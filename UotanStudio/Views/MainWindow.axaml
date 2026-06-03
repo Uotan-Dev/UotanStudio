@@ -1,12 +1,51 @@
 <Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:UotanStudio.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:views="using:UotanStudio.Views"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="UotanStudio.Views.MainWindow"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="UotanStudio">
-        <views:MainView />
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:vm="using:UotanStudio.ViewModels"
+		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:views="using:UotanStudio.Views"
+		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+		x:Class="UotanStudio.Views.MainWindow"
+		Icon="/Assets/UotanToolbox.png"
+		Title=""
+		ExtendClientAreaToDecorationsHint="True">
+	<DockPanel>
+		<!-- IsHitTestVisible="False" 使鼠标事件穿透交给底层窗口控制，从而恢复拖拽功能 -->
+		<Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32" Width="250">
+			<Image Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
+			<Menu Margin="35 0 0 0">
+				<MenuItem Padding="8 0">
+					<MenuItem.Header>
+						<TextBlock Text="Project" FontSize="13" FontWeight="SemiBold" />
+					</MenuItem.Header>
+					<MenuItem IsChecked="True" Header="Second Menu toggle item" ToggleType="CheckBox" />
+					<Separator />
+					<MenuItem GroupName="A" Header="Radio 1 - group" ToggleType="Radio" />
+					<MenuItem IsChecked="True" GroupName="A" Header="Radio 2 - group" ToggleType="Radio" />
+					<MenuItem GroupName="A" Header="Radio 3 - group" ToggleType="Radio">
+						<MenuItem Header="Radio 4 - group" ToggleType="Radio" GroupName="A" />
+						<MenuItem Header="Radio 5 - group" ToggleType="Radio" GroupName="A" />
+					</MenuItem>
+				</MenuItem>
+				<MenuItem Padding="8 0">
+					<MenuItem.Header>
+						<TextBlock Text="Tools" FontSize="13" FontWeight="SemiBold" />
+					</MenuItem.Header>
+				</MenuItem>
+				<MenuItem Padding="8 0">
+					<MenuItem.Header>
+						<TextBlock Text="View" FontSize="13" FontWeight="SemiBold" />
+					</MenuItem.Header>
+				</MenuItem>
+				<MenuItem Padding="8 0">
+					<MenuItem.Header>
+						<TextBlock Text="About" FontSize="13" FontWeight="SemiBold" />
+					</MenuItem.Header>
+				</MenuItem>
+			</Menu>
+		</Grid>
+
+		<!-- 原本的主页面内容 -->
+		<views:MainView Margin="{Binding $parent[Window].WindowDecorationMargin}"/>
+	</DockPanel>
 </Window>
