@@ -12,6 +12,6 @@ public partial class MainView : UserControl
 
     private void OnSelectionChanged(object? sender, PageSelectionChangedEventArgs e)
     {
-        
+
     }
 }
