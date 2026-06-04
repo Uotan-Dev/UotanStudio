@@ -7,5 +7,7 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Pages.WorkspaceView"
              x:DataType="viewmodels:WorkspaceViewModel">
-  <dock:DockControl Layout="{Binding Layout}" />
+  <dock:DockControl x:Name="DockControl"
+                     Layout="{Binding Layout}" 
+                     EnableManagedWindowLayer="True" />
 </UserControl>
