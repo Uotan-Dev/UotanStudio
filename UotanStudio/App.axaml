@@ -16,6 +16,7 @@
         <semi:SemiTheme Locale="zh-CN" />
         <u-semi:SemiTheme Locale="zh-CN"/>
         <semi:SemiPopupAnimations />
+        <semi:DockSemiTheme />
         <materialIcons:MaterialIconStyles />
     </Application.Styles>
 </Application>

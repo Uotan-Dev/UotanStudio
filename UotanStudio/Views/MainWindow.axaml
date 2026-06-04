@@ -10,7 +10,6 @@
 		Title=""
 		ExtendClientAreaToDecorationsHint="True">
 	<DockPanel>
-		<!-- IsHitTestVisible="False" 使鼠标事件穿透交给底层窗口控制，从而恢复拖拽功能 -->
 		<Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32" Width="250">
 			<Image Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
 			<Menu Margin="35 0 0 0">
@@ -46,6 +45,6 @@
 		</Grid>
 
 		<!-- 原本的主页面内容 -->
-		<views:MainView Margin="{Binding $parent[Window].WindowDecorationMargin}"/>
+		<views:MainView />
 	</DockPanel>
 </Window>
