@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using System.Globalization;
+using UotanStudio.Localization;
 using UotanStudio.ViewModels;
 using UotanStudio.Views;
 
@@ -11,6 +13,7 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        LocalizationService.Instance.InitializeFromSystemLanguage();
 #if DEBUG
         this.AttachDeveloperTools();
 #endif
@@ -36,5 +39,31 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+    }
+
+    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(LocalizationService.Culture))
+        {
+            var culture = LocalizationService.Instance.Culture;
+            UpdateSemiThemeLocale(culture);
+        }
+    }
+
+    private void UpdateSemiThemeLocale(CultureInfo culture)
+    {
+        foreach (var style in this.Styles)
+        {
+            switch (style)
+            {
+                case Semi.Avalonia.SemiTheme semiTheme:
+                    semiTheme.Locale = culture;
+                    break;
+                case Ursa.Themes.Semi.UrsaSemiTheme ursaTheme:
+                    ursaTheme.Locale = culture;
+                    break;
+            }
+        }
     }
 }

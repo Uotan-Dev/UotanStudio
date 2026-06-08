@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using System;
 using System.Diagnostics.CodeAnalysis;
+using UotanStudio.Localization;
 using UotanStudio.ViewModels;
 
 namespace UotanStudio;
@@ -27,7 +28,7 @@ public class ViewLocator : IDataTemplate
             return (Control)Activator.CreateInstance(type)!;
         }
 
-        return new TextBlock { Text = "Not Found: " + name };
+        return new TextBlock { Text = LocalizationService.Instance["ViewLocator_NotFound"] + name };
     }
 
     public bool Match(object? data)

@@ -1,11 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using UotanStudio.Localization;
 
 namespace UotanStudio.Pages.DockControl
 {
@@ -16,15 +17,15 @@ namespace UotanStudio.Pages.DockControl
             var document1 = new Document { Id = "Document1", Title = "build.prop", CanClose = true };
             var document2 = new Document { Id = "Document2", Title = "init.rc", CanClose = true };
 
-            var projectExplorer = new Tool { Id = "ProjectExplorer", Title = "Project Explorer", CanClose = true };
-            var properties = new Tool { Id = "Properties", Title = "Properties", CanClose = true };
-            var output = new Tool { Id = "Output", Title = "Output", CanClose = true };
-            var adbLog = new Tool { Id = "AdbLog", Title = "ADB Log", CanClose = true };
+            var projectExplorer = new Tool { Id = "ProjectExplorer", Title = LocalizationService.Instance["Dock_ProjectExplorer"], CanClose = true };
+            var properties = new Tool { Id = "Properties", Title = LocalizationService.Instance["Dock_Properties"], CanClose = true };
+            var output = new Tool { Id = "Output", Title = LocalizationService.Instance["Dock_Output"], CanClose = true };
+            var adbLog = new Tool { Id = "AdbLog", Title = LocalizationService.Instance["Dock_AdbLog"], CanClose = true };
 
             var documentDock = new DocumentDock
             {
                 Id = "DocumentsPane",
-                Title = "Documents",
+                Title = LocalizationService.Instance["Dock_Documents"],
                 IsCollapsable = false,
                 Proportion = double.NaN,
                 ActiveDockable = document1,
@@ -95,8 +96,8 @@ namespace UotanStudio.Pages.DockControl
             {
                 ["Document1"] = () => "using System;\n\nnamespace App {\n}",
                 ["Document2"] = () => "<Window>\n</Window>",
-                ["ProjectExplorer"] = () => "Project Tree",
-                ["Properties"] = () => "Properties View",
+                ["ProjectExplorer"] = () => LocalizationService.Instance["Dock_ProjectExplorer"],
+                ["Properties"] = () => LocalizationService.Instance["Dock_Properties"],
                 ["Output"] = () => "Build succeeded.",
                 ["AdbLog"] = () => "ADB Log Output"
             };
@@ -118,7 +119,7 @@ namespace UotanStudio.Pages.DockControl
             {
                 return;
             }
-            
+
             if (!dockable.CanClose)
             {
                 return;
@@ -142,7 +143,7 @@ namespace UotanStudio.Pages.DockControl
                 {
                     return;
                 }
-                
+
                 if (dockable.Owner is IDock dock)
                 {
                     if (dock.VisibleDockables != null)
@@ -152,7 +153,7 @@ namespace UotanStudio.Pages.DockControl
                         {
                             list.Remove(dockable);
                             dock.VisibleDockables = CreateList(list.ToArray());
-                            
+
                             if (dock.ActiveDockable == dockable)
                             {
                                 dock.ActiveDockable = list.FirstOrDefault();
@@ -160,7 +161,7 @@ namespace UotanStudio.Pages.DockControl
                         }
                     }
                 }
-                
+
                 dockable.Owner = null;
             }
             catch

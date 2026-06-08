@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="Menu_Project" xml:space="preserve">
+    <value>Project</value>
+  </data>
+  <data name="Menu_Tools" xml:space="preserve">
+    <value>Tools</value>
+  </data>
+  <data name="Menu_View" xml:space="preserve">
+    <value>View</value>
+  </data>
+  <data name="Menu_About" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="Menu_SecondToggleItem" xml:space="preserve">
+    <value>Second Menu toggle item</value>
+  </data>
+  <data name="Menu_Radio1Group" xml:space="preserve">
+    <value>Radio 1 - group</value>
+  </data>
+  <data name="Menu_Radio2Group" xml:space="preserve">
+    <value>Radio 2 - group</value>
+  </data>
+  <data name="Menu_Radio3Group" xml:space="preserve">
+    <value>Radio 3 - group</value>
+  </data>
+  <data name="Menu_Radio4Group" xml:space="preserve">
+    <value>Radio 4 - group</value>
+  </data>
+  <data name="Menu_Radio5Group" xml:space="preserve">
+    <value>Radio 5 - group</value>
+  </data>
+  <data name="Tab_Workspace" xml:space="preserve">
+    <value>Workspace</value>
+  </data>
+  <data name="Tab_Node" xml:space="preserve">
+    <value>Node</value>
+  </data>
+  <data name="Tab_Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Dock_ProjectExplorer" xml:space="preserve">
+    <value>Project Explorer</value>
+  </data>
+  <data name="Dock_Properties" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="Dock_Output" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="Dock_AdbLog" xml:space="preserve">
+    <value>ADB Log</value>
+  </data>
+  <data name="Dock_Documents" xml:space="preserve">
+    <value>Documents</value>
+  </data>
+  <data name="ViewLocator_NotFound" xml:space="preserve">
+    <value>Not Found: </value>
+  </data>
+</root>

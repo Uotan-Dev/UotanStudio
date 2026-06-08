@@ -12,8 +12,8 @@
     </Application.DataTemplates>
 
     <Application.Styles>
-        <semi:SemiTheme Locale="zh-CN" />
-        <semi:UrsaSemiTheme Locale="zh-CN"/>
+        <semi:SemiTheme />
+        <semi:UrsaSemiTheme />
         <semi:SemiPopupAnimations />
         <semi:DockSemiTheme />
         <materialIcons:MaterialIconStyles />

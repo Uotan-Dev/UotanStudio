@@ -1,6 +1,4 @@
-﻿using Avalonia.Collections;
-using CommunityToolkit.Mvvm.ComponentModel;
-using Dock.Model.Controls;
+﻿using Dock.Model.Controls;
 using Dock.Model.Core;
 using UotanStudio.Pages.DockControl;
 
