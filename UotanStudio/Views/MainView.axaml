@@ -42,7 +42,7 @@
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{i18n:Loc Tab_Node}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
-
+				<views:NodeEditorView DataContext="{Binding NodeEditorVM}" />
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
@@ -51,7 +51,7 @@
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{i18n:Loc Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
-				
+				<views:SettingsView DataContext="{Binding SettingsVM}" />
 			</ContentPage>
 			<ContentPage TabbedPage.IsTabEnabled="False">
 			</ContentPage>

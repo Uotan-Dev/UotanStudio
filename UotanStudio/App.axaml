@@ -17,5 +17,6 @@
         <semi:SemiPopupAnimations />
         <semi:DockSemiTheme />
         <materialIcons:MaterialIconStyles />
+        <StyleInclude Source="avares://NodifyM.Avalonia/Styles/ControlStyles.axaml" />
     </Application.Styles>
 </Application>

@@ -115,4 +115,133 @@
   <data name="ViewLocator_NotFound" xml:space="preserve">
     <value>Not Found: </value>
   </data>
+  <data name="Node_Toolbox" xml:space="preserve">
+    <value>Toolbox</value>
+  </data>
+  <data name="Node_Properties" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="Node_ExecLog" xml:space="preserve">
+    <value>Execution Log</value>
+  </data>
+  <data name="Node_Canvas" xml:space="preserve">
+    <value>Node Canvas</value>
+  </data>
+  <data name="Node_SearchNodes" xml:space="preserve">
+    <value>Search nodes...</value>
+  </data>
+  <data name="Node_ZoomIn" xml:space="preserve">
+    <value>Zoom In</value>
+  </data>
+  <data name="Node_ZoomOut" xml:space="preserve">
+    <value>Zoom Out</value>
+  </data>
+  <data name="Node_ResetZoom" xml:space="preserve">
+    <value>Reset Zoom</value>
+  </data>
+  <data name="Node_ToggleMinimap" xml:space="preserve">
+    <value>Toggle Minimap</value>
+  </data>
+  <data name="Node_DeleteSelected" xml:space="preserve">
+    <value>Delete Selected</value>
+  </data>
+  <data name="Node_Run" xml:space="preserve">
+    <value>Run</value>
+  </data>
+  <data name="Node_Stop" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="Node_NodesLabel" xml:space="preserve">
+    <value> nodes</value>
+  </data>
+  <data name="Node_ConnectionsLabel" xml:space="preserve">
+    <value> connections</value>
+  </data>
+  <data name="Node_NoSelection" xml:space="preserve">
+    <value>Select a node to view properties</value>
+  </data>
+  <data name="Node_StatusReady" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="Node_CatFirmware" xml:space="preserve">
+    <value>Firmware</value>
+  </data>
+  <data name="Node_CatFlash" xml:space="preserve">
+    <value>Flash</value>
+  </data>
+  <data name="Node_CatData" xml:space="preserve">
+    <value>Data</value>
+  </data>
+  <data name="Node_CatFlow" xml:space="preserve">
+    <value>Flow</value>
+  </data>
+  <data name="Node_CatOutput" xml:space="preserve">
+    <value>Output</value>
+  </data>
+  <data name="Settings_General" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Settings_Firmware" xml:space="preserve">
+    <value>Firmware Tools</value>
+  </data>
+  <data name="Settings_Flash" xml:space="preserve">
+    <value>Flash</value>
+  </data>
+  <data name="Settings_NodeEditor" xml:space="preserve">
+    <value>Node Editor</value>
+  </data>
+  <data name="Settings_Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Settings_Theme" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="Settings_ThemeDefault" xml:space="preserve">
+    <value>Follow System</value>
+  </data>
+  <data name="Settings_ThemeLight" xml:space="preserve">
+    <value>Light</value>
+  </data>
+  <data name="Settings_ThemeDark" xml:space="preserve">
+    <value>Dark</value>
+  </data>
+  <data name="Settings_AutoSave" xml:space="preserve">
+    <value>Auto Save</value>
+  </data>
+  <data name="Settings_UnpackToolPath" xml:space="preserve">
+    <value>Unpack Tool Path</value>
+  </data>
+  <data name="Settings_TempDir" xml:space="preserve">
+    <value>Temp Directory</value>
+  </data>
+  <data name="Settings_AutoVerify" xml:space="preserve">
+    <value>Auto Verify After Unpack</value>
+  </data>
+  <data name="Settings_PathPlaceholder" xml:space="preserve">
+    <value>Enter path...</value>
+  </data>
+  <data name="Settings_DeviceTimeout" xml:space="preserve">
+    <value>Device Timeout</value>
+  </data>
+  <data name="Settings_AutoBackup" xml:space="preserve">
+    <value>Auto Backup Before Flash</value>
+  </data>
+  <data name="Settings_SnapToGrid" xml:space="preserve">
+    <value>Snap to Grid</value>
+  </data>
+  <data name="Settings_GridSize" xml:space="preserve">
+    <value>Grid Size</value>
+  </data>
+  <data name="Settings_ConnectionStyle" xml:space="preserve">
+    <value>Connection Style</value>
+  </data>
+  <data name="Settings_ConnBezier" xml:space="preserve">
+    <value>Bezier</value>
+  </data>
+  <data name="Settings_ConnLine" xml:space="preserve">
+    <value>Line</value>
+  </data>
+  <data name="Settings_ConnStep" xml:space="preserve">
+    <value>Step</value>
+  </data>
 </root>

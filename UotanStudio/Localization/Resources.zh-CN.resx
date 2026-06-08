@@ -115,4 +115,133 @@
   <data name="ViewLocator_NotFound" xml:space="preserve">
     <value>未找到: </value>
   </data>
+  <data name="Node_Toolbox" xml:space="preserve">
+    <value>工具箱</value>
+  </data>
+  <data name="Node_Properties" xml:space="preserve">
+    <value>属性</value>
+  </data>
+  <data name="Node_ExecLog" xml:space="preserve">
+    <value>执行日志</value>
+  </data>
+  <data name="Node_Canvas" xml:space="preserve">
+    <value>节点画布</value>
+  </data>
+  <data name="Node_SearchNodes" xml:space="preserve">
+    <value>搜索节点...</value>
+  </data>
+  <data name="Node_ZoomIn" xml:space="preserve">
+    <value>放大</value>
+  </data>
+  <data name="Node_ZoomOut" xml:space="preserve">
+    <value>缩小</value>
+  </data>
+  <data name="Node_ResetZoom" xml:space="preserve">
+    <value>重置缩放</value>
+  </data>
+  <data name="Node_ToggleMinimap" xml:space="preserve">
+    <value>切换小地图</value>
+  </data>
+  <data name="Node_DeleteSelected" xml:space="preserve">
+    <value>删除选中</value>
+  </data>
+  <data name="Node_Run" xml:space="preserve">
+    <value>运行</value>
+  </data>
+  <data name="Node_Stop" xml:space="preserve">
+    <value>停止</value>
+  </data>
+  <data name="Node_NodesLabel" xml:space="preserve">
+    <value> 节点</value>
+  </data>
+  <data name="Node_ConnectionsLabel" xml:space="preserve">
+    <value> 连接</value>
+  </data>
+  <data name="Node_NoSelection" xml:space="preserve">
+    <value>选择节点以查看属性</value>
+  </data>
+  <data name="Node_StatusReady" xml:space="preserve">
+    <value>就绪</value>
+  </data>
+  <data name="Node_CatFirmware" xml:space="preserve">
+    <value>固件操作</value>
+  </data>
+  <data name="Node_CatFlash" xml:space="preserve">
+    <value>烧录操作</value>
+  </data>
+  <data name="Node_CatData" xml:space="preserve">
+    <value>数据处理</value>
+  </data>
+  <data name="Node_CatFlow" xml:space="preserve">
+    <value>流程控制</value>
+  </data>
+  <data name="Node_CatOutput" xml:space="preserve">
+    <value>输出</value>
+  </data>
+  <data name="Settings_General" xml:space="preserve">
+    <value>通用设置</value>
+  </data>
+  <data name="Settings_Firmware" xml:space="preserve">
+    <value>固件工具</value>
+  </data>
+  <data name="Settings_Flash" xml:space="preserve">
+    <value>烧录设置</value>
+  </data>
+  <data name="Settings_NodeEditor" xml:space="preserve">
+    <value>节点编辑器</value>
+  </data>
+  <data name="Settings_Language" xml:space="preserve">
+    <value>语言</value>
+  </data>
+  <data name="Settings_Theme" xml:space="preserve">
+    <value>主题</value>
+  </data>
+  <data name="Settings_ThemeDefault" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="Settings_ThemeLight" xml:space="preserve">
+    <value>浅色</value>
+  </data>
+  <data name="Settings_ThemeDark" xml:space="preserve">
+    <value>深色</value>
+  </data>
+  <data name="Settings_AutoSave" xml:space="preserve">
+    <value>自动保存</value>
+  </data>
+  <data name="Settings_UnpackToolPath" xml:space="preserve">
+    <value>解包工具路径</value>
+  </data>
+  <data name="Settings_TempDir" xml:space="preserve">
+    <value>临时文件目录</value>
+  </data>
+  <data name="Settings_AutoVerify" xml:space="preserve">
+    <value>解包后自动校验</value>
+  </data>
+  <data name="Settings_PathPlaceholder" xml:space="preserve">
+    <value>输入路径...</value>
+  </data>
+  <data name="Settings_DeviceTimeout" xml:space="preserve">
+    <value>设备超时时间</value>
+  </data>
+  <data name="Settings_AutoBackup" xml:space="preserve">
+    <value>烧录前自动备份</value>
+  </data>
+  <data name="Settings_SnapToGrid" xml:space="preserve">
+    <value>网格对齐</value>
+  </data>
+  <data name="Settings_GridSize" xml:space="preserve">
+    <value>网格大小</value>
+  </data>
+  <data name="Settings_ConnectionStyle" xml:space="preserve">
+    <value>连接线样式</value>
+  </data>
+  <data name="Settings_ConnBezier" xml:space="preserve">
+    <value>贝塞尔曲线</value>
+  </data>
+  <data name="Settings_ConnLine" xml:space="preserve">
+    <value>直线</value>
+  </data>
+  <data name="Settings_ConnStep" xml:space="preserve">
+    <value>阶梯线</value>
+  </data>
 </root>

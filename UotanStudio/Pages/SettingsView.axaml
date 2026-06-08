@@ -1,0 +1,130 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:i18n="using:UotanStudio.Localization"
+             xmlns:vm="using:UotanStudio.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="UotanStudio.Pages.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24,16" Spacing="24" MaxWidth="700">
+
+            <!-- 通用设置 -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="{i18n:Loc Settings_General}" FontWeight="SemiBold" FontSize="16" />
+                <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_Language}"
+                               VerticalAlignment="Center" FontSize="13" />
+                    <ComboBox Grid.Row="0" Grid.Column="1"
+                              ItemsSource="{Binding Languages}"
+                              SelectedIndex="{Binding SelectedLanguageIndex}"
+                              HorizontalAlignment="Stretch" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_Theme}"
+                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                    <ComboBox Grid.Row="1" Grid.Column="1"
+                              ItemsSource="{Binding Themes}"
+                              SelectedIndex="{Binding SelectedThemeIndex}"
+                              HorizontalAlignment="Stretch" Margin="0,8" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_AutoSave}"
+                               VerticalAlignment="Center" FontSize="13" />
+                    <ToggleSwitch Grid.Row="2" Grid.Column="1"
+                                  IsChecked="{Binding AutoSave}" />
+                </Grid>
+            </StackPanel>
+
+            <!-- 固件工具设置 -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="{i18n:Loc Settings_Firmware}" FontWeight="SemiBold" FontSize="16" />
+                <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_UnpackToolPath}"
+                               VerticalAlignment="Center" FontSize="13" />
+                    <TextBox Grid.Row="0" Grid.Column="1"
+                             Text="{Binding UnpackToolPath}"
+                             PlaceholderText="{i18n:Loc Settings_PathPlaceholder}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_TempDir}"
+                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                    <TextBox Grid.Row="1" Grid.Column="1"
+                             Text="{Binding TempDirectory}"
+                             PlaceholderText="{i18n:Loc Settings_PathPlaceholder}"
+                             Margin="0,8" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_AutoVerify}"
+                               VerticalAlignment="Center" FontSize="13" />
+                    <ToggleSwitch Grid.Row="2" Grid.Column="1"
+                                  IsChecked="{Binding AutoVerifyAfterUnpack}" />
+                </Grid>
+            </StackPanel>
+
+            <!-- 烧录设置 -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="{i18n:Loc Settings_Flash}" FontWeight="SemiBold" FontSize="16" />
+                <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="ADB"
+                               VerticalAlignment="Center" FontSize="13" />
+                    <TextBox Grid.Row="0" Grid.Column="1"
+                             Text="{Binding AdbPath}"
+                             PlaceholderText="{i18n:Loc Settings_PathPlaceholder}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Fastboot"
+                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                    <TextBox Grid.Row="1" Grid.Column="1"
+                             Text="{Binding FastbootPath}"
+                             PlaceholderText="{i18n:Loc Settings_PathPlaceholder}"
+                             Margin="0,8" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_DeviceTimeout}"
+                               VerticalAlignment="Center" FontSize="13" />
+                    <NumericUpDown Grid.Row="2" Grid.Column="1"
+                                   Value="{Binding DeviceTimeoutSeconds}"
+                                   Minimum="5" Maximum="300"
+                                   FormatString="0 s" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{i18n:Loc Settings_AutoBackup}"
+                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                    <ToggleSwitch Grid.Row="3" Grid.Column="1"
+                                  IsChecked="{Binding AutoBackupBeforeFlash}"
+                                  Margin="0,8" />
+                </Grid>
+            </StackPanel>
+
+            <!-- 节点编辑器设置 -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="{i18n:Loc Settings_NodeEditor}" FontWeight="SemiBold" FontSize="16" />
+                <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_SnapToGrid}"
+                               VerticalAlignment="Center" FontSize="13" />
+                    <ToggleSwitch Grid.Row="0" Grid.Column="1"
+                                  IsChecked="{Binding SnapToGrid}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_GridSize}"
+                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                    <NumericUpDown Grid.Row="1" Grid.Column="1"
+                                   Value="{Binding GridSize}"
+                                   Minimum="5" Maximum="100"
+                                   Margin="0,8" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_ConnectionStyle}"
+                               VerticalAlignment="Center" FontSize="13" />
+                    <ComboBox Grid.Row="2" Grid.Column="1"
+                              ItemsSource="{Binding ConnectionStyles}"
+                              SelectedIndex="{Binding ConnectionStyleIndex}"
+                              HorizontalAlignment="Stretch" />
+                </Grid>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

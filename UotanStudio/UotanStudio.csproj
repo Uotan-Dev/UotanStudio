@@ -28,6 +28,7 @@
     <PackageReference Include="Material.Icons.Avalonia" />
     <PackageReference Include="Semi.Avalonia" />
     <PackageReference Include="Semi.Avalonia.Dock" />
+    <PackageReference Include="NodifyM.Avalonia" />
   </ItemGroup>
 
   <ItemGroup>
