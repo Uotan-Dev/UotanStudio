@@ -160,7 +160,7 @@
                         <nodify:Node Header="{Binding Title}"
                                      Input="{Binding Input}"
                                      Output="{Binding Output}"
-                                     Location="{Binding Location}">
+                                     Location="{Binding Location, Mode=TwoWay}">
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
                                     <nodify:NodeInput Header="{Binding Title}" />

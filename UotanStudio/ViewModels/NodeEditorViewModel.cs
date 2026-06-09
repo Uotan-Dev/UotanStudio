@@ -1,3 +1,4 @@
+using Avalonia;
 using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.ObjectModel;
@@ -18,6 +19,8 @@ namespace UotanStudio.ViewModels
         private bool _showMinimap = true;
         private string _searchText = string.Empty;
         private string _executionStatus = LocalizationService.Instance["Node_StatusReady"];
+            private Point _nextNodeLocation = new(100, 100);
+            private static readonly Point DefaultNodeLocation = new(100, 100);
 
         /// <summary>
         /// <para>获取或设置画布上的节点集合。</para>
@@ -156,6 +159,12 @@ namespace UotanStudio.ViewModels
         /// </param>
         public void AddNode(NodeViewModels.FlowNodeViewModel node)
         {
+            if (node.Location == DefaultNodeLocation)
+            {
+                node.Location = _nextNodeLocation;
+                _nextNodeLocation = new Point(_nextNodeLocation.X + 40, _nextNodeLocation.Y + 40);
+            }
+
             Nodes.Add(node);
         }
 

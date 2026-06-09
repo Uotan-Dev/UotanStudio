@@ -244,4 +244,70 @@
   <data name="Settings_ConnStep" xml:space="preserve">
     <value>Step</value>
   </data>
+  <data name="Settings_Appearance" xml:space="preserve">
+    <value>Appearance</value>
+  </data>
+  <data name="Settings_ThemePreview" xml:space="preserve">
+    <value>Theme Preview</value>
+  </data>
+  <data name="Settings_LanguageAutoDetect" xml:space="preserve">
+    <value>Auto Detect</value>
+  </data>
+  <data name="Settings_LanguagePreview" xml:space="preserve">
+    <value>Language Preview</value>
+  </data>
+  <data name="Settings_LanguagePreviewText" xml:space="preserve">
+    <value>This is a preview of the selected language.</value>
+  </data>
+  <data name="Settings_VersionInfo" xml:space="preserve">
+    <value>Version Information</value>
+  </data>
+  <data name="Settings_FirmwareModule" xml:space="preserve">
+    <value>Firmware Unpack Module</value>
+  </data>
+  <data name="Settings_FlashModule" xml:space="preserve">
+    <value>Board Flash Module</value>
+  </data>
+  <data name="Settings_VisualProgrammingModule" xml:space="preserve">
+    <value>Visual Programming Module</value>
+  </data>
+  <data name="Settings_Version" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="Settings_CheckForUpdates" xml:space="preserve">
+    <value>Check for Updates</value>
+  </data>
+  <data name="Settings_CheckingUpdates" xml:space="preserve">
+    <value>Checking...</value>
+  </data>
+  <data name="Settings_UpToDate" xml:space="preserve">
+    <value>Already up to date</value>
+  </data>
+  <data name="Settings_UpdateAvailable" xml:space="preserve">
+    <value>Update available</value>
+  </data>
+  <data name="Settings_UpdateCheckFailed" xml:space="preserve">
+    <value>Update check failed</value>
+  </data>
+  <data name="Settings_ResetToDefaults" xml:space="preserve">
+    <value>Reset to Defaults</value>
+  </data>
+  <data name="Settings_ResetConfirm" xml:space="preserve">
+    <value>Are you sure you want to reset all settings to defaults?</value>
+  </data>
+  <data name="Settings_SettingsSaved" xml:space="preserve">
+    <value>Settings saved</value>
+  </data>
+  <data name="Settings_ThemeFollowSystem" xml:space="preserve">
+    <value>Follow System</value>
+  </data>
+  <data name="Settings_ThemeLightMode" xml:space="preserve">
+    <value>Light Mode</value>
+  </data>
+  <data name="Settings_ThemeDarkMode" xml:space="preserve">
+    <value>Dark Mode</value>
+  </data>
+  <data name="Settings_AutoDetect" xml:space="preserve">
+    <value>Auto Detect</value>
+  </data>
 </root>

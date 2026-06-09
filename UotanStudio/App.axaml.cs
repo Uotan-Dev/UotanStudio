@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
 using System.Globalization;
 using UotanStudio.Localization;
+using UotanStudio.Services;
 using UotanStudio.ViewModels;
 using UotanStudio.Views;
 
@@ -40,6 +42,24 @@ public partial class App : Application
 
         base.OnFrameworkInitializationCompleted();
         LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
+        SettingsViewModel.ThemeChanged += OnThemeChanged;
+        var savedSettings = SettingsPersistenceService.Instance.LoadSettings();
+        ApplyTheme((ThemeMode)savedSettings.SelectedThemeIndex);
+    }
+
+    private void OnThemeChanged(object? sender, ThemeMode themeMode)
+    {
+        ApplyTheme(themeMode);
+    }
+
+    private void ApplyTheme(ThemeMode themeMode)
+    {
+        RequestedThemeVariant = themeMode switch
+        {
+            ThemeMode.Light => ThemeVariant.Light,
+            ThemeMode.Dark => ThemeVariant.Dark,
+            _ => ThemeVariant.Default
+        };
     }
 
     private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

@@ -5,126 +5,270 @@
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:i18n="using:UotanStudio.Localization"
              xmlns:vm="using:UotanStudio.ViewModels"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="900"
              x:Class="UotanStudio.Pages.SettingsView"
              x:DataType="vm:SettingsViewModel">
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="24,16" Spacing="24" MaxWidth="700">
+    <Grid>
+        <!-- Main Content -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24,16" Spacing="24" MaxWidth="800">
 
-            <!-- 通用设置 -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{i18n:Loc Settings_General}" FontWeight="SemiBold" FontSize="16" />
-                <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+                <!-- Section 1: Appearance -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{i18n:Loc Settings_Appearance}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
 
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_Language}"
-                               VerticalAlignment="Center" FontSize="13" />
-                    <ComboBox Grid.Row="0" Grid.Column="1"
-                              ItemsSource="{Binding Languages}"
-                              SelectedIndex="{Binding SelectedLanguageIndex}"
-                              HorizontalAlignment="Stretch" />
+                    <!-- Theme Selection -->
+                    <TextBlock Text="{i18n:Loc Settings_Theme}" FontSize="13" Margin="0,4,0,0" />
+                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
+                        <RadioButton x:Name="ThemeFollowSystemRadio"
+                                     Content="{i18n:Loc Settings_ThemeFollowSystem}"
+                                     GroupName="ThemeGroup"
+                                     Tag="0"
+                                     IsChecked="{Binding SelectedThemeIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=0, Mode=OneWay}" />
+                        <RadioButton x:Name="ThemeLightRadio"
+                                     Content="{i18n:Loc Settings_ThemeLightMode}"
+                                     GroupName="ThemeGroup"
+                                     Tag="1"
+                                     IsChecked="{Binding SelectedThemeIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=1, Mode=OneWay}" />
+                        <RadioButton x:Name="ThemeDarkRadio"
+                                     Content="{i18n:Loc Settings_ThemeDarkMode}"
+                                     GroupName="ThemeGroup"
+                                     Tag="2"
+                                     IsChecked="{Binding SelectedThemeIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=2, Mode=OneWay}" />
+                    </StackPanel>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_Theme}"
-                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
-                    <ComboBox Grid.Row="1" Grid.Column="1"
-                              ItemsSource="{Binding Themes}"
-                              SelectedIndex="{Binding SelectedThemeIndex}"
-                              HorizontalAlignment="Stretch" Margin="0,8" />
+                    <!-- Theme Preview -->
+                    <TextBlock Text="{i18n:Loc Settings_ThemePreview}" FontSize="12" Opacity="0.7" Margin="0,8,0,0" />
+                    <Border CornerRadius="8" Padding="16" Height="80"
+                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Aa" FontSize="24" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            <Border Grid.Column="2" CornerRadius="4" Padding="16,6"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    VerticalAlignment="Center">
+                                <TextBlock Text="Button" FontSize="12"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                            </Border>
+                        </Grid>
+                    </Border>
+                </StackPanel>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_AutoSave}"
-                               VerticalAlignment="Center" FontSize="13" />
-                    <ToggleSwitch Grid.Row="2" Grid.Column="1"
-                                  IsChecked="{Binding AutoSave}" />
-                </Grid>
+                <!-- Section 2: Language -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{i18n:Loc Settings_Language}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_Language}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ComboBox Grid.Row="0" Grid.Column="1"
+                                  ItemsSource="{Binding Languages}"
+                                  SelectedIndex="{Binding SelectedLanguageIndex, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_LanguagePreview}"
+                                   VerticalAlignment="Center" FontSize="12" Opacity="0.7" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Text="{Binding LanguagePreviewText}"
+                                   FontSize="13" FontStyle="Italic"
+                                   Margin="0,8,0,0" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Section 3: General -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{i18n:Loc Settings_General}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto" Margin="0,4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_AutoSave}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ToggleSwitch Grid.Row="0" Grid.Column="1"
+                                      IsChecked="{Binding AutoSave}" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Section 4: Firmware Tools -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{i18n:Loc Settings_Firmware}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_UnpackToolPath}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <TextBox Grid.Row="0" Grid.Column="1"
+                                 Text="{Binding UnpackToolPath}"
+                                 PlaceholderText="{i18n:Loc Settings_PathPlaceholder}" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_TempDir}"
+                                   VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                        <TextBox Grid.Row="1" Grid.Column="1"
+                                 Text="{Binding TempDirectory}"
+                                 PlaceholderText="{i18n:Loc Settings_PathPlaceholder}"
+                                 Margin="0,8" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_AutoVerify}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ToggleSwitch Grid.Row="2" Grid.Column="1"
+                                      IsChecked="{Binding AutoVerifyAfterUnpack}" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Section 5: Flash -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{i18n:Loc Settings_Flash}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="ADB"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <TextBox Grid.Row="0" Grid.Column="1"
+                                 Text="{Binding AdbPath}"
+                                 PlaceholderText="{i18n:Loc Settings_PathPlaceholder}" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Fastboot"
+                                   VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                        <TextBox Grid.Row="1" Grid.Column="1"
+                                 Text="{Binding FastbootPath}"
+                                 PlaceholderText="{i18n:Loc Settings_PathPlaceholder}"
+                                 Margin="0,8" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_DeviceTimeout}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <NumericUpDown Grid.Row="2" Grid.Column="1"
+                                       Value="{Binding DeviceTimeoutSeconds}"
+                                       Minimum="5" Maximum="300"
+                                       FormatString="0 s" />
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{i18n:Loc Settings_AutoBackup}"
+                                   VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                        <ToggleSwitch Grid.Row="3" Grid.Column="1"
+                                      IsChecked="{Binding AutoBackupBeforeFlash}"
+                                      Margin="0,8" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Section 6: Node Editor -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{i18n:Loc Settings_NodeEditor}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_SnapToGrid}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ToggleSwitch Grid.Row="0" Grid.Column="1"
+                                      IsChecked="{Binding SnapToGrid}" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_GridSize}"
+                                   VerticalAlignment="Center" FontSize="13" Margin="0,8" />
+                        <NumericUpDown Grid.Row="1" Grid.Column="1"
+                                       Value="{Binding GridSize}"
+                                       Minimum="5" Maximum="100"
+                                       Margin="0,8" />
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_ConnectionStyle}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ComboBox Grid.Row="2" Grid.Column="1"
+                                  ItemsSource="{Binding ConnectionStyles}"
+                                  SelectedIndex="{Binding ConnectionStyleIndex}"
+                                  HorizontalAlignment="Stretch" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Section 7: Version Information -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{i18n:Loc Settings_VersionInfo}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4">
+                        <!-- Firmware Module Card -->
+                        <Border CornerRadius="8" Padding="16" MinWidth="180"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{i18n:Loc Settings_FirmwareModule}" FontWeight="SemiBold" FontSize="14" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{i18n:Loc Settings_Version}" FontSize="12" Opacity="0.7" />
+                                    <TextBlock Text="{Binding FirmwareModuleVersion}" FontSize="12" Opacity="0.7" />
+                                </StackPanel>
+                                <Button Content="{i18n:Loc Settings_CheckForUpdates}"
+                                        Command="{Binding CheckForUpdatesCommand}"
+                                        IsEnabled="{Binding !IsCheckingUpdates}"
+                                        FontSize="12" Margin="0,4,0,0"
+                                        HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Flash Module Card -->
+                        <Border CornerRadius="8" Padding="16" MinWidth="180"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{i18n:Loc Settings_FlashModule}" FontWeight="SemiBold" FontSize="14" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{i18n:Loc Settings_Version}" FontSize="12" Opacity="0.7" />
+                                    <TextBlock Text="{Binding FlashModuleVersion}" FontSize="12" Opacity="0.7" />
+                                </StackPanel>
+                                <Button Content="{i18n:Loc Settings_CheckForUpdates}"
+                                        Command="{Binding CheckForUpdatesCommand}"
+                                        IsEnabled="{Binding !IsCheckingUpdates}"
+                                        FontSize="12" Margin="0,4,0,0"
+                                        HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Visual Programming Module Card -->
+                        <Border CornerRadius="8" Padding="16" MinWidth="180"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{i18n:Loc Settings_VisualProgrammingModule}" FontWeight="SemiBold" FontSize="14" />
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock Text="{i18n:Loc Settings_Version}" FontSize="12" Opacity="0.7" />
+                                    <TextBlock Text="{Binding VisualProgrammingModuleVersion}" FontSize="12" Opacity="0.7" />
+                                </StackPanel>
+                                <Button Content="{i18n:Loc Settings_CheckForUpdates}"
+                                        Command="{Binding CheckForUpdatesCommand}"
+                                        IsEnabled="{Binding !IsCheckingUpdates}"
+                                        FontSize="12" Margin="0,4,0,0"
+                                        HorizontalAlignment="Left" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Update Check Result -->
+                    <TextBlock Text="{Binding UpdateCheckResult}"
+                               FontSize="12" Opacity="0.8"
+                               IsVisible="{Binding UpdateCheckResult, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                </StackPanel>
+
+                <!-- Section 8: Reset to Defaults -->
+                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,32">
+                    <Button Content="{i18n:Loc Settings_ResetToDefaults}"
+                            Command="{Binding ResetToDefaultsCommand}" />
+                </StackPanel>
+
             </StackPanel>
+        </ScrollViewer>
 
-            <!-- 固件工具设置 -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{i18n:Loc Settings_Firmware}" FontWeight="SemiBold" FontSize="16" />
-                <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
-
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_UnpackToolPath}"
-                               VerticalAlignment="Center" FontSize="13" />
-                    <TextBox Grid.Row="0" Grid.Column="1"
-                             Text="{Binding UnpackToolPath}"
-                             PlaceholderText="{i18n:Loc Settings_PathPlaceholder}" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_TempDir}"
-                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
-                    <TextBox Grid.Row="1" Grid.Column="1"
-                             Text="{Binding TempDirectory}"
-                             PlaceholderText="{i18n:Loc Settings_PathPlaceholder}"
-                             Margin="0,8" />
-
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_AutoVerify}"
-                               VerticalAlignment="Center" FontSize="13" />
-                    <ToggleSwitch Grid.Row="2" Grid.Column="1"
-                                  IsChecked="{Binding AutoVerifyAfterUnpack}" />
-                </Grid>
-            </StackPanel>
-
-            <!-- 烧录设置 -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{i18n:Loc Settings_Flash}" FontWeight="SemiBold" FontSize="16" />
-                <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
-
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="ADB"
-                               VerticalAlignment="Center" FontSize="13" />
-                    <TextBox Grid.Row="0" Grid.Column="1"
-                             Text="{Binding AdbPath}"
-                             PlaceholderText="{i18n:Loc Settings_PathPlaceholder}" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Fastboot"
-                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
-                    <TextBox Grid.Row="1" Grid.Column="1"
-                             Text="{Binding FastbootPath}"
-                             PlaceholderText="{i18n:Loc Settings_PathPlaceholder}"
-                             Margin="0,8" />
-
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_DeviceTimeout}"
-                               VerticalAlignment="Center" FontSize="13" />
-                    <NumericUpDown Grid.Row="2" Grid.Column="1"
-                                   Value="{Binding DeviceTimeoutSeconds}"
-                                   Minimum="5" Maximum="300"
-                                   FormatString="0 s" />
-
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="{i18n:Loc Settings_AutoBackup}"
-                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
-                    <ToggleSwitch Grid.Row="3" Grid.Column="1"
-                                  IsChecked="{Binding AutoBackupBeforeFlash}"
-                                  Margin="0,8" />
-                </Grid>
-            </StackPanel>
-
-            <!-- 节点编辑器设置 -->
-            <StackPanel Spacing="8">
-                <TextBlock Text="{i18n:Loc Settings_NodeEditor}" FontWeight="SemiBold" FontSize="16" />
-                <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
-
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_SnapToGrid}"
-                               VerticalAlignment="Center" FontSize="13" />
-                    <ToggleSwitch Grid.Row="0" Grid.Column="1"
-                                  IsChecked="{Binding SnapToGrid}" />
-
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_GridSize}"
-                               VerticalAlignment="Center" FontSize="13" Margin="0,8" />
-                    <NumericUpDown Grid.Row="1" Grid.Column="1"
-                                   Value="{Binding GridSize}"
-                                   Minimum="5" Maximum="100"
-                                   Margin="0,8" />
-
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_ConnectionStyle}"
-                               VerticalAlignment="Center" FontSize="13" />
-                    <ComboBox Grid.Row="2" Grid.Column="1"
-                              ItemsSource="{Binding ConnectionStyles}"
-                              SelectedIndex="{Binding ConnectionStyleIndex}"
-                              HorizontalAlignment="Stretch" />
-                </Grid>
-            </StackPanel>
-
-        </StackPanel>
-    </ScrollViewer>
+        <!-- Toast Notification Overlay -->
+        <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,24"
+                IsVisible="{Binding IsToastVisible}"
+                CornerRadius="8" Padding="12,8"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="1">
+            <TextBlock Text="{Binding ToastMessage}" FontSize="13" />
+        </Border>
+    </Grid>
 </UserControl>

@@ -46,6 +46,7 @@ public sealed class LocalizationService : INotifyPropertyChanged
             CultureInfo.DefaultThreadCurrentUICulture = value;
             Resources.Culture = value;
             OnPropertyChanged(nameof(Culture));
+            OnPropertyChanged("Item[]");
         }
     }
 

@@ -244,4 +244,70 @@
   <data name="Settings_ConnStep" xml:space="preserve">
     <value>阶梯线</value>
   </data>
+  <data name="Settings_Appearance" xml:space="preserve">
+    <value>外观设置</value>
+  </data>
+  <data name="Settings_ThemePreview" xml:space="preserve">
+    <value>主题预览</value>
+  </data>
+  <data name="Settings_LanguageAutoDetect" xml:space="preserve">
+    <value>自动检测</value>
+  </data>
+  <data name="Settings_LanguagePreview" xml:space="preserve">
+    <value>语言预览</value>
+  </data>
+  <data name="Settings_LanguagePreviewText" xml:space="preserve">
+    <value>这是所选语言的预览文本。</value>
+  </data>
+  <data name="Settings_VersionInfo" xml:space="preserve">
+    <value>版本信息</value>
+  </data>
+  <data name="Settings_FirmwareModule" xml:space="preserve">
+    <value>固件解打包模块</value>
+  </data>
+  <data name="Settings_FlashModule" xml:space="preserve">
+    <value>开发板烧录模块</value>
+  </data>
+  <data name="Settings_VisualProgrammingModule" xml:space="preserve">
+    <value>可视化编程模块</value>
+  </data>
+  <data name="Settings_Version" xml:space="preserve">
+    <value>版本</value>
+  </data>
+  <data name="Settings_CheckForUpdates" xml:space="preserve">
+    <value>检查更新</value>
+  </data>
+  <data name="Settings_CheckingUpdates" xml:space="preserve">
+    <value>检查中...</value>
+  </data>
+  <data name="Settings_UpToDate" xml:space="preserve">
+    <value>已是最新版本</value>
+  </data>
+  <data name="Settings_UpdateAvailable" xml:space="preserve">
+    <value>有可用更新</value>
+  </data>
+  <data name="Settings_UpdateCheckFailed" xml:space="preserve">
+    <value>更新检查失败</value>
+  </data>
+  <data name="Settings_ResetToDefaults" xml:space="preserve">
+    <value>恢复默认设置</value>
+  </data>
+  <data name="Settings_ResetConfirm" xml:space="preserve">
+    <value>确定要恢复所有设置为默认值吗？</value>
+  </data>
+  <data name="Settings_SettingsSaved" xml:space="preserve">
+    <value>设置已保存</value>
+  </data>
+  <data name="Settings_ThemeFollowSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="Settings_ThemeLightMode" xml:space="preserve">
+    <value>浅色模式</value>
+  </data>
+  <data name="Settings_ThemeDarkMode" xml:space="preserve">
+    <value>深色模式</value>
+  </data>
+  <data name="Settings_AutoDetect" xml:space="preserve">
+    <value>自动检测</value>
+  </data>
 </root>

@@ -3,9 +3,15 @@
              xmlns:local="using:UotanStudio"
              xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:semi="https://irihi.tech/semi"
+             xmlns:converters="using:UotanStudio.Converters"
              x:Class="UotanStudio.App"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+
+    <Application.Resources>
+        <converters:IntEqualConverter x:Key="IntEqualConverter" />
+        <converters:StringNotNullOrEmptyConverter x:Key="StringNotNullOrEmptyConverter" />
+    </Application.Resources>
 
     <Application.DataTemplates>
         <local:ViewLocator/>
