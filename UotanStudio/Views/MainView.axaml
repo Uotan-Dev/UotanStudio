@@ -3,7 +3,6 @@
 			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 			 xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-			 xmlns:i18n="using:UotanStudio.Localization"
 			 xmlns:vm="using:UotanStudio.ViewModels"
 			 xmlns:views="using:UotanStudio.Pages"
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
@@ -31,7 +30,7 @@
 					<avalonia:MaterialIcon Kind="MonitorDashboard" Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{i18n:Loc Tab_Workspace}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Workspace}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 				<views:WorkspaceView DataContext="{Binding WorkspaceVM}" />
 			</ContentPage>
@@ -40,7 +39,7 @@
 					<avalonia:MaterialIcon Kind="ScriptTextPlayOutline" Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{i18n:Loc Tab_Node}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Node}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 				<views:NodeEditorView DataContext="{Binding NodeEditorVM}" />
 			</ContentPage>
@@ -49,7 +48,7 @@
 					<avalonia:MaterialIcon Kind="CogOutline" Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{i18n:Loc Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
+					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 				<views:SettingsView DataContext="{Binding SettingsVM}" />
 			</ContentPage>

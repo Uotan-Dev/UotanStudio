@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
-using UotanStudio.Localization;
+using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels
 {
@@ -18,9 +18,9 @@ namespace UotanStudio.ViewModels
         private double _zoom = 1.0;
         private bool _showMinimap = true;
         private string _searchText = string.Empty;
-        private string _executionStatus = LocalizationService.Instance["Node_StatusReady"];
-            private Point _nextNodeLocation = new(100, 100);
-            private static readonly Point DefaultNodeLocation = new(100, 100);
+        private string _executionStatus = LanguageService.Instance.GetString("Node_StatusReady");
+        private Point _nextNodeLocation = new(100, 100);
+        private static readonly Point DefaultNodeLocation = new(100, 100);
 
         /// <summary>
         /// <para>获取或设置画布上的节点集合。</para>
@@ -100,7 +100,7 @@ namespace UotanStudio.ViewModels
         private void InitializeToolbox()
         {
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LocalizationService.Instance["Node_CatFirmware"],
+                LanguageService.Instance.GetString("Node_CatFirmware"),
                 NodeViewModels.NodeCategory.Firmware,
                 [
                     new NodeToolboxItem("Unpack Firmware", () => NodeViewModels.FirmwareNodeViewModel.CreateUnpackNode()),
@@ -111,7 +111,7 @@ namespace UotanStudio.ViewModels
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LocalizationService.Instance["Node_CatFlash"],
+                LanguageService.Instance.GetString("Node_CatFlash"),
                 NodeViewModels.NodeCategory.Flash,
                 [
                     new NodeToolboxItem("Connect Device", () => NodeViewModels.FlashNodeViewModel.CreateConnectNode()),
@@ -122,7 +122,7 @@ namespace UotanStudio.ViewModels
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LocalizationService.Instance["Node_CatData"],
+                LanguageService.Instance.GetString("Node_CatData"),
                 NodeViewModels.NodeCategory.Data,
                 [
                     new NodeToolboxItem("Read File", () => NodeViewModels.DataNodeViewModel.CreateFileReadNode()),
@@ -133,13 +133,13 @@ namespace UotanStudio.ViewModels
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LocalizationService.Instance["Node_CatFlow"],
+                LanguageService.Instance.GetString("Node_CatFlow"),
                 NodeViewModels.NodeCategory.Flow,
                 []
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LocalizationService.Instance["Node_CatOutput"],
+                LanguageService.Instance.GetString("Node_CatOutput"),
                 NodeViewModels.NodeCategory.Output,
                 [
                     new NodeToolboxItem("Log Output", () => NodeViewModels.OutputNodeViewModel.CreateLogNode()),

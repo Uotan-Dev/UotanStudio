@@ -5,7 +5,7 @@ using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using System;
 using System.Collections.Generic;
-using UotanStudio.Localization;
+using UotanStudio.Services;
 
 namespace UotanStudio.Pages.DockControl
 {
@@ -25,35 +25,35 @@ namespace UotanStudio.Pages.DockControl
             var nodeToolbox = new Tool
             {
                 Id = "NodeToolbox",
-                Title = LocalizationService.Instance["Node_Toolbox"],
+                Title = LanguageService.Instance.GetString("Node_Toolbox"),
                 CanClose = false
             };
 
             var nodeProperties = new Tool
             {
                 Id = "NodeProperties",
-                Title = LocalizationService.Instance["Node_Properties"],
+                Title = LanguageService.Instance.GetString("Node_Properties"),
                 CanClose = false
             };
 
             var executionLog = new Tool
             {
                 Id = "ExecutionLog",
-                Title = LocalizationService.Instance["Node_ExecLog"],
+                Title = LanguageService.Instance.GetString("Node_ExecLog"),
                 CanClose = false
             };
 
             var nodeCanvas = new Document
             {
                 Id = "NodeCanvas",
-                Title = LocalizationService.Instance["Node_Canvas"],
+                Title = LanguageService.Instance.GetString("Node_Canvas"),
                 CanClose = false
             };
 
             var documentDock = new DocumentDock
             {
                 Id = "NodeCanvasPane",
-                Title = LocalizationService.Instance["Node_Canvas"],
+                Title = LanguageService.Instance.GetString("Node_Canvas"),
                 IsCollapsable = false,
                 Proportion = double.NaN,
                 ActiveDockable = nodeCanvas,
@@ -130,10 +130,10 @@ namespace UotanStudio.Pages.DockControl
         {
             ContextLocator = new Dictionary<string, Func<object?>>
             {
-                ["NodeToolbox"] = () => LocalizationService.Instance["Node_Toolbox"],
-                ["NodeProperties"] = () => LocalizationService.Instance["Node_Properties"],
-                ["ExecutionLog"] = () => LocalizationService.Instance["Node_ExecLog"],
-                ["NodeCanvas"] = () => LocalizationService.Instance["Node_Canvas"]
+                ["NodeToolbox"] = () => LanguageService.Instance.GetString("Node_Toolbox"),
+                ["NodeProperties"] = () => LanguageService.Instance.GetString("Node_Properties"),
+                ["ExecutionLog"] = () => LanguageService.Instance.GetString("Node_ExecLog"),
+                ["NodeCanvas"] = () => LanguageService.Instance.GetString("Node_Canvas")
             };
 
             HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>

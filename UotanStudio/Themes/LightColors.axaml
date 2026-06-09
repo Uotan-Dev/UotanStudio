@@ -1,0 +1,9 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Color x:Key="PageBackground">#f2f2f6</Color>
+    <Color x:Key="CardBackground">#fefefe</Color>
+    <Color x:Key="TextForeground">#1a1a1a</Color>
+    <Color x:Key="SecondaryTextForeground">#666666</Color>
+    <Color x:Key="BorderForegroundColor">#e0e0e0</Color>
+    <Color x:Key="AccentColor">#0078d4</Color>
+</ResourceDictionary>

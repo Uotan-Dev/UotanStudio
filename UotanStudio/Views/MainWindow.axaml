@@ -4,7 +4,6 @@
 		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 		xmlns:views="using:UotanStudio.Views"
-		xmlns:i18n="using:UotanStudio.Localization"
 		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 		x:Class="UotanStudio.Views.MainWindow"
 		Icon="/Assets/UotanToolbox.png"
@@ -16,36 +15,36 @@
 			<Menu Margin="35 0 0 0">
 				<MenuItem Padding="8 0">
 					<MenuItem.Header>
-						<TextBlock Text="{i18n:Loc Menu_Project}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_Project}" FontSize="13" FontWeight="SemiBold" />
 					</MenuItem.Header>
-					<MenuItem IsChecked="True" Header="{i18n:Loc Menu_SecondToggleItem}" ToggleType="CheckBox" />
+					<MenuItem IsChecked="True" Header="{DynamicResource Menu_SecondToggleItem}" ToggleType="CheckBox" />
 					<Separator />
-					<MenuItem GroupName="A" Header="{i18n:Loc Menu_Radio1Group}" ToggleType="Radio" />
-					<MenuItem IsChecked="True" GroupName="A" Header="{i18n:Loc Menu_Radio2Group}" ToggleType="Radio" />
-					<MenuItem GroupName="A" Header="{i18n:Loc Menu_Radio3Group}" ToggleType="Radio">
-						<MenuItem Header="{i18n:Loc Menu_Radio4Group}" ToggleType="Radio" GroupName="A" />
-						<MenuItem Header="{i18n:Loc Menu_Radio5Group}" ToggleType="Radio" GroupName="A" />
+					<MenuItem GroupName="A" Header="{DynamicResource Menu_Radio1Group}" ToggleType="Radio" />
+					<MenuItem IsChecked="True" GroupName="A" Header="{DynamicResource Menu_Radio2Group}" ToggleType="Radio" />
+					<MenuItem GroupName="A" Header="{DynamicResource Menu_Radio3Group}" ToggleType="Radio">
+						<MenuItem Header="{DynamicResource Menu_Radio4Group}" ToggleType="Radio" GroupName="A" />
+						<MenuItem Header="{DynamicResource Menu_Radio5Group}" ToggleType="Radio" GroupName="A" />
 					</MenuItem>
 				</MenuItem>
 				<MenuItem Padding="8 0">
 					<MenuItem.Header>
-						<TextBlock Text="{i18n:Loc Menu_Tools}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_Tools}" FontSize="13" FontWeight="SemiBold" />
 					</MenuItem.Header>
 				</MenuItem>
 				<MenuItem Padding="8 0">
 					<MenuItem.Header>
-						<TextBlock Text="{i18n:Loc Menu_View}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_View}" FontSize="13" FontWeight="SemiBold" />
 					</MenuItem.Header>
 				</MenuItem>
 				<MenuItem Padding="8 0">
 					<MenuItem.Header>
-						<TextBlock Text="{i18n:Loc Menu_About}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_About}" FontSize="13" FontWeight="SemiBold" />
 					</MenuItem.Header>
 				</MenuItem>
 			</Menu>
 		</Grid>
 
-		<!-- ԭ������ҳ������ -->
+		<!-- 主内容页面区域 -->
 		<views:MainView />
 	</DockPanel>
 </Window>

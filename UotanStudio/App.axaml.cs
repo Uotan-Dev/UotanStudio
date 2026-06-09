@@ -2,8 +2,10 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using CommunityToolkit.Mvvm.Messaging;
 using System.Globalization;
-using UotanStudio.Localization;
+using UotanStudio.Messages;
+using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
 using UotanStudio.Views;
@@ -15,7 +17,6 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-        LocalizationService.Instance.InitializeFromSystemLanguage();
 #if DEBUG
         this.AttachDeveloperTools();
 #endif
@@ -25,8 +26,6 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Avoid duplicate validations from both Avalonia and the CommunityToolkit. 
-            // More info: https://docs.avaloniaui.net/docs/guides/development-guides/data-validation#manage-validationplugins
             desktop.MainWindow = new MainWindow
             {
                 DataContext = new MainViewModel()
@@ -41,15 +40,25 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
-        LocalizationService.Instance.PropertyChanged += OnLanguageChanged;
-        SettingsViewModel.ThemeChanged += OnThemeChanged;
+
+        // Register messenger receivers
+        WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, OnThemeChanged);
+        WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
+
+        // Load and apply saved settings
         var savedSettings = SettingsPersistenceService.Instance.LoadSettings();
-        ApplyTheme((ThemeMode)savedSettings.SelectedThemeIndex);
+        ApplyTheme(savedSettings.ThemeMode);
+        ApplyLanguage(savedSettings.LanguagePreference);
     }
 
-    private void OnThemeChanged(object? sender, ThemeMode themeMode)
+    private void OnThemeChanged(object recipient, ThemeChangedMessage message)
     {
-        ApplyTheme(themeMode);
+        ApplyTheme(message.ThemeMode);
+    }
+
+    private void OnLanguageChanged(object recipient, LanguageChangedMessage message)
+    {
+        UpdateSemiThemeLocale(message.CultureName);
     }
 
     private void ApplyTheme(ThemeMode themeMode)
@@ -60,19 +69,31 @@ public partial class App : Application
             ThemeMode.Dark => ThemeVariant.Dark,
             _ => ThemeVariant.Default
         };
+
+        // Apply custom theme colors
+        var themeKey = themeMode == ThemeMode.Dark ? "DarkColors" : "LightColors";
+        LanguageService.Instance.ApplyTheme(themeKey);
     }
 
-    private void OnLanguageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private void ApplyLanguage(LanguagePreference preference)
     {
-        if (e.PropertyName == nameof(LocalizationService.Culture))
+        switch (preference)
         {
-            var culture = LocalizationService.Instance.Culture;
-            UpdateSemiThemeLocale(culture);
+            case LanguagePreference.System:
+                LanguageService.Instance.InitializeFromSystemLanguage();
+                break;
+            case LanguagePreference.English:
+                LanguageService.Instance.ApplyLanguage("en-US");
+                break;
+            case LanguagePreference.Chinese:
+                LanguageService.Instance.ApplyLanguage("zh-CN");
+                break;
         }
     }
 
-    private void UpdateSemiThemeLocale(CultureInfo culture)
+    private void UpdateSemiThemeLocale(string cultureName)
     {
+        var culture = CultureInfo.GetCultureInfo(cultureName);
         foreach (var style in this.Styles)
         {
             switch (style)

@@ -3,7 +3,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             xmlns:i18n="using:UotanStudio.Localization"
              xmlns:vm="using:UotanStudio.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="900"
              x:Class="UotanStudio.Pages.SettingsView"
@@ -15,31 +14,25 @@
 
                 <!-- Section 1: Appearance -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{i18n:Loc Settings_Appearance}" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="{DynamicResource Settings_Appearance}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
 
                     <!-- Theme Selection -->
-                    <TextBlock Text="{i18n:Loc Settings_Theme}" FontSize="13" Margin="0,4,0,0" />
+                    <TextBlock Text="{DynamicResource Settings_Theme}" FontSize="13" Margin="0,4,0,0" />
                     <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
-                        <RadioButton x:Name="ThemeFollowSystemRadio"
-                                     Content="{i18n:Loc Settings_ThemeFollowSystem}"
+                        <RadioButton Content="{DynamicResource Settings_ThemeFollowSystem}"
                                      GroupName="ThemeGroup"
-                                     Tag="0"
-                                     IsChecked="{Binding SelectedThemeIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=0, Mode=OneWay}" />
-                        <RadioButton x:Name="ThemeLightRadio"
-                                     Content="{i18n:Loc Settings_ThemeLightMode}"
+                                     IsChecked="{Binding IsSystemTheme, Mode=TwoWay}" />
+                        <RadioButton Content="{DynamicResource Settings_ThemeLightMode}"
                                      GroupName="ThemeGroup"
-                                     Tag="1"
-                                     IsChecked="{Binding SelectedThemeIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=1, Mode=OneWay}" />
-                        <RadioButton x:Name="ThemeDarkRadio"
-                                     Content="{i18n:Loc Settings_ThemeDarkMode}"
+                                     IsChecked="{Binding IsLightTheme, Mode=TwoWay}" />
+                        <RadioButton Content="{DynamicResource Settings_ThemeDarkMode}"
                                      GroupName="ThemeGroup"
-                                     Tag="2"
-                                     IsChecked="{Binding SelectedThemeIndex, Converter={StaticResource IntEqualConverter}, ConverterParameter=2, Mode=OneWay}" />
+                                     IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
                     </StackPanel>
 
                     <!-- Theme Preview -->
-                    <TextBlock Text="{i18n:Loc Settings_ThemePreview}" FontSize="12" Opacity="0.7" Margin="0,8,0,0" />
+                    <TextBlock Text="{DynamicResource Settings_ThemePreview}" FontSize="12" Opacity="0.7" Margin="0,8,0,0" />
                     <Border CornerRadius="8" Padding="16" Height="80"
                             Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
                             BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
@@ -66,17 +59,17 @@
 
                 <!-- Section 2: Language -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{i18n:Loc Settings_Language}" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="{DynamicResource Settings_Language}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
                     <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_Language}"
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_Language}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ComboBox Grid.Row="0" Grid.Column="1"
                                   ItemsSource="{Binding Languages}"
-                                  SelectedIndex="{Binding SelectedLanguageIndex, Mode=TwoWay}"
+                                  SelectedItem="{Binding SelectedLanguagePreference, Mode=TwoWay}"
                                   HorizontalAlignment="Stretch" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_LanguagePreview}"
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_LanguagePreview}"
                                    VerticalAlignment="Center" FontSize="12" Opacity="0.7" Margin="0,8,0,0" />
                         <TextBlock Grid.Row="1" Grid.Column="1"
                                    Text="{Binding LanguagePreviewText}"
@@ -87,10 +80,10 @@
 
                 <!-- Section 3: General -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{i18n:Loc Settings_General}" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="{DynamicResource Settings_General}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
                     <Grid ColumnDefinitions="160,*" RowDefinitions="Auto" Margin="0,4">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_AutoSave}"
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AutoSave}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="0" Grid.Column="1"
                                       IsChecked="{Binding AutoSave}" />
@@ -99,23 +92,23 @@
 
                 <!-- Section 4: Firmware Tools -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{i18n:Loc Settings_Firmware}" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="{DynamicResource Settings_Firmware}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
                     <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_UnpackToolPath}"
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_UnpackToolPath}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <TextBox Grid.Row="0" Grid.Column="1"
                                  Text="{Binding UnpackToolPath}"
-                                 PlaceholderText="{i18n:Loc Settings_PathPlaceholder}" />
+                                 PlaceholderText="{DynamicResource Settings_PathPlaceholder}" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_TempDir}"
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_TempDir}"
                                    VerticalAlignment="Center" FontSize="13" Margin="0,8" />
                         <TextBox Grid.Row="1" Grid.Column="1"
                                  Text="{Binding TempDirectory}"
-                                 PlaceholderText="{i18n:Loc Settings_PathPlaceholder}"
+                                 PlaceholderText="{DynamicResource Settings_PathPlaceholder}"
                                  Margin="0,8" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_AutoVerify}"
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_AutoVerify}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="2" Grid.Column="1"
                                       IsChecked="{Binding AutoVerifyAfterUnpack}" />
@@ -124,30 +117,30 @@
 
                 <!-- Section 5: Flash -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{i18n:Loc Settings_Flash}" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="{DynamicResource Settings_Flash}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
                     <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="ADB"
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AdbPath}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <TextBox Grid.Row="0" Grid.Column="1"
                                  Text="{Binding AdbPath}"
-                                 PlaceholderText="{i18n:Loc Settings_PathPlaceholder}" />
+                                 PlaceholderText="{DynamicResource Settings_PathPlaceholder}" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Fastboot"
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_FastbootPath}"
                                    VerticalAlignment="Center" FontSize="13" Margin="0,8" />
                         <TextBox Grid.Row="1" Grid.Column="1"
                                  Text="{Binding FastbootPath}"
-                                 PlaceholderText="{i18n:Loc Settings_PathPlaceholder}"
+                                 PlaceholderText="{DynamicResource Settings_PathPlaceholder}"
                                  Margin="0,8" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_DeviceTimeout}"
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_DeviceTimeout}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <NumericUpDown Grid.Row="2" Grid.Column="1"
                                        Value="{Binding DeviceTimeoutSeconds}"
                                        Minimum="5" Maximum="300"
                                        FormatString="0 s" />
 
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{i18n:Loc Settings_AutoBackup}"
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource Settings_AutoBackup}"
                                    VerticalAlignment="Center" FontSize="13" Margin="0,8" />
                         <ToggleSwitch Grid.Row="3" Grid.Column="1"
                                       IsChecked="{Binding AutoBackupBeforeFlash}"
@@ -157,22 +150,22 @@
 
                 <!-- Section 6: Node Editor -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{i18n:Loc Settings_NodeEditor}" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="{DynamicResource Settings_NodeEditor}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
                     <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{i18n:Loc Settings_SnapToGrid}"
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_SnapToGrid}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="0" Grid.Column="1"
                                       IsChecked="{Binding SnapToGrid}" />
 
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{i18n:Loc Settings_GridSize}"
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_GridSize}"
                                    VerticalAlignment="Center" FontSize="13" Margin="0,8" />
                         <NumericUpDown Grid.Row="1" Grid.Column="1"
                                        Value="{Binding GridSize}"
                                        Minimum="5" Maximum="100"
                                        Margin="0,8" />
 
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{i18n:Loc Settings_ConnectionStyle}"
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_ConnectionStyle}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ComboBox Grid.Row="2" Grid.Column="1"
                                   ItemsSource="{Binding ConnectionStyles}"
@@ -183,7 +176,7 @@
 
                 <!-- Section 7: Version Information -->
                 <StackPanel Spacing="8">
-                    <TextBlock Text="{i18n:Loc Settings_VersionInfo}" FontWeight="SemiBold" FontSize="16" />
+                    <TextBlock Text="{DynamicResource Settings_VersionInfo}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
 
                     <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,4">
@@ -193,12 +186,12 @@
                                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1">
                             <StackPanel Spacing="4">
-                                <TextBlock Text="{i18n:Loc Settings_FirmwareModule}" FontWeight="SemiBold" FontSize="14" />
+                                <TextBlock Text="{DynamicResource Settings_FirmwareModule}" FontWeight="SemiBold" FontSize="14" />
                                 <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <TextBlock Text="{i18n:Loc Settings_Version}" FontSize="12" Opacity="0.7" />
+                                    <TextBlock Text="{DynamicResource Settings_Version}" FontSize="12" Opacity="0.7" />
                                     <TextBlock Text="{Binding FirmwareModuleVersion}" FontSize="12" Opacity="0.7" />
                                 </StackPanel>
-                                <Button Content="{i18n:Loc Settings_CheckForUpdates}"
+                                <Button Content="{DynamicResource Settings_CheckForUpdates}"
                                         Command="{Binding CheckForUpdatesCommand}"
                                         IsEnabled="{Binding !IsCheckingUpdates}"
                                         FontSize="12" Margin="0,4,0,0"
@@ -212,12 +205,12 @@
                                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1">
                             <StackPanel Spacing="4">
-                                <TextBlock Text="{i18n:Loc Settings_FlashModule}" FontWeight="SemiBold" FontSize="14" />
+                                <TextBlock Text="{DynamicResource Settings_FlashModule}" FontWeight="SemiBold" FontSize="14" />
                                 <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <TextBlock Text="{i18n:Loc Settings_Version}" FontSize="12" Opacity="0.7" />
+                                    <TextBlock Text="{DynamicResource Settings_Version}" FontSize="12" Opacity="0.7" />
                                     <TextBlock Text="{Binding FlashModuleVersion}" FontSize="12" Opacity="0.7" />
                                 </StackPanel>
-                                <Button Content="{i18n:Loc Settings_CheckForUpdates}"
+                                <Button Content="{DynamicResource Settings_CheckForUpdates}"
                                         Command="{Binding CheckForUpdatesCommand}"
                                         IsEnabled="{Binding !IsCheckingUpdates}"
                                         FontSize="12" Margin="0,4,0,0"
@@ -231,12 +224,12 @@
                                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                 BorderThickness="1">
                             <StackPanel Spacing="4">
-                                <TextBlock Text="{i18n:Loc Settings_VisualProgrammingModule}" FontWeight="SemiBold" FontSize="14" />
+                                <TextBlock Text="{DynamicResource Settings_VisualProgrammingModule}" FontWeight="SemiBold" FontSize="14" />
                                 <StackPanel Orientation="Horizontal" Spacing="4">
-                                    <TextBlock Text="{i18n:Loc Settings_Version}" FontSize="12" Opacity="0.7" />
+                                    <TextBlock Text="{DynamicResource Settings_Version}" FontSize="12" Opacity="0.7" />
                                     <TextBlock Text="{Binding VisualProgrammingModuleVersion}" FontSize="12" Opacity="0.7" />
                                 </StackPanel>
-                                <Button Content="{i18n:Loc Settings_CheckForUpdates}"
+                                <Button Content="{DynamicResource Settings_CheckForUpdates}"
                                         Command="{Binding CheckForUpdatesCommand}"
                                         IsEnabled="{Binding !IsCheckingUpdates}"
                                         FontSize="12" Margin="0,4,0,0"
@@ -253,7 +246,7 @@
 
                 <!-- Section 8: Reset to Defaults -->
                 <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,32">
-                    <Button Content="{i18n:Loc Settings_ResetToDefaults}"
+                    <Button Content="{DynamicResource Settings_ResetToDefaults}"
                             Command="{Binding ResetToDefaultsCommand}" />
                 </StackPanel>
 

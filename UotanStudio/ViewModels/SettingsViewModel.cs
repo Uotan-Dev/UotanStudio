@@ -1,52 +1,28 @@
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using UotanStudio.Localization;
+using UotanStudio.Messages;
+using UotanStudio.Models;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels;
 
 /// <summary>
-/// <para>主题模式枚举，定义应用程序可用的主题选项。</para>
-/// Theme mode enum, defining the available theme options for the application.
-/// </summary>
-public enum ThemeMode
-{
-    /// <summary>
-    /// <para>跟随系统主题。</para>
-    /// Follow the system theme.
-    /// </summary>
-    FollowSystem = 0,
-
-    /// <summary>
-    /// <para>浅色主题。</para>
-    /// Light theme.
-    /// </summary>
-    Light = 1,
-
-    /// <summary>
-    /// <para>深色主题。</para>
-    /// Dark theme.
-    /// </summary>
-    Dark = 2
-}
-
-/// <summary>
 /// <para>设置视图模型，管理应用程序的通用设置、固件工具设置、烧录设置和节点编辑器设置。</para>
 /// Settings view model, managing general settings, firmware tool settings, flash settings, and node editor settings.
 /// </summary>
-public partial class SettingsViewModel : ViewModelBase
+public partial class SettingsViewModel : ViewModelBase, IDisposable
 {
     private AppSettings _appSettings;
     private CancellationTokenSource? _saveCts;
     private Timer? _toastTimer;
+    private bool _disposed;
 
-    private int _selectedLanguageIndex;
-    private ThemeMode _selectedTheme;
+    private LanguagePreference _selectedLanguagePreference;
+    private ThemeMode _selectedThemeMode;
     private bool _autoSave;
     private string _unpackToolPath = string.Empty;
     private string _tempDirectory = string.Empty;
@@ -64,34 +40,33 @@ public partial class SettingsViewModel : ViewModelBase
     private string _toastMessage = string.Empty;
 
     /// <summary>
-    /// <para>当主题模式变更时触发，供外部订阅以应用主题切换。</para>
-    /// Fired when the theme mode changes, for external subscribers to apply theme switching.
+    /// <para>获取可用语言列表。</para>
+    /// Gets the list of available languages.
     /// </summary>
-    public static event EventHandler<ThemeMode>? ThemeChanged;
+    public List<LanguagePreference> Languages { get; } =
+        [LanguagePreference.System, LanguagePreference.English, LanguagePreference.Chinese];
 
     /// <summary>
-    /// <para>获取可用语言列表，首项为"自动检测"选项。</para>
-    /// Gets the list of available languages, with "Auto Detect" as the first item.
+    /// <para>获取可用主题模式列表。</para>
+    /// Gets the list of available theme modes.
     /// </summary>
-    public List<LanguageOption> Languages { get; }
-
-    /// <summary>
-    /// <para>获取可用主题列表（仅用于显示）。</para>
-    /// Gets the list of available themes (for display only).
-    /// </summary>
-    public List<string> Themes { get; }
+    public List<ThemeMode> Themes { get; } =
+        [ThemeMode.System, ThemeMode.Light, ThemeMode.Dark];
 
     /// <summary>
     /// <para>获取可用连接线样式列表。</para>
     /// Gets the list of available connection line styles.
     /// </summary>
-    public List<string> ConnectionStyles { get; }
+    public List<string> ConnectionStyles { get; } =
+        [LanguageService.Instance.GetString("Settings_ConnBezier"),
+         LanguageService.Instance.GetString("Settings_ConnLine"),
+         LanguageService.Instance.GetString("Settings_ConnStep")];
 
     /// <summary>
     /// <para>获取语言预览文本，根据当前语言动态更新。</para>
     /// Gets the language preview text, dynamically updated based on the current language.
     /// </summary>
-    public string LanguagePreviewText => LocalizationService.Instance["Settings_LanguagePreviewText"];
+    public string LanguagePreviewText => LanguageService.Instance.GetString("Settings_LanguagePreviewText");
 
     /// <summary>
     /// <para>获取固件解包模块版本号。</para>
@@ -112,25 +87,17 @@ public partial class SettingsViewModel : ViewModelBase
     public string VisualProgrammingModuleVersion { get; } = "1.0.0";
 
     /// <summary>
-    /// <para>获取或设置选中的语言索引。0=自动检测，1=English，2=简体中文。</para>
-    /// Gets or sets the selected language index. 0=Auto Detect, 1=English, 2=简体中文.
+    /// <para>获取或设置选中的语言偏好。</para>
+    /// Gets or sets the selected language preference.
     /// </summary>
-    public int SelectedLanguageIndex
+    public LanguagePreference SelectedLanguagePreference
     {
-        get => _selectedLanguageIndex;
+        get => _selectedLanguagePreference;
         set
         {
-            if (SetProperty(ref _selectedLanguageIndex, value) && value >= 0 && value < Languages.Count)
+            if (SetProperty(ref _selectedLanguagePreference, value))
             {
-                if (value == 0)
-                {
-                    LocalizationService.Instance.InitializeFromSystemLanguage();
-                }
-                else
-                {
-                    LocalizationService.Instance.Culture = new CultureInfo(Languages[value].Code);
-                }
-
+                ApplyLanguagePreference(value);
                 OnPropertyChanged(nameof(LanguagePreviewText));
                 DebouncedSaveSettings();
             }
@@ -141,28 +108,59 @@ public partial class SettingsViewModel : ViewModelBase
     /// <para>获取或设置选中的主题模式。</para>
     /// Gets or sets the selected theme mode.
     /// </summary>
-    public ThemeMode SelectedTheme
+    public ThemeMode SelectedThemeMode
     {
-        get => _selectedTheme;
+        get => _selectedThemeMode;
         set
         {
-            if (SetProperty(ref _selectedTheme, value))
+            if (SetProperty(ref _selectedThemeMode, value))
             {
-                OnPropertyChanged(nameof(SelectedThemeIndex));
-                ThemeChanged?.Invoke(this, value);
+                WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(value));
                 DebouncedSaveSettings();
             }
         }
     }
 
     /// <summary>
-    /// <para>获取或设置选中的主题索引，用于界面绑定。与 <see cref="SelectedTheme"/> 保持同步。</para>
-    /// Gets or sets the selected theme index, for UI binding. Synchronized with <see cref="SelectedTheme"/>.
+    /// <para>获取或设置是否为浅色主题（用于 RadioButton 绑定）。</para>
+    /// Gets or sets whether the light theme is selected (for RadioButton binding).
     /// </summary>
-    public int SelectedThemeIndex
+    public bool IsLightTheme
     {
-        get => (int)_selectedTheme;
-        set => SelectedTheme = (ThemeMode)value;
+        get => _selectedThemeMode == ThemeMode.Light;
+        set
+        {
+            if (value && _selectedThemeMode != ThemeMode.Light)
+                SelectedThemeMode = ThemeMode.Light;
+        }
+    }
+
+    /// <summary>
+    /// <para>获取或设置是否为深色主题（用于 RadioButton 绑定）。</para>
+    /// Gets or sets whether the dark theme is selected (for RadioButton binding).
+    /// </summary>
+    public bool IsDarkTheme
+    {
+        get => _selectedThemeMode == ThemeMode.Dark;
+        set
+        {
+            if (value && _selectedThemeMode != ThemeMode.Dark)
+                SelectedThemeMode = ThemeMode.Dark;
+        }
+    }
+
+    /// <summary>
+    /// <para>获取或设置是否跟随系统主题（用于 RadioButton 绑定）。</para>
+    /// Gets or sets whether to follow the system theme (for RadioButton binding).
+    /// </summary>
+    public bool IsSystemTheme
+    {
+        get => _selectedThemeMode == ThemeMode.System;
+        set
+        {
+            if (value && _selectedThemeMode != ThemeMode.System)
+                SelectedThemeMode = ThemeMode.System;
+        }
     }
 
     /// <summary>
@@ -172,11 +170,7 @@ public partial class SettingsViewModel : ViewModelBase
     public bool AutoSave
     {
         get => _autoSave;
-        set
-        {
-            if (SetProperty(ref _autoSave, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _autoSave, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -186,11 +180,7 @@ public partial class SettingsViewModel : ViewModelBase
     public string UnpackToolPath
     {
         get => _unpackToolPath;
-        set
-        {
-            if (SetProperty(ref _unpackToolPath, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _unpackToolPath, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -200,11 +190,7 @@ public partial class SettingsViewModel : ViewModelBase
     public string TempDirectory
     {
         get => _tempDirectory;
-        set
-        {
-            if (SetProperty(ref _tempDirectory, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _tempDirectory, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -214,11 +200,7 @@ public partial class SettingsViewModel : ViewModelBase
     public bool AutoVerifyAfterUnpack
     {
         get => _autoVerifyAfterUnpack;
-        set
-        {
-            if (SetProperty(ref _autoVerifyAfterUnpack, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _autoVerifyAfterUnpack, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -228,11 +210,7 @@ public partial class SettingsViewModel : ViewModelBase
     public string AdbPath
     {
         get => _adbPath;
-        set
-        {
-            if (SetProperty(ref _adbPath, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _adbPath, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -242,11 +220,7 @@ public partial class SettingsViewModel : ViewModelBase
     public string FastbootPath
     {
         get => _fastbootPath;
-        set
-        {
-            if (SetProperty(ref _fastbootPath, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _fastbootPath, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -256,11 +230,7 @@ public partial class SettingsViewModel : ViewModelBase
     public int DeviceTimeoutSeconds
     {
         get => _deviceTimeoutSeconds;
-        set
-        {
-            if (SetProperty(ref _deviceTimeoutSeconds, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _deviceTimeoutSeconds, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -270,11 +240,7 @@ public partial class SettingsViewModel : ViewModelBase
     public bool AutoBackupBeforeFlash
     {
         get => _autoBackupBeforeFlash;
-        set
-        {
-            if (SetProperty(ref _autoBackupBeforeFlash, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _autoBackupBeforeFlash, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -284,11 +250,7 @@ public partial class SettingsViewModel : ViewModelBase
     public bool SnapToGrid
     {
         get => _snapToGrid;
-        set
-        {
-            if (SetProperty(ref _snapToGrid, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _snapToGrid, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -298,11 +260,7 @@ public partial class SettingsViewModel : ViewModelBase
     public double GridSize
     {
         get => _gridSize;
-        set
-        {
-            if (SetProperty(ref _gridSize, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _gridSize, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -312,11 +270,7 @@ public partial class SettingsViewModel : ViewModelBase
     public int ConnectionStyleIndex
     {
         get => _connectionStyleIndex;
-        set
-        {
-            if (SetProperty(ref _connectionStyleIndex, value))
-                DebouncedSaveSettings();
-        }
+        set { if (SetProperty(ref _connectionStyleIndex, value)) DebouncedSaveSettings(); }
     }
 
     /// <summary>
@@ -365,31 +319,10 @@ public partial class SettingsViewModel : ViewModelBase
     /// </summary>
     public SettingsViewModel()
     {
-        Languages =
-        [
-            new LanguageOption(LocalizationService.Instance["Settings_AutoDetect"], "auto"),
-            new LanguageOption("English", "en-US"),
-            new LanguageOption("简体中文", "zh-CN")
-        ];
-
-        Themes =
-        [
-            LocalizationService.Instance["Settings_ThemeFollowSystem"],
-            LocalizationService.Instance["Settings_ThemeLightMode"],
-            LocalizationService.Instance["Settings_ThemeDarkMode"]
-        ];
-
-        ConnectionStyles =
-        [
-            LocalizationService.Instance["Settings_ConnBezier"],
-            LocalizationService.Instance["Settings_ConnLine"],
-            LocalizationService.Instance["Settings_ConnStep"]
-        ];
-
         _appSettings = SettingsPersistenceService.Instance.LoadSettings();
         InitializeFromAppSettings(_appSettings);
 
-        LocalizationService.Instance.PropertyChanged += OnLocalizationServicePropertyChanged;
+        LanguageService.Instance.LanguageChanged += OnLanguageChanged;
     }
 
     /// <summary>
@@ -402,8 +335,8 @@ public partial class SettingsViewModel : ViewModelBase
     /// </param>
     private void InitializeFromAppSettings(AppSettings settings)
     {
-        _selectedLanguageIndex = settings.SelectedLanguageIndex;
-        _selectedTheme = (ThemeMode)settings.SelectedThemeIndex;
+        _selectedLanguagePreference = settings.LanguagePreference;
+        _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
         _unpackToolPath = settings.UnpackToolPath;
         _tempDirectory = settings.TempDirectory;
@@ -416,14 +349,31 @@ public partial class SettingsViewModel : ViewModelBase
         _gridSize = settings.GridSize;
         _connectionStyleIndex = settings.ConnectionStyleIndex;
 
-        // Apply language based on loaded index
-        if (_selectedLanguageIndex == 0)
+        // Apply language based on loaded preference
+        ApplyLanguagePreference(_selectedLanguagePreference);
+    }
+
+    /// <summary>
+    /// <para>根据语言偏好枚举应用语言设置。</para>
+    /// Applies the language setting based on the language preference enum.
+    /// </summary>
+    /// <param name="preference">
+    /// <para>语言偏好。</para>
+    /// The language preference.
+    /// </param>
+    private void ApplyLanguagePreference(LanguagePreference preference)
+    {
+        switch (preference)
         {
-            LocalizationService.Instance.InitializeFromSystemLanguage();
-        }
-        else if (_selectedLanguageIndex > 0 && _selectedLanguageIndex < Languages.Count)
-        {
-            LocalizationService.Instance.Culture = new CultureInfo(Languages[_selectedLanguageIndex].Code);
+            case LanguagePreference.System:
+                LanguageService.Instance.InitializeFromSystemLanguage();
+                break;
+            case LanguagePreference.English:
+                LanguageService.Instance.ApplyLanguage("en-US");
+                break;
+            case LanguagePreference.Chinese:
+                LanguageService.Instance.ApplyLanguage("zh-CN");
+                break;
         }
     }
 
@@ -433,9 +383,11 @@ public partial class SettingsViewModel : ViewModelBase
     /// </summary>
     private void DebouncedSaveSettings()
     {
-        _saveCts?.Cancel();
-
+        var oldCts = _saveCts;
         _saveCts = new CancellationTokenSource();
+        oldCts?.Cancel();
+        oldCts?.Dispose();
+
         _ = DebouncedSaveSettingsAsync(_saveCts.Token);
     }
 
@@ -467,8 +419,8 @@ public partial class SettingsViewModel : ViewModelBase
     /// </summary>
     private void SaveSettings()
     {
-        _appSettings.SelectedLanguageIndex = _selectedLanguageIndex;
-        _appSettings.SelectedThemeIndex = (int)_selectedTheme;
+        _appSettings.LanguagePreference = _selectedLanguagePreference;
+        _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
         _appSettings.UnpackToolPath = _unpackToolPath;
         _appSettings.TempDirectory = _tempDirectory;
@@ -483,7 +435,7 @@ public partial class SettingsViewModel : ViewModelBase
 
         SettingsPersistenceService.Instance.SaveSettings(_appSettings);
 
-        ShowToast(LocalizationService.Instance["Settings_SettingsSaved"]);
+        ShowToast(LanguageService.Instance.GetString("Settings_SettingsSaved"));
     }
 
     /// <summary>
@@ -510,15 +462,14 @@ public partial class SettingsViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>监听本地化服务属性变更，更新语言预览文本。</para>
-    /// Listens to localization service property changes and updates the language preview text.
+    /// <para>监听语言服务变更事件，更新语言相关属性。</para>
+    /// Listens to language service change events and updates language-related properties.
     /// </summary>
-    private void OnLocalizationServicePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    private void OnLanguageChanged(object? sender, EventArgs e)
     {
-        if (e.PropertyName == nameof(LocalizationService.Culture))
-        {
-            OnPropertyChanged(nameof(LanguagePreviewText));
-        }
+        OnPropertyChanged(nameof(LanguagePreviewText));
+        // Update ConnectionStyles list display
+        OnPropertyChanged(nameof(ConnectionStyles));
     }
 
     /// <summary>
@@ -529,16 +480,16 @@ public partial class SettingsViewModel : ViewModelBase
     private async Task CheckForUpdatesAsync()
     {
         IsCheckingUpdates = true;
-        UpdateCheckResult = LocalizationService.Instance["Settings_CheckingUpdates"];
+        UpdateCheckResult = LanguageService.Instance.GetString("Settings_CheckingUpdates");
 
         try
         {
             await Task.Delay(1000);
-            UpdateCheckResult = LocalizationService.Instance["Settings_UpToDate"];
+            UpdateCheckResult = LanguageService.Instance.GetString("Settings_UpToDate");
         }
         catch (Exception)
         {
-            UpdateCheckResult = LocalizationService.Instance["Settings_UpdateCheckFailed"];
+            UpdateCheckResult = LanguageService.Instance.GetString("Settings_UpdateCheckFailed");
         }
         finally
         {
@@ -558,49 +509,40 @@ public partial class SettingsViewModel : ViewModelBase
 
         // Notify all properties changed
         OnPropertyChanged(string.Empty);
-        ThemeChanged?.Invoke(this, _selectedTheme);
+        WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
     }
-}
-
-/// <summary>
-/// <para>语言选项，包含显示名称和语言代码。</para>
-/// Language option, containing display name and language code.
-/// </summary>
-public class LanguageOption
-{
-    /// <summary>
-    /// <para>获取语言显示名称。</para>
-    /// Gets the language display name.
-    /// </summary>
-    public string Name { get; }
 
     /// <summary>
-    /// <para>获取语言代码。</para>
-    /// Gets the language code.
+    /// <para>释放所有资源，包括取消令牌源、定时器和事件订阅。</para>
+    /// Releases all resources, including cancellation token sources, timers, and event subscriptions.
     /// </summary>
-    public string Code { get; }
-
-    /// <summary>
-    /// <para>创建语言选项。</para>
-    /// Creates a language option.
-    /// </summary>
-    /// <param name="name">
-    /// <para>语言显示名称。</para>
-    /// The language display name.
-    /// </param>
-    /// <param name="code">
-    /// <para>语言代码。</para>
-    /// The language code.
-    /// </param>
-    public LanguageOption(string name, string code)
+    public void Dispose()
     {
-        Name = name;
-        Code = code;
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
-    /// <para>返回语言显示名称。</para>
-    /// Returns the language display name.
+    /// <para>释放资源的核心方法。</para>
+    /// Core method for releasing resources.
     /// </summary>
-    public override string ToString() => Name;
+    /// <param name="disposing">
+    /// <para>是否释放托管资源。</para>
+    /// Whether to release managed resources.
+    /// </param>
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed)
+            return;
+
+        if (disposing)
+        {
+            _saveCts?.Cancel();
+            _saveCts?.Dispose();
+            _toastTimer?.Dispose();
+            LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
+        }
+
+        _disposed = true;
+    }
 }

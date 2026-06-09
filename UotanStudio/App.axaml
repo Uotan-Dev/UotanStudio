@@ -9,8 +9,14 @@
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.Resources>
-        <converters:IntEqualConverter x:Key="IntEqualConverter" />
-        <converters:StringNotNullOrEmptyConverter x:Key="StringNotNullOrEmptyConverter" />
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://UotanStudio/Locale/en-US.axaml"/>
+                <ResourceInclude Source="avares://UotanStudio/Themes/LightColors.axaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <converters:IntEqualConverter x:Key="IntEqualConverter" />
+            <converters:StringNotNullOrEmptyConverter x:Key="StringNotNullOrEmptyConverter" />
+        </ResourceDictionary>
     </Application.Resources>
 
     <Application.DataTemplates>

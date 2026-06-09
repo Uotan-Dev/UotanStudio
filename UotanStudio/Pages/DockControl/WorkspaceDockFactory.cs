@@ -6,7 +6,7 @@ using Dock.Model.Mvvm.Controls;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using UotanStudio.Localization;
+using UotanStudio.Services;
 
 namespace UotanStudio.Pages.DockControl
 {
@@ -17,15 +17,15 @@ namespace UotanStudio.Pages.DockControl
             var document1 = new Document { Id = "Document1", Title = "build.prop", CanClose = true };
             var document2 = new Document { Id = "Document2", Title = "init.rc", CanClose = true };
 
-            var projectExplorer = new Tool { Id = "ProjectExplorer", Title = LocalizationService.Instance["Dock_ProjectExplorer"], CanClose = true };
-            var properties = new Tool { Id = "Properties", Title = LocalizationService.Instance["Dock_Properties"], CanClose = true };
-            var output = new Tool { Id = "Output", Title = LocalizationService.Instance["Dock_Output"], CanClose = true };
-            var adbLog = new Tool { Id = "AdbLog", Title = LocalizationService.Instance["Dock_AdbLog"], CanClose = true };
+            var projectExplorer = new Tool { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = true };
+            var properties = new Tool { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = true };
+            var output = new Tool { Id = "Output", Title = LanguageService.Instance.GetString("Dock_Output"), CanClose = true };
+            var adbLog = new Tool { Id = "AdbLog", Title = LanguageService.Instance.GetString("Dock_AdbLog"), CanClose = true };
 
             var documentDock = new DocumentDock
             {
                 Id = "DocumentsPane",
-                Title = LocalizationService.Instance["Dock_Documents"],
+                Title = LanguageService.Instance.GetString("Dock_Documents"),
                 IsCollapsable = false,
                 Proportion = double.NaN,
                 ActiveDockable = document1,
@@ -96,8 +96,8 @@ namespace UotanStudio.Pages.DockControl
             {
                 ["Document1"] = () => "using System;\n\nnamespace App {\n}",
                 ["Document2"] = () => "<Window>\n</Window>",
-                ["ProjectExplorer"] = () => LocalizationService.Instance["Dock_ProjectExplorer"],
-                ["Properties"] = () => LocalizationService.Instance["Dock_Properties"],
+                ["ProjectExplorer"] = () => LanguageService.Instance.GetString("Dock_ProjectExplorer"),
+                ["Properties"] = () => LanguageService.Instance.GetString("Dock_Properties"),
                 ["Output"] = () => "Build succeeded.",
                 ["AdbLog"] = () => "ADB Log Output"
             };

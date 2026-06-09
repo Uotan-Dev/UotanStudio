@@ -1,37 +1,19 @@
-using System;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
-using UotanStudio.ViewModels;
 
 namespace UotanStudio.Pages;
 
+/// <summary>
+/// <para>设置页面视图，提供应用程序设置的交互界面。</para>
+/// Settings page view, providing the interactive interface for application settings.
+/// </summary>
 public partial class SettingsView : UserControl
 {
+    /// <summary>
+    /// <para>初始化设置页面视图的新实例。</para>
+    /// Initializes a new instance of the SettingsView.
+    /// </summary>
     public SettingsView()
     {
         InitializeComponent();
-
-        ThemeFollowSystemRadio.IsCheckedChanged += OnThemeRadioButtonChanged;
-        ThemeLightRadio.IsCheckedChanged += OnThemeRadioButtonChanged;
-        ThemeDarkRadio.IsCheckedChanged += OnThemeRadioButtonChanged;
-    }
-
-    /// <summary>
-    /// <para>处理主题 RadioButton 的 IsCheckedChanged 事件，根据 Tag 更新 SelectedThemeIndex。</para>
-    /// Handles the IsCheckedChanged event for theme RadioButtons, updating SelectedThemeIndex based on Tag.
-    /// </summary>
-    private void OnThemeRadioButtonChanged(object? sender, RoutedEventArgs e)
-    {
-        if (DataContext is SettingsViewModel vm && sender is RadioButton rb && rb.IsChecked == true)
-        {
-            if (rb.Tag is int index)
-            {
-                vm.SelectedThemeIndex = index;
-            }
-            else if (rb.Tag is string tagStr && int.TryParse(tagStr, out int parsedIndex))
-            {
-                vm.SelectedThemeIndex = parsedIndex;
-            }
-        }
     }
 }

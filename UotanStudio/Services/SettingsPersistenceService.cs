@@ -1,7 +1,10 @@
+using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using UotanStudio.Messages;
+using UotanStudio.Models;
 
 namespace UotanStudio.Services;
 
@@ -12,18 +15,20 @@ namespace UotanStudio.Services;
 public class AppSettings
 {
     /// <summary>
-    /// <para>获取或设置选中的语言索引。</para>
-    /// Gets or sets the selected language index.
+    /// <para>获取或设置语言偏好。</para>
+    /// Gets or sets the language preference.
     /// </summary>
-    [JsonPropertyName("selectedLanguageIndex")]
-    public int SelectedLanguageIndex { get; set; }
+    [JsonPropertyName("languagePreference")]
+    [JsonConverter(typeof(JsonStringEnumConverter<LanguagePreference>))]
+    public LanguagePreference LanguagePreference { get; set; }
 
     /// <summary>
-    /// <para>获取或设置选中的主题索引。</para>
-    /// Gets or sets the selected theme index.
+    /// <para>获取或设置主题模式。</para>
+    /// Gets or sets the theme mode.
     /// </summary>
-    [JsonPropertyName("selectedThemeIndex")]
-    public int SelectedThemeIndex { get; set; }
+    [JsonPropertyName("themeMode")]
+    [JsonConverter(typeof(JsonStringEnumConverter<ThemeMode>))]
+    public ThemeMode ThemeMode { get; set; }
 
     /// <summary>
     /// <para>获取或设置是否启用自动保存。</para>
@@ -108,10 +113,13 @@ public class AppSettings
 /// JSON serialization context for <see cref="AppSettings"/>, providing source generation support for AOT compatibility.
 /// </summary>
 [JsonSerializable(typeof(AppSettings))]
+[JsonSerializable(typeof(ThemeMode))]
+[JsonSerializable(typeof(LanguagePreference))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<LanguagePreference>)])]
 internal partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
@@ -202,14 +210,13 @@ public class SettingsPersistenceService
             var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
             File.WriteAllText(_settingsFilePath, json);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
-            // Silently ignore IO errors to avoid crashing the application.
-            // Settings will be lost for this session but the app remains usable.
+            WeakReferenceMessenger.Default.Send(new SettingsSaveFailedMessage(ex.Message));
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
-            // Silently ignore access errors to avoid crashing the application.
+            WeakReferenceMessenger.Default.Send(new SettingsSaveFailedMessage(ex.Message));
         }
     }
 

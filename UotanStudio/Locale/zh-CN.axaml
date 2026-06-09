@@ -1,0 +1,104 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 菜单 -->
+    <x:String x:Key="Menu_Project">项目</x:String>
+    <x:String x:Key="Menu_Tools">工具</x:String>
+    <x:String x:Key="Menu_View">视图</x:String>
+    <x:String x:Key="Menu_About">关于</x:String>
+    <x:String x:Key="Menu_SecondToggleItem">第二个菜单切换项</x:String>
+    <x:String x:Key="Menu_Radio1Group">单选 1 - 组</x:String>
+    <x:String x:Key="Menu_Radio2Group">单选 2 - 组</x:String>
+    <x:String x:Key="Menu_Radio3Group">单选 3 - 组</x:String>
+    <x:String x:Key="Menu_Radio4Group">单选 4 - 组</x:String>
+    <x:String x:Key="Menu_Radio5Group">单选 5 - 组</x:String>
+
+    <!-- 选项卡 -->
+    <x:String x:Key="Tab_Workspace">工作区</x:String>
+    <x:String x:Key="Tab_Node">节点</x:String>
+    <x:String x:Key="Tab_Settings">设置</x:String>
+
+    <!-- 停靠面板 -->
+    <x:String x:Key="Dock_ProjectExplorer">项目资源管理器</x:String>
+    <x:String x:Key="Dock_Properties">属性</x:String>
+    <x:String x:Key="Dock_Output">输出</x:String>
+    <x:String x:Key="Dock_AdbLog">ADB 日志</x:String>
+    <x:String x:Key="Dock_Documents">文档</x:String>
+
+    <!-- 视图定位器 -->
+    <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
+
+    <!-- 节点编辑器 -->
+    <x:String x:Key="Node_Toolbox">工具箱</x:String>
+    <x:String x:Key="Node_Properties">属性</x:String>
+    <x:String x:Key="Node_ExecLog">执行日志</x:String>
+    <x:String x:Key="Node_Canvas">节点画布</x:String>
+    <x:String x:Key="Node_SearchNodes">搜索节点...</x:String>
+    <x:String x:Key="Node_ZoomIn">放大</x:String>
+    <x:String x:Key="Node_ZoomOut">缩小</x:String>
+    <x:String x:Key="Node_ResetZoom">重置缩放</x:String>
+    <x:String x:Key="Node_ToggleMinimap">切换小地图</x:String>
+    <x:String x:Key="Node_DeleteSelected">删除选中</x:String>
+    <x:String x:Key="Node_Run">运行</x:String>
+    <x:String x:Key="Node_Stop">停止</x:String>
+    <x:String x:Key="Node_NodesLabel"> 节点</x:String>
+    <x:String x:Key="Node_ConnectionsLabel"> 连接</x:String>
+    <x:String x:Key="Node_NoSelection">选择节点以查看属性</x:String>
+    <x:String x:Key="Node_StatusReady">就绪</x:String>
+
+    <!-- 节点分类 -->
+    <x:String x:Key="Node_CatFirmware">固件操作</x:String>
+    <x:String x:Key="Node_CatFlash">烧录操作</x:String>
+    <x:String x:Key="Node_CatData">数据处理</x:String>
+    <x:String x:Key="Node_CatFlow">流程控制</x:String>
+    <x:String x:Key="Node_CatOutput">输出</x:String>
+
+    <!-- 设置 -->
+    <x:String x:Key="Settings_General">通用设置</x:String>
+    <x:String x:Key="Settings_Firmware">固件工具</x:String>
+    <x:String x:Key="Settings_Flash">烧录设置</x:String>
+    <x:String x:Key="Settings_NodeEditor">节点编辑器</x:String>
+    <x:String x:Key="Settings_Language">语言</x:String>
+    <x:String x:Key="Settings_Theme">主题</x:String>
+    <x:String x:Key="Settings_ThemeDefault">跟随系统</x:String>
+    <x:String x:Key="Settings_ThemeLight">浅色</x:String>
+    <x:String x:Key="Settings_ThemeDark">深色</x:String>
+    <x:String x:Key="Settings_AutoSave">自动保存</x:String>
+    <x:String x:Key="Settings_UnpackToolPath">解包工具路径</x:String>
+    <x:String x:Key="Settings_TempDir">临时文件目录</x:String>
+    <x:String x:Key="Settings_AutoVerify">解包后自动校验</x:String>
+    <x:String x:Key="Settings_PathPlaceholder">输入路径...</x:String>
+    <x:String x:Key="Settings_DeviceTimeout">设备超时时间</x:String>
+    <x:String x:Key="Settings_AutoBackup">烧录前自动备份</x:String>
+    <x:String x:Key="Settings_SnapToGrid">网格对齐</x:String>
+    <x:String x:Key="Settings_GridSize">网格大小</x:String>
+    <x:String x:Key="Settings_ConnectionStyle">连接线样式</x:String>
+    <x:String x:Key="Settings_ConnBezier">贝塞尔曲线</x:String>
+    <x:String x:Key="Settings_ConnLine">直线</x:String>
+    <x:String x:Key="Settings_ConnStep">阶梯线</x:String>
+    <x:String x:Key="Settings_Appearance">外观设置</x:String>
+    <x:String x:Key="Settings_ThemePreview">主题预览</x:String>
+    <x:String x:Key="Settings_LanguageAutoDetect">自动检测</x:String>
+    <x:String x:Key="Settings_LanguagePreview">语言预览</x:String>
+    <x:String x:Key="Settings_LanguagePreviewText">这是所选语言的预览文本。</x:String>
+    <x:String x:Key="Settings_VersionInfo">版本信息</x:String>
+    <x:String x:Key="Settings_FirmwareModule">固件解打包模块</x:String>
+    <x:String x:Key="Settings_FlashModule">开发板烧录模块</x:String>
+    <x:String x:Key="Settings_VisualProgrammingModule">可视化编程模块</x:String>
+    <x:String x:Key="Settings_Version">版本</x:String>
+    <x:String x:Key="Settings_CheckForUpdates">检查更新</x:String>
+    <x:String x:Key="Settings_CheckingUpdates">检查中...</x:String>
+    <x:String x:Key="Settings_UpToDate">已是最新版本</x:String>
+    <x:String x:Key="Settings_UpdateAvailable">有可用更新</x:String>
+    <x:String x:Key="Settings_UpdateCheckFailed">更新检查失败</x:String>
+    <x:String x:Key="Settings_ResetToDefaults">恢复默认设置</x:String>
+    <x:String x:Key="Settings_ResetConfirm">确定要恢复所有设置为默认值吗？</x:String>
+    <x:String x:Key="Settings_SettingsSaved">设置已保存</x:String>
+    <x:String x:Key="Settings_ThemeFollowSystem">跟随系统</x:String>
+    <x:String x:Key="Settings_ThemeLightMode">浅色模式</x:String>
+    <x:String x:Key="Settings_ThemeDarkMode">深色模式</x:String>
+    <x:String x:Key="Settings_AutoDetect">自动检测</x:String>
+    <x:String x:Key="Settings_AdbPath">ADB 路径</x:String>
+    <x:String x:Key="Settings_FastbootPath">Fastboot 路径</x:String>
+
+</ResourceDictionary>

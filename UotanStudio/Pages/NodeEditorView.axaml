@@ -3,7 +3,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             xmlns:i18n="using:UotanStudio.Localization"
              xmlns:vm="using:UotanStudio.ViewModels"
              xmlns:nodify="clr-namespace:NodifyM.Avalonia.Controls;assembly=NodifyM.Avalonia"
              xmlns:nodeVm="using:UotanStudio.ViewModels.NodeViewModels"
@@ -17,7 +16,7 @@
             <DockPanel>
                 <!-- 左侧: 搜索框 -->
                 <TextBox DockPanel.Dock="Left" Width="200" Height="28"
-                         PlaceholderText="{i18n:Loc Node_SearchNodes}"
+                         PlaceholderText="{DynamicResource Node_SearchNodes}"
                          Text="{Binding SearchText}"
                          VerticalAlignment="Center" />
 
@@ -27,7 +26,7 @@
                             Spacing="4">
                     <Button Width="28" Height="28" Padding="0"
                             Command="{Binding ZoomOutCommand}"
-                            ToolTip.Tip="{i18n:Loc Node_ZoomOut}">
+                            ToolTip.Tip="{DynamicResource Node_ZoomOut}">
                         <avalonia:MaterialIcon Kind="Minus" Width="16" Height="16" />
                     </Button>
                     <TextBlock Text="{Binding Zoom, StringFormat='{}{0:P0}'}"
@@ -35,26 +34,26 @@
                                TextAlignment="Center" FontSize="12" />
                     <Button Width="28" Height="28" Padding="0"
                             Command="{Binding ZoomInCommand}"
-                            ToolTip.Tip="{i18n:Loc Node_ZoomIn}">
+                            ToolTip.Tip="{DynamicResource Node_ZoomIn}">
                         <avalonia:MaterialIcon Kind="Plus" Width="16" Height="16" />
                     </Button>
                     <Button Width="28" Height="28" Padding="0"
                             Command="{Binding ResetZoomCommand}"
-                            ToolTip.Tip="{i18n:Loc Node_ResetZoom}">
+                            ToolTip.Tip="{DynamicResource Node_ResetZoom}">
                         <avalonia:MaterialIcon Kind="Magnify" Width="16" Height="16" />
                     </Button>
                     <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
                             Margin="4,0" />
                     <ToggleButton Width="28" Height="28" Padding="0"
                                   IsChecked="{Binding ShowMinimap}"
-                                  ToolTip.Tip="{i18n:Loc Node_ToggleMinimap}">
+                                  ToolTip.Tip="{DynamicResource Node_ToggleMinimap}">
                         <avalonia:MaterialIcon Kind="Map" Width="16" Height="16" />
                     </ToggleButton>
                     <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
                             Margin="4,0" />
                     <Button Width="28" Height="28" Padding="0"
                             Command="{Binding DeleteSelectedCommand}"
-                            ToolTip.Tip="{i18n:Loc Node_DeleteSelected}">
+                            ToolTip.Tip="{DynamicResource Node_DeleteSelected}">
                         <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
                     </Button>
                 </StackPanel>
@@ -63,11 +62,11 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                             VerticalAlignment="Center" Spacing="4">
                     <Button Width="28" Height="28" Padding="0"
-                            ToolTip.Tip="{i18n:Loc Node_Run}">
+                            ToolTip.Tip="{DynamicResource Node_Run}">
                         <avalonia:MaterialIcon Kind="Play" Width="16" Height="16" Foreground="Green" />
                     </Button>
                     <Button Width="28" Height="28" Padding="0"
-                            ToolTip.Tip="{i18n:Loc Node_Stop}">
+                            ToolTip.Tip="{DynamicResource Node_Stop}">
                         <avalonia:MaterialIcon Kind="Stop" Width="16" Height="16" Foreground="Red" />
                     </Button>
                 </StackPanel>
@@ -86,10 +85,10 @@
                     <Run Text="{Binding Zoom, StringFormat='{}{0:P0}'}" />
                     <Run Text=" | " />
                     <Run Text="{Binding Nodes.Count, Mode=OneWay}" />
-                    <Run Text="{i18n:Loc Node_NodesLabel}" />
+                    <Run Text="{DynamicResource Node_NodesLabel}" />
                     <Run Text=" | " />
                     <Run Text="{Binding Connections.Count, Mode=OneWay}" />
-                    <Run Text="{i18n:Loc Node_ConnectionsLabel}" />
+                    <Run Text="{DynamicResource Node_ConnectionsLabel}" />
                 </TextBlock>
             </DockPanel>
         </Border>
@@ -98,7 +97,7 @@
         <Border DockPanel.Dock="Left" Width="220"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="{i18n:Loc Node_Toolbox}"
+                <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Toolbox}"
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
                 <ScrollViewer>
@@ -130,12 +129,12 @@
         <Border DockPanel.Dock="Right" Width="240"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="{i18n:Loc Node_Properties}"
+                <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Properties}"
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
                 <ScrollViewer>
                     <StackPanel Margin="8">
-                        <TextBlock Text="{i18n:Loc Node_NoSelection}"
+                        <TextBlock Text="{DynamicResource Node_NoSelection}"
                                    FontSize="12"
                                    Foreground="{DynamicResource SecondaryTextBrush}"
                                    HorizontalAlignment="Center"

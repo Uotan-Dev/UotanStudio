@@ -1,0 +1,104 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Menu -->
+    <x:String x:Key="Menu_Project">Project</x:String>
+    <x:String x:Key="Menu_Tools">Tools</x:String>
+    <x:String x:Key="Menu_View">View</x:String>
+    <x:String x:Key="Menu_About">About</x:String>
+    <x:String x:Key="Menu_SecondToggleItem">Second Menu toggle item</x:String>
+    <x:String x:Key="Menu_Radio1Group">Radio 1 - group</x:String>
+    <x:String x:Key="Menu_Radio2Group">Radio 2 - group</x:String>
+    <x:String x:Key="Menu_Radio3Group">Radio 3 - group</x:String>
+    <x:String x:Key="Menu_Radio4Group">Radio 4 - group</x:String>
+    <x:String x:Key="Menu_Radio5Group">Radio 5 - group</x:String>
+
+    <!-- Tabs -->
+    <x:String x:Key="Tab_Workspace">Workspace</x:String>
+    <x:String x:Key="Tab_Node">Node</x:String>
+    <x:String x:Key="Tab_Settings">Settings</x:String>
+
+    <!-- Dock -->
+    <x:String x:Key="Dock_ProjectExplorer">Project Explorer</x:String>
+    <x:String x:Key="Dock_Properties">Properties</x:String>
+    <x:String x:Key="Dock_Output">Output</x:String>
+    <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
+    <x:String x:Key="Dock_Documents">Documents</x:String>
+
+    <!-- ViewLocator -->
+    <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
+
+    <!-- Node Editor -->
+    <x:String x:Key="Node_Toolbox">Toolbox</x:String>
+    <x:String x:Key="Node_Properties">Properties</x:String>
+    <x:String x:Key="Node_ExecLog">Execution Log</x:String>
+    <x:String x:Key="Node_Canvas">Node Canvas</x:String>
+    <x:String x:Key="Node_SearchNodes">Search nodes...</x:String>
+    <x:String x:Key="Node_ZoomIn">Zoom In</x:String>
+    <x:String x:Key="Node_ZoomOut">Zoom Out</x:String>
+    <x:String x:Key="Node_ResetZoom">Reset Zoom</x:String>
+    <x:String x:Key="Node_ToggleMinimap">Toggle Minimap</x:String>
+    <x:String x:Key="Node_DeleteSelected">Delete Selected</x:String>
+    <x:String x:Key="Node_Run">Run</x:String>
+    <x:String x:Key="Node_Stop">Stop</x:String>
+    <x:String x:Key="Node_NodesLabel"> nodes</x:String>
+    <x:String x:Key="Node_ConnectionsLabel"> connections</x:String>
+    <x:String x:Key="Node_NoSelection">Select a node to view properties</x:String>
+    <x:String x:Key="Node_StatusReady">Ready</x:String>
+
+    <!-- Node Categories -->
+    <x:String x:Key="Node_CatFirmware">Firmware</x:String>
+    <x:String x:Key="Node_CatFlash">Flash</x:String>
+    <x:String x:Key="Node_CatData">Data</x:String>
+    <x:String x:Key="Node_CatFlow">Flow</x:String>
+    <x:String x:Key="Node_CatOutput">Output</x:String>
+
+    <!-- Settings -->
+    <x:String x:Key="Settings_General">General</x:String>
+    <x:String x:Key="Settings_Firmware">Firmware Tools</x:String>
+    <x:String x:Key="Settings_Flash">Flash</x:String>
+    <x:String x:Key="Settings_NodeEditor">Node Editor</x:String>
+    <x:String x:Key="Settings_Language">Language</x:String>
+    <x:String x:Key="Settings_Theme">Theme</x:String>
+    <x:String x:Key="Settings_ThemeDefault">Follow System</x:String>
+    <x:String x:Key="Settings_ThemeLight">Light</x:String>
+    <x:String x:Key="Settings_ThemeDark">Dark</x:String>
+    <x:String x:Key="Settings_AutoSave">Auto Save</x:String>
+    <x:String x:Key="Settings_UnpackToolPath">Unpack Tool Path</x:String>
+    <x:String x:Key="Settings_TempDir">Temp Directory</x:String>
+    <x:String x:Key="Settings_AutoVerify">Auto Verify After Unpack</x:String>
+    <x:String x:Key="Settings_PathPlaceholder">Enter path...</x:String>
+    <x:String x:Key="Settings_DeviceTimeout">Device Timeout</x:String>
+    <x:String x:Key="Settings_AutoBackup">Auto Backup Before Flash</x:String>
+    <x:String x:Key="Settings_SnapToGrid">Snap to Grid</x:String>
+    <x:String x:Key="Settings_GridSize">Grid Size</x:String>
+    <x:String x:Key="Settings_ConnectionStyle">Connection Style</x:String>
+    <x:String x:Key="Settings_ConnBezier">Bezier</x:String>
+    <x:String x:Key="Settings_ConnLine">Line</x:String>
+    <x:String x:Key="Settings_ConnStep">Step</x:String>
+    <x:String x:Key="Settings_Appearance">Appearance</x:String>
+    <x:String x:Key="Settings_ThemePreview">Theme Preview</x:String>
+    <x:String x:Key="Settings_LanguageAutoDetect">Auto Detect</x:String>
+    <x:String x:Key="Settings_LanguagePreview">Language Preview</x:String>
+    <x:String x:Key="Settings_LanguagePreviewText">This is a preview of the selected language.</x:String>
+    <x:String x:Key="Settings_VersionInfo">Version Information</x:String>
+    <x:String x:Key="Settings_FirmwareModule">Firmware Unpack Module</x:String>
+    <x:String x:Key="Settings_FlashModule">Board Flash Module</x:String>
+    <x:String x:Key="Settings_VisualProgrammingModule">Visual Programming Module</x:String>
+    <x:String x:Key="Settings_Version">Version</x:String>
+    <x:String x:Key="Settings_CheckForUpdates">Check for Updates</x:String>
+    <x:String x:Key="Settings_CheckingUpdates">Checking...</x:String>
+    <x:String x:Key="Settings_UpToDate">Already up to date</x:String>
+    <x:String x:Key="Settings_UpdateAvailable">Update available</x:String>
+    <x:String x:Key="Settings_UpdateCheckFailed">Update check failed</x:String>
+    <x:String x:Key="Settings_ResetToDefaults">Reset to Defaults</x:String>
+    <x:String x:Key="Settings_ResetConfirm">Are you sure you want to reset all settings to defaults?</x:String>
+    <x:String x:Key="Settings_SettingsSaved">Settings saved</x:String>
+    <x:String x:Key="Settings_ThemeFollowSystem">Follow System</x:String>
+    <x:String x:Key="Settings_ThemeLightMode">Light Mode</x:String>
+    <x:String x:Key="Settings_ThemeDarkMode">Dark Mode</x:String>
+    <x:String x:Key="Settings_AutoDetect">Auto Detect</x:String>
+    <x:String x:Key="Settings_AdbPath">ADB Path</x:String>
+    <x:String x:Key="Settings_FastbootPath">Fastboot Path</x:String>
+
+</ResourceDictionary>
