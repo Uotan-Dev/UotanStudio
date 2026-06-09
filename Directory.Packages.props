@@ -22,5 +22,6 @@
     <PackageVersion Include="Semi.Avalonia.Dock" Version="12.0.0.2" />
     <PackageVersion Include="NodifyM.Avalonia" Version="12.0.0" />
     <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
+
   </ItemGroup>
 </Project>

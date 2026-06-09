@@ -1,9 +1,10 @@
 namespace UotanStudio.Models;
 
 /// <summary>
-/// <para>语言偏好枚举，定义应用程序可用的语言选项。</para>
-/// Language preference enum, defining the available language options for the application.
+/// <para>已过时：请使用 <see cref="LanguageInfo"/> 替代。此枚举仅为向后兼容迁移而保留。</para>
+/// Obsolete: Use <see cref="LanguageInfo"/> instead. This enum is retained only for backward-compatible migration.
 /// </summary>
+[System.Obsolete("Use LanguageInfo instead. This enum is retained only for backward-compatible migration.")]
 public enum LanguagePreference
 {
     /// <summary>

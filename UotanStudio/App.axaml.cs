@@ -46,9 +46,11 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
 
         // Load and apply saved settings
+        // 初始化语言服务，自动发现内置语言包
+        LanguageService.Instance.Initialize();
         var savedSettings = SettingsPersistenceService.Instance.LoadSettings();
         ApplyTheme(savedSettings.ThemeMode);
-        ApplyLanguage(savedSettings.LanguagePreference);
+        ApplyLanguage(savedSettings.CultureName);
     }
 
     private void OnThemeChanged(object recipient, ThemeChangedMessage message)
@@ -75,19 +77,15 @@ public partial class App : Application
         LanguageService.Instance.ApplyTheme(themeKey);
     }
 
-    private void ApplyLanguage(LanguagePreference preference)
+    private void ApplyLanguage(string cultureName)
     {
-        switch (preference)
+        if (string.IsNullOrEmpty(cultureName))
         {
-            case LanguagePreference.System:
-                LanguageService.Instance.InitializeFromSystemLanguage();
-                break;
-            case LanguagePreference.English:
-                LanguageService.Instance.ApplyLanguage("en-US");
-                break;
-            case LanguagePreference.Chinese:
-                LanguageService.Instance.ApplyLanguage("zh-CN");
-                break;
+            LanguageService.Instance.InitializeFromSystemLanguage();
+        }
+        else
+        {
+            LanguageService.Instance.ApplyLanguage(cultureName);
         }
     }
 

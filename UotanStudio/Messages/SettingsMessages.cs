@@ -79,3 +79,114 @@ public class SettingsSaveFailedMessage
         ErrorMessage = errorMessage;
     }
 }
+
+/// <summary>
+/// <para>语言状态变更消息，当应用程序语言环境发生切换时发送，包含新旧语言信息。</para>
+/// Language state changed message, sent when the application language environment switches, containing both old and new language information.
+/// </summary>
+public class LanguageStateChangedMessage
+{
+    /// <summary>
+    /// <para>获取新的语言文化名称。</para>
+    /// Gets the new language culture name.
+    /// </summary>
+    public string CultureName { get; }
+
+    /// <summary>
+    /// <para>获取切换前的语言文化名称。</para>
+    /// Gets the previous language culture name before the switch.
+    /// </summary>
+    public string PreviousCultureName { get; }
+
+    /// <summary>
+    /// <para>初始化 <see cref="LanguageStateChangedMessage"/> 类的新实例。</para>
+    /// Initializes a new instance of the <see cref="LanguageStateChangedMessage"/> class.
+    /// </summary>
+    /// <param name="cultureName">
+    /// <para>新的语言文化名称。</para>
+    /// The new language culture name.
+    /// </param>
+    /// <param name="previousCultureName">
+    /// <para>切换前的语言文化名称。</para>
+    /// The previous language culture name.
+    /// </param>
+    public LanguageStateChangedMessage(string cultureName, string previousCultureName)
+    {
+        CultureName = cultureName;
+        PreviousCultureName = previousCultureName;
+    }
+}
+
+/// <summary>
+/// <para>语言包更新消息，当已注册的语言包被更高版本替换时发送。</para>
+/// Language pack updated message, sent when a registered language pack is replaced by a higher version.
+/// </summary>
+public class LanguagePackUpdatedMessage
+{
+    /// <summary>
+    /// <para>获取被更新的语言包区域性名称。</para>
+    /// Gets the culture name of the updated language pack.
+    /// </summary>
+    public string CultureName { get; }
+
+    /// <summary>
+    /// <para>获取新版本号。</para>
+    /// Gets the new version number.
+    /// </summary>
+    public string NewVersion { get; }
+
+    /// <summary>
+    /// <para>初始化 <see cref="LanguagePackUpdatedMessage"/> 类的新实例。</para>
+    /// Initializes a new instance of the <see cref="LanguagePackUpdatedMessage"/> class.
+    /// </summary>
+    /// <param name="cultureName">
+    /// <para>被更新的语言包区域性名称。</para>
+    /// The culture name of the updated language pack.
+    /// </param>
+    /// <param name="newVersion">
+    /// <para>新版本号字符串。</para>
+    /// The new version string.
+    /// </param>
+    public LanguagePackUpdatedMessage(string cultureName, string newVersion)
+    {
+        CultureName = cultureName;
+        NewVersion = newVersion;
+    }
+}
+
+/// <summary>
+/// <para>语言包注册拒绝消息，当语言包因版本不兼容等原因被拒绝注册时发送。</para>
+/// Language pack rejected message, sent when a language pack is rejected from registration due to version incompatibility or other reasons.
+/// </summary>
+public class LanguagePackRejectedMessage
+{
+    /// <summary>
+    /// <para>获取被拒绝的语言包区域性名称。</para>
+    /// Gets the culture name of the rejected language pack.
+    /// </summary>
+    public string CultureName { get; }
+
+    /// <summary>
+    /// <para>获取拒绝原因。</para>
+    /// Gets the rejection reason.
+    /// </summary>
+    public string Reason { get; }
+
+    /// <summary>
+    /// <para>初始化 <see cref="LanguagePackRejectedMessage"/> 类的新实例。</para>
+    /// Initializes a new instance of the <see cref="LanguagePackRejectedMessage"/> class.
+    /// </summary>
+    /// <param name="cultureName">
+    /// <para>被拒绝的语言包区域性名称。</para>
+    /// The culture name of the rejected language pack.
+    /// </param>
+    /// <param name="reason">
+    /// <para>拒绝原因描述。</para>
+    /// The rejection reason description.
+    /// </param>
+    public LanguagePackRejectedMessage(string cultureName, string reason)
+    {
+        CultureName = cultureName;
+        Reason = reason;
+    }
+}

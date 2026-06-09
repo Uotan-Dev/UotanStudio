@@ -1,59 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- Menu -->
-    <x:String x:Key="Menu_Project">Project</x:String>
-    <x:String x:Key="Menu_Tools">Tools</x:String>
-    <x:String x:Key="Menu_View">View</x:String>
-    <x:String x:Key="Menu_About">About</x:String>
-    <x:String x:Key="Menu_SecondToggleItem">Second Menu toggle item</x:String>
-    <x:String x:Key="Menu_Radio1Group">Radio 1 - group</x:String>
-    <x:String x:Key="Menu_Radio2Group">Radio 2 - group</x:String>
-    <x:String x:Key="Menu_Radio3Group">Radio 3 - group</x:String>
-    <x:String x:Key="Menu_Radio4Group">Radio 4 - group</x:String>
-    <x:String x:Key="Menu_Radio5Group">Radio 5 - group</x:String>
-
-    <!-- Tabs -->
-    <x:String x:Key="Tab_Workspace">Workspace</x:String>
-    <x:String x:Key="Tab_Node">Node</x:String>
-    <x:String x:Key="Tab_Settings">Settings</x:String>
-
-    <!-- Dock -->
-    <x:String x:Key="Dock_ProjectExplorer">Project Explorer</x:String>
-    <x:String x:Key="Dock_Properties">Properties</x:String>
-    <x:String x:Key="Dock_Output">Output</x:String>
-    <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
-    <x:String x:Key="Dock_Documents">Documents</x:String>
-
-    <!-- ViewLocator -->
-    <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
-
-    <!-- Node Editor -->
-    <x:String x:Key="Node_Toolbox">Toolbox</x:String>
-    <x:String x:Key="Node_Properties">Properties</x:String>
-    <x:String x:Key="Node_ExecLog">Execution Log</x:String>
-    <x:String x:Key="Node_Canvas">Node Canvas</x:String>
-    <x:String x:Key="Node_SearchNodes">Search nodes...</x:String>
-    <x:String x:Key="Node_ZoomIn">Zoom In</x:String>
-    <x:String x:Key="Node_ZoomOut">Zoom Out</x:String>
-    <x:String x:Key="Node_ResetZoom">Reset Zoom</x:String>
-    <x:String x:Key="Node_ToggleMinimap">Toggle Minimap</x:String>
-    <x:String x:Key="Node_DeleteSelected">Delete Selected</x:String>
-    <x:String x:Key="Node_Run">Run</x:String>
-    <x:String x:Key="Node_Stop">Stop</x:String>
-    <x:String x:Key="Node_NodesLabel"> nodes</x:String>
-    <x:String x:Key="Node_ConnectionsLabel"> connections</x:String>
-    <x:String x:Key="Node_NoSelection">Select a node to view properties</x:String>
-    <x:String x:Key="Node_StatusReady">Ready</x:String>
-
-    <!-- Node Categories -->
-    <x:String x:Key="Node_CatFirmware">Firmware</x:String>
-    <x:String x:Key="Node_CatFlash">Flash</x:String>
-    <x:String x:Key="Node_CatData">Data</x:String>
-    <x:String x:Key="Node_CatFlow">Flow</x:String>
-    <x:String x:Key="Node_CatOutput">Output</x:String>
-
-    <!-- Settings -->
     <x:String x:Key="Settings_General">General</x:String>
     <x:String x:Key="Settings_Firmware">Firmware Tools</x:String>
     <x:String x:Key="Settings_Flash">Flash</x:String>

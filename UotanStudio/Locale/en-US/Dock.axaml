@@ -1,0 +1,10 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <x:String x:Key="Dock_ProjectExplorer">Project Explorer</x:String>
+    <x:String x:Key="Dock_Properties">Properties</x:String>
+    <x:String x:Key="Dock_Output">Output</x:String>
+    <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
+    <x:String x:Key="Dock_Documents">Documents</x:String>
+
+</ResourceDictionary>

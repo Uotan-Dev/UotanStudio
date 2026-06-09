@@ -1,0 +1,12 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Tabs -->
+    <x:String x:Key="Tab_Workspace">Workspace</x:String>
+    <x:String x:Key="Tab_Node">Node</x:String>
+    <x:String x:Key="Tab_Settings">Settings</x:String>
+
+    <!-- ViewLocator -->
+    <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
+
+</ResourceDictionary>

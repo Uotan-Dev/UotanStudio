@@ -1,0 +1,29 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Node Editor -->
+    <x:String x:Key="Node_Toolbox">Toolbox</x:String>
+    <x:String x:Key="Node_Properties">Properties</x:String>
+    <x:String x:Key="Node_ExecLog">Execution Log</x:String>
+    <x:String x:Key="Node_Canvas">Node Canvas</x:String>
+    <x:String x:Key="Node_SearchNodes">Search nodes...</x:String>
+    <x:String x:Key="Node_ZoomIn">Zoom In</x:String>
+    <x:String x:Key="Node_ZoomOut">Zoom Out</x:String>
+    <x:String x:Key="Node_ResetZoom">Reset Zoom</x:String>
+    <x:String x:Key="Node_ToggleMinimap">Toggle Minimap</x:String>
+    <x:String x:Key="Node_DeleteSelected">Delete Selected</x:String>
+    <x:String x:Key="Node_Run">Run</x:String>
+    <x:String x:Key="Node_Stop">Stop</x:String>
+    <x:String x:Key="Node_NodesLabel"> nodes</x:String>
+    <x:String x:Key="Node_ConnectionsLabel"> connections</x:String>
+    <x:String x:Key="Node_NoSelection">Select a node to view properties</x:String>
+    <x:String x:Key="Node_StatusReady">Ready</x:String>
+
+    <!-- Node Categories -->
+    <x:String x:Key="Node_CatFirmware">Firmware</x:String>
+    <x:String x:Key="Node_CatFlash">Flash</x:String>
+    <x:String x:Key="Node_CatData">Data</x:String>
+    <x:String x:Key="Node_CatFlow">Flow</x:String>
+    <x:String x:Key="Node_CatOutput">Output</x:String>
+
+</ResourceDictionary>

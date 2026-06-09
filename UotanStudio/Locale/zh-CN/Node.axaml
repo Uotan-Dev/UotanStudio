@@ -1,0 +1,29 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 节点编辑器 -->
+    <x:String x:Key="Node_Toolbox">工具箱</x:String>
+    <x:String x:Key="Node_Properties">属性</x:String>
+    <x:String x:Key="Node_ExecLog">执行日志</x:String>
+    <x:String x:Key="Node_Canvas">节点画布</x:String>
+    <x:String x:Key="Node_SearchNodes">搜索节点...</x:String>
+    <x:String x:Key="Node_ZoomIn">放大</x:String>
+    <x:String x:Key="Node_ZoomOut">缩小</x:String>
+    <x:String x:Key="Node_ResetZoom">重置缩放</x:String>
+    <x:String x:Key="Node_ToggleMinimap">切换小地图</x:String>
+    <x:String x:Key="Node_DeleteSelected">删除选中</x:String>
+    <x:String x:Key="Node_Run">运行</x:String>
+    <x:String x:Key="Node_Stop">停止</x:String>
+    <x:String x:Key="Node_NodesLabel"> 节点</x:String>
+    <x:String x:Key="Node_ConnectionsLabel"> 连接</x:String>
+    <x:String x:Key="Node_NoSelection">选择节点以查看属性</x:String>
+    <x:String x:Key="Node_StatusReady">就绪</x:String>
+
+    <!-- 节点分类 -->
+    <x:String x:Key="Node_CatFirmware">固件操作</x:String>
+    <x:String x:Key="Node_CatFlash">烧录操作</x:String>
+    <x:String x:Key="Node_CatData">数据处理</x:String>
+    <x:String x:Key="Node_CatFlow">流程控制</x:String>
+    <x:String x:Key="Node_CatOutput">输出</x:String>
+
+</ResourceDictionary>

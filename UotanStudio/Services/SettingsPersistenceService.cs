@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.Messaging;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,12 +16,11 @@ namespace UotanStudio.Services;
 public class AppSettings
 {
     /// <summary>
-    /// <para>获取或设置语言偏好。</para>
-    /// Gets or sets the language preference.
+    /// <para>获取或设置当前语言的文化名称（如 "en-US"、"zh-CN"）。空字符串表示跟随系统。</para>
+    /// Gets or sets the culture name of the current language (e.g., "en-US", "zh-CN"). Empty string means follow system.
     /// </summary>
-    [JsonPropertyName("languagePreference")]
-    [JsonConverter(typeof(JsonStringEnumConverter<LanguagePreference>))]
-    public LanguagePreference LanguagePreference { get; set; }
+    [JsonPropertyName("cultureName")]
+    public string CultureName { get; set; } = string.Empty;
 
     /// <summary>
     /// <para>获取或设置主题模式。</para>
@@ -114,12 +114,11 @@ public class AppSettings
 /// </summary>
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(ThemeMode))]
-[JsonSerializable(typeof(LanguagePreference))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<LanguagePreference>)])]
+    Converters = [typeof(JsonStringEnumConverter<ThemeMode>)])]
 internal partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
@@ -171,8 +170,12 @@ public class SettingsPersistenceService
             }
 
             var json = File.ReadAllText(_settingsFilePath);
-            var settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings);
-            return settings ?? new AppSettings();
+            var settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+
+            // 迁移旧格式：如果 cultureName 为空但 JSON 中存在 languagePreference 字段，则进行映射
+            MigrateFromLegacyFormat(settings, json);
+
+            return settings;
         }
         catch (JsonException)
         {
@@ -233,5 +236,51 @@ public class SettingsPersistenceService
         var defaults = new AppSettings();
         SaveSettings(defaults);
         return defaults;
+    }
+
+    /// <summary>
+    /// <para>将旧版的 languagePreference 枚举值迁移到 cultureName 字符串格式。</para>
+    /// Migrates the legacy languagePreference enum value to the cultureName string format.
+    /// </summary>
+    /// <param name="settings">
+    /// <para>要迁移的设置实例。</para>
+    /// The settings instance to migrate.
+    /// </param>
+    /// <param name="rawJson">
+    /// <para>原始 JSON 字符串。</para>
+    /// The raw JSON string.
+    /// </param>
+    private static void MigrateFromLegacyFormat(AppSettings settings, string? rawJson)
+    {
+        if (rawJson is null || !string.IsNullOrEmpty(settings.CultureName))
+            return;
+
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(rawJson);
+            if (doc.RootElement.TryGetProperty("languagePreference", out var prop))
+            {
+                var legacyValue = prop.ValueKind == System.Text.Json.JsonValueKind.Number
+                    ? prop.GetInt32()
+                    : prop.ValueKind == System.Text.Json.JsonValueKind.String
+#pragma warning disable CS0618 // Type or member is obsolete
+                        ? (int)Enum.Parse(typeof(LanguagePreference), prop.GetString() ?? "0")
+#pragma warning restore CS0618 // Type or member is obsolete
+                        : -1;
+
+                settings.CultureName = legacyValue switch
+                {
+                    1 => "en-US",     // LanguagePreference.English
+                    2 => "zh-CN",     // LanguagePreference.Chinese
+                    _ => string.Empty // LanguagePreference.System or unknown
+                };
+
+                Debug.WriteLine($"[SettingsPersistenceService] Migrated legacy languagePreference '{legacyValue}' to cultureName '{settings.CultureName}'");
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            // 忽略解析错误，使用默认值
+        }
     }
 }

@@ -1,0 +1,15 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <x:String x:Key="Menu_Project">项目</x:String>
+    <x:String x:Key="Menu_Tools">工具</x:String>
+    <x:String x:Key="Menu_View">视图</x:String>
+    <x:String x:Key="Menu_About">关于</x:String>
+    <x:String x:Key="Menu_SecondToggleItem">第二个菜单切换项</x:String>
+    <x:String x:Key="Menu_Radio1Group">单选 1 - 组</x:String>
+    <x:String x:Key="Menu_Radio2Group">单选 2 - 组</x:String>
+    <x:String x:Key="Menu_Radio3Group">单选 3 - 组</x:String>
+    <x:String x:Key="Menu_Radio4Group">单选 4 - 组</x:String>
+    <x:String x:Key="Menu_Radio5Group">单选 5 - 组</x:String>
+
+</ResourceDictionary>

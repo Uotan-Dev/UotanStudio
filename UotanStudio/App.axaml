@@ -11,7 +11,7 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://UotanStudio/Locale/en-US.axaml"/>
+                <!-- 语言资源将在运行时由 LanguageService 动态加载 -->
                 <ResourceInclude Source="avares://UotanStudio/Themes/LightColors.axaml"/>
             </ResourceDictionary.MergedDictionaries>
             <converters:IntEqualConverter x:Key="IntEqualConverter" />

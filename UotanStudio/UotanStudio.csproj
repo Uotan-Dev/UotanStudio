@@ -13,6 +13,7 @@
     <AvaloniaResource Include="Themes\**" />
   </ItemGroup>
 
+
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />

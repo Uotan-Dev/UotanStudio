@@ -1,0 +1,12 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- 选项卡 -->
+    <x:String x:Key="Tab_Workspace">工作区</x:String>
+    <x:String x:Key="Tab_Node">节点</x:String>
+    <x:String x:Key="Tab_Settings">设置</x:String>
+
+    <!-- 视图定位器 -->
+    <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
+
+</ResourceDictionary>

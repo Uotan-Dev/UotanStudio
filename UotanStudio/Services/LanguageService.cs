@@ -1,16 +1,22 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
+using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Linq;
+using UotanStudio.Messages;
+using UotanStudio.Models;
 
 namespace UotanStudio.Services;
 
 /// <summary>
-/// <para>提供应用程序多语言切换与本地化字符串查询服务的单例类。</para>
-/// A singleton service that provides language switching and localized string lookup for the application.
+/// <para>提供应用程序多语言切换与本地化字符串查询服务的单例类，支持动态语言包注册与模块化加载。</para>
+/// A singleton service that provides language switching and localized string lookup for the application, supporting dynamic language pack registration and modular loading.
 /// </summary>
 public sealed class LanguageService
 {
@@ -23,10 +29,6 @@ public sealed class LanguageService
     /// </summary>
     public static LanguageService Instance => _instance.Value;
 
-    /// <summary>
-    /// <para>存储当前语言的区域性名称（如 "en-US"、"zh-CN"）。</para>
-    /// Stores the culture name of the current language (e.g., "en-US", "zh-CN").
-    /// </summary>
     private string _currentLanguage = "en-US";
 
     /// <summary>
@@ -44,15 +46,15 @@ public sealed class LanguageService
     }
 
     /// <summary>
-    /// <para>获取应用程序支持的语言列表。</para>
-    /// Gets the list of supported language culture names.
+    /// <para>获取当前可用的语言列表，从 <see cref="LanguagePackRegistry"/> 动态获取。</para>
+    /// Gets the list of available languages, dynamically retrieved from <see cref="LanguagePackRegistry"/>.
     /// </summary>
     /// <value>
-    /// <para>包含所有支持语言区域性名称的只读列表。</para>
-    /// A read-only list containing all supported language culture names.
+    /// <para>包含所有可用语言信息的只读集合。</para>
+    /// A read-only collection containing all available language information.
     /// </value>
-    public IReadOnlyList<string> SupportedLanguages { get; } =
-        Array.AsReadOnly(new[] { "en-US", "zh-CN" });
+    public ReadOnlyObservableCollection<LanguageInfo> AvailableLanguages =>
+        LanguagePackRegistry.Instance.AvailableLanguages;
 
     /// <summary>
     /// <para>获取当前应用的主题键名。</para>
@@ -76,12 +78,32 @@ public sealed class LanguageService
     /// </summary>
     public static event EventHandler? ThemeChanged;
 
+    /// <summary>
+    /// <para>获取语言包的基础 URI 前缀。</para>
+    /// Gets the base URI prefix for language packs.
+    /// </summary>
+    private const string LocaleBaseUri = "avares://UotanStudio/Locale";
+
+    /// <summary>
+    /// <para>获取默认回退语言的文化名称。</para>
+    /// Gets the culture name of the default fallback language.
+    /// </summary>
+    private const string FallbackCulture = "en-US";
+
     private LanguageService() { }
 
     /// <summary>
-    /// <para>应用指定语言的资源包，替换当前合并字典中的语言资源，并强制刷新所有 DynamicResource 绑定。</para>
-    /// Applies the language pack for the specified culture, replaces the current locale resource in merged dictionaries,
-    /// and forces a refresh of all DynamicResource bindings.
+    /// <para>初始化语言服务，自动发现并注册内置语言包。</para>
+    /// Initializes the language service, automatically discovering and registering built-in language packs.
+    /// </summary>
+    public void Initialize()
+    {
+        LanguagePackRegistry.Instance.DiscoverBuiltInPacks();
+    }
+
+    /// <summary>
+    /// <para>应用指定语言的资源包，按模块加载语言资源文件，替换当前合并字典中的语言资源，并强制刷新所有 DynamicResource 绑定。</para>
+    /// Applies the language pack for the specified culture, loading modular resource files, replacing the current locale resource in merged dictionaries, and forcing a refresh of all DynamicResource bindings.
     /// </summary>
     /// <param name="language">
     /// <para>要应用的语言区域性名称（如 "en-US"、"zh-CN"）。</para>
@@ -97,34 +119,143 @@ public sealed class LanguageService
     {
         ArgumentNullException.ThrowIfNull(language);
 
-        var uri = new Uri($"avares://UotanStudio/Locale/{language}.axaml");
-        var resourceInclude = new ResourceInclude(uri) { Source = uri };
+        var previousLanguage = _currentLanguage;
 
         var appResources = Application.Current!.Resources;
         var mergedDicts = appResources.MergedDictionaries;
 
-        IResourceProvider? oldLocale = null;
-        foreach (var dict in mergedDicts)
+        // 移除所有旧的 Locale 资源
+        var oldLocaleDicts = mergedDicts
+            .Where(d => d is ResourceInclude ri && ri.Source?.OriginalString.Contains("Locale") == true)
+            .ToList();
+        foreach (var old in oldLocaleDicts)
         {
-            if (dict is ResourceInclude ri && ri.Source?.OriginalString.Contains("Locale") == true)
+            mergedDicts.Remove(old);
+        }
+
+        // 获取该语言包的模块列表
+        IReadOnlyList<string> modules;
+        if (LanguagePackRegistry.Instance.TryGetPack(language, out var pack) && pack != null)
+        {
+            modules = pack.ModuleNames;
+        }
+        else
+        {
+            // 未注册的语言包，使用默认模块列表
+            modules = ["Common", "Menu", "Dock", "Node", "Settings"];
+        }
+
+        // 按模块加载语言资源
+        foreach (var module in modules)
+        {
+            var uri = new Uri($"{LocaleBaseUri}/{language}/{module}.axaml");
+
+            try
             {
-                oldLocale = dict;
-                break;
+                var resourceInclude = new ResourceInclude(uri) { Source = uri };
+                mergedDicts.Add(resourceInclude);
+            }
+            catch (Exception ex) when (ex is UriFormatException or ArgumentException)
+            {
+                // 模块文件缺失，回退到默认语言
+                Debug.WriteLine($"[LanguageService] Module '{module}' not found for '{language}', falling back to '{FallbackCulture}'");
+                LoadFallbackModule(mergedDicts, module);
             }
         }
 
-        if (oldLocale != null)
-            mergedDicts.Remove(oldLocale);
-
-        mergedDicts.Add(resourceInclude);
-
-        // Force refresh DynamicResource bindings by adding and removing a temporary dictionary
+        // Force refresh DynamicResource bindings
         var temp = new ResourceDictionary();
         mergedDicts.Add(temp);
         mergedDicts.Remove(temp);
 
         CurrentLanguage = language;
         LanguageChanged?.Invoke(this, EventArgs.Empty);
+
+        // 发送语言状态变更消息
+        WeakReferenceMessenger.Default.Send(new LanguageStateChangedMessage(language, previousLanguage));
+    }
+
+    /// <summary>
+    /// <para>加载回退语言的指定模块资源。</para>
+    /// Loads the specified module resource from the fallback language.
+    /// </summary>
+    /// <param name="mergedDicts">
+    /// <para>合并字典集合。</para>
+    /// The merged dictionaries collection.
+    /// </param>
+    /// <param name="module">
+    /// <para>模块名称。</para>
+    /// The module name.
+    /// </param>
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "ResourceInclude loads XAML resources at runtime which requires reflection.")]
+    private static void LoadFallbackModule(IList<IResourceProvider> mergedDicts, string module)
+    {
+        try
+        {
+            var fallbackUri = new Uri($"{LocaleBaseUri}/{FallbackCulture}/{module}.axaml");
+            var fallbackInclude = new ResourceInclude(fallbackUri) { Source = fallbackUri };
+            mergedDicts.Add(fallbackInclude);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[LanguageService] Fallback module '{module}' also not found: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>注册新的语言包。注册成功后可用语言列表自动更新。</para>
+    /// Registers a new language pack. The available languages list is automatically updated upon successful registration.
+    /// </summary>
+    /// <param name="descriptor">
+    /// <para>要注册的语言包描述符。</para>
+    /// The language pack descriptor to register.
+    /// </param>
+    /// <returns>
+    /// <para>注册结果。</para>
+    /// The registration result.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <para>当 <paramref name="descriptor"/> 为 null 时抛出。</para>
+    /// Thrown when <paramref name="descriptor"/> is null.
+    /// </exception>
+    public LanguagePackRegistrationResult RegisterLanguagePack(LanguagePackDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+
+        var result = LanguagePackRegistry.Instance.Register(descriptor);
+
+        // 根据注册结果发送消息
+        switch (result)
+        {
+            case LanguagePackRegistrationResult.Replaced:
+                WeakReferenceMessenger.Default.Send(new LanguagePackUpdatedMessage(descriptor.CultureName, descriptor.Version.ToString()));
+                break;
+            case LanguagePackRegistrationResult.RejectedVersionIncompatible:
+                WeakReferenceMessenger.Default.Send(new LanguagePackRejectedMessage(
+                    descriptor.CultureName,
+                    $"Version {descriptor.Version} is below minimum compatible version {LanguagePackRegistry.Instance.MinimumCompatibleVersion}"));
+                break;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// <para>注销指定文化的语言包。</para>
+    /// Unregisters the language pack for the specified culture.
+    /// </summary>
+    /// <param name="cultureName">
+    /// <para>要注销的语言包区域性名称。</para>
+    /// The culture name of the language pack to unregister.
+    /// </param>
+    /// <returns>
+    /// <para>如果成功注销返回 true；否则返回 false。</para>
+    /// True if successfully unregistered; otherwise, false.
+    /// </returns>
+    public bool UnregisterLanguagePack(string cultureName)
+    {
+        return LanguagePackRegistry.Instance.Unregister(cultureName);
     }
 
     /// <summary>
@@ -133,7 +264,7 @@ public sealed class LanguageService
     /// </summary>
     /// <param name="themeKey">
     /// <para>主题资源键名（如 "LightColors" 或 "DarkColors"）。</para>
-    /// The theme resource key name (e.g., "LightColors" or "DarkColors").
+    /// The theme resource key name (e.g., "LightColors", "DarkColors").
     /// </param>
     /// <exception cref="ArgumentNullException">
     /// <para>当 <paramref name="themeKey"/> 为 null 时抛出。</para>
@@ -192,7 +323,7 @@ public sealed class LanguageService
         if (Application.Current?.TryFindResource(key, null, out var value) == true && value is string str)
             return str;
 
-        System.Diagnostics.Debug.WriteLine($"[LanguageService] Resource key not found: {key}");
+        Debug.WriteLine($"[LanguageService] Resource key not found: {key}");
         return key;
     }
 
@@ -227,16 +358,34 @@ public sealed class LanguageService
     }
 
     /// <summary>
-    /// <para>根据系统当前的区域设置自动初始化应用程序语言。如果系统语言为中文则应用 zh-CN，否则应用 en-US。</para>
+    /// <para>根据系统当前的区域设置自动初始化应用程序语言。优先匹配已注册的语言包，否则回退到默认语言。</para>
     /// Automatically initializes the application language based on the current system culture.
-    /// Applies zh-CN for Chinese cultures, en-US otherwise.
+    /// Prefers matching a registered language pack; falls back to the default language otherwise.
     /// </summary>
     public void InitializeFromSystemLanguage()
     {
         var culture = CultureInfo.CurrentUICulture;
-        var language = culture.TwoLetterISOLanguageName.Equals("zh", StringComparison.OrdinalIgnoreCase)
-            ? "zh-CN"
-            : "en-US";
-        ApplyLanguage(language);
+        var cultureName = culture.Name;
+
+        // 尝试精确匹配（如 "zh-CN"）
+        if (LanguagePackRegistry.Instance.TryGetPack(cultureName, out _))
+        {
+            ApplyLanguage(cultureName);
+            return;
+        }
+
+        // 尝试按两字母代码匹配（如 "zh" 匹配 "zh-CN"）
+        var twoLetterCode = culture.TwoLetterISOLanguageName;
+        var matchedPack = LanguagePackRegistry.Instance.GetAllPacks()
+            .FirstOrDefault(p => p.CultureName.StartsWith(twoLetterCode, StringComparison.OrdinalIgnoreCase));
+
+        if (matchedPack != null)
+        {
+            ApplyLanguage(matchedPack.CultureName);
+            return;
+        }
+
+        // 回退到默认语言
+        ApplyLanguage(FallbackCulture);
     }
 }

@@ -2,6 +2,8 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using UotanStudio.Messages;
@@ -21,7 +23,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private Timer? _toastTimer;
     private bool _disposed;
 
-    private LanguagePreference _selectedLanguagePreference;
+    private LanguageInfo _selectedLanguage = LanguageInfo.SystemLanguage;
     private ThemeMode _selectedThemeMode;
     private bool _autoSave;
     private string _unpackToolPath = string.Empty;
@@ -40,11 +42,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private string _toastMessage = string.Empty;
 
     /// <summary>
-    /// <para>获取可用语言列表。</para>
-    /// Gets the list of available languages.
+    /// <para>获取可用语言列表，从语言服务动态获取。</para>
+    /// Gets the list of available languages, dynamically retrieved from the language service.
     /// </summary>
-    public List<LanguagePreference> Languages { get; } =
-        [LanguagePreference.System, LanguagePreference.English, LanguagePreference.Chinese];
+    public ObservableCollection<LanguageInfo> Languages { get; }
 
     /// <summary>
     /// <para>获取可用主题模式列表。</para>
@@ -87,17 +88,17 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public string VisualProgrammingModuleVersion { get; } = "1.0.0";
 
     /// <summary>
-    /// <para>获取或设置选中的语言偏好。</para>
-    /// Gets or sets the selected language preference.
+    /// <para>获取或设置选中的语言信息。</para>
+    /// Gets or sets the selected language information.
     /// </summary>
-    public LanguagePreference SelectedLanguagePreference
+    public LanguageInfo SelectedLanguage
     {
-        get => _selectedLanguagePreference;
+        get => _selectedLanguage;
         set
         {
-            if (SetProperty(ref _selectedLanguagePreference, value))
+            if (SetProperty(ref _selectedLanguage, value))
             {
-                ApplyLanguagePreference(value);
+                ApplyLanguageInfo(value);
                 OnPropertyChanged(nameof(LanguagePreviewText));
                 DebouncedSaveSettings();
             }
@@ -320,9 +321,14 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public SettingsViewModel()
     {
         _appSettings = SettingsPersistenceService.Instance.LoadSettings();
+
+        // 初始化语言列表（从 LanguageService 动态获取）
+        Languages = new ObservableCollection<LanguageInfo>(LanguageService.Instance.AvailableLanguages);
+
         InitializeFromAppSettings(_appSettings);
 
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
+        LanguagePackRegistry.Instance.LanguagePackChanged += OnLanguagePackChanged;
     }
 
     /// <summary>
@@ -335,7 +341,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </param>
     private void InitializeFromAppSettings(AppSettings settings)
     {
-        _selectedLanguagePreference = settings.LanguagePreference;
+        // 根据 CultureName 查找或创建 LanguageInfo
+        _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)
+            ? LanguageInfo.SystemLanguage
+            : LanguageService.Instance.AvailableLanguages.FirstOrDefault(l => l.CultureName == settings.CultureName)
+              ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
         _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
         _unpackToolPath = settings.UnpackToolPath;
@@ -350,30 +360,26 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _connectionStyleIndex = settings.ConnectionStyleIndex;
 
         // Apply language based on loaded preference
-        ApplyLanguagePreference(_selectedLanguagePreference);
+        ApplyLanguageInfo(_selectedLanguage);
     }
 
     /// <summary>
-    /// <para>根据语言偏好枚举应用语言设置。</para>
-    /// Applies the language setting based on the language preference enum.
+    /// <para>根据语言信息应用语言设置。</para>
+    /// Applies the language setting based on the language information.
     /// </summary>
-    /// <param name="preference">
-    /// <para>语言偏好。</para>
-    /// The language preference.
+    /// <param name="languageInfo">
+    /// <para>语言信息。</para>
+    /// The language information.
     /// </param>
-    private void ApplyLanguagePreference(LanguagePreference preference)
+    private void ApplyLanguageInfo(LanguageInfo languageInfo)
     {
-        switch (preference)
+        if (languageInfo.IsSystemLanguage)
         {
-            case LanguagePreference.System:
-                LanguageService.Instance.InitializeFromSystemLanguage();
-                break;
-            case LanguagePreference.English:
-                LanguageService.Instance.ApplyLanguage("en-US");
-                break;
-            case LanguagePreference.Chinese:
-                LanguageService.Instance.ApplyLanguage("zh-CN");
-                break;
+            LanguageService.Instance.InitializeFromSystemLanguage();
+        }
+        else if (!string.IsNullOrEmpty(languageInfo.CultureName))
+        {
+            LanguageService.Instance.ApplyLanguage(languageInfo.CultureName);
         }
     }
 
@@ -419,7 +425,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void SaveSettings()
     {
-        _appSettings.LanguagePreference = _selectedLanguagePreference;
+        _appSettings.CultureName = _selectedLanguage.IsSystemLanguage ? string.Empty : _selectedLanguage.CultureName;
         _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
         _appSettings.UnpackToolPath = _unpackToolPath;
@@ -473,6 +479,20 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>监听语言包注册中心变更事件，动态更新可用语言列表。</para>
+    /// Listens to language pack registry change events and dynamically updates the available languages list.
+    /// </summary>
+    private void OnLanguagePackChanged(object? sender, LanguagePackChangedEventArgs e)
+    {
+        // 同步更新语言列表
+        Languages.Clear();
+        foreach (var lang in LanguageService.Instance.AvailableLanguages)
+        {
+            Languages.Add(lang);
+        }
+    }
+
+    /// <summary>
     /// <para>异步检查更新，模拟网络请求后显示结果。</para>
     /// Asynchronously checks for updates, simulating a network request before displaying the result.
     /// </summary>
@@ -506,6 +526,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     {
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
+
+        // 同步语言列表
+        Languages.Clear();
+        foreach (var lang in LanguageService.Instance.AvailableLanguages)
+        {
+            Languages.Add(lang);
+        }
 
         // Notify all properties changed
         OnPropertyChanged(string.Empty);
@@ -541,6 +568,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             _saveCts?.Dispose();
             _toastTimer?.Dispose();
             LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
+            LanguagePackRegistry.Instance.LanguagePackChanged -= OnLanguagePackChanged;
         }
 
         _disposed = true;

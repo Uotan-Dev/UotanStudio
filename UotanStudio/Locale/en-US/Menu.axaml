@@ -1,0 +1,15 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <x:String x:Key="Menu_Project">Project</x:String>
+    <x:String x:Key="Menu_Tools">Tools</x:String>
+    <x:String x:Key="Menu_View">View</x:String>
+    <x:String x:Key="Menu_About">About</x:String>
+    <x:String x:Key="Menu_SecondToggleItem">Second Menu toggle item</x:String>
+    <x:String x:Key="Menu_Radio1Group">Radio 1 - group</x:String>
+    <x:String x:Key="Menu_Radio2Group">Radio 2 - group</x:String>
+    <x:String x:Key="Menu_Radio3Group">Radio 3 - group</x:String>
+    <x:String x:Key="Menu_Radio4Group">Radio 4 - group</x:String>
+    <x:String x:Key="Menu_Radio5Group">Radio 5 - group</x:String>
+
+</ResourceDictionary>
