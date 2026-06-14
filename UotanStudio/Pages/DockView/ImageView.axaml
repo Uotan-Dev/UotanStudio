@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:viewmodels="using:UotanStudio.ViewModels"
+			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+			 x:Class="UotanStudio.Pages.DockView.ImageView"
+			 x:DataType="viewmodels:ImageViewModel">
+	<StackPanel>
+		<StackPanel VerticalAlignment="Top">
+			<ScrollViewer>
+				<StackPanel Spacing="20">
+					<ListBox Name="ImagesList"/>
+				</StackPanel>
+			</ScrollViewer>
+			<StackPanel VerticalAlignment="Bottom" Spacing="10">
+				<StackPanel Margin="10 0 0 0" Orientation="Horizontal" Spacing="10">
+					<Button Width="140">
+						<TextBlock Text="分解选中文件" />
+					</Button>
+					<Button Width="110">
+						<TextBlock Text="合成img" />
+					</Button>
+					<Button Width="110">
+						<TextBlock Text="合成br" />
+					</Button>
+				</StackPanel>
+				<StackPanel Margin="10 0 0 0" Orientation="Horizontal" Spacing="10">
+					<Button Width="140">
+						<TextBlock Text="删除选中文件" />
+					</Button>
+					<Button Width="110">
+						<TextBlock Text="合成Super" />
+					</Button>
+					<Button Width="110">
+						<TextBlock Text="合成dat" />
+					</Button>
+				</StackPanel>
+			</StackPanel>
+		</StackPanel>
+	</StackPanel>
+</UserControl>

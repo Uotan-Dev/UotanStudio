@@ -3,10 +3,20 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewmodels="using:UotanStudio.ViewModels"
+             xmlns:dockview="using:UotanStudio.Pages.DockView"
              xmlns:dock="using:Dock.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Pages.WorkspaceView"
              x:DataType="viewmodels:WorkspaceViewModel">
+
+    <UserControl.DataTemplates>
+      <DataTemplate DataType="viewmodels:FileViewModel">
+          <dockview:FileView />
+      </DataTemplate>
+      <DataTemplate DataType="viewmodels:ImageViewModel">
+          <dockview:ImageView />
+      </DataTemplate>
+  </UserControl.DataTemplates>
   <dock:DockControl x:Name="DockControl"
                      Layout="{Binding Layout}" 
                      EnableManagedWindowLayer="True" />

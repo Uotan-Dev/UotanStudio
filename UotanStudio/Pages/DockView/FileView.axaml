@@ -5,7 +5,7 @@
              xmlns:controls="using:UotanStudio.Pages.DockControl"
              xmlns:viewmodels="using:UotanStudio.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-             x:Class="UotanStudio.FileView"
-             x:DataType="viewmodels:WorkspaceViewModel">
+             x:Class="UotanStudio.Pages.DockView.FileView"
+             x:DataType="viewmodels:FileViewModel">
   <controls:CodeEditor Name="Editor" Language="xml"/>
 </UserControl>

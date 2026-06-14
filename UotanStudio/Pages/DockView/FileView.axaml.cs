@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 
-namespace UotanStudio;
+namespace UotanStudio.Pages.DockView;
 
 public partial class FileView : UserControl
 {
