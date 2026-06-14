@@ -1,0 +1,22 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:viewmodels="using:UotanStudio.ViewModels"
+			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+			 x:Class="UotanStudio.Pages.DockView.PropertiesView"
+			 x:DataType="viewmodels:PropertiesViewModel">
+	<DataGrid
+	Name="Properties"
+	Margin="8"
+	CanUserReorderColumns="True"
+	CanUserResizeColumns="True"
+	CanUserSortColumns="True"
+	HeadersVisibility="All"
+	IsReadOnly="True">
+		<DataGrid.Columns>
+			<DataGridTextColumn IsReadOnly="True" Header="属性名称"/>
+			<DataGridTextColumn IsReadOnly="True" Header="值"/>
+		</DataGrid.Columns>
+	</DataGrid>
+</UserControl>

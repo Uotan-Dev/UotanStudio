@@ -38,6 +38,9 @@
       <DataTemplate DataType="viewmodels:OutputViewModel">
           <dockview:OutputView />
       </DataTemplate>
+      <DataTemplate DataType="viewmodels:PropertiesViewModel">
+          <dockview:PropertiesView />
+      </DataTemplate>
     </Application.DataTemplates>
 
     <Application.Styles>
@@ -45,6 +48,7 @@
         <semi:UrsaSemiTheme />
         <semi:SemiPopupAnimations />
         <semi:DockSemiTheme />
+        <semi:DataGridSemiTheme />
         <materialIcons:MaterialIconStyles />
         <StyleInclude Source="avares://NodifyM.Avalonia/Styles/ControlStyles.axaml" />
     </Application.Styles>

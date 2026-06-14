@@ -20,7 +20,7 @@ namespace UotanStudio.Pages.DockControl
             var projectSetting = new ProjectSettingViewModel { Id = "ProjectSetting", Title = LanguageService.Instance.GetString("Dock_ProjectSetting"), CanClose = true };
             var projectExplorer = new ProjectExplorerViewModel { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = true };
             var imagesview = new ImageViewModel { Id = "ImagesView", Title = LanguageService.Instance.GetString("Dock_ImagesView"), CanClose = true };
-            var properties = new Tool { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = true };
+            var properties = new PropertiesViewModel { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = true };
             var output = new OutputViewModel { Id = "Output", Title = LanguageService.Instance.GetString("Dock_Output"), CanClose = true };
             var adbLog = new Tool { Id = "AdbLog", Title = LanguageService.Instance.GetString("Dock_AdbLog"), CanClose = true };
 
