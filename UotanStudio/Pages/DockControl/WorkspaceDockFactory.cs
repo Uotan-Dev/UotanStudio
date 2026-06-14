@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
 
 namespace UotanStudio.Pages.DockControl
 {
@@ -14,10 +15,11 @@ namespace UotanStudio.Pages.DockControl
     {
         public override IRootDock CreateLayout()
         {
-            var document1 = new Document { Id = "Document1", Title = "build.prop", CanClose = true };
-            var document2 = new Document { Id = "Document2", Title = "init.rc", CanClose = true };
+            var document1 = new FileViewModel { Id = "Document1", Title = "build.prop", CanClose = true };
+            var document2 = new FileViewModel { Id = "Document2", Title = "init.rc", CanClose = true };
 
             var projectExplorer = new Tool { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = true };
+            var imagesview = new Tool { Id = "ImagesView", Title = LanguageService.Instance.GetString("Dock_ImagesView"), CanClose = true };
             var properties = new Tool { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = true };
             var output = new Tool { Id = "Output", Title = LanguageService.Instance.GetString("Dock_Output"), CanClose = true };
             var adbLog = new Tool { Id = "AdbLog", Title = LanguageService.Instance.GetString("Dock_AdbLog"), CanClose = true };
@@ -30,6 +32,15 @@ namespace UotanStudio.Pages.DockControl
                 Proportion = double.NaN,
                 ActiveDockable = document1,
                 VisibleDockables = CreateList<IDockable>(document1, document2)
+            };
+
+            var rightToolsTop = new ToolDock
+            {
+                Id = "RightPaneTop",
+                Title = "RightPaneTop",
+                Proportion = 0.25,
+                ActiveDockable = imagesview,
+                VisibleDockables = CreateList<IDockable>(imagesview)
             };
 
             var rightTools = new ToolDock
@@ -62,14 +73,14 @@ namespace UotanStudio.Pages.DockControl
             var mainLayout = new ProportionalDock
             {
                 Orientation = Orientation.Horizontal,
-                Proportion = double.NaN,
+                Proportion = 0.2,
                 VisibleDockables = CreateList<IDockable>(
                     leftTools,
                     new ProportionalDockSplitter(),
                     new ProportionalDock
                     {
                         Orientation = Orientation.Vertical,
-                        Proportion = 0.5,
+                        Proportion = 0.8,
                         VisibleDockables = CreateList<IDockable>(
                             documentDock,
                             new ProportionalDockSplitter(),
@@ -77,7 +88,16 @@ namespace UotanStudio.Pages.DockControl
                         )
                     },
                     new ProportionalDockSplitter(),
-                    rightTools
+                    new ProportionalDock
+                    {
+                        Orientation = Orientation.Vertical,
+                        Proportion = 0.3,
+                        VisibleDockables = CreateList<IDockable>(
+                            rightToolsTop,
+                            new ProportionalDockSplitter(),
+                            rightTools
+                        )
+                    }
                 )
             };
 

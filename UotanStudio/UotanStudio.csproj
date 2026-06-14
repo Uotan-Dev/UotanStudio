@@ -16,8 +16,10 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="AvaloniaEdit.TextMate" />
     <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
@@ -30,6 +32,7 @@
     <PackageReference Include="Irihi.Ursa.Themes.Semi" />
     <PackageReference Include="Material.Icons.Avalonia" />
     <PackageReference Include="Semi.Avalonia" />
+    <PackageReference Include="Semi.Avalonia.AvaloniaEdit" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
   </ItemGroup>
