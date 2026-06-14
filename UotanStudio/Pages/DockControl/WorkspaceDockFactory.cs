@@ -17,7 +17,7 @@ namespace UotanStudio.Pages.DockControl
         {
             var document1 = new FileViewModel { Id = "Document1", Title = "build.prop", CanClose = true };
             var document2 = new FileViewModel { Id = "Document2", Title = "init.rc", CanClose = true };
-
+            var projectSetting = new ProjectSettingViewModel { Id = "ProjectSetting", Title = LanguageService.Instance.GetString("Dock_ProjectSetting"), CanClose = true };
             var projectExplorer = new ProjectExplorerViewModel { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = true };
             var imagesview = new ImageViewModel { Id = "ImagesView", Title = LanguageService.Instance.GetString("Dock_ImagesView"), CanClose = true };
             var properties = new Tool { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = true };
@@ -58,7 +58,7 @@ namespace UotanStudio.Pages.DockControl
                 Title = "LeftPane",
                 Proportion = 0.25,
                 ActiveDockable = projectExplorer,
-                VisibleDockables = CreateList<IDockable>(projectExplorer)
+                VisibleDockables = CreateList<IDockable>(projectExplorer, projectSetting)
             };
 
             var bottomTools = new ToolDock

@@ -19,6 +19,9 @@
       <DataTemplate DataType="viewmodels:ProjectExplorerViewModel">
           <dockview:ProjectExplorerView />
       </DataTemplate>
+      <DataTemplate DataType="viewmodels:ProjectSettingViewModel">
+          <dockview:ProjectSettingView />
+      </DataTemplate>
   </UserControl.DataTemplates>
   <dock:DockControl x:Name="DockControl"
                      Layout="{Binding Layout}" 
