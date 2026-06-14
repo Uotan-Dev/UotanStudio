@@ -9,20 +9,6 @@
              x:Class="UotanStudio.Pages.WorkspaceView"
              x:DataType="viewmodels:WorkspaceViewModel">
 
-    <UserControl.DataTemplates>
-      <DataTemplate DataType="viewmodels:FileViewModel">
-          <dockview:FileView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:ImageViewModel">
-          <dockview:ImageView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:ProjectExplorerViewModel">
-          <dockview:ProjectExplorerView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:ProjectSettingViewModel">
-          <dockview:ProjectSettingView />
-      </DataTemplate>
-  </UserControl.DataTemplates>
   <dock:DockControl x:Name="DockControl"
                      Layout="{Binding Layout}" 
                      EnableManagedWindowLayer="True" />
