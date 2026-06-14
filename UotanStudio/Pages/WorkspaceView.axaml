@@ -16,6 +16,9 @@
       <DataTemplate DataType="viewmodels:ImageViewModel">
           <dockview:ImageView />
       </DataTemplate>
+      <DataTemplate DataType="viewmodels:ProjectExplorerViewModel">
+          <dockview:ProjectExplorerView />
+      </DataTemplate>
   </UserControl.DataTemplates>
   <dock:DockControl x:Name="DockControl"
                      Layout="{Binding Layout}" 

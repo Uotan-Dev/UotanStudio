@@ -18,7 +18,7 @@ namespace UotanStudio.Pages.DockControl
             var document1 = new FileViewModel { Id = "Document1", Title = "build.prop", CanClose = true };
             var document2 = new FileViewModel { Id = "Document2", Title = "init.rc", CanClose = true };
 
-            var projectExplorer = new Tool { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = true };
+            var projectExplorer = new ProjectExplorerViewModel { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = true };
             var imagesview = new ImageViewModel { Id = "ImagesView", Title = LanguageService.Instance.GetString("Dock_ImagesView"), CanClose = true };
             var properties = new Tool { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = true };
             var output = new Tool { Id = "Output", Title = LanguageService.Instance.GetString("Dock_Output"), CanClose = true };
