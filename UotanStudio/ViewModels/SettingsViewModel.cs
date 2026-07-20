@@ -40,6 +40,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private string _updateCheckResult = string.Empty;
     private bool _isToastVisible;
     private string _toastMessage = string.Empty;
+    private string? _adbToolStatus;
+    private string? _fastbootToolStatus;
+    private bool _isCheckingTools;
 
     /// <summary>
     /// <para>获取可用语言列表，从语言服务动态获取。</para>
@@ -54,11 +57,23 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public List<ThemeMode> Themes { get; } =
         [ThemeMode.System, ThemeMode.Light, ThemeMode.Dark];
 
+    private List<string> _connectionStyles = BuildConnectionStyles();
+
     /// <summary>
     /// <para>获取可用连接线样式列表。</para>
     /// Gets the list of available connection line styles.
     /// </summary>
-    public List<string> ConnectionStyles { get; } =
+    public List<string> ConnectionStyles
+    {
+        get => _connectionStyles;
+        private set => SetProperty(ref _connectionStyles, value);
+    }
+
+    /// <summary>
+    /// <para>根据当前语言构建连接线样式列表。</para>
+    /// Builds the connection line styles list based on the current language.
+    /// </summary>
+    private static List<string> BuildConnectionStyles() =>
         [LanguageService.Instance.GetString("Settings_ConnBezier"),
          LanguageService.Instance.GetString("Settings_ConnLine"),
          LanguageService.Instance.GetString("Settings_ConnStep")];
@@ -86,6 +101,30 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// Gets the visual programming module version.
     /// </summary>
     public string VisualProgrammingModuleVersion { get; } = "1.0.0";
+
+    /// <summary>
+    /// <para>获取版本信息卡片列表，供设置页 WrapLayout 呈现。</para>
+    /// Gets the list of module version cards for the settings page WrapLayout.
+    /// </summary>
+    public ObservableCollection<ModuleCardInfo> ModuleCards { get; } = [];
+
+    /// <summary>
+    /// <para>根据当前语言刷新版本信息卡片列表（名称本地化）。</para>
+    /// Refreshes the module version cards list based on the current language (localized names).
+    /// </summary>
+    private void RefreshModuleCards()
+    {
+        ModuleCards.Clear();
+        ModuleCards.Add(new ModuleCardInfo(
+            LanguageService.Instance.GetString("Settings_FirmwareModule"),
+            FirmwareModuleVersion));
+        ModuleCards.Add(new ModuleCardInfo(
+            LanguageService.Instance.GetString("Settings_FlashModule"),
+            FlashModuleVersion));
+        ModuleCards.Add(new ModuleCardInfo(
+            LanguageService.Instance.GetString("Settings_VisualProgrammingModule"),
+            VisualProgrammingModuleVersion));
+    }
 
     /// <summary>
     /// <para>获取或设置选中的语言信息。</para>
@@ -231,7 +270,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public int DeviceTimeoutSeconds
     {
         get => _deviceTimeoutSeconds;
-        set { if (SetProperty(ref _deviceTimeoutSeconds, value)) DebouncedSaveSettings(); }
+        set
+        {
+            var clamped = Math.Clamp(value, 5, 300);
+            if (SetProperty(ref _deviceTimeoutSeconds, clamped))
+                DebouncedSaveSettings();
+        }
     }
 
     /// <summary>
@@ -327,6 +371,17 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         InitializeFromAppSettings(_appSettings);
 
+        // 初始化完成后通知 UI 刷新主题相关 RadioButton 绑定
+        OnPropertyChanged(nameof(IsSystemTheme));
+        OnPropertyChanged(nameof(IsLightTheme));
+
+        // 初始化版本信息卡片（本地化名称）
+        RefreshModuleCards();
+        OnPropertyChanged(nameof(IsDarkTheme));
+
+        // 显式发送一次主题变更消息，确保 App 与 VM 状态同步
+        WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
+
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
         LanguagePackRegistry.Instance.LanguagePackChanged += OnLanguagePackChanged;
     }
@@ -341,7 +396,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </param>
     private void InitializeFromAppSettings(AppSettings settings)
     {
-        // 根据 CultureName 查找或创建 LanguageInfo
+        // 直接赋值私有字段以避免触发 setter 中的防抖保存
         _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)
             ? LanguageInfo.SystemLanguage
             : LanguageService.Instance.AvailableLanguages.FirstOrDefault(l => l.CultureName == settings.CultureName)
@@ -353,11 +408,14 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _autoVerifyAfterUnpack = settings.AutoVerifyAfterUnpack;
         _adbPath = settings.AdbPath;
         _fastbootPath = settings.FastbootPath;
-        _deviceTimeoutSeconds = settings.DeviceTimeoutSeconds;
+        _deviceTimeoutSeconds = Math.Clamp(settings.DeviceTimeoutSeconds, 5, 300);
         _autoBackupBeforeFlash = settings.AutoBackupBeforeFlash;
         _snapToGrid = settings.SnapToGrid;
         _gridSize = settings.GridSize;
         _connectionStyleIndex = settings.ConnectionStyleIndex;
+
+        // 统一通知 UI 刷新所有绑定属性
+        OnPropertyChanged(string.Empty);
 
         // Apply language based on loaded preference
         ApplyLanguageInfo(_selectedLanguage);
@@ -474,8 +532,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(LanguagePreviewText));
-        // Update ConnectionStyles list display
-        OnPropertyChanged(nameof(ConnectionStyles));
+        // 重建连接线样式列表以反映新语言文本
+        ConnectionStyles = BuildConnectionStyles();
+        // 刷新版本卡片以反映新语言名称
+        RefreshModuleCards();
     }
 
     /// <summary>
@@ -484,11 +544,21 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void OnLanguagePackChanged(object? sender, LanguagePackChangedEventArgs e)
     {
-        // 同步更新语言列表
+        // 同步更新语言列表，保留"跟随系统"头部
+        var currentSelected = _selectedLanguage;
         Languages.Clear();
+        Languages.Add(LanguageInfo.SystemLanguage);
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
-            Languages.Add(lang);
+            if (!lang.IsSystemLanguage)
+                Languages.Add(lang);
+        }
+
+        // 若当前选中语言已被卸载，回退到"跟随系统"
+        if (!currentSelected.IsSystemLanguage &&
+            !Languages.Any(l => l.CultureName == currentSelected.CultureName))
+        {
+            SelectedLanguage = LanguageInfo.SystemLanguage;
         }
     }
 
@@ -518,6 +588,142 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>获取或设置 ADB 工具可用性检测结果文本。</para>
+    /// Gets or sets the ADB tool availability check result text.
+    /// </summary>
+    public string? AdbToolStatus
+    {
+        get => _adbToolStatus;
+        set => SetProperty(ref _adbToolStatus, value);
+    }
+
+    /// <summary>
+    /// <para>获取或设置 Fastboot 工具可用性检测结果文本。</para>
+    /// Gets or sets the Fastboot tool availability check result text.
+    /// </summary>
+    public string? FastbootToolStatus
+    {
+        get => _fastbootToolStatus;
+        set => SetProperty(ref _fastbootToolStatus, value);
+    }
+
+    /// <summary>
+    /// <para>获取或设置是否正在检测工具可用性。</para>
+    /// Gets or sets whether tool availability check is in progress.
+    /// </summary>
+    public bool IsCheckingTools
+    {
+        get => _isCheckingTools;
+        set => SetProperty(ref _isCheckingTools, value);
+    }
+
+    /// <summary>
+    /// <para>异步检测 ADB 与 Fastboot 工具可用性，更新状态文本。</para>
+    /// Asynchronously verifies ADB and Fastboot tool availability, updating status text.
+    /// <para>调用 AdbService 实例的 GetDevicesAsync，成功即工具可达。</para>
+    /// Invokes AdbService.Instance.GetDevicesAsync; success means the tool is reachable.
+    /// </summary>
+    [RelayCommand]
+    private async Task VerifyToolPathsAsync()
+    {
+        if (IsCheckingTools) return;
+        IsCheckingTools = true;
+        AdbToolStatus = LanguageService.Instance.GetString("Settings_Checking");
+        FastbootToolStatus = LanguageService.Instance.GetString("Settings_Checking");
+
+        try
+        {
+            // 同步当前路径配置到 AdbService 单例
+            AdbService.Instance.UpdateConfiguration(AdbPath, FastbootPath, DeviceTimeoutSeconds);
+
+            // ADB 可用性：枚举设备命令成功即工具可达
+            var adbResult = await AdbService.Instance.GetDevicesAsync();
+            AdbToolStatus = string.IsNullOrEmpty(AdbPath)
+                ? $"{LanguageService.Instance.GetString("Settings_ToolDefault")}: {adbResult.Count} device(s)"
+                : $"{LanguageService.Instance.GetString("Settings_ToolAvailable")}: {adbResult.Count} device(s)";
+
+            // Fastboot 可用性：直接尝试 fastboot devices 等价命令（通过 ExecuteFastbootAsync）
+            var fbResult = await AdbService.Instance.ExecuteFastbootAsync(string.Empty, "devices", System.Threading.CancellationToken.None);
+            FastbootToolStatus = fbResult.Success
+                ? LanguageService.Instance.GetString("Settings_ToolAvailable")
+                : (string.IsNullOrEmpty(FastbootPath)
+                    ? LanguageService.Instance.GetString("Settings_ToolDefault")
+                    : LanguageService.Instance.GetString("Settings_ToolUnavailable"));
+        }
+        catch (System.Exception ex)
+        {
+            AdbToolStatus = $"{LanguageService.Instance.GetString("Settings_ToolUnavailable")}: {ex.Message}";
+            FastbootToolStatus = LanguageService.Instance.GetString("Settings_ToolUnavailable");
+        }
+        finally
+        {
+            IsCheckingTools = false;
+        }
+    }
+
+    /// <summary>
+    /// <para>异步重置设置为默认值，需通过确认对话框二次确认。</para>
+    /// Asynchronously resets settings to defaults, requiring confirmation via a dialog.
+    /// <para>通过 ResetToDefaultsRequested 事件触发 UI 层弹出确认对话框；用户确认后调用 ResetToDefaults。</para>
+    /// Triggers the UI layer confirmation dialog via the ResetToDefaultsRequested event; calls ResetToDefaults after user confirmation.
+    /// </summary>
+    [RelayCommand]
+    private async Task ResetToDefaultsWithConfirmAsync()
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        ResetToDefaultsRequested?.Invoke(this, tcs);
+        var confirmed = await tcs.Task;
+        if (!confirmed)
+        {
+            ShowToast(LanguageService.Instance.GetString("Settings_ResetCanceled"));
+            return;
+        }
+        ResetToDefaultsCore();
+    }
+
+    /// <summary>
+    /// <para>重置确认请求事件，由 UI 层（SettingsView）订阅以弹出确认对话框。</para>
+    /// Reset confirmation request event, subscribed by the UI layer (SettingsView) to pop a confirmation dialog.
+    /// </summary>
+    public event EventHandler<TaskCompletionSource<bool>>? ResetToDefaultsRequested;
+
+    /// <summary>
+    /// <para>重置所有设置为默认值，重新加载并通知主题变更。</para>
+    /// Resets all settings to default values, reloads them, and notifies of theme changes.
+    /// </summary>
+    private void ResetToDefaultsCore()
+    {
+        _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
+        InitializeFromAppSettings(_appSettings);
+
+        // 通知主题相关 RadioButton 绑定刷新
+        OnPropertyChanged(nameof(IsSystemTheme));
+        OnPropertyChanged(nameof(IsLightTheme));
+        OnPropertyChanged(nameof(IsDarkTheme));
+
+        // 同步语言列表，保留"跟随系统"头部
+        Languages.Clear();
+        Languages.Add(LanguageInfo.SystemLanguage);
+        foreach (var lang in LanguageService.Instance.AvailableLanguages)
+        {
+            if (!lang.IsSystemLanguage)
+                Languages.Add(lang);
+        }
+
+        // 实际应用重置后的语言（默认为跟随系统）
+        ApplyLanguageInfo(_selectedLanguage);
+
+        // Notify all properties changed
+        OnPropertyChanged(string.Empty);
+        WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
+
+        // 刷新版本卡片以反映当前语言
+        RefreshModuleCards();
+
+        ShowToast(LanguageService.Instance.GetString("Settings_SettingsReset"));
+    }
+
+    /// <summary>
     /// <para>重置所有设置为默认值，重新加载并通知主题变更。</para>
     /// Resets all settings to default values, reloads them, and notifies of theme changes.
     /// </summary>
@@ -527,16 +733,28 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
 
-        // 同步语言列表
+        // 通知主题相关 RadioButton 绑定刷新
+        OnPropertyChanged(nameof(IsSystemTheme));
+        OnPropertyChanged(nameof(IsLightTheme));
+        OnPropertyChanged(nameof(IsDarkTheme));
+
+        // 同步语言列表，保留"跟随系统"头部
         Languages.Clear();
+        Languages.Add(LanguageInfo.SystemLanguage);
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
-            Languages.Add(lang);
+            if (!lang.IsSystemLanguage)
+                Languages.Add(lang);
         }
+
+        // 实际应用重置后的语言（默认为跟随系统）
+        ApplyLanguageInfo(_selectedLanguage);
 
         // Notify all properties changed
         OnPropertyChanged(string.Empty);
         WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
+
+        ShowToast(LanguageService.Instance.GetString("Settings_SettingsSaved"));
     }
 
     /// <summary>
@@ -572,5 +790,29 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
 
         _disposed = true;
+    }
+}
+
+/// <summary>
+/// <para>模块版本信息卡片，供设置页 WrapLayout 呈现。</para>
+/// Module version info card for the settings page WrapLayout.
+/// </summary>
+public sealed class ModuleCardInfo
+{
+    /// <summary>模块本地化名称。</summary>
+    public string Name { get; }
+    /// <summary>模块版本号。</summary>
+    public string Version { get; }
+
+    /// <summary>
+    /// <para>创建模块版本信息卡片。</para>
+    /// Creates a module version info card.
+    /// </summary>
+    /// <param name="name">模块本地化名称。</param>
+    /// <param name="version">模块版本号。</param>
+    public ModuleCardInfo(string name, string version)
+    {
+        Name = name ?? string.Empty;
+        Version = version ?? string.Empty;
     }
 }

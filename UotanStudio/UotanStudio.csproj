@@ -18,8 +18,12 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
-    <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
-    <PackageReference Include="AvaloniaUI.DiagnosticsSupport">
+    <!-- InProcess.DevTools replaces AvaloniaUI.DiagnosticsSupport: it is an Avalonia 12+
+         DevTools fork exposing AttachDevTools(Application, DevToolsOptions) with an optional
+         localhost MCP server for AI agents (DOM inspection, screenshots, navigation, state mutation).
+         DEBUG-only: Release/AOT excludes it via IncludeAssets=None + PrivateAssets=All,
+         keeping IsAotCompatible safe (the package uses reflection for runtime UI introspection). -->
+    <PackageReference Include="InProcess.DevTools">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
     </PackageReference>
@@ -32,6 +36,25 @@
     <PackageReference Include="Semi.Avalonia" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
+    <!-- FirmwareKit 生态包（全量引入）：通信 / Fastboot / Fex / CPIO / Payload / AVB / DT / DTOverlay / Sparse / Lp / NTPi / Nb / Oppo 全家桶 / PartitionTab -->
+    <PackageReference Include="FirmwareKit.Comm" />
+    <PackageReference Include="FirmwareKit.Comm.Fastboot" />
+    <PackageReference Include="FirmwareKit.Comm.Fex" />
+    <PackageReference Include="FirmwareKit.CPIO" />
+    <PackageReference Include="FirmwareKit.Payload" />
+    <PackageReference Include="FirmwareKit.Payload.Reader" />
+    <PackageReference Include="FirmwareKit.Payload.Creator" />
+    <PackageReference Include="FirmwareKit.Payload.Modifier" />
+    <PackageReference Include="FirmwareKit.AVB" />
+    <PackageReference Include="FirmwareKit.DT" />
+    <PackageReference Include="FirmwareKit.DTOverlay" />
+    <PackageReference Include="FirmwareKit.Sparse" />
+    <PackageReference Include="FirmwareKit.Lp" />
+    <PackageReference Include="FirmwareKit.NTPi" />
+    <PackageReference Include="FirmwareKit.Oppo" />
+    <PackageReference Include="FirmwareKit.Oppo.Core" />
+    <PackageReference Include="FirmwareKit.OfpReader" />
+    <PackageReference Include="FirmwareKit.OpsReader" />
   </ItemGroup>
 
 </Project>

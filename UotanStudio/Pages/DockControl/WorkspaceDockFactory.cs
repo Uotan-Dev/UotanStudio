@@ -94,12 +94,12 @@ namespace UotanStudio.Pages.DockControl
         {
             ContextLocator = new Dictionary<string, Func<object?>>
             {
-                ["Document1"] = () => "using System;\n\nnamespace App {\n}",
-                ["Document2"] = () => "<Window>\n</Window>",
-                ["ProjectExplorer"] = () => LanguageService.Instance.GetString("Dock_ProjectExplorer"),
-                ["Properties"] = () => LanguageService.Instance.GetString("Dock_Properties"),
-                ["Output"] = () => "Build succeeded.",
-                ["AdbLog"] = () => "ADB Log Output"
+                ["Document1"] = () => "# build.prop\n# Auto-generated build properties\n\nro.build.id=UotanStudio\nro.build.version.release=14\nro.product.model=ExampleDevice\nro.build.type=userdebug\n",
+                ["Document2"] = () => "# init.rc - Android init script\n\nservice adbd /system/bin/adbd\n    class core\n    socket adbd stream 660 system system\n",
+                ["ProjectExplorer"] = () => "ProjectExplorer",
+                ["Properties"] = () => "Properties",
+                ["Output"] = () => "Output",
+                ["AdbLog"] = () => "AdbLog"
             };
 
             HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>

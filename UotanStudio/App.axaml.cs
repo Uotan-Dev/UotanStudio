@@ -72,8 +72,17 @@ public partial class App : Application
             _ => ThemeVariant.Default
         };
 
-        // Apply custom theme colors
-        var themeKey = themeMode == ThemeMode.Dark ? "DarkColors" : "LightColors";
+        // 应用自定义主题颜色：跟随系统时根据实际主题变体动态选择
+        string themeKey;
+        if (themeMode == ThemeMode.System)
+        {
+            var actualVariant = Application.Current?.ActualThemeVariant ?? ThemeVariant.Default;
+            themeKey = actualVariant == ThemeVariant.Dark ? "DarkColors" : "LightColors";
+        }
+        else
+        {
+            themeKey = themeMode == ThemeMode.Dark ? "DarkColors" : "LightColors";
+        }
         LanguageService.Instance.ApplyTheme(themeKey);
     }
 

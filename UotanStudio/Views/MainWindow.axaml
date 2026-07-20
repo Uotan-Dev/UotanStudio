@@ -1,50 +1,76 @@
 <Window xmlns="https://github.com/avaloniaui"
-		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-		xmlns:vm="using:UotanStudio.ViewModels"
-		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-		xmlns:views="using:UotanStudio.Views"
-		mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-		x:Class="UotanStudio.Views.MainWindow"
-		Icon="/Assets/UotanToolbox.png"
-		Title=""
-		ExtendClientAreaToDecorationsHint="True">
-	<DockPanel>
-		<Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32" Width="250">
-			<Image Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
-			<Menu Margin="35 0 0 0">
-				<MenuItem Padding="8 0">
-					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_Project}" FontSize="13" FontWeight="SemiBold" />
-					</MenuItem.Header>
-					<MenuItem IsChecked="True" Header="{DynamicResource Menu_SecondToggleItem}" ToggleType="CheckBox" />
-					<Separator />
-					<MenuItem GroupName="A" Header="{DynamicResource Menu_Radio1Group}" ToggleType="Radio" />
-					<MenuItem IsChecked="True" GroupName="A" Header="{DynamicResource Menu_Radio2Group}" ToggleType="Radio" />
-					<MenuItem GroupName="A" Header="{DynamicResource Menu_Radio3Group}" ToggleType="Radio">
-						<MenuItem Header="{DynamicResource Menu_Radio4Group}" ToggleType="Radio" GroupName="A" />
-						<MenuItem Header="{DynamicResource Menu_Radio5Group}" ToggleType="Radio" GroupName="A" />
-					</MenuItem>
-				</MenuItem>
-				<MenuItem Padding="8 0">
-					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_Tools}" FontSize="13" FontWeight="SemiBold" />
-					</MenuItem.Header>
-				</MenuItem>
-				<MenuItem Padding="8 0">
-					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_View}" FontSize="13" FontWeight="SemiBold" />
-					</MenuItem.Header>
-				</MenuItem>
-				<MenuItem Padding="8 0">
-					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_About}" FontSize="13" FontWeight="SemiBold" />
-					</MenuItem.Header>
-				</MenuItem>
-			</Menu>
-		</Grid>
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:UotanStudio.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:views="using:UotanStudio.Views"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="UotanStudio.Views.MainWindow"
+        Icon="/Assets/UotanToolbox.png"
+        Title=""
+        ExtendClientAreaToDecorationsHint="True">
+    <DockPanel>
+        <Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32" Width="250">
+            <Image Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
+            <Menu Margin="35 0 0 0">
+                <!-- 项目菜单 -->
+                <MenuItem Padding="8 0">
+                    <MenuItem.Header>
+                        <TextBlock Text="{DynamicResource Menu_Project}" FontSize="13" FontWeight="SemiBold" />
+                    </MenuItem.Header>
+                    <MenuItem Header="{DynamicResource Menu_New}" InputGesture="Ctrl+N"
+                              Click="OnNewClick" />
+                    <MenuItem Header="{DynamicResource Menu_Open}" InputGesture="Ctrl+O"
+                              Click="OnOpenClick" />
+                    <MenuItem Header="{DynamicResource Menu_Save}" InputGesture="Ctrl+S"
+                              Click="OnSaveClick" />
+                    <Separator />
+                    <MenuItem Header="{DynamicResource Menu_Exit}" InputGesture="Alt+F4"
+                              Click="OnExitClick" />
+                </MenuItem>
+                <!-- 工具菜单 -->
+                <MenuItem Padding="8 0">
+                    <MenuItem.Header>
+                        <TextBlock Text="{DynamicResource Menu_Tools}" FontSize="13" FontWeight="SemiBold" />
+                    </MenuItem.Header>
+                    <MenuItem Header="{DynamicResource Menu_DeviceManager}"
+                              Click="OnDeviceManagerClick" />
+                    <MenuItem Header="{DynamicResource Menu_ReloadLanguagePacks}"
+                              Click="OnReloadLanguagePacksClick" />
+                    <Separator />
+                    <MenuItem Header="{DynamicResource Menu_ClearCanvas}"
+                              Click="OnClearCanvasClick" />
+                    <Separator />
+                    <MenuItem Header="{DynamicResource Menu_Settings}"
+                              Click="OnSettingsClick" />
+                </MenuItem>
+                <!-- 视图菜单 -->
+                <MenuItem Padding="8 0">
+                    <MenuItem.Header>
+                        <TextBlock Text="{DynamicResource Menu_View}" FontSize="13" FontWeight="SemiBold" />
+                    </MenuItem.Header>
+                    <MenuItem Header="{DynamicResource Menu_ThemeFollowSystem}" ToggleType="Radio"
+                              GroupName="Theme" IsChecked="True"
+                              Click="OnThemeFollowSystemClick" />
+                    <MenuItem Header="{DynamicResource Menu_ThemeLight}" ToggleType="Radio"
+                              GroupName="Theme"
+                              Click="OnThemeLightClick" />
+                    <MenuItem Header="{DynamicResource Menu_ThemeDark}" ToggleType="Radio"
+                              GroupName="Theme"
+                              Click="OnThemeDarkClick" />
+                </MenuItem>
+                <!-- 关于菜单 -->
+                <MenuItem Padding="8 0">
+                    <MenuItem.Header>
+                        <TextBlock Text="{DynamicResource Menu_About}" FontSize="13" FontWeight="SemiBold" />
+                    </MenuItem.Header>
+                    <MenuItem Header="{DynamicResource Menu_About}"
+                              Click="OnAboutClick" />
+                </MenuItem>
+            </Menu>
+        </Grid>
 
-		<!-- 主内容页面区域 -->
-		<views:MainView />
-	</DockPanel>
+        <!-- 主内容页面区域 -->
+        <views:MainView />
+    </DockPanel>
 </Window>

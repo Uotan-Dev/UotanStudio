@@ -56,16 +56,23 @@
                             ToolTip.Tip="{DynamicResource Node_DeleteSelected}">
                         <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
                     </Button>
+                    <Button Width="28" Height="28" Padding="0"
+                            Command="{Binding ClearAllCommand}"
+                            ToolTip.Tip="{DynamicResource Node_ClearAll}">
+                        <avalonia:MaterialIcon Kind="TrashOutline" Width="16" Height="16" />
+                    </Button>
                 </StackPanel>
 
                 <!-- 中间: 运行控制 -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                             VerticalAlignment="Center" Spacing="4">
                     <Button Width="28" Height="28" Padding="0"
+                            Command="{Binding RunCommand}"
                             ToolTip.Tip="{DynamicResource Node_Run}">
                         <avalonia:MaterialIcon Kind="Play" Width="16" Height="16" Foreground="Green" />
                     </Button>
                     <Button Width="28" Height="28" Padding="0"
+                            Command="{Binding StopCommand}"
                             ToolTip.Tip="{DynamicResource Node_Stop}">
                         <avalonia:MaterialIcon Kind="Stop" Width="16" Height="16" Foreground="Red" />
                     </Button>
@@ -111,6 +118,7 @@
                                                 <Button HorizontalAlignment="Stretch"
                                                         HorizontalContentAlignment="Left"
                                                         Padding="6,4" Margin="0,1"
+                                                        IsVisible="{Binding IsVisible}"
                                                         Click="OnToolboxItemClicked">
                                                     <TextBlock Text="{Binding Name}" FontSize="12" />
                                                 </Button>
@@ -133,13 +141,58 @@
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
                 <ScrollViewer>
-                    <StackPanel Margin="8">
-                        <TextBlock Text="{DynamicResource Node_NoSelection}"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                   HorizontalAlignment="Center"
-                                   Margin="0,20" />
-                    </StackPanel>
+                    <Grid Margin="8">
+                        <!-- 无选中状态 -->
+                        <StackPanel IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNull}}"
+                                    HorizontalAlignment="Center">
+                            <TextBlock Text="{DynamicResource Node_NoSelection}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,20" />
+                        </StackPanel>
+
+                        <!-- 选中节点属性 -->
+                        <StackPanel IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                    Spacing="6">
+                            <TextBlock Text="{DynamicResource Node_Properties_Title}" FontSize="11" Opacity="0.7" />
+                            <TextBox Text="{Binding SelectedNode.Title, Mode=TwoWay}" FontSize="12" />
+
+                            <TextBlock Text="{DynamicResource Node_Properties_Category}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
+                            <TextBlock Text="{Binding SelectedNode.Category}" FontSize="12" />
+
+                            <TextBlock Text="{DynamicResource Node_Properties_Location}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
+                            <TextBlock FontSize="12">
+                                <Run Text="{Binding SelectedNode.Location.X}" />
+                                <Run Text=", " />
+                                <Run Text="{Binding SelectedNode.Location.Y}" />
+                            </TextBlock>
+
+                            <TextBlock Text="{DynamicResource Node_Properties_Inputs}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
+                            <ItemsControl ItemsSource="{Binding SelectedNode.Input}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
+                                        <StackPanel Margin="0,2" Spacing="2">
+                                            <TextBlock Text="{Binding Title}" FontSize="11" Opacity="0.7" />
+                                            <TextBox Text="{Binding Value, Mode=TwoWay}" FontSize="12" Padding="4,2" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <TextBlock Text="{DynamicResource Node_Properties_Outputs}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
+                            <ItemsControl ItemsSource="{Binding SelectedNode.Output}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
+                                        <StackPanel Margin="0,2" Spacing="2">
+                                            <TextBlock Text="{Binding Title}" FontSize="11" Opacity="0.7" />
+                                            <TextBox Text="{Binding Value, Mode=TwoWay}" FontSize="12" Padding="4,2" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Grid>
                 </ScrollViewer>
             </DockPanel>
         </Border>
@@ -151,6 +204,11 @@
                                  Zoom="{Binding Zoom}"
                                  AllowAlign="True"
                                  AllowAutoPanning="True"
+                                 ConnectionStartedCommand="{Binding ConnectionStartedCommand}"
+                                 ConnectionCompletedCommand="{Binding ConnectionCompletedCommand}"
+                                 DisconnectConnectorCommand="{Binding DisconnectConnectorCommand}"
+                                 RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
+                                 SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
                                  x:Name="Editor">
 
                 <!-- 节点模板 -->
@@ -159,15 +217,20 @@
                         <nodify:Node Header="{Binding Title}"
                                      Input="{Binding Input}"
                                      Output="{Binding Output}"
-                                     Location="{Binding Location, Mode=TwoWay}">
+                                     Location="{Binding Location, Mode=TwoWay}"
+                                     IsSelected="{Binding IsSelected, Mode=TwoWay}">
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                    <nodify:NodeInput Header="{Binding Title}" />
+                                    <nodify:NodeInput Header="{Binding Title}"
+                                                      Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                                      IsConnected="{Binding IsConnected, Mode=TwoWay}" />
                                 </DataTemplate>
                             </nodify:Node.InputConnectorTemplate>
                             <nodify:Node.OutputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                    <nodify:NodeOutput Header="{Binding Title}" />
+                                    <nodify:NodeOutput Header="{Binding Title}"
+                                                       Anchor="{Binding Anchor, Mode=OneWayToSource}"
+                                                       IsConnected="{Binding IsConnected, Mode=TwoWay}" />
                                 </DataTemplate>
                             </nodify:Node.OutputConnectorTemplate>
                         </nodify:Node>
@@ -178,9 +241,21 @@
                 <nodify:NodifyEditor.ConnectionTemplate>
                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectionViewModel}">
                         <nodify:Connection Source="{Binding Source.Anchor}"
-                                           Target="{Binding Target.Anchor}" />
+                                           Target="{Binding Target.Anchor}"
+                                           Text="{Binding Text}"
+                                           SplitCommand="{Binding SplitCommand}"
+                                           DisconnectCommand="{Binding DisconnectCommand}" />
                     </DataTemplate>
                 </nodify:NodifyEditor.ConnectionTemplate>
+
+                <!-- 待定连接线模板（拖拽中的连接预览） -->
+                <nodify:NodifyEditor.PendingConnectionTemplate>
+                    <DataTemplate>
+                        <nodify:PendingConnection EnablePreview="True"
+                                                  EnableSnapping="True"
+                                                  Direction="Forward" />
+                    </DataTemplate>
+                </nodify:NodifyEditor.PendingConnectionTemplate>
             </nodify:NodifyEditor>
 
             <!-- 小地图 - 作为叠加层放在 Grid 中，而非 NodifyEditor 的子元素 -->

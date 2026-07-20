@@ -1,0 +1,119 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="UotanStudio.Pages.DeviceView"
+             x:DataType="vm:DeviceViewModel">
+    <DockPanel>
+        <!-- 顶部工具栏 -->
+        <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Content="{DynamicResource Device_Refresh}"
+                        Command="{Binding RefreshDevicesCommand}"
+                        IsEnabled="{Binding !IsRefreshing}" />
+                <Button Content="{DynamicResource Device_Connect}"
+                        Command="{Binding ConnectCommand}"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button Content="{DynamicResource Device_Disconnect}"
+                        Command="{Binding DisconnectCommand}"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button Content="{DynamicResource Device_Reboot}"
+                        Command="{Binding RebootCommand}"
+                        CommandParameter="system"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button Content="{DynamicResource Device_RebootBootloader}"
+                        Command="{Binding RebootCommand}"
+                        CommandParameter="bootloader"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button Content="{DynamicResource Device_RebootRecovery}"
+                        Command="{Binding RebootCommand}"
+                        CommandParameter="recovery"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button Content="{DynamicResource Device_RebootEdl}"
+                        Command="{Binding RebootCommand}"
+                        CommandParameter="edl"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                           FontSize="12" Opacity="0.7" Margin="8,0" />
+            </StackPanel>
+        </Border>
+
+        <!-- 设备详情面板 -->
+        <Border DockPanel.Dock="Bottom" Height="80" Padding="8"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <TextBlock Text="{Binding DeviceDetail}" FontSize="12" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- 设备列表：ADB / Fastboot 分组 + 空状态提示 -->
+        <Grid Margin="8">
+            <!-- 空状态提示 -->
+            <StackPanel IsVisible="{Binding HasNoDevices}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Spacing="6">
+                <TextBlock Text="{DynamicResource Device_NoDevices}"
+                           FontSize="14" Opacity="0.7"
+                           HorizontalAlignment="Center" />
+                <TextBlock Text="{DynamicResource Device_EmptyHint}"
+                           FontSize="12" Opacity="0.5"
+                           HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <!-- 分组列表（ADB 与 Fastboot 分两栏） -->
+            <Grid ColumnDefinitions="*,*" IsVisible="{Binding HasNoDevices, Converter={x:Static BoolConverters.Not}}">
+                <!-- ADB 设备组 -->
+                <Border Grid.Column="0" Margin="0,0,4,0"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Device_GroupAdb}"
+                                   FontWeight="SemiBold" FontSize="13"
+                                   Margin="8,6" />
+                        <ListBox ItemsSource="{Binding AdbDevices}"
+                                 SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
+                                 Background="Transparent" BorderThickness="0">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:DeviceInfo}">
+                                    <StackPanel Spacing="2" Margin="4">
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.7" />
+                                            <TextBlock Text="{Binding Mode}" FontSize="11" Opacity="0.7" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+
+                <!-- Fastboot 设备组 -->
+                <Border Grid.Column="1" Margin="4,0,0,0"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Device_GroupFastboot}"
+                                   FontWeight="SemiBold" FontSize="13"
+                                   Margin="8,6" />
+                        <ListBox ItemsSource="{Binding FastbootDevices}"
+                                 SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
+                                 Background="Transparent" BorderThickness="0">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:DeviceInfo}">
+                                    <StackPanel Spacing="2" Margin="4">
+                                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.7" />
+                                            <TextBlock Text="{Binding Mode}" FontSize="11" Opacity="0.7" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </Grid>
+    </DockPanel>
+</UserControl>

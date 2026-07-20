@@ -1,0 +1,28 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Log Page -->
+    <x:String x:Key="Log_Start">Start</x:String>
+    <x:String x:Key="Log_Stop">Stop</x:String>
+    <x:String x:Key="Log_Pause">Pause</x:String>
+    <x:String x:Key="Log_Resume">Resume</x:String>
+    <x:String x:Key="Log_Clear">Clear</x:String>
+    <x:String x:Key="Log_Export">Export...</x:String>
+    <x:String x:Key="Log_AutoScroll">Auto Scroll</x:String>
+    <x:String x:Key="Log_FilterPlaceholder">Filter logs...</x:String>
+    <x:String x:Key="Log_LevelFilterPlaceholder">Filter by level...</x:String>
+    <x:String x:Key="Log_Level">Level</x:String>
+    <x:String x:Key="Log_Source">Source</x:String>
+    <x:String x:Key="Log_Message">Message</x:String>
+    <x:String x:Key="Log_CaptureStarting">Starting log capture...</x:String>
+    <x:String x:Key="Log_CaptureStarted">Log capture started.</x:String>
+    <x:String x:Key="Log_CaptureStopped">Log capture stopped.</x:String>
+    <x:String x:Key="Log_Paused">Log capture paused.</x:String>
+    <x:String x:Key="Log_Resumed">Log capture resumed.</x:String>
+    <x:String x:Key="Log_NoLogs">No log entries.</x:String>
+    <x:String x:Key="Log_ExportSucceeded">Logs exported to {0}</x:String>
+    <x:String x:Key="Log_ExportFailed">Failed to export logs.</x:String>
+    <x:String x:Key="Log_ExportDialogTitle">Export Logs</x:String>
+    <x:String x:Key="Log_SelectDeviceFirst">Please select a device first.</x:String>
+
+</ResourceDictionary>

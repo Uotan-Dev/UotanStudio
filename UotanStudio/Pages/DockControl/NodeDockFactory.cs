@@ -12,6 +12,10 @@ namespace UotanStudio.Pages.DockControl
     /// <summary>
     /// <para>节点编辑器的 Dock 布局工厂，创建包含工具箱、画布、属性面板和执行日志的布局。</para>
     /// Dock layout factory for the node editor, creating a layout with toolbox, canvas, properties panel, and execution log.
+    /// <para>备注：当前 NodeEditorView 使用固定的 DockPanel 布局；此类作为可停靠浮动布局的备用实现保留，
+    /// 供未来需要支持面板拖拽分离/重停靠的场景启用。</para>
+    /// Note: NodeEditorView currently uses a fixed DockPanel layout; this factory is retained as a standby
+    /// implementation of a dockable floating layout, to be enabled when panel tear-off/re-docking is needed.
     /// </summary>
     public class NodeDockFactory : Factory
     {

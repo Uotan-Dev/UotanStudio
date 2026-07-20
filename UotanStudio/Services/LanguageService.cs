@@ -73,12 +73,6 @@ public sealed class LanguageService
     public event EventHandler? LanguageChanged;
 
     /// <summary>
-    /// <para>当应用程序主题发生更改时触发的静态事件。</para>
-    /// Static event raised when the application theme has changed.
-    /// </summary>
-    public static event EventHandler? ThemeChanged;
-
-    /// <summary>
     /// <para>获取语言包的基础 URI 前缀。</para>
     /// Gets the base URI prefix for language packs.
     /// </summary>
@@ -124,9 +118,9 @@ public sealed class LanguageService
         var appResources = Application.Current!.Resources;
         var mergedDicts = appResources.MergedDictionaries;
 
-        // 移除所有旧的 Locale 资源
+        // 移除所有旧的 Locale 资源（精确路径前缀匹配，避免误删其他资源）
         var oldLocaleDicts = mergedDicts
-            .Where(d => d is ResourceInclude ri && ri.Source?.OriginalString.Contains("Locale") == true)
+            .Where(d => d is ResourceInclude ri && ri.Source?.OriginalString.StartsWith(LocaleBaseUri, StringComparison.OrdinalIgnoreCase) == true)
             .ToList();
         foreach (var old in oldLocaleDicts)
         {
@@ -302,7 +296,6 @@ public sealed class LanguageService
         }
 
         CurrentTheme = themeKey;
-        ThemeChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

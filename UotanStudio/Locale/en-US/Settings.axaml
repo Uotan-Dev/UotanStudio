@@ -40,12 +40,22 @@
     <x:String x:Key="Settings_UpdateCheckFailed">Update check failed</x:String>
     <x:String x:Key="Settings_ResetToDefaults">Reset to Defaults</x:String>
     <x:String x:Key="Settings_ResetConfirm">Are you sure you want to reset all settings to defaults?</x:String>
+    <x:String x:Key="Settings_ResetCanceled">Reset canceled</x:String>
     <x:String x:Key="Settings_SettingsSaved">Settings saved</x:String>
+    <x:String x:Key="Settings_SettingsReset">Settings reset to defaults</x:String>
     <x:String x:Key="Settings_ThemeFollowSystem">Follow System</x:String>
     <x:String x:Key="Settings_ThemeLightMode">Light Mode</x:String>
     <x:String x:Key="Settings_ThemeDarkMode">Dark Mode</x:String>
     <x:String x:Key="Settings_AutoDetect">Auto Detect</x:String>
     <x:String x:Key="Settings_AdbPath">ADB Path</x:String>
     <x:String x:Key="Settings_FastbootPath">Fastboot Path</x:String>
+    <x:String x:Key="Settings_Browse">Browse...</x:String>
+    <x:String x:Key="Settings_BrowseFolder">Browse folder...</x:String>
+    <x:String x:Key="Settings_FirmwareKitHint">FirmwareKit ecosystem integrated: CPIO/Payload/AVB/Oppo parsers are built-in. Tool paths below are optional overrides.</x:String>
+    <x:String x:Key="Settings_VerifyToolPaths">Verify Tool Paths</x:String>
+    <x:String x:Key="Settings_Checking">Checking...</x:String>
+    <x:String x:Key="Settings_ToolDefault">Using default tool from PATH</x:String>
+    <x:String x:Key="Settings_ToolAvailable">Tool available</x:String>
+    <x:String x:Key="Settings_ToolUnavailable">Tool unavailable</x:String>
 
 </ResourceDictionary>

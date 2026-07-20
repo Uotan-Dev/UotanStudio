@@ -12,12 +12,16 @@
     <x:String x:Key="Node_ResetZoom">重置缩放</x:String>
     <x:String x:Key="Node_ToggleMinimap">切换小地图</x:String>
     <x:String x:Key="Node_DeleteSelected">删除选中</x:String>
+    <x:String x:Key="Node_ClearAll">清空全部</x:String>
     <x:String x:Key="Node_Run">运行</x:String>
     <x:String x:Key="Node_Stop">停止</x:String>
     <x:String x:Key="Node_NodesLabel"> 节点</x:String>
     <x:String x:Key="Node_ConnectionsLabel"> 连接</x:String>
     <x:String x:Key="Node_NoSelection">选择节点以查看属性</x:String>
     <x:String x:Key="Node_StatusReady">就绪</x:String>
+    <x:String x:Key="Node_StatusRunning">运行中...</x:String>
+    <x:String x:Key="Node_StatusCompleted">已完成</x:String>
+    <x:String x:Key="Node_StatusStopped">已停止</x:String>
 
     <!-- 节点分类 -->
     <x:String x:Key="Node_CatFirmware">固件操作</x:String>
@@ -25,5 +29,12 @@
     <x:String x:Key="Node_CatData">数据处理</x:String>
     <x:String x:Key="Node_CatFlow">流程控制</x:String>
     <x:String x:Key="Node_CatOutput">输出</x:String>
+
+    <!-- 节点属性面板 -->
+    <x:String x:Key="Node_Properties_Title">标题</x:String>
+    <x:String x:Key="Node_Properties_Category">类别</x:String>
+    <x:String x:Key="Node_Properties_Location">位置</x:String>
+    <x:String x:Key="Node_Properties_Inputs">输入端口</x:String>
+    <x:String x:Key="Node_Properties_Outputs">输出端口</x:String>
 
 </ResourceDictionary>

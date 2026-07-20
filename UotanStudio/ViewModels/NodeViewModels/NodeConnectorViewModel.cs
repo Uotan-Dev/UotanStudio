@@ -1,5 +1,8 @@
 using Avalonia;
+using CommunityToolkit.Mvvm.Input;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -14,6 +17,7 @@ namespace UotanStudio.ViewModels.NodeViewModels
         private Point _anchor;
         private int _maxConnections = 0;
         private bool _isConnected;
+        private string _value = string.Empty;
 
         /// <summary>
         /// <para>获取或设置连接器的显示标题。</para>
@@ -23,6 +27,16 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             get => _title;
             set => SetProperty(ref _title, value);
+        }
+
+        /// <summary>
+        /// <para>获取或设置连接器携带的数据值。连接建立时由源端口（输出）同步到目标端口（输入）。</para>
+        /// Gets or sets the data value carried by the connector. Synced from source (output) to target (input) upon connection.
+        /// </summary>
+        public string Value
+        {
+            get => _value;
+            set => SetProperty(ref _value, value);
         }
 
         /// <summary>
@@ -64,5 +78,40 @@ namespace UotanStudio.ViewModels.NodeViewModels
             get => _isConnected;
             set => SetProperty(ref _isConnected, value);
         }
+
+        /// <summary>
+        /// <para>获取该连接器所属的节点（运行时由节点设置，用于断开时回溯查找连接）。</para>
+        /// Gets the node that owns this connector (set at runtime by the node).
+        /// </summary>
+        public FlowNodeViewModel? Node { get; internal set; }
+
+        /// <summary>
+        /// <para>获取该连接器当前的全部连接（每次访问返回快照，避免枚举过程中集合被修改）。</para>
+        /// Gets all connections currently linked to this connector. Returns a snapshot on each access to avoid modification-during-enumeration errors.
+        /// </summary>
+        public IReadOnlyList<NodeConnectionViewModel> Connections =>
+            Node is null ? Array.Empty<NodeConnectionViewModel>() : Node.NodeConnections.Where(c => c.Source == this || c.Target == this).ToList();
+
+        /// <summary>
+        /// <para>断开该连接器上的所有连接。</para>
+        /// Disconnects all connections on this connector. Exposed as <c>DisconnectCommand</c> for XAML binding.
+        /// </summary>
+        [RelayCommand]
+        public void Disconnect()
+        {
+            if (Node is null) return;
+            // 先拍快照再枚举删除，避免 InvalidOperationException
+            var toRemove = Node.NodeConnections.Where(c => c.Source == this || c.Target == this).ToList();
+            foreach (var conn in toRemove)
+            {
+                var s = conn.Source;
+                var t = conn.Target;
+                Node.NodeConnections.Remove(conn);
+                s?.SetConnected(s.Connections.Any());
+                t?.SetConnected(t.Connections.Any());
+            }
+        }
+
+        internal void SetConnected(bool value) => IsConnected = value;
     }
 }

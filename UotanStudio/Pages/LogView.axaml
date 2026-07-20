@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="UotanStudio.Pages.LogView"
+             x:DataType="vm:LogViewModel">
+    <DockPanel>
+        <!-- 顶部工具栏 -->
+        <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <!-- 左侧: 开始 / 停止 / 暂停 / 继续 / 清空 / 导出 -->
+                <Button DockPanel.Dock="Left" Content="{DynamicResource Log_Start}"
+                        Command="{Binding StartCaptureCommand}"
+                        IsEnabled="{Binding !IsCapturing}"
+                        Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="{DynamicResource Log_Stop}"
+                        Command="{Binding StopCaptureCommand}"
+                        IsEnabled="{Binding IsCapturing}"
+                        Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="{DynamicResource Log_Pause}"
+                        Command="{Binding PauseCaptureCommand}"
+                        IsEnabled="{Binding IsCapturing}"
+                        IsVisible="{Binding !IsPaused}"
+                        Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="{DynamicResource Log_Resume}"
+                        Command="{Binding ResumeCaptureCommand}"
+                        IsEnabled="{Binding IsCapturing}"
+                        IsVisible="{Binding IsPaused}"
+                        Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="{DynamicResource Log_Clear}"
+                        Command="{Binding ClearLogsCommand}"
+                        Margin="0,0,8,0" />
+                <Button DockPanel.Dock="Left" Content="{DynamicResource Log_Export}"
+                        Click="OnExportClick"
+                        Margin="0,0,8,0" />
+
+                <!-- 右侧: 自动滚动开关 + 级别过滤 + 文本过滤 -->
+                <ToggleButton DockPanel.Dock="Right" Content="{DynamicResource Log_AutoScroll}"
+                              IsChecked="{Binding AutoScroll}"
+                              VerticalAlignment="Center"
+                              Margin="8,0,0,0" />
+                <TextBox DockPanel.Dock="Right" Width="100"
+                         PlaceholderText="{DynamicResource Log_LevelFilterPlaceholder}"
+                         Text="{Binding LevelFilter}"
+                         VerticalAlignment="Center"
+                         Margin="8,0,0,0" />
+                <TextBox DockPanel.Dock="Right" Width="220"
+                         PlaceholderText="{DynamicResource Log_FilterPlaceholder}"
+                         Text="{Binding Filter}"
+                         VerticalAlignment="Center"
+                         Margin="8,0,0,0" />
+            </DockPanel>
+        </Border>
+
+        <!-- 状态栏 -->
+        <Border DockPanel.Dock="Bottom" Height="24" Padding="8,2"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <TextBlock Text="{Binding StatusText}" FontSize="11"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       VerticalAlignment="Center" />
+        </Border>
+
+        <!-- 日志列表 -->
+        <ListBox ItemsSource="{Binding FilteredEntries}" Margin="8">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:LogEntry}">
+                    <Grid ColumnDefinitions="70,120,*" Margin="2">
+                        <TextBlock Grid.Column="0" Text="{Binding Level}" FontSize="11"
+                                   FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Source}" FontSize="11" Opacity="0.7" />
+                        <TextBlock Grid.Column="2" Text="{Binding Message}" FontSize="12" TextWrapping="Wrap" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

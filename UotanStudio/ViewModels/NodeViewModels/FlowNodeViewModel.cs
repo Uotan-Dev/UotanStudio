@@ -1,6 +1,7 @@
 using Avalonia;
 using NodifyM.Avalonia.ViewModelBase;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -89,16 +90,22 @@ namespace UotanStudio.ViewModels.NodeViewModels
         }
 
         /// <summary>
-        /// <para>获取节点的输入连接器集合。</para>
-        /// Gets the collection of input connectors for the node.
+        /// <para>获取节点的输入连接器集合。添加连接器时自动绑定 Node 反向引用。</para>
+        /// Gets the collection of input connectors for the node. Node back-reference is auto-bound when a connector is added.
         /// </summary>
-        public ObservableCollection<NodeConnectorViewModel> Input { get; } = [];
+        public ObservableCollection<NodeConnectorViewModel> Input { get; }
 
         /// <summary>
-        /// <para>获取节点的输出连接器集合。</para>
-        /// Gets the collection of output connectors for the node.
+        /// <para>获取节点的输出连接器集合。添加连接器时自动绑定 Node 反向引用。</para>
+        /// Gets the collection of output connectors for the node. Node back-reference is auto-bound when a connector is added.
         /// </summary>
-        public ObservableCollection<NodeConnectorViewModel> Output { get; } = [];
+        public ObservableCollection<NodeConnectorViewModel> Output { get; }
+
+        /// <summary>
+        /// <para>获取该节点上的全部连接（运行时由 NodeEditorViewModel 维护，用于连接器断开回溯）。</para>
+        /// Gets all connections on this node (maintained at runtime by NodeEditorViewModel, used for connector disconnect backtracking).
+        /// </summary>
+        public ObservableCollection<NodeConnectionViewModel> NodeConnections { get; } = [];
 
         /// <summary>
         /// <para>创建具有指定标题和类别的节点。</para>
@@ -116,6 +123,20 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             _title = title;
             _category = category;
+            Input = [];
+            Output = [];
+            Input.CollectionChanged += OnConnectorsChanged;
+            Output.CollectionChanged += OnConnectorsChanged;
+        }
+
+        private void OnConnectorsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems != null)
+            {
+                foreach (NodeConnectorViewModel connector in e.NewItems)
+                    connector.Node = this;
+            }
         }
     }
 }
+

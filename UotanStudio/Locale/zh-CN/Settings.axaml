@@ -40,12 +40,22 @@
     <x:String x:Key="Settings_UpdateCheckFailed">更新检查失败</x:String>
     <x:String x:Key="Settings_ResetToDefaults">恢复默认设置</x:String>
     <x:String x:Key="Settings_ResetConfirm">确定要恢复所有设置为默认值吗？</x:String>
+    <x:String x:Key="Settings_ResetCanceled">已取消重置</x:String>
     <x:String x:Key="Settings_SettingsSaved">设置已保存</x:String>
+    <x:String x:Key="Settings_SettingsReset">设置已恢复为默认值</x:String>
     <x:String x:Key="Settings_ThemeFollowSystem">跟随系统</x:String>
     <x:String x:Key="Settings_ThemeLightMode">浅色模式</x:String>
     <x:String x:Key="Settings_ThemeDarkMode">深色模式</x:String>
     <x:String x:Key="Settings_AutoDetect">自动检测</x:String>
     <x:String x:Key="Settings_AdbPath">ADB 路径</x:String>
     <x:String x:Key="Settings_FastbootPath">Fastboot 路径</x:String>
+    <x:String x:Key="Settings_Browse">浏览...</x:String>
+    <x:String x:Key="Settings_BrowseFolder">浏览文件夹...</x:String>
+    <x:String x:Key="Settings_FirmwareKitHint">已集成 FirmwareKit 生态：CPIO/Payload/AVB/Oppo 解析器内置。下方工具路径为可选覆盖项。</x:String>
+    <x:String x:Key="Settings_VerifyToolPaths">验证工具路径</x:String>
+    <x:String x:Key="Settings_Checking">检查中...</x:String>
+    <x:String x:Key="Settings_ToolDefault">使用 PATH 中的默认工具</x:String>
+    <x:String x:Key="Settings_ToolAvailable">工具可用</x:String>
+    <x:String x:Key="Settings_ToolUnavailable">工具不可用</x:String>
 
 </ResourceDictionary>

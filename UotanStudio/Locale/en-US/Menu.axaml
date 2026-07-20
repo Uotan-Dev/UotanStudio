@@ -5,11 +5,16 @@
     <x:String x:Key="Menu_Tools">Tools</x:String>
     <x:String x:Key="Menu_View">View</x:String>
     <x:String x:Key="Menu_About">About</x:String>
-    <x:String x:Key="Menu_SecondToggleItem">Second Menu toggle item</x:String>
-    <x:String x:Key="Menu_Radio1Group">Radio 1 - group</x:String>
-    <x:String x:Key="Menu_Radio2Group">Radio 2 - group</x:String>
-    <x:String x:Key="Menu_Radio3Group">Radio 3 - group</x:String>
-    <x:String x:Key="Menu_Radio4Group">Radio 4 - group</x:String>
-    <x:String x:Key="Menu_Radio5Group">Radio 5 - group</x:String>
+    <x:String x:Key="Menu_New">New Project</x:String>
+    <x:String x:Key="Menu_Open">Open Project...</x:String>
+    <x:String x:Key="Menu_Save">Save Project</x:String>
+    <x:String x:Key="Menu_Exit">Exit</x:String>
+    <x:String x:Key="Menu_DeviceManager">Device Manager</x:String>
+    <x:String x:Key="Menu_ReloadLanguagePacks">Reload Language Packs</x:String>
+    <x:String x:Key="Menu_ClearCanvas">Clear Canvas</x:String>
+    <x:String x:Key="Menu_Settings">Settings</x:String>
+    <x:String x:Key="Menu_ThemeFollowSystem">Follow System Theme</x:String>
+    <x:String x:Key="Menu_ThemeLight">Light Theme</x:String>
+    <x:String x:Key="Menu_ThemeDark">Dark Theme</x:String>
 
 </ResourceDictionary>

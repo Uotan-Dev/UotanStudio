@@ -1,0 +1,22 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Device Page -->
+    <x:String x:Key="Device_Refresh">Refresh</x:String>
+    <x:String x:Key="Device_Connect">Connect</x:String>
+    <x:String x:Key="Device_Disconnect">Disconnect</x:String>
+    <x:String x:Key="Device_NoDevices">No devices detected.</x:String>
+    <x:String x:Key="Device_Scanning">Scanning for devices...</x:String>
+    <x:String x:Key="Device_Reboot">Reboot</x:String>
+    <x:String x:Key="Device_RebootBootloader">Reboot to Bootloader</x:String>
+    <x:String x:Key="Device_RebootRecovery">Reboot to Recovery</x:String>
+    <x:String x:Key="Device_RebootEdl">Reboot to EDL</x:String>
+    <x:String x:Key="Device_DeviceCount"> device(s) found.</x:String>
+    <x:String x:Key="Device_Detail">Device Detail</x:String>
+    <x:String x:Key="Device_Connecting">Connecting...</x:String>
+    <x:String x:Key="Device_Reconnecting">Reconnecting...</x:String>
+    <x:String x:Key="Device_GroupAdb">ADB Devices</x:String>
+    <x:String x:Key="Device_GroupFastboot">Fastboot Devices</x:String>
+    <x:String x:Key="Device_EmptyHint">Click Refresh to scan connected devices.</x:String>
+
+</ResourceDictionary>

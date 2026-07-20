@@ -5,11 +5,16 @@
     <x:String x:Key="Menu_Tools">工具</x:String>
     <x:String x:Key="Menu_View">视图</x:String>
     <x:String x:Key="Menu_About">关于</x:String>
-    <x:String x:Key="Menu_SecondToggleItem">第二个菜单切换项</x:String>
-    <x:String x:Key="Menu_Radio1Group">单选 1 - 组</x:String>
-    <x:String x:Key="Menu_Radio2Group">单选 2 - 组</x:String>
-    <x:String x:Key="Menu_Radio3Group">单选 3 - 组</x:String>
-    <x:String x:Key="Menu_Radio4Group">单选 4 - 组</x:String>
-    <x:String x:Key="Menu_Radio5Group">单选 5 - 组</x:String>
+    <x:String x:Key="Menu_New">新建项目</x:String>
+    <x:String x:Key="Menu_Open">打开项目...</x:String>
+    <x:String x:Key="Menu_Save">保存项目</x:String>
+    <x:String x:Key="Menu_Exit">退出</x:String>
+    <x:String x:Key="Menu_DeviceManager">设备管理器</x:String>
+    <x:String x:Key="Menu_ReloadLanguagePacks">重新加载语言包</x:String>
+    <x:String x:Key="Menu_ClearCanvas">清空画布</x:String>
+    <x:String x:Key="Menu_Settings">设置</x:String>
+    <x:String x:Key="Menu_ThemeFollowSystem">跟随系统主题</x:String>
+    <x:String x:Key="Menu_ThemeLight">浅色主题</x:String>
+    <x:String x:Key="Menu_ThemeDark">深色主题</x:String>
 
 </ResourceDictionary>
