@@ -37,4 +37,17 @@
     <x:String x:Key="Node_Properties_Inputs">输入端口</x:String>
     <x:String x:Key="Node_Properties_Outputs">输出端口</x:String>
 
+    <!-- 节点日志面板 -->
+    <x:String x:Key="Node_LogPanel">工具箱日志</x:String>
+    <x:String x:Key="Node_LogTogglePause">暂停 / 继续 日志接收</x:String>
+    <x:String x:Key="Node_LogClearActive">清空当前分类</x:String>
+    <x:String x:Key="Node_LogAutoScroll">自动滚动到最新</x:String>
+    <x:String x:Key="Node_LogFilterPlaceholder">过滤日志...</x:String>
+    <x:String x:Key="Node_LogCat_Toolbox">工具箱</x:String>
+    <x:String x:Key="Node_LogCat_ADB">ADB</x:String>
+    <x:String x:Key="Node_LogCat_Fastboot">Fastboot</x:String>
+    <x:String x:Key="Node_LogCat_Firmware">固件</x:String>
+    <x:String x:Key="Node_LogCat_Node">节点</x:String>
+    <x:String x:Key="Node_RemoveConnection">删除连接线</x:String>
+
 </ResourceDictionary>

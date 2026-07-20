@@ -27,6 +27,12 @@ namespace UotanStudio.ViewModels
         private NodeViewModels.FlowNodeViewModel? _selectedNode;
 
         /// <summary>
+        /// <para>获取工具箱日志面板视图模型（订阅 LogAggregator，按分类分发各后端日志）。</para>
+        /// Gets the toolbox log panel view model (subscribes to LogAggregator, dispatching logs by category).
+        /// </summary>
+        public ToolboxLogViewModel ToolboxLog { get; } = new();
+
+        /// <summary>
         /// <para>获取或设置画布上的节点集合。</para>
         /// Gets or sets the collection of nodes on the canvas.
         /// </summary>
@@ -214,6 +220,8 @@ namespace UotanStudio.ViewModels
             }
 
             Nodes.Add(node);
+            Services.LogAggregator.Info(Services.ToolboxLogCategory.Toolbox, "Editor",
+                $"Added node '{node.Title}' at ({node.Location.X}, {node.Location.Y}).");
         }
 
         /// <summary>
@@ -237,6 +245,8 @@ namespace UotanStudio.ViewModels
             }
 
             Nodes.Remove(node);
+            Services.LogAggregator.Info(Services.ToolboxLogCategory.Toolbox, "Editor",
+                $"Removed node '{node.Title}' and {relatedConnections.Count} related connections.");
         }
 
         private static bool IsConnectorInNode(NodeViewModels.NodeConnectorViewModel connector, NodeViewModels.FlowNodeViewModel node)
@@ -267,6 +277,8 @@ namespace UotanStudio.ViewModels
                 Source = source,
                 Target = target
             };
+            // 绑定删除回调：连接线 Remove 命令触发时，由本 VM 从 Connections 集合移除
+            connection.RemoveRequested = OnConnectionRemoveRequested;
 
             Connections.Add(connection);
 
@@ -280,6 +292,9 @@ namespace UotanStudio.ViewModels
 
             // 将源端口（输出）的数据值同步到目标端口（输入）
             target.Value = source.Value;
+
+            Services.LogAggregator.Info(Services.ToolboxLogCategory.Toolbox, "Editor",
+                $"Connected '{source.Node?.Title}/{source.Title}' -> '{target.Node?.Title}/{target.Title}'.");
         }
 
         /// <summary>
@@ -307,6 +322,22 @@ namespace UotanStudio.ViewModels
                 source.SetConnected(source.Connections.Any());
             if (target != null)
                 target.SetConnected(target.Connections.Any());
+        }
+
+        /// <summary>
+        /// <para>连接线 Remove 命令的回调入口：从 Connections 集合移除指定连接。</para>
+        /// Callback entry for the connection's Remove command: removes the specified connection from the Connections collection.
+        /// </summary>
+        /// <param name="connection">
+        /// <para>要删除的连接。</para>
+        /// The connection to remove.
+        /// </param>
+        private void OnConnectionRemoveRequested(NodeViewModels.NodeConnectionViewModel connection)
+        {
+            // RemoveConnection 内部已处理两端 NodeConnections 与 IsConnected；
+            // 但连接的 Remove 命令先调了 Disconnect()，两端 NodeConnections 已被清理，
+            // 这里直接从 Connections 移除即可，重复的 Remove 调用是幂等的。
+            Connections.Remove(connection);
         }
 
         /// <summary>
@@ -537,6 +568,8 @@ namespace UotanStudio.ViewModels
             {
                 // 拓扑排序：按连接的 Source -> Target 顺序执行
                 var ordered = TopologicalSort(Nodes, Connections);
+                Services.LogAggregator.Info(Services.ToolboxLogCategory.Node, "Flow",
+                    $"Run started: {ordered.Count} nodes scheduled.");
 
                 foreach (var node in ordered)
                 {
@@ -544,6 +577,7 @@ namespace UotanStudio.ViewModels
                     // 在执行前，把上游 Output 端口的 Value 同步到本节点 Input 端口的 Value
                     SyncUpstreamValues(node);
                     ExecutionStatus = $"{node.Title}...";
+                    Services.LogAggregator.Info(Services.ToolboxLogCategory.Node, node.Title, "Executing...");
 
                     // 固件节点接入 FirmwareService 真实后端执行
                     if (node is NodeViewModels.FirmwareNodeViewModel fwNode)
@@ -553,6 +587,10 @@ namespace UotanStudio.ViewModels
                         var partitionName = GetInputValue(node, 2);
                         var status = await fwNode.ExecuteAsync(firmwarePath, outputDir, partitionName, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
+                        Services.LogAggregator.Append(
+                            status.Contains("OK") ? Services.ToolboxLogCategory.Firmware : Services.ToolboxLogCategory.Firmware,
+                            status.StartsWith("[", StringComparison.Ordinal) && status.Contains("FAIL") ? "ERROR" : "INFO",
+                            "Firmware", status);
                     }
                     // 烧录节点接入 FirmwareKit.Comm.Fastboot 真实刷写/擦除/重启
                     else if (node is NodeViewModels.FlashNodeViewModel flashNode)
@@ -562,6 +600,10 @@ namespace UotanStudio.ViewModels
                         var imagePath = GetInputValue(node, 2);
                         var status = await flashNode.ExecuteAsync(devicePath, partition, imagePath, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
+                        Services.LogAggregator.Append(
+                            Services.ToolboxLogCategory.Fastboot,
+                            status.Contains("FAIL") ? "ERROR" : "INFO",
+                            "Fastboot", status);
                     }
                     // 数据处理节点：Read File / Format Convert / Checksum / Compare
                     else if (node is NodeViewModels.DataNodeViewModel dataNode)
@@ -573,6 +615,10 @@ namespace UotanStudio.ViewModels
                         var dataB = GetInputValue(node, 1);
                         var status = await dataNode.ExecuteAsync(pathOrInput, formatOrAlgorithm, dataB, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
+                        Services.LogAggregator.Append(
+                            Services.ToolboxLogCategory.Firmware,
+                            status.Contains("FAIL") ? "ERROR" : (status.Contains("WAIT") ? "WARN" : "INFO"),
+                            "Data", status);
                     }
                     // 流程控制节点：If Branch / Loop / Wait
                     else if (node is NodeViewModels.FlowControlNodeViewModel flowNode)
@@ -580,6 +626,10 @@ namespace UotanStudio.ViewModels
                         var conditionOrCountOrDelay = GetInputValue(node, 0);
                         var status = await flowNode.ExecuteAsync(conditionOrCountOrDelay, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
+                        Services.LogAggregator.Append(
+                            Services.ToolboxLogCategory.Node,
+                            status.Contains("FAIL") ? "ERROR" : "INFO",
+                            "Flow", status);
                     }
                     // 输出节点：Log Output / Progress Report / Save Result
                     else if (node is NodeViewModels.OutputNodeViewModel outputNode)
@@ -588,10 +638,16 @@ namespace UotanStudio.ViewModels
                         var levelOrStatusOrPath = GetInputValue(node, 1);
                         var status = await outputNode.ExecuteAsync(messageOrData, levelOrStatusOrPath, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
+                        Services.LogAggregator.Append(
+                            Services.ToolboxLogCategory.Node,
+                            status.Contains("FAIL") ? "ERROR" : "INFO",
+                            "Output", status);
                     }
                     else
                     {
                         await Task.Delay(300, ct).ConfigureAwait(false);
+                        Services.LogAggregator.Warn(Services.ToolboxLogCategory.Node, "Flow",
+                            $"Node '{node.Title}' has no backend dispatch; skipped with delay.");
                     }
 
                     // 节点执行完毕后，将其 Output 端口的 Value 同步到下游节点（通过连接传播）
@@ -599,10 +655,12 @@ namespace UotanStudio.ViewModels
                 }
 
                 ExecutionStatus = LanguageService.Instance.GetString("Node_StatusCompleted");
+                Services.LogAggregator.Info(Services.ToolboxLogCategory.Node, "Flow", "Run completed.");
             }
             catch (OperationCanceledException)
             {
                 ExecutionStatus = LanguageService.Instance.GetString("Node_StatusStopped");
+                Services.LogAggregator.Warn(Services.ToolboxLogCategory.Node, "Flow", "Run stopped by user.");
             }
             finally
             {

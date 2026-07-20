@@ -6,6 +6,7 @@
              xmlns:vm="using:UotanStudio.ViewModels"
              xmlns:nodify="clr-namespace:NodifyM.Avalonia.Controls;assembly=NodifyM.Avalonia"
              xmlns:nodeVm="using:UotanStudio.ViewModels.NodeViewModels"
+             xmlns:svc="using:UotanStudio.Services"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
              x:Class="UotanStudio.Pages.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
@@ -100,36 +101,113 @@
             </DockPanel>
         </Border>
 
-        <!-- 左侧工具箱面板 -->
-        <Border DockPanel.Dock="Left" Width="220"
+        <!-- 左侧工具箱 + 日志面板 -->
+        <Border DockPanel.Dock="Left" Width="260"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Toolbox}"
-                           FontWeight="SemiBold" FontSize="13"
-                           Margin="8,8,8,4" />
-                <ScrollViewer>
-                    <ItemsControl ItemsSource="{Binding ToolboxCategories}" Margin="4">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:NodeToolboxCategory}">
-                                <Expander Header="{Binding Name}" IsExpanded="True" Margin="0,2">
-                                    <ItemsControl ItemsSource="{Binding Items}" Margin="8,0">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate DataType="{x:Type vm:NodeToolboxItem}">
-                                                <Button HorizontalAlignment="Stretch"
-                                                        HorizontalContentAlignment="Left"
-                                                        Padding="6,4" Margin="0,1"
-                                                        IsVisible="{Binding IsVisible}"
-                                                        Click="OnToolboxItemClicked">
-                                                    <TextBlock Text="{Binding Name}" FontSize="12" />
-                                                </Button>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </Expander>
+                <!-- 工具箱区(上方,占自然高) -->
+                <Border DockPanel.Dock="Top" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Toolbox}"
+                                   FontWeight="SemiBold" FontSize="13"
+                                   Margin="8,8,8,4" />
+                        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding ToolboxCategories}" Margin="4">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:NodeToolboxCategory}">
+                                        <Expander Header="{Binding Name}" IsExpanded="True" Margin="0,2">
+                                            <ItemsControl ItemsSource="{Binding Items}" Margin="8,0">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:NodeToolboxItem}">
+                                                        <Button HorizontalAlignment="Stretch"
+                                                                HorizontalContentAlignment="Left"
+                                                                Padding="6,4" Margin="0,1"
+                                                                IsVisible="{Binding IsVisible}"
+                                                                Click="OnToolboxItemClicked">
+                                                            <TextBlock Text="{Binding Name}" FontSize="12" />
+                                                        </Button>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Expander>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <!-- 日志面板区(下方,填满剩余) -->
+                <DockPanel DataContext="{Binding ToolboxLog}" Margin="0">
+                    <!-- 日志面板顶部:标题 + 工具按钮 -->
+                    <Border DockPanel.Dock="Top" Padding="8,4,8,4"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Node_LogPanel}"
+                                       FontWeight="SemiBold" FontSize="13"
+                                       VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ToggleButton DockPanel.Dock="Right" Padding="4,2" Margin="4,0,0,0"
+                                          IsChecked="{Binding IsPaused}"
+                                          ToolTip.Tip="{DynamicResource Node_LogTogglePause}"
+                                          VerticalAlignment="Center">
+                                <avalonia:MaterialIcon Kind="Pause" Width="14" Height="14" />
+                            </ToggleButton>
+                            <Button DockPanel.Dock="Right" Padding="4,2" Margin="4,0,0,0"
+                                    Command="{Binding ClearActiveCommand}"
+                                    ToolTip.Tip="{DynamicResource Node_LogClearActive}"
+                                    VerticalAlignment="Center">
+                                <avalonia:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
+                            </Button>
+                            <ToggleButton DockPanel.Dock="Right" Padding="4,2" Margin="4,0,0,0"
+                                          IsChecked="{Binding AutoScroll}"
+                                          ToolTip.Tip="{DynamicResource Node_LogAutoScroll}"
+                                          VerticalAlignment="Center">
+                                <avalonia:MaterialIcon Kind="ArrowDownBold" Width="14" Height="14" />
+                            </ToggleButton>
+                            <TextBox DockPanel.Dock="Right" Width="90" Padding="4,2"
+                                     PlaceholderText="{DynamicResource Node_LogFilterPlaceholder}"
+                                     Text="{Binding Filter}"
+                                     VerticalAlignment="Center" FontSize="11" />
+                        </DockPanel>
+                    </Border>
+
+                    <!-- 分类切换栏 -->
+                    <Border DockPanel.Dock="Top" Padding="4,2"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <ListBox ItemsSource="{Binding Categories}"
+                                 Background="Transparent" BorderThickness="0" Padding="0"
+                                 SelectedItem="{Binding ActiveCategory}">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="2" />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type svc:ToolboxLogCategory}">
+                                    <Border Padding="6,2" CornerRadius="3"
+                                            Background="{DynamicResource AccentBrushSemi}">
+                                        <TextBlock Text="{Binding .}" FontSize="11" />
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+
+                    <!-- 日志列表 -->
+                    <ListBox ItemsSource="{Binding VisibleEntries}" Padding="2"
+                             Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:ToolboxLogViewModel+Entry}">
+                                <Grid ColumnDefinitions="42,80,*" Margin="1">
+                                    <TextBlock Grid.Column="0" Text="{Binding Level}" FontSize="10"
+                                               FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Source}" FontSize="10" Opacity="0.65" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Message}" FontSize="11" TextWrapping="Wrap" />
+                                </Grid>
                             </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </DockPanel>
             </DockPanel>
         </Border>
 

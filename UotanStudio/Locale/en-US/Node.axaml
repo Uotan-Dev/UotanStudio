@@ -37,4 +37,17 @@
     <x:String x:Key="Node_Properties_Inputs">Inputs</x:String>
     <x:String x:Key="Node_Properties_Outputs">Outputs</x:String>
 
+    <!-- Node Log Panel -->
+    <x:String x:Key="Node_LogPanel">Toolbox Log</x:String>
+    <x:String x:Key="Node_LogTogglePause">Pause / Resume log intake</x:String>
+    <x:String x:Key="Node_LogClearActive">Clear active category</x:String>
+    <x:String x:Key="Node_LogAutoScroll">Auto scroll to latest</x:String>
+    <x:String x:Key="Node_LogFilterPlaceholder">Filter logs...</x:String>
+    <x:String x:Key="Node_LogCat_Toolbox">Toolbox</x:String>
+    <x:String x:Key="Node_LogCat_ADB">ADB</x:String>
+    <x:String x:Key="Node_LogCat_Fastboot">Fastboot</x:String>
+    <x:String x:Key="Node_LogCat_Firmware">Firmware</x:String>
+    <x:String x:Key="Node_LogCat_Node">Node</x:String>
+    <x:String x:Key="Node_RemoveConnection">Remove connection</x:String>
+
 </ResourceDictionary>

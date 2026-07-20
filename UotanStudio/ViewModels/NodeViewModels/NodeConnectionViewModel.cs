@@ -14,6 +14,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         private string? _text;
 
         /// <summary>
+        /// <para>请求宿主（NodeEditorViewModel）删除本连接的回调。宿主在创建连接时绑定。</para>
+        /// Callback requesting the host (NodeEditorViewModel) to remove this connection. Bound by the host on creation.
+        /// </summary>
+        public System.Action<NodeConnectionViewModel>? RemoveRequested { get; set; }
+
+        /// <summary>
         /// <para>获取或设置连接的源连接器（输出端口）。</para>
         /// Gets or sets the source connector (output port) of the connection.
         /// </summary>
@@ -69,15 +75,28 @@ namespace UotanStudio.ViewModels.NodeViewModels
         }
 
         /// <summary>
-        /// <para>在连接线指定位置分裂为两段（当前实现简化为断开原连接）。</para>
-        /// Splits the connection at the specified position into two segments (current implementation simplifies this to disconnecting the original connection).
+        /// <para>在连接线指定位置分裂为两段。NodifyM 的 Connection 控件未暴露 RemoveCommand，故借 SplitCommand 这条已绑定路径触发删除。</para>
+        /// Splits the connection at the specified position. NodifyM's Connection control does not expose RemoveCommand, so we reuse the bound SplitCommand path to trigger removal.
         /// </summary>
         [RelayCommand]
         public void Split()
         {
-            // 分裂操作需要插入一个中间节点，当前实现简化为断开原连接，
-            // 由 NodeEditorViewModel 的 RemoveConnection 流程接管。
+            // NodifyM 的 Connection 无 RemoveCommand；把 Split 按钮当作删除入口，
+            // 调用 Remove() 完成断开 + 请求宿主从 Connections 集合移除。
+            Remove();
+        }
+
+        /// <summary>
+        /// <para>删除本连接线。先断开两端连接关系，再通过 RemoveRequested 回调请求宿主从集合移除。</para>
+        /// Removes this connection. Disconnects both endpoints first, then asks the host to remove it from the collection via RemoveRequested.
+        /// </summary>
+        [RelayCommand]
+        public void Remove()
+        {
+            // 先断开两端口的连接关系（更新 IsConnected、清理 NodeConnections）
             Disconnect();
+            // 再请求宿主从 Connections 集合移除本对象
+            RemoveRequested?.Invoke(this);
         }
     }
 }
