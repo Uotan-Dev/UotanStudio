@@ -37,10 +37,9 @@ namespace UotanStudio.ViewModels.NodeViewModels
         /// <returns>执行结果摘要文本。</returns>
         public async Task<string> ExecuteAsync(string devicePath, string partition, string imagePath, CancellationToken cancellationToken)
         {
-            _ = devicePath; // 当前 FirmwareKit.Comm.Fastboot.Usb.Windows.WinUSBDevice 不暴露 DevicePath setter，先用默认句柄
+            _ = devicePath;
             try
             {
-                // 构造 WinUSB 传输并实例化 FastbootDriver（使用无参 ctor + 默认句柄）
                 var transport = new FirmwareKit.Comm.Fastboot.Usb.Windows.WinUSBDevice();
                 using var driver = new FastbootDriver(transport);
 

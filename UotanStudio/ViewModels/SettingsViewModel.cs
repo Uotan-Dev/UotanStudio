@@ -396,7 +396,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </param>
     private void InitializeFromAppSettings(AppSettings settings)
     {
-        // 直接赋值私有字段以避免触发 setter 中的防抖保存
         _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)
             ? LanguageInfo.SystemLanguage
             : LanguageService.Instance.AvailableLanguages.FirstOrDefault(l => l.CultureName == settings.CultureName)
@@ -414,10 +413,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _gridSize = settings.GridSize;
         _connectionStyleIndex = settings.ConnectionStyleIndex;
 
-        // 统一通知 UI 刷新所有绑定属性
         OnPropertyChanged(string.Empty);
 
-        // Apply language based on loaded preference
         ApplyLanguageInfo(_selectedLanguage);
     }
 
@@ -696,12 +693,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
 
-        // 通知主题相关 RadioButton 绑定刷新
         OnPropertyChanged(nameof(IsSystemTheme));
         OnPropertyChanged(nameof(IsLightTheme));
         OnPropertyChanged(nameof(IsDarkTheme));
 
-        // 同步语言列表，保留"跟随系统"头部
         Languages.Clear();
         Languages.Add(LanguageInfo.SystemLanguage);
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
@@ -710,14 +705,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
                 Languages.Add(lang);
         }
 
-        // 实际应用重置后的语言（默认为跟随系统）
         ApplyLanguageInfo(_selectedLanguage);
 
-        // Notify all properties changed
         OnPropertyChanged(string.Empty);
         WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
 
-        // 刷新版本卡片以反映当前语言
         RefreshModuleCards();
 
         ShowToast(LanguageService.Instance.GetString("Settings_SettingsReset"));
@@ -733,12 +725,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
 
-        // 通知主题相关 RadioButton 绑定刷新
         OnPropertyChanged(nameof(IsSystemTheme));
         OnPropertyChanged(nameof(IsLightTheme));
         OnPropertyChanged(nameof(IsDarkTheme));
 
-        // 同步语言列表，保留"跟随系统"头部
         Languages.Clear();
         Languages.Add(LanguageInfo.SystemLanguage);
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
@@ -747,10 +737,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
                 Languages.Add(lang);
         }
 
-        // 实际应用重置后的语言（默认为跟随系统）
         ApplyLanguageInfo(_selectedLanguage);
 
-        // Notify all properties changed
         OnPropertyChanged(string.Empty);
         WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
 

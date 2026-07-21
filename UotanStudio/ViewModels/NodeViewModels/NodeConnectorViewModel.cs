@@ -100,7 +100,6 @@ namespace UotanStudio.ViewModels.NodeViewModels
         public void Disconnect()
         {
             if (Node is null) return;
-            // 先拍快照再枚举删除，避免 InvalidOperationException
             var toRemove = Node.NodeConnections.Where(c => c.Source == this || c.Target == this).ToList();
             foreach (var conn in toRemove)
             {

@@ -19,8 +19,6 @@ public partial class LogView : UserControl
 
     private void OnDataContextChanged(object? sender, System.EventArgs e)
     {
-        // 当 DataContext 变化时，可在此处与外部设备状态关联
-        // 当前实现：LogViewModel.SetActiveDevice 由外部调用方（如 MainViewModel）触发
     }
 
     /// <summary>

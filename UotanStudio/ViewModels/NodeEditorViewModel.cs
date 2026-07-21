@@ -27,12 +27,6 @@ namespace UotanStudio.ViewModels
         private NodeViewModels.FlowNodeViewModel? _selectedNode;
 
         /// <summary>
-        /// <para>获取工具箱日志面板视图模型（订阅 LogAggregator，按分类分发各后端日志）。</para>
-        /// Gets the toolbox log panel view model (subscribes to LogAggregator, dispatching logs by category).
-        /// </summary>
-        public ToolboxLogViewModel ToolboxLog { get; } = new();
-
-        /// <summary>
         /// <para>获取或设置画布上的节点集合。</para>
         /// Gets or sets the collection of nodes on the canvas.
         /// </summary>
@@ -220,8 +214,6 @@ namespace UotanStudio.ViewModels
             }
 
             Nodes.Add(node);
-            Services.LogAggregator.Info(Services.ToolboxLogCategory.Toolbox, "Editor",
-                $"Added node '{node.Title}' at ({node.Location.X}, {node.Location.Y}).");
         }
 
         /// <summary>
@@ -245,8 +237,6 @@ namespace UotanStudio.ViewModels
             }
 
             Nodes.Remove(node);
-            Services.LogAggregator.Info(Services.ToolboxLogCategory.Toolbox, "Editor",
-                $"Removed node '{node.Title}' and {relatedConnections.Count} related connections.");
         }
 
         private static bool IsConnectorInNode(NodeViewModels.NodeConnectorViewModel connector, NodeViewModels.FlowNodeViewModel node)
@@ -268,7 +258,6 @@ namespace UotanStudio.ViewModels
         /// </param>
         public void CreateConnection(NodeViewModels.NodeConnectorViewModel source, NodeViewModels.NodeConnectorViewModel target)
         {
-            // 防止重复连接
             if (Connections.Any(c => c.Source == source && c.Target == target))
                 return;
 
@@ -277,24 +266,17 @@ namespace UotanStudio.ViewModels
                 Source = source,
                 Target = target
             };
-            // 绑定删除回调：连接线 Remove 命令触发时，由本 VM 从 Connections 集合移除
             connection.RemoveRequested = OnConnectionRemoveRequested;
 
             Connections.Add(connection);
 
-            // 在两端节点上记录该连接，便于后续断开回溯
             source.Node?.NodeConnections.Add(connection);
             target.Node?.NodeConnections.Add(connection);
 
-            // 更新连接状态
             source.SetConnected(true);
             target.SetConnected(true);
 
-            // 将源端口（输出）的数据值同步到目标端口（输入）
             target.Value = source.Value;
-
-            Services.LogAggregator.Info(Services.ToolboxLogCategory.Toolbox, "Editor",
-                $"Connected '{source.Node?.Title}/{source.Title}' -> '{target.Node?.Title}/{target.Title}'.");
         }
 
         /// <summary>
@@ -317,7 +299,6 @@ namespace UotanStudio.ViewModels
 
             Connections.Remove(connection);
 
-            // 重新计算两端连接状态
             if (source != null)
                 source.SetConnected(source.Connections.Any());
             if (target != null)
@@ -334,9 +315,6 @@ namespace UotanStudio.ViewModels
         /// </param>
         private void OnConnectionRemoveRequested(NodeViewModels.NodeConnectionViewModel connection)
         {
-            // RemoveConnection 内部已处理两端 NodeConnections 与 IsConnected；
-            // 但连接的 Remove 命令先调了 Disconnect()，两端 NodeConnections 已被清理，
-            // 这里直接从 Connections 移除即可，重复的 Remove 调用是幂等的。
             Connections.Remove(connection);
         }
 
@@ -351,7 +329,6 @@ namespace UotanStudio.ViewModels
         [RelayCommand]
         private void OnConnectionStarted(object? connector)
         {
-            // 仅记录待定源，实际连接在完成回调中创建
             _pendingSource = connector as NodeViewModels.NodeConnectorViewModel;
         }
 
@@ -366,21 +343,22 @@ namespace UotanStudio.ViewModels
         [RelayCommand]
         private void OnConnectionCompleted(object? args)
         {
-            _pendingSource = null;
-
             // 兼容 NodifyM.Avalonia 不同版本的回调签名：
             //   ValueTuple<object,object> / Tuple<object,object> / 单个 connector / (source,target,*) 等
             if (!TryExtractConnectors(args, out var source, out var target))
+            {
+                _pendingSource = null;
                 return;
+            }
+
+            _pendingSource = null;
 
             if (source == null || target == null)
                 return;
 
-            // 自环：禁止连接到自身
             if (source.Node == target.Node && source == target)
                 return;
 
-            // 方向校验：必须 Output -> Input；若 Input -> Output 则交换
             var sourceIsOutput = source.Node?.Output.Contains(source) == true;
             var targetIsInput = target.Node?.Input.Contains(target) == true;
             var sourceIsInput = source.Node?.Input.Contains(source) == true;
@@ -394,16 +372,15 @@ namespace UotanStudio.ViewModels
             {
                 CreateConnection(target, source);
             }
-            // 其他情况（Output->Output, Input->Input, 跨节点自环）忽略
         }
 
         /// <summary>
         /// <para>从 ConnectionCompletedCommand 的回调参数中提取源/目标连接器。</para>
         /// Extracts source/target connectors from the ConnectionCompletedCommand callback argument.
-        /// 兼容 ValueTuple / Tuple / 单连接器 / PendingConnection 等多种 NodifyM 版本签名。
+        /// 兼容 ValueTuple / Tuple / 单连接器（取 _pendingSource 作为另一端）/ 反射兜底等多种 NodifyM 版本签名。
         /// </summary>
         [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("反射兜底分支仅在未知 NodifyM 版本签名时触发，trimming 场景下不应到达。")]
-        private static bool TryExtractConnectors(object? args, out NodeViewModels.NodeConnectorViewModel? source, out NodeViewModels.NodeConnectorViewModel? target)
+        private bool TryExtractConnectors(object? args, out NodeViewModels.NodeConnectorViewModel? source, out NodeViewModels.NodeConnectorViewModel? target)
         {
             source = null;
             target = null;
@@ -425,10 +402,38 @@ namespace UotanStudio.ViewModels
                 return true;
             }
 
-            // 直接传单个 connector —— 此时另一端未知，回退到 _pendingSource 不可靠，直接放弃
+            // 直接传单个 connector —— NodifyM 12.0.0 的实际回调签名：
+            // 取 _pendingSource（OnConnectionStarted 时记录）作为另一端，按 Output->Input 方向赋 source/target
             if (args is NodeViewModels.NodeConnectorViewModel single)
             {
-                source = single;
+                var other = _pendingSource;
+                if (other is null)
+                {
+                    source = single;
+                    target = null;
+                    return true;
+                }
+
+                var singleIsOutput = single.Node?.Output.Contains(single) == true;
+                var otherIsInput = other.Node?.Input.Contains(other) == true;
+                var singleIsInput = single.Node?.Input.Contains(single) == true;
+                var otherIsOutput = other.Node?.Output.Contains(other) == true;
+
+                if (singleIsOutput && otherIsInput)
+                {
+                    source = single;
+                    target = other;
+                }
+                else if (singleIsInput && otherIsOutput)
+                {
+                    source = other;
+                    target = single;
+                }
+                else
+                {
+                    source = single;
+                    target = other;
+                }
                 return true;
             }
 
@@ -525,7 +530,6 @@ namespace UotanStudio.ViewModels
         [RelayCommand]
         private void ClearAll()
         {
-            // 先清空各节点的本地连接集合，再清空画布集合
             foreach (var node in Nodes)
                 node.NodeConnections.Clear();
             Connections.Clear();
@@ -568,8 +572,6 @@ namespace UotanStudio.ViewModels
             {
                 // 拓扑排序：按连接的 Source -> Target 顺序执行
                 var ordered = TopologicalSort(Nodes, Connections);
-                Services.LogAggregator.Info(Services.ToolboxLogCategory.Node, "Flow",
-                    $"Run started: {ordered.Count} nodes scheduled.");
 
                 foreach (var node in ordered)
                 {
@@ -577,7 +579,6 @@ namespace UotanStudio.ViewModels
                     // 在执行前，把上游 Output 端口的 Value 同步到本节点 Input 端口的 Value
                     SyncUpstreamValues(node);
                     ExecutionStatus = $"{node.Title}...";
-                    Services.LogAggregator.Info(Services.ToolboxLogCategory.Node, node.Title, "Executing...");
 
                     // 固件节点接入 FirmwareService 真实后端执行
                     if (node is NodeViewModels.FirmwareNodeViewModel fwNode)
@@ -587,10 +588,6 @@ namespace UotanStudio.ViewModels
                         var partitionName = GetInputValue(node, 2);
                         var status = await fwNode.ExecuteAsync(firmwarePath, outputDir, partitionName, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
-                        Services.LogAggregator.Append(
-                            status.Contains("OK") ? Services.ToolboxLogCategory.Firmware : Services.ToolboxLogCategory.Firmware,
-                            status.StartsWith("[", StringComparison.Ordinal) && status.Contains("FAIL") ? "ERROR" : "INFO",
-                            "Firmware", status);
                     }
                     // 烧录节点接入 FirmwareKit.Comm.Fastboot 真实刷写/擦除/重启
                     else if (node is NodeViewModels.FlashNodeViewModel flashNode)
@@ -600,10 +597,6 @@ namespace UotanStudio.ViewModels
                         var imagePath = GetInputValue(node, 2);
                         var status = await flashNode.ExecuteAsync(devicePath, partition, imagePath, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
-                        Services.LogAggregator.Append(
-                            Services.ToolboxLogCategory.Fastboot,
-                            status.Contains("FAIL") ? "ERROR" : "INFO",
-                            "Fastboot", status);
                     }
                     // 数据处理节点：Read File / Format Convert / Checksum / Compare
                     else if (node is NodeViewModels.DataNodeViewModel dataNode)
@@ -615,10 +608,6 @@ namespace UotanStudio.ViewModels
                         var dataB = GetInputValue(node, 1);
                         var status = await dataNode.ExecuteAsync(pathOrInput, formatOrAlgorithm, dataB, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
-                        Services.LogAggregator.Append(
-                            Services.ToolboxLogCategory.Firmware,
-                            status.Contains("FAIL") ? "ERROR" : (status.Contains("WAIT") ? "WARN" : "INFO"),
-                            "Data", status);
                     }
                     // 流程控制节点：If Branch / Loop / Wait
                     else if (node is NodeViewModels.FlowControlNodeViewModel flowNode)
@@ -626,10 +615,6 @@ namespace UotanStudio.ViewModels
                         var conditionOrCountOrDelay = GetInputValue(node, 0);
                         var status = await flowNode.ExecuteAsync(conditionOrCountOrDelay, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
-                        Services.LogAggregator.Append(
-                            Services.ToolboxLogCategory.Node,
-                            status.Contains("FAIL") ? "ERROR" : "INFO",
-                            "Flow", status);
                     }
                     // 输出节点：Log Output / Progress Report / Save Result
                     else if (node is NodeViewModels.OutputNodeViewModel outputNode)
@@ -638,16 +623,10 @@ namespace UotanStudio.ViewModels
                         var levelOrStatusOrPath = GetInputValue(node, 1);
                         var status = await outputNode.ExecuteAsync(messageOrData, levelOrStatusOrPath, ct).ConfigureAwait(false);
                         ExecutionStatus = status;
-                        Services.LogAggregator.Append(
-                            Services.ToolboxLogCategory.Node,
-                            status.Contains("FAIL") ? "ERROR" : "INFO",
-                            "Output", status);
                     }
                     else
                     {
                         await Task.Delay(300, ct).ConfigureAwait(false);
-                        Services.LogAggregator.Warn(Services.ToolboxLogCategory.Node, "Flow",
-                            $"Node '{node.Title}' has no backend dispatch; skipped with delay.");
                     }
 
                     // 节点执行完毕后，将其 Output 端口的 Value 同步到下游节点（通过连接传播）
@@ -655,12 +634,10 @@ namespace UotanStudio.ViewModels
                 }
 
                 ExecutionStatus = LanguageService.Instance.GetString("Node_StatusCompleted");
-                Services.LogAggregator.Info(Services.ToolboxLogCategory.Node, "Flow", "Run completed.");
             }
             catch (OperationCanceledException)
             {
                 ExecutionStatus = LanguageService.Instance.GetString("Node_StatusStopped");
-                Services.LogAggregator.Warn(Services.ToolboxLogCategory.Node, "Flow", "Run stopped by user.");
             }
             finally
             {

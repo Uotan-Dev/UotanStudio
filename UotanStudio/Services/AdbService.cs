@@ -74,7 +74,6 @@ public sealed class AdbService
     {
         var devices = new List<AdbDevice>();
 
-        // ADB devices
         var adbResult = await RunAsync(ResolveAdb(), "devices", cancellationToken);
         if (adbResult.Success)
         {
@@ -88,7 +87,6 @@ public sealed class AdbService
             }
         }
 
-        // fastboot devices
         var fbResult = await RunAsync(ResolveFastboot(), "devices", cancellationToken);
         if (fbResult.Success)
         {
@@ -162,7 +160,6 @@ public sealed class AdbService
         foreach (var line in result.Output.Split('\n', '\r'))
         {
             var trimmed = line.Trim('[', ']', ' ', '\t');
-            // getprop 输出形如: [key]: [value]
             var idx = trimmed.IndexOf("]: [", StringComparison.Ordinal);
             if (idx <= 0) continue;
             var key = trimmed.Substring(0, idx).TrimStart('[');
@@ -211,7 +208,6 @@ public sealed class AdbService
         }
         catch (OperationCanceledException)
         {
-            // 正常取消路径
         }
         catch (Exception ex) when (ex is FileNotFoundException or System.ComponentModel.Win32Exception)
         {

@@ -30,12 +30,10 @@ namespace UotanStudio.ViewModels.NodeViewModels
                 {
                     case "If Branch":
                         {
-                            // 条件为非空、非 "0"、非 "false"（不区分大小写）时为真
                             var cond = (conditionOrCountOrDelay ?? string.Empty).Trim();
                             var isTrue = cond.Length > 0 &&
                                          cond != "0" &&
                                          !string.Equals(cond, "false", System.StringComparison.OrdinalIgnoreCase);
-                            // 写回 True/False 两个输出端口
                             for (int i = 0; i < Output.Count; i++)
                             {
                                 Output[i].Value = (i == 0) == isTrue ? "1" : "0";
@@ -44,7 +42,6 @@ namespace UotanStudio.ViewModels.NodeViewModels
                         }
                     case "Loop":
                         {
-                            // 单次执行：读 Count，循环 Delay(50) 输出 Index 序列
                             if (!int.TryParse(conditionOrCountOrDelay, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) || count < 0)
                                 return "[Loop] FAIL: invalid count.";
                             for (int i = 0; i <= count; i++)

@@ -129,14 +129,16 @@ public sealed class LanguageService
 
         // 获取该语言包的模块列表
         IReadOnlyList<string> modules;
-        if (LanguagePackRegistry.Instance.TryGetPack(language, out var pack) && pack != null)
+        if (LanguagePackRegistry.Instance.TryGetPack(language, out var pack) && pack != null
+            && pack.ModuleNames.Count > 0)
         {
             modules = pack.ModuleNames;
         }
         else
         {
-            // 未注册的语言包，使用默认模块列表
-            modules = ["Common", "Menu", "Dock", "Node", "Settings"];
+            // 未注册或模块列表为空的语言包，使用默认模块列表
+            // 必须与 Locale/<culture>/ 下实际存在的 .axaml 文件一一对应，否则对应模块的 DynamicResource 查找失败
+            modules = ["Common", "Menu", "Dock", "Device", "Log", "Node", "Settings"];
         }
 
         // 按模块加载语言资源

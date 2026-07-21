@@ -56,7 +56,6 @@ namespace UotanStudio.ViewModels.NodeViewModels
                         }
                     case "Format Convert":
                         {
-                            // 占位实现：镜像到镜像的转换尚需具体格式库支持
                             if (Output.Count > 0)
                                 Output[0].Value = pathOrInput ?? string.Empty;
                             return "[Format Convert] WAIT: format conversion backend not yet implemented.";

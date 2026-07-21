@@ -56,7 +56,6 @@ namespace UotanStudio.ViewModels.NodeViewModels
         [RelayCommand]
         public void Disconnect()
         {
-            // 先缓存两端引用，避免在枚举 Connections 时访问被修改的 NodeConnections
             var source = Source;
             var target = Target;
             var sourceNode = source?.Node;
@@ -67,7 +66,7 @@ namespace UotanStudio.ViewModels.NodeViewModels
             if (targetNode is not null && targetNode != sourceNode)
                 targetNode.NodeConnections.Remove(this);
 
-            // 在 NodeConnections 已更新后再重算 IsConnected，避免 InvalidOperationException
+            // 重算 IsConnected 前需先更新 NodeConnections，避免枚举时集合变更
             if (source is not null)
                 source.SetConnected(source.Connections.Any());
             if (target is not null)
