@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:vm="using:UotanStudio.ViewModels"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="UotanStudio.Pages.DeviceView"
@@ -10,32 +11,55 @@
         <!-- 顶部工具栏 -->
         <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <Button Content="{DynamicResource Device_Refresh}"
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding RefreshDevicesCommand}"
-                        IsEnabled="{Binding !IsRefreshing}" />
-                <Button Content="{DynamicResource Device_Connect}"
+                        IsEnabled="{Binding !IsRefreshing}"
+                        ToolTip.Tip="{DynamicResource Device_Refresh}">
+                    <avalonia:MaterialIcon Kind="Refresh" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding ConnectCommand}"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <Button Content="{DynamicResource Device_Disconnect}"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        ToolTip.Tip="{DynamicResource Device_Connect}">
+                    <avalonia:MaterialIcon Kind="LinkVariant" Width="16" Height="16" Foreground="Green" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding DisconnectCommand}"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <Button Content="{DynamicResource Device_Reboot}"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        ToolTip.Tip="{DynamicResource Device_Disconnect}">
+                    <avalonia:MaterialIcon Kind="LinkOff" Width="16" Height="16" Foreground="Red" />
+                </Button>
+                <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
+                        Margin="4,0" />
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding RebootCommand}"
                         CommandParameter="system"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <Button Content="{DynamicResource Device_RebootBootloader}"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        ToolTip.Tip="{DynamicResource Device_Reboot}">
+                    <avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding RebootCommand}"
                         CommandParameter="bootloader"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <Button Content="{DynamicResource Device_RebootRecovery}"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        ToolTip.Tip="{DynamicResource Device_RebootBootloader}">
+                    <avalonia:MaterialIcon Kind="FastForward" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding RebootCommand}"
                         CommandParameter="recovery"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                <Button Content="{DynamicResource Device_RebootEdl}"
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        ToolTip.Tip="{DynamicResource Device_RebootRecovery}">
+                    <avalonia:MaterialIcon Kind="HospitalBoxOutline" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding RebootCommand}"
                         CommandParameter="edl"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        ToolTip.Tip="{DynamicResource Device_RebootEdl}">
+                    <avalonia:MaterialIcon Kind="DownloadOutline" Width="16" Height="16" />
+                </Button>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.7" Margin="8,0" />
             </StackPanel>
