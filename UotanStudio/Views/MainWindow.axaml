@@ -4,43 +4,128 @@
    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
    xmlns:views="using:UotanStudio.Views"
+   xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
    mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
    x:Class="UotanStudio.Views.MainWindow"
+   x:DataType="vm:MainViewModel"
    Icon="/Assets/UotanToolbox.png"
    Title=""
    ExtendClientAreaToDecorationsHint="True">
 	<DockPanel>
-		<Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32" Width="250">
+		<Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32" Width="600">
 			<Image Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
-			<Menu Margin="35 0 0 0">
+			<Menu Margin="35 0 0 0" x:Name="TopMenu">
+
+				<!-- 文件 / File -->
 				<MenuItem Padding="8 0">
 					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_Project}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_File}" FontSize="13" FontWeight="SemiBold" />
 					</MenuItem.Header>
-					<MenuItem IsChecked="True" Header="{DynamicResource Menu_SecondToggleItem}" ToggleType="CheckBox" />
-					<Separator />
-					<MenuItem GroupName="A" Header="{DynamicResource Menu_Radio1Group}" ToggleType="Radio" />
-					<MenuItem IsChecked="True" GroupName="A" Header="{DynamicResource Menu_Radio2Group}" ToggleType="Radio" />
-					<MenuItem GroupName="A" Header="{DynamicResource Menu_Radio3Group}" ToggleType="Radio">
-						<MenuItem Header="{DynamicResource Menu_Radio4Group}" ToggleType="Radio" GroupName="A" />
-						<MenuItem Header="{DynamicResource Menu_Radio5Group}" ToggleType="Radio" GroupName="A" />
+					<MenuItem Header="{DynamicResource Menu_NewProject}" Command="{Binding MenuVM.NewProjectCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="FolderPlus" Width="16" Height="16" />
+						</MenuItem.Icon>
 					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_OpenProject}" Command="{Binding MenuVM.OpenProjectCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="FolderOpen" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_OpenRecent}" IsEnabled="False" />
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_Save}" Command="{Binding MenuVM.SaveCommand}" InputGesture="Ctrl+S">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="ContentSave" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_SaveAs}" Command="{Binding MenuVM.SaveAsCommand}" InputGesture="Ctrl+Shift+S" />
+					<MenuItem Header="{DynamicResource Menu_Export}" Command="{Binding MenuVM.ExportCommand}" />
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_Exit}" Command="{Binding MenuVM.ExitCommand}" />
 				</MenuItem>
+
+				<!-- 编辑 / Edit -->
 				<MenuItem Padding="8 0">
 					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_Tools}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_Edit}" FontSize="13" FontWeight="SemiBold" />
 					</MenuItem.Header>
+					<MenuItem Header="{DynamicResource Menu_Undo}" Command="{Binding MenuVM.UndoCommand}" InputGesture="Ctrl+Z" />
+					<MenuItem Header="{DynamicResource Menu_Redo}" Command="{Binding MenuVM.RedoCommand}" InputGesture="Ctrl+Y" />
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_Cut}" Command="{Binding MenuVM.CutCommand}" InputGesture="Ctrl+X" />
+					<MenuItem Header="{DynamicResource Menu_Copy}" Command="{Binding MenuVM.CopyCommand}" InputGesture="Ctrl+C" />
+					<MenuItem Header="{DynamicResource Menu_Paste}" Command="{Binding MenuVM.PasteCommand}" InputGesture="Ctrl+V" />
+					<MenuItem Header="{DynamicResource Menu_Delete}" Command="{Binding MenuVM.DeleteCommand}" InputGesture="Delete" />
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_SelectAll}" Command="{Binding MenuVM.SelectAllCommand}" InputGesture="Ctrl+A" />
 				</MenuItem>
+
+				<!-- 视图 / View -->
 				<MenuItem Padding="8 0">
 					<MenuItem.Header>
 						<TextBlock Text="{DynamicResource Menu_View}" FontSize="13" FontWeight="SemiBold" />
 					</MenuItem.Header>
+					<MenuItem Header="{DynamicResource Menu_Workspace}" Command="{Binding MenuVM.GoToWorkspaceCommand}" />
+					<MenuItem Header="{DynamicResource Menu_NodeEditor}" Command="{Binding MenuVM.GoToNodeEditorCommand}" />
+					<MenuItem Header="{DynamicResource Menu_Settings}" Command="{Binding MenuVM.GoToSettingsCommand}" />
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_ToggleMinimap}" Command="{Binding MenuVM.ToggleMinimapCommand}" />
+					<MenuItem Header="{DynamicResource Menu_ZoomIn}" Command="{Binding MenuVM.ZoomInCommand}" InputGesture="Ctrl++" />
+					<MenuItem Header="{DynamicResource Menu_ZoomOut}" Command="{Binding MenuVM.ZoomOutCommand}" InputGesture="Ctrl+-" />
+					<MenuItem Header="{DynamicResource Menu_ResetZoom}" Command="{Binding MenuVM.ResetZoomCommand}" InputGesture="Ctrl+0" />
 				</MenuItem>
+
+				<!-- 工具 / Tools -->
 				<MenuItem Padding="8 0">
 					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_About}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_Tools}" FontSize="13" FontWeight="SemiBold" />
 					</MenuItem.Header>
+					<MenuItem Header="{DynamicResource Menu_AdbShell}" Command="{Binding MenuVM.AdbShellCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="Console" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_FastbootConsole}" Command="{Binding MenuVM.FastbootConsoleCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="Terminal" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_LanguageManager}" Command="{Binding MenuVM.LanguageManagerCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="Translate" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_PluginManager}" Command="{Binding MenuVM.PluginManagerCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="PuzzleOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
 				</MenuItem>
+
+				<!-- 帮助 / Help -->
+				<MenuItem Padding="8 0">
+					<MenuItem.Header>
+						<TextBlock Text="{DynamicResource Menu_Help}" FontSize="13" FontWeight="SemiBold" />
+					</MenuItem.Header>
+					<MenuItem Header="{DynamicResource Menu_Documentation}" Command="{Binding MenuVM.DocumentationCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="FileDocumentOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_ReportIssue}" Command="{Binding MenuVM.ReportIssueCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="BugOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<Separator />
+					<MenuItem Header="{DynamicResource Menu_About}" Command="{Binding MenuVM.AboutCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="InformationOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+				</MenuItem>
+
 			</Menu>
 		</Grid>
 

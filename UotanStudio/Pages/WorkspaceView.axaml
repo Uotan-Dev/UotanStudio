@@ -10,6 +10,7 @@
              x:DataType="viewmodels:WorkspaceViewModel">
 
   <dock:DockControl x:Name="DockControl"
-                     Layout="{Binding Layout}" 
-                     EnableManagedWindowLayer="True" />
+                     Layout="{Binding Layout}"
+                     EnableManagedWindowLayer="True"
+                     AutoCreateDataTemplates="True" />
 </UserControl>

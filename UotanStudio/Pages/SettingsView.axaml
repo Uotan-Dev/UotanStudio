@@ -87,7 +87,7 @@
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AutoSave}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="0" Grid.Column="1"
-                                      IsChecked="{Binding AutoSave}" />
+                                      IsChecked="{Binding AutoSave, Mode=TwoWay}" />
                     </Grid>
                 </StackPanel>
 
@@ -99,20 +99,20 @@
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_UnpackToolPath}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <TextBox Grid.Row="0" Grid.Column="1"
-                                 Text="{Binding UnpackToolPath}"
+                                 Text="{Binding UnpackToolPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="{DynamicResource Settings_PathPlaceholder}" />
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_TempDir}"
                                    VerticalAlignment="Center" FontSize="13" Margin="0,8" />
                         <TextBox Grid.Row="1" Grid.Column="1"
-                                 Text="{Binding TempDirectory}"
+                                 Text="{Binding TempDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="{DynamicResource Settings_PathPlaceholder}"
                                  Margin="0,8" />
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_AutoVerify}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="2" Grid.Column="1"
-                                      IsChecked="{Binding AutoVerifyAfterUnpack}" />
+                                      IsChecked="{Binding AutoVerifyAfterUnpack, Mode=TwoWay}" />
                     </Grid>
                 </StackPanel>
 
@@ -124,27 +124,27 @@
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AdbPath}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <TextBox Grid.Row="0" Grid.Column="1"
-                                 Text="{Binding AdbPath}"
+                                 Text="{Binding AdbPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="{DynamicResource Settings_PathPlaceholder}" />
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_FastbootPath}"
                                    VerticalAlignment="Center" FontSize="13" Margin="0,8" />
                         <TextBox Grid.Row="1" Grid.Column="1"
-                                 Text="{Binding FastbootPath}"
+                                 Text="{Binding FastbootPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  PlaceholderText="{DynamicResource Settings_PathPlaceholder}"
                                  Margin="0,8" />
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_DeviceTimeout}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <NumericUpDown Grid.Row="2" Grid.Column="1"
-                                       Value="{Binding DeviceTimeoutSeconds}"
+                                       Value="{Binding DeviceTimeoutSeconds, Mode=TwoWay}"
                                        Minimum="5" Maximum="300"
                                        FormatString="0 s" />
 
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource Settings_AutoBackup}"
                                    VerticalAlignment="Center" FontSize="13" Margin="0,8" />
                         <ToggleSwitch Grid.Row="3" Grid.Column="1"
-                                      IsChecked="{Binding AutoBackupBeforeFlash}"
+                                      IsChecked="{Binding AutoBackupBeforeFlash, Mode=TwoWay}"
                                       Margin="0,8" />
                     </Grid>
                 </StackPanel>
@@ -157,12 +157,12 @@
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_SnapToGrid}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="0" Grid.Column="1"
-                                      IsChecked="{Binding SnapToGrid}" />
+                                      IsChecked="{Binding SnapToGrid, Mode=TwoWay}" />
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_GridSize}"
                                    VerticalAlignment="Center" FontSize="13" Margin="0,8" />
                         <NumericUpDown Grid.Row="1" Grid.Column="1"
-                                       Value="{Binding GridSize}"
+                                       Value="{Binding GridSize, Mode=TwoWay}"
                                        Minimum="5" Maximum="100"
                                        Margin="0,8" />
 
@@ -170,7 +170,7 @@
                                    VerticalAlignment="Center" FontSize="13" />
                         <ComboBox Grid.Row="2" Grid.Column="1"
                                   ItemsSource="{Binding ConnectionStyles}"
-                                  SelectedIndex="{Binding ConnectionStyleIndex}"
+                                  SelectedIndex="{Binding ConnectionStyleIndex, Mode=TwoWay}"
                                   HorizontalAlignment="Stretch" />
                     </Grid>
                 </StackPanel>

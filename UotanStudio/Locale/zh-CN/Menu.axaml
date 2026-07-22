@@ -1,15 +1,57 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <x:String x:Key="Menu_Project">项目</x:String>
-    <x:String x:Key="Menu_Tools">工具</x:String>
+    <!-- 顶级菜单 -->
+    <x:String x:Key="Menu_File">文件</x:String>
+    <x:String x:Key="Menu_Edit">编辑</x:String>
     <x:String x:Key="Menu_View">视图</x:String>
-    <x:String x:Key="Menu_About">关于</x:String>
-    <x:String x:Key="Menu_SecondToggleItem">第二个菜单切换项</x:String>
-    <x:String x:Key="Menu_Radio1Group">单选 1 - 组</x:String>
-    <x:String x:Key="Menu_Radio2Group">单选 2 - 组</x:String>
-    <x:String x:Key="Menu_Radio3Group">单选 3 - 组</x:String>
-    <x:String x:Key="Menu_Radio4Group">单选 4 - 组</x:String>
-    <x:String x:Key="Menu_Radio5Group">单选 5 - 组</x:String>
+    <x:String x:Key="Menu_Tools">工具</x:String>
+    <x:String x:Key="Menu_Help">帮助</x:String>
+
+    <!-- 文件菜单 -->
+    <x:String x:Key="Menu_NewProject">新建项目</x:String>
+    <x:String x:Key="Menu_OpenProject">打开项目...</x:String>
+    <x:String x:Key="Menu_OpenRecent">最近打开</x:String>
+    <x:String x:Key="Menu_Save">保存</x:String>
+    <x:String x:Key="Menu_SaveAs">另存为...</x:String>
+    <x:String x:Key="Menu_Export">导出...</x:String>
+    <x:String x:Key="Menu_Exit">退出</x:String>
+
+    <!-- 编辑菜单 -->
+    <x:String x:Key="Menu_Undo">撤销</x:String>
+    <x:String x:Key="Menu_Redo">重做</x:String>
+    <x:String x:Key="Menu_Cut">剪切</x:String>
+    <x:String x:Key="Menu_Copy">复制</x:String>
+    <x:String x:Key="Menu_Paste">粘贴</x:String>
+    <x:String x:Key="Menu_Delete">删除</x:String>
+    <x:String x:Key="Menu_SelectAll">全选</x:String>
+    <x:String x:Key="Menu_Preferences">首选项...</x:String>
+
+    <!-- 视图菜单 -->
+    <x:String x:Key="Menu_Workspace">工作区</x:String>
+    <x:String x:Key="Menu_NodeEditor">节点编辑器</x:String>
+    <x:String x:Key="Menu_Settings">设置</x:String>
+    <x:String x:Key="Menu_ToggleMinimap">切换小地图</x:String>
+    <x:String x:Key="Menu_ZoomIn">放大</x:String>
+    <x:String x:Key="Menu_ZoomOut">缩小</x:String>
+    <x:String x:Key="Menu_ResetZoom">重置缩放</x:String>
+
+    <!-- 工具菜单 -->
+    <x:String x:Key="Menu_FlashTools">烧录工具</x:String>
+    <x:String x:Key="Menu_FirmwareTools">固件工具</x:String>
+    <x:String x:Key="Menu_AdbShell">ADB 终端</x:String>
+    <x:String x:Key="Menu_FastbootConsole">Fastboot 控制台</x:String>
+    <x:String x:Key="Menu_LanguageManager">语言管理器</x:String>
+    <x:String x:Key="Menu_PluginManager">插件管理器</x:String>
+
+    <!-- 帮助菜单 -->
+    <x:String x:Key="Menu_About">关于 UotanStudio</x:String>
+    <x:String x:Key="Menu_Documentation">文档</x:String>
+    <x:String x:Key="Menu_ReportIssue">报告问题</x:String>
+
+    <!-- 关于对话框 -->
+    <x:String x:Key="About_Version">版本</x:String>
+    <x:String x:Key="About_Description">集固件解打包、开发板烧录与可视化编程于一体的一站式工具箱。</x:String>
+    <x:String x:Key="About_Close">关闭</x:String>
 
 </ResourceDictionary>

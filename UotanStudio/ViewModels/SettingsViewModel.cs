@@ -445,8 +445,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>显示 Toast 通知，2 秒后自动隐藏。</para>
-    /// Shows a toast notification that automatically hides after 2 seconds.
+    /// <para>显示 Toast 通知，2 秒后在 UI 线程上自动隐藏。</para>
+    /// Shows a toast notification that automatically hides after 2 seconds on the UI thread.
     /// </summary>
     /// <param name="message">
     /// <para>要显示的通知消息。</para>
@@ -454,17 +454,31 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </param>
     private void ShowToast(string message)
     {
+        // 取消上一次的 Toast 计时，避免遗留回调造成抖动
         _toastTimer?.Dispose();
 
+        // Toast 是一个非模态覆盖层，设置可见性后立即返回，不阻塞调用方
         ToastMessage = message;
         IsToastVisible = true;
 
-        _toastTimer = new Timer(_ =>
+        // Toast 计时器回调在 UI 线程上执行隐藏操作，避免跨线程访问绑定属性。
+        // 先把当前计时器存入字段，再在回调里比对引用，防止并发 ShowToast 时
+        // 旧的 Dispatcher.Post 回调误将新计时器置空。
+        Timer? createdTimer = null;
+        createdTimer = new Timer(_ =>
         {
-            IsToastVisible = false;
-            _toastTimer?.Dispose();
-            _toastTimer = null;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                // 仅当仍然指向同一计时器时才隐藏，防止竞态条件下覆盖较新的 Toast
+                if (ReferenceEquals(_toastTimer, createdTimer))
+                {
+                    IsToastVisible = false;
+                    _toastTimer?.Dispose();
+                    _toastTimer = null;
+                }
+            });
         }, null, 2000, Timeout.Infinite);
+        _toastTimer = createdTimer;
     }
 
     /// <summary>

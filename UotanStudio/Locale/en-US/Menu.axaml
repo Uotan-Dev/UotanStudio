@@ -1,15 +1,57 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <x:String x:Key="Menu_Project">Project</x:String>
-    <x:String x:Key="Menu_Tools">Tools</x:String>
+    <!-- Top-level menus -->
+    <x:String x:Key="Menu_File">File</x:String>
+    <x:String x:Key="Menu_Edit">Edit</x:String>
     <x:String x:Key="Menu_View">View</x:String>
-    <x:String x:Key="Menu_About">About</x:String>
-    <x:String x:Key="Menu_SecondToggleItem">Second Menu toggle item</x:String>
-    <x:String x:Key="Menu_Radio1Group">Radio 1 - group</x:String>
-    <x:String x:Key="Menu_Radio2Group">Radio 2 - group</x:String>
-    <x:String x:Key="Menu_Radio3Group">Radio 3 - group</x:String>
-    <x:String x:Key="Menu_Radio4Group">Radio 4 - group</x:String>
-    <x:String x:Key="Menu_Radio5Group">Radio 5 - group</x:String>
+    <x:String x:Key="Menu_Tools">Tools</x:String>
+    <x:String x:Key="Menu_Help">Help</x:String>
+
+    <!-- File menu -->
+    <x:String x:Key="Menu_NewProject">New Project</x:String>
+    <x:String x:Key="Menu_OpenProject">Open Project...</x:String>
+    <x:String x:Key="Menu_OpenRecent">Open Recent</x:String>
+    <x:String x:Key="Menu_Save">Save</x:String>
+    <x:String x:Key="Menu_SaveAs">Save As...</x:String>
+    <x:String x:Key="Menu_Export">Export...</x:String>
+    <x:String x:Key="Menu_Exit">Exit</x:String>
+
+    <!-- Edit menu -->
+    <x:String x:Key="Menu_Undo">Undo</x:String>
+    <x:String x:Key="Menu_Redo">Redo</x:String>
+    <x:String x:Key="Menu_Cut">Cut</x:String>
+    <x:String x:Key="Menu_Copy">Copy</x:String>
+    <x:String x:Key="Menu_Paste">Paste</x:String>
+    <x:String x:Key="Menu_Delete">Delete</x:String>
+    <x:String x:Key="Menu_SelectAll">Select All</x:String>
+    <x:String x:Key="Menu_Preferences">Preferences...</x:String>
+
+    <!-- View menu -->
+    <x:String x:Key="Menu_Workspace">Workspace</x:String>
+    <x:String x:Key="Menu_NodeEditor">Node Editor</x:String>
+    <x:String x:Key="Menu_Settings">Settings</x:String>
+    <x:String x:Key="Menu_ToggleMinimap">Toggle Minimap</x:String>
+    <x:String x:Key="Menu_ZoomIn">Zoom In</x:String>
+    <x:String x:Key="Menu_ZoomOut">Zoom Out</x:String>
+    <x:String x:Key="Menu_ResetZoom">Reset Zoom</x:String>
+
+    <!-- Tools menu -->
+    <x:String x:Key="Menu_FlashTools">Flash Tools</x:String>
+    <x:String x:Key="Menu_FirmwareTools">Firmware Tools</x:String>
+    <x:String x:Key="Menu_AdbShell">ADB Shell</x:String>
+    <x:String x:Key="Menu_FastbootConsole">Fastboot Console</x:String>
+    <x:String x:Key="Menu_LanguageManager">Language Manager</x:String>
+    <x:String x:Key="Menu_PluginManager">Plugin Manager</x:String>
+
+    <!-- Help menu -->
+    <x:String x:Key="Menu_About">About UotanStudio</x:String>
+    <x:String x:Key="Menu_Documentation">Documentation</x:String>
+    <x:String x:Key="Menu_ReportIssue">Report an Issue</x:String>
+
+    <!-- About dialog -->
+    <x:String x:Key="About_Version">Version</x:String>
+    <x:String x:Key="About_Description">An integrated toolbox for firmware unpack/pack, board flashing and visual programming.</x:String>
+    <x:String x:Key="About_Close">Close</x:String>
 
 </ResourceDictionary>

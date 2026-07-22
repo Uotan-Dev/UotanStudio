@@ -51,6 +51,7 @@ public partial class App : Application
         // Register messenger receivers
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, OnThemeChanged);
         WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
+        WeakReferenceMessenger.Default.Register<ExitApplicationMessage>(this, OnExitApplication);
     }
 
     private void OnThemeChanged(object recipient, ThemeChangedMessage message)
@@ -61,6 +62,18 @@ public partial class App : Application
     private void OnLanguageChanged(object recipient, LanguageChangedMessage message)
     {
         UpdateSemiThemeLocale(message.CultureName);
+    }
+
+    /// <summary>
+    /// <para>响应退出应用程序消息，关闭主窗口并退出。</para>
+    /// Responds to the exit-application message by closing the main window and quitting.
+    /// </summary>
+    private void OnExitApplication(object recipient, ExitApplicationMessage message)
+    {
+        if (ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IControlledApplicationLifetime controlled)
+        {
+            controlled.Shutdown();
+        }
     }
 
     private void ApplyTheme(ThemeMode themeMode)

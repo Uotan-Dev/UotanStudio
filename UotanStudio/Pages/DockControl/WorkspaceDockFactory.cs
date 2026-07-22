@@ -13,6 +13,12 @@ namespace UotanStudio.Pages.DockControl
 {
     public class WorkspaceDockFactory : Factory
     {
+        /// <summary>
+        /// 关联的主 DockControl，用于共享 DockManagerOptions 并在浮动窗口拖拽时参与命中测试。
+        /// Set by WorkspaceView after the DockControl is loaded; null before that point.
+        /// </summary>
+        public Dock.Avalonia.Controls.DockControl? DockControl { get; set; }
+
         public override IRootDock CreateLayout()
         {
             var svc = LanguageService.Instance;
@@ -125,11 +131,11 @@ namespace UotanStudio.Pages.DockControl
 
             HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
             {
-                [nameof(IDockWindow)] = () => new HostWindow(),
-                ["ManagedHostWindow"] = () => new ManagedHostWindow()
+                [nameof(IDockWindow)] = () => new HostWindow(DockControl?.DockManagerOptions),
+                ["ManagedHostWindow"] = () => new ManagedHostWindow(DockControl?.DockManagerOptions)
             };
 
-            DefaultHostWindowLocator = () => new HostWindow();
+            DefaultHostWindowLocator = () => new HostWindow(DockControl?.DockManagerOptions);
 
             base.InitLayout(layout);
         }

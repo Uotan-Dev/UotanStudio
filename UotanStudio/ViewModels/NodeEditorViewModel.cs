@@ -116,6 +116,10 @@ namespace UotanStudio.ViewModels
                     new NodeToolboxItem(svc.GetString("Node_Firmware_Pack"), () => NodeViewModels.FirmwareNodeViewModel.CreatePackNode()),
                     new NodeToolboxItem(svc.GetString("Node_Firmware_Verify"), () => NodeViewModels.FirmwareNodeViewModel.CreateVerifyNode()),
                     new NodeToolboxItem(svc.GetString("Node_Firmware_Extract"), () => NodeViewModels.FirmwareNodeViewModel.CreateExtractNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Firmware_OtaDelta"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Firmware_MergeSignature"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Firmware_MergeDualSlot"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Firmware_FlashBoot"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateFlashBootNode()),
                 ]
             ));
 
@@ -127,6 +131,10 @@ namespace UotanStudio.ViewModels
                     new NodeToolboxItem(svc.GetString("Node_Flash_Flash"), () => NodeViewModels.FlashNodeViewModel.CreateFlashNode()),
                     new NodeToolboxItem(svc.GetString("Node_Flash_Erase"), () => NodeViewModels.FlashNodeViewModel.CreateEraseNode()),
                     new NodeToolboxItem(svc.GetString("Node_Flash_Reboot"), () => NodeViewModels.FlashNodeViewModel.CreateRebootNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flash_Bootloader"), () => NodeViewModels.ExtendedFlashNodeViewModel.CreateFlashBootloaderNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flash_EraseAll"), () => NodeViewModels.ExtendedFlashNodeViewModel.CreateEraseAllNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flash_OtaSideload"), () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOtaSideloadNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flash_OverwriteFirmware"), () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOverwriteFirmwareNode()),
                 ]
             ));
 
@@ -138,13 +146,27 @@ namespace UotanStudio.ViewModels
                     new NodeToolboxItem(svc.GetString("Node_Data_Convert"), () => NodeViewModels.DataNodeViewModel.CreateConvertNode()),
                     new NodeToolboxItem(svc.GetString("Node_Data_Checksum"), () => NodeViewModels.DataNodeViewModel.CreateChecksumNode()),
                     new NodeToolboxItem(svc.GetString("Node_Data_Compare"), () => NodeViewModels.DataNodeViewModel.CreateCompareNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_Concat"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateConcatNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_Slice"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateSliceNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_Encrypt"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateEncryptNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_Compress"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateCompressNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_ByteSwap"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateByteSwapNode()),
                 ]
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
                 svc.GetString("Node_CatFlow"),
                 NodeViewModels.NodeCategory.Flow,
-                []
+                [
+                    new NodeToolboxItem(svc.GetString("Node_Flow_Start"), () => NodeViewModels.FlowControlNodeViewModel.CreateStartNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flow_End"), () => NodeViewModels.FlowControlNodeViewModel.CreateEndNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flow_Branch"), () => NodeViewModels.FlowControlNodeViewModel.CreateBranchNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flow_Loop"), () => NodeViewModels.FlowControlNodeViewModel.CreateLoopNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flow_Delay"), () => NodeViewModels.FlowControlNodeViewModel.CreateDelayNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flow_Parallel"), () => NodeViewModels.FlowControlNodeViewModel.CreateParallelNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flow_Sequence"), () => NodeViewModels.FlowControlNodeViewModel.CreateSequenceNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flow_Terminate"), () => NodeViewModels.FlowControlNodeViewModel.CreateTerminateNode()),
+                ]
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
@@ -154,6 +176,10 @@ namespace UotanStudio.ViewModels
                     new NodeToolboxItem(svc.GetString("Node_Output_Log"), () => NodeViewModels.OutputNodeViewModel.CreateLogNode()),
                     new NodeToolboxItem(svc.GetString("Node_Output_Progress"), () => NodeViewModels.OutputNodeViewModel.CreateProgressNode()),
                     new NodeToolboxItem(svc.GetString("Node_Output_Save"), () => NodeViewModels.OutputNodeViewModel.CreateSaveNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Output_Notify"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateNotifyNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Output_Email"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateSendEmailNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Output_Console"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateConsoleOutputNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Output_FileExport"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateFileExportNode()),
                 ]
             ));
         }
