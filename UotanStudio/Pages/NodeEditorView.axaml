@@ -62,10 +62,12 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
                             VerticalAlignment="Center" Spacing="4">
                     <Button Width="28" Height="28" Padding="0"
+                            Command="{Binding RunCommand}"
                             ToolTip.Tip="{DynamicResource Node_Run}">
                         <avalonia:MaterialIcon Kind="Play" Width="16" Height="16" Foreground="Green" />
                     </Button>
                     <Button Width="28" Height="28" Padding="0"
+                            Command="{Binding StopCommand}"
                             ToolTip.Tip="{DynamicResource Node_Stop}">
                         <avalonia:MaterialIcon Kind="Stop" Width="16" Height="16" Foreground="Red" />
                     </Button>
@@ -148,7 +150,9 @@
         <Grid>
             <nodify:NodifyEditor ItemsSource="{Binding Nodes}"
                                  Connections="{Binding Connections}"
+                                 PendingConnection="{Binding PendingConnection}"
                                  Zoom="{Binding Zoom}"
+                                 DisconnectConnectorCommand="{Binding DisconnectConnectorCommand}"
                                  AllowAlign="True"
                                  AllowAutoPanning="True"
                                  x:Name="Editor">
@@ -162,12 +166,16 @@
                                      Location="{Binding Location, Mode=TwoWay}">
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                    <nodify:NodeInput Header="{Binding Title}" />
+                                    <nodify:NodeInput Header="{Binding Title}"
+                                                      IsConnected="{Binding IsConnected}"
+                                                      Anchor="{Binding Anchor, Mode=OneWayToSource}" />
                                 </DataTemplate>
                             </nodify:Node.InputConnectorTemplate>
                             <nodify:Node.OutputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                    <nodify:NodeOutput Header="{Binding Title}" />
+                                    <nodify:NodeOutput Header="{Binding Title}"
+                                                       IsConnected="{Binding IsConnected}"
+                                                       Anchor="{Binding Anchor, Mode=OneWayToSource}" />
                                 </DataTemplate>
                             </nodify:Node.OutputConnectorTemplate>
                         </nodify:Node>
@@ -181,6 +189,17 @@
                                            Target="{Binding Target.Anchor}" />
                     </DataTemplate>
                 </nodify:NodifyEditor.ConnectionTemplate>
+
+                <!-- 待处理连接线模板（拖拽连线时显示） -->
+                <nodify:NodifyEditor.PendingConnectionTemplate>
+                    <DataTemplate DataType="{x:Type nodeVm:PendingConnectionViewModel}">
+                        <nodify:PendingConnection
+                            StartedCommand="{Binding StartCommand}"
+                            CompletedCommand="{Binding FinishCommand}"
+                            EnablePreview="True"
+                            EnableSnapping="True" />
+                    </DataTemplate>
+                </nodify:NodifyEditor.PendingConnectionTemplate>
             </nodify:NodifyEditor>
 
             <!-- 小地图 - 作为叠加层放在 Grid 中，而非 NodifyEditor 的子元素 -->

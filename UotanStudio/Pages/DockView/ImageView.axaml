@@ -14,29 +14,29 @@
 				</StackPanel>
 			</ScrollViewer>
 			<StackPanel VerticalAlignment="Bottom" Spacing="10">
-				<StackPanel Margin="10 0 0 0" Orientation="Horizontal" Spacing="10">
-					<Button Width="140">
-						<TextBlock Text="分解选中文件" />
-					</Button>
-					<Button Width="110">
-						<TextBlock Text="合成img" />
-					</Button>
-					<Button Width="110">
-						<TextBlock Text="合成br" />
-					</Button>
-				</StackPanel>
-				<StackPanel Margin="10 0 0 0" Orientation="Horizontal" Spacing="10">
-					<Button Width="140">
-						<TextBlock Text="删除选中文件" />
-					</Button>
-					<Button Width="110">
-						<TextBlock Text="合成Super" />
-					</Button>
-					<Button Width="110">
-						<TextBlock Text="合成dat" />
-					</Button>
-				</StackPanel>
-			</StackPanel>
+			     <StackPanel Margin="10 0 0 0" Orientation="Horizontal" Spacing="10">
+			      <Button Width="140">
+			       <TextBlock Text="{DynamicResource ImageView_ExtractSelected}" />
+			      </Button>
+			      <Button Width="110">
+			       <TextBlock Text="{DynamicResource ImageView_SynthesizeImg}" />
+			      </Button>
+			      <Button Width="110">
+			       <TextBlock Text="{DynamicResource ImageView_SynthesizeBr}" />
+			      </Button>
+			     </StackPanel>
+			     <StackPanel Margin="10 0 0 0" Orientation="Horizontal" Spacing="10">
+			      <Button Width="140">
+			       <TextBlock Text="{DynamicResource ImageView_DeleteSelected}" />
+			      </Button>
+			      <Button Width="110">
+			       <TextBlock Text="{DynamicResource ImageView_SynthesizeSuper}" />
+			      </Button>
+			      <Button Width="110">
+			       <TextBlock Text="{DynamicResource ImageView_SynthesizeDat}" />
+			      </Button>
+			     </StackPanel>
+			    </StackPanel>
 		</StackPanel>
 	</StackPanel>
 </UserControl>

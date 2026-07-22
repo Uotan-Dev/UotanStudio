@@ -9,4 +9,22 @@
     <!-- ViewLocator -->
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
 
+    <!-- ImageView -->
+    <x:String x:Key="ImageView_ExtractSelected">Extract Selected</x:String>
+    <x:String x:Key="ImageView_SynthesizeImg">Synthesize img</x:String>
+    <x:String x:Key="ImageView_SynthesizeBr">Synthesize br</x:String>
+    <x:String x:Key="ImageView_DeleteSelected">Delete Selected</x:String>
+    <x:String x:Key="ImageView_SynthesizeSuper">Synthesize Super</x:String>
+    <x:String x:Key="ImageView_SynthesizeDat">Synthesize dat</x:String>
+
+    <!-- MainWindow -->
+    <x:String x:Key="MainWindow_Title">UotanStudio</x:String>
+    <x:String x:Key="Document_BuildProp">build.prop</x:String>
+    <x:String x:Key="Document_InitRc">init.rc</x:String>
+
+    <!-- ProjectExplorer -->
+    <x:String x:Key="ProjectExplorer_Outer">Outer</x:String>
+    <x:String x:Key="ProjectExplorer_Inner">Inner</x:String>
+    <x:String x:Key="ProjectExplorer_Innermost">Innermost</x:String>
+
 </ResourceDictionary>

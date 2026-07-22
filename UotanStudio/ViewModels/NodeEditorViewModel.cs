@@ -4,6 +4,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using UotanStudio.Services;
+using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.ViewModels
 {
@@ -89,62 +90,70 @@ namespace UotanStudio.ViewModels
         public ObservableCollection<NodeToolboxCategory> ToolboxCategories { get; } = [];
 
         /// <summary>
+        /// <para>获取待处理连接视图模型，管理拖拽连线状态。</para>
+        /// Gets the pending connection view model, managing the drag-connection state.
+        /// </summary>
+        public PendingConnectionViewModel PendingConnection { get; }
+
+        /// <summary>
         /// <para>初始化节点编辑器视图模型，创建默认工具箱分类和示例节点。</para>
         /// Initializes the node editor view model, creating default toolbox categories and example nodes.
         /// </summary>
         public NodeEditorViewModel()
         {
             InitializeToolbox();
+            PendingConnection = new PendingConnectionViewModel(this);
         }
 
         private void InitializeToolbox()
         {
+            var svc = LanguageService.Instance;
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LanguageService.Instance.GetString("Node_CatFirmware"),
+                svc.GetString("Node_CatFirmware"),
                 NodeViewModels.NodeCategory.Firmware,
                 [
-                    new NodeToolboxItem("Unpack Firmware", () => NodeViewModels.FirmwareNodeViewModel.CreateUnpackNode()),
-                    new NodeToolboxItem("Pack Firmware", () => NodeViewModels.FirmwareNodeViewModel.CreatePackNode()),
-                    new NodeToolboxItem("Verify Signature", () => NodeViewModels.FirmwareNodeViewModel.CreateVerifyNode()),
-                    new NodeToolboxItem("Extract Partition", () => NodeViewModels.FirmwareNodeViewModel.CreateExtractNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Firmware_Unpack"), () => NodeViewModels.FirmwareNodeViewModel.CreateUnpackNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Firmware_Pack"), () => NodeViewModels.FirmwareNodeViewModel.CreatePackNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Firmware_Verify"), () => NodeViewModels.FirmwareNodeViewModel.CreateVerifyNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Firmware_Extract"), () => NodeViewModels.FirmwareNodeViewModel.CreateExtractNode()),
                 ]
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LanguageService.Instance.GetString("Node_CatFlash"),
+                svc.GetString("Node_CatFlash"),
                 NodeViewModels.NodeCategory.Flash,
                 [
-                    new NodeToolboxItem("Connect Device", () => NodeViewModels.FlashNodeViewModel.CreateConnectNode()),
-                    new NodeToolboxItem("Flash Partition", () => NodeViewModels.FlashNodeViewModel.CreateFlashNode()),
-                    new NodeToolboxItem("Erase Partition", () => NodeViewModels.FlashNodeViewModel.CreateEraseNode()),
-                    new NodeToolboxItem("Reboot Device", () => NodeViewModels.FlashNodeViewModel.CreateRebootNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flash_Connect"), () => NodeViewModels.FlashNodeViewModel.CreateConnectNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flash_Flash"), () => NodeViewModels.FlashNodeViewModel.CreateFlashNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flash_Erase"), () => NodeViewModels.FlashNodeViewModel.CreateEraseNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Flash_Reboot"), () => NodeViewModels.FlashNodeViewModel.CreateRebootNode()),
                 ]
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LanguageService.Instance.GetString("Node_CatData"),
+                svc.GetString("Node_CatData"),
                 NodeViewModels.NodeCategory.Data,
                 [
-                    new NodeToolboxItem("Read File", () => NodeViewModels.DataNodeViewModel.CreateFileReadNode()),
-                    new NodeToolboxItem("Format Convert", () => NodeViewModels.DataNodeViewModel.CreateConvertNode()),
-                    new NodeToolboxItem("Checksum", () => NodeViewModels.DataNodeViewModel.CreateChecksumNode()),
-                    new NodeToolboxItem("Compare", () => NodeViewModels.DataNodeViewModel.CreateCompareNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_ReadFile"), () => NodeViewModels.DataNodeViewModel.CreateFileReadNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_Convert"), () => NodeViewModels.DataNodeViewModel.CreateConvertNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_Checksum"), () => NodeViewModels.DataNodeViewModel.CreateChecksumNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Data_Compare"), () => NodeViewModels.DataNodeViewModel.CreateCompareNode()),
                 ]
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LanguageService.Instance.GetString("Node_CatFlow"),
+                svc.GetString("Node_CatFlow"),
                 NodeViewModels.NodeCategory.Flow,
                 []
             ));
 
             ToolboxCategories.Add(new NodeToolboxCategory(
-                LanguageService.Instance.GetString("Node_CatOutput"),
+                svc.GetString("Node_CatOutput"),
                 NodeViewModels.NodeCategory.Output,
                 [
-                    new NodeToolboxItem("Log Output", () => NodeViewModels.OutputNodeViewModel.CreateLogNode()),
-                    new NodeToolboxItem("Progress Report", () => NodeViewModels.OutputNodeViewModel.CreateProgressNode()),
-                    new NodeToolboxItem("Save Result", () => NodeViewModels.OutputNodeViewModel.CreateSaveNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Output_Log"), () => NodeViewModels.OutputNodeViewModel.CreateLogNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Output_Progress"), () => NodeViewModels.OutputNodeViewModel.CreateProgressNode()),
+                    new NodeToolboxItem(svc.GetString("Node_Output_Save"), () => NodeViewModels.OutputNodeViewModel.CreateSaveNode()),
                 ]
             ));
         }
@@ -180,7 +189,7 @@ namespace UotanStudio.ViewModels
         {
             var relatedConnections = Connections
                 .Where(c => c.Source != null && c.Target != null &&
-                    (IsConnectorInNode(c.Source, node) || IsConnectorInNode(c.Target, node)))
+                    (IsConnectorInNode(c.Source as NodeViewModels.NodeConnectorViewModel, node) || IsConnectorInNode(c.Target as NodeViewModels.NodeConnectorViewModel, node)))
                 .ToList();
 
             foreach (var conn in relatedConnections)
@@ -191,8 +200,9 @@ namespace UotanStudio.ViewModels
             Nodes.Remove(node);
         }
 
-        private static bool IsConnectorInNode(NodeViewModels.NodeConnectorViewModel connector, NodeViewModels.FlowNodeViewModel node)
+        private static bool IsConnectorInNode(NodeViewModels.NodeConnectorViewModel? connector, NodeViewModels.FlowNodeViewModel node)
         {
+            if (connector == null) return false;
             return node.Input.Contains(connector) || node.Output.Contains(connector);
         }
 
@@ -210,11 +220,10 @@ namespace UotanStudio.ViewModels
         /// </param>
         public void CreateConnection(NodeViewModels.NodeConnectorViewModel source, NodeViewModels.NodeConnectorViewModel target)
         {
-            Connections.Add(new NodeViewModels.NodeConnectionViewModel
-            {
-                Source = source,
-                Target = target
-            });
+            if (source == target) return;
+            // 检查是否已存在相同连接
+            if (Connections.Any(c => c.Source == source && c.Target == target)) return;
+            Connections.Add(new NodeViewModels.NodeConnectionViewModel(source, target));
         }
 
         [RelayCommand]
@@ -246,6 +255,47 @@ namespace UotanStudio.ViewModels
         {
             // 删除选中的节点和连接线由 NodifyEditor 内部管理
             // 此命令可通过后续扩展实现更复杂的删除逻辑
+        }
+
+        /// <summary>
+        /// <para>执行节点工作流。</para>
+        /// Executes the node workflow.
+        /// </summary>
+        [RelayCommand]
+        private void Run()
+        {
+            ExecutionStatus = LanguageService.Instance.GetString("Node_Run");
+        }
+
+        /// <summary>
+        /// <para>停止节点工作流。</para>
+        /// Stops the node workflow.
+        /// </summary>
+        [RelayCommand]
+        private void Stop()
+        {
+            ExecutionStatus = LanguageService.Instance.GetString("Node_StatusReady");
+        }
+
+        /// <summary>
+        /// <para>断开连接器上的所有连接，由 NodifyEditor 的 DisconnectConnectorCommand 触发。</para>
+        /// Disconnects all connections on a connector, triggered by NodifyEditor's DisconnectConnectorCommand.
+        /// </summary>
+        /// <param name="connector">
+        /// <para>要断开连接的连接器。</para>
+        /// The connector to disconnect.
+        /// </param>
+        [RelayCommand]
+        private void DisconnectConnector(NodeViewModels.NodeConnectorViewModel? connector)
+        {
+            if (connector == null) return;
+            var related = Connections
+                .Where(c => c.Source == connector || c.Target == connector)
+                .ToList();
+            foreach (var conn in related)
+            {
+                Connections.Remove(conn);
+            }
         }
     }
 

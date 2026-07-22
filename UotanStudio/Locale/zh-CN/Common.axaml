@@ -9,4 +9,22 @@
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
 
+    <!-- ImageView -->
+    <x:String x:Key="ImageView_ExtractSelected">分解选中文件</x:String>
+    <x:String x:Key="ImageView_SynthesizeImg">合成img</x:String>
+    <x:String x:Key="ImageView_SynthesizeBr">合成br</x:String>
+    <x:String x:Key="ImageView_DeleteSelected">删除选中文件</x:String>
+    <x:String x:Key="ImageView_SynthesizeSuper">合成Super</x:String>
+    <x:String x:Key="ImageView_SynthesizeDat">合成dat</x:String>
+
+    <!-- MainWindow -->
+    <x:String x:Key="MainWindow_Title">UotanStudio</x:String>
+    <x:String x:Key="Document_BuildProp">build.prop</x:String>
+    <x:String x:Key="Document_InitRc">init.rc</x:String>
+
+    <!-- ProjectExplorer -->
+    <x:String x:Key="ProjectExplorer_Outer">外部</x:String>
+    <x:String x:Key="ProjectExplorer_Inner">内部</x:String>
+    <x:String x:Key="ProjectExplorer_Innermost">最内层</x:String>
+
 </ResourceDictionary>

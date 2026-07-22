@@ -1,11 +1,10 @@
 ﻿using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
-using NodifyM.Avalonia.Controls;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
+using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels
 {
@@ -15,10 +14,14 @@ namespace UotanStudio.ViewModels
 
         public ProjectExplorerViewModel()
         {
+            var svc = LanguageService.Instance;
+            var outerLabel = svc.GetString("ProjectExplorer_Outer");
+            var innerLabel = svc.GetString("ProjectExplorer_Inner");
+            var innermostLabel = svc.GetString("ProjectExplorer_Innermost");
             TreeViewContent.AddRange(
-            Enumerable.Range(1, 10).Select(x => new Node($"Outer {x}",
-                Enumerable.Range(1, 5).Select(y => new Node($"Inner {y}",
-                    Enumerable.Range(1, 2).Select(z => new Node($"Innermost {z}",
+            Enumerable.Range(1, 10).Select(x => new Node($"{outerLabel} {x}",
+                Enumerable.Range(1, 5).Select(y => new Node($"{innerLabel} {y}",
+                    Enumerable.Range(1, 2).Select(z => new Node($"{innermostLabel} {z}",
                         Enumerable.Range(1, 2).Select(n => new Node($"1234567 {n}")))))))));
         }
     }

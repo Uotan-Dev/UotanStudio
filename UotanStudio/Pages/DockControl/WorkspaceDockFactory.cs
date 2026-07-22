@@ -15,8 +15,9 @@ namespace UotanStudio.Pages.DockControl
     {
         public override IRootDock CreateLayout()
         {
-            var document1 = new FileViewModel { Id = "Document1", Title = "build.prop", CanClose = true };
-            var document2 = new FileViewModel { Id = "Document2", Title = "init.rc", CanClose = true };
+            var svc = LanguageService.Instance;
+            var document1 = new FileViewModel { Id = "Document1", Title = svc.GetString("Document_BuildProp"), CanClose = true };
+            var document2 = new FileViewModel { Id = "Document2", Title = svc.GetString("Document_InitRc"), CanClose = true };
             var projectSetting = new ProjectSettingViewModel { Id = "ProjectSetting", Title = LanguageService.Instance.GetString("Dock_ProjectSetting"), CanClose = true };
             var projectExplorer = new ProjectExplorerViewModel { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = true };
             var imagesview = new ImageViewModel { Id = "ImagesView", Title = LanguageService.Instance.GetString("Dock_ImagesView"), CanClose = true };
@@ -118,8 +119,8 @@ namespace UotanStudio.Pages.DockControl
                 ["Document2"] = () => "<Window>\n</Window>",
                 ["ProjectExplorer"] = () => LanguageService.Instance.GetString("Dock_ProjectExplorer"),
                 ["Properties"] = () => LanguageService.Instance.GetString("Dock_Properties"),
-                ["Output"] = () => "Build succeeded.",
-                ["AdbLog"] = () => "ADB Log Output"
+                ["Output"] = () => LanguageService.Instance.GetString("Dock_Output_Log"),
+                ["AdbLog"] = () => LanguageService.Instance.GetString("Dock_AdbLog_Output")
             };
 
             HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>

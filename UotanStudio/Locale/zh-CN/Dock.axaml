@@ -4,7 +4,35 @@
     <x:String x:Key="Dock_ProjectExplorer">项目资源管理器</x:String>
     <x:String x:Key="Dock_Properties">属性</x:String>
     <x:String x:Key="Dock_Output">输出</x:String>
+    <x:String x:Key="Dock_Output_Placeholder">输出日志</x:String>
     <x:String x:Key="Dock_AdbLog">ADB 日志</x:String>
     <x:String x:Key="Dock_Documents">文档</x:String>
+    <x:String x:Key="Dock_Properties_Name">属性名称</x:String>
+    <x:String x:Key="Dock_Properties_Value">值</x:String>
+    <x:String x:Key="Dock_Properties_ImageName">镜像名称</x:String>
+    <x:String x:Key="Dock_Properties_ImageSize">镜像大小</x:String>
+    <x:String x:Key="Dock_Properties_ImageType">镜像类型</x:String>
+    <x:String x:Key="Dock_Properties_ImageFormat">镜像格式</x:String>
+    <x:String x:Key="Dock_ProjectSetting">打包设置</x:String>
+    <x:String x:Key="Dock_ImagesView">镜像文件管理</x:String>
+    <x:String x:Key="Dock_ImageType">镜像类型</x:String>
+    <x:String x:Key="Dock_ImageFormat">镜像格式</x:String>
+    <x:String x:Key="Dock_EXT4RW">EXT4读写</x:String>
+    <x:String x:Key="Dock_SizeCalc">大小计算</x:String>
+    <x:String x:Key="Dock_Auto">自动</x:String>
+    <x:String x:Key="Dock_OriginalSize">原大小</x:String>
+    <x:String x:Key="Dock_EXT4Compress">EXT4压缩</x:String>
+    <x:String x:Key="Dock_NoCompress">不压</x:String>
+    <x:String x:Key="Dock_Compress">压缩</x:String>
+    <x:String x:Key="Dock_EROFSAlgorithm">EROFS算法</x:String>
+    <x:String x:Key="Dock_EROFSCompLevel">EROFS压缩等级</x:String>
+    <x:String x:Key="Dock_SUPERSize">SUPER大小</x:String>
+    <x:String x:Key="Dock_SUPERName">SUPER簇名</x:String>
+    <x:String x:Key="Dock_SUPERFormat">SUPER格式</x:String>
+    <x:String x:Key="Dock_BRCompLevel">BR压缩等级</x:String>
+    <x:String x:Key="Dock_UTCTime">UTC时间戳</x:String>
+    <x:String x:Key="Dock_DATSegments">DAT分段数量</x:String>
+    <x:String x:Key="Dock_Output_Log">Build succeeded.</x:String>
+    <x:String x:Key="Dock_AdbLog_Output">ADB Log Output</x:String>
 
 </ResourceDictionary>

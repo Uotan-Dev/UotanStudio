@@ -6,6 +6,6 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Pages.DockView.OutputView"
              x:DataType="viewmodels:OutputViewModel">
-  <TextBox Name="WiredflashLog" Watermark="Output" AcceptsReturn="True" IsReadOnly="True"
+  <TextBox Name="WiredflashLog" PlaceholderText="{DynamicResource Dock_Output_Placeholder}" AcceptsReturn="True" IsReadOnly="True"
 		   HorizontalAlignment="Stretch" VerticalAlignment="Stretch" TextWrapping="Wrap" />
 </UserControl>

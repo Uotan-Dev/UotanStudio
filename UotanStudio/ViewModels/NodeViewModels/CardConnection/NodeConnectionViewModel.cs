@@ -28,5 +28,17 @@ namespace UotanStudio.ViewModels.NodeViewModels
             get => _target;
             set => SetProperty(ref _target, value);
         }
+
+        /// <summary>
+        /// <para>创建连接线视图模型。</para>
+        /// Creates a connection view model.
+        /// </summary>
+        /// <param name="source">源连接器（输出端口）。</param>
+        /// <param name="target">目标连接器（输入端口）。</param>
+        public NodeConnectionViewModel(NodeConnectorViewModel source, NodeConnectorViewModel target)
+        {
+            _source = source;
+            _target = target;
+        }
     }
 }

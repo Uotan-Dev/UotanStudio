@@ -4,6 +4,6 @@ namespace UotanStudio.ViewModels
 {
     public class FileViewModel : Document
     {
-       
+
     }
 }

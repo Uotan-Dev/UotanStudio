@@ -7,121 +7,121 @@
              x:Class="UotanStudio.Pages.DockView.ProjectSettingView"
              x:DataType="viewmodels:ProjectSettingViewModel">
   <StackPanel Orientation="Vertical" Spacing="0">
-					<TextBlock HorizontalAlignment="Left"
-							   VerticalAlignment="Top"
-		                       FontWeight="DemiBold"
-							   Text="打包设置" />
-					<StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="镜像类型" />
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<RadioButton Width="80" FontSize="15" Content="EXT4" IsChecked="{Binding TypeEXT4}"/>
-							<RadioButton Width="80" FontSize="15" Content="EROFS" IsChecked="{Binding TypeEROFS}"/>
-						</StackPanel>
-					</StackPanel>
-					<StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="镜像格式" />
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<RadioButton Width="80" FontSize="15" Content="RAW" IsChecked="{Binding FormatRAW}"/>
-							<RadioButton Width="90" FontSize="15" Content="SPARSE" IsChecked="{Binding FormatSPARSE}"/>
-						</StackPanel>
-					</StackPanel>
-					<StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="EXT4读写" />
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<RadioButton Width="80" FontSize="15" Content="RO" IsChecked="{Binding EXT4RO}"/>
-							<RadioButton Width="80" FontSize="15" Content="RW" IsChecked="{Binding EXT4RW}"/>
-						</StackPanel>
-					</StackPanel>
-					<StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="大小计算" />
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<RadioButton Width="80" FontSize="15" Content="自动" IsChecked="{Binding SizeAuto}"/>
-							<RadioButton Width="80" FontSize="15" Content="原大小" IsChecked="{Binding SizeOri}"/>
-						</StackPanel>
-					</StackPanel>
-					<StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="EXT4压缩" />
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<RadioButton Width="80" FontSize="15" Content="不压" IsChecked="{Binding EXT4NoCompress}"/>
-							<RadioButton Width="80" FontSize="15" Content="压缩" IsChecked="{Binding EXT4Compress}"/>
-						</StackPanel>
-					</StackPanel>
-					<StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="EROFS算法" />
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<RadioButton Width="80" FontSize="15" Content="lz4" IsChecked="{Binding EROFSLZ4}"/>
-							<RadioButton Width="80" FontSize="15" Content="lz4hc" IsChecked="{Binding EROFSLZ4HC}"/>
-						</StackPanel>
-					</StackPanel>
-					<StackPanel Margin="8,10,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="120"
-								   FontSize="15"
-								   Text="EROFS压缩等级" />
-						<ComboBox Width="145" ItemsSource="0123456789" SelectedIndex="{Binding EROFSComGrade}"></ComboBox>
-					</StackPanel>
-					<StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="SUPER大小" />
-						<TextBox Width="180" Text="{Binding SUPERSize}" FontSize="15"/>
-					</StackPanel>
-					<StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="SUPER簇名" />
-						<TextBox Width="180" Text="{Binding SUPERName}" FontSize="15"/>
-					</StackPanel>
-					<StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="SUPER格式" />
-						<StackPanel Orientation="Horizontal" Spacing="5">
-							<RadioButton Width="80" FontSize="15" Content="RAW" IsChecked="{Binding SUPERRAW}"/>
-							<RadioButton Width="90" FontSize="15" Content="SPARSE" IsChecked="{Binding SUPERSPARSE}"/>
-						</StackPanel>
-					</StackPanel>
-					<StackPanel Margin="8,10,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="120"
-								   FontSize="15"
-								   Text="BR 压 缩 等 级" />
-						<ComboBox Width="145" ItemsSource="0123456789" SelectedIndex="{Binding BRComGrade}"></ComboBox>
-					</StackPanel>
-					<StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="85"
-								   FontSize="15"
-								   Text="UTC时间戳" />
-						<TextBox Width="180" Text="{Binding UTCTime}" FontSize="15"/>
-					</StackPanel>
-					<StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-						<TextBlock VerticalAlignment="Center"
-								   Width="100"
-								   FontSize="15"
-								   Text="DAT分段数量" />
-						<TextBox Width="165" Text="{Binding DATSeg}" FontSize="15" Watermark="0-999"/>
-					</StackPanel>
-				</StackPanel>
+        <TextBlock HorizontalAlignment="Left"
+                   VerticalAlignment="Top"
+                   FontWeight="DemiBold"
+                   Text="{DynamicResource Dock_ProjectSetting}" />
+        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_ImageType}" />
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <RadioButton Width="80" FontSize="15" Content="EXT4" IsChecked="{Binding TypeEXT4}"/>
+                <RadioButton Width="80" FontSize="15" Content="EROFS" IsChecked="{Binding TypeEROFS}"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_ImageFormat}" />
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <RadioButton Width="80" FontSize="15" Content="RAW" IsChecked="{Binding FormatRAW}"/>
+                <RadioButton Width="90" FontSize="15" Content="SPARSE" IsChecked="{Binding FormatSPARSE}"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_EXT4RW}" />
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <RadioButton Width="80" FontSize="15" Content="RO" IsChecked="{Binding EXT4RO}"/>
+                <RadioButton Width="80" FontSize="15" Content="RW" IsChecked="{Binding EXT4RW}"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_SizeCalc}" />
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <RadioButton Width="80" FontSize="15" Content="{DynamicResource Dock_Auto}" IsChecked="{Binding SizeAuto}"/>
+                <RadioButton Width="80" FontSize="15" Content="{DynamicResource Dock_OriginalSize}" IsChecked="{Binding SizeOri}"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_EXT4Compress}" />
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <RadioButton Width="80" FontSize="15" Content="{DynamicResource Dock_NoCompress}" IsChecked="{Binding EXT4NoCompress}"/>
+                <RadioButton Width="80" FontSize="15" Content="{DynamicResource Dock_Compress}" IsChecked="{Binding EXT4Compress}"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_EROFSAlgorithm}" />
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <RadioButton Width="80" FontSize="15" Content="lz4" IsChecked="{Binding EROFSLZ4}"/>
+                <RadioButton Width="80" FontSize="15" Content="lz4hc" IsChecked="{Binding EROFSLZ4HC}"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Margin="8,10,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="120"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_EROFSCompLevel}" />
+            <ComboBox Width="145" ItemsSource="0123456789" SelectedIndex="{Binding EROFSComGrade}"></ComboBox>
+        </StackPanel>
+        <StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_SUPERSize}" />
+            <TextBox Width="180" Text="{Binding SUPERSize}" FontSize="15"/>
+        </StackPanel>
+        <StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_SUPERName}" />
+            <TextBox Width="180" Text="{Binding SUPERName}" FontSize="15"/>
+        </StackPanel>
+        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_SUPERFormat}" />
+            <StackPanel Orientation="Horizontal" Spacing="5">
+                <RadioButton Width="80" FontSize="15" Content="RAW" IsChecked="{Binding SUPERRAW}"/>
+                <RadioButton Width="90" FontSize="15" Content="SPARSE" IsChecked="{Binding SUPERSPARSE}"/>
+            </StackPanel>
+        </StackPanel>
+        <StackPanel Margin="8,10,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="120"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_BRCompLevel}" />
+            <ComboBox Width="145" ItemsSource="0123456789" SelectedIndex="{Binding BRComGrade}"></ComboBox>
+        </StackPanel>
+        <StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="85"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_UTCTime}" />
+            <TextBox Width="180" Text="{Binding UTCTime}" FontSize="15"/>
+        </StackPanel>
+        <StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock VerticalAlignment="Center"
+                       Width="100"
+                       FontSize="15"
+                       Text="{DynamicResource Dock_DATSegments}" />
+            <TextBox Width="165" Text="{Binding DATSeg}" FontSize="15" PlaceholderText="0-999"/>
+        </StackPanel>
+    </StackPanel>
 </UserControl>

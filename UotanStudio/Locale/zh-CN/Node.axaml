@@ -19,6 +19,53 @@
     <x:String x:Key="Node_NoSelection">选择节点以查看属性</x:String>
     <x:String x:Key="Node_StatusReady">就绪</x:String>
 
+    <!-- 节点名称 -->
+    <x:String x:Key="Node_Firmware_Unpack">解包固件</x:String>
+    <x:String x:Key="Node_Firmware_Pack">打包固件</x:String>
+    <x:String x:Key="Node_Firmware_Verify">验证签名</x:String>
+    <x:String x:Key="Node_Firmware_Extract">提取分区</x:String>
+    <x:String x:Key="Node_Flash_Connect">连接设备</x:String>
+    <x:String x:Key="Node_Flash_Flash">刷入分区</x:String>
+    <x:String x:Key="Node_Flash_Erase">擦除分区</x:String>
+    <x:String x:Key="Node_Flash_Reboot">重启设备</x:String>
+    <x:String x:Key="Node_Data_ReadFile">读取文件</x:String>
+    <x:String x:Key="Node_Data_Convert">格式转换</x:String>
+    <x:String x:Key="Node_Data_Checksum">校验和</x:String>
+    <x:String x:Key="Node_Data_Compare">比较</x:String>
+    <x:String x:Key="Node_Output_Log">日志输出</x:String>
+    <x:String x:Key="Node_Output_Progress">进度报告</x:String>
+    <x:String x:Key="Node_Output_Save">保存结果</x:String>
+
+    <!-- 连接器名称 -->
+    <x:String x:Key="Node_Conn_Path">路径</x:String>
+    <x:String x:Key="Node_Conn_Data">数据</x:String>
+    <x:String x:Key="Node_Conn_Input">输入</x:String>
+    <x:String x:Key="Node_Conn_Format">格式</x:String>
+    <x:String x:Key="Node_Conn_Output">输出</x:String>
+    <x:String x:Key="Node_Conn_Algorithm">算法</x:String>
+    <x:String x:Key="Node_Conn_Hash">哈希</x:String>
+    <x:String x:Key="Node_Conn_DataA">数据 A</x:String>
+    <x:String x:Key="Node_Conn_DataB">数据 B</x:String>
+    <x:String x:Key="Node_Conn_Match">匹配结果</x:String>
+    <x:String x:Key="Node_Conn_FirmwarePath">固件路径</x:String>
+    <x:String x:Key="Node_Conn_OutputDir">输出目录</x:String>
+    <x:String x:Key="Node_Conn_Partitions">分区信息</x:String>
+    <x:String x:Key="Node_Conn_InputDir">输入目录</x:String>
+    <x:String x:Key="Node_Conn_Config">配置</x:String>
+    <x:String x:Key="Node_Conn_Firmware">固件</x:String>
+    <x:String x:Key="Node_Conn_Valid">有效性</x:String>
+    <x:String x:Key="Node_Conn_Report">报告</x:String>
+    <x:String x:Key="Node_Conn_PartitionName">分区名称</x:String>
+    <x:String x:Key="Node_Conn_Image">镜像</x:String>
+    <x:String x:Key="Node_Conn_Mode">模式</x:String>
+    <x:String x:Key="Node_Conn_Device">设备</x:String>
+    <x:String x:Key="Node_Conn_Status">状态</x:String>
+    <x:String x:Key="Node_Conn_Partition">分区</x:String>
+    <x:String x:Key="Node_Conn_Result">结果</x:String>
+    <x:String x:Key="Node_Conn_Message">消息</x:String>
+    <x:String x:Key="Node_Conn_Level">级别</x:String>
+    <x:String x:Key="Node_Conn_Progress">进度</x:String>
+
     <!-- 节点分类 -->
     <x:String x:Key="Node_CatFirmware">固件操作</x:String>
     <x:String x:Key="Node_CatFlash">烧录操作</x:String>

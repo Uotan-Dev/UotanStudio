@@ -1,7 +1,5 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
-using System.Collections.Generic;
+using UotanStudio.Services;
 
 namespace UotanStudio.Pages.DockView;
 
@@ -13,10 +11,10 @@ public partial class PropertiesView : UserControl
         InitializeComponent();
         Properties.ItemsSource = new[]
         {
-            new PropertyItem("镜像名称", "boot.img"),
-            new PropertyItem("镜像大小", "106 MB"),
-            new PropertyItem("镜像类型", "Kernel"),
-            new PropertyItem("镜像格式", "（EXT4）")
+            new PropertyItem(LanguageService.Instance.GetString("Dock_Properties_ImageName"), "boot.img"),
+            new PropertyItem(LanguageService.Instance.GetString("Dock_Properties_ImageSize"), "106 MB"),
+            new PropertyItem(LanguageService.Instance.GetString("Dock_Properties_ImageType"), "Kernel"),
+            new PropertyItem(LanguageService.Instance.GetString("Dock_Properties_ImageFormat"), "（EXT4）")
         };
     }
 }

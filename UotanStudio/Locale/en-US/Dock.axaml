@@ -4,7 +4,35 @@
     <x:String x:Key="Dock_ProjectExplorer">Project Explorer</x:String>
     <x:String x:Key="Dock_Properties">Properties</x:String>
     <x:String x:Key="Dock_Output">Output</x:String>
+    <x:String x:Key="Dock_Output_Placeholder">Output Log</x:String>
     <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
     <x:String x:Key="Dock_Documents">Documents</x:String>
+    <x:String x:Key="Dock_Properties_Name">Property Name</x:String>
+    <x:String x:Key="Dock_Properties_Value">Value</x:String>
+    <x:String x:Key="Dock_Properties_ImageName">Image Name</x:String>
+    <x:String x:Key="Dock_Properties_ImageSize">Image Size</x:String>
+    <x:String x:Key="Dock_Properties_ImageType">Image Type</x:String>
+    <x:String x:Key="Dock_Properties_ImageFormat">Image Format</x:String>
+    <x:String x:Key="Dock_ProjectSetting">Packing Settings</x:String>
+    <x:String x:Key="Dock_ImagesView">Image Manager</x:String>
+    <x:String x:Key="Dock_ImageType">Image Type</x:String>
+    <x:String x:Key="Dock_ImageFormat">Image Format</x:String>
+    <x:String x:Key="Dock_EXT4RW">EXT4 R/W</x:String>
+    <x:String x:Key="Dock_SizeCalc">Size Calculation</x:String>
+    <x:String x:Key="Dock_Auto">Auto</x:String>
+    <x:String x:Key="Dock_OriginalSize">Original Size</x:String>
+    <x:String x:Key="Dock_EXT4Compress">EXT4 Compression</x:String>
+    <x:String x:Key="Dock_NoCompress">No Compress</x:String>
+    <x:String x:Key="Dock_Compress">Compress</x:String>
+    <x:String x:Key="Dock_EROFSAlgorithm">EROFS Algorithm</x:String>
+    <x:String x:Key="Dock_EROFSCompLevel">EROFS Compression Level</x:String>
+    <x:String x:Key="Dock_SUPERSize">SUPER Size</x:String>
+    <x:String x:Key="Dock_SUPERName">SUPER Cluster Name</x:String>
+    <x:String x:Key="Dock_SUPERFormat">SUPER Format</x:String>
+    <x:String x:Key="Dock_BRCompLevel">BR Compression Level</x:String>
+    <x:String x:Key="Dock_UTCTime">UTC Timestamp</x:String>
+    <x:String x:Key="Dock_DATSegments">DAT Segments</x:String>
+    <x:String x:Key="Dock_Output_Log">Build succeeded.</x:String>
+    <x:String x:Key="Dock_AdbLog_Output">ADB Log Output</x:String>
 
 </ResourceDictionary>

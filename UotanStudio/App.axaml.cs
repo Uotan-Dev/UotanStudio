@@ -24,6 +24,13 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // 初始化语言服务并应用保存的语言设置，必须在创建 MainViewModel 之前完成，
+        // 因为 Dock 布局在构造时会通过 LanguageService.GetString 解析面板标题。
+        LanguageService.Instance.Initialize();
+        var savedSettings = SettingsPersistenceService.Instance.LoadSettings();
+        ApplyTheme(savedSettings.ThemeMode);
+        ApplyLanguage(savedSettings.CultureName);
+
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             desktop.MainWindow = new MainWindow
@@ -44,13 +51,6 @@ public partial class App : Application
         // Register messenger receivers
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, OnThemeChanged);
         WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
-
-        // Load and apply saved settings
-        // 初始化语言服务，自动发现内置语言包
-        LanguageService.Instance.Initialize();
-        var savedSettings = SettingsPersistenceService.Instance.LoadSettings();
-        ApplyTheme(savedSettings.ThemeMode);
-        ApplyLanguage(savedSettings.CultureName);
     }
 
     private void OnThemeChanged(object recipient, ThemeChangedMessage message)
