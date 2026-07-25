@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Dock.Avalonia.Controls;
 using UotanStudio.ViewModels;
 
 namespace UotanStudio.Pages;

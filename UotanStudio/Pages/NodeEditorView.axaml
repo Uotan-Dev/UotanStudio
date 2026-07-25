@@ -135,13 +135,93 @@
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
                 <ScrollViewer>
-                    <StackPanel Margin="8">
+                    <Grid>
+                        <!-- 未选中节点时的占位提示 -->
                         <TextBlock Text="{DynamicResource Node_NoSelection}"
                                    FontSize="12"
                                    Foreground="{DynamicResource SecondaryTextBrush}"
                                    HorizontalAlignment="Center"
-                                   Margin="0,20" />
-                    </StackPanel>
+                                   Margin="0,20"
+                                   IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNull}}" />
+
+                        <!-- 选中节点后的属性面板 -->
+                        <StackPanel Margin="8" Spacing="6"
+                                    IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Text="{Binding SelectedNode.Title}"
+                                       FontWeight="SemiBold" FontSize="13"
+                                       Margin="0,0,0,4" />
+                            <Separator Margin="0,4" />
+
+                            <!-- 节点类别 -->
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Text="Category"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SelectedNode.Category}"
+                                           FontSize="12" />
+                            </Grid>
+
+                            <!-- 执行状态 -->
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Text="Status"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SelectedNode.ExecutionStatus}"
+                                           FontSize="12" />
+                            </Grid>
+
+                            <!-- 位置 -->
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Text="Location"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="1"
+                                           FontSize="12">
+                                    <Run Text="{Binding SelectedNode.Location.X}" />
+                                    <Run Text=", " />
+                                    <Run Text="{Binding SelectedNode.Location.Y}" />
+                                </TextBlock>
+                            </Grid>
+
+                            <Separator Margin="0,4" />
+
+                            <!-- 输入端口 -->
+                            <TextBlock Text="Inputs"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                            <ItemsControl ItemsSource="{Binding SelectedNode.Input}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
+                                        <TextBlock FontSize="12" Margin="0,1">
+                                            <Run Text="• " />
+                                            <Run Text="{Binding Title}" />
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <!-- 输出端口 -->
+                            <TextBlock Text="Outputs"
+                                       FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Margin="0,4,0,0" />
+                            <ItemsControl ItemsSource="{Binding SelectedNode.Output}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
+                                        <TextBlock FontSize="12" Margin="0,1">
+                                            <Run Text="• " />
+                                            <Run Text="{Binding Title}" />
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Grid>
                 </ScrollViewer>
             </DockPanel>
         </Border>

@@ -5,6 +5,7 @@
 			 xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
 			 xmlns:vm="using:UotanStudio.ViewModels"
 			 xmlns:views="using:UotanStudio.Pages"
+			 xmlns:mainviews="using:UotanStudio.Views"
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 			 x:Class="UotanStudio.Views.MainView"
 			 x:DataType="vm:MainViewModel">

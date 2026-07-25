@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.ViewModels;
 
@@ -32,6 +31,8 @@ public partial class MainView : UserControl
                 NavigationTarget.Workspace => 3,
                 NavigationTarget.NodeEditor => 4,
                 NavigationTarget.Settings => 5,
+                // Device 与 Plugin 已移至顶栏对话框入口，不再对应底栏 Tab
+                NavigationTarget.DeviceManager or NavigationTarget.PluginManager => MainTabs.SelectedIndex,
                 _ => MainTabs.SelectedIndex
             };
             MainTabs.SelectedIndex = index;

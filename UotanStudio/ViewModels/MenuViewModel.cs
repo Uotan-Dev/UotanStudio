@@ -4,9 +4,8 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using System;
+using System.Linq;
 using System.Threading.Tasks;
-using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Views;
 
@@ -37,28 +36,64 @@ public partial class MenuViewModel : ViewModelBase
     [RelayCommand]
     private async Task NewProjectAsync()
     {
-        await PickProjectFileAsync(isSave: true);
+        var path = await PickProjectFileAsync(isSave: true);
+        if (path != null)
+        {
+            _currentProjectPath = path;
+            // 新工程：清空画布后立即保存空骨架
+            if (NodeEditorVM != null)
+            {
+                NodeEditorVM.Clear();
+                await PersistToAsync(path);
+            }
+        }
     }
 
     /// <summary>
-    /// <para>打开现有项目，弹出文件打开对话框选择 .uotan 工程文件。</para>
-    /// Opens an existing project by showing a file-open dialog to pick a .uotan project file.
+    /// <para>打开现有项目，弹出文件打开对话框选择 .uotan 工程文件并重建画布。</para>
+    /// Opens an existing project by showing a file-open dialog to pick a .uotan project file and rebuild the canvas.
     /// </summary>
     [RelayCommand]
     private async Task OpenProjectAsync()
     {
-        await PickProjectFileAsync(isSave: false);
+        var path = await PickProjectFileAsync(isSave: false);
+        if (path == null) return;
+        _currentProjectPath = path;
+
+        var snapshot = await Services.WorkflowPersistenceService.LoadAsync(path).ConfigureAwait(false);
+        if (snapshot == null) return;
+
+        if (NodeEditorVM != null)
+        {
+            await NodeEditorVM.LoadFromAsync(snapshot).ConfigureAwait(false);
+        }
     }
+
+    /// <summary>
+    /// <para>当前工程文件路径，由保存/打开操作填充。</para>
+    /// Current project file path, populated by save/open operations.
+    /// </summary>
+    private string? _currentProjectPath;
+
+    /// <summary>
+    /// <para>当前节点编辑器视图模型引用，由外部设置以便持久化访问画布。</para>
+    /// Current node editor view model reference, set externally so persistence can access the canvas.
+    /// </summary>
+    public NodeEditorViewModel? NodeEditorVM { get; set; }
 
     /// <summary>
     /// <para>保存当前项目，若无路径则触发另存流程。</para>
     /// Saves the current project, triggering Save As if there is no project path yet.
     /// </summary>
     [RelayCommand]
-    private void Save()
+    private async Task SaveAsync()
     {
-        // 后端实现：将当前工作区状态序列化到项目文件
-        // 此处由后续项目持久化服务接入
+        if (string.IsNullOrEmpty(_currentProjectPath))
+        {
+            await SaveAsAsync();
+            return;
+        }
+        await PersistToAsync(_currentProjectPath);
     }
 
     /// <summary>
@@ -68,7 +103,31 @@ public partial class MenuViewModel : ViewModelBase
     [RelayCommand]
     private async Task SaveAsAsync()
     {
-        await PickProjectFileAsync(isSave: true);
+        var path = await PickProjectFileAsync(isSave: true);
+        if (path == null) return;
+        _currentProjectPath = path;
+        await PersistToAsync(path);
+    }
+
+    /// <summary>
+    /// <para>将当前画布快照写入指定路径。</para>
+    /// Writes the current canvas snapshot to the specified path.
+    /// </summary>
+    /// <param name="path">
+    /// <para>目标文件路径。</para>
+    /// Target file path.
+    /// </param>
+    private async Task PersistToAsync(string path)
+    {
+        if (NodeEditorVM == null)
+        {
+            Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Warn, "Menu", "Save aborted: no node editor bound");
+            return;
+        }
+        await Services.WorkflowPersistenceService.SaveAsync(
+            path,
+            NodeEditorVM.Nodes.ToList(),
+            NodeEditorVM.Connections.ToList()).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -107,33 +166,54 @@ public partial class MenuViewModel : ViewModelBase
 
     // ===== 编辑 / Edit =====
 
-    /// <summary><para>撤销操作。</para>Undo operation.</summary>
+    /// <summary><para>撤销操作，转发到当前活动视图模型。</para>Undo operation, forwarded to the currently active view model.</summary>
     [RelayCommand]
-    private void Undo() { }
+    private void Undo()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Undo));
+    }
 
-    /// <summary><para>重做操作。</para>Redo operation.</summary>
+    /// <summary><para>重做操作，转发到当前活动视图模型。</para>Redo operation, forwarded to the currently active view model.</summary>
     [RelayCommand]
-    private void Redo() { }
+    private void Redo()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Redo));
+    }
 
-    /// <summary><para>剪切选中内容。</para>Cut selection.</summary>
+    /// <summary><para>剪切选中内容，转发到当前活动视图模型。</para>Cut selection, forwarded to the currently active view model.</summary>
     [RelayCommand]
-    private void Cut() { }
+    private void Cut()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Cut));
+    }
 
-    /// <summary><para>复制选中内容。</para>Copy selection.</summary>
+    /// <summary><para>复制选中内容，转发到当前活动视图模型。</para>Copy selection, forwarded to the currently active view model.</summary>
     [RelayCommand]
-    private void Copy() { }
+    private void Copy()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy));
+    }
 
-    /// <summary><para>粘贴剪贴板内容。</para>Paste clipboard contents.</summary>
+    /// <summary><para>粘贴剪贴板内容，转发到当前活动视图模型。</para>Paste clipboard contents, forwarded to the currently active view model.</summary>
     [RelayCommand]
-    private void Paste() { }
+    private void Paste()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste));
+    }
 
-    /// <summary><para>删除选中内容。</para>Delete selection.</summary>
+    /// <summary><para>删除选中内容，转发到当前活动视图模型。</para>Delete selection, forwarded to the currently active view model.</summary>
     [RelayCommand]
-    private void Delete() { }
+    private void Delete()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Delete));
+    }
 
-    /// <summary><para>全选。</para>Select all.</summary>
+    /// <summary><para>全选，转发到当前活动视图模型。</para>Select all, forwarded to the currently active view model.</summary>
     [RelayCommand]
-    private void SelectAll() { }
+    private void SelectAll()
+    {
+        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.SelectAll));
+    }
 
     // ===== 视图 / View =====
 
@@ -191,31 +271,91 @@ public partial class MenuViewModel : ViewModelBase
 
     // ===== 工具 / Tools =====
 
-    /// <summary><para>打开 ADB 终端。</para>Open the ADB shell console.</summary>
+    /// <summary><para>打开 ADB 终端，弹出设备管理器对话框。</para>Open the ADB shell console, popping up the Device Manager dialog.</summary>
     [RelayCommand]
-    private void AdbShell() { }
+    private void AdbShell()
+    {
+        OpenDialog<DeviceManagerDialog>();
+        Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Info, "Menu", "ADB shell requested via Device Manager dialog");
+    }
 
-    /// <summary><para>打开 Fastboot 控制台。</para>Open the Fastboot console.</summary>
+    /// <summary><para>打开 Fastboot 控制台，弹出设备管理器对话框。</para>Open the Fastboot console, popping up the Device Manager dialog.</summary>
     [RelayCommand]
-    private void FastbootConsole() { }
+    private void FastbootConsole()
+    {
+        OpenDialog<DeviceManagerDialog>();
+        Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Info, "Menu", "Fastboot console requested via Device Manager dialog");
+    }
 
-    /// <summary><para>打开语言管理器。</para>Open the language manager.</summary>
+    /// <summary><para>打开语言管理器，切换到设置选项卡。</para>Open the language manager, switching to the Settings tab.</summary>
     [RelayCommand]
-    private void LanguageManager() { }
+    private void LanguageManager()
+    {
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
+    }
 
-    /// <summary><para>打开插件管理器。</para>Open the plugin manager.</summary>
+    /// <summary><para>打开插件管理器，弹出插件管理器对话框。</para>Open the plugin manager, popping up the Plugin Manager dialog.</summary>
     [RelayCommand]
-    private void PluginManager() { }
+    private void PluginManager()
+    {
+        OpenDialog<PluginManagerDialog>();
+    }
+
+    /// <summary>
+    /// <para>以主窗口为 owner 弹出指定类型的独立对话框窗口。</para>
+    /// Pops up a standalone dialog window of the specified type, owned by the main window.
+    /// </summary>
+    /// <typeparam name="TWindow">
+    /// <para>对话框窗口类型，必须具有公共无参构造。</para>
+    /// Dialog window type, must have a public parameterless constructor.
+    /// </typeparam>
+    private static void OpenDialog<TWindow>() where TWindow : Window, new()
+    {
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+            && desktop.MainWindow is { } owner)
+        {
+            var dialog = new TWindow();
+            dialog.Show(owner);
+        }
+    }
 
     // ===== 帮助 / Help =====
 
     /// <summary><para>打开在线文档。</para>Open online documentation.</summary>
     [RelayCommand]
-    private void Documentation() { }
+    private async Task Documentation()
+    {
+        await OpenUrlAsync("https://github.com/UotanStudio/UotanStudio/wiki");
+    }
 
     /// <summary><para>打开问题反馈页面。</para>Open the issue reporting page.</summary>
     [RelayCommand]
-    private void ReportIssue() { }
+    private async Task ReportIssue()
+    {
+        await OpenUrlAsync("https://github.com/UotanStudio/UotanStudio/issues");
+    }
+
+    /// <summary>
+    /// <para>使用宿主系统浏览器打开指定 URL，失败时写入统一日志。</para>
+    /// Opens the specified URL using the host system browser, logging on failure.
+    /// </summary>
+    private static async Task OpenUrlAsync(string url)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
+        catch (System.Exception ex)
+        {
+            Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Error, "Menu", $"Failed to open URL '{url}': {ex.Message}");
+        }
+    }
 
     /// <summary>
     /// <para>显示关于对话框，包含版本与简介信息。</para>
@@ -239,21 +379,25 @@ public partial class MenuViewModel : ViewModelBase
     // ===== 辅助方法 =====
 
     /// <summary>
-    /// <para>弹出文件选择/保存对话框选取项目文件路径。</para>
-    /// Shows a file open/save dialog to pick a project file path.
+    /// <para>弹出文件选择/保存对话框选取项目文件路径，返回所选路径或 <c>null</c>。</para>
+    /// Shows a file open/save dialog to pick a project file path, returning the chosen path or <c>null</c>.
     /// </summary>
     /// <param name="isSave">
     /// <para>是否为保存对话框；false 则为打开对话框。</para>
     /// Whether this is a save dialog; false means open dialog.
     /// </param>
-    private static async Task PickProjectFileAsync(bool isSave)
+    /// <returns>
+    /// <para>所选文件本地路径；取消时返回 <c>null</c>。</para>
+    /// The chosen local file path; returns <c>null</c> when cancelled.
+    /// </returns>
+    private static async Task<string?> PickProjectFileAsync(bool isSave)
     {
         var topLevel = TopLevel;
-        if (topLevel == null) return;
+        if (topLevel == null) return null;
 
         if (isSave)
         {
-            _ = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
                 Title = LanguageService.Instance.GetString("Menu_NewProject"),
                 DefaultExtension = "uotan",
@@ -263,10 +407,11 @@ public partial class MenuViewModel : ViewModelBase
                     new FilePickerFileType("All files") { Patterns = ["*.*"] }
                 ]
             });
+            return file?.Path.LocalPath;
         }
         else
         {
-            _ = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
                 Title = LanguageService.Instance.GetString("Menu_OpenProject"),
                 AllowMultiple = false,
@@ -276,6 +421,7 @@ public partial class MenuViewModel : ViewModelBase
                     new FilePickerFileType("All files") { Patterns = ["*.*"] }
                 ]
             });
+            return files.Count > 0 ? files[0].Path.LocalPath : null;
         }
     }
 }
@@ -290,6 +436,10 @@ public enum NavigationTarget
     Workspace,
     /// <summary><para>节点编辑器。</para>Node editor.</summary>
     NodeEditor,
+    /// <summary><para>设备管理器。</para>Device manager.</summary>
+    DeviceManager,
+    /// <summary><para>插件管理器。</para>Plugin manager.</summary>
+    PluginManager,
     /// <summary><para>设置。</para>Settings.</summary>
     Settings
 }
@@ -330,7 +480,21 @@ public enum NodeEditorAction
     /// <summary><para>缩小。</para>Zoom out.</summary>
     ZoomOut,
     /// <summary><para>重置缩放。</para>Reset zoom.</summary>
-    ResetZoom
+    ResetZoom,
+    /// <summary><para>撤销。</para>Undo.</summary>
+    Undo,
+    /// <summary><para>重做。</para>Redo.</summary>
+    Redo,
+    /// <summary><para>剪切选中。</para>Cut selection.</summary>
+    Cut,
+    /// <summary><para>复制选中。</para>Copy selection.</summary>
+    Copy,
+    /// <summary><para>粘贴。</para>Paste.</summary>
+    Paste,
+    /// <summary><para>删除选中。</para>Delete selection.</summary>
+    Delete,
+    /// <summary><para>全选。</para>Select all.</summary>
+    SelectAll
 }
 
 /// <summary>

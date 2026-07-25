@@ -1,6 +1,8 @@
 using Avalonia;
 using NodifyM.Avalonia.ViewModelBase;
+using System;
 using System.Collections.ObjectModel;
+using UotanStudio.Abstractions.Nodes;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -14,6 +16,13 @@ namespace UotanStudio.ViewModels.NodeViewModels
         private Point _location;
         private NodeCategory _category;
         private bool _isSelected;
+        private NodeExecutionStatus _executionStatus = NodeExecutionStatus.Idle;
+
+        /// <summary>
+        /// <para>节点实例唯一标识。</para>
+        /// Unique identifier of the node instance.
+        /// </summary>
+        public string InstanceId { get; } = Guid.NewGuid().ToString("N");
 
         /// <summary>
         /// <para>获取或设置节点的显示标题。</para>
@@ -53,6 +62,16 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             get => _isSelected;
             set => SetProperty(ref _isSelected, value);
+        }
+
+        /// <summary>
+        /// <para>获取或设置节点执行状态。</para>
+        /// Gets or sets the node execution status.
+        /// </summary>
+        public NodeExecutionStatus ExecutionStatus
+        {
+            get => _executionStatus;
+            set => SetProperty(ref _executionStatus, value);
         }
 
         /// <summary>

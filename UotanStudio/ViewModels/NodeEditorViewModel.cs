@@ -1,16 +1,21 @@
 using Avalonia;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using UotanStudio.Services;
+using UotanStudio.Services.Execution;
 using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.ViewModels
 {
     /// <summary>
-    /// <para>节点编辑器主视图模型，管理节点画布、连接线、工具箱和执行状态。</para>
-    /// Main view model for the node editor, managing the node canvas, connections, toolbox, and execution state.
+    /// <para>节点编辑器主视图模型，管理节点画布、连接线、工具箱、选择状态与工作流执行。</para>
+    /// Main view model for the node editor, managing the node canvas, connections, toolbox, selection state, and workflow execution.
     /// </summary>
     public partial class NodeEditorViewModel : ViewModelBase
     {
@@ -22,6 +27,29 @@ namespace UotanStudio.ViewModels
         private string _executionStatus = LanguageService.Instance.GetString("Node_StatusReady");
         private Point _nextNodeLocation = new(100, 100);
         private static readonly Point DefaultNodeLocation = new(100, 100);
+
+        private NodeViewModels.FlowNodeViewModel? _selectedNode;
+        private ObservableCollection<NodeToolboxCategory> _visibleToolboxCategories = [];
+        private double _executionProgress;
+        private bool _isExecuting;
+
+        /// <summary>
+        /// <para>统一日志服务实例，节点编辑器与执行引擎共享。</para>
+        /// Unified log service instance, shared between the node editor and the execution engine.
+        /// </summary>
+        private readonly Services.LogService _log = Services.LogService.Instance;
+
+        /// <summary>
+        /// <para>节点工作流执行引擎实例，按需懒构造。</para>
+        /// Node workflow execution engine instance, lazily constructed on demand.
+        /// </summary>
+        private Services.Execution.NodeExecutionEngine? _engine;
+
+        /// <summary>
+        /// <para>执行取消令牌源。</para>
+        /// Cancellation token source for execution.
+        /// </summary>
+        private CancellationTokenSource? _runCts;
 
         /// <summary>
         /// <para>获取或设置画布上的节点集合。</para>
@@ -84,10 +112,50 @@ namespace UotanStudio.ViewModels
         }
 
         /// <summary>
-        /// <para>获取节点工具箱分类列表。</para>
-        /// Gets the list of node toolbox categories.
+        /// <para>获取节点工具箱分类列表（全量，由插件注册填充）。</para>
+        /// Gets the full list of node toolbox categories, populated from registered plugins.
         /// </summary>
         public ObservableCollection<NodeToolboxCategory> ToolboxCategories { get; } = [];
+
+        /// <summary>
+        /// <para>获取搜索过滤后的工具箱分类视图，UI 绑定此项。</para>
+        /// Gets the search-filtered toolbox category view bound by the UI.
+        /// </summary>
+        public ObservableCollection<NodeToolboxCategory> VisibleToolboxCategories
+        {
+            get => _visibleToolboxCategories;
+            private set => SetProperty(ref _visibleToolboxCategories, value);
+        }
+
+        /// <summary>
+        /// <para>获取或设置当前选中的节点，绑定到属性面板。</para>
+        /// Gets or sets the currently selected node, bound to the properties panel.
+        /// </summary>
+        public NodeViewModels.FlowNodeViewModel? SelectedNode
+        {
+            get => _selectedNode;
+            set => SetProperty(ref _selectedNode, value);
+        }
+
+        /// <summary>
+        /// <para>获取或设置执行进度（0.0 ~ 1.0）。</para>
+        /// Gets or sets the execution progress (0.0 ~ 1.0).
+        /// </summary>
+        public double ExecutionProgress
+        {
+            get => _executionProgress;
+            set => SetProperty(ref _executionProgress, value);
+        }
+
+        /// <summary>
+        /// <para>获取或设置是否正在执行工作流。</para>
+        /// Gets or sets whether a workflow is currently executing.
+        /// </summary>
+        public bool IsExecuting
+        {
+            get => _isExecuting;
+            set => SetProperty(ref _isExecuting, value);
+        }
 
         /// <summary>
         /// <para>获取待处理连接视图模型，管理拖拽连线状态。</para>
@@ -96,14 +164,91 @@ namespace UotanStudio.ViewModels
         public PendingConnectionViewModel PendingConnection { get; }
 
         /// <summary>
-        /// <para>初始化节点编辑器视图模型，创建默认工具箱分类和示例节点。</para>
-        /// Initializes the node editor view model, creating default toolbox categories and example nodes.
+        /// <para>初始化节点编辑器视图模型，从插件注册表构建工具箱，并初始化搜索过滤视图。</para>
+        /// Initializes the node editor view model, building the toolbox from the plugin registry, and initializing the search-filter view.
         /// </summary>
         public NodeEditorViewModel()
         {
             InitializeToolbox();
             PendingConnection = new PendingConnectionViewModel(this);
+            RefreshVisibleToolbox();
+            WeakReferenceMessenger.Default.Register<NodeEditorActionMessage>(this, OnNodeEditorAction);
         }
+
+        /// <summary>
+        /// <para>响应节点编辑器动作消息，执行撤销/重做/剪切/复制/粘贴/删除/全选等编辑操作。</para>
+        /// Responds to node-editor action messages, performing undo/redo/cut/copy/paste/delete/select-all edit operations.
+        /// </summary>
+        /// <param name="recipient">
+        /// <para>消息接收者。</para>
+        /// The message recipient.
+        /// </param>
+        /// <param name="message">
+        /// <para>包含动作类型的消息。</para>
+        /// The message containing the action type.
+        /// </param>
+        private void OnNodeEditorAction(object recipient, NodeEditorActionMessage message)
+        {
+            switch (message.Action)
+            {
+                case NodeEditorAction.Delete:
+                    DeleteSelected();
+                    break;
+                case NodeEditorAction.SelectAll:
+                    foreach (var n in Nodes) n.IsSelected = true;
+                    if (Nodes.Count > 0) SelectedNode = Nodes.First(n => n.IsSelected);
+                    break;
+                case NodeEditorAction.Copy:
+                    CopySelectedToClipboard();
+                    break;
+                case NodeEditorAction.Cut:
+                    CopySelectedToClipboard();
+                    DeleteSelected();
+                    break;
+                case NodeEditorAction.Paste:
+                    PasteFromClipboard();
+                    break;
+                case NodeEditorAction.Undo:
+                case NodeEditorAction.Redo:
+                    // Undo/Redo 需要命令栈支持，当前先记录日志占位
+                    _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor", $"{message.Action} requested (command stack not yet implemented)");
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// <para>将选中节点序列化到剪贴板（简易内存剪贴板）。</para>
+        /// Serializes selected nodes to the clipboard (simple in-memory clipboard).
+        /// </summary>
+        private void CopySelectedToClipboard()
+        {
+            var selected = Nodes.Where(n => n.IsSelected).ToList();
+            if (selected.Count == 0) return;
+            _clipboardNodeTitles = selected.Select(n => n.Title).ToList();
+            _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor", $"Copied {selected.Count} node(s)");
+        }
+
+        /// <summary>
+        /// <para>从剪贴板粘贴节点，复制到原位置偏移。</para>
+        /// Pastes nodes from the clipboard, offset from their original positions.
+        /// </summary>
+        private void PasteFromClipboard()
+        {
+            if (_clipboardNodeTitles == null || _clipboardNodeTitles.Count == 0) return;
+            var offset = new Point(40, 40);
+            foreach (var title in _clipboardNodeTitles)
+            {
+                var node = new NodeViewModels.FlowNodeViewModel(title + " (copy)", NodeViewModels.NodeCategory.Firmware)
+                {
+                    Location = _nextNodeLocation
+                };
+                AddNode(node);
+                _nextNodeLocation = new Point(_nextNodeLocation.X + offset.X, _nextNodeLocation.Y + offset.Y);
+            }
+            _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor", $"Pasted {_clipboardNodeTitles.Count} node(s)");
+        }
+
+        private List<string>? _clipboardNodeTitles;
 
         private void InitializeToolbox()
         {
@@ -279,28 +424,195 @@ namespace UotanStudio.ViewModels
         [RelayCommand]
         private void DeleteSelected()
         {
-            // 删除选中的节点和连接线由 NodifyEditor 内部管理
-            // 此命令可通过后续扩展实现更复杂的删除逻辑
+            // 删除当前选中的节点及其相关连接
+            if (SelectedNode != null)
+            {
+                RemoveNode(SelectedNode);
+                SelectedNode = null;
+                return;
+            }
+
+            // 兜底：删除所有 IsSelected 的节点
+            var toDelete = Nodes.Where(n => n.IsSelected).ToList();
+            foreach (var n in toDelete)
+            {
+                RemoveNode(n);
+            }
+            if (toDelete.Count > 0) SelectedNode = null;
         }
 
         /// <summary>
-        /// <para>执行节点工作流。</para>
-        /// Executes the node workflow.
+        /// <para>选中指定节点，同时清除其他节点的选中状态。</para>
+        /// Selects the specified node, clearing the selection state of others.
+        /// </summary>
+        /// <param name="node">
+        /// <para>要选中的节点；<c>null</c> 表示清空选择。</para>
+        /// The node to select; <c>null</c> clears the selection.
+        /// </param>
+        public void SelectNode(NodeViewModels.FlowNodeViewModel? node)
+        {
+            foreach (var n in Nodes) n.IsSelected = false;
+            if (node != null) node.IsSelected = true;
+            SelectedNode = node;
+        }
+
+        /// <summary>
+        /// <para>异步执行节点工作流。基于拓扑排序依次执行节点，并将上游输出注入下游输入。</para>
+        /// Asynchronously executes the node workflow. Nodes are executed in topological order; upstream outputs are injected into downstream inputs.
         /// </summary>
         [RelayCommand]
-        private void Run()
+        private async Task RunAsync()
         {
+            if (IsExecuting)
+            {
+                _log.Write(Abstractions.Logging.LogLevel.Warn, "NodeEditor", "Run requested while already executing — ignored");
+                return;
+            }
+
+            if (Nodes.Count == 0)
+            {
+                _log.Write(Abstractions.Logging.LogLevel.Warn, "NodeEditor", "Cannot run: no nodes on canvas");
+                return;
+            }
+
+            IsExecuting = true;
             ExecutionStatus = LanguageService.Instance.GetString("Node_Run");
+            ExecutionProgress = 0.0;
+            _runCts = new CancellationTokenSource();
+
+            try
+            {
+                _engine ??= new NodeExecutionEngine(_log);
+                _engine.ProgressChanged += OnExecutionProgress;
+                _engine.NodeStatusChanged += OnNodeStatusChanged;
+                _engine.ExecutionCompleted += OnExecutionCompleted;
+
+                var nodes = Nodes.ToList();
+                var connections = Connections
+                    .Where(c => c.Source != null && c.Target != null)
+                    .Select(c => new NodeConnection
+                    {
+                        SourceInstanceId = FindOwnerInstanceId(c.Source!) ?? string.Empty,
+                        TargetInstanceId = FindOwnerInstanceId(c.Target!) ?? string.Empty,
+                        SourceConnector = c.Source!.Title,
+                        TargetConnector = c.Target!.Title
+                    })
+                    .Where(c => !string.IsNullOrEmpty(c.SourceInstanceId) && !string.IsNullOrEmpty(c.TargetInstanceId))
+                    .ToList();
+
+                var result = await _engine.ExecuteAsync(nodes, connections, _runCts.Token).ConfigureAwait(false);
+
+                ExecutionStatus = result.Status switch
+                {
+                    Services.Execution.ExecutionStatus.Succeeded => "Workflow completed",
+                    Services.Execution.ExecutionStatus.PartiallySucceeded => $"Completed with {result.FailedNodes.Count} failures",
+                    Services.Execution.ExecutionStatus.Cancelled => "Workflow cancelled",
+                    Services.Execution.ExecutionStatus.Failed => result.ErrorMessage ?? "Workflow failed",
+                    _ => "Unknown"
+                };
+            }
+            catch (Exception ex)
+            {
+                _log.Write(Abstractions.Logging.LogLevel.Error, "NodeEditor", $"Run failed: {ex.Message}");
+                ExecutionStatus = $"Run failed: {ex.Message}";
+            }
+            finally
+            {
+                IsExecuting = false;
+                if (_engine != null)
+                {
+                    _engine.ProgressChanged -= OnExecutionProgress;
+                    _engine.NodeStatusChanged -= OnNodeStatusChanged;
+                    _engine.ExecutionCompleted -= OnExecutionCompleted;
+                }
+                _runCts?.Dispose();
+                _runCts = null;
+            }
         }
 
         /// <summary>
-        /// <para>停止节点工作流。</para>
-        /// Stops the node workflow.
+        /// <para>停止正在执行的节点工作流。</para>
+        /// Stops the currently executing node workflow.
         /// </summary>
         [RelayCommand]
         private void Stop()
         {
+            if (!IsExecuting) return;
+            _runCts?.Cancel();
+            _log.Write(Abstractions.Logging.LogLevel.Warn, "NodeEditor", "Stop requested");
+        }
+
+        /// <summary>
+        /// <para>清空画布上的所有节点和连接线。</para>
+        /// Clears all nodes and connections on the canvas.
+        /// </summary>
+        [RelayCommand]
+        public void Clear()
+        {
+            Connections.Clear();
+            Nodes.Clear();
+            SelectedNode = null;
+            ExecutionProgress = 0.0;
             ExecutionStatus = LanguageService.Instance.GetString("Node_StatusReady");
+        }
+
+        private void OnExecutionProgress(object? sender, double progress)
+        {
+            ExecutionProgress = progress;
+        }
+
+        private void OnNodeStatusChanged(object? sender, NodeStatusChangedEventArgs e)
+        {
+            // 节点状态变更由引擎触发；此处可更新节点视觉状态
+            // FlowNodeViewModel 尚未内置 Status 字段，后续可扩展
+        }
+
+        private void OnExecutionCompleted(object? sender, ExecutionCompletedEventArgs e)
+        {
+            _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor", $"Execution completed: {e.Result.Status}");
+        }
+
+        /// <summary>
+        /// <para>查找拥有指定连接器的节点实例 ID。若无匹配则返回 <c>null</c>。</para>
+        /// Finds the node instance ID that owns the specified connector. Returns <c>null</c> if no match.
+        /// </summary>
+        private string? FindOwnerInstanceId(NodeViewModels.NodeConnectorViewModel connector)
+        {
+            foreach (var node in Nodes)
+            {
+                if (node.Input.Contains(connector) || node.Output.Contains(connector))
+                {
+                    return node.InstanceId;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// <para>应用搜索过滤，更新 <see cref="VisibleToolboxCategories"/>。</para>
+        /// Applies the search filter, updating <see cref="VisibleToolboxCategories"/>.
+        /// </summary>
+        private void RefreshVisibleToolbox()
+        {
+            var keyword = (SearchText ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(keyword))
+            {
+                VisibleToolboxCategories = new ObservableCollection<NodeToolboxCategory>(ToolboxCategories);
+                return;
+            }
+
+            var filtered = new ObservableCollection<NodeToolboxCategory>();
+            foreach (var cat in ToolboxCategories)
+            {
+                var matchedItems = cat.Items
+                    .Where(i => i.Name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToList();
+                if (matchedItems.Count > 0)
+                {
+                    filtered.Add(new NodeToolboxCategory(cat.Name, cat.Category, new ObservableCollection<NodeToolboxItem>(matchedItems)));
+                }
+            }
+            VisibleToolboxCategories = filtered;
         }
 
         /// <summary>
@@ -322,6 +634,69 @@ namespace UotanStudio.ViewModels
             {
                 Connections.Remove(conn);
             }
+        }
+
+        /// <summary>
+        /// <para>从工作流快照重建画布：清空当前节点与连接，按 DTO 重建节点，再尝试匹配重建连接。</para>
+        /// Rebuilds the canvas from a workflow snapshot: clears current nodes/connections, rebuilds nodes from DTOs, then attempts to rebuild connections.
+        /// </summary>
+        /// <param name="snapshot">
+        /// <para>工作流快照。</para>
+        /// The workflow snapshot.
+        /// </param>
+        /// <returns>
+        /// <para>表示异步操作的任务。</para>
+        /// A task representing the async operation.
+        /// </returns>
+        public async Task LoadFromAsync(Services.WorkflowSnapshot snapshot)
+        {
+            ArgumentNullException.ThrowIfNull(snapshot);
+            Clear();
+
+            // 重建节点：按标题匹配已知类别的简易工厂
+            var created = new System.Collections.Generic.Dictionary<string, NodeViewModels.FlowNodeViewModel>(StringComparer.OrdinalIgnoreCase);
+            foreach (var dto in snapshot.Nodes)
+            {
+                if (!System.Enum.TryParse<NodeViewModels.NodeCategory>(dto.Category, true, out var category))
+                {
+                    category = NodeViewModels.NodeCategory.Firmware;
+                }
+                var node = new NodeViewModels.FlowNodeViewModel(dto.Title, category)
+                {
+                    Location = new Point(dto.X, dto.Y)
+                };
+                AddNode(node);
+                if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
+            }
+
+            // 重建连接：按连接器标题匹配源/目标节点上的端口（简易匹配，仅当标题唯一时成功）
+            foreach (var cdto in snapshot.Connections)
+            {
+                NodeViewModels.NodeConnectorViewModel? src = null, tgt = null;
+                foreach (var n in Nodes)
+                {
+                    foreach (var oc in n.Output) { if (oc.Title == cdto.SourceConnectorTitle) { src = oc; break; } }
+                    if (src != null) break;
+                }
+                foreach (var n in Nodes)
+                {
+                    foreach (var ic in n.Input) { if (ic.Title == cdto.TargetConnectorTitle) { tgt = ic; break; } }
+                    if (tgt != null) break;
+                }
+                if (src != null && tgt != null)
+                {
+                    CreateConnection(src, tgt);
+                }
+                else
+                {
+                    _log.Write(Abstractions.Logging.LogLevel.Warn, "NodeEditor",
+                        $"Could not rebuild connection: '{cdto.SourceConnectorTitle}' → '{cdto.TargetConnectorTitle}'");
+                }
+            }
+
+            await Task.CompletedTask.ConfigureAwait(false);
+            _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor",
+                $"Loaded {Nodes.Count} node(s), {Connections.Count} connection(s) from snapshot");
         }
     }
 

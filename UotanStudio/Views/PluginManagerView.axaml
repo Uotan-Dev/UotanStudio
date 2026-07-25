@@ -1,0 +1,115 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.ViewModels.Plugins"
+             xmlns:abs="using:UotanStudio.Abstractions.Plugin"
+             xmlns:absnodes="using:UotanStudio.Abstractions.Nodes"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.PluginManagerView"
+             x:DataType="vm:PluginManagerViewModel">
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- 顶部：标题 + 统计 + 刷新 -->
+        <Border Grid.Row="0" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="Plugins" FontWeight="SemiBold"
+                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12"
+                            HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding LoadedCount}" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="plugins" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="·" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding TotalNodes}" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="nodes" FontSize="11"
+                               Foreground="{DynamicResource SecondaryTextBrush}"
+                               VerticalAlignment="Center" />
+                    <Button Width="28" Height="28" Padding="0"
+                            Command="{Binding RefreshCommand}"
+                            ToolTip.Tip="Refresh">
+                        <avalonia:MaterialIcon Kind="Refresh" Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
+                <TextBlock Text="Built-in plugins are compiled in; external plugins are integrated via NuGet redistribution and AOT publish."
+                           FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                           VerticalAlignment="Center" Margin="12,0,0,0" />
+            </DockPanel>
+        </Border>
+
+        <!-- 中央：插件列表 + 节点定义 -->
+        <Grid Grid.Row="1" ColumnDefinitions="2*,3*">
+            <!-- 左侧插件列表 -->
+            <ListBox Grid.Column="0" ItemsSource="{Binding Plugins}"
+                     SelectedItem="{Binding SelectedPlugin}"
+                     Margin="0,0,4,0">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="abs:PluginInfo">
+                        <StackPanel Margin="0,2" Spacing="1">
+                            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
+                            <TextBlock Text="{Binding Id}" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding Version}" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" />
+                                <TextBlock Text="·" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" />
+                                <TextBlock Text="{Binding Author}" FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding Description}" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}" />
+                            <TextBlock Text="Loaded" FontSize="10" Foreground="Green"
+                                       IsVisible="{Binding IsLoaded}" />
+                            <TextBlock Text="{Binding LoadError}" FontSize="10" Foreground="OrangeRed"
+                                       IsVisible="{Binding !IsLoaded}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- 右侧：选中插件提供的节点定义 -->
+            <Border Grid.Column="1" Padding="8" Margin="4,0,0,0"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+                <Grid RowDefinitions="Auto,*">
+                    <TextBlock Grid.Row="0" Text="Node Definitions" FontWeight="SemiBold" Margin="0,0,0,8" />
+                    <ListBox Grid.Row="1" ItemsSource="{Binding SelectedPluginNodes}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="absnodes:INodeDefinition">
+                                <StackPanel Margin="0,2" Spacing="1">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" FontSize="13" />
+                                    <TextBlock Text="{Binding TypeId}" FontSize="11"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" />
+                                    <TextBlock Text="{Binding Description}" FontSize="11"
+                                               Foreground="{DynamicResource SecondaryTextBrush}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- 底部：启用/禁用 -->
+        <Border Grid.Row="2" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left">
+                <Button Padding="8,4" Content="Disable"
+                        IsEnabled="{Binding SelectedPlugin, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        Command="{Binding DisableSelectedCommand}" />
+                <Button Padding="8,4" Content="Enable"
+                        IsEnabled="{Binding SelectedPlugin, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        Command="{Binding EnableSelectedCommand}" />
+                <TextBlock Text="Note: enable/disable takes effect after restart." FontSize="11"
+                           Foreground="{DynamicResource SecondaryTextBrush}"
+                           VerticalAlignment="Center" Margin="12,0,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

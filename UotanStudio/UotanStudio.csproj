@@ -15,6 +15,11 @@
 
 
   <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Abstractions\UotanStudio.Abstractions.csproj" />
+    <ProjectReference Include="..\UotanStudio.Plugins.BuiltIn\UotanStudio.Plugins.BuiltIn.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.AvaloniaEdit" />
     <PackageReference Include="Avalonia.Controls.DataGrid" />
