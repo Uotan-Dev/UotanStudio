@@ -35,4 +35,8 @@
     <x:String x:Key="Dock_Output_Log">Build succeeded.</x:String>
     <x:String x:Key="Dock_AdbLog_Output">ADB Log Output</x:String>
 
+    <!-- Global log panel -->
+    <x:String x:Key="Log_Panel_Title">Global Log</x:String>
+    <x:String x:Key="Log_Clear">Clear</x:String>
+
 </ResourceDictionary>

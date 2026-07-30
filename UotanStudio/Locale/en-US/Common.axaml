@@ -4,6 +4,7 @@
     <!-- Tabs -->
     <x:String x:Key="Tab_Workspace">Workspace</x:String>
     <x:String x:Key="Tab_Node">Node</x:String>
+    <x:String x:Key="Tab_Log">Log</x:String>
     <x:String x:Key="Tab_Settings">Settings</x:String>
 
     <!-- ViewLocator -->

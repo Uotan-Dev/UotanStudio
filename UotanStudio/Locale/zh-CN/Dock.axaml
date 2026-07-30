@@ -35,4 +35,8 @@
     <x:String x:Key="Dock_Output_Log">Build succeeded.</x:String>
     <x:String x:Key="Dock_AdbLog_Output">ADB Log Output</x:String>
 
+    <!-- 全局日志面板 -->
+    <x:String x:Key="Log_Panel_Title">全局日志</x:String>
+    <x:String x:Key="Log_Clear">清空</x:String>
+
 </ResourceDictionary>

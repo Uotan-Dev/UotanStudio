@@ -1,15 +1,15 @@
-using System;
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
+using System;
+using System.Collections.ObjectModel;
 using UotanStudio.Abstractions.Logging;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels
 {
     /// <summary>
-    /// <para>输出视图模型，订阅 <see cref="LogService"/> 日志条目推送并维护可绑定集合，供 OutputView 显示。</para>
-    /// Output view model, subscribing to <see cref="LogService"/> log entry pushes and maintaining a bindable collection for the OutputView to display.
+    /// <para>输出视图模型，维护工作区特定日志集合，供 OutputView 显示。仅接收由工作区自身操作（打包/合成/分解等）通过 <see cref="Write"/> 推送的日志，不订阅全局 <see cref="LogService"/> 流；同时将每条日志转发到全局 <see cref="LogService"/>，使其出现在全局日志面板。</para>
+    /// Output view model, maintaining a workspace-specific log collection for the OutputView. Only receives logs pushed via <see cref="Write"/> by workspace operations (pack/synthesis/extract etc.); it does NOT subscribe to the global <see cref="LogService"/> stream. Each entry is also forwarded to the global <see cref="LogService"/> so it appears in the global log panel.
     /// </summary>
     internal partial class OutputViewModel : Tool
     {
@@ -69,55 +69,39 @@ namespace UotanStudio.ViewModels
         private const int MaxEntries = 2000;
 
         /// <summary>
-        /// <para>取消订阅委托。</para>
-        /// Unsubscribe delegate.
-        /// </summary>
-        private Action? _unsubscribe;
-
-        /// <summary>
-        /// <para>构造输出视图模型，订阅统一日志服务。</para>
-        /// Constructs the output view model, subscribing to the unified log service.
+        /// <para>构造输出视图模型。不再订阅全局日志流；仅接收由工作区操作通过 <see cref="Write"/> 显式推送的条目。</para>
+        /// Constructs the output view model. Does not subscribe to the global log stream; only receives entries explicitly pushed via <see cref="Write"/> by workspace operations.
         /// </summary>
         public OutputViewModel()
         {
-            _unsubscribe = LogService.Instance.Subscribe(OnLogEnqueued);
-            // 回填当前缓冲区中的历史条目
-            foreach (var e in LogService.Instance.Entries)
-            {
-                AppendEntry(e);
-            }
         }
 
         /// <summary>
-        /// <para>日志条目入队回调，追加到集合并裁剪超限条目。</para>
-        /// Log entry enqueue callback, appending to the collection and trimming over-limit entries.
+        /// <para>写入一条工作区特定日志：追加到本面板集合并裁剪超限条目，同时转发到全局 <see cref="LogService"/> 使其出现在全局日志面板。</para>
+        /// Writes a workspace-specific log entry: appends to this panel's collection (trimming over-limit entries) and forwards to the global <see cref="LogService"/> so it also appears in the global log panel.
         /// </summary>
-        /// <param name="sender">
-        /// <para>事件源。</para>
-        /// Event source.
-        /// </param>
-        /// <param name="entry">
-        /// <para>日志条目记录。</para>
-        /// Log entry record.
-        /// </param>
-        private void OnLogEnqueued(object? sender, LogEntry entry)
+        /// <param name="level"><para>日志级别。</para>Log level.</param>
+        /// <param name="source"><para>日志来源。</para>Log source.</param>
+        /// <param name="message"><para>日志文本。</para>Log text.</param>
+        public void Write(LogLevel level, string source, string message)
         {
-            AppendEntry(entry);
-            // 裁剪超限条目
+            AppendEntry(DateTime.Now, level, source, message);
             while (Entries.Count > MaxEntries && Entries.Count > 0)
             {
                 Entries.RemoveAt(0);
             }
+            // 转发到全局日志服务，使其出现在全局日志面板
+            LogService.Instance.Write(level, source, message);
         }
 
         /// <summary>
         /// <para>追加一条日志到集合。</para>
         /// Appends a log entry to the collection.
         /// </summary>
-        private void AppendEntry(LogEntry entry)
+        private void AppendEntry(DateTime timestamp, LogLevel level, string source, string message)
         {
-            var ts = entry.Timestamp.ToString("HH:mm:ss");
-            Entries.Add(new LogEntryViewModel(ts, entry.Level, entry.Source, entry.Message));
+            var ts = timestamp.ToString("HH:mm:ss");
+            Entries.Add(new LogEntryViewModel(ts, level, source, message));
         }
 
         /// <summary>
@@ -127,15 +111,6 @@ namespace UotanStudio.ViewModels
         public void Clear()
         {
             Entries.Clear();
-        }
-
-        /// <summary>
-        /// <para>析构时取消订阅，防止内存泄漏。</para>
-        /// Unsubscribes on finalization to prevent memory leaks.
-        /// </summary>
-        ~OutputViewModel()
-        {
-            try { _unsubscribe?.Invoke(); } catch { /* 忽略析构异常 */ }
         }
     }
 }

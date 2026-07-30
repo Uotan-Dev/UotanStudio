@@ -39,9 +39,9 @@
     <!-- 工具菜单 -->
     <x:String x:Key="Menu_FlashTools">烧录工具</x:String>
     <x:String x:Key="Menu_FirmwareTools">固件工具</x:String>
+    <x:String x:Key="Menu_DeviceManager">设备管理器</x:String>
     <x:String x:Key="Menu_AdbShell">ADB 终端</x:String>
     <x:String x:Key="Menu_FastbootConsole">Fastboot 控制台</x:String>
-    <x:String x:Key="Menu_LanguageManager">语言管理器</x:String>
     <x:String x:Key="Menu_PluginManager">插件管理器</x:String>
 
     <!-- 帮助菜单 -->

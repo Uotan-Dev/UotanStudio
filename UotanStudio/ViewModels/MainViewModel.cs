@@ -8,6 +8,7 @@ public partial class MainViewModel : ViewModelBase
     public MenuViewModel MenuVM { get; } = new();
     public WorkspaceViewModel WorkspaceVM { get; } = new();
     public NodeEditorViewModel NodeEditorVM { get; } = new();
+    public LogViewModel LogVM { get; } = new();
     public DeviceManagerViewModel DeviceManagerVM { get; } = new();
     public PluginManagerViewModel PluginManagerVM { get; } = new();
     public SettingsViewModel SettingsVM { get; } = new();

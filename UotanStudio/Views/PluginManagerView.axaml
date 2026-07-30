@@ -9,6 +9,11 @@
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="UotanStudio.Views.PluginManagerView"
              x:DataType="vm:PluginManagerViewModel">
+    <UserControl.Resources>
+        <!-- 深色模式下可读的状态色（浅色模式下亦足够对比） -->
+        <SolidColorBrush x:Key="PluginLoadedBrush" Color="#3fb950" />
+        <SolidColorBrush x:Key="PluginLoadErrorBrush" Color="#f87171" />
+    </UserControl.Resources>
     <Grid RowDefinitions="Auto,*,Auto">
         <!-- 顶部：标题 + 统计 + 刷新 -->
         <Border Grid.Row="0" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
@@ -66,9 +71,11 @@
                             </StackPanel>
                             <TextBlock Text="{Binding Description}" FontSize="11"
                                        Foreground="{DynamicResource SecondaryTextBrush}" />
-                            <TextBlock Text="Loaded" FontSize="10" Foreground="Green"
+                            <TextBlock Text="Loaded" FontSize="10"
+                                       Foreground="{DynamicResource PluginLoadedBrush}"
                                        IsVisible="{Binding IsLoaded}" />
-                            <TextBlock Text="{Binding LoadError}" FontSize="10" Foreground="OrangeRed"
+                            <TextBlock Text="{Binding LoadError}" FontSize="10"
+                                       Foreground="{DynamicResource PluginLoadErrorBrush}"
                                        IsVisible="{Binding !IsLoaded}" />
                         </StackPanel>
                     </DataTemplate>

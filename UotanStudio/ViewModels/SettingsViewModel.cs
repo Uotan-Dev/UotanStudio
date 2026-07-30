@@ -116,6 +116,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref _selectedThemeMode, value))
             {
+                // 通知三个 RadioButton 绑定属性同步更新，避免快速来回点击时 UI 选中态与 VM 脱节导致主题切换丢失
+                OnPropertyChanged(nameof(IsLightTheme));
+                OnPropertyChanged(nameof(IsDarkTheme));
+                OnPropertyChanged(nameof(IsSystemTheme));
                 WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(value));
                 DebouncedSaveSettings();
             }

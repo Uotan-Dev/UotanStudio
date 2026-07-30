@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="UotanStudio.Pages.LogView"
+             x:DataType="vm:LogViewModel">
+  <Grid RowDefinitions="Auto,*">
+    <!-- 顶栏：标题与操作按钮 -->
+    <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Log_Panel_Title}"
+                   FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+        <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
+                Padding="6,2" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBlock Text="{DynamicResource Log_Clear}" FontSize="11" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </DockPanel>
+    </Border>
+    <!-- 日志列表 -->
+    <ScrollViewer Grid.Row="1" Name="LogScroll"
+                  HorizontalScrollBarVisibility="Auto"
+                  VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Entries}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Vertical" Spacing="1" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate DataType="vm:LogViewModel+LogEntryViewModel">
+            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
+              <TextBlock Text="{Binding Timestamp}" FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         FontFamily="Consolas,monospace" />
+              <TextBlock Text="{Binding Level}" FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         FontFamily="Consolas,monospace" Width="56" />
+              <TextBlock Text="{Binding Source}" FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextBrush}"
+                         FontFamily="Consolas,monospace" Width="140" />
+              <TextBlock Text="{Binding Message}" FontSize="12"
+                         TextWrapping="Wrap"
+                         FontFamily="Consolas,monospace" />
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

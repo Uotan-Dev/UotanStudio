@@ -4,6 +4,7 @@
     <!-- 选项卡 -->
     <x:String x:Key="Tab_Workspace">工作区</x:String>
     <x:String x:Key="Tab_Node">节点</x:String>
+    <x:String x:Key="Tab_Log">日志</x:String>
     <x:String x:Key="Tab_Settings">设置</x:String>
 
     <!-- 视图定位器 -->

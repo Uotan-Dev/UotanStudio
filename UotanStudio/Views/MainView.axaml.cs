@@ -14,6 +14,9 @@ public partial class MainView : UserControl
         MainTabs.SelectedIndex = 3;
 
         WeakReferenceMessenger.Default.Register<NavigateToTabMessage>(this, OnNavigateToTab);
+        MainTabs.SelectionChanged += OnSelectionChanged;
+        // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex=3 对应）
+        SendActiveTabChanged(MainTabs.SelectedIndex);
     }
 
     /// <summary>
@@ -30,8 +33,9 @@ public partial class MainView : UserControl
             {
                 NavigationTarget.Workspace => 3,
                 NavigationTarget.NodeEditor => 4,
-                NavigationTarget.Settings => 5,
-                // Device 与 Plugin 已移至顶栏对话框入口，不再对应底栏 Tab
+                NavigationTarget.Log => 5,
+                NavigationTarget.Settings => 6,
+                // Device 与 Plugin 已移至顶栏工具菜单对话框入口，不再对应底栏 Tab
                 NavigationTarget.DeviceManager or NavigationTarget.PluginManager => MainTabs.SelectedIndex,
                 _ => MainTabs.SelectedIndex
             };
@@ -40,13 +44,43 @@ public partial class MainView : UserControl
     }
 
     /// <summary>
-    /// <para>视图从可视化树分离时取消消息订阅，防止内存泄漏。</para>
-    /// Unregisters message subscriptions when the view detaches from the visual tree.
+    /// <para>TabbedPage 切换事件：将新激活的 SelectedIndex 映射为 <see cref="ActiveTab"/> 并广播，使菜单命令据此刻画可用性。</para>
+    /// TabbedPage switch event: maps the newly active SelectedIndex to <see cref="ActiveTab"/> and broadcasts it so menu commands can re-evaluate availability.
+    /// </summary>
+    /// <param name="sender"><para>事件源。</para>Event source.</param>
+    /// <param name="e"><para>切换事件参数。</para>The selection changed args.</param>
+    private void OnSelectionChanged(object? sender, PageSelectionChangedEventArgs e)
+    {
+        SendActiveTabChanged(MainTabs.SelectedIndex);
+    }
+
+    /// <summary>
+    /// <para>将 TabbedPage 的 SelectedIndex 映射为 <see cref="ActiveTab"/> 并发送 <see cref="ActiveTabChangedMessage"/>。</para>
+    /// Maps the TabbedPage's SelectedIndex to <see cref="ActiveTab"/> and sends an <see cref="ActiveTabChangedMessage"/>.
+    /// </summary>
+    /// <param name="selectedIndex"><para>当前激活的底栏 Tab 索引。</para>The currently active bottom tab index.</param>
+    private static void SendActiveTabChanged(int selectedIndex)
+    {
+        var tab = selectedIndex switch
+        {
+            3 => ActiveTab.Workspace,
+            4 => ActiveTab.NodeEditor,
+            5 => ActiveTab.Log,
+            6 => ActiveTab.Settings,
+            _ => ActiveTab.Workspace
+        };
+        WeakReferenceMessenger.Default.Send(new ActiveTabChangedMessage(tab));
+    }
+
+    /// <summary>
+    /// <para>视图从可视化树分离时取消消息订阅与事件挂载，防止内存泄漏。</para>
+    /// Unregisters message subscriptions and event handlers when the view detaches from the visual tree.
     /// </summary>
     /// <param name="e"><para>分离事件参数。</para>The detach event args.</param>
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         WeakReferenceMessenger.Default.Unregister<NavigateToTabMessage>(this);
+        MainTabs.SelectionChanged -= OnSelectionChanged;
         base.OnDetachedFromVisualTree(e);
     }
 }

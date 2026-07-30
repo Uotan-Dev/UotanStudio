@@ -46,6 +46,15 @@
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
+					<avalonia:MaterialIcon Kind="ScrollTextOutline" Width="18" Margin="0 -10 0 0" />
+				</ContentPage.Icon>
+				<ContentPage.Header>
+					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Log}" FontSize="13" FontWeight="SemiBold" />
+				</ContentPage.Header>
+				<views:LogView DataContext="{Binding LogVM}" />
+			</ContentPage>
+			<ContentPage>
+				<ContentPage.Icon>
 					<avalonia:MaterialIcon Kind="CogOutline" Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>

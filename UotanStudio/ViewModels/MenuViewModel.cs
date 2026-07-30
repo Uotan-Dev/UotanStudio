@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using UotanStudio.Services;
@@ -20,12 +21,46 @@ public partial class MenuViewModel : ViewModelBase
     private static TopLevel? TopLevel => TopLevelExtensions.GetTopLevel();
 
     /// <summary>
-    /// <para>创建菜单视图模型。</para>
-    /// Creates the menu view model.
+    /// <para>当前激活的底栏主面板；影响视图菜单中节点编辑器相关命令（小地图/缩放）的可用性。</para>
+    /// Currently active bottom main panel; gates availability of node-editor-related View menu commands (minimap/zoom).
+    /// </summary>
+    /// <remarks>
+    /// <para>由 <c>MainView</c> 通过 <see cref="ActiveTabChangedMessage"/> 在面板切换时更新；初始为 <see cref="ActiveTab.Workspace"/>（与 MainView 默认 SelectedIndex=3 对应）。</para>
+    /// Updated by <c>MainView</c> via <see cref="ActiveTabChangedMessage"/> on tab switch; defaults to <see cref="ActiveTab.Workspace"/> (matching MainView default SelectedIndex=3).
+    /// </remarks>
+    private ActiveTab _currentTab = ActiveTab.Workspace;
+
+    /// <summary>
+    /// <para>创建菜单视图模型，订阅激活面板切换消息以维护 <see cref="_currentTab"/>。</para>
+    /// Creates the menu view model, subscribing to active-tab-changed messages to maintain <see cref="_currentTab"/>.
     /// </summary>
     public MenuViewModel()
     {
+        WeakReferenceMessenger.Default.Register<ActiveTabChangedMessage>(this, OnActiveTabChanged);
     }
+
+    /// <summary>
+    /// <para>响应激活面板切换：更新 <see cref="_currentTab"/> 并通知节点编辑器相关命令重新计算可用性。</para>
+    /// Responds to active-tab changes: updates <see cref="_currentTab"/> and notifies node-editor-related commands to re-evaluate their availability.
+    /// </summary>
+    /// <param name="recipient"><para>消息接收者。</para>The message recipient.</param>
+    /// <param name="message"><para>包含新激活面板的消息。</para>The message carrying the newly active tab.</param>
+    private void OnActiveTabChanged(object recipient, ActiveTabChangedMessage message)
+    {
+        if (_currentTab == message.Tab) return;
+        _currentTab = message.Tab;
+        // 通知节点编辑器相关命令重新评估 CanExecute
+        ToggleMinimapCommand.NotifyCanExecuteChanged();
+        ZoomInCommand.NotifyCanExecuteChanged();
+        ZoomOutCommand.NotifyCanExecuteChanged();
+        ResetZoomCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// <para>当前是否在节点编辑器面板；仅供 <c>CanExecute</c> 私有方法使用。</para>
+    /// Whether the Node Editor panel is currently active; used solely by <c>CanExecute</c> helpers.
+    /// </summary>
+    private bool IsNodeEditorActive => _currentTab == ActiveTab.NodeEditor;
 
     // ===== 文件 / File =====
 
@@ -238,32 +273,39 @@ public partial class MenuViewModel : ViewModelBase
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
     }
 
-    /// <summary>
-    /// <para>切换节点编辑器的小地图显示状态。</para>
-    /// Toggles the minimap display state of the node editor.
-    /// </summary>
+    /// <summary><para>切换到日志面板选项卡。</para>Switch to the global Log panel tab.</summary>
     [RelayCommand]
+    private void GoToLog()
+    {
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Log));
+    }
+
+    /// <summary>
+    /// <para>切换节点编辑器的小地图显示状态。仅在节点编辑器面板激活时可用。</para>
+    /// Toggles the minimap display state of the node editor. Only available when the Node Editor panel is active.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ToggleMinimap()
     {
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ToggleMinimap));
     }
 
-    /// <summary><para>放大节点画布。</para>Zoom in the node canvas.</summary>
-    [RelayCommand]
+    /// <summary><para>放大节点画布。仅在节点编辑器面板激活时可用。</para>Zoom in the node canvas. Only available when the Node Editor panel is active.</summary>
+    [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ZoomIn()
     {
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ZoomIn));
     }
 
-    /// <summary><para>缩小节点画布。</para>Zoom out the node canvas.</summary>
-    [RelayCommand]
+    /// <summary><para>缩小节点画布。仅在节点编辑器面板激活时可用。</para>Zoom out the node canvas. Only available when the Node Editor panel is active.</summary>
+    [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ZoomOut()
     {
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ZoomOut));
     }
 
-    /// <summary><para>重置节点画布缩放。</para>Reset the node canvas zoom.</summary>
-    [RelayCommand]
+    /// <summary><para>重置节点画布缩放。仅在节点编辑器面板激活时可用。</para>Reset the node canvas zoom. Only available when the Node Editor panel is active.</summary>
+    [RelayCommand(CanExecute = nameof(IsNodeEditorActive))]
     private void ResetZoom()
     {
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ResetZoom));
@@ -271,52 +313,90 @@ public partial class MenuViewModel : ViewModelBase
 
     // ===== 工具 / Tools =====
 
-    /// <summary><para>打开 ADB 终端，弹出设备管理器对话框。</para>Open the ADB shell console, popping up the Device Manager dialog.</summary>
+    /// <summary>
+    /// <para>当前已打开的设备管理器对话框引用，同一时间仅允许一个实例；已关闭时为 null。</para>
+    /// Currently open Device Manager dialog reference; only one instance is allowed at a time; null when closed.
+    /// </summary>
+    private Window? _openDeviceManagerDialog;
+
+    /// <summary>
+    /// <para>当前已打开的插件管理器对话框引用，同一时间仅允许一个实例；已关闭时为 null。</para>
+    /// Currently open Plugin Manager dialog reference; only one instance is allowed at a time; null when closed.
+    /// </summary>
+    private Window? _openPluginManagerDialog;
+
+    /// <summary><para>打开设备管理器页面；若已存在则将焦点转移到已打开的页面而非新开。</para>Opens the Device Manager page; if one is already open, transfers focus to it instead of opening a new one.</summary>
+    [RelayCommand]
+    private void DeviceManager()
+    {
+        OpenSingletonDialog(() => _openDeviceManagerDialog, d => _openDeviceManagerDialog = d, () => new DeviceManagerDialog());
+        Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Info, "Menu", "Device Manager dialog requested");
+    }
+
+    /// <summary><para>打开 ADB 终端的设备管理器页面；若已存在则将焦点转移过去而非新开。</para>Opens the Device Manager page for the ADB shell console; if one is already open, transfers focus to it instead of opening a new one.</summary>
     [RelayCommand]
     private void AdbShell()
     {
-        OpenDialog<DeviceManagerDialog>();
+        OpenSingletonDialog(() => _openDeviceManagerDialog, d => _openDeviceManagerDialog = d, () => new DeviceManagerDialog());
         Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Info, "Menu", "ADB shell requested via Device Manager dialog");
     }
 
-    /// <summary><para>打开 Fastboot 控制台，弹出设备管理器对话框。</para>Open the Fastboot console, popping up the Device Manager dialog.</summary>
+    /// <summary><para>打开 Fastboot 控制台的设备管理器页面；若已存在则将焦点转移过去而非新开。</para>Opens the Device Manager page for the Fastboot console; if one is already open, transfers focus to it instead of opening a new one.</summary>
     [RelayCommand]
     private void FastbootConsole()
     {
-        OpenDialog<DeviceManagerDialog>();
+        OpenSingletonDialog(() => _openDeviceManagerDialog, d => _openDeviceManagerDialog = d, () => new DeviceManagerDialog());
         Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Info, "Menu", "Fastboot console requested via Device Manager dialog");
     }
 
-    /// <summary><para>打开语言管理器，切换到设置选项卡。</para>Open the language manager, switching to the Settings tab.</summary>
-    [RelayCommand]
-    private void LanguageManager()
-    {
-        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
-    }
-
-    /// <summary><para>打开插件管理器，弹出插件管理器对话框。</para>Open the plugin manager, popping up the Plugin Manager dialog.</summary>
+    /// <summary><para>打开插件管理器页面；若已存在则将焦点转移到已打开的页面而非新开。</para>Opens the Plugin Manager page; if one is already open, transfers focus to it instead of opening a new one.</summary>
     [RelayCommand]
     private void PluginManager()
     {
-        OpenDialog<PluginManagerDialog>();
+        OpenSingletonDialog(() => _openPluginManagerDialog, d => _openPluginManagerDialog = d, () => new PluginManagerDialog());
     }
 
     /// <summary>
-    /// <para>以主窗口为 owner 弹出指定类型的独立对话框窗口。</para>
-    /// Pops up a standalone dialog window of the specified type, owned by the main window.
+    /// <para>以主窗口为 owner 打开指定类型的单例管理器对话框：若同类型已打开则转移焦点，否则新建并记录引用；对话框关闭时清空引用以便再次打开。</para>
+    /// Opens a singleton manager dialog owned by the main window: if the same type is already open, transfers focus to it; otherwise creates a new instance and records the reference. The reference is cleared on close so it can be reopened later.
     /// </summary>
-    /// <typeparam name="TWindow">
-    /// <para>对话框窗口类型，必须具有公共无参构造。</para>
-    /// Dialog window type, must have a public parameterless constructor.
-    /// </typeparam>
-    private static void OpenDialog<TWindow>() where TWindow : Window, new()
+    /// <param name="getSlot"><para>读取该类型当前已打开对话框引用的委托。</para>Delegate reading the currently open dialog reference of this type.</param>
+    /// <param name="setSlot"><para>写入该类型当前已打开对话框引用的委托。</para>Delegate writing the currently open dialog reference of this type.</param>
+    /// <param name="factory"><para>构造新对话框实例的工厂。</para>Factory producing a fresh dialog instance.</param>
+    private void OpenSingletonDialog(Func<Window?> getSlot, Action<Window?> setSlot, Func<Window> factory)
     {
-        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-            && desktop.MainWindow is { } owner)
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
+            || desktop.MainWindow is not { } owner)
         {
-            var dialog = new TWindow();
-            dialog.Show(owner);
+            return;
         }
+
+        // 同类型已打开：转移焦点而非新开
+        if (getSlot() is { } existing)
+        {
+            if (!existing.IsActive)
+            {
+                existing.Activate();
+            }
+            if (existing.WindowState == WindowState.Minimized)
+            {
+                existing.WindowState = WindowState.Normal;
+            }
+            existing.Focus();
+            return;
+        }
+
+        // 新建并记录引用；关闭时清空以便之后再次打开
+        var dialog = factory();
+        dialog.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(getSlot(), dialog))
+            {
+                setSlot(null);
+            }
+        };
+        setSlot(dialog);
+        dialog.Show(owner);
     }
 
     // ===== 帮助 / Help =====
@@ -436,6 +516,8 @@ public enum NavigationTarget
     Workspace,
     /// <summary><para>节点编辑器。</para>Node editor.</summary>
     NodeEditor,
+    /// <summary><para>全局日志面板。</para>Global log panel.</summary>
+    Log,
     /// <summary><para>设备管理器。</para>Device manager.</summary>
     DeviceManager,
     /// <summary><para>插件管理器。</para>Plugin manager.</summary>
@@ -466,6 +548,39 @@ public class NavigateToTabMessage
 /// Exit-application message, sent by the top menu to the App.
 /// </summary>
 public class ExitApplicationMessage;
+
+/// <summary>
+/// <para>当前激活的底栏主面板枚举，由 MainView 在 TabbedPage 切换时发送。</para>
+/// Currently active bottom main panel enum, sent by MainView when the TabbedPage switches.
+/// </summary>
+public enum ActiveTab
+{
+    /// <summary><para>工作区面板。</para>Workspace panel.</summary>
+    Workspace,
+    /// <summary><para>节点编辑器面板。</para>Node editor panel.</summary>
+    NodeEditor,
+    /// <summary><para>全局日志面板。</para>Global log panel.</summary>
+    Log,
+    /// <summary><para>设置面板。</para>Settings panel.</summary>
+    Settings
+}
+
+/// <summary>
+/// <para>激活面板切换消息，由 MainView 发送给订阅者（如 MenuViewModel）以告知当前激活的底栏主面板。</para>
+/// Active-tab-changed message, sent by MainView to subscribers (e.g. MenuViewModel) to inform them of the currently active bottom main panel.
+/// </summary>
+public class ActiveTabChangedMessage
+{
+    /// <summary><para>获取新激活的面板。</para>Gets the newly active tab.</summary>
+    public ActiveTab Tab { get; }
+
+    /// <summary>
+    /// <para>创建激活面板切换消息。</para>
+    /// Creates an active-tab-changed message.
+    /// </summary>
+    /// <param name="tab"><para>新激活的面板。</para>The newly active tab.</param>
+    public ActiveTabChangedMessage(ActiveTab tab) => Tab = tab;
+}
 
 /// <summary>
 /// <para>节点编辑器动作枚举，由顶部视图菜单触发。</para>
