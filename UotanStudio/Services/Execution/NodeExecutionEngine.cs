@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using UotanStudio.Abstractions.Devices;
 using UotanStudio.Abstractions.Logging;
 using UotanStudio.Abstractions.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -17,7 +16,6 @@ namespace UotanStudio.Services.Execution
     public sealed class NodeExecutionEngine
     {
         private readonly IUnifiedLog _log;
-        private readonly IDeviceManager _devices;
         private CancellationTokenSource? _cts;
         private volatile bool _isRunning;
 
@@ -29,14 +27,9 @@ namespace UotanStudio.Services.Execution
         /// <para>统一日志服务。</para>
         /// Unified log service.
         /// </param>
-        /// <param name="devices">
-        /// <para>设备管理器，可为 <c>null</c>（纯数据流场景）。</para>
-        /// Device manager, may be <c>null</c> for pure data-flow scenarios.
-        /// </param>
-        public NodeExecutionEngine(IUnifiedLog log, IDeviceManager? devices = null)
+        public NodeExecutionEngine(IUnifiedLog log)
         {
             _log = log ?? throw new ArgumentNullException(nameof(log));
-            _devices = devices ?? new NullDeviceManager();
         }
 
         /// <summary>
@@ -389,20 +382,17 @@ namespace UotanStudio.Services.Execution
     internal sealed class ExecutionContextImpl : INodeExecutionContext
     {
         private readonly IUnifiedLog _log;
-        private readonly IDeviceManager _devices;
         private readonly CancellationToken _token;
         private readonly Action<double> _progress;
 
-        public ExecutionContextImpl(IUnifiedLog log, IDeviceManager devices, CancellationToken token, Action<double> progress)
+        public ExecutionContextImpl(IUnifiedLog log, CancellationToken token, Action<double> progress)
         {
             _log = log;
-            _devices = devices;
             _token = token;
             _progress = progress;
         }
 
         public IUnifiedLog Log => _log;
-        public IDeviceManager Devices => _devices;
         public CancellationToken CancellationToken => _token;
 
         public void ReportProgress(double progress)
@@ -411,41 +401,5 @@ namespace UotanStudio.Services.Execution
             else if (progress > 1) progress = 1;
             _progress?.Invoke(progress);
         }
-    }
-
-    /// <summary>
-    /// <para>空设备管理器实现，供纯数据流场景使用。</para>
-    /// Null device manager implementation, for pure data-flow scenarios.
-    /// </summary>
-    internal sealed class NullDeviceManager : IDeviceManager
-    {
-        public IReadOnlyList<DeviceInfo> Devices => Array.Empty<DeviceInfo>();
-
-        public event DeviceListChangedEventHandler? DevicesChanged
-        {
-            add { }
-            remove { }
-        }
-
-        public Task EnumerateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        public Task<DeviceInfo?> ConnectAsync(string serial, DeviceProtocol protocol, CancellationToken cancellationToken = default)
-            => Task.FromResult<DeviceInfo?>(null);
-
-        public Task DisconnectAsync(string serial, CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        public Task<DeviceCommandResult> ExecuteAsync(string serial, string command, CancellationToken cancellationToken = default)
-            => Task.FromResult(DeviceCommandResult.Failed("No device manager configured"));
-
-        public Task<DeviceCommandResult> FlashPartitionAsync(string serial, string partition, string imagePath, CancellationToken cancellationToken = default)
-            => Task.FromResult(DeviceCommandResult.Failed("No device manager configured"));
-
-        public Task<DeviceCommandResult> ErasePartitionAsync(string serial, string partition, CancellationToken cancellationToken = default)
-            => Task.FromResult(DeviceCommandResult.Failed("No device manager configured"));
-
-        public Task<DeviceCommandResult> RebootAsync(string serial, RebootMode mode, CancellationToken cancellationToken = default)
-            => Task.FromResult(DeviceCommandResult.Failed("No device manager configured"));
-
-        public DeviceCapabilities? GetCapabilities(string serial) => null;
     }
 }

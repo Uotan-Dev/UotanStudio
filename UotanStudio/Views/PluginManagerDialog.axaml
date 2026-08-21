@@ -7,7 +7,7 @@
         CanResize="True"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="True"
-        SystemDecorations="Full"
+        WindowDecorations="Full"
         x:Class="UotanStudio.Views.PluginManagerDialog"
         x:DataType="vm:PluginManagerViewModel">
     <views:PluginManagerView DataContext="{Binding}" />

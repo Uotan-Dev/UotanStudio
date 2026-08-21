@@ -12,8 +12,6 @@ sealed class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // Enable managed windows for docking
-        DockSettings.UseManagedWindows = true;
         BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
     }
@@ -23,6 +21,10 @@ sealed class Program
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
-            .LogToTrace()
-            .UseManagedWindows();
+            .WithDockSettings(new DockSettingsOptions
+            {
+                CommandBarMergingEnabled = true,
+                CommandBarMergingScope = DockCommandBarMergingScope.ActiveDocument
+            })
+            .LogToTrace();
 }

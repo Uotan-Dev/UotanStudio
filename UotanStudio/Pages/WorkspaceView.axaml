@@ -11,6 +11,6 @@
 
   <dock:DockControl x:Name="DockControl"
                      Layout="{Binding Layout}"
-                     EnableManagedWindowLayer="True"
+                     IsDockingEnabled="True"
                      AutoCreateDataTemplates="True" />
 </UserControl>

@@ -44,6 +44,14 @@
     <PackageReference Include="Semi.Avalonia.DataGrid" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
+    <!-- Device communication -->
+    <PackageReference Include="FirmwareKit.Comm" />
+    <PackageReference Include="FirmwareKit.Comm.Adb" />
+    <PackageReference Include="FirmwareKit.Comm.Edl" />
+    <PackageReference Include="FirmwareKit.Comm.Fastboot" />
+    <PackageReference Include="FirmwareKit.Comm.Fex" />
+    <PackageReference Include="System.IO.Ports" />
+    <PackageReference Include="Zeroconf" />
   </ItemGroup>
 
 </Project>

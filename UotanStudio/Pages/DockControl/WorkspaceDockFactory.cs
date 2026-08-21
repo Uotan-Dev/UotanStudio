@@ -13,12 +13,6 @@ namespace UotanStudio.Pages.DockControl
 {
     public class WorkspaceDockFactory : Factory
     {
-        /// <summary>
-        /// 关联的主 DockControl，用于共享 DockManagerOptions 并在浮动窗口拖拽时参与命中测试。
-        /// Set by WorkspaceView after the DockControl is loaded; null before that point.
-        /// </summary>
-        public Dock.Avalonia.Controls.DockControl? DockControl { get; set; }
-
         public override IRootDock CreateLayout()
         {
             var svc = LanguageService.Instance;
@@ -129,18 +123,36 @@ namespace UotanStudio.Pages.DockControl
                 ["AdbLog"] = () => LanguageService.Instance.GetString("Dock_AdbLog_Output")
             };
 
+            // 创建启用 docking 的 HostWindow
             HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
             {
-                [nameof(IDockWindow)] = () => new HostWindow(DockControl?.DockManagerOptions),
-                ["ManagedHostWindow"] = () => new ManagedHostWindow(DockControl?.DockManagerOptions)
+                [nameof(IDockWindow)] = () => CreateHostWindow(),
+                ["ManagedHostWindow"] = () => CreateManagedHostWindow()
             };
 
-            DefaultHostWindowLocator = () => new HostWindow(DockControl?.DockManagerOptions);
+            DefaultHostWindowLocator = () => CreateHostWindow();
 
             base.InitLayout(layout);
         }
 
-        public override void CloseDockable(IDockable dockable)
+        private static HostWindow CreateHostWindow()
+        {
+            var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
+            var hwnd = new HostWindow(options);
+            // 启用操作系统外框（标题栏、边框、最小化/最大化/关闭按钮）
+            hwnd.WindowDecorations = Avalonia.Controls.WindowDecorations.Full;
+            hwnd.ShowInTaskbar = true;
+            hwnd.CanResize = true;
+            return hwnd;
+        }
+
+        private static ManagedHostWindow CreateManagedHostWindow()
+        {
+            var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
+            return new ManagedHostWindow(options);
+        }
+
+        public override void CloseDockable(IDockable? dockable)
         {
             if (dockable == null)
             {

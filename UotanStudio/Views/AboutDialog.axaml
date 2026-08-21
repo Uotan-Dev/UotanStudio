@@ -6,7 +6,7 @@
         CanResize="False"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
-        SystemDecorations="Full"
+        WindowDecorations="Full"
         x:Class="UotanStudio.Views.AboutDialog">
     <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,*,Auto">
         <!-- Logo -->

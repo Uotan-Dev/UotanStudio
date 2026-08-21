@@ -138,13 +138,25 @@ namespace UotanStudio.Pages.DockControl
 
             HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
             {
-                [nameof(IDockWindow)] = () => new HostWindow(),
-                ["ManagedHostWindow"] = () => new ManagedHostWindow()
+                [nameof(IDockWindow)] = () => CreateHostWindow(),
+                ["ManagedHostWindow"] = () => CreateManagedHostWindow()
             };
 
-            DefaultHostWindowLocator = () => new HostWindow();
+            DefaultHostWindowLocator = () => CreateHostWindow();
 
             base.InitLayout(layout);
+        }
+
+        private static HostWindow CreateHostWindow()
+        {
+            var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
+            return new HostWindow(options);
+        }
+
+        private static ManagedHostWindow CreateManagedHostWindow()
+        {
+            var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
+            return new ManagedHostWindow(options);
         }
 
         /// <summary>
@@ -155,7 +167,7 @@ namespace UotanStudio.Pages.DockControl
         /// <para>要关闭的可停靠面板。</para>
         /// The dockable to close.
         /// </param>
-        public override void CloseDockable(IDockable dockable)
+        public override void CloseDockable(IDockable? dockable)
         {
             if (dockable == null || !dockable.CanClose)
             {

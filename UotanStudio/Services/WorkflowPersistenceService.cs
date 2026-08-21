@@ -10,45 +10,31 @@ using UotanStudio.ViewModels.NodeViewModels;
 namespace UotanStudio.Services
 {
     /// <summary>
+    /// <para>工作流快照 JSON 序列化上下文（AOT 源生成）。</para>
+    /// Workflow snapshot JSON serialization context (AOT source-generated).
+    /// </summary>
+    [JsonSerializable(typeof(WorkflowSnapshot))]
+    [JsonSerializable(typeof(List<NodeDto>))]
+    [JsonSerializable(typeof(List<ConnectionDto>))]
+    [JsonSourceGenerationOptions(
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
+    internal partial class WorkflowJsonContext : JsonSerializerContext;
+
+    /// <summary>
     /// <para>节点工作流持久化服务，将节点画布序列化/反序列化到 <c>.uotan</c> 工程文件。</para>
     /// Node workflow persistence service, serializing/deserializing the node canvas to a <c>.uotan</c> project file.
     /// </summary>
     /// <remarks>
-    /// <para>AOT 友好：使用 <see cref="JsonSerializerContext"/> 源生成的 <c>JsonSerializer</c>，零反射。</para>
-    /// AOT-friendly: uses <see cref="JsonSerializerContext"/> source-generated <c>JsonSerializer</c>, no reflection.
+    /// <para>AOT 友好：使用 <see cref="WorkflowJsonContext"/> 源生成 JSON，零反射。</para>
+    /// AOT-friendly: uses <see cref="WorkflowJsonContext"/> source-generated JSON, no reflection.
     /// </remarks>
     public static class WorkflowPersistenceService
     {
-        private static readonly JsonSerializerOptions Options = new()
-        {
-            WriteIndented = true,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-        };
-
         /// <summary>
         /// <para>异步保存节点工作流到指定路径。</para>
         /// Asynchronously saves the node workflow to the specified path.
         /// </summary>
-        /// <param name="path">
-        /// <para>目标文件路径。</para>
-        /// Target file path.
-        /// </param>
-        /// <param name="nodes">
-        /// <para>节点集合快照。</para>
-        /// Node collection snapshot.
-        /// </param>
-        /// <param name="connections">
-        /// <para>连接集合快照。</para>
-        /// Connection collection snapshot.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// <para>取消令牌。</para>
-        /// Cancellation token.
-        /// </param>
-        /// <returns>
-        /// <para>成功返回 <c>true</c>。</para>
-        /// Returns <c>true</c> on success.
-        /// </returns>
         public static async Task<bool> SaveAsync(
             string path,
             IReadOnlyList<FlowNodeViewModel> nodes,
@@ -72,7 +58,7 @@ namespace UotanStudio.Services
                 };
 
                 await using var stream = File.Create(path);
-                await JsonSerializer.SerializeAsync(stream, snapshot, Options, cancellationToken).ConfigureAwait(false);
+                await JsonSerializer.SerializeAsync(stream, snapshot, WorkflowJsonContext.Default.WorkflowSnapshot, cancellationToken).ConfigureAwait(false);
                 log.Write(LogLevel.Info, "Persistence", $"Saved workflow: {path} ({nodes.Count} nodes, {connections.Count} connections)");
                 return true;
             }
@@ -87,18 +73,6 @@ namespace UotanStudio.Services
         /// <para>异步从指定路径加载节点工作流，返回节点与连接 DTO 列表（由调用方重建画布）。</para>
         /// Asynchronously loads the node workflow from the specified path, returning node and connection DTO lists (the caller rebuilds the canvas).
         /// </summary>
-        /// <param name="path">
-        /// <para>源文件路径。</para>
-        /// Source file path.
-        /// </param>
-        /// <param name="cancellationToken">
-        /// <para>取消令牌。</para>
-        /// Cancellation token.
-        /// </param>
-        /// <returns>
-        /// <para>工作流快照；失败返回 <c>null</c>。</para>
-        /// Workflow snapshot; returns <c>null</c> on failure.
-        /// </returns>
         public static async Task<WorkflowSnapshot?> LoadAsync(string path, CancellationToken cancellationToken = default)
         {
             var log = LogService.Instance;
@@ -111,7 +85,7 @@ namespace UotanStudio.Services
             try
             {
                 await using var stream = File.OpenRead(path);
-                var snapshot = await JsonSerializer.DeserializeAsync<WorkflowSnapshot>(stream, Options, cancellationToken).ConfigureAwait(false);
+                var snapshot = await JsonSerializer.DeserializeAsync(stream, WorkflowJsonContext.Default.WorkflowSnapshot, cancellationToken).ConfigureAwait(false);
                 log.Write(LogLevel.Info, "Persistence", $"Loaded workflow: {path} ({snapshot?.Nodes.Count ?? 0} nodes, {snapshot?.Connections.Count ?? 0} connections)");
                 return snapshot;
             }

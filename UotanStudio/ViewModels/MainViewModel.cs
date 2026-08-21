@@ -1,4 +1,3 @@
-using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Plugins;
 
 namespace UotanStudio.ViewModels;
@@ -9,7 +8,6 @@ public partial class MainViewModel : ViewModelBase
     public WorkspaceViewModel WorkspaceVM { get; } = new();
     public NodeEditorViewModel NodeEditorVM { get; } = new();
     public LogViewModel LogVM { get; } = new();
-    public DeviceManagerViewModel DeviceManagerVM { get; } = new();
     public PluginManagerViewModel PluginManagerVM { get; } = new();
     public SettingsViewModel SettingsVM { get; } = new();
 

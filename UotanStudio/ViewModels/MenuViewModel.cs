@@ -314,40 +314,10 @@ public partial class MenuViewModel : ViewModelBase
     // ===== 工具 / Tools =====
 
     /// <summary>
-    /// <para>当前已打开的设备管理器对话框引用，同一时间仅允许一个实例；已关闭时为 null。</para>
-    /// Currently open Device Manager dialog reference; only one instance is allowed at a time; null when closed.
-    /// </summary>
-    private Window? _openDeviceManagerDialog;
-
-    /// <summary>
     /// <para>当前已打开的插件管理器对话框引用，同一时间仅允许一个实例；已关闭时为 null。</para>
     /// Currently open Plugin Manager dialog reference; only one instance is allowed at a time; null when closed.
     /// </summary>
     private Window? _openPluginManagerDialog;
-
-    /// <summary><para>打开设备管理器页面；若已存在则将焦点转移到已打开的页面而非新开。</para>Opens the Device Manager page; if one is already open, transfers focus to it instead of opening a new one.</summary>
-    [RelayCommand]
-    private void DeviceManager()
-    {
-        OpenSingletonDialog(() => _openDeviceManagerDialog, d => _openDeviceManagerDialog = d, () => new DeviceManagerDialog());
-        Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Info, "Menu", "Device Manager dialog requested");
-    }
-
-    /// <summary><para>打开 ADB 终端的设备管理器页面；若已存在则将焦点转移过去而非新开。</para>Opens the Device Manager page for the ADB shell console; if one is already open, transfers focus to it instead of opening a new one.</summary>
-    [RelayCommand]
-    private void AdbShell()
-    {
-        OpenSingletonDialog(() => _openDeviceManagerDialog, d => _openDeviceManagerDialog = d, () => new DeviceManagerDialog());
-        Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Info, "Menu", "ADB shell requested via Device Manager dialog");
-    }
-
-    /// <summary><para>打开 Fastboot 控制台的设备管理器页面；若已存在则将焦点转移过去而非新开。</para>Opens the Device Manager page for the Fastboot console; if one is already open, transfers focus to it instead of opening a new one.</summary>
-    [RelayCommand]
-    private void FastbootConsole()
-    {
-        OpenSingletonDialog(() => _openDeviceManagerDialog, d => _openDeviceManagerDialog = d, () => new DeviceManagerDialog());
-        Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Info, "Menu", "Fastboot console requested via Device Manager dialog");
-    }
 
     /// <summary><para>打开插件管理器页面；若已存在则将焦点转移到已打开的页面而非新开。</para>Opens the Plugin Manager page; if one is already open, transfers focus to it instead of opening a new one.</summary>
     [RelayCommand]
@@ -518,8 +488,6 @@ public enum NavigationTarget
     NodeEditor,
     /// <summary><para>全局日志面板。</para>Global log panel.</summary>
     Log,
-    /// <summary><para>设备管理器。</para>Device manager.</summary>
-    DeviceManager,
     /// <summary><para>插件管理器。</para>Plugin manager.</summary>
     PluginManager,
     /// <summary><para>设置。</para>Settings.</summary>

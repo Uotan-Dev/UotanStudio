@@ -35,8 +35,7 @@ public partial class MainView : UserControl
                 NavigationTarget.NodeEditor => 4,
                 NavigationTarget.Log => 5,
                 NavigationTarget.Settings => 6,
-                // Device 与 Plugin 已移至顶栏工具菜单对话框入口，不再对应底栏 Tab
-                NavigationTarget.DeviceManager or NavigationTarget.PluginManager => MainTabs.SelectedIndex,
+                NavigationTarget.PluginManager => MainTabs.SelectedIndex,
                 _ => MainTabs.SelectedIndex
             };
             MainTabs.SelectedIndex = index;
