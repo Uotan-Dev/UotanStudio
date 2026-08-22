@@ -2,6 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />
   </Folder>
+  <Project Path="UotanStudio.Comm/UotanStudio.Comm.csproj" Id="5ea832ba-ef03-45bb-8d39-995e112c8197" />
   <Project Path="UotanStudio.Desktop/UotanStudio.Desktop.csproj" />
   <Project Path="UotanStudio/UotanStudio.csproj" />
 
