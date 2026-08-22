@@ -12,16 +12,25 @@ using UotanStudio.Views;
 
 namespace UotanStudio;
 
+/// <summary>
+/// The main application class.
+/// <para>主应用程序类。</para>
+/// </summary>
 public partial class App : Application
 {
+    /// <summary>
+    /// Initializes the application by loading the XAML.
+    /// <para>通过加载 XAML 初始化应用程序。</para>
+    /// </summary>
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-#if DEBUG
-        this.AttachDeveloperTools();
-#endif
     }
 
+    /// <summary>
+    /// Called when the framework initialization is completed.
+    /// <para>当框架初始化完成时调用。</para>
+    /// </summary>
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
@@ -48,21 +57,28 @@ public partial class App : Application
         // Load and apply saved settings
         // 初始化语言服务，自动发现内置语言包
         LanguageService.Instance.Initialize();
-        var savedSettings = SettingsPersistenceService.Instance.LoadSettings();
+        AppSettings savedSettings = SettingsPersistenceService.Instance.LoadSettings();
         ApplyTheme(savedSettings.ThemeMode);
         ApplyLanguage(savedSettings.CultureName);
     }
 
-    private void OnThemeChanged(object recipient, ThemeChangedMessage message)
-    {
-        ApplyTheme(message.ThemeMode);
-    }
+    /// <summary>
+    /// Handles theme change messages.
+    /// <para>处理主题更改消息。</para>
+    /// </summary>
+    private void OnThemeChanged(object recipient, ThemeChangedMessage message) => ApplyTheme(message.ThemeMode);
 
-    private void OnLanguageChanged(object recipient, LanguageChangedMessage message)
-    {
-        UpdateSemiThemeLocale(message.CultureName);
-    }
+    /// <summary>
+    /// Handles language change messages.
+    /// <para>处理语言更改消息。</para>
+    /// </summary>
+    private void OnLanguageChanged(object recipient, LanguageChangedMessage message) => UpdateSemiThemeLocale(message.CultureName);
 
+    /// <summary>
+    /// Applies the specified theme mode.
+    /// <para>应用指定的主题模式。</para>
+    /// </summary>
+    /// <param name="themeMode">The theme mode to apply.</param>
     private void ApplyTheme(ThemeMode themeMode)
     {
         RequestedThemeVariant = themeMode switch
@@ -76,7 +92,7 @@ public partial class App : Application
         string themeKey;
         if (themeMode == ThemeMode.System)
         {
-            var actualVariant = Application.Current?.ActualThemeVariant ?? ThemeVariant.Default;
+            ThemeVariant actualVariant = Application.Current?.ActualThemeVariant ?? ThemeVariant.Default;
             themeKey = actualVariant == ThemeVariant.Dark ? "DarkColors" : "LightColors";
         }
         else
@@ -86,6 +102,11 @@ public partial class App : Application
         LanguageService.Instance.ApplyTheme(themeKey);
     }
 
+    /// <summary>
+    /// Applies the specified language culture.
+    /// <para>应用指定的语言文化。</para>
+    /// </summary>
+    /// <param name="cultureName">The culture name to apply.</param>
     private void ApplyLanguage(string cultureName)
     {
         if (string.IsNullOrEmpty(cultureName))
@@ -98,10 +119,15 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Updates the Semi theme locale for the specified culture.
+    /// <para>更新指定文化的 Semi 主题区域设置。</para>
+    /// </summary>
+    /// <param name="cultureName">The culture name to set.</param>
     private void UpdateSemiThemeLocale(string cultureName)
     {
         var culture = CultureInfo.GetCultureInfo(cultureName);
-        foreach (var style in this.Styles)
+        foreach (IStyle style in this.Styles)
         {
             switch (style)
             {

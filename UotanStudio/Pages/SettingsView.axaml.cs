@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UotanStudio.ViewModels;
@@ -92,7 +93,7 @@ public partial class SettingsView : UserControl
 
             // 简化：通过 DialogResult 标志
             var ok = false;
-            foreach (var btn in ((StackPanel)((StackPanel)dialog.Content).Children[1]).Children)
+            foreach (Control btn in ((StackPanel)((StackPanel)dialog.Content).Children[1]).Children)
             {
                 if (btn is Button b)
                     b.Click += (_, _) => { ok = (bool)(b.Tag ?? false); dialog.Close(); };
@@ -153,7 +154,7 @@ public partial class SettingsView : UserControl
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel == null) return;
 
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        IReadOnlyList<IStorageFile> files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Select executable",
             AllowMultiple = false,
@@ -166,7 +167,7 @@ public partial class SettingsView : UserControl
             }
         });
 
-        var file = files?.FirstOrDefault();
+        IStorageFile? file = files?.FirstOrDefault();
         if (file == null) return;
 
         var path = file.TryGetLocalPath();
@@ -188,13 +189,13 @@ public partial class SettingsView : UserControl
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel == null) return;
 
-        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        IReadOnlyList<IStorageFolder> folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
             Title = "Select folder",
             AllowMultiple = false
         });
 
-        var folder = folders?.FirstOrDefault();
+        IStorageFolder? folder = folders?.FirstOrDefault();
         if (folder == null) return;
 
         var path = folder.TryGetLocalPath();

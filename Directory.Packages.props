@@ -22,14 +22,8 @@
     <PackageVersion Include="Semi.Avalonia.Dock" Version="12.0.0.2" />
     <PackageVersion Include="NodifyM.Avalonia" Version="12.0.0" />
     <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
-    <PackageVersion Include="FirmwareKit.Comm" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.Comm.Fastboot" Version="1.0.1" />
-    <PackageVersion Include="FirmwareKit.Comm.Fex" Version="1.0.0" />
     <PackageVersion Include="FirmwareKit.CPIO" Version="1.0.0" />
     <PackageVersion Include="FirmwareKit.Payload" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.Payload.Reader" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.Payload.Creator" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.Payload.Modifier" Version="1.0.0" />
     <PackageVersion Include="FirmwareKit.AVB" Version="1.1.0" />
     <PackageVersion Include="FirmwareKit.DT" Version="1.0.0" />
     <PackageVersion Include="FirmwareKit.DTOverlay" Version="1.0.0" />
@@ -40,5 +34,7 @@
     <PackageVersion Include="FirmwareKit.Oppo.Core" Version="0.1.0" />
     <PackageVersion Include="FirmwareKit.OfpReader" Version="0.1.0" />
     <PackageVersion Include="FirmwareKit.OpsReader" Version="0.1.0" />
+    <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
   </ItemGroup>
 </Project>

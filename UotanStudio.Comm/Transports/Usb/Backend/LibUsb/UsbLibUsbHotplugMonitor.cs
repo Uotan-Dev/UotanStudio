@@ -1,6 +1,6 @@
-using UotanStudio.Comm.Diagnostics;
 using LibUsbDotNet;
 using LibUsbDotNet.LibUsb;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Core;
 

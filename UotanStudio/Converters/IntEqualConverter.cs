@@ -16,7 +16,7 @@ public class IntEqualConverter : IValueConverter
     /// </summary>
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is int intValue && parameter is string paramStr && int.TryParse(paramStr, out int paramValue))
+        if (value is int intValue && parameter is string paramStr && int.TryParse(paramStr, out var paramValue))
         {
             return intValue == paramValue;
         }
@@ -33,8 +33,5 @@ public class IntEqualConverter : IValueConverter
     /// <para>不支持反向转换。</para>
     /// Reverse conversion is not supported.
     /// </summary>
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        return Avalonia.AvaloniaProperty.UnsetValue;
-    }
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Avalonia.AvaloniaProperty.UnsetValue;
 }

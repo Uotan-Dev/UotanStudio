@@ -4,7 +4,9 @@
   </Folder>
   <Project Path="UotanStudio.Comm/UotanStudio.Comm.csproj" Id="5ea832ba-ef03-45bb-8d39-995e112c8197" />
   <Project Path="UotanStudio.Desktop/UotanStudio.Desktop.csproj" />
-  <Project Path="UotanStudio/UotanStudio.csproj" />
+  <Project Path="UotanStudio/UotanStudio.csproj">
+    <BuildDependency Project="UotanStudio.Comm/UotanStudio.Comm.csproj" />
+  </Project>
 
 
 </Solution>

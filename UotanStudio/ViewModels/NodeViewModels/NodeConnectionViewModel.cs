@@ -56,10 +56,10 @@ namespace UotanStudio.ViewModels.NodeViewModels
         [RelayCommand]
         public void Disconnect()
         {
-            var source = Source;
-            var target = Target;
-            var sourceNode = source?.Node;
-            var targetNode = target?.Node;
+            NodeConnectorViewModel? source = Source;
+            NodeConnectorViewModel? target = Target;
+            FlowNodeViewModel? sourceNode = source?.Node;
+            FlowNodeViewModel? targetNode = target?.Node;
 
             if (sourceNode is not null)
                 sourceNode.NodeConnections.Remove(this);
@@ -78,12 +78,10 @@ namespace UotanStudio.ViewModels.NodeViewModels
         /// Splits the connection at the specified position. NodifyM's Connection control does not expose RemoveCommand, so we reuse the bound SplitCommand path to trigger removal.
         /// </summary>
         [RelayCommand]
-        public void Split()
-        {
+        public void Split() =>
             // NodifyM 的 Connection 无 RemoveCommand；把 Split 按钮当作删除入口，
             // 调用 Remove() 完成断开 + 请求宿主从 Connections 集合移除。
             Remove();
-        }
 
         /// <summary>
         /// <para>删除本连接线。先断开两端连接关系，再通过 RemoveRequested 回调请求宿主从集合移除。</para>

@@ -78,7 +78,7 @@ public class LanguagePackRegistry
             return LanguagePackRegistrationResult.RejectedVersionIncompatible;
         }
 
-        if (_packs.TryGetValue(pack.CultureName, out var existing))
+        if (_packs.TryGetValue(pack.CultureName, out LanguagePackDescriptor? existing))
         {
             if (pack.Version > existing.Version)
             {
@@ -148,10 +148,7 @@ public class LanguagePackRegistry
     /// <para>如果找到返回 true；否则返回 false。</para>
     /// True if found; otherwise, false.
     /// </returns>
-    public bool TryGetPack(string cultureName, out LanguagePackDescriptor? pack)
-    {
-        return _packs.TryGetValue(cultureName, out pack);
-    }
+    public bool TryGetPack(string cultureName, out LanguagePackDescriptor? pack) => _packs.TryGetValue(cultureName, out pack);
 
     /// <summary>
     /// <para>获取所有已注册语言包的描述符。</para>
@@ -222,7 +219,7 @@ public class LanguagePackRegistry
         _availableLanguages.Add(LanguageInfo.SystemLanguage);
 
         // 按文化名称排序添加已注册语言
-        foreach (var pack in _packs.Values.OrderBy(p => p.CultureName, StringComparer.OrdinalIgnoreCase))
+        foreach (LanguagePackDescriptor? pack in _packs.Values.OrderBy(p => p.CultureName, StringComparer.OrdinalIgnoreCase))
         {
             _availableLanguages.Add(pack.ToLanguageInfo());
         }
@@ -236,10 +233,7 @@ public class LanguagePackRegistry
     /// <para>事件参数。</para>
     /// The event arguments.
     /// </param>
-    private void OnLanguagePackChanged(LanguagePackChangedEventArgs e)
-    {
-        LanguagePackChanged?.Invoke(this, e);
-    }
+    private void OnLanguagePackChanged(LanguagePackChangedEventArgs e) => LanguagePackChanged?.Invoke(this, e);
 }
 
 /// <summary>
@@ -302,35 +296,29 @@ public enum LanguagePackChangeType
 /// <para>语言包变更事件参数。</para>
 /// Language pack changed event arguments.
 /// </summary>
-public class LanguagePackChangedEventArgs : EventArgs
+/// <remarks>
+/// <para>初始化 <see cref="LanguagePackChangedEventArgs"/> 类的新实例。</para>
+/// Initializes a new instance of the <see cref="LanguagePackChangedEventArgs"/> class.
+/// </remarks>
+/// <param name="cultureName">
+/// <para>区域性名称。</para>
+/// The culture name.
+/// </param>
+/// <param name="changeType">
+/// <para>变更类型。</para>
+/// The change type.
+/// </param>
+public class LanguagePackChangedEventArgs(string cultureName, LanguagePackChangeType changeType) : EventArgs
 {
     /// <summary>
     /// <para>获取发生变更的语言包区域性名称。</para>
     /// Gets the culture name of the changed language pack.
     /// </summary>
-    public string CultureName { get; }
+    public string CultureName { get; } = cultureName;
 
     /// <summary>
     /// <para>获取变更类型。</para>
     /// Gets the change type.
     /// </summary>
-    public LanguagePackChangeType ChangeType { get; }
-
-    /// <summary>
-    /// <para>初始化 <see cref="LanguagePackChangedEventArgs"/> 类的新实例。</para>
-    /// Initializes a new instance of the <see cref="LanguagePackChangedEventArgs"/> class.
-    /// </summary>
-    /// <param name="cultureName">
-    /// <para>区域性名称。</para>
-    /// The culture name.
-    /// </param>
-    /// <param name="changeType">
-    /// <para>变更类型。</para>
-    /// The change type.
-    /// </param>
-    public LanguagePackChangedEventArgs(string cultureName, LanguagePackChangeType changeType)
-    {
-        CultureName = cultureName;
-        ChangeType = changeType;
-    }
+    public LanguagePackChangeType ChangeType { get; } = changeType;
 }

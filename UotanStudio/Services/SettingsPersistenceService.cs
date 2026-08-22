@@ -170,7 +170,7 @@ public class SettingsPersistenceService
             }
 
             var json = File.ReadAllText(_settingsFilePath);
-            var settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+            AppSettings settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
 
             // 迁移旧格式：如果 cultureName 为空但 JSON 中存在 languagePreference 字段，则进行映射
             MigrateFromLegacyFormat(settings, json);
@@ -258,7 +258,7 @@ public class SettingsPersistenceService
         try
         {
             using var doc = System.Text.Json.JsonDocument.Parse(rawJson);
-            if (doc.RootElement.TryGetProperty("languagePreference", out var prop))
+            if (doc.RootElement.TryGetProperty("languagePreference", out JsonElement prop))
             {
                 var legacyValue = prop.ValueKind == System.Text.Json.JsonValueKind.Number
                     ? prop.GetInt32()

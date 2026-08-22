@@ -10,8 +10,17 @@ using UotanStudio.Services;
 
 namespace UotanStudio.Pages.DockControl
 {
+    /// <summary>
+    /// Factory for creating the workspace dock layout.
+    /// <para>用于创建工作区停靠布局的工厂。</para>
+    /// </summary>
     public class WorkspaceDockFactory : Factory
     {
+        /// <summary>
+        /// Creates the root dock layout.
+        /// <para>创建根停靠布局。</para>
+        /// </summary>
+        /// <returns>The root dock layout.</returns>
         public override IRootDock CreateLayout()
         {
             var document1 = new Document { Id = "Document1", Title = "build.prop", CanClose = true };
@@ -81,7 +90,7 @@ namespace UotanStudio.Pages.DockControl
                 )
             };
 
-            var rootDock = CreateRootDock();
+            IRootDock rootDock = CreateRootDock();
             rootDock.IsCollapsable = false;
             rootDock.ActiveDockable = mainLayout;
             rootDock.DefaultDockable = mainLayout;
@@ -90,6 +99,11 @@ namespace UotanStudio.Pages.DockControl
             return rootDock;
         }
 
+        /// <summary>
+        /// Initializes the dock layout.
+        /// <para>初始化停靠布局。</para>
+        /// </summary>
+        /// <param name="layout">The dockable layout.</param>
         public override void InitLayout(IDockable layout)
         {
             ContextLocator = new Dictionary<string, Func<object?>>
@@ -113,6 +127,11 @@ namespace UotanStudio.Pages.DockControl
             base.InitLayout(layout);
         }
 
+        /// <summary>
+        /// Closes the dockable.
+        /// <para>关闭可停靠对象。</para>
+        /// </summary>
+        /// <param name="dockable">The dockable to close.</param>
         public override void CloseDockable(IDockable dockable)
         {
             if (dockable == null)
@@ -135,6 +154,11 @@ namespace UotanStudio.Pages.DockControl
             }
         }
 
+        /// <summary>
+        /// Safely removes the dockable from its owner.
+        /// <para>安全地从所有者移除可停靠对象。</para>
+        /// </summary>
+        /// <param name="dockable">The dockable to remove.</param>
         private void SafeRemoveDockable(IDockable dockable)
         {
             try

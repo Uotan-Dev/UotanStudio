@@ -113,7 +113,7 @@ namespace UotanStudio.Pages.DockControl
                 )
             };
 
-            var rootDock = CreateRootDock();
+            IRootDock rootDock = CreateRootDock();
             rootDock.IsCollapsable = false;
             rootDock.ActiveDockable = mainLayout;
             rootDock.DefaultDockable = mainLayout;

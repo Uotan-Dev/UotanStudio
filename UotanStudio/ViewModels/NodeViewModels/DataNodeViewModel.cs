@@ -13,19 +13,16 @@ namespace UotanStudio.ViewModels.NodeViewModels
     /// <para>执行逻辑通过 FirmwareService 接入 SHA256 校验真实后端；Read/Compare 直接调用系统文件 API。</para>
     /// Execution logic connects to SHA256 verification via FirmwareService; Read/Compare directly call system file APIs.
     /// </summary>
-    public class DataNodeViewModel : FlowNodeViewModel
+    /// <remarks>
+    /// <para>创建具有指定标题的数据处理节点。</para>
+    /// Creates a data processing node with the specified title.
+    /// </remarks>
+    /// <param name="title">
+    /// <para>节点的显示标题。</para>
+    /// The display title of the node.
+    /// </param>
+    public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCategory.Data)
     {
-        /// <summary>
-        /// <para>创建具有指定标题的数据处理节点。</para>
-        /// Creates a data processing node with the specified title.
-        /// </summary>
-        /// <param name="title">
-        /// <para>节点的显示标题。</para>
-        /// The display title of the node.
-        /// </param>
-        public DataNodeViewModel(string title) : base(title, NodeCategory.Data)
-        {
-        }
 
         /// <summary>
         /// <para>执行该数据节点的真实操作，依据节点标题分派到对应文件/校验/比较逻辑。</para>
@@ -64,7 +61,7 @@ namespace UotanStudio.ViewModels.NodeViewModels
                         {
                             if (string.IsNullOrEmpty(pathOrInput))
                                 return "[Checksum] FAIL: data/path is empty.";
-                            var result = await FirmwareService.Instance.VerifyChecksumAsync(pathOrInput, expectedHash: formatOrAlgorithm, cancellationToken).ConfigureAwait(false);
+                            FirmwareOpResult result = await FirmwareService.Instance.VerifyChecksumAsync(pathOrInput, expectedHash: formatOrAlgorithm, cancellationToken).ConfigureAwait(false);
                             var summary = result.Success ? $"[Checksum] OK: {result.Summary}" : $"[Checksum] FAIL: {result.Summary}";
                             if (Output.Count > 0)
                                 Output[0].Value = result.Summary;

@@ -6,24 +6,32 @@ using UotanStudio.ViewModels;
 namespace UotanStudio.Pages;
 
 /// <summary>
-/// <para>日志页面视图，提供实时日志查看、过滤、暂停与导出界面。</para>
 /// Log page view, providing real-time log viewing, filtering, pause, and export interface.
+/// <para>日志页面视图，提供实时日志查看、过滤、暂停与导出界面。</para>
 /// </summary>
 public partial class LogView : UserControl
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LogView"/> class.
+    /// <para>初始化 <see cref="LogView"/> 类的新实例。</para>
+    /// </summary>
     public LogView()
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
     }
 
+    /// <summary>
+    /// Handles the DataContextChanged event.
+    /// <para>处理 DataContextChanged 事件。</para>
+    /// </summary>
     private void OnDataContextChanged(object? sender, System.EventArgs e)
     {
     }
 
     /// <summary>
-    /// <para>弹出保存文件对话框，将日志导出到用户选择的路径。</para>
     /// Pops a save-file dialog and exports logs to the user-selected path.
+    /// <para>弹出保存文件对话框，将日志导出到用户选择的路径。</para>
     /// </summary>
     private async void OnExportClick(object? sender, RoutedEventArgs e)
     {
@@ -31,7 +39,7 @@ public partial class LogView : UserControl
         var topLevel = TopLevel.GetTopLevel(this);
         if (topLevel == null) return;
 
-        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        IStorageFile? file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export Logs",
             DefaultExtension = "txt",

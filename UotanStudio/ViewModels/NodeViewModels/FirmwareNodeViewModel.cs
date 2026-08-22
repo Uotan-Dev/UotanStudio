@@ -11,19 +11,16 @@ namespace UotanStudio.ViewModels.NodeViewModels
     /// <para>执行逻辑通过 FirmwareService 接入 FirmwareKit.CPIO / Payload / AVB / Oppo 真实后端。</para>
     /// Execution logic connects to real FirmwareKit.CPIO / Payload / AVB / Oppo backends via FirmwareService.
     /// </summary>
-    public class FirmwareNodeViewModel : FlowNodeViewModel
+    /// <remarks>
+    /// <para>创建具有指定标题的固件操作节点。</para>
+    /// Creates a firmware operation node with the specified title.
+    /// </remarks>
+    /// <param name="title">
+    /// <para>节点的显示标题。</para>
+    /// The display title of the node.
+    /// </param>
+    public class FirmwareNodeViewModel(string title) : FlowNodeViewModel(title, NodeCategory.Firmware)
     {
-        /// <summary>
-        /// <para>创建具有指定标题的固件操作节点。</para>
-        /// Creates a firmware operation node with the specified title.
-        /// </summary>
-        /// <param name="title">
-        /// <para>节点的显示标题。</para>
-        /// The display title of the node.
-        /// </param>
-        public FirmwareNodeViewModel(string title) : base(title, NodeCategory.Firmware)
-        {
-        }
 
         /// <summary>
         /// <para>执行该固件节点的真实操作，依据节点标题分派到 FirmwareService 对应方法。</para>
@@ -38,7 +35,7 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             if (string.IsNullOrEmpty(firmwarePath))
                 return "Error: firmware path is empty.";
-            var svc = FirmwareService.Instance;
+            FirmwareService svc = FirmwareService.Instance;
             FirmwareOpResult result = Title switch
             {
                 "Unpack Firmware" => await svc.UnpackCpioAsync(firmwarePath, string.IsNullOrEmpty(outputDirectory) ? "unpacked" : outputDirectory, true, cancellationToken),

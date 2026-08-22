@@ -2,7 +2,6 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Backend;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows
 {

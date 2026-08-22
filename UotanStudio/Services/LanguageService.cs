@@ -90,10 +90,7 @@ public sealed class LanguageService
     /// <para>初始化语言服务，自动发现并注册内置语言包。</para>
     /// Initializes the language service, automatically discovering and registering built-in language packs.
     /// </summary>
-    public void Initialize()
-    {
-        LanguagePackRegistry.Instance.DiscoverBuiltInPacks();
-    }
+    public void Initialize() => LanguagePackRegistry.Instance.DiscoverBuiltInPacks();
 
     /// <summary>
     /// <para>应用指定语言的资源包，按模块加载语言资源文件，替换当前合并字典中的语言资源，并强制刷新所有 DynamicResource 绑定。</para>
@@ -115,21 +112,21 @@ public sealed class LanguageService
 
         var previousLanguage = _currentLanguage;
 
-        var appResources = Application.Current!.Resources;
-        var mergedDicts = appResources.MergedDictionaries;
+        IResourceDictionary appResources = Application.Current!.Resources;
+        IList<IResourceProvider> mergedDicts = appResources.MergedDictionaries;
 
         // 移除所有旧的 Locale 资源（精确路径前缀匹配，避免误删其他资源）
         var oldLocaleDicts = mergedDicts
             .Where(d => d is ResourceInclude ri && ri.Source?.OriginalString.StartsWith(LocaleBaseUri, StringComparison.OrdinalIgnoreCase) == true)
             .ToList();
-        foreach (var old in oldLocaleDicts)
+        foreach (IResourceProvider? old in oldLocaleDicts)
         {
             mergedDicts.Remove(old);
         }
 
         // 获取该语言包的模块列表
         IReadOnlyList<string> modules;
-        if (LanguagePackRegistry.Instance.TryGetPack(language, out var pack) && pack != null
+        if (LanguagePackRegistry.Instance.TryGetPack(language, out LanguagePackDescriptor? pack) && pack != null
             && pack.ModuleNames.Count > 0)
         {
             modules = pack.ModuleNames;
@@ -219,7 +216,7 @@ public sealed class LanguageService
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        var result = LanguagePackRegistry.Instance.Register(descriptor);
+        LanguagePackRegistrationResult result = LanguagePackRegistry.Instance.Register(descriptor);
 
         // 根据注册结果发送消息
         switch (result)
@@ -249,10 +246,7 @@ public sealed class LanguageService
     /// <para>如果成功注销返回 true；否则返回 false。</para>
     /// True if successfully unregistered; otherwise, false.
     /// </returns>
-    public bool UnregisterLanguagePack(string cultureName)
-    {
-        return LanguagePackRegistry.Instance.Unregister(cultureName);
-    }
+    public bool UnregisterLanguagePack(string cultureName) => LanguagePackRegistry.Instance.Unregister(cultureName);
 
     /// <summary>
     /// <para>应用指定的主题样式，替换 MergedDictionaries 中的主题资源字典。</para>
@@ -275,11 +269,11 @@ public sealed class LanguageService
         var uri = new Uri($"avares://UotanStudio/Themes/{themeKey}.axaml");
         var resourceInclude = new ResourceInclude(uri) { Source = uri };
 
-        var appResources = Application.Current!.Resources;
-        var mergedDicts = appResources.MergedDictionaries;
+        IResourceDictionary appResources = Application.Current!.Resources;
+        IList<IResourceProvider> mergedDicts = appResources.MergedDictionaries;
 
-        int themeIndex = -1;
-        for (int i = 0; i < mergedDicts.Count; i++)
+        var themeIndex = -1;
+        for (var i = 0; i < mergedDicts.Count; i++)
         {
             if (mergedDicts[i] is ResourceInclude ri && ri.Source?.OriginalString.Contains("Themes") == true)
             {
@@ -359,7 +353,7 @@ public sealed class LanguageService
     /// </summary>
     public void InitializeFromSystemLanguage()
     {
-        var culture = CultureInfo.CurrentUICulture;
+        CultureInfo culture = CultureInfo.CurrentUICulture;
         var cultureName = culture.Name;
 
         // 尝试精确匹配（如 "zh-CN"）
@@ -371,7 +365,7 @@ public sealed class LanguageService
 
         // 尝试按两字母代码匹配（如 "zh" 匹配 "zh-CN"）
         var twoLetterCode = culture.TwoLetterISOLanguageName;
-        var matchedPack = LanguagePackRegistry.Instance.GetAllPacks()
+        LanguagePackDescriptor? matchedPack = LanguagePackRegistry.Instance.GetAllPacks()
             .FirstOrDefault(p => p.CultureName.StartsWith(twoLetterCode, StringComparison.OrdinalIgnoreCase));
 
         if (matchedPack != null)

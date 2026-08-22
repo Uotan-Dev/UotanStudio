@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Diagnostics;
-using UotanStudio.Comm.Transports.Usb.Backend;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 

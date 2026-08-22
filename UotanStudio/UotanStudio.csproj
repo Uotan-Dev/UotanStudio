@@ -5,6 +5,7 @@
     <LangVersion>latest</LangVersion>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <IsAotCompatible>true</IsAotCompatible>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
   
   <ItemGroup>
@@ -18,12 +19,6 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
-    <!-- AvaloniaUI.DiagnosticsSupport: Avalonia 12+ DevTools 支持包，DEBUG-only 启用。
-         Release/AOT 通过 IncludeAssets=None + PrivateAssets=All 排除，保持 IsAotCompatible。 -->
-    <PackageReference Include="AvaloniaUI.DiagnosticsSupport">
-      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
-      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
-    </PackageReference>
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Dock.Avalonia" />
     <PackageReference Include="Dock.Model.Mvvm" />
@@ -33,15 +28,8 @@
     <PackageReference Include="Semi.Avalonia" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
-    <!-- FirmwareKit 生态包（全量引入）：通信 / Fastboot / Fex / CPIO / Payload / AVB / DT / DTOverlay / Sparse / Lp / NTPi / Nb / Oppo 全家桶 / PartitionTab -->
-    <PackageReference Include="FirmwareKit.Comm" />
-    <PackageReference Include="FirmwareKit.Comm.Fastboot" />
-    <PackageReference Include="FirmwareKit.Comm.Fex" />
     <PackageReference Include="FirmwareKit.CPIO" />
     <PackageReference Include="FirmwareKit.Payload" />
-    <PackageReference Include="FirmwareKit.Payload.Reader" />
-    <PackageReference Include="FirmwareKit.Payload.Creator" />
-    <PackageReference Include="FirmwareKit.Payload.Modifier" />
     <PackageReference Include="FirmwareKit.AVB" />
     <PackageReference Include="FirmwareKit.DT" />
     <PackageReference Include="FirmwareKit.DTOverlay" />

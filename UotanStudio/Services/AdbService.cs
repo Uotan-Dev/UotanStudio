@@ -74,7 +74,7 @@ public sealed class AdbService
     {
         var devices = new List<AdbDevice>();
 
-        var adbResult = await RunAsync(ResolveAdb(), "devices", cancellationToken);
+        AdbCommandResult adbResult = await RunAsync(ResolveAdb(), "devices", cancellationToken);
         if (adbResult.Success)
         {
             foreach (var line in adbResult.Output.Split('\n', '\r'))
@@ -87,7 +87,7 @@ public sealed class AdbService
             }
         }
 
-        var fbResult = await RunAsync(ResolveFastboot(), "devices", cancellationToken);
+        AdbCommandResult fbResult = await RunAsync(ResolveFastboot(), "devices", cancellationToken);
         if (fbResult.Success)
         {
             foreach (var line in fbResult.Output.Split('\n', '\r'))
@@ -154,7 +154,7 @@ public sealed class AdbService
     /// <returns>属性键值对字典。</returns>
     public async Task<IReadOnlyDictionary<string, string>> GetPropertiesAsync(string serial, CancellationToken cancellationToken = default)
     {
-        var result = await ExecuteAdbAsync(serial, "shell getprop", cancellationToken);
+        AdbCommandResult result = await ExecuteAdbAsync(serial, "shell getprop", cancellationToken);
         var props = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!result.Success) return props;
         foreach (var line in result.Output.Split('\n', '\r'))
@@ -198,7 +198,7 @@ public sealed class AdbService
             process = new Process { StartInfo = psi };
             process.Start();
 
-            using var reader = process.StandardOutput;
+            using StreamReader reader = process.StandardOutput;
             string? line;
             while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
             {
@@ -253,8 +253,8 @@ public sealed class AdbService
             using var process = new Process { StartInfo = psi };
             process.Start();
 
-            var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+            Task<string> stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             cts.CancelAfter(TimeSpan.FromSeconds(_timeoutSeconds));
             try

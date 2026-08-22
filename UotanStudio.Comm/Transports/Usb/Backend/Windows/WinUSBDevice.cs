@@ -1,11 +1,10 @@
+using Microsoft.Win32.SafeHandles;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
-using Microsoft.Win32.SafeHandles;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.WinUSBAPI;
-using UotanStudio.Comm.Transports.Usb.Backend;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 

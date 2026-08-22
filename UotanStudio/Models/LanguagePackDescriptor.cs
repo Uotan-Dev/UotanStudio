@@ -94,7 +94,7 @@ public class LanguagePackDescriptor : ILanguagePack
         NativeName = nativeName;
         EnglishName = englishName;
         Version = version ?? LanguagePackVersion.Default;
-        ModuleNames = moduleNames ?? Array.Empty<string>();
+        ModuleNames = moduleNames ?? [];
         IsBuiltIn = isBuiltIn;
     }
 

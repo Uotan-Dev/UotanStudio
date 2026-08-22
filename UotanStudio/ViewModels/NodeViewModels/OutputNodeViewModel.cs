@@ -10,26 +10,21 @@ namespace UotanStudio.ViewModels.NodeViewModels
     /// <para>可选通过构造函数注入 <see cref="LogViewModel"/>，运行时将日志写入面板。</para>
     /// Optionally injects a <see cref="LogViewModel"/> via the constructor; runtime writes logs to the panel.
     /// </summary>
-    public class OutputNodeViewModel : FlowNodeViewModel
+    /// <remarks>
+    /// <para>创建具有指定标题的输出节点。</para>
+    /// Creates an output node with the specified title.
+    /// </remarks>
+    /// <param name="title">
+    /// <para>节点的显示标题。</para>
+    /// The display title of the node.
+    /// </param>
+    /// <param name="logVm">
+    /// <para>可选的日志视图模型，用于将输出写入日志面板。</para>
+    /// Optional log view model, used to write output to the log panel.
+    /// </param>
+    public class OutputNodeViewModel(string title, LogViewModel? logVm = null) : FlowNodeViewModel(title, NodeCategory.Output)
     {
-        private readonly LogViewModel? _logVm;
-
-        /// <summary>
-        /// <para>创建具有指定标题的输出节点。</para>
-        /// Creates an output node with the specified title.
-        /// </summary>
-        /// <param name="title">
-        /// <para>节点的显示标题。</para>
-        /// The display title of the node.
-        /// </param>
-        /// <param name="logVm">
-        /// <para>可选的日志视图模型，用于将输出写入日志面板。</para>
-        /// Optional log view model, used to write output to the log panel.
-        /// </param>
-        public OutputNodeViewModel(string title, LogViewModel? logVm = null) : base(title, NodeCategory.Output)
-        {
-            _logVm = logVm;
-        }
+        private readonly LogViewModel? _logVm = logVm;
 
         /// <summary>
         /// <para>执行该输出节点的真实操作，依据节点标题分派到 Log/Progress/Save 逻辑。</para>

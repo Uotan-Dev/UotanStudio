@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
-using UotanStudio.Comm.Transports.Usb.Backend;
 using static UotanStudio.Comm.Transports.Usb.Backend.Linux.LinuxUsbAPI;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Linux;

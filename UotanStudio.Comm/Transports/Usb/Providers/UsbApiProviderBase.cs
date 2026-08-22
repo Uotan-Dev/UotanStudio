@@ -1,7 +1,7 @@
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Backend;
 using UotanStudio.Comm.Transports.Usb.Core;
-using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Comm.Transports.Usb.Providers;
 

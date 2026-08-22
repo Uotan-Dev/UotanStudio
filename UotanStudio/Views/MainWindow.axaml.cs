@@ -34,16 +34,10 @@ public partial class MainWindow : Window
     }
 
     /// <summary>导航到设备管理标签页（索引 0）。</summary>
-    private void OnDeviceManagerClick(object? sender, RoutedEventArgs e)
-    {
-        WeakReferenceMessenger.Default.Send(new NavigateTabMessage(0));
-    }
+    private void OnDeviceManagerClick(object? sender, RoutedEventArgs e) => WeakReferenceMessenger.Default.Send(new NavigateTabMessage(0));
 
     /// <summary>导航到设置标签页（索引 4）。</summary>
-    private void OnSettingsClick(object? sender, RoutedEventArgs e)
-    {
-        WeakReferenceMessenger.Default.Send(new NavigateTabMessage(4));
-    }
+    private void OnSettingsClick(object? sender, RoutedEventArgs e) => WeakReferenceMessenger.Default.Send(new NavigateTabMessage(4));
 
     /// <summary>重新加载所有语言包。</summary>
     private void OnReloadLanguagePacksClick(object? sender, RoutedEventArgs e)
@@ -88,39 +82,21 @@ public partial class MainWindow : Window
     }
 
     /// <summary>退出应用程序。</summary>
-    private void OnExitClick(object? sender, RoutedEventArgs e)
-    {
-        Close();
-    }
+    private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
 
     /// <summary>新建项目（当前为桩，弹出提示）。</summary>
-    private async void OnNewClick(object? sender, RoutedEventArgs e)
-    {
-        await ShowInfoDialog("New Project", "New project creation is not yet implemented.");
-    }
+    private async void OnNewClick(object? sender, RoutedEventArgs e) => await ShowInfoDialog("New Project", "New project creation is not yet implemented.");
 
     /// <summary>打开项目（当前为桩，弹出提示）。</summary>
-    private async void OnOpenClick(object? sender, RoutedEventArgs e)
-    {
-        await ShowInfoDialog("Open Project", "Open project is not yet implemented.");
-    }
+    private async void OnOpenClick(object? sender, RoutedEventArgs e) => await ShowInfoDialog("Open Project", "Open project is not yet implemented.");
 
     /// <summary>保存项目（当前为桩，弹出提示）。</summary>
-    private async void OnSaveClick(object? sender, RoutedEventArgs e)
-    {
-        await ShowInfoDialog("Save Project", "Save project is not yet implemented.");
-    }
+    private async void OnSaveClick(object? sender, RoutedEventArgs e) => await ShowInfoDialog("Save Project", "Save project is not yet implemented.");
 
     /// <summary>显示关于对话框。</summary>
-    private async void OnAboutClick(object? sender, RoutedEventArgs e)
-    {
-        await ShowAboutDialog();
-    }
+    private async void OnAboutClick(object? sender, RoutedEventArgs e) => await ShowAboutDialog();
 
-    private async System.Threading.Tasks.Task ShowAboutDialog()
-    {
-        await ShowInfoDialog("About UotanStudio", "UotanStudio\nVersion: 1.0.0\n\nA cross-platform Android device toolbox.");
-    }
+    private async System.Threading.Tasks.Task ShowAboutDialog() => await ShowInfoDialog("About UotanStudio", "UotanStudio\nVersion: 1.0.0\n\nA cross-platform Android device toolbox.");
 
     private async System.Threading.Tasks.Task ShowInfoDialog(string title, string text)
     {

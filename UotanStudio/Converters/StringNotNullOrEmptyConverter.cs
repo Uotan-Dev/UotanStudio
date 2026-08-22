@@ -14,17 +14,11 @@ public class StringNotNullOrEmptyConverter : IValueConverter
     /// <para>字符串非空时返回 true，否则返回 false。</para>
     /// Returns true when the string is not null or empty, otherwise false.
     /// </summary>
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        return value is string str && !string.IsNullOrEmpty(str);
-    }
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value is string str && !string.IsNullOrEmpty(str);
 
     /// <summary>
     /// <para>不支持反向转换。</para>
     /// Reverse conversion is not supported.
     /// </summary>
-    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        return Avalonia.AvaloniaProperty.UnsetValue;
-    }
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => Avalonia.AvaloniaProperty.UnsetValue;
 }

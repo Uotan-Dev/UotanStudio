@@ -101,10 +101,10 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             if (Node is null) return;
             var toRemove = Node.NodeConnections.Where(c => c.Source == this || c.Target == this).ToList();
-            foreach (var conn in toRemove)
+            foreach (NodeConnectionViewModel? conn in toRemove)
             {
-                var s = conn.Source;
-                var t = conn.Target;
+                NodeConnectorViewModel? s = conn.Source;
+                NodeConnectorViewModel? t = conn.Target;
                 Node.NodeConnections.Remove(conn);
                 s?.SetConnected(s.Connections.Any());
                 t?.SetConnected(t.Connections.Any());

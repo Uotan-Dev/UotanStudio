@@ -9,11 +9,8 @@ namespace UotanStudio.ViewModels.NodeViewModels
     /// <para>流程控制节点视图模型，提供条件分支、循环和等待功能。</para>
     /// Flow control node view model, providing conditional branch, loop, and wait capabilities.
     /// </summary>
-    public class FlowControlNodeViewModel : FlowNodeViewModel
+    public class FlowControlNodeViewModel(string title) : FlowNodeViewModel(title, NodeCategory.Flow)
     {
-        public FlowControlNodeViewModel(string title) : base(title, NodeCategory.Flow)
-        {
-        }
 
         /// <summary>
         /// <para>执行该流程控制节点的真实操作，依据节点标题分派到 If/Loop/Wait 逻辑。</para>
@@ -34,7 +31,7 @@ namespace UotanStudio.ViewModels.NodeViewModels
                             var isTrue = cond.Length > 0 &&
                                          cond != "0" &&
                                          !string.Equals(cond, "false", System.StringComparison.OrdinalIgnoreCase);
-                            for (int i = 0; i < Output.Count; i++)
+                            for (var i = 0; i < Output.Count; i++)
                             {
                                 Output[i].Value = (i == 0) == isTrue ? "1" : "0";
                             }
@@ -44,7 +41,7 @@ namespace UotanStudio.ViewModels.NodeViewModels
                         {
                             if (!int.TryParse(conditionOrCountOrDelay, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) || count < 0)
                                 return "[Loop] FAIL: invalid count.";
-                            for (int i = 0; i <= count; i++)
+                            for (var i = 0; i <= count; i++)
                             {
                                 cancellationToken.ThrowIfCancellationRequested();
                                 if (Output.Count > 0)

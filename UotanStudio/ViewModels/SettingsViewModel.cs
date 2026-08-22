@@ -444,7 +444,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void DebouncedSaveSettings()
     {
-        var oldCts = _saveCts;
+        CancellationTokenSource? oldCts = _saveCts;
         _saveCts = new CancellationTokenSource();
         oldCts?.Cancel();
         oldCts?.Dispose();
@@ -542,10 +542,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void OnLanguagePackChanged(object? sender, LanguagePackChangedEventArgs e)
     {
         // 同步更新语言列表，保留"跟随系统"头部
-        var currentSelected = _selectedLanguage;
+        LanguageInfo currentSelected = _selectedLanguage;
         Languages.Clear();
         Languages.Add(LanguageInfo.SystemLanguage);
-        foreach (var lang in LanguageService.Instance.AvailableLanguages)
+        foreach (LanguageInfo lang in LanguageService.Instance.AvailableLanguages)
         {
             if (!lang.IsSystemLanguage)
                 Languages.Add(lang);
@@ -634,13 +634,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             AdbService.Instance.UpdateConfiguration(AdbPath, FastbootPath, DeviceTimeoutSeconds);
 
             // ADB 可用性：枚举设备命令成功即工具可达
-            var adbResult = await AdbService.Instance.GetDevicesAsync();
+            IReadOnlyList<AdbDevice> adbResult = await AdbService.Instance.GetDevicesAsync();
             AdbToolStatus = string.IsNullOrEmpty(AdbPath)
                 ? $"{LanguageService.Instance.GetString("Settings_ToolDefault")}: {adbResult.Count} device(s)"
                 : $"{LanguageService.Instance.GetString("Settings_ToolAvailable")}: {adbResult.Count} device(s)";
 
             // Fastboot 可用性：直接尝试 fastboot devices 等价命令（通过 ExecuteFastbootAsync）
-            var fbResult = await AdbService.Instance.ExecuteFastbootAsync(string.Empty, "devices", System.Threading.CancellationToken.None);
+            AdbCommandResult fbResult = await AdbService.Instance.ExecuteFastbootAsync(string.Empty, "devices", System.Threading.CancellationToken.None);
             FastbootToolStatus = fbResult.Success
                 ? LanguageService.Instance.GetString("Settings_ToolAvailable")
                 : (string.IsNullOrEmpty(FastbootPath)
@@ -699,7 +699,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         Languages.Clear();
         Languages.Add(LanguageInfo.SystemLanguage);
-        foreach (var lang in LanguageService.Instance.AvailableLanguages)
+        foreach (LanguageInfo lang in LanguageService.Instance.AvailableLanguages)
         {
             if (!lang.IsSystemLanguage)
                 Languages.Add(lang);
@@ -731,7 +731,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         Languages.Clear();
         Languages.Add(LanguageInfo.SystemLanguage);
-        foreach (var lang in LanguageService.Instance.AvailableLanguages)
+        foreach (LanguageInfo lang in LanguageService.Instance.AvailableLanguages)
         {
             if (!lang.IsSystemLanguage)
                 Languages.Add(lang);
@@ -785,22 +785,16 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 /// <para>模块版本信息卡片，供设置页 WrapLayout 呈现。</para>
 /// Module version info card for the settings page WrapLayout.
 /// </summary>
-public sealed class ModuleCardInfo
+/// <remarks>
+/// <para>创建模块版本信息卡片。</para>
+/// Creates a module version info card.
+/// </remarks>
+/// <param name="name">模块本地化名称。</param>
+/// <param name="version">模块版本号。</param>
+public sealed class ModuleCardInfo(string name, string version)
 {
     /// <summary>模块本地化名称。</summary>
-    public string Name { get; }
+    public string Name { get; } = name ?? string.Empty;
     /// <summary>模块版本号。</summary>
-    public string Version { get; }
-
-    /// <summary>
-    /// <para>创建模块版本信息卡片。</para>
-    /// Creates a module version info card.
-    /// </summary>
-    /// <param name="name">模块本地化名称。</param>
-    /// <param name="version">模块版本号。</param>
-    public ModuleCardInfo(string name, string version)
-    {
-        Name = name ?? string.Empty;
-        Version = version ?? string.Empty;
-    }
+    public string Version { get; } = version ?? string.Empty;
 }

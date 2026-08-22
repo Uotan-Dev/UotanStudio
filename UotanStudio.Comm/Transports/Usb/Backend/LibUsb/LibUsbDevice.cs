@@ -1,10 +1,9 @@
-using System.Runtime.InteropServices;
-using UotanStudio.Comm.Diagnostics;
 using LibUsbDotNet;
+using LibUsbDotNet.Info;
 using LibUsbDotNet.LibUsb;
 using LibUsbDotNet.Main;
-using LibUsbDotNet.Info;
-using UotanStudio.Comm.Transports.Usb.Backend;
+using System.Runtime.InteropServices;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
@@ -673,7 +672,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         }
 
         var chunkBuffer = _readChunkBuffer;
-        (Error error, int readLen) = await reader.ReadAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
+        (Error error, var readLen) = await reader.ReadAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
         if (error == Error.NoDevice)
         {
             return UsbChunkResult.Fatal((int)error);
@@ -709,7 +708,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         var chunkBuffer = _writeChunkBuffer;
         Marshal.Copy(buffer, chunkBuffer, 0, length);
 
-        (Error errorCode, int transferred) = await writer.WriteAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
+        (Error errorCode, var transferred) = await writer.WriteAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
         if (errorCode == Error.NoDevice)
         {
             return UsbChunkResult.Fatal((int)errorCode);

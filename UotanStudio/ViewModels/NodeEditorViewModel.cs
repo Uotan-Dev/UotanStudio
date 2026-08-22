@@ -1,11 +1,15 @@
 using Avalonia;
 using CommunityToolkit.Mvvm.Input;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using UotanStudio.Services;
+using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.ViewModels
 {
@@ -89,9 +93,9 @@ namespace UotanStudio.ViewModels
         private void FilterToolbox()
         {
             var keyword = _searchText?.Trim() ?? string.Empty;
-            foreach (var category in ToolboxCategories)
+            foreach (NodeToolboxCategory category in ToolboxCategories)
             {
-                foreach (var item in category.Items)
+                foreach (NodeToolboxItem item in category.Items)
                 {
                     item.IsVisible = string.IsNullOrEmpty(keyword)
                         || item.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase);
@@ -231,7 +235,7 @@ namespace UotanStudio.ViewModels
                     (IsConnectorInNode(c.Source, node) || IsConnectorInNode(c.Target, node)))
                 .ToList();
 
-            foreach (var conn in relatedConnections)
+            foreach (NodeConnectionViewModel? conn in relatedConnections)
             {
                 Connections.Remove(conn);
             }
@@ -239,10 +243,7 @@ namespace UotanStudio.ViewModels
             Nodes.Remove(node);
         }
 
-        private static bool IsConnectorInNode(NodeViewModels.NodeConnectorViewModel connector, NodeViewModels.FlowNodeViewModel node)
-        {
-            return node.Input.Contains(connector) || node.Output.Contains(connector);
-        }
+        private static bool IsConnectorInNode(NodeViewModels.NodeConnectorViewModel connector, NodeViewModels.FlowNodeViewModel node) => node.Input.Contains(connector) || node.Output.Contains(connector);
 
         /// <summary>
         /// <para>在两个连接器之间创建连接。</para>
@@ -291,8 +292,8 @@ namespace UotanStudio.ViewModels
         {
             if (connection == null) return;
 
-            var source = connection.Source;
-            var target = connection.Target;
+            NodeConnectorViewModel? source = connection.Source;
+            NodeConnectorViewModel? target = connection.Target;
 
             source?.Node?.NodeConnections.Remove(connection);
             target?.Node?.NodeConnections.Remove(connection);
@@ -313,10 +314,7 @@ namespace UotanStudio.ViewModels
         /// <para>要删除的连接。</para>
         /// The connection to remove.
         /// </param>
-        private void OnConnectionRemoveRequested(NodeViewModels.NodeConnectionViewModel connection)
-        {
-            Connections.Remove(connection);
-        }
+        private void OnConnectionRemoveRequested(NodeViewModels.NodeConnectionViewModel connection) => Connections.Remove(connection);
 
         /// <summary>
         /// <para>连接开始拖拽时回调（由 NodifyEditor 的 ConnectionStartedCommand 触发）。</para>
@@ -327,10 +325,7 @@ namespace UotanStudio.ViewModels
         /// The source connector object.
         /// </param>
         [RelayCommand]
-        private void OnConnectionStarted(object? connector)
-        {
-            _pendingSource = connector as NodeViewModels.NodeConnectorViewModel;
-        }
+        private void OnConnectionStarted(object? connector) => _pendingSource = connector as NodeViewModels.NodeConnectorViewModel;
 
         /// <summary>
         /// <para>连接拖拽完成回调（由 NodifyEditor 的 ConnectionCompletedCommand 触发）。</para>
@@ -341,11 +336,10 @@ namespace UotanStudio.ViewModels
         /// A tuple containing the source and target connectors.
         /// </param>
         [RelayCommand]
+        [RequiresUnreferencedCode("Calls UotanStudio.ViewModels.NodeEditorViewModel.TryExtractConnectors(Object, out NodeConnectorViewModel, out NodeConnectorViewModel)")]
         private void OnConnectionCompleted(object? args)
         {
-            // 兼容 NodifyM.Avalonia 不同版本的回调签名：
-            //   ValueTuple<object,object> / Tuple<object,object> / 单个 connector / (source,target,*) 等
-            if (!TryExtractConnectors(args, out var source, out var target))
+            if (!TryExtractConnectors(args, out NodeConnectorViewModel? source, out NodeConnectorViewModel? target))
             {
                 _pendingSource = null;
                 return;
@@ -406,7 +400,7 @@ namespace UotanStudio.ViewModels
             // 取 _pendingSource（OnConnectionStarted 时记录）作为另一端，按 Output->Input 方向赋 source/target
             if (args is NodeViewModels.NodeConnectorViewModel single)
             {
-                var other = _pendingSource;
+                NodeConnectorViewModel? other = _pendingSource;
                 if (other is null)
                 {
                     source = single;
@@ -438,9 +432,9 @@ namespace UotanStudio.ViewModels
             }
 
             // 兜底：反射尝试找 Item1 / Item2 字段
-            var type = args.GetType();
-            var item1Field = GetPublicField(type, "Item1");
-            var item2Field = GetPublicField(type, "Item2");
+            Type type = args.GetType();
+            FieldInfo? item1Field = GetPublicField(type, "Item1");
+            FieldInfo? item2Field = GetPublicField(type, "Item2");
             if (item1Field != null && item2Field != null)
             {
                 source = item1Field.GetValue(args) as NodeViewModels.NodeConnectorViewModel;
@@ -471,7 +465,7 @@ namespace UotanStudio.ViewModels
         {
             if (connector is not NodeViewModels.NodeConnectorViewModel c) return;
             var conns = Connections.Where(conn => conn.Source == c || conn.Target == c).ToList();
-            foreach (var conn in conns)
+            foreach (NodeConnectionViewModel? conn in conns)
                 RemoveConnection(conn);
         }
 
@@ -491,35 +485,23 @@ namespace UotanStudio.ViewModels
         }
 
         [RelayCommand]
-        private void ZoomIn()
-        {
-            Zoom = Math.Min(Zoom * 1.2, 3.0);
-        }
+        private void ZoomIn() => Zoom = Math.Min(Zoom * 1.2, 3.0);
 
         [RelayCommand]
-        private void ZoomOut()
-        {
-            Zoom = Math.Max(Zoom / 1.2, 0.2);
-        }
+        private void ZoomOut() => Zoom = Math.Max(Zoom / 1.2, 0.2);
 
         [RelayCommand]
-        private void ResetZoom()
-        {
-            Zoom = 1.0;
-        }
+        private void ResetZoom() => Zoom = 1.0;
 
         [RelayCommand]
-        private void ToggleMinimap()
-        {
-            ShowMinimap = !ShowMinimap;
-        }
+        private void ToggleMinimap() => ShowMinimap = !ShowMinimap;
 
         [RelayCommand]
         private void DeleteSelected()
         {
             // 删除所有选中节点及其相关连接
             var selectedNodes = Nodes.Where(n => n.IsSelected).ToList();
-            foreach (var node in selectedNodes)
+            foreach (FlowNodeViewModel? node in selectedNodes)
                 RemoveNode(node);
         }
 
@@ -530,7 +512,7 @@ namespace UotanStudio.ViewModels
         [RelayCommand]
         private void ClearAll()
         {
-            foreach (var node in Nodes)
+            foreach (FlowNodeViewModel node in Nodes)
                 node.NodeConnections.Clear();
             Connections.Clear();
             Nodes.Clear();
@@ -563,7 +545,7 @@ namespace UotanStudio.ViewModels
 
             _runCts?.Cancel();
             _runCts = new CancellationTokenSource();
-            var ct = _runCts.Token;
+            CancellationToken ct = _runCts.Token;
 
             IsRunning = true;
             ExecutionStatus = LanguageService.Instance.GetString("Node_StatusRunning");
@@ -571,9 +553,9 @@ namespace UotanStudio.ViewModels
             try
             {
                 // 拓扑排序：按连接的 Source -> Target 顺序执行
-                var ordered = TopologicalSort(Nodes, Connections);
+                List<FlowNodeViewModel> ordered = TopologicalSort(Nodes, Connections);
 
-                foreach (var node in ordered)
+                foreach (FlowNodeViewModel node in ordered)
                 {
                     ct.ThrowIfCancellationRequested();
                     // 在执行前，把上游 Output 端口的 Value 同步到本节点 Input 端口的 Value
@@ -662,11 +644,11 @@ namespace UotanStudio.ViewModels
         private void SyncUpstreamValues(NodeViewModels.FlowNodeViewModel node)
         {
             // 找出所有以本节点 Input 端口为 Target 的连接
-            foreach (var conn in Connections)
+            foreach (NodeConnectionViewModel conn in Connections)
             {
                 if (conn.Target?.Node != node) continue;
-                var src = conn.Source;
-                var tgt = conn.Target;
+                NodeConnectorViewModel? src = conn.Source;
+                NodeConnectorViewModel? tgt = conn.Target;
                 if (src is null || tgt is null) continue;
                 // 上游 Output 的 Value 同步到本 Input
                 tgt.Value = src.Value;
@@ -679,11 +661,11 @@ namespace UotanStudio.ViewModels
         /// </summary>
         private void PropagateOutputsToDownstream(NodeViewModels.FlowNodeViewModel node)
         {
-            foreach (var conn in Connections)
+            foreach (NodeConnectionViewModel conn in Connections)
             {
                 if (conn.Source?.Node != node) continue;
-                var src = conn.Source;
-                var tgt = conn.Target;
+                NodeConnectorViewModel? src = conn.Source;
+                NodeConnectorViewModel? tgt = conn.Target;
                 if (src is null || tgt is null) continue;
                 tgt.Value = src.Value;
             }
@@ -694,10 +676,7 @@ namespace UotanStudio.ViewModels
         /// Stops the currently running node flow.
         /// </summary>
         [RelayCommand]
-        private void Stop()
-        {
-            _runCts?.Cancel();
-        }
+        private void Stop() => _runCts?.Cancel();
 
         /// <summary>
         /// <para>对节点进行拓扑排序，基于连接的依赖关系。</para>
@@ -724,9 +703,9 @@ namespace UotanStudio.ViewModels
                 if (inProgress.Contains(node)) return; // 循环依赖，跳过
 
                 inProgress.Add(node);
-                if (deps.TryGetValue(node, out var sources))
+                if (deps.TryGetValue(node, out List<FlowNodeViewModel>? sources))
                 {
-                    foreach (var s in sources)
+                    foreach (FlowNodeViewModel? s in sources)
                         Visit(s);
                 }
                 inProgress.Remove(node);
@@ -734,7 +713,7 @@ namespace UotanStudio.ViewModels
                 result.Add(node);
             }
 
-            foreach (var n in nodeList)
+            foreach (FlowNodeViewModel? n in nodeList)
                 Visit(n);
 
             return result;
@@ -745,55 +724,60 @@ namespace UotanStudio.ViewModels
     /// <para>节点工具箱分类，包含同类别的节点项列表。</para>
     /// Node toolbox category, containing a list of node items in the same category.
     /// </summary>
-    public class NodeToolboxCategory
+    /// <remarks>
+    /// <para>创建工具箱分类。</para>
+    /// Creates a toolbox category.
+    /// </remarks>
+    /// <param name="name">
+    /// <para>分类名称。</para>
+    /// The category name.
+    /// </param>
+    /// <param name="category">
+    /// <para>节点类别。</para>
+    /// The node category.
+    /// </param>
+    /// <param name="items">
+    /// <para>分类下的节点项列表。</para>
+    /// The list of node items in this category.
+    /// </param>
+    public class NodeToolboxCategory(string name, NodeViewModels.NodeCategory category, ObservableCollection<NodeToolboxItem> items)
     {
         /// <summary>
         /// <para>获取分类名称。</para>
         /// Gets the category name.
         /// </summary>
-        public string Name { get; }
+        public string Name { get; } = name;
 
         /// <summary>
         /// <para>获取节点类别。</para>
         /// Gets the node category.
         /// </summary>
-        public NodeViewModels.NodeCategory Category { get; }
+        public NodeViewModels.NodeCategory Category { get; } = category;
 
         /// <summary>
         /// <para>获取分类下的节点项列表。</para>
         /// Gets the list of node items in this category.
         /// </summary>
-        public ObservableCollection<NodeToolboxItem> Items { get; }
-
-        /// <summary>
-        /// <para>创建工具箱分类。</para>
-        /// Creates a toolbox category.
-        /// </summary>
-        /// <param name="name">
-        /// <para>分类名称。</para>
-        /// The category name.
-        /// </param>
-        /// <param name="category">
-        /// <para>节点类别。</para>
-        /// The node category.
-        /// </param>
-        /// <param name="items">
-        /// <para>分类下的节点项列表。</para>
-        /// The list of node items in this category.
-        /// </param>
-        public NodeToolboxCategory(string name, NodeViewModels.NodeCategory category, ObservableCollection<NodeToolboxItem> items)
-        {
-            Name = name;
-            Category = category;
-            Items = items;
-        }
+        public ObservableCollection<NodeToolboxItem> Items { get; } = items;
     }
 
     /// <summary>
     /// <para>节点工具箱项，表示工具箱中可添加到画布的节点模板。</para>
     /// Node toolbox item, representing a node template in the toolbox that can be added to the canvas.
     /// </summary>
-    public class NodeToolboxItem : ViewModelBase
+    /// <remarks>
+    /// <para>创建工具箱项。</para>
+    /// Creates a toolbox item.
+    /// </remarks>
+    /// <param name="name">
+    /// <para>节点项名称。</para>
+    /// The node item name.
+    /// </param>
+    /// <param name="createNode">
+    /// <para>创建节点实例的工厂方法。</para>
+    /// The factory method to create a node instance.
+    /// </param>
+    public class NodeToolboxItem(string name, Func<NodeViewModels.FlowNodeViewModel> createNode) : ViewModelBase
     {
         private bool _isVisible = true;
 
@@ -801,13 +785,13 @@ namespace UotanStudio.ViewModels
         /// <para>获取节点项名称。</para>
         /// Gets the node item name.
         /// </summary>
-        public string Name { get; }
+        public string Name { get; } = name;
 
         /// <summary>
         /// <para>获取创建节点实例的工厂方法。</para>
         /// Gets the factory method to create a node instance.
         /// </summary>
-        public Func<NodeViewModels.FlowNodeViewModel> CreateNode { get; }
+        public Func<NodeViewModels.FlowNodeViewModel> CreateNode { get; } = createNode;
 
         /// <summary>
         /// <para>获取或设置该工具箱项是否可见（用于搜索过滤）。</para>
@@ -817,24 +801,6 @@ namespace UotanStudio.ViewModels
         {
             get => _isVisible;
             set => SetProperty(ref _isVisible, value);
-        }
-
-        /// <summary>
-        /// <para>创建工具箱项。</para>
-        /// Creates a toolbox item.
-        /// </summary>
-        /// <param name="name">
-        /// <para>节点项名称。</para>
-        /// The node item name.
-        /// </param>
-        /// <param name="createNode">
-        /// <para>创建节点实例的工厂方法。</para>
-        /// The factory method to create a node instance.
-        /// </param>
-        public NodeToolboxItem(string name, Func<NodeViewModels.FlowNodeViewModel> createNode)
-        {
-            Name = name;
-            CreateNode = createNode;
         }
     }
 }

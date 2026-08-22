@@ -1,6 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
-using FirmwareKit.Comm.Fastboot.Usb;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -102,22 +102,23 @@ namespace UotanStudio.ViewModels
             OnPropertyChanged(nameof(HasNoDevices));
             try
             {
-                // 优先枚举 Fastboot USB 设备（FirmwareKit.Comm.Fastboot.Usb.UsbManager）
-                var fbDevices = UsbManager.GetAllDevices() ?? new();
+                // 优先枚举 USB 设备（通过 AdbService 获取 Fastboot 设备）
+                IReadOnlyList<AdbDevice> fbDevices = await AdbService.Instance.GetDevicesAsync();
+                var fastbootDevices = fbDevices.Where(d => d.Mode == "Fastboot").ToList();
                 Devices.Clear();
-                foreach (var d in fbDevices)
+                foreach (AdbDevice? d in fastbootDevices)
                 {
                     Devices.Add(new DeviceInfo
                     {
-                        Serial = d.SerialNumber ?? d.DevicePath ?? string.Empty,
-                        State = "fastboot",
-                        Mode = "Fastboot"
+                        Serial = d.Serial ?? string.Empty,
+                        State = d.State,
+                        Mode = d.Mode
                     });
                 }
 
                 // 补充 ADB 设备（通过 AdbService，与 Fastboot 合并呈现）
-                var adbList = await AdbService.Instance.GetDevicesAsync();
-                foreach (var d in adbList)
+                IReadOnlyList<AdbDevice> adbList = await AdbService.Instance.GetDevicesAsync();
+                foreach (AdbDevice d in adbList)
                     Devices.Add(new DeviceInfo { Serial = d.Serial, State = d.State, Mode = d.Mode });
 
                 StatusText = Devices.Count == 0
@@ -149,7 +150,7 @@ namespace UotanStudio.ViewModels
         {
             AdbDevices.Clear();
             FastbootDevices.Clear();
-            foreach (var d in Devices)
+            foreach (DeviceInfo d in Devices)
             {
                 if (d.Mode == "Fastboot")
                     FastbootDevices.Add(d);
@@ -167,7 +168,7 @@ namespace UotanStudio.ViewModels
             if (device.Mode != "ADB") return;
             try
             {
-                var props = await AdbService.Instance.GetPropertiesAsync(device.Serial);
+                IReadOnlyDictionary<string, string> props = await AdbService.Instance.GetPropertiesAsync(device.Serial);
                 if (props.TryGetValue("ro.product.model", out var model))
                     device.Model = model;
                 if (props.TryGetValue("ro.build.version.release", out var version))
@@ -195,12 +196,12 @@ namespace UotanStudio.ViewModels
             {
                 if (SelectedDevice.Mode == "ADB")
                 {
-                    var r = await AdbService.Instance.ExecuteAdbAsync(SelectedDevice.Serial, "get-state");
+                    AdbCommandResult r = await AdbService.Instance.ExecuteAdbAsync(SelectedDevice.Serial, "get-state");
                     SelectedDevice.State = r.Success ? "device" : "offline";
                 }
                 else
                 {
-                    var r = await AdbService.Instance.ExecuteFastbootAsync(SelectedDevice.Serial, "getvar product");
+                    AdbCommandResult r = await AdbService.Instance.ExecuteFastbootAsync(SelectedDevice.Serial, "getvar product");
                     SelectedDevice.State = r.Success ? "fastboot" : "offline";
                 }
                 StatusText = SelectedDevice.State == "offline"
@@ -249,7 +250,7 @@ namespace UotanStudio.ViewModels
             StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {SelectedDevice.Serial} -> {mode}...";
             try
             {
-                var r = await AdbService.Instance.RebootAsync(SelectedDevice.Serial, mode);
+                AdbCommandResult r = await AdbService.Instance.RebootAsync(SelectedDevice.Serial, mode);
                 StatusText = r.Success
                     ? $"{LanguageService.Instance.GetString("Device_Reboot")} {SelectedDevice.Serial} -> {mode} OK"
                     : $"{LanguageService.Instance.GetString("Device_Reboot")} {SelectedDevice.Serial} FAIL";

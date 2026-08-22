@@ -1,9 +1,7 @@
-using System.Runtime.InteropServices;
-using UotanStudio.Comm.Diagnostics;
 using LibUsbDotNet;
 using LibUsbDotNet.LibUsb;
-using UotanStudio.Comm.Transports.Usb.Backend;
-using UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
+using System.Runtime.InteropServices;
+using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
