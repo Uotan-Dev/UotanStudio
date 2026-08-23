@@ -216,6 +216,8 @@ public class FirehoseConfiguration
         FirehoseStorageType.Ufs => "ufs",
         FirehoseStorageType.Nand => "nand",
         FirehoseStorageType.Spinor => "spinor",
+        FirehoseStorageType.Emmc => throw new NotImplementedException(),
+        FirehoseStorageType.Unknown => throw new NotImplementedException(),
         _ => "eMMC"
     };
 }
@@ -446,6 +448,9 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             sectorSize = Configuration.StorageType switch
             {
                 FirehoseStorageType.Ufs or FirehoseStorageType.Spinor => EdlConstants.DefaultSectorSizeLarge,
+                FirehoseStorageType.Emmc => throw new NotImplementedException(),
+                FirehoseStorageType.Nand => throw new NotImplementedException(),
+                FirehoseStorageType.Unknown => throw new NotImplementedException(),
                 _ => EdlConstants.DefaultSectorSizeSmall
             };
             Log($"Using default sector size for {Configuration.StorageType}: {sectorSize}");
@@ -489,6 +494,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 FirehoseStorageType.Spinor => EdlConstants.WriteTimeoutSpinorMs,
                 FirehoseStorageType.Nand => EdlConstants.WriteTimeoutNandMs,
                 FirehoseStorageType.Ufs => EdlConstants.WriteTimeoutUfsMs,
+                FirehoseStorageType.Emmc => throw new NotImplementedException(),
+                FirehoseStorageType.Unknown => throw new NotImplementedException(),
                 _ => EdlConstants.WriteTimeoutDefaultMs
             };
     }
@@ -507,6 +514,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 FirehoseStorageType.Spinor => EdlConstants.EraseTimeoutSpinorMs,
                 FirehoseStorageType.Nand => EdlConstants.EraseTimeoutNandMs,
                 FirehoseStorageType.Ufs => EdlConstants.EraseTimeoutUfsMs,
+                FirehoseStorageType.Emmc => throw new NotImplementedException(),
+                FirehoseStorageType.Unknown => throw new NotImplementedException(),
                 _ => EdlConstants.EraseTimeoutEmmcMs
             };
     }

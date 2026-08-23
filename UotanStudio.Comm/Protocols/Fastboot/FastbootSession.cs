@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Protocols.Fastboot.Utils;
 using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Fastboot;
@@ -21,6 +22,7 @@ public sealed class FastbootSession : IProtocolSession
     private readonly int _timeoutMs;
     private readonly Dictionary<string, string> _varCache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, bool> _hasSlotCache = new(StringComparer.Ordinal);
+    private HashSet<string>? _logicalPartitionsFromMetadata;
     private long? _maxDownloadSize;
     private bool _disposed;
 
@@ -1059,6 +1061,271 @@ public sealed class FastbootSession : IProtocolSession
         return value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
             ? long.TryParse(value[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex) ? hex : -1
             : long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var dec) ? dec : -1;
+    }
+
+    private static readonly HashSet<string> VbmetaPartitionSet = new(
+        ["vbmeta", "vbmeta_system", "vbmeta_vendor", "vbmeta_custom"],
+        StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Queries a single device variable and returns a detailed result including error information.
+    /// <para>按键查询单个设备变量并返回包含错误信息的详细结果。</para>
+    /// </summary>
+    /// <param name="key">The variable key. 变量名。</param>
+    /// <param name="useCache">Whether to use the cached value. 是否使用缓存值。</param>
+    /// <returns>A tuple of value, success flag, and error message. 值、成功标志与错误信息的三元组。</returns>
+    public (string Value, bool Success, string? ErrorMessage) GetVarWithResult(string key, bool useCache = true)
+    {
+        if (useCache && _varCache.TryGetValue(key, out var cached))
+        {
+            return (cached, true, null);
+        }
+
+        var response = ExecuteCommand(FastbootConstants.CommandGetVar + key);
+        if (response.State is FastbootResponseState.Fail)
+        {
+            return (string.Empty, false, response.Info);
+        }
+
+        if (response.State is FastbootResponseState.Timeout)
+        {
+            return (string.Empty, false, "Timeout waiting for device response");
+        }
+
+        if (useCache)
+        {
+            _varCache[key] = response.Info;
+        }
+
+        return (response.Info, true, null);
+    }
+
+    /// <summary>
+    /// Gets the number of A/B slots on the device.
+    /// <para>获取设备上的 A/B 槽位数量。</para>
+    /// </summary>
+    public int GetSlotCount()
+        => int.TryParse(GetVariable(FastbootConstants.VarSlotCount), out var count) ? count : 1;
+
+    /// <summary>
+    /// Checks whether the specified partition exists on the device.
+    /// <para>检查指定分区在设备上是否存在。</para>
+    /// </summary>
+    public bool PartitionExists(string partition)
+        => TryGetVar(FastbootConstants.VarPartitionSizePrefix + partition, out var res)
+           && !string.IsNullOrEmpty(res) && res != "0" && res != "0x0";
+
+    /// <summary>
+    /// Gets the raw partition size string reported by the device (e.g. "0x4000000").
+    /// <para>获取设备上报的分区大小原始字符串（如 "0x4000000"）。</para>
+    /// </summary>
+    public string GetPartitionSize(string partition)
+        => TryGetVar(FastbootConstants.VarPartitionSizePrefix + partition, out var v) ? v.Trim() : string.Empty;
+
+    /// <summary>
+    /// Gets the filesystem type of the specified partition.
+    /// <para>获取指定分区的文件系统类型。</para>
+    /// </summary>
+    public string GetPartitionType(string partition)
+        => TryGetVar(FastbootConstants.VarPartitionTypePrefix + partition, out var v) ? v.Trim() : string.Empty;
+
+    /// <summary>
+    /// Checks whether the device is in userspace fastboot mode (fastbootd).
+    /// <para>检查设备是否处于用户空间 fastboot 模式（fastbootd）。</para>
+    /// </summary>
+    public bool IsUserspace()
+    {
+        try
+        {
+            return GetVariable(FastbootConstants.VarIsUserspace, useCache: false) == "yes";
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Checks whether a partition is a logical partition on the device.
+    /// <para>检查指定分区是否为设备上的逻辑分区。</para>
+    /// </summary>
+    public bool IsLogical(string partition)
+        => TryGetVar(FastbootConstants.VarIsLogicalPrefix + partition, out var v) && v == "yes";
+
+    /// <summary>
+    /// Checks whether a partition is logical, using preloaded metadata if available,
+    /// otherwise querying the device.
+    /// <para>检查分区是否为逻辑分区，优先使用预加载的元数据，否则查询设备。</para>
+    /// </summary>
+    public bool IsLogicalOptimized(string partition)
+        => _logicalPartitionsFromMetadata?.Contains(partition) ?? IsLogical(partition);
+
+    /// <summary>
+    /// Loads logical partition names from a super image metadata file for optimized flashing.
+    /// <para>从 super 镜像元数据文件加载逻辑分区名称，用于优化刷写。</para>
+    /// </summary>
+    public void LoadLogicalPartitionsFromMetadata(string superImagePath)
+    {
+        if (!File.Exists(superImagePath))
+        {
+            _logicalPartitionsFromMetadata = null;
+            return;
+        }
+
+        try
+        {
+            var partitions = new HashSet<string>(
+                new SuperImageBuilder().GetLogicalPartitions(superImagePath)
+                    .Select(p => p.Name)
+                    .Where(n => !string.IsNullOrEmpty(n)),
+                StringComparer.Ordinal);
+            _logicalPartitionsFromMetadata = partitions;
+        }
+        catch
+        {
+            _logicalPartitionsFromMetadata = null;
+        }
+    }
+
+    /// <summary>
+    /// Retrieves staged data from the device and writes it to the specified stream.
+    /// <para>从设备获取暂存数据并写入指定流。</para>
+    /// </summary>
+    public FastbootResponse GetStagedToStream(Stream output)
+        => UploadData(FastbootConstants.CommandGetStaged, output);
+
+    /// <summary>
+    /// Retrieves staged data from the device and writes it to a file.
+    /// <para>从设备获取暂存数据并写入文件。</para>
+    /// </summary>
+    public void GetStaged(string outputPath)
+    {
+        using var fs = File.Create(outputPath);
+        GetStagedToStream(fs);
+    }
+
+    /// <summary>
+    /// Waits for a snapshot merge operation to complete within the specified timeout.
+    /// <para>在指定超时时间内等待快照合并操作完成。</para>
+    /// </summary>
+    public void WaitForSnapshotMerge(int timeoutSeconds = 600)
+    {
+        var start = Stopwatch.GetTimestamp();
+        while ((Stopwatch.GetTimestamp() - start) < Stopwatch.Frequency * timeoutSeconds)
+        {
+            var res = GetVariable(FastbootConstants.VarSnapshotUpdateStatus);
+            if (res == "merging")
+            {
+                Thread.Sleep(2000);
+                continue;
+            }
+
+            if (res is "none" or "completed")
+            {
+                return;
+            }
+
+            break;
+        }
+    }
+
+    /// <summary>
+    /// Cancels a pending snapshot update if one is in progress.
+    /// <para>如果正在进行快照更新，则取消挂起的快照更新。</para>
+    /// </summary>
+    public void CancelSnapshotIfNeeded()
+    {
+        try
+        {
+            var status = GetVariable(FastbootConstants.VarSnapshotUpdateStatus);
+            if (!string.IsNullOrEmpty(status) && status != "none")
+            {
+                SnapshotUpdate("cancel");
+            }
+        }
+        catch
+        {
+            // Ignore transient failures; cancellation is best-effort.
+            // 忽略瞬时失败；取消是尽力而为。
+        }
+    }
+
+    /// <summary>
+    /// Checks whether the fastboot-info.txt version is supported (version ≤ 2).
+    /// <para>检查 fastboot-info.txt 版本是否受支持（版本 ≤ 2）。</para>
+    /// </summary>
+    public bool CheckFastbootInfoRequirements(string version)
+        => uint.TryParse(version, out var v) && v <= 2;
+
+    /// <summary>
+    /// Checks whether the specified partition name is a known vbmeta partition.
+    /// <para>检查指定分区名称是否为已知的 vbmeta 分区。</para>
+    /// </summary>
+    public bool IsVbmetaPartition(string partition)
+    {
+        if (string.IsNullOrWhiteSpace(partition))
+        {
+            return false;
+        }
+
+        var partName = partition;
+        var underscoreIndex = partition.LastIndexOf('_');
+        if (underscoreIndex > 0)
+        {
+            var suffix = partition[(underscoreIndex + 1)..];
+            if (suffix.Equals("a", StringComparison.OrdinalIgnoreCase) ||
+                suffix.Equals("b", StringComparison.OrdinalIgnoreCase))
+            {
+                partName = partition[..underscoreIndex];
+            }
+        }
+
+        return VbmetaPartitionSet.Contains(partName);
+    }
+
+    /// <summary>
+    /// Wipes user data by erasing and formatting userdata, cache, and metadata partitions.
+    /// <para>通过擦除并格式化 userdata、cache 和 metadata 分区来清除用户数据。</para>
+    /// </summary>
+    public void WipeUserData()
+    {
+        foreach (var partition in new[] { "userdata", "cache", "metadata" })
+        {
+            try
+            {
+                var partitionType = GetPartitionType(partition);
+                if (string.IsNullOrEmpty(partitionType))
+                {
+                    continue;
+                }
+
+                ErasePartition(partition);
+                FormatPartition(partition);
+            }
+            catch
+            {
+                // Best-effort: a partition may not exist on all devices.
+                // 尽力而为：某些设备可能不存在对应分区。
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tries to query a device variable, returning <c>false</c> on any transport failure.
+    /// <para>尝试查询设备变量，传输失败时返回 <c>false</c>。</para>
+    /// </summary>
+    private bool TryGetVar(string key, out string value)
+    {
+        try
+        {
+            value = GetVariable(key, useCache: false);
+            return true;
+        }
+        catch
+        {
+            value = string.Empty;
+            return false;
+        }
     }
 
     private void ThrowIfDisposed()

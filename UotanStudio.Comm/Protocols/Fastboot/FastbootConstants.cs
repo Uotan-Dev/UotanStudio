@@ -126,6 +126,12 @@ public static class FastbootConstants
     public const string CommandUpload = "upload:";
 
     /// <summary>
+    /// get_staged command: retrieves data staged by a previous download (e.g. boot image).
+    /// <para>get_staged 命令：取回先前 download 暂存的数据（如 boot 镜像）。</para>
+    /// </summary>
+    public const string CommandGetStaged = "get_staged";
+
+    /// <summary>
     /// flash command prefix.
     /// <para>flash 命令前缀。</para>
     /// </summary>
@@ -258,4 +264,34 @@ public static class FastbootConstants
     /// <para>报告当前活跃 A/B 槽位的变量。</para>
     /// </summary>
     public const string VarCurrentSlot = "current-slot";
+
+    /// <summary>
+    /// Variable reporting whether the device runs userspace fastboot (fastbootd).
+    /// <para>报告设备是否运行用户空间 fastboot（fastbootd）的变量。</para>
+    /// </summary>
+    public const string VarIsUserspace = "is-userspace";
+
+    /// <summary>
+    /// Variable prefix reporting whether a partition is logical (is-logical:&lt;partition&gt;).
+    /// <para>报告分区是否为逻辑分区的变量前缀（is-logical:&lt;分区&gt;）。</para>
+    /// </summary>
+    public const string VarIsLogicalPrefix = "is-logical:";
+
+    /// <summary>
+    /// Variable reporting the number of A/B slots.
+    /// <para>报告 A/B 槽位数量的变量。</para>
+    /// </summary>
+    public const string VarSlotCount = "slot-count";
+
+    /// <summary>
+    /// Variable prefix reporting partition filesystem types (partition-type:&lt;partition&gt;).
+    /// <para>报告分区文件系统类型的变量前缀（partition-type:&lt;分区&gt;）。</para>
+    /// </summary>
+    public const string VarPartitionTypePrefix = "partition-type:";
+
+    /// <summary>
+    /// Variable reporting the snapshot update status ("none"/"merging"/"completed").
+    /// <para>报告快照更新状态的变量（"none"/"merging"/"completed"）。</para>
+    /// </summary>
+    public const string VarSnapshotUpdateStatus = "snapshot-update-status";
 }

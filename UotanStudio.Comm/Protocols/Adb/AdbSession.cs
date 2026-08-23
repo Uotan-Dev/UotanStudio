@@ -166,6 +166,17 @@ public sealed class AdbSession : IProtocolSession
     }
 
     /// <summary>
+    /// Creates a device-services client for one-shot services (reboot, remount, getprop).
+    /// <para>创建一次性设备服务（reboot、remount、getprop）客户端。</para>
+    /// </summary>
+    /// <returns>A device services client. 设备服务客户端。</returns>
+    public AdbDeviceServices CreateDeviceServices()
+    {
+        ThrowIfDisposed();
+        return new AdbDeviceServices(Connection);
+    }
+
+    /// <summary>
     /// Executes a shell command and returns the result.
     /// <para>执行 shell 命令并返回结果。</para>
     /// </summary>
