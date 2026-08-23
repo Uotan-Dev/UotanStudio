@@ -34,6 +34,7 @@
     <x:String x:Key="Device_Transport">连接方式</x:String>
     <x:String x:Key="Device_LinkPort">链接端口</x:String>
     <x:String x:Key="Device_UsbIds">厂商/产品 ID</x:String>
+    <x:String x:Key="Device_Vendor">厂商</x:String>
     <x:String x:Key="Device_Brand">品牌</x:String>
     <x:String x:Key="Device_Codename">型号代号</x:String>
     <x:String x:Key="Device_SdkVersion">Android SDK</x:String>

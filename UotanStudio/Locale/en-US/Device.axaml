@@ -34,6 +34,7 @@
     <x:String x:Key="Device_Transport">Transport</x:String>
     <x:String x:Key="Device_LinkPort">Link Port</x:String>
     <x:String x:Key="Device_UsbIds">Vendor/Product ID</x:String>
+    <x:String x:Key="Device_Vendor">Vendor</x:String>
     <x:String x:Key="Device_Brand">Brand</x:String>
     <x:String x:Key="Device_Codename">Codename</x:String>
     <x:String x:Key="Device_SdkVersion">Android SDK</x:String>
