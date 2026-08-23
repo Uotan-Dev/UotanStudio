@@ -18,7 +18,7 @@ namespace UotanStudio.Models;
 /// </remarks>
 public static class UsbVendorTable
 {
-    private static readonly Dictionary<ushort, string> s_vendors = new()
+    private static readonly Dictionary<ushort, string> _vendors = new()
     {
         // Android OEMs
         [0x04E8] = "Samsung",
@@ -68,5 +68,5 @@ public static class UsbVendorTable
     /// <para>已知时返回厂商名；否则返回 <see cref="string.Empty"/>。</para>
     /// </returns>
     public static string TryGetVendor(ushort vendorId)
-        => s_vendors.TryGetValue(vendorId, out var name) ? name : string.Empty;
+        => _vendors.TryGetValue(vendorId, out var name) ? name : string.Empty;
 }

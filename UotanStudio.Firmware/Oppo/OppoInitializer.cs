@@ -14,7 +14,7 @@ namespace UotanStudio.Firmware.Oppo;
 public static class OppoInitializer
 {
     private static readonly Lock Lock = new();
-    private static bool s_initialized;
+    private static bool _initialized;
 
     /// <summary>
     /// <para>获取全局共享的加密提供者聚合器实例。</para>
@@ -30,7 +30,7 @@ public static class OppoInitializer
     {
         lock (Lock)
         {
-            if (s_initialized)
+            if (_initialized)
             {
                 return;
             }
@@ -55,7 +55,7 @@ public static class OppoInitializer
             // Register enhanced MTK format detector
             FormatDetector.RegisterDetector(TryDetectMtkFormat);
 
-            s_initialized = true;
+            _initialized = true;
         }
     }
 

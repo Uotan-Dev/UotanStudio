@@ -12,7 +12,7 @@ namespace UotanStudio.Comm.Diagnostics;
 /// </summary>
 public static class UsbLoggerBridge
 {
-    private static bool s_attached;
+    private static bool _attached;
 
     /// <summary>
     /// Attaches an <see cref="ILogger"/> to receive plain-text logs and structured
@@ -30,12 +30,12 @@ public static class UsbLoggerBridge
     public static void Attach(ILogger logger)
     {
         ArgumentNullException.ThrowIfNull(logger);
-        if (s_attached)
+        if (_attached)
         {
             return;
         }
 
-        s_attached = true;
+        _attached = true;
 
         UsbTrace.Logger = new LoggerAdapter(logger);
         UsbTrace.TransferObserved += evt =>

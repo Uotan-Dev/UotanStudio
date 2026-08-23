@@ -8,8 +8,8 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Linux;
 
 internal static class LinuxUsbFinder
 {
-    private static int s_permissionDeniedCount;
-    private static int s_busyCount;
+    private static int _permissionDeniedCount;
+    private static int _busyCount;
 
     /// <summary>
     /// Gets the number of /dev/bus/usb devices skipped because the process lacked
@@ -18,7 +18,7 @@ internal static class LinuxUsbFinder
     /// <para>获取上次枚举中因权限不足（EACCES）而跳过的设备数。让上层区分
     /// "没有设备"与"没有权限"（例如缺少 udev 规则）。</para>
     /// </summary>
-    public static int PermissionDeniedCount => Volatile.Read(ref s_permissionDeniedCount);
+    public static int PermissionDeniedCount => Volatile.Read(ref _permissionDeniedCount);
 
     /// <summary>
     /// Gets whether any /dev/bus/usb device was skipped due to missing permissions.
@@ -31,7 +31,7 @@ internal static class LinuxUsbFinder
     /// (EBUSY - another process, e.g. an adb server, already claimed it).
     /// <para>获取因接口无法声明（EBUSY——其他进程，例如 adb server，已占用）而跳过的设备数。</para>
     /// </summary>
-    public static int BusyCount => Volatile.Read(ref s_busyCount);
+    public static int BusyCount => Volatile.Read(ref _busyCount);
 
     /// <summary>
     /// Gets whether any device was skipped because its interface is busy.
@@ -71,7 +71,7 @@ internal static class LinuxUsbFinder
     /// <param name="path">The device node path. <para>设备节点路径。</para></param>
     internal static void ReportPermissionDenied(string path)
     {
-        Interlocked.Increment(ref s_permissionDeniedCount);
+        Interlocked.Increment(ref _permissionDeniedCount);
         UsbTrace.Log($"LinuxUsbFinder: permission denied opening '{path}' (EACCES) - ensure udev rules grant access to the current user/group.");
     }
 
@@ -84,15 +84,15 @@ internal static class LinuxUsbFinder
     /// <param name="path">The device node path. <para>设备节点路径。</para></param>
     internal static void ReportBusy(string path)
     {
-        Interlocked.Increment(ref s_busyCount);
+        Interlocked.Increment(ref _busyCount);
         UsbTrace.Log($"LinuxUsbFinder: interface busy on '{path}' (EBUSY) - another process (e.g. adb server) may have claimed it.");
     }
 
     public static List<UsbDevice> FindDevice(UsbDeviceFilter? filter = null, string? usbfsRoot = null)
     {
         var devices = new List<UsbDevice>();
-        Volatile.Write(ref s_permissionDeniedCount, 0);
-        Volatile.Write(ref s_busyCount, 0);
+        Volatile.Write(ref _permissionDeniedCount, 0);
+        Volatile.Write(ref _busyCount, 0);
         const string default_base_path = "/dev/bus/usb";
         var base_path = usbfsRoot ?? default_base_path;
         LastUsbfsRootExists = Directory.Exists(base_path);

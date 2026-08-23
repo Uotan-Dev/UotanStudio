@@ -60,10 +60,10 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 internal static partial class LibUsbNativeLoader
 {
     private static readonly Lock Gate = new();
-    private static string? s_libraryPath;
-    private static IntPtr s_libraryHandle;
+    private static string? _libraryPath;
+    private static IntPtr _libraryHandle;
 #if NET5_0_OR_GREATER
-    private static bool s_resolverRegistered;
+    private static bool _resolverRegistered;
 #endif
 
     /// <summary>
@@ -76,7 +76,7 @@ internal static partial class LibUsbNativeLoader
         {
             lock (Gate)
             {
-                return s_libraryPath;
+                return _libraryPath;
             }
         }
     }
@@ -105,13 +105,13 @@ internal static partial class LibUsbNativeLoader
 
         lock (Gate)
         {
-            if (s_libraryPath == full && s_libraryHandle != IntPtr.Zero)
+            if (_libraryPath == full && _libraryHandle != IntPtr.Zero)
             {
                 return;
             }
 
-            s_libraryPath = full;
-            s_libraryHandle = LoadNative(full);
+            _libraryPath = full;
+            _libraryHandle = LoadNative(full);
         }
     }
 
@@ -137,12 +137,12 @@ internal static partial class LibUsbNativeLoader
 #if NET5_0_OR_GREATER
     private static void RegisterResolverOnce()
     {
-        if (s_resolverRegistered)
+        if (_resolverRegistered)
         {
             return;
         }
 
-        s_resolverRegistered = true;
+        _resolverRegistered = true;
         NativeLibrary.SetDllImportResolver(typeof(LibUsbNativeLoader).Assembly, ResolveLibrary);
     }
 
@@ -159,14 +159,14 @@ internal static partial class LibUsbNativeLoader
         {
             lock (Gate)
             {
-                if (s_libraryHandle != IntPtr.Zero)
+                if (_libraryHandle != IntPtr.Zero)
                 {
-                    return s_libraryHandle;
+                    return _libraryHandle;
                 }
 
-                if (s_libraryPath != null)
+                if (_libraryPath != null)
                 {
-                    return LoadNative(s_libraryPath);
+                    return LoadNative(_libraryPath);
                 }
             }
         }
