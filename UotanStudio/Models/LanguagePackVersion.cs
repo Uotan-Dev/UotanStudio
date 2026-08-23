@@ -48,9 +48,21 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     /// </exception>
     public LanguagePackVersion(int major, int minor, int revision)
     {
-        if (major < 0) throw new ArgumentOutOfRangeException(nameof(major), "Major version must be non-negative.");
-        if (minor < 0) throw new ArgumentOutOfRangeException(nameof(minor), "Minor version must be non-negative.");
-        if (revision < 0) throw new ArgumentOutOfRangeException(nameof(revision), "Revision must be non-negative.");
+        if (major < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(major), "Major version must be non-negative.");
+        }
+
+        if (minor < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(minor), "Minor version must be non-negative.");
+        }
+
+        if (revision < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(revision), "Revision must be non-negative.");
+        }
+
         Major = major;
         Minor = minor;
         Revision = revision;
@@ -83,15 +95,12 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
         ArgumentException.ThrowIfNullOrWhiteSpace(versionString);
 
         var parts = versionString.Split('.');
-        if (parts.Length != 3 ||
+        return parts.Length != 3 ||
             !int.TryParse(parts[0], out var major) ||
             !int.TryParse(parts[1], out var minor) ||
-            !int.TryParse(parts[2], out var revision))
-        {
-            throw new ArgumentException($"Invalid version format: '{versionString}'. Expected 'Major.Minor.Revision'.", nameof(versionString));
-        }
-
-        return new LanguagePackVersion(major, minor, revision);
+            !int.TryParse(parts[2], out var revision)
+            ? throw new ArgumentException($"Invalid version format: '{versionString}'. Expected 'Major.Minor.Revision'.", nameof(versionString))
+            : new LanguagePackVersion(major, minor, revision);
     }
 
     /// <summary>
@@ -113,7 +122,10 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     public static bool TryParse(string? versionString, out LanguagePackVersion? result)
     {
         result = null;
-        if (string.IsNullOrWhiteSpace(versionString)) return false;
+        if (string.IsNullOrWhiteSpace(versionString))
+        {
+            return false;
+        }
 
         var parts = versionString.Split('.');
         if (parts.Length != 3 ||
@@ -124,7 +136,10 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
             return false;
         }
 
-        if (major < 0 || minor < 0 || revision < 0) return false;
+        if (major < 0 || minor < 0 || revision < 0)
+        {
+            return false;
+        }
 
         result = new LanguagePackVersion(major, minor, revision);
         return true;
@@ -144,26 +159,26 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     /// </returns>
     public int CompareTo(LanguagePackVersion? other)
     {
-        if (other is null) return 1;
+        if (other is null)
+        {
+            return 1;
+        }
 
         var result = Major.CompareTo(other.Major);
-        if (result != 0) return result;
+        if (result != 0)
+        {
+            return result;
+        }
 
         result = Minor.CompareTo(other.Minor);
-        if (result != 0) return result;
-
-        return Revision.CompareTo(other.Revision);
+        return result != 0 ? result : Revision.CompareTo(other.Revision);
     }
 
     /// <summary>
     /// Determines whether the current version is equal to another version.
     /// <para>判断当前版本是否与另一个版本相等。</para>
     /// </summary>
-    public bool Equals(LanguagePackVersion? other)
-    {
-        if (other is null) return false;
-        return Major == other.Major && Minor == other.Minor && Revision == other.Revision;
-    }
+    public bool Equals(LanguagePackVersion? other) => other is not null && Major == other.Major && Minor == other.Minor && Revision == other.Revision;
 
     /// <summary>
     /// Determines whether the current version is equal to the specified object.
@@ -187,34 +202,52 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     /// Comparison operators.
     /// <para>比较运算符。</para>
     /// </summary>
-    public static bool operator <(LanguagePackVersion left, LanguagePackVersion right) => left.CompareTo(right) < 0;
+    public static bool operator <(LanguagePackVersion left, LanguagePackVersion right)
+    {
+        return left.CompareTo(right) < 0;
+    }
+
     /// <summary>
     /// Comparison operators.
     /// <para>比较运算符。</para>
     /// </summary>
-    public static bool operator >(LanguagePackVersion left, LanguagePackVersion right) => left.CompareTo(right) > 0;
+    public static bool operator >(LanguagePackVersion left, LanguagePackVersion right)
+    {
+        return left.CompareTo(right) > 0;
+    }
+
     /// <summary>
     /// Comparison operators.
     /// <para>比较运算符。</para>
     /// </summary>
-    public static bool operator <=(LanguagePackVersion left, LanguagePackVersion right) => left.CompareTo(right) <= 0;
+    public static bool operator <=(LanguagePackVersion left, LanguagePackVersion right)
+    {
+        return left.CompareTo(right) <= 0;
+    }
+
     /// <summary>
     /// Comparison operators.
     /// <para>比较运算符。</para>
     /// </summary>
-    public static bool operator >=(LanguagePackVersion left, LanguagePackVersion right) => left.CompareTo(right) >= 0;
+    public static bool operator >=(LanguagePackVersion left, LanguagePackVersion right)
+    {
+        return left.CompareTo(right) >= 0;
+    }
+
     /// <summary>
     /// Comparison operators.
     /// <para>比较运算符。</para>
     /// </summary>
     public static bool operator ==(LanguagePackVersion? left, LanguagePackVersion? right)
     {
-        if (left is null) return right is null;
-        return left.Equals(right);
+        return left is null ? right is null : left.Equals(right);
     }
     /// <summary>
     /// Comparison operators.
     /// <para>比较运算符。</para>
     /// </summary>
-    public static bool operator !=(LanguagePackVersion? left, LanguagePackVersion? right) => !(left == right);
+    public static bool operator !=(LanguagePackVersion? left, LanguagePackVersion? right)
+    {
+        return !(left == right);
+    }
 }

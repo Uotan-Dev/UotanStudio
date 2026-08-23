@@ -1,7 +1,3 @@
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Markup.Xaml.Styling;
-using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -9,6 +5,10 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Markup.Xaml.Styling;
+using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 
@@ -20,16 +20,14 @@ namespace UotanStudio.Services;
 /// </summary>
 public sealed class LanguageService
 {
-    private static readonly Lazy<LanguageService> _instance =
+    private static readonly Lazy<LanguageService> InstanceLazy =
         new(() => new LanguageService());
 
     /// <summary>
     /// <para>获取 <see cref="LanguageService"/> 的单例实例。</para>
     /// Gets the singleton instance of <see cref="LanguageService"/>.
     /// </summary>
-    public static LanguageService Instance => _instance.Value;
-
-    private string _currentLanguage = "en-US";
+    public static LanguageService Instance => InstanceLazy.Value;
 
     /// <summary>
     /// <para>获取或设置当前语言的区域性名称。</para>
@@ -39,11 +37,7 @@ public sealed class LanguageService
     /// <para>当前语言的区域性名称，默认为 "en-US"。</para>
     /// The culture name of the current language, defaults to "en-US".
     /// </value>
-    public string CurrentLanguage
-    {
-        get => _currentLanguage;
-        private set => _currentLanguage = value;
-    }
+    public string CurrentLanguage { get; private set; } = "en-US";
 
     /// <summary>
     /// <para>获取当前可用的语言列表，从 <see cref="LanguagePackRegistry"/> 动态获取。</para>
@@ -110,23 +104,23 @@ public sealed class LanguageService
     {
         ArgumentNullException.ThrowIfNull(language);
 
-        var previousLanguage = _currentLanguage;
+        var previousLanguage = CurrentLanguage;
 
-        IResourceDictionary appResources = Application.Current!.Resources;
-        IList<IResourceProvider> mergedDicts = appResources.MergedDictionaries;
+        var appResources = Application.Current!.Resources;
+        var mergedDicts = appResources.MergedDictionaries;
 
         // 移除所有旧的 Locale 资源（精确路径前缀匹配，避免误删其他资源）
         var oldLocaleDicts = mergedDicts
             .Where(d => d is ResourceInclude ri && ri.Source?.OriginalString.StartsWith(LocaleBaseUri, StringComparison.OrdinalIgnoreCase) == true)
             .ToList();
-        foreach (IResourceProvider? old in oldLocaleDicts)
+        foreach (var old in oldLocaleDicts)
         {
             mergedDicts.Remove(old);
         }
 
         // 获取该语言包的模块列表
         IReadOnlyList<string> modules;
-        if (LanguagePackRegistry.Instance.TryGetPack(language, out LanguagePackDescriptor? pack) && pack != null
+        if (LanguagePackRegistry.Instance.TryGetPack(language, out var pack) && pack != null
             && pack.ModuleNames.Count > 0)
         {
             modules = pack.ModuleNames;
@@ -216,7 +210,7 @@ public sealed class LanguageService
     {
         ArgumentNullException.ThrowIfNull(descriptor);
 
-        LanguagePackRegistrationResult result = LanguagePackRegistry.Instance.Register(descriptor);
+        var result = LanguagePackRegistry.Instance.Register(descriptor);
 
         // 根据注册结果发送消息
         switch (result)
@@ -228,6 +222,12 @@ public sealed class LanguageService
                 WeakReferenceMessenger.Default.Send(new LanguagePackRejectedMessage(
                     descriptor.CultureName,
                     $"Version {descriptor.Version} is below minimum compatible version {LanguagePackRegistry.Instance.MinimumCompatibleVersion}"));
+                break;
+            case LanguagePackRegistrationResult.Registered:
+                break;
+            case LanguagePackRegistrationResult.ConflictNotReplaced:
+                break;
+            default:
                 break;
         }
 
@@ -250,7 +250,7 @@ public sealed class LanguageService
 
     /// <summary>
     /// <para>应用指定的主题样式，替换 MergedDictionaries 中的主题资源字典。</para>
-    /// Applies the specified theme style, replacing the theme resource dictionary in MergedDictionaries.
+    /// Applies the specified theme Style, replacing the theme resource dictionary in MergedDictionaries.
     /// </summary>
     /// <param name="themeKey">
     /// <para>主题资源键名（如 "LightColors" 或 "DarkColors"）。</para>
@@ -269,8 +269,8 @@ public sealed class LanguageService
         var uri = new Uri($"avares://UotanStudio/Themes/{themeKey}.axaml");
         var resourceInclude = new ResourceInclude(uri) { Source = uri };
 
-        IResourceDictionary appResources = Application.Current!.Resources;
-        IList<IResourceProvider> mergedDicts = appResources.MergedDictionaries;
+        var appResources = Application.Current!.Resources;
+        var mergedDicts = appResources.MergedDictionaries;
 
         var themeIndex = -1;
         for (var i = 0; i < mergedDicts.Count; i++)
@@ -310,7 +310,9 @@ public sealed class LanguageService
     public string GetString(string key)
     {
         if (Application.Current?.TryFindResource(key, null, out var value) == true && value is string str)
+        {
             return str;
+        }
 
         Debug.WriteLine($"[LanguageService] Resource key not found: {key}");
         return key;
@@ -353,7 +355,7 @@ public sealed class LanguageService
     /// </summary>
     public void InitializeFromSystemLanguage()
     {
-        CultureInfo culture = CultureInfo.CurrentUICulture;
+        var culture = CultureInfo.CurrentUICulture;
         var cultureName = culture.Name;
 
         // 尝试精确匹配（如 "zh-CN"）
@@ -365,7 +367,7 @@ public sealed class LanguageService
 
         // 尝试按两字母代码匹配（如 "zh" 匹配 "zh-CN"）
         var twoLetterCode = culture.TwoLetterISOLanguageName;
-        LanguagePackDescriptor? matchedPack = LanguagePackRegistry.Instance.GetAllPacks()
+        var matchedPack = LanguagePackRegistry.Instance.GetAllPacks()
             .FirstOrDefault(p => p.CultureName.StartsWith(twoLetterCode, StringComparison.OrdinalIgnoreCase));
 
         if (matchedPack != null)

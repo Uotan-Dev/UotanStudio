@@ -1,7 +1,7 @@
 namespace UotanStudio.Messages;
 
 /// <summary>
-/// Tab navigation message, used to switch between tabs in the main view.
+/// Tab navigation Message, used to switch between tabs in the main view.
 /// <para>标签页导航消息，用于在主视图的标签页之间切换。</para>
 /// </summary>
 public class NavigateTabMessage(int tabIndex)
@@ -14,7 +14,7 @@ public class NavigateTabMessage(int tabIndex)
 }
 
 /// <summary>
-/// Theme switch message, triggered from the menu.
+/// Theme switch Message, triggered from the menu.
 /// <para>主题切换消息，从菜单触发。</para>
 /// </summary>
 public class MenuThemeChangedMessage(Models.ThemeMode themeMode)
@@ -27,7 +27,7 @@ public class MenuThemeChangedMessage(Models.ThemeMode themeMode)
 }
 
 /// <summary>
-/// Clear canvas message, triggered from the menu, received by the main view which invokes NodeEditorVM.ClearAllCommand.
+/// Clear canvas Message, triggered from the menu, received by the main view which invokes NodeEditorVM.ClearAllCommand.
 /// <para>清空画布消息，由菜单触发，由主视图接收并调用 NodeEditorVM.ClearAllCommand。</para>
 /// </summary>
 public class ClearCanvasMessage

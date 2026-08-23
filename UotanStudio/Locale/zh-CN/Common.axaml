@@ -11,4 +11,11 @@
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
 
+    <!-- 启动窗 -->
+    <x:String x:Key="Splash_Subtitle">固件工具箱 · Firmware Toolbox</x:String>
+    <x:String x:Key="Splash_Initializing">正在初始化...</x:String>
+    <x:String x:Key="Splash_Scanning">正在扫描 USB 设备...</x:String>
+    <x:String x:Key="Splash_FoundDevices">发现 {0} 台设备</x:String>
+    <x:String x:Key="Splash_Preparing">正在准备主界面...</x:String>
+
 </ResourceDictionary>

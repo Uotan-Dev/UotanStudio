@@ -11,4 +11,11 @@
     <!-- ViewLocator -->
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
 
+    <!-- Splash window -->
+    <x:String x:Key="Splash_Subtitle">Firmware Toolbox</x:String>
+    <x:String x:Key="Splash_Initializing">Initializing...</x:String>
+    <x:String x:Key="Splash_Scanning">Scanning USB devices...</x:String>
+    <x:String x:Key="Splash_FoundDevices">{0} device(s) found</x:String>
+    <x:String x:Key="Splash_Preparing">Preparing main window...</x:String>
+
 </ResourceDictionary>

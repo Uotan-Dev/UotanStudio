@@ -108,11 +108,7 @@ public class LanguageInfo : IEquatable<LanguageInfo>
     /// True if equal; otherwise, false.
     /// </returns>
     public bool Equals(LanguageInfo? other)
-    {
-        if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
-        return IsSystemLanguage == other.IsSystemLanguage && CultureName == other.CultureName;
-    }
+        => other is not null && (ReferenceEquals(this, other) || (IsSystemLanguage == other.IsSystemLanguage && CultureName == other.CultureName));
 
     /// <summary>
     /// <para>判断当前实例是否与指定对象相等。</para>
@@ -138,13 +134,15 @@ public class LanguageInfo : IEquatable<LanguageInfo>
     /// </summary>
     public static bool operator ==(LanguageInfo? left, LanguageInfo? right)
     {
-        if (left is null) return right is null;
-        return left.Equals(right);
+        return left is null ? right is null : left.Equals(right);
     }
 
     /// <summary>
     /// <para>判断两个 <see cref="LanguageInfo"/> 实例是否不相等。</para>
     /// Determines whether two <see cref="LanguageInfo"/> instances are not equal.
     /// </summary>
-    public static bool operator !=(LanguageInfo? left, LanguageInfo? right) => !(left == right);
+    public static bool operator !=(LanguageInfo? left, LanguageInfo? right)
+    {
+        return !(left == right);
+    }
 }
