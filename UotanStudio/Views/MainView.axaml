@@ -4,7 +4,11 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:vm="using:UotanStudio.ViewModels"
-             xmlns:views="using:UotanStudio.Pages"
+             xmlns:device="using:UotanStudio.Areas.Device"
+             xmlns:workspace="using:UotanStudio.Areas.Workspace"
+             xmlns:nodeeditor="using:UotanStudio.Areas.NodeEditor"
+             xmlns:log="using:UotanStudio.Areas.Log"
+             xmlns:settings="using:UotanStudio.Areas.Settings"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.MainView"
              x:DataType="vm:MainViewModel">
@@ -26,7 +30,7 @@
                 <ContentPage.Header>
                     <TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Device}" FontSize="13" FontWeight="SemiBold" />
                 </ContentPage.Header>
-                <views:DeviceView DataContext="{Binding DeviceVM}" />
+                <device:DeviceView DataContext="{Binding DeviceVM}" />
             </ContentPage>
 
             <!-- Workspace Tab -->
@@ -38,7 +42,7 @@
                     <TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Workspace}" FontSize="13" FontWeight="SemiBold" />
                 </ContentPage.Header>
                 <!-- WorkspaceView 自行持有工作区布局（见 WorkspaceView 构造函数），无需父级注入 -->
-                <views:WorkspaceView />
+                <workspace:WorkspaceView />
             </ContentPage>
 
             <!-- Node Tab -->
@@ -49,7 +53,7 @@
                 <ContentPage.Header>
                     <TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Node}" FontSize="13" FontWeight="SemiBold" />
                 </ContentPage.Header>
-                <views:NodeEditorView DataContext="{Binding NodeEditorVM}" />
+                <nodeeditor:NodeEditorView DataContext="{Binding NodeEditorVM}" />
             </ContentPage>
 
             <!-- Log Tab -->
@@ -60,7 +64,7 @@
                 <ContentPage.Header>
                     <TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Log}" FontSize="13" FontWeight="SemiBold" />
                 </ContentPage.Header>
-                <views:LogView DataContext="{Binding LogVM}" />
+                <log:LogView DataContext="{Binding LogVM}" />
             </ContentPage>
 
             <!-- Settings Tab -->
@@ -71,7 +75,7 @@
                 <ContentPage.Header>
                     <TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
                 </ContentPage.Header>
-                <views:SettingsView DataContext="{Binding SettingsVM}" />
+                <settings:SettingsView DataContext="{Binding SettingsVM}" />
             </ContentPage>
         </TabbedPage>
     </DockPanel>

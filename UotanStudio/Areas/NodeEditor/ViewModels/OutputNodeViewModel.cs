@@ -2,8 +2,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels.NodeViewModels;
+namespace UotanStudio.Areas.NodeEditor.ViewModels;
 
 /// <summary>
 /// <para>输出节点视图模型，提供日志输出、进度报告和结果保存功能。</para>

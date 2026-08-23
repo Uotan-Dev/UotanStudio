@@ -7,7 +7,7 @@ using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 
-namespace UotanStudio.Pages.DockControl;
+namespace UotanStudio.Areas.DockControl;
 
 /// <summary>
 /// Factory for creating the workspace dock layout.

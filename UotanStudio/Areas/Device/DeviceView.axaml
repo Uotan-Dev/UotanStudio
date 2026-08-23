@@ -3,9 +3,9 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             xmlns:vm="using:UotanStudio.ViewModels"
+             xmlns:vm="using:UotanStudio.Areas.Device"
              mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="600"
-             x:Class="UotanStudio.Pages.DeviceView"
+             x:Class="UotanStudio.Areas.Device.DeviceView"
              x:DataType="vm:DeviceViewModel">
     <UserControl.Styles>
         <!-- 模式徽标通用样式 -->
@@ -226,7 +226,7 @@
                         <Border Classes="InfoCard">
                             <StackPanel>
                                 <TextBlock Classes="CardCaption" Text="{DynamicResource Device_DeviceInfo}" />
-                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                                <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
                                       RowSpacing="8">
                                     <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_Serial}" />
@@ -257,6 +257,13 @@
                                                Text="{DynamicResource Device_LinkPort}" />
                                     <TextBlock Grid.Row="5" Grid.Column="1" Classes="CardValue"
                                                Text="{Binding LinkPort}" />
+
+                                    <TextBlock Grid.Row="6" Grid.Column="0" Classes="CardLabel"
+                                               Text="{DynamicResource Device_Vendor}"
+                                               IsVisible="{Binding VendorName, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
+                                    <TextBlock Grid.Row="6" Grid.Column="1" Classes="CardValue"
+                                               Text="{Binding VendorName}"
+                                               IsVisible="{Binding VendorName, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
                                 </Grid>
                             </StackPanel>
                         </Border>

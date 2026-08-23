@@ -6,10 +6,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Areas.NodeEditor.ViewModels;
 using UotanStudio.Services;
-using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels;
+namespace UotanStudio.Areas.NodeEditor;
 
 /// <summary>
 /// <para>节点编辑器主视图模型，管理节点画布、连接线、工具箱和执行状态。</para>

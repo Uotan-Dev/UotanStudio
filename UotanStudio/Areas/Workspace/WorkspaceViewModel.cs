@@ -1,8 +1,9 @@
-﻿using Dock.Model.Controls;
+using Dock.Model.Controls;
 using Dock.Model.Core;
-using UotanStudio.Pages.DockControl;
+using UotanStudio.Areas.DockControl;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels;
+namespace UotanStudio.Areas.Workspace;
 
 public class WorkspaceViewModel : ViewModelBase
 {

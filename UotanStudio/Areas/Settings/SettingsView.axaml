@@ -3,9 +3,9 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             xmlns:vm="using:UotanStudio.ViewModels"
+             xmlns:vm="using:UotanStudio.Areas.Settings"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="900"
-             x:Class="UotanStudio.Pages.SettingsView"
+             x:Class="UotanStudio.Areas.Settings.SettingsView"
              x:DataType="vm:SettingsViewModel">
     <UserControl.Styles>
         <!-- 卡片化区段标题样式：图标 + 标题 -->

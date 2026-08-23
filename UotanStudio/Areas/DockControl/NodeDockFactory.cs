@@ -7,7 +7,7 @@ using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 
-namespace UotanStudio.Pages.DockControl;
+namespace UotanStudio.Areas.DockControl;
 
 /// <summary>
 /// <para>节点编辑器的 Dock 布局工厂，创建包含工具箱、画布、属性面板和执行日志的布局。</para>

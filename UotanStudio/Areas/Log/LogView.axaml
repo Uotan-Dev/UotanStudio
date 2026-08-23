@@ -3,9 +3,9 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             xmlns:vm="using:UotanStudio.ViewModels"
+             xmlns:vm="using:UotanStudio.Areas.Log"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
-             x:Class="UotanStudio.Pages.LogView"
+             x:Class="UotanStudio.Areas.Log.LogView"
              x:DataType="vm:LogViewModel">
     <DockPanel>
         <!-- 顶部工具栏 -->

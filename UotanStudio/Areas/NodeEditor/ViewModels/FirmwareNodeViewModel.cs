@@ -2,8 +2,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels.NodeViewModels;
+namespace UotanStudio.Areas.NodeEditor.ViewModels;
 
 /// <summary>
 /// <para>固件操作节点视图模型，提供固件解包、打包、签名验证和分区提取功能。</para>

@@ -31,6 +31,9 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+# 例外：源码内的 Log 区域不应被忽略
+# Exception: source Log areas must not be ignored.
+!UotanStudio/Areas/Log/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/

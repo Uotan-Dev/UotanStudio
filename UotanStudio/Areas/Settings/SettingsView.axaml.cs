@@ -3,9 +3,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using UotanStudio.ViewModels;
+using UotanStudio.Areas.Settings;
 
-namespace UotanStudio.Pages;
+namespace UotanStudio.Areas.Settings;
 
 /// <summary>
 /// <para>设置页面视图，提供应用程序设置的交互界面。</para>

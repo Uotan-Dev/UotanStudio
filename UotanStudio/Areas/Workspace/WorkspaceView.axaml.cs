@@ -1,7 +1,7 @@
 using Avalonia.Controls;
-using UotanStudio.ViewModels;
+using UotanStudio.Areas.Workspace;
 
-namespace UotanStudio.Pages;
+namespace UotanStudio.Areas.Workspace;
 
 /// <summary>
 /// Workspace page view.

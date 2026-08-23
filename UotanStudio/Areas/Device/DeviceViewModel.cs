@@ -6,9 +6,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Models;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels;
+namespace UotanStudio.Areas.Device;
 
 /// <summary>
 /// <para>设备视图模型，管理 ADB/Fastboot/EDL/RKDL 设备列表与连接状态。
@@ -175,8 +177,10 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     {
         DeviceProtocolKind.Adb => EnrichAdbInfoAsync(device),
         DeviceProtocolKind.Fastboot => EnrichFastbootInfoAsync(device),
-        DeviceProtocolKind.Edl => throw new NotImplementedException(),
-        DeviceProtocolKind.Rkdl => throw new NotImplementedException(),
+        // EDL/RKDL 处于 bootrom/loader 模式，无可拉取的系统属性。
+        // EDL/RKDL stay in bootrom/loader mode with no system properties to retrieve.
+        DeviceProtocolKind.Edl => Task.CompletedTask,
+        DeviceProtocolKind.Rkdl => Task.CompletedTask,
         _ => Task.CompletedTask,
     };
 
@@ -651,7 +655,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 DeviceProtocolKind.Fastboot => TryFastboot(SelectedDevice),
                 DeviceProtocolKind.Edl => true, // EDL 握手需要 programmer，此处仅确认设备在位
                 DeviceProtocolKind.Rkdl => TryRkdl(SelectedDevice),
-                DeviceProtocolKind.Adb => throw new NotImplementedException(),
+                DeviceProtocolKind.Adb => TryAdb(SelectedDevice),
                 _ => TryAdb(SelectedDevice),
             }).ConfigureAwait(true);
 
@@ -840,11 +844,11 @@ public class DeviceInfo(DetectedDevice device) : ViewModelBase
     /// <summary>连接模式（ADB/Fastboot/EDL/RKDL）。 Connection mode.</summary>
     public string Mode => Device.Protocol switch
     {
+        DeviceProtocolKind.Adb => "ADB",
         DeviceProtocolKind.Fastboot => "Fastboot",
         DeviceProtocolKind.Edl => "EDL",
         DeviceProtocolKind.Rkdl => "RKDL",
-        DeviceProtocolKind.Adb => throw new NotImplementedException(),
-        _ => "ADB",
+        _ => throw new ArgumentOutOfRangeException(nameof(Device.Protocol), Device.Protocol, "Unexpected protocol kind."),
     };
 
     /// <summary>协议类型枚举值。 Protocol kind value.</summary>
@@ -855,8 +859,8 @@ public class DeviceInfo(DetectedDevice device) : ViewModelBase
     {
         DeviceTransportKind.Tcp => "Network",
         DeviceTransportKind.Serial => "Serial",
-        DeviceTransportKind.Usb => throw new NotImplementedException(),
-        _ => "USB",
+        DeviceTransportKind.Usb => "USB",
+        _ => throw new ArgumentOutOfRangeException(nameof(Device.Transport), Device.Transport, "Unexpected transport kind."),
     };
 
     /// <summary>设备型号（ro.product.model 或 fastboot product）。 Device model.</summary>
@@ -884,14 +888,17 @@ public class DeviceInfo(DetectedDevice device) : ViewModelBase
         DeviceTransportKind.Tcp =>
             Device.Key.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase) ? Device.Key[4..] : Device.Key,
         DeviceTransportKind.Serial => Device.Key,
-        DeviceTransportKind.Usb => throw new NotImplementedException(),
-        _ => "USB",
+        DeviceTransportKind.Usb => "USB",
+        _ => throw new ArgumentOutOfRangeException(nameof(Device.Transport), Device.Transport, "Unexpected transport kind."),
     };
 
     /// <summary>厂商/产品 USB ID（十六进制 VID:PID）。 Vendor/product USB ID.</summary>
     public string UsbIds => Device.VendorId == 0
         ? string.Empty
         : $"{Device.VendorId:X04}:{Device.ProductId:X04}";
+
+    /// <summary>USB 厂商名（按 VendorId 查内置表，未知返回空）。 USB vendor name from the built-in VID table.</summary>
+    public string VendorName => UsbVendorTable.TryGetVendor(Device.VendorId);
 
     /// <summary>是否为 ADB 设备。 Whether the device is in ADB mode.</summary>
     public bool IsAdb => Device.Protocol == DeviceProtocolKind.Adb;

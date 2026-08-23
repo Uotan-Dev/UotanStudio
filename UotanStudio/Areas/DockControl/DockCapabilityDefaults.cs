@@ -1,6 +1,6 @@
 using Dock.Model.Core;
 
-namespace UotanStudio.Pages.DockControl;
+namespace UotanStudio.Areas.DockControl;
 
 /// <summary>
 /// <para>为 Dock 布局预置非空的能力策略对象，避免主题模板绑定报 "Value is null"。</para>

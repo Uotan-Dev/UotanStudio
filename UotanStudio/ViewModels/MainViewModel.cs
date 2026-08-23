@@ -1,3 +1,8 @@
+using UotanStudio.Areas.Device;
+using UotanStudio.Areas.Log;
+using UotanStudio.Areas.NodeEditor;
+using UotanStudio.Areas.Settings;
+
 namespace UotanStudio.ViewModels;
 
 public partial class MainViewModel : ViewModelBase

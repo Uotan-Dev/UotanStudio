@@ -9,8 +9,9 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels;
+namespace UotanStudio.Areas.Settings;
 
 /// <summary>
 /// <para>设置视图模型，管理应用程序的通用设置、固件工具设置、烧录设置和节点编辑器设置。</para>

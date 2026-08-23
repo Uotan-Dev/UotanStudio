@@ -2,8 +2,9 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels.NodeViewModels;
+namespace UotanStudio.Areas.NodeEditor.ViewModels;
 
 /// <summary>
 /// <para>流程控制节点视图模型，提供条件分支、循环和等待功能。</para>

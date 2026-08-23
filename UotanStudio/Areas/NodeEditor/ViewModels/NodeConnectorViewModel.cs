@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels.NodeViewModels;
+namespace UotanStudio.Areas.NodeEditor.ViewModels;
 
 /// <summary>
 /// <para>节点连接器视图模型，表示节点上的输入或输出端口。</para>
