@@ -19,7 +19,7 @@ public partial class MainView : UserControl
     private void OnNavigateTab(object recipient, NavigateTabMessage message)
     {
         // Device=0, Workspace=1, Node=2, Log=3, Settings=4
-        if (message.TabIndex >= 0 && message.TabIndex < 5)
+        if (message.TabIndex is >= 0 and < 5)
         {
             MainTabs.SelectedIndex = message.TabIndex;
         }

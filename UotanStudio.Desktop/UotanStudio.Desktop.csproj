@@ -13,6 +13,18 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <!--
+    AOT publish suppressions for third-party assemblies only (no first-party sources):
+    仅抑制来自第三方程序集的 AOT 发布诊断（第一方代码的同类告警均已在源码级修复）：
+      IL2104/IL3053 - Dock.Avalonia / Semi.Avalonia.Dock / Ursa / Ursa.Themes.Semi /
+                      Common.Logging / BrotliSharpLib 整包产生的 trim/AOT 告警（无源码可修）。
+      IL2026        - Dock.Model IFactory 命令 trampoline 与 Dock/Ursa 编译 XAML 闭包中的
+                      ReflectionBinding（其 XAML 编译产物内嵌于第三方 DLL）。
+  -->
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);IL2104;IL3053;IL2026</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" />
   </ItemGroup>

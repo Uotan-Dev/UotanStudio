@@ -37,7 +37,8 @@
                 <ContentPage.Header>
                     <TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Workspace}" FontSize="13" FontWeight="SemiBold" />
                 </ContentPage.Header>
-                <views:WorkspaceView DataContext="{Binding WorkspaceVM}" />
+                <!-- WorkspaceView 自行持有工作区布局（见 WorkspaceView 构造函数），无需父级注入 -->
+                <views:WorkspaceView />
             </ContentPage>
 
             <!-- Node Tab -->

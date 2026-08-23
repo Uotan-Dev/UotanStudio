@@ -1,6 +1,6 @@
-using Avalonia.Data.Converters;
 using System;
 using System.Globalization;
+using Avalonia.Data.Converters;
 
 namespace UotanStudio.Converters;
 
@@ -16,17 +16,9 @@ public class IntEqualConverter : IValueConverter
     /// </summary>
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is int intValue && parameter is string paramStr && int.TryParse(paramStr, out var paramValue))
-        {
-            return intValue == paramValue;
-        }
-
-        if (value is int intVal && parameter is int paramInt)
-        {
-            return intVal == paramInt;
-        }
-
-        return false;
+        return value is int intValue && parameter is string paramStr && int.TryParse(paramStr, out var paramValue)
+            ? intValue == paramValue
+            : value is int intVal && parameter is int paramInt && intVal == paramInt;
     }
 
     /// <summary>

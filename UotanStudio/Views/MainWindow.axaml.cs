@@ -1,9 +1,9 @@
+using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using CommunityToolkit.Mvvm.Messaging;
-using System;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
@@ -14,6 +14,12 @@ public partial class MainWindow : Window
 {
     public MainWindow()
     {
+        // 在 InitializeComponent 之前设置 DataContext，使子控件绑定尽早可用；
+        // 工作区 DockControl 的布局由 WorkspaceView 自行在模板实例化前提供（见其构造函数）。
+        // Set the DataContext before InitializeComponent so child bindings resolve early;
+        // the workspace DockControl's layout is provided by WorkspaceView itself before
+        // its template instantiates (see its constructor).
+        DataContext = new ViewModels.MainViewModel();
         InitializeComponent();
         Closing += MainWindow_Closing;
     }

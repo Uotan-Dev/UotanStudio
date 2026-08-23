@@ -16,6 +16,11 @@
 
 
   <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AdvancedSharpAdbClient" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />

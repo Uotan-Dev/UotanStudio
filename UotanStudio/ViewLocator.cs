@@ -1,7 +1,7 @@
+using System;
+using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
-using System;
-using System.Diagnostics.CodeAnalysis;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
 
@@ -10,12 +10,22 @@ namespace UotanStudio;
 /// <summary>
 /// Given a view model, returns the corresponding view if possible.
 /// <para>根据视图模型，返回对应的视图（如果可能）。</para>
+/// Uses an explicit type map instead of reflection so the application stays
+/// trimming/AOT safe (a reflection-based lookup would be trimmed away).
+/// <para>使用显式类型映射而非反射，以保证应用可被裁剪/AOT（基于反射的查找会被裁剪掉）。</para>
 /// </summary>
-[RequiresUnreferencedCode(
-    "Default implementation of ViewLocator involves reflection which may be trimmed away.",
-    Url = "https://docs.avaloniaui.net/docs/concepts/view-locator")]
-public class ViewLocator : IDataTemplate
+public sealed class ViewLocator : IDataTemplate
 {
+    private static readonly Dictionary<Type, Func<Control>> ViewMap = new()
+    {
+        [typeof(MainViewModel)] = () => new Views.MainView(),
+        [typeof(DeviceViewModel)] = () => new Pages.DeviceView(),
+        [typeof(WorkspaceViewModel)] = () => new Pages.WorkspaceView(),
+        [typeof(LogViewModel)] = () => new Pages.LogView(),
+        [typeof(SettingsViewModel)] = () => new Pages.SettingsView(),
+        [typeof(NodeEditorViewModel)] = () => new Pages.NodeEditorView(),
+    };
+
     /// <summary>
     /// Builds the view for the specified view model parameter.
     /// <para>为指定的视图模型参数构建视图。</para>
@@ -23,18 +33,11 @@ public class ViewLocator : IDataTemplate
     /// <param name="param">The view model parameter.</param>
     public Control? Build(object? param)
     {
-        if (param is null)
-            return null;
-
-        var name = param.GetType().FullName!.Replace("ViewModel", "View", StringComparison.Ordinal);
-        var type = Type.GetType(name);
-
-        if (type != null)
-        {
-            return (Control)Activator.CreateInstance(type)!;
-        }
-
-        return new TextBlock { Text = LanguageService.Instance.GetString("ViewLocator_NotFound") + name };
+        return param is null
+            ? null
+            : ViewMap.TryGetValue(param.GetType(), out var factory)
+            ? factory()
+            : new TextBlock { Text = LanguageService.Instance.GetString("ViewLocator_NotFound") + param.GetType().FullName };
     }
 
     /// <summary>
