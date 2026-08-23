@@ -23,21 +23,26 @@
     <PackageVersion Include="Semi.Avalonia.Dock" Version="12.0.0.2" />
     <PackageVersion Include="NodifyM.Avalonia" Version="12.0.0" />
     <PackageVersion Include="Xamarin.AndroidX.Core.SplashScreen" Version="1.0.1.15" />
-    <PackageVersion Include="FirmwareKit.CPIO" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.Payload" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.AVB" Version="1.1.0" />
-    <PackageVersion Include="FirmwareKit.DT" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.DTOverlay" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.Sparse" Version="1.1.0" />
-    <PackageVersion Include="FirmwareKit.Lp" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.NTPi" Version="1.0.0" />
-    <PackageVersion Include="FirmwareKit.Oppo" Version="0.1.0" />
-    <PackageVersion Include="FirmwareKit.Oppo.Core" Version="0.1.0" />
-    <PackageVersion Include="FirmwareKit.OfpReader" Version="0.1.0" />
-    <PackageVersion Include="FirmwareKit.OpsReader" Version="0.1.0" />
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
     <PackageVersion Include="System.IO.Ports" Version="10.0.11" />
+    <!-- UotanStudio.Firmware third-party dependencies -->
+    <PackageVersion Include="BrotliSharpLib" Version="0.3.3" />
+    <PackageVersion Include="BsDiff" Version="1.1.0" />
+    <PackageVersion Include="Crc32.NET" Version="1.2.0" />
+    <PackageVersion Include="Google.Protobuf" Version="3.35.0" />
+    <PackageVersion Include="K4os.Compression.LZ4" Version="1.3.8" />
+    <PackageVersion Include="K4os.Compression.LZ4.Legacy" Version="1.3.8" />
+    <PackageVersion Include="K4os.Compression.LZ4.Streams" Version="1.3.8" />
+    <PackageVersion Include="LZMA-SDK" Version="22.1.1" />
+    <PackageVersion Include="SharpCompress" Version="0.50.4" />
+    <PackageVersion Include="System.IO.Hashing" Version="10.0.11" />
+    <PackageVersion Include="ZstdSharp.Port" Version="0.8.8" />
+    <!-- UotanStudio.Firmware.Tests -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="coverlet.collector" Version="8.0.0" />
   </ItemGroup>
 </Project>

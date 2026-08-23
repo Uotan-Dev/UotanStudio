@@ -1,0 +1,105 @@
+using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.NTPi.Models;
+
+namespace UotanStudio.Firmware.NTPi;
+
+/// <summary>
+/// <para>NTPI 加密固件包(AES-CBC + LZMA2)的 IFormatHandler 实现。</para>
+/// IFormatHandler implementation for NTPI encrypted firmware packages (AES-CBC + LZMA2).
+/// </summary>
+public sealed class NtpiFormatHandler : IFormatHandler
+{
+    /// <inheritdoc />
+    public string FormatName => "NTPI Firmware Package";
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> FileExtensions => ["ntpi", "bin", "fw"];
+
+    /// <inheritdoc />
+    public bool CanHandle(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+        {
+            return false;
+        }
+        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+        if (ext == "ntpi")
+        {
+            return true;
+        }
+        try
+        {
+            using var fs = File.OpenRead(filePath);
+            Span<byte> magic = stackalloc byte[4];
+            return fs.Read(magic) == 4 && magic.SequenceEqual("NTPI"u8);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var reader = NtpiReader.CreateDefault();
+            var info = reader.ReadInfo(filePath);
+            var summary = $"NTPI v{info.MajorVersion}.{info.MinorVersion}.{info.PatchVersion}: " +
+                          $"{info.Regions.Count} regions, {info.FileEntries.Count} files";
+            return Task.FromResult(FirmwareOpResult.Ok(summary,
+                entries: [.. info.FileEntries.Select(e => e.Name)],
+                metadata: new Dictionary<string, string>
+                {
+                    ["MajorVersion"] = info.MajorVersion.ToString(),
+                    ["MinorVersion"] = info.MinorVersion.ToString(),
+                    ["PatchVersion"] = info.PatchVersion.ToString(),
+                    ["RegionCount"] = info.Regions.Count.ToString(),
+                    ["FileCount"] = info.FileEntries.Count.ToString()
+                }));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+            using var reader = NtpiReader.CreateDefault();
+            var progress = options?.Progress is null ? null : new Progress<NtpiExtractionProgress>(p => options.Progress.Report(p.CompletedFiles * 100.0 / Math.Max(1, p.TotalFiles), p.CurrentFileName));
+            reader.Unpack(filePath, outputDirectory, progress, fileFilter: null);
+            var count = Directory.EnumerateFiles(outputDirectory, "*", SearchOption.AllDirectories).Count();
+            return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} files to {outputDirectory}"));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!Directory.Exists(inputPath))
+            {
+                return Task.FromResult(FirmwareOpResult.Fail("Input path must be a directory for NTPI packing."));
+            }
+            using var writer = NtpiWriter.CreateDefault();
+            writer.Pack(inputPath, outputPath);
+            var count = Directory.EnumerateFiles(inputPath, "*", SearchOption.AllDirectories).Count();
+            return Task.FromResult(FirmwareOpResult.Ok($"Packed {count} files to {outputPath}"));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
+        }
+    }
+}

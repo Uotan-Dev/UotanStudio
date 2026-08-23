@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,18 +34,6 @@
     <PackageReference Include="Semi.Avalonia" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
-    <PackageReference Include="FirmwareKit.CPIO" />
-    <PackageReference Include="FirmwareKit.Payload" />
-    <PackageReference Include="FirmwareKit.AVB" />
-    <PackageReference Include="FirmwareKit.DT" />
-    <PackageReference Include="FirmwareKit.DTOverlay" />
-    <PackageReference Include="FirmwareKit.Sparse" />
-    <PackageReference Include="FirmwareKit.Lp" />
-    <PackageReference Include="FirmwareKit.NTPi" />
-    <PackageReference Include="FirmwareKit.Oppo" />
-    <PackageReference Include="FirmwareKit.Oppo.Core" />
-    <PackageReference Include="FirmwareKit.OfpReader" />
-    <PackageReference Include="FirmwareKit.OpsReader" />
   </ItemGroup>
 
 </Project>

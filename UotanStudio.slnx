@@ -4,6 +4,8 @@
   </Folder>
   <Project Path="UotanStudio.Comm/UotanStudio.Comm.csproj" Id="5ea832ba-ef03-45bb-8d39-995e112c8197" />
   <Project Path="UotanStudio.Desktop/UotanStudio.Desktop.csproj" />
+  <Project Path="UotanStudio.Firmware/UotanStudio.Firmware.csproj" Id="3de52260-59aa-4956-ae11-1de93a721a54" />
+  <Project Path="UotanStudio.Firmware.Tests/UotanStudio.Firmware.Tests.csproj" />
   <Project Path="UotanStudio/UotanStudio.csproj">
     <BuildDependency Project="UotanStudio.Comm/UotanStudio.Comm.csproj" />
   </Project>

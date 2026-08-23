@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>UotanStudio.Firmware</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Compression / binary processing (used across formats) -->
+    <PackageReference Include="BrotliSharpLib" />
+    <PackageReference Include="BsDiff" />
+    <PackageReference Include="Crc32.NET" />
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="K4os.Compression.LZ4" />
+    <PackageReference Include="K4os.Compression.LZ4.Legacy" />
+    <PackageReference Include="K4os.Compression.LZ4.Streams" />
+    <PackageReference Include="LZMA-SDK" />
+    <PackageReference Include="SharpCompress" />
+    <PackageReference Include="System.IO.Hashing" />
+    <PackageReference Include="ZstdSharp.Port" />
+  </ItemGroup>
+
+</Project>

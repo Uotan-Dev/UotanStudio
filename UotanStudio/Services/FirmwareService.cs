@@ -4,13 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using FirmwareKit.AVB.VBMeta;
-using FirmwareKit.CPIO;
-using FirmwareKit.CPIO.Extraction;
-using FirmwareKit.CPIO.Model;
-using FirmwareKit.Oppo;
-using FirmwareKit.Oppo.Models;
-using FirmwareKit.Payload;
+using UotanStudio.Firmware.Avb;
+using UotanStudio.Firmware.Cpio;
+using UotanStudio.Firmware.Cpio.Extraction;
+using UotanStudio.Firmware.Cpio.Model;
+using UotanStudio.Firmware.Oppo;
+using UotanStudio.Firmware.Oppo.Models;
+using UotanStudio.Firmware.Payload;
 
 namespace UotanStudio.Services;
 

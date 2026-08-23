@@ -1,0 +1,13 @@
+gzip: gzip (external)
+bzip2: bzip2 (external)
+xz: xz (external)
+lzma: xz --format=lzma (external)
+brotli: brotli (external, q=11)
+zlib: python zlib (external)
+deflate: python zlib raw (external)
+lz4: python lz4.frame (external)
+zstd: python zstandard (external, level 19)
+lz4_legacy: firmwarekit.cli
+lz4_lg: firmwarekit.cli
+lzop: firmwarekit.cli (stored)
+zopfli: firmwarekit.cli
