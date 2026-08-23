@@ -9,6 +9,7 @@
     <PackageVersion Include="Avalonia" Version="12.1.0" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.0" />
     <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.0" />
+    <PackageVersion Include="AdvancedSharpAdbClient" Version="3.6.16" />
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
     <PackageVersion Include="Avalonia.Desktop" Version="12.1.0" />
     <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
@@ -35,6 +36,8 @@
     <PackageVersion Include="FirmwareKit.OfpReader" Version="0.1.0" />
     <PackageVersion Include="FirmwareKit.OpsReader" Version="0.1.0" />
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
+    <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageVersion Include="System.IO.Ports" Version="10.0.11" />
   </ItemGroup>
 </Project>
