@@ -1,3 +1,6 @@
+using UotanStudio.Comm.Transports.Serial;
+using UotanStudio.Comm.Transports.Tcp;
+using UotanStudio.Comm.Transports.Udp;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Core;
 
@@ -115,7 +118,7 @@ public interface ICommKit
     /// </summary>
     /// <param name="apiKind">The USB API selection mode. <para>USB API 选择模式。</para></param>
     /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
-    /// <param name="timeout">Maximum wait time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
+    /// <param name="timeout">Maximum wait Time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns><c>true</c> when a matching device appeared before the timeout. <para>超时前出现匹配设备时返回 <c>true</c>。</para></returns>
     Task<bool> WaitForDeviceAppearAsync(UsbApiKind apiKind = UsbApiKind.Auto, UsbDeviceFilter? filter = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
@@ -126,7 +129,7 @@ public interface ICommKit
     /// </summary>
     /// <param name="apiKind">The USB API selection mode. <para>USB API 选择模式。</para></param>
     /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
-    /// <param name="timeout">Maximum wait time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
+    /// <param name="timeout">Maximum wait Time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns><c>true</c> when no matching device remains before the timeout. <para>超时前不再存在匹配设备时返回 <c>true</c>。</para></returns>
     Task<bool> WaitForDeviceDisappearAsync(UsbApiKind apiKind = UsbApiKind.Auto, UsbDeviceFilter? filter = null, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
@@ -140,7 +143,7 @@ public interface ICommKit
     /// <param name="removedFilter">Filter for devices expected to disappear; pass <c>null</c> to skip this half. <para>预期消失的设备过滤条件；传 <c>null</c> 跳过该半边。</para></param>
     /// <param name="appearedFilter">Filter for devices expected to appear; pass <c>null</c> to skip this half. <para>预期出现的设备过滤条件；传 <c>null</c> 跳过该半边。</para></param>
     /// <param name="apiKind">The USB API selection mode. <para>USB API 选择模式。</para></param>
-    /// <param name="timeout">Maximum wait time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
+    /// <param name="timeout">Maximum wait Time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns><c>true</c> when the mode switch completed before the timeout. <para>超时前完成模式切换时返回 <c>true</c>。</para></returns>
     Task<bool> WaitForModeSwitchAsync(UsbDeviceFilter? removedFilter, UsbDeviceFilter? appearedFilter, UsbApiKind apiKind = UsbApiKind.Auto, TimeSpan? timeout = null, CancellationToken cancellationToken = default);
@@ -153,4 +156,54 @@ public interface ICommKit
     /// <param name="providerFactory">Factory that creates the provider. <para>创建提供器实例的工厂方法。</para></param>
     /// <returns><c>true</c> when the provider is registered. <para>注册成功时返回 <c>true</c>。</para></returns>
     bool RegisterUsbApi(string apiName, Func<IUsbApiProvider> providerFactory);
+
+    /// <summary>
+    /// Enumerates the serial ports currently available on the system.
+    /// <para>枚举系统当前可用的串口。</para>
+    /// </summary>
+    /// <returns>A read-only list of port names (e.g. "COM3", "/dev/ttyUSB0"). <para>端口名称只读列表（如 "COM3"、"/dev/ttyUSB0"）。</para></returns>
+    IReadOnlyList<string> GetAvailableSerialPorts();
+
+    /// <summary>
+    /// Creates a serial-port transport (e.g. for EDL over UART, default 3 Mbaud with
+    /// RTS/CTS flow control mirroring QSaharaServer).
+    /// <para>创建串口传输（例如用于 UART 上的 EDL，默认 3 Mbaud 并镜像 QSaharaServer 的
+    /// RTS/CTS 流控）。</para>
+    /// </summary>
+    /// <param name="portName">The serial port name. <para>串口名称。</para></param>
+    /// <param name="baudRate">The baud rate. <para>波特率。</para></param>
+    /// <returns>An unconnected serial transport; call <c>Connect</c> before use. <para>未连接的串口传输；使用前调用 <c>Connect</c>。</para></returns>
+    SerialTransport CreateSerialTransport(string portName, int baudRate = 3000000);
+
+    /// <summary>
+    /// Creates a TCP transport that speaks ADB directly to a device's adbd (port 5555),
+    /// bypassing any adb server.
+    /// <para>创建直接与设备 adbd（端口 5555）通信的 ADB TCP 传输，绕过任何 adb server。</para>
+    /// </summary>
+    /// <param name="host">The device host name or address. <para>设备主机名或地址。</para></param>
+    /// <param name="port">The adbd TCP port. <para>adbd TCP 端口。</para></param>
+    /// <param name="connectTimeoutMs">Connect timeout in milliseconds. <para>连接超时（毫秒）。</para></param>
+    /// <returns>An unconnected TCP transport. <para>未连接的 TCP 传输。</para></returns>
+    AdbTcpTransport CreateAdbTcpTransport(string host, int port = 5555, int connectTimeoutMs = 5000);
+
+    /// <summary>
+    /// Creates a TCP transport for fastboot-over-TCP (length-prefixed framing, port 5554).
+    /// <para>创建 fastboot-over-TCP 的 TCP 传输（长度前缀帧，端口 5554）。</para>
+    /// </summary>
+    /// <param name="host">The device host name or address. <para>设备主机名或地址。</para></param>
+    /// <param name="port">The fastboot TCP port. <para>fastboot TCP 端口。</para></param>
+    /// <param name="connectTimeoutMs">Connect/handshake timeout in milliseconds. <para>连接/握手超时（毫秒）。</para></param>
+    /// <returns>An unconnected TCP transport. <para>未连接的 TCP 传输。</para></returns>
+    FastbootTcpTransport CreateFastbootTcpTransport(string host, int port = 5554, int connectTimeoutMs = 30000);
+
+    /// <summary>
+    /// Creates a retransmitting UDP transport for fastboot-over-UDP.
+    /// <para>创建带重传的 fastboot-over-UDP UDP 传输。</para>
+    /// </summary>
+    /// <param name="host">The device host name or address. <para>设备主机名或地址。</para></param>
+    /// <param name="port">The fastboot UDP port. <para>fastboot UDP 端口。</para></param>
+    /// <param name="timeoutMs">Per-transmission timeout in milliseconds. <para>单次传输超时（毫秒）。</para></param>
+    /// <param name="maxTransmissionAttempts">Maximum transmission attempts. <para>最大传输尝试次数。</para></param>
+    /// <returns>An unconnected UDP transport. <para>未连接的 UDP 传输。</para></returns>
+    FastbootUdpTransport CreateFastbootUdpTransport(string host, int port = 5554, int timeoutMs = 1000, int maxTransmissionAttempts = 10);
 }

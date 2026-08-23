@@ -13,15 +13,13 @@ namespace UotanStudio.Comm;
 /// </summary>
 public sealed class CommKit : ICommKit
 {
-    private static readonly CommKit _default = new();
-
     private readonly UsbCommunicationLayer _usb;
 
     /// <summary>
     /// Gets the default facade instance backed by the default USB communication layer.
     /// <para>获取由默认 USB 通信层支撑的默认门面实例。</para>
     /// </summary>
-    public static CommKit Default => _default;
+    public static CommKit Default { get; } = new();
 
     /// <summary>
     /// Gets the names of the APIs that are supported on the current platform.
@@ -33,14 +31,14 @@ public sealed class CommKit : ICommKit
     /// 的提供器；不可用的提供器（例如需显式开启的 HarmonyOS DDK 后端）不会出现。</para>
     /// </summary>
     /// <returns>A read-only list of names. <para>名称只读列表。</para></returns>
-    public static IReadOnlyList<string> GetAvailableApis() => _default._usb.GetAvailableApis();
+    public static IReadOnlyList<string> GetAvailableApis() => Default._usb.GetAvailableApis();
 
     /// <summary>
     /// Gets capability summaries for the currently registered USB APIs.
     /// <para>获取当前已注册 USB API 的能力摘要。</para>
     /// </summary>
     /// <returns>A read-only list of capability summaries. <para>能力摘要只读列表。</para></returns>
-    public static IReadOnlyList<UsbApiCapabilities> GetAvailableApiCapabilities() => _default._usb.GetAvailableApiCapabilities();
+    public static IReadOnlyList<UsbApiCapabilities> GetAvailableApiCapabilities() => Default._usb.GetAvailableApiCapabilities();
 
     /// <summary>
     /// Enumerates devices for the selected backend.
@@ -51,7 +49,7 @@ public sealed class CommKit : ICommKit
     /// <returns>A read-only list of matched devices. <para>匹配设备只读列表。</para></returns>
     public static IReadOnlyList<UsbDeviceInfo> EnumerateDevices(
         UsbApiKind apiKind = UsbApiKind.Auto,
-        UsbDeviceFilter? filter = null) => _default._usb.EnumerateDevices(apiKind, filter);
+        UsbDeviceFilter? filter = null) => Default._usb.EnumerateDevices(apiKind, filter);
 
     /// <summary>
     /// Enumerates devices asynchronously for the selected backend.
@@ -64,7 +62,7 @@ public sealed class CommKit : ICommKit
     public static Task<IReadOnlyList<UsbDeviceInfo>> EnumerateDevicesAsync(
         UsbApiKind apiKind = UsbApiKind.Auto,
         UsbDeviceFilter? filter = null,
-        CancellationToken cancellationToken = default) => _default._usb.EnumerateDevicesAsync(apiKind, filter, cancellationToken);
+        CancellationToken cancellationToken = default) => Default._usb.EnumerateDevicesAsync(apiKind, filter, cancellationToken);
 
     /// <summary>
     /// Monitors USB device additions and removals by polling snapshots.
@@ -83,7 +81,7 @@ public sealed class CommKit : ICommKit
         UsbDeviceFilter? filter = null,
         TimeSpan? pollInterval = null,
         bool fireInitialSnapshot = false,
-        Action<Exception>? onError = null) => _default._usb.MonitorDevices(onChanged, apiKind, filter, pollInterval, fireInitialSnapshot, onError);
+        Action<Exception>? onError = null) => Default._usb.MonitorDevices(onChanged, apiKind, filter, pollInterval, fireInitialSnapshot, onError);
 
     /// <summary>
     /// Opens matching device sessions for direct read/write operations.
@@ -94,7 +92,7 @@ public sealed class CommKit : ICommKit
     /// <returns>A wrapped collection of opened sessions. <para>封装后的已打开会话集合。</para></returns>
     public static UsbSessionCollection OpenDeviceSessions(
         UsbApiKind apiKind = UsbApiKind.Auto,
-        UsbDeviceFilter? filter = null) => _default._usb.OpenDeviceSessions(apiKind, filter);
+        UsbDeviceFilter? filter = null) => Default._usb.OpenDeviceSessions(apiKind, filter);
 
     /// <summary>
     /// Opens the first matching device session for direct read/write operations.
@@ -105,7 +103,7 @@ public sealed class CommKit : ICommKit
     /// <returns>The first matching session, or <c>null</c> if none was found. <para>第一个匹配会话；如果没有则返回 <c>null</c>。</para></returns>
     public static IUsbDeviceSession? OpenDeviceSession(
         UsbApiKind apiKind = UsbApiKind.Auto,
-        UsbDeviceFilter? filter = null) => _default._usb.OpenDeviceSession(apiKind, filter);
+        UsbDeviceFilter? filter = null) => Default._usb.OpenDeviceSession(apiKind, filter);
 
     /// <summary>
     /// Opens the first matching device session for direct read/write operations, applying
@@ -122,7 +120,7 @@ public sealed class CommKit : ICommKit
     public static IUsbDeviceSession? OpenDeviceSession(
         UsbApiKind apiKind,
         UsbDeviceFilter? filter,
-        UsbSessionOptions? options) => _default._usb.OpenDeviceSession(apiKind, filter, options);
+        UsbSessionOptions? options) => Default._usb.OpenDeviceSession(apiKind, filter, options);
 
     /// <summary>
     /// Opens the session whose <see cref="UsbDeviceInfo.DeviceKey"/> matches the specified key.
@@ -137,7 +135,7 @@ public sealed class CommKit : ICommKit
     /// <returns>The matching session, or <c>null</c> when no device matches. <para>匹配的会话；无匹配设备时返回 <c>null</c>。</para></returns>
     public static IUsbDeviceSession? OpenDeviceSessionByKey(
         string deviceKey,
-        UsbApiKind apiKind = UsbApiKind.Auto) => _default._usb.OpenDeviceSessionByKey(deviceKey, apiKind);
+        UsbApiKind apiKind = UsbApiKind.Auto) => Default._usb.OpenDeviceSessionByKey(deviceKey, apiKind);
 
     /// <summary>
     /// Registers a custom USB API provider.
@@ -146,7 +144,7 @@ public sealed class CommKit : ICommKit
     /// <param name="apiName">The API name. <para>API 名称。</para></param>
     /// <param name="providerFactory">The provider factory. <para>提供器工厂方法。</para></param>
     /// <returns><c>true</c> when the provider is registered. <para>注册成功时返回 <c>true</c>。</para></returns>
-    public static bool RegisterApi(string apiName, Func<IUsbApiProvider> providerFactory) => _default._usb.RegisterApi(apiName, providerFactory);
+    public static bool RegisterApi(string apiName, Func<IUsbApiProvider> providerFactory) => Default._usb.RegisterApi(apiName, providerFactory);
 
     /// <summary>
     /// Configures the absolute path to the native libusb runtime for the libusb backend.
@@ -218,4 +216,19 @@ public sealed class CommKit : ICommKit
 
     /// <inheritdoc/>
     public bool RegisterUsbApi(string apiName, Func<IUsbApiProvider> providerFactory) => _usb.RegisterApi(apiName, providerFactory);
+
+    /// <inheritdoc/>
+    public IReadOnlyList<string> GetAvailableSerialPorts() => Transports.Serial.SerialTransport.GetAvailablePorts();
+
+    /// <inheritdoc/>
+    public Transports.Serial.SerialTransport CreateSerialTransport(string portName, int baudRate = 3000000) => new(portName, baudRate);
+
+    /// <inheritdoc/>
+    public Transports.Tcp.AdbTcpTransport CreateAdbTcpTransport(string host, int port = 5555, int connectTimeoutMs = 5000) => new(host, port, connectTimeoutMs);
+
+    /// <inheritdoc/>
+    public Transports.Tcp.FastbootTcpTransport CreateFastbootTcpTransport(string host, int port = 5554, int connectTimeoutMs = 30000) => new(host, port, connectTimeoutMs);
+
+    /// <inheritdoc/>
+    public Transports.Udp.FastbootUdpTransport CreateFastbootUdpTransport(string host, int port = 5554, int timeoutMs = 1000, int maxTransmissionAttempts = 10) => new(host, port, timeoutMs, maxTransmissionAttempts);
 }

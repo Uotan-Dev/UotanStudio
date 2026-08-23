@@ -23,5 +23,5 @@ public interface IProtocolFactory
     /// <param name="transport">The underlying transport session. <para>底层传输会话。</para></param>
     /// <param name="session">The created protocol session, or <c>null</c> when the transport is not compatible. <para>创建的协议会话；传输不兼容时返回 <c>null</c>。</para></param>
     /// <returns><c>true</c> when the protocol session was created. <para>协议会话创建成功返回 <c>true</c>。</para></returns>
-    bool TryCreate(UotanStudio.Comm.Transports.Usb.Abstractions.IUsbDeviceSession transport, out IProtocolSession? session);
+    bool TryCreate(Transports.Usb.Abstractions.IUsbDeviceSession transport, out IProtocolSession? session);
 }
