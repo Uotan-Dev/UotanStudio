@@ -39,18 +39,23 @@ public sealed class TarArchiveReader
                 TarEntryType.BlockDevice => CpioFileType.BlockDevice,
                 TarEntryType.CharacterDevice => CpioFileType.CharacterDevice,
                 TarEntryType.Fifo => CpioFileType.Fifo,
-                TarEntryType.V7RegularFile => throw new NotImplementedException(),
-                TarEntryType.RegularFile => throw new NotImplementedException(),
-                TarEntryType.ContiguousFile => throw new NotImplementedException(),
-                TarEntryType.DirectoryList => throw new NotImplementedException(),
-                TarEntryType.LongLink => throw new NotImplementedException(),
-                TarEntryType.LongPath => throw new NotImplementedException(),
-                TarEntryType.MultiVolume => throw new NotImplementedException(),
-                TarEntryType.RenamedOrSymlinked => throw new NotImplementedException(),
-                TarEntryType.SparseFile => throw new NotImplementedException(),
-                TarEntryType.TapeVolume => throw new NotImplementedException(),
-                TarEntryType.GlobalExtendedAttributes => throw new NotImplementedException(),
-                TarEntryType.ExtendedAttributes => throw new NotImplementedException(),
+                // 普通文件变体（V7/Contiguous/Sparse）映射为 Regular。
+                // Regular file variants (V7/Contiguous/Sparse) map to Regular.
+                TarEntryType.V7RegularFile => CpioFileType.Regular,
+                TarEntryType.RegularFile => CpioFileType.Regular,
+                TarEntryType.ContiguousFile => CpioFileType.Regular,
+                TarEntryType.SparseFile => CpioFileType.Regular,
+                TarEntryType.MultiVolume => CpioFileType.Regular,
+                TarEntryType.RenamedOrSymlinked => CpioFileType.Regular,
+                TarEntryType.DirectoryList => CpioFileType.Directory,
+                // 元数据条目（长名/PAX 扩展/磁带卷）不对应实际文件，映射为 Unknown。
+                // Metadata entries (long names / PAX extensions / tape volume) do not represent
+                // actual files; map to Unknown.
+                TarEntryType.LongLink => CpioFileType.Unknown,
+                TarEntryType.LongPath => CpioFileType.Unknown,
+                TarEntryType.TapeVolume => CpioFileType.Unknown,
+                TarEntryType.GlobalExtendedAttributes => CpioFileType.Unknown,
+                TarEntryType.ExtendedAttributes => CpioFileType.Unknown,
                 _ => CpioFileType.Regular,
             };
 

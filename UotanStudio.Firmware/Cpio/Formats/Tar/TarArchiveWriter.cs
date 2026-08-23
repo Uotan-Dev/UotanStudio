@@ -41,9 +41,11 @@ public sealed class TarArchiveWriter
             CpioFileType.CharacterDevice => TarEntryType.CharacterDevice,
             CpioFileType.BlockDevice => TarEntryType.BlockDevice,
             CpioFileType.Fifo => TarEntryType.Fifo,
-            CpioFileType.Unknown => throw new NotImplementedException(),
-            CpioFileType.Regular => throw new NotImplementedException(),
-            CpioFileType.Socket => throw new NotImplementedException(),
+            // TAR 格式没有 Socket 类型，保守映射为普通文件；Unknown 同样回退为普通文件。
+            // TAR has no Socket entry type; fall back to a regular file. Unknown falls back likewise.
+            CpioFileType.Socket => TarEntryType.RegularFile,
+            CpioFileType.Unknown => TarEntryType.RegularFile,
+            CpioFileType.Regular => TarEntryType.RegularFile,
             _ => TarEntryType.RegularFile,
         };
 

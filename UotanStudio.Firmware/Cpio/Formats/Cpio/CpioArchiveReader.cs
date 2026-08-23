@@ -42,9 +42,10 @@ public sealed class CpioArchiveReader
                 ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii => ReadNewAsciiLike(stream, detected),
                 ArchiveFormat.OldAscii or ArchiveFormat.HpOldAscii => ReadOldAsciiLike(stream, detected),
                 ArchiveFormat.Binary or ArchiveFormat.HpBinary => ReadBinaryLike(stream, detected),
-                ArchiveFormat.Unknown => throw new NotImplementedException(),
-                ArchiveFormat.Tar => throw new NotImplementedException(),
-                ArchiveFormat.Ustar => throw new NotImplementedException(),
+                // Unknown 无法读取；Tar/Ustar 不是 CPIO 格式，应使用 TarArchiveReader。
+                // Unknown cannot be read; Tar/Ustar are not CPIO formats and should use TarArchiveReader.
+                ArchiveFormat.Unknown => throw new NotSupportedException("Unknown CPIO archive format."),
+                ArchiveFormat.Tar or ArchiveFormat.Ustar => throw new NotSupportedException("TAR/Ustar is not a CPIO format; use TarArchiveReader instead."),
                 _ => throw new NotSupportedException($"Unsupported CPIO format: {detected}"),
             };
 

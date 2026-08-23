@@ -606,8 +606,10 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
             UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
             UsbApiKind.HarmonyOS => HarmonyOSUsbApiProvider.ApiNameConst,
-            UsbApiKind.Auto => throw new NotImplementedException(),
-            UsbApiKind.Custom => throw new NotImplementedException(),
+            // Auto 已在上方 ResolveProviders 开头解析为单一具体后端，不应到达此处。
+            // Auto is resolved to a concrete backend at the top of ResolveProviders; unreachable here.
+            UsbApiKind.Auto => string.Empty,
+            UsbApiKind.Custom => string.Empty,
             _ => string.Empty
         };
 
@@ -644,9 +646,9 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     {
         UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
         UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
-        UsbApiKind.Auto => throw new NotImplementedException(),
-        UsbApiKind.Custom => throw new NotImplementedException(),
-        UsbApiKind.HarmonyOS => throw new NotImplementedException(),
+        // 未知平台或非自动解析的后端没有首选名称，回退到首个可用后端。
+        // Unknown platforms and non-Auto resolved backends have no preferred name;
+        // fall back to the first supported backend.
         _ => null
     };
 

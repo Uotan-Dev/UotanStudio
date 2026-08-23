@@ -393,8 +393,10 @@ public static class CompressionService
             CompressionFormat.Bzip2 => Bzip2Compressor.Compress(data, options),
             CompressionFormat.Zstd => ZstdCompressor.Compress(data, options),
             CompressionFormat.None => data,
-            CompressionFormat.Lzop => throw new NotImplementedException(),
-            CompressionFormat.Zopfli => throw new NotImplementedException(),
+            // Lzop/Zopfli 仅识别魔数，压缩/解压未实现。
+            // Lzop/Zopfli are magic-number detected only; compression/decompression is not supported.
+            CompressionFormat.Lzop => throw new NotSupportedException("LZOP compression is not supported."),
+            CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli compression is not supported."),
             _ => throw new ArgumentException($"Unsupported compression format: {format}", nameof(format))
         };
     }
@@ -414,8 +416,10 @@ public static class CompressionService
             CompressionFormat.Bzip2 => Bzip2Compressor.Decompress(data),
             CompressionFormat.Zstd => ZstdCompressor.Decompress(data),
             CompressionFormat.None => data,
-            CompressionFormat.Lzop => throw new NotImplementedException(),
-            CompressionFormat.Zopfli => throw new NotImplementedException(),
+            // Lzop/Zopfli 仅识别魔数，压缩/解压未实现。
+            // Lzop/Zopfli are magic-number detected only; compression/decompression is not supported.
+            CompressionFormat.Lzop => throw new NotSupportedException("LZOP decompression is not supported."),
+            CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli decompression is not supported."),
             _ => throw new ArgumentException($"Unsupported decompression format: {format}", nameof(format))
         };
     }

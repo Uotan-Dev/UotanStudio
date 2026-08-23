@@ -139,9 +139,11 @@ public class BootImagePacker
             BootImageVersion.V0 => 0u,
             BootImageVersion.V1 => 1u,
             BootImageVersion.V2 => 2u,
-            BootImageVersion.Unknown => throw new NotImplementedException(),
-            BootImageVersion.V3 => throw new NotImplementedException(),
-            BootImageVersion.V4 => throw new NotImplementedException(),
+            // V3/V4 使用不同的 header 结构，不支持旧式打包；Unknown 为无效版本。
+            // V3/V4 use a different header structure and are not supported by this legacy packer; Unknown is invalid.
+            BootImageVersion.V3 => throw new NotSupportedException("Boot image V3 packing is not supported by this packer."),
+            BootImageVersion.V4 => throw new NotSupportedException("Boot image V4 packing is not supported by this packer."),
+            BootImageVersion.Unknown => throw new ArgumentException("Unknown boot image version.", nameof(Header.HeaderVersion)),
             _ => 0u
         });
         writer.Write(Header.OsVersion);
@@ -169,9 +171,11 @@ public class BootImagePacker
             BootImageVersion.V0 => 1632,
             BootImageVersion.V1 => 1648,
             BootImageVersion.V2 => 1664,
-            BootImageVersion.Unknown => throw new NotImplementedException(),
-            BootImageVersion.V3 => throw new NotImplementedException(),
-            BootImageVersion.V4 => throw new NotImplementedException(),
+            // V3/V4 使用不同的 header 结构，不支持旧式打包；Unknown 为无效版本。
+            // V3/V4 use a different header structure and are not supported by this legacy packer; Unknown is invalid.
+            BootImageVersion.V3 => throw new NotSupportedException("Boot image V3 packing is not supported by this packer."),
+            BootImageVersion.V4 => throw new NotSupportedException("Boot image V4 packing is not supported by this packer."),
+            BootImageVersion.Unknown => throw new ArgumentException("Unknown boot image version.", nameof(Header.HeaderVersion)),
             _ => 1632
         };
 

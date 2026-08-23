@@ -52,13 +52,8 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         return format switch
         {
             ArchiveFormat.Tar or ArchiveFormat.Ustar => _tarReader.ReadEntries(stream),
-            ArchiveFormat.Unknown => throw new NotImplementedException(),
-            ArchiveFormat.Binary => throw new NotImplementedException(),
-            ArchiveFormat.OldAscii => throw new NotImplementedException(),
-            ArchiveFormat.NewAscii => throw new NotImplementedException(),
-            ArchiveFormat.CrcAscii => throw new NotImplementedException(),
-            ArchiveFormat.HpOldAscii => throw new NotImplementedException(),
-            ArchiveFormat.HpBinary => throw new NotImplementedException(),
+            // 所有 CPIO 二进制/ASCII 变体由 CPIO reader 读取。
+            // All CPIO binary/ASCII variants are handled by the CPIO reader.
             _ => _cpioReader.ReadEntries(stream, format),
         };
     }

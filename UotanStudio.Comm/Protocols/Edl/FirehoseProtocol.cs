@@ -216,8 +216,10 @@ public class FirehoseConfiguration
         FirehoseStorageType.Ufs => "ufs",
         FirehoseStorageType.Nand => "nand",
         FirehoseStorageType.Spinor => "spinor",
-        FirehoseStorageType.Emmc => throw new NotImplementedException(),
-        FirehoseStorageType.Unknown => throw new NotImplementedException(),
+        FirehoseStorageType.Emmc => "eMMC",
+        // Unknown 存储类型无法生成有效 XML，返回空让调用方处理。
+        // Unknown storage type cannot produce valid XML; return empty for the caller to handle.
+        FirehoseStorageType.Unknown => string.Empty,
         _ => "eMMC"
     };
 }
@@ -448,9 +450,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
             sectorSize = Configuration.StorageType switch
             {
                 FirehoseStorageType.Ufs or FirehoseStorageType.Spinor => EdlConstants.DefaultSectorSizeLarge,
-                FirehoseStorageType.Emmc => throw new NotImplementedException(),
-                FirehoseStorageType.Nand => throw new NotImplementedException(),
-                FirehoseStorageType.Unknown => throw new NotImplementedException(),
+                // eMMC/NAND/Unknown 使用小扇区（512）作为保守默认值。
+                // eMMC/NAND/Unknown use the small sector size (512) as a conservative default.
                 _ => EdlConstants.DefaultSectorSizeSmall
             };
             Log($"Using default sector size for {Configuration.StorageType}: {sectorSize}");
@@ -494,8 +495,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 FirehoseStorageType.Spinor => EdlConstants.WriteTimeoutSpinorMs,
                 FirehoseStorageType.Nand => EdlConstants.WriteTimeoutNandMs,
                 FirehoseStorageType.Ufs => EdlConstants.WriteTimeoutUfsMs,
-                FirehoseStorageType.Emmc => throw new NotImplementedException(),
-                FirehoseStorageType.Unknown => throw new NotImplementedException(),
+                // eMMC/Unknown 使用默认写入超时。
+                // eMMC/Unknown use the default write timeout.
                 _ => EdlConstants.WriteTimeoutDefaultMs
             };
     }
@@ -514,8 +515,8 @@ public sealed partial class FirehoseProtocol(ICommTransport transport, FirehoseC
                 FirehoseStorageType.Spinor => EdlConstants.EraseTimeoutSpinorMs,
                 FirehoseStorageType.Nand => EdlConstants.EraseTimeoutNandMs,
                 FirehoseStorageType.Ufs => EdlConstants.EraseTimeoutUfsMs,
-                FirehoseStorageType.Emmc => throw new NotImplementedException(),
-                FirehoseStorageType.Unknown => throw new NotImplementedException(),
+                // eMMC/Unknown 使用 eMMC 擦除超时作为默认值。
+                // eMMC/Unknown use the eMMC erase timeout as the default.
                 _ => EdlConstants.EraseTimeoutEmmcMs
             };
     }

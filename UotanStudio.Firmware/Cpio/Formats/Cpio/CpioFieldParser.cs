@@ -75,8 +75,10 @@ internal static class CpioFieldParser
             CpioFileType.BlockDevice => 0x6000U,
             CpioFileType.Fifo => 0x1000U,
             CpioFileType.Socket => 0xC000U,
-            CpioFileType.Unknown => throw new NotImplementedException(),
-            CpioFileType.HardLink => throw new NotImplementedException(),
+            // 硬链接在 CPIO 中 mode 位与普通文件相同（指向既有 inode）。
+            // Hard links share the same mode bits as regular files in CPIO (point to an existing inode).
+            CpioFileType.HardLink => 0x8000U,
+            CpioFileType.Unknown => throw new ArgumentException("Unknown CPIO file type.", nameof(fileType)),
             _ => 0x8000U,
         };
 

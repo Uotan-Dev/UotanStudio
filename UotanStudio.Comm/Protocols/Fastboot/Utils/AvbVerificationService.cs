@@ -726,7 +726,7 @@ public sealed class AvbVerificationService
     {
         AvbAlgorithmType.Sha256Rsa2048 or AvbAlgorithmType.Sha256Rsa4096 or AvbAlgorithmType.Sha256Rsa8192 => "SHA256",
         AvbAlgorithmType.Sha512Rsa2048 or AvbAlgorithmType.Sha512Rsa4096 or AvbAlgorithmType.Sha512Rsa8192 => "SHA512",
-        AvbAlgorithmType.None => throw new NotImplementedException(),
+        AvbAlgorithmType.None => string.Empty,
         _ => string.Empty
     };
 
