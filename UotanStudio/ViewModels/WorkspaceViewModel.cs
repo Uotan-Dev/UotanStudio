@@ -2,27 +2,25 @@
 using Dock.Model.Core;
 using UotanStudio.Pages.DockControl;
 
-namespace UotanStudio.ViewModels
+namespace UotanStudio.ViewModels;
+
+public class WorkspaceViewModel : ViewModelBase
 {
-    public class WorkspaceViewModel : ViewModelBase
+    private readonly IFactory _factory;
+
+    public IRootDock? Layout
     {
-        private readonly IFactory _factory;
-        private IRootDock? _layout;
+        get;
+        set => SetProperty(ref field, value);
+    }
 
-        public IRootDock? Layout
+    public WorkspaceViewModel()
+    {
+        _factory = new WorkspaceDockFactory();
+        Layout = _factory.CreateLayout();
+        if (Layout != null)
         {
-            get => _layout;
-            set => SetProperty(ref _layout, value);
-        }
-
-        public WorkspaceViewModel()
-        {
-            _factory = new WorkspaceDockFactory();
-            Layout = _factory.CreateLayout();
-            if (Layout != null)
-            {
-                _factory.InitLayout(Layout);
-            }
+            _factory.InitLayout(Layout);
         }
     }
 }

@@ -1,0 +1,29 @@
+<u:SplashWindow x:Class="UotanStudio.Views.MainSplashWindow"
+               xmlns="https://github.com/avaloniaui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:u="https://irihi.tech/ursa"
+               xmlns:vm="using:UotanStudio.ViewModels"
+               x:DataType="vm:SplashViewModel"
+               Title="UotanStudio"
+               Width="480" Height="300"
+               CanResize="False"
+               ShowInTaskbar="False"
+               WindowStartupLocation="CenterScreen"
+               WindowDecorations="BorderOnly">
+    <!-- Ursa 主题启动窗：Logo + 应用名 + 启动状态文本 -->
+    <DockPanel LastChildFill="True">
+        <StackPanel DockPanel.Dock="Bottom" Margin="24,0,24,20" Spacing="8">
+            <TextBlock Text="{Binding StatusText}"
+                       FontSize="12" Opacity="0.7"
+                       HorizontalAlignment="Center" />
+            <ProgressBar IsIndeterminate="True" Height="4" MinWidth="320" />
+        </StackPanel>
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+            <Image Source="/Assets/UotanToolbox.png" Width="72" Height="72" />
+            <TextBlock Text="UotanStudio" FontSize="26" FontWeight="Bold"
+                       HorizontalAlignment="Center" />
+            <TextBlock Text="{DynamicResource Splash_Subtitle}" FontSize="13" Opacity="0.6"
+                       HorizontalAlignment="Center" />
+        </StackPanel>
+    </DockPanel>
+</u:SplashWindow>
