@@ -62,8 +62,9 @@ public class FastbootResponse
     public FastbootResponseState State { get; set; }
 
     /// <summary>
-    /// Gets or sets the response text.
-    /// <para>获取或设置响应文本。</para>
+    /// Gets or sets the response text: the accumulated TEXT frame content, or the terminal
+    /// OKAY/FAIL payload when no TEXT frames were received.
+    /// <para>获取或设置响应文本：累积的 TEXT 帧内容；未收到 TEXT 帧时为终止 OKAY/FAIL 帧的负载。</para>
     /// </summary>
     public string Text { get; set; } = string.Empty;
 
@@ -86,8 +87,11 @@ public class FastbootResponse
     public List<string> InfoLines { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the content following a status prefix (minus trailing NUL).
-    /// <para>获取或设置状态前缀后的内容（减去尾随 NUL）。</para>
+    /// Gets or sets the content following the terminal status prefix (minus trailing NUL),
+    /// e.g. the OKAY/FAIL payload. INFO frame contents are accumulated in
+    /// <see cref="InfoLines"/> instead.
+    /// <para>获取或设置终止状态前缀后的内容（减去尾随 NUL），如 OKAY/FAIL 负载。
+    /// INFO 帧内容累积在 <see cref="InfoLines"/> 中。</para>
     /// </summary>
     public string Info { get; set; } = string.Empty;
 
@@ -105,7 +109,9 @@ public class FastbootResponse
     public void ThrowIfFailed()
     {
         if (State is FastbootResponseState.Fail or FastbootResponseState.Timeout)
-            throw new FastbootException(State, Text);
+        {
+            throw new FastbootException(State, string.IsNullOrEmpty(Info) ? Text : Info);
+        }
     }
 }
 
@@ -113,23 +119,17 @@ public class FastbootResponse
 /// Exception thrown when a fastboot command fails.
 /// <para>fastboot 命令失败时抛出的异常。</para>
 /// </summary>
-public class FastbootException : Exception
+/// <remarks>
+/// Initializes a new instance of the <see cref="FastbootException"/> class.
+/// <para>初始化 <see cref="FastbootException"/> 类的新实例。</para>
+/// </remarks>
+/// <param name="state">The response state. 响应状态。</param>
+/// <param name="message">The error message. 错误消息。</param>
+public class FastbootException(FastbootResponseState state, string message) : Exception($"fastboot {state}: {message}")
 {
     /// <summary>
     /// Gets the response state.
     /// <para>获取响应状态。</para>
     /// </summary>
-    public FastbootResponseState State { get; }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FastbootException"/> class.
-    /// <para>初始化 <see cref="FastbootException"/> 类的新实例。</para>
-    /// </summary>
-    /// <param name="state">The response state. 响应状态。</param>
-    /// <param name="message">The error message. 错误消息。</param>
-    public FastbootException(FastbootResponseState state, string message)
-        : base($"fastboot {state}: {message}")
-    {
-        State = state;
-    }
+    public FastbootResponseState State { get; } = state;
 }
