@@ -35,6 +35,9 @@ public partial class App : Application
         // 将 Comm 层 USB 诊断桥接到统一日志服务（输出受 FIRMWAREKIT_USB_DEBUG=1 控制），
         // 并记录应用启动日志（历史缓冲由 LogService 保留，日志面板订阅时回填）。
         UsbLogBridge.Install();
+        // 注册全部固件格式处理器，供工作区固件分析面板的格式识别与扫描使用。
+        // Register all firmware format handlers for the workspace analyzer's detection.
+        UotanStudio.Firmware.FirmwareFormatRegistry.RegisterAll();
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
         // 仅初始化语言包注册表（纯内存操作，快速）；持久化设置的读取与主题/语言 XAML

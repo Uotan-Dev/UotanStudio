@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.Areas.ProjectExplorer"
+             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="600"
+             x:Class="UotanStudio.Areas.ProjectExplorer.ProjectExplorerView"
+             x:DataType="vm:ProjectExplorerViewModel">
+    <DockPanel>
+        <!-- 顶部操作栏 -->
+        <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button Width="28" Height="28" Padding="0"
+                        Click="OnCreateProjectClick"
+                        ToolTip.Tip="{DynamicResource Project_Create}">
+                    <avalonia:MaterialIcon Kind="FolderPlusOutline" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
+                        Click="OnOpenProjectClick"
+                        ToolTip.Tip="{DynamicResource Project_Open}">
+                    <avalonia:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding RefreshRecentCommand}"
+                        ToolTip.Tip="{DynamicResource Project_Refresh}">
+                    <avalonia:MaterialIcon Kind="Refresh" Width="16" Height="16" />
+                </Button>
+                <TextBlock VerticalAlignment="Center" Margin="6,0,0,0"
+                           Text="{Binding ProjectName}"
+                           FontWeight="SemiBold" />
+            </StackPanel>
+        </Border>
+
+        <!-- 状态行 -->
+        <Border DockPanel.Dock="Bottom" Height="28" Padding="8,0"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <TextBlock VerticalAlignment="Center" Text="{Binding StatusText}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" FontSize="12"
+                       TextTrimming="CharacterEllipsis" />
+        </Border>
+
+        <!-- 工程树 -->
+        <TreeView ItemsSource="{Binding Tree}" Margin="4">
+            <TreeView.ItemTemplate>
+                <DataTemplate>
+                    <TreeViewItem ItemsSource="{Binding Children}" IsExpanded="True">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <avalonia:MaterialIcon Kind="FileOutline" Width="16" Height="16" />
+                            <TextBlock Text="{Binding Name}" />
+                        </StackPanel>
+                    </TreeViewItem>
+                </DataTemplate>
+            </TreeView.ItemTemplate>
+        </TreeView>
+    </DockPanel>
+</UserControl>

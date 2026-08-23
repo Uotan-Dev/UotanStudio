@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.Areas.Output"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="300"
+             x:Class="UotanStudio.Areas.Output.OutputView"
+             x:DataType="vm:OutputViewModel">
+    <DockPanel>
+        <!-- 顶部工具 + 通道切换 -->
+        <Border DockPanel.Dock="Top" Height="36" Padding="8,2"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Width="28" Height="28" Padding="0"
+                        Command="{Binding ClearAllCommand}"
+                        ToolTip.Tip="{DynamicResource Output_Clear}">
+                    <avalonia:MaterialIcon Kind="TrashOutline" Width="16" Height="16" />
+                </Button>
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <RadioButton Content="{DynamicResource Output_All}" IsChecked="{Binding SelectedChannel, Converter={x:Static vm:ChannelEqualsConverter.All}}" />
+                    <RadioButton Content="{DynamicResource Output_Build}" IsChecked="{Binding SelectedChannel, Converter={x:Static vm:ChannelEqualsConverter.Build}}" />
+                    <RadioButton Content="{DynamicResource Output_Flash}" IsChecked="{Binding SelectedChannel, Converter={x:Static vm:ChannelEqualsConverter.Flash}}" />
+                    <RadioButton Content="{DynamicResource Output_Device}" IsChecked="{Binding SelectedChannel, Converter={x:Static vm:ChannelEqualsConverter.Device}}" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- 日志列表 -->
+        <ListBox ItemsSource="{Binding ActiveEntries}" Margin="4">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding Line}" TextWrapping="Wrap"
+                               FontFamily="Consolas" FontSize="12" />
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </DockPanel>
+</UserControl>

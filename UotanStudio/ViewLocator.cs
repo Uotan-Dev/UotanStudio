@@ -2,9 +2,13 @@ using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using UotanStudio.Areas.Analyzer;
 using UotanStudio.Areas.Device;
+using UotanStudio.Areas.Editor;
 using UotanStudio.Areas.Log;
 using UotanStudio.Areas.NodeEditor;
+using UotanStudio.Areas.Output;
+using UotanStudio.Areas.ProjectExplorer;
 using UotanStudio.Areas.Settings;
 using UotanStudio.Areas.Workspace;
 using UotanStudio.Services;
@@ -24,11 +28,15 @@ public sealed class ViewLocator : IDataTemplate
     private static readonly Dictionary<Type, Func<Control>> ViewMap = new()
     {
         [typeof(MainViewModel)] = () => new Views.MainView(),
-        [typeof(DeviceViewModel)] = () => new Areas.Device.DeviceView(),
-        [typeof(WorkspaceViewModel)] = () => new Areas.Workspace.WorkspaceView(),
-        [typeof(LogViewModel)] = () => new Areas.Log.LogView(),
-        [typeof(SettingsViewModel)] = () => new Areas.Settings.SettingsView(),
-        [typeof(NodeEditorViewModel)] = () => new Areas.NodeEditor.NodeEditorView(),
+        [typeof(DeviceViewModel)] = () => new DeviceView(),
+        [typeof(WorkspaceViewModel)] = () => new WorkspaceView(),
+        [typeof(LogViewModel)] = () => new LogView(),
+        [typeof(SettingsViewModel)] = () => new SettingsView(),
+        [typeof(NodeEditorViewModel)] = () => new NodeEditorView(),
+        [typeof(ProjectExplorerViewModel)] = () => new ProjectExplorerView(),
+        [typeof(EditorViewModel)] = () => new EditorView(),
+        [typeof(AnalyzerViewModel)] = () => new AnalyzerView(),
+        [typeof(OutputViewModel)] = () => new OutputView(),
     };
 
     /// <summary>

@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.Areas.Analyzer"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="UotanStudio.Areas.Analyzer.AnalyzerView"
+             x:DataType="vm:AnalyzerViewModel">
+    <DockPanel>
+        <!-- 顶部工具栏 -->
+        <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding ScanCommand}"
+                        ToolTip.Tip="{DynamicResource Analyzer_Scan}">
+                    <avalonia:MaterialIcon Kind="TuneVariant" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding ProbeCommand}"
+                        IsEnabled="{Binding SelectedComponent, Converter={StaticResource NotNullConverter}}"
+                        ToolTip.Tip="{DynamicResource Analyzer_Probe}">
+                    <avalonia:MaterialIcon Kind="Magnify" Width="16" Height="16" />
+                </Button>
+                <TextBlock VerticalAlignment="Center" Margin="6,0,0,0"
+                           Text="{DynamicResource Analyzer_Title}" FontWeight="SemiBold" />
+            </StackPanel>
+        </Border>
+
+        <Grid ColumnDefinitions="2*,*" Margin="4">
+            <!-- 部件列表 -->
+            <ListBox Grid.Column="0" ItemsSource="{Binding Components}"
+                     SelectedItem="{Binding SelectedComponent}" Margin="0,0,4,0">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8">
+                            <avalonia:MaterialIcon Kind="FileCogOutline" Width="16" Height="16"
+                                                   VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                            <Border Grid.Column="2" CornerRadius="4" Padding="6,2"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                                <TextBlock Text="{Binding FormatName}" FontSize="11"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- 分析摘要区 -->
+            <ScrollViewer Grid.Column="1">
+                <Border Padding="12" Margin="4,0,0,0"
+                        BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="6">
+                    <TextBlock Text="{Binding AnalysisSummary}" TextWrapping="Wrap"
+                               FontFamily="Consolas" FontSize="13" />
+                </Border>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- 状态行 -->
+        <Border DockPanel.Dock="Bottom" Height="28" Padding="8,0"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="{Binding Components.Count, StringFormat='{}{0} components'}" />
+            </StackPanel>
+        </Border>
+    </DockPanel>
+</UserControl>

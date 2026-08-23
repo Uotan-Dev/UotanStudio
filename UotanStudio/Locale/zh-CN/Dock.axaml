@@ -5,6 +5,37 @@
     <x:String x:Key="Dock_Properties">属性</x:String>
     <x:String x:Key="Dock_Output">输出</x:String>
     <x:String x:Key="Dock_AdbLog">ADB 日志</x:String>
+    <x:String x:Key="Dock_Analyzer">固件分析</x:String>
+    <x:String x:Key="Dock_Editor">编辑器</x:String>
     <x:String x:Key="Dock_Documents">文档</x:String>
+
+    <!-- 工程管理 -->
+    <x:String x:Key="Project_Create">新建工程</x:String>
+    <x:String x:Key="Project_Open">打开工程</x:String>
+    <x:String x:Key="Project_Refresh">刷新</x:String>
+    <x:String x:Key="Project_Opened">工程已打开</x:String>
+    <x:String x:Key="Project_OpenFailed">工程打开失败</x:String>
+    <x:String x:Key="Project_SaveFailed">工程保存失败</x:String>
+    <x:String x:Key="Project_Created">工程 {0} 已创建</x:String>
+
+    <!-- 编辑器 -->
+    <x:String x:Key="Editor_Open">打开文件</x:String>
+    <x:String x:Key="Editor_Save">保存</x:String>
+    <x:String x:Key="Editor_Empty">打开或新建文件开始编辑</x:String>
+
+    <!-- 固件分析 -->
+    <x:String x:Key="Analyzer_Scan">扫描部件</x:String>
+    <x:String x:Key="Analyzer_Probe">识别格式</x:String>
+    <x:String x:Key="Analyzer_Title">固件分析</x:String>
+    <x:String x:Key="Analyzer_NoProject">请先新建或打开一个工程</x:String>
+    <x:String x:Key="Analyzer_ScanSummary">发现 {0} 个部件</x:String>
+    <x:String x:Key="Analyzer_Unknown">未知格式</x:String>
+
+    <!-- 输出通道 -->
+    <x:String x:Key="Output_Clear">清空日志</x:String>
+    <x:String x:Key="Output_All">全部</x:String>
+    <x:String x:Key="Output_Build">构建</x:String>
+    <x:String x:Key="Output_Flash">烧录</x:String>
+    <x:String x:Key="Output_Device">设备</x:String>
 
 </ResourceDictionary>

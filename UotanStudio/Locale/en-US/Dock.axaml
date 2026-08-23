@@ -5,6 +5,37 @@
     <x:String x:Key="Dock_Properties">Properties</x:String>
     <x:String x:Key="Dock_Output">Output</x:String>
     <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
+    <x:String x:Key="Dock_Analyzer">Firmware Analyzer</x:String>
+    <x:String x:Key="Dock_Editor">Editor</x:String>
     <x:String x:Key="Dock_Documents">Documents</x:String>
+
+    <!-- Project -->
+    <x:String x:Key="Project_Create">New Project</x:String>
+    <x:String x:Key="Project_Open">Open Project</x:String>
+    <x:String x:Key="Project_Refresh">Refresh</x:String>
+    <x:String x:Key="Project_Opened">Project opened</x:String>
+    <x:String x:Key="Project_OpenFailed">Failed to open project</x:String>
+    <x:String x:Key="Project_SaveFailed">Failed to save project</x:String>
+    <x:String x:Key="Project_Created">Project {0} created</x:String>
+
+    <!-- Editor -->
+    <x:String x:Key="Editor_Open">Open File</x:String>
+    <x:String x:Key="Editor_Save">Save</x:String>
+    <x:String x:Key="Editor_Empty">Open or create a file to start editing</x:String>
+
+    <!-- Analyzer -->
+    <x:String x:Key="Analyzer_Scan">Scan Components</x:String>
+    <x:String x:Key="Analyzer_Probe">Detect Format</x:String>
+    <x:String x:Key="Analyzer_Title">Firmware Analyzer</x:String>
+    <x:String x:Key="Analyzer_NoProject">Create or open a project first</x:String>
+    <x:String x:Key="Analyzer_ScanSummary">{0} component(s) found</x:String>
+    <x:String x:Key="Analyzer_Unknown">Unknown format</x:String>
+
+    <!-- Output channels -->
+    <x:String x:Key="Output_Clear">Clear Logs</x:String>
+    <x:String x:Key="Output_All">All</x:String>
+    <x:String x:Key="Output_Build">Build</x:String>
+    <x:String x:Key="Output_Flash">Flash</x:String>
+    <x:String x:Key="Output_Device">Device</x:String>
 
 </ResourceDictionary>

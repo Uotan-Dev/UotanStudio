@@ -1,0 +1,87 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.Areas.Editor"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="UotanStudio.Areas.Editor.EditorView"
+             x:DataType="vm:EditorViewModel">
+    <DockPanel>
+        <!-- 顶部工具栏 -->
+        <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <Button Width="28" Height="28" Padding="0"
+                        Click="OnOpenClick"
+                        ToolTip.Tip="{DynamicResource Editor_Open}">
+                    <avalonia:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding SaveCommand}"
+                        IsEnabled="{Binding SelectedDocument.IsDirty}"
+                        ToolTip.Tip="{DynamicResource Editor_Save}">
+                    <avalonia:MaterialIcon Kind="ContentSaveOutline" Width="16" Height="16" />
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- 文档区 -->
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- 文档标签页（横向滚动） -->
+            <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{Binding Documents}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Padding="10,6" Margin="0,0,2,0"
+                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                    CornerRadius="4"
+                                    PointerPressed="OnTabPointerPressed">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding DisplayTitle}" FontSize="12"
+                                               VerticalAlignment="Center" />
+                                    <Button Width="16" Height="16" Padding="0"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Click="OnCloseClick"
+                                            Tag="{Binding}">
+                                        <avalonia:MaterialIcon Kind="Close" Width="10" Height="10" />
+                                    </Button>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- 编辑器主体 -->
+            <TextBox Grid.Row="1" Margin="4"
+                     Text="{Binding SelectedDocument.Text, Mode=TwoWay}"
+                     AcceptsReturn="True"
+                     AcceptsTab="True"
+                     TextWrapping="Wrap"
+                     FontFamily="Cascadia Mono,Consolas,monospace"
+                     FontSize="13"
+                     Background="Transparent"
+                     IsVisible="{Binding SelectedDocument, Converter={StaticResource NotNullConverter}}"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto" />
+
+            <!-- 无文档占位 -->
+            <TextBlock Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
+                       Text="{DynamicResource Editor_Empty}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       IsVisible="{Binding SelectedDocument, Converter={StaticResource NullConverter}}" />
+        </Grid>
+    </DockPanel>
+</UserControl>

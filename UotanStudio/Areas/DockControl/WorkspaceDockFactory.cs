@@ -5,6 +5,10 @@ using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Areas.Analyzer;
+using UotanStudio.Areas.Editor;
+using UotanStudio.Areas.Output;
+using UotanStudio.Areas.ProjectExplorer;
 using UotanStudio.Services;
 
 namespace UotanStudio.Areas.DockControl;
@@ -22,12 +26,12 @@ public class WorkspaceDockFactory : Factory
     /// <returns>The root dock layout.</returns>
     public override IRootDock CreateLayout()
     {
-        var document1 = new Document { Id = "Document1", Title = "build.prop", CanClose = true };
-        var document2 = new Document { Id = "Document2", Title = "init.rc", CanClose = true };
+        var document1 = new Document { Id = "Document1", Title = LanguageService.Instance.GetString("Dock_Editor"), CanClose = false };
 
-        var projectExplorer = new Tool { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = true };
-        var properties = new Tool { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = true };
-        var output = new Tool { Id = "Output", Title = LanguageService.Instance.GetString("Dock_Output"), CanClose = true };
+        var projectExplorer = new Tool { Id = "ProjectExplorer", Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"), CanClose = false };
+        var properties = new Tool { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = false };
+        var analyzer = new Tool { Id = "Analyzer", Title = LanguageService.Instance.GetString("Dock_Analyzer"), CanClose = false };
+        var output = new Tool { Id = "Output", Title = LanguageService.Instance.GetString("Dock_Output"), CanClose = false };
         var adbLog = new Tool { Id = "AdbLog", Title = LanguageService.Instance.GetString("Dock_AdbLog"), CanClose = true };
 
         var documentDock = new DocumentDock
@@ -37,16 +41,16 @@ public class WorkspaceDockFactory : Factory
             IsCollapsable = false,
             Proportion = double.NaN,
             ActiveDockable = document1,
-            VisibleDockables = CreateList<IDockable>(document1, document2)
+            VisibleDockables = CreateList<IDockable>(document1)
         };
 
         var rightTools = new ToolDock
         {
             Id = "RightPane",
             Title = "RightPane",
-            Proportion = 0.25,
+            Proportion = 0.3,
             ActiveDockable = properties,
-            VisibleDockables = CreateList<IDockable>(properties)
+            VisibleDockables = CreateList<IDockable>(analyzer, properties)
         };
 
         var leftTools = new ToolDock
@@ -120,14 +124,29 @@ public class WorkspaceDockFactory : Factory
         // 主题模板会直接绑定 DockCapabilityOverrides/DockCapabilityPolicy，预置非空对象避免 "Value is null" 绑定错误
         DockCapabilityDefaults.Ensure(layout);
 
+        // 面板视图模型：ProjectExplorer/Editor/Analyzer/Output 均为真实能力，经全局
+        // ViewLocator 映射到对应视图；文档区共享同一 EditorViewModel 以承载打开的文档。
+        // Panel view models: ProjectExplorer/Editor/Analyzer/Output map through the global
+        // ViewLocator to their views; the document area shares one EditorViewModel to host
+        // the opened documents.
+        var explorer = new ProjectExplorerViewModel();
+        var editor = new EditorViewModel();
+        var analyzer = new AnalyzerViewModel();
+        var output = new OutputViewModel();
+
+        // 文档上下文：启动时打开两个占位文档，引导用户使用编辑器。
+        // Document contexts: open two placeholder documents at startup to guide usage.
+        editor.OpenFileFromText("build.prop", "# build.prop\n# Auto-generated build properties\n\nro.build.id=UotanStudio\nro.build.version.release=14\nro.product.model=ExampleDevice\nro.build.type=userdebug\n");
+        editor.OpenFileFromText("init.rc", "# init.rc - Android init script\n\nservice adbd /system/bin/adbd\n    class core\n    socket adbd stream 660 system system\n");
+
         ContextLocator = new Dictionary<string, Func<object?>>
         {
-            ["Document1"] = () => "# build.prop\n# Auto-generated build properties\n\nro.build.id=UotanStudio\nro.build.version.release=14\nro.product.model=ExampleDevice\nro.build.type=userdebug\n",
-            ["Document2"] = () => "# init.rc - Android init script\n\nservice adbd /system/bin/adbd\n    class core\n    socket adbd stream 660 system system\n",
-            ["ProjectExplorer"] = () => "ProjectExplorer",
-            ["Properties"] = () => "Properties",
-            ["Output"] = () => "Output",
-            ["AdbLog"] = () => "AdbLog"
+            ["ProjectExplorer"] = () => explorer,
+            ["Analyzer"] = () => analyzer,
+            ["Properties"] = () => analyzer,
+            ["Output"] = () => output,
+            ["AdbLog"] = () => output,
+            ["Document1"] = () => editor
         };
 
         HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
