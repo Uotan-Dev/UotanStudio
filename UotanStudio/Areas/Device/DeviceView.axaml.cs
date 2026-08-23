@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace UotanStudio.Pages;
+namespace UotanStudio.Areas.Device;
 
 /// <summary>
 /// Device page view, providing ADB/Fastboot device list and connection management interface.

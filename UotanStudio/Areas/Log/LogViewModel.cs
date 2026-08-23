@@ -9,8 +9,9 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels;
+namespace UotanStudio.Areas.Log;
 
 /// <summary>
 /// <para>全局日志面板视图模型：订阅统一日志服务（<see cref="LogService"/>）的条目推送并维护
@@ -459,6 +460,6 @@ public sealed partial class LogEntryViewModel(string timestamp, LogLevel level, 
         LogLevel.Error => ErrorBrush,
         LogLevel.Fatal => FatalBrush,
         LogLevel.Info => InfoBrush,
-        _ => throw new NotImplementedException(),
+        _ => throw new ArgumentOutOfRangeException(nameof(Level), Level, "Unexpected log level."),
     };
 }

@@ -2,8 +2,9 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using Avalonia;
 using NodifyM.Avalonia.ViewModelBase;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels.NodeViewModels;
+namespace UotanStudio.Areas.NodeEditor.ViewModels;
 
 /// <summary>
 /// <para>节点类别枚举，定义不同类型的工具箱节点。</para>

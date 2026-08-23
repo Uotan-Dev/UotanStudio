@@ -1,7 +1,8 @@
 using System.Linq;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels.NodeViewModels;
+namespace UotanStudio.Areas.NodeEditor.ViewModels;
 
 /// <summary>
 /// <para>节点连接线视图模型，表示两个连接器之间的连接。</para>

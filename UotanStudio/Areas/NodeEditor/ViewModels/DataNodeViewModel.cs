@@ -4,8 +4,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using UotanStudio.Services;
+using UotanStudio.ViewModels;
 
-namespace UotanStudio.ViewModels.NodeViewModels;
+namespace UotanStudio.Areas.NodeEditor.ViewModels;
 
 /// <summary>
 /// <para>数据处理节点视图模型，提供文件读取、格式转换、校验和与比较功能。</para>

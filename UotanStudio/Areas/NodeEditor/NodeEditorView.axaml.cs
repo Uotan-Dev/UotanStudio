@@ -4,11 +4,11 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using NodifyM.Avalonia.Controls;
+using UotanStudio.Areas.NodeEditor;
+using UotanStudio.Areas.NodeEditor.ViewModels;
 using UotanStudio.Services;
-using UotanStudio.ViewModels;
-using UotanStudio.ViewModels.NodeViewModels;
 
-namespace UotanStudio.Pages;
+namespace UotanStudio.Areas.NodeEditor;
 
 /// <summary>
 /// Node editor view for creating and managing flow nodes.

@@ -3,11 +3,11 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
-             xmlns:vm="using:UotanStudio.ViewModels"
+             xmlns:vm="using:UotanStudio.Areas.NodeEditor"
              xmlns:nodify="clr-namespace:NodifyM.Avalonia.Controls;assembly=NodifyM.Avalonia"
-             xmlns:nodeVm="using:UotanStudio.ViewModels.NodeViewModels"
+             xmlns:nodeVm="using:UotanStudio.Areas.NodeEditor.ViewModels"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
-             x:Class="UotanStudio.Pages.NodeEditorView"
+             x:Class="UotanStudio.Areas.NodeEditor.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
     <DockPanel>
         <!-- 顶部工具栏 -->

@@ -2,9 +2,8 @@ using System.Collections.Specialized;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using UotanStudio.ViewModels;
 
-namespace UotanStudio.Pages;
+namespace UotanStudio.Areas.Log;
 
 /// <summary>
 /// Log page view, providing real-Time log viewing, filtering, pause, and export interface.
