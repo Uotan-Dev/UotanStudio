@@ -12,7 +12,6 @@ namespace UotanStudio.Comm.Extensions;
 /// </summary>
 public sealed class UsbStream : Stream
 {
-    private readonly IUsbDeviceSession _session;
 
     /// <summary>
     /// Initializes a new stream over the specified session.
@@ -21,7 +20,7 @@ public sealed class UsbStream : Stream
     /// <param name="session">The opened USB device session. <para>已打开的 USB 设备会话。</para></param>
     public UsbStream(IUsbDeviceSession session)
     {
-        _session = session ?? throw new ArgumentNullException(nameof(session));
+        Session = session ?? throw new ArgumentNullException(nameof(session));
         ReadTimeout = session.DefaultTimeoutMs;
         WriteTimeout = session.DefaultTimeoutMs;
     }
@@ -30,7 +29,7 @@ public sealed class UsbStream : Stream
     /// Gets the wrapped session.
     /// <para>获取被包装的会话。</para>
     /// </summary>
-    public IUsbDeviceSession Session => _session;
+    public IUsbDeviceSession Session { get; }
 
     /// <inheritdoc />
     public override bool CanRead => true;
@@ -55,7 +54,11 @@ public sealed class UsbStream : Stream
         get => _readTimeout;
         set
         {
-            if (value < 0 && value != InfiniteTimeout) throw new ArgumentOutOfRangeException(nameof(value));
+            if (value is < 0 and not InfiniteTimeout)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
             _readTimeout = value;
         }
     }
@@ -66,7 +69,11 @@ public sealed class UsbStream : Stream
         get => _writeTimeout;
         set
         {
-            if (value < 0 && value != InfiniteTimeout) throw new ArgumentOutOfRangeException(nameof(value));
+            if (value is < 0 and not InfiniteTimeout)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
             _writeTimeout = value;
         }
     }
@@ -92,11 +99,18 @@ public sealed class UsbStream : Stream
     {
         ArgumentNullException.ThrowIfNull(buffer);
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
-        if (count < 0 || count > buffer.Length - offset) throw new ArgumentOutOfRangeException(nameof(count));
-        if (count == 0) return 0;
+        if (count < 0 || count > buffer.Length - offset)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count));
+        }
+
+        if (count == 0)
+        {
+            return 0;
+        }
 
         // A returned count of 0 means the operation timed out (the session has no EOF concept).
-        return _session.ReadInto(buffer, offset, count, ReadTimeout);
+        return Session.ReadInto(buffer, offset, count, ReadTimeout);
     }
 
     /// <inheritdoc />
@@ -104,12 +118,19 @@ public sealed class UsbStream : Stream
     {
         ArgumentNullException.ThrowIfNull(buffer);
         ArgumentOutOfRangeException.ThrowIfNegative(offset);
-        if (count < 0 || count > buffer.Length - offset) throw new ArgumentOutOfRangeException(nameof(count));
-        if (count == 0) return;
+        if (count < 0 || count > buffer.Length - offset)
+        {
+            throw new ArgumentOutOfRangeException(nameof(count));
+        }
+
+        if (count == 0)
+        {
+            return;
+        }
 
         // The session's offset-aware Write overload writes straight from the caller's
         // buffer, avoiding a sub-range copy for chunked transfers (e.g. firmware images).
-        _ = _session.Write(buffer, offset, count, WriteTimeout);
+        _ = Session.Write(buffer, offset, count, WriteTimeout);
     }
 
     /// <inheritdoc />
@@ -131,5 +152,5 @@ public static class UsbStreamExtensions
     /// </summary>
     /// <param name="session">The opened USB device session. <para>已打开的 USB 设备会话。</para></param>
     /// <returns>A stream adapter over the session. <para>会话上的流适配器。</para></returns>
-    public static UsbStream AsStream(this IUsbDeviceSession session) => new UsbStream(session);
+    public static UsbStream AsStream(this IUsbDeviceSession session) => new(session);
 }

@@ -37,7 +37,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// </summary>
     /// <param name="libraryPath">Absolute path to the native libusb runtime.
     /// <para>原生 libusb 运行时的绝对路径。</para></param>
-    /// <exception cref="System.IO.FileNotFoundException">The path does not exist.
+    /// <exception cref="FileNotFoundException">The path does not exist.
     /// <para>路径不存在。</para></exception>
     public static void SetLibusbLibraryPath(string libraryPath) => LibUsbNativeLoader.SetLibraryPath(libraryPath);
 
@@ -52,11 +52,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// </summary>
     /// <returns>A read-only list of names. <para>名称只读列表。</para></returns>
     public IReadOnlyList<string> GetAvailableApis()
-    {
-        return _registry.GetApiNames()
-            .Where(name => _registry.TryCreate(name, out IUsbApiProvider? provider) && provider?.IsSupportedOnCurrentPlatform == true)
-            .ToList();
-    }
+        => [.. _registry.GetApiNames().Where(name => _registry.TryCreate(name, out var provider) && provider?.IsSupportedOnCurrentPlatform == true)];
 
     /// <summary>
     /// Gets capability summaries for the currently registered USB APIs.
@@ -64,11 +60,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// </summary>
     /// <returns>A read-only list of capability summaries. <para>能力摘要只读列表。</para></returns>
     public IReadOnlyList<UsbApiCapabilities> GetAvailableApiCapabilities()
-    {
-        return ResolveProviders(UsbApiKind.Auto)
-            .Select(CreateCapabilities)
-            .ToList();
-    }
+        => [.. ResolveProviders(UsbApiKind.Auto).Select(CreateCapabilities)];
 
     /// <summary>
     /// Enumerates devices for the selected backend.
@@ -99,10 +91,19 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         UsbDeviceFilter? filter,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<IUsbApiProvider> providers = ResolveProviders(apiKind);
+        var providers = ResolveProviders(apiKind);
         var devices = new List<UsbDeviceInfo>();
 
-        foreach (IUsbApiProvider provider in providers)
+        // Auto 解析多个后端（Windows 上为 WinUSB 原生 + libusb）时，同一物理设备会被
+        // 各后端分别枚举一次；按物理键去重，避免设备管理器出现重复条目
+        // （与 OpenDeviceSessions 的去重逻辑保持一致）。
+        // When Auto resolves multiple backends (WinUSB native + libusb on Windows) the
+        // same physical device is enumerated once per backend; deduplicate by physical
+        // key so the device manager does not show duplicate entries (mirrors
+        // OpenDeviceSessions).
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var provider in providers)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -111,9 +112,12 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
                 continue;
             }
 
-            if (provider.IsSupportedOnCurrentPlatform)
+            foreach (var info in provider.EnumerateDeviceInfos(filter))
             {
-                devices.AddRange(provider.EnumerateDeviceInfos(filter));
+                if (seen.Add(UsbDeviceIdentity.BuildPhysicalKey(info)))
+                {
+                    devices.Add(info);
+                }
             }
         }
 
@@ -152,8 +156,8 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(onDeviceFound);
 
-        IReadOnlyList<UsbDeviceInfo> devices = EnumerateDevices(apiKind, filter);
-        foreach (UsbDeviceInfo device in devices)
+        var devices = EnumerateDevices(apiKind, filter);
+        foreach (var device in devices)
         {
             onDeviceFound(device);
         }
@@ -182,13 +186,13 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     {
         ArgumentNullException.ThrowIfNull(onChanged);
 
-        TimeSpan interval = pollInterval ?? TimeSpan.FromSeconds(1);
+        var interval = pollInterval ?? TimeSpan.FromSeconds(1);
         if (interval <= TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(pollInterval));
         }
 
-        Func<IReadOnlyList<UsbDeviceInfo>> enumerator = () =>
+        IReadOnlyList<UsbDeviceInfo> Enumerator()
         {
             try
             {
@@ -200,7 +204,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
                 UsbTrace.Log($"MonitorDevices enumerate failed: {ex.GetType().Name}: {ex.Message}");
                 return [];
             }
-        };
+        }
 
         // Prefer libusb's native hotplug callback (event-driven on Linux/macOS) when the
         // caller explicitly selected the libusb backend. Falls back to polling when the
@@ -209,7 +213,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         {
             try
             {
-                return new UsbLibUsbHotplugMonitor(enumerator, onChanged, onError, filter);
+                return new UsbLibUsbHotplugMonitor(Enumerator, onChanged, onError, filter);
             }
             catch (PlatformNotSupportedException)
             {
@@ -231,12 +235,12 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         }
 
         // On Windows, prefer event-driven WM_DEVICECHANGE notifications for the native
-        // backend; fall back to polling when the hidden message window cannot be created.
+        // backend; fall back to polling when the hidden Message window cannot be created.
         if (apiKind == UsbApiKind.Native && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             try
             {
-                return new UsbWindowsHotplugMonitor(enumerator, onChanged, onError);
+                return new UsbWindowsHotplugMonitor(Enumerator, onChanged, onError);
             }
             catch (Exception ex)
             {
@@ -245,7 +249,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             }
         }
 
-        return new UsbDeviceMonitor(enumerator, onChanged, onError, interval, fireInitialSnapshot, cancellationToken);
+        return new UsbDeviceMonitor(Enumerator, onChanged, onError, interval, fireInitialSnapshot, cancellationToken);
     }
 
     /// <summary>
@@ -256,7 +260,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// </summary>
     /// <param name="apiKind">The USB API selection mode. <para>USB API 选择模式。</para></param>
     /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
-    /// <param name="timeout">Maximum wait time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
+    /// <param name="timeout">Maximum wait Time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns><c>true</c> when a matching device appeared before the timeout. <para>超时前出现匹配设备时返回 <c>true</c>。</para></returns>
     public Task<bool> WaitForDeviceAppearAsync(
@@ -265,7 +269,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
-        TimeSpan effectiveTimeout = NormalizeWaitTimeout(timeout);
+        var effectiveTimeout = NormalizeWaitTimeout(timeout);
         return WaitAsync(
             () => EnumerateDevicesCore(apiKind, filter, cancellationToken).Count > 0,
             effectiveTimeout,
@@ -280,7 +284,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// </summary>
     /// <param name="apiKind">The USB API selection mode. <para>USB API 选择模式。</para></param>
     /// <param name="filter">Optional device filter. <para>可选设备过滤器。</para></param>
-    /// <param name="timeout">Maximum wait time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
+    /// <param name="timeout">Maximum wait Time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns><c>true</c> when no matching device remains before the timeout. <para>超时前不再存在匹配设备时返回 <c>true</c>。</para></returns>
     public Task<bool> WaitForDeviceDisappearAsync(
@@ -289,7 +293,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
-        TimeSpan effectiveTimeout = NormalizeWaitTimeout(timeout);
+        var effectiveTimeout = NormalizeWaitTimeout(timeout);
         return WaitAsync(
             () => EnumerateDevicesCore(apiKind, filter, cancellationToken).Count == 0,
             effectiveTimeout,
@@ -307,7 +311,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// <param name="removedFilter">Filter for devices expected to disappear; pass <c>null</c> to skip this half. <para>预期消失的设备过滤条件；传 <c>null</c> 跳过该半边。</para></param>
     /// <param name="appearedFilter">Filter for devices expected to appear; pass <c>null</c> to skip this half. <para>预期出现的设备过滤条件；传 <c>null</c> 跳过该半边。</para></param>
     /// <param name="apiKind">The USB API selection mode. <para>USB API 选择模式。</para></param>
-    /// <param name="timeout">Maximum wait time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
+    /// <param name="timeout">Maximum wait Time (default 30 s). <para>最大等待时间（默认 30 秒）。</para></param>
     /// <param name="cancellationToken">A cancellation token. <para>取消令牌。</para></param>
     /// <returns><c>true</c> when the mode switch completed before the timeout. <para>超时前完成模式切换时返回 <c>true</c>。</para></returns>
     public Task<bool> WaitForModeSwitchAsync(
@@ -317,13 +321,10 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
-        TimeSpan effectiveTimeout = NormalizeWaitTimeout(timeout);
-        if (removedFilter == null && appearedFilter == null)
-        {
-            throw new ArgumentException("At least one of removedFilter/appearedFilter must be provided.");
-        }
-
-        return WaitAsync(
+        var effectiveTimeout = NormalizeWaitTimeout(timeout);
+        return removedFilter == null && appearedFilter == null
+            ? throw new ArgumentException("At least one of removedFilter/appearedFilter must be provided.")
+            : WaitAsync(
             () =>
             {
                 var removedCount = removedFilter == null ? 0 : EnumerateDevicesCore(apiKind, removedFilter, cancellationToken).Count;
@@ -336,19 +337,16 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
 
     private static TimeSpan NormalizeWaitTimeout(TimeSpan? timeout)
     {
-        TimeSpan effectiveTimeout = timeout ?? TimeSpan.FromSeconds(30);
-        if (effectiveTimeout <= TimeSpan.Zero)
-        {
-            throw new ArgumentOutOfRangeException(nameof(timeout), "Timeout must be positive.");
-        }
-
-        return effectiveTimeout;
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(30);
+        return effectiveTimeout <= TimeSpan.Zero
+            ? throw new ArgumentOutOfRangeException(nameof(timeout), "Timeout must be positive.")
+            : effectiveTimeout;
     }
 
     private static async Task<bool> WaitAsync(Func<bool> condition, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        const int PollIntervalMs = 250;
-        DateTime deadline = DateTime.UtcNow + timeout;
+        const int pollIntervalMs = 250;
+        var deadline = DateTime.UtcNow + timeout;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -357,13 +355,13 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
                 return true;
             }
 
-            TimeSpan remaining = deadline - DateTime.UtcNow;
+            var remaining = deadline - DateTime.UtcNow;
             if (remaining <= TimeSpan.Zero)
             {
                 return false;
             }
 
-            TimeSpan delay = remaining < TimeSpan.FromMilliseconds(PollIntervalMs) ? remaining : TimeSpan.FromMilliseconds(PollIntervalMs);
+            var delay = remaining < TimeSpan.FromMilliseconds(pollIntervalMs) ? remaining : TimeSpan.FromMilliseconds(pollIntervalMs);
             await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
         }
     }
@@ -379,18 +377,21 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         UsbApiKind apiKind = UsbApiKind.Auto,
         UsbDeviceFilter? filter = null)
     {
-        IReadOnlyList<IUsbApiProvider> providers = ResolveProviders(apiKind);
+        var providers = ResolveProviders(apiKind);
         var sessions = new List<IUsbDeviceSession>();
 
         // Auto 解析多个后端时，同一物理设备可能被 native 与 libusb 各枚举一次，
         // 按物理键去重，避免同一设备被打开两次。
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (IUsbApiProvider provider in providers)
+        foreach (var provider in providers)
         {
-            if (!provider.IsSupportedOnCurrentPlatform) continue;
+            if (!provider.IsSupportedOnCurrentPlatform)
+            {
+                continue;
+            }
 
-            foreach (IUsbDeviceSession session in provider.EnumerateDeviceSessions(filter))
+            foreach (var session in provider.EnumerateDeviceSessions(filter))
             {
                 if (seen.Add(UsbDeviceIdentity.BuildPhysicalKey(session.DeviceInfo)))
                 {
@@ -435,9 +436,9 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         UsbDeviceFilter? filter,
         UsbSessionOptions? options)
     {
-        IReadOnlyList<IUsbApiProvider> providers = ResolveProviders(apiKind);
+        var providers = ResolveProviders(apiKind);
 
-        foreach (IUsbApiProvider provider in providers)
+        foreach (var provider in providers)
         {
             if (!provider.IsSupportedOnCurrentPlatform)
             {
@@ -449,7 +450,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             // (third-party) providers keep the plain contract and ignore the options.
             // <para>通过内部提供器重载透传会话选项，使 WinUSB 后端可在创建句柄前应用
             // 超时/RAW_IO；自定义（第三方）提供器保持普通契约并忽略选项。</para>
-            IReadOnlyList<IUsbDeviceSession> sessions = provider is UsbApiProviderBase baseProvider
+            var sessions = provider is UsbApiProviderBase baseProvider
                 ? baseProvider.EnumerateDeviceSessions(filter, options)
                 : provider.EnumerateDeviceSessions(filter);
             if (sessions.Count == 0)
@@ -457,7 +458,7 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
                 continue;
             }
 
-            IUsbDeviceSession firstSession = sessions[0];
+            var firstSession = sessions[0];
             for (var index = 1; index < sessions.Count; index++)
             {
                 sessions[index].Dispose();
@@ -495,19 +496,19 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         // <para>重建键中内嵌的过滤器（VID/PID + 接口三元组），使后端绑定与生成该键时相同的
         // 接口。否则，接口过滤器产生的键（如 ADB FF|42|01）会被拿去与无接口约束打开的会话
         // 比较，而无约束打开会绑定复合设备第一个 bulk 接口（FF|FF|00），永远不等于所请求的键。</para>
-        UsbDeviceFilter? keyFilter = UsbDeviceIdentity.TryParseKeyFilter(deviceKey);
+        var keyFilter = UsbDeviceIdentity.TryParseKeyFilter(deviceKey);
 
-        IReadOnlyList<IUsbApiProvider> providers = ResolveProviders(apiKind);
+        var providers = ResolveProviders(apiKind);
 
-        foreach (IUsbApiProvider provider in providers)
+        foreach (var provider in providers)
         {
             if (!provider.IsSupportedOnCurrentPlatform)
             {
                 continue;
             }
 
-            IReadOnlyList<IUsbDeviceSession> sessions = provider.EnumerateDeviceSessions(keyFilter);
-            foreach (IUsbDeviceSession session in sessions)
+            var sessions = provider.EnumerateDeviceSessions(keyFilter);
+            foreach (var session in sessions)
             {
                 if (string.Equals(session.DeviceInfo.DeviceKey, deviceKey, StringComparison.Ordinal))
                 {
@@ -556,20 +557,12 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             _ => string.Empty
         };
 
-        if (string.IsNullOrEmpty(apiName)) return [];
-
-        if (_registry.TryCreate(apiName, out IUsbApiProvider? provider) && provider != null)
-        {
-            return new[] { provider };
-        }
-
-        return [];
+        return string.IsNullOrEmpty(apiName)
+            ? []
+            : _registry.TryCreate(apiName, out var provider) && provider != null ? [provider] : [];
     }
 
-    private static UsbApiCapabilities CreateCapabilities(IUsbApiProvider provider)
-    {
-        return provider.GetCapabilities();
-    }
+    private static UsbApiCapabilities CreateCapabilities(IUsbApiProvider provider) => provider.GetCapabilities();
 
     /// <summary>
     /// Returns a compact diagnostic summary of the last enumeration on the current platform,

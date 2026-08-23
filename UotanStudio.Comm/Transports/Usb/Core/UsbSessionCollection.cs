@@ -33,7 +33,7 @@ public sealed class UsbSessionCollection(IReadOnlyList<IUsbDeviceSession> sessio
     /// </summary>
     public void Dispose()
     {
-        foreach (IUsbDeviceSession session in Sessions)
+        foreach (var session in Sessions)
         {
             session.Dispose();
         }

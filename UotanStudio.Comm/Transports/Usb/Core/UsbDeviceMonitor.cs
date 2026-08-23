@@ -13,7 +13,7 @@ internal sealed class UsbDeviceMonitor : IDisposable
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
     private readonly Action<Exception>? _onError;
     private readonly TimeSpan _pollInterval;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private Timer? _timer;
     private Dictionary<string, UsbDeviceInfo> _lastSnapshot = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenRegistration? _cancellationRegistration;
@@ -50,7 +50,7 @@ internal sealed class UsbDeviceMonitor : IDisposable
             initialDevices = [];
         }
 
-        Dictionary<string, UsbDeviceInfo> initial = BuildMap(initialDevices);
+        var initial = BuildMap(initialDevices);
         _lastSnapshot = initial;
         if (fireInitialSnapshot && initial.Count > 0)
         {
@@ -103,7 +103,7 @@ internal sealed class UsbDeviceMonitor : IDisposable
 
         try
         {
-            Dictionary<string, UsbDeviceInfo> currentSnapshot = BuildMap(_enumerator());
+            var currentSnapshot = BuildMap(_enumerator());
             List<UsbDeviceChange>? changes = null;
 
             lock (_gate)
@@ -163,13 +163,13 @@ internal sealed class UsbDeviceMonitor : IDisposable
     {
         List<UsbDeviceChange>? changes = null;
 
-        foreach (KeyValuePair<string, UsbDeviceInfo> pair in current)
+        foreach (var pair in current)
         {
-            if (last.TryGetValue(pair.Key, out UsbDeviceInfo? previous))
+            if (last.TryGetValue(pair.Key, out var previous))
             {
                 if (HasMetadataChanged(previous, pair.Value))
                 {
-                    changes ??= new List<UsbDeviceChange>();
+                    changes ??= [];
                     changes.Add(new UsbDeviceChange
                     {
                         Kind = UsbDeviceChangeKind.Changed,
@@ -180,7 +180,7 @@ internal sealed class UsbDeviceMonitor : IDisposable
                 continue;
             }
 
-            changes ??= new List<UsbDeviceChange>();
+            changes ??= [];
             changes.Add(new UsbDeviceChange
             {
                 Kind = UsbDeviceChangeKind.Added,
@@ -188,14 +188,14 @@ internal sealed class UsbDeviceMonitor : IDisposable
             });
         }
 
-        foreach (KeyValuePair<string, UsbDeviceInfo> pair in last)
+        foreach (var pair in last)
         {
             if (current.ContainsKey(pair.Key))
             {
                 continue;
             }
 
-            changes ??= new List<UsbDeviceChange>();
+            changes ??= [];
             changes.Add(new UsbDeviceChange
             {
                 Kind = UsbDeviceChangeKind.Removed,
@@ -218,7 +218,7 @@ internal sealed class UsbDeviceMonitor : IDisposable
     internal static Dictionary<string, UsbDeviceInfo> BuildMap(IReadOnlyList<UsbDeviceInfo> devices)
     {
         var map = new Dictionary<string, UsbDeviceInfo>(StringComparer.OrdinalIgnoreCase);
-        foreach (UsbDeviceInfo device in devices)
+        foreach (var device in devices)
         {
             map[BuildIdentityKey(device)] = device;
         }

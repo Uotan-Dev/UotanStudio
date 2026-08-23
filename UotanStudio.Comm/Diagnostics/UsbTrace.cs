@@ -56,7 +56,11 @@ public static class UsbTrace
     /// <param name="message">The diagnostic message. <para>诊断消息。</para></param>
     public static void Log(string message)
     {
-        if (!IsEnabled || string.IsNullOrEmpty(message)) return;
+        if (!IsEnabled || string.IsNullOrEmpty(message))
+        {
+            return;
+        }
+
         Logger.Log(message);
     }
 
@@ -69,7 +73,11 @@ public static class UsbTrace
     /// <param name="message">The interpolated message. <para>插值消息。</para></param>
     public static void LogFormatted(FormattableString message)
     {
-        if (!IsEnabled || message == null) return;
+        if (!IsEnabled || message == null)
+        {
+            return;
+        }
+
         Logger.Log(message.ToString());
     }
 
@@ -85,7 +93,7 @@ public static class UsbTrace
             return;
         }
 
-        Action<UsbTransferEvent>? handler = TransferObserved;
+        var handler = TransferObserved;
         if (handler == null)
         {
             return;

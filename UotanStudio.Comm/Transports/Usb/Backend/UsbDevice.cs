@@ -178,11 +178,9 @@ internal abstract class UsbDevice : IDisposable
     /// </summary>
     protected virtual Exception CreateReadFatalException(int nativeError)
     {
-        if (IsDisconnectionError(nativeError))
-        {
-            return new UsbDeviceDisconnectedException($"USB device disconnected during read (native error: 0x{nativeError:X}).", nativeError);
-        }
-        return new IOException($"USB read failed with fatal error: 0x{nativeError:X}");
+        return IsDisconnectionError(nativeError)
+            ? new UsbDeviceDisconnectedException($"USB device disconnected during read (native error: 0x{nativeError:X}).", nativeError)
+            : (Exception)new IOException($"USB read failed with fatal error: 0x{nativeError:X}");
     }
 
     /// <summary>
@@ -191,11 +189,9 @@ internal abstract class UsbDevice : IDisposable
     /// </summary>
     protected virtual Exception CreateWriteFatalException(int nativeError)
     {
-        if (IsDisconnectionError(nativeError))
-        {
-            return new UsbDeviceDisconnectedException($"USB device disconnected during write (native error: 0x{nativeError:X}).", nativeError);
-        }
-        return new IOException($"USB write failed with fatal error: 0x{nativeError:X}");
+        return IsDisconnectionError(nativeError)
+            ? new UsbDeviceDisconnectedException($"USB device disconnected during write (native error: 0x{nativeError:X}).", nativeError)
+            : (Exception)new IOException($"USB write failed with fatal error: 0x{nativeError:X}");
     }
 
     /// <summary>
@@ -216,7 +212,7 @@ internal abstract class UsbDevice : IDisposable
     /// Describes the outcome of a single chunk transfer.
     /// <para>描述单次分块传输的结果。</para>
     /// </summary>
-    protected readonly struct UsbChunkResult(UsbDevice.UsbChunkStatus status, int transferred, int nativeError = 0, int retryCount = 0)
+    protected readonly struct UsbChunkResult(UsbChunkStatus status, int transferred, int nativeError = 0, int retryCount = 0)
     {
         public UsbChunkStatus Status { get; } = status;
         public int Transferred { get; } = transferred;
@@ -339,11 +335,19 @@ internal abstract class UsbDevice : IDisposable
     /// <returns>The number of bytes actually read. <para>实际读取的字节数。</para></returns>
     public virtual int ReadInto(byte[] buffer, int offset, int length)
     {
-        if (length <= 0) return 0;
+        if (length <= 0)
+        {
+            return 0;
+        }
+
         ValidateBufferRange(buffer, offset, length);
 
         var data = Read(length);
-        if (data.Length == 0) return 0;
+        if (data.Length == 0)
+        {
+            return 0;
+        }
+
         Buffer.BlockCopy(data, 0, buffer, offset, data.Length);
         return data.Length;
     }
@@ -354,7 +358,11 @@ internal abstract class UsbDevice : IDisposable
     /// </summary>
     private static byte[]? CapturePayload(byte[] buffer, int offset, int count)
     {
-        if (!UsbTrace.CaptureFrames || count <= 0) return null;
+        if (!UsbTrace.CaptureFrames || count <= 0)
+        {
+            return null;
+        }
+
         var cap = Math.Min(count, UsbTrace.MaxCaptureBytes);
         var frame = new byte[cap];
         Buffer.BlockCopy(buffer, offset, frame, 0, cap);
@@ -370,7 +378,10 @@ internal abstract class UsbDevice : IDisposable
         // Skip allocating the event object entirely when no subscriber is registered;
         // the transfer hot path otherwise constructs one per chunk.
         // <para>未注册订阅者时完全跳过事件对象分配；否则传输热路径每块都会构造一个。</para>
-        if (!UsbTrace.HasTransferSubscribers) return;
+        if (!UsbTrace.HasTransferSubscribers)
+        {
+            return;
+        }
 
         UsbTrace.EmitTransfer(new UsbTransferEvent
         {
@@ -417,7 +428,10 @@ internal abstract class UsbDevice : IDisposable
     /// <returns>The number of bytes read. <para>实际读取的字节数。</para></returns>
     public virtual int ReadInto(Span<byte> buffer, int timeoutMs)
     {
-        if (buffer.Length == 0) return 0;
+        if (buffer.Length == 0)
+        {
+            return 0;
+        }
 
         var temp = new byte[buffer.Length];
         var count = ReadInto(temp, 0, temp.Length, timeoutMs);
@@ -435,8 +449,8 @@ internal abstract class UsbDevice : IDisposable
     /// <para>将数据读取到指定缓冲区并报告传输结果。</para>
     /// <see cref="UsbReadResult.IsTimeout"/> is set when no data arrived before the deadline;
     /// <see cref="UsbReadResult.IsShortPacket"/> is set when the device ended the transfer with
-    /// fewer bytes than requested (the USB message boundary). Protocol layers use these flags to
-    /// distinguish "waiting for more data" from "message complete".
+    /// fewer bytes than requested (the USB Message boundary). Protocol layers use these flags to
+    /// distinguish "waiting for more data" from "Message complete".
     /// <para><see cref="UsbReadResult.IsTimeout"/> 表示在期限内没有数据到达；
     /// <see cref="UsbReadResult.IsShortPacket"/> 表示设备以少于请求的字节数结束传输
     /// （USB 消息边界）。协议层用这些标志区分"等待更多数据"与"消息已完成"。</para>
@@ -465,13 +479,17 @@ internal abstract class UsbDevice : IDisposable
     {
         var stopwatch = Stopwatch.StartNew();
         int? lastError = null;
-        UsbTransferOutcome outcome = UsbTransferOutcome.Success;
+        var outcome = UsbTransferOutcome.Success;
 
         if (!IsOpen)
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
-        if (length <= 0) return new UsbReadResult(0, false, false);
+        if (length <= 0)
+        {
+            return new UsbReadResult(0, false, false);
+        }
+
         ValidateBufferRange(buffer, offset, length);
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, DefaultTimeoutMs);
@@ -487,7 +505,7 @@ internal abstract class UsbDevice : IDisposable
                 var lenToRead = Math.Min(lenRemaining, MaxChunkSize);
                 var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset + count);
 
-                UsbChunkResult chunk = ReadChunk(ptr, lenToRead, effectiveTimeoutMs);
+                var chunk = ReadChunk(ptr, lenToRead, effectiveTimeoutMs);
                 retryCount += chunk.RetryCount;
 
                 if (chunk.Status == UsbChunkStatus.Timeout)
@@ -516,7 +534,10 @@ internal abstract class UsbDevice : IDisposable
                 lenRemaining -= transferred;
                 progress?.Report(count);
 
-                if (transferred < lenToRead) break;
+                if (transferred < lenToRead)
+                {
+                    break;
+                }
             }
         }
         finally
@@ -560,8 +581,15 @@ internal abstract class UsbDevice : IDisposable
 
         var buffer = new byte[length];
         var count = await ReadIntoAsync(buffer, 0, length, timeoutMs, cancellationToken).ConfigureAwait(false);
-        if (count == length) return buffer;
-        if (count == 0) return [];
+        if (count == length)
+        {
+            return buffer;
+        }
+
+        if (count == 0)
+        {
+            return [];
+        }
 
         var realData = new byte[count];
         Buffer.BlockCopy(buffer, 0, realData, 0, count);
@@ -580,7 +608,7 @@ internal abstract class UsbDevice : IDisposable
     /// <returns>A task that represents the asynchronous read operation with the number of bytes read. <para>表示异步读取操作并返回已读取字节数的任务。</para></returns>
     public virtual async Task<int> ReadIntoAsync(byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
-        UsbReadResult result = await ReadPacketAsync(buffer, offset, length, timeoutMs, cancellationToken).ConfigureAwait(false);
+        var result = await ReadPacketAsync(buffer, offset, length, timeoutMs, cancellationToken).ConfigureAwait(false);
         return result.Count;
     }
 
@@ -613,14 +641,18 @@ internal abstract class UsbDevice : IDisposable
     {
         var stopwatch = Stopwatch.StartNew();
         int? lastError = null;
-        UsbTransferOutcome outcome = UsbTransferOutcome.Success;
+        var outcome = UsbTransferOutcome.Success;
         var retryCount = 0;
 
         if (!IsOpen)
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
-        if (length <= 0) return new UsbReadResult(0, false, false);
+        if (length <= 0)
+        {
+            return new UsbReadResult(0, false, false);
+        }
+
         ValidateBufferRange(buffer, offset, length);
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, DefaultTimeoutMs);
@@ -637,7 +669,7 @@ internal abstract class UsbDevice : IDisposable
                 var lenToRead = Math.Min(lenRemaining, MaxChunkSize);
                 var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset + count);
 
-                UsbChunkResult chunk = await ReadChunkAsync(ptr, lenToRead, effectiveTimeoutMs, cancellationToken).ConfigureAwait(false);
+                var chunk = await ReadChunkAsync(ptr, lenToRead, effectiveTimeoutMs, cancellationToken).ConfigureAwait(false);
                 retryCount += chunk.RetryCount;
 
                 if (chunk.Status == UsbChunkStatus.Timeout)
@@ -666,7 +698,10 @@ internal abstract class UsbDevice : IDisposable
                 lenRemaining -= transferred;
                 progress?.Report(count);
 
-                if (transferred < lenToRead) break;
+                if (transferred < lenToRead)
+                {
+                    break;
+                }
             }
         }
         finally
@@ -744,7 +779,7 @@ internal abstract class UsbDevice : IDisposable
     {
         var stopwatch = Stopwatch.StartNew();
         int? lastError = null;
-        UsbTransferOutcome outcome = UsbTransferOutcome.Success;
+        var outcome = UsbTransferOutcome.Success;
         var retryCount = 0;
 
         if (!IsOpen)
@@ -772,7 +807,7 @@ internal abstract class UsbDevice : IDisposable
                 var lenToSend = Math.Min(lenRemaining, MaxChunkSize);
                 var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset + count);
 
-                UsbChunkResult chunk = WriteChunk(ptr, lenToSend, effectiveTimeoutMs);
+                var chunk = WriteChunk(ptr, lenToSend, effectiveTimeoutMs);
                 retryCount += chunk.RetryCount;
 
                 if (chunk.Status == UsbChunkStatus.Timeout)
@@ -801,7 +836,10 @@ internal abstract class UsbDevice : IDisposable
                 lenRemaining -= transferred;
                 progress?.Report(count);
 
-                if (transferred < lenToSend) break;
+                if (transferred < lenToSend)
+                {
+                    break;
+                }
             }
         }
         finally
@@ -859,7 +897,7 @@ internal abstract class UsbDevice : IDisposable
     {
         var stopwatch = Stopwatch.StartNew();
         int? lastError = null;
-        UsbTransferOutcome outcome = UsbTransferOutcome.Success;
+        var outcome = UsbTransferOutcome.Success;
         var retryCount = 0;
 
         if (!IsOpen)
@@ -889,7 +927,7 @@ internal abstract class UsbDevice : IDisposable
                 var lenToSend = Math.Min(lenRemaining, MaxChunkSize);
                 var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset + count);
 
-                UsbChunkResult chunk = await WriteChunkAsync(ptr, lenToSend, effectiveTimeoutMs, cancellationToken).ConfigureAwait(false);
+                var chunk = await WriteChunkAsync(ptr, lenToSend, effectiveTimeoutMs, cancellationToken).ConfigureAwait(false);
                 retryCount += chunk.RetryCount;
 
                 if (chunk.Status == UsbChunkStatus.Timeout)
@@ -918,7 +956,10 @@ internal abstract class UsbDevice : IDisposable
                 lenRemaining -= transferred;
                 progress?.Report(count);
 
-                if (transferred < lenToSend) break;
+                if (transferred < lenToSend)
+                {
+                    break;
+                }
             }
         }
         finally
@@ -971,8 +1012,8 @@ internal abstract class UsbDevice : IDisposable
 
     /// <summary>
     /// Sets the active alternate setting of an interface via the standard SET_INTERFACE
-    /// control request (request 0x0B, wValue = alternate setting, wIndex = interface number).
-    /// <para>通过标准 SET_INTERFACE 控制请求（请求 0x0B，wValue = 备用设置，wIndex = 接口编号）
+    /// control request (request 0x0B, WValue = alternate setting, WIndex = interface number).
+    /// <para>通过标准 SET_INTERFACE 控制请求（请求 0x0B，WValue = 备用设置，WIndex = 接口编号）
     /// 设置接口的活动备用设置。</para>
     /// </summary>
     /// <param name="interfaceNumber">The interface number. <para>接口编号。</para></param>
@@ -993,8 +1034,8 @@ internal abstract class UsbDevice : IDisposable
 
     /// <summary>
     /// Sets the active device configuration via the standard SET_CONFIGURATION control
-    /// request (request 0x09, wValue = configuration value).
-    /// <para>通过标准 SET_CONFIGURATION 控制请求（请求 0x09，wValue = 配置值）
+    /// request (request 0x09, WValue = configuration value).
+    /// <para>通过标准 SET_CONFIGURATION 控制请求（请求 0x09，WValue = 配置值）
     /// 设置设备的活动配置。</para>
     /// </summary>
     /// <param name="configuration">The configuration value to activate. <para>要激活的配置值。</para></param>

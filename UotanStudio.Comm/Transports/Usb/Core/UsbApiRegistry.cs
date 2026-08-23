@@ -53,7 +53,10 @@ public sealed class UsbApiRegistry
     public bool TryCreate(string apiName, out IUsbApiProvider? provider)
     {
         provider = null;
-        if (!_factories.TryGetValue(apiName, out Func<IUsbApiProvider>? factory)) return false;
+        if (!_factories.TryGetValue(apiName, out var factory))
+        {
+            return false;
+        }
 
         provider = factory();
         return true;
@@ -64,14 +67,14 @@ public sealed class UsbApiRegistry
     /// <para>创建所有已注册的提供器实例。</para>
     /// </summary>
     /// <returns>A read-only list of providers. <para>提供器只读列表。</para></returns>
-    public IReadOnlyList<IUsbApiProvider> CreateAll() => _factories.Values.Select(factory => factory()).ToList();
+    public IReadOnlyList<IUsbApiProvider> CreateAll() => [.. _factories.Values.Select(factory => factory())];
 
     /// <summary>
     /// Gets the registered API names.
     /// <para>获取已注册的 API 名称列表。</para>
     /// </summary>
     /// <returns>A read-only list of names. <para>名称只读列表。</para></returns>
-    public IReadOnlyList<string> GetApiNames() => _factories.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList();
+    public IReadOnlyList<string> GetApiNames() => [.. _factories.Keys.OrderBy(name => name, StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>
     /// Creates the default registry with native, libusb and harmony providers.

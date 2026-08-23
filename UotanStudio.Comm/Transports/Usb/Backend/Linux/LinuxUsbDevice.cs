@@ -8,14 +8,14 @@ internal class LinuxUsbDevice : UsbDevice
 {
     private const int PlatformDefaultTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
 
-    private readonly LinuxUsbFd _fd = new LinuxUsbFd();
+    private readonly LinuxUsbFd _fd = new();
 
     private int Fd => (int)_fd.DangerousGetHandle();
 
-    public byte ep_in { get; set; }
-    public byte ep_out { get; set; }
+    public byte Ep_in { get; set; }
+    public byte Ep_out { get; set; }
     public int InterfaceId { get; set; }
-    public byte iSerialNumber { get; set; }
+    public byte ISerialNumber { get; set; }
 
     /// <summary>
     /// Additional interfaces to claim in addition to <see cref="InterfaceId"/> (e.g. the
@@ -26,10 +26,10 @@ internal class LinuxUsbDevice : UsbDevice
     /// </summary>
     public IReadOnlyList<byte> ClaimedInterfaceIds { get; set; } = [];
 
-    private readonly List<byte> _claimedInterfaces = new();
+    private readonly List<byte> _claimedInterfaces = [];
 
-    public override byte EndpointIn => ep_in;
-    public override byte EndpointOut => ep_out;
+    public override byte EndpointIn => Ep_in;
+    public override byte EndpointOut => Ep_out;
 
     public override int DefaultTimeoutMs => PlatformDefaultTimeoutMs;
 
@@ -81,18 +81,22 @@ internal class LinuxUsbDevice : UsbDevice
     private bool ClaimInterface(byte interfaceId)
     {
         int ifc = interfaceId;
-        var n = ioctl(Fd, (UIntPtr)USBDEVFS_CLAIMINTERFACE, ref ifc);
+        var n = ioctl(Fd, USBDEVFS_CLAIMINTERFACE, ref ifc);
         if (n != 0)
         {
-            ioctl(Fd, (UIntPtr)USBDEVFS_DISCONNECT, ref ifc);
+            ioctl(Fd, USBDEVFS_DISCONNECT, ref ifc);
             // udev may rebind a kernel driver right after the disconnect, so retry the claim
             // instead of failing on the first EBUSY. Matches libusb's auto-detach behaviour.
             // <para>udev 可能在分离后立即重新绑定内核驱动，因此重试几次而不是首次 EBUSY 即失败；
             // 与 libusb 的自动分离行为一致。</para>
             for (var attempt = 0; attempt < 3; attempt++)
             {
-                n = ioctl(Fd, (UIntPtr)USBDEVFS_CLAIMINTERFACE, ref ifc);
-                if (n == 0) break;
+                n = ioctl(Fd, USBDEVFS_CLAIMINTERFACE, ref ifc);
+                if (n == 0)
+                {
+                    break;
+                }
+
                 Thread.Sleep(50);
             }
         }
@@ -115,7 +119,7 @@ internal class LinuxUsbDevice : UsbDevice
     {
         if (!_fd.IsInvalid)
         {
-            ioctl(Fd, (UIntPtr)USBDEVFS_RESET, IntPtr.Zero);
+            ioctl(Fd, USBDEVFS_RESET, IntPtr.Zero);
         }
     }
 
@@ -136,14 +140,14 @@ internal class LinuxUsbDevice : UsbDevice
         }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        var ctrl = new usbdevfs_ctrltransfer
+        var ctrl = new Usbdevfs_ctrltransfer
         {
-            bRequestType = setupPacket.RequestType,
-            bRequest = setupPacket.Request,
-            wValue = setupPacket.Value,
-            wIndex = setupPacket.Index,
-            wLength = (ushort)length,
-            timeout = (uint)effectiveTimeoutMs
+            BRequestType = setupPacket.RequestType,
+            BRequest = setupPacket.Request,
+            WValue = setupPacket.Value,
+            WIndex = setupPacket.Index,
+            WLength = (ushort)length,
+            Timeout = (uint)effectiveTimeoutMs
         };
 
         var isInDirection = (setupPacket.RequestType & 0x80) != 0;
@@ -155,14 +159,9 @@ internal class LinuxUsbDevice : UsbDevice
                 var pinnedHandle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
                 try
                 {
-                    ctrl.data = pinnedHandle.AddrOfPinnedObject();
-                    var result = ioctl(Fd, (UIntPtr)(IntPtr.Size == 8 ? USBDEVFS_CONTROL_X86_64 : USBDEVFS_CONTROL_X86), ref ctrl);
-                    if (result < 0)
-                    {
-                        throw new IOException($"USB control transfer failed with error: {Marshal.GetLastWin32Error()}");
-                    }
-
-                    return result;
+                    ctrl.Data = pinnedHandle.AddrOfPinnedObject();
+                    var result = ioctl(Fd, IntPtr.Size == 8 ? USBDEVFS_CONTROL_X86_64 : USBDEVFS_CONTROL_X86, ref ctrl);
+                    return result < 0 ? throw new IOException($"USB control transfer failed with error: {Marshal.GetLastWin32Error()}") : result;
                 }
                 finally
                 {
@@ -179,8 +178,8 @@ internal class LinuxUsbDevice : UsbDevice
             var transferHandle = GCHandle.Alloc(transferBuffer, GCHandleType.Pinned);
             try
             {
-                ctrl.data = transferHandle.AddrOfPinnedObject();
-                var result = ioctl(Fd, (UIntPtr)(IntPtr.Size == 8 ? USBDEVFS_CONTROL_X86_64 : USBDEVFS_CONTROL_X86), ref ctrl);
+                ctrl.Data = transferHandle.AddrOfPinnedObject();
+                var result = ioctl(Fd, IntPtr.Size == 8 ? USBDEVFS_CONTROL_X86_64 : USBDEVFS_CONTROL_X86, ref ctrl);
                 if (result < 0)
                 {
                     throw new IOException($"USB control transfer failed with error: {Marshal.GetLastWin32Error()}");
@@ -199,14 +198,9 @@ internal class LinuxUsbDevice : UsbDevice
             }
         }
 
-        ctrl.data = IntPtr.Zero;
-        var zeroResult = ioctl(Fd, (UIntPtr)(IntPtr.Size == 8 ? USBDEVFS_CONTROL_X86_64 : USBDEVFS_CONTROL_X86), ref ctrl);
-        if (zeroResult < 0)
-        {
-            throw new IOException($"USB control transfer failed with error: {Marshal.GetLastWin32Error()}");
-        }
-
-        return zeroResult;
+        ctrl.Data = IntPtr.Zero;
+        var zeroResult = ioctl(Fd, IntPtr.Size == 8 ? USBDEVFS_CONTROL_X86_64 : USBDEVFS_CONTROL_X86, ref ctrl);
+        return zeroResult < 0 ? throw new IOException($"USB control transfer failed with error: {Marshal.GetLastWin32Error()}") : zeroResult;
     }
 
     public override void Dispose()
@@ -216,7 +210,7 @@ internal class LinuxUsbDevice : UsbDevice
             foreach (var ifc in _claimedInterfaces)
             {
                 int interfaceId = ifc;
-                ioctl(Fd, (UIntPtr)USBDEVFS_RELEASEINTERFACE, ref interfaceId);
+                ioctl(Fd, USBDEVFS_RELEASEINTERFACE, ref interfaceId);
             }
 
             _claimedInterfaces.Clear();
@@ -226,9 +220,12 @@ internal class LinuxUsbDevice : UsbDevice
 
     public override int GetSerialNumber()
     {
-        if (iSerialNumber == 0) return -1;
+        if (ISerialNumber == 0)
+        {
+            return -1;
+        }
 
-        var ctrl = new usbdevfs_ctrltransfer();
+        var ctrl = new Usbdevfs_ctrltransfer();
         var descriptor = new byte[256];
         var handle = GCHandle.Alloc(descriptor, GCHandleType.Pinned);
         try
@@ -236,13 +233,13 @@ internal class LinuxUsbDevice : UsbDevice
             var ctrlCode = (IntPtr.Size == 8) ? USBDEVFS_CONTROL_X86_64 : USBDEVFS_CONTROL_X86;
             var ctrlCodePtr = (UIntPtr)ctrlCode;
 
-            ctrl.bRequestType = 0x80;
-            ctrl.bRequest = 0x06;
-            ctrl.wValue = (ushort)(0x03 << 8);
-            ctrl.wIndex = 0;
-            ctrl.wLength = (ushort)descriptor.Length;
-            ctrl.data = handle.AddrOfPinnedObject();
-            ctrl.timeout = 1000;
+            ctrl.BRequestType = 0x80;
+            ctrl.BRequest = 0x06;
+            ctrl.WValue = 0x03 << 8;
+            ctrl.WIndex = 0;
+            ctrl.WLength = (ushort)descriptor.Length;
+            ctrl.Data = handle.AddrOfPinnedObject();
+            ctrl.Timeout = 1000;
 
             var n = ioctl(Fd, ctrlCodePtr, ref ctrl);
             var languageCount = 0;
@@ -252,7 +249,7 @@ internal class LinuxUsbDevice : UsbDevice
                 languageCount = (n - 2) / 2;
                 for (var i = 0; i < languageCount; i++)
                 {
-                    languages[i] = (ushort)(descriptor[2 + i * 2] | (descriptor[3 + i * 2] << 8));
+                    languages[i] = (ushort)(descriptor[2 + (i * 2)] | (descriptor[3 + (i * 2)] << 8));
                 }
             }
             else
@@ -263,13 +260,13 @@ internal class LinuxUsbDevice : UsbDevice
 
             for (var i = 0; i < languageCount; i++)
             {
-                ctrl.bRequestType = 0x80;
-                ctrl.bRequest = 0x06;
-                ctrl.wValue = (ushort)((0x03 << 8) | iSerialNumber);
-                ctrl.wIndex = languages[i];
-                ctrl.wLength = (ushort)descriptor.Length;
-                ctrl.data = handle.AddrOfPinnedObject();
-                ctrl.timeout = 1000;
+                ctrl.BRequestType = 0x80;
+                ctrl.BRequest = 0x06;
+                ctrl.WValue = (ushort)((0x03 << 8) | ISerialNumber);
+                ctrl.WIndex = languages[i];
+                ctrl.WLength = (ushort)descriptor.Length;
+                ctrl.Data = handle.AddrOfPinnedObject();
+                ctrl.Timeout = 1000;
 
                 n = ioctl(Fd, ctrlCodePtr, ref ctrl);
                 if (n > 2)
@@ -290,12 +287,22 @@ internal class LinuxUsbDevice : UsbDevice
 
     public override byte[] Read(int length, int timeoutMs)
     {
-        if (length <= 0) return [];
+        if (length <= 0)
+        {
+            return [];
+        }
 
         var buffer = new byte[length];
         var count = ReadInto(buffer, 0, length, timeoutMs);
-        if (count == length) return buffer;
-        if (count == 0) return [];
+        if (count == length)
+        {
+            return buffer;
+        }
+
+        if (count == 0)
+        {
+            return [];
+        }
 
         var result = new byte[count];
         Buffer.BlockCopy(buffer, 0, result, 0, count);
@@ -312,36 +319,52 @@ internal class LinuxUsbDevice : UsbDevice
     internal override bool IsHandleOpen => !_fd.IsInvalid;
 
     protected override bool IsDisconnectionError(int nativeError)
-        => nativeError == ENODEV || nativeError == ESHUTDOWN || nativeError == EPROTO;
+        => nativeError is ENODEV or ESHUTDOWN or EPROTO;
 
     protected override int MaxChunkSize => UsbTransferPolicies.LinuxUsbFsMaxBulkSize;
 
     protected override UsbChunkResult ReadChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        var bulk = new usbdevfs_bulktransfer
+        var bulk = new Usbdevfs_bulktransfer
         {
-            ep = ep_in,
-            len = (uint)length,
-            timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
-            data = buffer
+            Ep = Ep_in,
+            Len = (uint)length,
+            Timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
+            Data = buffer
         };
 
         var bulkCode = (IntPtr.Size == 8) ? USBDEVFS_BULK_X86_64 : USBDEVFS_BULK_X86;
         var bulkCodePtr = (UIntPtr)bulkCode;
-        var n = -1;
         var retry = 0;
         var retryCount = 0;
-        UsbTransferRetryPolicy retryPolicy = UsbTransferPolicies.DefaultRetryPolicy;
+        var retryPolicy = UsbTransferPolicies.DefaultRetryPolicy;
+        int n;
         do
         {
             n = ioctl(Fd, bulkCodePtr, ref bulk);
             if (n < 0)
             {
                 var err = Marshal.GetLastWin32Error();
-                if (err == EINTR || err == EAGAIN) continue;
-                if (err == ETIMEDOUT) return UsbChunkResult.Timeout(err);
-                if (err == ENODEV || err == ESHUTDOWN || err == EPROTO) return UsbChunkResult.Fatal(err);
-                if (++retry > retryPolicy.MaxRetries) return UsbChunkResult.Error(err);
+                if (err is EINTR or EAGAIN)
+                {
+                    continue;
+                }
+
+                if (err == ETIMEDOUT)
+                {
+                    return UsbChunkResult.Timeout(err);
+                }
+
+                if (err is ENODEV or ESHUTDOWN or EPROTO)
+                {
+                    return UsbChunkResult.Fatal(err);
+                }
+
+                if (++retry > retryPolicy.MaxRetries)
+                {
+                    return UsbChunkResult.Error(err);
+                }
+
                 retryCount++;
                 Thread.Sleep(retryPolicy.RetryDelayMs);
             }
@@ -351,30 +374,46 @@ internal class LinuxUsbDevice : UsbDevice
 
     protected override UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        var bulk = new usbdevfs_bulktransfer
+        var bulk = new Usbdevfs_bulktransfer
         {
-            ep = ep_out,
-            len = (uint)length,
-            timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
-            data = buffer
+            Ep = Ep_out,
+            Len = (uint)length,
+            Timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
+            Data = buffer
         };
 
         var bulkCode = (IntPtr.Size == 8) ? USBDEVFS_BULK_X86_64 : USBDEVFS_BULK_X86;
         var bulkCodePtr = (UIntPtr)bulkCode;
-        var n = -1;
         var retry = 0;
         var retryCount = 0;
-        UsbTransferRetryPolicy retryPolicy = UsbTransferPolicies.DefaultRetryPolicy;
+        var retryPolicy = UsbTransferPolicies.DefaultRetryPolicy;
+        int n;
         do
         {
             n = ioctl(Fd, bulkCodePtr, ref bulk);
             if (n < 0)
             {
                 var err = Marshal.GetLastWin32Error();
-                if (err == EINTR || err == EAGAIN) continue;
-                if (err == ETIMEDOUT) return UsbChunkResult.Timeout(err);
-                if (err == ENODEV || err == ESHUTDOWN || err == EPROTO) return UsbChunkResult.Fatal(err);
-                if (++retry > retryPolicy.MaxRetries) return UsbChunkResult.Error(err);
+                if (err is EINTR or EAGAIN)
+                {
+                    continue;
+                }
+
+                if (err == ETIMEDOUT)
+                {
+                    return UsbChunkResult.Timeout(err);
+                }
+
+                if (err is ENODEV or ESHUTDOWN or EPROTO)
+                {
+                    return UsbChunkResult.Fatal(err);
+                }
+
+                if (++retry > retryPolicy.MaxRetries)
+                {
+                    return UsbChunkResult.Error(err);
+                }
+
                 retryCount++;
                 Thread.Sleep(retryPolicy.RetryDelayMs);
             }
@@ -391,22 +430,22 @@ internal class LinuxUsbDevice : UsbDevice
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
 
-        var bulk = new usbdevfs_bulktransfer
+        var bulk = new Usbdevfs_bulktransfer
         {
-            ep = ep_out,
-            len = 0,
+            Ep = Ep_out,
+            Len = 0,
             // usbfs treats 0 as "no timeout"; map the -1 sentinel accordingly.
             // <para>usbfs 将 0 视为"无超时"；因此将 -1 哨兵映射为 0。</para>
-            timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
-            data = IntPtr.Zero
+            Timeout = timeoutMs == UsbTransferPolicies.InfiniteTimeoutMs ? 0 : (uint)timeoutMs,
+            Data = IntPtr.Zero
         };
 
         var bulkCode = (IntPtr.Size == 8) ? USBDEVFS_BULK_X86_64 : USBDEVFS_BULK_X86;
-        var n = ioctl(Fd, (UIntPtr)bulkCode, ref bulk);
+        var n = ioctl(Fd, bulkCode, ref bulk);
         if (n < 0)
         {
             var err = Marshal.GetLastWin32Error();
-            if (err == ENODEV || err == ESHUTDOWN || err == EPROTO)
+            if (err is ENODEV or ESHUTDOWN or EPROTO)
             {
                 throw new UsbDeviceDisconnectedException("USB device disconnected during zero-length write.", err);
             }
@@ -420,18 +459,20 @@ internal class LinuxUsbDevice : UsbDevice
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
-        if (length <= 0) return new UsbReadResult(0, false, false);
+        if (length <= 0)
+        {
+            return new UsbReadResult(0, false, false);
+        }
+
         ValidateBufferRange(buffer, offset, length);
 
         // Interrupt endpoints cannot use the USBDEVFS_BULK ioctl; they require an URB of
         // type USBDEVFS_URB_TYPE_INTERRUPT, so reuse the async URB machinery synchronously.
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
         var transferred = SubmitUrbAsync(endpointAddress, buffer, offset, length, effectiveTimeoutMs, CancellationToken.None, USBDEVFS_URB_TYPE_INTERRUPT).GetAwaiter().GetResult();
-        if (transferred == 0)
-        {
-            return new UsbReadResult(0, isTimeout: true, isShortPacket: false);
-        }
-        return new UsbReadResult((int)transferred, isTimeout: false, isShortPacket: transferred < length);
+        return transferred == 0
+            ? new UsbReadResult(0, isTimeout: true, isShortPacket: false)
+            : new UsbReadResult((int)transferred, isTimeout: false, isShortPacket: transferred < length);
     }
 
     public override long WriteInterrupt(byte endpointAddress, byte[] data, int offset, int length, int timeoutMs)
@@ -441,7 +482,10 @@ internal class LinuxUsbDevice : UsbDevice
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
         ValidateWriteData(data, offset, length);
-        if (length == 0) return 0;
+        if (length == 0)
+        {
+            return 0;
+        }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
         var transferred = SubmitUrbAsync(endpointAddress, data, offset, length, effectiveTimeoutMs, CancellationToken.None, USBDEVFS_URB_TYPE_INTERRUPT).GetAwaiter().GetResult();
@@ -463,7 +507,7 @@ internal class LinuxUsbDevice : UsbDevice
             effectiveTimeoutMs = 0;
         }
 
-        var transferred = await SubmitUrbAsync(ep_in, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
+        var transferred = await SubmitUrbAsync(Ep_in, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
         return transferred > 0
             ? UsbChunkResult.Success((int)transferred)
             : UsbChunkResult.Timeout(ETIMEDOUT);
@@ -482,7 +526,7 @@ internal class LinuxUsbDevice : UsbDevice
             effectiveTimeoutMs = 0;
         }
 
-        var transferred = await SubmitUrbAsync(ep_out, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
+        var transferred = await SubmitUrbAsync(Ep_out, buffer, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
         return transferred > 0
             ? UsbChunkResult.Success((int)transferred)
             : UsbChunkResult.Timeout(ETIMEDOUT);
@@ -494,7 +538,11 @@ internal class LinuxUsbDevice : UsbDevice
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
-        if (length <= 0) return new UsbReadResult(0, false, false);
+        if (length <= 0)
+        {
+            return new UsbReadResult(0, false, false);
+        }
+
         ValidateBufferRange(buffer, offset, length);
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
@@ -503,11 +551,9 @@ internal class LinuxUsbDevice : UsbDevice
         {
             var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset);
             var transferred = await SubmitUrbAsync(endpointAddress, ptr, length, effectiveTimeoutMs, cancellationToken, USBDEVFS_URB_TYPE_INTERRUPT).ConfigureAwait(false);
-            if (transferred == 0)
-            {
-                return new UsbReadResult(0, isTimeout: true, isShortPacket: false);
-            }
-            return new UsbReadResult((int)transferred, isTimeout: false, isShortPacket: transferred < length);
+            return transferred == 0
+                ? new UsbReadResult(0, isTimeout: true, isShortPacket: false)
+                : new UsbReadResult((int)transferred, isTimeout: false, isShortPacket: transferred < length);
         }
         finally
         {
@@ -522,7 +568,10 @@ internal class LinuxUsbDevice : UsbDevice
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
         ValidateWriteData(data, offset, length);
-        if (length == 0) return 0;
+        if (length == 0)
+        {
+            return 0;
+        }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
         var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
@@ -537,13 +586,6 @@ internal class LinuxUsbDevice : UsbDevice
             handle.Free();
         }
     }
-
-    /// <summary>
-    /// Submits a bulk URB and waits for completion via poll(). The kernel performs the
-    /// transfer asynchronously; a thread-pool thread waits on poll() without blocking the caller.
-    /// <para>提交批量 URB 并通过 poll() 等待完成。内核异步执行传输；线程池线程在 poll() 上等待，不阻塞调用方。</para>
-    /// </summary>
-    private async Task<uint> SubmitUrbAsync(byte endpoint, byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken) => await SubmitUrbAsync(endpoint, buffer, offset, length, timeoutMs, cancellationToken, USBDEVFS_URB_TYPE_BULK).ConfigureAwait(false);
 
     private async Task<uint> SubmitUrbAsync(byte endpoint, byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken, byte urbType)
     {
@@ -569,21 +611,21 @@ internal class LinuxUsbDevice : UsbDevice
     /// </summary>
     private async Task<uint> SubmitUrbAsync(byte endpoint, IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken, byte urbType)
     {
-        var urb = new usbdevfs_urb
+        var urb = new Usbdevfs_urb
         {
-            type = urbType,
-            endpoint = endpoint,
-            flags = 0, // keep short reads completing normally (do not set SHORT_NOT_OK)
-            buffer = buffer,
-            buffer_length = length,
-            usercontext = IntPtr.Zero
+            Type = urbType,
+            Endpoint = endpoint,
+            Flags = 0, // keep short reads completing normally (do not set SHORT_NOT_OK)
+            Buffer = buffer,
+            Buffer_length = length,
+            Usercontext = IntPtr.Zero
         };
 
         var urbHandle = GCHandle.Alloc(urb, GCHandleType.Pinned);
         try
         {
             var submitCode = (IntPtr.Size == 8) ? USBDEVFS_SUBMITURB_X86_64 : USBDEVFS_SUBMITURB_X86;
-            if (ioctl(Fd, (UIntPtr)submitCode, urbHandle.AddrOfPinnedObject()) < 0)
+            if (ioctl(Fd, submitCode, urbHandle.AddrOfPinnedObject()) < 0)
             {
                 throw new IOException($"USB async submit failed: {Marshal.GetLastWin32Error()}");
             }
@@ -593,7 +635,7 @@ internal class LinuxUsbDevice : UsbDevice
             {
                 pollResult = await Task.Run(() =>
                 {
-                    var pfd = new PollFd { fd = Fd, events = (short)(POLLIN | POLLOUT) };
+                    var pfd = new PollFd { Fd = Fd, Events = POLLIN | POLLOUT };
                     return poll(ref pfd, 1, timeoutMs);
                 }, cancellationToken).ConfigureAwait(false);
             }
@@ -614,30 +656,28 @@ internal class LinuxUsbDevice : UsbDevice
             if (pollResult < 0)
             {
                 var err = Marshal.GetLastWin32Error();
-                if (err == EINTR) return 0;
-                throw new IOException($"USB async poll failed: {err}");
+                return err == EINTR ? (uint)0 : throw new IOException($"USB async poll failed: {err}");
             }
 
-            // Reap the completed URB and read its status/actual_length.
+            // Reap the completed URB and read its status/Actual_length.
             var reaped = IntPtr.Zero;
             var reapCode2 = (IntPtr.Size == 8) ? USBDEVFS_REAPURBNDELAY_X86_64 : USBDEVFS_REAPURBNDELAY_X86;
-            if (ioctl(Fd, (UIntPtr)reapCode2, ref reaped) < 0)
+            if (ioctl(Fd, reapCode2, ref reaped) < 0)
             {
                 throw new IOException($"USB async reap failed: {Marshal.GetLastWin32Error()}");
             }
 
-            usbdevfs_urb completed = Marshal.PtrToStructure<usbdevfs_urb>(reaped);
-            if (completed.status != 0)
+            var completed = Marshal.PtrToStructure<Usbdevfs_urb>(reaped);
+            if (completed.Status != 0)
             {
-                var err = -completed.status; // kernel reports negative errno in status
-                if (err == ETIMEDOUT || err == EPIPE) return 0;
-                if (err == ENODEV || err == ESHUTDOWN || err == EPROTO)
-                {
-                    throw new UsbDeviceDisconnectedException($"USB async transfer failed: device disconnected (error: {err}).", err);
-                }
-                return 0;
+                var err = -completed.Status; // kernel reports negative errno in status
+                return err is ETIMEDOUT or EPIPE
+                    ? 0
+                    : err is ENODEV or ESHUTDOWN or EPROTO
+                    ? throw new UsbDeviceDisconnectedException($"USB async transfer failed: device disconnected (error: {err}).", err)
+                    : (uint)0;
             }
-            return (uint)Math.Max(0, completed.actual_length);
+            return (uint)Math.Max(0, completed.Actual_length);
         }
         finally
         {
@@ -657,9 +697,7 @@ internal class LinuxUsbDevice : UsbDevice
         var drain = IntPtr.Zero;
         var discardCode = (IntPtr.Size == 8) ? USBDEVFS_DISCARDURB_X86_64 : USBDEVFS_DISCARDURB_X86;
         var reapCode = (IntPtr.Size == 8) ? USBDEVFS_REAPURBNDELAY_X86_64 : USBDEVFS_REAPURBNDELAY_X86;
-        _ = ioctl(Fd, (UIntPtr)discardCode, urbHandle.AddrOfPinnedObject());
-        _ = ioctl(Fd, (UIntPtr)reapCode, ref drain);
+        _ = ioctl(Fd, discardCode, urbHandle.AddrOfPinnedObject());
+        _ = ioctl(Fd, reapCode, ref drain);
     }
 }
-
-

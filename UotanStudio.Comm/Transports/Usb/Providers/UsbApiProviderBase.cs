@@ -64,18 +64,24 @@ internal abstract class UsbApiProviderBase : IUsbApiProvider
     /// <returns>The discovered device sessions. <para>发现的设备会话。</para></returns>
     internal IReadOnlyList<IUsbDeviceSession> EnumerateDeviceSessions(UsbDeviceFilter? filter, UsbSessionOptions? options)
     {
-        if (!IsSupportedOnCurrentPlatform) return Array.Empty<IUsbDeviceSession>();
+        if (!IsSupportedOnCurrentPlatform)
+        {
+            return [];
+        }
 
-        List<UsbDevice> devices = EnumerateBackendDevices(filter, options);
+        var devices = EnumerateBackendDevices(filter, options);
         return UsbProviderProjection.ToSessions(ApiName, ApiKind, devices, filter);
     }
 
     /// <inheritdoc/>
     public IReadOnlyList<UsbDeviceInfo> EnumerateDeviceInfos(UsbDeviceFilter? filter = null)
     {
-        if (!IsSupportedOnCurrentPlatform) return Array.Empty<UsbDeviceInfo>();
+        if (!IsSupportedOnCurrentPlatform)
+        {
+            return [];
+        }
 
-        List<UsbDevice> devices = EnumerateBackendDevices(filter);
+        var devices = EnumerateBackendDevices(filter);
         return UsbProviderProjection.ToInfos(ApiName, ApiKind, devices, filter);
     }
 
@@ -99,17 +105,17 @@ internal abstract class UsbApiProviderBase : IUsbApiProvider
         catch (DllNotFoundException ex)
         {
             UsbTrace.Log($"{backendTag} backend unavailable: {ex.Message}");
-            return new List<UsbDevice>();
+            return [];
         }
         catch (TypeInitializationException ex)
         {
             UsbTrace.Log($"{backendTag} initialization failed: {ex.Message}");
-            return new List<UsbDevice>();
+            return [];
         }
         catch
         {
             UsbTrace.Log($"{backendTag} enumeration failed with unknown exception.");
-            return new List<UsbDevice>();
+            return [];
         }
     }
 }

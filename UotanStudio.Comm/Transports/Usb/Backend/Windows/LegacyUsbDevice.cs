@@ -1,6 +1,6 @@
-using Microsoft.Win32.SafeHandles;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
 
@@ -17,20 +17,22 @@ internal class LegacyUsbDevice : UsbDevice
     public static uint IoGetDescriptorCode => CTL_CODE(FILE_DEVICE_UNKNOWN, 0x802, METHOD_BUFFERED, FILE_READ_ACCESS);
     public static uint IoControlTransferCode => CTL_CODE(FILE_DEVICE_UNKNOWN, 0x803, METHOD_BUFFERED, FILE_READ_ACCESS);
 
-    private SafeFileHandle fileHandle = new SafeFileHandle(new IntPtr(-1), ownsHandle: true);
+    private SafeFileHandle _fileHandle = new(new IntPtr(-1), ownsHandle: true);
     private bool _disposed;
 
-    public IntPtr Handle => fileHandle.IsInvalid ? INVALID_HANDLE_VALUE : fileHandle.DangerousGetHandle();
+    public IntPtr Handle => _fileHandle.IsInvalid ? INVALID_HANDLE_VALUE : _fileHandle.DangerousGetHandle();
 
     public override int CreateHandle()
     {
-        fileHandle = new SafeFileHandle(SimpleCreateHandle(DevicePath), ownsHandle: true);
-        if (fileHandle.IsInvalid)
+        _fileHandle = new SafeFileHandle(SimpleCreateHandle(DevicePath), ownsHandle: true);
+        if (_fileHandle.IsInvalid)
+        {
             return Marshal.GetLastWin32Error();
+        }
 
         if (!CheckInterface())
         {
-            fileHandle.Dispose();
+            _fileHandle.Dispose();
             return -1;
         }
 
@@ -41,15 +43,13 @@ internal class LegacyUsbDevice : UsbDevice
     private bool CheckInterface()
     {
         var buffer = new byte[256];
-        uint returned;
-        return DeviceIoControl(fileHandle.DangerousGetHandle(), IoGetSerialCode, null, 0, buffer, (uint)buffer.Length, out returned, IntPtr.Zero);
+        return DeviceIoControl(_fileHandle.DangerousGetHandle(), IoGetSerialCode, null, 0, buffer, (uint)buffer.Length, out _, IntPtr.Zero);
     }
 
     public override int GetSerialNumber()
     {
         var buffer = new byte[256];
-        uint returned;
-        if (DeviceIoControl(fileHandle.DangerousGetHandle(), IoGetSerialCode, null, 0, buffer, (uint)buffer.Length, out returned, IntPtr.Zero))
+        if (DeviceIoControl(_fileHandle.DangerousGetHandle(), IoGetSerialCode, null, 0, buffer, (uint)buffer.Length, out var returned, IntPtr.Zero))
         {
             SerialNumber = System.Text.Encoding.Unicode.GetString(buffer, 0, (int)returned).TrimEnd('\0');
             return 0;
@@ -59,7 +59,7 @@ internal class LegacyUsbDevice : UsbDevice
 
     public override int ControlTransfer(UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
     {
-        if (_disposed || fileHandle.IsInvalid)
+        if (_disposed || _fileHandle.IsInvalid)
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
@@ -95,9 +95,8 @@ internal class LegacyUsbDevice : UsbDevice
             }
 
             var outBuffer = new byte[setupSize + length];
-            uint returned;
 
-            if (!DeviceIoControl(fileHandle.DangerousGetHandle(), IoControlTransferCode, inBuffer, (uint)totalInSize, outBuffer, (uint)outBuffer.Length, out returned, IntPtr.Zero))
+            if (!DeviceIoControl(_fileHandle.DangerousGetHandle(), IoControlTransferCode, inBuffer, (uint)totalInSize, outBuffer, (uint)outBuffer.Length, out var returned, IntPtr.Zero))
             {
                 throw new Win32Exception(Marshal.GetLastWin32Error());
             }
@@ -128,8 +127,15 @@ internal class LegacyUsbDevice : UsbDevice
         // timeout behaviour is delegated to the legacy driver (ReadChunk ignores timeoutMs).
         var buffer = new byte[length];
         var count = ReadInto(buffer, 0, length, IoTimeoutMs);
-        if (count == length) return buffer;
-        if (count == 0) return [];
+        if (count == length)
+        {
+            return buffer;
+        }
+
+        if (count == 0)
+        {
+            return [];
+        }
 
         var result = new byte[count];
         Buffer.BlockCopy(buffer, 0, result, 0, count);
@@ -140,33 +146,27 @@ internal class LegacyUsbDevice : UsbDevice
 
     protected override string BackendName => "winusb-legacy";
 
-    protected override bool IsOpen => !_disposed && !fileHandle.IsInvalid;
+    protected override bool IsOpen => !_disposed && !_fileHandle.IsInvalid;
 
     /// <inheritdoc/>
-    internal override bool IsHandleOpen => !_disposed && !fileHandle.IsInvalid;
+    internal override bool IsHandleOpen => !_disposed && !_fileHandle.IsInvalid;
 
     protected override UsbChunkResult ReadChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        uint bytesRead;
-        if (!ReadFile(fileHandle.DangerousGetHandle(), buffer, (uint)length, out bytesRead, IntPtr.Zero))
-        {
-            return UsbChunkResult.Fatal(Marshal.GetLastWin32Error());
-        }
-        return UsbChunkResult.Success((int)bytesRead);
+        return !ReadFile(_fileHandle.DangerousGetHandle(), buffer, (uint)length, out var bytesRead, IntPtr.Zero)
+            ? UsbChunkResult.Fatal(Marshal.GetLastWin32Error())
+            : UsbChunkResult.Success((int)bytesRead);
     }
 
     protected override UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        uint written;
-        if (!WriteFile(fileHandle.DangerousGetHandle(), buffer, (uint)length, out written, IntPtr.Zero))
-        {
-            return UsbChunkResult.Fatal(Marshal.GetLastWin32Error());
-        }
-        return UsbChunkResult.Success((int)written);
+        return !WriteFile(_fileHandle.DangerousGetHandle(), buffer, (uint)length, out var written, IntPtr.Zero)
+            ? UsbChunkResult.Fatal(Marshal.GetLastWin32Error())
+            : UsbChunkResult.Success((int)written);
     }
 
     protected override bool IsDisconnectionError(int nativeError)
-        => nativeError == ERROR_DEVICE_NOT_CONNECTED || nativeError == ERROR_NO_SUCH_DEVICE || nativeError == ERROR_DEVICE_REMOVED;
+        => nativeError is ERROR_DEVICE_NOT_CONNECTED or ERROR_NO_SUCH_DEVICE or ERROR_DEVICE_REMOVED;
 
     protected override Exception CreateReadFatalException(int nativeError)
         => IsDisconnectionError(nativeError) ? base.CreateReadFatalException(nativeError) : new Win32Exception(nativeError);
@@ -182,12 +182,16 @@ internal class LegacyUsbDevice : UsbDevice
 
     public override void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
-        if (!fileHandle.IsInvalid)
+        if (!_fileHandle.IsInvalid)
         {
-            fileHandle.Dispose();
+            _fileHandle.Dispose();
         }
         GC.SuppressFinalize(this);
     }

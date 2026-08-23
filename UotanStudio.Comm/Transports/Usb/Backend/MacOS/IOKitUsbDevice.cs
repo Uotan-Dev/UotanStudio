@@ -63,25 +63,17 @@ internal class IOKitUsbDevice : UsbDevice
     {
         if (_interfaceInterface == IntPtr.Zero || _bulkIn == 0)
         {
-            return UsbChunkResult.Fatal(IOKitUsbAPI.kIOReturnNoDevice);
+            return UsbChunkResult.Fatal(IOKitUsbAPI.KIOReturnNoDevice);
         }
 
-        IOKitUsbAPI.ReadPipeTODelegate readPipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReadPipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_ReadPipeTO);
+        var readPipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReadPipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_ReadPipeTO);
         var size = (uint)length;
         var kr = readPipe(_interfaceInterface, _bulkIn, buffer, ref size, (uint)timeoutMs, (uint)timeoutMs);
-        if (kr != IOKitUsbAPI.kIOReturnSuccess)
-        {
-            if (kr == IOKitUsbAPI.kIOReturnNoDevice || kr == IOKitUsbAPI.kIOReturnNotResponding || kr == IOKitUsbAPI.kIOReturnAborted)
-            {
-                return UsbChunkResult.Fatal(kr);
-            }
-            if (kr == IOKitUsbAPI.kIOReturnTimeout)
-            {
-                return UsbChunkResult.Timeout(kr);
-            }
-            return UsbChunkResult.Error(kr);
-        }
-        return UsbChunkResult.Success((int)size);
+        return kr != IOKitUsbAPI.KIOReturnSuccess
+            ? kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted
+                ? UsbChunkResult.Fatal(kr)
+                : kr == IOKitUsbAPI.KIOReturnTimeout ? UsbChunkResult.Timeout(kr) : UsbChunkResult.Error(kr)
+            : UsbChunkResult.Success((int)size);
     }
 
     /// <inheritdoc/>
@@ -89,31 +81,23 @@ internal class IOKitUsbDevice : UsbDevice
     {
         if (_interfaceInterface == IntPtr.Zero || _bulkOut == 0)
         {
-            return UsbChunkResult.Fatal(IOKitUsbAPI.kIOReturnNoDevice);
+            return UsbChunkResult.Fatal(IOKitUsbAPI.KIOReturnNoDevice);
         }
 
-        IOKitUsbAPI.WritePipeTODelegate writePipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.WritePipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_WritePipeTO);
+        var writePipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.WritePipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_WritePipeTO);
         var kr = writePipe(_interfaceInterface, _bulkOut, buffer, (uint)length, (uint)timeoutMs, (uint)timeoutMs);
-        if (kr != IOKitUsbAPI.kIOReturnSuccess)
-        {
-            if (kr == IOKitUsbAPI.kIOReturnNoDevice || kr == IOKitUsbAPI.kIOReturnNotResponding || kr == IOKitUsbAPI.kIOReturnAborted)
-            {
-                return UsbChunkResult.Fatal(kr);
-            }
-            if (kr == IOKitUsbAPI.kIOReturnTimeout)
-            {
-                return UsbChunkResult.Timeout(kr);
-            }
-            return UsbChunkResult.Error(kr);
-        }
-        return UsbChunkResult.Success(length);
+        return kr != IOKitUsbAPI.KIOReturnSuccess
+            ? kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted
+                ? UsbChunkResult.Fatal(kr)
+                : kr == IOKitUsbAPI.KIOReturnTimeout ? UsbChunkResult.Timeout(kr) : UsbChunkResult.Error(kr)
+            : UsbChunkResult.Success(length);
     }
 
     /// <inheritdoc/>
     protected override bool IsDisconnectionError(int nativeError)
-        => nativeError == IOKitUsbAPI.kIOReturnNoDevice
-           || nativeError == IOKitUsbAPI.kIOReturnNotResponding
-           || nativeError == IOKitUsbAPI.kIOReturnAborted;
+        => nativeError is IOKitUsbAPI.KIOReturnNoDevice
+           or IOKitUsbAPI.KIOReturnNotResponding
+           or IOKitUsbAPI.KIOReturnAborted;
 
     /// <inheritdoc/>
     public override byte[] Read(int length) => Read(length, PlatformDefaultTimeoutMs);
@@ -121,11 +105,23 @@ internal class IOKitUsbDevice : UsbDevice
     /// <inheritdoc/>
     public override byte[] Read(int length, int timeoutMs)
     {
-        if (length == 0) return [];
+        if (length == 0)
+        {
+            return [];
+        }
+
         var buffer = new byte[length];
         var count = ReadInto(buffer, 0, length, timeoutMs);
-        if (count <= 0) return [];
-        if (count == length) return buffer;
+        if (count <= 0)
+        {
+            return [];
+        }
+
+        if (count == length)
+        {
+            return buffer;
+        }
+
         var result = new byte[count];
         Array.Copy(buffer, result, count);
         return result;
@@ -137,10 +133,13 @@ internal class IOKitUsbDevice : UsbDevice
     /// <inheritdoc/>
     public override int ReadInto(byte[] buffer, int offset, int length, int timeoutMs)
     {
-        if (_interfaceInterface == IntPtr.Zero || _bulkIn == 0) return 0;
+        if (_interfaceInterface == IntPtr.Zero || _bulkIn == 0)
+        {
+            return 0;
+        }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        IOKitUsbAPI.ReadPipeTODelegate readPipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReadPipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_ReadPipeTO);
+        var readPipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReadPipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_ReadPipeTO);
 
         var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
         try
@@ -148,19 +147,11 @@ internal class IOKitUsbDevice : UsbDevice
             var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + offset);
             var size = (uint)length;
             var kr = readPipe(_interfaceInterface, _bulkIn, ptr, ref size, (uint)effectiveTimeoutMs, (uint)effectiveTimeoutMs);
-            if (kr != IOKitUsbAPI.kIOReturnSuccess)
-            {
-                if (kr == IOKitUsbAPI.kIOReturnNoDevice || kr == IOKitUsbAPI.kIOReturnNotResponding || kr == IOKitUsbAPI.kIOReturnAborted)
-                {
-                    throw new UsbDeviceDisconnectedException($"USB device disconnected during read (error: 0x{kr:X}).", kr);
-                }
-                if (kr == IOKitUsbAPI.kIOReturnTimeout)
-                {
-                    return 0;
-                }
-                throw new IOException($"USB read failed with error: 0x{kr:X}");
-            }
-            return (int)size;
+            return kr != IOKitUsbAPI.KIOReturnSuccess
+                ? kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted
+                    ? throw new UsbDeviceDisconnectedException($"USB device disconnected during read (error: 0x{kr:X}).", kr)
+                    : kr == IOKitUsbAPI.KIOReturnTimeout ? 0 : throw new IOException($"USB read failed with error: 0x{kr:X}")
+                : (int)size;
         }
         finally
         {
@@ -174,7 +165,11 @@ internal class IOKitUsbDevice : UsbDevice
     /// <inheritdoc/>
     public override long Write(byte[] data, int length, int timeoutMs)
     {
-        if (_interfaceInterface == IntPtr.Zero || _bulkOut == 0) return -1;
+        if (_interfaceInterface == IntPtr.Zero || _bulkOut == 0)
+        {
+            return -1;
+        }
+
         if (length == 0)
         {
             WriteZlp(timeoutMs);
@@ -182,7 +177,7 @@ internal class IOKitUsbDevice : UsbDevice
         }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        IOKitUsbAPI.WritePipeTODelegate writePipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.WritePipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_WritePipeTO);
+        var writePipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.WritePipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_WritePipeTO);
 
         var handle = GCHandle.Alloc(data, GCHandleType.Pinned);
         try
@@ -195,9 +190,9 @@ internal class IOKitUsbDevice : UsbDevice
                 var lenToSend = Math.Min(lenRemaining, maxLenToSend);
                 var ptr = new IntPtr(handle.AddrOfPinnedObject().ToInt64() + count);
                 var kr = writePipe(_interfaceInterface, _bulkOut, ptr, (uint)lenToSend, (uint)effectiveTimeoutMs, (uint)effectiveTimeoutMs);
-                if (kr != IOKitUsbAPI.kIOReturnSuccess)
+                if (kr != IOKitUsbAPI.KIOReturnSuccess)
                 {
-                    if (kr == IOKitUsbAPI.kIOReturnNoDevice || kr == IOKitUsbAPI.kIOReturnNotResponding || kr == IOKitUsbAPI.kIOReturnAborted)
+                    if (kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted)
                     {
                         throw new UsbDeviceDisconnectedException($"USB device disconnected during write (error: 0x{kr:X}).", kr);
                     }
@@ -223,11 +218,11 @@ internal class IOKitUsbDevice : UsbDevice
         }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        IOKitUsbAPI.WritePipeTODelegate writePipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.WritePipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_WritePipeTO);
+        var writePipe = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.WritePipeTODelegate>(_interfaceInterface, IOKitUsbAPI.Offset_WritePipeTO);
         var kr = writePipe(_interfaceInterface, _bulkOut, IntPtr.Zero, 0, (uint)effectiveTimeoutMs, (uint)effectiveTimeoutMs);
-        if (kr != IOKitUsbAPI.kIOReturnSuccess)
+        if (kr != IOKitUsbAPI.KIOReturnSuccess)
         {
-            if (kr == IOKitUsbAPI.kIOReturnNoDevice || kr == IOKitUsbAPI.kIOReturnNotResponding || kr == IOKitUsbAPI.kIOReturnAborted)
+            if (kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted)
             {
                 throw new UsbDeviceDisconnectedException($"USB device disconnected during zero-length write (error: 0x{kr:X}).", kr);
             }
@@ -238,10 +233,13 @@ internal class IOKitUsbDevice : UsbDevice
     /// <inheritdoc/>
     public override int ControlTransfer(UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
     {
-        if (_deviceInterface == IntPtr.Zero) return 0;
+        if (_deviceInterface == IntPtr.Zero)
+        {
+            return 0;
+        }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
-        IOKitUsbAPI.DeviceRequestDelegate devRequest = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.DeviceRequestDelegate>(_deviceInterface, IOKitUsbAPI.Offset_DeviceRequest);
+        var devRequest = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.DeviceRequestDelegate>(_deviceInterface, IOKitUsbAPI.Offset_DeviceRequest);
 
         GCHandle? handle = null;
         try
@@ -255,25 +253,21 @@ internal class IOKitUsbDevice : UsbDevice
 
             var request = new IOKitUsbAPI.IOUSBDeviceRequest
             {
-                bmRequestType = setupPacket.RequestType,
-                bRequest = setupPacket.Request,
-                wValue = setupPacket.Value,
-                wIndex = setupPacket.Index,
-                wLength = (ushort)length,
-                pData = dataPtr,
-                wLenDone = 0,
+                BmRequestType = setupPacket.RequestType,
+                BRequest = setupPacket.Request,
+                WValue = setupPacket.Value,
+                WIndex = setupPacket.Index,
+                WLength = (ushort)length,
+                PData = dataPtr,
+                WLenDone = 0,
             };
 
             var kr = devRequest(_deviceInterface, ref request);
-            if (kr != IOKitUsbAPI.kIOReturnSuccess)
-            {
-                if (kr == IOKitUsbAPI.kIOReturnNoDevice || kr == IOKitUsbAPI.kIOReturnNotResponding || kr == IOKitUsbAPI.kIOReturnAborted)
-                {
-                    throw new UsbDeviceDisconnectedException($"USB device disconnected during control transfer (error: 0x{kr:X}).", kr);
-                }
-                return 0;
-            }
-            return (int)request.wLenDone;
+            return kr != IOKitUsbAPI.KIOReturnSuccess
+                ? kr is IOKitUsbAPI.KIOReturnNoDevice or IOKitUsbAPI.KIOReturnNotResponding or IOKitUsbAPI.KIOReturnAborted
+                    ? throw new UsbDeviceDisconnectedException($"USB device disconnected during control transfer (error: 0x{kr:X}).", kr)
+                    : 0
+                : (int)request.WLenDone;
         }
         finally
         {
@@ -284,8 +278,15 @@ internal class IOKitUsbDevice : UsbDevice
     /// <inheritdoc/>
     public override int CreateHandle()
     {
-        if (_deviceInterface != IntPtr.Zero) return 0;
-        if (string.IsNullOrEmpty(DevicePath)) return -1;
+        if (_deviceInterface != IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        if (string.IsNullOrEmpty(DevicePath))
+        {
+            return -1;
+        }
 
         // Re-open the device service from its IOService-plane path (the finder
         // stored the path returned by IORegistryEntryGetPath).
@@ -294,25 +295,31 @@ internal class IOKitUsbDevice : UsbDevice
         UsbTrace.Log($"IOKitUsbDevice.CreateHandle: DevicePath='{DevicePath}'");
         var service = IOKitUsbAPI.IORegistryEntryFromPath(IntPtr.Zero, DevicePath);
         UsbTrace.Log($"IOKitUsbDevice.CreateHandle: IORegistryEntryFromPath -> {service}");
-        if (service == IntPtr.Zero) return -1;
+        if (service == IntPtr.Zero)
+        {
+            return -1;
+        }
 
         try
         {
             var kr = IOKitUsbAPI.IOCreatePlugInInterfaceForService(
                 service,
-                IOKitUsbAPI.kIOUSBDeviceUserClientTypeID,
-                IOKitUsbAPI.kIOCFPlugInInterfaceID,
+                IOKitUsbAPI.KIOUSBDeviceUserClientTypeID,
+                IOKitUsbAPI.KIOCFPlugInInterfaceID,
                 out var plugin,
                 out _);
             UsbTrace.Log($"IOKitUsbDevice.CreateHandle: IOCreatePlugInInterfaceForService kr={kr} plugin={plugin}");
-            if (kr != IOKitUsbAPI.S_OK || plugin == IntPtr.Zero) return -1;
+            if (kr != IOKitUsbAPI.Ok || plugin == IntPtr.Zero)
+            {
+                return -1;
+            }
 
             try
             {
-                IOKitUsbAPI.QueryInterfaceDelegate queryInterface = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.QueryInterfaceDelegate>(plugin, IOKitUsbAPI.Offset_Plugin_QueryInterface);
-                if (queryInterface(plugin, IOKitUsbAPI.kIOUSBDeviceInterfaceID, out _deviceInterface) != IOKitUsbAPI.S_OK || _deviceInterface == IntPtr.Zero)
+                var queryInterface = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.QueryInterfaceDelegate>(plugin, IOKitUsbAPI.Offset_Plugin_QueryInterface);
+                if (queryInterface(plugin, IOKitUsbAPI.KIOUSBDeviceInterfaceID, out _deviceInterface) != IOKitUsbAPI.Ok || _deviceInterface == IntPtr.Zero)
                 {
-                    UsbTrace.Log("IOKitUsbDevice.CreateHandle: QueryInterface(kIOUSBDeviceInterfaceID) FAILED");
+                    UsbTrace.Log("IOKitUsbDevice.CreateHandle: QueryInterface(KIOUSBDeviceInterfaceID) FAILED");
                     return -1;
                 }
                 UsbTrace.Log($"IOKitUsbDevice.CreateHandle: QueryInterface -> deviceInterface={_deviceInterface}");
@@ -341,9 +348,9 @@ internal class IOKitUsbDevice : UsbDevice
                 // 可能仅有一个编号不同的配置。</para>
                 try
                 {
-                    IOKitUsbAPI.USBGetConfigurationDelegate getConf = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBGetConfigurationDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBGetConfiguration);
-                    IOKitUsbAPI.USBSetConfigurationDelegate setConf = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBSetConfigurationDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBSetConfiguration);
-                    if (getConf(_deviceInterface, out var currentConf) == IOKitUsbAPI.S_OK && currentConf != 1)
+                    var getConf = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBGetConfigurationDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBGetConfiguration);
+                    var setConf = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBSetConfigurationDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBSetConfiguration);
+                    if (getConf(_deviceInterface, out var currentConf) == IOKitUsbAPI.Ok && currentConf != 1)
                     {
                         _ = setConf(_deviceInterface, 1);
                     }
@@ -355,21 +362,21 @@ internal class IOKitUsbDevice : UsbDevice
 
                 // Match interfaces by the device's known class/subclass/protocol
                 // (adb CheckInterface semantics: avoid claiming mass-storage
-                // endpoints). Falls back to kIOUSBFindInterfaceDontCare when the
+                // endpoints). Falls back to KIOUSBFindInterfaceDontCare when the
                 // finder did not surface interface codes.
                 // <para>按设备已知的类/子类/协议匹配接口（adb CheckInterface 语义：
                 // 避免声明大容量存储端点）。finder 未暴露接口码时回退到
-                // kIOUSBFindInterfaceDontCare。</para>
+                // KIOUSBFindInterfaceDontCare。</para>
                 var findRequest = new IOKitUsbAPI.IOUSBFindInterfaceRequest
                 {
-                    bInterfaceClass = InterfaceClass ?? IOKitUsbAPI.kIOUSBFindInterfaceDontCare,
-                    bInterfaceSubClass = InterfaceSubClass ?? IOKitUsbAPI.kIOUSBFindInterfaceDontCare,
-                    bInterfaceProtocol = InterfaceProtocol ?? IOKitUsbAPI.kIOUSBFindInterfaceDontCare,
-                    bAlternateSetting = IOKitUsbAPI.kIOUSBFindInterfaceDontCare,
+                    BInterfaceClass = InterfaceClass ?? IOKitUsbAPI.KIOUSBFindInterfaceDontCare,
+                    BInterfaceSubClass = InterfaceSubClass ?? IOKitUsbAPI.KIOUSBFindInterfaceDontCare,
+                    BInterfaceProtocol = InterfaceProtocol ?? IOKitUsbAPI.KIOUSBFindInterfaceDontCare,
+                    BAlternateSetting = IOKitUsbAPI.KIOUSBFindInterfaceDontCare,
                 };
 
-                IOKitUsbAPI.USBDeviceCreateInterfaceIteratorDelegate createIter = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCreateInterfaceIteratorDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceCreateInterfaceIterator);
-                if (createIter(_deviceInterface, ref findRequest, out var iter) != IOKitUsbAPI.S_OK || iter == IntPtr.Zero)
+                var createIter = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCreateInterfaceIteratorDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceCreateInterfaceIterator);
+                if (createIter(_deviceInterface, ref findRequest, out var iter) != IOKitUsbAPI.Ok || iter == IntPtr.Zero)
                 {
                     return -1;
                 }
@@ -404,15 +411,15 @@ internal class IOKitUsbDevice : UsbDevice
                     // Interface claim failed or no matching interface: release what we
                     // opened so a later retry can start clean.
                     // <para>接口声明失败或无匹配接口：释放已打开者，使后续重试可干净开始。</para>
-                    IOKitUsbAPI.USBDeviceCloseDelegate devClose = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCloseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceClose);
+                    var devClose = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCloseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceClose);
                     _ = devClose(_deviceInterface);
-                    IOKitUsbAPI.ReleaseDelegate devRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_IUnknown_Release);
+                    var devRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_IUnknown_Release);
                     _ = devRelease(_deviceInterface);
                     _deviceInterface = IntPtr.Zero;
 
                     if (_pluginInterface != IntPtr.Zero)
                     {
-                        IOKitUsbAPI.ReleaseDelegate pluginRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_pluginInterface, IOKitUsbAPI.Offset_Plugin_Release);
+                        var pluginRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_pluginInterface, IOKitUsbAPI.Offset_Plugin_Release);
                         _ = pluginRelease(_pluginInterface);
                         _pluginInterface = IntPtr.Zero;
                     }
@@ -443,33 +450,35 @@ internal class IOKitUsbDevice : UsbDevice
     {
         var kr = IOKitUsbAPI.IOCreatePlugInInterfaceForService(
             ifcService,
-            IOKitUsbAPI.kIOUSBInterfaceUserClientTypeID,
-            IOKitUsbAPI.kIOCFPlugInInterfaceID,
+            IOKitUsbAPI.KIOUSBInterfaceUserClientTypeID,
+            IOKitUsbAPI.KIOCFPlugInInterfaceID,
             out var ifcPlugin,
             out _);
-        if (kr != IOKitUsbAPI.S_OK || ifcPlugin == IntPtr.Zero) return false;
+        if (kr != IOKitUsbAPI.Ok || ifcPlugin == IntPtr.Zero)
+        {
+            return false;
+        }
 
         try
         {
-            IOKitUsbAPI.QueryInterfaceDelegate ifcQuery = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.QueryInterfaceDelegate>(ifcPlugin, IOKitUsbAPI.Offset_Plugin_QueryInterface);
-            if (ifcQuery(ifcPlugin, IOKitUsbAPI.kIOUSBInterfaceInterfaceID190, out var ifcIntf) != IOKitUsbAPI.S_OK || ifcIntf == IntPtr.Zero)
+            var ifcQuery = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.QueryInterfaceDelegate>(ifcPlugin, IOKitUsbAPI.Offset_Plugin_QueryInterface);
+            if (ifcQuery(ifcPlugin, IOKitUsbAPI.KIOUSBInterfaceInterfaceID190, out var ifcIntf) != IOKitUsbAPI.Ok || ifcIntf == IntPtr.Zero)
             {
                 return false;
             }
 
             try
             {
-                IOKitUsbAPI.USBInterfaceOpenDelegate ifcOpen = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBInterfaceOpenDelegate>(ifcIntf, IOKitUsbAPI.Offset_USBInterfaceOpen);
-                if (ifcOpen(ifcIntf) != IOKitUsbAPI.S_OK)
+                var ifcOpen = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBInterfaceOpenDelegate>(ifcIntf, IOKitUsbAPI.Offset_USBInterfaceOpen);
+                if (ifcOpen(ifcIntf) != IOKitUsbAPI.Ok)
                 {
                     return false;
                 }
 
-                IOKitUsbAPI.GetNumEndpointsDelegate getNumEpts = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.GetNumEndpointsDelegate>(ifcIntf, IOKitUsbAPI.Offset_GetNumEndpoints);
-                IOKitUsbAPI.GetPipePropertiesDelegate getPipeProps = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.GetPipePropertiesDelegate>(ifcIntf, IOKitUsbAPI.Offset_GetPipeProperties);
+                var getNumEpts = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.GetNumEndpointsDelegate>(ifcIntf, IOKitUsbAPI.Offset_GetNumEndpoints);
+                var getPipeProps = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.GetPipePropertiesDelegate>(ifcIntf, IOKitUsbAPI.Offset_GetPipeProperties);
 
-                byte numEpts = 0;
-                if (getNumEpts(ifcIntf, out numEpts) != IOKitUsbAPI.S_OK)
+                if (getNumEpts(ifcIntf, out var numEpts) != IOKitUsbAPI.Ok)
                 {
                     return false;
                 }
@@ -480,22 +489,34 @@ internal class IOKitUsbDevice : UsbDevice
                 byte interruptOut = 0;
                 for (byte i = 1; i <= numEpts; i++)
                 {
-                    if (getPipeProps(ifcIntf, i, out var direction, out _, out var transferType, out _, out _) == IOKitUsbAPI.S_OK)
+                    if (getPipeProps(ifcIntf, i, out var direction, out _, out var transferType, out _, out _) == IOKitUsbAPI.Ok)
                     {
                         if (direction == 1) // kUSBIn
                         {
-                            if (transferType == 0x02 && bulkIn == 0) bulkIn = i;          // Bulk
-                            else if (transferType == 0x03 && interruptIn == 0) interruptIn = i; // Interrupt
+                            if (transferType == 0x02 && bulkIn == 0)
+                            {
+                                bulkIn = i;          // Bulk
+                            }
+                            else if (transferType == 0x03 && interruptIn == 0)
+                            {
+                                interruptIn = i; // Interrupt
+                            }
                         }
                         else if (direction == 0) // kUSBOut
                         {
-                            if (transferType == 0x02 && bulkOut == 0) bulkOut = i;          // Bulk
-                            else if (transferType == 0x03 && interruptOut == 0) interruptOut = i; // Interrupt
+                            if (transferType == 0x02 && bulkOut == 0)
+                            {
+                                bulkOut = i;          // Bulk
+                            }
+                            else if (transferType == 0x03 && interruptOut == 0)
+                            {
+                                interruptOut = i; // Interrupt
+                            }
                         }
                     }
                 }
 
-                // Prefer the bulk pair; fall back to interrupt pipes for HID-style
+                // Prefer the bulk pair; fall back to interrupt pipes for HID-Style
                 // interfaces that have no bulk endpoints (libusb parity).
                 // <para>优先使用批量对；无批量端点时回退到中断管道（HID 类接口，
                 // 与 libusb 对齐）。</para>
@@ -506,7 +527,7 @@ internal class IOKitUsbDevice : UsbDevice
                     return false;
                 }
 
-                IOKitUsbAPI.ClearPipeStallBothEndsDelegate clearStall = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ClearPipeStallBothEndsDelegate>(ifcIntf, IOKitUsbAPI.Offset_ClearPipeStallBothEnds);
+                var clearStall = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ClearPipeStallBothEndsDelegate>(ifcIntf, IOKitUsbAPI.Offset_ClearPipeStallBothEnds);
                 _ = clearStall(ifcIntf, pipeIn);
                 if (pipeOut != 0)
                 {
@@ -524,14 +545,14 @@ internal class IOKitUsbDevice : UsbDevice
                 {
                     // Interface not claimed: release the interface COM object.
                     // <para>接口未声明：释放接口 COM 对象。</para>
-                    IOKitUsbAPI.ReleaseDelegate ifcRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(ifcIntf, IOKitUsbAPI.Offset_IUnknown_Release);
+                    var ifcRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(ifcIntf, IOKitUsbAPI.Offset_IUnknown_Release);
                     _ = ifcRelease(ifcIntf);
                 }
             }
         }
         finally
         {
-            IOKitUsbAPI.ReleaseDelegate pluginRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(ifcPlugin, IOKitUsbAPI.Offset_Plugin_Release);
+            var pluginRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(ifcPlugin, IOKitUsbAPI.Offset_Plugin_Release);
             _ = pluginRelease(ifcPlugin);
         }
     }
@@ -539,13 +560,16 @@ internal class IOKitUsbDevice : UsbDevice
     /// <inheritdoc/>
     public override void Reset()
     {
-        if (_deviceInterface == IntPtr.Zero) return;
+        if (_deviceInterface == IntPtr.Zero)
+        {
+            return;
+        }
 
         // USBDeviceReset restarts the device; best-effort (mirrors SharpFastboot).
         // <para>USBDeviceReset 重启设备；尽力而为（与 SharpFastboot 对齐）。</para>
         try
         {
-            IOKitUsbAPI.USBDeviceResetDelegate reset = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceResetDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceReset);
+            var reset = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceResetDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceReset);
             _ = reset(_deviceInterface);
         }
         catch
@@ -557,27 +581,39 @@ internal class IOKitUsbDevice : UsbDevice
     /// <inheritdoc/>
     public override int GetSerialNumber()
     {
-        if (_deviceInterface == IntPtr.Zero) return -1;
+        if (_deviceInterface == IntPtr.Zero)
+        {
+            return -1;
+        }
 
         try
         {
-            // Read the device descriptor via a control request; iSerialNumber lives
-            // at offset 16, bcdUSB at offset 2 (used to infer the USB speed).
-            // <para>经控制请求读取设备描述符；iSerialNumber 在偏移 16，bcdUSB 在偏移 2
+            // Read the device descriptor via a control request; ISerialNumber lives
+            // at offset 16, BcdUSB at offset 2 (used to infer the USB speed).
+            // <para>经控制请求读取设备描述符；ISerialNumber 在偏移 16，BcdUSB 在偏移 2
             // （用于推断 USB 速度）。</para>
             var dd = new byte[18];
             var done = ControlTransferRaw(0x80, 0x06, 0x0100, 0x0000, dd, dd.Length);
-            if (done < 18) return -1;
+            if (done < 18)
+            {
+                return -1;
+            }
 
             Speed = UsbSpeedInference.FromBcdUsb((ushort)(dd[2] | (dd[3] << 8)));
 
             var serialIndex = dd[16];
-            if (serialIndex == 0) return -1;
+            if (serialIndex == 0)
+            {
+                return -1;
+            }
 
             // GET_DESCRIPTOR(STRING), language 0x0409 (en-US).
             var buf = new byte[256];
             done = ControlTransferRaw(0x80, 0x06, (ushort)((0x03 << 8) | serialIndex), 0x0409, buf, buf.Length);
-            if (done <= 2) return -1;
+            if (done <= 2)
+            {
+                return -1;
+            }
 
             SerialNumber = UsbStringDescriptor.Decode(buf, done);
             return 0;
@@ -590,9 +626,12 @@ internal class IOKitUsbDevice : UsbDevice
 
     private int ControlTransferRaw(byte bmRequestType, byte bRequest, ushort wValue, ushort wIndex, byte[] buffer, int length)
     {
-        if (_deviceInterface == IntPtr.Zero) return -1;
+        if (_deviceInterface == IntPtr.Zero)
+        {
+            return -1;
+        }
 
-        IOKitUsbAPI.DeviceRequestDelegate devRequest = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.DeviceRequestDelegate>(_deviceInterface, IOKitUsbAPI.Offset_DeviceRequest);
+        var devRequest = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.DeviceRequestDelegate>(_deviceInterface, IOKitUsbAPI.Offset_DeviceRequest);
 
         GCHandle? handle = null;
         try
@@ -606,17 +645,17 @@ internal class IOKitUsbDevice : UsbDevice
 
             var request = new IOKitUsbAPI.IOUSBDeviceRequest
             {
-                bmRequestType = bmRequestType,
-                bRequest = bRequest,
-                wValue = wValue,
-                wIndex = wIndex,
-                wLength = (ushort)length,
-                pData = dataPtr,
-                wLenDone = 0,
+                BmRequestType = bmRequestType,
+                BRequest = bRequest,
+                WValue = wValue,
+                WIndex = wIndex,
+                WLength = (ushort)length,
+                PData = dataPtr,
+                WLenDone = 0,
             };
 
             var kr = devRequest(_deviceInterface, ref request);
-            return kr == IOKitUsbAPI.kIOReturnSuccess ? (int)request.wLenDone : -1;
+            return kr == IOKitUsbAPI.KIOReturnSuccess ? (int)request.WLenDone : -1;
         }
         finally
         {
@@ -631,9 +670,9 @@ internal class IOKitUsbDevice : UsbDevice
         {
             try
             {
-                IOKitUsbAPI.USBInterfaceCloseDelegate ifcClose = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBInterfaceCloseDelegate>(_interfaceInterface, IOKitUsbAPI.Offset_USBInterfaceClose);
+                var ifcClose = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBInterfaceCloseDelegate>(_interfaceInterface, IOKitUsbAPI.Offset_USBInterfaceClose);
                 _ = ifcClose(_interfaceInterface);
-                IOKitUsbAPI.ReleaseDelegate ifcRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_interfaceInterface, IOKitUsbAPI.Offset_IUnknown_Release);
+                var ifcRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_interfaceInterface, IOKitUsbAPI.Offset_IUnknown_Release);
                 _ = ifcRelease(_interfaceInterface);
             }
             catch
@@ -647,9 +686,9 @@ internal class IOKitUsbDevice : UsbDevice
         {
             try
             {
-                IOKitUsbAPI.USBDeviceCloseDelegate devClose = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCloseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceClose);
+                var devClose = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.USBDeviceCloseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_USBDeviceClose);
                 _ = devClose(_deviceInterface);
-                IOKitUsbAPI.ReleaseDelegate devRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_IUnknown_Release);
+                var devRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_deviceInterface, IOKitUsbAPI.Offset_IUnknown_Release);
                 _ = devRelease(_deviceInterface);
             }
             catch
@@ -663,7 +702,7 @@ internal class IOKitUsbDevice : UsbDevice
         {
             try
             {
-                IOKitUsbAPI.ReleaseDelegate pluginRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_pluginInterface, IOKitUsbAPI.Offset_Plugin_Release);
+                var pluginRelease = IOKitUsbAPI.GetDelegate<IOKitUsbAPI.ReleaseDelegate>(_pluginInterface, IOKitUsbAPI.Offset_Plugin_Release);
                 _ = pluginRelease(_pluginInterface);
             }
             catch

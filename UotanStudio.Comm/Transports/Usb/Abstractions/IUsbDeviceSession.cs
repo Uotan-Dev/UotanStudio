@@ -88,7 +88,7 @@ public interface IUsbDeviceSession : IDisposable
     /// Unlike <see cref="ReadInto(byte[],int,int,int)"/>, which collapses timeouts and short
     /// packets into a bare byte count, this returns a <see cref="UsbReadResult"/> that
     /// distinguishes the two — protocol layers (fastboot/EDL/bootrom) use it to detect the
-    /// USB short-packet message boundary and to tell "no data yet" from "transfer ended".
+    /// USB short-packet Message boundary and to tell "no data yet" from "transfer ended".
     /// <para>与把超时和短包折叠为裸字节数的 <see cref="ReadInto(byte[],int,int,int)"/> 不同，
     /// 此方法返回区分二者的 <see cref="UsbReadResult"/>——协议层（fastboot/EDL/bootrom）
     /// 用它检测 USB 短包消息边界，并区分"暂无数据"与"传输已结束"。</para>

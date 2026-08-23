@@ -1,22 +1,22 @@
+using System.Runtime.InteropServices;
 using LibUsbDotNet;
 using LibUsbDotNet.LibUsb;
-using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 
-internal static class LibUsbFinder
+internal static partial class LibUsbFinder
 {
     // LibUsbDotNet 3.0.224 no longer bundles the native libusb runtime. Creating a
     // UsbContext when the native library is absent leaves a half-initialized context
     // whose finalizer NullReferenceExceptions (known upstream issue). Probe for the
     // runtime first so we never create a context without the native library present.
-    [DllImport("libusb-1.0", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int libusb_init(out IntPtr context);
+    [LibraryImport("libusb-1.0")]
+    private static partial int libusb_init(out IntPtr context);
 
-    [DllImport("libusb-1.0", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void libusb_exit(IntPtr context);
+    [LibraryImport("libusb-1.0")]
+    private static partial void libusb_exit(IntPtr context);
 
     private static bool IsNativeRuntimePresent()
     {
@@ -73,63 +73,87 @@ internal static class LibUsbFinder
             // 首个命中接口处提前返回，导致后续接口（如 FT2232H 的接口 1）从列表中丢失。</para>
             var configs = device.Configs.ToList();
             var collected = new List<UsbInterfaceInfo>();
-            foreach (LibUsbDotNet.Info.UsbConfigInfo? config in configs)
+            foreach (var config in configs)
             {
-                foreach (LibUsbDotNet.Info.UsbInterfaceInfo? ifc in config.Interfaces)
+                foreach (var ifc in config.Interfaces)
                 {
                     var endpoints = new List<UsbEndpointInfo>();
-                    foreach (LibUsbDotNet.Info.UsbEndpointInfo? endpoint in ifc.Endpoints)
+                    foreach (var endpoint in ifc.Endpoints)
                     {
                         endpoints.Add(new UsbEndpointInfo
                         {
-                            EndpointAddress = (byte)endpoint.EndpointAddress,
-                            Attributes = (byte)endpoint.Attributes,
-                            MaxPacketSize = (ushort)endpoint.MaxPacketSize,
-                            Interval = (byte)endpoint.Interval
+                            EndpointAddress = endpoint.EndpointAddress,
+                            Attributes = endpoint.Attributes,
+                            MaxPacketSize = endpoint.MaxPacketSize,
+                            Interval = endpoint.Interval
                         });
                     }
                     collected.Add(new UsbInterfaceInfo
                     {
                         InterfaceNumber = (byte)ifc.Number,
                         Class = (byte)ifc.Class,
-                        SubClass = (byte)ifc.SubClass,
-                        Protocol = (byte)ifc.Protocol,
+                        SubClass = ifc.SubClass,
+                        Protocol = ifc.Protocol,
                         Endpoints = endpoints
                     });
                 }
             }
 
-            foreach (LibUsbDotNet.Info.UsbConfigInfo? config in configs)
+            foreach (var config in configs)
             {
-                foreach (LibUsbDotNet.Info.UsbInterfaceInfo? ifc in config.Interfaces)
+                foreach (var ifc in config.Interfaces)
                 {
-                    if (filter?.InterfaceClass is byte c && (byte)ifc.Class != c) continue;
-                    if (filter?.InterfaceSubClass is byte s && (byte)ifc.SubClass != s) continue;
-                    if (filter?.InterfaceProtocol is byte p && (byte)ifc.Protocol != p) continue;
-                    if (filter?.InterfaceNumber is byte n && (byte)ifc.Number != n) continue;
+                    if (filter?.InterfaceClass is byte c && (byte)ifc.Class != c)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.InterfaceSubClass is byte s && ifc.SubClass != s)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.InterfaceProtocol is byte p && ifc.Protocol != p)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.InterfaceNumber is byte n && (byte)ifc.Number != n)
+                    {
+                        continue;
+                    }
 
                     var hasIn = false;
                     var hasOut = false;
                     byte candidateIn = 0;
                     byte candidateOut = 0;
-                    foreach (LibUsbDotNet.Info.UsbEndpointInfo? endpoint in ifc.Endpoints)
+                    foreach (var endpoint in ifc.Endpoints)
                     {
                         // Collect bulk endpoints first (the session I/O path), then interrupt
                         // endpoints as fallback candidates so devices with only interrupt pipes
                         // (e.g. HID) can still be opened when the filter requests explicit
                         // endpoint addresses (interrupt-test).
                         var epType = endpoint.Attributes & 0x03;
-                        if (epType != 0x02 && epType != 0x03) continue;
+                        if (epType is not 0x02 and not 0x03)
+                        {
+                            continue;
+                        }
 
                         if ((endpoint.EndpointAddress & 0x80) != 0)
                         {
                             hasIn = true;
-                            if (candidateIn == 0) candidateIn = endpoint.EndpointAddress;
+                            if (candidateIn == 0)
+                            {
+                                candidateIn = endpoint.EndpointAddress;
+                            }
                         }
                         else
                         {
                             hasOut = true;
-                            if (candidateOut == 0) candidateOut = endpoint.EndpointAddress;
+                            if (candidateOut == 0)
+                            {
+                                candidateOut = endpoint.EndpointAddress;
+                            }
                         }
                     }
 
@@ -148,8 +172,8 @@ internal static class LibUsbFinder
                             inEndpoint = filter?.EndpointAddressIn ?? candidateIn;
                             outEndpoint = filter?.EndpointAddressOut ?? candidateOut;
                             interfaceClass = (byte)ifc.Class;
-                            interfaceSubClass = (byte)ifc.SubClass;
-                            interfaceProtocol = (byte)ifc.Protocol;
+                            interfaceSubClass = ifc.SubClass;
+                            interfaceProtocol = ifc.Protocol;
                             interfaces = collected;
                             return true;
                         }
@@ -161,8 +185,8 @@ internal static class LibUsbFinder
                         inEndpoint = inOnlyEp;
                         outEndpoint = 0;
                         interfaceClass = (byte)ifc.Class;
-                        interfaceSubClass = (byte)ifc.SubClass;
-                        interfaceProtocol = (byte)ifc.Protocol;
+                        interfaceSubClass = ifc.SubClass;
+                        interfaceProtocol = ifc.Protocol;
                         interfaces = collected;
                         return true;
                     }
@@ -186,9 +210,9 @@ internal static class LibUsbFinder
         return false;
     }
 
-    public static List<global::UotanStudio.Comm.Transports.Usb.Backend.UsbDevice> FindDevice(UsbDeviceFilter? filter = null)
+    public static List<UsbDevice> FindDevice(UsbDeviceFilter? filter = null)
     {
-        var devices = new List<global::UotanStudio.Comm.Transports.Usb.Backend.UsbDevice>();
+        var devices = new List<UsbDevice>();
         if (!IsNativeRuntimePresent())
         {
             UsbTrace.Log("LibUsb backend unavailable: native libusb runtime not found.");
@@ -196,7 +220,7 @@ internal static class LibUsbFinder
         }
 
         using (var context = new UsbContext())
-        using (UsbDeviceCollection deviceList = context.List())
+        using (var deviceList = context.List())
         {
             // NOTE: LibUsbDotNet's UsbContext is NOT thread-safe; a Parallel.For over
             // device descriptor reads caused the CLI to hang (features/pull tests
@@ -206,15 +230,28 @@ internal static class LibUsbFinder
             // 读取使用 Parallel.For 会导致 CLI 挂起（features/pull 测试 30 秒超时）。
             // 描述符读取保持串行——枚举延迟主要由 libusb 自身的 List()/描述符缓存
             // 决定，而非我们的循环。</para>
-            foreach (IUsbDevice? device in deviceList)
+            foreach (var device in deviceList)
             {
-                var libUsbDevice = device as LibUsbDotNet.LibUsb.UsbDevice;
-                if (libUsbDevice == null) continue;
-                if (filter?.VendorId is ushort filterVid && (ushort)device.VendorId != filterVid) continue;
-                if (filter?.ProductId is ushort filterPid && (ushort)device.ProductId != filterPid) continue;
+                if (device is not LibUsbDotNet.LibUsb.UsbDevice libUsbDevice)
+                {
+                    continue;
+                }
 
-                UsbDevice? built = BuildDevice(libUsbDevice, filter);
-                if (built != null) devices.Add(built);
+                if (filter?.VendorId is ushort filterVid && device.VendorId != filterVid)
+                {
+                    continue;
+                }
+
+                if (filter?.ProductId is ushort filterPid && device.ProductId != filterPid)
+                {
+                    continue;
+                }
+
+                var built = BuildDevice(libUsbDevice, filter);
+                if (built != null)
+                {
+                    devices.Add(built);
+                }
             }
         }
         return devices;
@@ -226,7 +263,7 @@ internal static class LibUsbFinder
     /// <para>为单个 libusb 设备构建后端设备（或仅元数据条目），读取其配置描述符。
     /// 线程安全：无共享可变状态。</para>
     /// </summary>
-    private static global::UotanStudio.Comm.Transports.Usb.Backend.UsbDevice? BuildDevice(
+    private static UsbDevice? BuildDevice(
         LibUsbDotNet.LibUsb.UsbDevice libUsbDevice,
         UsbDeviceFilter? filter)
     {
@@ -240,7 +277,7 @@ internal static class LibUsbFinder
             out var interfaceClass,
             out var interfaceSubClass,
             out var interfaceProtocol,
-            out IReadOnlyList<UsbInterfaceInfo> interfaces))
+            out var interfaces))
         {
             if (!descriptorReadFailed)
             {
@@ -261,14 +298,14 @@ internal static class LibUsbFinder
             var degradedAddress = libUsbDevice.Address;
             var degraded = new LibUsbDevice
             {
-                Vid = (ushort)libUsbDevice.VendorId,
-                Pid = (ushort)libUsbDevice.ProductId,
+                Vid = libUsbDevice.VendorId,
+                Pid = libUsbDevice.ProductId,
                 BusNumber = degradedBus,
                 DeviceAddress = degradedAddress,
                 InterfaceMetadataObserved = false,
                 Speed = MapSpeed(libUsbDevice.Speed),
                 DevicePath = $"Bus {degradedBus} Device {degradedAddress}: {libUsbDevice.VendorId:X4}:{libUsbDevice.ProductId:X4}",
-                UsbDeviceType = global::UotanStudio.Comm.Transports.Usb.Backend.UsbDeviceType.LibUSB
+                UsbDeviceType = UsbDeviceType.LibUSB
             };
 
             UsbTrace.Log($"LibUsbFinder: device {libUsbDevice.VendorId:X4}:{libUsbDevice.ProductId:X4} descriptor read failed - reported with metadata only.");
@@ -280,8 +317,8 @@ internal static class LibUsbFinder
 
         var usbDevice = new LibUsbDevice
         {
-            Vid = (ushort)libUsbDevice.VendorId,
-            Pid = (ushort)libUsbDevice.ProductId,
+            Vid = libUsbDevice.VendorId,
+            Pid = libUsbDevice.ProductId,
             BusNumber = busNumber,
             DeviceAddress = address,
             InterfaceId = interfaceId,
@@ -294,7 +331,7 @@ internal static class LibUsbFinder
             Interfaces = interfaces,
             Speed = MapSpeed(libUsbDevice.Speed),
             DevicePath = $"Bus {busNumber} Device {address}: {libUsbDevice.VendorId:X4}:{libUsbDevice.ProductId:X4}",
-            UsbDeviceType = global::UotanStudio.Comm.Transports.Usb.Backend.UsbDeviceType.LibUSB
+            UsbDeviceType = UsbDeviceType.LibUSB
         };
 
         // Keep the device even when the handle cannot be opened (e.g. the interface
@@ -381,6 +418,3 @@ internal static class LibUsbFinder
 
 
 }
-
-
-

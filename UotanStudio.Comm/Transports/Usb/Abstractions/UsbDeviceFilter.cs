@@ -102,22 +102,61 @@ public sealed class UsbDeviceFilter
     /// <returns><c>true</c> if the device matches; otherwise, <c>false</c>. <para>匹配返回 <c>true</c>，否则返回 <c>false</c>。</para></returns>
     public bool Matches(UsbDeviceInfo info)
     {
-        if (VendorId.HasValue && info.VendorId != VendorId.Value) return false;
-        if (ProductId.HasValue && info.ProductId != ProductId.Value) return false;
+        if (VendorId.HasValue && info.VendorId != VendorId.Value)
+        {
+            return false;
+        }
+
+        if (ProductId.HasValue && info.ProductId != ProductId.Value)
+        {
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(SerialNumber) &&
-            !string.Equals(info.SerialNumber, SerialNumber, StringComparison.OrdinalIgnoreCase)) return false;
+            !string.Equals(info.SerialNumber, SerialNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         if (!string.IsNullOrWhiteSpace(DevicePathContains) &&
             (string.IsNullOrWhiteSpace(info.DevicePath) ||
-             info.DevicePath.IndexOf(DevicePathContains, StringComparison.OrdinalIgnoreCase) < 0)) return false;
-        if (SourceApiKind.HasValue && info.SourceApiKind != SourceApiKind.Value) return false;
-        if (InterfaceClass.HasValue && info.InterfaceClass != InterfaceClass.Value) return false;
-        if (InterfaceSubClass.HasValue && info.InterfaceSubClass != InterfaceSubClass.Value) return false;
-        if (InterfaceProtocol.HasValue && info.InterfaceProtocol != InterfaceProtocol.Value) return false;
+             info.DevicePath.IndexOf(DevicePathContains, StringComparison.OrdinalIgnoreCase) < 0))
+        {
+            return false;
+        }
+
+        if (SourceApiKind.HasValue && info.SourceApiKind != SourceApiKind.Value)
+        {
+            return false;
+        }
+
+        if (InterfaceClass.HasValue && info.InterfaceClass != InterfaceClass.Value)
+        {
+            return false;
+        }
+
+        if (InterfaceSubClass.HasValue && info.InterfaceSubClass != InterfaceSubClass.Value)
+        {
+            return false;
+        }
+
+        if (InterfaceProtocol.HasValue && info.InterfaceProtocol != InterfaceProtocol.Value)
+        {
+            return false;
+        }
+
         if (InterfaceNumber.HasValue &&
-            !info.Interfaces.Any(i => i.InterfaceNumber == InterfaceNumber.Value)) return false;
+            !info.Interfaces.Any(i => i.InterfaceNumber == InterfaceNumber.Value))
+        {
+            return false;
+        }
+
         if (InterfaceNumbers is { Count: > 0 } requestedInterfaces &&
             requestedInterfaces.Any(required =>
-                !info.Interfaces.Any(i => i.InterfaceNumber == required))) return false;
+                !info.Interfaces.Any(i => i.InterfaceNumber == required)))
+        {
+            return false;
+        }
 
         if (EndpointAddressIn.HasValue || EndpointAddressOut.HasValue)
         {
@@ -125,8 +164,15 @@ public sealed class UsbDeviceFilter
                 info.Interfaces.Any(i => i.Endpoints.Any(e => e.EndpointAddress == eIn));
             var hasOut = EndpointAddressOut is byte eOut &&
                 info.Interfaces.Any(i => i.Endpoints.Any(e => e.EndpointAddress == eOut));
-            if (EndpointAddressIn.HasValue && !hasIn) return false;
-            if (EndpointAddressOut.HasValue && !hasOut) return false;
+            if (EndpointAddressIn.HasValue && !hasIn)
+            {
+                return false;
+            }
+
+            if (EndpointAddressOut.HasValue && !hasOut)
+            {
+                return false;
+            }
         }
 
         return true;

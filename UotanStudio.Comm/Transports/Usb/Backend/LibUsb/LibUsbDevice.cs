@@ -1,14 +1,13 @@
+using System.Runtime.InteropServices;
 using LibUsbDotNet;
-using LibUsbDotNet.Info;
 using LibUsbDotNet.LibUsb;
 using LibUsbDotNet.Main;
-using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 
-internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.UsbDevice
+internal partial class LibUsbDevice : UsbDevice
 {
     private const int PlatformDefaultTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
 
@@ -25,13 +24,13 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
     // and resetting the pipe state after a failed read/write. <para>直接 P/Invoke
     // libusb_clear_halt；Windows winusb 上映射到 WinUsb_ResetPipe，在传输失败后
     // 中止未决传输并重置管道状态。</para>
-    [DllImport("libusb-1.0", CallingConvention = CallingConvention.Cdecl)]
-    private static extern int libusb_clear_halt(IntPtr devHandle, byte endpoint);
+    [LibraryImport("libusb-1.0")]
+    private static partial int libusb_clear_halt(IntPtr devHandle, byte endpoint);
 
-    private UsbContext? context;
-    private IUsbDevice? usbDevice;
-    private UsbEndpointReader? reader;
-    private UsbEndpointWriter? writer;
+    private UsbContext? _context;
+    private IUsbDevice? _usbDevice;
+    private UsbEndpointReader? _reader;
+    private UsbEndpointWriter? _writer;
     // Vid/Pid delegate to the base UsbDevice.VendorId/ProductId so that both the
     // shorthand used by CreateHandle() and the projection in
     // UsbDeviceInfoFactory (which reads VendorId/ProductId) see the same values.
@@ -49,7 +48,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
     public override byte EndpointOut => WriteEndpointId;
 
     /// <inheritdoc/>
-    internal override bool IsHandleOpen => usbDevice != null;
+    internal override bool IsHandleOpen => _usbDevice != null;
 
     public override int DefaultTimeoutMs => PlatformDefaultTimeoutMs;
 
@@ -60,20 +59,33 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
     {
         try
         {
-            foreach (UsbConfigInfo? config in device.Configs)
+            foreach (var config in device.Configs)
             {
-                foreach (LibUsbDotNet.Info.UsbInterfaceInfo? ifc in config.Interfaces)
+                foreach (var ifc in config.Interfaces)
                 {
                     var hasIn = false;
                     var hasOut = false;
-                    foreach (LibUsbDotNet.Info.UsbEndpointInfo? endpoint in ifc.Endpoints)
+                    foreach (var endpoint in ifc.Endpoints)
                     {
-                        if ((endpoint.Attributes & 0x03) != 0x02) continue;
-                        if ((endpoint.EndpointAddress & 0x80) != 0) hasIn = true;
-                        else hasOut = true;
+                        if ((endpoint.Attributes & 0x03) != 0x02)
+                        {
+                            continue;
+                        }
+
+                        if ((endpoint.EndpointAddress & 0x80) != 0)
+                        {
+                            hasIn = true;
+                        }
+                        else
+                        {
+                            hasOut = true;
+                        }
                     }
 
-                    if (hasIn && hasOut) return true;
+                    if (hasIn && hasOut)
+                    {
+                        return true;
+                    }
                 }
             }
         }
@@ -88,7 +100,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     public override int CreateHandle()
     {
-        context = new UsbContext();
+        _context = new UsbContext();
 
         // UsbContext.List() returns a UsbDeviceCollection that MUST be disposed: the
         // collection owns the native device handles, and leaving it undisposed lets the
@@ -101,7 +113,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         // 在 UnrefDevice 处以 0xC0000005 崩溃。按 LibUsbDotNet 文档建议 Clone 匹配到的
         // 设备，使会话在集合释放后仍持有有效句柄。</para>
         LibUsbDotNet.LibUsb.UsbDevice? device;
-        using (UsbDeviceCollection candidates = context.List())
+        using (var candidates = _context.List())
         {
             var candidateList = candidates.OfType<LibUsbDotNet.LibUsb.UsbDevice>().ToList();
 
@@ -117,30 +129,27 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
                     string.Equals(BuildDevicePath(d), DevicePath, StringComparison.OrdinalIgnoreCase));
             }
 
-            if (device == null)
-            {
-                device = candidateList.FirstOrDefault(d =>
+            device ??= candidateList.FirstOrDefault(d =>
                     d.VendorId == Vid &&
                     d.ProductId == Pid &&
                     HasBulkInterface(d));
-            }
 
             if (device != null)
             {
-                usbDevice = device.Clone();
+                _usbDevice = device.Clone();
             }
         }
 
-        if (device == null || usbDevice == null)
+        if (device == null || _usbDevice == null)
         {
-            context.Dispose();
-            context = null;
+            _context.Dispose();
+            _context = null;
             return -1;
         }
 
         try
         {
-            usbDevice.Open();
+            _usbDevice.Open();
         }
         catch
         {
@@ -148,13 +157,13 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             // Never Close() a device that was never opened: LibUsbDotNet's Close() on an
             // unopened device corrupts the native refcount and the device's finalizer
             // later crashes with 0xC0000005 in UnrefDevice. Dispose() the clone (releases
-            // the SafeHandle) and release only the context.
+            // the SafeHandle) and release only the _context.
             // <para>Open() 失败（例如接口已被其他会话或进程声明）。绝不对从未成功打开的设备
             // 调用 Close()：LibUsbDotNet 对未打开设备调用 Close() 会破坏原生引用计数，
             // 设备终结器随后在 UnrefDevice 处以 0xC0000005 崩溃。对克隆调用 Dispose()
             // （释放 SafeHandle），并仅释放上下文。</para>
-            (usbDevice as IDisposable)?.Dispose();
-            usbDevice = null;
+            (_usbDevice as IDisposable)?.Dispose();
+            _usbDevice = null;
             Dispose();
             return -1;
         }
@@ -168,9 +177,9 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         // 尚未处于配置 1 时才设置。</para>
         try
         {
-            if (usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice && wholeUsbDevice.Configuration != 1)
+            if (_usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice && wholeUsbDevice.Configuration != 1)
             {
-                usbDevice.SetConfiguration(1);
+                _usbDevice.SetConfiguration(1);
             }
         }
         catch (Exception ex)
@@ -188,41 +197,61 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         // target explicit endpoints regardless of the bulk pair.
         if (inEndpoint == 0 || outEndpoint == 0)
         {
-            foreach (UsbConfigInfo? config in usbDevice.Configs)
+            foreach (var config in _usbDevice.Configs)
             {
-                foreach (LibUsbDotNet.Info.UsbInterfaceInfo? ifc in config.Interfaces)
+                foreach (var ifc in config.Interfaces)
                 {
                     byte candidateIn = 0;
                     byte candidateOut = 0;
-                    foreach (LibUsbDotNet.Info.UsbEndpointInfo? endpoint in ifc.Endpoints)
+                    foreach (var endpoint in ifc.Endpoints)
                     {
                         // Collect bulk endpoints first (the session I/O path), then interrupt
                         // endpoints as fallback candidates so devices with only interrupt pipes
                         // (e.g. HID) can still be opened when the filter requests explicit
                         // endpoint addresses (interrupt-test).
                         var epType = endpoint.Attributes & 0x03;
-                        if (epType != 0x02 && epType != 0x03) continue;
+                        if (epType is not 0x02 and not 0x03)
+                        {
+                            continue;
+                        }
 
                         if ((endpoint.EndpointAddress & 0x80) != 0)
                         {
-                            if (candidateIn == 0) candidateIn = endpoint.EndpointAddress;
+                            if (candidateIn == 0)
+                            {
+                                candidateIn = endpoint.EndpointAddress;
+                            }
                         }
                         else
                         {
-                            if (candidateOut == 0) candidateOut = endpoint.EndpointAddress;
+                            if (candidateOut == 0)
+                            {
+                                candidateOut = endpoint.EndpointAddress;
+                            }
                         }
                     }
 
                     if (candidateIn != 0)
                     {
                         targetInterfaceId = (byte)ifc.Number;
-                        if (inEndpoint == 0) inEndpoint = candidateIn;
-                        if (outEndpoint == 0) outEndpoint = candidateOut;
+                        if (inEndpoint == 0)
+                        {
+                            inEndpoint = candidateIn;
+                        }
+
+                        if (outEndpoint == 0)
+                        {
+                            outEndpoint = candidateOut;
+                        }
+
                         break;
                     }
                 }
 
-                if (inEndpoint != 0 && outEndpoint != 0) break;
+                if (inEndpoint != 0 && outEndpoint != 0)
+                {
+                    break;
+                }
             }
         }
 
@@ -243,7 +272,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         var claimed = false;
         try
         {
-            usbDevice.ClaimInterface(targetInterfaceId);
+            _usbDevice.ClaimInterface(targetInterfaceId);
             claimed = true;
         }
         catch (Exception ex)
@@ -251,7 +280,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             claimError = ex;
         }
 
-        if (!claimed && usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice)
+        if (!claimed && _usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice)
         {
             for (var attempt = 0; attempt < 3; attempt++)
             {
@@ -266,7 +295,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
                 try
                 {
-                    usbDevice.ClaimInterface(targetInterfaceId);
+                    _usbDevice.ClaimInterface(targetInterfaceId);
                     claimed = true;
                     break;
                 }
@@ -283,20 +312,20 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             UsbTrace.LogFormatted($"LibUsbDevice.ClaimInterface failed: {claimError?.GetType().Name}: {claimError?.Message}");
         }
 
-        reader = null;
-        writer = null;
+        _reader = null;
+        _writer = null;
 
         // Open each direction independently: interrupt-only HID devices (e.g. QEMU
         // usb-tablet) expose no OUT pipe, so a missing direction must not fail the
         // session — the session's ReadInterrupt/WriteInterrupt target explicit endpoints.
         if (inEndpoint != 0)
         {
-            reader = usbDevice.OpenEndpointReader((ReadEndpointID)inEndpoint);
+            _reader = _usbDevice.OpenEndpointReader((ReadEndpointID)inEndpoint);
         }
 
         if (outEndpoint != 0)
         {
-            writer = usbDevice.OpenEndpointWriter((WriteEndpointID)outEndpoint);
+            _writer = _usbDevice.OpenEndpointWriter((WriteEndpointID)outEndpoint);
         }
 
         // Do NOT flush the IN endpoint at session open: protocol devices that greet
@@ -309,7 +338,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         // A session is usable as long as every direction it was asked to bind actually
         // opened. IN-only (HID interrupt) and OUT-only devices are valid; the missing
         // direction's bulk helpers throw NotSupportedException when invoked.
-        if ((inEndpoint != 0 && reader == null) || (outEndpoint != 0 && writer == null))
+        if ((inEndpoint != 0 && _reader == null) || (outEndpoint != 0 && _writer == null))
         {
             Dispose();
             return -1;
@@ -321,7 +350,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     public override void Dispose()
     {
-        if (usbDevice != null)
+        if (_usbDevice != null)
         {
             // Clear any halted pipes before releasing the interface; on Windows winusb
             // a stalled pipe keeps the interface claimed at the driver level, so later
@@ -336,7 +365,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             // <para>关闭句柄前显式释放已 claim 的接口：winusb.sys 每接口仅允许一个句柄。</para>
             try
             {
-                if (usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice)
+                if (_usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice)
                 {
                     wholeUsbDevice.ReleaseInterface(InterfaceId);
                 }
@@ -353,22 +382,20 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             // <para>Close() 释放设备句柄；Dispose() 额外释放底层 Device SafeHandle。
             // 仅调用 Close() 会把 SafeHandle 留给终结器，终结器会对 libusb_exit 已释放的
             // 内存执行 UnrefDevice，导致 0xC0000005。</para>
-            usbDevice.Close();
-            (usbDevice as IDisposable)?.Dispose();
-            usbDevice = null;
+            _usbDevice.Close();
+            (_usbDevice as IDisposable)?.Dispose();
+            _usbDevice = null;
         }
-        if (context != null)
-        {
-            context.Dispose();
-            context = null;
-        }
+
+        _context?.Dispose();
+        _context = null;
     }
 
     public override int GetSerialNumber()
     {
-        if (usbDevice != null)
+        if (_usbDevice != null)
         {
-            SerialNumber = usbDevice.Info.SerialNumber;
+            SerialNumber = _usbDevice.Info.SerialNumber;
             return 0;
         }
         return -1;
@@ -376,11 +403,11 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     public override void Reset()
     {
-        if (usbDevice != null)
+        if (_usbDevice != null)
         {
             try
             {
-                usbDevice.ResetDevice();
+                _usbDevice.ResetDevice();
             }
             catch (Exception ex)
             {
@@ -391,7 +418,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     public override int ControlTransfer(Abstractions.UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
     {
-        if (usbDevice == null)
+        if (_usbDevice == null)
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
@@ -409,12 +436,12 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
         if (length == 0)
         {
-            return usbDevice.ControlTransfer(libUsbSetup, null, 0, 0);
+            return _usbDevice.ControlTransfer(libUsbSetup, null, 0, 0);
         }
 
         if (buffer != null && offset == 0 && length == buffer.Length)
         {
-            return usbDevice.ControlTransfer(libUsbSetup, buffer, 0, length);
+            return _usbDevice.ControlTransfer(libUsbSetup, buffer, 0, length);
         }
 
         var transferBuffer = new byte[length];
@@ -424,7 +451,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             Buffer.BlockCopy(buffer, offset, transferBuffer, 0, length);
         }
 
-        var transferred = usbDevice.ControlTransfer(libUsbSetup, transferBuffer, 0, length);
+        var transferred = _usbDevice.ControlTransfer(libUsbSetup, transferBuffer, 0, length);
         if (isInDirection && buffer != null)
         {
             Buffer.BlockCopy(transferBuffer, 0, buffer, offset, Math.Min(transferred, length));
@@ -437,12 +464,22 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     public override byte[] Read(int length, int timeoutMs)
     {
-        if (length <= 0) return [];
+        if (length <= 0)
+        {
+            return [];
+        }
 
         var buffer = new byte[length];
         var count = ReadInto(buffer, 0, length, timeoutMs);
-        if (count == length) return buffer;
-        if (count == 0) return [];
+        if (count == length)
+        {
+            return buffer;
+        }
+
+        if (count == 0)
+        {
+            return [];
+        }
 
         var result = new byte[count];
         Buffer.BlockCopy(buffer, 0, result, 0, count);
@@ -456,14 +493,14 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
     // A session is open when at least one direction bound successfully; IN-only (HID
     // interrupt) and OUT-only devices are valid sessions even though bulk I/O in the
     // missing direction throws NotSupportedException.
-    protected override bool IsOpen => reader != null || writer != null;
+    protected override bool IsOpen => _reader != null || _writer != null;
 
     protected override bool IsDisconnectionError(int nativeError)
         => nativeError == (int)Error.NoDevice;
 
     /// <summary>
     /// Maps the library timeout sentinel to libusb's convention: libusb treats 0 as
-    /// "never time out", so <see cref="UsbTransferPolicies.InfiniteTimeoutMs"/> (-1) becomes 0.
+    /// "never Time out", so <see cref="UsbTransferPolicies.InfiniteTimeoutMs"/> (-1) becomes 0.
     /// <para>将库的超时哨兵映射为 libusb 约定：libusb 将 0 视为"永不超时"，
     /// 因此 <see cref="UsbTransferPolicies.InfiniteTimeoutMs"/>（-1）转换为 0。</para>
     /// </summary>
@@ -493,7 +530,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
         try
         {
-            if (usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice &&
+            if (_usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice &&
                 libusbDevice.DeviceHandle is { IsInvalid: false } deviceHandle)
             {
                 var result = libusb_clear_halt(deviceHandle.DangerousGetHandle(), endpoint);
@@ -512,7 +549,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     protected override UsbChunkResult ReadChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        if (reader == null)
+        if (_reader == null)
         {
             throw new NotSupportedException("The session has no bound IN endpoint for bulk reads (interrupt-only device?).");
         }
@@ -523,7 +560,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         }
 
         var chunkBuffer = _readChunkBuffer;
-        Error error = reader.Read(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var readLen);
+        var error = _reader.Read(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var readLen);
         if (error == Error.NoDevice)
         {
             return UsbChunkResult.Fatal((int)error);
@@ -541,7 +578,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     protected override UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        if (writer == null)
+        if (_writer == null)
         {
             throw new NotSupportedException("The session has no bound OUT endpoint for bulk writes (interrupt-only device?).");
         }
@@ -554,8 +591,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         var chunkBuffer = _writeChunkBuffer;
         Marshal.Copy(buffer, chunkBuffer, 0, length);
 
-        int transferred;
-        Error errorCode = writer!.Write(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out transferred);
+        var errorCode = _writer.Write(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var transferred);
         if (errorCode == Error.NoDevice)
         {
             return UsbChunkResult.Fatal((int)errorCode);
@@ -565,25 +601,21 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             RestoreEndpointHalt(WriteEndpointId);
             return UsbChunkResult.Error((int)errorCode);
         }
-        if (transferred <= 0)
-        {
-            return UsbChunkResult.Timeout((int)errorCode);
-        }
-        return UsbChunkResult.Success(transferred);
+        return transferred <= 0 ? UsbChunkResult.Timeout((int)errorCode) : UsbChunkResult.Success(transferred);
     }
 
     public override long Write(byte[] data, int length) => Write(data, length, PlatformDefaultTimeoutMs);
 
     public override void WriteZlp(int timeoutMs)
     {
-        if (writer == null)
+        if (_writer == null)
         {
             throw new NotSupportedException("The session has no bound OUT endpoint for bulk writes (interrupt-only device?).");
         }
 
         var effectiveTimeoutMs = UsbTransferPolicies.NormalizeTimeout(timeoutMs, PlatformDefaultTimeoutMs);
         var zero = Array.Empty<byte>();
-        Error errorCode = writer.Write(zero, 0, 0, ToLibusbTimeout(effectiveTimeoutMs), out var transferred);
+        var errorCode = _writer.Write(zero, 0, 0, ToLibusbTimeout(effectiveTimeoutMs), out _);
         if (errorCode == Error.NoDevice)
         {
             throw new UsbDeviceDisconnectedException("USB write failed: device disconnected (Error.NoDevice).", (int)errorCode);
@@ -596,23 +628,27 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     public override UsbReadResult ReadInterrupt(byte endpointAddress, byte[] buffer, int offset, int length, int timeoutMs)
     {
-        if (usbDevice == null)
+        if (_usbDevice == null)
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
-        if (length <= 0) return new UsbReadResult(0, false, false);
+        if (length <= 0)
+        {
+            return new UsbReadResult(0, false, false);
+        }
+
         ValidateBufferRange(buffer, offset, length);
 
         // libusb's bulk transfer API is also valid for interrupt endpoints; open a
-        // temporary reader on the requested endpoint for the single transfer.
+        // temporary _reader on the requested endpoint for the single transfer.
         // (LibUsbDotNet 3.x endpoint objects do not implement IDisposable; they are
-        // reclaimed with the owning UsbDevice, matching the session reader/writer fields.)
-        UsbEndpointReader interruptReader = usbDevice.OpenEndpointReader((ReadEndpointID)endpointAddress);
+        // reclaimed with the owning UsbDevice, matching the session _reader/_writer fields.)
+        var interruptReader = _usbDevice.OpenEndpointReader((ReadEndpointID)endpointAddress);
         if (interruptReader == null)
         {
             return new UsbReadResult(0, isTimeout: true, isShortPacket: false);
         }
-        Error error = interruptReader.Read(buffer, offset, length, ToLibusbTimeout(timeoutMs), out var readLen);
+        var error = interruptReader.Read(buffer, offset, length, ToLibusbTimeout(timeoutMs), out var readLen);
         if (error == Error.NoDevice)
         {
             throw new UsbDeviceDisconnectedException("USB interrupt read failed: device disconnected (Error.NoDevice).", (int)error);
@@ -621,28 +657,29 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         {
             RestoreEndpointHalt(endpointAddress);
         }
-        if (readLen <= 0)
-        {
-            return new UsbReadResult(0, isTimeout: true, isShortPacket: false);
-        }
-        return new UsbReadResult(readLen, isTimeout: false, isShortPacket: readLen < length);
+        return readLen <= 0
+            ? new UsbReadResult(0, isTimeout: true, isShortPacket: false)
+            : new UsbReadResult(readLen, isTimeout: false, isShortPacket: readLen < length);
     }
 
     public override long WriteInterrupt(byte endpointAddress, byte[] data, int offset, int length, int timeoutMs)
     {
-        if (usbDevice == null)
+        if (_usbDevice == null)
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
         ValidateWriteData(data, offset, length);
-        if (length == 0) return 0;
+        if (length == 0)
+        {
+            return 0;
+        }
 
-        UsbEndpointWriter interruptWriter = usbDevice.OpenEndpointWriter((WriteEndpointID)endpointAddress);
+        var interruptWriter = _usbDevice.OpenEndpointWriter((WriteEndpointID)endpointAddress);
         if (interruptWriter == null)
         {
             return 0;
         }
-        Error error = interruptWriter.Write(data, offset, length, ToLibusbTimeout(timeoutMs), out var transferred);
+        var error = interruptWriter.Write(data, offset, length, ToLibusbTimeout(timeoutMs), out var transferred);
         if (error == Error.NoDevice)
         {
             throw new UsbDeviceDisconnectedException("USB interrupt write failed: device disconnected (Error.NoDevice).", (int)error);
@@ -656,7 +693,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     protected override async Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
     {
-        if (reader == null)
+        if (_reader == null)
         {
             // IN-only session bound without an OUT pipe is valid for interrupt reads;
             // bulk reads in a direction that never opened must not NRE.
@@ -672,7 +709,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         }
 
         var chunkBuffer = _readChunkBuffer;
-        (Error error, var readLen) = await reader.ReadAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
+        (var error, var readLen) = await _reader.ReadAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
         if (error == Error.NoDevice)
         {
             return UsbChunkResult.Fatal((int)error);
@@ -690,7 +727,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
     protected override async Task<UsbChunkResult> WriteChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
     {
-        if (writer == null)
+        if (_writer == null)
         {
             // OUT-only session bound without an IN pipe is valid for interrupt writes;
             // bulk writes in a direction that never opened must not NRE.
@@ -708,7 +745,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         var chunkBuffer = _writeChunkBuffer;
         Marshal.Copy(buffer, chunkBuffer, 0, length);
 
-        (Error errorCode, var transferred) = await writer.WriteAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
+        (var errorCode, var transferred) = await _writer.WriteAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
         if (errorCode == Error.NoDevice)
         {
             return UsbChunkResult.Fatal((int)errorCode);
@@ -718,18 +755,14 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             RestoreEndpointHalt(WriteEndpointId);
             return UsbChunkResult.Error((int)errorCode);
         }
-        if (transferred <= 0)
-        {
-            return UsbChunkResult.Timeout((int)errorCode);
-        }
-        return UsbChunkResult.Success(transferred);
+        return transferred <= 0 ? UsbChunkResult.Timeout((int)errorCode) : UsbChunkResult.Success(transferred);
     }
 
     public override async Task<int> ControlTransferAsync(Abstractions.UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (usbDevice == null)
+        if (_usbDevice == null)
         {
             throw new UsbDeviceHandleClosedException("Device handle is closed.");
         }
@@ -747,22 +780,22 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
 
         if (length == 0)
         {
-            return await usbDevice.ControlTransferAsync(libUsbSetup).ConfigureAwait(false);
+            return await _usbDevice.ControlTransferAsync(libUsbSetup).ConfigureAwait(false);
         }
 
-        if (timeoutMs > 0 && timeoutMs != PlatformDefaultTimeoutMs)
+        if (timeoutMs is > 0 and not PlatformDefaultTimeoutMs)
         {
             return await Task.Run(() => ControlTransfer(setupPacket, buffer, offset, length, timeoutMs), cancellationToken).ConfigureAwait(false);
         }
 
         if (buffer == null)
         {
-            return await usbDevice.ControlTransferAsync(libUsbSetup).ConfigureAwait(false);
+            return await _usbDevice.ControlTransferAsync(libUsbSetup).ConfigureAwait(false);
         }
 
         if (offset == 0 && length == buffer.Length)
         {
-            return await usbDevice.ControlTransferAsync(libUsbSetup, buffer, 0, length).ConfigureAwait(false);
+            return await _usbDevice.ControlTransferAsync(libUsbSetup, buffer, 0, length).ConfigureAwait(false);
         }
 
         var transferBuffer = new byte[length];
@@ -772,7 +805,7 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
             Buffer.BlockCopy(buffer, offset, transferBuffer, 0, length);
         }
 
-        var transferred = await usbDevice.ControlTransferAsync(libUsbSetup, transferBuffer, 0, length).ConfigureAwait(false);
+        var transferred = await _usbDevice.ControlTransferAsync(libUsbSetup, transferBuffer, 0, length).ConfigureAwait(false);
         if (isInDirection)
         {
             Buffer.BlockCopy(transferBuffer, 0, buffer, offset, Math.Min(transferred, length));
@@ -781,5 +814,3 @@ internal class LibUsbDevice : global::UotanStudio.Comm.Transports.Usb.Backend.Us
         return transferred;
     }
 }
-
-

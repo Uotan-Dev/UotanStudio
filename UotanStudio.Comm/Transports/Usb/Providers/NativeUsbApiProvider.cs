@@ -56,14 +56,14 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
             // （至少一个后端会重新枚举）。</para>
             ResetReenumeratesDevice = true,
             Notes = notes,
-            Backends = new[]
-            {
+            Backends =
+            [
                 new UsbBackendCapability { BackendName = "winusb", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "winusb-legacy", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "linux-usbfs", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = true },
                 new UsbBackendCapability { BackendName = "macos-iokit", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "harmony-ddk", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true }
-            }
+            ],
         };
     }
 
@@ -95,7 +95,7 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
             return IOKitUsbFinder.FindDevice(filter);
         }
 
-        return new List<UsbDevice>();
+        return [];
     }
 
     /// <summary>
@@ -112,11 +112,8 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
     /// <returns>The discovered backend devices. <para>发现的后端设备。</para></returns>
     protected override List<UsbDevice> EnumerateBackendDevices(UsbDeviceFilter? filter, UsbSessionOptions? options)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            return WinUSBFinder.FindDevice(filter, options);
-        }
-
-        return base.EnumerateBackendDevices(filter, options);
+        return RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? WinUSBFinder.FindDevice(filter, options)
+            : base.EnumerateBackendDevices(filter, options);
     }
 }

@@ -25,7 +25,7 @@ internal static class UsbProviderProjection
         UsbDeviceFilter? filter)
     {
         var sessions = new List<IUsbDeviceSession>(devices.Count);
-        foreach (UsbDevice device in devices)
+        foreach (var device in devices)
         {
             // Enumeration does not open handles (metadata discovery); open on demand
             // here so the session path pays the open cost only when sessions are
@@ -71,11 +71,11 @@ internal static class UsbProviderProjection
     {
         var infos = new List<UsbDeviceInfo>(devices.Count);
 
-        foreach (UsbDevice device in devices)
+        foreach (var device in devices)
         {
             try
             {
-                UsbDeviceInfo info = UsbDeviceInfoFactory.FromBackendDevice(apiName, apiKind, device);
+                var info = UsbDeviceInfoFactory.FromBackendDevice(apiName, apiKind, device);
                 if (filter == null || filter.Matches(info))
                 {
                     infos.Add(info);

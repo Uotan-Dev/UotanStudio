@@ -17,9 +17,5 @@ internal static class UsbStringDescriptor
     /// <param name="responseLength">The number of valid bytes in the buffer. <para>缓冲区有效字节数。</para></param>
     /// <returns>The decoded string, or <see cref="string.Empty"/> when the payload is too short.
     /// <para>解码后的字符串，载荷过短时返回空字符串。</para></returns>
-    public static string Decode(byte[] descriptor, int responseLength)
-    {
-        if (responseLength <= 2) return string.Empty;
-        return Encoding.Unicode.GetString(descriptor, 2, responseLength - 2).TrimEnd('\0');
-    }
+    public static string Decode(byte[] descriptor, int responseLength) => responseLength <= 2 ? string.Empty : Encoding.Unicode.GetString(descriptor, 2, responseLength - 2).TrimEnd('\0');
 }

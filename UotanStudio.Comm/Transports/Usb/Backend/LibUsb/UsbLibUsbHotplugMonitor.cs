@@ -21,7 +21,7 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
     private readonly Func<IReadOnlyList<UsbDeviceInfo>> _enumerator;
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
     private readonly Action<Exception>? _onError;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private UsbContext? _context;
     private Dictionary<string, UsbDeviceInfo> _lastSnapshot = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
@@ -80,7 +80,7 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
 
     private void PollOnce()
     {
-        Dictionary<string, UsbDeviceInfo> currentSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
+        var currentSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
         List<UsbDeviceChange>? changes;
 
         lock (_gate)
@@ -120,7 +120,7 @@ internal sealed class UsbLibUsbHotplugMonitor : IDisposable
             _disposed = true;
         }
 
-        UsbContext? context = _context;
+        var context = _context;
         _context = null;
         if (context != null)
         {

@@ -7,7 +7,7 @@ namespace UotanStudio.Comm.Transports.Usb.Core;
 /// Represents an active session over a USB device, implementing both synchronous and asynchronous I/O.
 /// <para>表示 USB 设备上的活动会话，实现同步和异步 I/O。</para>
 /// Reads, writes and control transfers are serialized through separate direction gates so
-/// concurrent protocol threads (e.g. a status thread plus a transfer thread in adb-style
+/// concurrent protocol threads (e.g. a status thread plus a transfer thread in adb-Style
 /// clients) can run full-duplex: a blocked read on the IN endpoint never stalls a write on
 /// the OUT endpoint. Same-direction operations remain strictly serialized to keep transfers
 /// on the same endpoints from interleaving.
@@ -514,7 +514,7 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
 
         if (length > ushort.MaxValue)
         {
-            throw new ArgumentOutOfRangeException(nameof(length), "USB control transfers are limited to 65535 bytes (16-bit wLength).");
+            throw new ArgumentOutOfRangeException(nameof(length), "USB control transfers are limited to 65535 bytes (16-bit WLength).");
         }
     }
 }

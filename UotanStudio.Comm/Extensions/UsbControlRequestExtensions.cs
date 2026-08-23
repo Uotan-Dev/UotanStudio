@@ -19,10 +19,10 @@ public static class UsbControlRequestExtensions
     /// <para>执行设备到主机的控制读取并返回响应字节。</para>
     /// </summary>
     /// <param name="session">The source session. <para>源会话。</para></param>
-    /// <param name="requestType">The bmRequestType byte (direction bit 7 set for IN). <para>bmRequestType 字节（IN 方向需置位 bit 7）。</para></param>
-    /// <param name="request">The bRequest byte. <para>bRequest 字节。</para></param>
-    /// <param name="value">The wValue field. <para>wValue 字段。</para></param>
-    /// <param name="index">The wIndex field. <para>wIndex 字段。</para></param>
+    /// <param name="requestType">The BmRequestType byte (direction bit 7 set for IN). <para>BmRequestType 字节（IN 方向需置位 bit 7）。</para></param>
+    /// <param name="request">The BRequest byte. <para>BRequest 字节。</para></param>
+    /// <param name="value">The WValue field. <para>WValue 字段。</para></param>
+    /// <param name="index">The WIndex field. <para>WIndex 字段。</para></param>
     /// <param name="length">The number of bytes to read. <para>要读取的字节数。</para></param>
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
     /// <returns>The response bytes. <para>响应字节。</para></returns>
@@ -32,7 +32,11 @@ public static class UsbControlRequestExtensions
         var buffer = new byte[length];
         var setup = new UsbSetupPacket { RequestType = requestType, Request = request, Value = value, Index = index, Length = (ushort)length };
         var transferred = session.ControlTransfer(setup, buffer, 0, length, timeoutMs);
-        if (transferred == length) return buffer;
+        if (transferred == length)
+        {
+            return buffer;
+        }
+
         var result = new byte[transferred];
         Buffer.BlockCopy(buffer, 0, result, 0, transferred);
         return result;
@@ -43,10 +47,10 @@ public static class UsbControlRequestExtensions
     /// <para>执行主机到设备的控制写入。</para>
     /// </summary>
     /// <param name="session">The source session. <para>源会话。</para></param>
-    /// <param name="requestType">The bmRequestType byte (direction bit 7 clear for OUT). <para>bmRequestType 字节（OUT 方向需清零 bit 7）。</para></param>
-    /// <param name="request">The bRequest byte. <para>bRequest 字节。</para></param>
-    /// <param name="value">The wValue field. <para>wValue 字段。</para></param>
-    /// <param name="index">The wIndex field. <para>wIndex 字段。</para></param>
+    /// <param name="requestType">The BmRequestType byte (direction bit 7 clear for OUT). <para>BmRequestType 字节（OUT 方向需清零 bit 7）。</para></param>
+    /// <param name="request">The BRequest byte. <para>BRequest 字节。</para></param>
+    /// <param name="value">The WValue field. <para>WValue 字段。</para></param>
+    /// <param name="index">The WIndex field. <para>WIndex 字段。</para></param>
     /// <param name="data">The data to send. <para>要发送的数据。</para></param>
     /// <param name="timeoutMs">Timeout in milliseconds. <para>超时时间（毫秒）。</para></param>
     /// <returns>The number of bytes transferred. <para>实际传输字节数。</para></returns>
@@ -72,7 +76,7 @@ public static class UsbControlRequestExtensions
     {
         ArgumentNullException.ThrowIfNull(session);
         var payload = BuildLineCodingPayload(baudRate, charFormat, parityType, dataBits);
-        // bmRequestType = 0x21 (host→device, class, interface); bRequest = 0x20 (SET_LINE_CODING).
+        // BmRequestType = 0x21 (host→device, class, interface); BRequest = 0x20 (SET_LINE_CODING).
         _ = session.ControlWrite(0x21, 0x20, 0, interfaceNumber, payload, timeoutMs);
     }
 
@@ -87,14 +91,14 @@ public static class UsbControlRequestExtensions
     public static byte[] GetLineCoding(this IUsbDeviceSession session, byte interfaceNumber, int timeoutMs)
     {
         ArgumentNullException.ThrowIfNull(session);
-        // bmRequestType = 0xA1 (device→host, class, interface); bRequest = 0x21 (GET_LINE_CODING).
+        // BmRequestType = 0xA1 (device→host, class, interface); BRequest = 0x21 (GET_LINE_CODING).
         return session.ControlRead(0xA1, 0x21, 0, interfaceNumber, 7, timeoutMs);
     }
 
     private static byte[] BuildLineCodingPayload(uint baudRate, byte charFormat, byte parityType, byte dataBits)
     {
-        return new[]
-        {
+        return
+        [
             (byte)(baudRate & 0xFF),
             (byte)((baudRate >> 8) & 0xFF),
             (byte)((baudRate >> 16) & 0xFF),
@@ -102,6 +106,6 @@ public static class UsbControlRequestExtensions
             charFormat,
             parityType,
             dataBits
-        };
+        ];
     }
 }

@@ -71,7 +71,7 @@ internal class HarmonyOSUsbDevice : UsbDevice
         }
 
         var devMmapPtr = IntPtr.Zero;
-        ret = OH_Usb_CreateDeviceMemMap(_deviceId, (UIntPtr)UsbTransferPolicies.LinuxUsbFsMaxBulkSize, ref devMmapPtr);
+        ret = OH_Usb_CreateDeviceMemMap(_deviceId, UsbTransferPolicies.LinuxUsbFsMaxBulkSize, ref devMmapPtr);
         if (ret != USB_DDK_NO_ERROR)
         {
             UsbTrace.Log($"HarmonyOSUsbDevice: OH_Usb_CreateDeviceMemMap failed: {GetErrorMessage(ret)}");
@@ -83,9 +83,9 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
         _devMmap = devMmapPtr;
 
-        UsbDeviceMemMap mmapStruct = Marshal.PtrToStructure<UsbDeviceMemMap>(_devMmap);
-        _devMmapBuffer = mmapStruct.buffer;
-        _devMmapSize = (int)mmapStruct.size;
+        var mmapStruct = Marshal.PtrToStructure<UsbDeviceMemMap>(_devMmap);
+        _devMmapBuffer = mmapStruct.Buffer;
+        _devMmapSize = (int)mmapStruct.Size;
 
         GetSerialNumber();
         return USB_DDK_NO_ERROR;
@@ -93,7 +93,10 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
     public override void Reset()
     {
-        if (_disposed || !_ddkInitialized) return;
+        if (_disposed || !_ddkInitialized)
+        {
+            return;
+        }
 
         OH_Usb_ReleaseInterface(_interfaceHandle);
         OH_Usb_Release();
@@ -108,7 +111,7 @@ internal class HarmonyOSUsbDevice : UsbDevice
         }
     }
 
-    public override int ControlTransfer(Abstractions.UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
+    public override int ControlTransfer(UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
     {
         if (_disposed || !_ddkInitialized)
         {
@@ -129,16 +132,16 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
         var setup = new UsbControlRequestSetup
         {
-            bmRequestType = setupPacket.RequestType,
-            bRequest = setupPacket.Request,
-            wValue = setupPacket.Value,
-            wIndex = setupPacket.Index,
-            wLength = (ushort)length
+            BmRequestType = setupPacket.RequestType,
+            BRequest = setupPacket.Request,
+            WValue = setupPacket.Value,
+            WIndex = setupPacket.Index,
+            WLength = (ushort)length
         };
 
         int ret;
         var isInDirection = (setupPacket.RequestType & 0x80) != 0;
-        UsbTransferOperation traceOp = isInDirection ? UsbTransferOperation.Read : UsbTransferOperation.Write;
+        var traceOp = isInDirection ? UsbTransferOperation.Read : UsbTransferOperation.Write;
 
         if (isInDirection)
         {
@@ -181,27 +184,32 @@ internal class HarmonyOSUsbDevice : UsbDevice
             }
         }
 
-        UsbTransferOutcome outcome = ret == USB_DDK_TIMEOUT ? UsbTransferOutcome.Timeout : UsbTransferOutcome.FatalError;
+        var outcome = ret == USB_DDK_TIMEOUT ? UsbTransferOutcome.Timeout : UsbTransferOutcome.FatalError;
         EmitControlTransferTrace(traceOp, length, 0, effectiveTimeoutMs, stopwatch.ElapsedMilliseconds, outcome);
 
-        if (ret != USB_DDK_NO_ERROR)
-        {
-            throw new UsbTransferException($"USB control transfer failed: {GetErrorMessage(ret)}", ret);
-        }
-
-        return 0;
+        return ret != USB_DDK_NO_ERROR ? throw new UsbTransferException($"USB control transfer failed: {GetErrorMessage(ret)}", ret) : 0;
     }
 
     public override byte[] Read(int length) => Read(length, PlatformDefaultTimeoutMs);
 
     public override byte[] Read(int length, int timeoutMs)
     {
-        if (length <= 0) return [];
+        if (length <= 0)
+        {
+            return [];
+        }
 
         var buffer = new byte[length];
         var count = ReadInto(buffer, 0, length, timeoutMs);
-        if (count == length) return buffer;
-        if (count == 0) return [];
+        if (count == length)
+        {
+            return buffer;
+        }
+
+        if (count == 0)
+        {
+            return [];
+        }
 
         var result = new byte[count];
         Buffer.BlockCopy(buffer, 0, result, 0, count);
@@ -223,24 +231,24 @@ internal class HarmonyOSUsbDevice : UsbDevice
     {
         var pipe = new UsbRequestPipe
         {
-            interfaceHandle = _interfaceHandle,
-            endpointAddress = _epIn,
-            timeout = (uint)timeoutMs
+            InterfaceHandle = _interfaceHandle,
+            EndpointAddress = _epIn,
+            Timeout = (uint)timeoutMs
         };
 
         var devMmap = new UsbDeviceMemMap
         {
-            deviceId = _deviceId,
-            buffer = _devMmapBuffer,
-            size = (UIntPtr)_devMmapSize,
-            offset = UIntPtr.Zero,
-            length = (UIntPtr)length
+            DeviceId = _deviceId,
+            Buffer = _devMmapBuffer,
+            Size = (UIntPtr)_devMmapSize,
+            Offset = UIntPtr.Zero,
+            Length = (UIntPtr)length
         };
 
         var ret = OH_Usb_SendPipeRequest(ref pipe, ref devMmap);
         if (ret == USB_DDK_NO_ERROR)
         {
-            var transferred = (int)devMmap.length;
+            var transferred = (int)devMmap.Length;
             var copyLen = Math.Min(transferred, length);
             if (copyLen > 0)
             {
@@ -272,27 +280,24 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
         var pipe = new UsbRequestPipe
         {
-            interfaceHandle = _interfaceHandle,
-            endpointAddress = _epOut,
-            timeout = (uint)timeoutMs
+            InterfaceHandle = _interfaceHandle,
+            EndpointAddress = _epOut,
+            Timeout = (uint)timeoutMs
         };
 
         var devMmap = new UsbDeviceMemMap
         {
-            deviceId = _deviceId,
-            buffer = _devMmapBuffer,
-            size = (UIntPtr)_devMmapSize,
-            offset = UIntPtr.Zero,
-            length = (UIntPtr)length
+            DeviceId = _deviceId,
+            Buffer = _devMmapBuffer,
+            Size = (UIntPtr)_devMmapSize,
+            Offset = UIntPtr.Zero,
+            Length = (UIntPtr)length
         };
 
         var ret = OH_Usb_SendPipeRequest(ref pipe, ref devMmap);
-        if (ret == USB_DDK_NO_ERROR)
-        {
-            return UsbChunkResult.Success((int)devMmap.length);
-        }
-
-        return ret == USB_DDK_TIMEOUT ? UsbChunkResult.Timeout(ret) : UsbChunkResult.Fatal(ret);
+        return ret == USB_DDK_NO_ERROR
+            ? UsbChunkResult.Success((int)devMmap.Length)
+            : ret == USB_DDK_TIMEOUT ? UsbChunkResult.Timeout(ret) : UsbChunkResult.Fatal(ret);
     }
 
     protected override Exception CreateReadFatalException(int nativeError)
@@ -312,18 +317,18 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
         var pipe = new UsbRequestPipe
         {
-            interfaceHandle = _interfaceHandle,
-            endpointAddress = _epOut,
-            timeout = (uint)timeoutMs
+            InterfaceHandle = _interfaceHandle,
+            EndpointAddress = _epOut,
+            Timeout = (uint)timeoutMs
         };
 
         var devMmap = new UsbDeviceMemMap
         {
-            deviceId = _deviceId,
-            buffer = _devMmapBuffer,
-            size = (UIntPtr)_devMmapSize,
-            offset = UIntPtr.Zero,
-            length = UIntPtr.Zero
+            DeviceId = _deviceId,
+            Buffer = _devMmapBuffer,
+            Size = (UIntPtr)_devMmapSize,
+            Offset = UIntPtr.Zero,
+            Length = UIntPtr.Zero
         };
 
         var ret = OH_Usb_SendPipeRequest(ref pipe, ref devMmap);
@@ -339,41 +344,59 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
     public override int GetSerialNumber()
     {
-        if (_disposed || !_ddkInitialized) return -1;
+        if (_disposed || !_ddkInitialized)
+        {
+            return -1;
+        }
 
         var setup = new UsbControlRequestSetup
         {
-            bmRequestType = 0x80,
-            bRequest = 0x06,
-            wValue = 0x0300,
-            wIndex = 0,
-            wLength = 255
+            BmRequestType = 0x80,
+            BRequest = 0x06,
+            WValue = 0x0300,
+            WIndex = 0,
+            WLength = 255
         };
 
         var descriptor = new byte[256];
         uint dataLen = 256;
 
         var ret = OH_Usb_SendControlReadRequest(_interfaceHandle, ref setup, 1000, descriptor, ref dataLen);
-        if (ret != USB_DDK_NO_ERROR || dataLen < 4) return -1;
+        if (ret != USB_DDK_NO_ERROR || dataLen < 4)
+        {
+            return -1;
+        }
 
         var langCount = (int)(dataLen - 2) / 2;
-        if (langCount == 0) return -1;
+        if (langCount == 0)
+        {
+            return -1;
+        }
 
         var langId = (ushort)(descriptor[2] | (descriptor[3] << 8));
 
         var devDesc = new UsbDeviceDescriptor();
         ret = OH_Usb_GetDeviceDescriptor(_deviceId, ref devDesc);
-        if (ret != USB_DDK_NO_ERROR) return -1;
+        if (ret != USB_DDK_NO_ERROR)
+        {
+            return -1;
+        }
 
-        if (devDesc.iSerialNumber == 0) return -1;
+        if (devDesc.ISerialNumber == 0)
+        {
+            return -1;
+        }
 
-        setup.wValue = (ushort)((0x03 << 8) | devDesc.iSerialNumber);
-        setup.wIndex = langId;
-        setup.wLength = 255;
+        setup.WValue = (ushort)((0x03 << 8) | devDesc.ISerialNumber);
+        setup.WIndex = langId;
+        setup.WLength = 255;
         dataLen = 256;
 
         ret = OH_Usb_SendControlReadRequest(_interfaceHandle, ref setup, 1000, descriptor, ref dataLen);
-        if (ret != USB_DDK_NO_ERROR || dataLen < 2) return -1;
+        if (ret != USB_DDK_NO_ERROR || dataLen < 2)
+        {
+            return -1;
+        }
 
         var stringLen = (int)(dataLen - 2);
         if (stringLen > 0)
@@ -386,7 +409,11 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
     public override void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
         if (_devMmap != IntPtr.Zero)
@@ -410,7 +437,10 @@ internal class HarmonyOSUsbDevice : UsbDevice
 
     private void EmitControlTransferTrace(UsbTransferOperation operation, int requested, int transferred, int timeoutMs, long elapsedMs, UsbTransferOutcome outcome)
     {
-        if (!UsbTrace.HasTransferSubscribers) return;
+        if (!UsbTrace.HasTransferSubscribers)
+        {
+            return;
+        }
 
         UsbTrace.EmitTransfer(new UsbTransferEvent
         {

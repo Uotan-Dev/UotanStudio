@@ -6,7 +6,7 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// Unlike the raw <c>int</c> returned by <see cref="IUsbDeviceSession.ReadInto(byte[],int,int,int)"/>,
 /// this result distinguishes a short packet (device closed the transfer with fewer bytes than
 /// requested) from a timeout (no data arrived within the deadline) — information protocol
-/// layers (fastboot/EDL/bootrom) need to frame their message boundaries correctly.
+/// layers (fastboot/EDL/bootrom) need to frame their Message boundaries correctly.
 /// <para>与 <see cref="IUsbDeviceSession.ReadInto(byte[],int,int,int)"/> 返回的原始 <c>int</c>
 /// 不同，此结果区分"短包"（设备以少于请求的字节数结束传输）与"超时"（在期限内没有数据到达）——
 /// 协议层（fastboot/EDL/bootrom）需要这些信息来正确界定消息边界。</para>
@@ -37,7 +37,7 @@ public readonly struct UsbReadResult(int count, bool isTimeout, bool isShortPack
 
     /// <summary>
     /// Gets a value indicating whether the device ended the transfer with fewer bytes than
-    /// requested (a short packet — the USB message boundary).
+    /// requested (a short packet — the USB Message boundary).
     /// <para>获取一个值，指示设备是否以少于请求的字节数结束传输（短包——USB 消息边界）。</para>
     /// A short packet is a successful, complete USB transfer; it is mutually exclusive with
     /// <see cref="IsTimeout"/>.

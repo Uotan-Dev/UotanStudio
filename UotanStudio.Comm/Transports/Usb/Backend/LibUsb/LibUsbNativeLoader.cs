@@ -57,13 +57,13 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// <c>[DllImport("libusb-1.0")]</c> 探测）同样仅 net5+ 可用；netstandard2.0 上
 /// 仅凭预加载须使裸 SONAME 可解析，否则后端报告运行时不可用。</para>
 /// </remarks>
-internal static class LibUsbNativeLoader
+internal static partial class LibUsbNativeLoader
 {
-    private static readonly object Gate = new();
-    private static string? _libraryPath;
-    private static IntPtr _libraryHandle;
+    private static readonly Lock Gate = new();
+    private static string? s_libraryPath;
+    private static IntPtr s_libraryHandle;
 #if NET5_0_OR_GREATER
-    private static bool _resolverRegistered;
+    private static bool s_resolverRegistered;
 #endif
 
     /// <summary>
@@ -76,7 +76,7 @@ internal static class LibUsbNativeLoader
         {
             lock (Gate)
             {
-                return _libraryPath;
+                return s_libraryPath;
             }
         }
     }
@@ -105,13 +105,13 @@ internal static class LibUsbNativeLoader
 
         lock (Gate)
         {
-            if (_libraryPath == full && _libraryHandle != IntPtr.Zero)
+            if (s_libraryPath == full && s_libraryHandle != IntPtr.Zero)
             {
                 return;
             }
 
-            _libraryPath = full;
-            _libraryHandle = LoadNative(full);
+            s_libraryPath = full;
+            s_libraryHandle = LoadNative(full);
         }
     }
 
@@ -137,18 +137,18 @@ internal static class LibUsbNativeLoader
 #if NET5_0_OR_GREATER
     private static void RegisterResolverOnce()
     {
-        if (_resolverRegistered)
+        if (s_resolverRegistered)
         {
             return;
         }
 
-        _resolverRegistered = true;
+        s_resolverRegistered = true;
         NativeLibrary.SetDllImportResolver(typeof(LibUsbNativeLoader).Assembly, ResolveLibrary);
     }
 
     // Answers our own [DllImport("libusb-1.0")] probes (libusb_init/libusb_exit in
     // LibUsbFinder, libusb_clear_halt in LibUsbDevice) with the caller-loaded
-    // handle, so PrelinkAll-style runtime detection succeeds even before dyld's
+    // handle, so PrelinkAll-Style runtime detection succeeds even before dyld's
     // leaf-name matching kicks in.
     // <para>用调用者加载的句柄回答我们自身的 [DllImport("libusb-1.0")] 探测
     // （LibUsbFinder 的 libusb_init/libusb_exit、LibUsbDevice 的 libusb_clear_halt），
@@ -159,14 +159,14 @@ internal static class LibUsbNativeLoader
         {
             lock (Gate)
             {
-                if (_libraryHandle != IntPtr.Zero)
+                if (s_libraryHandle != IntPtr.Zero)
                 {
-                    return _libraryHandle;
+                    return s_libraryHandle;
                 }
 
-                if (_libraryPath != null)
+                if (s_libraryPath != null)
                 {
-                    return LoadNative(_libraryPath);
+                    return LoadNative(s_libraryPath);
                 }
             }
         }
@@ -178,10 +178,10 @@ internal static class LibUsbNativeLoader
 #if !NET5_0_OR_GREATER
     private const int RtlNowLocal = 0x2 | 0x1; // RTLD_NOW | RTLD_LOCAL
 
-    [DllImport("libSystem.dylib", EntryPoint = "dlopen", CallingConvention = CallingConvention.Cdecl)]
-    private static extern IntPtr Dlopen(string path, int mode);
+    [LibraryImport("libSystem.dylib", EntryPoint = "dlopen")]
+    private static partial IntPtr Dlopen([MarshalAs(UnmanagedType.LPStr)] string path, int mode);
 
-    [DllImport("kernel32.dll", EntryPoint = "LoadLibraryW", CallingConvention = CallingConvention.Winapi, CharSet = CharSet.Unicode)]
-    private static extern IntPtr LoadLibraryW(string path);
+    [LibraryImport("kernel32.dll", EntryPoint = "LoadLibraryW")]
+    private static partial IntPtr LoadLibraryW([MarshalAs(UnmanagedType.LPWStr)] string path);
 #endif
 }

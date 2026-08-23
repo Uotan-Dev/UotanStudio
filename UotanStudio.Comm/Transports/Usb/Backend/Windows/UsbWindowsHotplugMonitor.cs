@@ -6,7 +6,7 @@ using UotanStudio.Comm.Transports.Usb.Core;
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 /// <summary>
-/// Event-driven USB device monitoring on Windows via a hidden message-only window that
+/// Event-driven USB device monitoring on Windows via a hidden Message-only window that
 /// registers <c>RegisterDeviceNotification</c> for the known interface GUIDs and re-runs
 /// enumeration + diff on every <c>WM_DEVICECHANGE</c> (arrival/removal) event.
 /// <para>Windows 上的事件驱动 USB 设备监视：通过隐藏消息窗口为已知接口 GUID 注册
@@ -21,22 +21,22 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     private readonly Func<IReadOnlyList<UsbDeviceInfo>> _enumerator;
     private readonly Action<IReadOnlyList<UsbDeviceChange>> _onChanged;
     private readonly Action<Exception>? _onError;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Win32API.WndProcDelegate _wndProc; // keep the delegate alive for the native callback
-    private Thread? _thread;
+    private readonly Thread? _thread;
     private IntPtr _hwnd;
     private Dictionary<string, UsbDeviceInfo> _lastSnapshot = new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
     // The same interface GUID set the finder enumerates; kept local so this Windows-specific
     // adapter does not depend on WinUSBFinder internals.
-    private static readonly Guid[] InterfaceGuids = new[]
-    {
+    private static readonly Guid[] InterfaceGuids =
+    [
         new Guid("a5dcbf10-6530-11d2-901f-00c04fb951ed"), // USB Device
         new Guid("f72fe0d4-cbcb-407d-8814-9ed673d0dd6b"), // WinUSB generic
         new Guid("77395066-6C05-4B91-8071-3D7E2409546E"), // ADB
         new Guid("4D36E978-E325-11CE-BFC1-08002BE10318")  // Ports
-    };
+    ];
 
     public UsbWindowsHotplugMonitor(
         Func<IReadOnlyList<UsbDeviceInfo>> enumerator,
@@ -61,11 +61,12 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
     private void MessagePump()
     {
         var className = "FirmwareKitCommHotplugWindow";
+        var classNamePtr = Marshal.StringToHGlobalUni(className);
         var wc = new Win32API.WNDCLASSW
         {
-            lpfnWndProc = _wndProc,
-            lpszClassName = className,
-            hInstance = Win32API.GetModuleHandleW(null)
+            LpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProc),
+            LpszClassName = classNamePtr,
+            HInstance = Win32API.GetModuleHandleW(null)
         };
 
         try
@@ -75,19 +76,19 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 throw new InvalidOperationException($"RegisterClassW failed: {Marshal.GetLastWin32Error()}");
             }
 
-            _hwnd = Win32API.CreateWindowExW(0, className, string.Empty, 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.hInstance, IntPtr.Zero);
+            _hwnd = Win32API.CreateWindowExW(0, className, string.Empty, 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, wc.HInstance, IntPtr.Zero);
             if (_hwnd == IntPtr.Zero)
             {
                 throw new InvalidOperationException($"CreateWindowExW failed: {Marshal.GetLastWin32Error()}");
             }
 
-            foreach (Guid guid in InterfaceGuids)
+            foreach (var guid in InterfaceGuids)
             {
                 var filter = new Win32API.DEV_BROADCAST_DEVICEINTERFACE_W
                 {
-                    dbcc_size = (uint)Marshal.OffsetOf(typeof(Win32API.DEV_BROADCAST_DEVICEINTERFACE_W), "dbcc_name"),
-                    dbcc_devicetype = Win32API.DBT_DEVTYP_DEVICEINTERFACE,
-                    dbcc_classguid = ToApiGuid(guid)
+                    Dbcc_size = (uint)Marshal.OffsetOf<Win32API.DEV_BROADCAST_DEVICEINTERFACE_W>("Dbcc_name"),
+                    Dbcc_devicetype = Win32API.DBT_DEVTYP_DEVICEINTERFACE,
+                    Dbcc_classguid = guid
                 };
                 var filterPtr = Marshal.AllocHGlobal(Marshal.SizeOf(filter));
                 try
@@ -101,7 +102,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
                 }
             }
 
-            while (Win32API.GetMessageW(out Win32API.MSG msg, IntPtr.Zero, 0, 0))
+            while (Win32API.GetMessageW(out var msg, IntPtr.Zero, 0, 0))
             {
                 _ = Win32API.TranslateMessage(ref msg);
                 _ = Win32API.DispatchMessageW(ref msg);
@@ -110,10 +111,13 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         catch (Exception ex)
         {
             _onError?.Invoke(ex);
-            UsbTrace.Log($"UsbWindowsHotplugMonitor message pump failed: {ex.GetType().Name}: {ex.Message}");
+            UsbTrace.Log($"UsbWindowsHotplugMonitor Message pump failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
+            // RegisterClassW 拷贝类名字符串，此处统一释放，异常路径也不泄漏。
+            // RegisterClassW copies the class-name string; free it here so the failure path leaks nothing.
+            Marshal.FreeHGlobal(classNamePtr);
             if (_hwnd != IntPtr.Zero)
             {
                 _ = Win32API.DestroyWindow(_hwnd);
@@ -135,7 +139,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
 
     private void TriggerPoll()
     {
-        // Never block the message pump: re-enumerate and diff on the thread pool.
+        // Never block the Message pump: re-enumerate and diff on the thread pool.
         _ = Task.Run(() =>
         {
             try
@@ -152,7 +156,7 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
 
     private void PollOnce()
     {
-        Dictionary<string, UsbDeviceInfo> currentSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
+        var currentSnapshot = UsbDeviceMonitor.BuildMap(_enumerator());
         List<UsbDeviceChange>? changes;
 
         lock (_gate)
@@ -201,17 +205,5 @@ internal sealed class UsbWindowsHotplugMonitor : IDisposable
         }
 
         _lastSnapshot.Clear();
-    }
-
-    private static Win32API.GUID ToApiGuid(Guid guid)
-    {
-        var bytes = guid.ToByteArray();
-        return new Win32API.GUID
-        {
-            Data1 = BitConverter.ToUInt32(bytes, 0),
-            Data2 = BitConverter.ToUInt16(bytes, 4),
-            Data3 = BitConverter.ToUInt16(bytes, 6),
-            Data4 = bytes.Skip(8).Take(8).ToArray()
-        };
     }
 }

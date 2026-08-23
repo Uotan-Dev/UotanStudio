@@ -10,7 +10,7 @@ internal static class HarmonyOSUsbFinder
     // The USB DDK exposes no "list devices" API, so discovery probes device IDs 1..N.
     // Device IDs are normally assigned sequentially by the system, but gaps can appear;
     // callers that know their device ID can raise the limit to scan further, or lower it
-    // to reduce probing time.
+    // to reduce probing Time.
     /// <summary>
     /// Gets or sets the maximum device ID probed during discovery (default 256).
     /// <para>获取或设置发现期间探测的最大设备 ID（默认 256）。</para>
@@ -51,87 +51,127 @@ internal static class HarmonyOSUsbFinder
     {
         var devDesc = new UsbDeviceDescriptor();
         var ret = OH_Usb_GetDeviceDescriptor(deviceId, ref devDesc);
-        if (ret != USB_DDK_NO_ERROR) return;
+        if (ret != USB_DDK_NO_ERROR)
+        {
+            return;
+        }
 
-        var vendorId = devDesc.idVendor;
-        var productId = devDesc.idProduct;
+        var vendorId = devDesc.IdVendor;
+        var productId = devDesc.IdProduct;
 
-        if (filter?.VendorId is ushort filterVid && vendorId != filterVid) return;
-        if (filter?.ProductId is ushort filterPid && productId != filterPid) return;
+        if (filter?.VendorId is ushort filterVid && vendorId != filterVid)
+        {
+            return;
+        }
+
+        if (filter?.ProductId is ushort filterPid && productId != filterPid)
+        {
+            return;
+        }
 
         var configPtr = IntPtr.Zero;
         ret = OH_Usb_GetConfigDescriptor(deviceId, 0, ref configPtr);
-        if (ret != USB_DDK_NO_ERROR || configPtr == IntPtr.Zero) return;
+        if (ret != USB_DDK_NO_ERROR || configPtr == IntPtr.Zero)
+        {
+            return;
+        }
 
         try
         {
-            UsbDdkConfigDescriptor configDescriptor = Marshal.PtrToStructure<UsbDdkConfigDescriptor>(configPtr);
-            var numInterfaces = configDescriptor.numIface;
+            var configDescriptor = Marshal.PtrToStructure<UsbDdkConfigDescriptor>(configPtr);
+            var numInterfaces = configDescriptor.NumIface;
             var interfaces = new List<UsbInterfaceInfo>();
 
             for (byte ifcIndex = 0; ifcIndex < numInterfaces; ifcIndex++)
             {
-                var ifaceArrayPtr = configDescriptor.iface;
-                if (ifaceArrayPtr == IntPtr.Zero) continue;
+                var ifaceArrayPtr = configDescriptor.Iface;
+                if (ifaceArrayPtr == IntPtr.Zero)
+                {
+                    continue;
+                }
 
                 var ifaceSize = Marshal.SizeOf<UsbDdkInterface>();
-                var ifacePtr = new IntPtr(ifaceArrayPtr.ToInt64() + ifcIndex * ifaceSize);
+                var ifacePtr = new IntPtr(ifaceArrayPtr.ToInt64() + (ifcIndex * ifaceSize));
 
-                UsbDdkInterface iface = Marshal.PtrToStructure<UsbDdkInterface>(ifacePtr);
+                var iface = Marshal.PtrToStructure<UsbDdkInterface>(ifacePtr);
 
-                if (iface.altsetting == IntPtr.Zero) continue;
+                if (iface.Altsetting == IntPtr.Zero)
+                {
+                    continue;
+                }
 
-                UsbDdkInterfaceDescriptor ifaceDescStruct = Marshal.PtrToStructure<UsbDdkInterfaceDescriptor>(iface.altsetting);
-                UsbInterfaceDescriptor ifaceDesc = ifaceDescStruct.interfaceDescriptor;
+                var ifaceDescStruct = Marshal.PtrToStructure<UsbDdkInterfaceDescriptor>(iface.Altsetting);
+                var ifaceDesc = ifaceDescStruct.InterfaceDescriptor;
 
-                var ifcClass = ifaceDesc.bInterfaceClass;
-                var ifcSubClass = ifaceDesc.bInterfaceSubClass;
-                var ifcProtocol = ifaceDesc.bInterfaceProtocol;
+                var ifcClass = ifaceDesc.BInterfaceClass;
+                var ifcSubClass = ifaceDesc.BInterfaceSubClass;
+                var ifcProtocol = ifaceDesc.BInterfaceProtocol;
 
-                var numEndpoints = ifaceDesc.bNumEndpoints;
+                var numEndpoints = ifaceDesc.BNumEndpoints;
                 var endpoints = new List<UsbEndpointInfo>();
                 byte epIn = 0, epOut = 0;
 
-                var endpointArrayPtr = ifaceDescStruct.endpoint;
+                var endpointArrayPtr = ifaceDescStruct.Endpoint;
                 if (endpointArrayPtr != IntPtr.Zero)
                 {
                     var epSize = Marshal.SizeOf<UsbEndpointDescriptor>();
                     for (var epIdx = 0; epIdx < numEndpoints; epIdx++)
                     {
-                        var epPtr = new IntPtr(endpointArrayPtr.ToInt64() + epIdx * epSize);
-                        UsbEndpointDescriptor epDesc = Marshal.PtrToStructure<UsbEndpointDescriptor>(epPtr);
+                        var epPtr = new IntPtr(endpointArrayPtr.ToInt64() + (epIdx * epSize));
+                        var epDesc = Marshal.PtrToStructure<UsbEndpointDescriptor>(epPtr);
 
-                        var epAddr = epDesc.bEndpointAddress;
-                        var epAttr = epDesc.bmAttributes;
+                        var epAddr = epDesc.BEndpointAddress;
+                        var epAttr = epDesc.BmAttributes;
                         endpoints.Add(new UsbEndpointInfo
                         {
                             EndpointAddress = epAddr,
                             Attributes = epAttr,
-                            MaxPacketSize = epDesc.wMaxPacketSize,
-                            Interval = epDesc.bInterval
+                            MaxPacketSize = epDesc.WMaxPacketSize,
+                            Interval = epDesc.BInterval
                         });
 
                         if ((epAttr & 0x03) == 0x02)
                         {
-                            if ((epAddr & 0x80) != 0) epIn = epAddr;
-                            else epOut = epAddr;
+                            if ((epAddr & 0x80) != 0)
+                            {
+                                epIn = epAddr;
+                            }
+                            else
+                            {
+                                epOut = epAddr;
+                            }
                         }
                     }
                 }
 
                 interfaces.Add(new UsbInterfaceInfo
                 {
-                    InterfaceNumber = ifaceDesc.bInterfaceNumber,
+                    InterfaceNumber = ifaceDesc.BInterfaceNumber,
                     Class = ifcClass,
                     SubClass = ifcSubClass,
                     Protocol = ifcProtocol,
                     Endpoints = endpoints
                 });
 
-                if (filter?.InterfaceClass is byte c && ifcClass != c) continue;
-                if (filter?.InterfaceSubClass is byte s && ifcSubClass != s) continue;
-                if (filter?.InterfaceProtocol is byte p && ifcProtocol != p) continue;
-                if (filter?.InterfaceNumber is byte n && ifaceDesc.bInterfaceNumber != n) continue;
+                if (filter?.InterfaceClass is byte c && ifcClass != c)
+                {
+                    continue;
+                }
+
+                if (filter?.InterfaceSubClass is byte s && ifcSubClass != s)
+                {
+                    continue;
+                }
+
+                if (filter?.InterfaceProtocol is byte p && ifcProtocol != p)
+                {
+                    continue;
+                }
+
+                if (filter?.InterfaceNumber is byte n && ifaceDesc.BInterfaceNumber != n)
+                {
+                    continue;
+                }
 
                 if (epIn != 0 && epOut != 0)
                 {
@@ -146,10 +186,10 @@ internal static class HarmonyOSUsbFinder
                         ifcClass,
                         ifcSubClass,
                         ifcProtocol,
-                        devDesc.iSerialNumber == 0 ? null : "UNKNOWN"
+                        devDesc.ISerialNumber == 0 ? null : "UNKNOWN"
                     );
                     dev.Interfaces = interfaces;
-                    dev.Speed = UsbSpeedInference.FromBcdUsb(devDesc.bcdUSB);
+                    dev.Speed = UsbSpeedInference.FromBcdUsb(devDesc.BcdUSB);
 
                     // Keep the device even when the handle cannot be opened (e.g. the
                     // interface is claimed by another session/process). Enumeration must

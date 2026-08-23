@@ -2,29 +2,29 @@ using System.Runtime.InteropServices;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Linux;
 
-internal static class LinuxUsbAPI
+internal static partial class LinuxUsbAPI
 {
     public const string Libc = "libc";
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct usbdevfs_bulktransfer
+    public struct Usbdevfs_bulktransfer
     {
-        public uint ep;
-        public uint len;
-        public uint timeout;
-        public IntPtr data;
+        public uint Ep;
+        public uint Len;
+        public uint Timeout;
+        public IntPtr Data;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct usbdevfs_ctrltransfer
+    public struct Usbdevfs_ctrltransfer
     {
-        public byte bRequestType;
-        public byte bRequest;
-        public ushort wValue;
-        public ushort wIndex;
-        public ushort wLength;
-        public uint timeout;
-        public IntPtr data;
+        public byte BRequestType;
+        public byte BRequest;
+        public ushort WValue;
+        public ushort WIndex;
+        public ushort WLength;
+        public uint Timeout;
+        public IntPtr Data;
     }
 
     public const uint USBDEVFS_BULK = 0xC0105502;
@@ -40,54 +40,54 @@ internal static class LinuxUsbAPI
     public static uint USBDEVFS_CONTROL_X86 = 0xC0105500;
     public const uint USBDEVFS_CONTROL = 0xC0105500;
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int open(string pathname, int flags);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int open([MarshalAs(UnmanagedType.LPStr)] string pathname, int Flags);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int close(int fd);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int close(int Fd);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern IntPtr read(int fd, IntPtr buf, UIntPtr count);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial IntPtr read(int Fd, IntPtr buf, UIntPtr count);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int ioctl(int fd, UIntPtr request, IntPtr arg);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, IntPtr arg);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int ioctl(int fd, UIntPtr request, ref int arg);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, ref int arg);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int ioctl(int fd, UIntPtr request, ref usbdevfs_bulktransfer arg);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, ref Usbdevfs_bulktransfer arg);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int ioctl(int fd, UIntPtr request, ref usbdevfs_ctrltransfer arg);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, ref Usbdevfs_ctrltransfer arg);
 
     [StructLayout(LayoutKind.Sequential)]
-    public struct usbdevfs_urb
+    public struct Usbdevfs_urb
     {
-        public byte type;
-        public byte endpoint;
-        public int status;
-        public uint flags;
-        public IntPtr buffer;
-        public int buffer_length;
-        public int actual_length;
-        public int start_frame;
-        public int number_of_packets;
-        public int error_count;
-        public uint signr;
-        public IntPtr usercontext;
+        public byte Type;
+        public byte Endpoint;
+        public int Status;
+        public uint Flags;
+        public IntPtr Buffer;
+        public int Buffer_length;
+        public int Actual_length;
+        public int Start_frame;
+        public int Number_of_packets;
+        public int Error_count;
+        public uint Signr;
+        public IntPtr Usercontext;
     }
 
     [StructLayout(LayoutKind.Sequential)]
     public struct PollFd
     {
-        public int fd;
-        public short events;
-        public short revents;
+        public int Fd;
+        public short Events;
+        public short Revents;
     }
 
     // URB control ioctls, encoded exactly as in kernel include/uapi/linux/usbdevice_fs.h:
-    //   USBDEVFS_SUBMITURB      _IOR('U', 10, struct usbdevfs_urb)   -> 56B on x86_64, 44B on x86
+    //   USBDEVFS_SUBMITURB      _IOR('U', 10, struct Usbdevfs_urb)   -> 56B on x86_64, 44B on x86
     //   USBDEVFS_DISCARDURB     _IO('U', 11)                         -> no argument (same both ABIs)
     //   USBDEVFS_REAPURB        _IOW('U', 12, void *)                -> sizeof(void*) = 8/4
     //   USBDEVFS_REAPURBNDELAY  _IOW('U', 13, void *)                -> sizeof(void*) = 8/4
@@ -113,33 +113,33 @@ internal static class LinuxUsbAPI
     public const short POLLERR = 0x008;
     public const short POLLHUP = 0x010;
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int ioctl(int fd, UIntPtr request, ref IntPtr arg);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int ioctl(int Fd, UIntPtr request, ref IntPtr arg);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int poll(ref PollFd fds, uint nfds, int timeout);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int poll(ref PollFd fds, uint nfds, int Timeout);
 
     public const int O_RDWR = 2;
     public const int O_CLOEXEC = 0x80000;
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern IntPtr opendir(string name);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial IntPtr opendir([MarshalAs(UnmanagedType.LPStr)] string name);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern int closedir(IntPtr dirp);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial int closedir(IntPtr dirp);
 
-    [DllImport(Libc, SetLastError = true)]
-    public static extern IntPtr readdir(IntPtr dirp);
+    [LibraryImport(Libc, SetLastError = true)]
+    public static partial IntPtr readdir(IntPtr dirp);
 
     [StructLayout(LayoutKind.Sequential)]
     public struct Dirent64
     {
-        public ulong d_ino;
-        public long d_off;
-        public ushort d_reclen;
-        public byte d_type;
+        public ulong D_ino;
+        public long D_off;
+        public ushort D_reclen;
+        public byte D_type;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
-        public string d_name;
+        public string D_name;
     }
 
     public const int EINTR = 4;

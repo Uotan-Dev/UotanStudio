@@ -12,12 +12,12 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.MacOS;
 /// （<c>IOServiceMatching("IOUSBDevice")</c> + <c>IORegistryEntryCreateCFProperty</c>）
 /// 枚举 USB 设备，替替当前 macOS 上不可加载的 IOUSBHost.framework 路径。</para>
 /// </summary>
-internal static class IOKitUsbFinder
+internal static partial class IOKitUsbFinder
 {
     // Cached allocator handle (kCFAllocatorDefault = NULL) reused for every
     // IORegistryEntryCreateCFProperty / CFStringCreateWithCString call. Exposed
     // as a static readonly field (not const) because IntPtr.Zero is not a
-    // compile-time constant under all TFMs.
+    // compile-Time constant under all TFMs.
     // <para>缓存的分配器句柄（kCFAllocatorDefault = NULL），被每次
     // IORegistryEntryCreateCFProperty / CFStringCreateWithCString 调用复用。
     // 以静态只读字段（非 const）暴露，因为 IntPtr.Zero 在所有 TFM 下非编译期常量。</para>
@@ -25,7 +25,7 @@ internal static class IOKitUsbFinder
 
     // Registry entry IDs are stable across re-enumeration; used as the reopen key.
     // <para>注册表项 ID 跨再枚举稳定；用作重开键。</para>
-    private const string RegistryIdProperty = "RegistryEntryID";
+    // private const string RegistryIdProperty = "RegistryEntryID";
 
     /// <summary>
     /// Whether the last IOServiceGetMatchingServices call succeeded. Surfaced
@@ -58,21 +58,21 @@ internal static class IOKitUsbFinder
     /// </summary>
     public static List<UsbDevice> FindDevice(UsbDeviceFilter? filter = null)
     {
-        List<UsbDevice> devices = new();
+        List<UsbDevice> devices = [];
         LastScannedDeviceCount = 0;
         LastMatchedDeviceCount = 0;
 
         // Build a (vid,pid) -> interfaces[] table ONCE by enumerating the
-        // IOUSBInterface plane. IOUSBInterface services inherit idVendor/
-        // idProduct from their parent IOUSBDevice (verified by probe), so we
+        // IOUSBInterface plane. IOUSBInterface services inherit IdVendor/
+        // IdProduct from their parent IOUSBDevice (verified by probe), so we
         // can pair interfaces to devices by VID/PID without IORegistryEntryGetParent
         // (which is not exported on current macOS) or IORegistryEntryGetRegistryEntryID
         // (which segfaults against IOUSBDevice services).
         // <para>枚举 IOUSBInterface 平面一次，构建 (vid,pid) -> interfaces[] 表。
-        // IOUSBInterface 服务从父 IOUSBDevice 继承 idVendor/idProduct（已由探针验证），
+        // IOUSBInterface 服务从父 IOUSBDevice 继承 IdVendor/IdProduct（已由探针验证），
         // 故可按 VID/PID 将接口配对到设备，无需 IORegistryEntryGetParent（当前 macOS
         // 不导出）或 IORegistryEntryGetRegistryEntryID（对 IOUSBDevice 服务段错误）。</para>
-        Dictionary<(ushort Vid, ushort Pid), List<UsbInterfaceInfo>> interfaceTable = BuildInterfaceTable();
+        var interfaceTable = BuildInterfaceTable();
 
         var matching = IntPtr.Zero;
         var iterator = IntPtr.Zero;
@@ -92,7 +92,7 @@ internal static class IOKitUsbFinder
             // IOServiceGetMatchingServices consumes the matching dictionary (+1 ref -> 0).
             // <para>IOServiceGetMatchingServices 消费匹配字典（+1 引用 -> 0）。</para>
             matching = IntPtr.Zero;
-            if (kr != IOKitUsbAPI.kIOReturnSuccess || iter == IntPtr.Zero)
+            if (kr != IOKitUsbAPI.KIOReturnSuccess || iter == IntPtr.Zero)
             {
                 LastCopyDevicesSucceeded = false;
                 return devices;
@@ -119,7 +119,7 @@ internal static class IOKitUsbFinder
                             out var pid,
                             out var serial,
                             out var registryEntryId,
-                            out IReadOnlyList<UsbInterfaceInfo> interfaces,
+                            out var interfaces,
                             out var ifcClass,
                             out var ifcSubClass,
                             out var ifcProtocol))
@@ -136,11 +136,30 @@ internal static class IOKitUsbFinder
 
                     // Apply the device filter (vendor/product/interface codes).
                     // <para>应用设备过滤器（厂商/产品/接口码）。</para>
-                    if (filter?.VendorId is ushort filterVid && vid != filterVid) continue;
-                    if (filter?.ProductId is ushort filterPid && pid != filterPid) continue;
-                    if (filter?.InterfaceClass is byte filterClass && ifcClass != filterClass) continue;
-                    if (filter?.InterfaceSubClass is byte filterSubClass && ifcSubClass != filterSubClass) continue;
-                    if (filter?.InterfaceProtocol is byte filterProtocol && ifcProtocol != filterProtocol) continue;
+                    if (filter?.VendorId is ushort filterVid && vid != filterVid)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.ProductId is ushort filterPid && pid != filterPid)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.InterfaceClass is byte filterClass && ifcClass != filterClass)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.InterfaceSubClass is byte filterSubClass && ifcSubClass != filterSubClass)
+                    {
+                        continue;
+                    }
+
+                    if (filter?.InterfaceProtocol is byte filterProtocol && ifcProtocol != filterProtocol)
+                    {
+                        continue;
+                    }
 
                     var dev = new IOKitUsbDevice
                     {
@@ -218,8 +237,15 @@ internal static class IOKitUsbFinder
         }
         finally
         {
-            if (matching != IntPtr.Zero) IOKitUsbAPI.CFRelease(matching);
-            if (iterator != IntPtr.Zero) IOKitUsbAPI.IOObjectRelease(iterator);
+            if (matching != IntPtr.Zero)
+            {
+                IOKitUsbAPI.CFRelease(matching);
+            }
+
+            if (iterator != IntPtr.Zero)
+            {
+                IOKitUsbAPI.IOObjectRelease(iterator);
+            }
         }
 
         LastMatchedDeviceCount = devices.Count;
@@ -268,8 +294,8 @@ internal static class IOKitUsbFinder
         UsbTrace.Log($"IOKitUsbFinder: TryReadDeviceMetadata entry, service={service}");
         registryEntryId = (uint)service.ToInt64();
 
-        vid = ReadCFNumberUshort(service, "idVendor");
-        pid = ReadCFNumberUshort(service, "idProduct");
+        vid = ReadCFNumberUshort(service, "IdVendor");
+        pid = ReadCFNumberUshort(service, "IdProduct");
 
         // Serial number: the IORegistry publishes it as a CFString under
         // "USB Serial Number" (or "kUSBSerialNumberString" = "serial number").
@@ -278,18 +304,18 @@ internal static class IOKitUsbFinder
         serial = ReadCFString(service, "USB Serial Number") ?? ReadCFString(service, "serial number");
 
         // Interface metadata: pair this device to its IOUSBInterface children by
-        // VID/PID. IOUSBInterface services inherit idVendor/idProduct from their
+        // VID/PID. IOUSBInterface services inherit IdVendor/IdProduct from their
         // parent IOUSBDevice (verified by probe), so the (vid,pid) -> interfaces[]
         // table built once at the top of FindDevice() carries the full interface
         // list — including every alternate-setting's class/subclass/protocol —
         // which lets the matcher find the ADB interface (0xFF/0x42/0x01) even when
         // it is not the first interface.
         // <para>接口元数据：按 VID/PID 将本设备与其 IOUSBInterface 子项配对。
-        // IOUSBInterface 服务从父 IOUSBDevice 继承 idVendor/idProduct（已由探针验证），
+        // IOUSBInterface 服务从父 IOUSBDevice 继承 IdVendor/IdProduct（已由探针验证），
         // 故 FindDevice() 顶部一次性构建的 (vid,pid) -> interfaces[] 表携带完整接口
         // 列表——包括每个备用设置的类/子类/协议——使匹配器即便 ADB 接口
         // （0xFF/0x42/0x01）非首个接口时也能找到。</para>
-        if (interfaceTable.TryGetValue((vid, pid), out List<UsbInterfaceInfo>? pairedInterfaces) && pairedInterfaces.Count > 0)
+        if (interfaceTable.TryGetValue((vid, pid), out var pairedInterfaces) && pairedInterfaces.Count > 0)
         {
             interfaces = pairedInterfaces;
             // Surface the FIRST interface's codes for UsbDeviceFilter compatibility
@@ -297,7 +323,7 @@ internal static class IOKitUsbFinder
             // specific alternate setting should filter by the full interface list.
             // <para>为 UsbDeviceFilter 兼容暴露首个接口的码（匹配器检查一组接口类
             // 元组）。需特定备用设置的调用方应按完整接口列表过滤。</para>
-            UsbInterfaceInfo first = pairedInterfaces[0];
+            var first = pairedInterfaces[0];
             ifcClass = first.Class;
             ifcSubClass = first.SubClass;
             ifcProtocol = first.Protocol;
@@ -320,21 +346,29 @@ internal static class IOKitUsbFinder
     // CFNumberGetValue REQUIRES the type argument to match the CFNumber's actual
     // storage type — passing kCFNumberShortType=5 to a kCFNumberSInt32Type=3
     // CFNumber returns the low 16 bits with garbage in the high byte (verified:
-    // idVendor=0x18D1 read as 0x8000 when wrong type).
+    // IdVendor=0x18D1 read as 0x8000 when wrong type).
     // <para>先经 CFNumberGetType 咨询真实存储类型，再派发到匹配的 CFNumberGetValue
     // 访问器（kCFNumberSInt16Type=1、kCFNumberSInt32Type=3、kCFNumberSInt64Type=4）以
     // uint32 读取 CFNumber。CFNumberGetValue 要求类型参数匹配 CFNumber 的实际存储类型
     // ——对 kCFNumberSInt32Type=3 的 CFNumber 传 kCFNumberShortType=5 会返回低位 16 比特
-    // 且高位字节为垃圾（已验证：idVendor=0x18D1 在错误类型下读为 0x8000）。</para>
+    // 且高位字节为垃圾（已验证：IdVendor=0x18D1 在错误类型下读为 0x8000）。</para>
     private static bool TryReadCFNumberRawU32(IntPtr service, string propertyName, out uint value)
     {
         value = 0;
-        var key = IOKitUsbAPI.CFStringCreateWithCString(DefaultAllocator, propertyName, IOKitUsbAPI.kCFStringEncodingUTF8);
-        if (key == IntPtr.Zero) return false;
+        var key = IOKitUsbAPI.CFStringCreateWithCString(DefaultAllocator, propertyName, IOKitUsbAPI.KCFStringEncodingUTF8);
+        if (key == IntPtr.Zero)
+        {
+            return false;
+        }
+
         try
         {
             var cfValue = IOKitUsbAPI.IORegistryEntryCreateCFProperty(service, key, DefaultAllocator, 0);
-            if (cfValue == IntPtr.Zero) return false;
+            if (cfValue == IntPtr.Zero)
+            {
+                return false;
+            }
+
             try
             {
                 var cfType = CFNumberGetType(cfValue);
@@ -342,24 +376,40 @@ internal static class IOKitUsbFinder
                 {
                     case 1: // kCFNumberSInt16Type
                         ushort v16 = 0;
-                        if (!CFNumberGetValueU16(cfValue, 1, ref v16)) return false;
+                        if (!CFNumberGetValueU16(cfValue, 1, ref v16))
+                        {
+                            return false;
+                        }
+
                         value = v16;
                         return true;
                     case 3: // kCFNumberSInt32Type
                         uint v32 = 0;
-                        if (!CFNumberGetValueU32(cfValue, 3, ref v32)) return false;
+                        if (!CFNumberGetValueU32(cfValue, 3, ref v32))
+                        {
+                            return false;
+                        }
+
                         value = v32;
                         return true;
                     case 4: // kCFNumberSInt64Type
                         ulong v64 = 0;
-                        if (!CFNumberGetValueU64(cfValue, 4, ref v64)) return false;
+                        if (!CFNumberGetValueU64(cfValue, 4, ref v64))
+                        {
+                            return false;
+                        }
+
                         value = unchecked((uint)v64);
                         return true;
                     default:
                         // Unknown numeric type — fall back to SInt32 widening.
                         // <para>未知数值类型——回退到 SInt32 widening。</para>
                         uint fallback = 0;
-                        if (!CFNumberGetValueU32(cfValue, 3, ref fallback)) return false;
+                        if (!CFNumberGetValueU32(cfValue, 3, ref fallback))
+                        {
+                            return false;
+                        }
+
                         value = fallback;
                         return true;
                 }
@@ -375,39 +425,57 @@ internal static class IOKitUsbFinder
         }
     }
 
-    [DllImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFNumberGetType")]
-    private static extern int CFNumberGetType(IntPtr number);
+    [LibraryImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFNumberGetType")]
+    private static partial int CFNumberGetType(IntPtr number);
 
-    [DllImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFNumberGetValue")]
-    private static extern bool CFNumberGetValueU16(IntPtr number, int theType, ref ushort valuePtr);
+    [LibraryImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFNumberGetValue")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static partial bool CFNumberGetValueU16(IntPtr number, int theType, ref ushort valuePtr);
 
-    [DllImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFNumberGetValue")]
-    private static extern bool CFNumberGetValueU32(IntPtr number, int theType, ref uint valuePtr);
+    [LibraryImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFNumberGetValue")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static partial bool CFNumberGetValueU32(IntPtr number, int theType, ref uint valuePtr);
 
-    [DllImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFNumberGetValue")]
-    private static extern bool CFNumberGetValueU64(IntPtr number, int theType, ref ulong valuePtr);
+    [LibraryImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFNumberGetValue")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static partial bool CFNumberGetValueU64(IntPtr number, int theType, ref ulong valuePtr);
 
     // Reads a CFString-valued registry property as a UTF-8 string. Returns null
     // when the property is absent or not a CFString.
     // <para>读取 CFString 值的注册表属性为 UTF-8 字符串。属性不存在或非 CFString 时返回 null。</para>
     private static string? ReadCFString(IntPtr service, string propertyName)
     {
-        var key = IOKitUsbAPI.CFStringCreateWithCString(DefaultAllocator, propertyName, IOKitUsbAPI.kCFStringEncodingUTF8);
-        if (key == IntPtr.Zero) return null;
+        var key = IOKitUsbAPI.CFStringCreateWithCString(DefaultAllocator, propertyName, IOKitUsbAPI.KCFStringEncodingUTF8);
+        if (key == IntPtr.Zero)
+        {
+            return null;
+        }
+
         try
         {
             var cfValue = IOKitUsbAPI.IORegistryEntryCreateCFProperty(service, key, DefaultAllocator, 0);
-            if (cfValue == IntPtr.Zero) return null;
+            if (cfValue == IntPtr.Zero)
+            {
+                return null;
+            }
+
             try
             {
                 // CFStringGetCString writes a NUL-terminated UTF-8 buffer.
                 // <para>CFStringGetCString 写入 NUL 终止的 UTF-8 缓冲。</para>
                 var buffer = new byte[256];
-                if (CFStringGetCString(cfValue, buffer, buffer.Length, IOKitUsbAPI.kCFStringEncodingUTF8))
+                bool ok;
+                unsafe
+                {
+                    fixed (byte* p = buffer)
+                    {
+                        ok = CFStringGetCString(cfValue, (IntPtr)p, buffer.Length, IOKitUsbAPI.KCFStringEncodingUTF8);
+                    }
+                }
+                if (ok)
                 {
                     var len = Array.IndexOf(buffer, (byte)0);
-                    if (len <= 0) return string.Empty;
-                    return System.Text.Encoding.UTF8.GetString(buffer, 0, len);
+                    return len <= 0 ? string.Empty : System.Text.Encoding.UTF8.GetString(buffer, 0, len);
                 }
                 return null;
             }
@@ -422,18 +490,18 @@ internal static class IOKitUsbFinder
         }
     }
 
-    [DllImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFStringGetCString")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CFStringGetCString(IntPtr theString, byte[] buffer, int maxLength, int encoding);
+    [LibraryImport(IOKitUsbAPI.CoreFoundation, EntryPoint = "CFStringGetCString")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static partial bool CFStringGetCString(IntPtr theString, IntPtr buffer, int maxLength, int encoding);
 
     // Builds a (vid,pid) -> interfaces[] table by enumerating the IOUSBInterface
-    // plane ONCE. IOUSBInterface services inherit idVendor/idProduct from their
+    // plane ONCE. IOUSBInterface services inherit IdVendor/IdProduct from their
     // parent IOUSBDevice (verified by probe), so interfaces pair to devices by
     // VID/PID without IORegistryEntryGetParent (not exported on current macOS) or
     // IORegistryEntryGetRegistryEntryID (segfaults against IOUSBDevice). Class/
     // subclass/protocol are read via CFNumberGetType dispatch.
     // <para>枚举 IOUSBInterface 平面一次，构建 (vid,pid) -> interfaces[] 表。
-    // IOUSBInterface 服务从父 IOUSBDevice 继承 idVendor/idProduct（已由探针验证），
+    // IOUSBInterface 服务从父 IOUSBDevice 继承 IdVendor/IdProduct（已由探针验证），
     // 故可按 VID/PID 将接口配对到设备，无需 IORegistryEntryGetParent（当前 macOS
     // 不导出）或 IORegistryEntryGetRegistryEntryID（对 IOUSBDevice 段错误）。类/
     // 子类/协议经 CFNumberGetType 派发读取。</para>
@@ -458,7 +526,7 @@ internal static class IOKitUsbFinder
             var kr = IOKitUsbAPI.IOServiceGetMatchingServices(IntPtr.Zero, matching, out var iter);
             UsbTrace.Log($"IOKitUsbFinder: BuildInterfaceTable GetMatchingServices kr={kr} iter={iter}");
             matching = IntPtr.Zero; // consumed by GetMatchingServices
-            if (kr != IOKitUsbAPI.kIOReturnSuccess || iter == IntPtr.Zero)
+            if (kr != IOKitUsbAPI.KIOReturnSuccess || iter == IntPtr.Zero)
             {
                 return table;
             }
@@ -471,8 +539,8 @@ internal static class IOKitUsbFinder
                 var ifaceService = new IntPtr(next);
                 try
                 {
-                    var vid = ReadCFNumberUshort(ifaceService, "idVendor");
-                    var pid = ReadCFNumberUshort(ifaceService, "idProduct");
+                    var vid = ReadCFNumberUshort(ifaceService, "IdVendor");
+                    var pid = ReadCFNumberUshort(ifaceService, "IdProduct");
                     if (vid == 0 || pid == 0)
                     {
                         // Some host-side interfaces may not carry VID/PID; skip them.
@@ -482,15 +550,15 @@ internal static class IOKitUsbFinder
 
                     var info = new UsbInterfaceInfo
                     {
-                        Class = ReadCFNumberByte(ifaceService, "bInterfaceClass") ?? 0,
-                        SubClass = ReadCFNumberByte(ifaceService, "bInterfaceSubClass") ?? 0,
-                        Protocol = ReadCFNumberByte(ifaceService, "bInterfaceProtocol") ?? 0,
+                        Class = ReadCFNumberByte(ifaceService, "BInterfaceClass") ?? 0,
+                        SubClass = ReadCFNumberByte(ifaceService, "BInterfaceSubClass") ?? 0,
+                        Protocol = ReadCFNumberByte(ifaceService, "BInterfaceProtocol") ?? 0,
                     };
 
-                    (ushort vid, ushort pid) key = (vid, pid);
-                    if (!table.TryGetValue(key, out List<UsbInterfaceInfo>? list))
+                    var key = (vid, pid);
+                    if (!table.TryGetValue(key, out var list))
                     {
-                        list = new List<UsbInterfaceInfo>();
+                        list = [];
                         table[key] = list;
                     }
                     list.Add(info);
@@ -517,8 +585,15 @@ internal static class IOKitUsbFinder
         }
         finally
         {
-            if (matching != IntPtr.Zero) IOKitUsbAPI.CFRelease(matching);
-            if (iterator != IntPtr.Zero) IOKitUsbAPI.IOObjectRelease(iterator);
+            if (matching != IntPtr.Zero)
+            {
+                IOKitUsbAPI.CFRelease(matching);
+            }
+
+            if (iterator != IntPtr.Zero)
+            {
+                IOKitUsbAPI.IOObjectRelease(iterator);
+            }
         }
 
         UsbTrace.Log($"IOKitUsbFinder: BuildInterfaceTable done, scanned {ifaceCount} IOUSBInterface services, table has {table.Count} (vid,pid) keys");
@@ -548,13 +623,20 @@ internal static class IOKitUsbFinder
         try
         {
             var path = new byte[512]; // io_string_t is 512 chars
-            if (IOKitUsbAPI.IORegistryEntryGetPath(service, IOKitUsbAPI.IOServicePlane, path) != IOKitUsbAPI.kIOReturnSuccess)
+            int pathResult;
+            unsafe
+            {
+                fixed (byte* p = path)
+                {
+                    pathResult = IOKitUsbAPI.IORegistryEntryGetPath(service, IOKitUsbAPI.IOServicePlane, (IntPtr)p);
+                }
+            }
+            if (pathResult != IOKitUsbAPI.KIOReturnSuccess)
             {
                 return null;
             }
             var len = Array.IndexOf(path, (byte)0);
-            if (len <= 0) return null;
-            return System.Text.Encoding.UTF8.GetString(path, 0, len);
+            return len <= 0 ? null : System.Text.Encoding.UTF8.GetString(path, 0, len);
         }
         catch
         {

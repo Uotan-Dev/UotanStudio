@@ -74,12 +74,9 @@ public static class UsbTransferPolicies
     /// </summary>
     public static UsbTransferRetryPolicy DefaultRetryPolicy
     {
-        get => _defaultRetryPolicy;
-        set => _defaultRetryPolicy = value ?? new UsbTransferRetryPolicy(LinuxMaxRetries, retryDelayMs: 500);
-    }
-
-    private static UsbTransferRetryPolicy _defaultRetryPolicy =
-        new UsbTransferRetryPolicy(LinuxMaxRetries, retryDelayMs: 500);
+        get;
+        set => field = value ?? new UsbTransferRetryPolicy(LinuxMaxRetries, retryDelayMs: 500);
+    } = new UsbTransferRetryPolicy(LinuxMaxRetries, retryDelayMs: 500);
 
     /// <summary>
     /// Returns the effective timeout, substituting the default when the provided value is zero or negative.
@@ -92,13 +89,5 @@ public static class UsbTransferPolicies
     /// <param name="timeoutMs">The requested timeout in milliseconds. <para>请求的超时时间（毫秒）。</para></param>
     /// <param name="defaultTimeoutMs">The fallback default timeout. <para>回退的默认超时时间。</para></param>
     /// <returns>The normalized timeout value. <para>规范化后的超时值。</para></returns>
-    public static int NormalizeTimeout(int timeoutMs, int defaultTimeoutMs)
-    {
-        if (timeoutMs == InfiniteTimeoutMs)
-        {
-            return InfiniteTimeoutMs;
-        }
-
-        return timeoutMs > 0 ? timeoutMs : defaultTimeoutMs;
-    }
+    public static int NormalizeTimeout(int timeoutMs, int defaultTimeoutMs) => timeoutMs == InfiniteTimeoutMs ? InfiniteTimeoutMs : timeoutMs > 0 ? timeoutMs : defaultTimeoutMs;
 }

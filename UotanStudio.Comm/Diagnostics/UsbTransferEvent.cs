@@ -135,7 +135,7 @@ public sealed class UsbTransferEvent
     public int? NativeErrorCode { get; set; }
 
     /// <summary>
-    /// Gets or sets elapsed time in milliseconds.
+    /// Gets or sets elapsed Time in milliseconds.
     /// <para>获取或设置耗时（毫秒）。</para>
     /// </summary>
     public long ElapsedMs { get; set; }
@@ -147,7 +147,7 @@ public sealed class UsbTransferEvent
     public UsbTransferOutcome Outcome { get; set; }
 
     /// <summary>
-    /// Gets or sets optional message.
+    /// Gets or sets optional Message.
     /// <para>获取或设置可选消息。</para>
     /// </summary>
     public string? Message { get; set; }

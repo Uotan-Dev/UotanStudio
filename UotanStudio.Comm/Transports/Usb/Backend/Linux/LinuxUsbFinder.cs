@@ -8,8 +8,8 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Linux;
 
 internal static class LinuxUsbFinder
 {
-    private static int _permissionDeniedCount;
-    private static int _busyCount;
+    private static int s_permissionDeniedCount;
+    private static int s_busyCount;
 
     /// <summary>
     /// Gets the number of /dev/bus/usb devices skipped because the process lacked
@@ -18,7 +18,7 @@ internal static class LinuxUsbFinder
     /// <para>获取上次枚举中因权限不足（EACCES）而跳过的设备数。让上层区分
     /// "没有设备"与"没有权限"（例如缺少 udev 规则）。</para>
     /// </summary>
-    public static int PermissionDeniedCount => Volatile.Read(ref _permissionDeniedCount);
+    public static int PermissionDeniedCount => Volatile.Read(ref s_permissionDeniedCount);
 
     /// <summary>
     /// Gets whether any /dev/bus/usb device was skipped due to missing permissions.
@@ -31,7 +31,7 @@ internal static class LinuxUsbFinder
     /// (EBUSY - another process, e.g. an adb server, already claimed it).
     /// <para>获取因接口无法声明（EBUSY——其他进程，例如 adb server，已占用）而跳过的设备数。</para>
     /// </summary>
-    public static int BusyCount => Volatile.Read(ref _busyCount);
+    public static int BusyCount => Volatile.Read(ref s_busyCount);
 
     /// <summary>
     /// Gets whether any device was skipped because its interface is busy.
@@ -71,7 +71,7 @@ internal static class LinuxUsbFinder
     /// <param name="path">The device node path. <para>设备节点路径。</para></param>
     internal static void ReportPermissionDenied(string path)
     {
-        Interlocked.Increment(ref _permissionDeniedCount);
+        Interlocked.Increment(ref s_permissionDeniedCount);
         UsbTrace.Log($"LinuxUsbFinder: permission denied opening '{path}' (EACCES) - ensure udev rules grant access to the current user/group.");
     }
 
@@ -84,21 +84,24 @@ internal static class LinuxUsbFinder
     /// <param name="path">The device node path. <para>设备节点路径。</para></param>
     internal static void ReportBusy(string path)
     {
-        Interlocked.Increment(ref _busyCount);
+        Interlocked.Increment(ref s_busyCount);
         UsbTrace.Log($"LinuxUsbFinder: interface busy on '{path}' (EBUSY) - another process (e.g. adb server) may have claimed it.");
     }
 
     public static List<UsbDevice> FindDevice(UsbDeviceFilter? filter = null, string? usbfsRoot = null)
     {
         var devices = new List<UsbDevice>();
-        Volatile.Write(ref _permissionDeniedCount, 0);
-        Volatile.Write(ref _busyCount, 0);
+        Volatile.Write(ref s_permissionDeniedCount, 0);
+        Volatile.Write(ref s_busyCount, 0);
         const string default_base_path = "/dev/bus/usb";
         var base_path = usbfsRoot ?? default_base_path;
         LastUsbfsRootExists = Directory.Exists(base_path);
         LastScannedNodes = 0;
         LastMatchedDeviceCount = 0;
-        if (!LastUsbfsRootExists) return devices;
+        if (!LastUsbfsRootExists)
+        {
+            return devices;
+        }
 
         foreach (var bus_dir in Directory.GetDirectories(base_path))
         {
@@ -156,7 +159,7 @@ internal static class LinuxUsbFinder
 
                     Marshal.Copy(ptr, desc, 0, n);
 
-                    LinuxUsbDescriptorInfo? info = TryParseDescriptor(desc, n, filter);
+                    var info = TryParseDescriptor(desc, n, filter);
                     if (info == null)
                     {
                         continue;
@@ -173,11 +176,11 @@ internal static class LinuxUsbFinder
                         InterfaceMetadataObserved = true,
                         Speed = ResolveSpeed(dev_path, info.BcdUsb),
                         Interfaces = info.Interfaces,
-                        ep_in = info.EndpointIn,
-                        ep_out = info.EndpointOut,
+                        Ep_in = info.EndpointIn,
+                        Ep_out = info.EndpointOut,
                         InterfaceId = info.InterfaceId,
                         ClaimedInterfaceIds = filter?.InterfaceNumbers?.ToArray() ?? [],
-                        iSerialNumber = info.ISerialNumber,
+                        ISerialNumber = info.ISerialNumber,
                         UsbDeviceType = UsbDeviceType.Linux,
                         SerialNumber = info.ISerialNumber == 0 ? null : "UNKNOWN"
                     };
@@ -206,7 +209,11 @@ internal static class LinuxUsbFinder
                 finally
                 {
                     Marshal.FreeHGlobal(ptr);
-                    if (fd >= 0) close(fd);
+                    if (fd >= 0)
+                    {
+                        close(fd);
+                    }
+
                     fd = -1;
                 }
             }
@@ -228,15 +235,25 @@ internal static class LinuxUsbFinder
     /// <returns>The parsed metadata when a matching interface was found; otherwise <c>null</c>. <para>找到匹配接口时返回解析元数据；否则返回 <c>null</c>。</para></returns>
     internal static LinuxUsbDescriptorInfo? TryParseDescriptor(byte[] desc, int length, UsbDeviceFilter? filter)
     {
-        if (desc == null || length < 18) return null;
+        if (desc == null || length < 18)
+        {
+            return null;
+        }
 
         var idVendor = (ushort)(desc[8] | (desc[9] << 8));
         var idProduct = (ushort)(desc[10] | (desc[11] << 8));
         var iSerialNumber = desc[16];
         var bcdUsb = (ushort)(desc[2] | (desc[3] << 8));
 
-        if (filter?.VendorId is ushort filterVid && idVendor != filterVid) return null;
-        if (filter?.ProductId is ushort filterPid && idProduct != filterPid) return null;
+        if (filter?.VendorId is ushort filterVid && idVendor != filterVid)
+        {
+            return null;
+        }
+
+        if (filter?.ProductId is ushort filterPid && idProduct != filterPid)
+        {
+            return null;
+        }
 
         var interfaces = new List<UsbInterfaceInfo>();
 
@@ -244,7 +261,11 @@ internal static class LinuxUsbFinder
         while (pos < length - 1)
         {
             int len = desc[pos];
-            if (len < 2 || pos + len > length) break;
+            if (len < 2 || pos + len > length)
+            {
+                break;
+            }
+
             var type = desc[pos + 1];
 
             if (type == 0x04 && len >= 9)
@@ -269,7 +290,11 @@ internal static class LinuxUsbFinder
                 while (ept_pos < length - 1 && checked_epts < numEpts)
                 {
                     int ept_len = desc[ept_pos];
-                    if (ept_len < 2 || ept_pos + ept_len > length) break;
+                    if (ept_len < 2 || ept_pos + ept_len > length)
+                    {
+                        break;
+                    }
+
                     var ept_type = desc[ept_pos + 1];
 
                     if (ept_type == 0x05 && ept_len >= 7)
@@ -300,37 +325,57 @@ internal static class LinuxUsbFinder
         byte epIn = 0, epOut = 0;
         byte matchedIfcClass = 0, matchedIfcSubClass = 0, matchedIfcProtocol = 0, matchedIfcId = 0;
         var matched = false;
-        foreach (UsbInterfaceInfo iface in interfaces)
+        foreach (var iface in interfaces)
         {
             var ifcClass = iface.Class;
             var ifcSubClass = iface.SubClass;
             var ifcProtocol = iface.Protocol;
             var ifcId = iface.InterfaceNumber;
-            IReadOnlyList<UsbEndpointInfo> endpoints = iface.Endpoints;
+            var endpoints = iface.Endpoints;
 
             var matchesFilter = InterfaceMatchesFilter(ifcClass, ifcSubClass, ifcProtocol, filter) &&
-                (!(filter?.InterfaceNumber is byte fn) || ifcId == fn);
-            if (!matchesFilter) continue;
+                (filter?.InterfaceNumber is not byte fn || ifcId == fn);
+            if (!matchesFilter)
+            {
+                continue;
+            }
 
             // Collect bulk endpoints first (the session I/O path), then interrupt
             // endpoints as fallback candidates so devices with only interrupt pipes
             // (e.g. HID) can still be opened when the filter requests explicit
             // endpoint addresses (interrupt-test).
-            foreach (UsbEndpointInfo ep in endpoints)
+            foreach (var ep in endpoints)
             {
                 var epType = ep.Attributes & 0x03;
-                if (epType != 0x02 && epType != 0x03) continue;
+                if (epType is not 0x02 and not 0x03)
+                {
+                    continue;
+                }
 
                 var isIn = (ep.EndpointAddress & 0x80) != 0;
                 if (isIn)
                 {
-                    if (epIn == 0) epIn = ep.EndpointAddress;
-                    if (filter?.EndpointAddressIn == ep.EndpointAddress) epIn = ep.EndpointAddress;
+                    if (epIn == 0)
+                    {
+                        epIn = ep.EndpointAddress;
+                    }
+
+                    if (filter?.EndpointAddressIn == ep.EndpointAddress)
+                    {
+                        epIn = ep.EndpointAddress;
+                    }
                 }
                 else
                 {
-                    if (epOut == 0) epOut = ep.EndpointAddress;
-                    if (filter?.EndpointAddressOut == ep.EndpointAddress) epOut = ep.EndpointAddress;
+                    if (epOut == 0)
+                    {
+                        epOut = ep.EndpointAddress;
+                    }
+
+                    if (filter?.EndpointAddressOut == ep.EndpointAddress)
+                    {
+                        epOut = ep.EndpointAddress;
+                    }
                 }
             }
 
@@ -371,22 +416,22 @@ internal static class LinuxUsbFinder
             }
         }
 
-        if (!matched) return null;
-
-        return new LinuxUsbDescriptorInfo
-        {
-            VendorId = idVendor,
-            ProductId = idProduct,
-            ISerialNumber = iSerialNumber,
-            BcdUsb = bcdUsb,
-            Interfaces = interfaces,
-            EndpointIn = epIn,
-            EndpointOut = epOut,
-            InterfaceClass = matchedIfcClass,
-            InterfaceSubClass = matchedIfcSubClass,
-            InterfaceProtocol = matchedIfcProtocol,
-            InterfaceId = matchedIfcId
-        };
+        return !matched
+            ? null
+            : new LinuxUsbDescriptorInfo
+            {
+                VendorId = idVendor,
+                ProductId = idProduct,
+                ISerialNumber = iSerialNumber,
+                BcdUsb = bcdUsb,
+                Interfaces = interfaces,
+                EndpointIn = epIn,
+                EndpointOut = epOut,
+                InterfaceClass = matchedIfcClass,
+                InterfaceSubClass = matchedIfcSubClass,
+                InterfaceProtocol = matchedIfcProtocol,
+                InterfaceId = matchedIfcId
+            };
     }
 
     /// <summary>
@@ -409,16 +454,11 @@ internal static class LinuxUsbFinder
     }
 
     private static bool InterfaceMatchesFilter(byte interfaceClass, byte interfaceSubClass, byte interfaceProtocol, UsbDeviceFilter? filter)
-    {
-        if (filter?.InterfaceClass is byte c && interfaceClass != c) return false;
-        if (filter?.InterfaceSubClass is byte s && interfaceSubClass != s) return false;
-        if (filter?.InterfaceProtocol is byte p && interfaceProtocol != p) return false;
-        return true;
-    }
+        => (filter?.InterfaceClass is not byte c || interfaceClass == c) && (filter?.InterfaceSubClass is not byte s || interfaceSubClass == s) && (filter?.InterfaceProtocol is not byte p || interfaceProtocol == p);
 
     /// <summary>
-    /// Approximates the USB speed from the device descriptor's bcdUSB version.
-    /// <para>根据设备描述符的 bcdUSB 版本近似推断 USB 速度。</para>
+    /// Approximates the USB speed from the device descriptor's BcdUSB version.
+    /// <para>根据设备描述符的 BcdUSB 版本近似推断 USB 速度。</para>
     /// This reflects the device's declared USB spec version rather than the negotiated
     /// link speed; good enough for discovery hints (e.g. EDL USB3 vs USB2 paths).
     /// <para>反映设备声明的 USB 规范版本而非协商链路速度；作为发现提示足够
@@ -429,9 +469,9 @@ internal static class LinuxUsbFinder
 
     /// <summary>
     /// Resolves the negotiated link speed: prefer the sysfs <c>speed</c> file of the
-    /// device matched by bus/device number, falling back to bcdUSB inference.
+    /// device matched by bus/device number, falling back to BcdUSB inference.
     /// <para>解析协商链路速度：优先读取按总线/设备号匹配到的 sysfs <c>speed</c> 文件，
-    /// 失败时回退到 bcdUSB 推断。</para>
+    /// 失败时回退到 BcdUSB 推断。</para>
     /// sysfs names devices by <c>bus-port</c> (e.g. <c>1-1</c>), not by device number,
     /// so the directory is located via the <c>busnum</c>/<c>devnum</c> attributes.
     /// <para>sysfs 按 <c>bus-port</c>（如 <c>1-1</c>）而非设备号命名设备目录，
@@ -475,7 +515,7 @@ internal static class LinuxUsbFinder
         }
         catch
         {
-            // sysfs unreadable (permissions, non-Linux); fall back to bcdUSB inference.
+            // sysfs unreadable (permissions, non-Linux); fall back to BcdUSB inference.
         }
 
         return InferSpeed(bcdUsb);
@@ -486,8 +526,7 @@ internal static class LinuxUsbFinder
         value = 0;
         try
         {
-            if (!File.Exists(path)) return false;
-            return int.TryParse(File.ReadAllText(path).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+            return File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
         }
         catch
         {
@@ -497,6 +536,3 @@ internal static class LinuxUsbFinder
 
 
 }
-
-
-
