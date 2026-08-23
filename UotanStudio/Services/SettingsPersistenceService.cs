@@ -1,9 +1,9 @@
-using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 
@@ -102,7 +102,7 @@ public class AppSettings
 
     /// <summary>
     /// <para>获取或设置连接线样式索引。</para>
-    /// Gets or sets the connection line style index.
+    /// Gets or sets the connection line Style index.
     /// </summary>
     [JsonPropertyName("connectionStyleIndex")]
     public int ConnectionStyleIndex { get; set; }
@@ -130,7 +130,6 @@ public class SettingsPersistenceService
     private static readonly Lazy<SettingsPersistenceService> LazyInstance = new(() => new SettingsPersistenceService());
 
     private readonly string _settingsDirectory;
-    private readonly string _settingsFilePath;
 
     /// <summary>
     /// <para>获取设置持久化服务的单例实例。</para>
@@ -142,14 +141,14 @@ public class SettingsPersistenceService
     /// <para>获取设置文件的完整路径。</para>
     /// Gets the full path of the settings file.
     /// </summary>
-    public string SettingsFilePath => _settingsFilePath;
+    public string SettingsFilePath { get; }
 
     private SettingsPersistenceService()
     {
         _settingsDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "UotanStudio");
-        _settingsFilePath = Path.Combine(_settingsDirectory, "settings.json");
+        SettingsFilePath = Path.Combine(_settingsDirectory, "settings.json");
     }
 
     /// <summary>
@@ -164,13 +163,13 @@ public class SettingsPersistenceService
     {
         try
         {
-            if (!File.Exists(_settingsFilePath))
+            if (!File.Exists(SettingsFilePath))
             {
                 return new AppSettings();
             }
 
-            var json = File.ReadAllText(_settingsFilePath);
-            AppSettings settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
+            var json = File.ReadAllText(SettingsFilePath);
+            var settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
 
             // 迁移旧格式：如果 cultureName 为空但 JSON 中存在 languagePreference 字段，则进行映射
             MigrateFromLegacyFormat(settings, json);
@@ -211,7 +210,7 @@ public class SettingsPersistenceService
             }
 
             var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
-            File.WriteAllText(_settingsFilePath, json);
+            File.WriteAllText(SettingsFilePath, json);
         }
         catch (IOException ex)
         {
@@ -253,18 +252,20 @@ public class SettingsPersistenceService
     private static void MigrateFromLegacyFormat(AppSettings settings, string? rawJson)
     {
         if (rawJson is null || !string.IsNullOrEmpty(settings.CultureName))
+        {
             return;
+        }
 
         try
         {
-            using var doc = System.Text.Json.JsonDocument.Parse(rawJson);
-            if (doc.RootElement.TryGetProperty("languagePreference", out JsonElement prop))
+            using var doc = JsonDocument.Parse(rawJson);
+            if (doc.RootElement.TryGetProperty("languagePreference", out var prop))
             {
-                var legacyValue = prop.ValueKind == System.Text.Json.JsonValueKind.Number
+                var legacyValue = prop.ValueKind == JsonValueKind.Number
                     ? prop.GetInt32()
-                    : prop.ValueKind == System.Text.Json.JsonValueKind.String
+                    : prop.ValueKind == JsonValueKind.String
 #pragma warning disable CS0618 // Type or member is obsolete
-                        ? (int)Enum.Parse(typeof(LanguagePreference), prop.GetString() ?? "0")
+                        ? (int)Enum.Parse<LanguagePreference>(prop.GetString() ?? "0")
 #pragma warning restore CS0618 // Type or member is obsolete
                         : -1;
 
@@ -278,7 +279,7 @@ public class SettingsPersistenceService
                 Debug.WriteLine($"[SettingsPersistenceService] Migrated legacy languagePreference '{legacyValue}' to cultureName '{settings.CultureName}'");
             }
         }
-        catch (System.Text.Json.JsonException)
+        catch (JsonException)
         {
             // 忽略解析错误，使用默认值
         }

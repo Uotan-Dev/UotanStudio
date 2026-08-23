@@ -4,11 +4,11 @@ namespace UotanStudio.Messages;
 
 /// <summary>
 /// <para>主题变更消息，当用户切换主题时发送。</para>
-/// Theme changed message, sent when the user switches the theme.
+/// Theme changed Message, sent when the user switches the theme.
 /// </summary>
 /// <remarks>
 /// <para>创建主题变更消息。</para>
-/// Creates a theme changed message.
+/// Creates a theme changed Message.
 /// </remarks>
 /// <param name="themeMode">
 /// <para>新的主题模式。</para>
@@ -25,11 +25,11 @@ public class ThemeChangedMessage(ThemeMode themeMode)
 
 /// <summary>
 /// <para>语言变更消息，当用户切换语言时发送。</para>
-/// Language changed message, sent when the user switches the language.
+/// Language changed Message, sent when the user switches the language.
 /// </summary>
 /// <remarks>
 /// <para>创建语言变更消息。</para>
-/// Creates a language changed message.
+/// Creates a language changed Message.
 /// </remarks>
 /// <param name="cultureName">
 /// <para>新的语言文化名称（如 "en-US"、"zh-CN"）。</para>
@@ -46,28 +46,28 @@ public class LanguageChangedMessage(string cultureName)
 
 /// <summary>
 /// <para>设置保存失败消息，当设置持久化失败时发送。</para>
-/// Settings save failed message, sent when settings persistence fails.
+/// Settings save failed Message, sent when settings persistence fails.
 /// </summary>
 /// <remarks>
 /// <para>创建设置保存失败消息。</para>
-/// Creates a settings save failed message.
+/// Creates a settings save failed Message.
 /// </remarks>
 /// <param name="errorMessage">
 /// <para>错误信息描述。</para>
-/// The error message description.
+/// The error Message description.
 /// </param>
 public class SettingsSaveFailedMessage(string errorMessage)
 {
     /// <summary>
     /// <para>获取错误信息。</para>
-    /// Gets the error message.
+    /// Gets the error Message.
     /// </summary>
     public string ErrorMessage { get; } = errorMessage;
 }
 
 /// <summary>
 /// <para>语言状态变更消息，当应用程序语言环境发生切换时发送，包含新旧语言信息。</para>
-/// Language state changed message, sent when the application language environment switches, containing both old and new language information.
+/// Language state changed Message, sent when the application language environment switches, containing both old and new language information.
 /// </summary>
 /// <remarks>
 /// <para>初始化 <see cref="LanguageStateChangedMessage"/> 类的新实例。</para>
@@ -98,7 +98,7 @@ public class LanguageStateChangedMessage(string cultureName, string previousCult
 
 /// <summary>
 /// <para>语言包更新消息，当已注册的语言包被更高版本替换时发送。</para>
-/// Language pack updated message, sent when a registered language pack is replaced by a higher version.
+/// Language pack updated Message, sent when a registered language pack is replaced by a higher version.
 /// </summary>
 /// <remarks>
 /// <para>初始化 <see cref="LanguagePackUpdatedMessage"/> 类的新实例。</para>
@@ -129,7 +129,7 @@ public class LanguagePackUpdatedMessage(string cultureName, string newVersion)
 
 /// <summary>
 /// <para>语言包注册拒绝消息，当语言包因版本不兼容等原因被拒绝注册时发送。</para>
-/// Language pack rejected message, sent when a language pack is rejected from registration due to version incompatibility or other reasons.
+/// Language pack rejected Message, sent when a language pack is rejected from registration due to version incompatibility or other reasons.
 /// </summary>
 /// <remarks>
 /// <para>初始化 <see cref="LanguagePackRejectedMessage"/> 类的新实例。</para>

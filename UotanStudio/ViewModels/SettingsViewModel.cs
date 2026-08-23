@@ -1,11 +1,11 @@
-using CommunityToolkit.Mvvm.Input;
-using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
@@ -26,23 +26,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private LanguageInfo _selectedLanguage = LanguageInfo.SystemLanguage;
     private ThemeMode _selectedThemeMode;
     private bool _autoSave;
-    private string _unpackToolPath = string.Empty;
-    private string _tempDirectory = string.Empty;
-    private bool _autoVerifyAfterUnpack = true;
-    private string _adbPath = string.Empty;
-    private string _fastbootPath = string.Empty;
-    private int _deviceTimeoutSeconds = 30;
     private bool _autoBackupBeforeFlash;
     private bool _snapToGrid = true;
     private double _gridSize = 20;
     private int _connectionStyleIndex;
-    private bool _isCheckingUpdates;
-    private string _updateCheckResult = string.Empty;
-    private bool _isToastVisible;
-    private string _toastMessage = string.Empty;
-    private string? _adbToolStatus;
-    private string? _fastbootToolStatus;
-    private bool _isCheckingTools;
 
     /// <summary>
     /// <para>获取可用语言列表，从语言服务动态获取。</para>
@@ -57,17 +44,15 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public List<ThemeMode> Themes { get; } =
         [ThemeMode.System, ThemeMode.Light, ThemeMode.Dark];
 
-    private List<string> _connectionStyles = BuildConnectionStyles();
-
     /// <summary>
     /// <para>获取可用连接线样式列表。</para>
     /// Gets the list of available connection line styles.
     /// </summary>
     public List<string> ConnectionStyles
     {
-        get => _connectionStyles;
-        private set => SetProperty(ref _connectionStyles, value);
-    }
+        get;
+        private set => SetProperty(ref field, value);
+    } = BuildConnectionStyles();
 
     /// <summary>
     /// <para>根据当前语言构建连接线样式列表。</para>
@@ -83,48 +68,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// Gets the language preview text, dynamically updated based on the current language.
     /// </summary>
     public string LanguagePreviewText => LanguageService.Instance.GetString("Settings_LanguagePreviewText");
-
-    /// <summary>
-    /// <para>获取固件解包模块版本号。</para>
-    /// Gets the firmware unpack module version.
-    /// </summary>
-    public string FirmwareModuleVersion { get; } = "1.0.0";
-
-    /// <summary>
-    /// <para>获取烧录模块版本号。</para>
-    /// Gets the board flash module version.
-    /// </summary>
-    public string FlashModuleVersion { get; } = "1.0.0";
-
-    /// <summary>
-    /// <para>获取可视化编程模块版本号。</para>
-    /// Gets the visual programming module version.
-    /// </summary>
-    public string VisualProgrammingModuleVersion { get; } = "1.0.0";
-
-    /// <summary>
-    /// <para>获取版本信息卡片列表，供设置页 WrapLayout 呈现。</para>
-    /// Gets the list of module version cards for the settings page WrapLayout.
-    /// </summary>
-    public ObservableCollection<ModuleCardInfo> ModuleCards { get; } = [];
-
-    /// <summary>
-    /// <para>根据当前语言刷新版本信息卡片列表（名称本地化）。</para>
-    /// Refreshes the module version cards list based on the current language (localized names).
-    /// </summary>
-    private void RefreshModuleCards()
-    {
-        ModuleCards.Clear();
-        ModuleCards.Add(new ModuleCardInfo(
-            LanguageService.Instance.GetString("Settings_FirmwareModule"),
-            FirmwareModuleVersion));
-        ModuleCards.Add(new ModuleCardInfo(
-            LanguageService.Instance.GetString("Settings_FlashModule"),
-            FlashModuleVersion));
-        ModuleCards.Add(new ModuleCardInfo(
-            LanguageService.Instance.GetString("Settings_VisualProgrammingModule"),
-            VisualProgrammingModuleVersion));
-    }
 
     /// <summary>
     /// <para>获取或设置选中的语言信息。</para>
@@ -171,7 +114,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         set
         {
             if (value && _selectedThemeMode != ThemeMode.Light)
+            {
                 SelectedThemeMode = ThemeMode.Light;
+            }
         }
     }
 
@@ -185,7 +130,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         set
         {
             if (value && _selectedThemeMode != ThemeMode.Dark)
+            {
                 SelectedThemeMode = ThemeMode.Dark;
+            }
         }
     }
 
@@ -199,7 +146,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         set
         {
             if (value && _selectedThemeMode != ThemeMode.System)
+            {
                 SelectedThemeMode = ThemeMode.System;
+            }
         }
     }
 
@@ -210,71 +159,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public bool AutoSave
     {
         get => _autoSave;
-        set { if (SetProperty(ref _autoSave, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置默认解包工具路径。</para>
-    /// Gets or sets the default unpack tool path.
-    /// </summary>
-    public string UnpackToolPath
-    {
-        get => _unpackToolPath;
-        set { if (SetProperty(ref _unpackToolPath, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置临时文件目录。</para>
-    /// Gets or sets the temporary file directory.
-    /// </summary>
-    public string TempDirectory
-    {
-        get => _tempDirectory;
-        set { if (SetProperty(ref _tempDirectory, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置解包后是否自动校验。</para>
-    /// Gets or sets whether to auto-verify after unpacking.
-    /// </summary>
-    public bool AutoVerifyAfterUnpack
-    {
-        get => _autoVerifyAfterUnpack;
-        set { if (SetProperty(ref _autoVerifyAfterUnpack, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置 ADB 路径。</para>
-    /// Gets or sets the ADB path.
-    /// </summary>
-    public string AdbPath
-    {
-        get => _adbPath;
-        set { if (SetProperty(ref _adbPath, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置 Fastboot 路径。</para>
-    /// Gets or sets the Fastboot path.
-    /// </summary>
-    public string FastbootPath
-    {
-        get => _fastbootPath;
-        set { if (SetProperty(ref _fastbootPath, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置设备超时时间（秒）。</para>
-    /// Gets or sets the device timeout in seconds.
-    /// </summary>
-    public int DeviceTimeoutSeconds
-    {
-        get => _deviceTimeoutSeconds;
         set
         {
-            var clamped = Math.Clamp(value, 5, 300);
-            if (SetProperty(ref _deviceTimeoutSeconds, clamped))
+            if (SetProperty(ref _autoSave, value))
+            {
                 DebouncedSaveSettings();
+            }
         }
     }
 
@@ -285,7 +175,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public bool AutoBackupBeforeFlash
     {
         get => _autoBackupBeforeFlash;
-        set { if (SetProperty(ref _autoBackupBeforeFlash, value)) DebouncedSaveSettings(); }
+        set
+        {
+            if (SetProperty(ref _autoBackupBeforeFlash, value))
+            {
+                DebouncedSaveSettings();
+            }
+        }
     }
 
     /// <summary>
@@ -295,7 +191,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public bool SnapToGrid
     {
         get => _snapToGrid;
-        set { if (SetProperty(ref _snapToGrid, value)) DebouncedSaveSettings(); }
+        set
+        {
+            if (SetProperty(ref _snapToGrid, value))
+            {
+                DebouncedSaveSettings();
+            }
+        }
     }
 
     /// <summary>
@@ -305,37 +207,29 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     public double GridSize
     {
         get => _gridSize;
-        set { if (SetProperty(ref _gridSize, value)) DebouncedSaveSettings(); }
+        set
+        {
+            if (SetProperty(ref _gridSize, value))
+            {
+                DebouncedSaveSettings();
+            }
+        }
     }
 
     /// <summary>
     /// <para>获取或设置连接线样式索引。</para>
-    /// Gets or sets the connection line style index.
+    /// Gets or sets the connection line Style index.
     /// </summary>
     public int ConnectionStyleIndex
     {
         get => _connectionStyleIndex;
-        set { if (SetProperty(ref _connectionStyleIndex, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置是否正在检查更新。</para>
-    /// Gets or sets whether an update check is in progress.
-    /// </summary>
-    public bool IsCheckingUpdates
-    {
-        get => _isCheckingUpdates;
-        set => SetProperty(ref _isCheckingUpdates, value);
-    }
-
-    /// <summary>
-    /// <para>获取或设置更新检查结果消息。</para>
-    /// Gets or sets the update check result message.
-    /// </summary>
-    public string UpdateCheckResult
-    {
-        get => _updateCheckResult;
-        set => SetProperty(ref _updateCheckResult, value);
+        set
+        {
+            if (SetProperty(ref _connectionStyleIndex, value))
+            {
+                DebouncedSaveSettings();
+            }
+        }
     }
 
     /// <summary>
@@ -344,8 +238,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public bool IsToastVisible
     {
-        get => _isToastVisible;
-        set => SetProperty(ref _isToastVisible, value);
+        get;
+        set => SetProperty(ref field, value);
     }
 
     /// <summary>
@@ -354,9 +248,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public string ToastMessage
     {
-        get => _toastMessage;
-        set => SetProperty(ref _toastMessage, value);
-    }
+        get;
+        set => SetProperty(ref field, value);
+    } = string.Empty;
 
     /// <summary>
     /// <para>初始化设置视图模型，从持久化服务加载设置并初始化所有属性。</para>
@@ -375,8 +269,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(IsSystemTheme));
         OnPropertyChanged(nameof(IsLightTheme));
 
-        // 初始化版本信息卡片（本地化名称）
-        RefreshModuleCards();
         OnPropertyChanged(nameof(IsDarkTheme));
 
         // 显式发送一次主题变更消息，确保 App 与 VM 状态同步
@@ -402,12 +294,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
               ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
         _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
-        _unpackToolPath = settings.UnpackToolPath;
-        _tempDirectory = settings.TempDirectory;
-        _autoVerifyAfterUnpack = settings.AutoVerifyAfterUnpack;
-        _adbPath = settings.AdbPath;
-        _fastbootPath = settings.FastbootPath;
-        _deviceTimeoutSeconds = Math.Clamp(settings.DeviceTimeoutSeconds, 5, 300);
         _autoBackupBeforeFlash = settings.AutoBackupBeforeFlash;
         _snapToGrid = settings.SnapToGrid;
         _gridSize = settings.GridSize;
@@ -444,7 +330,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void DebouncedSaveSettings()
     {
-        CancellationTokenSource? oldCts = _saveCts;
+        var oldCts = _saveCts;
         _saveCts = new CancellationTokenSource();
         oldCts?.Cancel();
         oldCts?.Dispose();
@@ -483,12 +369,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.CultureName = _selectedLanguage.IsSystemLanguage ? string.Empty : _selectedLanguage.CultureName;
         _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
-        _appSettings.UnpackToolPath = _unpackToolPath;
-        _appSettings.TempDirectory = _tempDirectory;
-        _appSettings.AutoVerifyAfterUnpack = _autoVerifyAfterUnpack;
-        _appSettings.AdbPath = _adbPath;
-        _appSettings.FastbootPath = _fastbootPath;
-        _appSettings.DeviceTimeoutSeconds = _deviceTimeoutSeconds;
         _appSettings.AutoBackupBeforeFlash = _autoBackupBeforeFlash;
         _appSettings.SnapToGrid = _snapToGrid;
         _appSettings.GridSize = _gridSize;
@@ -531,8 +411,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(LanguagePreviewText));
         // 重建连接线样式列表以反映新语言文本
         ConnectionStyles = BuildConnectionStyles();
-        // 刷新版本卡片以反映新语言名称
-        RefreshModuleCards();
     }
 
     /// <summary>
@@ -542,13 +420,15 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void OnLanguagePackChanged(object? sender, LanguagePackChangedEventArgs e)
     {
         // 同步更新语言列表，保留"跟随系统"头部
-        LanguageInfo currentSelected = _selectedLanguage;
+        var currentSelected = _selectedLanguage;
         Languages.Clear();
         Languages.Add(LanguageInfo.SystemLanguage);
-        foreach (LanguageInfo lang in LanguageService.Instance.AvailableLanguages)
+        foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
             if (!lang.IsSystemLanguage)
+            {
                 Languages.Add(lang);
+            }
         }
 
         // 若当前选中语言已被卸载，回退到"跟随系统"
@@ -556,105 +436,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
             !Languages.Any(l => l.CultureName == currentSelected.CultureName))
         {
             SelectedLanguage = LanguageInfo.SystemLanguage;
-        }
-    }
-
-    /// <summary>
-    /// <para>异步检查更新，模拟网络请求后显示结果。</para>
-    /// Asynchronously checks for updates, simulating a network request before displaying the result.
-    /// </summary>
-    [RelayCommand]
-    private async Task CheckForUpdatesAsync()
-    {
-        IsCheckingUpdates = true;
-        UpdateCheckResult = LanguageService.Instance.GetString("Settings_CheckingUpdates");
-
-        try
-        {
-            await Task.Delay(1000);
-            UpdateCheckResult = LanguageService.Instance.GetString("Settings_UpToDate");
-        }
-        catch (Exception)
-        {
-            UpdateCheckResult = LanguageService.Instance.GetString("Settings_UpdateCheckFailed");
-        }
-        finally
-        {
-            IsCheckingUpdates = false;
-        }
-    }
-
-    /// <summary>
-    /// <para>获取或设置 ADB 工具可用性检测结果文本。</para>
-    /// Gets or sets the ADB tool availability check result text.
-    /// </summary>
-    public string? AdbToolStatus
-    {
-        get => _adbToolStatus;
-        set => SetProperty(ref _adbToolStatus, value);
-    }
-
-    /// <summary>
-    /// <para>获取或设置 Fastboot 工具可用性检测结果文本。</para>
-    /// Gets or sets the Fastboot tool availability check result text.
-    /// </summary>
-    public string? FastbootToolStatus
-    {
-        get => _fastbootToolStatus;
-        set => SetProperty(ref _fastbootToolStatus, value);
-    }
-
-    /// <summary>
-    /// <para>获取或设置是否正在检测工具可用性。</para>
-    /// Gets or sets whether tool availability check is in progress.
-    /// </summary>
-    public bool IsCheckingTools
-    {
-        get => _isCheckingTools;
-        set => SetProperty(ref _isCheckingTools, value);
-    }
-
-    /// <summary>
-    /// <para>异步检测 ADB 与 Fastboot 工具可用性，更新状态文本。</para>
-    /// Asynchronously verifies ADB and Fastboot tool availability, updating status text.
-    /// <para>调用 AdbService 实例的 GetDevicesAsync，成功即工具可达。</para>
-    /// Invokes AdbService.Instance.GetDevicesAsync; success means the tool is reachable.
-    /// </summary>
-    [RelayCommand]
-    private async Task VerifyToolPathsAsync()
-    {
-        if (IsCheckingTools) return;
-        IsCheckingTools = true;
-        AdbToolStatus = LanguageService.Instance.GetString("Settings_Checking");
-        FastbootToolStatus = LanguageService.Instance.GetString("Settings_Checking");
-
-        try
-        {
-            // 同步当前路径配置到 AdbService 单例
-            AdbService.Instance.UpdateConfiguration(AdbPath, FastbootPath, DeviceTimeoutSeconds);
-
-            // ADB 可用性：枚举设备命令成功即工具可达
-            IReadOnlyList<AdbDevice> adbResult = await AdbService.Instance.GetDevicesAsync();
-            AdbToolStatus = string.IsNullOrEmpty(AdbPath)
-                ? $"{LanguageService.Instance.GetString("Settings_ToolDefault")}: {adbResult.Count} device(s)"
-                : $"{LanguageService.Instance.GetString("Settings_ToolAvailable")}: {adbResult.Count} device(s)";
-
-            // Fastboot 可用性：直接尝试 fastboot devices 等价命令（通过 ExecuteFastbootAsync）
-            AdbCommandResult fbResult = await AdbService.Instance.ExecuteFastbootAsync(string.Empty, "devices", System.Threading.CancellationToken.None);
-            FastbootToolStatus = fbResult.Success
-                ? LanguageService.Instance.GetString("Settings_ToolAvailable")
-                : (string.IsNullOrEmpty(FastbootPath)
-                    ? LanguageService.Instance.GetString("Settings_ToolDefault")
-                    : LanguageService.Instance.GetString("Settings_ToolUnavailable"));
-        }
-        catch (System.Exception ex)
-        {
-            AdbToolStatus = $"{LanguageService.Instance.GetString("Settings_ToolUnavailable")}: {ex.Message}";
-            FastbootToolStatus = LanguageService.Instance.GetString("Settings_ToolUnavailable");
-        }
-        finally
-        {
-            IsCheckingTools = false;
         }
     }
 
@@ -699,18 +480,18 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         Languages.Clear();
         Languages.Add(LanguageInfo.SystemLanguage);
-        foreach (LanguageInfo lang in LanguageService.Instance.AvailableLanguages)
+        foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
             if (!lang.IsSystemLanguage)
+            {
                 Languages.Add(lang);
+            }
         }
 
         ApplyLanguageInfo(_selectedLanguage);
 
         OnPropertyChanged(string.Empty);
         WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
-
-        RefreshModuleCards();
 
         ShowToast(LanguageService.Instance.GetString("Settings_SettingsReset"));
     }
@@ -731,10 +512,12 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         Languages.Clear();
         Languages.Add(LanguageInfo.SystemLanguage);
-        foreach (LanguageInfo lang in LanguageService.Instance.AvailableLanguages)
+        foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
             if (!lang.IsSystemLanguage)
+            {
                 Languages.Add(lang);
+            }
         }
 
         ApplyLanguageInfo(_selectedLanguage);
@@ -766,7 +549,9 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)
+        {
             return;
+        }
 
         if (disposing)
         {
@@ -779,22 +564,4 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
         _disposed = true;
     }
-}
-
-/// <summary>
-/// <para>模块版本信息卡片，供设置页 WrapLayout 呈现。</para>
-/// Module version info card for the settings page WrapLayout.
-/// </summary>
-/// <remarks>
-/// <para>创建模块版本信息卡片。</para>
-/// Creates a module version info card.
-/// </remarks>
-/// <param name="name">模块本地化名称。</param>
-/// <param name="version">模块版本号。</param>
-public sealed class ModuleCardInfo(string name, string version)
-{
-    /// <summary>模块本地化名称。</summary>
-    public string Name { get; } = name ?? string.Empty;
-    /// <summary>模块版本号。</summary>
-    public string Version { get; } = version ?? string.Empty;
 }

@@ -1,12 +1,8 @@
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using UotanStudio.ViewModels;
 
 namespace UotanStudio.Pages;
@@ -93,10 +89,12 @@ public partial class SettingsView : UserControl
 
             // 简化：通过 DialogResult 标志
             var ok = false;
-            foreach (Control btn in ((StackPanel)((StackPanel)dialog.Content).Children[1]).Children)
+            foreach (var btn in ((StackPanel)((StackPanel)dialog.Content).Children[1]).Children)
             {
                 if (btn is Button b)
+                {
                     b.Click += (_, _) => { ok = (bool)(b.Tag ?? false); dialog.Close(); };
+                }
             }
 
             await dialog.ShowDialog(owner);
@@ -106,100 +104,5 @@ public partial class SettingsView : UserControl
         {
             tcs.TrySetResult(false);
         }
-    }
-
-    /// <summary>弹出文件选择对话框，选取 ADB 可执行文件路径并写回 VM。</summary>
-    private async void OnBrowseAdbClick(object? sender, RoutedEventArgs e)
-        => await PickExecutableAsync(path =>
-        {
-            if (DataContext is SettingsViewModel vm)
-                vm.AdbPath = path;
-        });
-
-    /// <summary>弹出文件选择对话框，选取 Fastboot 可执行文件路径并写回 VM。</summary>
-    private async void OnBrowseFastbootClick(object? sender, RoutedEventArgs e)
-        => await PickExecutableAsync(path =>
-        {
-            if (DataContext is SettingsViewModel vm)
-                vm.FastbootPath = path;
-        });
-
-    /// <summary>弹出文件选择对话框，选取解包工具可执行文件路径并写回 VM。</summary>
-    private async void OnBrowseUnpackToolClick(object? sender, RoutedEventArgs e)
-        => await PickExecutableAsync(path =>
-        {
-            if (DataContext is SettingsViewModel vm)
-                vm.UnpackToolPath = path;
-        });
-
-    /// <summary>弹出文件夹选择对话框，选取临时目录并写回 VM。</summary>
-    private async void OnBrowseTempDirClick(object? sender, RoutedEventArgs e)
-        => await PickFolderAsync(path =>
-        {
-            if (DataContext is SettingsViewModel vm)
-                vm.TempDirectory = path;
-        });
-
-    /// <summary>
-    /// <para>通用可执行文件选择器，选择成功后通过 apply 回调写回对应 VM 属性。</para>
-    /// Generic executable picker; writes back to the corresponding VM property via the apply callback on success.
-    /// </summary>
-    /// <param name="apply">
-    /// <para>接收选中文件本地路径的写回回调。</para>
-    /// Callback receiving the selected file's local path for write-back.
-    /// </param>
-    private async Task PickExecutableAsync(System.Action<string> apply)
-    {
-        if (DataContext is not SettingsViewModel) return;
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel == null) return;
-
-        IReadOnlyList<IStorageFile> files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Select executable",
-            AllowMultiple = false,
-            FileTypeFilter = new[]
-            {
-                new FilePickerFileType("Executables")
-                {
-                    Patterns = new[] { "*.exe", "*" }
-                }
-            }
-        });
-
-        IStorageFile? file = files?.FirstOrDefault();
-        if (file == null) return;
-
-        var path = file.TryGetLocalPath();
-        if (string.IsNullOrEmpty(path)) return;
-        apply(path);
-    }
-
-    /// <summary>
-    /// <para>通用文件夹选择器，选择成功后通过 apply 回调写回对应 VM 属性。</para>
-    /// Generic folder picker; writes back to the corresponding VM property via the apply callback on success.
-    /// </summary>
-    /// <param name="apply">
-    /// <para>接收选中文件夹本地路径的写回回调。</para>
-    /// Callback receiving the selected folder's local path for write-back.
-    /// </param>
-    private async Task PickFolderAsync(System.Action<string> apply)
-    {
-        if (DataContext is not SettingsViewModel) return;
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel == null) return;
-
-        IReadOnlyList<IStorageFolder> folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            Title = "Select folder",
-            AllowMultiple = false
-        });
-
-        IStorageFolder? folder = folders?.FirstOrDefault();
-        if (folder == null) return;
-
-        var path = folder.TryGetLocalPath();
-        if (string.IsNullOrEmpty(path)) return;
-        apply(path);
     }
 }
