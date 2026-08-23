@@ -13,13 +13,13 @@ public static class AdbConstants
     public const uint ProtocolVersion = 0x01000001;
 
     /// <summary>
-    /// Maximum data payload in a single message (A_MAX_PAYLOAD, 1 MiB).
+    /// Maximum data payload in a single Message (A_MAX_PAYLOAD, 1 MiB).
     /// <para>单条消息的最大数据负载（A_MAX_PAYLOAD，1 MiB）。</para>
     /// </summary>
     public const uint MaxPayload = 0x00100000;
 
     /// <summary>
-    /// Fixed ADB message header size (24 bytes).
+    /// Fixed ADB Message header size (24 bytes).
     /// <para>ADB 消息头固定大小（24 字节）。</para>
     /// </summary>
     public const int HeaderSize = 24;

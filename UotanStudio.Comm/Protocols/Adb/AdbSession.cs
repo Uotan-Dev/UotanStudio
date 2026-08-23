@@ -1,15 +1,14 @@
 using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
-/// Represents an ADB protocol session over a USB transport.
-/// <para>表示基于 USB 传输的 ADB 协议会话。</para>
+/// Represents an ADB protocol session over a device transport.
+/// <para>表示基于设备传输的 ADB 协议会话。</para>
 /// </summary>
 public sealed class AdbSession : IProtocolSession
 {
-    private readonly AdbConnection _connection;
     private bool _disposed;
 
     /// <summary>
@@ -22,52 +21,87 @@ public sealed class AdbSession : IProtocolSession
     /// Gets the underlying transport session.
     /// <para>获取底层传输会话。</para>
     /// </summary>
-    public IUsbDeviceSession Transport => _connection.Transport;
+    public ICommTransport Transport => Connection.Transport;
 
     /// <summary>
     /// Gets whether the session is connected and authenticated.
     /// <para>获取会话是否已连接并通过认证。</para>
     /// </summary>
-    public bool IsConnected => _connection.IsConnected && !_disposed;
+    public bool IsConnected => Connection.IsConnected && !_disposed;
 
     /// <summary>
     /// Gets the ADB connection.
     /// <para>获取 ADB 连接。</para>
     /// </summary>
-    public AdbConnection Connection => _connection;
+    public AdbConnection Connection { get; }
 
     /// <summary>
     /// Gets the peer protocol version.
     /// <para>获取对端协议版本。</para>
     /// </summary>
-    public uint PeerVersion => _connection.PeerVersion;
+    public uint PeerVersion => Connection.PeerVersion;
 
     /// <summary>
     /// Gets the peer max payload size.
     /// <para>获取对端最大负载大小。</para>
     /// </summary>
-    public uint PeerMaxPayload => _connection.PeerMaxPayload;
+    public uint PeerMaxPayload => Connection.PeerMaxPayload;
 
     /// <summary>
     /// Gets the peer banner.
     /// <para>获取对端横幅。</para>
     /// </summary>
-    public string? PeerBanner => _connection.PeerBanner;
+    public string? PeerBanner => Connection.PeerBanner;
 
     /// <summary>
     /// Gets the features advertised by the peer.
     /// <para>获取对端宣告的特性。</para>
     /// </summary>
-    public IReadOnlyList<string> PeerFeatures => _connection.PeerFeatures;
+    public IReadOnlyList<string> PeerFeatures => Connection.PeerFeatures;
 
     /// <summary>
-    /// Creates a new ADB session over the specified USB transport.
-    /// <para>在指定 USB 传输上创建新的 ADB 会话。</para>
+    /// Creates a new ADB session over the specified device transport, using the
+    /// persistent default key (loaded from %USERPROFILE%/.android/adbkey, generated
+    /// when absent).
+    /// <para>在指定设备传输上创建新的 ADB 会话，使用持久化的默认密钥（从
+    /// %USERPROFILE%/.android/adbkey 加载，不存在时生成）。</para>
     /// </summary>
-    /// <param name="transport">The USB transport session. USB 传输会话。</param>
-    public AdbSession(IUsbDeviceSession transport)
+    /// <param name="transport">The device transport. 设备传输。</param>
+    public AdbSession(ICommTransport transport)
+        : this(transport, AdbAuthentication.LoadOrCreate())
     {
-        _connection = new AdbConnection(transport ?? throw new ArgumentNullException(nameof(transport)));
+    }
+
+    /// <summary>
+    /// Creates a new ADB session over the specified device transport with a single
+    /// authentication identity. The session (its connection) owns and disposes the
+    /// identity.
+    /// <para>在指定设备传输上创建使用单个认证身份的新 ADB 会话。会话（其连接）
+    /// 拥有并释放该身份。</para>
+    /// </summary>
+    /// <param name="transport">The device transport. 设备传输。</param>
+    /// <param name="authentication">The RSA authentication identity. RSA 认证身份。</param>
+    public AdbSession(ICommTransport transport, AdbAuthentication authentication)
+    {
+        Connection = new AdbConnection(
+            transport ?? throw new ArgumentNullException(nameof(transport)),
+            authentication ?? throw new ArgumentNullException(nameof(authentication)));
+    }
+
+    /// <summary>
+    /// Creates a new ADB session over the specified device transport with an ordered
+    /// list of authentication identities (key rotation). The session (its
+    /// connection) owns and disposes every identity.
+    /// <para>在指定设备传输上创建使用有序认证身份列表（密钥轮换）的新 ADB 会话。
+    /// 会话（其连接）拥有并释放所有身份。</para>
+    /// </summary>
+    /// <param name="transport">The device transport. 设备传输。</param>
+    /// <param name="authentications">The ordered RSA authentication identities. 有序 RSA 认证身份列表。</param>
+    public AdbSession(ICommTransport transport, IReadOnlyList<AdbAuthentication> authentications)
+    {
+        Connection = new AdbConnection(
+            transport ?? throw new ArgumentNullException(nameof(transport)),
+            authentications ?? throw new ArgumentNullException(nameof(authentications)));
     }
 
     /// <summary>
@@ -77,8 +111,8 @@ public sealed class AdbSession : IProtocolSession
     public void Connect()
     {
         ThrowIfDisposed();
-        _connection.Connect();
-        _connection.WaitForPeer(10000);
+        Connection.Connect();
+        Connection.WaitForPeer(10000);
     }
 
     /// <summary>
@@ -89,8 +123,8 @@ public sealed class AdbSession : IProtocolSession
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        await _connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
-        _connection.WaitForPeer(10000);
+        await Connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
+        Connection.WaitForPeer(10000);
     }
 
     /// <summary>
@@ -102,7 +136,7 @@ public sealed class AdbSession : IProtocolSession
     public AdbStream OpenStream(string service)
     {
         ThrowIfDisposed();
-        return _connection.OpenStream(service);
+        return Connection.OpenStream(service);
     }
 
     /// <summary>
@@ -116,7 +150,7 @@ public sealed class AdbSession : IProtocolSession
     public AdbShellClient CreateShellClient(string command, string? term = null, bool pty = false)
     {
         ThrowIfDisposed();
-        return new AdbShellClient(_connection, command, term, pty);
+        return new AdbShellClient(Connection, command, term, pty);
     }
 
     /// <summary>
@@ -128,7 +162,7 @@ public sealed class AdbSession : IProtocolSession
     public AdbSyncClient CreateSyncClient(uint maxChunk = 64 * 1024)
     {
         ThrowIfDisposed();
-        return new AdbSyncClient(_connection, maxChunk);
+        return new AdbSyncClient(Connection, maxChunk);
     }
 
     /// <summary>
@@ -148,7 +182,9 @@ public sealed class AdbSession : IProtocolSession
     private void ThrowIfDisposed()
     {
         if (_disposed)
+        {
             throw new ObjectDisposedException(nameof(AdbSession));
+        }
     }
 
     /// <summary>
@@ -157,8 +193,12 @@ public sealed class AdbSession : IProtocolSession
     /// </summary>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
-        _connection.Dispose();
+        Connection.Dispose();
     }
 }

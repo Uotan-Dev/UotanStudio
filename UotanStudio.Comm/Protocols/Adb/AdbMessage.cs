@@ -4,57 +4,46 @@ namespace UotanStudio.Comm.Protocols.Adb;
 /// Represents a single ADB wire message: a fixed 24-byte header followed by an optional payload.
 /// <para>表示单条 ADB 线上消息：固定的 24 字节头部加可选负载。</para>
 /// </summary>
-public sealed class AdbMessage
+/// <remarks>
+/// Initializes a new instance of the <see cref="AdbMessage"/> class.
+/// <para>初始化 <see cref="AdbMessage"/> 类的新实例。</para>
+/// </remarks>
+/// <param name="command">The ADB command identifier. ADB 命令标识。</param>
+/// <param name="arg0">The first argument. 第一个参数。</param>
+/// <param name="arg1">The second argument. 第二个参数。</param>
+/// <param name="payload">The optional payload bytes. 可选的负载字节。</param>
+public sealed class AdbMessage(AdbCommand command, uint arg0, uint arg1, byte[]? payload = null)
 {
     /// <summary>
     /// Gets the command identifier.
     /// <para>获取命令标识。</para>
     /// </summary>
-    public AdbCommand Command { get; }
+    public AdbCommand Command { get; } = command;
 
     /// <summary>
     /// Gets the first argument (local stream id / auth type / protocol version).
     /// <para>获取第一个参数（本地流 id / 认证类型 / 协议版本）。</para>
     /// </summary>
-    public uint Arg0 { get; }
+    public uint Arg0 { get; } = arg0;
 
     /// <summary>
     /// Gets the second argument (remote stream id / maximum payload length).
     /// <para>获取第二个参数（远端流 id / 最大负载长度）。</para>
     /// </summary>
-    public uint Arg1 { get; }
+    public uint Arg1 { get; } = arg1;
 
     /// <summary>
     /// Gets the payload bytes, or null when the message has no payload.
     /// <para>获取负载字节，无负载时为 null。</para>
     /// </summary>
-    public byte[]? Payload { get; }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="AdbMessage"/> class.
-    /// <para>初始化 <see cref="AdbMessage"/> 类的新实例。</para>
-    /// </summary>
-    /// <param name="command">The ADB command identifier. ADB 命令标识。</param>
-    /// <param name="arg0">The first argument. 第一个参数。</param>
-    /// <param name="arg1">The second argument. 第二个参数。</param>
-    /// <param name="payload">The optional payload bytes. 可选的负载字节。</param>
-    public AdbMessage(AdbCommand command, uint arg0, uint arg1, byte[]? payload = null)
-    {
-        Command = command;
-        Arg0 = arg0;
-        Arg1 = arg1;
-        Payload = payload;
-    }
+    public byte[]? Payload { get; } = payload;
 
     /// <summary>
     /// Decodes the payload as UTF-8 text.
     /// <para>将负载解码为 UTF-8 文本。</para>
     /// </summary>
     /// <returns>The payload as a string. 负载的字符串形式。</returns>
-    public string PayloadAsString()
-    {
-        return Payload is { Length: > 0 } ? System.Text.Encoding.UTF8.GetString(Payload) : string.Empty;
-    }
+    public string PayloadAsString() => Payload is { Length: > 0 } ? System.Text.Encoding.UTF8.GetString(Payload) : string.Empty;
 }
 
 /// <summary>
@@ -71,9 +60,17 @@ public static class AdbMessaging
     /// <returns>The computed CRC value. 计算得到的 CRC 值。</returns>
     public static uint ComputeCrc(byte[]? payload)
     {
-        if (payload is null || payload.Length == 0) return 0;
+        if (payload is null || payload.Length == 0)
+        {
+            return 0;
+        }
+
         uint crc = 0;
-        foreach (var b in payload) crc = (crc + b) & 0xFFFFFFFF;
+        foreach (var b in payload)
+        {
+            crc = (crc + b) & 0xFFFFFFFF;
+        }
+
         return crc;
     }
 
@@ -90,15 +87,19 @@ public static class AdbMessaging
         var payloadCrc = ComputeCrc(message.Payload);
 
         var packet = new byte[AdbConstants.HeaderSize + (message.Payload?.Length ?? 0)];
-        using var ms = new System.IO.MemoryStream(packet);
-        using var bw = new System.IO.BinaryWriter(ms);
+        using var ms = new MemoryStream(packet);
+        using var bw = new BinaryWriter(ms);
         bw.Write(command);
         bw.Write(message.Arg0);
         bw.Write(message.Arg1);
         bw.Write(payloadLength);
         bw.Write(payloadCrc);
         bw.Write(command ^ 0xFFFFFFFF); // Magic
-        if (message.Payload is { Length: > 0 }) bw.Write(message.Payload);
+        if (message.Payload is { Length: > 0 })
+        {
+            bw.Write(message.Payload);
+        }
+
         return packet;
     }
 
@@ -115,8 +116,8 @@ public static class AdbMessaging
         var payloadCrc = ComputeCrc(message.Payload);
 
         var header = new byte[AdbConstants.HeaderSize];
-        using var ms = new System.IO.MemoryStream(header);
-        using var bw = new System.IO.BinaryWriter(ms);
+        using var ms = new MemoryStream(header);
+        using var bw = new BinaryWriter(ms);
         bw.Write(command);
         bw.Write(message.Arg0);
         bw.Write(message.Arg1);
@@ -135,10 +136,12 @@ public static class AdbMessaging
     public static (AdbCommand Command, uint Arg0, uint Arg1, uint PayloadLength, uint PayloadCrc) ParseHeader(byte[] header)
     {
         if (header is null || header.Length != AdbConstants.HeaderSize)
+        {
             throw new InvalidDataException($"Invalid ADB header size: {header?.Length}");
+        }
 
-        using var ms = new System.IO.MemoryStream(header);
-        using var br = new System.IO.BinaryReader(ms);
+        using var ms = new MemoryStream(header);
+        using var br = new BinaryReader(ms);
         var command = br.ReadUInt32();
         var arg0 = br.ReadUInt32();
         var arg1 = br.ReadUInt32();
@@ -146,10 +149,9 @@ public static class AdbMessaging
         var payloadCrc = br.ReadUInt32();
         var magic = br.ReadUInt32();
 
-        if ((command ^ 0xFFFFFFFF) != magic)
-            throw new InvalidDataException("Invalid ADB message magic!");
-
-        return ((AdbCommand)command, arg0, arg1, payloadLength, payloadCrc);
+        return (command ^ 0xFFFFFFFF) != magic
+            ? throw new InvalidDataException("Invalid ADB message magic!")
+            : ((AdbCommand Command, uint Arg0, uint Arg1, uint PayloadLength, uint PayloadCrc))((AdbCommand)command, arg0, arg1, payloadLength, payloadCrc);
     }
 
     /// <summary>
@@ -162,7 +164,9 @@ public static class AdbMessaging
     {
         var actual = ComputeCrc(payload);
         if (actual != expectedCrc)
+        {
             throw new InvalidDataException($"ADB payload CRC mismatch: expected 0x{expectedCrc:X8}, got 0x{actual:X8}.");
+        }
     }
 
     /// <summary>

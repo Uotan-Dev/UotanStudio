@@ -1,18 +1,23 @@
-using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>
-/// Represents an ADB connection over a USB transport: CNXN handshake, authentication,
+/// Represents an ADB connection over a device transport: CNXN handshake, authentication,
 /// message dispatch loop, and stream multiplexing.
-/// <para>基于 USB 传输的 ADB 连接：CNXN 握手、认证、消息分发循环、流复用。</para>
+/// <para>基于设备传输的 ADB 连接：CNXN 握手、认证、消息分发循环、流复用。</para>
 /// </summary>
 public sealed class AdbConnection : IDisposable
 {
-    private readonly IUsbDeviceSession _transport;
-    private readonly object _lock = new();
-    private readonly Dictionary<uint, AdbStream> _streams = new();
-    private readonly object _sendLock = new();
+    // Ordered auth identities; AUTH tokens are answered with each key in turn
+    // (AOSP NextKey semantics, see the constructor docs and HandleAuth).
+    // <para>有序认证身份列表；AUTH 令牌依次用每个密钥应答（AOSP NextKey 语义，
+    // 见构造函数文档与 HandleAuth）。</para>
+    private readonly IReadOnlyList<AdbAuthentication> _authentications;
+    private int _authKeyIndex;
+    private readonly Lock _lock = new();
+    private readonly Dictionary<uint, AdbStream> _streams = [];
+    private readonly Lock _sendLock = new();
     private readonly ManualResetEventSlim _peerReady = new(false);
     private uint _nextLocalId = 1;
     private bool _connected;
@@ -23,7 +28,7 @@ public sealed class AdbConnection : IDisposable
     /// Gets whether the connection is established.
     /// <para>获取连接是否已建立。</para>
     /// </summary>
-    public bool IsConnected { get { lock (_lock) return _connected; } }
+    public bool IsConnected { get { lock (_lock) { return _connected; } } }
 
     /// <summary>
     /// Gets the peer protocol version.
@@ -47,22 +52,48 @@ public sealed class AdbConnection : IDisposable
     /// Gets the features advertised by the peer.
     /// <para>获取对端宣告的特性。</para>
     /// </summary>
-    public IReadOnlyList<string> PeerFeatures { get; private set; } = Array.Empty<string>();
+    public IReadOnlyList<string> PeerFeatures { get; private set; } = [];
 
     /// <summary>
-    /// Gets the underlying USB transport.
-    /// <para>获取底层 USB 传输。</para>
+    /// Gets the underlying transport.
+    /// <para>获取底层传输。</para>
     /// </summary>
-    public IUsbDeviceSession Transport => _transport;
+    public ICommTransport Transport { get; }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AdbConnection"/> class.
-    /// <para>初始化 <see cref="AdbConnection"/> 类的新实例。</para>
+    /// Initializes a new instance of the <see cref="AdbConnection"/> class with a
+    /// single authentication identity.
+    /// <para>使用单个认证身份初始化 <see cref="AdbConnection"/> 类的新实例。</para>
     /// </summary>
-    /// <param name="transport">The USB transport session. USB 传输会话。</param>
-    public AdbConnection(IUsbDeviceSession transport)
+    /// <param name="transport">The device transport. 设备传输。</param>
+    /// <param name="authentication">The RSA authentication identity. RSA 认证身份。</param>
+    public AdbConnection(ICommTransport transport, AdbAuthentication authentication)
+        : this(transport, authentication is null ? Array.Empty<AdbAuthentication>() : [authentication])
     {
-        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AdbConnection"/> class with an
+    /// ordered list of authentication identities. On AUTH token challenges each
+    /// identity is tried in order (AOSP adb_auth_host.cpp NextKey semantics); when
+    /// the list is exhausted the client advertises its public key. The connection
+    /// OWNS the list and disposes every identity in <see cref="Dispose"/>; callers
+    /// must not dispose the identities themselves.
+    /// <para>使用有序认证身份列表初始化 <see cref="AdbConnection"/> 类的新实例。
+    /// AUTH 令牌挑战时按顺序尝试每个身份（AOSP adb_auth_host.cpp NextKey 语义）；
+    /// 列表耗尽后客户端宣告其公钥。连接拥有该列表并在 <see cref="Dispose"/> 中释放
+    /// 每个身份；调用方不得自行释放这些身份。</para>
+    /// </summary>
+    /// <param name="transport">The device transport. 设备传输。</param>
+    /// <param name="authentications">The ordered RSA authentication identities. 有序 RSA 认证身份列表。</param>
+    public AdbConnection(ICommTransport transport, IReadOnlyList<AdbAuthentication> authentications)
+    {
+        Transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        _authentications = authentications ?? throw new ArgumentNullException(nameof(authentications));
+        if (_authentications.Count == 0)
+        {
+            throw new ArgumentException("At least one authentication identity is required.", nameof(authentications));
+        }
     }
 
     /// <summary>
@@ -73,12 +104,20 @@ public sealed class AdbConnection : IDisposable
     {
         lock (_lock)
         {
-            if (_disposed) throw new ObjectDisposedException(nameof(AdbConnection));
-            if (_connected) return;
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(AdbConnection));
+            }
+
+            if (_connected)
+            {
+                return;
+            }
         }
 
         Send(AdbMessaging.BuildConnect());
         _connected = true;
+        _authKeyIndex = 0;
 
         _messageLoopThread = new Thread(MessageLoop) { IsBackground = true, Name = "ADB message loop" };
         _messageLoopThread.Start();
@@ -89,10 +128,7 @@ public sealed class AdbConnection : IDisposable
     /// <para>异步连接到 ADB 对端。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    public async Task ConnectAsync(CancellationToken cancellationToken = default)
-    {
-        await Task.Run(() => Connect(), cancellationToken).ConfigureAwait(false);
-    }
+    public async Task ConnectAsync(CancellationToken cancellationToken = default) => await Task.Run(Connect, cancellationToken).ConfigureAwait(false);
 
     /// <summary>
     /// Opens a stream to a service (e.g. "shell:v2:...", "sync:").
@@ -102,7 +138,11 @@ public sealed class AdbConnection : IDisposable
     /// <returns>An ADB stream. ADB 流。</returns>
     public AdbStream OpenStream(string service)
     {
-        if (service is null) throw new ArgumentNullException(nameof(service));
+        if (service is null)
+        {
+            throw new ArgumentNullException(nameof(service));
+        }
+
         EnsureConnected();
 
         uint localId;
@@ -137,10 +177,14 @@ public sealed class AdbConnection : IDisposable
         EnsureConnected();
 
         if (stream.RemoteId == 0)
+        {
             stream.WaitReady(5000);
+        }
 
         if (stream.RemoteId == 0)
+        {
             throw new InvalidOperationException("Stream was not acknowledged by the peer.");
+        }
 
         Send(AdbMessaging.BuildWrite(stream.LocalId, stream.RemoteId, data));
     }
@@ -166,11 +210,11 @@ public sealed class AdbConnection : IDisposable
         lock (_sendLock)
         {
             var header = AdbMessaging.SerializeHeader(message);
-            _transport.Write(header, header.Length, 5000);
+            Transport.Write(header, 0, header.Length, 5000);
 
             if (message.Payload is { Length: > 0 } payload)
             {
-                _transport.Write(payload, payload.Length, 5000);
+                Transport.Write(payload, 0, payload.Length, 5000);
             }
         }
     }
@@ -182,17 +226,21 @@ public sealed class AdbConnection : IDisposable
     private AdbMessage ReadMessage()
     {
         var header = ReadExact(AdbConstants.HeaderSize, 5000);
-        (AdbCommand command, uint arg0, uint arg1, uint payloadLength, uint payloadCrc) = AdbMessaging.ParseHeader(header);
+        (var command, var arg0, var arg1, var payloadLength, var payloadCrc) = AdbMessaging.ParseHeader(header);
 
         if (payloadLength > AdbConstants.MaxPayload)
+        {
             throw new InvalidDataException($"ADB payload length {payloadLength} exceeds the protocol maximum.");
+        }
 
         byte[]? payload = null;
         if (payloadLength > 0)
         {
             payload = ReadExact((int)payloadLength, 5000);
             if (payloadCrc != 0)
+            {
                 AdbMessaging.VerifyCrc(payload, payloadCrc);
+            }
         }
 
         return new AdbMessage(command, arg0, arg1, payload);
@@ -208,20 +256,68 @@ public sealed class AdbConnection : IDisposable
         {
             while (!_disposed)
             {
-                AdbMessage message = ReadMessage();
+                var message = ReadMessage();
                 switch (message.Command)
                 {
+                    case AdbCommand.Auth: HandleAuth(message); break;
                     case AdbCommand.Cnxn: HandleConnect(message); break;
                     case AdbCommand.Open: HandleOpen(message); break;
                     case AdbCommand.Okay: HandleOkay(message); break;
                     case AdbCommand.Wrte: HandleWrite(message); break;
                     case AdbCommand.Clse: HandleClose(message); break;
+                    case AdbCommand.Sync:
+                        break;
+                    default:
+                        break;
                 }
             }
         }
         catch (Exception ex)
         {
             FaultAllStreams(ex);
+        }
+    }
+
+    /// <summary>
+    /// Handles the AUTH handshake from the peer (TOKEN / SIGNATURE / RSAPUBLICKEY).
+    /// <para>处理来自对端的 AUTH 握手（TOKEN / SIGNATURE / RSAPUBLICKEY）。</para>
+    /// </summary>
+    /// <param name="message">The AUTH message. AUTH 消息。</param>
+    private void HandleAuth(AdbMessage message)
+    {
+        switch ((AdbAuthType)message.Arg0)
+        {
+            case AdbAuthType.Token:
+                // AOSP send_auth_response(): answer EACH token with the NEXT key's
+                // signature; when the key queue is exhausted, advertise the public key
+                // so the user can authorize it on the device.
+                // <para>AOSP send_auth_response()：对每个令牌以“下一个”密钥的签名
+                // 应答；密钥队列耗尽后宣告公钥，供用户在设备上授权。</para>
+                var token = message.Payload ?? [];
+                if (_authKeyIndex < _authentications.Count)
+                {
+                    var signature = _authentications[_authKeyIndex].SignToken(token);
+                    _authKeyIndex++;
+                    Send(AdbMessaging.BuildAuth(AdbAuthType.Signature, signature));
+                }
+                else
+                {
+                    var publicKey = _authentications[0].BuildPublicKeyPayload();
+                    Send(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, publicKey));
+                }
+                break;
+
+            case AdbAuthType.RsaPublicKey:
+                // The peer asked for an explicit (re)send of our public key.
+                // <para>对端要求显式（重）发我们的公钥。</para>
+                var explicitPublicKey = _authentications[0].BuildPublicKeyPayload();
+                Send(AdbMessaging.BuildAuth(AdbAuthType.RsaPublicKey, explicitPublicKey));
+                break;
+
+            case AdbAuthType.Signature:
+                break;
+            default:
+                break;
         }
     }
 
@@ -262,11 +358,16 @@ public sealed class AdbConnection : IDisposable
     /// <param name="message">The OKAY message. OKAY 消息。</param>
     private void HandleOkay(AdbMessage message)
     {
+        // Peer messages carry arg0 = peer's local id (our remote id), arg1 = our local id.
+        // <para>对端消息中 arg0 = 对端的本地 id（即我们的远端 id），arg1 = 我们的本地 id。</para>
+        AdbStream? stream;
         lock (_lock)
         {
-            if (_streams.TryGetValue(message.Arg0, out AdbStream? stream))
-                stream.SetRemoteId(message.Arg1);
+            _streams.TryGetValue(message.Arg1, out stream);
         }
+        // Set outside the lock: this signals _ready which may unblock waiting writers.
+        // <para>在锁外设置：该操作触发 _ready，可能唤醒等待的写入方。</para>
+        stream?.SetRemoteId(message.Arg0);
     }
 
     /// <summary>
@@ -276,10 +377,15 @@ public sealed class AdbConnection : IDisposable
     /// <param name="message">The WRTE message. WRTE 消息。</param>
     private void HandleWrite(AdbMessage message)
     {
+        // arg1 = our local id; acknowledge with OKAY so the peer's window does not stall.
+        // <para>arg1 = 我们的本地 id；回 OKAY 确认，避免对端窗口停滞。</para>
         lock (_lock)
         {
-            if (_streams.TryGetValue(message.Arg0, out AdbStream? stream))
-                stream.EnqueueData(message.Payload ?? Array.Empty<byte>());
+            if (_streams.TryGetValue(message.Arg1, out var stream))
+            {
+                stream.EnqueueData(message.Payload ?? []);
+                Send(AdbMessaging.BuildOkay(message.Arg1, message.Arg0));
+            }
         }
     }
 
@@ -290,14 +396,19 @@ public sealed class AdbConnection : IDisposable
     /// <param name="message">The CLSE message. CLSE 消息。</param>
     private void HandleClose(AdbMessage message)
     {
+        // Echo CLSE back so the peer tears down its side, then drop the stream.
+        // <para>回送 CLSE 使对端拆除其侧流，然后移除该流。</para>
+        AdbStream? stream;
         lock (_lock)
         {
-            if (_streams.TryGetValue(message.Arg0, out AdbStream? stream))
+            if (_streams.TryGetValue(message.Arg1, out stream))
             {
-                _streams.Remove(message.Arg0);
-                stream.MarkClosed();
+                _streams.Remove(message.Arg1);
             }
         }
+
+        stream?.MarkClosed();
+        Send(AdbMessaging.BuildClose(message.Arg1, message.Arg0));
     }
 
     /// <summary>
@@ -307,11 +418,17 @@ public sealed class AdbConnection : IDisposable
     /// <param name="ex">The exception. 异常。</param>
     private void FaultAllStreams(Exception ex)
     {
+        AdbStream[] streams;
         lock (_lock)
         {
-            foreach (AdbStream stream in _streams.Values)
-                stream.MarkFaulted(ex);
+            streams = [.. _streams.Values];
             _streams.Clear();
+            _connected = false;
+        }
+
+        foreach (var stream in streams)
+        {
+            stream.MarkFaulted(ex);
         }
     }
 
@@ -322,11 +439,16 @@ public sealed class AdbConnection : IDisposable
     /// <param name="banner">The peer banner string. 对端横幅字符串。</param>
     private static IReadOnlyList<string> ParseFeatures(string? banner)
     {
-        if (string.IsNullOrEmpty(banner)) return Array.Empty<string>();
+        if (string.IsNullOrEmpty(banner))
+        {
+            return [];
+        }
+
         var idx = banner.IndexOf("features=", StringComparison.Ordinal);
-        if (idx < 0) return Array.Empty<string>();
-        return banner.Substring(idx + "features=".Length).Trim()
-            .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+        return idx < 0
+            ? []
+            : banner[(idx + "features=".Length)..].Trim()
+            .Split([','], StringSplitOptions.RemoveEmptyEntries);
     }
 
     /// <summary>
@@ -341,8 +463,12 @@ public sealed class AdbConnection : IDisposable
         var totalRead = 0;
         while (totalRead < length)
         {
-            var n = _transport.ReadInto(buffer, totalRead, length - totalRead, timeoutMs);
-            if (n == 0) throw new TimeoutException("ADB read timeout");
+            var n = Transport.Read(buffer, totalRead, length - totalRead, timeoutMs);
+            if (n == 0)
+            {
+                throw new TimeoutException("ADB read timeout");
+            }
+
             totalRead += n;
         }
         return buffer;
@@ -354,7 +480,10 @@ public sealed class AdbConnection : IDisposable
     /// </summary>
     private void EnsureConnected()
     {
-        if (!_connected) throw new InvalidOperationException("Connection not established. Call Connect() first.");
+        if (!_connected)
+        {
+            throw new InvalidOperationException("Connection not established. Call Connect() first.");
+        }
     }
 
     /// <summary>
@@ -363,17 +492,30 @@ public sealed class AdbConnection : IDisposable
     /// </summary>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
         lock (_lock)
         {
-            foreach (AdbStream stream in _streams.Values)
+            _connected = false;
+            foreach (var stream in _streams.Values)
+            {
                 stream.MarkClosed();
+            }
+
             _streams.Clear();
         }
 
-        _transport.Dispose();
+        Transport.Dispose();
+        foreach (var auth in _authentications)
+        {
+            auth.Dispose();
+        }
         _peerReady.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

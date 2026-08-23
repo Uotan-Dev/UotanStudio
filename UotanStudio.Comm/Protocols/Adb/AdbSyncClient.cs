@@ -3,35 +3,27 @@ using System.Text;
 namespace UotanStudio.Comm.Protocols.Adb;
 
 /// <summary>Directory entry from sync STAT / LIST. sync STAT / LIST 返回的目录条目。</summary>
-public readonly struct SyncEntry
+/// <remarks>
+/// Initializes a new instance of the <see cref="SyncEntry"/> struct.
+/// <para>初始化 <see cref="SyncEntry"/> 结构的新实例。</para>
+/// </remarks>
+/// <param name="mode">The file mode bits (st_mode). 文件模式位。</param>
+/// <param name="size">The file size in bytes. 文件大小（字节）。</param>
+/// <param name="time">The modification time as Unix seconds. 修改时间（Unix 秒）。</param>
+/// <param name="name">The entry name. 条目名称。</param>
+public readonly struct SyncEntry(uint mode, uint size, uint time, string name)
 {
     /// <summary>Gets the entry mode bits (st_mode). 模式位。</summary>
-    public uint Mode { get; }
+    public uint Mode { get; } = mode;
 
     /// <summary>Gets the entry size in bytes. 字节大小。</summary>
-    public uint Size { get; }
+    public uint Size { get; } = size;
 
     /// <summary>Gets the modification time as Unix seconds. 修改时间（Unix 秒）。</summary>
-    public uint Time { get; }
+    public uint Time { get; } = time;
 
     /// <summary>Gets the entry name. 条目名称。</summary>
-    public string Name { get; }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SyncEntry"/> struct.
-    /// <para>初始化 <see cref="SyncEntry"/> 结构的新实例。</para>
-    /// </summary>
-    /// <param name="mode">The file mode bits (st_mode). 文件模式位。</param>
-    /// <param name="size">The file size in bytes. 文件大小（字节）。</param>
-    /// <param name="time">The modification time as Unix seconds. 修改时间（Unix 秒）。</param>
-    /// <param name="name">The entry name. 条目名称。</param>
-    public SyncEntry(uint mode, uint size, uint time, string name)
-    {
-        Mode = mode;
-        Size = size;
-        Time = time;
-        Name = name;
-    }
+    public string Name { get; } = name;
 }
 
 /// <summary>
@@ -40,26 +32,20 @@ public readonly struct SyncEntry
 /// Speaks the v1 wire format, which adbd accepts even when sendrecv_v2 is negotiated.
 /// <para>ADB sync 服务客户端，实现文件传输（SEND / RECV / STAT / LIST）。</para>
 /// </summary>
-public sealed class AdbSyncClient : IDisposable
+/// <remarks>
+/// Initializes a new sync client.
+/// <para>初始化新的 sync 客户端。</para>
+/// </remarks>
+public sealed class AdbSyncClient(AdbConnection connection, uint maxChunk = AdbSyncClient.DefaultMaxChunk) : IDisposable
 {
     private const int V1HeaderSize = 8;      // id(4) + length(4)
     private const uint DefaultMaxChunk = 64 * 1024;
 
-    private readonly AdbConnection _connection;
-    private readonly uint _maxChunk;
+    private readonly AdbConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+    private readonly uint _maxChunk = maxChunk;
     private readonly Queue<byte> _readBuffer = new();
     private AdbStream? _stream;
     private bool _disposed;
-
-    /// <summary>
-    /// Initializes a new sync client.
-    /// <para>初始化新的 sync 客户端。</para>
-    /// </summary>
-    public AdbSyncClient(AdbConnection connection, uint maxChunk = DefaultMaxChunk)
-    {
-        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-        _maxChunk = maxChunk;
-    }
 
     /// <summary>
     /// Ensures the sync stream is open, opening it if needed.
@@ -67,8 +53,8 @@ public sealed class AdbSyncClient : IDisposable
     /// </summary>
     private AdbStream EnsureStream()
     {
-        if (_stream is null)
-            _stream = _connection.OpenStream("sync:");
+        _stream ??= _connection.OpenStream("sync:");
+
         return _stream;
     }
 
@@ -78,8 +64,12 @@ public sealed class AdbSyncClient : IDisposable
     /// </summary>
     public SyncEntry? Stat(string remotePath)
     {
-        if (remotePath is null) throw new ArgumentNullException(nameof(remotePath));
-        AdbStream stream = EnsureStream();
+        if (remotePath is null)
+        {
+            throw new ArgumentNullException(nameof(remotePath));
+        }
+
+        var stream = EnsureStream();
 
         var request = BuildV1Packet(SyncIds.Stat, Encoding.UTF8.GetBytes(remotePath));
         stream.Write(request);
@@ -93,7 +83,9 @@ public sealed class AdbSyncClient : IDisposable
         }
 
         if (id != SyncIds.Stat)
+        {
             throw new InvalidDataException($"Unexpected sync response id '{id}' to STAT.");
+        }
 
         var body = ReadExact(stream, 12); // mode + size + mtime
         var mode = BitConverter.ToUInt32(body, 0);
@@ -109,8 +101,12 @@ public sealed class AdbSyncClient : IDisposable
     /// </summary>
     public IReadOnlyList<SyncEntry> List(string remotePath)
     {
-        if (remotePath is null) throw new ArgumentNullException(nameof(remotePath));
-        AdbStream stream = EnsureStream();
+        if (remotePath is null)
+        {
+            throw new ArgumentNullException(nameof(remotePath));
+        }
+
+        var stream = EnsureStream();
 
         var request = BuildV1Packet(SyncIds.List, Encoding.UTF8.GetBytes(remotePath));
         stream.Write(request);
@@ -135,7 +131,9 @@ public sealed class AdbSyncClient : IDisposable
             }
 
             if (id != SyncIds.Dent)
+            {
                 throw new InvalidDataException($"Unexpected sync response id '{id}' to LIST.");
+            }
 
             var body = ReadExact(stream, 16); // mode + size + mtime + namelen
             var mode = BitConverter.ToUInt32(body, 0);
@@ -155,10 +153,17 @@ public sealed class AdbSyncClient : IDisposable
     /// </summary>
     public void Push(string localPath, string remotePath, uint mode = 0x81A4, uint mtime = 0)
     {
-        if (localPath is null) throw new ArgumentNullException(nameof(localPath));
-        if (remotePath is null) throw new ArgumentNullException(nameof(remotePath));
+        if (localPath is null)
+        {
+            throw new ArgumentNullException(nameof(localPath));
+        }
 
-        using FileStream fs = File.OpenRead(localPath);
+        if (remotePath is null)
+        {
+            throw new ArgumentNullException(nameof(remotePath));
+        }
+
+        using var fs = File.OpenRead(localPath);
         PushStream(fs, remotePath, mode, mtime);
     }
 
@@ -168,12 +173,21 @@ public sealed class AdbSyncClient : IDisposable
     /// </summary>
     public void PushStream(Stream source, string remotePath, uint mode = 0x81A4, uint mtime = 0)
     {
-        if (source is null) throw new ArgumentNullException(nameof(source));
-        if (remotePath is null) throw new ArgumentNullException(nameof(remotePath));
+        if (source is null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
 
-        AdbStream stream = EnsureStream();
+        if (remotePath is null)
+        {
+            throw new ArgumentNullException(nameof(remotePath));
+        }
+
+        var stream = EnsureStream();
         if (mtime == 0)
+        {
             mtime = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
 
         var sendTarget = $"{remotePath},0{Convert.ToString(mode, 8)}";
         var sendRequest = BuildV1Packet(SyncIds.Send, Encoding.UTF8.GetBytes(sendTarget));
@@ -183,7 +197,10 @@ public sealed class AdbSyncClient : IDisposable
         while (true)
         {
             var read = source.Read(buffer, 0, buffer.Length);
-            if (read <= 0) break;
+            if (read <= 0)
+            {
+                break;
+            }
 
             var chunk = new byte[read];
             Buffer.BlockCopy(buffer, 0, chunk, 0, read);
@@ -205,20 +222,34 @@ public sealed class AdbSyncClient : IDisposable
     /// </summary>
     public void Pull(string remotePath, string localPath)
     {
-        if (remotePath is null) throw new ArgumentNullException(nameof(remotePath));
-        if (localPath is null) throw new ArgumentNullException(nameof(localPath));
+        if (remotePath is null)
+        {
+            throw new ArgumentNullException(nameof(remotePath));
+        }
 
-        using FileStream fs = File.Create(localPath);
+        if (localPath is null)
+        {
+            throw new ArgumentNullException(nameof(localPath));
+        }
+
+        using var fs = File.Create(localPath);
         PullStream(remotePath, fs);
     }
 
     /// <summary>Pulls a remote file into a stream. 将远端文件拉取到流中。</summary>
     public void PullStream(string remotePath, Stream destination)
     {
-        if (remotePath is null) throw new ArgumentNullException(nameof(remotePath));
-        if (destination is null) throw new ArgumentNullException(nameof(destination));
+        if (remotePath is null)
+        {
+            throw new ArgumentNullException(nameof(remotePath));
+        }
 
-        AdbStream stream = EnsureStream();
+        if (destination is null)
+        {
+            throw new ArgumentNullException(nameof(destination));
+        }
+
+        var stream = EnsureStream();
         var request = BuildV1Packet(SyncIds.Recv, Encoding.UTF8.GetBytes(remotePath));
         stream.Write(request);
 
@@ -228,7 +259,10 @@ public sealed class AdbSyncClient : IDisposable
             var id = Encoding.ASCII.GetString(header, 0, 4);
             var length = BitConverter.ToUInt32(header, 4);
 
-            if (id == SyncIds.Done) break;
+            if (id == SyncIds.Done)
+            {
+                break;
+            }
 
             if (id == SyncIds.Fail)
             {
@@ -250,17 +284,21 @@ public sealed class AdbSyncClient : IDisposable
     /// <summary>Closes the sync service stream. 关闭 sync 服务流。</summary>
     public void Close()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
 
-        AdbStream? stream = _stream;
+        var stream = _stream;
         _stream = null;
 
         if (stream is not null && !stream.IsClosed)
         {
             try
             {
-                var quit = BuildV1Packet(SyncIds.Quit, Array.Empty<byte>());
+                var quit = BuildV1Packet(SyncIds.Quit, []);
                 stream.Write(quit);
             }
             catch { }
@@ -280,13 +318,16 @@ public sealed class AdbSyncClient : IDisposable
     /// </summary>
     /// <param name="stream">The sync stream. Sync 流。</param>
     /// <param name="operation">The operation name for error messages. 用于错误消息的操作名称。</param>
-    private void ExpectResponse(global::UotanStudio.Comm.Protocols.Adb.AdbStream stream, string operation)
+    private void ExpectResponse(AdbStream stream, string operation)
     {
         var header = ReadExact(stream, V1HeaderSize);
         var id = Encoding.ASCII.GetString(header, 0, 4);
         var length = BitConverter.ToUInt32(header, 4);
 
-        if (id == SyncIds.Okay) return;
+        if (id == SyncIds.Okay)
+        {
+            return;
+        }
 
         if (id == SyncIds.Fail)
         {
@@ -302,7 +343,7 @@ public sealed class AdbSyncClient : IDisposable
     /// <para>从 sync 流读取 32 位无符号整数。</para>
     /// </summary>
     /// <param name="stream">The sync stream. Sync 流。</param>
-    private uint ReadUInt32(global::UotanStudio.Comm.Protocols.Adb.AdbStream stream) =>
+    private uint ReadUInt32(AdbStream stream) =>
         BitConverter.ToUInt32(ReadExact(stream, 4), 0);
 
     /// <summary>
@@ -328,10 +369,12 @@ public sealed class AdbSyncClient : IDisposable
     /// </summary>
     /// <param name="stream">The sync stream. Sync 流。</param>
     /// <param name="length">The number of bytes to read. 要读取的字节数。</param>
-    private byte[] ReadExact(global::UotanStudio.Comm.Protocols.Adb.AdbStream stream, int length)
+    private byte[] ReadExact(AdbStream stream, int length)
     {
         if (length < 0)
+        {
             throw new InvalidDataException("Negative sync length.");
+        }
 
         var result = new byte[length];
         var offset = 0;
@@ -343,10 +386,7 @@ public sealed class AdbSyncClient : IDisposable
 
         while (offset < length)
         {
-            var chunk = stream.Read();
-            if (chunk is null)
-                throw new EndOfStreamException("Sync stream closed unexpectedly.");
-
+            var chunk = stream.Read() ?? throw new EndOfStreamException("Sync stream closed unexpectedly.");
             var needed = length - offset;
             if (chunk.Length <= needed)
             {
