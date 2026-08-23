@@ -57,10 +57,18 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     /// <summary>
     /// Gets capability summaries for the currently registered USB APIs.
     /// <para>获取当前已注册 USB API 的能力摘要。</para>
+    /// Lists every backend supported on the current platform (mirrors
+    /// <see cref="GetAvailableApis"/>), independent of the <see cref="UsbApiKind.Auto"/>
+    /// resolution — Auto affects enumeration/session/monitor paths only.
+    /// <para>列出当前平台支持的每个后端（与 <see cref="GetAvailableApis"/> 一致），
+    /// 与 <see cref="UsbApiKind.Auto"/> 的解析无关——Auto 只影响枚举/会话/监视路径。</para>
     /// </summary>
     /// <returns>A read-only list of capability summaries. <para>能力摘要只读列表。</para></returns>
     public IReadOnlyList<UsbApiCapabilities> GetAvailableApiCapabilities()
-        => [.. ResolveProviders(UsbApiKind.Auto).Select(CreateCapabilities)];
+        => [.. _registry.GetApiNames()
+            .Select(name => _registry.TryCreate(name, out var provider) ? provider : null)
+            .Where(static provider => provider is { IsSupportedOnCurrentPlatform: true })
+            .Select(static provider => provider!.GetCapabilities())];
 
     /// <summary>
     /// Enumerates devices for the selected backend.
@@ -185,6 +193,18 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(onChanged);
+
+        // Auto 按平台配置表解析为单一默认后端，使插拔监视与枚举使用同一后端：
+        // Windows → WM_DEVICECHANGE（winusb 原生），Linux/macOS → libusb hotplug。
+        // 未知平台保持 Auto，落入下方轮询监视器。
+        // Auto resolves to a single default backend per the platform table so the
+        // hotplug monitor matches the enumeration backend: WM_DEVICECHANGE (winusb
+        // native) on Windows, libusb hotplug on Linux/macOS. Unknown platforms keep
+        // Auto and fall through to the polling monitor below.
+        if (apiKind == UsbApiKind.Auto)
+        {
+            apiKind = PreferredAutoApiKind();
+        }
 
         var interval = pollInterval ?? TimeSpan.FromSeconds(1);
         if (interval <= TimeSpan.Zero)
@@ -498,7 +518,22 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         // 比较，而无约束打开会绑定复合设备第一个 bulk 接口（FF|FF|00），永远不等于所请求的键。</para>
         var keyFilter = UsbDeviceIdentity.TryParseKeyFilter(deviceKey);
 
+        // Auto 下按 key 内嵌的后端名(首段,如 "native"/"libusb")解析,使此前多后端
+        // 枚举产生的 key 仍可重开,而不是被 Auto 的单一默认后端(WinUSB)拒绝匹配。
+        // Under Auto, resolve by the backend name embedded in the key (first segment,
+        // e.g. "native"/"libusb") so keys produced by earlier multi-backend enumeration
+        // still reopen instead of being rejected by Auto's single default backend.
         var providers = ResolveProviders(apiKind);
+        if (apiKind == UsbApiKind.Auto)
+        {
+            var keyBackend = deviceKey.Split('|')[0];
+            if (!string.IsNullOrEmpty(keyBackend) &&
+                _registry.TryCreate(keyBackend, out var keyProvider) &&
+                keyProvider is { IsSupportedOnCurrentPlatform: true })
+            {
+                providers = [keyProvider];
+            }
+        }
 
         foreach (var provider in providers)
         {
@@ -546,7 +581,24 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
     {
         if (apiKind == UsbApiKind.Auto)
         {
-            return _registry.CreateAll();
+            // Auto 按平台配置表解析为单一默认后端：Windows 走 winusb 原生，
+            // Linux/macOS 走 libusb。首选后端不可用（例如缺少 libusb 原生运行时）
+            // 时，回退到当前平台第一个可用后端，保证设备发现始终可用。
+            // Auto resolves to a single default backend per the platform table:
+            // winusb-native on Windows, libusb on Linux/macOS. When the preferred
+            // backend is unavailable (e.g. missing libusb native runtime), fall back
+            // to the first backend supported on the current platform so device
+            // discovery always works.
+            var preferredName = PreferredAutoApiName();
+            return preferredName is not null &&
+                _registry.TryCreate(preferredName, out var preferred) &&
+                preferred is { IsSupportedOnCurrentPlatform: true }
+                ? [preferred]
+                : [.. _registry.GetApiNames()
+                .Select(name => _registry.TryCreate(name, out var provider) ? provider : null)
+                .Where(static provider => provider is { IsSupportedOnCurrentPlatform: true })
+                .Cast<IUsbApiProvider>()
+                .Take(1)];
         }
 
         var apiName = apiKind switch
@@ -554,6 +606,8 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
             UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
             UsbApiKind.HarmonyOS => HarmonyOSUsbApiProvider.ApiNameConst,
+            UsbApiKind.Auto => throw new NotImplementedException(),
+            UsbApiKind.Custom => throw new NotImplementedException(),
             _ => string.Empty
         };
 
@@ -562,7 +616,39 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             : _registry.TryCreate(apiName, out var provider) && provider != null ? [provider] : [];
     }
 
-    private static UsbApiCapabilities CreateCapabilities(IUsbApiProvider provider) => provider.GetCapabilities();
+    /// <summary>
+    /// Returns the default backend that <see cref="UsbApiKind.Auto"/> resolves to on the
+    /// current platform (Windows → winusb native; Linux/macOS → libusb). Unknown platforms
+    /// keep <see cref="UsbApiKind.Auto"/>, which selects the polling monitor.
+    /// <para>返回 <see cref="UsbApiKind.Auto"/> 在当前平台上解析到的默认后端
+    /// （Windows → winusb 原生；Linux/macOS → libusb）。未知平台保持
+    /// <see cref="UsbApiKind.Auto"/>，落入轮询监视器。</para>
+    /// </summary>
+    private static UsbApiKind PreferredAutoApiKind()
+    {
+        return RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? UsbApiKind.Native
+            : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
+            RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+            ? UsbApiKind.LibUsbDotNet
+            : UsbApiKind.Auto;
+    }
+
+    /// <summary>
+    /// Returns the default backend name that <see cref="UsbApiKind.Auto"/> resolves to
+    /// on the current platform (Windows → winusb native; Linux/macOS → libusb).
+    /// <para>返回 <see cref="UsbApiKind.Auto"/> 在当前平台上解析到的默认后端名称
+    /// （Windows → winusb 原生；Linux/macOS → libusb）。</para>
+    /// </summary>
+    private static string? PreferredAutoApiName() => PreferredAutoApiKind() switch
+    {
+        UsbApiKind.Native => NativeUsbApiProvider.ApiNameConst,
+        UsbApiKind.LibUsbDotNet => LibUsbApiProvider.ApiNameConst,
+        UsbApiKind.Auto => throw new NotImplementedException(),
+        UsbApiKind.Custom => throw new NotImplementedException(),
+        UsbApiKind.HarmonyOS => throw new NotImplementedException(),
+        _ => null
+    };
 
     /// <summary>
     /// Returns a compact diagnostic summary of the last enumeration on the current platform,

@@ -458,6 +458,7 @@ public sealed partial class LogEntryViewModel(string timestamp, LogLevel level, 
         LogLevel.Warn => WarnBrush,
         LogLevel.Error => ErrorBrush,
         LogLevel.Fatal => FatalBrush,
-        _ => InfoBrush,
+        LogLevel.Info => InfoBrush,
+        _ => throw new NotImplementedException(),
     };
 }

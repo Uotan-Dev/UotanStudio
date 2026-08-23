@@ -151,7 +151,7 @@ internal partial class LibUsbDevice : UsbDevice
         {
             _usbDevice.Open();
         }
-        catch
+        catch (Exception ex)
         {
             // Open() failed (e.g. the interface is claimed by another session or process).
             // Never Close() a device that was never opened: LibUsbDotNet's Close() on an
@@ -162,6 +162,8 @@ internal partial class LibUsbDevice : UsbDevice
             // 调用 Close()：LibUsbDotNet 对未打开设备调用 Close() 会破坏原生引用计数，
             // 设备终结器随后在 UnrefDevice 处以 0xC0000005 崩溃。对克隆调用 Dispose()
             // （释放 SafeHandle），并仅释放上下文。</para>
+            UsbTrace.LogErrorFormatted(
+                $"LibUsbDevice.CreateHandle open failed: {ex.GetType().Name}: {ex.Message}");
             (_usbDevice as IDisposable)?.Dispose();
             _usbDevice = null;
             Dispose();
@@ -395,8 +397,22 @@ internal partial class LibUsbDevice : UsbDevice
     {
         if (_usbDevice != null)
         {
-            SerialNumber = _usbDevice.Info.SerialNumber;
-            return 0;
+            try
+            {
+                SerialNumber = _usbDevice.Info.SerialNumber;
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                // Info.SerialNumber reads the string descriptor; a device without a
+                // serial or with a stalled control pipe throws UsbException. Expose the
+                // reason to the global log instead of silently swallowing it.
+                // <para>Info.SerialNumber 会读取字符串描述符；无序列号的设备或控制
+                // 管道停滞的设备会抛出 UsbException。将原因写入全局日志而非静默吞掉。</para>
+                UsbTrace.LogErrorFormatted(
+                    $"LibUsbDevice.GetSerialNumber failed: {ex.GetType().Name}: {ex.Message}");
+                return -1;
+            }
         }
         return -1;
     }

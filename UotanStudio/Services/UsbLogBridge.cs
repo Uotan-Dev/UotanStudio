@@ -1,3 +1,4 @@
+using System;
 using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Services;
@@ -17,8 +18,13 @@ namespace UotanStudio.Services;
 public sealed class UsbLogBridge : IUsbLogger
 {
     /// <summary>
-    /// <para>将诊断消息以 Trace 级别写入统一日志服务。</para>
-    /// Writes a diagnostic message into the unified log service at Trace level.
+    /// <para>将诊断消息以 Trace 级别写入统一日志服务；<c>[ERROR]</c> 前缀的错误消息
+    /// （来自 <see cref="UsbTrace.LogError"/> / <see cref="UsbTrace.LogErrorFormatted"/>）
+    /// 以 Error 级别写入，确保异常原因在全局日志中醒目可见。</para>
+    /// Writes a diagnostic message into the unified log service at Trace level; error
+    /// messages prefixed with <c>[ERROR]</c> (from <see cref="UsbTrace.LogError"/> /
+    /// <see cref="UsbTrace.LogErrorFormatted"/>) are written at Error level so exception
+    /// reasons stand out in the global log.
     /// </summary>
     /// <param name="message">The diagnostic message. <para>诊断日志消息内容。</para></param>
     public void Log(string message)
@@ -28,7 +34,10 @@ public sealed class UsbLogBridge : IUsbLogger
             return;
         }
 
-        LogService.Instance.Write(LogLevel.Trace, "USB", message);
+        var level = message.StartsWith("[ERROR]", StringComparison.Ordinal)
+            ? LogLevel.Error
+            : LogLevel.Trace;
+        LogService.Instance.Write(level, "USB", message);
     }
 
     /// <summary>

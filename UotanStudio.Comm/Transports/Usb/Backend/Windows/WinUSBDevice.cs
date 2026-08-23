@@ -882,7 +882,7 @@ internal class WinUSBDevice : UsbDevice
                     // mutable List<T> per interface and attach it to the interface directly.
                     // <para>Endpoints 声明为 IReadOnlyList&lt;T&gt;，集合表达式（[]）会生成
                     // 无法追加的数组；这里为每个接口维护可变 List&lt;T&gt; 并直接挂到接口上。</para>
-                    currentEndpoints = new List<UsbEndpointInfo>();
+                    currentEndpoints = [];
                     currentInterface = new UsbInterfaceInfo
                     {
                         InterfaceNumber = Marshal.ReadByte(buffer, pos + 2),
@@ -894,16 +894,13 @@ internal class WinUSBDevice : UsbDevice
                     break;
 
                 case 5: // USB_ENDPOINT_DESCRIPTOR_TYPE
-                    if (currentEndpoints != null)
-                    {
-                        currentEndpoints.Add(new UsbEndpointInfo
+                    currentEndpoints?.Add(new UsbEndpointInfo
                         {
                             EndpointAddress = Marshal.ReadByte(buffer, pos + 2),
                             Attributes = Marshal.ReadByte(buffer, pos + 3),
                             MaxPacketSize = (ushort)(Marshal.ReadByte(buffer, pos + 4) | (Marshal.ReadByte(buffer, pos + 5) << 8)),
                             Interval = Marshal.ReadByte(buffer, pos + 6)
                         });
-                    }
                     break;
                 default:
                     break;

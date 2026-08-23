@@ -82,6 +82,39 @@ public static class UsbTrace
     }
 
     /// <summary>
+    /// Writes an error message regardless of the <see cref="IsEnabled"/> switch, so that
+    /// exception reasons (e.g. LibUsbDotNet UsbException) reach the global log even when
+    /// verbose USB diagnostics are turned off.
+    /// <para>无论 <see cref="IsEnabled"/> 开关如何都写入错误消息，使异常原因
+    /// （例如 LibUsbDotNet 的 UsbException）即使在详细 USB 诊断关闭时也能进入全局日志。</para>
+    /// </summary>
+    /// <param name="message">The error message. <para>错误消息。</para></param>
+    public static void LogError(string message)
+    {
+        if (string.IsNullOrEmpty(message))
+        {
+            return;
+        }
+
+        Logger.Log($"[ERROR] {message}");
+    }
+
+    /// <summary>
+    /// Writes an interpolated error message regardless of the <see cref="IsEnabled"/> switch.
+    /// <para>无论 <see cref="IsEnabled"/> 开关如何都写入插值错误消息。</para>
+    /// </summary>
+    /// <param name="message">The interpolated error message. <para>插值错误消息。</para></param>
+    public static void LogErrorFormatted(FormattableString message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+
+        Logger.Log($"[ERROR] {message}");
+    }
+
+    /// <summary>
     /// Emits a structured transfer event.
     /// <para>发送结构化传输事件。</para>
     /// </summary>

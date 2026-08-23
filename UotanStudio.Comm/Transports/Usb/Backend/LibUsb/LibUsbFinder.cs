@@ -365,6 +365,7 @@ internal static partial class LibUsbFinder
             Speed.Full => UsbDeviceSpeed.Full,
             Speed.High => UsbDeviceSpeed.High,
             Speed.Super => UsbDeviceSpeed.Super,
+            Speed.Unknown => throw new NotImplementedException(),
             _ => UsbDeviceSpeed.Unknown
         };
     }
