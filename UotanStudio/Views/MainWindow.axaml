@@ -44,21 +44,6 @@
                     <MenuItem Header="{DynamicResource Menu_Settings}"
                               Click="OnSettingsClick" />
                 </MenuItem>
-                <!-- 视图菜单 -->
-                <MenuItem Padding="8 0">
-                    <MenuItem.Header>
-                        <TextBlock Text="{DynamicResource Menu_View}" FontSize="13" FontWeight="SemiBold" />
-                    </MenuItem.Header>
-                    <MenuItem Header="{DynamicResource Menu_ThemeFollowSystem}" ToggleType="Radio"
-                              GroupName="Theme" IsChecked="True"
-                              Click="OnThemeFollowSystemClick" />
-                    <MenuItem Header="{DynamicResource Menu_ThemeLight}" ToggleType="Radio"
-                              GroupName="Theme"
-                              Click="OnThemeLightClick" />
-                    <MenuItem Header="{DynamicResource Menu_ThemeDark}" ToggleType="Radio"
-                              GroupName="Theme"
-                              Click="OnThemeDarkClick" />
-                </MenuItem>
                 <!-- 关于菜单 -->
                 <MenuItem Padding="8 0">
                     <MenuItem.Header>

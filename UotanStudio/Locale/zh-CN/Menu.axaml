@@ -3,7 +3,6 @@
 
     <x:String x:Key="Menu_Project">项目</x:String>
     <x:String x:Key="Menu_Tools">工具</x:String>
-    <x:String x:Key="Menu_View">视图</x:String>
     <x:String x:Key="Menu_About">关于</x:String>
     <x:String x:Key="Menu_New">新建项目</x:String>
     <x:String x:Key="Menu_Open">打开项目...</x:String>
@@ -13,8 +12,5 @@
     <x:String x:Key="Menu_ReloadLanguagePacks">重新加载语言包</x:String>
     <x:String x:Key="Menu_ClearCanvas">清空画布</x:String>
     <x:String x:Key="Menu_Settings">设置</x:String>
-    <x:String x:Key="Menu_ThemeFollowSystem">跟随系统主题</x:String>
-    <x:String x:Key="Menu_ThemeLight">浅色主题</x:String>
-    <x:String x:Key="Menu_ThemeDark">深色主题</x:String>
 
 </ResourceDictionary>

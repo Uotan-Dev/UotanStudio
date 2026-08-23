@@ -3,7 +3,6 @@
 
     <x:String x:Key="Menu_Project">Project</x:String>
     <x:String x:Key="Menu_Tools">Tools</x:String>
-    <x:String x:Key="Menu_View">View</x:String>
     <x:String x:Key="Menu_About">About</x:String>
     <x:String x:Key="Menu_New">New Project</x:String>
     <x:String x:Key="Menu_Open">Open Project...</x:String>
@@ -13,8 +12,5 @@
     <x:String x:Key="Menu_ReloadLanguagePacks">Reload Language Packs</x:String>
     <x:String x:Key="Menu_ClearCanvas">Clear Canvas</x:String>
     <x:String x:Key="Menu_Settings">Settings</x:String>
-    <x:String x:Key="Menu_ThemeFollowSystem">Follow System Theme</x:String>
-    <x:String x:Key="Menu_ThemeLight">Light Theme</x:String>
-    <x:String x:Key="Menu_ThemeDark">Dark Theme</x:String>
 
 </ResourceDictionary>

@@ -52,30 +52,6 @@
                                          GroupName="ThemeGroup"
                                          IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
                         </StackPanel>
-
-                        <TextBlock Text="{DynamicResource Settings_ThemePreview}" FontSize="12" Opacity="0.7" Margin="0,10,0,0" />
-                        <Border CornerRadius="8" Padding="16" Height="74"
-                                Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1" Margin="0,4,0,0">
-                            <Grid VerticalAlignment="Center">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Aa" FontSize="24" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                <Border Grid.Column="2" CornerRadius="4" Padding="16,6"
-                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                        BorderThickness="1"
-                                        VerticalAlignment="Center">
-                                    <TextBlock Text="Button" FontSize="12"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                </Border>
-                            </Grid>
-                        </Border>
                     </StackPanel>
                 </Border>
 

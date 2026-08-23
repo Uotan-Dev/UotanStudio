@@ -5,7 +5,6 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
-using UotanStudio.Models;
 using UotanStudio.Services;
 
 namespace UotanStudio.Views;
@@ -64,27 +63,6 @@ public partial class MainWindow : Window
         // 导航到节点编辑器标签页（索引 2），由 MainView 中的接收器触发 ClearAllCommand
         WeakReferenceMessenger.Default.Send(new NavigateTabMessage(2));
         WeakReferenceMessenger.Default.Send(new ClearCanvasMessage());
-    }
-
-    /// <summary>切换到跟随系统主题。</summary>
-    private void OnThemeFollowSystemClick(object? sender, RoutedEventArgs e)
-    {
-        Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Default;
-        WeakReferenceMessenger.Default.Send(new MenuThemeChangedMessage(ThemeMode.System));
-    }
-
-    /// <summary>切换到浅色主题。</summary>
-    private void OnThemeLightClick(object? sender, RoutedEventArgs e)
-    {
-        Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Light;
-        WeakReferenceMessenger.Default.Send(new MenuThemeChangedMessage(ThemeMode.Light));
-    }
-
-    /// <summary>切换到深色主题。</summary>
-    private void OnThemeDarkClick(object? sender, RoutedEventArgs e)
-    {
-        Application.Current!.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
-        WeakReferenceMessenger.Default.Send(new MenuThemeChangedMessage(ThemeMode.Dark));
     }
 
     /// <summary>退出应用程序。</summary>

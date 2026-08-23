@@ -24,7 +24,6 @@
     <x:String x:Key="Settings_ConnLine">直线</x:String>
     <x:String x:Key="Settings_ConnStep">阶梯线</x:String>
     <x:String x:Key="Settings_Appearance">外观设置</x:String>
-    <x:String x:Key="Settings_ThemePreview">主题预览</x:String>
     <x:String x:Key="Settings_LanguageAutoDetect">自动检测</x:String>
     <x:String x:Key="Settings_LanguagePreview">语言预览</x:String>
     <x:String x:Key="Settings_LanguagePreviewText">这是所选语言的预览文本。</x:String>

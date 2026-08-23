@@ -24,7 +24,6 @@
     <x:String x:Key="Settings_ConnLine">Line</x:String>
     <x:String x:Key="Settings_ConnStep">Step</x:String>
     <x:String x:Key="Settings_Appearance">Appearance</x:String>
-    <x:String x:Key="Settings_ThemePreview">Theme Preview</x:String>
     <x:String x:Key="Settings_LanguageAutoDetect">Auto Detect</x:String>
     <x:String x:Key="Settings_LanguagePreview">Language Preview</x:String>
     <x:String x:Key="Settings_LanguagePreviewText">This is a preview of the selected language.</x:String>
