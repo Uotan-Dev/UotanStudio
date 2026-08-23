@@ -1,10 +1,9 @@
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using NodifyM.Avalonia.Controls;
-using System.Collections;
-using System.Collections.Generic;
-using System.Linq;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -38,7 +37,7 @@ public partial class NodeEditorView : UserControl
         {
             if (DataContext is NodeEditorViewModel vm)
             {
-                FlowNodeViewModel node = item.CreateNode();
+                var node = item.CreateNode();
                 vm.AddNode(node);
             }
         }
@@ -55,17 +54,28 @@ public partial class NodeEditorView : UserControl
     /// </remarks>
     private void OnViewKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Delete) return;
-        if (DataContext is not NodeEditorViewModel vm) return;
-        if (this.FindControl<NodifyEditor>("Editor") is not { } editor) return;
+        if (e.Key != Key.Delete)
+        {
+            return;
+        }
+
+        if (DataContext is not NodeEditorViewModel vm)
+        {
+            return;
+        }
+
+        if (this.FindControl<NodifyEditor>("Editor") is not { } editor)
+        {
+            return;
+        }
 
         var removed = false;
 
-        IList? selectedItems = editor.SelectedItems;
-        List<FlowNodeViewModel> selectedNodes = selectedItems is null
-            ? new List<FlowNodeViewModel>()
+        var selectedItems = editor.SelectedItems;
+        var selectedNodes = selectedItems is null
+            ? []
             : selectedItems.OfType<FlowNodeViewModel>().ToList();
-        foreach (FlowNodeViewModel node in selectedNodes)
+        foreach (var node in selectedNodes)
         {
             vm.RemoveNode(node);
             removed = true;
@@ -75,14 +85,17 @@ public partial class NodeEditorView : UserControl
         if (editor.Selection?.SelectedItems is IEnumerable<object> selConns)
         {
             var selectedConnections = selConns.OfType<NodeConnectionViewModel>().ToList();
-            foreach (NodeConnectionViewModel? conn in selectedConnections)
+            foreach (var conn in selectedConnections)
             {
                 vm.RemoveConnection(conn);
                 removed = true;
             }
         }
 
-        if (removed) e.Handled = true;
+        if (removed)
+        {
+            e.Handled = true;
+        }
     }
 
     /// <summary>
@@ -95,12 +108,19 @@ public partial class NodeEditorView : UserControl
     /// </remarks>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
     {
-        if (DataContext is not NodeEditorViewModel vm) return;
-        if (this.FindControl<NodifyEditor>("Editor") is not { } editor) return;
+        if (DataContext is not NodeEditorViewModel vm)
+        {
+            return;
+        }
+
+        if (this.FindControl<NodifyEditor>("Editor") is not { } editor)
+        {
+            return;
+        }
 
         // 命中测试：沿可视树从事件源向上找首个带识别性 DataContext 的控件
         var hit = ResolveHitTarget(e.Source);
-        ContextMenu menu = hit switch
+        var menu = hit switch
         {
             FlowNodeViewModel node => BuildNodeMenu(vm, node),
             NodeConnectionViewModel conn => BuildConnectionMenu(vm, conn),
@@ -119,13 +139,29 @@ public partial class NodeEditorView : UserControl
     /// </summary>
     private static object? ResolveHitTarget(object? source)
     {
-        if (source is not Avalonia.Visual visual) return null;
+        if (source is not Avalonia.Visual visual)
+        {
+            return null;
+        }
+
         Avalonia.StyledElement? node = visual;
         while (node is not null)
         {
-            if (node is Control c && c.DataContext is FlowNodeViewModel fn) return fn;
-            if (node is Control cc && cc.DataContext is NodeConnectionViewModel nc) return nc;
-            if (node is Control pc && pc.DataContext is NodeConnectorViewModel pk) return pk;
+            if (node is Control c && c.DataContext is FlowNodeViewModel fn)
+            {
+                return fn;
+            }
+
+            if (node is Control cc && cc.DataContext is NodeConnectionViewModel nc)
+            {
+                return nc;
+            }
+
+            if (node is Control pc && pc.DataContext is NodeConnectorViewModel pk)
+            {
+                return pk;
+            }
+
             node = node.Parent;
         }
         return null;
@@ -135,10 +171,10 @@ public partial class NodeEditorView : UserControl
     /// Builds the node context menu: delete node, duplicate node, run this node, isolate (disconnect all).
     /// <para>构建节点右键菜单：删除节点、复制节点、运行此节点、隔离（断开所有连接）。</para>
     /// </summary>
-    private static Avalonia.Controls.ContextMenu BuildNodeMenu(NodeEditorViewModel vm, FlowNodeViewModel node)
+    private static ContextMenu BuildNodeMenu(NodeEditorViewModel vm, FlowNodeViewModel node)
     {
-        var menu = new Avalonia.Controls.ContextMenu();
-        LanguageService lng = UotanStudio.Services.LanguageService.Instance;
+        var menu = new ContextMenu();
+        var lng = LanguageService.Instance;
 
         var itemDelete = new MenuItem { Header = lng.GetString("Node_Ctx_DeleteNode") };
         itemDelete.Click += (_, _) => vm.RemoveNode(node);
@@ -146,7 +182,7 @@ public partial class NodeEditorView : UserControl
         var itemDuplicate = new MenuItem { Header = lng.GetString("Node_Ctx_DuplicateNode") };
         itemDuplicate.Click += (_, _) =>
         {
-            FlowNodeViewModel copy = node switch
+            var copy = node switch
             {
                 FirmwareNodeViewModel => new FirmwareNodeViewModel(node.Title),
                 FlashNodeViewModel => new FlashNodeViewModel(node.Title),
@@ -157,9 +193,15 @@ public partial class NodeEditorView : UserControl
             };
             copy.Location = new Avalonia.Point(node.Location.X + 40, node.Location.Y + 40);
             for (var i = 0; i < node.Input.Count; i++)
+            {
                 copy.Input.Add(new NodeConnectorViewModel { Title = node.Input[i].Title, Value = node.Input[i].Value });
+            }
+
             for (var i = 0; i < node.Output.Count; i++)
+            {
                 copy.Output.Add(new NodeConnectorViewModel { Title = node.Output[i].Title, Value = node.Output[i].Value });
+            }
+
             vm.AddNode(copy);
         };
 
@@ -172,8 +214,10 @@ public partial class NodeEditorView : UserControl
             var related = vm.Connections
                 .Where(c => c.Source?.Node == node || c.Target?.Node == node)
                 .ToList();
-            foreach (NodeConnectionViewModel? conn in related)
+            foreach (var conn in related)
+            {
                 vm.RemoveConnection(conn);
+            }
         };
 
         menu.Items.Add(itemDelete);
@@ -188,10 +232,10 @@ public partial class NodeEditorView : UserControl
     /// Builds the connection context menu: delete connection, disconnect (preserve both endpoints' data).
     /// <para>构建连接线右键菜单：删除连接、断开（保留两端数据）。</para>
     /// </summary>
-    private static Avalonia.Controls.ContextMenu BuildConnectionMenu(NodeEditorViewModel vm, NodeConnectionViewModel conn)
+    private static ContextMenu BuildConnectionMenu(NodeEditorViewModel vm, NodeConnectionViewModel conn)
     {
-        var menu = new Avalonia.Controls.ContextMenu();
-        LanguageService lng = UotanStudio.Services.LanguageService.Instance;
+        var menu = new ContextMenu();
+        var lng = LanguageService.Instance;
 
         var itemDelete = new MenuItem { Header = lng.GetString("Node_Ctx_DeleteConnection") };
         itemDelete.Click += (_, _) => vm.RemoveConnection(conn);
@@ -208,10 +252,10 @@ public partial class NodeEditorView : UserControl
     /// Builds the port context menu: disconnect all connections on this port.
     /// <para>构建端口右键菜单：断开端口所有连接。</para>
     /// </summary>
-    private static Avalonia.Controls.ContextMenu BuildPortMenu(NodeEditorViewModel vm, NodeConnectorViewModel port)
+    private static ContextMenu BuildPortMenu(NodeEditorViewModel vm, NodeConnectorViewModel port)
     {
-        var menu = new Avalonia.Controls.ContextMenu();
-        LanguageService lng = UotanStudio.Services.LanguageService.Instance;
+        var menu = new ContextMenu();
+        var lng = LanguageService.Instance;
 
         var itemDisconnect = new MenuItem { Header = lng.GetString("Node_Ctx_DisconnectPort") };
         itemDisconnect.Click += (_, _) =>
@@ -219,8 +263,10 @@ public partial class NodeEditorView : UserControl
             var related = vm.Connections
                 .Where(c => c.Source == port || c.Target == port)
                 .ToList();
-            foreach (NodeConnectionViewModel? conn in related)
+            foreach (var conn in related)
+            {
                 vm.RemoveConnection(conn);
+            }
         };
 
         menu.Items.Add(itemDisconnect);
@@ -231,16 +277,18 @@ public partial class NodeEditorView : UserControl
     /// Builds the canvas-empty context menu: select all, clear canvas, run all, reset zoom.
     /// <para>构建画布空白右键菜单：全选、清空画布、运行全部、重置缩放。</para>
     /// </summary>
-    private static Avalonia.Controls.ContextMenu BuildCanvasMenu(NodeEditorViewModel vm)
+    private static ContextMenu BuildCanvasMenu(NodeEditorViewModel vm)
     {
-        var menu = new Avalonia.Controls.ContextMenu();
-        LanguageService lng = UotanStudio.Services.LanguageService.Instance;
+        var menu = new ContextMenu();
+        var lng = LanguageService.Instance;
 
         var itemSelectAll = new MenuItem { Header = lng.GetString("Node_Ctx_SelectAll") };
         itemSelectAll.Click += (_, _) =>
         {
-            foreach (FlowNodeViewModel n in vm.Nodes)
+            foreach (var n in vm.Nodes)
+            {
                 n.IsSelected = true;
+            }
         };
 
         var itemClearAll = new MenuItem { Header = lng.GetString("Node_Ctx_ClearAll") };

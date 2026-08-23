@@ -1,3 +1,9 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using FirmwareKit.AVB.VBMeta;
 using FirmwareKit.CPIO;
 using FirmwareKit.CPIO.Extraction;
@@ -5,13 +11,6 @@ using FirmwareKit.CPIO.Model;
 using FirmwareKit.Oppo;
 using FirmwareKit.Oppo.Models;
 using FirmwareKit.Payload;
-using FirmwareKit.Payload.Models;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace UotanStudio.Services;
 
@@ -61,15 +60,14 @@ public sealed class FirmwareService
     /// <para>列举 CPIO/TAR 归档的全部条目名称（不解包到磁盘）。</para>
     /// </summary>
     /// <param name="archivePath">The archive file path.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Operation result, Entries is the entry name list.</returns>
-    public async Task<FirmwareOpResult> ListCpioEntriesAsync(string archivePath, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOpResult> ListCpioEntriesAsync(string archivePath)
     {
         try
         {
-            await using FileStream fs = File.OpenRead(archivePath);
+            await using var fs = File.OpenRead(archivePath);
             var archive = new CpioArchive();
-            IReadOnlyList<ArchiveEntry> entries = archive.ReadAll(fs);
+            var entries = archive.ReadAll(fs);
             var names = entries.Select(e => e.Name ?? string.Empty).Where(n => n.Length > 0).ToList();
             return new FirmwareOpResult { Success = true, Summary = $"{names.Count} entries", Entries = names };
         }
@@ -86,13 +84,12 @@ public sealed class FirmwareService
     /// <param name="archivePath">The archive file path.</param>
     /// <param name="outputDirectory">The output directory.</param>
     /// <param name="overwrite">Whether to overwrite existing files.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Operation result.</returns>
-    public async Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory, bool overwrite = true)
     {
         try
         {
-            await using FileStream fs = File.OpenRead(archivePath);
+            await using var fs = File.OpenRead(archivePath);
             var archive = new CpioArchive();
             Directory.CreateDirectory(outputDirectory);
             archive.ExtractToDirectory(fs, outputDirectory, new ExtractOptions
@@ -115,7 +112,6 @@ public sealed class FirmwareService
     /// </summary>
     /// <param name="inputDirectory">The input directory.</param>
     /// <param name="outputArchivePath">The output archive path.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Operation result.</returns>
     public async Task<FirmwareOpResult> PackCpioAsync(string inputDirectory, string outputArchivePath, CancellationToken cancellationToken = default)
     {
@@ -138,7 +134,7 @@ public sealed class FirmwareService
                     }
                 });
             }
-            using FileStream output = File.Create(outputArchivePath);
+            using var output = File.Create(outputArchivePath);
             archive.SaveAll(output, entries, ArchiveFormat.NewAscii);
             return new FirmwareOpResult { Success = true, Summary = $"Packed {entries.Count} entries to {outputArchivePath}" };
         }
@@ -155,21 +151,20 @@ public sealed class FirmwareService
     /// <param name="payloadPath">The payload.bin file path.</param>
     /// <param name="outputDirectory">The output directory.</param>
     /// <param name="partitionName">Target partition name; null or empty means all partitions.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Operation result.</returns>
-    public async Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory, string? partitionName = null, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory, string? partitionName = null)
     {
         try
         {
             Directory.CreateDirectory(outputDirectory);
-            PayloadMetadata metadata = await PayloadParser.GetPayloadMetadataAsync(payloadPath);
-            List<string> allNames = metadata?.PartitionNames ?? new();
+            var metadata = await PayloadParser.GetPayloadMetadataAsync(payloadPath);
+            var allNames = metadata?.PartitionNames ?? [];
             var targets = string.IsNullOrWhiteSpace(partitionName)
                 ? allNames.Where(n => !string.IsNullOrEmpty(n)).ToArray()
-                : new[] { partitionName };
+                : [partitionName];
 
             await PayloadParser.ExtractAsync(payloadPath, targets, outputDirectory);
-            return new FirmwareOpResult { Success = true, Summary = $"Extracted {targets.Length} partitions", Entries = targets.ToList() };
+            return new FirmwareOpResult { Success = true, Summary = $"Extracted {targets.Length} partitions", Entries = [.. targets] };
         }
         catch (Exception ex)
         {
@@ -182,7 +177,6 @@ public sealed class FirmwareService
     /// <para>校验 Android Verified Boot VBMeta 镜像，输出头部与描述符摘要。</para>
     /// </summary>
     /// <param name="vbmetaPath">The vbmeta.img file path.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Operation result, Summary contains header summary.</returns>
     public async Task<FirmwareOpResult> VerifyAvbAsync(string vbmetaPath, CancellationToken cancellationToken = default)
     {
@@ -205,14 +199,13 @@ public sealed class FirmwareService
     /// <para>读取 Oppo 固件包（自动检测 OFP/OPS/OZIP）的元数据，输出格式与条目数。</para>
     /// </summary>
     /// <param name="firmwarePath">The firmware package path.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Operation result.</returns>
     public async Task<FirmwareOpResult> ReadOppoMetadataAsync(string firmwarePath, CancellationToken cancellationToken = default)
     {
         try
         {
             var reader = new OppReader();
-            OppMetadata metadata = await reader.ReadMetadataAsync(firmwarePath, cancellationToken);
+            var metadata = await reader.ReadMetadataAsync(firmwarePath, cancellationToken);
             var summary = $"Format: {metadata.FormatName}\nEntries: {metadata.EntryCount}";
             return new FirmwareOpResult { Success = true, Summary = summary };
         }
@@ -229,7 +222,6 @@ public sealed class FirmwareService
     /// <param name="firmwarePath">The firmware package path.</param>
     /// <param name="outputDirectory">The output directory.</param>
     /// <param name="overwrite">Whether to overwrite existing files.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Operation result.</returns>
     public async Task<FirmwareOpResult> ExtractOppoAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
     {
@@ -237,7 +229,7 @@ public sealed class FirmwareService
         {
             Directory.CreateDirectory(outputDirectory);
             var reader = new OppReader();
-            OppExtractResult result = await reader.ExtractAsync(firmwarePath, outputDirectory, new OppExtractOptions
+            var result = await reader.ExtractAsync(firmwarePath, outputDirectory, new OppExtractOptions
             {
                 Overwrite = overwrite
             }, progress: null, cancellationToken);
@@ -256,13 +248,12 @@ public sealed class FirmwareService
     /// </summary>
     /// <param name="filePath">The file path.</param>
     /// <param name="expectedHash">Expected SHA256 hex string; empty returns only computed value.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Operation result, Summary is computed value or comparison result.</returns>
     public async Task<FirmwareOpResult> VerifyChecksumAsync(string filePath, string? expectedHash = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            await using FileStream fs = File.OpenRead(filePath);
+            await using var fs = File.OpenRead(filePath);
             var hash = await System.Security.Cryptography.SHA256.HashDataAsync(fs, cancellationToken);
             var hex = Convert.ToHexString(hash).ToLowerInvariant();
             var ok = string.IsNullOrEmpty(expectedHash) || string.Equals(hex, expectedHash, StringComparison.OrdinalIgnoreCase);
