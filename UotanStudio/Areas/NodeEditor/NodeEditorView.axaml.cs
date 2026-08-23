@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using NodifyM.Avalonia.Controls;
-using UotanStudio.Areas.NodeEditor;
 using UotanStudio.Areas.NodeEditor.ViewModels;
 using UotanStudio.Services;
 

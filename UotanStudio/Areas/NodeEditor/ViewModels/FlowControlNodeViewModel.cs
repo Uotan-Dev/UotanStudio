@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
-using UotanStudio.ViewModels;
 
 namespace UotanStudio.Areas.NodeEditor.ViewModels;
 

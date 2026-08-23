@@ -895,12 +895,12 @@ internal class WinUSBDevice : UsbDevice
 
                 case 5: // USB_ENDPOINT_DESCRIPTOR_TYPE
                     currentEndpoints?.Add(new UsbEndpointInfo
-                        {
-                            EndpointAddress = Marshal.ReadByte(buffer, pos + 2),
-                            Attributes = Marshal.ReadByte(buffer, pos + 3),
-                            MaxPacketSize = (ushort)(Marshal.ReadByte(buffer, pos + 4) | (Marshal.ReadByte(buffer, pos + 5) << 8)),
-                            Interval = Marshal.ReadByte(buffer, pos + 6)
-                        });
+                    {
+                        EndpointAddress = Marshal.ReadByte(buffer, pos + 2),
+                        Attributes = Marshal.ReadByte(buffer, pos + 3),
+                        MaxPacketSize = (ushort)(Marshal.ReadByte(buffer, pos + 4) | (Marshal.ReadByte(buffer, pos + 5) << 8)),
+                        Interval = Marshal.ReadByte(buffer, pos + 6)
+                    });
                     break;
                 default:
                     break;
