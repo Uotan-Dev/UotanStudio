@@ -75,6 +75,13 @@ public class EdlException : Exception
         EdlErrorCode.ConnectionLost => "Connection to device lost.",
         EdlErrorCode.OperationCancelled => "Operation was cancelled.",
         EdlErrorCode.DeviceNotFound => "EDL device not found.",
+        EdlErrorCode.PeekFailed => "Peek (memory read) operation failed.",
+        EdlErrorCode.PokeFailed => "Poke (memory write) operation failed.",
+        EdlErrorCode.MemoryCommandFailed => "Memory command failed.",
+        EdlErrorCode.UfsProvisioningFailed => "UFS provisioning operation failed.",
+        EdlErrorCode.OnTargetVerificationFailed => "On-target verification failed.",
+        EdlErrorCode.SetActivePartitionFailed => "Setting the active A/B partition failed.",
+        EdlErrorCode.XmlParseError => "XML parsing failed.",
         _ => $"Unknown error code: {code}"
     };
 }

@@ -1,4 +1,5 @@
 using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl;
@@ -46,18 +47,25 @@ public sealed class EdlFactory : IProtocolFactory
         session = null;
         try
         {
-            UsbDeviceInfo info = transport.DeviceInfo;
+            var info = transport.DeviceInfo;
 
             // Check VID/PID if specified
-            if (_vendorId.HasValue && info.VendorId != _vendorId.Value) return false;
-            if (_productId.HasValue && info.ProductId != _productId.Value) return false;
+            if (_vendorId.HasValue && info.VendorId != _vendorId.Value)
+            {
+                return false;
+            }
+
+            if (_productId.HasValue && info.ProductId != _productId.Value)
+            {
+                return false;
+            }
 
             // Check for known Qualcomm EDL interfaces
-            foreach (UsbInterfaceInfo iface in info.Interfaces)
+            foreach (var iface in info.Interfaces)
             {
                 if (iface.Class == 0xFF && iface.SubClass == 0x01)
                 {
-                    session = new EdlSession(transport);
+                    session = new EdlSession(new UsbDeviceTransport(transport));
                     return true;
                 }
             }
@@ -70,7 +78,7 @@ public sealed class EdlFactory : IProtocolFactory
                 info.ProductId == 0x9025 ||  // OnePlus Qualcomm EDL
                 info.ProductId == 0x9087))   // Generic Qualcomm EDL
             {
-                session = new EdlSession(transport);
+                session = new EdlSession(new UsbDeviceTransport(transport));
                 return true;
             }
 
@@ -83,18 +91,18 @@ public sealed class EdlFactory : IProtocolFactory
                 info.ProductId == 0x330A ||  // RK3326 Loader
                 info.ProductId == 0x320A))   // RK3229 Loader
             {
-                session = new EdlSession(transport);
+                session = new EdlSession(new UsbDeviceTransport(transport));
                 return true;
             }
 
             // Also check by interface subclass if specified
             if (_interfaceSubclass.HasValue)
             {
-                foreach (UsbInterfaceInfo iface in info.Interfaces)
+                foreach (var iface in info.Interfaces)
                 {
                     if (iface.Class == 0xFF && iface.SubClass == _interfaceSubclass.Value)
                     {
-                        session = new EdlSession(transport);
+                        session = new EdlSession(new UsbDeviceTransport(transport));
                         return true;
                     }
                 }

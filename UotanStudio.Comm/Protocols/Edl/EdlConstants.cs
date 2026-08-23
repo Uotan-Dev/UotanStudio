@@ -173,6 +173,26 @@ public static class EdlConstants
     public const int HelloProbeTimeoutMs = 1500;
 
     /// <summary>
+    /// Short timeout used to read the optional trailing packet after the Sahara handshake
+    /// loop exits (timeout is tolerated — some devices send nothing after DONE_RESPONSE).
+    /// <para>握手循环退出后读取可选尾包的短超时（毫秒）；超时可容忍——部分设备在
+    /// DONE_RESPONSE 之后不再发送任何包。</para>
+    /// </summary>
+    public const int SaharaTrailingPacketTimeoutMs = 1000;
+
+    /// <summary>
+    /// Total read budget (ms) for the active Firehose NOP probe.
+    /// <para>主动 Firehose NOP 探测的总读取预算（毫秒）。</para>
+    /// </summary>
+    public const int ProbeReadBudgetMs = 3000;
+
+    /// <summary>
+    /// Read chunk size for the active Firehose NOP probe.
+    /// <para>主动 Firehose NOP 探测的读取分块大小。</para>
+    /// </summary>
+    public const int ProbeReadChunkBytes = 4096;
+
+    /// <summary>
     /// Default response timeout in seconds.
     /// <para>默认响应超时（秒）。</para>
     /// </summary>
@@ -195,6 +215,98 @@ public static class EdlConstants
     /// <para>电源操作响应超时（毫秒）。</para>
     /// </summary>
     public const int PowerResponseTimeoutMs = 3000;
+
+    /// <summary>
+    /// Default budget (ms) for verifying that a power reset actually took effect by reading
+    /// target logs until the device disappears.
+    /// <para>通过读取目标日志直到设备消失来验证电源复位是否生效的默认预算（毫秒）。</para>
+    /// </summary>
+    public const int PowerResetVerifyTimeoutMs = 30000;
+
+    /// <summary>
+    /// Per-storage write (ZLP) timeout for UFS storage in milliseconds.
+    /// <para>UFS 存储的写入（ZLP）超时（毫秒）。</para>
+    /// </summary>
+    public const int WriteTimeoutUfsMs = 20000;
+
+    /// <summary>
+    /// Per-storage write (ZLP) timeout for NAND storage in milliseconds.
+    /// <para>NAND 存储的写入（ZLP）超时（毫秒）。</para>
+    /// </summary>
+    public const int WriteTimeoutNandMs = 30000;
+
+    /// <summary>
+    /// Per-storage write (ZLP) timeout for SPI NOR storage in milliseconds.
+    /// <para>SPI NOR 存储的写入（ZLP）超时（毫秒）。</para>
+    /// </summary>
+    public const int WriteTimeoutSpinorMs = 60000;
+
+    /// <summary>
+    /// Default write (ZLP) timeout for other storage types (eMMC etc.) in milliseconds.
+    /// <para>其他存储类型（eMMC 等）的默认写入（ZLP）超时（毫秒）。</para>
+    /// </summary>
+    public const int WriteTimeoutDefaultMs = 10000;
+
+    /// <summary>
+    /// Per-storage erase timeout for eMMC storage in milliseconds.
+    /// <para>eMMC 存储的擦除超时（毫秒）。</para>
+    /// </summary>
+    public const int EraseTimeoutEmmcMs = 15000;
+
+    /// <summary>
+    /// Per-storage erase timeout for UFS storage in milliseconds.
+    /// <para>UFS 存储的擦除超时（毫秒）。</para>
+    /// </summary>
+    public const int EraseTimeoutUfsMs = 30000;
+
+    /// <summary>
+    /// Per-storage erase timeout for NAND storage in milliseconds.
+    /// <para>NAND 存储的擦除超时（毫秒）。</para>
+    /// </summary>
+    public const int EraseTimeoutNandMs = 60000;
+
+    /// <summary>
+    /// Per-storage erase timeout for SPI NOR storage in milliseconds.
+    /// <para>SPI NOR 存储的擦除超时（毫秒）。</para>
+    /// </summary>
+    public const int EraseTimeoutSpinorMs = 120000;
+
+    /// <summary>
+    /// Maximum number of drain reads (each capped at the drain read timeout) performed when
+    /// flushing pending data from the transport.
+    /// <para>排出传输中待处理数据时执行的最大读取次数（每次读取受排出读取超时约束）。</para>
+    /// </summary>
+    public const int DrainMaxReads = 10;
+
+    /// <summary>
+    /// Timeout for each drain read in milliseconds.
+    /// <para>每次排出读取的超时（毫秒）。</para>
+    /// </summary>
+    public const int DrainReadTimeoutMs = 100;
+
+    /// <summary>
+    /// Read chunk size for Firehose XML response accumulation.
+    /// <para>Firehose XML 响应累积的读取分块大小。</para>
+    /// </summary>
+    public const int ResponseReadChunkBytes = 4096;
+
+    /// <summary>
+    /// Chunk size for streaming raw (binary) payloads over USB bulk endpoints.
+    /// <para>通过 USB 批量端点流式传输原始（二进制）数据的分块大小。</para>
+    /// </summary>
+    public const int RawReadChunkBytes = 1024 * 1024;
+
+    /// <summary>
+    /// Sector size assumed for UFS and SPI NOR storage when auto-detection is unavailable.
+    /// <para>自动检测不可用时 UFS 与 SPI NOR 存储采用的扇区大小。</para>
+    /// </summary>
+    public const long DefaultSectorSizeLarge = 4096;
+
+    /// <summary>
+    /// Sector size assumed for eMMC and other storage when auto-detection is unavailable.
+    /// <para>自动检测不可用时 eMMC 及其他存储采用的扇区大小。</para>
+    /// </summary>
+    public const long DefaultSectorSizeSmall = 512;
 
     // USB class for EDL devices (Qualcomm HS-USB QDLoader 9008)
     /// <summary>
@@ -542,6 +654,48 @@ public enum EdlErrorCode
     /// <para>未找到 EDL 设备。</para>
     /// </summary>
     DeviceNotFound,
+
+    /// <summary>
+    /// Peek (memory read) operation failed.
+    /// <para>Peek（内存读取）操作失败。</para>
+    /// </summary>
+    PeekFailed,
+
+    /// <summary>
+    /// Poke (memory write) operation failed.
+    /// <para>Poke（内存写入）操作失败。</para>
+    /// </summary>
+    PokeFailed,
+
+    /// <summary>
+    /// Memory command (memcpy/pokedword) failed.
+    /// <para>内存命令（memcpy/pokedword）失败。</para>
+    /// </summary>
+    MemoryCommandFailed,
+
+    /// <summary>
+    /// UFS provisioning operation failed.
+    /// <para>UFS 配置（provisioning）操作失败。</para>
+    /// </summary>
+    UfsProvisioningFailed,
+
+    /// <summary>
+    /// On-target (read-back / SHA256) verification failed.
+    /// <para>目标端（回读 / SHA256）校验失败。</para>
+    /// </summary>
+    OnTargetVerificationFailed,
+
+    /// <summary>
+    /// Setting the active A/B partition failed.
+    /// <para>设置活跃 A/B 槽位失败。</para>
+    /// </summary>
+    SetActivePartitionFailed,
+
+    /// <summary>
+    /// XML parsing failed.
+    /// <para>XML 解析失败。</para>
+    /// </summary>
+    XmlParseError,
 }
 
 /// <summary>
@@ -563,7 +717,7 @@ public enum FirehoseResponseState
     Nak,
 
     /// <summary>
-    /// Log message response.
+    /// Log Message response.
     /// <para>日志消息响应。</para>
     /// </summary>
     Log,
@@ -579,4 +733,29 @@ public enum FirehoseResponseState
     /// <para>未知响应状态。</para>
     /// </summary>
     Unknown
+}
+
+/// <summary>
+/// Firehose power command reboot options.
+/// <para>Firehose 电源命令的复位选项。</para>
+/// </summary>
+public enum RebootOption
+{
+    /// <summary>
+    /// Normal reset (reboot into the system).
+    /// <para>普通复位（重启进入系统）。</para>
+    /// </summary>
+    Reset,
+
+    /// <summary>
+    /// Power off the device.
+    /// <para>关闭设备电源。</para>
+    /// </summary>
+    PowerOff,
+
+    /// <summary>
+    /// Reset back into EDL (emergency download) mode.
+    /// <para>复位回 EDL（紧急下载）模式。</para>
+    /// </summary>
+    ResetToEdl
 }

@@ -1,5 +1,5 @@
 using UotanStudio.Comm.Protocols.Common;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
+using UotanStudio.Comm.Transports.Abstractions;
 
 namespace UotanStudio.Comm.Protocols.Edl;
 
@@ -7,13 +7,15 @@ namespace UotanStudio.Comm.Protocols.Edl;
 /// Represents an EDL (Emergency Download Mode) protocol session combining Sahara and Firehose protocols.
 /// <para>表示 EDL（紧急下载模式）协议会话，组合 Sahara 和 Firehose 协议。</para>
 /// </summary>
-public sealed class EdlSession : IProtocolSession
+/// <remarks>
+/// Creates a new EDL session over the specified device transport.
+/// <para>在指定设备传输上创建新的 EDL 会话。</para>
+/// </remarks>
+/// <param name="transport">The device transport. 设备传输。</param>
+/// <param name="firehoseConfig">Optional Firehose configuration. 可选的 Firehose 配置。</param>
+public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? firehoseConfig = null) : IProtocolSession
 {
-    private readonly IUsbDeviceSession _transport;
-    private SaharaProtocol? _sahara;
-    private FirehoseProtocol? _firehose;
     private bool _disposed;
-    private bool _configured;
 
     /// <summary>
     /// Gets the protocol name.
@@ -25,7 +27,7 @@ public sealed class EdlSession : IProtocolSession
     /// Gets the underlying transport session.
     /// <para>获取底层传输会话。</para>
     /// </summary>
-    public IUsbDeviceSession Transport => _transport;
+    public ICommTransport Transport { get; } = transport ?? throw new ArgumentNullException(nameof(transport));
 
     /// <summary>
     /// Gets whether the session is connected and ready.
@@ -37,37 +39,25 @@ public sealed class EdlSession : IProtocolSession
     /// Gets whether Firehose has been configured.
     /// <para>Firehose 是否已配置。</para>
     /// </summary>
-    public bool IsConfigured => _configured;
+    public bool IsConfigured { get; private set; }
 
     /// <summary>
     /// Gets the Sahara protocol instance.
     /// <para>获取 Sahara 协议实例。</para>
     /// </summary>
-    public SaharaProtocol? Sahara => _sahara;
+    public SaharaProtocol? Sahara { get; private set; }
 
     /// <summary>
     /// Gets the Firehose protocol instance.
     /// <para>获取 Firehose 协议实例。</para>
     /// </summary>
-    public FirehoseProtocol? Firehose => _firehose;
+    public FirehoseProtocol? Firehose { get; } = new FirehoseProtocol(transport, firehoseConfig);
 
     /// <summary>
     /// Gets the negotiated maximum packet length from Sahara.
     /// <para>从 Sahara 获取协商的最大包长度。</para>
     /// </summary>
-    public uint MaxPacketLength => _sahara?.MaxPacketLength ?? 4096;
-
-    /// <summary>
-    /// Creates a new EDL session over the specified USB transport.
-    /// <para>在指定 USB 传输上创建新的 EDL 会话。</para>
-    /// </summary>
-    /// <param name="transport">The USB transport session. USB 传输会话。</param>
-    /// <param name="firehoseConfig">Optional Firehose configuration. 可选的 Firehose 配置。</param>
-    public EdlSession(IUsbDeviceSession transport, FirehoseConfiguration? firehoseConfig = null)
-    {
-        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
-        _firehose = new FirehoseProtocol(transport, firehoseConfig);
-    }
+    public uint MaxPacketLength => Sahara?.MaxPacketLength ?? 4096;
 
     /// <summary>
     /// Performs Sahara handshake (if needed) and Firehose configure.
@@ -80,20 +70,19 @@ public sealed class EdlSession : IProtocolSession
     {
         ThrowIfDisposed();
 
-        // Try Sahara handshake
-        _sahara = new SaharaProtocol(_transport);
-        SaharaMode mode = await _sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken);
+        // Try Sahara handshake (skipped internally when the device already runs Firehose).
+        Sahara = new SaharaProtocol(Transport);
+        await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken);
 
-        if (mode == SaharaMode.ImageTxComplete)
-        {
-            // Device was already in Firehose mode
-            _configured = true;
-            return;
-        }
-
-        // Configure Firehose
-        await _firehose!.ConfigureAsync(cancellationToken: cancellationToken);
-        _configured = true;
+        // Always configure Firehose afterwards — even when Sahara detected an already-running
+        // programmer, the configure handshake (payload negotiation, sector-size detection) is
+        // still required before any Firehose command can be trusted. FirehoseAlreadyRunning
+        // only decides whether the Sahara handshake itself can be skipped.
+        // 之后总是执行 Firehose 配置——即使 Sahara 检测到 programmer 已在运行，仍需 configure
+        // 握手（负载协商、扇区大小检测）才能保证后续 Firehose 命令可靠。FirehoseAlreadyRunning
+        // 仅用于决定是否跳过 Sahara 握手本身。
+        await Firehose!.ConfigureAsync(cancellationToken: cancellationToken);
+        IsConfigured = true;
     }
 
     /// <summary>
@@ -105,8 +94,10 @@ public sealed class EdlSession : IProtocolSession
     /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
     public async Task EnsureInitializedAsync(Stream? programmerImage = null, CancellationToken cancellationToken = default)
     {
-        if (!_configured)
+        if (!IsConfigured)
+        {
             await InitializeAsync(programmerImage, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -124,7 +115,7 @@ public sealed class EdlSession : IProtocolSession
     {
         ThrowIfDisposed();
         await EnsureInitializedAsync(cancellationToken: cancellationToken);
-        return await _firehose!.ProgramAsync(dataStream, startSector, numSectors, filename, physicalPartition, cancellationToken);
+        return await Firehose!.ProgramAsync(dataStream, startSector, numSectors, filename, physicalPartition, cancellationToken);
     }
 
     /// <summary>
@@ -140,7 +131,7 @@ public sealed class EdlSession : IProtocolSession
     {
         ThrowIfDisposed();
         await EnsureInitializedAsync(cancellationToken: cancellationToken);
-        return await _firehose!.EraseAsync(startSector, numSectors, physicalPartition, cancellationToken);
+        return await Firehose!.EraseAsync(startSector, numSectors, physicalPartition, cancellationToken);
     }
 
     /// <summary>
@@ -157,7 +148,7 @@ public sealed class EdlSession : IProtocolSession
     {
         ThrowIfDisposed();
         await EnsureInitializedAsync(cancellationToken: cancellationToken);
-        return await _firehose!.ReadAsync(startSector, numSectors, filename, physicalPartition, cancellationToken);
+        return await Firehose!.ReadAsync(startSector, numSectors, filename, physicalPartition, cancellationToken);
     }
 
     /// <summary>
@@ -170,7 +161,7 @@ public sealed class EdlSession : IProtocolSession
     {
         ThrowIfDisposed();
         await EnsureInitializedAsync(cancellationToken: cancellationToken);
-        return await _firehose!.ResetAsync(cancellationToken);
+        return await Firehose!.ResetAsync(cancellationToken);
     }
 
     /// <summary>
@@ -180,7 +171,9 @@ public sealed class EdlSession : IProtocolSession
     private void ThrowIfDisposed()
     {
         if (_disposed)
+        {
             throw new ObjectDisposedException(nameof(EdlSession));
+        }
     }
 
     /// <summary>
@@ -189,10 +182,14 @@ public sealed class EdlSession : IProtocolSession
     /// </summary>
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
-        _sahara?.Dispose();
-        _firehose?.Dispose();
-        _transport.Dispose();
+        Sahara?.Dispose();
+        Firehose?.Dispose();
+        Transport.Dispose();
     }
 }
