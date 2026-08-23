@@ -438,17 +438,24 @@ public sealed class DeviceMonitorService : IDisposable
     /// </summary>
     public async Task<bool> RebootAsync(DetectedDevice device, string mode, CancellationToken cancellationToken = default)
     {
+        // 目标模式即 reboot:<mode> 服务中冒号之后的部分（不带 "reboot " 前缀）。
+        // 若前缀传入，两种后端会拼成非法的 "reboot:reboot <mode>"，设备会回退为普通进系统重启。
+        // "now" 表示普通重启进系统（与 FirmwareKit.Comm.ADB 的默认值一致）。
+        // The target mode is the part after the colon of the reboot:<mode> service (no
+        // "reboot " prefix). Passing the prefix yields the invalid "reboot:reboot <mode>"
+        // which falls back to a plain system reboot. "now" means a plain reboot (matching
+        // FirmwareKit.Comm.ADB's default).
         var adbTarget = mode switch
         {
-            "system" => "reboot",
-            "bootloader" => "reboot bootloader",
-            "recovery" => "reboot recovery",
-            "edl" => "reboot edl",
-            _ => "reboot",
+            "bootloader" => "bootloader",
+            "recovery" => "recovery",
+            "edl" => "edl",
+            "sideload" => "sideload",
+            "fastboot" => "fastboot",
+            _ => "now",
         };
         var fastbootTarget = mode switch
         {
-            "system" => null,
             "bootloader" => "bootloader",
             "recovery" => "recovery",
             "edl" => "edl",
@@ -467,7 +474,8 @@ public sealed class DeviceMonitorService : IDisposable
             return true;
         }
 
-        // USB 直连优先（不经 adb server）。
+        // USB 直连优先：使用 reboot:<mode> 设备服务（不经 adb server，也不走 shell）。
+        // Direct USB first: use the reboot:<mode> device service (no adb server, no shell).
         if (device.Protocol == DeviceProtocolKind.Adb && device.Transport == DeviceTransportKind.Usb)
         {
             var session = OpenAdbSession(device);
@@ -476,7 +484,7 @@ public sealed class DeviceMonitorService : IDisposable
                 try
                 {
                     await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-                    _ = session.ExecuteCommand(adbTarget);
+                    session.CreateDeviceServices().Reboot(adbTarget);
                     return true;
                 }
                 catch
