@@ -233,6 +233,51 @@ public sealed class DeviceMonitorService : IDisposable
     {
         var devices = new List<DetectedDevice>();
 
+        // 参考 adb devices:adb server 对 USB 设备会返回真实序列号(来自设备实例 ID),
+        // 而本库枚举阶段(仅元数据发现)读不到 USB 字符串描述符序列号。此处预先取回
+        // adb server 的 USB 设备序列号列表,供下方按枚举顺序补全,使设备管理器能
+        // 区分多台相同 VID/PID 的设备。
+        // Reference the adb devices implementation: the adb server reports the real
+        // serial (from the device instance ID) for USB devices, whereas this library's
+        // enumeration is metadata-only and cannot read the USB string-descriptor serial.
+        // Pre-fetch the adb server's USB serials here and backfill them in enumeration
+        // order below, so the device manager can tell apart multiple devices sharing
+        // the same VID/PID.
+        var adbUsbSerials = new List<string>();
+        var adbStates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var adbClient = AdbServerClient;
+        if (adbClient is not null)
+        {
+            foreach (var d in adbClient.GetDevices())
+            {
+                if (d.Serial.Contains(':'))
+                {
+                    continue; // 网络设备(host:port)在下方单独合并
+                }
+
+                adbUsbSerials.Add(d.Serial);
+                adbStates[d.Serial] = d.State.ToString().ToLowerInvariant();
+            }
+        }
+
+        // Auto 模式下 winusb 原生与 libusb 两个后端会同时枚举同一物理设备;libusb
+        // 以"首个 bulk 接口"(如 FF|FF|30)报告接口三元组,与 winusb 的 ADB 接口
+        // (FF|42|01)不同,物理去重键不合并 → 同一台设备出现两条 ADB 条目,而 adb
+        // server 的序列号只有一份,第二条补不到序列号便回退成 VID:PID。此处对 ADB
+        // 条目合并:已补全真实序列号的条目以其序列号去重;回退成 VID:PID 的条目若
+        // 其 VID/PID 已有带序列号的条目(后端重复),直接丢弃。
+        // In Auto mode both the native (winusb) and libusb backends enumerate the same
+        // physical device; libusb reports the first bulk interface (e.g. FF|FF|30) which
+        // differs from winusb's ADB interface (FF|42|01), so the physical dedup key does
+        // not merge them — the same device then shows up as two ADB entries, and since
+        // the adb server has only one serial, the second entry cannot be backfilled and
+        // degrades to a VID:PID string. Merge ADB entries here: entries backfilled with a
+        // real serial are deduplicated by that serial; an entry degraded to VID:PID whose
+        // VID/PID already has a serial-bearing entry (backend duplicate) is dropped.
+        var seenAdbSerials = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenVidPidWithSerial = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var usbSerialCursor = 0;
         foreach (var info in _comm.EnumerateUsbDevices())
         {
             var protocol = Classify(info);
@@ -241,14 +286,51 @@ public sealed class DeviceMonitorService : IDisposable
                 continue;
             }
 
+            // adb server 报告的 USB 序列号(与设备路径中的实例号一致)优先于
+            // VID:PID 回退;adb server 未运行时(列表为空)保持原有回退行为。
+            var serial = info.SerialNumber;
+            if (string.IsNullOrEmpty(serial) &&
+                protocol == DeviceProtocolKind.Adb &&
+                usbSerialCursor < adbUsbSerials.Count)
+            {
+                serial = adbUsbSerials[usbSerialCursor++];
+            }
+
+            if (protocol == DeviceProtocolKind.Adb)
+            {
+                var vidPid = $"{info.VendorId:X4}:{info.ProductId:X4}";
+                if (!string.IsNullOrEmpty(serial))
+                {
+                    if (!seenAdbSerials.Add(serial))
+                    {
+                        continue; // 同一序列号已有条目(跨后端重复),丢弃
+                    }
+
+                    seenVidPidWithSerial.Add(vidPid);
+                }
+                else
+                {
+                    // 未补到序列号:若该 VID/PID 已有带序列号的条目,这是 libusb
+                    // 后端的重复枚举,丢弃;否则保留(adb server 未运行的场景)。
+                    if (seenVidPidWithSerial.Contains(vidPid))
+                    {
+                        continue;
+                    }
+
+                    seenVidPidWithSerial.Add(vidPid);
+                }
+            }
+
             devices.Add(new DetectedDevice
             {
                 Key = info.DeviceKey,
-                Serial = info.SerialNumber ?? $"{info.VendorId:X4}:{info.ProductId:X4}",
+                Serial = serial ?? $"{info.VendorId:X4}:{info.ProductId:X4}",
                 Protocol = protocol.Value,
                 Transport = DeviceTransportKind.Usb,
                 State = protocol.Value switch
                 {
+                    DeviceProtocolKind.Adb when !string.IsNullOrEmpty(serial) &&
+                        adbStates.TryGetValue(serial, out var adbState) => adbState,
                     DeviceProtocolKind.Adb => "device",
                     DeviceProtocolKind.Fastboot => "fastboot",
                     DeviceProtocolKind.Edl => "edl",
@@ -261,7 +343,6 @@ public sealed class DeviceMonitorService : IDisposable
         }
 
         // adb server 中的网络设备（host:port 序列号）。
-        var adbClient = AdbServerClient;
         if (adbClient is not null)
         {
             foreach (var d in adbClient.GetDevices())

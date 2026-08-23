@@ -21,4 +21,45 @@
     <x:String x:Key="Device_GroupRkdl">RKDL 设备</x:String>
     <x:String x:Key="Device_EmptyHint">点击刷新以扫描已连接的设备。</x:String>
 
+    <!-- 设备详情两栏布局 -->
+    <x:String x:Key="Device_DetailPlaceholder">选择设备以查看详情</x:String>
+    <x:String x:Key="Device_DeviceInfo">设备信息</x:String>
+    <x:String x:Key="Device_FastbootInfo">Fastboot 模式信息</x:String>
+    <x:String x:Key="Device_EdlInfo">EDL 模式信息</x:String>
+    <x:String x:Key="Device_RkdlInfo">RKDL 模式信息</x:String>
+    <x:String x:Key="Device_Serial">序列号</x:String>
+    <x:String x:Key="Device_Model">型号</x:String>
+    <x:String x:Key="Device_AndroidVersion">Android 版本</x:String>
+    <x:String x:Key="Device_State">状态</x:String>
+    <x:String x:Key="Device_Transport">连接方式</x:String>
+    <x:String x:Key="Device_LinkPort">链接端口</x:String>
+    <x:String x:Key="Device_UsbIds">厂商/产品 ID</x:String>
+    <x:String x:Key="Device_Brand">品牌</x:String>
+    <x:String x:Key="Device_Codename">型号代号</x:String>
+    <x:String x:Key="Device_SdkVersion">Android SDK</x:String>
+    <x:String x:Key="Device_CpuAbi">CPU ABI</x:String>
+    <x:String x:Key="Device_CpuCode">SoC 平台</x:String>
+    <x:String x:Key="Device_Kernel">内核版本</x:String>
+    <x:String x:Key="Device_Resolution">屏幕分辨率</x:String>
+    <x:String x:Key="Device_Density">像素密度</x:String>
+    <x:String x:Key="Device_BoardId">主板序列号</x:String>
+    <x:String x:Key="Device_BlStatus">Bootloader 状态</x:String>
+    <x:String x:Key="Device_Slot">当前槽位</x:String>
+    <x:String x:Key="Device_CompileVersion">编译版本</x:String>
+    <x:String x:Key="Device_VndkVersion">VNDK 版本</x:String>
+    <x:String x:Key="Device_PowerOnTime">开机时长</x:String>
+    <x:String x:Key="Device_DiskType">存储类型</x:String>
+    <x:String x:Key="Device_Userspace">Fastboot 模式</x:String>
+    <x:String x:Key="Device_Battery">电池</x:String>
+    <x:String x:Key="Device_Memory">内存</x:String>
+    <x:String x:Key="Device_Storage">存储</x:String>
+    <x:String x:Key="Device_Unlocked">已解锁</x:String>
+    <x:String x:Key="Device_Locked">已锁定</x:String>
+    <x:String x:Key="Device_UptimeDay">天</x:String>
+    <x:String x:Key="Device_UptimeHour">时</x:String>
+    <x:String x:Key="Device_UptimeMinute">分</x:String>
+    <x:String x:Key="Device_UptimeSecond">秒</x:String>
+    <x:String x:Key="Device_SystemOverview">系统信息</x:String>
+    <x:String x:Key="Device_ResourceOverview">资源使用</x:String>
+
 </ResourceDictionary>

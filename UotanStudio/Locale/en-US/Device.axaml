@@ -21,4 +21,45 @@
     <x:String x:Key="Device_GroupRkdl">RKDL Devices</x:String>
     <x:String x:Key="Device_EmptyHint">Click Refresh to scan connected devices.</x:String>
 
+    <!-- Device detail two-column layout -->
+    <x:String x:Key="Device_DetailPlaceholder">Select a device to view details</x:String>
+    <x:String x:Key="Device_DeviceInfo">Device Information</x:String>
+    <x:String x:Key="Device_FastbootInfo">Fastboot Mode Information</x:String>
+    <x:String x:Key="Device_EdlInfo">EDL Mode Information</x:String>
+    <x:String x:Key="Device_RkdlInfo">RKDL Mode Information</x:String>
+    <x:String x:Key="Device_Serial">Serial</x:String>
+    <x:String x:Key="Device_Model">Model</x:String>
+    <x:String x:Key="Device_AndroidVersion">Android Version</x:String>
+    <x:String x:Key="Device_State">State</x:String>
+    <x:String x:Key="Device_Transport">Transport</x:String>
+    <x:String x:Key="Device_LinkPort">Link Port</x:String>
+    <x:String x:Key="Device_UsbIds">Vendor/Product ID</x:String>
+    <x:String x:Key="Device_Brand">Brand</x:String>
+    <x:String x:Key="Device_Codename">Codename</x:String>
+    <x:String x:Key="Device_SdkVersion">Android SDK</x:String>
+    <x:String x:Key="Device_CpuAbi">CPU ABI</x:String>
+    <x:String x:Key="Device_CpuCode">SoC Platform</x:String>
+    <x:String x:Key="Device_Kernel">Kernel Version</x:String>
+    <x:String x:Key="Device_Resolution">Resolution</x:String>
+    <x:String x:Key="Device_Density">Density</x:String>
+    <x:String x:Key="Device_BoardId">Board Serial</x:String>
+    <x:String x:Key="Device_BlStatus">Bootloader Status</x:String>
+    <x:String x:Key="Device_Slot">Current Slot</x:String>
+    <x:String x:Key="Device_CompileVersion">Build Version</x:String>
+    <x:String x:Key="Device_VndkVersion">VNDK Version</x:String>
+    <x:String x:Key="Device_PowerOnTime">Power-On Time</x:String>
+    <x:String x:Key="Device_DiskType">Storage Type</x:String>
+    <x:String x:Key="Device_Userspace">Fastboot Mode</x:String>
+    <x:String x:Key="Device_Battery">Battery</x:String>
+    <x:String x:Key="Device_Memory">Memory</x:String>
+    <x:String x:Key="Device_Storage">Storage</x:String>
+    <x:String x:Key="Device_Unlocked">Unlocked</x:String>
+    <x:String x:Key="Device_Locked">Locked</x:String>
+    <x:String x:Key="Device_UptimeDay"> d </x:String>
+    <x:String x:Key="Device_UptimeHour">h </x:String>
+    <x:String x:Key="Device_UptimeMinute">m </x:String>
+    <x:String x:Key="Device_UptimeSecond">s</x:String>
+    <x:String x:Key="Device_SystemOverview">System Information</x:String>
+    <x:String x:Key="Device_ResourceOverview">Resource Usage</x:String>
+
 </ResourceDictionary>

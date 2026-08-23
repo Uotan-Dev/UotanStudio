@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels;
@@ -134,10 +137,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             LogService.Instance.Write(LogLevel.Info, "DeviceManager",
                 $"Scan completed: {Devices.Count} device(s) found.");
 
-            var adbDevices = Devices.Where(x => x.Protocol == DeviceProtocolKind.Adb && x.Transport == "USB").ToList();
-            if (adbDevices.Count > 0)
+            var enrichable = Devices
+                .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot)
+                .ToList();
+            if (enrichable.Count > 0)
             {
-                await Task.WhenAll(adbDevices.Select(EnrichDeviceInfoAsync));
+                await Task.WhenAll(enrichable.Select(EnrichDeviceInfoAsync));
             }
         }
         catch (OperationCanceledException)
@@ -163,65 +168,468 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>通过 UotanStudio.Comm 的 ADB 会话拉取设备 getprop 属性填充 Model/AndroidVersion 字段。</para>
-    /// Retrieves device getprop properties via a UotanStudio.Comm ADB session to populate
-    /// Model/AndroidVersion fields.
+    /// <para>按设备协议分发到对应的信息丰富方法。</para>
+    /// Dispatches to the mode-specific enrichment method based on the device protocol.
     /// </summary>
-    private async Task EnrichDeviceInfoAsync(DeviceInfo device)
+    private Task EnrichDeviceInfoAsync(DeviceInfo device) => device.Protocol switch
     {
-        if (device.Protocol != DeviceProtocolKind.Adb)
-        {
-            return;
-        }
+        DeviceProtocolKind.Adb => EnrichAdbInfoAsync(device),
+        DeviceProtocolKind.Fastboot => EnrichFastbootInfoAsync(device),
+        DeviceProtocolKind.Edl => throw new NotImplementedException(),
+        DeviceProtocolKind.Rkdl => throw new NotImplementedException(),
+        _ => Task.CompletedTask,
+    };
 
+    /// <summary>
+    /// <para>通过 UotanStudio.Comm 的 ADB 会话批量拉取设备属性（getprop / 系统级 / 电池 / 内存 / 存储），
+    /// 用以丰富设备详细信息的展示。</para>
+    /// Retrieves a broad set of device properties via a UotanStudio.Comm ADB session
+    /// (getprop / system-level / battery / memory / storage) to enrich the detail view.
+    /// </summary>
+    private async Task EnrichAdbInfoAsync(DeviceInfo device)
+    {
+        Dictionary<string, string>? info = null;
         try
         {
-            // 打开 USB 设备与 getprop 均为同步阻塞调用（未授权设备可能挂到超时），
+            // 打开 USB 设备与执行 shell 均为同步阻塞调用（未授权设备可能挂到超时），
             // 整体放后台线程，避免扫描结束过渡到主窗时冻结 UI。
-            // Opening the USB device and getprop are blocking calls (unauthorized devices
-            // can stall until timeout); run them on a background thread so the transition
-            // from splash to main window never freezes the UI.
-            var (model, version) = await Task.Run(() =>
+            // Opening the USB device and running shell commands are blocking calls
+            // (unauthorized devices can stall until timeout); run on a background thread
+            // so the splash-to-main transition never freezes the UI.
+            info = await Task.Run(() =>
             {
                 var session = DeviceMonitorService.Instance.OpenAdbSession(device.Device);
                 if (session is null)
                 {
-                    return (string.Empty, string.Empty);
+                    return null;
                 }
 
                 try
                 {
                     session.Connect();
-                    var result = session.ExecuteCommand("getprop ro.product.model; getprop ro.build.version.release");
-                    var lines = System.Text.Encoding.UTF8.GetString(result.Stdout).Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                    return (lines.Length > 0 ? lines[0].Trim() : string.Empty,
-                            lines.Length > 1 ? lines[1].Trim() : string.Empty);
+                    return session.Connection.IsConnected ? QueryAdbProperties(session) : null;
                 }
                 finally
                 {
                     session.Dispose();
                 }
             }).ConfigureAwait(true);
-
-            if (!string.IsNullOrEmpty(model))
-            {
-                device.Model = model;
-            }
-
-            if (!string.IsNullOrEmpty(version))
-            {
-                device.AndroidVersion = version;
-            }
-
-            if (SelectedDevice == device)
-            {
-                OnPropertyChanged(nameof(DeviceDetail));
-            }
         }
         catch
         {
             // 属性拉取失败不影响主流程（设备可能未授权）。
         }
+
+        if (info is null)
+        {
+            return;
+        }
+
+        ApplyAdbProperties(device, info);
+        if (SelectedDevice == device)
+        {
+            OnPropertyChanged(nameof(DeviceDetail));
+        }
+    }
+
+    /// <summary>
+    /// <para>通过 UotanStudio.Comm 的 Fastboot 会话查询 getvar 变量丰富设备信息。</para>
+    /// Queries fastboot getvar variables via a UotanStudio.Comm session to enrich device info.
+    /// </summary>
+    private async Task EnrichFastbootInfoAsync(DeviceInfo device)
+    {
+        Dictionary<string, string>? info = null;
+        try
+        {
+            info = await Task.Run(() =>
+            {
+                var session = DeviceMonitorService.Instance.OpenFastbootSession(device.Device);
+                if (session is null)
+                {
+                    return null;
+                }
+
+                try
+                {
+                    return !session.IsConnected
+                        ? null
+                        : new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["product"] = session.GetVariable("product", useCache: false),
+                            ["bl"] = session.GetVariable("unlocked", useCache: false),
+                            ["slot"] = session.GetVariable("current-slot", useCache: false),
+                            ["userspace"] = session.GetVariable("is-userspace", useCache: false),
+                            ["variant"] = session.GetVariable("variant", useCache: false),
+                        };
+                }
+                catch
+                {
+                    return null;
+                }
+                finally
+                {
+                    session.Dispose();
+                }
+            }).ConfigureAwait(true);
+        }
+        catch
+        {
+            // 属性拉取失败不影响主流程。
+        }
+
+        if (info is null)
+        {
+            return;
+        }
+
+        ApplyFastbootProperties(device, info);
+        if (SelectedDevice == device)
+        {
+            OnPropertyChanged(nameof(DeviceDetail));
+        }
+    }
+
+    /// <summary>
+    /// <para>执行一条 ADB shell 命令并返回去除空白行与首尾裁剪后的文本。</para>
+    /// Runs an ADB shell command and returns the whitespace-collapsed trimmed output.
+    /// </summary>
+    private static string RunShell(AdbSession session, string command)
+        => System.Text.Encoding.UTF8.GetString(session.ExecuteCommand(command).Stdout);
+
+    /// <summary>
+    /// <para>清理 shell 输出：去除空行并合并空白，错误标记归一化为 "--"。</para>
+    /// Cleans shell output: strips blank lines, collapses whitespace, normalizes error
+    /// markers to "--".
+    /// </summary>
+    private static string Clean(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "--";
+        }
+
+        var trimmed = string.Join(" ", raw.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)).Trim();
+        return trimmed.Length == 0
+            || trimmed.Contains("not found", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("device offline", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("unauthorized", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("closed", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Contains("fail", StringComparison.OrdinalIgnoreCase)
+                ? "--"
+                : trimmed;
+    }
+
+    /// <summary>
+    /// <para>从冒号分隔的输出中取冒号后的值（如 "Physical size: 1080x2340" -> "1080x2340"）。</para>
+    /// Extracts the last colon-delimited segment (e.g. "Physical size: 1080x2340" -> "1080x2340").
+    /// </summary>
+    private static string ColonValue(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return "--";
+        }
+
+        var parts = raw.Split(['\r', '\n', ':'], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 0 ? parts[^1].Trim() : "--";
+    }
+
+    /// <summary>
+    /// <para>批量查询 ADB 设备属性并解析电池、内存、磁盘信息。</para>
+    /// Queries ADB device properties and parses battery, memory and disk details.
+    /// </summary>
+    private static Dictionary<string, string> QueryAdbProperties(AdbSession session)
+    {
+        string Get(string cmd)
+        {
+            return Clean(RunShell(session, cmd));
+        }
+
+        var map = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["brand"] = Get("getprop ro.product.brand"),
+            ["model"] = Get("getprop ro.product.model"),
+            ["android"] = Get("getprop ro.build.version.release"),
+            ["sdk"] = Get("getprop ro.build.version.sdk"),
+            ["codename"] = Get("getprop ro.product.device"),
+            ["cpuabi"] = Get("getprop ro.product.cpu.abi"),
+            ["cpucode"] = Get("getprop ro.board.platform"),
+            ["kernel"] = Get("uname -r"),
+            ["resolution"] = ColonValue(RunShell(session, "wm size")),
+            ["density"] = ColonValue(RunShell(session, "wm density")),
+            ["boardid"] = Get("cat /sys/devices/soc0/serial_number"),
+            ["slot"] = Get("getprop ro.boot.slot_suffix"),
+            ["compile"] = Get("getprop ro.system.build.version.incremental"),
+            ["vndk"] = Get("getprop ro.vndk.version"),
+        };
+
+        var bl = Get("getprop ro.secureboot.lockstate");
+        if (bl == "--")
+        {
+            bl = Get("getprop ro.boot.vbmeta.device_state");
+        }
+
+        map["bl"] = bl;
+        map["uptime"] = FormatUptime(Get("cat /proc/uptime"));
+
+        var (bLevel, bText) = ParseBattery(RunShell(session, "dumpsys battery"));
+        map["batteryLevel"] = bLevel.ToString(CultureInfo.InvariantCulture);
+        map["batteryText"] = bText;
+
+        var (mLevel, mText) = ParseMem(RunShell(session, "cat /proc/meminfo | grep -E 'MemTotal|MemAvailable'"));
+        map["memLevel"] = mLevel.ToString(CultureInfo.InvariantCulture);
+        map["memText"] = mText;
+
+        var (dLevel, dText) = ParseDisk(RunShell(session, "echo; df /storage/emulated 2>/dev/null || df /data 2>/dev/null || df /sdcard 2>/dev/null"));
+        map["diskLevel"] = dLevel.ToString(CultureInfo.InvariantCulture);
+        map["diskText"] = dText;
+
+        return map;
+    }
+
+    /// <summary>
+    /// <para>将查询到的 ADB 属性应用到设备信息模型。</para>
+    /// Applies the queried ADB properties onto the device info model.
+    /// </summary>
+    private static void ApplyAdbProperties(DeviceInfo device, Dictionary<string, string> info)
+    {
+        device.Brand = info["brand"];
+        device.SdkVersion = info["sdk"];
+        device.CodeName = info["codename"];
+        device.CpuAbi = info["cpuabi"];
+        device.CpuCode = info["cpucode"];
+        device.Kernel = info["kernel"];
+        device.Resolution = info["resolution"];
+        device.Density = info["density"];
+        device.BoardId = info["boardid"];
+        device.BlStatus = info["bl"];
+        device.Slot = info["slot"];
+        device.CompileVersion = info["compile"];
+        device.VndkVersion = info["vndk"];
+        device.PowerOnTime = info["uptime"];
+        device.BatteryText = info["batteryText"];
+        device.MemText = info["memText"];
+        device.DiskText = info["diskText"];
+
+        if (int.TryParse(info["batteryLevel"], out var bLevel))
+        {
+            device.BatteryLevel = bLevel;
+        }
+
+        if (int.TryParse(info["memLevel"], out var mLevel))
+        {
+            device.MemLevel = mLevel;
+        }
+
+        if (int.TryParse(info["diskLevel"], out var dLevel))
+        {
+            device.DiskLevel = dLevel;
+        }
+
+        if (info["model"] != "--")
+        {
+            device.Model = info["model"];
+        }
+
+        if (info["android"] != "--")
+        {
+            device.AndroidVersion = info["android"];
+        }
+    }
+
+    /// <summary>
+    /// <para>将查询到的 Fastboot 属性应用到设备信息模型。</para>
+    /// Applies the queried fastboot properties onto the device info model.
+    /// </summary>
+    private static void ApplyFastbootProperties(DeviceInfo device, Dictionary<string, string> info)
+    {
+        var lang = LanguageService.Instance;
+        if (info["product"] != "--")
+        {
+            device.Model = info["product"];
+            device.CodeName = info["product"];
+        }
+
+        device.IsUserspace = info["userspace"].ToLowerInvariant().Contains("yes") ? "fastbootd" : "fastboot";
+        device.DiskType = info["variant"].ToUpperInvariant() switch
+        {
+            string v when v.Contains("UFS") => "UFS",
+            string v when v.Contains("EMMC") => "EMMC",
+            _ => "--",
+        };
+
+        device.BlStatus = info["bl"].ToLowerInvariant() switch
+        {
+            "yes" => lang.GetString("Device_Unlocked"),
+            "no" => lang.GetString("Device_Locked"),
+            _ => "--",
+        };
+
+        device.Slot = ParseSlot(info["slot"]);
+    }
+
+    /// <summary>
+    /// <para>解析 A/B 槽位号为可读字符串。</para>
+    /// Parses an A/B slot id into a human-readable value.
+    /// </summary>
+    private static string ParseSlot(string slot)
+    {
+        if (string.IsNullOrEmpty(slot))
+        {
+            return "--";
+        }
+
+        var normalized = slot.Trim().ToLowerInvariant();
+        return normalized.EndsWith("_a") || normalized.Equals("a") || normalized.Contains("current-slot: a")
+            ? "Slot A"
+            : normalized.EndsWith("_b") || normalized.Equals("b") || normalized.Contains("current-slot: b") ? "Slot B" : "--";
+    }
+
+    /// <summary>
+    /// <para>将 /proc/uptime 的秒数格式化为可读的开机时长。</para>
+    /// Formats the /proc/uptime seconds into a human-readable power-on duration.
+    /// </summary>
+    private static string FormatUptime(string raw)
+    {
+        if (raw is null or "--")
+        {
+            return "--";
+        }
+
+        var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 0
+            || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds))
+        {
+            return "--";
+        }
+
+        var lang = LanguageService.Instance;
+        var ts = TimeSpan.FromSeconds(seconds);
+        return $"{ts.Days}{lang.GetString("Device_UptimeDay")}"
+             + $"{ts.Hours}{lang.GetString("Device_UptimeHour")}"
+             + $"{ts.Minutes}{lang.GetString("Device_UptimeMinute")}"
+             + $"{ts.Seconds}{lang.GetString("Device_UptimeSecond")}";
+    }
+
+    /// <summary>
+    /// <para>解析 dumpsys battery 输出，返回（电量百分比, 电压/温度文本）。</para>
+    /// Parses dumpsys battery output; returns (level percent, voltage/temperature text).
+    /// </summary>
+    private static (int Level, string Text) ParseBattery(string info)
+    {
+        var values = new List<string>();
+        var lines = info.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            if (line.Contains("Max charging voltage", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("Charger voltage", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("the voltage was", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("last voltage value", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (line.Contains("level", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("voltage", StringComparison.OrdinalIgnoreCase)
+                || line.Contains("temperature", StringComparison.OrdinalIgnoreCase))
+            {
+                var tokens = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (tokens.Length > 0)
+                {
+                    values.Add(tokens[^1]);
+                }
+            }
+        }
+
+        if (values.Count < 3)
+        {
+            return (-1, "--");
+        }
+
+        int.TryParse(values[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var level);
+        double.TryParse(values[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var millivolts);
+        double.TryParse(values[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var tenthsCelsius);
+        return (Math.Clamp(level, 0, 100), $"{millivolts / 1000.0:0.00}V {tenthsCelsius / 10.0:0.0}℃");
+    }
+
+    /// <summary>
+    /// <para>解析 /proc/meminfo 中 MemTotal/MemAvailable，返回（占用百分比, 已用/总量文本）。</para>
+    /// Parses MemTotal/MemAvailable from /proc/meminfo; returns (usage percent, used/total text).
+    /// </summary>
+    private static (int Level, string Text) ParseMem(string info)
+    {
+        long total = 0, available = 0;
+        foreach (var line in info.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var tokens = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (tokens.Length < 2)
+            {
+                continue;
+            }
+
+            if (line.StartsWith("MemTotal:", StringComparison.OrdinalIgnoreCase))
+            {
+                long.TryParse(tokens[^2], NumberStyles.Integer, CultureInfo.InvariantCulture, out total);
+            }
+            else if (line.StartsWith("MemAvailable:", StringComparison.OrdinalIgnoreCase))
+            {
+                long.TryParse(tokens[^2], NumberStyles.Integer, CultureInfo.InvariantCulture, out available);
+            }
+        }
+
+        if (total <= 0)
+        {
+            return (-1, "--");
+        }
+
+        if (available <= 0)
+        {
+            available = total;
+        }
+
+        double usedKb = total - available;
+        var totalGb = Math.Round(total * 1.024 / 1_000_000, 1);
+        var usedGb = Math.Round(usedKb * 1.024 / 1_000_000, 1);
+        var percent = (int)Math.Round(usedGb / (totalGb <= 0 ? 1 : totalGb) * 100);
+        return (Math.Clamp(percent, 0, 100), $"{usedGb:0.0}GB/{totalGb:0.0}GB");
+    }
+
+    /// <summary>
+    /// <para>解析 df 输出中目标挂载点所在行，返回（占用百分比, 已用/总量文本）。</para>
+    /// Parses the target mount line from df output; returns (usage percent, used/total text).
+    /// </summary>
+    private static (int Level, string Text) ParseDisk(string info)
+    {
+        string? target = null;
+        foreach (var line in info.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.StartsWith("/storage/emulated")
+                || line.StartsWith("/data")
+                || line.StartsWith("/sdcard"))
+            {
+                target = line;
+                break;
+            }
+        }
+
+        if (target is null)
+        {
+            return (-1, "--");
+        }
+
+        // 列顺序：Filesystem Size Used Avail Use% Mounted
+        var columns = target.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (columns.Length < 5
+            || !double.TryParse(columns[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var blocks)
+            || !double.TryParse(columns[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var usedBlocks))
+        {
+            return (-1, "--");
+        }
+
+        var sizeGb = Math.Round(blocks / 1024.0 / 1024.0, 2);
+        var usedGb = Math.Round(usedBlocks / 1024.0 / 1024.0, 2);
+        var percent = (int)Math.Round(usedBlocks / (blocks <= 0 ? 1 : blocks) * 100);
+        return (Math.Clamp(percent, 0, 100), $"{usedGb:0.00}GB/{sizeGb:0.00}GB");
     }
     /// <summary>
     /// <para>连接到选中的设备（验证协议可达性）。</para>
@@ -243,6 +651,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 DeviceProtocolKind.Fastboot => TryFastboot(SelectedDevice),
                 DeviceProtocolKind.Edl => true, // EDL 握手需要 programmer，此处仅确认设备在位
                 DeviceProtocolKind.Rkdl => TryRkdl(SelectedDevice),
+                DeviceProtocolKind.Adb => throw new NotImplementedException(),
                 _ => TryAdb(SelectedDevice),
             }).ConfigureAwait(true);
 
@@ -434,6 +843,7 @@ public class DeviceInfo(DetectedDevice device) : ViewModelBase
         DeviceProtocolKind.Fastboot => "Fastboot",
         DeviceProtocolKind.Edl => "EDL",
         DeviceProtocolKind.Rkdl => "RKDL",
+        DeviceProtocolKind.Adb => throw new NotImplementedException(),
         _ => "ADB",
     };
 
@@ -445,6 +855,7 @@ public class DeviceInfo(DetectedDevice device) : ViewModelBase
     {
         DeviceTransportKind.Tcp => "Network",
         DeviceTransportKind.Serial => "Serial",
+        DeviceTransportKind.Usb => throw new NotImplementedException(),
         _ => "USB",
     };
 
@@ -466,4 +877,217 @@ public class DeviceInfo(DetectedDevice device) : ViewModelBase
     public string DisplayName => string.IsNullOrEmpty(Model)
         ? $"{Serial} ({State})"
         : $"{Serial} - {Model} ({State})";
+
+    /// <summary>链接端口/地址信息（USB 标识、TCP host:port、串口路径）。 Link/port info.</summary>
+    public string LinkPort => Device.Transport switch
+    {
+        DeviceTransportKind.Tcp =>
+            Device.Key.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase) ? Device.Key[4..] : Device.Key,
+        DeviceTransportKind.Serial => Device.Key,
+        DeviceTransportKind.Usb => throw new NotImplementedException(),
+        _ => "USB",
+    };
+
+    /// <summary>厂商/产品 USB ID（十六进制 VID:PID）。 Vendor/product USB ID.</summary>
+    public string UsbIds => Device.VendorId == 0
+        ? string.Empty
+        : $"{Device.VendorId:X04}:{Device.ProductId:X04}";
+
+    /// <summary>是否为 ADB 设备。 Whether the device is in ADB mode.</summary>
+    public bool IsAdb => Device.Protocol == DeviceProtocolKind.Adb;
+
+    /// <summary>是否为 Fastboot 设备。 Whether the device is in Fastboot mode.</summary>
+    public bool IsFastboot => Device.Protocol == DeviceProtocolKind.Fastboot;
+
+    /// <summary>是否为 EDL 设备。 Whether the device is in EDL mode.</summary>
+    public bool IsEdl => Device.Protocol == DeviceProtocolKind.Edl;
+
+    /// <summary>是否为 RKDL 设备。 Whether the device is in RKDL mode.</summary>
+    public bool IsRkdl => Device.Protocol == DeviceProtocolKind.Rkdl;
+
+    /// <summary>是否为 USB 直连设备。 Whether the device is connected over USB.</summary>
+    public bool IsUsb => Device.Transport == DeviceTransportKind.Usb;
+
+    /// <summary>是否为网络（TCP/adb server）设备。 Whether the device is connected over network.</summary>
+    public bool IsNetwork => Device.Transport == DeviceTransportKind.Tcp;
+
+    /// <summary>是否为串口设备。 Whether the device is connected over a serial port.</summary>
+    public bool IsSerial => Device.Transport == DeviceTransportKind.Serial;
+
+    /// <summary>
+    /// <para>设备品牌（ro.product.brand）。</para>
+    /// Device brand (ro.product.brand).
+    /// </summary>
+    public string Brand { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>系统 SDK 版本（ro.build.version.sdk）。</para>
+    /// System SDK version (ro.build.version.sdk).
+    /// </summary>
+    public string SdkVersion { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>设备代号（ro.product.device / fastboot product）。</para>
+    /// Device codename (ro.product.device / fastboot product).
+    /// </summary>
+    public string CodeName { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>CPU ABI（ro.product.cpu.abi）。</para>
+    /// CPU ABI (ro.product.cpu.abi).
+    /// </summary>
+    public string CpuAbi { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>SoC/主板平台代号（ro.board.platform）。</para>
+    /// SoC/board platform code (ro.board.platform).
+    /// </summary>
+    public string CpuCode { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>内核版本（uname -r）。</para>
+    /// Kernel version (uname -r).
+    /// </summary>
+    public string Kernel { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>屏幕分辨率（wm size）。</para>
+    /// Screen resolution (wm size).
+    /// </summary>
+    public string Resolution { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>屏幕像素密度（wm density）。</para>
+    /// Screen pixel density (wm density).
+    /// </summary>
+    public string Density { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>主板/SoC 序列号。</para>
+    /// Board/SoC serial number.
+    /// </summary>
+    public string BoardId { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>Bootloader 锁定状态。</para>
+    /// Bootloader lock state.
+    /// </summary>
+    public string BlStatus { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>当前 A/B 槽位（如 _a/_b）。</para>
+    /// Current A/B slot (e.g. _a/_b).
+    /// </summary>
+    public string Slot { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>开机时长（uptime）。</para>
+    /// Power-on time (uptime).
+    /// </summary>
+    public string PowerOnTime { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>编译/构建增量版本号。</para>
+    /// Compile/build incremental version.
+    /// </summary>
+    public string CompileVersion { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>VNDK 版本。</para>
+    /// VNDK version.
+    /// </summary>
+    public string VndkVersion { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>存储类型（UFS/EMMC，来自 fastboot variant）。</para>
+    /// Storage type (UFS/EMMC, from fastboot variant).
+    /// </summary>
+    public string DiskType { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>fastboot 是否为 user-space（fastbootd）。</para>
+    /// Whether fastboot is user-space (fastbootd).
+    /// </summary>
+    public string IsUserspace { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>电池电量百分比，-1 表示不可用。</para>
+    /// Battery level percent (-1 = unavailable).
+    /// </summary>
+    public int BatteryLevel
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasBattery));
+            }
+        }
+    } = -1;
+
+    /// <summary>电池信息是否可用。 Whether battery info is available.</summary>
+    public bool HasBattery => BatteryLevel >= 0;
+
+    /// <summary>
+    /// <para>电池状态文本（电压/温度）。</para>
+    /// Battery status text (voltage/temperature).
+    /// </summary>
+    public string BatteryText { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>内存占用百分比，-1 表示不可用。</para>
+    /// Memory usage percent (-1 = unavailable).
+    /// </summary>
+    public int MemLevel
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasMem));
+            }
+        }
+    } = -1;
+
+    /// <summary>内存信息是否可用。 Whether memory info is available.</summary>
+    public bool HasMem => MemLevel >= 0;
+
+    /// <summary>
+    /// <para>内存使用文本（已用/总量）。</para>
+    /// Memory usage text (used/total).
+    /// </summary>
+    public string MemText { get; set => SetProperty(ref field, value); } = string.Empty;
+
+    /// <summary>
+    /// <para>磁盘占用百分比，-1 表示不可用。</para>
+    /// Disk usage percent (-1 = unavailable).
+    /// </summary>
+    public int DiskLevel
+    {
+        get;
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(HasDisk));
+            }
+        }
+    } = -1;
+
+    /// <summary>磁盘信息是否可用。 Whether disk info is available.</summary>
+    public bool HasDisk => DiskLevel >= 0;
+
+    /// <summary>
+    /// <para>资源使用信息（电池/内存/存储）是否至少一项可用。</para>
+    /// Whether at least one of battery/memory/storage resource metrics is available.
+    /// </summary>
+    public bool HasResourceInfo => IsAdb && (HasBattery || HasMem || HasDisk);
+
+    /// <summary>
+    /// <para>磁盘占用文本（已用/总量）。</para>
+    /// Disk usage text (used/total).
+    /// </summary>
+    public string DiskText { get; set => SetProperty(ref field, value); } = string.Empty;
 }
