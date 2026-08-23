@@ -152,46 +152,53 @@
                                        Margin="0,20" />
                         </StackPanel>
 
-                        <!-- 选中节点属性 -->
-                        <StackPanel IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                    Spacing="6">
-                            <TextBlock Text="{DynamicResource Node_Properties_Title}" FontSize="11" Opacity="0.7" />
-                            <TextBox Text="{Binding SelectedNode.Title, Mode=TwoWay}" FontSize="12" />
+                        <!-- 选中节点属性：使用 ContentControl + DataTemplate，仅在 SelectedNode 非空时才实例化
+                             子控件并解析其绑定，避免 SelectedNode 为 null 时输出 "Value is null" 绑定错误。 -->
+                        <ContentControl Content="{Binding SelectedNode}"
+                                        IsVisible="{Binding SelectedNode, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <ContentControl.ContentTemplate>
+                                <DataTemplate DataType="{x:Type nodeVm:FlowNodeViewModel}">
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="{DynamicResource Node_Properties_Title}" FontSize="11" Opacity="0.7" />
+                                        <TextBox Text="{Binding Title, Mode=TwoWay}" FontSize="12" />
 
-                            <TextBlock Text="{DynamicResource Node_Properties_Category}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
-                            <TextBlock Text="{Binding SelectedNode.Category}" FontSize="12" />
+                                        <TextBlock Text="{DynamicResource Node_Properties_Category}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
+                                        <TextBlock Text="{Binding Category}" FontSize="12" />
 
-                            <TextBlock Text="{DynamicResource Node_Properties_Location}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
-                            <TextBlock FontSize="12">
-                                <Run Text="{Binding SelectedNode.Location.X}" />
-                                <Run Text=", " />
-                                <Run Text="{Binding SelectedNode.Location.Y}" />
-                            </TextBlock>
+                                        <TextBlock Text="{DynamicResource Node_Properties_Location}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
+                                        <TextBlock FontSize="12">
+                                            <Run Text="{Binding Location.X}" />
+                                            <Run Text=", " />
+                                            <Run Text="{Binding Location.Y}" />
+                                        </TextBlock>
 
-                            <TextBlock Text="{DynamicResource Node_Properties_Inputs}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
-                            <ItemsControl ItemsSource="{Binding SelectedNode.Input}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                        <StackPanel Margin="0,2" Spacing="2">
-                                            <TextBlock Text="{Binding Title}" FontSize="11" Opacity="0.7" />
-                                            <TextBox Text="{Binding Value, Mode=TwoWay}" FontSize="12" Padding="4,2" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                        <TextBlock Text="{DynamicResource Node_Properties_Inputs}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
+                                        <ItemsControl ItemsSource="{Binding Input}" Margin="0,2,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
+                                                    <StackPanel Margin="0,2" Spacing="2">
+                                                        <TextBlock Text="{Binding Title}" FontSize="11" Opacity="0.7" />
+                                                        <TextBox Text="{Binding Value, Mode=TwoWay}" FontSize="12" Padding="4,2" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
 
-                            <TextBlock Text="{DynamicResource Node_Properties_Outputs}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
-                            <ItemsControl ItemsSource="{Binding SelectedNode.Output}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                        <StackPanel Margin="0,2" Spacing="2">
-                                            <TextBlock Text="{Binding Title}" FontSize="11" Opacity="0.7" />
-                                            <TextBox Text="{Binding Value, Mode=TwoWay}" FontSize="12" Padding="4,2" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
+                                        <TextBlock Text="{DynamicResource Node_Properties_Outputs}" FontSize="11" Opacity="0.7" Margin="0,4,0,0" />
+                                        <ItemsControl ItemsSource="{Binding Output}" Margin="0,2,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
+                                                    <StackPanel Margin="0,2" Spacing="2">
+                                                        <TextBlock Text="{Binding Title}" FontSize="11" Opacity="0.7" />
+                                                        <TextBox Text="{Binding Value, Mode=TwoWay}" FontSize="12" Padding="4,2" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ContentControl.ContentTemplate>
+                        </ContentControl>
                     </Grid>
                 </ScrollViewer>
             </DockPanel>

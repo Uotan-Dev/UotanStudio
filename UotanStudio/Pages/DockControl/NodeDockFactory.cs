@@ -114,6 +114,12 @@ public class NodeDockFactory : Factory
         };
 
         var rootDock = CreateRootDock();
+
+        // 显式启用托管托管模式，避免 ManagedWindowLayer 存在却无 Dock 而触发 #PART_Windows 绑定错误。
+        // Explicitly enable managed hosting so the ManagedWindowLayer is bound to a dock and the
+        // theme's #PART_Windows ItemsSource binding does not log "Value is null".
+        rootDock.FloatingWindowHostMode = DockFloatingWindowHostMode.Managed;
+
         rootDock.IsCollapsable = false;
         rootDock.ActiveDockable = mainLayout;
         rootDock.DefaultDockable = mainLayout;
@@ -132,6 +138,9 @@ public class NodeDockFactory : Factory
     /// </param>
     public override void InitLayout(IDockable layout)
     {
+        // 主题模板会直接绑定 DockCapabilityOverrides/DockCapabilityPolicy，预置非空对象避免 "Value is null" 绑定错误
+        DockCapabilityDefaults.Ensure(layout);
+
         ContextLocator = new Dictionary<string, Func<object?>>
         {
             ["NodeToolbox"] = () => LanguageService.Instance.GetString("Node_Toolbox"),
@@ -149,57 +158,5 @@ public class NodeDockFactory : Factory
         DefaultHostWindowLocator = () => new HostWindow();
 
         base.InitLayout(layout);
-    }
-
-    /// <summary>
-    /// <para>关闭可停靠面板，安全移除。</para>
-    /// Closes a dockable panel with safe removal.
-    /// </summary>
-    /// <param name="dockable">
-    /// <para>要关闭的可停靠面板。</para>
-    /// The dockable to close.
-    /// </param>
-    public override void CloseDockable(IDockable dockable)
-    {
-        if (dockable == null || !dockable.CanClose)
-        {
-            return;
-        }
-
-        try
-        {
-            SafeRemoveDockable(dockable);
-        }
-        catch
-        {
-            // 忽略任何异常，确保不崩溃
-        }
-    }
-
-    private void SafeRemoveDockable(IDockable dockable)
-    {
-        try
-        {
-            if (dockable?.Owner is IDock dock && dock.VisibleDockables != null)
-            {
-                var list = new List<IDockable>(dock.VisibleDockables);
-                if (list.Contains(dockable))
-                {
-                    list.Remove(dockable);
-                    dock.VisibleDockables = CreateList(list.ToArray());
-
-                    if (dock.ActiveDockable == dockable)
-                    {
-                        dock.ActiveDockable = list.Count > 0 ? list[0] : null;
-                    }
-                }
-            }
-
-            dockable?.Owner = null;
-        }
-        catch
-        {
-            // 忽略任何移除过程中的错误
-        }
     }
 }

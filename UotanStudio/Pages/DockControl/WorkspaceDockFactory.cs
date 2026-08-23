@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
@@ -91,6 +90,18 @@ public class WorkspaceDockFactory : Factory
         };
 
         var rootDock = CreateRootDock();
+
+        // 显式启用托管窗口托管模式：DockControl.EnableManagedWindowLayer 默认为 true，但
+        // DockSettings 默认不启用托管托管。若不设置，ManagedWindowLayer 虽被创建却从未绑定 Dock，
+        // 其主题模板中的 #PART_Windows(ItemsSource=$parent[ManagedWindowLayer].Dock.VisibleDockables)
+        // 会因 Dock 为 null 而输出 "Value is null" 绑定错误。
+        // Explicitly enable managed window hosting: DockControl.EnableManagedWindowLayer defaults to
+        // true, but DockSettings does not enable managed hosting by default. Without this, the
+        // ManagedWindowLayer is created but never given a Dock, so its theme's #PART_Windows
+        // (ItemsSource=$parent[ManagedWindowLayer].Dock.VisibleDockables) logs "Value is null"
+        // binding errors because Dock is null.
+        rootDock.FloatingWindowHostMode = DockFloatingWindowHostMode.Managed;
+
         rootDock.IsCollapsable = false;
         rootDock.ActiveDockable = mainLayout;
         rootDock.DefaultDockable = mainLayout;
@@ -106,6 +117,9 @@ public class WorkspaceDockFactory : Factory
     /// <param name="layout">The dockable layout.</param>
     public override void InitLayout(IDockable layout)
     {
+        // 主题模板会直接绑定 DockCapabilityOverrides/DockCapabilityPolicy，预置非空对象避免 "Value is null" 绑定错误
+        DockCapabilityDefaults.Ensure(layout);
+
         ContextLocator = new Dictionary<string, Func<object?>>
         {
             ["Document1"] = () => "# build.prop\n# Auto-generated build properties\n\nro.build.id=UotanStudio\nro.build.version.release=14\nro.product.model=ExampleDevice\nro.build.type=userdebug\n",
@@ -125,72 +139,5 @@ public class WorkspaceDockFactory : Factory
         DefaultHostWindowLocator = () => new HostWindow();
 
         base.InitLayout(layout);
-    }
-
-    /// <summary>
-    /// Closes the dockable.
-    /// <para>关闭可停靠对象。</para>
-    /// </summary>
-    /// <param name="dockable">The dockable to close.</param>
-    public override void CloseDockable(IDockable dockable)
-    {
-        if (dockable == null)
-        {
-            return;
-        }
-
-        if (!dockable.CanClose)
-        {
-            return;
-        }
-
-        try
-        {
-            SafeRemoveDockable(dockable);
-        }
-        catch
-        {
-            // 忽略任何异常，确保不崩溃
-        }
-    }
-
-    /// <summary>
-    /// Safely removes the dockable from its owner.
-    /// <para>安全地从所有者移除可停靠对象。</para>
-    /// </summary>
-    /// <param name="dockable">The dockable to remove.</param>
-    private void SafeRemoveDockable(IDockable dockable)
-    {
-        try
-        {
-            if (dockable == null)
-            {
-                return;
-            }
-
-            if (dockable.Owner is IDock dock)
-            {
-                if (dock.VisibleDockables != null)
-                {
-                    var list = dock.VisibleDockables.ToList();
-                    if (list.Contains(dockable))
-                    {
-                        list.Remove(dockable);
-                        dock.VisibleDockables = CreateList(list.ToArray());
-
-                        if (dock.ActiveDockable == dockable)
-                        {
-                            dock.ActiveDockable = list.FirstOrDefault();
-                        }
-                    }
-                }
-            }
-
-            dockable.Owner = null;
-        }
-        catch
-        {
-            // 忽略任何移除过程中的错误
-        }
     }
 }
