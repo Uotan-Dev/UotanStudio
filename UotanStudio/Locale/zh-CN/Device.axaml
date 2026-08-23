@@ -17,6 +17,8 @@
     <x:String x:Key="Device_Reconnecting">正在重新连接...</x:String>
     <x:String x:Key="Device_GroupAdb">ADB 设备</x:String>
     <x:String x:Key="Device_GroupFastboot">Fastboot 设备</x:String>
+    <x:String x:Key="Device_GroupEdl">EDL 设备</x:String>
+    <x:String x:Key="Device_GroupRkdl">RKDL 设备</x:String>
     <x:String x:Key="Device_EmptyHint">点击刷新以扫描已连接的设备。</x:String>
 
 </ResourceDictionary>

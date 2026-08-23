@@ -17,6 +17,8 @@
     <x:String x:Key="Device_Reconnecting">Reconnecting...</x:String>
     <x:String x:Key="Device_GroupAdb">ADB Devices</x:String>
     <x:String x:Key="Device_GroupFastboot">Fastboot Devices</x:String>
+    <x:String x:Key="Device_GroupEdl">EDL Devices</x:String>
+    <x:String x:Key="Device_GroupRkdl">RKDL Devices</x:String>
     <x:String x:Key="Device_EmptyHint">Click Refresh to scan connected devices.</x:String>
 
 </ResourceDictionary>
