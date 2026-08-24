@@ -1,0 +1,754 @@
+using AdvancedSharpAdbClient;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using UotanStudio.Comm;
+using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Protocols.Bootrom;
+using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Protocols.Fastboot;
+using UotanStudio.Comm.Transports.Abstractions;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
+
+namespace UotanStudio.Services;
+
+/// <summary>
+/// <para>设备传输类型。</para>
+/// Device transport kind.
+/// </summary>
+public enum DeviceTransportKind
+{
+    /// <summary>USB 直连。 Direct USB.</summary>
+    Usb,
+    /// <summary>网络（adb server / TCP）。 Network (adb server / TCP).</summary>
+    Tcp,
+    /// <summary>串口。 Serial port.</summary>
+    Serial,
+}
+
+/// <summary>
+/// <para>设备协议类型。</para>
+/// Device protocol kind.
+/// </summary>
+public enum DeviceProtocolKind
+{
+    /// <summary>ADB（system/recovery/sideload）。 ADB mode.</summary>
+    Adb,
+    /// <summary>Fastboot（bootloader/fastbootd）。 Fastboot mode.</summary>
+    Fastboot,
+    /// <summary>高通 EDL（9008）。 Qualcomm EDL.</summary>
+    Edl,
+    /// <summary>瑞芯微 bootrom/loader（rockusb）。 Rockchip bootrom/loader.</summary>
+    Rkdl,
+}
+
+/// <summary>
+/// <para>由设备监视服务枚举出的一台设备。</para>
+/// A single device enumerated by the device monitor service.
+/// </summary>
+public sealed class DetectedDevice
+{
+    /// <summary>稳定键（USB DeviceKey 或 "tcp:host:port"）。 Stable key.</summary>
+    public required string Key { get; init; }
+    /// <summary>序列号或显示标识。 Serial or display identity.</summary>
+    public required string Serial { get; init; }
+    /// <summary>协议类型。 Protocol kind.</summary>
+    public required DeviceProtocolKind Protocol { get; init; }
+    /// <summary>传输类型。 Transport kind.</summary>
+    public required DeviceTransportKind Transport { get; init; }
+    /// <summary>状态文本（device/offline/fastboot/edl/maskrom/loader…）。 State text.</summary>
+    public string State { get; set; } = string.Empty;
+    /// <summary>USB 厂商 ID（非 USB 为 0）。 USB vendor ID.</summary>
+    public ushort VendorId { get; init; }
+    /// <summary>USB 产品 ID（非 USB 为 0）。 USB product ID.</summary>
+    public ushort ProductId { get; init; }
+    /// <summary>显示名称。 Display name.</summary>
+    public string DisplayName => Transport == DeviceTransportKind.Tcp
+        ? $"{Serial} (network)"
+        : $"{Serial} ({State})";
+}
+
+/// <summary>
+/// <para>设备监视服务：启动时全量扫描 USB 设备，随后响应 USB 热插拔与 adb server 设备变更，
+/// 并提供手动强制刷新。设备枚举与协议会话完全基于 UotanStudio.Comm；与 Google 官方
+/// adb server 的交互（网络设备、状态查询、重启）通过 AdvancedSharpAdbClient 完成。</para>
+/// Device monitor service: performs a full USB scan on startup, then reacts to USB
+/// hotplug events and adb-server device changes, plus a manual force-refresh. Enumeration
+/// and protocol sessions go through UotanStudio.Comm; interaction with the official Google
+/// adb server (network devices, state queries, reboots) uses AdvancedSharpAdbClient.
+/// </summary>
+public sealed class DeviceMonitorService : IDisposable
+{
+    /// <summary>
+    /// <para>单例实例。</para>
+    /// Singleton instance.
+    /// </summary>
+    public static DeviceMonitorService Instance { get; } = new();
+
+    private readonly CommKit _comm = CommKit.Default;
+    private IDisposable? _usbMonitor;
+    private DeviceMonitor? _adbMonitor;
+    private Timer? _debounce;
+    private volatile bool _started;
+    private volatile IReadOnlyList<DetectedDevice>? _cachedScan;
+    private readonly Lock _sync = new();
+
+    /// <summary>
+    /// <para>设备列表发生变化（热插拔、adb server 变更或强制刷新完成）时触发。</para>
+    /// Raised when the device list changed (hotplug, adb-server change or completed force refresh).
+    /// </summary>
+    public event EventHandler? DevicesChanged;
+
+    private DeviceMonitorService() { }
+
+    /// <summary>
+    /// <para>启动服务：立即执行一次全量扫描，并开始监听 USB 热插拔与 adb server 设备变更。
+    /// 幂等，可安全多次调用。</para>
+    /// Starts the service: performs one full scan immediately and begins monitoring USB
+    /// hotplug and adb-server device changes. Idempotent.
+    /// </summary>
+    public void Start()
+    {
+        lock (_sync)
+        {
+            if (_started)
+            {
+                return;
+            }
+
+            _started = true;
+        }
+
+        LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Device monitor starting (initial full USB scan).");
+
+        // USB 热插拔监视（Windows 走 WM_DEVICECHANGE 原生事件，其他平台回退轮询快照）。
+        // 仅当变化涉及 ADB/Fastboot/EDL/RKDL 相关设备时才触发重扫：摄像头、键鼠等与
+        // 本工具无关的设备（如 0C45:6362）在总线上频繁插拔/接口重枚举时，不应反复触发
+        // 全量扫描与列表刷新。
+        // USB hotplug monitoring (native WM_DEVICECHANGE on Windows, polling snapshot
+        // elsewhere). Only changes of ADB/Fastboot/EDL/RKDL-relevant devices trigger a
+        // rescan: irrelevant devices such as webcams (e.g. 0C45:6362) that churn on the
+        // bus / re-enumerate interfaces must not repeatedly trigger full scans.
+        _usbMonitor = _comm.MonitorUsbDevices(changes =>
+        {
+            LogDeviceChanges(changes);
+            if (changes.Any(static c => IsRelevantDevice(c.Device)))
+            {
+                ScheduleChange();
+            }
+        }, onError: _ => { });
+
+        // adb server 设备变更监视（server 未运行时静默跳过，不拉起外部进程）。
+        try
+        {
+            var client = ProbeAdbServer(); // 探测 5037 端口是否可达（短缓存）
+            if (client is null)
+            {
+                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Official adb server not running; USB-direct sources only.");
+                return;
+            }
+            var monitor = new DeviceMonitor(new AdbSocket(client.EndPoint));
+            monitor.DeviceChanged += (_, _) => ScheduleChange();
+            monitor.Start();
+            _adbMonitor = monitor;
+            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Official adb server detected; network devices will be merged.");
+        }
+        catch
+        {
+            // 官方 adb server 未运行：网络设备源不可用，USB 直连不受影响。
+            LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Official adb server not running; USB-direct sources only.");
+        }
+    }
+
+    /// <summary>
+    /// <para>将 USB 设备增删/变更写入统一日志。与工具相关的设备记录为 Info；
+    /// 无关设备（摄像头、键鼠等）仅记录 Debug，避免日志刷屏。</para>
+    /// Writes USB device add/remove/change events into the unified log. Relevant
+    /// devices are logged at Info; irrelevant ones (webcams, HID, etc.) at Debug
+    /// to avoid log spam.
+    /// </summary>
+    private static void LogDeviceChanges(IReadOnlyList<UsbDeviceChange> changes)
+    {
+        foreach (var change in changes)
+        {
+            var d = change.Device;
+            var identity = $"{d.VendorId:X4}:{d.ProductId:X4}" +
+                (string.IsNullOrEmpty(d.SerialNumber) ? string.Empty : $" ({d.SerialNumber})");
+            var level = IsRelevantDevice(d) ? LogLevel.Info : LogLevel.Debug;
+            switch (change.Kind)
+            {
+                case UsbDeviceChangeKind.Added:
+                    LogService.Instance.Write(level, "DeviceMonitor", $"USB device added: {identity}");
+                    break;
+                case UsbDeviceChangeKind.Removed:
+                    LogService.Instance.Write(level, "DeviceMonitor", $"USB device removed: {identity}");
+                    break;
+                case UsbDeviceChangeKind.Changed:
+                    LogService.Instance.Write(LogLevel.Debug, "DeviceMonitor", $"USB device changed: {identity}");
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <para>判断 USB 设备是否与本工具相关（ADB/Fastboot/EDL/RKDL）。不相关设备的
+    /// 变化（如复合摄像头接口节点的动态插拔）不会触发设备列表重扫。</para>
+    /// Determines whether a USB device is relevant to the tool (ADB/Fastboot/EDL/RKDL).
+    /// Changes of irrelevant devices (e.g. dynamic interface churn of composite webcams)
+    /// do not trigger a device-list rescan.
+    /// </summary>
+    private static bool IsRelevantDevice(UsbDeviceInfo info) => Classify(info) is not null;
+
+    /// <summary>
+    /// <para>全量扫描：枚举所有 USB 设备并按接口类/VID-PID 分类为 ADB/Fastboot/EDL/RKDL，
+    /// 并合并 adb server 中的网络设备。结果缓存至下一次设备变更（启动窗的首次扫描结果
+    /// 可直接供设备管理器复用，避免重复枚举）。</para>
+    /// Full scan: enumerates all USB devices, classifies them as ADB/Fastboot/EDL/RKDL by
+    /// interface class or VID/PID, and merges network devices from the adb server. The result
+    /// is cached until the next device change (the splash's initial scan is reused by the
+    /// device manager, avoiding a duplicate enumeration).
+    /// </summary>
+    public IReadOnlyList<DetectedDevice> Scan()
+    {
+        var cached = _cachedScan;
+        if (cached is not null)
+        {
+            return cached;
+        }
+
+        var devices = ScanCore();
+        _cachedScan = devices;
+        return devices;
+    }
+
+    /// <summary>
+    /// <para>执行实际的全量枚举与分类。</para>
+    /// Performs the actual full enumeration and classification.
+    /// </summary>
+    private IReadOnlyList<DetectedDevice> ScanCore()
+    {
+        var devices = new List<DetectedDevice>();
+
+        // 参考 adb devices:adb server 对 USB 设备会返回真实序列号(来自设备实例 ID),
+        // 而本库枚举阶段(仅元数据发现)读不到 USB 字符串描述符序列号。此处预先取回
+        // adb server 的 USB 设备序列号列表,供下方按枚举顺序补全,使设备管理器能
+        // 区分多台相同 VID/PID 的设备。
+        // Reference the adb devices implementation: the adb server reports the real
+        // serial (from the device instance ID) for USB devices, whereas this library's
+        // enumeration is metadata-only and cannot read the USB string-descriptor serial.
+        // Pre-fetch the adb server's USB serials here and backfill them in enumeration
+        // order below, so the device manager can tell apart multiple devices sharing
+        // the same VID/PID.
+        var adbUsbSerials = new List<string>();
+        var adbStates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var adbClient = AdbServerClient;
+        if (adbClient is not null)
+        {
+            foreach (var d in adbClient.GetDevices())
+            {
+                if (d.Serial.Contains(':'))
+                {
+                    continue; // 网络设备(host:port)在下方单独合并
+                }
+
+                adbUsbSerials.Add(d.Serial);
+                adbStates[d.Serial] = d.State.ToString().ToLowerInvariant();
+            }
+        }
+
+        // Auto 模式下 winusb 原生与 libusb 两个后端会同时枚举同一物理设备;libusb
+        // 以"首个 bulk 接口"(如 FF|FF|30)报告接口三元组,与 winusb 的 ADB 接口
+        // (FF|42|01)不同,物理去重键不合并 → 同一台设备出现两条 ADB 条目,而 adb
+        // server 的序列号只有一份,第二条补不到序列号便回退成 VID:PID。此处对 ADB
+        // 条目合并:已补全真实序列号的条目以其序列号去重;回退成 VID:PID 的条目若
+        // 其 VID/PID 已有带序列号的条目(后端重复),直接丢弃。
+        // In Auto mode both the native (winusb) and libusb backends enumerate the same
+        // physical device; libusb reports the first bulk interface (e.g. FF|FF|30) which
+        // differs from winusb's ADB interface (FF|42|01), so the physical dedup key does
+        // not merge them — the same device then shows up as two ADB entries, and since
+        // the adb server has only one serial, the second entry cannot be backfilled and
+        // degrades to a VID:PID string. Merge ADB entries here: entries backfilled with a
+        // real serial are deduplicated by that serial; an entry degraded to VID:PID whose
+        // VID/PID already has a serial-bearing entry (backend duplicate) is dropped.
+        var seenAdbSerials = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenVidPidWithSerial = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var usbSerialCursor = 0;
+        foreach (var info in _comm.EnumerateUsbDevices())
+        {
+            var protocol = Classify(info);
+            if (protocol is null)
+            {
+                continue;
+            }
+
+            // adb server 报告的 USB 序列号(与设备路径中的实例号一致)优先于
+            // VID:PID 回退;adb server 未运行时(列表为空)保持原有回退行为。
+            var serial = info.SerialNumber;
+            if (string.IsNullOrEmpty(serial) &&
+                protocol == DeviceProtocolKind.Adb &&
+                usbSerialCursor < adbUsbSerials.Count)
+            {
+                serial = adbUsbSerials[usbSerialCursor++];
+            }
+
+            if (protocol == DeviceProtocolKind.Adb)
+            {
+                var vidPid = $"{info.VendorId:X4}:{info.ProductId:X4}";
+                if (!string.IsNullOrEmpty(serial))
+                {
+                    if (!seenAdbSerials.Add(serial))
+                    {
+                        continue; // 同一序列号已有条目(跨后端重复),丢弃
+                    }
+
+                    seenVidPidWithSerial.Add(vidPid);
+                }
+                else
+                {
+                    // 未补到序列号:若该 VID/PID 已有带序列号的条目,这是 libusb
+                    // 后端的重复枚举,丢弃;否则保留(adb server 未运行的场景)。
+                    if (seenVidPidWithSerial.Contains(vidPid))
+                    {
+                        continue;
+                    }
+
+                    seenVidPidWithSerial.Add(vidPid);
+                }
+            }
+
+            devices.Add(new DetectedDevice
+            {
+                Key = info.DeviceKey,
+                Serial = serial ?? $"{info.VendorId:X4}:{info.ProductId:X4}",
+                Protocol = protocol.Value,
+                Transport = DeviceTransportKind.Usb,
+                State = protocol.Value switch
+                {
+                    DeviceProtocolKind.Adb when !string.IsNullOrEmpty(serial) &&
+                        adbStates.TryGetValue(serial, out var adbState) => adbState,
+                    DeviceProtocolKind.Adb => "device",
+                    DeviceProtocolKind.Fastboot => "fastboot",
+                    DeviceProtocolKind.Edl => "edl",
+                    DeviceProtocolKind.Rkdl => RkdlState(info),
+                    _ => string.Empty,
+                },
+                VendorId = info.VendorId,
+                ProductId = info.ProductId,
+            });
+        }
+
+        // adb server 中的网络设备（host:port 序列号）。
+        if (adbClient is not null)
+        {
+            foreach (var d in adbClient.GetDevices())
+            {
+                if (!d.Serial.Contains(':'))
+                {
+                    continue; // USB 设备已由 Comm 枚举
+                }
+
+                devices.Add(new DetectedDevice
+                {
+                    Key = "tcp:" + d.Serial,
+                    Serial = d.Serial,
+                    Protocol = DeviceProtocolKind.Adb,
+                    Transport = DeviceTransportKind.Tcp,
+                    State = d.State.ToString().ToLowerInvariant(),
+                });
+            }
+        }
+
+        return devices;
+    }
+
+    /// <summary>
+    /// <para>手动强制刷新：重新执行全量扫描并广播变更。</para>
+    /// Manual force refresh: reruns the full scan and broadcasts the change.
+    /// </summary>
+    public Task ForceRefreshAsync()
+    {
+        LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Manual device refresh requested.");
+        ScheduleChange();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// <para>按序列号查找当前扫描结果中的设备；找不到时返回 <c>null</c>。</para>
+    /// Finds a device from the current scan result by serial; returns <c>null</c> when absent.
+    /// </summary>
+    public DetectedDevice? FindDeviceBySerial(string serial)
+        => Scan().FirstOrDefault(d => d.Serial == serial);
+
+    /// <summary>
+    /// <para>为设备打开 USB 设备会话（按键重开，支持模式切换后 VID/PID 变化）。</para>
+    /// Opens the USB device session for the device (reopen by key, tolerating VID/PID
+    /// changes across mode switches).
+    /// </summary>
+    public IUsbDeviceSession? OpenUsbSession(DetectedDevice device)
+        => device.Transport == DeviceTransportKind.Usb
+            ? _comm.OpenUsbDeviceSessionByKey(device.Key)
+            : null;
+
+    /// <summary>
+    /// <para>为设备打开 ADB 协议会话（USB 直连；网络设备请使用 <see cref="AdbServerClient"/>）。</para>
+    /// Opens an ADB protocol session for the device (direct USB; use <see cref="AdbServerClient"/>
+    /// for network devices).
+    /// </summary>
+    public AdbSession? OpenAdbSession(DetectedDevice device)
+    {
+        var usb = OpenUsbSession(device);
+        return usb is null ? null : new AdbSession(new UsbDeviceTransport(usb));
+    }
+
+    /// <summary>
+    /// <para>为设备打开 Fastboot 协议会话。</para>
+    /// Opens a Fastboot protocol session for the device.
+    /// </summary>
+    public FastbootSession? OpenFastbootSession(DetectedDevice device)
+    {
+        var usb = OpenUsbSession(device);
+        return usb is null ? null : new FastbootSession(new UsbDeviceTransport(usb));
+    }
+
+    /// <summary>
+    /// <para>为设备打开 EDL 协议会话。</para>
+    /// Opens an EDL protocol session for the device.
+    /// </summary>
+    public EdlSession? OpenEdlSession(DetectedDevice device)
+    {
+        var usb = OpenUsbSession(device);
+        return usb is null ? null : new EdlSession(new UsbDeviceTransport(usb));
+    }
+
+    /// <summary>
+    /// <para>为设备打开 RKDL 协议会话。</para>
+    /// Opens an RKDL protocol session for the device.
+    /// </summary>
+    public RkdlSession? OpenRkdlSession(DetectedDevice device)
+    {
+        var usb = OpenUsbSession(device);
+        return usb is null ? null : new RkdlSession(new UsbDeviceTransport(usb));
+    }
+
+    /// <summary>
+    /// <para>获取与 Google 官方 adb server 交互的客户端；server 未运行时返回 <c>null</c>。</para>
+    /// Gets a client for the official Google adb server, or <c>null</c> when it is not running.
+    /// </summary>
+    public AdbClient? AdbServerClient => ProbeAdbServer();
+
+    /// <summary>
+    /// <para>缓存的 adb server 探测结果与探测时间。</para>
+    /// Cached adb-server probe result and probe timestamp.
+    /// </summary>
+    private AdbClient? _cachedAdbClient;
+    private long _adbProbeTicks;
+
+    /// <summary>
+    /// <para>探测官方 adb server（127.0.0.1:5037），结果缓存 3 秒——避免每次扫描/重启
+    /// 都建立新连接，也减少 server 未运行时调试器中的 SocketException 噪音。</para>
+    /// Probes the official adb server (127.0.0.1:5037) with a 3-second result cache —
+    /// avoids a new connection per scan/reboot and reduces SocketException noise in the
+    /// debugger when the server is not running.
+    /// </summary>
+    private AdbClient? ProbeAdbServer()
+    {
+        var now = Environment.TickCount64;
+        lock (_sync)
+        {
+            if (now - _adbProbeTicks < 3000)
+            {
+                return _cachedAdbClient;
+            }
+
+            _adbProbeTicks = now;
+            // 端口未被监听时直接返回 null：避免连接被拒时抛 SocketException
+            //（调试器中的首异常噪音）。
+            // Skip the probe when nothing is listening on 5037, avoiding a
+            // SocketException (first-chance noise in the debugger) on a refused connection.
+            if (!IsAdbPortListening())
+            {
+                _cachedAdbClient = null;
+                return null;
+            }
+
+            try
+            {
+                var client = new AdbClient();
+                _ = client.GetAdbVersion();
+                _cachedAdbClient = client;
+            }
+            catch
+            {
+                _cachedAdbClient = null;
+            }
+            return _cachedAdbClient;
+        }
+    }
+
+    /// <summary>
+    /// <para>非抛异常地检查 127.0.0.1:5037 是否有进程在监听（adb server 通常绑定此端口）。</para>
+    /// Non-throwing check whether anything listens on 127.0.0.1:5037 (the adb server's usual port).
+    /// </summary>
+    private static bool IsAdbPortListening()
+    {
+        try
+        {
+            var listeners = System.Net.NetworkInformation.IPGlobalProperties
+                .GetIPGlobalProperties()
+                .GetActiveTcpListeners();
+            return listeners.Any(ep => ep.Port == 5037);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <para>将设备重启到指定模式（system/bootloader/recovery/edl）。
+    /// ADB 设备：优先 USB 直连会话，失败或为网络设备时回退 adb server；
+    /// Fastboot 设备：使用 fastboot reboot。</para>
+    /// Reboots the device into the given mode (system/bootloader/recovery/edl). ADB
+    /// devices prefer a direct USB session, falling back to the adb server for network
+    /// devices; Fastboot devices use fastboot reboot.
+    /// </summary>
+    public async Task<bool> RebootAsync(DetectedDevice device, string mode, CancellationToken cancellationToken = default)
+    {
+        // 目标模式即 reboot:<mode> 服务中冒号之后的部分（不带 "reboot " 前缀）。
+        // 若前缀传入，两种后端会拼成非法的 "reboot:reboot <mode>"，设备会回退为普通进系统重启。
+        // "now" 表示普通重启进系统（与 FirmwareKit.Comm.ADB 的默认值一致）。
+        // The target mode is the part after the colon of the reboot:<mode> service (no
+        // "reboot " prefix). Passing the prefix yields the invalid "reboot:reboot <mode>"
+        // which falls back to a plain system reboot. "now" means a plain reboot (matching
+        // FirmwareKit.Comm.ADB's default).
+        var adbTarget = mode switch
+        {
+            "bootloader" => "bootloader",
+            "recovery" => "recovery",
+            "edl" => "edl",
+            "sideload" => "sideload",
+            "fastboot" => "fastboot",
+            _ => "now",
+        };
+        var fastbootTarget = mode switch
+        {
+            "bootloader" => "bootloader",
+            "recovery" => "recovery",
+            "edl" => "edl",
+            _ => null,
+        };
+
+        if (device.Protocol == DeviceProtocolKind.Fastboot)
+        {
+            using var session = OpenFastbootSession(device);
+            if (session is null)
+            {
+                return false;
+            }
+
+            session.Reboot(fastbootTarget);
+            return true;
+        }
+
+        // USB 直连优先：使用 reboot:<mode> 设备服务（不经 adb server，也不走 shell）。
+        // Direct USB first: use the reboot:<mode> device service (no adb server, no shell).
+        if (device.Protocol == DeviceProtocolKind.Adb && device.Transport == DeviceTransportKind.Usb)
+        {
+            var session = OpenAdbSession(device);
+            if (session is not null)
+            {
+                try
+                {
+                    await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
+                    session.CreateDeviceServices().Reboot(adbTarget);
+                    return true;
+                }
+                catch
+                {
+                    // 直连失败（未授权等），回退 adb server。
+                }
+                finally
+                {
+                    session.Dispose();
+                }
+            }
+        }
+
+        var client = AdbServerClient;
+        if (client is null)
+        {
+            return false;
+        }
+
+        var data = client.GetDevices().FirstOrDefault(d => d.Serial == device.Serial);
+        if (data is null)
+        {
+            return false;
+        }
+
+        await client.RebootAsync(adbTarget, data, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// <para>查询 ADB 设备状态（优先 adb server；不可达时通过直连会话执行 get-state）。</para>
+    /// Queries the ADB device state (adb server preferred; direct session get-state fallback).
+    /// </summary>
+    public async Task<string> GetAdbStateAsync(string serial)
+    {
+        var client = AdbServerClient;
+        if (client is not null)
+        {
+            var data = client.GetDevices().FirstOrDefault(d => d.Serial == serial);
+            if (data is not null)
+            {
+                return data.State.ToString().ToLowerInvariant();
+            }
+        }
+        return await Task.FromResult("unknown").ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <para>基于 UotanStudio.Comm 的 AdbSession 启动 logcat 流式捕获；网络设备通过
+    /// AdbTcpTransport 直连设备 adbd。返回一个任务，其在流结束或取消时完成。</para>
+    /// Starts a streaming logcat capture using a UotanStudio.Comm AdbSession; network
+    /// devices connect straight to the device adbd via AdbTcpTransport. The returned task
+    /// completes when the stream ends or is cancelled.
+    /// </summary>
+    public async Task StartLogcatStreamingAsync(DetectedDevice device, Action<string> onLine, CancellationToken cancellationToken)
+    {
+        AdbSession? session;
+        if (device.Transport == DeviceTransportKind.Tcp)
+        {
+            // 序列号形如 "192.168.1.10:5555"。
+            var parts = device.Serial.Split(':');
+            if (parts.Length != 2 || !int.TryParse(parts[1], out var port))
+            {
+                throw new InvalidOperationException($"Invalid network ADB serial: {device.Serial}");
+            }
+
+            var transport = _comm.CreateAdbTcpTransport(parts[0], port);
+            transport.Connect();
+            session = new AdbSession(transport);
+        }
+        else
+        {
+            session = OpenAdbSession(device)
+                ?? throw new InvalidOperationException("Unable to open an ADB session for the device.");
+        }
+
+        try
+        {
+            await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            var shell = session.CreateShellClient("logcat");
+            await Task.Run(() => shell.ExecuteStreaming(buffer =>
+            {
+                foreach (var line in System.Text.Encoding.UTF8.GetString(buffer).Split('\n'))
+                {
+                    onLine(line.TrimEnd('\r'));
+                }
+            }, null, cancellationToken), cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            session.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// <para>按接口类/VID-PID 将 USB 设备分类到协议类型；不匹配任何协议时返回 <c>null</c>。</para>
+    /// Classifies a USB device into a protocol kind by interface class / VID-PID;
+    /// returns <c>null</c> when nothing matches.
+    /// </summary>
+    private static DeviceProtocolKind? Classify(UsbDeviceInfo info)
+    {
+        // EDL：高通 9008 族（VID/PID 匹配）。
+        if (info.VendorId == 0x05C6 && info.ProductId is 0x9008 or 0x9006 or 0x900E or 0x901D or 0x9307)
+        {
+            return DeviceProtocolKind.Edl;
+        }
+
+        // RKDL：瑞芯微 bootrom/loader。
+        if (info.VendorId == 0x2207 && ((info.ProductId >> 8) != 0 || IsKnownRkdlLoader(info.ProductId)))
+        {
+            return DeviceProtocolKind.Rkdl;
+        }
+
+        // ADB / Fastboot：接口类 0xFF/0x42，协议 0x01 / 0x03。
+        foreach (var iface in info.Interfaces)
+        {
+            if (iface.Class == 0xFF && iface.SubClass == 0x42)
+            {
+                if (iface.Protocol == 0x01)
+                {
+                    return DeviceProtocolKind.Adb;
+                }
+
+                if (iface.Protocol == 0x03)
+                {
+                    return DeviceProtocolKind.Fastboot;
+                }
+            }
+        }
+        if (info.InterfaceMetadataObserved &&
+            info.InterfaceClass == 0xFF && info.InterfaceSubClass == 0x42)
+        {
+            if (info.InterfaceProtocol == 0x01)
+            {
+                return DeviceProtocolKind.Adb;
+            }
+
+            if (info.InterfaceProtocol == 0x03)
+            {
+                return DeviceProtocolKind.Fastboot;
+            }
+        }
+        return null;
+    }
+
+    private static bool IsKnownRkdlLoader(ushort productId)
+        => RkdlConstants.KnownLoaderProductIds.Contains(productId);
+
+    private static string RkdlState(UsbDeviceInfo info)
+        => RkdlConstants.KnownLoaderProductIds.Contains(info.ProductId) ? "loader" : "maskrom";
+
+    /// <summary>
+    /// <para>调度一次去抖动的设备列表刷新通知。</para>
+    /// Schedules a debounced device-list change notification.
+    /// </summary>
+    private void ScheduleChange()
+    {
+        lock (_sync)
+        {
+            // 设备列表即将变化：失效扫描缓存，使下一次 Scan() 重新枚举。
+            // The device list is about to change: invalidate the scan cache so the next
+            // Scan() re-enumerates.
+            _cachedScan = null;
+            _debounce ??= new Timer(_ => DevicesChanged?.Invoke(this, EventArgs.Empty), null, 300, Timeout.Infinite);
+            _debounce.Change(300, Timeout.Infinite);
+        }
+    }
+
+    /// <summary>
+    /// <para>停止监视并释放资源。</para>
+    /// Stops monitoring and releases resources.
+    /// </summary>
+    public void Dispose()
+    {
+        lock (_sync)
+        {
+            _usbMonitor?.Dispose();
+            _usbMonitor = null;
+            _adbMonitor?.Dispose();
+            _adbMonitor = null;
+            _debounce?.Dispose();
+            _debounce = null;
+            _started = false;
+        }
+    }
+}

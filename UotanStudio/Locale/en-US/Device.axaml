@@ -1,0 +1,78 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Device Page -->
+    <x:String x:Key="Device_Refresh">Refresh</x:String>
+    <x:String x:Key="Device_Connect">Connect</x:String>
+    <x:String x:Key="Device_Disconnect">Disconnect</x:String>
+    <x:String x:Key="Device_NoDevices">No devices detected.</x:String>
+    <x:String x:Key="Device_Scanning">Scanning for devices...</x:String>
+    <x:String x:Key="Device_Reboot">Reboot</x:String>
+    <x:String x:Key="Device_RebootBootloader">Reboot to Bootloader</x:String>
+    <x:String x:Key="Device_RebootRecovery">Reboot to Recovery</x:String>
+    <x:String x:Key="Device_RebootEdl">Reboot to EDL</x:String>
+    <x:String x:Key="Device_DeviceCount"> device(s) found.</x:String>
+    <x:String x:Key="Device_Detail">Device Detail</x:String>
+    <x:String x:Key="Device_Connecting">Connecting...</x:String>
+    <x:String x:Key="Device_Reconnecting">Reconnecting...</x:String>
+    <x:String x:Key="Device_GroupAdb">ADB Devices</x:String>
+    <x:String x:Key="Device_GroupFastboot">Fastboot Devices</x:String>
+    <x:String x:Key="Device_GroupEdl">EDL Devices</x:String>
+    <x:String x:Key="Device_GroupRkdl">RKDL Devices</x:String>
+    <x:String x:Key="Device_EmptyHint">Click Refresh to scan connected devices.</x:String>
+
+    <!-- Device detail two-column layout -->
+    <x:String x:Key="Device_DetailPlaceholder">Select a device to view details</x:String>
+    <x:String x:Key="Device_DeviceInfo">Device Information</x:String>
+    <x:String x:Key="Device_FastbootInfo">Fastboot Mode Information</x:String>
+    <x:String x:Key="Device_EdlInfo">EDL Mode Information</x:String>
+    <x:String x:Key="Device_RkdlInfo">RKDL Mode Information</x:String>
+    <x:String x:Key="Device_Serial">Serial</x:String>
+    <x:String x:Key="Device_Model">Model</x:String>
+    <x:String x:Key="Device_AndroidVersion">Android Version</x:String>
+    <x:String x:Key="Device_State">State</x:String>
+    <x:String x:Key="Device_Transport">Transport</x:String>
+    <x:String x:Key="Device_LinkPort">Link Port</x:String>
+    <x:String x:Key="Device_UsbIds">Vendor/Product ID</x:String>
+    <x:String x:Key="Device_Vendor">Vendor</x:String>
+    <x:String x:Key="Device_Brand">Brand</x:String>
+    <x:String x:Key="Device_Codename">Codename</x:String>
+    <x:String x:Key="Device_SdkVersion">Android SDK</x:String>
+    <x:String x:Key="Device_CpuAbi">CPU ABI</x:String>
+    <x:String x:Key="Device_CpuCode">SoC Platform</x:String>
+    <x:String x:Key="Device_Kernel">Kernel Version</x:String>
+    <x:String x:Key="Device_Resolution">Resolution</x:String>
+    <x:String x:Key="Device_Density">Density</x:String>
+    <x:String x:Key="Device_BoardId">Board Serial</x:String>
+    <x:String x:Key="Device_BlStatus">Bootloader Status</x:String>
+    <x:String x:Key="Device_Slot">Current Slot</x:String>
+    <x:String x:Key="Device_CompileVersion">Build Version</x:String>
+    <x:String x:Key="Device_VndkVersion">VNDK Version</x:String>
+    <x:String x:Key="Device_PowerOnTime">Power-On Time</x:String>
+    <x:String x:Key="Device_DiskType">Storage Type</x:String>
+    <x:String x:Key="Device_Userspace">Fastboot Mode</x:String>
+    <x:String x:Key="Device_Battery">Battery</x:String>
+    <x:String x:Key="Device_Memory">Memory</x:String>
+    <x:String x:Key="Device_Storage">Storage</x:String>
+    <x:String x:Key="Device_Unlocked">Unlocked</x:String>
+    <x:String x:Key="Device_Locked">Locked</x:String>
+    <x:String x:Key="Device_UptimeDay"> d </x:String>
+    <x:String x:Key="Device_UptimeHour">h </x:String>
+    <x:String x:Key="Device_UptimeMinute">m </x:String>
+    <x:String x:Key="Device_UptimeSecond">s</x:String>
+    <x:String x:Key="Device_SystemOverview">System Information</x:String>
+    <x:String x:Key="Device_ResourceOverview">Resource Usage</x:String>
+
+    <!-- Flash card -->
+    <x:String x:Key="Flash_Flash">Flash</x:String>
+    <x:String x:Key="Flash_FlashCard">Flash Partition</x:String>
+    <x:String x:Key="Flash_Partition">Partition</x:String>
+    <x:String x:Key="Flash_PartitionHint">e.g. boot</x:String>
+    <x:String x:Key="Flash_ImagePath">Image path</x:String>
+    <x:String x:Key="Flash_ImagePathHint">Path to the image file</x:String>
+    <x:String x:Key="Flash_Flashing">Flashing</x:String>
+    <x:String x:Key="Flash_Done">Flash done</x:String>
+    <x:String x:Key="Flash_Failed">Flash failed</x:String>
+    <x:String x:Key="Flash_Canceled">Flash canceled</x:String>
+
+</ResourceDictionary>
