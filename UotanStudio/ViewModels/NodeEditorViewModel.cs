@@ -211,7 +211,7 @@ namespace UotanStudio.ViewModels
                 case NodeEditorAction.Undo:
                 case NodeEditorAction.Redo:
                     // Undo/Redo 需要命令栈支持，当前先记录日志占位
-                    _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor", $"{message.Action} requested (command stack not yet implemented)");
+                    _log.Write(LogLevel.Info, "NodeEditor", $"{message.Action} requested (command stack not yet implemented)");
                     break;
             }
         }
@@ -225,7 +225,7 @@ namespace UotanStudio.ViewModels
             var selected = Nodes.Where(n => n.IsSelected).ToList();
             if (selected.Count == 0) return;
             _clipboardNodeTitles = selected.Select(n => n.Title).ToList();
-            _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor", $"Copied {selected.Count} node(s)");
+            _log.Write(LogLevel.Info, "NodeEditor", $"Copied {selected.Count} node(s)");
         }
 
         /// <summary>
@@ -245,7 +245,7 @@ namespace UotanStudio.ViewModels
                 AddNode(node);
                 _nextNodeLocation = new Point(_nextNodeLocation.X + offset.X, _nextNodeLocation.Y + offset.Y);
             }
-            _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor", $"Pasted {_clipboardNodeTitles.Count} node(s)");
+            _log.Write(LogLevel.Info, "NodeEditor", $"Pasted {_clipboardNodeTitles.Count} node(s)");
         }
 
         private List<string>? _clipboardNodeTitles;
@@ -465,13 +465,13 @@ namespace UotanStudio.ViewModels
         {
             if (IsExecuting)
             {
-                _log.Write(Abstractions.Logging.LogLevel.Warn, "NodeEditor", "Run requested while already executing — ignored");
+                _log.Write(LogLevel.Warn, "NodeEditor", "Run requested while already executing — ignored");
                 return;
             }
 
             if (Nodes.Count == 0)
             {
-                _log.Write(Abstractions.Logging.LogLevel.Warn, "NodeEditor", "Cannot run: no nodes on canvas");
+                _log.Write(LogLevel.Warn, "NodeEditor", "Cannot run: no nodes on canvas");
                 return;
             }
 
@@ -513,7 +513,7 @@ namespace UotanStudio.ViewModels
             }
             catch (Exception ex)
             {
-                _log.Write(Abstractions.Logging.LogLevel.Error, "NodeEditor", $"Run failed: {ex.Message}");
+                _log.Write(LogLevel.Error, "NodeEditor", $"Run failed: {ex.Message}");
                 ExecutionStatus = $"Run failed: {ex.Message}";
             }
             finally
@@ -539,7 +539,7 @@ namespace UotanStudio.ViewModels
         {
             if (!IsExecuting) return;
             _runCts?.Cancel();
-            _log.Write(Abstractions.Logging.LogLevel.Warn, "NodeEditor", "Stop requested");
+            _log.Write(LogLevel.Warn, "NodeEditor", "Stop requested");
         }
 
         /// <summary>
@@ -569,7 +569,7 @@ namespace UotanStudio.ViewModels
 
         private void OnExecutionCompleted(object? sender, ExecutionCompletedEventArgs e)
         {
-            _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor", $"Execution completed: {e.Result.Status}");
+            _log.Write(LogLevel.Info, "NodeEditor", $"Execution completed: {e.Result.Status}");
         }
 
         /// <summary>
@@ -689,13 +689,13 @@ namespace UotanStudio.ViewModels
                 }
                 else
                 {
-                    _log.Write(Abstractions.Logging.LogLevel.Warn, "NodeEditor",
+                    _log.Write(LogLevel.Warn, "NodeEditor",
                         $"Could not rebuild connection: '{cdto.SourceConnectorTitle}' → '{cdto.TargetConnectorTitle}'");
                 }
             }
 
             await Task.CompletedTask.ConfigureAwait(false);
-            _log.Write(Abstractions.Logging.LogLevel.Info, "NodeEditor",
+            _log.Write(LogLevel.Info, "NodeEditor",
                 $"Loaded {Nodes.Count} node(s), {Connections.Count} connection(s) from snapshot");
         }
     }

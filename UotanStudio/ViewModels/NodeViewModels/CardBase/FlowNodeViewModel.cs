@@ -2,7 +2,6 @@ using Avalonia;
 using NodifyM.Avalonia.ViewModelBase;
 using System;
 using System.Collections.ObjectModel;
-using UotanStudio.Abstractions.Nodes;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
