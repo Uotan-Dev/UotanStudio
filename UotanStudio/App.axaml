@@ -18,6 +18,7 @@
             <converters:StringNotNullOrEmptyConverter x:Key="StringNotNullOrEmptyConverter" />
             <converters:NotNullConverter x:Key="NotNullConverter" />
             <converters:NullConverter x:Key="NullConverter" />
+            <converters:EnumEqualsConverter x:Key="EnumEqualsConverter" />
         </ResourceDictionary>
     </Application.Resources>
 

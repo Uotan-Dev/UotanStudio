@@ -4,6 +4,9 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:vm="using:UotanStudio.Areas.Editor"
+             xmlns:text="using:UotanStudio.Areas.Editor.Text"
+             xmlns:hex="using:UotanStudio.Areas.Editor.Hex"
+             xmlns:structured="using:UotanStudio.Areas.Editor.Structured"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="UotanStudio.Areas.Editor.EditorView"
              x:DataType="vm:EditorViewModel">
@@ -64,24 +67,22 @@
                 </ItemsControl>
             </ScrollViewer>
 
-            <!-- 编辑器主体 -->
-            <TextBox Grid.Row="1" Margin="4"
-                     Text="{Binding SelectedDocument.Text, Mode=TwoWay}"
-                     AcceptsReturn="True"
-                     AcceptsTab="True"
-                     TextWrapping="Wrap"
-                     FontFamily="Cascadia Mono,Consolas,monospace"
-                     FontSize="13"
-                     Background="Transparent"
-                     IsVisible="{Binding SelectedDocument, Converter={StaticResource NotNullConverter}}"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto" />
-
-            <!-- 无文档占位 -->
-            <TextBlock Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center"
-                       Text="{DynamicResource Editor_Empty}"
-                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                       IsVisible="{Binding SelectedDocument, Converter={StaticResource NullConverter}}" />
+            <!-- 编辑器主体（按文档类型路由：文本 / 二进制 / 结构化） -->
+            <Grid Grid.Row="1">
+                <text:TextEditorHost Margin="4"
+                                     Text="{Binding SelectedDocument.Text, Mode=TwoWay}"
+                                     IsVisible="{Binding SelectedDocument.Kind, Converter={StaticResource EnumEqualsConverter}, ConverterParameter=Text}" />
+                <hex:HexDocumentView Margin="4"
+                                     Data="{Binding SelectedDocument.BinaryData}"
+                                     IsVisible="{Binding SelectedDocument.Kind, Converter={StaticResource EnumEqualsConverter}, ConverterParameter=Hex}" />
+                <structured:StructuredDocumentView Margin="4"
+                                                   Data="{Binding SelectedDocument.Text}"
+                                                   IsVisible="{Binding SelectedDocument.Kind, Converter={StaticResource EnumEqualsConverter}, ConverterParameter=Structured}" />
+                <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center"
+                           Text="{DynamicResource Editor_Empty}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           IsVisible="{Binding SelectedDocument, Converter={StaticResource NullConverter}}" />
+            </Grid>
         </Grid>
     </DockPanel>
 </UserControl>

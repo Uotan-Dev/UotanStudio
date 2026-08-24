@@ -5,6 +5,9 @@ using System.Text;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Core.Editor;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
 
@@ -25,6 +28,15 @@ public partial class EditorViewModel : ViewModelBase
     public ObservableCollection<OpenDocument> Documents { get; } = [];
 
     /// <summary>
+    /// <para>初始化编辑器视图模型并订阅文档打开消息。</para>
+    /// Initializes the editor view model and subscribes to document-open messages.
+    /// </summary>
+    public EditorViewModel()
+    {
+        WeakReferenceMessenger.Default.Register<OpenDocumentMessage>(this, OnOpenDocumentMessage);
+    }
+
+    /// <summary>
     /// <para>获取或设置当前选中文档。</para>
     /// Gets or sets the currently selected document.
     /// </summary>
@@ -32,6 +44,18 @@ public partial class EditorViewModel : ViewModelBase
     {
         get;
         set => SetProperty(ref field, value);
+    }
+
+    /// <summary>
+    /// <para>处理文档打开消息：调用现有 <see cref="OpenFileAsync"/> 打开指定文件。</para>
+    /// Handles the document-open message: opens the requested file via the existing
+    /// <see cref="OpenFileAsync"/> method.
+    /// </summary>
+    /// <param name="recipient"><para>消息接收者。</para>The message recipient.</param>
+    /// <param name="message"><para>文档打开消息。</para>The document-open message.</param>
+    private async void OnOpenDocumentMessage(object recipient, OpenDocumentMessage message)
+    {
+        await OpenFileAsync(message.Path);
     }
 
     /// <summary>
@@ -58,8 +82,19 @@ public partial class EditorViewModel : ViewModelBase
 
         try
         {
-            var text = await File.ReadAllTextAsync(path);
-            var doc = new OpenDocument(path, text);
+            var kind = DocumentKindDetector.Detect(path);
+            OpenDocument doc;
+            if (kind == EditorDocumentKind.Hex)
+            {
+                var bytes = await File.ReadAllBytesAsync(path);
+                doc = new OpenDocument(path, string.Empty) { Kind = kind, BinaryData = bytes };
+            }
+            else
+            {
+                var text = await File.ReadAllTextAsync(path);
+                doc = new OpenDocument(path, text) { Kind = kind };
+            }
+
             Documents.Add(doc);
             SelectedDocument = doc;
             LogService.Instance.Write(LogLevel.Info, "Editor", $"Opened {path}");
@@ -166,6 +201,18 @@ public partial class OpenDocument(string path, string content) : ViewModelBase
 
     /// <summary>文件绝对路径。 Absolute file path.</summary>
     public string Path { get; } = path;
+
+    /// <summary>
+    /// <para>获取文档的编辑器类型，决定展示视图（文本/二进制/结构化）。</para>
+    /// Gets the editor document kind, selecting the display view (text/binary/structured).
+    /// </summary>
+    public EditorDocumentKind Kind { get; init; } = EditorDocumentKind.Text;
+
+    /// <summary>
+    /// <para>获取二进制文档的原始数据；仅当 <see cref="Kind"/> 为 Hex 时非空。</para>
+    /// Gets the raw binary data of a binary document; non-null only when <see cref="Kind"/> is Hex.
+    /// </summary>
+    public byte[]? BinaryData { get; init; }
 
     /// <summary>显示标题（文件名）。 Display title (file name).</summary>
     public string Title => System.IO.Path.GetFileName(Path);
