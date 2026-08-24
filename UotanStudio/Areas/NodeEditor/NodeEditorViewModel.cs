@@ -84,6 +84,26 @@ public partial class NodeEditorViewModel : ViewModelBase
     } = true;
 
     /// <summary>
+    /// <para>获取或设置是否显示执行日志面板。</para>
+    /// Gets or sets whether the execution log panel is visible.
+    /// </summary>
+    public bool IsExecLogVisible
+    {
+        get;
+        set => SetProperty(ref field, value);
+    } = true;
+
+    /// <summary>
+    /// <para>获取或设置执行日志面板高度。</para>
+    /// Gets or sets the height of the execution log panel.
+    /// </summary>
+    public double ExecLogHeight
+    {
+        get;
+        set => SetProperty(ref field, value);
+    } = 130;
+
+    /// <summary>
     /// <para>获取或设置节点搜索文本。</para>
     /// Gets or sets the node search text.
     /// </summary>

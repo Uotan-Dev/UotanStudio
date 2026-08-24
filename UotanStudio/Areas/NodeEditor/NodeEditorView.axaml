@@ -114,12 +114,20 @@
         </Border>
 
         <!-- 执行日志面板 -->
-        <Border DockPanel.Dock="Bottom" Height="130"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+        <Border DockPanel.Dock="Bottom" Height="{Binding ExecLogHeight}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                IsVisible="{Binding IsExecLogVisible}">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_ExecLog}"
-                           FontWeight="SemiBold" FontSize="12"
-                           Margin="8,6,8,2" />
+                <DockPanel DockPanel.Dock="Top" Margin="8,6,8,2">
+                    <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Node_ExecLog}"
+                               FontWeight="SemiBold" FontSize="12"
+                               VerticalAlignment="Center" />
+                    <ToggleButton DockPanel.Dock="Right" Width="24" Height="24" Padding="0"
+                                  IsChecked="{Binding IsExecLogVisible, Mode=TwoWay}"
+                                  ToolTip.Tip="{DynamicResource Node_ExecLogToggle}">
+                        <avalonia:MaterialIcon Kind="ChevronDown" Width="14" Height="14" />
+                    </ToggleButton>
+                </DockPanel>
                 <ScrollViewer>
                     <ItemsControl ItemsSource="{Binding ExecutionLog}" Margin="8,0">
                         <ItemsControl.ItemTemplate>
