@@ -1,4 +1,10 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
+using UotanStudio.Services;
+using UotanStudio.Services.Execution;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -77,6 +83,80 @@ namespace UotanStudio.ViewModels.NodeViewModels
             node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
             node.Input.Add(new NodeConnectorViewModel { Title = "Path" });
             return node;
+        }
+
+        /// <summary>
+        /// <para>执行与节点标题对应的扩展输出逻辑：Notify 通知、Send Email 发邮件（在当前环境记录日志）、Console Output 控制台输出、File Export 文件导出。</para>
+        /// Executes the extended output logic matching the node title: Notify emits a notification-style log entry, Send Email
+        /// records an email summary, Console Output prints to the console and log, and File Export writes a file.
+        /// </summary>
+        /// <param name="context">
+        /// <para>执行上下文。</para>
+        /// The execution context.
+        /// </param>
+        /// <returns>
+        /// <para>表示异步执行的任务。</para>
+        /// A task representing the asynchronous execution.
+        /// </returns>
+        public override Task ExecuteAsync(INodeExecutionContext context)
+        {
+            switch (Title)
+            {
+                case "Notify":
+                    context.Log.Write(LogLevel.Warn, Title, $"NOTIFY: {NodeDataUtil.ToDisplay(ReadInput("Message"))}  通知。");
+                    break;
+                case "Send Email":
+                    ExecuteEmail(context);
+                    break;
+                case "Console Output":
+                    ExecuteConsole(context);
+                    break;
+                case "File Export":
+                    ExecuteFileExport(context);
+                    break;
+                default:
+                    return base.ExecuteAsync(context);
+            }
+
+            context.CancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        private void ExecuteEmail(INodeExecutionContext context)
+        {
+            var to = NodeDataUtil.ToDisplay(ReadInput("To"));
+            var subject = NodeDataUtil.ToDisplay(ReadInput("Subject"));
+            var body = NodeDataUtil.ToDisplay(ReadInput("Body"));
+            // 应用未接入 SMTP 客户端；此处将待发邮件详情写入日志，供后续接入真实邮件服务。
+            // No SMTP client is wired into the app; the pending email is written to the log for later integration.
+            context.Log.Write(LogLevel.Info, Title, $"EMAIL to:{to} subject:'{subject}' body:{body.Length} chars  待发邮件已记录。");
+        }
+
+        private void ExecuteConsole(INodeExecutionContext context)
+        {
+            var text = NodeDataUtil.ToDisplay(ReadInput("Text"));
+            System.Console.WriteLine($"[{Title}] {text}");
+            context.Log.Write(LogLevel.Info, Title, text);
+        }
+
+        private void ExecuteFileExport(INodeExecutionContext context)
+        {
+            var data = NodeDataUtil.ToBytes(ReadInput("Data")) ?? [];
+            var path = Convert.ToString(ReadInput("Path"), CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                context.Log.Write(LogLevel.Warn, Title, "No export Path.  缺少导出路径。");
+                return;
+            }
+
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllBytes(path, data);
+            context.Log.Write(LogLevel.Info, Title, $"Exported {data.Length} bytes to '{path}'  已导出。");
         }
     }
 }

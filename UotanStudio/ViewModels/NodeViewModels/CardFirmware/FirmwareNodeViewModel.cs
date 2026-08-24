@@ -1,4 +1,9 @@
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
+using UotanStudio.Services;
+using UotanStudio.Services.Execution;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -83,6 +88,199 @@ namespace UotanStudio.ViewModels.NodeViewModels
             node.Input.Add(new NodeConnectorViewModel { Title = "Partition Name" });
             node.Output.Add(new NodeConnectorViewModel { Title = "Image" });
             return node;
+        }
+
+        /// <summary>
+        /// <para>执行与节点标题对应的固件逻辑：Unpack Firmware 解包（boot/oppo）、Pack Firmware 打包（boot/cpio）、
+        /// Verify Signature 校验 AVB 签名或计算哈希、Extract Partition 从 payload 提取分区。</para>
+        /// Executes the firmware logic matching the node title: Unpack Firmware unpacks (boot/oppo), Pack Firmware packs
+        /// (boot/cpio), Verify Signature verifies the AVB signature or computes a hash, and Extract Partition extracts a
+        /// partition from a payload.
+        /// </summary>
+        /// <param name="context">
+        /// <para>执行上下文。</para>
+        /// The execution context.
+        /// </param>
+        /// <returns>
+        /// <para>表示异步执行的任务。</para>
+        /// A task representing the asynchronous execution.
+        /// </returns>
+        public override async Task ExecuteAsync(INodeExecutionContext context)
+        {
+            try
+            {
+                switch (Title)
+                {
+                    case "Unpack Firmware":
+                        await ExecuteUnpackAsync(context).ConfigureAwait(false);
+                        break;
+                    case "Pack Firmware":
+                        await ExecutePackAsync(context).ConfigureAwait(false);
+                        break;
+                    case "Verify Signature":
+                        await ExecuteVerifyAsync(context).ConfigureAwait(false);
+                        break;
+                    case "Extract Partition":
+                        await ExecuteExtractAsync(context).ConfigureAwait(false);
+                        break;
+                    default:
+                        await base.ExecuteAsync(context).ConfigureAwait(false);
+                        break;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                context.Log.Write(LogLevel.Error, Title, $"Firmware node failed: {ex.Message}  固件节点执行失败。");
+            }
+        }
+
+        private async Task ExecuteUnpackAsync(INodeExecutionContext context)
+        {
+            var path = PathText(ReadInput("Firmware Path"));
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                context.Log.Write(LogLevel.Warn, Title, $"Firmware path not found: {path ?? "<empty>"}  找不到固件路径。");
+                return;
+            }
+
+            var outputDir = DeriveOutputDir(path);
+            var service = FirmwareService.Instance;
+            var boot = await service.UnpackBootAsync(path, outputDir, context.CancellationToken).ConfigureAwait(false);
+            if (!boot.Success)
+            {
+                var oppo = await service.ExtractOppoAsync(path, outputDir, true, context.CancellationToken).ConfigureAwait(false);
+                if (!oppo.Success)
+                {
+                    context.Log.Write(LogLevel.Warn, Title, $"Unpack failed: {boot.Summary} | {oppo.Summary}  解包失败。");
+                    return;
+                }
+
+                WriteOutput("Output Dir", outputDir);
+                WriteOutput("Partitions", oppo.Entries);
+                context.Log.Write(LogLevel.Info, Title, $"{oppo.Summary}  已解包。");
+                return;
+            }
+
+            WriteOutput("Output Dir", outputDir);
+            WriteOutput("Partitions", boot.Entries);
+            context.Log.Write(LogLevel.Info, Title, $"{boot.Summary}  已解包。");
+        }
+
+        private async Task ExecutePackAsync(INodeExecutionContext context)
+        {
+            var inputDir = PathText(ReadInput("Input Dir"));
+            var config = PathText(ReadInput("Config"));
+            if (string.IsNullOrWhiteSpace(inputDir) || !Directory.Exists(inputDir))
+            {
+                context.Log.Write(LogLevel.Warn, Title, $"Input directory not found: {inputDir ?? "<empty>"}  找不到输入目录。");
+                return;
+            }
+
+            var outputPath = string.IsNullOrWhiteSpace(config)
+                ? DefaultOutputFor(inputDir)
+                : config;
+
+            var service = FirmwareService.Instance;
+            FirmwareOpResult result;
+            if (File.Exists(Path.Combine(inputDir, "header.json")))
+            {
+                result = await service.PackBootAsync(inputDir, outputPath, context.CancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                result = await service.PackCpioAsync(inputDir, outputPath, context.CancellationToken).ConfigureAwait(false);
+            }
+
+            if (!result.Success)
+            {
+                context.Log.Write(LogLevel.Error, Title, $"Pack failed: {result.Summary}  打包失败。");
+                return;
+            }
+
+            WriteOutput("Firmware", outputPath);
+            context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已打包。");
+        }
+
+        private async Task ExecuteVerifyAsync(INodeExecutionContext context)
+        {
+            var path = PathText(ReadInput("Firmware"));
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                context.Log.Write(LogLevel.Warn, Title, $"Firmware path not found: {path ?? "<empty>"}  找不到固件路径。");
+                return;
+            }
+
+            var service = FirmwareService.Instance;
+            var isVbmeta = await HasMagicAsync(path, "AVB0").ConfigureAwait(false);
+            FirmwareOpResult result;
+            if (isVbmeta)
+            {
+                result = await service.VerifyAvbAsync(path, publicKeyPath: null, context.CancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                var checksum = await service.VerifyChecksumAsync(path, null, context.CancellationToken).ConfigureAwait(false);
+                result = new FirmwareOpResult { Success = true, Summary = $"Computed {checksum.Summary}" };
+            }
+
+            var report = result.Success ? result.Summary : $"Verification failed: {result.Summary}  校验失败。";
+            WriteOutput("Valid", result.Success);
+            WriteOutput("Report", report);
+            context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title, report);
+        }
+
+        private async Task ExecuteExtractAsync(INodeExecutionContext context)
+        {
+            var path = PathText(ReadInput("Firmware"));
+            var partition = Convert.ToString(ReadInput("Partition Name"), System.Globalization.CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                context.Log.Write(LogLevel.Warn, Title, $"Firmware path not found: {path ?? "<empty>"}  找不到固件路径。");
+                return;
+            }
+
+            var outputDir = DeriveOutputDir(path);
+            var result = await FirmwareService.Instance
+                .ExtractPayloadAsync(path, outputDir, partition)
+                .ConfigureAwait(false);
+            if (!result.Success)
+            {
+                context.Log.Write(LogLevel.Error, Title, $"Extract failed: {result.Summary}  提取失败。");
+                return;
+            }
+
+            var imagePath = string.IsNullOrWhiteSpace(partition)
+                ? outputDir
+                : Path.Combine(outputDir, partition);
+            WriteOutput("Image", imagePath);
+            context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已提取。");
+        }
+
+        private static string? PathText(object? value) => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);
+
+        private static string DeriveOutputDir(string sourcePath)
+        {
+            var directory = Path.GetDirectoryName(sourcePath) ?? ".";
+            var name = Path.GetFileNameWithoutExtension(sourcePath);
+            return Path.Combine(directory, string.IsNullOrEmpty(name) ? "out" : name + "_out");
+        }
+
+        private static string DefaultOutputFor(string inputDir)
+        {
+            var parent = Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(inputDir)) ?? ".";
+            return Path.Combine(parent, Path.GetFileName(inputDir) + ".img");
+        }
+
+        private static async Task<bool> HasMagicAsync(string path, string magic)
+        {
+            await using var fs = File.OpenRead(path);
+            var buffer = new byte[magic.Length];
+            var read = await fs.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
+            return read >= magic.Length && System.Text.Encoding.ASCII.GetString(buffer, 0, magic.Length) == magic;
         }
     }
 }

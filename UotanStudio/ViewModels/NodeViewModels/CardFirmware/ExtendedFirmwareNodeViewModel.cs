@@ -1,4 +1,8 @@
+using System;
+using System.Threading.Tasks;
 using Avalonia;
+using UotanStudio.Services;
+using UotanStudio.Services.Execution;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -81,6 +85,77 @@ namespace UotanStudio.ViewModels.NodeViewModels
             node.Input.Add(new NodeConnectorViewModel { Title = "Bootloader" });
             node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
             return node;
+        }
+
+        /// <summary>
+        /// <para>执行与节点标题对应的扩展固件逻辑：OTA Delta 记录差分任务、Merge Signature 把签名追加进镜像、
+        /// Merge Dual Slot 拼接 A/B 槽位、Flash Boot 记录 bootloader 刷写任务。</para>
+        /// Executes the extended firmware logic matching the node title: OTA Delta records a delta task, Merge Signature appends
+        /// a signature into the image, Merge Dual Slot concatenates the A/B slots, and Flash Boot records a bootloader flash task.
+        /// </summary>
+        /// <param name="context">
+        /// <para>执行上下文。</para>
+        /// The execution context.
+        /// </param>
+        /// <returns>
+        /// <para>表示异步执行的任务。</para>
+        /// A task representing the asynchronous execution.
+        /// </returns>
+        public override Task ExecuteAsync(INodeExecutionContext context)
+        {
+            switch (Title)
+            {
+                case "OTA Delta":
+                    context.Log.Write(LogLevel.Warn, Title,
+                        "OTA delta generation requires a bsdiff engine (not bundled); parameters recorded.  生成差分包需要 bsdiff 引擎（未内置），已记录参数。");
+                    break;
+                case "Merge Signature":
+                    ExecuteMergeSignature(context);
+                    break;
+                case "Merge Dual Slot":
+                    ExecuteMergeDualSlot(context);
+                    break;
+                case "Flash Boot":
+                {
+                    var bootloader = Convert.ToString(ReadInput("Bootloader"), System.Globalization.CultureInfo.InvariantCulture);
+                    WriteOutput("Status", "queued");
+                    context.Log.Write(LogLevel.Info, Title, $"Bootloader flash queued: {bootloader ?? "<empty>"}  已记录刷写任务。");
+                    break;
+                }
+                default:
+                    return base.ExecuteAsync(context);
+            }
+
+            context.CancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        private void ExecuteMergeSignature(INodeExecutionContext context)
+        {
+            var image = NodeDataUtil.ToBytes(ReadInput("Image"));
+            var signature = NodeDataUtil.ToBytes(ReadInput("Signature"));
+            if (image == null || signature == null)
+            {
+                context.Log.Write(LogLevel.Warn, Title, "Missing Image or Signature input.  缺少镜像或签名。");
+                return;
+            }
+
+            var signed = new byte[image.Length + signature.Length];
+            image.CopyTo(signed, 0);
+            signature.CopyTo(signed, image.Length);
+            WriteOutput("Signed", signed);
+            context.Log.Write(LogLevel.Info, Title, $"Appended {signature.Length}-byte signature to {image.Length}-byte image.  已合并签名。");
+        }
+
+        private void ExecuteMergeDualSlot(INodeExecutionContext context)
+        {
+            var a = NodeDataUtil.ToBytes(ReadInput("Slot A")) ?? [];
+            var b = NodeDataUtil.ToBytes(ReadInput("Slot B")) ?? [];
+            var merged = new byte[a.Length + b.Length];
+            a.CopyTo(merged, 0);
+            b.CopyTo(merged, a.Length);
+            WriteOutput("Merged", merged);
+            context.Log.Write(LogLevel.Info, Title, $"Merged slot A ({a.Length}B) + slot B ({b.Length}B).  已合并双槽。");
         }
     }
 }

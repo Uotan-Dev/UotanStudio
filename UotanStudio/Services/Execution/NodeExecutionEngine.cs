@@ -103,6 +103,7 @@ namespace UotanStudio.Services.Execution
                 var total = order.Count;
                 var failedNodes = new List<string>();
                 var aborted = false;
+                var byId = nodes.ToDictionary(n => n.InstanceId);
 
                 foreach (var node in order)
                 {
@@ -119,17 +120,13 @@ namespace UotanStudio.Services.Execution
 
                     try
                     {
-                        // 简单执行：记录节点标题，模拟执行延迟
-                        _log.Write(LogLevel.Info, "Engine", $"Executing node '{node.Title}' (id={node.InstanceId})");
-                        await Task.Delay(50, token).ConfigureAwait(false);
+                        // 先注入数据流：把上游输出端口值写入本节点对应输入端口
+                        FlowInputs(node, byId, connections);
 
-                        if (token.IsCancellationRequested)
-                        {
-                            node.ExecutionStatus = NodeExecutionStatus.Cancelled;
-                            NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
-                            aborted = true;
-                            break;
-                        }
+                        var context = new ExecutionContextImpl(_log, token,
+                            p => SafeReportProgress(completed, total, p));
+                        _log.Write(LogLevel.Info, "Engine", $"Executing node '{node.Title}' (id={node.InstanceId})");
+                        await node.ExecuteAsync(context).ConfigureAwait(false);
 
                         node.ExecutionStatus = NodeExecutionStatus.Succeeded;
                         NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
@@ -181,6 +178,54 @@ namespace UotanStudio.Services.Execution
         {
             _log.Write(LogLevel.Warn, "Engine", "Stop requested");
             _cts?.Cancel();
+        }
+
+        /// <summary>
+        /// <para>把连接到 <paramref name="target"/> 节点输入端口的上游输出端口值复制到对应输入端口，建立节点间数据流。</para>
+        /// Copies the upstream output port values connected to the target node's inputs into the corresponding input ports,
+        /// establishing data flow between nodes.
+        /// </summary>
+        /// <param name="target">
+        /// <para>将要执行的目标节点。</para>
+        /// The target node about to execute.
+        /// </param>
+        /// <param name="byId">
+        /// <para>节点实例 ID 到节点视图模型的映射。</para>
+        /// Mapping from node instance ID to node view model.
+        /// </param>
+        /// <param name="connections">
+        /// <para>连接列表（源→目标）。</para>
+        /// Connection list (source → target).
+        /// </param>
+        private static void FlowInputs(FlowNodeViewModel target, IReadOnlyDictionary<string, FlowNodeViewModel> byId, IReadOnlyList<NodeConnection>? connections)
+        {
+            if (connections == null) return;
+
+            foreach (var conn in connections)
+            {
+                if (conn.TargetInstanceId != target.InstanceId) continue;
+                if (!byId.TryGetValue(conn.SourceInstanceId, out var sourceNode)) continue;
+                if (string.IsNullOrWhiteSpace(conn.SourceConnector) || string.IsNullOrWhiteSpace(conn.TargetConnector)) continue;
+
+                var sourceConnector = sourceNode.Output.FirstOrDefault(c => string.Equals(c.Title, conn.SourceConnector, StringComparison.Ordinal));
+                var targetConnector = target.Input.FirstOrDefault(c => string.Equals(c.Title, conn.TargetConnector, StringComparison.Ordinal));
+                if (sourceConnector != null && targetConnector != null)
+                {
+                    targetConnector.Data = sourceConnector.Data;
+                }
+            }
+        }
+
+        /// <summary>
+        /// <para>把节点上报的局部进度换算为整体进度并安全触发 <see cref="ProgressChanged"/>。</para>
+        /// Converts the node-reported local progress into overall progress and safely raises <see cref="ProgressChanged"/>.
+        /// </summary>
+        private void SafeReportProgress(int completedBefore, int total, double localProgress)
+        {
+            var clamped = Math.Clamp(localProgress, 0.0, 1.0);
+            // 本节点进度占 1/total，之前已完成节点占 completedBefore/total
+            var overall = (completedBefore + clamped) / Math.Max(1, total);
+            ProgressChanged?.Invoke(this, Math.Clamp(overall, 0.0, 1.0));
         }
 
         /// <summary>
@@ -347,10 +392,6 @@ namespace UotanStudio.Services.Execution
         /// </summary>
         public FlowNodeViewModel Node { get; }
 
-        /// <summary>
-        /// <para>创建事件参数。</para>
-        /// Creates event args.
-        /// </summary>
         public NodeStatusChangedEventArgs(FlowNodeViewModel node) => Node = node;
     }
 
@@ -366,10 +407,6 @@ namespace UotanStudio.Services.Execution
         /// </summary>
         public ExecutionResult Result { get; }
 
-        /// <summary>
-        /// <para>创建事件参数。</para>
-        /// Creates event args.
-        /// </summary>
         public ExecutionCompletedEventArgs(ExecutionResult result) => Result = result;
     }
 

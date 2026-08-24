@@ -1,7 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using NodifyM.Avalonia.ViewModelBase;
+using UotanStudio.Services;
+using UotanStudio.Services.Execution;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -101,6 +105,64 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             _title = title;
             _category = category;
+        }
+
+        /// <summary>
+        /// <para>按端口标题读取输入值。若节点不存在同标题输入端口，返回 <c>default</c>。</para>
+        /// Reads the input value by connector title. Returns the default value if no input connector matches.
+        /// </summary>
+        /// <param name="title">
+        /// <para>输入端口标题。</para>
+        /// The input connector title.
+        /// </param>
+        /// <returns>
+        /// <para>端口承载的值；无匹配端口时返回 <c>null</c>。</para>
+        /// The value carried by the port; <c>null</c> if no matching port exists.
+        /// </returns>
+        public object? ReadInput(string title)
+        {
+            var connector = Input.FirstOrDefault(c => string.Equals(c.Title, title, StringComparison.Ordinal));
+            return connector?.Data;
+        }
+
+        /// <summary>
+        /// <para>按端口标题把结果写入输出端口。</para>
+        /// Writes a result to the output port by connector title.
+        /// </summary>
+        /// <param name="title">
+        /// <para>输出端口标题。</para>
+        /// The output connector title.
+        /// </param>
+        /// <param name="value">
+        /// <para>要写入的值。</para>
+        /// The value to write.
+        /// </param>
+        public void WriteOutput(string title, object? value)
+        {
+            var connector = Output.FirstOrDefault(c => string.Equals(c.Title, title, StringComparison.Ordinal));
+            if (connector != null)
+            {
+                connector.Data = value;
+            }
+        }
+
+        /// <summary>
+        /// <para>执行节点业务逻辑。子类应重写此方法，通过 <see cref="ReadInput"/> 读取输入值并调用 <see cref="WriteOutput"/> 写入结果；默认实现仅记录一条日志。</para>
+        /// Executes the node business logic. Subclasses should override this method, reading inputs via <see cref="ReadInput"/>
+        /// and writing results via <see cref="WriteOutput"/>; the default implementation only writes a log entry.
+        /// </summary>
+        /// <param name="context">
+        /// <para>执行上下文，提供日志、取消令牌与进度报告。</para>
+        /// The execution context, providing logging, a cancellation token, and progress reporting.
+        /// </param>
+        /// <returns>
+        /// <para>表示异步执行的任务。</para>
+        /// A task representing the asynchronous execution.
+        /// </returns>
+        public virtual Task ExecuteAsync(INodeExecutionContext context)
+        {
+            context.Log.Write(LogLevel.Info, Title, $"Node '{Title}' has no execution logic (no-op).  节点无执行逻辑。");
+            return Task.CompletedTask;
         }
     }
 }

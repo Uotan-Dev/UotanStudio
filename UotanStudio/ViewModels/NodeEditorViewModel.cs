@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
 
 namespace UotanStudio.ViewModels
 {
@@ -32,6 +33,11 @@ namespace UotanStudio.ViewModels
         private ObservableCollection<NodeToolboxCategory> _visibleToolboxCategories = [];
         private double _executionProgress;
         private bool _isExecuting;
+
+        // ---- 撤销/重做命令栈 ----
+        private readonly Stack<IEditorCommand> _undoStack = [];
+        private readonly Stack<IEditorCommand> _redoStack = [];
+        private const int MaxUndoDepth = 100;
 
         /// <summary>
         /// <para>统一日志服务实例，节点编辑器与执行引擎共享。</para>
@@ -158,6 +164,18 @@ namespace UotanStudio.ViewModels
         }
 
         /// <summary>
+        /// <para>获取是否能执行撤销操作。</para>
+        /// Gets whether an undo operation is available.
+        /// </summary>
+        public bool CanUndo => _undoStack.Count > 0;
+
+        /// <summary>
+        /// <para>获取是否能执行重做操作。</para>
+        /// Gets whether a redo operation is available.
+        /// </summary>
+        public bool CanRedo => _redoStack.Count > 0;
+
+        /// <summary>
         /// <para>获取待处理连接视图模型，管理拖拽连线状态。</para>
         /// Gets the pending connection view model, managing the drag-connection state.
         /// </summary>
@@ -209,11 +227,85 @@ namespace UotanStudio.ViewModels
                     PasteFromClipboard();
                     break;
                 case NodeEditorAction.Undo:
+                    Undo();
+                    break;
                 case NodeEditorAction.Redo:
-                    // Undo/Redo 需要命令栈支持，当前先记录日志占位
-                    _log.Write(LogLevel.Info, "NodeEditor", $"{message.Action} requested (command stack not yet implemented)");
+                    Redo();
                     break;
             }
+        }
+
+        /// <summary>
+        /// <para>将命令推入撤销栈并执行，同时清空重做栈。当撤销栈达到深度上限时丢弃最旧命令。</para>
+        /// Pushes a command onto the undo stack, executes it, and clears the redo stack. Drops the oldest
+        /// command when the undo stack reaches its depth limit.
+        /// </summary>
+        /// <param name="command">
+        /// <para>要执行的命令。</para>
+        /// The command to execute.
+        /// </param>
+        private void ExecuteCommand(NodeViewModels.EditorCommands.IEditorCommand command)
+        {
+            command.Execute();
+            _undoStack.Push(command);
+            if (_undoStack.Count > MaxUndoDepth)
+            {
+                _undoStack.Pop();
+            }
+            _redoStack.Clear();
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+        }
+
+        /// <summary>
+        /// <para>撤销最近一次编辑操作。</para>
+        /// Undoes the most recent edit operation.
+        /// </summary>
+        public void Undo()
+        {
+            if (_undoStack.Count == 0)
+            {
+                _log.Write(LogLevel.Info, "NodeEditor", "Undo requested but undo stack is empty");
+                return;
+            }
+            var command = _undoStack.Pop();
+            command.Undo();
+            _redoStack.Push(command);
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+            _log.Write(LogLevel.Info, "NodeEditor", $"Undo: {command.DisplayName}");
+        }
+
+        /// <summary>
+        /// <para>重做最近一次被撤销的编辑操作。</para>
+        /// Redoes the most recently undone edit operation.
+        /// </summary>
+        public void Redo()
+        {
+            if (_redoStack.Count == 0)
+            {
+                _log.Write(LogLevel.Info, "NodeEditor", "Redo requested but redo stack is empty");
+                return;
+            }
+            var command = _redoStack.Pop();
+            command.Execute();
+            _undoStack.Push(command);
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+            _log.Write(LogLevel.Info, "NodeEditor", $"Redo: {command.DisplayName}");
+        }
+
+        /// <summary>
+        /// <para>赋予节点通过可撤销命令入栈的编辑操作，供批量操作合并为单个命令使用。</para>
+        /// Records an edit via a command pushed onto the stack; used to merge batch operations into one command.
+        /// </summary>
+        /// <param name="command">
+        /// <para>要执行的命令。</para>
+        /// The command to execute.
+        /// </param>
+        public void Record(NodeViewModels.EditorCommands.IEditorCommand command)
+        {
+            ExecuteCommand(command);
         }
 
         /// <summary>
@@ -345,12 +437,12 @@ namespace UotanStudio.ViewModels
                 _nextNodeLocation = new Point(_nextNodeLocation.X + 40, _nextNodeLocation.Y + 40);
             }
 
-            Nodes.Add(node);
+            ExecuteCommand(new NodeViewModels.EditorCommands.AddNodeCommand(Nodes, Connections, node));
         }
 
         /// <summary>
-        /// <para>从画布移除指定节点。</para>
-        /// Removes the specified node from the canvas.
+        /// <para>从画布移除指定节点（可撤销）。</para>
+        /// Removes the specified node from the canvas (undoable).
         /// </summary>
         /// <param name="node">
         /// <para>要移除的节点。</para>
@@ -358,23 +450,7 @@ namespace UotanStudio.ViewModels
         /// </param>
         public void RemoveNode(NodeViewModels.FlowNodeViewModel node)
         {
-            var relatedConnections = Connections
-                .Where(c => c.Source != null && c.Target != null &&
-                    (IsConnectorInNode(c.Source as NodeViewModels.NodeConnectorViewModel, node) || IsConnectorInNode(c.Target as NodeViewModels.NodeConnectorViewModel, node)))
-                .ToList();
-
-            foreach (var conn in relatedConnections)
-            {
-                Connections.Remove(conn);
-            }
-
-            Nodes.Remove(node);
-        }
-
-        private static bool IsConnectorInNode(NodeViewModels.NodeConnectorViewModel? connector, NodeViewModels.FlowNodeViewModel node)
-        {
-            if (connector == null) return false;
-            return node.Input.Contains(connector) || node.Output.Contains(connector);
+            ExecuteCommand(new NodeViewModels.EditorCommands.RemoveNodeCommand(Nodes, Connections, node));
         }
 
         /// <summary>
@@ -394,7 +470,7 @@ namespace UotanStudio.ViewModels
             if (source == target) return;
             // 检查是否已存在相同连接
             if (Connections.Any(c => c.Source == source && c.Target == target)) return;
-            Connections.Add(new NodeViewModels.NodeConnectionViewModel(source, target));
+            ExecuteCommand(new NodeViewModels.EditorCommands.AddConnectionCommand(Connections, new NodeViewModels.NodeConnectionViewModel(source, target)));
         }
 
         [RelayCommand]
@@ -424,21 +500,16 @@ namespace UotanStudio.ViewModels
         [RelayCommand]
         private void DeleteSelected()
         {
-            // 删除当前选中的节点及其相关连接
-            if (SelectedNode != null)
-            {
-                RemoveNode(SelectedNode);
-                SelectedNode = null;
-                return;
-            }
-
-            // 兜底：删除所有 IsSelected 的节点
+            // 删除当前选中的节点及其相关连接，作为单个可撤销命令整批执行
             var toDelete = Nodes.Where(n => n.IsSelected).ToList();
-            foreach (var n in toDelete)
-            {
-                RemoveNode(n);
-            }
-            if (toDelete.Count > 0) SelectedNode = null;
+            if (toDelete.Count == 0) return;
+
+            var commands = toDelete
+                .Select(n => (NodeViewModels.EditorCommands.IEditorCommand)new NodeViewModels.EditorCommands.RemoveNodeCommand(Nodes, Connections, n))
+                .ToList();
+
+            ExecuteCommand(new NodeViewModels.EditorCommands.CompoundCommand(commands));
+            SelectedNode = null;
         }
 
         /// <summary>
@@ -630,10 +701,12 @@ namespace UotanStudio.ViewModels
             var related = Connections
                 .Where(c => c.Source == connector || c.Target == connector)
                 .ToList();
-            foreach (var conn in related)
-            {
-                Connections.Remove(conn);
-            }
+            if (related.Count == 0) return;
+
+            var commands = related
+                .Select(c => (NodeViewModels.EditorCommands.IEditorCommand)new NodeViewModels.EditorCommands.RemoveConnectionCommand(Connections, c))
+                .ToList();
+            ExecuteCommand(new NodeViewModels.EditorCommands.CompoundCommand(commands));
         }
 
         /// <summary>
@@ -665,7 +738,7 @@ namespace UotanStudio.ViewModels
                 {
                     Location = new Point(dto.X, dto.Y)
                 };
-                AddNode(node);
+                Nodes.Add(node); // 加载操作直接写入画布，不进入撤销栈
                 if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
             }
 
@@ -685,7 +758,7 @@ namespace UotanStudio.ViewModels
                 }
                 if (src != null && tgt != null)
                 {
-                    CreateConnection(src, tgt);
+                    Connections.Add(new NodeViewModels.NodeConnectionViewModel(src, tgt));
                 }
                 else
                 {

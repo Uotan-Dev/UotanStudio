@@ -1,4 +1,10 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
+using UotanStudio.Services;
+using UotanStudio.Services.Execution;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -82,5 +88,73 @@ namespace UotanStudio.ViewModels.NodeViewModels
             node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
             return node;
         }
+
+        /// <summary>
+        /// <para>执行与节点标题对应的扩展烧录逻辑：Flash Bootloader / Erase All / OTA Sideload / Overwrite Firmware 校验输入并上报状态，
+        /// 实时刷写依赖设备管理器会话，此处校验参数并记录任务。</para>
+        /// Executes the extended flash logic matching the node title: Flash Bootloader, Erase All, OTA Sideload and Overwrite Firmware
+        /// validate their inputs and report status; live flashing relies on device-manager sessions, so nodes validate and record the task.
+        /// </summary>
+        /// <param name="context">
+        /// <para>执行上下文。</para>
+        /// The execution context.
+        /// </param>
+        /// <returns>
+        /// <para>表示异步执行的任务。</para>
+        /// A task representing the asynchronous execution.
+        /// </returns>
+        public override Task ExecuteAsync(INodeExecutionContext context)
+        {
+            switch (Title)
+            {
+                case "Flash Bootloader":
+                    ExecuteFlashBootloader(context);
+                    break;
+                case "Erase All":
+                    WriteOutput("Status", "recorded");
+                    context.Log.Write(LogLevel.Info, Title, "Erase-all task recorded.  已记录整机擦除任务。");
+                    break;
+                case "OTA Sideload":
+                    ExecuteOtaSideload(context);
+                    break;
+                case "Overwrite Firmware":
+                    ExecuteOverwrite(context);
+                    break;
+                default:
+                    return base.ExecuteAsync(context);
+            }
+
+            context.CancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        private void ExecuteFlashBootloader(INodeExecutionContext context)
+        {
+            var bootloader = Text(ReadInput("Bootloader"));
+            var ok = !string.IsNullOrWhiteSpace(bootloader) && File.Exists(bootloader);
+            WriteOutput("Status", ok ? "ready" : "invalid");
+            context.Log.Write(ok ? LogLevel.Info : LogLevel.Warn, Title,
+                ok ? $"Bootloader ready: {bootloader}  引导加载器校验就绪。" : $"Bootloader path invalid: {bootloader ?? "<empty>"}  引导加载器路径无效。");
+        }
+
+        private void ExecuteOtaSideload(INodeExecutionContext context)
+        {
+            var package = Text(ReadInput("OTA Package"));
+            var ok = !string.IsNullOrWhiteSpace(package) && File.Exists(package);
+            WriteOutput("Status", ok ? "ready" : "invalid");
+            context.Log.Write(ok ? LogLevel.Info : LogLevel.Warn, Title,
+                ok ? $"Sideload package ready: {package}  OTA 包校验就绪。" : $"OTA package invalid: {package ?? "<empty>"}  OTA 包路径无效。");
+        }
+
+        private void ExecuteOverwrite(INodeExecutionContext context)
+        {
+            var firmware = Text(ReadInput("Firmware"));
+            var ok = !string.IsNullOrWhiteSpace(firmware) && File.Exists(firmware);
+            WriteOutput("Status", ok ? "ready" : "invalid");
+            context.Log.Write(ok ? LogLevel.Info : LogLevel.Warn, Title,
+                ok ? $"Overwrite firmware ready: {firmware}  覆盖固件校验就绪。" : $"Firmware path invalid: {firmware ?? "<empty>"}  固件路径无效。");
+        }
+
+        private static string? Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture);
     }
 }

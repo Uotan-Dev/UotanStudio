@@ -1,4 +1,10 @@
+using System;
+using System.Globalization;
+using System.IO;
+using System.Threading.Tasks;
 using Avalonia;
+using UotanStudio.Services;
+using UotanStudio.Services.Execution;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {
@@ -63,6 +69,92 @@ namespace UotanStudio.ViewModels.NodeViewModels
             node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
             node.Input.Add(new NodeConnectorViewModel { Title = "Path" });
             return node;
+        }
+
+        /// <summary>
+        /// <para>执行与节点标题对应的输出逻辑：Log Output 写日志、Progress Report 上报进度、Save Result 保存文件。</para>
+        /// Executes the output logic matching the node title: Log Output writes a log entry, Progress Report reports progress,
+        /// and Save Result writes a file.
+        /// </summary>
+        /// <param name="context">
+        /// <para>执行上下文。</para>
+        /// The execution context.
+        /// </param>
+        /// <returns>
+        /// <para>表示异步执行的任务。</para>
+        /// A task representing the asynchronous execution.
+        /// </returns>
+        public override Task ExecuteAsync(INodeExecutionContext context)
+        {
+            switch (Title)
+            {
+                case "Log Output":
+                    ExecuteLog(context);
+                    break;
+                case "Progress Report":
+                    ExecuteProgress(context);
+                    break;
+                case "Save Result":
+                    ExecuteSave(context);
+                    break;
+                default:
+                    return base.ExecuteAsync(context);
+            }
+
+            context.CancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        private void ExecuteLog(INodeExecutionContext context)
+        {
+            var message = NodeDataUtil.ToDisplay(ReadInput("Message"));
+            var levelText = (Convert.ToString(ReadInput("Level"), CultureInfo.InvariantCulture) ?? "info").Trim().ToLowerInvariant();
+            var level = ParseLogLevel(levelText) ?? LogLevel.Info;
+            context.Log.Write(level, Title, message);
+        }
+
+        private void ExecuteProgress(INodeExecutionContext context)
+        {
+            var progress = NodeDataUtil.ToDouble(ReadInput("Progress"), 0);
+            context.ReportProgress(Math.Clamp(progress, 0.0, 1.0));
+            var status = NodeDataUtil.ToDisplay(ReadInput("Status"));
+            var percent = Math.Clamp(progress, 0.0, 1.0) * 100;
+            context.Log.Write(LogLevel.Info, Title,
+                string.IsNullOrEmpty(status) ? $"Progress {percent:0.0}%  进度。" : $"Progress {percent:0.0}% — {status}  进度。");
+        }
+
+        private void ExecuteSave(INodeExecutionContext context)
+        {
+            var data = NodeDataUtil.ToBytes(ReadInput("Data")) ?? [];
+            var path = Convert.ToString(ReadInput("Path"), CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                context.Log.Write(LogLevel.Warn, Title, "No output Path.  缺少输出路径。");
+                return;
+            }
+
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllBytes(path, data);
+            context.Log.Write(LogLevel.Info, Title, $"Saved {data.Length} bytes to '{path}'  已保存。");
+        }
+
+        private static LogLevel? ParseLogLevel(string text)
+        {
+            return text switch
+            {
+                "trace" => LogLevel.Trace,
+                "debug" => LogLevel.Debug,
+                "info" or "information" => LogLevel.Info,
+                "warn" or "warning" => LogLevel.Warn,
+                "error" => LogLevel.Error,
+                "fatal" or "critical" => LogLevel.Fatal,
+                _ => null
+            };
         }
     }
 }
