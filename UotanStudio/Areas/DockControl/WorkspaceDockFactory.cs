@@ -16,11 +16,27 @@ using UotanStudio.Services;
 namespace UotanStudio.Areas.DockControl;
 
 /// <summary>
+/// Describes a toggleable tool window and the dock pane it should be added to.
+/// <para>描述一个可切换的工具窗口及其应加入的停靠面板。</para>
+/// </summary>
+/// <param name="Window">The dockable window instance.</param>
+/// <param name="TargetDock">The dock pane that hosts the window when it is shown.</param>
+public readonly record struct DockWindowEntry(IDockable Window, IDock TargetDock);
+
+/// <summary>
 /// Factory for creating the workspace dock layout.
 /// <para>用于创建工作区停靠布局的工厂。</para>
 /// </summary>
 public class WorkspaceDockFactory : Factory
 {
+    private readonly Dictionary<string, DockWindowEntry> _toolWindows = new();
+
+    /// <summary>
+    /// Gets the toggleable tool windows mapped to their target dock panes.
+    /// <para>获取可切换的工具窗口及其目标停靠面板的映射。</para>
+    /// </summary>
+    public IReadOnlyDictionary<string, DockWindowEntry> ToolWindows => _toolWindows;
+
     /// <summary>
     /// Creates the root dock layout.
     /// <para>创建根停靠布局。</para>
@@ -34,7 +50,6 @@ public class WorkspaceDockFactory : Factory
         var properties = new Tool { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = false };
         var analyzer = new Tool { Id = "Analyzer", Title = LanguageService.Instance.GetString("Dock_Analyzer"), CanClose = false };
         var output = new Tool { Id = "Output", Title = LanguageService.Instance.GetString("Dock_Output"), CanClose = false };
-        var adbLog = new Tool { Id = "AdbLog", Title = LanguageService.Instance.GetString("Dock_AdbLog"), CanClose = true };
 
         var documentDock = new DocumentDock
         {
@@ -59,7 +74,8 @@ public class WorkspaceDockFactory : Factory
         {
             Id = "LeftPane",
             Title = "LeftPane",
-            Proportion = 0.25,
+            Proportion = 0.35,
+            IsCollapsable = false,
             ActiveDockable = projectExplorer,
             VisibleDockables = CreateList<IDockable>(projectExplorer)
         };
@@ -70,7 +86,7 @@ public class WorkspaceDockFactory : Factory
             Title = "BottomPane",
             Proportion = 0.25,
             ActiveDockable = output,
-            VisibleDockables = CreateList<IDockable>(output, adbLog)
+            VisibleDockables = CreateList<IDockable>(output)
         };
 
         var mainLayout = new ProportionalDock
@@ -102,6 +118,14 @@ public class WorkspaceDockFactory : Factory
         rootDock.DefaultDockable = mainLayout;
         rootDock.VisibleDockables = CreateList<IDockable>(mainLayout);
 
+        // 记录可切换的工具窗口及其目标停靠面板，供窗口管理器显隐。
+        // Register toggleable tool windows with their target panes for the window manager.
+        _toolWindows.Clear();
+        _toolWindows["ProjectExplorer"] = new DockWindowEntry(projectExplorer, leftTools);
+        _toolWindows["Properties"] = new DockWindowEntry(properties, rightTools);
+        _toolWindows["Analyzer"] = new DockWindowEntry(analyzer, rightTools);
+        _toolWindows["Output"] = new DockWindowEntry(output, bottomTools);
+
         return rootDock;
     }
 
@@ -121,7 +145,7 @@ public class WorkspaceDockFactory : Factory
         // ViewLocator to their views; the document area shares one EditorViewModel to host
         // the opened documents.
         var explorer = new ProjectExplorerViewModel();
-        var editor = new EditorViewModel();
+        var editor = EditorViewModel.Instance;
         var analyzer = new AnalyzerViewModel();
         var output = new OutputViewModel();
         var properties = new PropertiesViewModel();

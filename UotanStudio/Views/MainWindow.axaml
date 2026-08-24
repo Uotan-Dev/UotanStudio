@@ -4,15 +4,22 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:views="using:UotanStudio.Views"
+        xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         x:Class="UotanStudio.Views.MainWindow"
         Icon="/Assets/UotanToolbox.png"
         Title=""
+        x:DataType="vm:MainViewModel"
         ExtendClientAreaToDecorationsHint="True">
     <DockPanel>
-        <Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32" Width="250">
-            <Image Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
-            <Menu Margin="35 0 0 0">
+        <Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Image Grid.Column="0" Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
+            <Menu Grid.Column="1" Margin="35 0 0 0">
                 <!-- 项目菜单 -->
                 <MenuItem Padding="8 0">
                     <MenuItem.Header>
@@ -24,6 +31,11 @@
                               Click="OnOpenClick" />
                     <MenuItem Header="{DynamicResource Menu_Save}" InputGesture="Ctrl+S"
                               Click="OnSaveClick" />
+                    <Separator />
+                    <MenuItem Header="{DynamicResource Menu_ImportImages}"
+                              Click="OnImportImagesClick" />
+                    <MenuItem Header="{DynamicResource Menu_ExportImages}"
+                              Click="OnExportImagesClick" />
                     <Separator />
                     <MenuItem Header="{DynamicResource Menu_Exit}" InputGesture="Alt+F4"
                               Click="OnExitClick" />
@@ -44,6 +56,12 @@
                     <MenuItem Header="{DynamicResource Menu_Settings}"
                               Click="OnSettingsClick" />
                 </MenuItem>
+                <!-- 窗口菜单 -->
+                <MenuItem Padding="8 0" x:Name="WindowMenu" SubmenuOpened="OnWindowMenuOpened">
+                    <MenuItem.Header>
+                        <TextBlock Text="{DynamicResource WinMgr_Button}" FontSize="13" FontWeight="SemiBold" />
+                    </MenuItem.Header>
+                </MenuItem>
                 <!-- 关于菜单 -->
                 <MenuItem Padding="8 0">
                     <MenuItem.Header>
@@ -53,6 +71,13 @@
                               Click="OnAboutClick" />
                 </MenuItem>
             </Menu>
+            <!-- 当前打开工程标题 -->
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" Margin="18,0,0,0"
+                       Text="{Binding ProjectTitle}"
+                       FontSize="13" FontWeight="SemiBold"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       TextTrimming="CharacterEllipsis"
+                       IsVisible="{Binding ProjectTitle, Converter={StaticResource StringNotNullOrEmptyConverter}}" />
         </Grid>
 
         <!-- 主内容页面区域 -->

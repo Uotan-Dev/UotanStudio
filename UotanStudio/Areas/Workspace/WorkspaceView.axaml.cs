@@ -23,6 +23,11 @@ public partial class WorkspaceView : UserControl
         // So the layout must be ready before the DockControl template instantiates: set the
         // DataContext first, then assign DockControl.Layout after InitializeComponent, so the
         // layout is non-null before the view attaches to the visual tree.
+        // 每个工作区视图都实例化自己的布局并登记为 Instance，确保 DockControl 绑定的是
+        // 全新加载的布局并正常渲染；窗口管理器读取实例来操作同一个停靠布局。
+        // Each workspace view builds its own layout and registers itself as Instance so the
+        // DockControl binds a freshly-loaded layout; the window manager reads it to operate
+        // the same dock layout.
         var vm = new WorkspaceViewModel();
         DataContext = vm;
         InitializeComponent();

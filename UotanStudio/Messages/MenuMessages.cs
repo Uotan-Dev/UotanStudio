@@ -33,3 +33,12 @@ public class MenuThemeChangedMessage(Models.ThemeMode themeMode)
 public class ClearCanvasMessage
 {
 }
+
+/// <summary>
+/// Project opened Message, broadcast after a project is opened or created; the window manager
+/// uses it to auto-enable the project-related windows.
+/// <para>工程打开消息，在工程被打开或新建后广播；窗口管理器据此自动启用与工程相关的窗口。</para>
+/// </summary>
+public class ProjectOpenedMessage
+{
+}

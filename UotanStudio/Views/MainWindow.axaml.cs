@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
@@ -7,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Areas.ProjectExplorer;
+using UotanStudio.Areas.Workspace;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 
@@ -66,6 +69,161 @@ public partial class MainWindow : Window
         // 导航到节点编辑器标签页（索引 2），由 MainView 中的接收器触发 ClearAllCommand
         WeakReferenceMessenger.Default.Send(new NavigateTabMessage(2));
         WeakReferenceMessenger.Default.Send(new ClearCanvasMessage());
+    }
+
+    /// <summary>
+    /// 处理「导入镜像」：多选固件镜像文件并导入当前工程。
+    /// <para>Handles "import images": multi-selects firmware image files and imports them
+    /// into the current project.</para>
+    /// </summary>
+    private async void OnImportImagesClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = ProjectExplorerViewModel.Instance;
+        if (vm is null)
+        {
+            return;
+        }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import Firmware Images",
+            AllowMultiple = true,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Firmware Images")
+                {
+                    Patterns = ["*.img", "*.bin", "*.payload", "*.cpio", "*.tar", "*.ofp", "*.ops", "*.ozip"]
+                },
+                new FilePickerFileType("All Files")
+                {
+                    Patterns = ["*.*"]
+                }
+            ]
+        });
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        var paths = files
+            .Select(f => f.TryGetLocalPath())
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Cast<string>()
+            .ToList();
+        if (paths.Count > 0)
+        {
+            await vm.ImportImagesAsync(paths);
+        }
+    }
+
+    /// <summary>
+    /// 处理「导出镜像」：选择目标目录并将当前工程部件镜像导出。
+    /// <para>Handles "export images": picks a target directory and exports the current
+    /// project's component images.</para>
+    /// </summary>
+    private async void OnExportImagesClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = ProjectExplorerViewModel.Instance;
+        if (vm is null)
+        {
+            return;
+        }
+
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Export Firmware Images",
+            AllowMultiple = false
+        });
+        if (folders.Count == 0)
+        {
+            return;
+        }
+
+        var directory = folders[0].TryGetLocalPath();
+        if (!string.IsNullOrEmpty(directory))
+        {
+            await vm.ExportImagesAsync(directory);
+        }
+    }
+
+    /// <summary>
+    /// 展开「窗口」菜单时动态构建其子项：工具窗口开关、工程部件与打开的文档。
+    /// <para>Builds the "Window" menu children when it expands: tool-window toggles, project
+    /// components and open documents.</para>
+    /// </summary>
+    private void OnWindowMenuOpened(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem menu || DataContext is not ViewModels.MainViewModel vm)
+        {
+            return;
+        }
+
+        var win = vm.WindowManagerVM;
+        var items = new List<object>();
+
+        // 工具窗口：可勾选开关。
+        // Tool windows: checkable toggles.
+        foreach (var id in win.ToolWindowIds)
+        {
+            var toggle = new MenuItem
+            {
+                Header = win.ToolTitle(id),
+                IsChecked = win.IsToolShown(id)
+            };
+            var toggled = id;
+            toggle.Click += (_, _) =>
+            {
+                toggle.IsChecked = !toggle.IsChecked;
+                win.SetToolVisible(toggled, toggle.IsChecked);
+            };
+            items.Add(toggle);
+        }
+
+        // 工程部件窗口（打开工程后显示）。
+        // Project component windows (shown once a project is open).
+        if (win.ComponentPaths.Count > 0)
+        {
+            items.Add(new Separator());
+            var components = new MenuItem
+            {
+                Header = LanguageService.Instance.GetString("WinMgr_Components")
+            };
+            var componentChildren = new List<object>();
+            foreach (var path in win.ComponentPaths)
+            {
+                var child = new MenuItem { Header = Path.GetFileName(path) };
+                var componentPath = path;
+                child.Click += (_, _) => win.OpenComponent(componentPath);
+                componentChildren.Add(child);
+            }
+
+            components.ItemsSource = componentChildren;
+            items.Add(components);
+        }
+
+        // 打开的文档。
+        // Open documents.
+        if (win.Documents.Count > 0)
+        {
+            items.Add(new Separator());
+            var documents = new MenuItem
+            {
+                Header = LanguageService.Instance.GetString("WinMgr_Documents")
+            };
+            var documentChildren = new List<object>();
+            foreach (var doc in win.Documents)
+            {
+                var child = new MenuItem { Header = doc.Title };
+                var docPath = doc.Path;
+                child.Click += (_, _) => win.ActivateDocument(docPath);
+                documentChildren.Add(child);
+            }
+
+            documents.ItemsSource = documentChildren;
+            items.Add(documents);
+        }
+
+        menu.ItemsSource = items;
     }
 
     /// <summary>退出应用程序。</summary>
@@ -159,7 +317,12 @@ public partial class MainWindow : Window
     /// <summary>显示关于对话框。</summary>
     private async void OnAboutClick(object? sender, RoutedEventArgs e) => await ShowAboutDialog();
 
-    private async System.Threading.Tasks.Task ShowAboutDialog() => await ShowInfoDialog("About UotanStudio", "UotanStudio\nVersion: 1.0.0\n\nA cross-platform Android device toolbox.");
+    private async System.Threading.Tasks.Task ShowAboutDialog()
+    {
+        var title = LanguageService.Instance.GetString("About_Title");
+        var description = LanguageService.Instance.GetString("About_Description");
+        await ShowInfoDialog(title, $"UotanStudio\nVersion: 1.0.0\n\n{description}");
+    }
 
     private async System.Threading.Tasks.Task ShowInfoDialog(string title, string text)
     {
