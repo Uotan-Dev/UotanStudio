@@ -258,6 +258,9 @@ Generated_Code/
 # because we have git ;-)
 _UpgradeReport_Files/
 Backup*/
+# 项目自有代码目录 UotanStudio/Core/Backup 需要纳入版本控制，不受上面 VS 备份规则影响
+!UotanStudio/Core/Backup/
+!UotanStudio/Core/Backup/**
 UpgradeLog*.XML
 UpgradeLog*.htm
 ServiceFabricBackup/
