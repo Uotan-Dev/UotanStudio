@@ -215,18 +215,8 @@ public sealed class CpioArchiveReader
         var nameRaw = ReadExact(stream, checked((int)nameSize));
         var name = Encoding.UTF8.GetString(nameRaw.AsSpan(0, checked((int)nameSize - 1)));
 
-        // odc uses no alignment padding; the switch is kept for parity with the reference.
-        const int alignment = 1;
-        if (alignment > 1)
-        {
-            SkipPadding(stream, CpioConstants.OldAsciiHeaderSize + (int)nameSize, alignment);
-        }
-
+        // odc uses no alignment padding.
         var data = ReadExact(stream, checked((int)fileSize));
-        if (alignment > 1)
-        {
-            SkipPadding(stream, (int)fileSize, alignment);
-        }
 
         var fileType = CpioFieldParser.ToFileType(mode);
         return new ArchiveEntry

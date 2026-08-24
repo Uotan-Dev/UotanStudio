@@ -199,7 +199,7 @@ public static class AvbVerifier
     {
         try
         {
-            using var cert = new X509Certificate2(certificateData);
+            using var cert = X509CertificateLoader.LoadCertificate(certificateData);
             return cert.GetRSAPublicKey();
         }
         catch
