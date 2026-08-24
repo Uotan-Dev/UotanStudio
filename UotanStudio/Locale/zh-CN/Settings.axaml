@@ -38,7 +38,10 @@
     <x:String x:Key="Settings_UpdateAvailable">有可用更新</x:String>
     <x:String x:Key="Settings_UpdateCheckFailed">更新检查失败</x:String>
     <x:String x:Key="Settings_ResetToDefaults">恢复默认设置</x:String>
-    <x:String x:Key="Settings_ResetConfirm">确定要恢复所有设置为默认值吗？</x:String>
+    <x:String x:Key="Settings_ResetConfirmTitle">重置设置</x:String>
+    <x:String x:Key="Settings_ResetConfirmMessage">确定要恢复所有设置为默认值吗？此操作不可撤销。</x:String>
+    <x:String x:Key="Settings_ResetConfirm">重置</x:String>
+    <x:String x:Key="Settings_ResetCancel">取消</x:String>
     <x:String x:Key="Settings_ResetCanceled">已取消重置</x:String>
     <x:String x:Key="Settings_SettingsSaved">设置已保存</x:String>
     <x:String x:Key="Settings_SettingsReset">设置已恢复为默认值</x:String>

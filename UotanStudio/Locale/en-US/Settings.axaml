@@ -38,7 +38,10 @@
     <x:String x:Key="Settings_UpdateAvailable">Update available</x:String>
     <x:String x:Key="Settings_UpdateCheckFailed">Update check failed</x:String>
     <x:String x:Key="Settings_ResetToDefaults">Reset to Defaults</x:String>
-    <x:String x:Key="Settings_ResetConfirm">Are you sure you want to reset all settings to defaults?</x:String>
+    <x:String x:Key="Settings_ResetConfirmTitle">Reset Settings</x:String>
+    <x:String x:Key="Settings_ResetConfirmMessage">Are you sure you want to reset all settings to their default values?</x:String>
+    <x:String x:Key="Settings_ResetConfirm">Reset</x:String>
+    <x:String x:Key="Settings_ResetCancel">Cancel</x:String>
     <x:String x:Key="Settings_ResetCanceled">Reset canceled</x:String>
     <x:String x:Key="Settings_SettingsSaved">Settings saved</x:String>
     <x:String x:Key="Settings_SettingsReset">Settings reset to defaults</x:String>

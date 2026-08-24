@@ -8,6 +8,7 @@
     <x:String x:Key="Dock_Analyzer">固件分析</x:String>
     <x:String x:Key="Dock_Editor">编辑器</x:String>
     <x:String x:Key="Dock_Documents">文档</x:String>
+    <x:String x:Key="Dock_Device">设备</x:String>
 
     <!-- 工程管理 -->
     <x:String x:Key="Project_Create">新建工程</x:String>
@@ -17,11 +18,50 @@
     <x:String x:Key="Project_OpenFailed">工程打开失败</x:String>
     <x:String x:Key="Project_SaveFailed">工程保存失败</x:String>
     <x:String x:Key="Project_Created">工程 {0} 已创建</x:String>
+    <x:String x:Key="Project_Import">导入镜像</x:String>
+    <x:String x:Key="Project_ImportNoProject">请先新建或打开一个工程</x:String>
+    <x:String x:Key="Project_ImportFailed">镜像导入失败</x:String>
+    <x:String x:Key="Project_Imported">已导入 {0} 个镜像</x:String>
+    <x:String x:Key="Project_ExportNoProject">请先新建或打开一个工程</x:String>
+    <x:String x:Key="Project_Exported">已导出 {0} 个镜像</x:String>
+    <x:String x:Key="Project_ExportFailed">镜像导出失败</x:String>
+
+    <!-- 工程资源管理器右键菜单 -->
+    <x:String x:Key="Explorer_Open">打开</x:String>
+    <x:String x:Key="Explorer_Unpack">解包到工程目录</x:String>
+    <x:String x:Key="Explorer_AddComponent">添加到工程部件</x:String>
+    <x:String x:Key="Explorer_Rename">重命名</x:String>
 
     <!-- 编辑器 -->
     <x:String x:Key="Editor_Open">打开文件</x:String>
     <x:String x:Key="Editor_Save">保存</x:String>
     <x:String x:Key="Editor_Empty">打开或新建文件开始编辑</x:String>
+    <x:String x:Key="Editor_SaveConfirmTitle">保存更改</x:String>
+    <x:String x:Key="Editor_SaveConfirmMessage">文档 "{0}" 有未保存的更改，是否在关闭前保存？</x:String>
+    <x:String x:Key="Editor_Yes">是</x:String>
+    <x:String x:Key="Editor_No">否</x:String>
+    <x:String x:Key="Editor_Cancel">取消</x:String>
+
+    <!-- 设备 -->
+    <x:String x:Key="Device_RebootConfirmTitle">确认重启</x:String>
+    <x:String x:Key="Device_RebootConfirmMessage">确定要将设备重启到 {0} 吗？</x:String>
+    <x:String x:Key="Device_FlashConfirmTitle">确认刷写</x:String>
+    <x:String x:Key="Device_FlashConfirmMessage">刷写操作存在风险，可能导致设备变砖。是否继续？</x:String>
+    <x:String x:Key="Device_ModeSystem">系统</x:String>
+    <x:String x:Key="Device_ModeBootloader">Bootloader</x:String>
+    <x:String x:Key="Device_ModeRecovery">Recovery</x:String>
+    <x:String x:Key="Device_ModeEdl">EDL 模式</x:String>
+
+    <!-- 日志 -->
+    <x:String x:Key="Log_LevelFilter">级别</x:String>
+    <x:String x:Key="Log_LevelAll">全部</x:String>
+    <x:String x:Key="Log_LevelDebug">调试</x:String>
+    <x:String x:Key="Log_LevelInfo">信息</x:String>
+    <x:String x:Key="Log_LevelWarn">警告</x:String>
+    <x:String x:Key="Log_LevelError">错误</x:String>
+
+    <!-- 节点编辑器 -->
+    <x:String x:Key="Node_ExecLogToggle">切换执行日志</x:String>
 
     <!-- 固件分析 -->
     <x:String x:Key="Analyzer_Scan">扫描部件</x:String>

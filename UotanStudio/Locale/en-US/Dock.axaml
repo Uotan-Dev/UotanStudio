@@ -8,6 +8,7 @@
     <x:String x:Key="Dock_Analyzer">Firmware Analyzer</x:String>
     <x:String x:Key="Dock_Editor">Editor</x:String>
     <x:String x:Key="Dock_Documents">Documents</x:String>
+    <x:String x:Key="Dock_Device">Device</x:String>
 
     <!-- Project -->
     <x:String x:Key="Project_Create">New Project</x:String>
@@ -17,11 +18,54 @@
     <x:String x:Key="Project_OpenFailed">Failed to open project</x:String>
     <x:String x:Key="Project_SaveFailed">Failed to save project</x:String>
     <x:String x:Key="Project_Created">Project {0} created</x:String>
+    <x:String x:Key="Project_Import">Import Image</x:String>
+    <x:String x:Key="Project_ImportNoProject">Create or open a project first</x:String>
+    <x:String x:Key="Project_ImportFailed">Failed to import images</x:String>
+    <x:String x:Key="Project_Imported">Imported {0} image(s)</x:String>
+    <x:String x:Key="Project_ExportNoProject">Create or open a project first</x:String>
+    <x:String x:Key="Project_Exported">Exported {0} image(s)</x:String>
+    <x:String x:Key="Project_ExportFailed">Failed to export images</x:String>
+
+    <!-- Project explorer context menu -->
+    <x:String x:Key="Explorer_Open">Open</x:String>
+    <x:String x:Key="Explorer_Unpack">Unpack to Project</x:String>
+    <x:String x:Key="Explorer_AddComponent">Add to Components</x:String>
+    <x:String x:Key="Explorer_Rename">Rename</x:String>
 
     <!-- Editor -->
     <x:String x:Key="Editor_Open">Open File</x:String>
     <x:String x:Key="Editor_Save">Save</x:String>
     <x:String x:Key="Editor_Empty">Open or create a file to start editing</x:String>
+    <x:String x:Key="Editor_SaveConfirmTitle">Save Changes</x:String>
+    <x:String x:Key="Editor_SaveConfirmMessage">The document "{0}" has unsaved changes. Save before closing?</x:String>
+    <x:String x:Key="Editor_Yes">Yes</x:String>
+    <x:String x:Key="Editor_No">No</x:String>
+    <x:String x:Key="Editor_Cancel">Cancel</x:String>
+
+    <!-- Device -->
+    <x:String x:Key="Device_RebootConfirmTitle">Confirm Reboot</x:String>
+    <x:String x:Key="Device_RebootConfirmMessage">Are you sure you want to reboot the device to {0}?</x:String>
+    <x:String x:Key="Device_FlashConfirmTitle">Confirm Flash</x:String>
+    <x:String x:Key="Device_FlashConfirmMessage">Flashing is a risky operation that may brick your device. Continue?</x:String>
+    <x:String x:Key="Device_ModeSystem">system</x:String>
+    <x:String x:Key="Device_ModeBootloader">bootloader</x:String>
+    <x:String x:Key="Device_ModeRecovery">recovery</x:String>
+    <x:String x:Key="Device_ModeEdl">EDL mode</x:String>
+
+    <!-- About -->
+    <x:String x:Key="About_Title">About UotanStudio</x:String>
+    <x:String x:Key="About_Description">A cross-platform Android device toolbox.</x:String>
+
+    <!-- Log -->
+    <x:String x:Key="Log_LevelFilter">Level</x:String>
+    <x:String x:Key="Log_LevelAll">All</x:String>
+    <x:String x:Key="Log_LevelDebug">Debug</x:String>
+    <x:String x:Key="Log_LevelInfo">Info</x:String>
+    <x:String x:Key="Log_LevelWarn">Warn</x:String>
+    <x:String x:Key="Log_LevelError">Error</x:String>
+
+    <!-- Node Editor -->
+    <x:String x:Key="Node_ExecLogToggle">Toggle Execution Log</x:String>
 
     <!-- Analyzer -->
     <x:String x:Key="Analyzer_Scan">Scan Components</x:String>

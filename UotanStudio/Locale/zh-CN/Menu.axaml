@@ -12,5 +12,12 @@
     <x:String x:Key="Menu_ReloadLanguagePacks">重新加载语言包</x:String>
     <x:String x:Key="Menu_ClearCanvas">清空画布</x:String>
     <x:String x:Key="Menu_Settings">设置</x:String>
+    <x:String x:Key="Menu_ImportImages">导入镜像...</x:String>
+    <x:String x:Key="Menu_ExportImages">导出镜像...</x:String>
+    <x:String x:Key="WinMgr_Button">窗口</x:String>
+    <x:String x:Key="WinMgr_Title">窗口管理器</x:String>
+    <x:String x:Key="WinMgr_Hint">切换要在工作区中显示或隐藏的窗口。</x:String>
+    <x:String x:Key="WinMgr_Components">镜像/部件</x:String>
+    <x:String x:Key="WinMgr_Documents">打开的文档</x:String>
 
 </ResourceDictionary>

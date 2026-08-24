@@ -12,5 +12,12 @@
     <x:String x:Key="Menu_ReloadLanguagePacks">Reload Language Packs</x:String>
     <x:String x:Key="Menu_ClearCanvas">Clear Canvas</x:String>
     <x:String x:Key="Menu_Settings">Settings</x:String>
+    <x:String x:Key="Menu_ImportImages">Import Images...</x:String>
+    <x:String x:Key="Menu_ExportImages">Export Images...</x:String>
+    <x:String x:Key="WinMgr_Button">Window</x:String>
+    <x:String x:Key="WinMgr_Title">Window Manager</x:String>
+    <x:String x:Key="WinMgr_Hint">Toggle which windows are shown in the workspace.</x:String>
+    <x:String x:Key="WinMgr_Components">Images / Components</x:String>
+    <x:String x:Key="WinMgr_Documents">Open Documents</x:String>
 
 </ResourceDictionary>
