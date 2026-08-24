@@ -1,0 +1,195 @@
+using UotanStudio.Comm.Protocols.Common;
+using UotanStudio.Comm.Transports.Abstractions;
+
+namespace UotanStudio.Comm.Protocols.Edl;
+
+/// <summary>
+/// Represents an EDL (Emergency Download Mode) protocol session combining Sahara and Firehose protocols.
+/// <para>表示 EDL（紧急下载模式）协议会话，组合 Sahara 和 Firehose 协议。</para>
+/// </summary>
+/// <remarks>
+/// Creates a new EDL session over the specified device transport.
+/// <para>在指定设备传输上创建新的 EDL 会话。</para>
+/// </remarks>
+/// <param name="transport">The device transport. 设备传输。</param>
+/// <param name="firehoseConfig">Optional Firehose configuration. 可选的 Firehose 配置。</param>
+public sealed class EdlSession(ICommTransport transport, FirehoseConfiguration? firehoseConfig = null) : IProtocolSession
+{
+    private bool _disposed;
+
+    /// <summary>
+    /// Gets the protocol name.
+    /// <para>获取协议名称。</para>
+    /// </summary>
+    public string ProtocolName => "edl";
+
+    /// <summary>
+    /// Gets the underlying transport session.
+    /// <para>获取底层传输会话。</para>
+    /// </summary>
+    public ICommTransport Transport { get; } = transport ?? throw new ArgumentNullException(nameof(transport));
+
+    /// <summary>
+    /// Gets whether the session is connected and ready.
+    /// <para>获取会话是否已连接并就绪。</para>
+    /// </summary>
+    public bool IsConnected => !_disposed;
+
+    /// <summary>
+    /// Gets whether Firehose has been configured.
+    /// <para>Firehose 是否已配置。</para>
+    /// </summary>
+    public bool IsConfigured { get; private set; }
+
+    /// <summary>
+    /// Gets the Sahara protocol instance.
+    /// <para>获取 Sahara 协议实例。</para>
+    /// </summary>
+    public SaharaProtocol? Sahara { get; private set; }
+
+    /// <summary>
+    /// Gets the Firehose protocol instance.
+    /// <para>获取 Firehose 协议实例。</para>
+    /// </summary>
+    public FirehoseProtocol? Firehose { get; } = new FirehoseProtocol(transport, firehoseConfig);
+
+    /// <summary>
+    /// Gets the negotiated maximum packet length from Sahara.
+    /// <para>从 Sahara 获取协商的最大包长度。</para>
+    /// </summary>
+    public uint MaxPacketLength => Sahara?.MaxPacketLength ?? 4096;
+
+    /// <summary>
+    /// Performs Sahara handshake (if needed) and Firehose configure.
+    /// <para>执行 Sahara 握手（如需要）和 Firehose 配置。</para>
+    /// </summary>
+    /// <param name="programmerImage">Optional programmer image stream. 可选的编程器镜像流。</param>
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    public async Task InitializeAsync(Stream? programmerImage = null, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        // Try Sahara handshake (skipped internally when the device already runs Firehose).
+        Sahara = new SaharaProtocol(Transport);
+        await Sahara.HandshakeAsync(programmerImage, cancellationToken: cancellationToken);
+
+        // Always configure Firehose afterwards — even when Sahara detected an already-running
+        // programmer, the configure handshake (payload negotiation, sector-size detection) is
+        // still required before any Firehose command can be trusted. FirehoseAlreadyRunning
+        // only decides whether the Sahara handshake itself can be skipped.
+        // 之后总是执行 Firehose 配置——即使 Sahara 检测到 programmer 已在运行，仍需 configure
+        // 握手（负载协商、扇区大小检测）才能保证后续 Firehose 命令可靠。FirehoseAlreadyRunning
+        // 仅用于决定是否跳过 Sahara 握手本身。
+        await Firehose!.ConfigureAsync(cancellationToken: cancellationToken);
+        IsConfigured = true;
+    }
+
+    /// <summary>
+    /// Ensures the session is initialized (handshake + configure).
+    /// <para>确保会话已初始化（握手 + 配置）。</para>
+    /// </summary>
+    /// <param name="programmerImage">Optional programmer image stream. 可选的编程器镜像流。</param>
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>A task representing the asynchronous operation. 表示异步操作的任务。</returns>
+    public async Task EnsureInitializedAsync(Stream? programmerImage = null, CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured)
+        {
+            await InitializeAsync(programmerImage, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Programs (flashes) data to a partition.
+    /// <para>将数据编程（刷写）到分区。</para>
+    /// </summary>
+    /// <param name="dataStream">The data stream to write. 要写入的数据流。</param>
+    /// <param name="startSector">The starting sector. 起始扇区。</param>
+    /// <param name="numSectors">The number of sectors. 扇区数量。</param>
+    /// <param name="filename">The target filename. 目标文件名。</param>
+    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>The Firehose response. Firehose 响应。</returns>
+    public async Task<FirehoseResponse> FlashPartitionAsync(Stream dataStream, long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        await EnsureInitializedAsync(cancellationToken: cancellationToken);
+        return await Firehose!.ProgramAsync(dataStream, startSector, numSectors, filename, physicalPartition, cancellationToken);
+    }
+
+    /// <summary>
+    /// Erases a partition.
+    /// <para>擦除分区。</para>
+    /// </summary>
+    /// <param name="startSector">The starting sector. 起始扇区。</param>
+    /// <param name="numSectors">The number of sectors. 扇区数量。</param>
+    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>The Firehose response. Firehose 响应。</returns>
+    public async Task<FirehoseResponse> ErasePartitionAsync(long startSector, long numSectors, int physicalPartition = 0, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        await EnsureInitializedAsync(cancellationToken: cancellationToken);
+        return await Firehose!.EraseAsync(startSector, numSectors, physicalPartition, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads data from a partition.
+    /// <para>从分区读取数据。</para>
+    /// </summary>
+    /// <param name="startSector">The starting sector. 起始扇区。</param>
+    /// <param name="numSectors">The number of sectors. 扇区数量。</param>
+    /// <param name="filename">The target filename. 目标文件名。</param>
+    /// <param name="physicalPartition">The physical partition number. 物理分区编号。</param>
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>A tuple containing the response and data. 包含响应和数据的元组。</returns>
+    public async Task<(FirehoseResponse Response, byte[] Data)> ReadPartitionAsync(long startSector, long numSectors, string filename = "partition.bin", int physicalPartition = 0, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        await EnsureInitializedAsync(cancellationToken: cancellationToken);
+        return await Firehose!.ReadAsync(startSector, numSectors, filename, physicalPartition, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resets the device.
+    /// <para>复位设备。</para>
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
+    /// <returns>The Firehose response. Firehose 响应。</returns>
+    public async Task<FirehoseResponse> ResetAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        await EnsureInitializedAsync(cancellationToken: cancellationToken);
+        return await Firehose!.ResetAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Throws <see cref="ObjectDisposedException"/> if the session has been disposed.
+    /// <para>如果会话已释放，则抛出 <see cref="ObjectDisposedException"/>。</para>
+    /// </summary>
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(EdlSession));
+        }
+    }
+
+    /// <summary>
+    /// Disposes the session and releases all resources.
+    /// <para>释放会话并释放所有资源。</para>
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        Sahara?.Dispose();
+        Firehose?.Dispose();
+        Transport.Dispose();
+    }
+}
