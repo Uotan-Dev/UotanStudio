@@ -69,7 +69,7 @@ public sealed class NodeEditorTests
             }
         };
 
-        var result = await engine.ExecuteAsync(nodes, connections);
+        var result = await engine.ExecuteAsync(nodes, connections, TestContext.Current.CancellationToken);
 
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         var input = Assert.Single(target.Input);
@@ -80,7 +80,7 @@ public sealed class NodeEditorTests
     public async Task Engine_EmptyGraph_SucceedsWithZero()
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
-        var result = await engine.ExecuteAsync([], Array.Empty<NodeConnection>());
+        var result = await engine.ExecuteAsync([], Array.Empty<NodeConnection>(), TestContext.Current.CancellationToken);
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(0, result.ExecutedCount);
     }
@@ -90,7 +90,7 @@ public sealed class NodeEditorTests
     {
         var engine = new NodeExecutionEngine(new MemoryLog());
         var node = new TestNodeViewModel("Alone", NodeCategory.Flow);
-        var result = await engine.ExecuteAsync([node], Array.Empty<NodeConnection>());
+        var result = await engine.ExecuteAsync([node], Array.Empty<NodeConnection>(), TestContext.Current.CancellationToken);
         Assert.Equal(ExecutionStatus.Succeeded, result.Status);
         Assert.Equal(1, result.ExecutedCount);
         Assert.Equal(NodeExecutionStatus.Succeeded, node.ExecutionStatus);
@@ -107,7 +107,7 @@ public sealed class NodeEditorTests
             new NodeConnection { SourceInstanceId = a.InstanceId, SourceConnector = "O", TargetInstanceId = b.InstanceId, TargetConnector = "I" },
             new NodeConnection { SourceInstanceId = b.InstanceId, SourceConnector = "O", TargetInstanceId = a.InstanceId, TargetConnector = "I" }
         };
-        var result = await engine.ExecuteAsync([a, b], connections);
+        var result = await engine.ExecuteAsync([a, b], connections, TestContext.Current.CancellationToken);
         Assert.Equal(ExecutionStatus.Failed, result.Status);
     }
 
@@ -127,8 +127,10 @@ public sealed class NodeEditorTests
         };
 
         using var cts = new CancellationTokenSource();
+#pragma warning disable xUnit1051 // 本测试刻意使用独立 CTS 验证取消传播，而非 TestContext 令牌
         var runTask = engine.ExecuteAsync([stuck], Array.Empty<NodeConnection>(), cts.Token);
-        await Task.Delay(30);
+#pragma warning restore xUnit1051
+        await Task.Delay(30, TestContext.Current.CancellationToken);
         cts.Cancel();
 
         var result = await runTask;
