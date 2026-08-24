@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Core.Flash;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
@@ -21,6 +24,22 @@ namespace UotanStudio.Areas.Device;
 /// </summary>
 public partial class DeviceViewModel : ViewModelBase, IDisposable
 {
+    /// <summary>
+    /// <para>获取当前激活的设备面板单例，供主窗口与工作区停靠面板共享同一实例
+    /// （避免双实例导致重复订阅设备变更）。</para>
+    /// Gets the active device panel singleton, shared by the main window and the
+    /// workspace dock so no duplicate instance subscribes to device changes twice.
+    /// </summary>
+    public static DeviceViewModel? Instance { get; private set; }
+
+    /// <summary>
+    /// <para>确保设备面板单例已创建并返回它；首次调用时构造并在构造函数中注册到
+    /// <see cref="Instance"/>，后续调用复用同一实例。</para>
+    /// Ensures the device panel singleton exists and returns it; the first call constructs
+    /// the instance (registered on <see cref="Instance"/> in the constructor) and later
+    /// calls reuse the same instance.
+    /// </summary>
+    internal static DeviceViewModel EnsureInstance() => Instance ??= new();
 
     /// <summary>
     /// <para>获取或设置已检测到的设备列表。</para>
@@ -44,6 +63,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(DeviceDetail));
+                FlashCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -75,6 +95,30 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     public bool HasNoDevices => !IsRefreshing && Devices.Count == 0;
 
     /// <summary>
+    /// <para>获取或设置是否正在刷写分区（刷写中禁用刷写按钮）。</para>
+    /// Gets or sets whether a partition flash is in progress (disables the flash button).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(FlashCommand))]
+    private bool _isBusy;
+
+    /// <summary>
+    /// <para>获取或设置要刷写的分区名。</para>
+    /// Gets or sets the partition name to flash.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(FlashCommand))]
+    private string _flashPartition = string.Empty;
+
+    /// <summary>
+    /// <para>获取或设置要刷写的镜像文件路径。</para>
+    /// Gets or sets the image file path to flash.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(FlashCommand))]
+    private string _flashImagePath = string.Empty;
+
+    /// <summary>
     /// <para>获取选中设备的详情文本。</para>
     /// Gets the detail text of the selected device.
     /// </summary>
@@ -91,6 +135,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public DeviceViewModel()
     {
+        Instance = this;
         DeviceMonitorService.Instance.DevicesChanged += OnDevicesChanged;
         DeviceMonitorService.Instance.Start();
         _ = RefreshDevicesAsync();
@@ -795,6 +840,63 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 $"Reboot {SelectedDevice.Serial} -> {mode} failed: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// <para>把当前输入的分区名与镜像路径刷写到选中设备；刷写期间置忙，
+    /// 进度经 <see cref="FlashService"/> 与 FlashProgressMessage 广播到输出面板。</para>
+    /// Flashes the entered partition name and image path to the selected device; keeps the
+    /// UI busy while flashing and broadcasts progress to the output panel via
+    /// <see cref="FlashService"/> and FlashProgressMessage.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanFlash))]
+    private async Task FlashAsync()
+    {
+        var device = SelectedDevice;
+        var partition = FlashPartition.Trim();
+        var imagePath = FlashImagePath.Trim();
+        if (device is null || partition.Length == 0 || imagePath.Length == 0)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        StatusText = $"{LanguageService.Instance.GetString("Flash_Flashing")} {partition}";
+        LogService.Instance.Write(LogLevel.Info, "FlashService",
+            $"Flashing {partition} -> {imagePath} on {device.Serial} ({device.Mode})");
+        try
+        {
+            var progress = new Progress<FlashProgress>(p => StatusText = p.Status);
+            var result = await FlashService.FlashImageAsync(device, partition, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
+            StatusText = result.Success
+                ? $"{LanguageService.Instance.GetString("Flash_Done")} {partition}"
+                : $"{LanguageService.Instance.GetString("Flash_Failed")} {partition}: {result.Summary}";
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "FlashService",
+                $"Flash {partition} on {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
+        }
+        catch (OperationCanceledException)
+        {
+            StatusText = LanguageService.Instance.GetString("Flash_Canceled");
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"{LanguageService.Instance.GetString("Flash_Failed")} {partition}: {ex.Message}";
+            LogService.Instance.Write(LogLevel.Error, "FlashService", $"Flash {partition} failed: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// <para>刷写命令是否可执行：未在刷写、已选设备且分区名与镜像路径均已填写。</para>
+    /// Whether the flash command can execute: not already flashing, a device is selected,
+    /// and both the partition name and image path are filled in.
+    /// </summary>
+    private bool CanFlash => !IsBusy
+        && SelectedDevice is not null
+        && !string.IsNullOrWhiteSpace(FlashPartition)
+        && !string.IsNullOrWhiteSpace(FlashImagePath);
 
     /// <summary>
     /// <para>取消订阅设备变更事件。</para>
