@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using UotanStudio.Services;
 
 namespace UotanStudio.Areas.Settings;
 
@@ -44,9 +45,14 @@ public partial class SettingsView : UserControl
                 return;
             }
 
+            var title = LanguageService.Instance.GetString("Settings_ResetConfirmTitle");
+            var message = LanguageService.Instance.GetString("Settings_ResetConfirmMessage");
+            var cancel = LanguageService.Instance.GetString("Settings_ResetCancel");
+            var reset = LanguageService.Instance.GetString("Settings_ResetConfirm");
+
             var dialog = new Window
             {
-                Title = "Confirm Reset",
+                Title = title,
                 Width = 360,
                 Height = 180,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -60,7 +66,7 @@ public partial class SettingsView : UserControl
                     {
                         new TextBlock
                         {
-                            Text = "Reset all settings to defaults? This cannot be undone.",
+                            Text = message,
                             TextWrapping = TextWrapping.Wrap
                         },
                         new StackPanel
@@ -72,12 +78,12 @@ public partial class SettingsView : UserControl
                             {
                                 new Button
                                 {
-                                    Content = "Cancel",
+                                    Content = cancel,
                                     Tag = false
                                 },
                                 new Button
                                 {
-                                    Content = "Reset",
+                                    Content = reset,
                                     Tag = true
                                 }
                             }

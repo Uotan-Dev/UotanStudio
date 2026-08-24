@@ -269,11 +269,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         // 初始化完成后通知 UI 刷新主题相关 RadioButton 绑定
         OnPropertyChanged(nameof(IsSystemTheme));
         OnPropertyChanged(nameof(IsLightTheme));
-
         OnPropertyChanged(nameof(IsDarkTheme));
-
-        // 显式发送一次主题变更消息，确保 App 与 VM 状态同步
-        WeakReferenceMessenger.Default.Send(new ThemeChangedMessage(_selectedThemeMode));
 
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
         LanguagePackRegistry.Instance.LanguagePackChanged += OnLanguagePackChanged;
