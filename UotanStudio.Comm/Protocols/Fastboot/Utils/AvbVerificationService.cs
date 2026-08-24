@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using FirmwareAvbVerifier = UotanStudio.Firmware.Avb.AvbSignatureVerifier;
 
 namespace UotanStudio.Comm.Protocols.Fastboot.Utils;
 
@@ -461,17 +462,20 @@ public sealed class AvbSignatureResult
 
 /// <summary>
 /// Provides AVB (Android Verified Boot) verification services for vbmeta images: vbmeta
-/// header parsing, hash (digest) verification against the embedded hash descriptor, and a
-/// signature verification skeleton.
+/// header parsing, hash (digest) verification against the embedded hash descriptor, and
+/// RSASSA-PSS / PKCS#1 v1.5 signature verification (delegated to
+/// <see cref="FirmwareAvbVerifier"/> in <c>UotanStudio.Firmware</c>).
 /// <para>为 vbmeta 镜像提供 AVB（Android Verified Boot）验证服务：vbmeta 头部解析、
-/// 针对内嵌哈希描述符的哈希（摘要）校验，以及签名校验骨架。</para>
+/// 针对内嵌哈希描述符的哈希（摘要）校验，以及 RSASSA-PSS / PKCS#1 v1.5 签名校验
+/// （委托给 <c>UotanStudio.Firmware</c> 中的 <see cref="FirmwareAvbVerifier"/>）。</para>
 /// </summary>
 /// <remarks>
-/// No external AVB package is referenced. Signature verification (RSASSA-PSS over libavb's
-/// raw big-endian RSA blobs) is intentionally left as a <see cref="NotSupportedException"/>
-/// skeleton; only the structure is provided.
-/// <para>未引用任何外部 AVB 包。签名验证（对 libavb 原始大端 RSA 数据块的 RSASSA-PSS）
-/// 有意保留为 <see cref="NotSupportedException"/> 骨架；仅提供结构。</para>
+/// Signature verification (RSASSA-PSS / PKCS#1 v1.5 over libavb's raw big-endian RSA blobs)
+/// is implemented in <c>UotanStudio.Firmware</c> and referenced from here; no external AVB
+/// package is needed beyond the shared BouncyCastle dependency.
+/// <para>签名验证（对 libavb 原始大端 RSA 数据块的 RSASSA-PSS / PKCS#1 v1.5）在
+/// <c>UotanStudio.Firmware</c> 中实现并由此处引用；除共享的 BouncyCastle 依赖外无需
+/// 其他外部 AVB 包。</para>
 /// </remarks>
 public sealed class AvbVerificationService
 {
@@ -636,27 +640,27 @@ public sealed class AvbVerificationService
         => data == null ? null : ComputeVbmetaDigest(data, AvbVbmetaHeader.Size);
 
     /// <summary>
-    /// Verifies the signature of a vbmeta image.
-    /// <para>验证 vbmeta 镜像的签名。</para>
+    /// Verifies the signature of a vbmeta image with the shared RSASSA-PSS / PKCS#1 v1.5 verifier
+    /// (<see cref="FirmwareAvbVerifier"/>) implemented in <c>UotanStudio.Firmware</c>.
+    /// <para>使用 <c>UotanStudio.Firmware</c> 中实现的共享 RSASSA-PSS / PKCS#1 v1.5 验证器
+    /// （<see cref="FirmwareAvbVerifier"/>）验证 vbmeta 镜像的签名。</para>
     /// </summary>
     /// <remarks>
-    /// Skeleton only: full verification requires an RSASSA-PSS verifier that understands
-    /// libavb's raw big-endian RSA key/signature blobs, which .NET's RSA API cannot express
-    /// without an external AVB crypto package (e.g. FirmwareKit.AVB.Security). This method
-    /// validates the inputs and documents the required steps, then throws
-    /// <see cref="NotSupportedException"/> instead of returning a misleading result.
-    /// <para>仅骨架：完整验证需要能理解 libavb 原始大端 RSA 密钥/签名数据块的 RSASSA-PSS
-    /// 验证器，.NET 的 RSA API 在无外部 AVB 加密包（如 FirmwareKit.AVB.Security）时无法表达。
-    /// 本方法校验输入并说明所需步骤，然后抛出 <see cref="NotSupportedException"/>，而不是返回误导性结果。</para>
+    /// <paramref name="publicKey"/> is an AVB-format RSA public key blob
+    /// (<c>avbtool extract_public_key</c> output). The signing input is the vbmeta header (256 bytes)
+    /// followed by the auxiliary data block; both the spec-strict zeroed-sizes form and the legacy
+    /// as-is form are tried so that images from avbtool forks verify correctly.
+    /// <para><paramref name="publicKey"/> 是 AVB 格式 RSA 公钥数据块（<c>avbtool extract_public_key</c>
+    /// 输出）。签名输入为 vbmeta 头（256 字节）及其后的辅助数据块；规范要求的清零尺寸形式与旧式
+    /// 原样形式都会被尝试，使来自 avbtool 分支的镜像也能正确验证。</para>
     /// </remarks>
     /// <param name="data">The vbmeta image data. vbmeta 镜像数据。</param>
     /// <param name="signature">The raw RSA signature blob. 原始 RSA 签名数据块。</param>
-    /// <param name="publicKey">The raw public key blob. 原始公钥数据块。</param>
+    /// <param name="publicKey">The AVB-format public key blob. AVB 格式公钥数据块。</param>
     /// <param name="algorithmType">The algorithm type. 算法类型。</param>
-    /// <returns>This method always throws. 本方法始终抛出异常。</returns>
+    /// <returns>The signature verification result. 签名验证结果。</returns>
     /// <exception cref="ArgumentNullException">Thrown when any input is <c>null</c>. 任一输入为 <c>null</c> 时抛出。</exception>
     /// <exception cref="ArgumentException">Thrown when the algorithm type is unsupported. 算法类型不受支持时抛出。</exception>
-    /// <exception cref="NotSupportedException">Thrown because no external AVB crypto package is referenced. 因未引用外部 AVB 加密包而抛出。</exception>
     public AvbSignatureResult VerifySignature(byte[] data, byte[] signature, byte[] publicKey, AvbAlgorithmType algorithmType)
     {
         if (data == null)
@@ -674,27 +678,23 @@ public sealed class AvbVerificationService
             throw new ArgumentNullException(nameof(publicKey));
         }
 
-        var algorithmName = GetHashAlgorithmName(algorithmType);
-        if (string.IsNullOrEmpty(algorithmName))
+        if (string.IsNullOrEmpty(GetHashAlgorithmName(algorithmType)))
         {
             throw new ArgumentException($"Unsupported AVB algorithm type: {algorithmType} 不支持的 AVB 算法类型。", nameof(algorithmType));
         }
 
-        // Steps a real implementation must perform (structure skeleton):
-        // 1. Parse the vbmeta header and locate signature / public key regions in the
-        //    authentication and auxiliary data blocks.
-        // 2. Import the raw big-endian modulus/exponent from `publicKey` into an RSAParameters.
-        // 3. Verify RSASSA-PSS over `data` (digest = H(salt || header_with_zeroed_sizes || aux))
-        //    with the hash derived from `algorithmType`.
-        // 实际实现必须执行的步骤（结构骨架）：
-        // 1. 解析 vbmeta 头，在认证数据块/辅助数据块中定位签名与公钥区域。
-        // 2. 将 `publicKey` 的原始大端模数/指数导入 RSAParameters。
-        // 3. 使用 `algorithmType` 派生的哈希对 `data` 进行 RSASSA-PSS 验证
-        //    （摘要 = H(盐值 || 清零尺寸后的头 || 辅助数据块)）。
-        throw new NotSupportedException(
-            "AVB signature verification is not implemented because no external AVB crypto " +
-            "package is referenced; see the XML remarks for the required RSASSA-PSS steps. " +
-            "未引用外部 AVB 加密包，未实现 AVB 签名验证；所需 RSASSA-PSS 步骤见 XML 注释。");
+        var verifyResult = FirmwareAvbVerifier.VerifySignature(data, signature, publicKey, (uint)algorithmType);
+
+        return new AvbSignatureResult
+        {
+            Success = verifyResult.SignatureIsValid,
+            Message = verifyResult.SignatureIsValid
+                ? "AVB signature verification succeeded. AVB 签名验证成功。"
+                : $"AVB signature verification failed. AVB 签名验证失败。{(string.IsNullOrEmpty(verifyResult.ErrorMessage) ? string.Empty : $" ({verifyResult.ErrorMessage})")}",
+            AlgorithmName = verifyResult.AlgorithmName,
+            Signature = signature,
+            PublicKey = publicKey
+        };
     }
 
     /// <summary>

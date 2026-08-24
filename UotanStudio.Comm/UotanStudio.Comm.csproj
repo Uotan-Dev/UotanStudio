@@ -16,6 +16,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Shared AVB signature verification lives in UotanStudio.Firmware (no circular dependency:
+         Firmware does not reference Comm). -->
+    <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" PrivateAssets="all" />
   </ItemGroup>
 
