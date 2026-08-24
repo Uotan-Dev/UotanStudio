@@ -823,6 +823,24 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        // 弹出确认对话框
+        var modeDisplayName = mode switch
+        {
+            "system" => LanguageService.Instance.GetString("Device_ModeSystem"),
+            "bootloader" => LanguageService.Instance.GetString("Device_ModeBootloader"),
+            "recovery" => LanguageService.Instance.GetString("Device_ModeRecovery"),
+            "edl" => LanguageService.Instance.GetString("Device_ModeEdl"),
+            _ => mode
+        };
+
+        var tcs = new TaskCompletionSource<bool>();
+        RebootConfirmationRequested?.Invoke(this, (mode, modeDisplayName, tcs));
+        var confirmed = await tcs.Task;
+        if (!confirmed)
+        {
+            return;
+        }
+
         StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {SelectedDevice.Serial} -> {mode}...";
         try
         {
@@ -855,6 +873,15 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         var partition = FlashPartition.Trim();
         var imagePath = FlashImagePath.Trim();
         if (device is null || partition.Length == 0 || imagePath.Length == 0)
+        {
+            return;
+        }
+
+        // 弹出确认对话框
+        var tcs = new TaskCompletionSource<bool>();
+        FlashConfirmationRequested?.Invoke(this, tcs);
+        var confirmed = await tcs.Task;
+        if (!confirmed)
         {
             return;
         }
@@ -897,6 +924,20 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         && SelectedDevice is not null
         && !string.IsNullOrWhiteSpace(FlashPartition)
         && !string.IsNullOrWhiteSpace(FlashImagePath);
+
+    /// <summary>
+    /// <para>当需要确认重启操作时引发，由视图处理对话框并将结果写入 TaskCompletionSource。</para>
+    /// Raised when a reboot operation needs confirmation; the view handles the dialog
+    /// and writes the result to the TaskCompletionSource.
+    /// </summary>
+    public event EventHandler<(string Mode, string ModeDisplayName, TaskCompletionSource<bool> Confirmation)>? RebootConfirmationRequested;
+
+    /// <summary>
+    /// <para>当需要确认刷写操作时引发，由视图处理对话框并将结果写入 TaskCompletionSource。</para>
+    /// Raised when a flash operation needs confirmation; the view handles the dialog
+    /// and writes the result to the TaskCompletionSource.
+    /// </summary>
+    public event EventHandler<TaskCompletionSource<bool>>? FlashConfirmationRequested;
 
     /// <summary>
     /// <para>取消订阅设备变更事件。</para>
