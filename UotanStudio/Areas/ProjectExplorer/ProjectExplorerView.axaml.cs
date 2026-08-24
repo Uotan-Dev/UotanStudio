@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -108,6 +109,56 @@ public partial class ProjectExplorerView : UserControl
         if (!string.IsNullOrEmpty(path))
         {
             await vm.OpenProjectAsync(path);
+        }
+    }
+
+    /// <summary>
+    /// Handles the import-images button: lets the user multi-select firmware image files and
+    /// imports them into the current project.
+    /// <para>处理导入镜像按钮：允许用户多选固件镜像文件并导入当前工程。</para>
+    /// </summary>
+    private async void OnImportImagesClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ProjectExplorerViewModel vm)
+        {
+            return;
+        }
+
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel == null)
+        {
+            return;
+        }
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import Firmware Images",
+            AllowMultiple = true,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Firmware Images")
+                {
+                    Patterns = ["*.img", "*.bin", "*.payload", "*.cpio", "*.tar", "*.ofp", "*.ops", "*.ozip"]
+                },
+                new FilePickerFileType("All Files")
+                {
+                    Patterns = ["*.*"]
+                }
+            ]
+        });
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        var paths = files
+            .Select(f => f.TryGetLocalPath())
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Cast<string>()
+            .ToList();
+        if (paths.Count > 0)
+        {
+            await vm.ImportImagesAsync(paths);
         }
     }
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -77,7 +78,7 @@ public partial class ProjectExplorerViewModel : ViewModelBase
     public ProjectExplorerViewModel()
     {
         Instance = this;
-        RefreshRecent();
+        _ = RefreshRecent();
     }
 
     partial void OnSelectedItemChanged(ProjectTreeItem? value) =>
@@ -88,7 +89,7 @@ public partial class ProjectExplorerViewModel : ViewModelBase
     /// Refreshes the recent projects list.
     /// </summary>
     [RelayCommand]
-    private void RefreshRecent()
+    private async Task<bool> RefreshRecent()
     {
         RecentProjects.Clear();
         foreach (var path in FirmwareProjectService.RecentProjects())
@@ -96,7 +97,21 @@ public partial class ProjectExplorerViewModel : ViewModelBase
             RecentProjects.Add(path);
         }
 
+        // 有打开工程时顺带重建工程树，使外部文件变更与导入结果即时反映到树上。
+        // When a project is open, also rebuild the tree so external file changes and
+        // import results are reflected immediately.
+        var openPath = FirmwareProjectService.OpenPath;
+        if (!string.IsNullOrWhiteSpace(openPath))
+        {
+            var project = await Task.Run(() => FirmwareProjectService.LoadProject(openPath));
+            if (project is not null)
+            {
+                BuildTree(project);
+            }
+        }
+
         OnPropertyChanged(nameof(ProjectName));
+        return true;
     }
 
     /// <summary>
@@ -122,9 +137,10 @@ public partial class ProjectExplorerViewModel : ViewModelBase
             }
 
             BuildTree(project);
-            RefreshRecent();
+            await RefreshRecent();
             StatusText = LanguageService.Instance.GetString("Project_Opened");
             LogService.Instance.Write(LogLevel.Info, "ProjectExplorer", $"Opened project: {project.Name}");
+            WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
         }
         catch (Exception ex)
         {
@@ -164,9 +180,10 @@ public partial class ProjectExplorerViewModel : ViewModelBase
             }
 
             BuildTree(project);
-            RefreshRecent();
+            await RefreshRecent();
             StatusText = string.Format(LanguageService.Instance.GetString("Project_Created"), project.Name);
             LogService.Instance.Write(LogLevel.Info, "ProjectExplorer", $"Created project: {project.Name}");
+            WeakReferenceMessenger.Default.Send(new ProjectOpenedMessage());
         }
         catch (Exception ex)
         {
@@ -197,17 +214,17 @@ public partial class ProjectExplorerViewModel : ViewModelBase
             var ok = await Task.Run(() =>
             {
                 var project = FirmwareProjectService.LoadProject(FirmwareProjectService.OpenPath);
-                if (project is null || !FirmwareProjectService.SaveProject(project))
-                {
-                    return false;
-                }
-
-                RefreshRecent();
-                StatusText = LanguageService.Instance.GetString("Project_Saved");
-                LogService.Instance.Write(LogLevel.Info, "ProjectExplorer", $"Saved project: {project.Name}");
-                return true;
+                return project is not null && FirmwareProjectService.SaveProject(project);
             });
-            if (!ok)
+            if (ok)
+            {
+                await RefreshRecent();
+                StatusText = LanguageService.Instance.GetString("Project_Saved");
+                var savedName = FirmwareProjectService.CurrentProject?.Name;
+                LogService.Instance.Write(LogLevel.Info, "ProjectExplorer",
+                    $"Saved project: {savedName}");
+            }
+            else
             {
                 StatusText = LanguageService.Instance.GetString("Project_SaveFailed");
             }
@@ -360,6 +377,208 @@ public partial class ProjectExplorerViewModel : ViewModelBase
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// <para>将外部选择的固件镜像文件导入当前工程：复制到工程的 firmware/ 子目录，
+    /// 登记进部件清单并保存，随后重建工程树。</para>
+    /// Imports the selected external firmware image files into the current project: copies
+    /// them into the project's firmware/ subdirectory, registers them in the component list,
+    /// saves the project, then rebuilds the tree.
+    /// </summary>
+    /// <param name="sourceFiles"><para>要导入的源文件完整路径列表。</para>
+    /// The full paths of the source files to import.</param>
+    public async Task ImportImagesAsync(IReadOnlyList<string> sourceFiles)
+    {
+        if (sourceFiles.Count == 0)
+        {
+            return;
+        }
+
+        var openPath = FirmwareProjectService.OpenPath;
+        if (string.IsNullOrWhiteSpace(openPath))
+        {
+            StatusText = LanguageService.Instance.GetString("Project_ImportNoProject");
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var imported = await Task.Run(() =>
+            {
+                var project = FirmwareProjectService.LoadProject(openPath);
+                if (project is null)
+                {
+                    return 0;
+                }
+
+                var targetDir = Path.Combine(project.RootDirectory, "firmware");
+                Directory.CreateDirectory(targetDir);
+
+                // 已占用名称集合，避免同批次内与应用目录已有文件发生重名覆盖。
+                // Track used names to avoid overwriting collisions within a batch or
+                // against files already present in the target directory.
+                var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var existing in Directory.EnumerateFiles(targetDir))
+                {
+                    used.Add(Path.GetFileName(existing));
+                }
+
+                var count = 0;
+                foreach (var source in sourceFiles)
+                {
+                    if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
+                    {
+                        continue;
+                    }
+
+                    var destName = UniqueName(Path.GetFileName(source), used);
+                    var dest = Path.Combine(targetDir, destName);
+                    File.Copy(source, dest, overwrite: false);
+                    used.Add(destName);
+
+                    var relative = Path.GetRelativePath(project.RootDirectory, dest);
+                    if (!project.Components.Contains(relative))
+                    {
+                        project.Components.Add(relative);
+                    }
+
+                    count++;
+                }
+
+                return FirmwareProjectService.SaveProject(project) ? count : 0;
+            });
+
+            if (imported > 0)
+            {
+                if (FirmwareProjectService.CurrentProject is { } project)
+                {
+                    BuildTree(project);
+                }
+
+                var target = FirmwareProjectService.CurrentProject?.RootDirectory ?? openPath;
+                StatusText = string.Format(
+                    LanguageService.Instance.GetString("Project_Imported"), imported);
+                LogService.Instance.Write(LogLevel.Info, "ProjectExplorer",
+                    $"Imported {imported} image(s) into {target}");
+
+                // 切回工作区标签页，让侧边资源管理器立即可见刷新后的工程树（含新导入镜像）。
+                // Switch back to the workspace tab so the side explorer immediately shows the
+                // refreshed project tree (including the newly imported images).
+                WeakReferenceMessenger.Default.Send(new NavigateTabMessage(1));
+            }
+            else
+            {
+                StatusText = LanguageService.Instance.GetString("Project_ImportFailed");
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            LogService.Instance.Write(LogLevel.Error, "ProjectExplorer",
+                $"Import images failed: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// <para>将当前工程部件清单中的镜像文件导出到目标目录（保留相对路径结构）。</para>
+    /// Exports the current project's component image files into a target directory,
+    /// preserving the relative directory structure.
+    /// </summary>
+    /// <param name="targetDirectory"><para>目标目录完整路径。</para>
+    /// The full path of the target directory.</param>
+    public async Task ExportImagesAsync(string? targetDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(targetDirectory))
+        {
+            return;
+        }
+
+        var openPath = FirmwareProjectService.OpenPath;
+        if (string.IsNullOrWhiteSpace(openPath))
+        {
+            StatusText = LanguageService.Instance.GetString("Project_ExportNoProject");
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var exported = await Task.Run(() =>
+            {
+                var project = FirmwareProjectService.LoadProject(openPath);
+                if (project is null)
+                {
+                    return 0;
+                }
+
+                Directory.CreateDirectory(targetDirectory);
+                var count = 0;
+                foreach (var relative in project.Components)
+                {
+                    var source = Path.GetFullPath(Path.Combine(project.RootDirectory, relative));
+                    if (!File.Exists(source))
+                    {
+                        continue;
+                    }
+
+                    var dest = Path.GetFullPath(Path.Combine(targetDirectory, relative));
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                    File.Copy(source, dest, overwrite: true);
+                    count++;
+                }
+
+                return count;
+            });
+
+            StatusText = exported > 0
+                ? string.Format(LanguageService.Instance.GetString("Project_Exported"), exported)
+                : LanguageService.Instance.GetString("Project_ExportFailed");
+            LogService.Instance.Write(LogLevel.Info, "ProjectExplorer",
+                $"Exported {exported} image(s) to {targetDirectory}");
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            LogService.Instance.Write(LogLevel.Error, "ProjectExplorer",
+                $"Export images failed: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// <para>生成不与给定集合冲突的目录内唯一文件名（重名时追加数字序号）。</para>
+    /// Produces a file name unique against the given set within a directory, appending a
+    /// numeric suffix on collision.
+    /// </summary>
+    /// <param name="fileName"><para>候选文件名。</para>The candidate file name.</param>
+    /// <param name="used"><para>已占用名称集合。</para>The set of names already in use.</param>
+    /// <returns>唯一文件名。</returns>
+    private static string UniqueName(string fileName, ISet<string> used)
+    {
+        if (!used.Contains(fileName))
+        {
+            return fileName;
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        var extension = Path.GetExtension(fileName);
+        for (var i = 1; ; i++)
+        {
+            var candidate = $"{baseName}({i}){extension}";
+            if (!used.Contains(candidate))
+            {
+                return candidate;
+            }
         }
     }
 

@@ -23,6 +23,11 @@
                     <avalonia:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
                 </Button>
                 <Button Width="28" Height="28" Padding="0"
+                        Click="OnImportImagesClick"
+                        ToolTip.Tip="{DynamicResource Project_Import}">
+                    <avalonia:MaterialIcon Kind="FileImageOutline" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding RefreshRecentCommand}"
                         ToolTip.Tip="{DynamicResource Project_Refresh}">
                     <avalonia:MaterialIcon Kind="Refresh" Width="16" Height="16" />
