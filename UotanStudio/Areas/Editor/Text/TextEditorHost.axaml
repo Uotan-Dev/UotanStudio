@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ae="using:AvaloniaEdit"
+             xmlns:self="using:UotanStudio.Areas.Editor.Text"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="400"
+             x:Class="UotanStudio.Areas.Editor.Text.TextEditorHost"
+             x:DataType="self:TextEditorHost">
+    <ae:TextEditor x:Name="Editor"
+                   ShowLineNumbers="True"
+                   FontFamily="Cascadia Mono,Consolas,monospace"
+                   FontSize="13"
+                   Background="Transparent" />
+</UserControl>
