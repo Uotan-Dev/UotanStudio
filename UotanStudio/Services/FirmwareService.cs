@@ -2,9 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using UotanStudio.Firmware.Avb;
+using UotanStudio.Firmware.BootImage;
 using UotanStudio.Firmware.Cpio;
 using UotanStudio.Firmware.Cpio.Extraction;
 using UotanStudio.Firmware.Cpio.Model;
@@ -37,6 +41,13 @@ public sealed class FirmwareOpResult
     /// <para>获取条目名称列表。</para>
     /// </summary>
     public IReadOnlyList<string> Entries { get; init; } = [];
+
+    /// <summary>
+    /// Creates a failed operation result.
+    /// <para>创建失败的操作结果。</para>
+    /// </summary>
+    /// <param name="summary">Failure summary. <para>失败摘要。</para></param>
+    public static FirmwareOpResult Fail(string summary) => new() { Success = false, Summary = summary };
 }
 
 /// <summary>
@@ -173,26 +184,356 @@ public sealed class FirmwareService
     }
 
     /// <summary>
-    /// Verifies an Android Verified Boot VBMeta image, outputting header and descriptor summary.
-    /// <para>校验 Android Verified Boot VBMeta 镜像，输出头部与描述符摘要。</para>
+    /// Verifies an Android Verified Boot VBMeta image: parses the header, extracts descriptors,
+    /// recomputes the embedded digest and verifies the RSASSA-PSS / PKCS#1 v1.5 signature with the
+    /// key embedded in the image or with a user-supplied trusted public key.
+    /// <para>校验 Android Verified Boot VBMeta 镜像：解析头部、提取描述符、重新计算内嵌摘要，
+    /// 并使用镜像内嵌密钥或用户提供的受信任公钥验证 RSASSA-PSS / PKCS#1 v1.5 签名。</para>
     /// </summary>
     /// <param name="vbmetaPath">The vbmeta.img file path.</param>
-    /// <returns>Operation result, Summary contains header summary.</returns>
-    public async Task<FirmwareOpResult> VerifyAvbAsync(string vbmetaPath, CancellationToken cancellationToken = default)
+    /// <param name="publicKeyPath">Optional trusted public key file (AVB <c>extract_public_key</c> blob, PEM or DER);
+    /// when omitted the public key embedded in the vbmeta auxiliary data block is used.
+    /// <para>可选的受信任公钥文件（AVB <c>extract_public_key</c> 数据块、PEM 或 DER）；
+    /// 省略时使用 vbmeta 辅助数据块中内嵌的公钥。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result, Summary contains the signature validity and descriptor summary.</returns>
+    public async Task<FirmwareOpResult> VerifyAvbAsync(string vbmetaPath, string? publicKeyPath = null, CancellationToken cancellationToken = default)
     {
         try
         {
             var bytes = await File.ReadAllBytesAsync(vbmetaPath, cancellationToken);
-            var header = AvbVBMetaImageHeader.FromBytes(bytes);
-            // AvbVBMetaImage.TryVerify 仅校验镜像自洽性；返回头部摘要
-            var summary = $"VBMeta header parsed.\nAlgorithm: {header.AlgorithmType}\nDescriptors size: {header.DescriptorsSize} bytes";
-            return new FirmwareOpResult { Success = true, Summary = summary };
+            RSA? trustedKey = null;
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(publicKeyPath))
+                {
+                    var keyBytes = await File.ReadAllBytesAsync(publicKeyPath, cancellationToken);
+                    trustedKey = AvbSignatureVerifier.ImportAvbRsaPublicKey(keyBytes)
+                                 ?? AvbSignatureVerifier.ImportPublicKeyPem(keyBytes);
+                    if (trustedKey == null)
+                    {
+                        return FirmwareOpResult.Fail($"Failed to import AVB public key from '{publicKeyPath}'. 无法从 '{publicKeyPath}' 导入 AVB 公钥。");
+                    }
+                }
+
+                var result = AvbSignatureVerifier.Verify(bytes, trustedKey);
+
+                var sb = new StringBuilder();
+                sb.AppendLine(result.IsSigned
+                    ? $"Signed vbmeta image. Algorithm: {result.AlgorithmName}  已签名 vbmeta 镜像。算法：{result.AlgorithmName}"
+                    : "Unsigned vbmeta image (algorithm NONE). 未签名 vbmeta 镜像（算法 NONE）。");
+                sb.AppendLine(result.HashIsValid
+                    ? "Embedded digest: VALID. 内嵌摘要：有效。"
+                    : "Embedded digest: invalid or absent. 内嵌摘要：无效或缺失。");
+                sb.AppendLine(result.SignatureIsValid
+                    ? "Signature: VALID. 签名：有效。"
+                    : "Signature: INVALID. 签名：无效。");
+                if (!string.IsNullOrEmpty(result.ErrorMessage))
+                {
+                    sb.AppendLine($"Detail: {result.ErrorMessage}");
+                }
+
+                sb.AppendLine($"Descriptors ({result.Descriptors.Count}):");
+                foreach (var d in result.Descriptors)
+                {
+                    sb.AppendLine($"  - tag={d.Tag} type={d.TypeName} size={d.Size} partition={d.PartitionName ?? "-"} hashAlg={d.HashAlgorithm ?? "-"}");
+                }
+
+                return new FirmwareOpResult { Success = true, Summary = sb.ToString().TrimEnd() };
+            }
+            finally
+            {
+                trustedKey?.Dispose();
+            }
         }
         catch (Exception ex)
         {
-            return new FirmwareOpResult { Success = false, Summary = ex.Message };
+            return FirmwareOpResult.Fail(ex.Message);
         }
     }
+
+    /// <summary>
+    /// Unpacks a boot or vendor_boot image into a component directory: <c>kernel</c>, <c>ramdisk</c>
+    /// (raw) and <c>ramdisk.cpio</c> (decompressed per <see cref="BootCompressor"/> detection),
+    /// <c>second</c>, <c>dtb</c>, <c>dtbo</c>, <c>signature</c>, plus a <c>header.json</c> that
+    /// <see cref="PackBootAsync"/> reads back for byte-identical repacking.
+    /// <para>将 boot 或 vendor_boot 镜像解包到组件目录：<c>kernel</c>、<c>ramdisk</c>（原始）与
+    /// <c>ramdisk.cpio</c>（按 <see cref="BootCompressor"/> 检测结果解压）、<c>second</c>、
+    /// <c>dtb</c>、<c>dtbo</c>、<c>signature</c>，以及可供 <see cref="PackBootAsync"/> 读回的
+    /// <c>header.json</c>（用于按原版本逐字节重打包）。</para>
+    /// </summary>
+    /// <param name="bootPath">The boot / vendor_boot image file path. <para>boot / vendor_boot 镜像文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+            var bytes = await File.ReadAllBytesAsync(bootPath, cancellationToken);
+            if (bytes.Length < 8)
+            {
+                return FirmwareOpResult.Fail($"File too small to be a boot image: {bytes.Length} bytes  文件过小，不是有效的 boot 镜像。");
+            }
+
+            var magic = Encoding.ASCII.GetString(bytes, 0, 8);
+            switch (magic)
+            {
+                case "ANDROID!":
+                    using (var parser = new BootImageParser())
+                    {
+                        parser.Parse(bytes);
+                        WriteComponent(outputDirectory, "kernel", parser.Kernel);
+                        WriteComponent(outputDirectory, "ramdisk", parser.Ramdisk);
+                        WriteComponent(outputDirectory, "ramdisk.cpio", DecompressRamdisk(parser.Ramdisk, parser.Header.RamdiskCompression));
+                        WriteComponent(outputDirectory, "second", parser.Second);
+                        WriteComponent(outputDirectory, "dtb", parser.Dtb);
+                        WriteComponent(outputDirectory, "dtbo", parser.RecoveryDtbo);
+                        WriteComponent(outputDirectory, "signature", parser.Signature);
+                        await File.WriteAllTextAsync(
+                            Path.Combine(outputDirectory, "header.json"),
+                            BuildBootHeaderJson(parser.Header).ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }),
+                            cancellationToken);
+                    }
+
+                    return new FirmwareOpResult { Success = true, Summary = $"Unpacked boot image to {outputDirectory}  已解包 boot 镜像。" };
+
+                case "VNDRBOOT":
+                    using (var parser = new VendorBootParser())
+                    {
+                        parser.Parse(bytes);
+                        WriteComponent(outputDirectory, "vendor_ramdisk", parser.VendorRamdisk);
+                        WriteComponent(outputDirectory, "vendor_ramdisk.cpio", DecompressRamdisk(parser.VendorRamdisk, parser.Header.VendorRamdiskCompression));
+                        WriteComponent(outputDirectory, "dtb", parser.Dtb);
+                        WriteComponent(outputDirectory, "bootconfig", parser.Bootconfig);
+                        await File.WriteAllTextAsync(
+                            Path.Combine(outputDirectory, "header.json"),
+                            BuildVendorBootHeaderJson(parser).ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }),
+                            cancellationToken);
+                    }
+
+                    return new FirmwareOpResult { Success = true, Summary = $"Unpacked vendor_boot image to {outputDirectory}  已解包 vendor_boot 镜像。" };
+
+                default:
+                    return FirmwareOpResult.Fail($"Unsupported boot image magic: {magic}  不支持的 boot 镜像魔数。");
+            }
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Packs a component directory produced by <see cref="UnpackBootAsync"/> back into a boot image
+    /// with the original header version, using the <c>kernel</c>, <c>ramdisk</c>, <c>second</c>,
+    /// <c>dtb</c> and <c>signature</c> files and the <c>header.json</c> metadata.
+    /// <para>将 <see cref="UnpackBootAsync"/> 产出的组件目录按原头部版本重打包为 boot 镜像，
+    /// 使用 <c>kernel</c>、<c>ramdisk</c>、<c>second</c>、<c>dtb</c>、<c>signature</c> 文件与
+    /// <c>header.json</c> 元数据。</para>
+    /// </summary>
+    /// <param name="inputDirectory">The directory produced by <see cref="UnpackBootAsync"/>. <para>由 <see cref="UnpackBootAsync"/> 产出的目录。</para></param>
+    /// <param name="outputPath">The output boot image path. <para>输出 boot 镜像路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var headerPath = Path.Combine(inputDirectory, "header.json");
+            if (!File.Exists(headerPath))
+            {
+                return FirmwareOpResult.Fail("header.json not found — unpack a boot image first. 未找到 header.json——请先解包 boot 镜像。");
+            }
+
+            var jsonText = await File.ReadAllTextAsync(headerPath, cancellationToken);
+            var json = JsonNode.Parse(jsonText) as JsonObject;
+            if (json == null)
+            {
+                return FirmwareOpResult.Fail("Invalid header.json. header.json 格式无效。");
+            }
+
+            if (json["magic"]?.GetValue<string>() == "VNDRBOOT")
+            {
+                return FirmwareOpResult.Fail("vendor_boot repacking is not supported yet; only the vendor_boot unpack path is available. 暂不支持 vendor_boot 重打包，仅提供 vendor_boot 解包。");
+            }
+
+            var header = ReadBootHeaderJson(json);
+            if (header == null || header.HeaderVersion == BootImageVersion.Unknown)
+            {
+                return FirmwareOpResult.Fail("Failed to read boot header from header.json. 无法从 header.json 读取 boot 头部。");
+            }
+
+            var ramdiskPath = Path.Combine(inputDirectory, "ramdisk");
+            if (!File.Exists(ramdiskPath))
+            {
+                return FirmwareOpResult.Fail("ramdisk component missing — repack needs the raw (possibly compressed) ramdisk from unpack for a byte-identical image. 缺少 ramdisk 组件——为逐字节一致重打包，需要解包产出的原始（可能已压缩）ramdisk。");
+            }
+
+            var packer = new BootImagePacker
+            {
+                Header = header,
+                Kernel = await ReadComponentAsync(inputDirectory, "kernel", cancellationToken),
+                Ramdisk = await ReadComponentAsync(inputDirectory, "ramdisk", cancellationToken),
+                Second = await ReadComponentAsync(inputDirectory, "second", cancellationToken),
+                Dtb = await ReadComponentAsync(inputDirectory, "dtb", cancellationToken),
+                RecoveryDtbo = await ReadComponentAsync(inputDirectory, "dtbo", cancellationToken),
+                Signature = await ReadComponentAsync(inputDirectory, "signature", cancellationToken)
+            };
+
+            packer.PackToFile(outputPath);
+            return new FirmwareOpResult { Success = true, Summary = $"Packed boot image (header v{(int)header.HeaderVersion}) to {outputPath}  已按头版本 v{(int)header.HeaderVersion} 重打包 boot 镜像。" };
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BootImage.CompressionType compression)
+    {
+        return compression == UotanStudio.Firmware.BootImage.CompressionType.None || raw.Length == 0
+            ? raw
+            : BootCompressor.TryDecompress(raw, compression) ?? raw;
+    }
+
+    private static void WriteComponent(string directory, string name, byte[] data)
+    {
+        if (data.Length == 0)
+        {
+            return;
+        }
+
+        File.WriteAllBytes(Path.Combine(directory, name), data);
+    }
+
+    private static async Task<byte[]> ReadComponentAsync(string directory, string name, CancellationToken cancellationToken)
+    {
+        var path = Path.Combine(directory, name);
+        return File.Exists(path) ? await File.ReadAllBytesAsync(path, cancellationToken) : [];
+    }
+
+    private static JsonObject BuildBootHeaderJson(BootImageHeader header)
+    {
+        var ids = new JsonArray();
+        foreach (var id in header.Ids ?? [])
+        {
+            // 显式转型到 JsonNode，强制选择非泛型 Add(JsonNode?) 重载（避免 AOT 裁剪告警）。
+            // Explicit cast to JsonNode forces the non-generic Add(JsonNode?) overload (AOT-safe).
+            ids.Add((JsonNode)JsonValue.Create(id));
+        }
+
+        return new JsonObject
+        {
+            ["magic"] = "ANDROID!",
+            ["header_version"] = (int)header.HeaderVersion,
+            ["header_size"] = header.HeaderSize,
+            ["kernel_size"] = header.KernelSize,
+            ["kernel_addr"] = header.KernelAddr,
+            ["ramdisk_size"] = header.RamdiskSize,
+            ["ramdisk_addr"] = header.RamdiskAddr,
+            ["second_size"] = header.SecondSize,
+            ["second_addr"] = header.SecondAddr,
+            ["tags_addr"] = header.TagsAddr,
+            ["page_size"] = header.PageSize,
+            ["os_version"] = header.OsVersion,
+            ["image_name"] = header.ImageName,
+            ["command_line"] = header.CommandLine,
+            ["product_name"] = header.ProductName,
+            ["architecture"] = header.Architecture,
+            ["ids"] = ids,
+            ["recovery_dtbo_size"] = header.RecoveryDtboSize,
+            ["recovery_dtbo_offset"] = header.RecoveryDtboOffset,
+            ["dtb_size"] = header.DtbSize,
+            ["kernel_load_addr"] = header.KernelLoadAddr,
+            ["signature_size"] = header.SignatureSize,
+            ["kernel_compression"] = header.KernelCompression.ToString(),
+            ["ramdisk_compression"] = header.RamdiskCompression.ToString()
+        };
+    }
+
+    private static BootImageHeader? ReadBootHeaderJson(JsonObject json)
+    {
+        try
+        {
+            var versionValue = GetInt(json, "header_version") ?? -1;
+            var header = new BootImageHeader
+            {
+                HeaderVersion = versionValue is >= 0 and <= 4
+                    ? (BootImageVersion)versionValue
+                    : BootImageVersion.Unknown,
+                HeaderSize = GetUInt(json, "header_size") ?? 0,
+                KernelSize = GetUInt(json, "kernel_size") ?? 0,
+                KernelAddr = GetULong(json, "kernel_addr") ?? 0,
+                RamdiskSize = GetUInt(json, "ramdisk_size") ?? 0,
+                RamdiskAddr = GetULong(json, "ramdisk_addr") ?? 0,
+                SecondSize = GetUInt(json, "second_size") ?? 0,
+                SecondAddr = GetULong(json, "second_addr") ?? 0,
+                TagsAddr = GetULong(json, "tags_addr") ?? 0,
+                PageSize = GetUInt(json, "page_size") ?? 0,
+                OsVersion = GetUInt(json, "os_version") ?? 0,
+                ImageName = json["image_name"]?.GetValue<string>() ?? string.Empty,
+                CommandLine = json["command_line"]?.GetValue<string>() ?? string.Empty,
+                ProductName = json["product_name"]?.GetValue<string>() ?? string.Empty,
+                Architecture = GetUInt(json, "architecture") ?? 0,
+                RecoveryDtboSize = GetUInt(json, "recovery_dtbo_size") ?? 0,
+                RecoveryDtboOffset = GetULong(json, "recovery_dtbo_offset") ?? 0,
+                DtbSize = GetUInt(json, "dtb_size") ?? 0,
+                KernelLoadAddr = GetULong(json, "kernel_load_addr") ?? 0,
+                SignatureSize = GetUInt(json, "signature_size") ?? 0
+            };
+
+            if (json["ids"] is JsonArray idsArray)
+            {
+                var ids = new uint[8];
+                var i = 0;
+                foreach (var node in idsArray)
+                {
+                    if (i >= 8)
+                    {
+                        break;
+                    }
+
+                    ids[i++] = node?.GetValue<uint>() ?? 0;
+                }
+
+                header.Ids = ids;
+            }
+
+            return header;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static JsonObject BuildVendorBootHeaderJson(VendorBootParser parser)
+    {
+        var header = parser.Header;
+        return new JsonObject
+        {
+            ["magic"] = "VNDRBOOT",
+            ["header_version"] = header.HeaderVersion,
+            ["page_size"] = header.PageSize,
+            ["kernel_load_address"] = header.KernelLoadAddress,
+            ["ramdisk_load_address"] = header.RamdiskLoadAddress,
+            ["vendor_ramdisk_size"] = header.VendorRamdiskSize,
+            ["vendor_cmdline"] = header.VendorCmdline,
+            ["tags_load_address"] = header.TagsLoadAddress,
+            ["dtb_size"] = header.DtbSize,
+            ["dtb_address"] = header.DtbAddress,
+            ["vendor_ramdisk_compression"] = header.VendorRamdiskCompression.ToString(),
+            ["ramdisk_table_count"] = parser.RamdiskTable.Count
+        };
+    }
+
+    private static uint? GetUInt(JsonObject json, string key) => json[key] is JsonValue value && value.TryGetValue<uint>(out var result) ? result : null;
+
+    private static ulong? GetULong(JsonObject json, string key) => json[key] is JsonValue value && value.TryGetValue<ulong>(out var result) ? result : null;
+
+    private static int? GetInt(JsonObject json, string key) => json[key] is JsonValue value && value.TryGetValue<int>(out var result) ? result : null;
 
     /// <summary>
     /// Reads metadata of an Oppo firmware package (auto-detecting OFP/OPS/OZIP), outputting format and entry count.
