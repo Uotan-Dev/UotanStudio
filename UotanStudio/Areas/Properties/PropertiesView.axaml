@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.Areas.Properties"
+             mc:Ignorable="d" d:DesignWidth="280" d:DesignHeight="400"
+             x:Class="UotanStudio.Areas.Properties.PropertiesView"
+             x:DataType="vm:PropertiesViewModel">
+    <DockPanel>
+        <!-- 标题行 -->
+        <Border DockPanel.Dock="Top" Height="32" Padding="8,0"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <TextBlock VerticalAlignment="Center" Text="{Binding Title}"
+                       FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+        </Border>
+
+        <!-- 键值列表 -->
+        <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Items}" Margin="4">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PropertyItem">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="4,3">
+                            <TextBlock Text="{Binding Key}" VerticalAlignment="Top"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                       FontSize="12" Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="1" Text="{Binding Value}"
+                                       VerticalAlignment="Top" FontSize="12"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

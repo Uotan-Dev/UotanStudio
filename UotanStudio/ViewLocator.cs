@@ -9,6 +9,7 @@ using UotanStudio.Areas.Log;
 using UotanStudio.Areas.NodeEditor;
 using UotanStudio.Areas.Output;
 using UotanStudio.Areas.ProjectExplorer;
+using UotanStudio.Areas.Properties;
 using UotanStudio.Areas.Settings;
 using UotanStudio.Areas.Workspace;
 using UotanStudio.Services;
@@ -37,6 +38,7 @@ public sealed class ViewLocator : IDataTemplate
         [typeof(EditorViewModel)] = () => new EditorView(),
         [typeof(AnalyzerViewModel)] = () => new AnalyzerView(),
         [typeof(OutputViewModel)] = () => new OutputView(),
+        [typeof(PropertiesViewModel)] = () => new PropertiesView(),
     };
 
     /// <summary>
