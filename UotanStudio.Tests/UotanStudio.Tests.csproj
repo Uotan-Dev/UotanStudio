@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- MTP 模式下 xUnit v3 测试工程必须是可执行程序（测试宿主） -->
+    <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -21,11 +23,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit.runner.visualstudio">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <!-- xunit.v3 基于 Microsoft.Testing.Platform（.NET 10 新测试体验）：
+         不再引用 VSTest 体系的 Microsoft.NET.Test.Sdk / xunit.runner.visualstudio，
+         dotnet test 配合 TestingPlatformDotnetTestSupport=true 走 MTP 通道。 -->
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 
