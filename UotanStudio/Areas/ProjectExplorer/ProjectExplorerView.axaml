@@ -42,10 +42,27 @@
         </Border>
 
         <!-- 工程树 -->
-        <TreeView ItemsSource="{Binding Tree}" Margin="4">
+        <TreeView ItemsSource="{Binding Tree}"
+                  SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                  Margin="4">
             <TreeView.ItemTemplate>
-                <DataTemplate>
-                    <TreeViewItem ItemsSource="{Binding Children}" IsExpanded="True">
+                <DataTemplate x:DataType="vm:ProjectTreeItem">
+                    <TreeViewItem ItemsSource="{Binding Children}"
+                                  IsExpanded="{Binding IsExpanded, Mode=TwoWay}"
+                                  Expanded="OnTreeItemExpanded"
+                                  DoubleTapped="OnTreeItemDoubleTapped">
+                        <TreeViewItem.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="{DynamicResource Explorer_Open}"
+                                          Click="OnOpenClick" />
+                                <MenuItem Header="{DynamicResource Explorer_Unpack}"
+                                          Click="OnUnpackClick" />
+                                <MenuItem Header="{DynamicResource Explorer_AddComponent}"
+                                          Click="OnAddComponentClick" />
+                                <MenuItem Header="{DynamicResource Explorer_Rename}"
+                                          Click="OnRenameClick" />
+                            </ContextMenu>
+                        </TreeViewItem.ContextMenu>
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <avalonia:MaterialIcon Kind="FileOutline" Width="16" Height="16" />
                             <TextBlock Text="{Binding Name}" />

@@ -61,6 +61,7 @@ public static class FirmwareProjectService
             var json = JsonSerializer.Serialize(project, FirmwareProjectJsonContext.Default.FirmwareProject);
             File.WriteAllText(path, json);
             OpenPath = path;
+            CurrentProject = project;
             RecordRecent(project);
             return true;
         }
@@ -95,6 +96,7 @@ public static class FirmwareProjectService
 
             project.RootDirectory = Path.GetFullPath(project.RootDirectory);
             OpenPath = path;
+            CurrentProject = project;
             RecordRecent(project);
             return project;
         }
@@ -137,6 +139,17 @@ public static class FirmwareProjectService
     /// Gets the currently open project path (with extension); empty if none is open.
     /// </summary>
     public static string? OpenPath { get; private set; } = null;
+
+    /// <summary>
+    /// <para>获取当前打开工程的内存缓存模型；无打开工程时为空。
+    /// 在 SaveProject/LoadProject 成功时刷新，供运行时门面直接读取，
+    /// 避免每次访问都重新反序列化工程文件（内含最近工程写盘副作用）。</para>
+    /// Gets the in-memory cached model of the currently open project; null when none is
+    /// open. Refreshed on successful SaveProject/LoadProject so runtime facades can read
+    /// it without re-deserializing the project file on every access (which carries a
+    /// recent-projects write side effect).
+    /// </summary>
+    public static FirmwareProject? CurrentProject { get; private set; }
 
     /// <summary>
     /// <para>从模型推导工程文件完整路径。</para>

@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Core.Inspector;
 using UotanStudio.Core.Projects;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
 
@@ -18,6 +22,12 @@ namespace UotanStudio.Areas.ProjectExplorer;
 /// </summary>
 public partial class ProjectExplorerViewModel : ViewModelBase
 {
+    /// <summary>
+    /// <para>获取当前激活的资源管理器实例，供主菜单新建/打开/保存工程复用其上下文。</para>
+    /// Gets the active explorer instance, reused by the main menu for create/open/save.
+    /// </summary>
+    public static ProjectExplorerViewModel? Instance { get; private set; }
+
     /// <summary>
     /// <para>获取工程树的根节点集合。</para>
     /// Gets the root nodes of the project tree.
@@ -45,6 +55,14 @@ public partial class ProjectExplorerViewModel : ViewModelBase
     private string _statusText = string.Empty;
 
     /// <summary>
+    /// <para>获取或设置当前选中的工程树条目；变化时广播 <see cref="SelectionChangedMessage"/>。</para>
+    /// Gets or sets the currently selected project tree item; broadcasts a
+    /// <see cref="SelectionChangedMessage"/> when it changes.
+    /// </summary>
+    [ObservableProperty]
+    private ProjectTreeItem? _selectedItem;
+
+    /// <summary>
     /// <para>获取当前工程名称；未打开时为空。</para>
     /// Gets the current project name; empty when no project is open.
     /// </summary>
@@ -58,8 +76,12 @@ public partial class ProjectExplorerViewModel : ViewModelBase
     /// </summary>
     public ProjectExplorerViewModel()
     {
+        Instance = this;
         RefreshRecent();
     }
+
+    partial void OnSelectedItemChanged(ProjectTreeItem? value) =>
+        WeakReferenceMessenger.Default.Send(new SelectionChangedMessage(value));
 
     /// <summary>
     /// <para>刷新最近工程项目列表。</para>
@@ -157,6 +179,203 @@ public partial class ProjectExplorerViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <para>保存当前打开的工程到磁盘；无打开工程时返回 false。</para>
+    /// Saves the currently open project to disk; returns false when no project is open.
+    /// </summary>
+    /// <returns>保存是否成功。<para>Whether the save succeeded.</para></returns>
+    public async Task<bool> SaveAsync()
+    {
+        if (FirmwareProjectService.OpenPath is null)
+        {
+            StatusText = LanguageService.Instance.GetString("Project_SaveNoProject");
+            return false;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var ok = await Task.Run(() =>
+            {
+                var project = FirmwareProjectService.LoadProject(FirmwareProjectService.OpenPath);
+                if (project is null || !FirmwareProjectService.SaveProject(project))
+                {
+                    return false;
+                }
+
+                RefreshRecent();
+                StatusText = LanguageService.Instance.GetString("Project_Saved");
+                LogService.Instance.Write(LogLevel.Info, "ProjectExplorer", $"Saved project: {project.Name}");
+                return true;
+            });
+            if (!ok)
+            {
+                StatusText = LanguageService.Instance.GetString("Project_SaveFailed");
+            }
+
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            return false;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// <para>懒加载指定文件树条目的结构子节点（payload 分区、cpio 条目等），结果按路径缓存。</para>
+    /// Lazy-loads the structure children of the given file tree item (payload partitions,
+    /// cpio entries, etc.); results are cached by path.
+    /// </summary>
+    /// <param name="item"><para>要解析的树条目。</para>The tree item to resolve.</param>
+    public Task LoadStructureAsync(ProjectTreeItem item) => item.LoadStructureAsync();
+
+    /// <summary>
+    /// <para>打开选中文件（发送 <see cref="OpenDocumentMessage"/>）。</para>
+    /// Opens the selected file (sends an <see cref="OpenDocumentMessage"/>).
+    /// </summary>
+    /// <param name="item"><para>要打开的文件条目。</para>The file item to open.</param>
+    public void OpenItem(ProjectTreeItem item)
+    {
+        if (item.IsDirectory)
+        {
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new OpenDocumentMessage(item.FullPath));
+    }
+
+    /// <summary>
+    /// <para>将部件文件解包到工程根目录（发送 <see cref="UnpackRequestMessage"/>）。</para>
+    /// Requests unpacking a component file into the project root directory (sends an
+    /// <see cref="UnpackRequestMessage"/>).
+    /// </summary>
+    /// <param name="item"><para>要解包的部件文件条目。</para>The component file item to unpack.</param>
+    public void UnpackItem(ProjectTreeItem item)
+    {
+        if (item.IsDirectory)
+        {
+            return;
+        }
+
+        var outputDirectory = ProjectRootDirectory();
+        WeakReferenceMessenger.Default.Send(new UnpackRequestMessage(item.FullPath, outputDirectory));
+        LogService.Instance.Write(LogLevel.Info, "ProjectExplorer", $"Unpack requested: {item.FullPath} -> {outputDirectory}");
+    }
+
+    /// <summary>
+    /// <para>将文件添加到当前工程的部件清单并保存。</para>
+    /// Adds a file to the current project's component list and saves it.
+    /// </summary>
+    /// <param name="item"><para>要添加的文件条目。</para>The file item to add.</param>
+    public async Task AddToComponentsAsync(ProjectTreeItem item)
+    {
+        if (item.IsDirectory || FirmwareProjectService.OpenPath is null)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var ok = await Task.Run(() =>
+            {
+                var project = FirmwareProjectService.LoadProject(FirmwareProjectService.OpenPath);
+                if (project is null)
+                {
+                    return false;
+                }
+
+                var relative = Path.GetRelativePath(project.RootDirectory, item.FullPath);
+                if (!project.Components.Contains(relative))
+                {
+                    project.Components.Add(relative);
+                }
+
+                return FirmwareProjectService.SaveProject(project);
+            });
+            StatusText = ok
+                ? LanguageService.Instance.GetString("Explorer_AddedComponent")
+                : LanguageService.Instance.GetString("Explorer_AddComponentFailed");
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            LogService.Instance.Write(LogLevel.Error, "ProjectExplorer", $"Add to components failed: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// <para>重命名文件条目，成功后重建工程树。</para>
+    /// Renames a file item and rebuilds the project tree on success.
+    /// </summary>
+    /// <param name="item"><para>要重命名的条目。</para>The item to rename.</param>
+    /// <param name="newName"><para>新文件名。</para>The new file name.</param>
+    public async Task RenameItemAsync(ProjectTreeItem item, string newName)
+    {
+        if (item.IsDirectory || string.IsNullOrWhiteSpace(newName))
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var directory = Path.GetDirectoryName(item.FullPath);
+            if (directory is null)
+            {
+                return;
+            }
+
+            var newPath = Path.Combine(directory, newName);
+            var ok = await Task.Run(() =>
+            {
+                File.Move(item.FullPath, newPath);
+                return true;
+            });
+            if (!ok)
+            {
+                return;
+            }
+
+            if (FirmwareProjectService.OpenPath is not null)
+            {
+                await OpenProjectAsync(FirmwareProjectService.OpenPath);
+            }
+
+            StatusText = LanguageService.Instance.GetString("Explorer_Renamed");
+        }
+        catch (Exception ex)
+        {
+            StatusText = ex.Message;
+            LogService.Instance.Write(LogLevel.Error, "ProjectExplorer", $"Rename failed: {ex.Message}");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private static string ProjectRootDirectory()
+    {
+        var openPath = FirmwareProjectService.OpenPath;
+        if (string.IsNullOrWhiteSpace(openPath))
+        {
+            return AppContext.BaseDirectory;
+        }
+
+        var directory = Path.GetDirectoryName(openPath);
+        return string.IsNullOrWhiteSpace(directory) ? AppContext.BaseDirectory : directory;
+    }
+
+    /// <summary>
     /// <para>清理并重建工程树。</para>
     /// Clears and rebuilds the project tree.
     /// </summary>
@@ -172,8 +391,9 @@ public partial class ProjectExplorerViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>递归填充目录节点。</para>
-    /// Recursively populates a directory node.
+    /// <para>递归填充目录节点；固件部件文件标记为可展开以支持懒加载。</para>
+    /// Recursively populates a directory node; firmware component files are marked expandable
+    /// for lazy loading.
     /// </summary>
     /// <param name="parent"><para>父节点。</para>The parent node.</param>
     /// <param name="fullPath"><para>目录完整路径。</para>The directory full path.</param>
@@ -190,7 +410,17 @@ public partial class ProjectExplorerViewModel : ViewModelBase
 
             foreach (var file in Directory.EnumerateFiles(fullPath))
             {
-                parent.Children.Add(new ProjectTreeItem(Path.GetFileName(file), file, false));
+                var node = new ProjectTreeItem(Path.GetFileName(file), file, false);
+                if (FirmwareInspector.CanInspect(file))
+                {
+                    node.IsExpandable = true;
+                    // 占位子节点：让 TreeView 显示展开箭头，展开时懒加载真实结构子节点。
+                    // Placeholder child so the TreeView shows an expander arrow; the real
+                    // structure children are lazy-loaded on expansion.
+                    node.Children.Add(new ProjectTreeItem(string.Empty, file, false));
+                }
+
+                parent.Children.Add(node);
             }
         }
         catch (Exception ex)
@@ -205,17 +435,124 @@ public partial class ProjectExplorerViewModel : ViewModelBase
 /// <para>工程树条目模型。</para>
 /// Project tree item model.
 /// </summary>
-public class ProjectTreeItem(string name, string fullPath, bool isDirectory) : ViewModelBase
+public partial class ProjectTreeItem(string name, string fullPath, bool isDirectory) : ViewModelBase
 {
-    /// <summary>显示名称。 Display name.</summary>
+    /// <summary>
+    /// <para>结构解析结果缓存：完整路径 → 结构树。</para>
+    /// Structure parse cache: full path → structure tree.
+    /// </summary>
+    private static readonly Dictionary<string, InspectorNode?> StructureCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <para>获取显示名称。</para>
+    /// Gets the display name.
+    /// </summary>
     public string Name { get; } = name;
 
-    /// <summary>完整路径。 Full path.</summary>
+    /// <summary>
+    /// <para>获取完整路径。</para>
+    /// Gets the full path.
+    /// </summary>
     public string FullPath { get; } = fullPath;
 
-    /// <summary>是否为目录。 Whether this is a directory.</summary>
+    /// <summary>
+    /// <para>获取是否为目录。</para>
+    /// Gets whether this is a directory.
+    /// </summary>
     public bool IsDirectory { get; } = isDirectory;
 
-    /// <summary>子节点集合。 Child nodes.</summary>
+    /// <summary>
+    /// <para>获取或设置是否可展开（固件部件文件懒加载结构子节点）。</para>
+    /// Gets or sets whether the item is expandable (firmware component files lazy-load
+    /// structure children).
+    /// </summary>
+    public bool IsExpandable { get; set; }
+
+    /// <summary>
+    /// <para>获取或设置是否已展开（目录默认展开）。</para>
+    /// Gets or sets whether the item is expanded (directories expanded by default).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isExpanded = isDirectory;
+
+    /// <summary>
+    /// <para>获取或设置附加详情（结构解析摘要）。</para>
+    /// Gets or sets additional detail (structure parse summary).
+    /// </summary>
+    public string? Detail { get; set; }
+
+    /// <summary>
+    /// <para>获取子节点集合。</para>
+    /// Gets the child nodes.
+    /// </summary>
     public ObservableCollection<ProjectTreeItem> Children { get; } = [];
+
+    /// <summary>
+    /// <para>懒加载结构子节点：展开/点击时调用 <see cref="FirmwareInspector.InspectAsync"/>，
+    /// 结果按完整路径缓存，避免重复解析。</para>
+    /// Lazy-loads structure children: calls <see cref="FirmwareInspector.InspectAsync"/> when
+    /// expanded/clicked; results are cached by full path to avoid re-parsing.
+    /// </summary>
+    /// <returns>是否成功解析出结构。<para>Whether a structure was resolved.</para></returns>
+    public async Task<bool> LoadStructureAsync()
+    {
+        if (IsDirectory || !IsExpandable || IsStructureLoaded)
+        {
+            return IsStructureLoaded;
+        }
+
+        IsStructureLoaded = true;
+        if (!StructureCache.TryGetValue(FullPath, out var node))
+        {
+            node = await FirmwareInspector.InspectAsync(FullPath);
+            StructureCache[FullPath] = node;
+        }
+
+        Children.Clear();
+        if (node is null)
+        {
+            IsExpandable = false;
+            return false;
+        }
+
+        Detail = node.Detail;
+        foreach (var child in node.Children)
+        {
+            Children.Add(FromInspector(child));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// <para>获取是否已尝试加载结构子节点。</para>
+    /// Gets whether structure children have been attempted to be loaded.
+    /// </summary>
+    public bool IsStructureLoaded { get; private set; }
+
+    internal void MarkStructureLoaded() => IsStructureLoaded = true;
+
+    /// <summary>
+    /// <para>递归将结构节点转换为树条目。</para>
+    /// Recursively converts an inspector node into a tree item.
+    /// </summary>
+    /// <param name="node"><para>结构节点。</para>The inspector node.</param>
+    private static ProjectTreeItem FromInspector(InspectorNode node)
+    {
+        var item = new ProjectTreeItem(node.Name, node.Name, false)
+        {
+            IsExpandable = node.Children.Count > 0,
+            Detail = node.Detail
+        };
+        // 结构子节点已完整解析，标记为已加载，避免展开时再次按路径解析。
+        // Structure children are already fully parsed; mark as loaded so expansion does not
+        // attempt to re-parse by path.
+        item.MarkStructureLoaded();
+        foreach (var child in node.Children)
+        {
+            item.Children.Add(FromInspector(child));
+        }
+
+        return item;
+    }
 }

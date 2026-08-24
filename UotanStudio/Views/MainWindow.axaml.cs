@@ -1,9 +1,12 @@
 using System;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
+using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Areas.ProjectExplorer;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 
@@ -68,14 +71,90 @@ public partial class MainWindow : Window
     /// <summary>退出应用程序。</summary>
     private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
 
-    /// <summary>新建项目（当前为桩，弹出提示）。</summary>
-    private async void OnNewClick(object? sender, RoutedEventArgs e) => await ShowInfoDialog("New Project", "New project creation is not yet implemented.");
+    /// <summary>新建项目：选择一个目录，以目录名创建并保存工程，随后切换到工作区标签页。</summary>
+    private async void OnNewClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = ProjectExplorerViewModel.Instance;
+        if (vm is null)
+        {
+            return;
+        }
 
-    /// <summary>打开项目（当前为桩，弹出提示）。</summary>
-    private async void OnOpenClick(object? sender, RoutedEventArgs e) => await ShowInfoDialog("Open Project", "Open project is not yet implemented.");
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Select Project Folder",
+            AllowMultiple = false
+        });
+        if (folders.Count == 0)
+        {
+            return;
+        }
 
-    /// <summary>保存项目（当前为桩，弹出提示）。</summary>
-    private async void OnSaveClick(object? sender, RoutedEventArgs e) => await ShowInfoDialog("Save Project", "Save project is not yet implemented.");
+        var directory = folders[0].TryGetLocalPath();
+        if (string.IsNullOrEmpty(directory))
+        {
+            return;
+        }
+
+        var name = Path.GetFileName(directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = "UntitledFirmware";
+        }
+
+        await vm.CreateProjectAsync(directory, name);
+        WeakReferenceMessenger.Default.Send(new NavigateTabMessage(1));
+    }
+
+    /// <summary>打开项目：选择一个 .uotproj 文件并打开，随后切换到工作区标签页。</summary>
+    private async void OnOpenClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = ProjectExplorerViewModel.Instance;
+        if (vm is null)
+        {
+            return;
+        }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Firmware Project",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("UotanStudio Project")
+                {
+                    Patterns = ["*.uotproj"]
+                },
+                new FilePickerFileType("All Files")
+                {
+                    Patterns = ["*.*"]
+                }
+            ]
+        });
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        var path = files[0].TryGetLocalPath();
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        await vm.OpenProjectAsync(path);
+        WeakReferenceMessenger.Default.Send(new NavigateTabMessage(1));
+    }
+
+    /// <summary>保存项目：将当前打开的工程写入磁盘。</summary>
+    private async void OnSaveClick(object? sender, RoutedEventArgs e)
+    {
+        var vm = ProjectExplorerViewModel.Instance;
+        if (vm is not null)
+        {
+            await vm.SaveAsync();
+        }
+    }
 
     /// <summary>显示关于对话框。</summary>
     private async void OnAboutClick(object? sender, RoutedEventArgs e) => await ShowAboutDialog();
