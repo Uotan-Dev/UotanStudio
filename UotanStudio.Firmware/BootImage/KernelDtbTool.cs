@@ -1,3 +1,5 @@
+using UotanStudio.Firmware.Dt;
+
 namespace UotanStudio.Firmware.BootImage;
 
 /// <summary>
@@ -5,11 +7,9 @@ namespace UotanStudio.Firmware.BootImage;
 /// <para>
 /// Kernel + DTB merge/extract tool.</para>
 /// <para>
-/// 该工具依赖完整的 Device Tree 解析能力；本移植版不内联 DTB 解析，仅保留 API 占位。
-/// 如需 DT 处理，请使用本项目独立的 DTB 格式实现（如有）。</para>
+/// 复用本项目的 <c>UotanStudio.Firmware.Dt</c> FDT 解析能力，从 magiskboot 合并格式中拆分内核与 DTB。</para>
 /// <para>
-/// The full tool requires complete Device Tree parsing; this simplified port does not inline
-/// DTB parsing and only keeps the API surface as a placeholder.</para>
+/// Reuses the <c>UotanStudio.Firmware.Dt</c> FDT parsing to split kernels and DTBs from the magiskboot merge format.</para>
 /// </summary>
 public static class KernelDtbTool
 {
@@ -64,27 +64,75 @@ public static class KernelDtbTool
     }
 
     /// <summary>
-    /// 提取内核数据。
-    /// <para>Extracts the kernel data.</para>
+    /// 提取内核数据（合并格式中首个有效 FDT 之前的部分）。
+    /// <para>Extracts the kernel data (the part before the first valid FDT in the merged format).</para>
     /// </summary>
     /// <param name="data">合并数据。<para>The merged data.</para></param>
-    /// <returns>内核数据；不支持时返回空数组。<para>The kernel data, or an empty array when unsupported.</para></returns>
+    /// <returns>内核数据；未检测到有效 FDT 时返回空数组。<para>The kernel data, or an empty array when no valid FDT is detected.</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> 为 <c>null</c>。<para><paramref name="data"/> is <c>null</c>.</para></exception>
     public static byte[] ExtractKernel(byte[] data)
     {
-        throw new NotSupportedException(
-            "KernelDtbTool requires full Device Tree parsing which is not inlined in this simplified port. " +
-            "Use the dedicated DTB implementation in this project when available.");
+        ArgumentNullException.ThrowIfNull(data);
+        return TryFindFdt(data, out var offset, out _) && offset > 0
+            ? data.AsSpan(0, offset).ToArray()
+            : [];
     }
 
     /// <summary>
-    /// 提取第一个 DTB。
-    /// <para>Extracts the first DTB.</para>
+    /// 提取第一个 DTB（合并格式中的首个有效 FDT）。
+    /// <para>Extracts the first DTB (the first valid FDT in the merged format).</para>
     /// </summary>
     /// <param name="data">合并数据。<para>The merged data.</para></param>
-    /// <returns>DTB 数据；不支持时返回空数组。<para>The DTB data, or an empty array when unsupported.</para></returns>
+    /// <returns>DTB 数据；未检测到有效 FDT 时返回空数组。<para>The DTB data, or an empty array when no valid FDT is detected.</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> 为 <c>null</c>。<para><paramref name="data"/> is <c>null</c>.</para></exception>
     public static byte[] ExtractFirstDtb(byte[] data)
     {
-        throw new NotSupportedException(
-            "KernelDtbTool requires full Device Tree parsing which is not inlined in this simplified port.");
+        ArgumentNullException.ThrowIfNull(data);
+        return TryFindFdt(data, out var offset, out var header)
+            ? data.AsSpan(offset, checked((int)header.TotalSize)).ToArray()
+            : [];
     }
+
+    private static bool TryFindFdt(ReadOnlySpan<byte> data, out int offset, out FdtHeader header)
+    {
+        offset = 0;
+        header = new();
+
+        for (var i = 0; i + FdtConstants.HeaderSize <= data.Length; i++)
+        {
+            if (ReadUInt32BigEndian(data.Slice(i, 4)) != FdtConstants.FdtMagic)
+            {
+                continue;
+            }
+
+            FdtHeader candidate;
+            try
+            {
+                candidate = FdtHeader.ReadFrom(data[i..]);
+            }
+            catch (InvalidDataException)
+            {
+                continue;
+            }
+
+            if (candidate.Version < FdtConstants.FdtLastCompVersion || candidate.TotalSize < FdtConstants.HeaderSize)
+            {
+                continue;
+            }
+
+            if (candidate.TotalSize > data.Length - i)
+            {
+                continue;
+            }
+
+            offset = i;
+            header = candidate;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static uint ReadUInt32BigEndian(ReadOnlySpan<byte> data) =>
+        (uint)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
 }

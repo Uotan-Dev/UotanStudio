@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.Payload;
 
 namespace UotanStudio.Firmware.BootImage;
 
@@ -7,11 +8,9 @@ namespace UotanStudio.Firmware.BootImage;
 /// <para>
 /// Payload partition image tool.</para>
 /// <para>
-/// 精简移植：仅实现 magic 检测。完整的 payload 解析/提取请使用本项目的
-/// <c>UotanStudio.Firmware.Payload</c> 命名空间下的 PayloadParser / PayloadFormatHandler。</para>
+/// 提供 magic 检测，并复用 <c>UotanStudio.Firmware.Payload.PayloadParser</c> 完成镜像提取。</para>
 /// <para>
-/// Simplified port: only magic detection is implemented. Full payload parsing/extraction
-/// is provided by <c>UotanStudio.Firmware.Payload</c> in this project.</para>
+/// Provides magic detection and reuses <c>UotanStudio.Firmware.Payload.PayloadParser</c> for image extraction.</para>
 /// </summary>
 public static class PayloadTool
 {
@@ -49,12 +48,40 @@ public static class PayloadTool
     /// </summary>
     /// <param name="data">payload 数据。<para>The payload data.</para></param>
     /// <param name="imageName">镜像名称。<para>The image name.</para></param>
-    /// <returns>镜像数据。<para>The image data.</para></returns>
+    /// <returns>镜像数据；格式无效或不存在该分区时返回 null。<para>The image data, or null when the payload is invalid or the partition does not exist.</para></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="data"/> 为 <c>null</c>。<para><paramref name="data"/> is <c>null</c>.</para></exception>
+    /// <exception cref="ArgumentException"><paramref name="imageName"/> 为空白。<para><paramref name="imageName"/> is blank.</para></exception>
     public static byte[]? ExtractImage(byte[] data, string imageName)
     {
-        throw new NotSupportedException(
-            "PayloadTool is a simplified stub. Use UotanStudio.Firmware.Payload.PayloadParser / " +
-            "PayloadFormatHandler for full payload extraction.");
+        ArgumentNullException.ThrowIfNull(data);
+        if (string.IsNullOrWhiteSpace(imageName))
+        {
+            throw new ArgumentException("Image name cannot be empty or whitespace.", nameof(imageName));
+        }
+
+        if (data.Length == 0 || !IsPayload(data))
+        {
+            return null;
+        }
+
+        var tempPath = Path.Combine(Path.GetTempPath(), $"uotan_payload_{Guid.NewGuid():N}.bin");
+        try
+        {
+            File.WriteAllBytes(tempPath, data);
+            return ExtractImage(tempPath, imageName);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch (IOException)
+            {
+                // 清理失败不影响已返回/抛出的结果。
+                // Cleanup failure does not affect the returned or thrown result.
+            }
+        }
     }
 
     /// <summary>
@@ -63,11 +90,58 @@ public static class PayloadTool
     /// </summary>
     /// <param name="path">payload 文件路径。<para>The payload file path.</para></param>
     /// <param name="imageName">镜像名称。<para>The image name.</para></param>
-    /// <returns>镜像数据。<para>The image data.</para></returns>
+    /// <returns>镜像数据；非 payload 或不存在该分区时返回 null。<para>The image data, or null when the file is not a payload or the partition does not exist.</para></returns>
+    /// <exception cref="ArgumentException"><paramref name="path"/> 或 <paramref name="imageName"/> 为空白。<para><paramref name="path"/> or <paramref name="imageName"/> is blank.</para></exception>
+    /// <exception cref="FileNotFoundException">payload 文件不存在。<para>The payload file does not exist.</para></exception>
     public static byte[]? ExtractImage(string path, string imageName)
     {
-        throw new NotSupportedException(
-            "PayloadTool is a simplified stub. Use UotanStudio.Firmware.Payload.PayloadParser / " +
-            "PayloadFormatHandler for full payload extraction.");
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException("Payload path cannot be empty or whitespace.", nameof(path));
+        }
+
+        if (string.IsNullOrWhiteSpace(imageName))
+        {
+            throw new ArgumentException("Image name cannot be empty or whitespace.", nameof(imageName));
+        }
+
+        if (!File.Exists(path))
+        {
+            throw new FileNotFoundException("Payload file not found.", path);
+        }
+
+        if (!IsPayload(path))
+        {
+            return null;
+        }
+
+        var metadata = PayloadParser.GetPayloadMetadata(path);
+        var actualName = metadata.PartitionNames.FirstOrDefault(
+            name => string.Equals(name, imageName, StringComparison.OrdinalIgnoreCase));
+        if (actualName is null)
+        {
+            return null;
+        }
+
+        var tempDir = Path.Combine(Path.GetTempPath(), $"uotan_payload_{Guid.NewGuid():N}");
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            PayloadParser.Extract(path, [actualName], tempDir);
+            var outputPath = Path.Combine(tempDir, $"{actualName}.img");
+            return File.Exists(outputPath) ? File.ReadAllBytes(outputPath) : null;
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+            catch (IOException)
+            {
+                // 清理失败不影响已返回/抛出的结果。
+                // Cleanup failure does not affect the returned or thrown result.
+            }
+        }
     }
 }
