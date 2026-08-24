@@ -1,13 +1,14 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
+using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Pages.DockControl
 {
@@ -24,6 +25,7 @@ namespace UotanStudio.Pages.DockControl
             var properties = new PropertiesViewModel { Id = "Properties", Title = LanguageService.Instance.GetString("Dock_Properties"), CanClose = true };
             var output = new OutputViewModel { Id = "Output", Title = LanguageService.Instance.GetString("Dock_Output"), CanClose = true };
             var adbLog = new Tool { Id = "AdbLog", Title = LanguageService.Instance.GetString("Dock_AdbLog"), CanClose = true };
+            var device = new Tool { Id = "Device", Title = LanguageService.Instance.GetString("Dock_Device"), CanClose = true };
 
             var documentDock = new DocumentDock
             {
@@ -59,7 +61,7 @@ namespace UotanStudio.Pages.DockControl
                 Title = "LeftPane",
                 Proportion = 0.25,
                 ActiveDockable = projectExplorer,
-                VisibleDockables = CreateList<IDockable>(projectExplorer, projectSetting)
+                VisibleDockables = CreateList<IDockable>(projectExplorer, projectSetting, device)
             };
 
             var bottomTools = new ToolDock
@@ -120,7 +122,8 @@ namespace UotanStudio.Pages.DockControl
                 ["ProjectExplorer"] = () => LanguageService.Instance.GetString("Dock_ProjectExplorer"),
                 ["Properties"] = () => LanguageService.Instance.GetString("Dock_Properties"),
                 ["Output"] = () => LanguageService.Instance.GetString("Dock_Output_Log"),
-                ["AdbLog"] = () => LanguageService.Instance.GetString("Dock_AdbLog_Output")
+                ["AdbLog"] = () => LanguageService.Instance.GetString("Dock_AdbLog_Output"),
+                ["Device"] = () => DeviceViewModel.Instance
             };
 
             // 创建启用 docking 的 HostWindow

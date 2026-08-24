@@ -1,5 +1,5 @@
-using SharpCompress.Compressors.LZMA;
 using System.Text;
+using SharpCompress.Compressors.LZMA;
 using UotanStudio.Firmware.NTPi.Exceptions;
 using UotanStudio.Firmware.NTPi.Helpers;
 using UotanStudio.Firmware.NTPi.Models;

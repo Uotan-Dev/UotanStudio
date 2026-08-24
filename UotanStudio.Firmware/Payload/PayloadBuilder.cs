@@ -1,6 +1,6 @@
+using System.Security.Cryptography;
 using Google.Protobuf;
 using SharpCompress.Compressors.BZip2;
-using System.Security.Cryptography;
 using UotanStudio.Firmware.Payload.Core;
 using UotanStudio.Firmware.Payload.Exceptions;
 using UotanStudio.Firmware.Payload.Proto;

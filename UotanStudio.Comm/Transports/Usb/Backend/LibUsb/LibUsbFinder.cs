@@ -1,6 +1,6 @@
+using System.Runtime.InteropServices;
 using LibUsbDotNet;
 using LibUsbDotNet.LibUsb;
-using System.Runtime.InteropServices;
 using UotanStudio.Comm.Diagnostics;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 

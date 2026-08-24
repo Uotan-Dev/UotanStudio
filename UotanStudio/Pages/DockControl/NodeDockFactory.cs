@@ -1,10 +1,10 @@
+using System;
+using System.Collections.Generic;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
-using System;
-using System.Collections.Generic;
 using UotanStudio.Services;
 
 namespace UotanStudio.Pages.DockControl

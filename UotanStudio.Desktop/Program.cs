@@ -1,6 +1,6 @@
+using System;
 using Avalonia;
 using Dock.Settings;
-using System;
 
 namespace UotanStudio.Desktop;
 

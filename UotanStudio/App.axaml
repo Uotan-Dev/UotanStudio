@@ -5,15 +5,15 @@
              xmlns:semi="https://irihi.tech/semi"
              xmlns:converters="using:UotanStudio.Converters"
              xmlns:viewmodels="using:UotanStudio.ViewModels"
+             xmlns:devices="using:UotanStudio.ViewModels.Devices"
+             xmlns:pages="using:UotanStudio.Pages"
              xmlns:dockview="using:UotanStudio.Pages.DockView"
              x:Class="UotanStudio.App"
              RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <!-- 语言资源将在运行时由 LanguageService 动态加载 -->
                 <ResourceInclude Source="avares://UotanStudio/Themes/LightColors.axaml"/>
             </ResourceDictionary.MergedDictionaries>
             <converters:IntEqualConverter x:Key="IntEqualConverter" />
@@ -40,6 +40,9 @@
       </DataTemplate>
       <DataTemplate DataType="viewmodels:PropertiesViewModel">
           <dockview:PropertiesView />
+      </DataTemplate>
+      <DataTemplate DataType="devices:DeviceViewModel">
+          <pages:DeviceView />
       </DataTemplate>
     </Application.DataTemplates>
 

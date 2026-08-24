@@ -1,6 +1,6 @@
+using System.Buffers;
 using K4os.Compression.LZ4;
 using K4os.Compression.LZ4.Streams;
-using System.Buffers;
 using UotanStudio.Firmware.Compress.Internal;
 
 namespace UotanStudio.Firmware.Compress.Compressors;

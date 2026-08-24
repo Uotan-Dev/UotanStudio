@@ -1,7 +1,7 @@
+using System.IO.Compression;
 using K4os.Compression.LZ4.Streams;
 using SharpCompress.Compressors.BZip2;
 using SharpCompress.Compressors.Xz;
-using System.IO.Compression;
 using ZstdSharp;
 
 namespace UotanStudio.Firmware.BootImage;

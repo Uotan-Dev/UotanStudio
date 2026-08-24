@@ -34,6 +34,19 @@
     <x:String x:Key="Dock_DATSegments">DAT分段数量</x:String>
     <x:String x:Key="Dock_Output_Log">Build succeeded.</x:String>
     <x:String x:Key="Dock_AdbLog_Output">ADB Log Output</x:String>
+    <x:String x:Key="Dock_Device">设备</x:String>
+
+    <!-- 设备确认对话框 -->
+    <x:String x:Key="Editor_Yes">是</x:String>
+    <x:String x:Key="Editor_Cancel">取消</x:String>
+    <x:String x:Key="Device_RebootConfirmTitle">确认重启</x:String>
+    <x:String x:Key="Device_RebootConfirmMessage">确定要将设备重启到 {0} 吗？</x:String>
+    <x:String x:Key="Device_FlashConfirmTitle">确认刷写</x:String>
+    <x:String x:Key="Device_FlashConfirmMessage">刷写操作存在风险，可能导致设备变砖。是否继续？</x:String>
+    <x:String x:Key="Device_ModeSystem">系统</x:String>
+    <x:String x:Key="Device_ModeBootloader">Bootloader</x:String>
+    <x:String x:Key="Device_ModeRecovery">Recovery</x:String>
+    <x:String x:Key="Device_ModeEdl">EDL 模式</x:String>
 
     <!-- 全局日志面板 -->
     <x:String x:Key="Log_Panel_Title">全局日志</x:String>

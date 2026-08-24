@@ -80,11 +80,6 @@
 				 <MenuItem.Header>
 				  <TextBlock Text="{DynamicResource Menu_Tools}" FontSize="13" FontWeight="SemiBold" />
 				 </MenuItem.Header>
-				 <MenuItem Header="{DynamicResource Menu_PluginManager}" Command="{Binding MenuVM.PluginManagerCommand}">
-				  <MenuItem.Icon>
-				   <avalonia:MaterialIcon Kind="PuzzleOutline" Width="16" Height="16" />
-				  </MenuItem.Icon>
-				 </MenuItem>
 				</MenuItem>
 
 				<!-- 帮助 / Help -->

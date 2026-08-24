@@ -1,12 +1,11 @@
+using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using UotanStudio.Services;
 using UotanStudio.Views;
 
@@ -156,7 +155,7 @@ public partial class MenuViewModel : ViewModelBase
     {
         if (NodeEditorVM == null)
         {
-            Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Warn, "Menu", "Save aborted: no node editor bound");
+            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Save aborted: no node editor bound");
             return;
         }
         await Services.WorkflowPersistenceService.SaveAsync(
@@ -311,64 +310,6 @@ public partial class MenuViewModel : ViewModelBase
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.ResetZoom));
     }
 
-    // ===== 工具 / Tools =====
-
-    /// <summary>
-    /// <para>当前已打开的插件管理器对话框引用，同一时间仅允许一个实例；已关闭时为 null。</para>
-    /// Currently open Plugin Manager dialog reference; only one instance is allowed at a time; null when closed.
-    /// </summary>
-    private Window? _openPluginManagerDialog;
-
-    /// <summary><para>打开插件管理器页面；若已存在则将焦点转移到已打开的页面而非新开。</para>Opens the Plugin Manager page; if one is already open, transfers focus to it instead of opening a new one.</summary>
-    [RelayCommand]
-    private void PluginManager()
-    {
-        OpenSingletonDialog(() => _openPluginManagerDialog, d => _openPluginManagerDialog = d, () => new PluginManagerDialog());
-    }
-
-    /// <summary>
-    /// <para>以主窗口为 owner 打开指定类型的单例管理器对话框：若同类型已打开则转移焦点，否则新建并记录引用；对话框关闭时清空引用以便再次打开。</para>
-    /// Opens a singleton manager dialog owned by the main window: if the same type is already open, transfers focus to it; otherwise creates a new instance and records the reference. The reference is cleared on close so it can be reopened later.
-    /// </summary>
-    /// <param name="getSlot"><para>读取该类型当前已打开对话框引用的委托。</para>Delegate reading the currently open dialog reference of this type.</param>
-    /// <param name="setSlot"><para>写入该类型当前已打开对话框引用的委托。</para>Delegate writing the currently open dialog reference of this type.</param>
-    /// <param name="factory"><para>构造新对话框实例的工厂。</para>Factory producing a fresh dialog instance.</param>
-    private void OpenSingletonDialog(Func<Window?> getSlot, Action<Window?> setSlot, Func<Window> factory)
-    {
-        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop
-            || desktop.MainWindow is not { } owner)
-        {
-            return;
-        }
-
-        // 同类型已打开：转移焦点而非新开
-        if (getSlot() is { } existing)
-        {
-            if (!existing.IsActive)
-            {
-                existing.Activate();
-            }
-            if (existing.WindowState == WindowState.Minimized)
-            {
-                existing.WindowState = WindowState.Normal;
-            }
-            existing.Focus();
-            return;
-        }
-
-        // 新建并记录引用；关闭时清空以便之后再次打开
-        var dialog = factory();
-        dialog.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(getSlot(), dialog))
-            {
-                setSlot(null);
-            }
-        };
-        setSlot(dialog);
-        dialog.Show(owner);
-    }
-
     // ===== 帮助 / Help =====
 
     /// <summary><para>打开在线文档。</para>Open online documentation.</summary>
@@ -403,7 +344,7 @@ public partial class MenuViewModel : ViewModelBase
         }
         catch (System.Exception ex)
         {
-            Services.LogService.Instance.Write(Abstractions.Logging.LogLevel.Error, "Menu", $"Failed to open URL '{url}': {ex.Message}");
+            Services.LogService.Instance.Write(LogLevel.Error, "Menu", $"Failed to open URL '{url}': {ex.Message}");
         }
     }
 
@@ -482,14 +423,14 @@ public partial class MenuViewModel : ViewModelBase
 /// </summary>
 public enum NavigationTarget
 {
+    /// <summary><para>设备管理器。</para>Device manager.</summary>
+    Device,
     /// <summary><para>工作区。</para>Workspace.</summary>
     Workspace,
     /// <summary><para>节点编辑器。</para>Node editor.</summary>
     NodeEditor,
     /// <summary><para>全局日志面板。</para>Global log panel.</summary>
     Log,
-    /// <summary><para>插件管理器。</para>Plugin manager.</summary>
-    PluginManager,
     /// <summary><para>设置。</para>Settings.</summary>
     Settings
 }
@@ -523,6 +464,8 @@ public class ExitApplicationMessage;
 /// </summary>
 public enum ActiveTab
 {
+    /// <summary><para>设备管理器面板。</para>Device manager panel.</summary>
+    Device,
     /// <summary><para>工作区面板。</para>Workspace panel.</summary>
     Workspace,
     /// <summary><para>节点编辑器面板。</para>Node editor panel.</summary>

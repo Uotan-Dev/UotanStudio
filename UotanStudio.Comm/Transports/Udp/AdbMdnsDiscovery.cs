@@ -1,5 +1,5 @@
-using Makaretu.Dns;
 using System.Collections.Concurrent;
+using Makaretu.Dns;
 
 namespace UotanStudio.Comm.Transports.Udp;
 

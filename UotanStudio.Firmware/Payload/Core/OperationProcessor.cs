@@ -1,8 +1,8 @@
+using System.Buffers;
 using BrotliSharpLib;
 using BsDiff;
 using SharpCompress.Compressors.BZip2;
 using SharpCompress.Compressors.Xz;
-using System.Buffers;
 using UotanStudio.Firmware.Payload.Exceptions;
 using UotanStudio.Firmware.Payload.Proto;
 using ZstdSharp;

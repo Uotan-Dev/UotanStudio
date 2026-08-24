@@ -1,7 +1,3 @@
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Markup.Xaml.Styling;
-using CommunityToolkit.Mvvm.Messaging;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -9,6 +5,10 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Markup.Xaml.Styling;
+using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 
@@ -142,7 +142,7 @@ public sealed class LanguageService
         else
         {
             // 未注册的语言包，使用默认模块列表
-            modules = ["Common", "Menu", "Dock", "Node", "Settings"];
+            modules = ["Common", "Menu", "Dock", "Node", "Settings", "Device"];
         }
 
         // 按模块加载语言资源

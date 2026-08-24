@@ -1,5 +1,5 @@
-using SharpCompress.Compressors.LZMA;
 using System.Buffers.Binary;
+using SharpCompress.Compressors.LZMA;
 
 namespace UotanStudio.Firmware.Payload;
 

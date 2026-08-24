@@ -34,6 +34,19 @@
     <x:String x:Key="Dock_DATSegments">DAT Segments</x:String>
     <x:String x:Key="Dock_Output_Log">Build succeeded.</x:String>
     <x:String x:Key="Dock_AdbLog_Output">ADB Log Output</x:String>
+    <x:String x:Key="Dock_Device">Device</x:String>
+
+    <!-- Device confirmation dialogs -->
+    <x:String x:Key="Editor_Yes">Yes</x:String>
+    <x:String x:Key="Editor_Cancel">Cancel</x:String>
+    <x:String x:Key="Device_RebootConfirmTitle">Confirm Reboot</x:String>
+    <x:String x:Key="Device_RebootConfirmMessage">Are you sure you want to reboot the device to {0}?</x:String>
+    <x:String x:Key="Device_FlashConfirmTitle">Confirm Flash</x:String>
+    <x:String x:Key="Device_FlashConfirmMessage">Flashing is a risky operation that may brick your device. Continue?</x:String>
+    <x:String x:Key="Device_ModeSystem">system</x:String>
+    <x:String x:Key="Device_ModeBootloader">bootloader</x:String>
+    <x:String x:Key="Device_ModeRecovery">recovery</x:String>
+    <x:String x:Key="Device_ModeEdl">EDL mode</x:String>
 
     <!-- Global log panel -->
     <x:String x:Key="Log_Panel_Title">Global Log</x:String>

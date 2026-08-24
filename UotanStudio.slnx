@@ -2,10 +2,12 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />
   </Folder>
-  <Project Path="UotanStudio.Abstractions/UotanStudio.Abstractions.csproj" />
+  <Project Path="UotanStudio.Comm/UotanStudio.Comm.csproj" />
   <Project Path="UotanStudio.Desktop/UotanStudio.Desktop.csproj" />
-  <Project Path="UotanStudio.Plugins.BuiltIn/UotanStudio.Plugins.BuiltIn.csproj" />
-  <Project Path="UotanStudio/UotanStudio.csproj" />
+  <Project Path="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
+  <Project Path="UotanStudio/UotanStudio.csproj">
+    <BuildDependency Project="UotanStudio.Comm/UotanStudio.Comm.csproj" />
+  </Project>
 
 
 </Solution>

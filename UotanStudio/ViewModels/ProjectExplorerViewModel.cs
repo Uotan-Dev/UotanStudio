@@ -1,9 +1,9 @@
-﻿using Avalonia.Collections;
-using CommunityToolkit.Mvvm.ComponentModel;
-using Dock.Model.Mvvm.Controls;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia.Collections;
+using CommunityToolkit.Mvvm.ComponentModel;
+using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels

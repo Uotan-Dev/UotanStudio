@@ -1,9 +1,9 @@
-﻿using Avalonia;
+﻿using System;
+using Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
 using AvaloniaEdit;
 using AvaloniaEdit.TextMate;
-using System;
 using TextMateSharp.Grammars;
 
 namespace UotanStudio.Pages.DockControl;

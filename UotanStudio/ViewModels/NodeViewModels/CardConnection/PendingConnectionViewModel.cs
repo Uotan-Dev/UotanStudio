@@ -1,6 +1,6 @@
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using NodifyM.Avalonia.ViewModelBase;
-using System.Windows.Input;
 
 namespace UotanStudio.ViewModels.NodeViewModels
 {

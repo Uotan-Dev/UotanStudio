@@ -1,7 +1,6 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
-using System.Collections.ObjectModel;
-using UotanStudio.Abstractions.Logging;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.NodeViewModels;
 

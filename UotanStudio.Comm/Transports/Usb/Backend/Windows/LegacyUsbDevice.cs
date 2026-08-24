@@ -1,6 +1,6 @@
-using Microsoft.Win32.SafeHandles;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using static UotanStudio.Comm.Transports.Usb.Backend.Windows.Win32API;
 
