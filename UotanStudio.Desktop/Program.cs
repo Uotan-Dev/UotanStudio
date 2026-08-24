@@ -1,6 +1,9 @@
 using System;
 using Avalonia;
 using Dock.Settings;
+#if DEBUG
+using AvaloniaMcp.Diagnostics;
+#endif
 
 namespace UotanStudio.Desktop;
 
@@ -18,7 +21,8 @@ sealed class Program
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
+    {
+        var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
             .WithInterFont()
             .WithDockSettings(new DockSettingsOptions
@@ -27,4 +31,10 @@ sealed class Program
                 CommandBarMergingScope = DockCommandBarMergingScope.ActiveDocument
             })
             .LogToTrace();
+#if DEBUG
+        // 启动命名管道 MCP 诊断服务器，供 AI 助手/CLI 在线检查与交互当前运行的 Avalonia 应用。
+        builder = builder.UseMcpDiagnostics();
+#endif
+        return builder;
+    }
 }

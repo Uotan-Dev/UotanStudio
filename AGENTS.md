@@ -35,6 +35,10 @@ dotnet publish UotanStudio.Desktop -c Release -r win-x64
 - JSON 序列化使用**源生成**：`AppSettingsJsonContext : JsonSerializerContext`，配合 `AppSettingsJsonContext.Default.AppSettings`。新增需序列化的类型必须用 `[JsonSerializable]` 注册到该上下文。
 - `ViewLocator` 内部仍用反射（已标注 `[RequiresUnreferencedCode]`），**不要在其他地方复制此模式**；非 `ViewModelBase` 的命名空间（如 `UotanStudio.ViewModels.Devices.DeviceViewModel`）需在 `App.axaml` 显式注册 `DataTemplate`。
 
+**Debug 诊断工具（仅 DEBUG 启用，`#if DEBUG` 隔离 + 包引用按 `$(Configuration)` 条件剔除，不进入 Release/AOT 发布）：**
+- `AvaloniaMcp.Diagnostics`（`UotanStudio.Desktop/Program.cs` 末尾 `.UseMcpDiagnostics()`）：启动命名管道 MCP 诊断服务器。
+- `Dock.Avalonia.Diagnostics`（`MainWindow` 打开时 `AttachDockDebugOverlay()`）：按 F9 显示 Dock 布局覆盖诊断。
+
 ### 2. 节点编辑器（NodifyM）
 1. 节点工具箱在 `NodeEditorViewModel.InitializeToolbox` 中通过 `NodeToolboxItem(name, () => XxxNodeViewModel.CreateXxxNode())` 工厂方法声明，分类为 `Firmware` / `Flash` / `Data` / `Flow` / `Output`。
 2. 节点视图模型继承 `FlowNodeViewModel`（`UotanStudio.ViewModels.NodeViewModels`），节点状态枚举 `NodeExecutionStatus` 与执行上下文 `INodeExecutionContext` 位于 `UotanStudio.Services.Execution` / `NodeViewModels`。

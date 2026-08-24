@@ -8,6 +8,7 @@
   <Project Path="UotanStudio/UotanStudio.csproj">
     <BuildDependency Project="UotanStudio.Comm/UotanStudio.Comm.csproj" />
   </Project>
+  <Project Path="UotanStudio.Tests/UotanStudio.Tests.csproj" />
 
 
 </Solution>

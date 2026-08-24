@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>UotanStudio.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Firmware library under test (AVB, boot image, CPIO, Sparse, compression, Payload) -->
+    <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <!-- Comm library under test (AVB verification wiring / protocol tests) -->
+    <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <!-- Application layer under test (FlashService / BackupService / DeviceInfo 等刷写与备份路径)。
+         Avalonia UI 依赖随引用带入，但测试只触碰非 UI 类型，无需 Avalonia.Headless。 -->
+    <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+</Project>

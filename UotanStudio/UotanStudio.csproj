@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -26,7 +26,6 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="AvaloniaEdit.TextMate" />
-    <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
@@ -36,6 +35,10 @@
     <PackageReference Include="Dock.Model" />
     <PackageReference Include="Dock.Model.Avalonia" />
     <PackageReference Include="Dock.Model.Mvvm" />
+    <PackageReference Include="Dock.Avalonia.Diagnostics">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Irihi.Ursa" />
     <PackageReference Include="Irihi.Ursa.Themes.Semi" />
     <PackageReference Include="Material.Icons.Avalonia" />
@@ -44,10 +47,7 @@
     <PackageReference Include="Semi.Avalonia.DataGrid" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
-    <!-- Device communication -->
     <PackageReference Include="AdvancedSharpAdbClient" />
-    <!-- 统一 Microsoft.Extensions.Logging.Abstractions 版本（AvaloniaUI.DiagnosticsSupport 传递 8.0.0，
-         UotanStudio.Comm 使用 10.0.11，显式引用让 NuGet 统一到 10.0.11，消除 MSB3277 冲突） -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
