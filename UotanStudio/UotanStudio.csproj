@@ -34,6 +34,8 @@
     <PackageReference Include="Semi.Avalonia" />
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" />
+    <PackageReference Include="Semi.Avalonia.AvaloniaEdit" />
   </ItemGroup>
 
 </Project>
