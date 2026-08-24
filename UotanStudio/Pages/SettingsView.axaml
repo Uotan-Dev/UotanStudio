@@ -31,31 +31,7 @@
                                      IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
                     </StackPanel>
 
-                    <!-- Theme Preview -->
-                    <TextBlock Text="{DynamicResource Settings_ThemePreview}" FontSize="12" Opacity="0.7" Margin="0,8,0,0" />
-                    <Border CornerRadius="8" Padding="16" Height="80"
-                            Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                            BorderThickness="1">
-                        <Grid VerticalAlignment="Center">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Aa" FontSize="24" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                            <Border Grid.Column="2" CornerRadius="4" Padding="16,6"
-                                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                    BorderThickness="1"
-                                    VerticalAlignment="Center">
-                                <TextBlock Text="Button" FontSize="12"
-                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                            </Border>
-                        </Grid>
-                    </Border>
-                </StackPanel>
+                    </StackPanel>
 
                 <!-- Section 2: Language -->
                 <StackPanel Spacing="8">
@@ -91,65 +67,7 @@
                     </Grid>
                 </StackPanel>
 
-                <!-- Section 4: Firmware Tools -->
-                <StackPanel Spacing="8">
-                    <TextBlock Text="{DynamicResource Settings_Firmware}" FontWeight="SemiBold" FontSize="16" />
-                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto" Margin="0,4">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_UnpackToolPath}"
-                                   VerticalAlignment="Center" FontSize="13" />
-                        <TextBox Grid.Row="0" Grid.Column="1"
-                                 Text="{Binding UnpackToolPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="{DynamicResource Settings_PathPlaceholder}" />
-
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_TempDir}"
-                                   VerticalAlignment="Center" FontSize="13" Margin="0,8" />
-                        <TextBox Grid.Row="1" Grid.Column="1"
-                                 Text="{Binding TempDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="{DynamicResource Settings_PathPlaceholder}"
-                                 Margin="0,8" />
-
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_AutoVerify}"
-                                   VerticalAlignment="Center" FontSize="13" />
-                        <ToggleSwitch Grid.Row="2" Grid.Column="1"
-                                      IsChecked="{Binding AutoVerifyAfterUnpack, Mode=TwoWay}" />
-                    </Grid>
-                </StackPanel>
-
-                <!-- Section 5: Flash -->
-                <StackPanel Spacing="8">
-                    <TextBlock Text="{DynamicResource Settings_Flash}" FontWeight="SemiBold" FontSize="16" />
-                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto,Auto,Auto" Margin="0,4">
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AdbPath}"
-                                   VerticalAlignment="Center" FontSize="13" />
-                        <TextBox Grid.Row="0" Grid.Column="1"
-                                 Text="{Binding AdbPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="{DynamicResource Settings_PathPlaceholder}" />
-
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_FastbootPath}"
-                                   VerticalAlignment="Center" FontSize="13" Margin="0,8" />
-                        <TextBox Grid.Row="1" Grid.Column="1"
-                                 Text="{Binding FastbootPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="{DynamicResource Settings_PathPlaceholder}"
-                                 Margin="0,8" />
-
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource Settings_DeviceTimeout}"
-                                   VerticalAlignment="Center" FontSize="13" />
-                        <NumericUpDown Grid.Row="2" Grid.Column="1"
-                                       Value="{Binding DeviceTimeoutSeconds, Mode=TwoWay}"
-                                       Minimum="5" Maximum="300"
-                                       FormatString="0 s" />
-
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="{DynamicResource Settings_AutoBackup}"
-                                   VerticalAlignment="Center" FontSize="13" Margin="0,8" />
-                        <ToggleSwitch Grid.Row="3" Grid.Column="1"
-                                      IsChecked="{Binding AutoBackupBeforeFlash, Mode=TwoWay}"
-                                      Margin="0,8" />
-                    </Grid>
-                </StackPanel>
-
-                <!-- Section 6: Node Editor -->
+                <!-- Section 4: Node Editor -->
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_NodeEditor}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />

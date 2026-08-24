@@ -28,15 +28,6 @@
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="Devices" Width="18" Margin="0 -10 0 0" />
-				</ContentPage.Icon>
-				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Device}" FontSize="13" FontWeight="SemiBold" />
-				</ContentPage.Header>
-				<views:DeviceView DataContext="{Binding DeviceVM}" />
-			</ContentPage>
-			<ContentPage>
-				<ContentPage.Icon>
 					<avalonia:MaterialIcon Kind="MonitorDashboard" Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
@@ -52,15 +43,6 @@
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Node}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 				<views:NodeEditorView DataContext="{Binding NodeEditorVM}" />
-			</ContentPage>
-			<ContentPage>
-				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="ScrollTextOutline" Width="18" Margin="0 -10 0 0" />
-				</ContentPage.Icon>
-				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Log}" FontSize="13" FontWeight="SemiBold" />
-				</ContentPage.Header>
-				<views:LogView DataContext="{Binding LogVM}" />
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>

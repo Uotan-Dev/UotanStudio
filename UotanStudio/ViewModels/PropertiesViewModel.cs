@@ -45,7 +45,7 @@ namespace UotanStudio.ViewModels
         /// <para>当前显示的属性行集合，UI 绑定此项。</para>
         /// Collection of property rows currently displayed, bound by the UI.
         /// </summary>
-        public ObservableCollection<PropertyRow> Properties { get; } = new();
+        public ObservableCollection<PropertyRow> Properties { get; } = [];
 
         /// <summary>
         /// <para>当前选中的节点标题，用于显示。</para>

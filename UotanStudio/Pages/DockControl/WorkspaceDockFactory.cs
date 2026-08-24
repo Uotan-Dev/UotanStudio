@@ -123,7 +123,7 @@ namespace UotanStudio.Pages.DockControl
                 ["Properties"] = () => LanguageService.Instance.GetString("Dock_Properties"),
                 ["Output"] = () => LanguageService.Instance.GetString("Dock_Output_Log"),
                 ["AdbLog"] = () => LanguageService.Instance.GetString("Dock_AdbLog_Output"),
-                ["Device"] = () => DeviceViewModel.Instance
+                ["Device"] = () => DeviceViewModel.EnsureInstance()
             };
 
             // 创建启用 docking 的 HostWindow

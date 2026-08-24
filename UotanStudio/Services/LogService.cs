@@ -27,7 +27,7 @@ namespace UotanStudio.Services
         private static readonly Lazy<LogService> LazyInstance = new(() => new LogService());
         private readonly ConcurrentQueue<LogEntry> _entries = new();
         private readonly object _subscribersLock = new();
-        private readonly List<EventHandler<LogEntry>> _subscribers = new();
+        private readonly List<EventHandler<LogEntry>> _subscribers = [];
         private LogLevel _minimumLevel = LogLevel.Trace;
         private int _maxQueueSize = 5000;
 

@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -272,11 +273,60 @@ public partial class MenuViewModel : ViewModelBase
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
     }
 
-    /// <summary><para>切换到日志面板选项卡。</para>Switch to the global Log panel tab.</summary>
+    // ===== 工具 / Tools =====
+
+    /// <summary>
+    /// <para>打开设备管理器窗口；窗口已打开时前置聚焦。</para>
+    /// Opens the device manager window, bringing it to the foreground if already open.
+    /// </summary>
     [RelayCommand]
-    private void GoToLog()
+    private void OpenDevice()
     {
-        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Log));
+        ShowWindow(ref _deviceWindow, () => new DeviceWindow());
+    }
+
+    /// <summary>
+    /// <para>打开全局日志窗口；窗口已打开时前置聚焦。</para>
+    /// Opens the global log window, bringing it to the foreground if already open.
+    /// </summary>
+    [RelayCommand]
+    private void OpenLogWindow()
+    {
+        ShowWindow(ref _logWindow, () => new LogWindow());
+    }
+
+    /// <summary>
+    /// <para>当前已打开的设备管理器窗口引用，用于单例前置与生命周期释放。</para>
+    /// Reference to the currently open device manager window, used for singleton focusing and lifecycle release.
+    /// </summary>
+    private static Window? _deviceWindow;
+
+    /// <summary>
+    /// <para>当前已打开的全局日志窗口引用，用于单例前置与生命周期释放。</para>
+    /// Reference to the currently open global log window, used for singleton focusing and lifecycle release.
+    /// </summary>
+    private static Window? _logWindow;
+
+    /// <summary>
+    /// <para>显示辅助工具窗口：若尚未打开则创建并显示，否则前置并恢复正常窗口状态。</para>
+    /// Shows a helper tool window: creates and shows it if not open, otherwise brings it to the foreground and restores the normal window state.
+    /// </summary>
+    /// <param name="holder"><para>窗口引用字段。</para>The window reference field.</param>
+    /// <param name="factory"><para>窗口工厂，用于创建新窗口实例。</para>The factory creating a new window instance.</param>
+    private static void ShowWindow(ref Window? holder, Func<Window> factory)
+    {
+        if (holder == null || !holder.IsVisible)
+        {
+            // 释放对已关闭窗口的旧引用，允许其被回收后再创建新窗口
+            holder = null;
+            holder = factory();
+            holder.Show();
+        }
+        else
+        {
+            holder.WindowState = WindowState.Normal;
+            holder.Activate();
+        }
     }
 
     /// <summary>

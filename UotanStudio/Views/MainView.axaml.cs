@@ -11,8 +11,8 @@ public partial class MainView : UserControl
     public MainView()
     {
         InitializeComponent();
-        // 默认选中 Workspace Tab（索引 4：Device=3, Workspace=4）
-        MainTabs.SelectedIndex = 4;
+        // 默认选中 Workspace Tab（移除设备/日志底栏后：Workspace=3, NodeEditor=4, Settings=5）
+        MainTabs.SelectedIndex = 3;
 
         WeakReferenceMessenger.Default.Register<NavigateToTabMessage>(this, OnNavigateToTab);
         MainTabs.SelectionChanged += OnSelectionChanged;
@@ -32,11 +32,9 @@ public partial class MainView : UserControl
         {
             var index = message.Target switch
             {
-                NavigationTarget.Device => 3,
-                NavigationTarget.Workspace => 4,
-                NavigationTarget.NodeEditor => 5,
-                NavigationTarget.Log => 6,
-                NavigationTarget.Settings => 7,
+                NavigationTarget.Workspace => 3,
+                NavigationTarget.NodeEditor => 4,
+                NavigationTarget.Settings => 5,
                 _ => MainTabs.SelectedIndex
             };
             MainTabs.SelectedIndex = index;
@@ -63,11 +61,9 @@ public partial class MainView : UserControl
     {
         var tab = selectedIndex switch
         {
-            3 => ActiveTab.Device,
-            4 => ActiveTab.Workspace,
-            5 => ActiveTab.NodeEditor,
-            6 => ActiveTab.Log,
-            7 => ActiveTab.Settings,
+            3 => ActiveTab.Workspace,
+            4 => ActiveTab.NodeEditor,
+            5 => ActiveTab.Settings,
             _ => ActiveTab.Workspace
         };
         WeakReferenceMessenger.Default.Send(new ActiveTabChangedMessage(tab));

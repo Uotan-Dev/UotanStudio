@@ -26,13 +26,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private LanguageInfo _selectedLanguage = LanguageInfo.SystemLanguage;
     private ThemeMode _selectedThemeMode;
     private bool _autoSave;
-    private string _unpackToolPath = string.Empty;
-    private string _tempDirectory = string.Empty;
-    private bool _autoVerifyAfterUnpack = true;
-    private string _adbPath = string.Empty;
-    private string _fastbootPath = string.Empty;
-    private int _deviceTimeoutSeconds = 30;
-    private bool _autoBackupBeforeFlash;
     private bool _snapToGrid = true;
     private double _gridSize = 20;
     private int _connectionStyleIndex;
@@ -179,76 +172,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置默认解包工具路径。</para>
-    /// Gets or sets the default unpack tool path.
-    /// </summary>
-    public string UnpackToolPath
-    {
-        get => _unpackToolPath;
-        set { if (SetProperty(ref _unpackToolPath, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置临时文件目录。</para>
-    /// Gets or sets the temporary file directory.
-    /// </summary>
-    public string TempDirectory
-    {
-        get => _tempDirectory;
-        set { if (SetProperty(ref _tempDirectory, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置解包后是否自动校验。</para>
-    /// Gets or sets whether to auto-verify after unpacking.
-    /// </summary>
-    public bool AutoVerifyAfterUnpack
-    {
-        get => _autoVerifyAfterUnpack;
-        set { if (SetProperty(ref _autoVerifyAfterUnpack, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置 ADB 路径。</para>
-    /// Gets or sets the ADB path.
-    /// </summary>
-    public string AdbPath
-    {
-        get => _adbPath;
-        set { if (SetProperty(ref _adbPath, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置 Fastboot 路径。</para>
-    /// Gets or sets the Fastboot path.
-    /// </summary>
-    public string FastbootPath
-    {
-        get => _fastbootPath;
-        set { if (SetProperty(ref _fastbootPath, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置设备超时时间（秒）。</para>
-    /// Gets or sets the device timeout in seconds.
-    /// </summary>
-    public int DeviceTimeoutSeconds
-    {
-        get => _deviceTimeoutSeconds;
-        set { if (SetProperty(ref _deviceTimeoutSeconds, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置烧录前是否自动备份。</para>
-    /// Gets or sets whether to auto-backup before flashing.
-    /// </summary>
-    public bool AutoBackupBeforeFlash
-    {
-        get => _autoBackupBeforeFlash;
-        set { if (SetProperty(ref _autoBackupBeforeFlash, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
     /// <para>获取或设置是否启用网格对齐。</para>
     /// Gets or sets whether snap-to-grid is enabled.
     /// </summary>
@@ -352,13 +275,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
               ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
         _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
-        _unpackToolPath = settings.UnpackToolPath;
-        _tempDirectory = settings.TempDirectory;
-        _autoVerifyAfterUnpack = settings.AutoVerifyAfterUnpack;
-        _adbPath = settings.AdbPath;
-        _fastbootPath = settings.FastbootPath;
-        _deviceTimeoutSeconds = settings.DeviceTimeoutSeconds;
-        _autoBackupBeforeFlash = settings.AutoBackupBeforeFlash;
         _snapToGrid = settings.SnapToGrid;
         _gridSize = settings.GridSize;
         _connectionStyleIndex = settings.ConnectionStyleIndex;
@@ -432,13 +348,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.CultureName = _selectedLanguage.IsSystemLanguage ? string.Empty : _selectedLanguage.CultureName;
         _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
-        _appSettings.UnpackToolPath = _unpackToolPath;
-        _appSettings.TempDirectory = _tempDirectory;
-        _appSettings.AutoVerifyAfterUnpack = _autoVerifyAfterUnpack;
-        _appSettings.AdbPath = _adbPath;
-        _appSettings.FastbootPath = _fastbootPath;
-        _appSettings.DeviceTimeoutSeconds = _deviceTimeoutSeconds;
-        _appSettings.AutoBackupBeforeFlash = _autoBackupBeforeFlash;
         _appSettings.SnapToGrid = _snapToGrid;
         _appSettings.GridSize = _gridSize;
         _appSettings.ConnectionStyleIndex = _connectionStyleIndex;

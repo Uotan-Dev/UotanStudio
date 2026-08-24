@@ -40,6 +40,7 @@
     <x:String x:Key="Menu_FlashTools">烧录工具</x:String>
     <x:String x:Key="Menu_FirmwareTools">固件工具</x:String>
     <x:String x:Key="Menu_DeviceManager">设备管理器</x:String>
+    <x:String x:Key="Menu_LogWindow">日志窗口</x:String>
 
     <!-- 底部选项卡 -->
     <x:String x:Key="Tab_Device">设备</x:String>

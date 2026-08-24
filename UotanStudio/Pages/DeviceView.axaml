@@ -475,29 +475,7 @@
                         </Border>
                         </StackPanel>
 
-                        <!-- 刷写分区（绑定 DeviceViewModel，不随 SelectedDevice 切换） -->
-                        <Border Classes="InfoCard">
-                            <StackPanel Spacing="8">
-                                <TextBlock Classes="CardCaption" Text="{DynamicResource Flash_FlashCard}" />
-                                <Grid ColumnDefinitions="120,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
-                                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
-                                               Text="{DynamicResource Flash_Partition}" />
-                                    <TextBox Grid.Row="0" Grid.Column="1"
-                                             PlaceholderText="{DynamicResource Flash_PartitionHint}"
-                                             Text="{Binding FlashPartition, Mode=TwoWay}" />
-                                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
-                                               Text="{DynamicResource Flash_ImagePath}" />
-                                    <TextBox Grid.Row="1" Grid.Column="1"
-                                             PlaceholderText="{DynamicResource Flash_ImagePathHint}"
-                                             Text="{Binding FlashImagePath, Mode=TwoWay}" />
-                                    <Button Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right"
-                                            Content="{DynamicResource Flash_Flash}"
-                                            Command="{Binding FlashCommand}"
-                                            IsEnabled="{Binding !IsBusy}" />
-                                </Grid>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
+                        </StackPanel>
                 </ScrollViewer>
             </Grid>
         </Grid>

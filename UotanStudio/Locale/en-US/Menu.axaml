@@ -40,6 +40,7 @@
     <x:String x:Key="Menu_FlashTools">Flash Tools</x:String>
     <x:String x:Key="Menu_FirmwareTools">Firmware Tools</x:String>
     <x:String x:Key="Menu_DeviceManager">Device Manager</x:String>
+    <x:String x:Key="Menu_LogWindow">Log Window</x:String>
 
     <!-- Bottom tabs -->
     <x:String x:Key="Tab_Device">Device</x:String>

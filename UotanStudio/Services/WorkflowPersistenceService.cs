@@ -144,13 +144,13 @@ namespace UotanStudio.Services
         /// <para>节点 DTO 列表。</para>
         /// List of node DTOs.
         /// </summary>
-        public List<NodeDto> Nodes { get; set; } = new();
+        public List<NodeDto> Nodes { get; set; } = [];
 
         /// <summary>
         /// <para>连接 DTO 列表。</para>
         /// List of connection DTOs.
         /// </summary>
-        public List<ConnectionDto> Connections { get; set; } = new();
+        public List<ConnectionDto> Connections { get; set; } = [];
     }
 
     /// <summary>

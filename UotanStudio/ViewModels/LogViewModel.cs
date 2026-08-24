@@ -46,7 +46,7 @@ public partial class LogViewModel : ViewModelBase
     /// <para>当前日志面板的条目集合，UI 绑定此项。</para>
     /// Collection of entries in the current log panel, bound by the UI.
     /// </summary>
-    public ObservableCollection<LogEntryViewModel> Entries { get; } = new();
+    public ObservableCollection<LogEntryViewModel> Entries { get; } = [];
 
     /// <summary>
     /// <para>累计条目数上限，超过后丢弃最旧条目以防止无限增长。</para>
@@ -80,17 +80,31 @@ public partial class LogViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>日志条目入队回调，追加到集合并裁剪超限条目。</para>
-    /// Log entry enqueue callback, appending to the collection and trimming over-limit entries.
+    /// <para>日志条目入队回调，追加到集合并裁剪超限条目；跨线程调用时调度到 UI 线程，
+    /// 确保 <see cref="ObservableCollection{T}"/> 的变更总能触发界面刷新。</para>
+    /// Log entry enqueue callback, appending to the collection and trimming over-limit entries;
+    /// cross-thread calls are dispatched to the UI thread so collection changes always refresh the view.
     /// </summary>
     /// <param name="sender"><para>事件源。</para>Event source.</param>
     /// <param name="entry"><para>日志条目记录。</para>Log entry record.</param>
     private void OnLogEnqueued(object? sender, LogEntry entry)
     {
-        AppendEntry(entry);
-        while (Entries.Count > MaxEntries && Entries.Count > 0)
+        void AppendAndTrim()
         {
-            Entries.RemoveAt(0);
+            AppendEntry(entry);
+            while (Entries.Count > MaxEntries && Entries.Count > 0)
+            {
+                Entries.RemoveAt(0);
+            }
+        }
+
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            AppendAndTrim();
+        }
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(AppendAndTrim);
         }
     }
 

@@ -59,7 +59,7 @@ namespace UotanStudio.ViewModels
         /// <para>当前输出窗口的日志条目集合，UI 绑定此项。</para>
         /// Collection of log entries in the current output window, bound by the UI.
         /// </summary>
-        public ObservableCollection<LogEntryViewModel> Entries { get; } = new();
+        public ObservableCollection<LogEntryViewModel> Entries { get; } = [];
 
         /// <summary>
         /// <para>累计条目数，用于自动裁剪防止无限增长。</para>

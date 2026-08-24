@@ -18,6 +18,13 @@
     <x:String x:Key="ImageView_SynthesizeSuper">合成Super</x:String>
     <x:String x:Key="ImageView_SynthesizeDat">合成dat</x:String>
 
+    <!-- Splash window -->
+    <x:String x:Key="Splash_Subtitle">固件工具箱 · Firmware Toolbox</x:String>
+    <x:String x:Key="Splash_Initializing">正在初始化...</x:String>
+    <x:String x:Key="Splash_Scanning">正在扫描 USB 设备...</x:String>
+    <x:String x:Key="Splash_FoundDevices">发现 {0} 台设备</x:String>
+    <x:String x:Key="Splash_Preparing">正在准备主界面...</x:String>
+
     <!-- MainWindow -->
     <x:String x:Key="MainWindow_Title">UotanStudio</x:String>
     <x:String x:Key="Document_BuildProp">build.prop</x:String>

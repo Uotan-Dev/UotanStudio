@@ -5,10 +5,11 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AdvancedSharpAdbClient;
+using AdvancedSharpAdbClient.Receivers;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Core.Flash;
 using UotanStudio.Models;
 using UotanStudio.Services;
 
@@ -62,7 +63,6 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             if (SetProperty(ref field, value))
             {
                 OnPropertyChanged(nameof(DeviceDetail));
-                FlashCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -92,30 +92,6 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// Gets whether there are no devices (used to show the empty-state hint).
     /// </summary>
     public bool HasNoDevices => !IsRefreshing && Devices.Count == 0;
-
-    /// <summary>
-    /// <para>获取或设置是否正在刷写分区（刷写中禁用刷写按钮）。</para>
-    /// Gets or sets whether a partition flash is in progress (disables the flash button).
-    /// </summary>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(FlashCommand))]
-    private bool _isBusy;
-
-    /// <summary>
-    /// <para>获取或设置要刷写的分区名。</para>
-    /// Gets or sets the partition name to flash.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(FlashCommand))]
-    private string _flashPartition = string.Empty;
-
-    /// <summary>
-    /// <para>获取或设置要刷写的镜像文件路径。</para>
-    /// Gets or sets the image file path to flash.
-    /// </summary>
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(FlashCommand))]
-    private string _flashImagePath = string.Empty;
 
     /// <summary>
     /// <para>获取选中设备的详情文本。</para>
@@ -229,39 +205,29 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     };
 
     /// <summary>
-    /// <para>通过 UotanStudio.Comm 的 ADB 会话批量拉取设备属性（getprop / 系统级 / 电池 / 内存 / 存储），
-    /// 用以丰富设备详细信息的展示。</para>
-    /// Retrieves a broad set of device properties via a UotanStudio.Comm ADB session
-    /// (getprop / system-level / battery / memory / storage) to enrich the detail view.
+    /// <para>拉取 ADB 设备扩展信息（getprop / 系统级 / 电池 / 内存 / 存储）。官方 adb server 会枚举
+    /// USB 与网络设备，因此无论传输类型都优先经 AdvancedSharpAdbClient 通过 adb server 执行 shell；
+    /// adb server 不可用或设备不在其列表中时，仅对 USB 设备回退到 UotanStudio.Comm 原生 USB 会话。</para>
+    /// Retrieves extended ADB device info (getprop / system-level / battery / memory / storage).
+    /// The official adb server enumerates both USB and network devices, so regardless of transport
+    /// the shell runs via AdvancedSharpAdbClient against the adb server first; only when the server
+    /// is unavailable or the device is absent from its list does a USB device fall back to the
+    /// UotanStudio.Comm native USB session.
     /// </summary>
     private async Task EnrichAdbInfoAsync(DeviceInfo device)
     {
         Dictionary<string, string>? info = null;
         try
         {
-            // 打开 USB 设备与执行 shell 均为同步阻塞调用（未授权设备可能挂到超时），
+            // 打开 USB 设备（或连 adb server）与执行 shell 均为同步阻塞调用（未授权设备可能挂到超时），
             // 整体放后台线程，避免扫描结束过渡到主窗时冻结 UI。
-            // Opening the USB device and running shell commands are blocking calls
-            // (unauthorized devices can stall until timeout); run on a background thread
-            // so the splash-to-main transition never freezes the UI.
+            // Opening the USB device (or connecting the adb server) and running shell commands are
+            // blocking calls (unauthorized devices can stall until timeout); run on a background
+            // thread so the splash-to-main transition never freezes the UI.
             info = await Task.Run(() =>
-            {
-                var session = DeviceMonitorService.Instance.OpenAdbSession(device.Device);
-                if (session is null)
-                {
-                    return null;
-                }
-
-                try
-                {
-                    session.Connect();
-                    return session.Connection.IsConnected ? QueryAdbProperties(session) : null;
-                }
-                finally
-                {
-                    session.Dispose();
-                }
-            }).ConfigureAwait(true);
+                QueryViaAdbServer(device)
+                ?? (device.IsUsb ? QueryViaNativeUsb(device) : null)
+            ).ConfigureAwait(true);
         }
         catch
         {
@@ -277,6 +243,72 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         if (SelectedDevice == device)
         {
             OnPropertyChanged(nameof(DeviceDetail));
+        }
+    }
+
+    /// <summary>
+    /// <para>经 AdvancedSharpAdbClient 通过官方 adb server（127.0.0.1:5037）按序列号匹配设备并拉取属性；
+    /// 设备不在列表中或 server 未运行时返回 null。</para>
+    /// Queries device properties via AdvancedSharpAdbClient against the official adb server
+    /// (127.0.0.1:5037), matching the device by serial; returns null when the device is absent
+    /// from the list or the server is not running.
+    /// </summary>
+    private static Dictionary<string, string>? QueryViaAdbServer(DeviceInfo device)
+    {
+        var client = DeviceMonitorService.Instance.AdbServerClient;
+        if (client is null)
+        {
+            return null;
+        }
+
+        // USB 设备（如本机直连）与网络设备（模拟器）在授权后都会出现在 adb server 设备列表中。
+        // Both USB devices (local direct connection) and network devices (emulator) appear in the
+        // adb server device list once authorized.
+        var target = client.GetDevices()
+            .FirstOrDefault(d => string.Equals(d.Serial, device.Serial, StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+        {
+            return null;
+        }
+
+        return QueryAdbProperties(cmd =>
+        {
+            try
+            {
+                var receiver = new ConsoleOutputReceiver();
+                client.ExecuteRemoteCommand(cmd, target, receiver);
+                return receiver.ToString() ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        });
+    }
+
+    /// <summary>
+    /// <para>通过 UotanStudio.Comm 原生 USB ADB 会话拉取设备属性；会话不可用或未连接时返回 null。</para>
+    /// Queries device properties via a UotanStudio.Comm native USB ADB session; returns null when
+    /// the session is unavailable or not connected.
+    /// </summary>
+    private static Dictionary<string, string>? QueryViaNativeUsb(DeviceInfo device)
+    {
+        var session = DeviceMonitorService.Instance.OpenAdbSession(device.Device);
+        if (session is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            session.Connect();
+            return session.Connection.IsConnected
+                ? QueryAdbProperties(cmd => RunShell(session, cmd))
+                : null;
+        }
+        finally
+        {
+            session.Dispose();
         }
     }
 
@@ -386,11 +418,11 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// <para>批量查询 ADB 设备属性并解析电池、内存、磁盘信息。</para>
     /// Queries ADB device properties and parses battery, memory and disk details.
     /// </summary>
-    private static Dictionary<string, string> QueryAdbProperties(AdbSession session)
+    private static Dictionary<string, string> QueryAdbProperties(Func<string, string> run)
     {
         string Get(string cmd)
         {
-            return Clean(RunShell(session, cmd));
+            return Clean(run(cmd));
         }
 
         var map = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -403,8 +435,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             ["cpuabi"] = Get("getprop ro.product.cpu.abi"),
             ["cpucode"] = Get("getprop ro.board.platform"),
             ["kernel"] = Get("uname -r"),
-            ["resolution"] = ColonValue(RunShell(session, "wm size")),
-            ["density"] = ColonValue(RunShell(session, "wm density")),
+            ["resolution"] = ColonValue(run("wm size")),
+            ["density"] = ColonValue(run("wm density")),
             ["boardid"] = Get("cat /sys/devices/soc0/serial_number"),
             ["slot"] = Get("getprop ro.boot.slot_suffix"),
             ["compile"] = Get("getprop ro.system.build.version.incremental"),
@@ -420,15 +452,15 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         map["bl"] = bl;
         map["uptime"] = FormatUptime(Get("cat /proc/uptime"));
 
-        var (bLevel, bText) = ParseBattery(RunShell(session, "dumpsys battery"));
+        var (bLevel, bText) = ParseBattery(run("dumpsys battery"));
         map["batteryLevel"] = bLevel.ToString(CultureInfo.InvariantCulture);
         map["batteryText"] = bText;
 
-        var (mLevel, mText) = ParseMem(RunShell(session, "cat /proc/meminfo | grep -E 'MemTotal|MemAvailable'"));
+        var (mLevel, mText) = ParseMem(run("cat /proc/meminfo | grep -E 'MemTotal|MemAvailable'"));
         map["memLevel"] = mLevel.ToString(CultureInfo.InvariantCulture);
         map["memText"] = mText;
 
-        var (dLevel, dText) = ParseDisk(RunShell(session, "echo; df /storage/emulated 2>/dev/null || df /data 2>/dev/null || df /sdcard 2>/dev/null"));
+        var (dLevel, dText) = ParseDisk(run("echo; df /storage/emulated 2>/dev/null || df /data 2>/dev/null || df /sdcard 2>/dev/null"));
         map["diskLevel"] = dLevel.ToString(CultureInfo.InvariantCulture);
         map["diskText"] = dText;
 
@@ -859,84 +891,11 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>把当前输入的分区名与镜像路径刷写到选中设备；刷写期间置忙，
-    /// 进度经 <see cref="FlashService"/> 与 FlashProgressMessage 广播到输出面板。</para>
-    /// Flashes the entered partition name and image path to the selected device; keeps the
-    /// UI busy while flashing and broadcasts progress to the output panel via
-    /// <see cref="FlashService"/> and FlashProgressMessage.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanFlash))]
-    private async Task FlashAsync()
-    {
-        var device = SelectedDevice;
-        var partition = FlashPartition.Trim();
-        var imagePath = FlashImagePath.Trim();
-        if (device is null || partition.Length == 0 || imagePath.Length == 0)
-        {
-            return;
-        }
-
-        // 弹出确认对话框
-        var tcs = new TaskCompletionSource<bool>();
-        FlashConfirmationRequested?.Invoke(this, tcs);
-        var confirmed = await tcs.Task;
-        if (!confirmed)
-        {
-            return;
-        }
-
-        IsBusy = true;
-        StatusText = $"{LanguageService.Instance.GetString("Flash_Flashing")} {partition}";
-        LogService.Instance.Write(LogLevel.Info, "FlashService",
-            $"Flashing {partition} -> {imagePath} on {device.Serial} ({device.Mode})");
-        try
-        {
-            var progress = new Progress<FlashProgress>(p => StatusText = p.Status);
-            var result = await FlashService.FlashImageAsync(device, partition, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
-            StatusText = result.Success
-                ? $"{LanguageService.Instance.GetString("Flash_Done")} {partition}"
-                : $"{LanguageService.Instance.GetString("Flash_Failed")} {partition}: {result.Summary}";
-            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "FlashService",
-                $"Flash {partition} on {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
-        }
-        catch (OperationCanceledException)
-        {
-            StatusText = LanguageService.Instance.GetString("Flash_Canceled");
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"{LanguageService.Instance.GetString("Flash_Failed")} {partition}: {ex.Message}";
-            LogService.Instance.Write(LogLevel.Error, "FlashService", $"Flash {partition} failed: {ex.Message}");
-        }
-        finally
-        {
-            IsBusy = false;
-        }
-    }
-
-    /// <summary>
-    /// <para>刷写命令是否可执行：未在刷写、已选设备且分区名与镜像路径均已填写。</para>
-    /// Whether the flash command can execute: not already flashing, a device is selected,
-    /// and both the partition name and image path are filled in.
-    /// </summary>
-    private bool CanFlash => !IsBusy
-        && SelectedDevice is not null
-        && !string.IsNullOrWhiteSpace(FlashPartition)
-        && !string.IsNullOrWhiteSpace(FlashImagePath);
-
-    /// <summary>
     /// <para>当需要确认重启操作时引发，由视图处理对话框并将结果写入 TaskCompletionSource。</para>
     /// Raised when a reboot operation needs confirmation; the view handles the dialog
     /// and writes the result to the TaskCompletionSource.
     /// </summary>
     public event EventHandler<(string Mode, string ModeDisplayName, TaskCompletionSource<bool> Confirmation)>? RebootConfirmationRequested;
-
-    /// <summary>
-    /// <para>当需要确认刷写操作时引发，由视图处理对话框并将结果写入 TaskCompletionSource。</para>
-    /// Raised when a flash operation needs confirmation; the view handles the dialog
-    /// and writes the result to the TaskCompletionSource.
-    /// </summary>
-    public event EventHandler<TaskCompletionSource<bool>>? FlashConfirmationRequested;
 
     /// <summary>
     /// <para>取消订阅设备变更事件。</para>
