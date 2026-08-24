@@ -115,11 +115,6 @@ public class NodeDockFactory : Factory
 
         var rootDock = CreateRootDock();
 
-        // 显式启用托管托管模式，避免 ManagedWindowLayer 存在却无 Dock 而触发 #PART_Windows 绑定错误。
-        // Explicitly enable managed hosting so the ManagedWindowLayer is bound to a dock and the
-        // theme's #PART_Windows ItemsSource binding does not log "Value is null".
-        rootDock.FloatingWindowHostMode = DockFloatingWindowHostMode.Managed;
-
         rootDock.IsCollapsable = false;
         rootDock.ActiveDockable = mainLayout;
         rootDock.DefaultDockable = mainLayout;
@@ -151,8 +146,7 @@ public class NodeDockFactory : Factory
 
         HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
         {
-            [nameof(IDockWindow)] = () => new HostWindow(),
-            ["ManagedHostWindow"] = () => new ManagedHostWindow()
+            [nameof(IDockWindow)] = () => new HostWindow()
         };
 
         DefaultHostWindowLocator = () => new HostWindow();

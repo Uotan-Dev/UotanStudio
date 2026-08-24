@@ -6,9 +6,11 @@ using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Areas.Analyzer;
+using UotanStudio.Areas.Device;
 using UotanStudio.Areas.Editor;
 using UotanStudio.Areas.Output;
 using UotanStudio.Areas.ProjectExplorer;
+using UotanStudio.Areas.Properties;
 using UotanStudio.Services;
 
 namespace UotanStudio.Areas.DockControl;
@@ -95,17 +97,6 @@ public class WorkspaceDockFactory : Factory
 
         var rootDock = CreateRootDock();
 
-        // 显式启用托管窗口托管模式：DockControl.EnableManagedWindowLayer 默认为 true，但
-        // DockSettings 默认不启用托管托管。若不设置，ManagedWindowLayer 虽被创建却从未绑定 Dock，
-        // 其主题模板中的 #PART_Windows(ItemsSource=$parent[ManagedWindowLayer].Dock.VisibleDockables)
-        // 会因 Dock 为 null 而输出 "Value is null" 绑定错误。
-        // Explicitly enable managed window hosting: DockControl.EnableManagedWindowLayer defaults to
-        // true, but DockSettings does not enable managed hosting by default. Without this, the
-        // ManagedWindowLayer is created but never given a Dock, so its theme's #PART_Windows
-        // (ItemsSource=$parent[ManagedWindowLayer].Dock.VisibleDockables) logs "Value is null"
-        // binding errors because Dock is null.
-        rootDock.FloatingWindowHostMode = DockFloatingWindowHostMode.Managed;
-
         rootDock.IsCollapsable = false;
         rootDock.ActiveDockable = mainLayout;
         rootDock.DefaultDockable = mainLayout;
@@ -133,6 +124,7 @@ public class WorkspaceDockFactory : Factory
         var editor = new EditorViewModel();
         var analyzer = new AnalyzerViewModel();
         var output = new OutputViewModel();
+        var properties = new PropertiesViewModel();
 
         // 文档上下文：启动时打开两个占位文档，引导用户使用编辑器。
         // Document contexts: open two placeholder documents at startup to guide usage.
@@ -143,16 +135,16 @@ public class WorkspaceDockFactory : Factory
         {
             ["ProjectExplorer"] = () => explorer,
             ["Analyzer"] = () => analyzer,
-            ["Properties"] = () => analyzer,
+            ["Properties"] = () => properties,
             ["Output"] = () => output,
             ["AdbLog"] = () => output,
+            ["Device"] = () => DeviceViewModel.Instance,
             ["Document1"] = () => editor
         };
 
         HostWindowLocator = new Dictionary<string, Func<IHostWindow?>>
         {
-            [nameof(IDockWindow)] = () => new HostWindow(),
-            ["ManagedHostWindow"] = () => new ManagedHostWindow()
+            [nameof(IDockWindow)] = () => new HostWindow()
         };
 
         DefaultHostWindowLocator = () => new HostWindow();
