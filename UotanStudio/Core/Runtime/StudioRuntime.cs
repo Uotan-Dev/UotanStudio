@@ -12,19 +12,30 @@ namespace UotanStudio.Core.Runtime;
 /// logging capabilities to all panels and the node editor, avoiding direct
 /// global-service access from each view model.
 /// </summary>
-public sealed class StudioRuntime
+public sealed class StudioRuntime : IStudioRuntime
 {
     /// <summary>
-    /// <para>获取当前打开的固件工程；未打开时为 null。</para>
-    /// Gets the currently open firmware project; null when none is open.
+    /// <para>获取当前打开的固件工程；未打开时为 null。该值在工程打开/保存时由
+    /// <see cref="FirmwareProjectService"/> 刷新，避免每次访问都从磁盘重载
+    /// （重载含最近工程写盘副作用）。</para>
+    /// Gets the currently open firmware project; null when none is open. The value is
+    /// refreshed by <see cref="FirmwareProjectService"/> when a project is opened or saved,
+    /// avoiding a disk reload on every access (reloads carry a recent-projects write
+    /// side effect).
     /// </summary>
-    public FirmwareProject? CurrentProject => FirmwareProjectService.OpenPath is null ? null : FirmwareProjectService.LoadProject(FirmwareProjectService.OpenPath);
+    public FirmwareProject? CurrentProject => FirmwareProjectService.CurrentProject;
 
     /// <summary>
     /// <para>获取固件操作服务。</para>
     /// Gets the firmware operation service.
     /// </summary>
     public FirmwareService Firmware => FirmwareService.Instance;
+
+    /// <summary>
+    /// <para>获取设备监视服务。</para>
+    /// Gets the device monitor service.
+    /// </summary>
+    public DeviceMonitorService Devices => DeviceMonitorService.Instance;
 
     /// <summary>
     /// <para>获取日志服务。</para>

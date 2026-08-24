@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using UotanStudio.Core.Projects;
 using UotanStudio.Core.Runtime;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
@@ -19,7 +18,7 @@ namespace UotanStudio.Areas.Analyzer;
 /// </summary>
 public partial class AnalyzerViewModel : ViewModelBase
 {
-    private readonly StudioRuntime _runtime = new();
+    private readonly IStudioRuntime _runtime = new StudioRuntime();
 
     /// <summary>
     /// <para>获取工程中的部件文件集合。</para>
@@ -65,9 +64,7 @@ public partial class AnalyzerViewModel : ViewModelBase
     [RelayCommand]
     private async Task ScanAsync()
     {
-        var root = FirmwareProjectService.OpenPath is null
-            ? null
-            : FirmwareProjectService.LoadProject(FirmwareProjectService.OpenPath)?.RootDirectory;
+        var root = _runtime.CurrentProject?.RootDirectory;
         if (string.IsNullOrEmpty(root) || !Directory.Exists(root))
         {
             AnalysisSummary = LanguageService.Instance.GetString("Analyzer_NoProject");
