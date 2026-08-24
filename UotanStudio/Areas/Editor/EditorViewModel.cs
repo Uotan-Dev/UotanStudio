@@ -22,6 +22,13 @@ namespace UotanStudio.Areas.Editor;
 public partial class EditorViewModel : ViewModelBase
 {
     /// <summary>
+    /// <para>获取共享的编辑器视图模型单例，供工作区停靠布局与窗口菜单共用同一文档集合。</para>
+    /// Gets the shared editor view model singleton, used by the workspace dock and the
+    /// window menu to share the same document collection.
+    /// </summary>
+    public static EditorViewModel Instance { get; } = new();
+
+    /// <summary>
     /// <para>获取已打开的文档集合。</para>
     /// Gets the collection of open documents.
     /// </summary>
@@ -177,13 +184,31 @@ public partial class EditorViewModel : ViewModelBase
             return;
         }
 
-        await SaveInternalAsync(doc);
+        if (doc.IsDirty && doc.HasBackingFile)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            CloseDocumentConfirmationRequested?.Invoke(this, (doc, tcs));
+            var confirmed = await tcs.Task;
+            if (!confirmed)
+            {
+                return;
+            }
+            await SaveInternalAsync(doc);
+        }
+
         Documents.Remove(doc);
         if (ReferenceEquals(SelectedDocument, doc))
         {
             SelectedDocument = Documents.Count > 0 ? Documents[0] : null;
         }
     }
+
+    /// <summary>
+    /// <para>当需要确认关闭未保存文档时引发，由视图处理对话框并将结果写入 TaskCompletionSource。</para>
+    /// Raised when closing an unsaved document needs confirmation; the view handles the
+    /// dialog and writes the result to the TaskCompletionSource.
+    /// </summary>
+    public event EventHandler<(OpenDocument Document, TaskCompletionSource<bool> Confirmation)>? CloseDocumentConfirmationRequested;
 }
 
 /// <summary>
@@ -216,6 +241,13 @@ public partial class OpenDocument(string path, string content) : ViewModelBase
 
     /// <summary>显示标题（文件名）。 Display title (file name).</summary>
     public string Title => System.IO.Path.GetFileName(Path);
+
+    /// <summary>
+    /// <para>获取值，指示文档是否有真实文件系统中的后备文件（非占位文档）。</para>
+    /// Gets a value indicating whether the document has a real backing file in the file system
+    /// (not a placeholder document).
+    /// </summary>
+    public bool HasBackingFile => System.IO.Path.IsPathRooted(Path) && System.IO.File.Exists(Path);
 
     /// <summary>
     /// <para>文本内容后备字段。</para>
