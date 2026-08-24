@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Areas.NodeEditor.ViewModels;
+using UotanStudio.Core.Flow;
+using UotanStudio.Core.Projects;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
 
@@ -41,6 +44,24 @@ public partial class NodeEditorViewModel : ViewModelBase
         get;
         set => SetProperty(ref field, value);
     } = [];
+
+    /// <summary>
+    /// <para>获取节点执行日志（每次执行的节点结果与错误记录）。</para>
+    /// Gets the node execution log (per-run node results and error records).
+    /// </summary>
+    public ObservableCollection<string> ExecutionLog { get; } = [];
+
+    private const int MaxExecutionLogEntries = 500;
+    private const string FlowExtension = ".uotflow";
+
+    private void AddExecutionLog(string entry)
+    {
+        ExecutionLog.Add(entry);
+        while (ExecutionLog.Count > MaxExecutionLogEntries)
+        {
+            ExecutionLog.RemoveAt(0);
+        }
+    }
 
     /// <summary>
     /// <para>获取或设置画布的缩放级别。</para>
@@ -136,10 +157,10 @@ public partial class NodeEditorViewModel : ViewModelBase
             LanguageService.Instance.GetString("Node_CatFirmware"),
             NodeCategory.Firmware,
             [
-                new NodeToolboxItem("Unpack Firmware", FirmwareNodeViewModel.CreateUnpackNode),
-                new NodeToolboxItem("Pack Firmware", FirmwareNodeViewModel.CreatePackNode),
-                new NodeToolboxItem("Verify Signature", FirmwareNodeViewModel.CreateVerifyNode),
-                new NodeToolboxItem("Extract Partition", FirmwareNodeViewModel.CreateExtractNode),
+                new NodeToolboxItem(NodeKeys.FirmwareUnpack, FirmwareNodeViewModel.CreateUnpackNode),
+                new NodeToolboxItem(NodeKeys.FirmwarePack, FirmwareNodeViewModel.CreatePackNode),
+                new NodeToolboxItem(NodeKeys.FirmwareVerify, FirmwareNodeViewModel.CreateVerifyNode),
+                new NodeToolboxItem(NodeKeys.FirmwareExtract, FirmwareNodeViewModel.CreateExtractNode),
             ]
         ));
 
@@ -147,10 +168,10 @@ public partial class NodeEditorViewModel : ViewModelBase
             LanguageService.Instance.GetString("Node_CatFlash"),
             NodeCategory.Flash,
             [
-                new NodeToolboxItem("Connect Device", FlashNodeViewModel.CreateConnectNode),
-                new NodeToolboxItem("Flash Partition", FlashNodeViewModel.CreateFlashNode),
-                new NodeToolboxItem("Erase Partition", FlashNodeViewModel.CreateEraseNode),
-                new NodeToolboxItem("Reboot Device", FlashNodeViewModel.CreateRebootNode),
+                new NodeToolboxItem(NodeKeys.FlashConnect, FlashNodeViewModel.CreateConnectNode),
+                new NodeToolboxItem(NodeKeys.FlashPartition, FlashNodeViewModel.CreateFlashNode),
+                new NodeToolboxItem(NodeKeys.FlashErase, FlashNodeViewModel.CreateEraseNode),
+                new NodeToolboxItem(NodeKeys.FlashReboot, FlashNodeViewModel.CreateRebootNode),
             ]
         ));
 
@@ -158,10 +179,10 @@ public partial class NodeEditorViewModel : ViewModelBase
             LanguageService.Instance.GetString("Node_CatData"),
             NodeCategory.Data,
             [
-                new NodeToolboxItem("Read File", DataNodeViewModel.CreateFileReadNode),
-                new NodeToolboxItem("Format Convert", DataNodeViewModel.CreateConvertNode),
-                new NodeToolboxItem("Checksum", DataNodeViewModel.CreateChecksumNode),
-                new NodeToolboxItem("Compare", DataNodeViewModel.CreateCompareNode),
+                new NodeToolboxItem(NodeKeys.DataReadFile, DataNodeViewModel.CreateFileReadNode),
+                new NodeToolboxItem(NodeKeys.DataConvert, DataNodeViewModel.CreateConvertNode),
+                new NodeToolboxItem(NodeKeys.DataChecksum, DataNodeViewModel.CreateChecksumNode),
+                new NodeToolboxItem(NodeKeys.DataCompare, DataNodeViewModel.CreateCompareNode),
             ]
         ));
 
@@ -169,9 +190,9 @@ public partial class NodeEditorViewModel : ViewModelBase
             LanguageService.Instance.GetString("Node_CatFlow"),
             NodeCategory.Flow,
             [
-                new NodeToolboxItem("If Branch", FlowControlNodeViewModel.CreateIfNode),
-                new NodeToolboxItem("Loop", FlowControlNodeViewModel.CreateLoopNode),
-                new NodeToolboxItem("Wait", FlowControlNodeViewModel.CreateWaitNode),
+                new NodeToolboxItem(NodeKeys.FlowIf, FlowControlNodeViewModel.CreateIfNode),
+                new NodeToolboxItem(NodeKeys.FlowLoop, FlowControlNodeViewModel.CreateLoopNode),
+                new NodeToolboxItem(NodeKeys.FlowWait, FlowControlNodeViewModel.CreateWaitNode),
             ]
         ));
 
@@ -179,9 +200,9 @@ public partial class NodeEditorViewModel : ViewModelBase
             LanguageService.Instance.GetString("Node_CatOutput"),
             NodeCategory.Output,
             [
-                new NodeToolboxItem("Log Output", OutputNodeViewModel.CreateLogNode),
-                new NodeToolboxItem("Progress Report", OutputNodeViewModel.CreateProgressNode),
-                new NodeToolboxItem("Save Result", OutputNodeViewModel.CreateSaveNode),
+                new NodeToolboxItem(NodeKeys.OutputLog, OutputNodeViewModel.CreateLogNode),
+                new NodeToolboxItem(NodeKeys.OutputProgress, OutputNodeViewModel.CreateProgressNode),
+                new NodeToolboxItem(NodeKeys.OutputSave, OutputNodeViewModel.CreateSaveNode),
             ]
         ));
     }
@@ -508,6 +529,7 @@ public partial class NodeEditorViewModel : ViewModelBase
         Nodes.Clear();
         SelectedNode = null;
         _pendingSource = null;
+        ExecutionLog.Clear();
         ExecutionStatus = LanguageService.Instance.GetString("Node_StatusReady");
     }
 
@@ -524,8 +546,11 @@ public partial class NodeEditorViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>异步运行节点流程。按拓扑顺序依次执行各节点，并更新执行状态。</para>
-    /// Asynchronously runs the node flow, executing each node in topological order and updating the execution status.
+    /// <para>异步运行节点流程。按拓扑顺序依次执行各节点；节点失败时暂停后续执行，
+    /// If 分支节点按输入值选择继续执行的分支，结果写入执行日志。</para>
+    /// Asynchronously runs the node flow, executing each node in topological order; pauses on
+    /// node failure, follows the branch selected by an If node's input value, and writes results
+    /// to the execution log.
     /// </summary>
     [RelayCommand]
     private async Task RunAsync()
@@ -549,91 +574,96 @@ public partial class NodeEditorViewModel : ViewModelBase
             LogService.Instance.Write(LogLevel.Info, "NodeRunner",
                 $"Flow run started: {ordered.Count} node(s) scheduled.");
 
+            var failed = false;
+            var skippedNodes = new HashSet<FlowNodeViewModel>();
+
             foreach (var node in ordered)
             {
                 ct.ThrowIfCancellationRequested();
+
+                // 条件分支中未选中的下游节点直接跳过
+                if (skippedNodes.Contains(node))
+                {
+                    AddExecutionLog($"[SKIP] {node.Title}");
+                    LogService.Instance.Write(LogLevel.Debug, "NodeRunner", $"Skipped node '{node.Title}' (inactive branch).");
+                    continue;
+                }
+
                 // 在执行前，把上游 Output 端口的 Value 同步到本节点 Input 端口的 Value
                 SyncUpstreamValues(node);
                 ExecutionStatus = $"{node.Title}...";
                 LogService.Instance.Write(LogLevel.Debug, "NodeRunner", $"Executing node '{node.Title}'...");
 
-                // 固件节点接入 FirmwareService 真实后端执行
-                if (node is FirmwareNodeViewModel fwNode)
+                string status;
+                try
                 {
-                    var firmwarePath = GetInputValue(node, 0);
-                    var outputDir = GetInputValue(node, 1);
-                    var partitionName = GetInputValue(node, 2);
-                    var status = await fwNode.ExecuteAsync(firmwarePath, outputDir, partitionName, ct).ConfigureAwait(false);
-                    ExecutionStatus = status;
+                    status = await ExecuteNodeAsync(node, ct);
                 }
-                // 烧录节点接入 FirmwareKit.Comm.Fastboot 真实刷写/擦除/重启
-                else if (node is FlashNodeViewModel flashNode)
+                catch (OperationCanceledException)
                 {
-                    var devicePath = GetInputValue(node, 0);
-                    var partition = GetInputValue(node, 1);
-                    var imagePath = GetInputValue(node, 2);
-                    var status = await flashNode.ExecuteAsync(devicePath, partition, imagePath, ct).ConfigureAwait(false);
-                    ExecutionStatus = status;
+                    throw;
                 }
-                // 数据处理节点：Read File / Format Convert / Checksum / Compare
-                else if (node is DataNodeViewModel dataNode)
+                catch (Exception ex)
                 {
-                    var pathOrInput = GetInputValue(node, 0);
-                    var formatOrAlgorithm = GetInputValue(node, 1);
-                    // Compare 节点的 Data B 通常在 Input[1]，但工具箱中 Data A=Input[0], Data B=Input[1]
-                    // 这里统一按位置取，ExecuteAsync 内部按 Title 解释
-                    var dataB = GetInputValue(node, 1);
-                    var status = await dataNode.ExecuteAsync(pathOrInput, formatOrAlgorithm, dataB, ct).ConfigureAwait(false);
-                    ExecutionStatus = status;
+                    status = $"[{node.Title}] FAIL: {ex.Message}";
                 }
-                // 流程控制节点：If Branch / Loop / Wait
-                else if (node is FlowControlNodeViewModel flowNode)
+
+                ExecutionStatus = status;
+                AddExecutionLog(status);
+
+                // 按节点结果摘要写入统一日志（失败视为错误级别）
+                if (!string.IsNullOrEmpty(status))
                 {
-                    var conditionOrCountOrDelay = GetInputValue(node, 0);
-                    var status = await flowNode.ExecuteAsync(conditionOrCountOrDelay, ct).ConfigureAwait(false);
-                    ExecutionStatus = status;
+                    if (IsFailureStatus(status))
+                    {
+                        LogService.Instance.Write(LogLevel.Error, "NodeRunner", status);
+                    }
+                    else
+                    {
+                        LogService.Instance.Write(LogLevel.Info, "NodeRunner", status);
+                    }
                 }
-                // 输出节点：Log Output / Progress Report / Save Result
-                else if (node is OutputNodeViewModel outputNode)
+
+                // FlowControl 条件分支：If 节点执行后，只继续执行选中输出分支的下游节点
+                if (node is FlowControlNodeViewModel flowControl && flowControl.Key == NodeKeys.FlowIf)
                 {
-                    var messageOrData = GetInputValue(node, 0);
-                    var levelOrStatusOrPath = GetInputValue(node, 1);
-                    var status = await outputNode.ExecuteAsync(messageOrData, levelOrStatusOrPath, ct).ConfigureAwait(false);
-                    ExecutionStatus = status;
+                    foreach (var skipped in ComputeSkippedBranches(flowControl, Connections))
+                    {
+                        skippedNodes.Add(skipped);
+                    }
                 }
-                else
+
+                // 失败暂停：节点失败立即停止后续节点执行
+                if (IsFailureStatus(status))
                 {
-                    await Task.Delay(300, ct).ConfigureAwait(false);
+                    failed = true;
+                    break;
                 }
 
                 // 节点执行完毕后，将其 Output 端口的 Value 同步到下游节点（通过连接传播）
                 PropagateOutputsToDownstream(node);
-
-                // 按节点结果摘要写入统一日志（FAIL 视为错误级别）
-                if (!string.IsNullOrEmpty(ExecutionStatus))
-                {
-                    if (ExecutionStatus.Contains("FAIL", StringComparison.OrdinalIgnoreCase))
-                    {
-                        LogService.Instance.Write(LogLevel.Error, "NodeRunner", ExecutionStatus);
-                    }
-                    else
-                    {
-                        LogService.Instance.Write(LogLevel.Info, "NodeRunner", ExecutionStatus);
-                    }
-                }
             }
 
-            ExecutionStatus = LanguageService.Instance.GetString("Node_StatusCompleted");
-            LogService.Instance.Write(LogLevel.Info, "NodeRunner", "Flow run completed.");
+            if (failed)
+            {
+                AddExecutionLog(LanguageService.Instance.GetString("Node_FlowRunFailed"));
+            }
+            else
+            {
+                ExecutionStatus = LanguageService.Instance.GetString("Node_StatusCompleted");
+                LogService.Instance.Write(LogLevel.Info, "NodeRunner", "Flow run completed.");
+            }
         }
         catch (OperationCanceledException)
         {
             ExecutionStatus = LanguageService.Instance.GetString("Node_StatusStopped");
+            AddExecutionLog(ExecutionStatus);
             LogService.Instance.Write(LogLevel.Warn, "NodeRunner", "Flow run cancelled.");
         }
         catch (Exception ex)
         {
             ExecutionStatus = ex.Message;
+            AddExecutionLog(ex.Message);
             LogService.Instance.Write(LogLevel.Error, "NodeRunner", $"Flow run failed: {ex.Message}");
             throw;
         }
@@ -641,6 +671,123 @@ public partial class NodeEditorViewModel : ViewModelBase
         {
             IsRunning = false;
         }
+    }
+
+    /// <summary>
+    /// <para>按节点类型分派执行，返回执行结果摘要文本。</para>
+    /// Dispatches execution by node type and returns the execution result summary.
+    /// </summary>
+    private async Task<string> ExecuteNodeAsync(FlowNodeViewModel node, CancellationToken ct)
+    {
+        // 固件节点接入 FirmwareService 真实后端执行
+        if (node is FirmwareNodeViewModel fwNode)
+        {
+            return await fwNode.ExecuteAsync(GetInputValue(node, 0), GetInputValue(node, 1), GetInputValue(node, 2), ct).ConfigureAwait(false);
+        }
+
+        // 烧录节点接入 FirmwareKit.Comm.Fastboot 真实刷写/擦除/重启
+        if (node is FlashNodeViewModel flashNode)
+        {
+            return await flashNode.ExecuteAsync(GetInputValue(node, 0), GetInputValue(node, 1), GetInputValue(node, 2), ct).ConfigureAwait(false);
+        }
+
+        // 数据处理节点：Read File / Format Convert / Checksum / Compare
+        if (node is DataNodeViewModel dataNode)
+        {
+            // Compare 节点的 Data A=Input[0]、Data B=Input[1]，统一按位置取，ExecuteAsync 内部按固定键解释
+            return await dataNode.ExecuteAsync(GetInputValue(node, 0), GetInputValue(node, 1), GetInputValue(node, 1), ct).ConfigureAwait(false);
+        }
+
+        // 流程控制节点：If Branch / Loop / Wait
+        if (node is FlowControlNodeViewModel flowNode)
+        {
+            return await flowNode.ExecuteAsync(GetInputValue(node, 0), ct).ConfigureAwait(false);
+        }
+
+        // 输出节点：Log Output / Progress Report / Save Result
+        if (node is OutputNodeViewModel outputNode)
+        {
+            return await outputNode.ExecuteAsync(GetInputValue(node, 0), GetInputValue(node, 1), ct).ConfigureAwait(false);
+        }
+
+        await Task.Delay(300, ct).ConfigureAwait(false);
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// <para>判断节点结果摘要是否为失败（含 FAIL 或 Error: 前缀）。</para>
+    /// Determines whether a node result summary indicates failure (contains FAIL or an Error: prefix).
+    /// </summary>
+    private static bool IsFailureStatus(string status) =>
+        status.Contains("FAIL", StringComparison.OrdinalIgnoreCase)
+        || status.StartsWith("Error:", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <para>计算 If 分支节点未选中输出分支的下游节点集合（同时被选中分支覆盖的节点除外）。</para>
+    /// Computes the set of downstream nodes of an If node's inactive output branches
+    /// (excluding nodes also reachable through the active branch).
+    /// </summary>
+    private static HashSet<FlowNodeViewModel> ComputeSkippedBranches(FlowNodeViewModel ifNode, IEnumerable<NodeConnectionViewModel> connections)
+    {
+        var active = new HashSet<FlowNodeViewModel>();
+        var inactive = new HashSet<FlowNodeViewModel>();
+        foreach (var output in ifNode.Output)
+        {
+            var reachable = CollectReachableDownstream(output, connections);
+            if (string.Equals(output.Value, "1", StringComparison.Ordinal))
+            {
+                active.UnionWith(reachable);
+            }
+            else
+            {
+                inactive.UnionWith(reachable);
+            }
+        }
+
+        inactive.ExceptWith(active);
+        return inactive;
+    }
+
+    /// <summary>
+    /// <para>从指定输出端口沿连接方向收集所有可达的下游节点。</para>
+    /// Collects all downstream nodes reachable from the specified output connector following connection direction.
+    /// </summary>
+    private static HashSet<FlowNodeViewModel> CollectReachableDownstream(NodeConnectorViewModel start, IEnumerable<NodeConnectionViewModel> connections)
+    {
+        var result = new HashSet<FlowNodeViewModel>();
+        var visited = new HashSet<NodeConnectorViewModel>();
+        var queue = new Queue<NodeConnectorViewModel>();
+        queue.Enqueue(start);
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (!visited.Add(current))
+            {
+                continue;
+            }
+
+            foreach (var connection in connections)
+            {
+                if (connection.Source != current)
+                {
+                    continue;
+                }
+
+                var targetNode = connection.Target?.Node;
+                if (targetNode is null)
+                {
+                    continue;
+                }
+
+                result.Add(targetNode);
+                foreach (var output in targetNode.Output)
+                {
+                    queue.Enqueue(output);
+                }
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -704,6 +851,257 @@ public partial class NodeEditorViewModel : ViewModelBase
     /// </summary>
     [RelayCommand]
     private void Stop() => _runCts?.Cancel();
+
+    /// <summary>
+    /// <para>将当前画布保存为 .uotflow 流程文件（保存到当前工程目录，未打开工程时提示）。</para>
+    /// Saves the current canvas as a .uotflow flow file (saved to the current project
+    /// directory; prompts when no project is open).
+    /// </summary>
+    [RelayCommand]
+    private async Task SaveFlowAsync()
+    {
+        if (!TryGetFlowPath(out var path))
+        {
+            return;
+        }
+
+        try
+        {
+            var json = FlowSerializer.Serialize(BuildFlowDocument());
+            await File.WriteAllTextAsync(path, json);
+            var message = LanguageService.Instance.GetString("Node_FlowSaved", path);
+            ExecutionStatus = message;
+            AddExecutionLog(message);
+            LogService.Instance.Write(LogLevel.Info, "NodeEditor", message);
+        }
+        catch (Exception ex)
+        {
+            var message = $"{LanguageService.Instance.GetString("Node_FlowSaveFailed")}: {ex.Message}";
+            ExecutionStatus = message;
+            AddExecutionLog(message);
+            LogService.Instance.Write(LogLevel.Error, "NodeEditor", message);
+        }
+    }
+
+    /// <summary>
+    /// <para>从当前工程目录加载 .uotflow 流程文件并重建画布（未打开工程或文件缺失时提示）。</para>
+    /// Loads a .uotflow flow file from the current project directory and rebuilds the canvas
+    /// (prompts when no project is open or the file is missing).
+    /// </summary>
+    [RelayCommand]
+    private async Task LoadFlowAsync()
+    {
+        if (!TryGetFlowPath(out var path))
+        {
+            return;
+        }
+
+        if (!File.Exists(path))
+        {
+            var notFound = LanguageService.Instance.GetString("Node_FlowNotFound", path);
+            ExecutionStatus = notFound;
+            LogService.Instance.Write(LogLevel.Warn, "NodeEditor", notFound);
+            return;
+        }
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(path);
+            var document = FlowSerializer.Deserialize(json);
+            if (document is null)
+            {
+                var failed = LanguageService.Instance.GetString("Node_FlowLoadFailed");
+                ExecutionStatus = failed;
+                LogService.Instance.Write(LogLevel.Error, "NodeEditor", failed);
+                return;
+            }
+
+            LoadFlowDocument(document);
+            var message = LanguageService.Instance.GetString("Node_FlowLoaded", path);
+            ExecutionStatus = message;
+            AddExecutionLog(message);
+            LogService.Instance.Write(LogLevel.Info, "NodeEditor", message);
+        }
+        catch (Exception ex)
+        {
+            var message = $"{LanguageService.Instance.GetString("Node_FlowLoadFailed")}: {ex.Message}";
+            ExecutionStatus = message;
+            AddExecutionLog(message);
+            LogService.Instance.Write(LogLevel.Error, "NodeEditor", message);
+        }
+    }
+
+    /// <summary>
+    /// <para>从当前打开的工程路径推导 .uotflow 文件路径；未打开工程时提示并返回 false。</para>
+    /// Derives the .uotflow file path from the currently open project path; prompts and
+    /// returns false when no project is open.
+    /// </summary>
+    private bool TryGetFlowPath(out string path)
+    {
+        var openPath = FirmwareProjectService.OpenPath;
+        var directory = string.IsNullOrEmpty(openPath) ? null : Path.GetDirectoryName(openPath);
+        if (string.IsNullOrEmpty(openPath) || string.IsNullOrEmpty(directory))
+        {
+            var message = LanguageService.Instance.GetString("Node_FlowNoProject");
+            ExecutionStatus = message;
+            LogService.Instance.Write(LogLevel.Warn, "NodeEditor", message);
+            path = string.Empty;
+            return false;
+        }
+
+        path = Path.Combine(directory, Path.GetFileNameWithoutExtension(openPath) + FlowExtension);
+        return true;
+    }
+
+    /// <summary>
+    /// <para>将当前画布节点与连接转换为可序列化的流程文档。</para>
+    /// Converts the current canvas nodes and connections into a serializable flow document.
+    /// </summary>
+    private FlowDocumentDto BuildFlowDocument()
+    {
+        var nodeDtos = new List<FlowNodeDto>(Nodes.Count);
+        var idMap = new Dictionary<FlowNodeViewModel, string>(Nodes.Count);
+        foreach (var node in Nodes)
+        {
+            var id = node.Id.ToString("N");
+            idMap[node] = id;
+            nodeDtos.Add(new FlowNodeDto
+            {
+                Id = id,
+                Title = node.Title,
+                NodeCategory = node.Category,
+                X = node.Location.X,
+                Y = node.Location.Y,
+                InputValues = [.. node.Input.Select(connector => connector.Value ?? string.Empty)]
+            });
+        }
+
+        var connectionDtos = new List<FlowConnectionDto>(Connections.Count);
+        foreach (var connection in Connections)
+        {
+            var source = connection.Source;
+            var target = connection.Target;
+            if (source?.Node is null || target?.Node is null
+                || !idMap.TryGetValue(source.Node, out var sourceId)
+                || !idMap.TryGetValue(target.Node, out var targetId))
+            {
+                continue;
+            }
+
+            connectionDtos.Add(new FlowConnectionDto
+            {
+                SourceNodeId = sourceId,
+                SourcePort = source.Node.Output.IndexOf(source),
+                TargetNodeId = targetId,
+                TargetPort = target.Node.Input.IndexOf(target)
+            });
+        }
+
+        return new FlowDocumentDto { Nodes = nodeDtos, Connections = connectionDtos };
+    }
+
+    /// <summary>
+    /// <para>用流程文档重建画布：清空现有内容，按 NodeCategory+标题映射到节点工厂方法创建节点，再重建连接。</para>
+    /// Rebuilds the canvas from a flow document: clears the current content, maps each node back
+    /// to its factory method by NodeCategory + title, and recreates the connections.
+    /// </summary>
+    private void LoadFlowDocument(FlowDocumentDto document)
+    {
+        foreach (var node in Nodes)
+        {
+            node.NodeConnections.Clear();
+        }
+
+        Connections.Clear();
+        Nodes.Clear();
+        SelectedNode = null;
+        _pendingSource = null;
+        ExecutionLog.Clear();
+
+        var created = new Dictionary<string, FlowNodeViewModel>();
+        foreach (var dto in document.Nodes)
+        {
+            if (string.IsNullOrEmpty(dto.Id))
+            {
+                LogService.Instance.Write(LogLevel.Warn, "NodeEditor", "Flow load: node skipped (missing id).");
+                continue;
+            }
+
+            var node = CreateNodeFromDto(dto);
+            if (node is null)
+            {
+                LogService.Instance.Write(LogLevel.Warn, "NodeEditor",
+                    $"Flow load: unknown node skipped ({dto.NodeCategory}: {dto.Title}).");
+                continue;
+            }
+
+            if (Guid.TryParse(dto.Id, out var id))
+            {
+                node.Id = id;
+            }
+
+            node.Location = new Point(dto.X, dto.Y);
+            var inputs = dto.InputValues;
+            if (inputs is not null)
+            {
+                for (var i = 0; i < inputs.Count && i < node.Input.Count; i++)
+                {
+                    node.Input[i].Value = inputs[i];
+                }
+            }
+
+            created[dto.Id] = node;
+            Nodes.Add(node);
+        }
+
+        foreach (var dto in document.Connections)
+        {
+            if (string.IsNullOrEmpty(dto.SourceNodeId) || string.IsNullOrEmpty(dto.TargetNodeId))
+            {
+                continue;
+            }
+
+            if (!created.TryGetValue(dto.SourceNodeId, out var sourceNode)
+                || !created.TryGetValue(dto.TargetNodeId, out var targetNode))
+            {
+                continue;
+            }
+
+            if (dto.SourcePort < 0 || dto.SourcePort >= sourceNode.Output.Count
+                || dto.TargetPort < 0 || dto.TargetPort >= targetNode.Input.Count)
+            {
+                continue;
+            }
+
+            CreateConnection(sourceNode.Output[dto.SourcePort], targetNode.Input[dto.TargetPort]);
+        }
+    }
+
+    /// <summary>
+    /// <para>按节点类别与标题在工具箱中查找对应模板，并调用工厂方法创建节点；未匹配时返回 null。</para>
+    /// Looks up the toolbox template matching the node category and title, and creates the node
+    /// via its factory method; returns null when nothing matches.
+    /// </summary>
+    private FlowNodeViewModel? CreateNodeFromDto(FlowNodeDto dto)
+    {
+        foreach (var category in ToolboxCategories)
+        {
+            if (category.Category != dto.NodeCategory)
+            {
+                continue;
+            }
+
+            foreach (var item in category.Items)
+            {
+                if (string.Equals(item.Name, dto.Title, StringComparison.Ordinal))
+                {
+                    return item.CreateNode();
+                }
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// <para>对节点进行拓扑排序，基于连接的依赖关系。</para>
@@ -804,25 +1202,31 @@ public class NodeToolboxCategory(string name, NodeCategory category, ObservableC
 /// Node toolbox item, representing a node template in the toolbox that can be added to the canvas.
 /// </summary>
 /// <remarks>
-/// <para>创建工具箱项。</para>
-/// Creates a toolbox item.
+/// <para>使用固定键创建工具箱项，显示名称按键本地化。</para>
+/// Creates a toolbox item from a fixed key; the display name is localized by the key.
 /// </remarks>
-/// <param name="name">
-/// <para>节点项名称。</para>
-/// The node item name.
+/// <param name="key">
+/// <para>节点固定键（本地化资源键）。</para>
+/// The fixed key of the node (localization resource key).
 /// </param>
 /// <param name="createNode">
 /// <para>创建节点实例的工厂方法。</para>
 /// The factory method to create a node instance.
 /// </param>
-public class NodeToolboxItem(string name, Func<FlowNodeViewModel> createNode) : ViewModelBase
+public class NodeToolboxItem(string key, Func<FlowNodeViewModel> createNode) : ViewModelBase
 {
 
     /// <summary>
-    /// <para>获取节点项名称。</para>
-    /// Gets the node item name.
+    /// <para>获取节点固定键（本地化资源键）。</para>
+    /// Gets the fixed key of the node (localization resource key).
     /// </summary>
-    public string Name { get; } = name;
+    public string Key { get; } = key;
+
+    /// <summary>
+    /// <para>获取节点项名称（按键本地化）。</para>
+    /// Gets the node item name (localized by the key).
+    /// </summary>
+    public string Name { get; } = LanguageService.Instance.GetString(key);
 
     /// <summary>
     /// <para>获取创建节点实例的工厂方法。</para>

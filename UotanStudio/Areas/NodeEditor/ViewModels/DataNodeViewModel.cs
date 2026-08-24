@@ -14,19 +14,18 @@ namespace UotanStudio.Areas.NodeEditor.ViewModels;
 /// Execution logic connects to SHA256 verification via FirmwareService; Read/Compare directly call system file APIs.
 /// </summary>
 /// <remarks>
-/// <para>创建具有指定标题的数据处理节点。</para>
-/// Creates a data processing node with the specified title.
+/// <para>创建具有指定固定键的数据处理节点，显示标题按键本地化。</para>
+/// Creates a data processing node with the specified fixed key; the display title is localized by the key.
 /// </remarks>
-/// <param name="title">
-/// <para>节点的显示标题。</para>
-/// The display title of the node.
+/// <param name="key">
+/// <para>节点的固定键（本地化资源键）。</para>
+/// The fixed key of the node (localization resource key).
 /// </param>
-public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCategory.Data)
+public class DataNodeViewModel(string key) : FlowNodeViewModel(LanguageService.Instance.GetString(key), NodeCategory.Data, key)
 {
-
     /// <summary>
-    /// <para>执行该数据节点的真实操作，依据节点标题分派到对应文件/校验/比较逻辑。</para>
-    /// Executes the real operation of this data node, dispatching to file/checksum/compare logic based on the node title.
+    /// <para>执行该数据节点的真实操作，依据节点固定键分派到对应文件/校验/比较逻辑。</para>
+    /// Executes the real operation of this data node, dispatching to file/checksum/compare logic based on the node key.
     /// </summary>
     /// <param name="pathOrInput">文件路径（Read File / Checksum / Compare 的 Data A）或输入数据（Convert）。</param>
     /// <param name="formatOrAlgorithm">格式（Convert）或算法（Checksum，留空则 SHA256）。</param>
@@ -37,9 +36,9 @@ public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCate
     {
         try
         {
-            switch (Title)
+            switch (Key)
             {
-                case "Read File":
+                case NodeKeys.DataReadFile:
                     {
                         if (string.IsNullOrEmpty(pathOrInput))
                         {
@@ -60,7 +59,7 @@ public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCate
 
                         return summary;
                     }
-                case "Format Convert":
+                case NodeKeys.DataConvert:
                     {
                         if (Output.Count > 0)
                         {
@@ -69,7 +68,7 @@ public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCate
 
                         return "[Format Convert] WAIT: format conversion backend not yet implemented.";
                     }
-                case "Checksum":
+                case NodeKeys.DataChecksum:
                     {
                         if (string.IsNullOrEmpty(pathOrInput))
                         {
@@ -85,7 +84,7 @@ public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCate
 
                         return summary;
                     }
-                case "Compare":
+                case NodeKeys.DataCompare:
                     {
                         if (string.IsNullOrEmpty(pathOrInput) || string.IsNullOrEmpty(dataB))
                         {
@@ -123,7 +122,7 @@ public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCate
     /// </summary>
     public static DataNodeViewModel CreateFileReadNode()
     {
-        var node = new DataNodeViewModel("Read File")
+        var node = new DataNodeViewModel(NodeKeys.DataReadFile)
         {
             Location = new Point(100, 100)
         };
@@ -138,7 +137,7 @@ public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCate
     /// </summary>
     public static DataNodeViewModel CreateConvertNode()
     {
-        var node = new DataNodeViewModel("Format Convert")
+        var node = new DataNodeViewModel(NodeKeys.DataConvert)
         {
             Location = new Point(100, 100)
         };
@@ -154,7 +153,7 @@ public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCate
     /// </summary>
     public static DataNodeViewModel CreateChecksumNode()
     {
-        var node = new DataNodeViewModel("Checksum")
+        var node = new DataNodeViewModel(NodeKeys.DataChecksum)
         {
             Location = new Point(100, 100)
         };
@@ -170,7 +169,7 @@ public class DataNodeViewModel(string title) : FlowNodeViewModel(title, NodeCate
     /// </summary>
     public static DataNodeViewModel CreateCompareNode()
     {
-        var node = new DataNodeViewModel("Compare")
+        var node = new DataNodeViewModel(NodeKeys.DataCompare)
         {
             Location = new Point(100, 100)
         };

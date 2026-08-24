@@ -8,23 +8,20 @@ namespace UotanStudio.Areas.NodeEditor.ViewModels;
 /// <summary>
 /// <para>输出节点视图模型，提供日志输出、进度报告和结果保存功能。</para>
 /// Output node view model, providing log output, progress report, and result saving capabilities.
-/// <para>可选通过构造函数注入 <see cref="LogViewModel"/>，运行时将日志写入面板。</para>
-/// Optionally injects a <see cref="LogViewModel"/> via the constructor; runtime writes logs to the panel.
 /// </summary>
 /// <remarks>
-/// <para>创建具有指定标题的输出节点。</para>
-/// Creates an output node with the specified title.
+/// <para>创建具有指定固定键的输出节点，显示标题按键本地化。</para>
+/// Creates an output node with the specified fixed key; the display title is localized by the key.
 /// </remarks>
-/// <param name="title">
-/// <para>节点的显示标题。</para>
-/// The display title of the node.
+/// <param name="key">
+/// <para>节点的固定键（本地化资源键）。</para>
+/// The fixed key of the node (localization resource key).
 /// </param>
-public class OutputNodeViewModel(string title) : FlowNodeViewModel(title, NodeCategory.Output)
+public class OutputNodeViewModel(string key) : FlowNodeViewModel(LanguageService.Instance.GetString(key), NodeCategory.Output, key)
 {
-
     /// <summary>
-    /// <para>执行该输出节点的真实操作，依据节点标题分派到 Log/Progress/Save 逻辑。</para>
-    /// Executes the real operation of this output node, dispatching to Log/Progress/Save logic based on the node title.
+    /// <para>执行该输出节点的真实操作，依据节点固定键分派到 Log/Progress/Save 逻辑。</para>
+    /// Executes the real operation of this output node, dispatching to Log/Progress/Save logic based on the node key.
     /// </summary>
     /// <param name="messageOrData">日志消息（Log）、进度数值（Progress）或结果数据（Save）。</param>
     /// <param name="levelOrStatusOrPath">日志级别（Log）、状态文本（Progress）或保存路径（Save）。</param>
@@ -32,21 +29,21 @@ public class OutputNodeViewModel(string title) : FlowNodeViewModel(title, NodeCa
     /// <returns>执行结果摘要文本。</returns>
     public async Task<string> ExecuteAsync(string messageOrData, string levelOrStatusOrPath, CancellationToken cancellationToken)
     {
-        switch (Title)
+        switch (Key)
         {
-            case "Log Output":
+            case NodeKeys.OutputLog:
                 {
                     var level = string.IsNullOrEmpty(levelOrStatusOrPath) ? "INFO" : levelOrStatusOrPath.ToUpperInvariant();
                     AppendLog(level, "Node", messageOrData ?? string.Empty);
                     return $"[Log Output] OK: {messageOrData}";
                 }
-            case "Progress Report":
+            case NodeKeys.OutputProgress:
                 {
                     var status = string.IsNullOrEmpty(levelOrStatusOrPath) ? "running" : levelOrStatusOrPath;
                     AppendLog("INFO", "Progress", $"{messageOrData}% — {status}");
                     return $"[Progress Report] OK: {messageOrData}% ({status})";
                 }
-            case "Save Result":
+            case NodeKeys.OutputSave:
                 {
                     var path = levelOrStatusOrPath;
                     if (string.IsNullOrEmpty(path))
@@ -87,7 +84,7 @@ public class OutputNodeViewModel(string title) : FlowNodeViewModel(title, NodeCa
     /// </summary>
     public static OutputNodeViewModel CreateLogNode()
     {
-        var node = new OutputNodeViewModel("Log Output")
+        var node = new OutputNodeViewModel(NodeKeys.OutputLog)
         {
             Location = new Point(100, 100)
         };
@@ -102,7 +99,7 @@ public class OutputNodeViewModel(string title) : FlowNodeViewModel(title, NodeCa
     /// </summary>
     public static OutputNodeViewModel CreateProgressNode()
     {
-        var node = new OutputNodeViewModel("Progress Report")
+        var node = new OutputNodeViewModel(NodeKeys.OutputProgress)
         {
             Location = new Point(100, 100)
         };
@@ -117,7 +114,7 @@ public class OutputNodeViewModel(string title) : FlowNodeViewModel(title, NodeCa
     /// </summary>
     public static OutputNodeViewModel CreateSaveNode()
     {
-        var node = new OutputNodeViewModel("Save Result")
+        var node = new OutputNodeViewModel(NodeKeys.OutputSave)
         {
             Location = new Point(100, 100)
         };

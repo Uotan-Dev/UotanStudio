@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using UotanStudio.Services;
 
 namespace UotanStudio.Areas.NodeEditor.ViewModels;
 
@@ -9,12 +10,19 @@ namespace UotanStudio.Areas.NodeEditor.ViewModels;
 /// <para>流程控制节点视图模型，提供条件分支、循环和等待功能。</para>
 /// Flow control node view model, providing conditional branch, loop, and wait capabilities.
 /// </summary>
-public class FlowControlNodeViewModel(string title) : FlowNodeViewModel(title, NodeCategory.Flow)
+/// <remarks>
+/// <para>创建具有指定固定键的流程控制节点，显示标题按键本地化。</para>
+/// Creates a flow control node with the specified fixed key; the display title is localized by the key.
+/// </remarks>
+/// <param name="key">
+/// <para>节点的固定键（本地化资源键）。</para>
+/// The fixed key of the node (localization resource key).
+/// </param>
+public class FlowControlNodeViewModel(string key) : FlowNodeViewModel(LanguageService.Instance.GetString(key), NodeCategory.Flow, key)
 {
-
     /// <summary>
-    /// <para>执行该流程控制节点的真实操作，依据节点标题分派到 If/Loop/Wait 逻辑。</para>
-    /// Executes the real operation of this flow control node, dispatching to If/Loop/Wait logic based on the node title.
+    /// <para>执行该流程控制节点的真实操作，依据节点固定键分派到 If/Loop/Wait 逻辑。</para>
+    /// Executes the real operation of this flow control node, dispatching to If/Loop/Wait logic based on the node key.
     /// </summary>
     /// <param name="conditionOrCountOrDelay">条件值（If）、循环次数（Loop）或等待毫秒（Wait）。</param>
     /// <param name="cancellationToken">取消令牌。</param>
@@ -23,9 +31,9 @@ public class FlowControlNodeViewModel(string title) : FlowNodeViewModel(title, N
     {
         try
         {
-            switch (Title)
+            switch (Key)
             {
-                case "If Branch":
+                case NodeKeys.FlowIf:
                     {
                         var cond = (conditionOrCountOrDelay ?? string.Empty).Trim();
                         var isTrue = cond.Length > 0 &&
@@ -37,7 +45,7 @@ public class FlowControlNodeViewModel(string title) : FlowNodeViewModel(title, N
                         }
                         return isTrue ? "[If Branch] OK: condition is TRUE." : "[If Branch] OK: condition is FALSE.";
                     }
-                case "Loop":
+                case NodeKeys.FlowLoop:
                     {
                         if (!int.TryParse(conditionOrCountOrDelay, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) || count < 0)
                         {
@@ -56,7 +64,7 @@ public class FlowControlNodeViewModel(string title) : FlowNodeViewModel(title, N
                         }
                         return $"[Loop] OK: iterated {count} times.";
                     }
-                case "Wait":
+                case NodeKeys.FlowWait:
                     {
                         if (!int.TryParse(conditionOrCountOrDelay, NumberStyles.Integer, CultureInfo.InvariantCulture, out var delayMs) || delayMs < 0)
                         {
@@ -88,7 +96,7 @@ public class FlowControlNodeViewModel(string title) : FlowNodeViewModel(title, N
     /// <summary>创建默认的条件分支节点。</summary>
     public static FlowControlNodeViewModel CreateIfNode()
     {
-        var node = new FlowControlNodeViewModel("If Branch")
+        var node = new FlowControlNodeViewModel(NodeKeys.FlowIf)
         {
             Location = new Point(100, 100)
         };
@@ -101,7 +109,7 @@ public class FlowControlNodeViewModel(string title) : FlowNodeViewModel(title, N
     /// <summary>创建默认的循环节点。</summary>
     public static FlowControlNodeViewModel CreateLoopNode()
     {
-        var node = new FlowControlNodeViewModel("Loop")
+        var node = new FlowControlNodeViewModel(NodeKeys.FlowLoop)
         {
             Location = new Point(100, 100)
         };
@@ -113,7 +121,7 @@ public class FlowControlNodeViewModel(string title) : FlowNodeViewModel(title, N
     /// <summary>创建默认的等待节点。</summary>
     public static FlowControlNodeViewModel CreateWaitNode()
     {
-        var node = new FlowControlNodeViewModel("Wait")
+        var node = new FlowControlNodeViewModel(NodeKeys.FlowWait)
         {
             Location = new Point(100, 100)
         };

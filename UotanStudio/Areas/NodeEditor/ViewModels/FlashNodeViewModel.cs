@@ -14,23 +14,22 @@ namespace UotanStudio.Areas.NodeEditor.ViewModels;
 /// Execution logic connects to the real Fastboot protocol via FirmwareKit.Comm.Fastboot.FastbootDriver.
 /// </summary>
 /// <remarks>
-/// <para>创建具有指定标题的烧录操作节点。</para>
-/// Creates a flash operation node with the specified title.
+/// <para>创建具有指定固定键的烧录操作节点，显示标题按键本地化。</para>
+/// Creates a flash operation node with the specified fixed key; the display title is localized by the key.
 /// </remarks>
-/// <param name="title">
-/// <para>节点的显示标题。</para>
-/// The display title of the node.
+/// <param name="key">
+/// <para>节点的固定键（本地化资源键）。</para>
+/// The fixed key of the node (localization resource key).
 /// </param>
-public class FlashNodeViewModel(string title) : FlowNodeViewModel(title, NodeCategory.Flash)
+public class FlashNodeViewModel(string key) : FlowNodeViewModel(LanguageService.Instance.GetString(key), NodeCategory.Flash, key)
 {
-
     /// <summary>
     /// <para>创建默认的设备连接节点。</para>
     /// Creates a default device connection node.
     /// </summary>
     public static FlashNodeViewModel CreateConnectNode()
     {
-        var node = new FlashNodeViewModel("Connect Device")
+        var node = new FlashNodeViewModel(NodeKeys.FlashConnect)
         {
             Location = new Point(100, 100)
         };
@@ -46,7 +45,7 @@ public class FlashNodeViewModel(string title) : FlowNodeViewModel(title, NodeCat
     /// </summary>
     public static FlashNodeViewModel CreateFlashNode()
     {
-        var node = new FlashNodeViewModel("Flash Partition")
+        var node = new FlashNodeViewModel(NodeKeys.FlashPartition)
         {
             Location = new Point(100, 100)
         };
@@ -63,7 +62,7 @@ public class FlashNodeViewModel(string title) : FlowNodeViewModel(title, NodeCat
     /// </summary>
     public static FlashNodeViewModel CreateEraseNode()
     {
-        var node = new FlashNodeViewModel("Erase Partition")
+        var node = new FlashNodeViewModel(NodeKeys.FlashErase)
         {
             Location = new Point(100, 100)
         };
@@ -79,7 +78,7 @@ public class FlashNodeViewModel(string title) : FlowNodeViewModel(title, NodeCat
     /// </summary>
     public static FlashNodeViewModel CreateRebootNode()
     {
-        var node = new FlashNodeViewModel("Reboot Device")
+        var node = new FlashNodeViewModel(NodeKeys.FlashReboot)
         {
             Location = new Point(100, 100)
         };
@@ -107,7 +106,7 @@ public class FlashNodeViewModel(string title) : FlowNodeViewModel(title, NodeCat
                 return $"[{Title}] FAIL: device path is empty.";
             }
 
-            if (Title == "Flash Partition")
+            if (Key == NodeKeys.FlashPartition)
             {
                 if (string.IsNullOrEmpty(imagePath))
                 {
@@ -130,7 +129,7 @@ public class FlashNodeViewModel(string title) : FlowNodeViewModel(title, NodeCat
 
                 return $"[Flash Partition] OK: {partition} <= {imagePath} ({size} bytes)";
             }
-            else if (Title == "Erase Partition")
+            else if (Key == NodeKeys.FlashErase)
             {
                 if (Output.Count > 0)
                 {
@@ -139,7 +138,7 @@ public class FlashNodeViewModel(string title) : FlowNodeViewModel(title, NodeCat
 
                 return $"[Erase Partition] OK: {partition}";
             }
-            else if (Title == "Reboot Device")
+            else if (Key == NodeKeys.FlashReboot)
             {
                 var mode = partition ?? "bootloader";
                 var device = DeviceMonitorService.Instance.FindDeviceBySerial(devicePath);
@@ -153,7 +152,7 @@ public class FlashNodeViewModel(string title) : FlowNodeViewModel(title, NodeCat
 
                 return summary;
             }
-            else if (Title == "Connect Device")
+            else if (Key == NodeKeys.FlashConnect)
             {
                 var state = await DeviceMonitorService.Instance.GetAdbStateAsync(devicePath).ConfigureAwait(false);
                 if (Output.Count > 0)

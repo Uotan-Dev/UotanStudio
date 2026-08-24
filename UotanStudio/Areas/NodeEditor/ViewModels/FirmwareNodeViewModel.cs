@@ -12,19 +12,18 @@ namespace UotanStudio.Areas.NodeEditor.ViewModels;
 /// Execution logic connects to real FirmwareKit.CPIO / Payload / AVB / Oppo backends via FirmwareService.
 /// </summary>
 /// <remarks>
-/// <para>创建具有指定标题的固件操作节点。</para>
-/// Creates a firmware operation node with the specified title.
+/// <para>创建具有指定固定键的固件操作节点，显示标题按键本地化。</para>
+/// Creates a firmware operation node with the specified fixed key; the display title is localized by the key.
 /// </remarks>
-/// <param name="title">
-/// <para>节点的显示标题。</para>
-/// The display title of the node.
+/// <param name="key">
+/// <para>节点的固定键（本地化资源键）。</para>
+/// The fixed key of the node (localization resource key).
 /// </param>
-public class FirmwareNodeViewModel(string title) : FlowNodeViewModel(title, NodeCategory.Firmware)
+public class FirmwareNodeViewModel(string key) : FlowNodeViewModel(LanguageService.Instance.GetString(key), NodeCategory.Firmware, key)
 {
-
     /// <summary>
-    /// <para>执行该固件节点的真实操作，依据节点标题分派到 FirmwareService 对应方法。</para>
-    /// Executes the real operation of this firmware node, dispatching to the corresponding FirmwareService method based on the node title.
+    /// <para>执行该固件节点的真实操作，依据节点固定键分派到 FirmwareService 对应方法。</para>
+    /// Executes the real operation of this firmware node, dispatching to the corresponding FirmwareService method based on the node key.
     /// </summary>
     /// <param name="firmwarePath">固件文件路径（来自输入端口绑定）。</param>
     /// <param name="outputDirectory">输出目录（来自输入端口绑定）。</param>
@@ -39,12 +38,12 @@ public class FirmwareNodeViewModel(string title) : FlowNodeViewModel(title, Node
         }
 
         var svc = FirmwareService.Instance;
-        var result = Title switch
+        var result = Key switch
         {
-            "Unpack Firmware" => await svc.UnpackCpioAsync(firmwarePath, string.IsNullOrEmpty(outputDirectory) ? "unpacked" : outputDirectory, true),
-            "Pack Firmware" => await svc.PackCpioAsync(firmwarePath, outputDirectory, cancellationToken),
-            "Verify Signature" => await svc.VerifyAvbAsync(firmwarePath, cancellationToken),
-            "Extract Partition" => await svc.ExtractPayloadAsync(firmwarePath, string.IsNullOrEmpty(outputDirectory) ? "extracted" : outputDirectory, partitionName),
+            NodeKeys.FirmwareUnpack => await svc.UnpackCpioAsync(firmwarePath, string.IsNullOrEmpty(outputDirectory) ? "unpacked" : outputDirectory, true),
+            NodeKeys.FirmwarePack => await svc.PackCpioAsync(firmwarePath, outputDirectory, cancellationToken),
+            NodeKeys.FirmwareVerify => await svc.VerifyAvbAsync(firmwarePath, cancellationToken),
+            NodeKeys.FirmwareExtract => await svc.ExtractPayloadAsync(firmwarePath, string.IsNullOrEmpty(outputDirectory) ? "extracted" : outputDirectory, partitionName),
             _ => new FirmwareOpResult { Success = false, Summary = $"Unknown firmware node: {Title}" }
         };
         return result.Success ? $"[{Title}] OK: {result.Summary}" : $"[{Title}] FAIL: {result.Summary}";
@@ -57,7 +56,7 @@ public class FirmwareNodeViewModel(string title) : FlowNodeViewModel(title, Node
     /// <returns>配置好输入输出端口的固件解包节点。</returns>
     public static FirmwareNodeViewModel CreateUnpackNode()
     {
-        var node = new FirmwareNodeViewModel("Unpack Firmware")
+        var node = new FirmwareNodeViewModel(NodeKeys.FirmwareUnpack)
         {
             Location = new Point(100, 100)
         };
@@ -73,7 +72,7 @@ public class FirmwareNodeViewModel(string title) : FlowNodeViewModel(title, Node
     /// </summary>
     public static FirmwareNodeViewModel CreatePackNode()
     {
-        var node = new FirmwareNodeViewModel("Pack Firmware")
+        var node = new FirmwareNodeViewModel(NodeKeys.FirmwarePack)
         {
             Location = new Point(100, 100)
         };
@@ -89,7 +88,7 @@ public class FirmwareNodeViewModel(string title) : FlowNodeViewModel(title, Node
     /// </summary>
     public static FirmwareNodeViewModel CreateVerifyNode()
     {
-        var node = new FirmwareNodeViewModel("Verify Signature")
+        var node = new FirmwareNodeViewModel(NodeKeys.FirmwareVerify)
         {
             Location = new Point(100, 100)
         };
@@ -105,7 +104,7 @@ public class FirmwareNodeViewModel(string title) : FlowNodeViewModel(title, Node
     /// </summary>
     public static FirmwareNodeViewModel CreateExtractNode()
     {
-        var node = new FirmwareNodeViewModel("Extract Partition")
+        var node = new FirmwareNodeViewModel(NodeKeys.FirmwareExtract)
         {
             Location = new Point(100, 100)
         };

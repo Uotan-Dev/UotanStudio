@@ -6,6 +6,7 @@
              xmlns:vm="using:UotanStudio.Areas.NodeEditor"
              xmlns:nodify="clr-namespace:NodifyM.Avalonia.Controls;assembly=NodifyM.Avalonia"
              xmlns:nodeVm="using:UotanStudio.Areas.NodeEditor.ViewModels"
+             xmlns:sys="using:System"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
              x:Class="UotanStudio.Areas.NodeEditor.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
@@ -61,6 +62,18 @@
                             ToolTip.Tip="{DynamicResource Node_ClearAll}">
                         <avalonia:MaterialIcon Kind="TrashOutline" Width="16" Height="16" />
                     </Button>
+                    <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
+                            Margin="4,0" />
+                    <Button Width="28" Height="28" Padding="0"
+                            Command="{Binding SaveFlowCommand}"
+                            ToolTip.Tip="{DynamicResource Node_SaveFlow}">
+                        <avalonia:MaterialIcon Kind="ContentSave" Width="16" Height="16" />
+                    </Button>
+                    <Button Width="28" Height="28" Padding="0"
+                            Command="{Binding LoadFlowCommand}"
+                            ToolTip.Tip="{DynamicResource Node_LoadFlow}">
+                        <avalonia:MaterialIcon Kind="FolderOpen" Width="16" Height="16" />
+                    </Button>
                 </StackPanel>
 
                 <!-- 中间: 运行控制 -->
@@ -97,6 +110,27 @@
                     <Run Text="{Binding Connections.Count, Mode=OneWay}" />
                     <Run Text="{DynamicResource Node_ConnectionsLabel}" />
                 </TextBlock>
+            </DockPanel>
+        </Border>
+
+        <!-- 执行日志面板 -->
+        <Border DockPanel.Dock="Bottom" Height="130"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_ExecLog}"
+                           FontWeight="SemiBold" FontSize="12"
+                           Margin="8,6,8,2" />
+                <ScrollViewer>
+                    <ItemsControl ItemsSource="{Binding ExecutionLog}" Margin="8,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type sys:String}">
+                                <TextBlock Text="{Binding}" FontSize="11"
+                                           FontFamily="Consolas, Courier New, monospace"
+                                           TextWrapping="NoWrap" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
             </DockPanel>
         </Border>
 

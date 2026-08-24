@@ -183,13 +183,14 @@ public partial class NodeEditorView : UserControl
         {
             var copy = node switch
             {
-                FirmwareNodeViewModel => new FirmwareNodeViewModel(node.Title),
-                FlashNodeViewModel => new FlashNodeViewModel(node.Title),
-                DataNodeViewModel => new DataNodeViewModel(node.Title),
-                FlowControlNodeViewModel => new FlowControlNodeViewModel(node.Title),
-                OutputNodeViewModel => new OutputNodeViewModel(node.Title),
-                _ => new FlowNodeViewModel(node.Title, node.Category)
+                FirmwareNodeViewModel => new FirmwareNodeViewModel(node.Key),
+                FlashNodeViewModel => new FlashNodeViewModel(node.Key),
+                DataNodeViewModel => new DataNodeViewModel(node.Key),
+                FlowControlNodeViewModel => new FlowControlNodeViewModel(node.Key),
+                OutputNodeViewModel => new OutputNodeViewModel(node.Key),
+                _ => new FlowNodeViewModel(node.Title, node.Category, node.Key)
             };
+            copy.Title = node.Title;
             copy.Location = new Avalonia.Point(node.Location.X + 40, node.Location.Y + 40);
             for (var i = 0; i < node.Input.Count; i++)
             {
