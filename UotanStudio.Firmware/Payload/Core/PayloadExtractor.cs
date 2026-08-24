@@ -48,8 +48,8 @@ internal class PayloadExtractor
     /// <param name="blockSize">The block size used for extent calculations.
     /// <para>用于区间计算的块大小。</para>
     /// </param>
-    /// <exception cref="PayloadUnsupportedOperationException">Thrown when a Puffdiff operation is encountered.
-    /// <para>当遇到 Puffdiff 操作时抛出。</para>
+    /// <exception cref="PayloadUnsupportedOperationException">Thrown when an operation type is genuinely unsupported.
+    /// <para>当操作类型确实不受支持时抛出。</para>
     /// </exception>
     /// <exception cref="PartitionExtractionException">Thrown when the partition extraction fails.
     /// <para>当分区提取失败时抛出。</para>
@@ -125,7 +125,10 @@ internal class PayloadExtractor
                         }
                         break;
                     case InstallOperation.Types.Type.Puffdiff:
-                        OperationProcessor.ProcessPuffdiff(op);
+                        {
+                            var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
+                            OperationProcessor.ProcessPuffdiff(op, patchData, patchData.Length, outFile, blockSize);
+                        }
                         break;
                     case InstallOperation.Types.Type.Bsdiff:
                         {
@@ -198,8 +201,8 @@ internal class PayloadExtractor
     /// <returns>A task that represents the asynchronous extraction operation.
     /// <para>表示异步提取操作的任务。</para>
     /// </returns>
-    /// <exception cref="PayloadUnsupportedOperationException">Thrown when a Puffdiff operation is encountered.
-    /// <para>当遇到 Puffdiff 操作时抛出。</para>
+    /// <exception cref="PayloadUnsupportedOperationException">Thrown when an operation type is genuinely unsupported.
+    /// <para>当操作类型确实不受支持时抛出。</para>
     /// </exception>
     /// <exception cref="PartitionExtractionException">Thrown when the partition extraction fails.
     /// <para>当分区提取失败时抛出。</para>

@@ -75,14 +75,14 @@ public enum CompressionFormat
     Zstd = 10,
 
     /// <summary>
-    /// LZOP 压缩格式（当前版本仅支持魔数识别，不提供压缩/解压实现）。
-    /// <para>LZOP compression format (this version only recognizes the magic; compression/decompression are not implemented).</para>
+    /// LZOP 压缩格式（支持解压，不支持压缩）。
+    /// <para>LZOP compression format (decompression supported; compression not supported).</para>
     /// </summary>
     Lzop = 11,
 
     /// <summary>
-    /// Zopfli 压缩格式（GZIP 兼容输出；当前版本明确标注不支持）。
-    /// <para>Zopfli compression format (GZIP-compatible output; explicitly unsupported in this version).</para>
+    /// Zopfli 压缩格式（GZIP 兼容输出；解压走 gzip 解码器，压缩端不支持）。
+    /// <para>Zopfli compression format (GZIP-compatible output; decompression reuses the gzip decoder, compression is unsupported).</para>
     /// </summary>
     Zopfli = 12
 }

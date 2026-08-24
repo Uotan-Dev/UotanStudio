@@ -117,24 +117,15 @@ public static class SparseWriter
                     }
                 case ChunkType.Fill:
                     {
+                        // Per the Android sparse spec a FILL chunk stores only the 4-byte pattern;
+                        // readers expand it to chunkSize * blockSize logically.
+                        // <para>按 Android 稀疏格式规范，FILL 数据块只存储 4 字节模式值；
+                        // 读取方将其逻辑展开为 chunkSize * blockSize。</para>
                         BinaryPrimitives.WriteUInt32LittleEndian(fillValData, chunk.FillValue);
-                        var total = (long)chunk.Header.ChunkSize * outHeader.BlockSize;
-                        while (total > 0)
+                        stream.Write(fillValData, 0, 4);
+                        if (checksum.HasValue)
                         {
-                            var n = (int)Math.Min(BufferSize, total);
-                            var offset = 0;
-                            while (offset < n)
-                            {
-                                var copy = Math.Min(4, n - offset);
-                                Array.Copy(fillValData, 0, buffer, offset, copy);
-                                offset += copy;
-                            }
-                            stream.Write(buffer, 0, n);
-                            if (checksum.HasValue)
-                            {
-                                checksum = Crc32.Update(checksum.Value, buffer.AsSpan(0, n));
-                            }
-                            total -= n;
+                            checksum = Crc32.UpdateRepeated(checksum.Value, chunk.FillValue, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
                         }
                         break;
                     }

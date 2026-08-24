@@ -2,6 +2,7 @@ using System.IO.Compression;
 using K4os.Compression.LZ4.Streams;
 using SharpCompress.Compressors.BZip2;
 using SharpCompress.Compressors.Xz;
+using UotanStudio.Firmware.Compress.Compressors;
 using ZstdSharp;
 
 namespace UotanStudio.Firmware.BootImage;
@@ -17,7 +18,7 @@ namespace UotanStudio.Firmware.BootImage;
 /// Detects gzip / lz4 / lzma / xz / bzip2 / zstd / brotli by magic bytes and decompresses
 /// using the BCL and configured packages (replacing the former FirmwareKit.Compress dependency).</para>
 /// </summary>
-internal static class BootCompressor
+public static class BootCompressor
 {
     /// <summary>
     /// 依据魔数检测数据的压缩格式。
@@ -160,9 +161,9 @@ internal static class BootCompressor
                 case CompressionType.Lzma:
                     break;
                 case CompressionType.Lzop:
-                    break;
-                // LZ4 legacy / LZMA / LZOP 解压未内联实现（原依赖 FirmwareKit.Compress）。
-                // LZ4 legacy, LZMA and LZOP decompression are not inlined here
+                    return LzopCompressor.Decompress(data);
+                // LZ4 legacy / LZMA 解压未内联实现（原依赖 FirmwareKit.Compress）。
+                // LZ4 legacy and LZMA decompression are not inlined here
                 // (the original implementation relied on FirmwareKit.Compress).
                 default:
                     return null;

@@ -393,10 +393,10 @@ public static class CompressionService
             CompressionFormat.Bzip2 => Bzip2Compressor.Compress(data, options),
             CompressionFormat.Zstd => ZstdCompressor.Compress(data, options),
             CompressionFormat.None => data,
-            // Lzop/Zopfli 仅识别魔数，压缩/解压未实现。
-            // Lzop/Zopfli are magic-number detected only; compression/decompression is not supported.
-            CompressionFormat.Lzop => throw new NotSupportedException("LZOP compression is not supported."),
-            CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli compression is not supported."),
+            // LZOP / Zopfli 压缩均不支持（LZOP 无托管编码器；Zopfli 为 gzip 兼容输出，压缩端不提供）。
+            // LZOP / Zopfli compression is not supported (no managed LZO encoder; Zopfli is gzip-compatible output and is not produced here).
+            CompressionFormat.Lzop => throw new NotSupportedException("LZOP compression is not supported. LZOP 压缩不受支持。"),
+            CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli compression is not supported. Zopfli 压缩不受支持。"),
             _ => throw new ArgumentException($"Unsupported compression format: {format}", nameof(format))
         };
     }
@@ -416,11 +416,13 @@ public static class CompressionService
             CompressionFormat.Bzip2 => Bzip2Compressor.Decompress(data),
             CompressionFormat.Zstd => ZstdCompressor.Decompress(data),
             CompressionFormat.None => data,
-            // Lzop/Zopfli 仅识别魔数，压缩/解压未实现。
-            // Lzop/Zopfli are magic-number detected only; compression/decompression is not supported.
-            CompressionFormat.Lzop => throw new NotSupportedException("LZOP decompression is not supported."),
-            CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli decompression is not supported."),
-            _ => throw new ArgumentException($"Unsupported decompression format: {format}", nameof(format))
+            // LZOP 仅支持解压（SharpZipLib 无 LZO 支持，由本库内嵌 LZO1X 解码器实现）。
+            // LZOP decompression is supported via the embedded LZO1X decoder; compression is not.
+            CompressionFormat.Lzop => LzopCompressor.Decompress(data),
+            // Zopfli 产物是标准 gzip 流，解压直接复用 gzip 解码器；压缩端不支持。
+            // Zopfli output is a standard gzip stream, so the gzip decoder is reused; compression is not supported.
+            CompressionFormat.Zopfli => GzipCompressor.Decompress(data),
+            _ => throw new ArgumentException($"Unsupported compression format: {format}", nameof(format))
         };
     }
 

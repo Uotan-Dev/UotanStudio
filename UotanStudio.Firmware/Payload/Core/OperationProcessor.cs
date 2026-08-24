@@ -114,6 +114,7 @@ internal static class OperationProcessor
                     case InstallOperation.Types.Type.SourceBsdiff:
                         break;
                     case InstallOperation.Types.Type.Puffdiff:
+                        ProcessPuffdiff(op, data, dataLength, outFile, blockSize);
                         break;
                     case InstallOperation.Types.Type.BrotliBsdiff:
                         break;
@@ -336,20 +337,78 @@ internal static class OperationProcessor
     }
 
     /// <summary>
-    /// Throws a <see cref="PayloadUnsupportedOperationException"/> because PUFFDIFF is not implemented.
-    /// <para>抛出 <see cref="PayloadUnsupportedOperationException"/>，因为 PUFFDIFF 尚未实现。</para>
+    /// Processes a PUFFDIFF operation by puff-decompressing the attached patch data, reading the
+    /// source partition base data at the source extents, applying the bsdiff patch and writing the
+    /// result to the destination extents.
+    /// <para>处理 PUFFDIFF 操作：对附加的补丁数据做 puff 解压，在源区间处读取源分区基准数据，
+    /// 应用 bsdiff 补丁并将结果写入目标区间。</para>
     /// </summary>
     /// <param name="op">The Puffdiff install operation.
     /// <para>PUFFDIFF 安装操作。</para>
     /// </param>
-    /// <exception cref="PayloadUnsupportedOperationException">Always thrown.
-    /// <para>始终抛出。</para>
+    /// <param name="data">The puff-compressed patch data blob read from the payload stream.
+    /// <para>从载荷流读取的 puff 压缩补丁数据块。</para>
+    /// </param>
+    /// <param name="dataLength">The number of valid bytes in <paramref name="data"/>.
+    /// <para><paramref name="data"/> 中的有效字节数。</para>
+    /// </param>
+    /// <param name="outFile">The output file stream to read source data from and write patched data to.
+    /// <para>用于读取源数据和写入补丁数据的输出文件流。</para>
+    /// </param>
+    /// <param name="blockSize">The block size used for extent calculations.
+    /// <para>用于区间计算的块大小。</para>
+    /// </param>
+    /// <exception cref="PartitionExtractionException">Thrown when source data cannot be read or the patch fails.
+    /// <para>当无法读取源数据或补丁失败时抛出。</para>
     /// </exception>
-    internal static void ProcessPuffdiff(InstallOperation op)
+    internal static void ProcessPuffdiff(InstallOperation op, byte[] data, int dataLength, FileStream outFile, uint blockSize)
     {
-        throw new PayloadUnsupportedOperationException(
-            "PUFFDIFF is not supported by this library. No suitable .NET puffdiff implementation is available.",
-            nameof(InstallOperation.Types.Type.Puffdiff));
+        long srcLength = 0;
+        foreach (var ext in op.SrcExtents)
+        {
+            srcLength += (long)ext.NumBlocks * blockSize;
+        }
+
+        var oldData = ArrayPool<byte>.Shared.Rent((int)srcLength);
+        try
+        {
+            var offset = 0;
+            foreach (var ext in op.SrcExtents)
+            {
+                var srcPos = (long)(ext.StartBlock * blockSize);
+                var chunkLen = (int)(ext.NumBlocks * blockSize);
+                outFile.Seek(srcPos, SeekOrigin.Begin);
+                var bytesRead = 0;
+                while (bytesRead < chunkLen)
+                {
+                    var read = outFile.Read(oldData, offset + bytesRead, chunkLen - bytesRead);
+                    if (read == 0)
+                    {
+                        break;
+                    }
+                    bytesRead += read;
+                }
+                if (bytesRead != chunkLen)
+                {
+                    throw new PartitionExtractionException(
+                        $"Failed to read {chunkLen} bytes of source data for PUFFDIFF at offset {srcPos}",
+                        string.Empty);
+                }
+                offset += bytesRead;
+            }
+
+            HashVerificationHelper.VerifySourceHash(oldData, (int)srcLength, op);
+
+            var newData = PuffDiffApplier.Apply(data.AsSpan(0, dataLength), oldData.AsSpan(0, (int)srcLength));
+
+            var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
+            outFile.Seek(dstPos, SeekOrigin.Begin);
+            outFile.Write(newData, 0, newData.Length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(oldData);
+        }
     }
 
     /// <summary>

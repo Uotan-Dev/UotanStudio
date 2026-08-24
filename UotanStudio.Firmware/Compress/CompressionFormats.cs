@@ -30,9 +30,9 @@ public static class CompressionFormats
         new(CompressionFormat.Zstd, "zstd", ["zstd", "zst"], [".zst", ".zstd"],
             [0x28, 0xB5, 0x2F, 0xFD], canCompress: true, canDecompress: true, isStreaming: false),
         new(CompressionFormat.Lzop, "lzop", ["lzop", "lzo"], [".lzop", ".lzo"],
-            [0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A], canCompress: false, canDecompress: false, isStreaming: false),
+            [0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A], canCompress: false, canDecompress: true, isStreaming: false),
         new(CompressionFormat.Zopfli, "zopfli", ["zopfli"], [".gz"],
-            null, canCompress: false, canDecompress: false, isStreaming: false),
+            null, canCompress: false, canDecompress: true, isStreaming: false),
     ];
 
     private static readonly Dictionary<CompressionFormat, CompressionFormatInfo> ByFormat =
@@ -159,20 +159,8 @@ public static class CompressionFormats
         return false;
     }
 
-    /// <summary>
-    /// 通过魔数检测数据的压缩格式。
-    /// <para>Detects the compression format of the data by magic bytes.</para>
-    /// </summary>
-    /// <param name="data">待检测的数据。<para>The data to detect.</para></param>
-    /// <returns>检测到的格式；无法识别时返回 <see cref="CompressionFormat.None"/>。<para>The detected format; <see cref="CompressionFormat.None"/> when unrecognized.</para></returns>
     public static CompressionFormat Detect(byte[] data) => data == null ? throw new ArgumentNullException(nameof(data)) : Detect(data.AsSpan());
 
-    /// <summary>
-    /// 通过魔数检测数据的压缩格式。
-    /// <para>Detects the compression format of the data by magic bytes.</para>
-    /// </summary>
-    /// <param name="data">待检测的数据。<para>The data to detect.</para></param>
-    /// <returns>检测到的格式；无法识别时返回 <see cref="CompressionFormat.None"/>。<para>The detected format; <see cref="CompressionFormat.None"/> when unrecognized.</para></returns>
     public static CompressionFormat Detect(ReadOnlySpan<byte> data)
     {
         if (data.Length < 2)
