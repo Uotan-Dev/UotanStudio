@@ -23,12 +23,9 @@ public class ViewLocator : IDataTemplate
         var name = param.GetType().FullName!.Replace("ViewModel", "View", StringComparison.Ordinal);
         var type = Type.GetType(name);
 
-        if (type != null)
-        {
-            return (Control)Activator.CreateInstance(type)!;
-        }
-
-        return new TextBlock { Text = LanguageService.Instance.GetString("ViewLocator_NotFound") + name };
+        return type != null
+            ? (Control)Activator.CreateInstance(type)!
+            : new TextBlock { Text = LanguageService.Instance.GetString("ViewLocator_NotFound") + name };
     }
 
     public bool Match(object? data)

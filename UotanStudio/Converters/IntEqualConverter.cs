@@ -21,12 +21,7 @@ public class IntEqualConverter : IValueConverter
             return intValue == paramValue;
         }
 
-        if (value is int intVal && parameter is int paramInt)
-        {
-            return intVal == paramInt;
-        }
-
-        return false;
+        return value is int intVal && parameter is int paramInt ? intVal == paramInt : false;
     }
 
     /// <summary>

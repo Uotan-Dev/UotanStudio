@@ -110,8 +110,7 @@ public class LanguageInfo : IEquatable<LanguageInfo>
     public bool Equals(LanguageInfo? other)
     {
         if (other is null) return false;
-        if (ReferenceEquals(this, other)) return true;
-        return IsSystemLanguage == other.IsSystemLanguage && CultureName == other.CultureName;
+        return ReferenceEquals(this, other) ? true : IsSystemLanguage == other.IsSystemLanguage && CultureName == other.CultureName;
     }
 
     /// <summary>
@@ -138,8 +137,7 @@ public class LanguageInfo : IEquatable<LanguageInfo>
     /// </summary>
     public static bool operator ==(LanguageInfo? left, LanguageInfo? right)
     {
-        if (left is null) return right is null;
-        return left.Equals(right);
+        return left is null ? right is null : left.Equals(right);
     }
 
     /// <summary>

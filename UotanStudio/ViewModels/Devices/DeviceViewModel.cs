@@ -3,11 +3,9 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using AdvancedSharpAdbClient;
 using AdvancedSharpAdbClient.Receivers;
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Models;
@@ -219,11 +217,6 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         Dictionary<string, string>? info = null;
         try
         {
-            // 打开 USB 设备（或连 adb server）与执行 shell 均为同步阻塞调用（未授权设备可能挂到超时），
-            // 整体放后台线程，避免扫描结束过渡到主窗时冻结 UI。
-            // Opening the USB device (or connecting the adb server) and running shell commands are
-            // blocking calls (unauthorized devices can stall until timeout); run on a background
-            // thread so the splash-to-main transition never freezes the UI.
             info = await Task.Run(() =>
                 QueryViaAdbServer(device)
                 ?? (device.IsUsb ? QueryViaNativeUsb(device) : null)
@@ -261,17 +254,11 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             return null;
         }
 
-        // USB 设备（如本机直连）与网络设备（模拟器）在授权后都会出现在 adb server 设备列表中。
-        // Both USB devices (local direct connection) and network devices (emulator) appear in the
-        // adb server device list once authorized.
         var target = client.GetDevices()
             .FirstOrDefault(d => string.Equals(d.Serial, device.Serial, StringComparison.OrdinalIgnoreCase));
-        if (target is null)
-        {
-            return null;
-        }
-
-        return QueryAdbProperties(cmd =>
+        return target is null
+            ? null
+            : QueryAdbProperties(cmd =>
         {
             try
             {

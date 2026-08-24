@@ -26,11 +26,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private LanguageInfo _selectedLanguage = LanguageInfo.SystemLanguage;
     private ThemeMode _selectedThemeMode;
     private bool _autoSave;
-    private bool _snapToGrid = true;
-    private double _gridSize = 20;
-    private int _connectionStyleIndex;
-    private bool _isCheckingUpdates;
-    private string _updateCheckResult = string.Empty;
     private bool _isToastVisible;
     private string _toastMessage = string.Empty;
 
@@ -48,37 +43,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         [ThemeMode.System, ThemeMode.Light, ThemeMode.Dark];
 
     /// <summary>
-    /// <para>获取可用连接线样式列表。</para>
-    /// Gets the list of available connection line styles.
-    /// </summary>
-    public List<string> ConnectionStyles { get; } =
-        [LanguageService.Instance.GetString("Settings_ConnBezier"),
-         LanguageService.Instance.GetString("Settings_ConnLine"),
-         LanguageService.Instance.GetString("Settings_ConnStep")];
-
-    /// <summary>
     /// <para>获取语言预览文本，根据当前语言动态更新。</para>
     /// Gets the language preview text, dynamically updated based on the current language.
     /// </summary>
     public string LanguagePreviewText => LanguageService.Instance.GetString("Settings_LanguagePreviewText");
-
-    /// <summary>
-    /// <para>获取固件解包模块版本号。</para>
-    /// Gets the firmware unpack module version.
-    /// </summary>
-    public string FirmwareModuleVersion { get; } = "1.0.0";
-
-    /// <summary>
-    /// <para>获取烧录模块版本号。</para>
-    /// Gets the board flash module version.
-    /// </summary>
-    public string FlashModuleVersion { get; } = "1.0.0";
-
-    /// <summary>
-    /// <para>获取可视化编程模块版本号。</para>
-    /// Gets the visual programming module version.
-    /// </summary>
-    public string VisualProgrammingModuleVersion { get; } = "1.0.0";
 
     /// <summary>
     /// <para>获取或设置选中的语言信息。</para>
@@ -172,56 +140,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置是否启用网格对齐。</para>
-    /// Gets or sets whether snap-to-grid is enabled.
-    /// </summary>
-    public bool SnapToGrid
-    {
-        get => _snapToGrid;
-        set { if (SetProperty(ref _snapToGrid, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置网格大小。</para>
-    /// Gets or sets the grid size.
-    /// </summary>
-    public double GridSize
-    {
-        get => _gridSize;
-        set { if (SetProperty(ref _gridSize, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置连接线样式索引。</para>
-    /// Gets or sets the connection line style index.
-    /// </summary>
-    public int ConnectionStyleIndex
-    {
-        get => _connectionStyleIndex;
-        set { if (SetProperty(ref _connectionStyleIndex, value)) DebouncedSaveSettings(); }
-    }
-
-    /// <summary>
-    /// <para>获取或设置是否正在检查更新。</para>
-    /// Gets or sets whether an update check is in progress.
-    /// </summary>
-    public bool IsCheckingUpdates
-    {
-        get => _isCheckingUpdates;
-        set => SetProperty(ref _isCheckingUpdates, value);
-    }
-
-    /// <summary>
-    /// <para>获取或设置更新检查结果消息。</para>
-    /// Gets or sets the update check result message.
-    /// </summary>
-    public string UpdateCheckResult
-    {
-        get => _updateCheckResult;
-        set => SetProperty(ref _updateCheckResult, value);
-    }
-
-    /// <summary>
     /// <para>获取或设置 Toast 通知是否可见。</para>
     /// Gets or sets whether the toast notification is visible.
     /// </summary>
@@ -275,9 +193,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
               ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
         _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
-        _snapToGrid = settings.SnapToGrid;
-        _gridSize = settings.GridSize;
-        _connectionStyleIndex = settings.ConnectionStyleIndex;
 
         // Apply language based on loaded preference
         ApplyLanguageInfo(_selectedLanguage);
@@ -348,9 +263,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.CultureName = _selectedLanguage.IsSystemLanguage ? string.Empty : _selectedLanguage.CultureName;
         _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
-        _appSettings.SnapToGrid = _snapToGrid;
-        _appSettings.GridSize = _gridSize;
-        _appSettings.ConnectionStyleIndex = _connectionStyleIndex;
 
         SettingsPersistenceService.Instance.SaveSettings(_appSettings);
 
@@ -401,8 +313,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(LanguagePreviewText));
-        // Update ConnectionStyles list display
-        OnPropertyChanged(nameof(ConnectionStyles));
     }
 
     /// <summary>
@@ -416,31 +326,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
             Languages.Add(lang);
-        }
-    }
-
-    /// <summary>
-    /// <para>异步检查更新，模拟网络请求后显示结果。</para>
-    /// Asynchronously checks for updates, simulating a network request before displaying the result.
-    /// </summary>
-    [RelayCommand]
-    private async Task CheckForUpdatesAsync()
-    {
-        IsCheckingUpdates = true;
-        UpdateCheckResult = LanguageService.Instance.GetString("Settings_CheckingUpdates");
-
-        try
-        {
-            await Task.Delay(1000);
-            UpdateCheckResult = LanguageService.Instance.GetString("Settings_UpToDate");
-        }
-        catch (Exception)
-        {
-            UpdateCheckResult = LanguageService.Instance.GetString("Settings_UpdateCheckFailed");
-        }
-        finally
-        {
-            IsCheckingUpdates = false;
         }
     }
 

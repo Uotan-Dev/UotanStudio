@@ -83,15 +83,12 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
         ArgumentException.ThrowIfNullOrWhiteSpace(versionString);
 
         var parts = versionString.Split('.');
-        if (parts.Length != 3 ||
+        return parts.Length != 3 ||
             !int.TryParse(parts[0], out var major) ||
             !int.TryParse(parts[1], out var minor) ||
-            !int.TryParse(parts[2], out var revision))
-        {
-            throw new ArgumentException($"Invalid version format: '{versionString}'. Expected 'Major.Minor.Revision'.", nameof(versionString));
-        }
-
-        return new LanguagePackVersion(major, minor, revision);
+            !int.TryParse(parts[2], out var revision)
+            ? throw new ArgumentException($"Invalid version format: '{versionString}'. Expected 'Major.Minor.Revision'.", nameof(versionString))
+            : new LanguagePackVersion(major, minor, revision);
     }
 
     /// <summary>
@@ -150,9 +147,7 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
         if (result != 0) return result;
 
         result = Minor.CompareTo(other.Minor);
-        if (result != 0) return result;
-
-        return Revision.CompareTo(other.Revision);
+        return result != 0 ? result : Revision.CompareTo(other.Revision);
     }
 
     /// <summary>
@@ -161,8 +156,7 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     /// </summary>
     public bool Equals(LanguagePackVersion? other)
     {
-        if (other is null) return false;
-        return Major == other.Major && Minor == other.Minor && Revision == other.Revision;
+        return other is null ? false : Major == other.Major && Minor == other.Minor && Revision == other.Revision;
     }
 
     /// <summary>
@@ -193,8 +187,7 @@ public sealed class LanguagePackVersion : IComparable<LanguagePackVersion>, IEqu
     public static bool operator >=(LanguagePackVersion left, LanguagePackVersion right) => left.CompareTo(right) >= 0;
     public static bool operator ==(LanguagePackVersion? left, LanguagePackVersion? right)
     {
-        if (left is null) return right is null;
-        return left.Equals(right);
+        return left is null ? right is null : left.Equals(right);
     }
     public static bool operator !=(LanguagePackVersion? left, LanguagePackVersion? right) => !(left == right);
 }

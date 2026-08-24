@@ -142,8 +142,8 @@ namespace UotanStudio.Pages.DockControl
         {
             var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
             var hwnd = new HostWindow(options);
-            // 启用操作系统外框（标题栏、边框、最小化/最大化/关闭按钮）
-            hwnd.WindowDecorations = Avalonia.Controls.WindowDecorations.Full;
+            // 由主题自绘窗体装饰（WindowDrawnDecorations 标题栏 + 最小化/最大化/关闭按钮），
+            // 与主窗口的自绘窗体样式保持一致；不要启用原生 WindowDecorations，否则会叠加一整套外框。
             hwnd.ShowInTaskbar = true;
             hwnd.CanResize = true;
             return hwnd;

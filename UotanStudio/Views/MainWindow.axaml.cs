@@ -1,11 +1,18 @@
 using System;
 using Avalonia.Controls;
 using UotanStudio.ViewModels;
+#if DEBUG
+using Dock.Avalonia.Diagnostics;
+#endif
 
 namespace UotanStudio.Views;
 
 public partial class MainWindow : Window
 {
+#if DEBUG
+    private IDisposable? _dockDebugOverlay;
+#endif
+
     public MainWindow()
     {
         // 在 InitializeComponent 之前设置 DataContext，使子控件绑定尽早可用；
@@ -13,7 +20,18 @@ public partial class MainWindow : Window
         DataContext = new MainViewModel();
         InitializeComponent();
         Closing += MainWindow_Closing;
+#if DEBUG
+        Opened += MainWindow_Opened;
+#endif
     }
+
+#if DEBUG
+    private void MainWindow_Opened(object? sender, EventArgs e)
+    {
+        _dockDebugOverlay?.Dispose();
+        _dockDebugOverlay = this.AttachDockDebugOverlay();
+    }
+#endif
 
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
