@@ -457,3 +457,6 @@ $RECYCLE.BIN/
 !.vscode/extensions.json
 /.atomcode
 .mcp.json
+
+# 本地调试工具（MCP 管道探测脚本、固件格式检查工具等）
+.tools/
