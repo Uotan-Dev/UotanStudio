@@ -7,5 +7,73 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Pages.DockView.FileView"
              x:DataType="viewmodels:FileViewModel">
-  <controls:CodeEditor Name="Editor" Language="xml"/>
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- 顶部工具栏：视图切换 -->
+    <Border Grid.Row="0" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Left" Text="{Binding FilePathDisplay}"
+                   FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" />
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
+                    IsVisible="{Binding IsBinary}">
+          <ToggleButton Content="{DynamicResource Dock_File_Hex}" IsChecked="{Binding ShowHexView, Mode=TwoWay}"
+                        FontSize="11" Padding="8,2" />
+          <ToggleButton Content="{DynamicResource Dock_File_Analysis}" IsChecked="{Binding ShowAnalysis, Mode=TwoWay}"
+                        FontSize="11" Padding="8,2" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- 文本编辑器 -->
+    <controls:CodeEditor Grid.Row="1" Name="Editor"
+                         Text="{Binding Text, Mode=TwoWay}"
+                         Language="{Binding Language}"
+                         IsVisible="{Binding !IsBinary}" />
+
+    <!-- 二进制视图：16 进制 + 分析 -->
+    <Grid Grid.Row="1" RowDefinitions="*,Auto" IsVisible="{Binding IsBinary}">
+      <!-- 16 进制查看器 -->
+      <controls:HexViewer Grid.Row="0" Data="{Binding RawBytes}"
+                          IsVisible="{Binding ShowHexView}" />
+
+      <!-- 结构分析面板 -->
+      <Border Grid.Row="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0"
+              IsVisible="{Binding ShowAnalysis}">
+        <ScrollViewer>
+          <StackPanel Margin="8" Spacing="4">
+            <TextBlock Text="{DynamicResource Dock_File_AnalysisTitle}"
+                       FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" />
+            <TextBlock Text="{Binding FormatDisplay}"
+                       FontSize="11" Opacity="0.7" Margin="0,0,0,4"
+                       IsVisible="{Binding DetectedFormat, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <ItemsControl ItemsSource="{Binding Analysis}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="viewmodels:PropertyRow">
+                  <Grid ColumnDefinitions="150,*" Margin="0,2">
+                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"
+                               Opacity="0.75" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="11"
+                               FontFamily="Consolas,monospace" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- 底部状态栏 -->
+    <Border Grid.Row="2" Padding="6,3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+            IsVisible="{Binding IsBinary}">
+      <StackPanel Orientation="Horizontal" Spacing="12">
+        <TextBlock Text="{Binding SizeDisplay}"
+                   FontSize="10" Opacity="0.6" />
+        <TextBlock Text="{Binding FormatDisplay}"
+                   FontSize="10" Opacity="0.6"
+                   IsVisible="{Binding DetectedFormat, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+    </Border>
+  </Grid>
 </UserControl>

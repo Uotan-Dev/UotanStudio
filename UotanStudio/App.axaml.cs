@@ -30,6 +30,9 @@ public partial class App : Application
         UsbLogBridge.Install();
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
+        // 注册全部固件格式处理器，供后续格式自动识别与结构分析使用。
+        UotanStudio.Firmware.FirmwareFormatRegistry.RegisterAll();
+
         // 仅初始化语言包注册表（纯内存操作，快速）；持久化设置的读取与主题/语言 XAML
         // 加载推迟到启动序列中执行，使启动窗能立刻显示，避免首帧出现前的同步阻塞。
         LanguageService.Instance.Initialize();
@@ -62,6 +65,7 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<ThemeChangedMessage>(this, OnThemeChanged);
         WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
         WeakReferenceMessenger.Default.Register<ExitApplicationMessage>(this, OnExitApplication);
+        WeakReferenceMessenger.Default.Register<OpenDocumentRequestMessage>(this, OnOpenDocument);
     }
 
     /// <summary>
@@ -130,6 +134,27 @@ public partial class App : Application
     private void OnLanguageChanged(object recipient, LanguageChangedMessage message)
     {
         UpdateSemiThemeLocale(message.CultureName);
+    }
+
+    /// <summary>
+    /// <para>响应打开文档请求消息，将请求转发给主窗口工作区视图模型，由其打开对应文档。</para>
+    /// Responds to open-document request messages by forwarding them to the main window's workspace
+    /// view model, which opens the requested document.
+    /// </summary>
+    private async void OnOpenDocument(object recipient, OpenDocumentRequestMessage message)
+    {
+        try
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+                && desktop.MainWindow?.DataContext is MainViewModel mainVm)
+            {
+                await mainVm.WorkspaceVM.OpenDocumentAsync(message.Path);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "App", $"Open document failed: {ex.Message}");
+        }
     }
 
     /// <summary>
