@@ -14,13 +14,6 @@
         <TextBlock DockPanel.Dock="Left" Text="{Binding FilePathDisplay}"
                    FontSize="11" Opacity="0.7" VerticalAlignment="Center"
                    TextTrimming="CharacterEllipsis" />
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="4"
-                    IsVisible="{Binding IsBinary}">
-          <ToggleButton Content="{DynamicResource Dock_File_Hex}" IsChecked="{Binding ShowHexView, Mode=TwoWay}"
-                        FontSize="11" Padding="8,2" />
-          <ToggleButton Content="{DynamicResource Dock_File_Analysis}" IsChecked="{Binding ShowAnalysis, Mode=TwoWay}"
-                        FontSize="11" Padding="8,2" />
-        </StackPanel>
       </DockPanel>
     </Border>
 
@@ -30,39 +23,10 @@
                          Language="{Binding Language}"
                          IsVisible="{Binding !IsBinary}" />
 
-    <!-- 二进制视图：16 进制 + 分析 -->
-    <Grid Grid.Row="1" RowDefinitions="*,Auto" IsVisible="{Binding IsBinary}">
-      <!-- 16 进制查看器 -->
-      <controls:HexViewer Grid.Row="0" Data="{Binding RawBytes}"
-                          IsVisible="{Binding ShowHexView}" />
-
-      <!-- 结构分析面板 -->
-      <Border Grid.Row="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0"
-              IsVisible="{Binding ShowAnalysis}">
-        <ScrollViewer>
-          <StackPanel Margin="8" Spacing="4">
-            <TextBlock Text="{DynamicResource Dock_File_AnalysisTitle}"
-                       FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" />
-            <TextBlock Text="{Binding FormatDisplay}"
-                       FontSize="11" Opacity="0.7" Margin="0,0,0,4"
-                       IsVisible="{Binding DetectedFormat, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-            <ItemsControl ItemsSource="{Binding Analysis}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate DataType="viewmodels:PropertyRow">
-                  <Grid ColumnDefinitions="150,*" Margin="0,2">
-                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"
-                               Opacity="0.75" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="11"
-                               FontFamily="Consolas,monospace" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" />
-                  </Grid>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-          </StackPanel>
-        </ScrollViewer>
-      </Border>
-    </Grid>
+    <!-- 二进制视图：16 进制查看器占满整个区域。
+         （固件结构分析结果已改由属性面板展示，不再在此显示，避免与 16 进制视图重叠。） -->
+    <controls:HexViewer Grid.Row="1" Name="HexEditor" Data="{Binding RawBytes}"
+                        IsVisible="{Binding IsBinary}" />
 
     <!-- 底部状态栏 -->
     <Border Grid.Row="2" Padding="6,3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"

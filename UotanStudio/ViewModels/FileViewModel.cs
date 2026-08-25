@@ -23,6 +23,12 @@ namespace UotanStudio.ViewModels;
 public partial class FileViewModel : Document
 {
     private bool _isLoading;
+
+    /// <summary>
+    /// <para>文件原始字节数据（用于 16 进制查看）。</para>
+    /// The raw file bytes used for hex viewing.
+    /// </summary>
+    [ObservableProperty]
     private byte[]? _rawBytes;
 
     /// <summary>
@@ -61,9 +67,9 @@ public partial class FileViewModel : Document
     /// Localized file size display text (status bar).
     /// </summary>
     public string SizeDisplay =>
-        _rawBytes is null
+        RawBytes is null
             ? string.Empty
-            : string.Format(LanguageService.Instance.GetString("Dock_File_SizeFormat"), _rawBytes.Length);
+            : string.Format(LanguageService.Instance.GetString("Dock_File_SizeFormat"), RawBytes.Length);
 
     /// <summary>
     /// <para>文档是否已被修改（与磁盘内容不一致）。</para>
@@ -78,26 +84,6 @@ public partial class FileViewModel : Document
     /// </summary>
     [ObservableProperty]
     private bool _isBinary;
-
-    /// <summary>
-    /// <para>是否显示 16 进制视图（二进制文件时可用）。</para>
-    /// Whether to show the hex view (available for binary files).
-    /// </summary>
-    [ObservableProperty]
-    private bool _showHexView = true;
-
-    /// <summary>
-    /// <para>是否显示结构分析面板（二进制文件时可用）。</para>
-    /// Whether to show the structure analysis panel (available for binary files).
-    /// </summary>
-    [ObservableProperty]
-    private bool _showAnalysis = true;
-
-    /// <summary>
-    /// <para>文件原始字节数据（用于 16 进制查看）。</para>
-    /// The raw file bytes used for hex viewing.
-    /// </summary>
-    public byte[]? RawBytes => _rawBytes;
 
     /// <summary>
     /// <para>固件格式分析结果（键值对列表），UI 绑定此项。</para>
@@ -144,8 +130,8 @@ public partial class FileViewModel : Document
         _isLoading = true;
         try
         {
-            _rawBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
-            IsBinary = IsBinaryFile(_rawBytes);
+            RawBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
+            IsBinary = IsBinaryFile(RawBytes);
 
             if (IsBinary)
             {
@@ -270,6 +256,12 @@ public partial class FileViewModel : Document
         Analysis.Clear();
     }
 
+    /// <summary>
+    /// <para>标记文档为已修改；由 16 进制查看器的字节编辑事件调用。</para>
+    /// Marks the document as modified; invoked by the hex viewer's byte-edit event.
+    /// </summary>
+    public void MarkModifiedByHexEdit() => IsDirty = true;
+
     partial void OnTextChanged(string value)
     {
         // 非加载路径的文本变更（编辑器回写、用户编辑等）视为内容已修改。
@@ -277,26 +269,6 @@ public partial class FileViewModel : Document
         if (!_isLoading)
         {
             IsDirty = true;
-        }
-    }
-
-    partial void OnShowHexViewChanged(bool value)
-    {
-        // 16 进制视图与分析面板互斥：打开一方时关闭另一方。
-        // Hex view and the analysis panel are mutually exclusive: opening one closes the other.
-        if (value)
-        {
-            ShowAnalysis = false;
-        }
-    }
-
-    partial void OnShowAnalysisChanged(bool value)
-    {
-        // 16 进制视图与分析面板互斥：打开一方时关闭另一方。
-        // Hex view and the analysis panel are mutually exclusive: opening one closes the other.
-        if (value)
-        {
-            ShowHexView = false;
         }
     }
 }
