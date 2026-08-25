@@ -3,16 +3,16 @@
 
     <x:String x:Key="Dock_ProjectExplorer">项目资源管理器</x:String>
     <x:String x:Key="Dock_Properties">属性</x:String>
-    <x:String x:Key="Dock_Output">输出</x:String>
-    <x:String x:Key="Dock_Output_Placeholder">输出日志</x:String>
-    <x:String x:Key="Dock_AdbLog">ADB 日志</x:String>
     <x:String x:Key="Dock_Documents">文档</x:String>
     <x:String x:Key="Dock_Properties_Name">属性名称</x:String>
     <x:String x:Key="Dock_Properties_Value">值</x:String>
     <x:String x:Key="Dock_Properties_ImageName">镜像名称</x:String>
     <x:String x:Key="Dock_Properties_ImageSize">镜像大小</x:String>
     <x:String x:Key="Dock_Properties_ImageType">镜像类型</x:String>
-    <x:String x:Key="Dock_Properties_ImageFormat">镜像格式</x:String>
+    <x:String x:Key="Dock_Properties_Path">路径</x:String>
+    <x:String x:Key="Dock_Properties_Format">格式</x:String>
+    <x:String x:Key="Dock_Properties_Size">大小</x:String>
+    <x:String x:Key="Dock_Properties_NoSelection">选择节点或镜像以查看详情</x:String>
     <x:String x:Key="Dock_ProjectSetting">打包设置</x:String>
     <x:String x:Key="Dock_ImagesView">镜像文件管理</x:String>
     <x:String x:Key="Dock_ImageType">镜像类型</x:String>
@@ -32,9 +32,21 @@
     <x:String x:Key="Dock_BRCompLevel">BR压缩等级</x:String>
     <x:String x:Key="Dock_UTCTime">UTC时间戳</x:String>
     <x:String x:Key="Dock_DATSegments">DAT分段数量</x:String>
-    <x:String x:Key="Dock_Output_Log">Build succeeded.</x:String>
-    <x:String x:Key="Dock_AdbLog_Output">ADB Log Output</x:String>
     <x:String x:Key="Dock_Device">设备</x:String>
+
+    <!-- 文件视图 -->
+    <x:String x:Key="Dock_File_Hex">十六进制</x:String>
+    <x:String x:Key="Dock_File_Analysis">结构分析</x:String>
+    <x:String x:Key="Dock_File_AnalysisTitle">固件结构分析</x:String>
+    <x:String x:Key="Dock_File_PathFormat">文件：{0}</x:String>
+    <x:String x:Key="Dock_File_SizeFormat">大小：{0:N0} 字节</x:String>
+    <x:String x:Key="Dock_File_FormatFormat">格式：{0}</x:String>
+
+    <!-- 属性面板内容类型 -->
+    <x:String x:Key="Dock_Properties_TypeFormat">类型：{0}</x:String>
+    <x:String x:Key="Dock_Properties_Type_Node">节点</x:String>
+    <x:String x:Key="Dock_Properties_Type_Image">镜像</x:String>
+    <x:String x:Key="Dock_Properties_Type_FileAnalysis">文件分析</x:String>
 
     <!-- 设备确认对话框 -->
     <x:String x:Key="Editor_Yes">是</x:String>

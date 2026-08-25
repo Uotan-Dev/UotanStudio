@@ -35,9 +35,6 @@
       <DataTemplate DataType="viewmodels:ProjectSettingViewModel">
           <dockview:ProjectSettingView />
       </DataTemplate>
-      <DataTemplate DataType="viewmodels:OutputViewModel">
-          <dockview:OutputView />
-      </DataTemplate>
       <DataTemplate DataType="viewmodels:PropertiesViewModel">
           <dockview:PropertiesView />
       </DataTemplate>
