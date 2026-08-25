@@ -20,35 +20,30 @@
         </Button>
       </DockPanel>
     </Border>
-    <!-- 日志列表 -->
-    <ScrollViewer Grid.Row="1" Name="LogScroll"
-                  HorizontalScrollBarVisibility="Auto"
-                  VerticalScrollBarVisibility="Auto">
-      <ItemsControl ItemsSource="{Binding Entries}">
-        <ItemsControl.ItemsPanel>
-          <ItemsPanelTemplate>
-            <StackPanel Orientation="Vertical" Spacing="1" />
-          </ItemsPanelTemplate>
-        </ItemsControl.ItemsPanel>
-        <ItemsControl.ItemTemplate>
-          <DataTemplate DataType="vm:LogViewModel+LogEntryViewModel">
-            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
-              <TextBlock Text="{Binding Timestamp}" FontSize="12"
-                         Foreground="{DynamicResource SecondaryTextBrush}"
-                         FontFamily="Consolas,monospace" />
-              <TextBlock Text="{Binding Level}" FontSize="12"
-                         Foreground="{DynamicResource SecondaryTextBrush}"
-                         FontFamily="Consolas,monospace" Width="56" />
-              <TextBlock Text="{Binding Source}" FontSize="12"
-                         Foreground="{DynamicResource SecondaryTextBrush}"
-                         FontFamily="Consolas,monospace" Width="140" />
-              <TextBlock Text="{Binding Message}" FontSize="12"
-                         TextWrapping="Wrap"
-                         FontFamily="Consolas,monospace" />
-            </StackPanel>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-    </ScrollViewer>
+    <!-- 日志列表：使用虚拟化 ListBox，避免大体积日志全集物化导致的性能开销 -->
+    <ListBox Grid.Row="1" Name="LogList"
+             ItemsSource="{Binding Entries}"
+             Background="Transparent" BorderThickness="0"
+             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+             ScrollViewer.VerticalScrollBarVisibility="Auto">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="vm:LogViewModel+LogEntryViewModel">
+          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1">
+            <TextBlock Text="{Binding Timestamp}" FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       FontFamily="Consolas,monospace" />
+            <TextBlock Text="{Binding Level}" FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       FontFamily="Consolas,monospace" Width="56" />
+            <TextBlock Text="{Binding Source}" FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextBrush}"
+                       FontFamily="Consolas,monospace" Width="140" />
+            <TextBlock Text="{Binding Message}" FontSize="12"
+                       TextWrapping="Wrap"
+                       FontFamily="Consolas,monospace" />
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
   </Grid>
 </UserControl>
