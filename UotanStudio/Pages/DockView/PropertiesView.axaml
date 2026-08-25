@@ -35,9 +35,13 @@
                  FontSize="12" Opacity="0.5" HorizontalAlignment="Center" />
     </StackPanel>
 
-    <!-- 属性列表 -->
-    <ScrollViewer Grid.Row="1" IsVisible="{Binding HasSelection}">
-      <StackPanel Margin="8" Spacing="4">
+    <!-- 属性列表：ScrollViewer + 行模板。
+         每行左侧固定宽度属性名，右侧属性值列（*）自适应面板宽度铺满到最右，
+         单行显示，超出省略，鼠标悬停 ToolTip 展示完整内容。 -->
+    <ScrollViewer Grid.Row="1" IsVisible="{Binding HasSelection}"
+                  HorizontalScrollBarVisibility="Disabled"
+                  VerticalScrollBarVisibility="Auto">
+      <StackPanel Margin="8,6,8,6" Spacing="2">
         <!-- 内容类型标签 -->
         <Border Padding="6,3" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 CornerRadius="4" HorizontalAlignment="Left" Margin="0,0,0,6">
@@ -47,7 +51,8 @@
         <ItemsControl ItemsSource="{Binding Properties}">
           <ItemsControl.ItemTemplate>
             <DataTemplate DataType="viewmodels:PropertiesViewModel+PropertyRow">
-              <Grid ColumnDefinitions="130,*" Margin="0,4">
+              <!-- 根 Grid 必须横向拉伸，使“*”值列真正铺满面板宽度 -->
+              <Grid ColumnDefinitions="130,*" Margin="0,2" HorizontalAlignment="Stretch">
                 <Grid.ColumnDefinitions>
                   <ColumnDefinition Width="130" />
                   <ColumnDefinition Width="*" />
@@ -55,10 +60,13 @@
                 <Border Grid.Column="0" Padding="6,3" CornerRadius="3" Margin="0,0,4,0"
                         Background="{DynamicResource ControlFillColorDefaultBrush}">
                   <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"
-                             Opacity="0.75" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                             Opacity="0.75" VerticalAlignment="Center"
+                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1"
+                             ToolTip.Tip="{Binding Name}" />
                 </Border>
                 <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="11"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1"
                            ToolTip.Tip="{Binding Value}" />
               </Grid>
             </DataTemplate>
