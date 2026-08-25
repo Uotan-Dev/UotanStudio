@@ -66,7 +66,7 @@ public class WorkspaceDockFactory : Factory
         {
             Id = "RightPane",
             Title = "RightPane",
-            Proportion = 0.25,
+            Proportion = 0.45,
             ActiveDockable = properties,
             VisibleDockables = CreateList<IDockable>(properties)
         };
@@ -110,7 +110,7 @@ public class WorkspaceDockFactory : Factory
                 new ProportionalDock
                 {
                     Orientation = Orientation.Vertical,
-                    Proportion = 0.3,
+                    Proportion = 0.5,
                     VisibleDockables = CreateList<IDockable>(
                         rightToolsTop,
                         new ProportionalDockSplitter(),

@@ -14,7 +14,7 @@
 	<DockPanel>
 		<Grid DockPanel.Dock="Top" HorizontalAlignment="Left" Height="32" Width="600">
 			<Image Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
-			<Menu Margin="35 0 0 0" x:Name="TopMenu">
+			<Menu Margin="35 0 0 0" x:Name="TopMenu" HorizontalAlignment="Left">
 
 				<!-- 文件 / File -->
 				<MenuItem Padding="8 0">
