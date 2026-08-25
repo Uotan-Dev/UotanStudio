@@ -3,9 +3,12 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
-	  <PublishAot>true</PublishAot>
-    <IsAotCompatible>true</IsAotCompatible>
-    <TrimMode>partial</TrimMode>
+	  <!-- 临时关闭 AOT 发布配置以支持 Avalonia 布局预览器；发布 AOT 时恢复：
+	       <PublishAot>true</PublishAot>
+	       <IsAotCompatible>true</IsAotCompatible>
+	       <TrimMode>partial</TrimMode> -->
+    <PublishAot>false</PublishAot>
+    <IsAotCompatible>false</IsAotCompatible>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -26,5 +29,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 文件关联图标：随输出目录复制，供注册表 DefaultIcon 引用。 -->
+    <Content Include="Assets\*.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>
