@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -67,6 +68,121 @@ internal partial class ImageViewModel : Tool
     public ImageViewModel()
     {
         Instance = this;
+        // 注册跨会话操作历史重建工厂，使重启后可恢复撤销栈。
+        // Register the cross-session history reconstructor so the undo stack can be restored after restart.
+        OperationHistoryService.ReconstructOperation = ReconstructOperation;
+    }
+
+    /// <summary>
+    /// <para>从持久化操作描述符重建撤销/重做动作（供操作历史跨会话恢复）。</para>
+    /// Reconstructs undo/redo actions from a persisted operation descriptor (for cross-session history restore).
+    /// </summary>
+    private static (Action Undo, Action Redo) ReconstructOperation(HistoryOperationDto operation)
+    {
+        switch (operation.Kind)
+        {
+            case HistoryOperationKind.ImportImages:
+                return ReconstructImport(operation);
+            case HistoryOperationKind.DeleteImage:
+                return ReconstructDelete(operation);
+            case HistoryOperationKind.ExtractImage:
+                return (() => DeleteDirectorySafe(operation.OutputPaths.FirstOrDefault() ?? string.Empty), () => { });
+            case HistoryOperationKind.SynthesizeImg:
+            case HistoryOperationKind.SynthesizeBr:
+            case HistoryOperationKind.SynthesizeSuper:
+                return (() => DeleteFileSafe(operation.OutputPaths.FirstOrDefault() ?? string.Empty), () => { });
+            case HistoryOperationKind.SynthesizeDat:
+                return (() =>
+                {
+                    foreach (var path in operation.OutputPaths)
+                    {
+                        DeleteFileSafe(path);
+                    }
+                }, () => { }
+                );
+            default:
+                return (() => { }, () => { });
+        }
+    }
+
+    private static (Action Undo, Action Redo) ReconstructImport(HistoryOperationDto operation)
+    {
+        var vm = EnsureInstance();
+        return (
+            () =>
+            {
+                foreach (var relative in operation.RelativePaths)
+                {
+                    var entry = vm.Images.FirstOrDefault(i => i.RelativePath == relative);
+                    if (entry is not null)
+                    {
+                        vm.Images.Remove(entry);
+                    }
+                }
+            },
+            () =>
+            {
+                foreach (var relative in operation.RelativePaths)
+                {
+                    if (vm.Images.Any(i => i.RelativePath == relative))
+                    {
+                        continue;
+                    }
+
+                    var absolute = ProjectContextService.Instance.ResolvePath(relative);
+                    if (absolute is null || !File.Exists(absolute))
+                    {
+                        continue;
+                    }
+
+                    vm.Images.Add(new ImageEntryViewModel
+                    {
+                        DisplayName = Path.GetFileName(relative),
+                        RelativePath = relative,
+                        SizeBytes = new FileInfo(absolute).Length,
+                        Format = DetectFormat(absolute)
+                    });
+                }
+            }
+        );
+    }
+
+    private static (Action Undo, Action Redo) ReconstructDelete(HistoryOperationDto operation)
+    {
+        var vm = EnsureInstance();
+        var source = ProjectContextService.Instance.ResolvePath(operation.RelativePath);
+        return (
+            () =>
+            {
+                if (source is null || !File.Exists(operation.DestinationPath))
+                {
+                    return;
+                }
+
+                File.Move(operation.DestinationPath, source);
+                vm.Images.Add(new ImageEntryViewModel
+                {
+                    DisplayName = Path.GetFileName(operation.RelativePath),
+                    RelativePath = operation.RelativePath,
+                    SizeBytes = new FileInfo(source).Length,
+                    Format = DetectFormat(source)
+                });
+            },
+            () =>
+            {
+                if (source is null || !File.Exists(source))
+                {
+                    return;
+                }
+
+                File.Move(source, operation.DestinationPath);
+                var entry = vm.Images.FirstOrDefault(i => i.RelativePath == operation.RelativePath);
+                if (entry is not null)
+                {
+                    vm.Images.Remove(entry);
+                }
+            }
+        );
     }
 
     /// <summary>
@@ -134,6 +250,13 @@ internal partial class ImageViewModel : Tool
             LogService.Instance.Write(LogLevel.Info, "Images", $"Imported {imported.Count} image(s)  已导入 {imported.Count} 个镜像");
             OperationHistoryService.Instance.Record(
                 $"Import {imported.Count} image(s)",
+                new HistoryOperationDto
+                {
+                    Kind = HistoryOperationKind.ImportImages,
+                    Description = $"Import {imported.Count} image(s)",
+                    Count = imported.Count,
+                    RelativePaths = imported.Select(e => e.RelativePath).ToList()
+                },
                 () =>
                 {
                     foreach (var entry in imported)
@@ -238,6 +361,13 @@ internal partial class ImageViewModel : Tool
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
             OperationHistoryService.Instance.Record(
                 $"Extract {image.DisplayName}",
+                new HistoryOperationDto
+                {
+                    Kind = HistoryOperationKind.ExtractImage,
+                    Description = $"Extract {image.DisplayName}",
+                    DisplayName = image.DisplayName,
+                    OutputPaths = [outputDir]
+                },
                 () => DeleteDirectorySafe(outputDir),
                 () => { });
         }
@@ -283,6 +413,13 @@ internal partial class ImageViewModel : Tool
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
             OperationHistoryService.Instance.Record(
                 $"Synthesize img {image.DisplayName}",
+                new HistoryOperationDto
+                {
+                    Kind = HistoryOperationKind.SynthesizeImg,
+                    Description = $"Synthesize img {image.DisplayName}",
+                    DisplayName = image.DisplayName,
+                    OutputPaths = [outputPath]
+                },
                 () => DeleteFileSafe(outputPath),
                 () => { });
         }
@@ -332,6 +469,13 @@ internal partial class ImageViewModel : Tool
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
             OperationHistoryService.Instance.Record(
                 $"Synthesize br {image.DisplayName}",
+                new HistoryOperationDto
+                {
+                    Kind = HistoryOperationKind.SynthesizeBr,
+                    Description = $"Synthesize br {image.DisplayName}",
+                    DisplayName = image.DisplayName,
+                    OutputPaths = [outputPath]
+                },
                 () => DeleteFileSafe(outputPath),
                 () => { });
         }
@@ -377,6 +521,14 @@ internal partial class ImageViewModel : Tool
             LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted {image.DisplayName} -> intermediate/deleted  已删除 {image.DisplayName}");
             OperationHistoryService.Instance.Record(
                 $"Delete {image.DisplayName}",
+                new HistoryOperationDto
+                {
+                    Kind = HistoryOperationKind.DeleteImage,
+                    Description = $"Delete {image.DisplayName}",
+                    DisplayName = image.DisplayName,
+                    RelativePath = image.RelativePath,
+                    DestinationPath = destination
+                },
                 () =>
                 {
                     File.Move(destination, source);
@@ -447,6 +599,12 @@ internal partial class ImageViewModel : Tool
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
             OperationHistoryService.Instance.Record(
                 "Synthesize super image",
+                new HistoryOperationDto
+                {
+                    Kind = HistoryOperationKind.SynthesizeSuper,
+                    Description = "Synthesize super image",
+                    OutputPaths = [outputPath]
+                },
                 () => DeleteFileSafe(outputPath),
                 () => { });
         }
@@ -510,6 +668,13 @@ internal partial class ImageViewModel : Tool
             LogService.Instance.Write(LogLevel.Info, "Images", $"Generated {datPath} + {listPath}  已生成 DAT 输出");
             OperationHistoryService.Instance.Record(
                 $"Synthesize dat {image.DisplayName}",
+                new HistoryOperationDto
+                {
+                    Kind = HistoryOperationKind.SynthesizeDat,
+                    Description = $"Synthesize dat {image.DisplayName}",
+                    DisplayName = image.DisplayName,
+                    OutputPaths = [datPath, listPath]
+                },
                 () =>
                 {
                     DeleteFileSafe(datPath);

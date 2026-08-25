@@ -67,9 +67,11 @@ public partial class MenuViewModel : ViewModelBase
     // ===== 文件 / File =====
 
     /// <summary>
-    /// <para>创建一个新项目，弹出文件保存对话框选择工程路径，打开工程上下文后清空画布并保存空快照。</para>
-    /// Creates a new project by showing a file-save dialog to pick the project path, opening the project
-    /// context, clearing the canvas, then saving an empty snapshot.
+    /// <para>创建一个新解决方案，弹出文件保存对话框选择 <c>.uotan</c> 路径，打开解决方案上下文后清空画布、
+    /// 镜像清单与历史，并写入空的固件项目、节点项目与解决方案文件。</para>
+    /// Creates a new solution by showing a file-save dialog to pick the <c>.uotan</c> path, opening the
+    /// solution context, clearing the canvas, image list and history, then writing empty firmware project,
+    /// node project and solution files.
     /// </summary>
     [RelayCommand]
     private async Task NewProjectAsync()
@@ -80,32 +82,71 @@ public partial class MenuViewModel : ViewModelBase
             return;
         }
 
-        ProjectContextService.Instance.OpenProject(path);
+        await CreateNewSolutionAsync(path);
+    }
+
+    /// <summary>
+    /// <para>在指定路径创建并持久化一个空解决方案（固件项目 + 节点项目 + 状态目录）。</para>
+    /// Creates and persists an empty solution (firmware project + node project + state directory) at the
+    /// specified path.
+    /// </summary>
+    private async Task CreateNewSolutionAsync(string path)
+    {
+        ProjectContextService.Instance.OpenSolution(path);
         _currentProjectPath = path;
-        // 新工程：清空画布后立即保存空骨架。
-        // New project: clear the canvas then immediately save an empty skeleton.
+        // 新解决方案：清空画布、镜像清单与历史后立即保存空骨架。
+        // New solution: clear the canvas, image list and history, then immediately save the empty skeleton.
         if (NodeEditorVM != null)
         {
             NodeEditorVM.Clear();
         }
 
         ImageViewModel.EnsureInstance().Images.Clear();
-        var snapshot = new ProjectSnapshot
+        OperationHistoryService.Instance.Clear();
+
+        var solutionName = ProjectContextService.Instance.SolutionName ?? Path.GetFileNameWithoutExtension(path);
+        var firmwarePath = ProjectContextService.Instance.FirmwareProjectPath
+            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName + ".uotanfw");
+        var nodePath = ProjectContextService.Instance.NodeProjectPath
+            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName + ".uotannode");
+        var stateDir = ProjectContextService.Instance.StateDirectory
+            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName, ".uotan");
+
+        var firmware = new FirmwareProjectSnapshot
         {
-            ProjectName = ProjectContextService.Instance.ProjectName ?? Path.GetFileNameWithoutExtension(path),
+            FormatVersion = 1,
+            ProjectName = solutionName,
             Images = [],
-            Settings = ProjectSettingViewModel.EnsureInstance().ToDto(),
+            Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
+        };
+        var node = new NodeProjectSnapshot
+        {
+            FormatVersion = 1,
+            ProjectName = solutionName,
             Nodes = [],
             Connections = []
         };
-        await ProjectPersistenceService.SaveAsync(path, snapshot);
+        var solution = new SolutionSnapshot
+        {
+            FormatVersion = 1,
+            SolutionName = solutionName,
+            FirmwareProjectPath = $"{solutionName}/{solutionName}.uotanfw",
+            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode"
+        };
+
+        await SolutionPersistenceService.SaveFirmwareProjectAsync(firmwarePath, firmware);
+        await SolutionPersistenceService.SaveNodeProjectAsync(nodePath, node);
+        await SolutionPersistenceService.SaveSolutionAsync(path, solution);
+        await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));
+        await SolutionSettingsService.SaveAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings());
+
         WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
     }
 
     /// <summary>
-    /// <para>打开现有项目，弹出文件打开对话框选择 .uotan 工程文件，恢复镜像清单、打包设置与画布。</para>
-    /// Opens an existing project by showing a file-open dialog to pick a .uotan project file, restoring
-    /// the image list, packing settings and canvas.
+    /// <para>打开现有解决方案，弹出文件打开对话框选择 <c>.uotan</c> 文件，恢复镜像清单、打包设置、画布与操作历史。</para>
+    /// Opens an existing solution by showing a file-open dialog to pick a <c>.uotan</c> file, restoring the
+    /// image list, packing settings, canvas and operation history.
     /// </summary>
     [RelayCommand]
     private async Task OpenProjectAsync()
@@ -116,52 +157,102 @@ public partial class MenuViewModel : ViewModelBase
             return;
         }
 
-        var snapshot = await ProjectPersistenceService.LoadAsync(path);
-        if (snapshot == null)
+        await OpenProjectFromPathAsync(path);
+    }
+
+    /// <summary>
+    /// <para>从指定路径打开解决方案（供菜单与命令行共用）：加载固件项目与节点项目，重建镜像清单、打包设置、
+    /// 画布与操作历史。返回是否成功。</para>
+    /// Opens the solution at the specified path (shared by the menu and the command line): loads the firmware
+    /// and node projects, rebuilding the image list, packing settings, canvas and operation history. Returns
+    /// whether the open succeeded.
+    /// </summary>
+    public async Task<bool> OpenProjectFromPathAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
-            return;
+            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", $"Open aborted: missing file '{path}'");
+            return false;
         }
 
-        ProjectContextService.Instance.OpenProject(path);
+        var solution = await SolutionPersistenceService.LoadSolutionAsync(path);
+        if (solution is null)
+        {
+            Services.LogService.Instance.Write(LogLevel.Error, "Menu", $"Open aborted: failed to load solution '{path}'");
+            return false;
+        }
+
+        ProjectContextService.Instance.OpenSolution(path);
         _currentProjectPath = path;
 
         // 重建镜像清单：仅加入实际存在的文件。
         // Rebuild the image list: only entries whose files still exist are added.
         var images = ImageViewModel.EnsureInstance();
         images.Images.Clear();
-        foreach (var dto in snapshot.Images)
+        var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(ProjectContextService.Instance.FirmwareProjectPath ?? string.Empty);
+        if (firmware is not null)
         {
-            var absolute = ProjectContextService.Instance.ResolvePath(dto.RelativePath);
-            if (absolute is null || !File.Exists(absolute))
+            foreach (var dto in firmware.Images)
             {
-                continue;
+                var absolute = ProjectContextService.Instance.ResolvePath(dto.RelativePath);
+                if (absolute is null || !File.Exists(absolute))
+                {
+                    continue;
+                }
+
+                images.Images.Add(new ImageEntryViewModel
+                {
+                    DisplayName = Path.GetFileName(dto.RelativePath),
+                    RelativePath = dto.RelativePath,
+                    SizeBytes = dto.SizeBytes,
+                    Format = dto.Format
+                });
             }
 
-            images.Images.Add(new ImageEntryViewModel
+            if (firmware.Settings is not null)
             {
-                DisplayName = Path.GetFileName(dto.RelativePath),
-                RelativePath = dto.RelativePath,
-                SizeBytes = dto.SizeBytes,
-                Format = dto.Format
-            });
+                ProjectSettingViewModel.EnsureInstance().ApplyFromDto(firmware.Settings);
+            }
         }
 
-        if (snapshot.Settings is not null)
-        {
-            ProjectSettingViewModel.EnsureInstance().ApplyFromDto(snapshot.Settings);
-        }
-
-        if (NodeEditorVM != null)
+        // 重建节点画布。
+        // Rebuild the node canvas.
+        var node = await SolutionPersistenceService.LoadNodeProjectAsync(ProjectContextService.Instance.NodeProjectPath ?? string.Empty);
+        if (NodeEditorVM != null && node is not null)
         {
             await NodeEditorVM.LoadFromAsync(new WorkflowSnapshot
             {
                 FormatVersion = 1,
-                Nodes = snapshot.Nodes,
-                Connections = snapshot.Connections
+                Nodes = node.Nodes,
+                Connections = node.Connections
             });
         }
 
+        // 恢复操作历史与解决方案设置。
+        // Restore the operation history and solution settings.
+        if (ProjectContextService.Instance.StateDirectory is { } stateDir)
+        {
+            await OperationHistoryService.Instance.LoadAsync(Path.Combine(stateDir, "history.json"));
+            await SolutionSettingsService.LoadAsync(Path.Combine(stateDir, "settings.json"));
+        }
+
         WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+        Services.LogService.Instance.Write(LogLevel.Info, "Menu", $"Opened solution: {path}");
+        return true;
+    }
+
+    /// <summary>
+    /// <para>将若干文件导入当前解决方案的镜像清单（供命令行与菜单共用）。</para>
+    /// Imports the given files into the current solution's image list (shared by the command line and the menu).
+    /// </summary>
+    public async Task ImportFilesAsync(string[] paths)
+    {
+        if (paths is null || paths.Length == 0)
+        {
+            return;
+        }
+
+        await ImageViewModel.EnsureInstance().ImportAsync(paths);
     }
 
     /// <summary>
@@ -192,15 +283,40 @@ public partial class MenuViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>另存为，弹出文件保存对话框选择新项目路径。</para>
-    /// Saves the project under a new path, showing a file-save dialog.
+    /// <para>另存为，弹出文件保存对话框选择新解决方案路径，复制镜像目录到新根目录后持久化。</para>
+    /// Saves the solution under a new path, showing a file-save dialog, copying the image directory to the
+    /// new root, then persisting.
     /// </summary>
     [RelayCommand]
     private async Task SaveAsAsync()
     {
         var path = await PickProjectFileAsync(isSave: true);
-        if (path == null) return;
+        if (path == null)
+        {
+            return;
+        }
+
+        var oldImages = ProjectContextService.Instance.ImagesDirectory;
+        var oldRoot = ProjectContextService.Instance.RootDirectory;
         _currentProjectPath = path;
+        ProjectContextService.Instance.OpenSolution(path);
+
+        var newRoot = ProjectContextService.Instance.RootDirectory;
+        if (oldImages is not null && oldRoot is not null && newRoot is not null &&
+            !string.Equals(oldRoot, newRoot, StringComparison.OrdinalIgnoreCase) && Directory.Exists(oldImages))
+        {
+            // 复制镜像目录到新根目录，保持相对路径有效。
+            // Copy the image directory to the new root so relative paths stay valid.
+            var newImages = ProjectContextService.Instance.EnsureImagesDirectory();
+            await Task.Run(() =>
+            {
+                foreach (var file in Directory.EnumerateFiles(oldImages))
+                {
+                    File.Copy(file, Path.Combine(newImages, Path.GetFileName(file)), overwrite: true);
+                }
+            });
+        }
+
         await PersistToAsync(path);
     }
 
@@ -221,9 +337,13 @@ public partial class MenuViewModel : ViewModelBase
             return;
         }
 
-        var snapshot = new ProjectSnapshot
+        var context = ProjectContextService.Instance;
+        var solutionName = context.SolutionName ?? Path.GetFileNameWithoutExtension(path);
+
+        var firmware = new FirmwareProjectSnapshot
         {
-            ProjectName = ProjectContextService.Instance.ProjectName ?? Path.GetFileNameWithoutExtension(path),
+            FormatVersion = 1,
+            ProjectName = solutionName,
             Images = ImageViewModel.EnsureInstance().Images
                 .Select(i => new ImageEntryDto
                 {
@@ -232,7 +352,13 @@ public partial class MenuViewModel : ViewModelBase
                     Format = i.Format
                 })
                 .ToList(),
-            Settings = ProjectSettingViewModel.EnsureInstance().ToDto(),
+            Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
+        };
+
+        var node = new NodeProjectSnapshot
+        {
+            FormatVersion = 1,
+            ProjectName = solutionName,
             Nodes = NodeEditorVM.Nodes
                 .Select(n => new NodeDto
                 {
@@ -254,7 +380,26 @@ public partial class MenuViewModel : ViewModelBase
                 .ToList()
         };
 
-        await ProjectPersistenceService.SaveAsync(path, snapshot);
+        var solution = new SolutionSnapshot
+        {
+            FormatVersion = 1,
+            SolutionName = solutionName,
+            FirmwareProjectPath = $"{solutionName}/{solutionName}.uotanfw",
+            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode"
+        };
+
+        var firmwarePath = context.FirmwareProjectPath
+            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName + ".uotanfw");
+        var nodePath = context.NodeProjectPath
+            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName + ".uotannode");
+        var stateDir = context.StateDirectory
+            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName, ".uotan");
+
+        await SolutionPersistenceService.SaveFirmwareProjectAsync(firmwarePath, firmware);
+        await SolutionPersistenceService.SaveNodeProjectAsync(nodePath, node);
+        await SolutionPersistenceService.SaveSolutionAsync(path, solution);
+        await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));
+        await SolutionSettingsService.SaveAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings());
     }
 
     /// <summary>
@@ -617,7 +762,7 @@ public partial class MenuViewModel : ViewModelBase
                 DefaultExtension = "uotan",
                 FileTypeChoices =
                 [
-                    new FilePickerFileType("UotanStudio Project") { Patterns = ["*.uotan"] },
+                    new FilePickerFileType("UotanStudio Solution") { Patterns = ["*.uotan"] },
                     new FilePickerFileType("All files") { Patterns = ["*.*"] }
                 ]
             });
@@ -631,7 +776,7 @@ public partial class MenuViewModel : ViewModelBase
                 AllowMultiple = false,
                 FileTypeFilter =
                 [
-                    new FilePickerFileType("UotanStudio Project") { Patterns = ["*.uotan"] },
+                    new FilePickerFileType("UotanStudio Solution") { Patterns = ["*.uotan"] },
                     new FilePickerFileType("All files") { Patterns = ["*.*"] }
                 ]
             });
