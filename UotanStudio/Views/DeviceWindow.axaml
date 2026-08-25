@@ -3,7 +3,7 @@
         xmlns:pages="using:UotanStudio.Pages"
         Title="{DynamicResource Menu_DeviceManager}"
         Width="960" Height="640"
-        WindowStartupLocation="CenterOwner"
+        WindowStartupLocation="CenterScreen"
         WindowDecorations="Full"
         Icon="/Assets/UotanToolbox.png"
         x:Class="UotanStudio.Views.DeviceWindow">

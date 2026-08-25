@@ -1,34 +1,169 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+using System;
+using System.Collections.ObjectModel;
+using System.IO;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 
-namespace UotanStudio.ViewModels
-{
-    internal class ProjectExplorerViewModel : Tool
-    {
-        public AvaloniaList<Node> TreeViewContent { get; } = [];
+namespace UotanStudio.ViewModels;
 
-        public ProjectExplorerViewModel()
+/// <summary>
+/// <para>项目资源管理器视图模型，以当前工程的 <c>images/</c> 与 <c>intermediate/</c> 目录为根展示真实目录树，
+/// 订阅工程上下文变更消息并在打开/关闭工程时重建树。</para>
+/// Project explorer view model, showing the real directory tree rooted at the current project's
+/// <c>images/</c> and <c>intermediate/</c> folders, rebuilding on project open/close via the
+/// project-context-changed message.
+/// </summary>
+internal class ProjectExplorerViewModel : Tool
+{
+    /// <summary>
+    /// <para>树根节点集合，UI 绑定此项；未打开工程时为空白树。</para>
+    /// Collection of root tree nodes, bound by the UI; empty when no project is open.
+    /// </summary>
+    public AvaloniaList<ExplorerNode> TreeViewContent { get; } = [];
+
+    /// <summary>
+    /// <para>创建项目资源管理器视图模型，订阅工程上下文变更消息并构建初始目录树。</para>
+    /// Creates the project explorer view model, subscribing to project-context-changed messages and building the initial directory tree.
+    /// </summary>
+    public ProjectExplorerViewModel()
+    {
+        WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
+        Refresh();
+    }
+
+    /// <summary>
+    /// <para>响应工程上下文变更消息，重建目录树。</para>
+    /// Responds to project-context-changed messages by rebuilding the directory tree.
+    /// </summary>
+    /// <param name="recipient"><para>消息接收者。</para>The message recipient.</param>
+    /// <param name="message"><para>工程上下文变更消息。</para>The project-context-changed message.</param>
+    private void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message) => Refresh();
+
+    /// <summary>
+    /// <para>重建目录树：以当前工程的 <c>images/</c> 与 <c>intermediate/</c> 目录为根；
+    /// 未打开工程或目录不存在时显示空树，不抛出异常。</para>
+    /// Rebuilds the directory tree rooted at the current project's <c>images/</c> and
+    /// <c>intermediate/</c> directories; shows an empty tree without throwing when no project is
+    /// open or the directories do not exist.
+    /// </summary>
+    public void Refresh()
+    {
+        TreeViewContent.Clear();
+        var svc = ProjectContextService.Instance;
+        AddRoot(svc.ImagesDirectory);
+        AddRoot(svc.IntermediateDirectory);
+    }
+
+    private void AddRoot(string? directory)
+    {
+        if (directory is not null && Directory.Exists(directory))
         {
-            var svc = LanguageService.Instance;
-            var outerLabel = svc.GetString("ProjectExplorer_Outer");
-            var innerLabel = svc.GetString("ProjectExplorer_Inner");
-            var innermostLabel = svc.GetString("ProjectExplorer_Innermost");
-            TreeViewContent.AddRange(
-            Enumerable.Range(1, 10).Select(x => new Node($"{outerLabel} {x}",
-                Enumerable.Range(1, 5).Select(y => new Node($"{innerLabel} {y}",
-                    Enumerable.Range(1, 2).Select(z => new Node($"{innermostLabel} {z}",
-                        Enumerable.Range(1, 2).Select(n => new Node($"1234567 {n}")))))))));
+            TreeViewContent.Add(new ExplorerNode(directory, isDirectory: true));
         }
     }
 }
 
-public partial class Node(string value, IEnumerable<Node>? subNodes = null) : ObservableObject
+/// <summary>
+/// <para>资源管理器树节点，表示一个文件或目录；目录节点的子节点在首次展开时按需扫描加载。</para>
+/// Explorer tree node representing a file or directory; directory children are loaded lazily on the first expansion.
+/// </summary>
+public sealed partial class ExplorerNode : ObservableObject
 {
-    public AvaloniaList<Node> SubNodes { get; } = new(subNodes ?? Array.Empty<Node>());
-    [ObservableProperty] private string _value = value;
+    private bool _childrenLoaded;
+
+    /// <summary>
+    /// <para>获取或设置节点显示名称。</para>
+    /// Gets or sets the display name of the node.
+    /// </summary>
+    [ObservableProperty] private string _name;
+
+    /// <summary>
+    /// <para>获取节点的完整文件系统路径。</para>
+    /// Gets the full file-system path of the node.
+    /// </summary>
+    public string Path { get; }
+
+    /// <summary>
+    /// <para>获取是否为目录节点。</para>
+    /// Gets whether this node is a directory.
+    /// </summary>
+    public bool IsDirectory { get; }
+
+    /// <summary>
+    /// <para>获取是否为占位子节点（用于让尚未展开的目录显示展开箭头）。</para>
+    /// Gets whether this node is a placeholder child (keeps the expander arrow visible for not-yet-expanded directories).
+    /// </summary>
+    public bool IsPlaceholder { get; }
+
+    /// <summary>
+    /// <para>获取子节点集合，在目录首次展开时填充。</para>
+    /// Gets the collection of child nodes, populated on the directory's first expansion.
+    /// </summary>
+    public ObservableCollection<ExplorerNode> Children { get; } = [];
+
+    /// <summary>
+    /// <para>创建资源管理器节点；目录节点会预置一个占位子节点以显示展开箭头。</para>
+    /// Creates an explorer node; directory nodes pre-insert a placeholder child so the expander arrow stays visible.
+    /// </summary>
+    /// <param name="path"><para>节点路径。</para>The node path.</param>
+    /// <param name="isDirectory"><para>是否为目录。</para>Whether the node is a directory.</param>
+    /// <param name="isPlaceholder"><para>是否为占位节点。</para>Whether the node is a placeholder.</param>
+    public ExplorerNode(string path, bool isDirectory, bool isPlaceholder = false)
+    {
+        Path = path;
+        IsDirectory = isDirectory;
+        IsPlaceholder = isPlaceholder;
+        _name = isPlaceholder ? string.Empty : GetDisplayName(path);
+        if (isDirectory && !isPlaceholder)
+        {
+            Children.Add(new ExplorerNode(string.Empty, isDirectory: false, isPlaceholder: true));
+        }
+    }
+
+    /// <summary>
+    /// <para>首次展开目录时扫描并填充子节点；仅在首次调用时执行一次。</para>
+    /// Scans and populates child nodes on the directory's first expansion; runs only once.
+    /// </summary>
+    public void EnsureChildrenLoaded()
+    {
+        if (_childrenLoaded || !IsDirectory)
+        {
+            return;
+        }
+
+        _childrenLoaded = true;
+        Children.Clear();
+
+        if (!Directory.Exists(Path))
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(Path))
+            {
+                Children.Add(new ExplorerNode(dir, isDirectory: true));
+            }
+
+            foreach (var file in Directory.EnumerateFiles(Path))
+            {
+                Children.Add(new ExplorerNode(file, isDirectory: false));
+            }
+        }
+        catch (Exception)
+        {
+            // 目录不可读等异常时保持空子节点，不中断资源管理器
+        }
+    }
+
+    private static string GetDisplayName(string path)
+    {
+        var name = System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(path));
+        return string.IsNullOrEmpty(name) ? path : name;
+    }
 }

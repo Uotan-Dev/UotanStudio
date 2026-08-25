@@ -6,10 +6,10 @@
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 			 x:Class="UotanStudio.Pages.DockView.ProjectExplorerView"
 			 x:DataType="viewmodels:ProjectExplorerViewModel">
-	<TreeView Height="680" ItemsSource="{Binding TreeViewContent}">
+	<TreeView x:Name="ProjectTree" Height="680" ItemsSource="{Binding TreeViewContent}" DoubleTapped="OnTreeDoubleTapped">
 		<TreeView.ItemTemplate>
-			<TreeDataTemplate ItemsSource="{Binding SubNodes}">
-				<TextBlock Text="{Binding Value}" />
+			<TreeDataTemplate x:DataType="viewmodels:ExplorerNode" ItemsSource="{Binding Children}">
+				<TextBlock Text="{Binding Name}" />
 			</TreeDataTemplate>
 		</TreeView.ItemTemplate>
 	</TreeView>
