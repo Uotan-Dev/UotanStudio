@@ -63,5 +63,9 @@
     <!-- 全局日志面板 -->
     <x:String x:Key="Log_Panel_Title">全局日志</x:String>
     <x:String x:Key="Log_Clear">清空</x:String>
+    <x:String x:Key="Log_Export">导出</x:String>
+    <x:String x:Key="Log_ExportDone">日志已导出到 {0}</x:String>
+    <x:String x:Key="Log_ExportFailed">导出日志失败：{0}</x:String>
+    <x:String x:Key="Log_CopyDone">日志条目已复制到剪贴板</x:String>
 
 </ResourceDictionary>

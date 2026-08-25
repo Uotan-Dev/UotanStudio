@@ -63,5 +63,9 @@
     <!-- Global log panel -->
     <x:String x:Key="Log_Panel_Title">Global Log</x:String>
     <x:String x:Key="Log_Clear">Clear</x:String>
+    <x:String x:Key="Log_Export">Export</x:String>
+    <x:String x:Key="Log_ExportDone">Logs exported to {0}</x:String>
+    <x:String x:Key="Log_ExportFailed">Failed to export logs: {0}</x:String>
+    <x:String x:Key="Log_CopyDone">Log entry copied to clipboard</x:String>
 
 </ResourceDictionary>

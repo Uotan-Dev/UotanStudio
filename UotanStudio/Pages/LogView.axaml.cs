@@ -1,14 +1,23 @@
+using System;
+using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
+using UotanStudio.Services;
 using UotanStudio.ViewModels;
 
 namespace UotanStudio.Pages;
 
 /// <summary>
-/// <para>全局日志面板视图，显示统一日志服务的全部条目并提供清空操作。</para>
-/// Global log panel view, displaying all entries from the unified log service and providing a clear action.
+/// <para>全局日志面板视图，显示统一日志服务的全部条目并提供清空、导出与点击复制操作。</para>
+/// Global log panel view, displaying all entries from the unified log service and providing clear, export, and click-to-copy actions.
 /// </summary>
 public partial class LogView : UserControl
 {
@@ -61,6 +70,113 @@ public partial class LogView : UserControl
             vm.Clear();
         }
         ScrollToEnd();
+    }
+
+    /// <summary>
+    /// <para>导出按钮点击事件，弹出保存对话框并将当前日志集合写入文本文件。</para>
+    /// Export button click handler, opening a save dialog and writing the current log collection to a text file.
+    /// </summary>
+    private async void OnExportClick(object? sender, RoutedEventArgs e)
+    {
+        await ExportLogsAsync();
+    }
+
+    /// <summary>
+    /// <para>导出日志到用户选择的文件。</para>
+    /// Exports logs to a user-chosen file.
+    /// </summary>
+    private async Task ExportLogsAsync()
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel is null)
+        {
+            return;
+        }
+
+        if (DataContext is not LogViewModel vm || vm.Entries.Count == 0)
+        {
+            return;
+        }
+
+        var suggestedName = $"UotanStudio_Log_{DateTime.Now:yyyyMMdd_HHmmss}.log";
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = LanguageService.Instance.GetString("Log_Export"),
+            DefaultExtension = "log",
+            SuggestedFileName = Path.GetFileNameWithoutExtension(suggestedName),
+            FileTypeChoices = new[]
+            {
+                new FilePickerFileType("Log files")
+                {
+                    Patterns = new[] { "*.log", "*.txt" },
+                },
+            },
+        });
+
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var stream = await file.OpenWriteAsync();
+            using var writer = new StreamWriter(stream, Encoding.UTF8);
+            foreach (var entry in vm.Entries)
+            {
+                await writer.WriteLineAsync(
+                    $"{entry.Timestamp} [{entry.Level}] {entry.Source} - {entry.Message}");
+            }
+            await writer.FlushAsync();
+
+            LogService.Instance.Write(LogLevel.Info, "LogView",
+                LanguageService.Instance.GetString("Log_ExportDone", file.Name));
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "LogView",
+                LanguageService.Instance.GetString("Log_ExportFailed", ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <para>日志条目点击事件，将该行日志文本复制到剪贴板。</para>
+    /// Log entry click handler, copying the clicked row's text to the clipboard.
+    /// </summary>
+    private async void OnEntryPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not StackPanel panel)
+        {
+            return;
+        }
+
+        if (panel.DataContext is not LogViewModel.LogEntryViewModel entry)
+        {
+            return;
+        }
+
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed == false)
+        {
+            return;
+        }
+
+        var text = $"{entry.Timestamp} [{entry.Level}] {entry.Source} - {entry.Message}";
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(text);
+            LogService.Instance.Write(LogLevel.Debug, "LogView",
+                LanguageService.Instance.GetString("Log_CopyDone"));
+        }
+        catch
+        {
+            // 剪贴板写入失败时不打扰用户
+        }
     }
 
     /// <summary>
