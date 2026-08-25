@@ -16,9 +16,26 @@ namespace UotanStudio;
 
 public partial class App : Application
 {
+    /// <summary>
+    /// <para>由 <c>Program.Main</c> 解析并注入的命令行选项；启动序列在主窗口预构建后据此打开解决方案/导入文件。</para>
+    /// Command-line options parsed and injected by <c>Program.Main</c>; the startup sequence opens a solution
+    /// and/or imports files based on them after the main window is pre-built.
+    /// </summary>
+    public static CommandLineOptions? StartupOptions { get; set; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        // 跟随系统主题时，ActualThemeVariant 会随系统切换；据此重新合并
+        // LightColors/DarkColors，使 Hex* 等自定义画刷同步刷新。
+        ActualThemeVariantChanged += (_, _) =>
+        {
+            var key = ActualThemeVariant == ThemeVariant.Dark ? "DarkColors" : "LightColors";
+            if (LanguageService.Instance.CurrentTheme != key)
+            {
+                LanguageService.Instance.ApplyTheme(key);
+            }
+        };
 #if DEBUG
         this.AttachDeveloperTools();
 #endif
@@ -29,6 +46,11 @@ public partial class App : Application
         // 将 Comm 层 USB 诊断桥接到统一日志服务。
         UsbLogBridge.Install();
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
+
+        // 幂等注册文件关联（后台执行，不阻塞启动；可用 --unregister-file-associations 注销）。
+        // Idempotently register file associations (background, non-blocking; remove with
+        // --unregister-file-associations).
+        _ = Task.Run(() => FileAssociationService.Register());
 
         // 注册全部固件格式处理器，供后续格式自动识别与结构分析使用。
         UotanStudio.Firmware.FirmwareFormatRegistry.RegisterAll();
@@ -117,6 +139,13 @@ public partial class App : Application
             LogService.Instance.Write(LogLevel.Error, "App", $"Pre-building main window failed: {ex.Message}");
         }
 
+        // 应用命令行选项：打开解决方案 / 导入文件（失败仅记日志，不阻断启动）。
+        // Apply command-line options: open a solution / import files (failures only log, never block startup).
+        if (StartupOptions is { } startupOptions)
+        {
+            await ApplyStartupOptionsAsync(splashWindow, startupOptions).ConfigureAwait(true);
+        }
+
         splash.StatusText = string.Format(
             LanguageService.Instance.GetString("Splash_FoundDevices"), devices.Count);
         LogService.Instance.Write(LogLevel.Info, "App",
@@ -124,6 +153,36 @@ public partial class App : Application
 
         await minShowTask.ConfigureAwait(true);
         splash.StatusText = LanguageService.Instance.GetString("Splash_Preparing");
+    }
+
+    /// <summary>
+    /// <para>应用命令行选项：打开指定解决方案并导入文件（失败仅记日志，不阻断启动）。</para>
+    /// Applies the command-line options: opens the specified solution and imports files (failures only log,
+    /// never block startup).
+    /// </summary>
+    private async Task ApplyStartupOptionsAsync(MainSplashWindow splashWindow, CommandLineOptions options)
+    {
+        try
+        {
+            if (splashWindow.PreparedMainWindow?.DataContext is not MainViewModel mainVm)
+            {
+                return;
+            }
+
+            if (options.ProjectPath is { } projectPath)
+            {
+                await mainVm.MenuVM.OpenProjectFromPathAsync(projectPath);
+            }
+
+            if (options.ImportFiles.Count > 0)
+            {
+                await mainVm.MenuVM.ImportFilesAsync([.. options.ImportFiles]);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "App", $"Apply startup options failed: {ex.Message}");
+        }
     }
 
     private void OnThemeChanged(object recipient, ThemeChangedMessage message)
@@ -178,8 +237,10 @@ public partial class App : Application
             _ => ThemeVariant.Default
         };
 
-        // Apply custom theme colors
-        var themeKey = themeMode == ThemeMode.Dark ? "DarkColors" : "LightColors";
+        // 根据实际生效的主题变体选择颜色字典：跟随系统（Default）时由 Avalonia 解析
+        // ActualThemeVariant，据此合并 LightColors/DarkColors，确保深色系统下 Hex* 等画刷也切换。
+        var actual = ActualThemeVariant;
+        var themeKey = actual == ThemeVariant.Dark ? "DarkColors" : "LightColors";
         LanguageService.Instance.ApplyTheme(themeKey);
     }
 

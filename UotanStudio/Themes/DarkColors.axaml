@@ -6,4 +6,12 @@
     <Color x:Key="SecondaryTextForeground">#999999</Color>
     <Color x:Key="BorderForegroundColor">#3a3a3c</Color>
     <Color x:Key="AccentColor">#4cc2ff</Color>
+    <Color x:Key="HexForeground">#ffffff</Color>
+    <Color x:Key="HexOffsetForeground">#7f8fa6</Color>
+    <Color x:Key="HexAsciiForeground">#8fbf8f</Color>
+    <Color x:Key="HexHeaderForeground">#9a9a9a</Color>
+    <Color x:Key="HexHeaderBackground">#00000000</Color>
+    <Color x:Key="HexSelectionBrush">#6659c2ff</Color>
+    <Color x:Key="HexCaretBrush">#4cc2ff</Color>
+    <Color x:Key="HexEditedBrush">#ff8a80</Color>
 </ResourceDictionary>
