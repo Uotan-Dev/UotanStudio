@@ -34,11 +34,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlashNodeViewModel("Connect Device")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flash.Connect"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Mode" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Device" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Mode", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Any });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
             return node;
         }
 
@@ -50,12 +51,13 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlashNodeViewModel("Flash Partition")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flash.Flash"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Device" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Partition" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Image" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Result" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Any });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Partition", PortType = NodePortType.Text });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Image", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Result", PortType = NodePortType.Boolean });
             return node;
         }
 
@@ -67,11 +69,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlashNodeViewModel("Erase Partition")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flash.Erase"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Device" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Partition" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Result" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Any });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Partition", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Result", PortType = NodePortType.Boolean });
             return node;
         }
 
@@ -83,11 +86,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlashNodeViewModel("Reboot Device")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flash.Reboot"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Device" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Mode" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Any });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Mode", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
             return node;
         }
 

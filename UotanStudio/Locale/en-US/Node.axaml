@@ -18,6 +18,7 @@
     <x:String x:Key="Node_ConnectionsLabel"> connections</x:String>
     <x:String x:Key="Node_NoSelection">Select a node to view properties</x:String>
     <x:String x:Key="Node_StatusReady">Ready</x:String>
+    <x:String x:Key="Node_MissingNode">Missing node</x:String>
 
     <!-- Node Names -->
     <x:String x:Key="Node_Firmware_Unpack">Unpack Firmware</x:String>

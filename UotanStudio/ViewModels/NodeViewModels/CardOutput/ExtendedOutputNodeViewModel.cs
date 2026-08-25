@@ -34,9 +34,10 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedOutputNodeViewModel("Notify")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Output.Notify"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Message" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Message", PortType = NodePortType.Text });
             return node;
         }
 
@@ -48,11 +49,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedOutputNodeViewModel("Send Email")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Output.Email"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "To" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Subject" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Body" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "To", PortType = NodePortType.Text });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Subject", PortType = NodePortType.Text });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Body", PortType = NodePortType.Text });
             return node;
         }
 
@@ -64,9 +66,10 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedOutputNodeViewModel("Console Output")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Output.Console"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Text" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Text", PortType = NodePortType.Text });
             return node;
         }
 
@@ -78,10 +81,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedOutputNodeViewModel("File Export")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Output.FileExport"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Path" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
             return node;
         }
 

@@ -34,10 +34,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new OutputNodeViewModel("Log Output")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Output.Log"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Message" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Level" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Message", PortType = NodePortType.Text });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Level", PortType = NodePortType.Text });
             return node;
         }
 
@@ -49,10 +50,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new OutputNodeViewModel("Progress Report")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Output.Progress"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Progress" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Status" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Progress", PortType = NodePortType.Number });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
             return node;
         }
 
@@ -64,10 +66,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new OutputNodeViewModel("Save Result")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Output.Save"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Path" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
             return node;
         }
 

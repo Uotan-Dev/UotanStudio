@@ -34,11 +34,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FirmwareNodeViewModel("Unpack Firmware")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Firmware.Unpack"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Firmware Path" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Output Dir" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Partitions" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Firmware Path", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Output Dir", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Partitions", PortType = NodePortType.Text });
             return node;
         }
 
@@ -50,11 +51,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FirmwareNodeViewModel("Pack Firmware")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Firmware.Pack"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Input Dir" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Config" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Firmware" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Input Dir", PortType = NodePortType.Path });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Config", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
             return node;
         }
 
@@ -66,11 +68,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FirmwareNodeViewModel("Verify Signature")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Firmware.Verify"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Firmware" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Valid" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Report" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Valid", PortType = NodePortType.Boolean });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Report", PortType = NodePortType.Text });
             return node;
         }
 
@@ -82,11 +85,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FirmwareNodeViewModel("Extract Partition")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Firmware.Extract"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Firmware" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Partition Name" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Image" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Partition Name", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Image", PortType = NodePortType.Data });
             return node;
         }
 

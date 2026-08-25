@@ -20,6 +20,8 @@ namespace UotanStudio.ViewModels.NodeViewModels
         private NodeCategory _category;
         private bool _isSelected;
         private NodeExecutionStatus _executionStatus = NodeExecutionStatus.Idle;
+        private string _typeKey = string.Empty;
+        private bool _isMissing;
 
         /// <summary>
         /// <para>节点实例唯一标识。</para>
@@ -75,6 +77,27 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             get => _executionStatus;
             set => SetProperty(ref _executionStatus, value);
+        }
+
+        /// <summary>
+        /// <para>获取或设置稳定节点类型键（对应 <see cref="NodeTypeRegistry"/> 注册键），用于工程持久化与加载重建。</para>
+        /// Gets or sets the stable node type key (matching a <see cref="NodeTypeRegistry"/> key), used for
+        /// project persistence and load-time reconstruction.
+        /// </summary>
+        public string TypeKey
+        {
+            get => _typeKey;
+            set => SetProperty(ref _typeKey, value);
+        }
+
+        /// <summary>
+        /// <para>获取或设置节点是否为缺失占位（加载时无法匹配已注册节点类型）。</para>
+        /// Gets or sets whether the node is a missing placeholder (its type was not found in the registry on load).
+        /// </summary>
+        public bool IsMissing
+        {
+            get => _isMissing;
+            set => SetProperty(ref _isMissing, value);
         }
 
         /// <summary>

@@ -36,11 +36,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedDataNodeViewModel("Concat")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.Concat"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data A" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data B" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Combined" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data A", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data B", PortType = NodePortType.Data });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Combined", PortType = NodePortType.Data });
             return node;
         }
 
@@ -52,12 +53,13 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedDataNodeViewModel("Slice")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.Slice"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Offset" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Length" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Slice" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Offset", PortType = NodePortType.Number });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Length", PortType = NodePortType.Number });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Slice", PortType = NodePortType.Data });
             return node;
         }
 
@@ -69,12 +71,13 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedDataNodeViewModel("Encrypt")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.Encrypt"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Key" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Cipher" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Key", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Cipher", PortType = NodePortType.Data });
             return node;
         }
 
@@ -86,11 +89,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedDataNodeViewModel("Compress")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.Compress"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Compressed" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Compressed", PortType = NodePortType.Data });
             return node;
         }
 
@@ -102,10 +106,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedDataNodeViewModel("Byte Swap")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.ByteSwap"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Swapped" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Swapped", PortType = NodePortType.Data });
             return node;
         }
 

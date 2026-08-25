@@ -33,9 +33,10 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlowControlNodeViewModel("Start")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flow.Start"
             };
-            node.Output.Add(new NodeConnectorViewModel { Title = "Flow" });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
             return node;
         }
 
@@ -47,9 +48,10 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlowControlNodeViewModel("End")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flow.End"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Flow" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
             return node;
         }
 
@@ -61,11 +63,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlowControlNodeViewModel("Branch")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flow.Branch"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Condition" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "True" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "False" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Condition", PortType = NodePortType.Boolean });
+            node.Output.Add(new NodeConnectorViewModel { Title = "True", PortType = NodePortType.Flow });
+            node.Output.Add(new NodeConnectorViewModel { Title = "False", PortType = NodePortType.Flow });
             return node;
         }
 
@@ -77,11 +80,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlowControlNodeViewModel("Loop")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flow.Loop"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Count" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Body" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Index" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Count", PortType = NodePortType.Number });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Body", PortType = NodePortType.Flow });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Index", PortType = NodePortType.Number });
             return node;
         }
 
@@ -93,11 +97,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlowControlNodeViewModel("Delay")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flow.Delay"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Milliseconds" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Flow" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Flow" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Milliseconds", PortType = NodePortType.Number });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
             return node;
         }
 
@@ -109,11 +114,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlowControlNodeViewModel("Parallel")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flow.Parallel"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Flow" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Branch A" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Branch B" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Branch A", PortType = NodePortType.Flow });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Branch B", PortType = NodePortType.Flow });
             return node;
         }
 
@@ -125,11 +131,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlowControlNodeViewModel("Sequence")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flow.Sequence"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Input A" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Input B" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Flow" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Input A", PortType = NodePortType.Flow });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Input B", PortType = NodePortType.Flow });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
             return node;
         }
 
@@ -141,10 +148,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new FlowControlNodeViewModel("Terminate")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flow.Terminate"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Flow" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Reason" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Reason", PortType = NodePortType.Text });
             return node;
         }
 

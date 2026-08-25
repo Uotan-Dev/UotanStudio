@@ -12,6 +12,29 @@ namespace UotanStudio.ViewModels.NodeViewModels
     internal static class NodeDataUtil
     {
         /// <summary>
+        /// <para>判断两个端口类型是否可以连接：任意一方为 <see cref="NodePortType.Any"/> 则允许连接，否则要求类型相同。</para>
+        /// Determines whether two port types can be connected: either side being <see cref="NodePortType.Any"/> permits the connection,
+        /// otherwise the types must match.
+        /// </summary>
+        /// <param name="source">
+        /// <para>源端口（输出）类型。</para>
+        /// The source (output) port type.
+        /// </param>
+        /// <param name="target">
+        /// <para>目标端口（输入）类型。</para>
+        /// The target (input) port type.
+        /// </param>
+        /// <returns>
+        /// <para>是否可以连接。</para>
+        /// Whether the connection is allowed.
+        /// </returns>
+        public static bool CanConnect(NodePortType source, NodePortType target)
+        {
+            if (source == NodePortType.Any || target == NodePortType.Any) return true;
+            return source == target;
+        }
+
+        /// <summary>
         /// <para>把端口值转换为字节数组：字节数组原样返回；字符串若是已存在文件路径则读取文件内容，否则按 UTF-8 编码；其他对象转换为字符串后按 UTF-8 编码。</para>
         /// Converts a port value to a byte array: byte arrays are returned as-is; strings that denote an existing file path are read as file
         /// contents, otherwise encoded as UTF-8; other objects are converted to a string and encoded as UTF-8.

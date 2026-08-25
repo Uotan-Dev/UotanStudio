@@ -106,7 +106,8 @@ namespace UotanStudio.Services
                     Title = n.Title,
                     Category = n.Category.ToString(),
                     X = n.Location.X,
-                    Y = n.Location.Y
+                    Y = n.Location.Y,
+                    TypeKey = n.TypeKey
                 });
             }
             return result;
@@ -188,6 +189,12 @@ namespace UotanStudio.Services
         /// Canvas Y coordinate.
         /// </summary>
         public double Y { get; set; }
+
+        /// <summary>
+        /// <para>稳定节点类型键，对应 NodeTypeRegistry 注册键</para>
+        /// Stable node type key matching a NodeTypeRegistry key.
+        /// </summary>
+        public string TypeKey { get; set; } = string.Empty;
     }
 
     /// <summary>

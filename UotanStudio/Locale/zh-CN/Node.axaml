@@ -18,6 +18,7 @@
     <x:String x:Key="Node_ConnectionsLabel"> 连接</x:String>
     <x:String x:Key="Node_NoSelection">选择节点以查看属性</x:String>
     <x:String x:Key="Node_StatusReady">就绪</x:String>
+    <x:String x:Key="Node_MissingNode">缺失节点</x:String>
 
     <!-- 节点名称 -->
     <x:String x:Key="Node_Firmware_Unpack">解包固件</x:String>

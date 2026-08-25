@@ -32,11 +32,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedFirmwareNodeViewModel("OTA Delta")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Firmware.OtaDelta"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Source" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Target" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Delta" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Source", PortType = NodePortType.Path });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Target", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Delta", PortType = NodePortType.Data });
             return node;
         }
 
@@ -48,11 +49,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedFirmwareNodeViewModel("Merge Signature")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Firmware.MergeSignature"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Image" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Signature" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Signed" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Image", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Signature", PortType = NodePortType.Data });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Signed", PortType = NodePortType.Data });
             return node;
         }
 
@@ -64,11 +66,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedFirmwareNodeViewModel("Merge Dual Slot")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Firmware.MergeDualSlot"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Slot A" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Slot B" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Merged" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Slot A", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Slot B", PortType = NodePortType.Data });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Merged", PortType = NodePortType.Data });
             return node;
         }
 
@@ -80,10 +83,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedFirmwareNodeViewModel("Flash Bootloader")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Firmware.FlashBoot"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Bootloader" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Bootloader", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
             return node;
         }
 
@@ -116,12 +120,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
                     ExecuteMergeDualSlot(context);
                     break;
                 case "Flash Boot":
-                {
-                    var bootloader = Convert.ToString(ReadInput("Bootloader"), System.Globalization.CultureInfo.InvariantCulture);
-                    WriteOutput("Status", "queued");
-                    context.Log.Write(LogLevel.Info, Title, $"Bootloader flash queued: {bootloader ?? "<empty>"}  已记录刷写任务。");
-                    break;
-                }
+                    {
+                        var bootloader = Convert.ToString(ReadInput("Bootloader"), System.Globalization.CultureInfo.InvariantCulture);
+                        WriteOutput("Status", "queued");
+                        context.Log.Write(LogLevel.Info, Title, $"Bootloader flash queued: {bootloader ?? "<empty>"}  已记录刷写任务。");
+                        break;
+                    }
                 default:
                     return base.ExecuteAsync(context);
             }

@@ -34,11 +34,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedFlashNodeViewModel("Flash Bootloader")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flash.Bootloader"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Device" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Bootloader" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Any });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Bootloader", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
             return node;
         }
 
@@ -50,10 +51,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedFlashNodeViewModel("Erase All")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flash.EraseAll"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Device" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Any });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
             return node;
         }
 
@@ -65,11 +67,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedFlashNodeViewModel("OTA Sideload")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flash.OtaSideload"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Device" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "OTA Package" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Any });
+            node.Input.Add(new NodeConnectorViewModel { Title = "OTA Package", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
             return node;
         }
 
@@ -81,11 +84,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new ExtendedFlashNodeViewModel("Overwrite Firmware")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Flash.OverwriteFirmware"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Device" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Firmware" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Status" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Any });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Firmware", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
             return node;
         }
 

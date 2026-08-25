@@ -174,6 +174,23 @@
                                            FontSize="12" />
                             </Grid>
 
+                            <!-- 节点类型键 -->
+                            <Grid ColumnDefinitions="Auto,*">
+                                <TextBlock Grid.Column="0" Text="Type"
+                                           FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Margin="0,0,8,0" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding SelectedNode.TypeKey}"
+                                           FontSize="12" />
+                            </Grid>
+
+                            <!-- 缺失节点占位标记 -->
+                            <TextBlock Text="{DynamicResource Node_MissingNode}"
+                                       FontSize="12" FontWeight="SemiBold"
+                                       Foreground="Red"
+                                       IsVisible="{Binding SelectedNode.IsMissing}" />
+
                             <!-- 位置 -->
                             <Grid ColumnDefinitions="Auto,*">
                                 <TextBlock Grid.Column="0" Text="Location"
@@ -246,16 +263,48 @@
                                      Location="{Binding Location, Mode=TwoWay}">
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                    <nodify:NodeInput Header="{Binding Title}"
-                                                      IsConnected="{Binding IsConnected}"
-                                                      Anchor="{Binding Anchor, Mode=OneWayToSource}" />
+                                    <nodify:NodeInput IsConnected="{Binding IsConnected}"
+                                                      Anchor="{Binding Anchor, Mode=OneWayToSource}">
+                                        <!-- 端口类型徽章 + 标题 -->
+                                        <nodify:NodeInput.Header>
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <Border CornerRadius="3" Padding="4,1"
+                                                        VerticalAlignment="Center"
+                                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                        BorderThickness="1">
+                                                    <TextBlock Text="{Binding PortTypeDisplay}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="12" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </nodify:NodeInput.Header>
+                                    </nodify:NodeInput>
                                 </DataTemplate>
                             </nodify:Node.InputConnectorTemplate>
                             <nodify:Node.OutputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                    <nodify:NodeOutput Header="{Binding Title}"
-                                                       IsConnected="{Binding IsConnected}"
-                                                       Anchor="{Binding Anchor, Mode=OneWayToSource}" />
+                                    <nodify:NodeOutput IsConnected="{Binding IsConnected}"
+                                                       Anchor="{Binding Anchor, Mode=OneWayToSource}">
+                                        <!-- 端口类型徽章 + 标题 -->
+                                        <nodify:NodeOutput.Header>
+                                            <StackPanel Orientation="Horizontal" Spacing="4">
+                                                <Border CornerRadius="3" Padding="4,1"
+                                                        VerticalAlignment="Center"
+                                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                                        BorderThickness="1">
+                                                    <TextBlock Text="{Binding PortTypeDisplay}"
+                                                               FontSize="10"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Title}"
+                                                           FontSize="12" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </nodify:NodeOutput.Header>
+                                    </nodify:NodeOutput>
                                 </DataTemplate>
                             </nodify:Node.OutputConnectorTemplate>
                         </nodify:Node>

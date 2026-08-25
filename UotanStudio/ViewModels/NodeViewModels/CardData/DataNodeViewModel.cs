@@ -35,10 +35,11 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new DataNodeViewModel("Read File")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.ReadFile"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Path" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Data" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Path", PortType = NodePortType.Path });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
             return node;
         }
 
@@ -50,11 +51,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new DataNodeViewModel("Format Convert")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.Convert"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Input" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Format" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Output" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Input", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Format", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Output", PortType = NodePortType.Text });
             return node;
         }
 
@@ -66,11 +68,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new DataNodeViewModel("Checksum")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.Checksum"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Hash" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Algorithm", PortType = NodePortType.Text });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Hash", PortType = NodePortType.Text });
             return node;
         }
 
@@ -82,11 +85,12 @@ namespace UotanStudio.ViewModels.NodeViewModels
         {
             var node = new DataNodeViewModel("Compare")
             {
-                Location = new Point(100, 100)
+                Location = new Point(100, 100),
+                TypeKey = "Data.Compare"
             };
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data A" });
-            node.Input.Add(new NodeConnectorViewModel { Title = "Data B" });
-            node.Output.Add(new NodeConnectorViewModel { Title = "Match" });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data A", PortType = NodePortType.Data });
+            node.Input.Add(new NodeConnectorViewModel { Title = "Data B", PortType = NodePortType.Data });
+            node.Output.Add(new NodeConnectorViewModel { Title = "Match", PortType = NodePortType.Boolean });
             return node;
         }
 

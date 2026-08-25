@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.ViewModels.NodeViewModels;
@@ -140,7 +141,13 @@ namespace UotanStudio.ViewModels
         public NodeViewModels.FlowNodeViewModel? SelectedNode
         {
             get => _selectedNode;
-            set => SetProperty(ref _selectedNode, value);
+            set
+            {
+                if (SetProperty(ref _selectedNode, value))
+                {
+                    WeakReferenceMessenger.Default.Send(new NodeSelectionChangedMessage(value));
+                }
+            }
         }
 
         /// <summary>
@@ -470,6 +477,12 @@ namespace UotanStudio.ViewModels
             if (source == target) return;
             // 检查是否已存在相同连接
             if (Connections.Any(c => c.Source == source && c.Target == target)) return;
+            // 端口类型兼容性校验：不兼容则拒绝连接并记录警告
+            if (!NodeDataUtil.CanConnect(source.PortType, target.PortType))
+            {
+                _log.Write(LogLevel.Warn, "NodeEditor", $"Connection rejected: type {source.PortType} -> {target.PortType} incompatible");
+                return;
+            }
             ExecuteCommand(new NodeViewModels.EditorCommands.AddConnectionCommand(Connections, new NodeViewModels.NodeConnectionViewModel(source, target)));
         }
 
@@ -726,7 +739,8 @@ namespace UotanStudio.ViewModels
             ArgumentNullException.ThrowIfNull(snapshot);
             Clear();
 
-            // 重建节点：按标题匹配已知类别的简易工厂
+            // 重建节点：按 TypeKey 查注册表创建具体节点；未注册时创建缺失占位节点
+            // Rebuild nodes: create concrete nodes via the registry by TypeKey; create a missing placeholder when unregistered.
             var created = new System.Collections.Generic.Dictionary<string, NodeViewModels.FlowNodeViewModel>(StringComparer.OrdinalIgnoreCase);
             foreach (var dto in snapshot.Nodes)
             {
@@ -734,10 +748,17 @@ namespace UotanStudio.ViewModels
                 {
                     category = NodeViewModels.NodeCategory.Firmware;
                 }
-                var node = new NodeViewModels.FlowNodeViewModel(dto.Title, category)
+                NodeViewModels.FlowNodeViewModel node;
+                if (!string.IsNullOrEmpty(dto.TypeKey) && NodeTypeRegistry.Contains(dto.TypeKey))
                 {
-                    Location = new Point(dto.X, dto.Y)
-                };
+                    node = NodeTypeRegistry.Create(dto.TypeKey)!;
+                }
+                else
+                {
+                    node = new NodeViewModels.FlowNodeViewModel(dto.Title, category) { IsMissing = true };
+                    _log.Write(LogLevel.Warn, "NodeEditor", $"Missing node type '{dto.TypeKey}' - placeholder created");
+                }
+                node.Location = new Point(dto.X, dto.Y);
                 Nodes.Add(node); // 加载操作直接写入画布，不进入撤销栈
                 if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
             }
