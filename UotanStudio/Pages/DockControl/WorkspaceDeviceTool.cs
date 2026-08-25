@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Pages;
 
 namespace UotanStudio.Pages.DockControl;
 

@@ -12,7 +12,7 @@
     <x:String x:Key="Dock_Properties_Path">路径</x:String>
     <x:String x:Key="Dock_Properties_Format">格式</x:String>
     <x:String x:Key="Dock_Properties_Size">大小</x:String>
-    <x:String x:Key="Dock_Properties_NoSelection">选择节点或镜像以查看详情</x:String>
+    <x:String x:Key="Dock_Properties_NoSelection">选择文件以查看详情</x:String>
     <x:String x:Key="Dock_ProjectSetting">打包设置</x:String>
     <x:String x:Key="Dock_ImagesView">镜像文件管理</x:String>
     <x:String x:Key="Dock_ImageType">镜像类型</x:String>

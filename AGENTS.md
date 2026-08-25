@@ -15,7 +15,7 @@ dotnet test UotanStudio.slnx -c Debug
 # 启动应用（Desktop 为启动项目）
 dotnet run --project UotanStudio.Desktop
 
-# AOT 发布（依赖 IsAotCompatible / PublishAot）
+# AOT 发布（依赖 IsAotCompatible / PublishAot；当前已临时关闭以支持 Avalonia 布局预览器，恢复方式见 §1）
 dotnet publish UotanStudio.Desktop -c Release -r win-x64
 ```
 
@@ -27,13 +27,13 @@ dotnet publish UotanStudio.Desktop -c Release -r win-x64
 |---|---|
 | `UotanStudio.Comm` | 设备通信库：USB 多后端（WinUSB/LibUsb/Linux/MacOS/HarmonyOS）+ ADB / Fastboot / EDL / RKDL 协议会话 + TCP/UDP/串口/mDNS 传输。**零 Avalonia 依赖**，供应用层引用。 |
 | `UotanStudio.Firmware` | 固件解析库：boot image、Payload、Sparse、CPIO、AVB、压缩、DAT（Android v4 transfer list 写入）、Oppo/NTPi/Nb0/Pac 等格式处理。**零 Avalonia 依赖**。 |
-| `UotanStudio` | 应用层：Avalonia 资源/主题（`avares://UotanStudio/...`）、ViewModel（继承 `ViewModelBase` → `ObservableObject`）、服务（单例：`LanguageService`、`LogService`、`SettingsPersistenceService`、`DeviceMonitorService`、`ProjectContextService`、`OperationHistoryService`；静态：`ProjectPersistenceService`）、消息（`WeakReferenceMessenger` 派生消息类在 `Messages/`）。 |
-| `UotanStudio.Desktop` | 启动项目：`WinExe`、`PublishAot=true`、`TrimMode=partial`。 |
+| `UotanStudio` | 应用层：Avalonia 资源/主题（`avares://UotanStudio/...`）、ViewModel（继承 `ViewModelBase` → `ObservableObject`）、服务（单例：`LanguageService`、`LogService`、`SettingsPersistenceService`、`DeviceMonitorService`、`ProjectContextService`、`OperationHistoryService`；静态：`SolutionPersistenceService`、`SolutionSettingsService`）、消息（`WeakReferenceMessenger` 派生消息类在 `Messages/`）。 |
+| `UotanStudio.Desktop` | 启动项目：`WinExe`、`PublishAot=true`、`TrimMode=partial`（当前临时关闭，见 §1）。 |
 
 ## 关键开发约定
 
-### 1. AOT 兼容性（强制）
-`UotanStudio.csproj` 与 `Desktop` 项目启用了 `IsAotCompatible` / `PublishAot`。这意味着：
+### 1. AOT 兼容性（强制；当前临时关闭）
+`UotanStudio.csproj` 与 `Desktop` 项目启用了 `IsAotCompatible` / `PublishAot`。**为支持 Avalonia 布局预览器，当前已在两个 csproj 中临时置为 `false`（`UotanStudio.csproj` 的 `IsAotCompatible`、`Desktop.csproj` 的 `PublishAot` / `IsAotCompatible` / `TrimMode`，注释中保留了恢复写法）；发布 AOT 前须恢复。** 以下约束在恢复后依然适用：
 - **禁止 `Assembly.LoadFrom`、`Activator.CreateInstance(Type)` 等反射加载**。设备协议会话、USB 后端等均通过编译期类型直接构造（`UotanStudio.Comm` 提供工厂/会话类，无运行时加载）。
 - JSON 序列化使用**源生成**：`AppSettingsJsonContext : JsonSerializerContext`，配合 `AppSettingsJsonContext.Default.AppSettings`。新增需序列化的类型必须用 `[JsonSerializable]` 注册到该上下文。
 - `ViewLocator` 内部仍用反射（已标注 `[RequiresUnreferencedCode]`），**不要在其他地方复制此模式**；非 `ViewModelBase` 的命名空间（如 `UotanStudio.ViewModels.Devices.DeviceViewModel`）需在 `App.axaml` 显式注册 `DataTemplate`。
@@ -74,9 +74,10 @@ dotnet publish UotanStudio.Desktop -c Release -r win-x64
 - **面板构成**：左侧（项目资源管理器 / 打包设置 / 设备）、中部文档区（`DocumentDock`，Id=`DocumentsPane`）、右侧（镜像管理 / 属性）；底部 `BottomPane` 保留为**空槽位**（无面板）。输出 / ADB 日志面板已移除，工作区操作日志统一走全局 `LogService`。
 - **文档编辑器**：`FileView` 使用 `Pages/DockControl/CodeEditor`（继承 AvaloniaEdit `TextEditor`，TextMate 语法高亮，LightPlus/DarkPlus 随主题切换）；`FileViewModel` 承载 `Text` / `Language` / `FilePath` / `IsDirty`，`FileView` 双向绑定；语言按扩展名由 `SyntaxLanguageRegistry.GetLanguageId` 解析（`.prop/.rc→ini`、`.xml→xml`、`.json→json` 等）。`WorkspaceViewModel.OpenDocumentAsync(path)` 打开/聚焦文档，`App` 注册 `OpenDocumentRequestMessage` 转发。
 - **镜像面板**：`ImageViewModel`（`ViewModels/ImageViewModel.cs`）为单例（`EnsureInstance()` / `Instance`），维护 `Images`（相对工程根目录的 `ImageEntryViewModel`）与 6 个命令（提取 / 合成 img / 合成 br / 删除 / 合成 super / 合成 dat），操作经 `FirmwareService`（`SynthesizeSuperAsync` 等）与 `UotanStudio.Firmware.Dat.DatWriter` 落到 `intermediate/`；文件菜单含「导入镜像」「导出镜像」。
-- **工程文件（`.uotan`）**：`ProjectPersistenceService`（静态，`ProjectJsonContext` 源生成 JSON）读写 `ProjectSnapshot`（FormatVersion=2：工程名 / 镜像清单 `ImageEntryDto`（相对路径）/ 打包设置 `ProjectSettingsDto` / 节点画布 `NodeDto`+`ConnectionDto`）。新建 / 打开 / 保存由 `MenuViewModel` 编排。
-- **工程目录约定**：`ProjectContextService`（单例）承载当前工程：`RootDirectory` = 工程文件同名目录，`images/` 存导入镜像，`intermediate/<操作>/` 存中间产物（解包、合成、deleted）。镜像条目一律存相对路径。
-- **操作历史**：`OperationHistoryService`（单例）维护内存撤销/重做栈（容量 50），工作区操作通过 `Record(description, undo, redo)` 登记；`MenuViewModel` 的 Undo/Redo 优先执行历史，未命中再转发 `NodeEditorActionMessage`。
+- **工程文件（VS 式布局）**：`SolutionPersistenceService`（静态，`SolutionJsonContext` 源生成 JSON）读写三类文件——解决方案 `<名称>.uotan`（`SolutionSnapshot`：解决方案名 + 引用的固件/节点项目相对路径）、固件项目 `<名称>.uotanfw`（`FirmwareProjectSnapshot`：镜像清单 `ImageEntryDto`（相对路径）+ 打包设置 `ProjectSettingsDto`）、节点项目 `<名称>.uotannode`（`NodeProjectSnapshot`：节点画布 `NodeDto`+`ConnectionDto`）。新建 / 打开 / 保存由 `MenuViewModel` 编排；`MenuViewModel.OpenProjectFromPathAsync(path)` / `ImportFilesAsync(paths)` 供菜单与命令行共用。旧单文件 `.uotan`（`ProjectSnapshot`）已废弃。
+- **工程目录约定**：`ProjectContextService`（单例）承载当前解决方案：`RootDirectory` = 解决方案文件同名目录，`images/` 存导入镜像，`intermediate/<操作>/` 存中间产物（解包、合成、deleted），`.uotan/` 存会话状态（`settings.json` + `history.json`，类似 VS 的 `.vs/`）。镜像条目一律存相对路径。
+- **操作历史**：`OperationHistoryService`（单例）维护内存撤销/重做栈（容量 50），工作区操作通过 `Record(description, [HistoryOperationDto,] undo, redo)` 登记；带 `HistoryOperationDto` 的条目可经 `SaveAsync`/`LoadAsync` 持久化到 `.uotan/history.json` 并跨会话重建（重建工厂由 `ImageViewModel` 注册到 `ReconstructOperation`）。`MenuViewModel` 的 Undo/Redo 优先执行历史，未命中再转发 `NodeEditorActionMessage`。
+- **窗口标题**：`MainViewModel.WindowTitle`（`"<解决方案名> - UotanStudio"`）绑定 `MainWindow.Title` 与顶部标题栏 `TextBlock`，随 `ProjectContextChangedMessage` 更新。
 
 ### 9. 设备管理器
 设备监视与协议交互**统一基于 `UotanStudio.Comm`**，由 `DeviceMonitorService`（`UotanStudio/Services/DeviceMonitorService.cs`，单例）驱动：

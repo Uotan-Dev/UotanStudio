@@ -4,7 +4,9 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <IsAotCompatible>true</IsAotCompatible>
+    <!-- 临时关闭 AOT 兼容以支持 Avalonia 布局预览器；发布 AOT 时恢复：
+         <IsAotCompatible>true</IsAotCompatible> -->
+    <IsAotCompatible>false</IsAotCompatible>
   </PropertyGroup>
   
   <ItemGroup>

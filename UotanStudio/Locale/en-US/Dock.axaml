@@ -12,7 +12,7 @@
     <x:String x:Key="Dock_Properties_Path">Path</x:String>
     <x:String x:Key="Dock_Properties_Format">Format</x:String>
     <x:String x:Key="Dock_Properties_Size">Size</x:String>
-    <x:String x:Key="Dock_Properties_NoSelection">Select a node or image to view details</x:String>
+    <x:String x:Key="Dock_Properties_NoSelection">Select a file to view details</x:String>
     <x:String x:Key="Dock_ProjectSetting">Packing Settings</x:String>
     <x:String x:Key="Dock_ImagesView">Image Manager</x:String>
     <x:String x:Key="Dock_ImageType">Image Type</x:String>
