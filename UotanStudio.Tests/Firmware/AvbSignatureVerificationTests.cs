@@ -186,7 +186,7 @@ public class AvbSignatureVerificationTests
             inv = unchecked(inv * (2 - a * inv));
         }
 
-        return unchecked((uint)(0 - inv));
+        return unchecked(0 - inv);
     }
 
     private static byte[] ToBigEndianPadded(BigInteger value, int length)

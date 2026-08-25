@@ -207,4 +207,4 @@ internal static class FormatDetector
         return hasPrintable;
     }
 
-    }
+}
