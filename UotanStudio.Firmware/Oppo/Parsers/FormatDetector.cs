@@ -137,17 +137,10 @@ internal static class FormatDetector
                 }
             }
 
-            // Step 5: Try MTK header detection (simple heuristic)
-            if (fileSize >= OfpMtkHeader.Size)
-            {
-                stream.Position = fileSize - OfpMtkHeader.Size;
-                var headerBuffer = new byte[OfpMtkHeader.Size];
-                var bytesRead = stream.Read(headerBuffer, 0, OfpMtkHeader.Size);
-                if (bytesRead == OfpMtkHeader.Size && ContainsMtkSignature(headerBuffer))
-                {
-                    return OppFormat.OfpMtk;
-                }
-            }
+            // Step 5: MTK detection is delegated to the registered custom detectors below.
+            // The former naive tail scan that searched for the ASCII substring "MTK" was removed
+            // because it produced false positives: the trailing bytes of unrelated images (e.g. TWRP /
+            // Android boot images) often contained "MTK", routing non-Oppo files to the Oppo MTK handler.
 
             // Step 6: Try custom detectors
             foreach (var detector in CustomDetectors)
@@ -214,17 +207,4 @@ internal static class FormatDetector
         return hasPrintable;
     }
 
-    private static bool ContainsMtkSignature(ReadOnlySpan<byte> data)
-    {
-        // Look for "MTK" ASCII pattern in the header data
-        for (var i = 0; i <= data.Length - 3; i++)
-        {
-            if (data[i] == 0x4D && data[i + 1] == 0x54 && data[i + 2] == 0x4B)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
-}

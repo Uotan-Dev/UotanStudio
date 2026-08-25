@@ -30,8 +30,11 @@ public static class FirmwareFormatRegistry
             Register(new Lp.LpFormatHandler());
             Register(new NTPi.NtpiFormatHandler());
             Register(new Nb0.Nb0FormatHandler());
-            Register(new Oppo.OppoFormatHandler());
+            // Boot/Vendor boot images are detected by their leading magic
+            // ("ANDROID!" / "VNDRBOOT"), a strong head signal, so they must be tried
+            // before the Oppo tail heuristics to avoid misrouting such images.
             Register(new BootImage.BootImageFormatHandler());
+            Register(new Oppo.OppoFormatHandler());
             Register(new Compress.CompressFormatHandler());
             Register(new OnePlusOps.OnePlusOpsFormatHandler());
             Register(new Pac.PacFormatHandler());
