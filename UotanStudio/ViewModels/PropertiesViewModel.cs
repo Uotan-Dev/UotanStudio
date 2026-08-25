@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
@@ -106,6 +107,7 @@ internal partial class PropertiesViewModel : Tool
         WeakReferenceMessenger.Default.Register<NodeSelectionChangedMessage>(this, OnNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<ImageSelectionChangedMessage>(this, OnImageSelectionChanged);
         WeakReferenceMessenger.Default.Register<FileAnalysisCompletedMessage>(this, OnFileAnalysisCompleted);
+        WeakReferenceMessenger.Default.Register<ActiveDocumentChangedMessage>(this, OnActiveDocumentChanged);
     }
 
     /// <summary>
@@ -125,6 +127,36 @@ internal partial class PropertiesViewModel : Tool
     /// Responds to file-analysis-completed messages by refreshing property rows with analysis results.
     /// </summary>
     private void OnFileAnalysisCompleted(object recipient, FileAnalysisCompletedMessage message) => RefreshForFileAnalysis(message);
+
+    /// <summary>
+    /// <para>响应活动文档切换消息，根据新选中文档的分析结果刷新属性行；
+    /// 文档为 <c>null</c> 或非二进制（无分析结果）时清空面板。</para>
+    /// Responds to active-document-changed messages by refreshing property rows with the newly
+    /// active document's analysis results; clears the panel when the document is <c>null</c> or has
+    /// no analysis (non-binary).
+    /// </summary>
+    private void OnActiveDocumentChanged(object recipient, ActiveDocumentChangedMessage message)
+    {
+        var doc = message.Document;
+        if (doc is null)
+        {
+            if (ContentType == PropertiesContentType.FileAnalysis)
+            {
+                Properties.Clear();
+                SelectedNodeTitle = string.Empty;
+                HasSelection = false;
+                ContentType = PropertiesContentType.None;
+            }
+            return;
+        }
+
+        // 切换到已打开文档时，用该文档已缓存的分析结果刷新属性面板。
+        // Refresh the properties panel with the document's cached analysis results on switch.
+        RefreshForFileAnalysis(new FileAnalysisCompletedMessage(
+            doc.Analysis.ToList(),
+            doc.DetectedFormat,
+            doc.FilePath));
+    }
 
     /// <summary>
     /// <para>刷新指定节点的属性行。节点为 <c>null</c> 时显示占位。</para>

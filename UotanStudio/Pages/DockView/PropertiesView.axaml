@@ -53,13 +53,19 @@
                         Background="{DynamicResource ControlFillColorDefaultBrush}">
                   <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold"
                              Opacity="0.75" VerticalAlignment="Center"
-                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1"
-                             ToolTip.Tip="{Binding Name}" />
+                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1">
+                    <ToolTip.Tip>
+                      <TextBlock Text="{Binding Name}" TextWrapping="Wrap" MaxWidth="480" />
+                    </ToolTip.Tip>
+                  </TextBlock>
                 </Border>
                 <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="11"
                            VerticalAlignment="Center" HorizontalAlignment="Stretch"
-                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1"
-                           ToolTip.Tip="{Binding Value}" />
+                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1">
+                  <ToolTip.Tip>
+                    <TextBlock Text="{Binding Value}" TextWrapping="Wrap" MaxWidth="640" />
+                  </ToolTip.Tip>
+                </TextBlock>
               </Grid>
             </DataTemplate>
           </ItemsControl.ItemTemplate>

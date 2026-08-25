@@ -1,10 +1,13 @@
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Messages;
 using UotanStudio.Pages.DockControl;
 
 namespace UotanStudio.ViewModels;
@@ -19,6 +22,7 @@ public class WorkspaceViewModel : ViewModelBase
     private readonly IFactory _factory;
     private IRootDock? _layout;
     private DocumentDock? _documentDock;
+    private bool _subscribedDocumentDock;
 
     /// <summary>
     /// <para>获取或设置 Dock 根布局。</para>
@@ -68,6 +72,8 @@ public class WorkspaceViewModel : ViewModelBase
             return;
         }
 
+        EnsureDocumentDockSubscribed(documentDock);
+
         var fullPath = Path.GetFullPath(path);
         var existing = documentDock.VisibleDockables?
             .OfType<FileViewModel>()
@@ -90,6 +96,34 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadContentAsync(fullPath);
+    }
+
+    /// <summary>
+    /// <para>订阅文档区 <see cref="IDock.ActiveDockable"/> 变更，在用户切换已打开文档标签时
+    /// 发送 <see cref="ActiveDocumentChangedMessage"/>，使属性面板等订阅方刷新显示。</para>
+    /// Subscribes to the document dock's <see cref="IDock.ActiveDockable"/> changes, sending an
+    /// <see cref="ActiveDocumentChangedMessage"/> when the user switches between already-open document
+    /// tabs so subscribers such as the properties panel can refresh.
+    /// </summary>
+    private void EnsureDocumentDockSubscribed(DocumentDock documentDock)
+    {
+        if (_subscribedDocumentDock)
+        {
+            return;
+        }
+
+        documentDock.PropertyChanged += OnDocumentDockPropertyChanged;
+        _subscribedDocumentDock = true;
+    }
+
+    private void OnDocumentDockPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(IDock.ActiveDockable) || sender is not DocumentDock dock)
+        {
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dock.ActiveDockable as FileViewModel));
     }
 
     /// <summary>
