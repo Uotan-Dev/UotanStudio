@@ -14,6 +14,8 @@
     <x:String x:Key="Menu_OpenRecent">最近打开</x:String>
     <x:String x:Key="Menu_Save">保存</x:String>
     <x:String x:Key="Menu_SaveAs">另存为...</x:String>
+    <x:String x:Key="Menu_ImportImage">导入镜像...</x:String>
+    <x:String x:Key="Menu_ExportImage">导出镜像...</x:String>
     <x:String x:Key="Menu_Export">导出...</x:String>
     <x:String x:Key="Menu_Exit">退出</x:String>
 

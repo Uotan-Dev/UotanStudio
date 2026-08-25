@@ -17,6 +17,14 @@
     <x:String x:Key="ImageView_DeleteSelected">删除选中文件</x:String>
     <x:String x:Key="ImageView_SynthesizeSuper">合成Super</x:String>
     <x:String x:Key="ImageView_SynthesizeDat">合成dat</x:String>
+    <x:String x:Key="ImageView_ImportHint">将镜像导入项目 images/ 目录</x:String>
+    <x:String x:Key="ImageView_ExportHint">将选中镜像导出到外部路径</x:String>
+    <x:String x:Key="ImageView_ExtractHint">将选中镜像分解到 intermediate/</x:String>
+    <x:String x:Key="ImageView_SuperHint">由项目内 raw/sparse 镜像合成 super 镜像</x:String>
+    <x:String x:Key="ImageView_DatHint">生成 .new.dat 与 .transfer.list（Android v4）</x:String>
+    <x:String x:Key="ImageView_NoSelection">未选中镜像</x:String>
+    <x:String x:Key="ImageView_NoProject">尚未打开工程</x:String>
+    <x:String x:Key="ImageView_OperationDone">操作完成</x:String>
 
     <!-- Splash window -->
     <x:String x:Key="Splash_Subtitle">固件工具箱 · Firmware Toolbox</x:String>

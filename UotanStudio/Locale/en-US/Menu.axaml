@@ -14,6 +14,8 @@
     <x:String x:Key="Menu_OpenRecent">Open Recent</x:String>
     <x:String x:Key="Menu_Save">Save</x:String>
     <x:String x:Key="Menu_SaveAs">Save As...</x:String>
+    <x:String x:Key="Menu_ImportImage">Import Image...</x:String>
+    <x:String x:Key="Menu_ExportImage">Export Image...</x:String>
     <x:String x:Key="Menu_Export">Export...</x:String>
     <x:String x:Key="Menu_Exit">Exit</x:String>
 

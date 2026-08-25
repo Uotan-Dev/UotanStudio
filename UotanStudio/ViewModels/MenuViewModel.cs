@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -7,6 +8,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Views;
 
@@ -65,43 +67,101 @@ public partial class MenuViewModel : ViewModelBase
     // ===== 文件 / File =====
 
     /// <summary>
-    /// <para>创建一个新项目，弹出文件保存对话框选择项目路径。</para>
-    /// Creates a new project by showing a file-save dialog to pick the project path.
+    /// <para>创建一个新项目，弹出文件保存对话框选择工程路径，打开工程上下文后清空画布并保存空快照。</para>
+    /// Creates a new project by showing a file-save dialog to pick the project path, opening the project
+    /// context, clearing the canvas, then saving an empty snapshot.
     /// </summary>
     [RelayCommand]
     private async Task NewProjectAsync()
     {
         var path = await PickProjectFileAsync(isSave: true);
-        if (path != null)
+        if (path == null)
         {
-            _currentProjectPath = path;
-            // 新工程：清空画布后立即保存空骨架
-            if (NodeEditorVM != null)
-            {
-                NodeEditorVM.Clear();
-                await PersistToAsync(path);
-            }
+            return;
         }
+
+        ProjectContextService.Instance.OpenProject(path);
+        _currentProjectPath = path;
+        // 新工程：清空画布后立即保存空骨架。
+        // New project: clear the canvas then immediately save an empty skeleton.
+        if (NodeEditorVM != null)
+        {
+            NodeEditorVM.Clear();
+        }
+
+        ImageViewModel.EnsureInstance().Images.Clear();
+        var snapshot = new ProjectSnapshot
+        {
+            ProjectName = ProjectContextService.Instance.ProjectName ?? Path.GetFileNameWithoutExtension(path),
+            Images = [],
+            Settings = ProjectSettingViewModel.EnsureInstance().ToDto(),
+            Nodes = [],
+            Connections = []
+        };
+        await ProjectPersistenceService.SaveAsync(path, snapshot);
+        WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
     }
 
     /// <summary>
-    /// <para>打开现有项目，弹出文件打开对话框选择 .uotan 工程文件并重建画布。</para>
-    /// Opens an existing project by showing a file-open dialog to pick a .uotan project file and rebuild the canvas.
+    /// <para>打开现有项目，弹出文件打开对话框选择 .uotan 工程文件，恢复镜像清单、打包设置与画布。</para>
+    /// Opens an existing project by showing a file-open dialog to pick a .uotan project file, restoring
+    /// the image list, packing settings and canvas.
     /// </summary>
     [RelayCommand]
     private async Task OpenProjectAsync()
     {
         var path = await PickProjectFileAsync(isSave: false);
-        if (path == null) return;
+        if (path == null)
+        {
+            return;
+        }
+
+        var snapshot = await ProjectPersistenceService.LoadAsync(path);
+        if (snapshot == null)
+        {
+            return;
+        }
+
+        ProjectContextService.Instance.OpenProject(path);
         _currentProjectPath = path;
 
-        var snapshot = await Services.WorkflowPersistenceService.LoadAsync(path).ConfigureAwait(false);
-        if (snapshot == null) return;
+        // 重建镜像清单：仅加入实际存在的文件。
+        // Rebuild the image list: only entries whose files still exist are added.
+        var images = ImageViewModel.EnsureInstance();
+        images.Images.Clear();
+        foreach (var dto in snapshot.Images)
+        {
+            var absolute = ProjectContextService.Instance.ResolvePath(dto.RelativePath);
+            if (absolute is null || !File.Exists(absolute))
+            {
+                continue;
+            }
+
+            images.Images.Add(new ImageEntryViewModel
+            {
+                DisplayName = Path.GetFileName(dto.RelativePath),
+                RelativePath = dto.RelativePath,
+                SizeBytes = dto.SizeBytes,
+                Format = dto.Format
+            });
+        }
+
+        if (snapshot.Settings is not null)
+        {
+            ProjectSettingViewModel.EnsureInstance().ApplyFromDto(snapshot.Settings);
+        }
 
         if (NodeEditorVM != null)
         {
-            await NodeEditorVM.LoadFromAsync(snapshot).ConfigureAwait(false);
+            await NodeEditorVM.LoadFromAsync(new WorkflowSnapshot
+            {
+                FormatVersion = 1,
+                Nodes = snapshot.Nodes,
+                Connections = snapshot.Connections
+            });
         }
+
+        WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
     }
 
     /// <summary>
@@ -145,12 +205,13 @@ public partial class MenuViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>将当前画布快照写入指定路径。</para>
-    /// Writes the current canvas snapshot to the specified path.
+    /// <para>将当前工程完整快照（工程名、镜像清单、打包设置、节点画布）写入指定路径。</para>
+    /// Writes the complete project snapshot (project name, image list, packing settings, node canvas)
+    /// to the specified path.
     /// </summary>
     /// <param name="path">
-    /// <para>目标文件路径。</para>
-    /// Target file path.
+    /// <para>目标工程文件路径。</para>
+    /// Target project file path.
     /// </param>
     private async Task PersistToAsync(string path)
     {
@@ -159,10 +220,41 @@ public partial class MenuViewModel : ViewModelBase
             Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Save aborted: no node editor bound");
             return;
         }
-        await Services.WorkflowPersistenceService.SaveAsync(
-            path,
-            NodeEditorVM.Nodes.ToList(),
-            NodeEditorVM.Connections.ToList()).ConfigureAwait(false);
+
+        var snapshot = new ProjectSnapshot
+        {
+            ProjectName = ProjectContextService.Instance.ProjectName ?? Path.GetFileNameWithoutExtension(path),
+            Images = ImageViewModel.EnsureInstance().Images
+                .Select(i => new ImageEntryDto
+                {
+                    RelativePath = i.RelativePath,
+                    SizeBytes = i.SizeBytes,
+                    Format = i.Format
+                })
+                .ToList(),
+            Settings = ProjectSettingViewModel.EnsureInstance().ToDto(),
+            Nodes = NodeEditorVM.Nodes
+                .Select(n => new NodeDto
+                {
+                    InstanceId = n.InstanceId,
+                    Title = n.Title,
+                    Category = n.Category.ToString(),
+                    X = n.Location.X,
+                    Y = n.Location.Y,
+                    TypeKey = n.TypeKey
+                })
+                .ToList(),
+            Connections = NodeEditorVM.Connections
+                .Where(c => c.Source is not null && c.Target is not null)
+                .Select(c => new ConnectionDto
+                {
+                    SourceConnectorTitle = c.Source!.Title,
+                    TargetConnectorTitle = c.Target!.Title
+                })
+                .ToList()
+        };
+
+        await ProjectPersistenceService.SaveAsync(path, snapshot);
     }
 
     /// <summary>
@@ -190,6 +282,77 @@ public partial class MenuViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <para>导入镜像，弹出文件多选对话框后复制所选文件到项目 <c>images/</c> 目录并加入镜像清单。</para>
+    /// Imports images: shows a multi-select file dialog, then copies the chosen files into the project
+    /// <c>images/</c> directory and adds them to the image list.
+    /// </summary>
+    [RelayCommand]
+    private async Task ImportImageAsync()
+    {
+        var topLevel = TopLevel;
+        if (topLevel == null)
+        {
+            return;
+        }
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Menu_ImportImage"),
+            AllowMultiple = true,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Images") { Patterns = ["*.img", "*.bin", "*.cpio", "*.ofp", "*.ops", "*.ozip", "*.simg", "*.sparse"] },
+                new FilePickerFileType("All files") { Patterns = ["*.*"] }
+            ]
+        });
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        await ImageViewModel.EnsureInstance().ImportAsync(files.Select(f => f.Path.LocalPath).ToArray());
+    }
+
+    /// <summary>
+    /// <para>导出选中镜像，弹出文件保存对话框选择目标路径后从项目目录复制出去。</para>
+    /// Exports the selected image: shows a save-file dialog to pick the target path, then copies the
+    /// image out of the project directory.
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportImageAsync()
+    {
+        var selected = ImageViewModel.EnsureInstance().SelectedImage;
+        if (selected is null)
+        {
+            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Export image aborted: no image selected  导出镜像中止：未选中镜像");
+            return;
+        }
+
+        var topLevel = TopLevel;
+        if (topLevel == null)
+        {
+            return;
+        }
+
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = LanguageService.Instance.GetString("Menu_ExportImage"),
+            DefaultExtension = "img",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("Image") { Patterns = ["*.img", "*.bin"] },
+                new FilePickerFileType("All files") { Patterns = ["*.*"] }
+            ]
+        });
+        if (file == null)
+        {
+            return;
+        }
+
+        await ImageViewModel.EnsureInstance().ExportAsync(file.Path.LocalPath);
+    }
+
+    /// <summary>
     /// <para>退出应用程序，发送退出消息由 App 处理。</para>
     /// Exits the application by sending an exit message handled by App.
     /// </summary>
@@ -201,17 +364,27 @@ public partial class MenuViewModel : ViewModelBase
 
     // ===== 编辑 / Edit =====
 
-    /// <summary><para>撤销操作，转发到当前活动视图模型。</para>Undo operation, forwarded to the currently active view model.</summary>
+    /// <summary><para>撤销操作：优先执行工作区操作历史，无历史时转发到节点编辑器。</para>Undo: executes the workspace operation history first, falling back to the node editor.</summary>
     [RelayCommand]
     private void Undo()
     {
+        if (OperationHistoryService.Instance.Undo())
+        {
+            return;
+        }
+
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Undo));
     }
 
-    /// <summary><para>重做操作，转发到当前活动视图模型。</para>Redo operation, forwarded to the currently active view model.</summary>
+    /// <summary><para>重做操作：优先执行工作区操作历史，无历史时转发到节点编辑器。</para>Redo: executes the workspace operation history first, falling back to the node editor.</summary>
     [RelayCommand]
     private void Redo()
     {
+        if (OperationHistoryService.Instance.Redo())
+        {
+            return;
+        }
+
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Redo));
     }
 

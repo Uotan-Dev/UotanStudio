@@ -12,9 +12,11 @@ using UotanStudio.Firmware.BootImage;
 using UotanStudio.Firmware.Cpio;
 using UotanStudio.Firmware.Cpio.Extraction;
 using UotanStudio.Firmware.Cpio.Model;
+using UotanStudio.Firmware.Lp;
 using UotanStudio.Firmware.Oppo;
 using UotanStudio.Firmware.Oppo.Models;
 using UotanStudio.Firmware.Payload;
+using UotanStudio.Firmware.Sparse;
 
 namespace UotanStudio.Services;
 
@@ -608,5 +610,120 @@ public sealed class FirmwareService
         {
             return new FirmwareOpResult { Success = false, Summary = ex.Message };
         }
+    }
+
+    /// <summary>
+    /// Builds an Android super (logical partition) image from a set of raw/sparse partition images:
+    /// constructs LP metadata via <see cref="MetadataBuilder"/>, writes the metadata into the reserved
+    /// area, lays out the partition data at the linear extent offsets, then sparsifies the whole image.
+    /// <para>从一组 raw/sparse 分区镜像构建 Android super（逻辑分区）镜像：通过
+    /// <see cref="MetadataBuilder"/> 构建 LP 元数据，将元数据写入保留区，按线性 extent 偏移排布分区数据，
+    /// 最后将整镜像转为 sparse 格式。</para>
+    /// </summary>
+    /// <param name="partitions">The partitions (name + source image path). <para>分区（名称 + 源镜像路径）。</para></param>
+    /// <param name="outputPath">The output super image path. <para>输出 super 镜像路径。</para></param>
+    /// <param name="deviceSize">The total device (super) size in bytes. <para>设备（super）总大小（字节）。</para></param>
+    /// <param name="groupName">The partition group name. <para>分区组名称。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result.</returns>
+    public async Task<FirmwareOpResult> SynthesizeSuperAsync(
+        IReadOnlyList<SuperPartitionInput> partitions,
+        string outputPath,
+        ulong deviceSize,
+        string groupName,
+        CancellationToken cancellationToken = default)
+    {
+        return await Task.Run<FirmwareOpResult>(() =>
+        {
+            try
+            {
+                if (partitions is null || partitions.Count == 0)
+                {
+                    return FirmwareOpResult.Fail("No partitions supplied. 未提供任何分区。");
+                }
+
+                var group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName;
+                var builder = MetadataBuilder.New(deviceSize, 64 * 1024, 2);
+                builder.AddGroup(group, deviceSize);
+                foreach (var partition in partitions)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    builder.AddPartition(partition.Name, group, (ulong)new FileInfo(partition.Path).Length);
+                }
+
+                var metadata = builder.Build();
+                var firstLogicalSector = metadata.BlockDevices.Count > 0 ? metadata.BlockDevices[0].FirstLogicalSector : 0UL;
+
+                var tempRaw = Path.Combine(Path.GetDirectoryName(outputPath) ?? ".", Path.GetFileNameWithoutExtension(outputPath) + ".raw");
+                try
+                {
+                    using (var stream = new FileStream(tempRaw, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+                    {
+                        stream.SetLength((long)deviceSize);
+                        MetadataWriter.WriteToImageStream(stream, metadata);
+                        for (var i = 0; i < metadata.Partitions.Count; i++)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            var extent = metadata.Extents[(int)metadata.Partitions[i].FirstExtentIndex];
+                            var offset = (long)((firstLogicalSector + extent.TargetData) * MetadataFormat.LP_SECTOR_SIZE);
+                            stream.Position = offset;
+                            using var source = SparseReader.ImportAuto(partitions[i].Path);
+                            source.WriteRawToStream(stream);
+                        }
+                    }
+
+                    SparseImageConverter.ConvertRawToSparse(tempRaw, outputPath);
+                    return new FirmwareOpResult
+                    {
+                        Success = true,
+                        Summary = $"Synthesized super image with {partitions.Count} partition(s) -> {outputPath}  已合成 super 镜像（{partitions.Count} 个分区）。"
+                    };
+                }
+                finally
+                {
+                    if (File.Exists(tempRaw))
+                    {
+                        File.Delete(tempRaw);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return FirmwareOpResult.Fail("Super synthesis cancelled. 合成 super 已取消。");
+            }
+            catch (Exception ex)
+            {
+                return FirmwareOpResult.Fail(ex.Message);
+            }
+        }, cancellationToken);
+    }
+}
+
+/// <summary>
+/// Describes one partition for super image synthesis: the partition name and its source image file path.
+/// <para>描述 super 镜像合成的一个分区：分区名称及其源镜像文件路径。</para>
+/// </summary>
+public sealed class SuperPartitionInput
+{
+    /// <summary>
+    /// Gets the partition name. <para>获取分区名称。</para>
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Gets the source image file path. <para>获取源镜像文件路径。</para>
+    /// </summary>
+    public string Path { get; }
+
+    /// <summary>
+    /// Creates a super partition input.
+    /// <para>创建 super 分区输入。</para>
+    /// </summary>
+    /// <param name="name">The partition name. <para>分区名称。</para></param>
+    /// <param name="path">The source image file path. <para>源镜像文件路径。</para></param>
+    public SuperPartitionInput(string name, string path)
+    {
+        Name = name;
+        Path = path;
     }
 }

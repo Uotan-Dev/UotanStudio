@@ -17,6 +17,14 @@
     <x:String x:Key="ImageView_DeleteSelected">Delete Selected</x:String>
     <x:String x:Key="ImageView_SynthesizeSuper">Synthesize Super</x:String>
     <x:String x:Key="ImageView_SynthesizeDat">Synthesize dat</x:String>
+    <x:String x:Key="ImageView_ImportHint">Import images into the project images/ folder</x:String>
+    <x:String x:Key="ImageView_ExportHint">Export the selected image to an external path</x:String>
+    <x:String x:Key="ImageView_ExtractHint">Unpack the selected image to intermediate/</x:String>
+    <x:String x:Key="ImageView_SuperHint">Build a super image from the project's raw/sparse images</x:String>
+    <x:String x:Key="ImageView_DatHint">Generate .new.dat + .transfer.list (Android v4)</x:String>
+    <x:String x:Key="ImageView_NoSelection">No image selected</x:String>
+    <x:String x:Key="ImageView_NoProject">No project is open</x:String>
+    <x:String x:Key="ImageView_OperationDone">Operation complete</x:String>
 
     <!-- Splash window -->
     <x:String x:Key="Splash_Subtitle">Firmware Toolbox</x:String>
