@@ -157,12 +157,16 @@ public sealed class SparseFile : IDisposable
     {
         var blockSize = Header.BlockSize;
         var zeros = new byte[blockSize];
+        var written = 0L;
+        var logicalLength = (long)Header.TotalBlocks * blockSize;
+
         foreach (var chunk in _chunks)
         {
             switch ((ChunkType)chunk.Header.ChunkType)
             {
                 case ChunkType.Raw when chunk.DataProvider != null:
                     chunk.DataProvider.WriteTo(stream);
+                    written += (long)chunk.Header.ChunkSize * blockSize;
                     break;
                 case ChunkType.Fill:
                     {
@@ -178,18 +182,17 @@ public sealed class SparseFile : IDisposable
                             }
                             total -= n;
                         }
+                        written += (long)chunk.Header.ChunkSize * blockSize;
                         break;
                     }
 
                 case ChunkType.Raw:
                     break;
                 case ChunkType.DontCare:
-                    break;
-                case ChunkType.Crc32:
-                    break;
-                default:
                     {
-                        // DontCare: zero-fill so the output image has full length.
+                        // DontCare 块在原始(非稀疏)输出中应零填充,以保持逻辑长度与后续块偏移一致。
+                        // A DontCare chunk must be zero-filled in the raw (unsparsified) output so the
+                        // logical length is preserved and following chunks stay at their correct offsets.
                         var total = (long)chunk.Header.ChunkSize * blockSize;
                         while (total > 0)
                         {
@@ -197,9 +200,37 @@ public sealed class SparseFile : IDisposable
                             stream.Write(zeros, 0, n);
                             total -= n;
                         }
+                        written += (long)chunk.Header.ChunkSize * blockSize;
+                        break;
+                    }
+                case ChunkType.Crc32:
+                    break;
+                default:
+                    {
+                        // 未知块类型：同样零填充,保证输出镜像长度完整。
+                        // Unknown chunk types: zero-fill so the output image keeps its full length.
+                        var total = (long)chunk.Header.ChunkSize * blockSize;
+                        while (total > 0)
+                        {
+                            var n = (int)Math.Min(blockSize, total);
+                            stream.Write(zeros, 0, n);
+                            total -= n;
+                        }
+                        written += (long)chunk.Header.ChunkSize * blockSize;
                         break;
                     }
             }
+        }
+
+        // 尾部补齐：未覆盖的块（如 SparseWriter 序列化时补入的 DontCare 尾块）一律零填充，
+        // 使原始输出恒等于 TotalBlocks*blockSize，与读回后的输出保持字节一致。
+        // Trailing padding: uncovered blocks (e.g. trailing DontCare chunks added at serialization) are
+        // zero-filled so the raw output is always TotalBlocks*blockSize and matches the read-back output.
+        while (written < logicalLength)
+        {
+            var n = (int)Math.Min(blockSize, logicalLength - written);
+            stream.Write(zeros, 0, n);
+            written += n;
         }
     }
 

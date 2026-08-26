@@ -167,6 +167,30 @@ public class BootImageHeader
     public uint OsVersion { get; set; }
 
     /// <summary>
+    /// 解析后的操作系统版本字符串（如 <c>12.1.2</c>）。Android boot image 的
+    /// <c>os_version</c> 字段按 7/7/7/11 位拆分为 major/minor/patch/patch_level，
+    /// 直接以 <see cref="OsVersion"/> 原始整数显示会得到错误的数字串。
+    /// <para>The decoded OS version string (e.g. <c>12.1.2</c>). The Android boot image
+    /// <c>os_version</c> field packs major/minor/patch/patch_level into 7/7/7/11 bits;
+    /// showing the raw <see cref="OsVersion"/> integer would produce an incorrect string.</para>
+    /// </summary>
+    public string OsVersionString
+    {
+        get
+        {
+            var major = (OsVersion >> 25) & 0x7Fu;
+            var minor = (OsVersion >> 18) & 0x7Fu;
+            var patch = (OsVersion >> 11) & 0x7Fu;
+            if (major == 0 && minor == 0 && patch == 0)
+            {
+                return string.Empty;
+            }
+
+            return $"{major}.{minor}.{patch}";
+        }
+    }
+
+    /// <summary>
     /// 架构类型（0=arm, 1=arm64, 2=x86, 3=x64）。
     /// <para>The architecture type (0=arm, 1=arm64, 2=x86, 3=x64).</para>
     /// </summary>

@@ -76,7 +76,7 @@ public sealed class BootImageFormatHandler : IFormatHandler
                         ["RamdiskSize"] = h.RamdiskSize.ToString(),
                         ["SecondSize"] = h.SecondSize.ToString(),
                         ["DtbSize"] = h.DtbSize.ToString(),
-                        ["OsVersion"] = h.OsVersion.ToString(),
+                        ["OsVersion"] = h.OsVersionString,
                         ["CommandLine"] = h.CommandLine,
                         ["KernelCompression"] = h.KernelCompression.ToString()
                     });
