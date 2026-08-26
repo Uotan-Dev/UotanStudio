@@ -180,8 +180,11 @@ public sealed class DeviceTreeNode
         => _children.FirstOrDefault(c => c.Name == name);
 
     /// <summary>
-    /// <para>获取节点在树中的完整路径(如 /soc/i2c@0)。</para>
-    /// Gets the full path of the node in the tree.
+    /// <para>获取节点在树中的完整路径(如 /soc/i2c@0)。根节点返回 /，其余节点跳过空名称的根段，
+    /// 与 DTS 写入器生成的行号映射键保持一致(避免 //soc 双斜杠)。</para>
+    /// Gets the full path of the node in the tree (e.g. /soc/i2c@0). The root returns / and empty-name root
+    /// segments are skipped, consistent with the line-map keys produced by the DTS writer (avoiding a
+    /// leading // such as //soc).
     /// </summary>
     public string GetPath()
     {
@@ -189,9 +192,14 @@ public sealed class DeviceTreeNode
         var current = this;
         while (current is not null)
         {
-            parts.Add(current.Name);
+            if (current.Name.Length > 0)
+            {
+                parts.Add(current.Name);
+            }
+
             current = current.Parent;
         }
+
         parts.Reverse();
         return "/" + string.Join("/", parts);
     }

@@ -186,6 +186,40 @@ public static class DtbFormat
     private static void ParseStructure(ReadOnlySpan<byte> structBlock, ReadOnlySpan<byte> stringsBlock, DeviceTree tree)
     {
         var cursor = 0;
+
+        // 根节点：结构块首个 token 必须是 FDT_BEGIN_NODE（根节点自身）。将其名称
+        // 解析进 tree.Root 本身，而非作为 tree.Root 的子节点——否则真实根内容会
+        // 被多套一层空名节点，导致 DTS 输出出现多余的 "{ { } }" 且回编译损坏。
+        // The first token in the structure block is the root node's own FDT_BEGIN_NODE.
+        // Parse its name into tree.Root itself instead of creating a synthetic child,
+        // which would otherwise nest the real root content under an extra empty-named
+        // node and corrupt DTS output / DTB recompile.
+        if (cursor + 4 > structBlock.Length)
+        {
+            throw new InvalidDataException("Empty structure block in DTB.");
+        }
+
+        var rootToken = FdtHeader.ReadU32BE(structBlock[cursor..]);
+        cursor += 4;
+        if (rootToken != FdtConstants.FdtBeginNode)
+        {
+            throw new InvalidDataException($"Expected root FDT_BEGIN_NODE, got 0x{rootToken:X8}");
+        }
+
+        var nameStart = cursor;
+        var end = structBlock[cursor..].IndexOf((byte)0);
+        if (end < 0)
+        {
+            throw new InvalidDataException("Unterminated root node name in DTB structure block.");
+        }
+
+        tree.Root.Name = Encoding.UTF8.GetString(structBlock.Slice(nameStart, end));
+        cursor = nameStart + end + 1;
+        while (cursor % FdtConstants.Alignment != 0)
+        {
+            cursor++;
+        }
+
         ParseNode(structBlock, stringsBlock, ref cursor, tree.Root);
     }
 
