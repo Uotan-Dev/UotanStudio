@@ -207,7 +207,7 @@ public partial class App : Application
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
                 && desktop.MainWindow?.DataContext is MainViewModel mainVm)
             {
-                await mainVm.WorkspaceVM.OpenDocumentAsync(message.Path);
+                await mainVm.WorkspaceVM.OpenDocumentAsync(message.Path, message.Mode);
             }
         }
         catch (Exception ex)

@@ -9,7 +9,21 @@
 	<TreeView x:Name="ProjectTree" Height="680" ItemsSource="{Binding TreeViewContent}" DoubleTapped="OnTreeDoubleTapped">
 		<TreeView.ItemTemplate>
 			<TreeDataTemplate x:DataType="viewmodels:ExplorerNode" ItemsSource="{Binding Children}">
-				<TextBlock Text="{Binding Name}" />
+				<TextBlock Text="{Binding Name}">
+					<TextBlock.ContextMenu>
+						<ContextMenu>
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsTextHeader}"
+									  IsVisible="{Binding !IsDirectory}"
+									  Click="OnOpenAsText" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsHexHeader}"
+									  IsVisible="{Binding !IsDirectory}"
+									  Click="OnOpenAsHex" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDtbHeader}"
+									  IsVisible="{Binding !IsDirectory}"
+									  Click="OnOpenAsDtb" />
+						</ContextMenu>
+					</TextBlock.ContextMenu>
+				</TextBlock>
 			</TreeDataTemplate>
 		</TreeView.ItemTemplate>
 	</TreeView>

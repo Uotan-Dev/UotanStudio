@@ -47,6 +47,31 @@
     <x:String x:Key="Dock_Properties_Type_Node">节点</x:String>
     <x:String x:Key="Dock_Properties_Type_Image">镜像</x:String>
     <x:String x:Key="Dock_Properties_Type_FileAnalysis">文件分析</x:String>
+    <x:String x:Key="Dock_Properties_Type_TextDocument">文本文档</x:String>
+    <x:String x:Key="Dock_Properties_Type_DtbDocument">设备树</x:String>
+
+    <!-- 文本文档属性面板标签 -->
+    <x:String x:Key="Dock_Properties_Text_FileName">文件名</x:String>
+    <x:String x:Key="Dock_Properties_Text_FilePath">文件路径</x:String>
+    <x:String x:Key="Dock_Properties_Text_FileSize">文件大小</x:String>
+    <x:String x:Key="Dock_Properties_Text_Encoding">编码</x:String>
+    <x:String x:Key="Dock_Properties_Text_LineCount">行数</x:String>
+    <x:String x:Key="Dock_Properties_Text_CharCount">字符数</x:String>
+    <x:String x:Key="Dock_Properties_Text_Language">语法语言</x:String>
+
+    <!-- 设备树文档属性面板标签 -->
+    <x:String x:Key="Dock_Properties_Dtb_FileName">文件名</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_FilePath">文件路径</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_FileSize">文件大小</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_NodeCount">节点总数</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_RootCompatible">根节点 compatible</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_RootAddressCells">#address-cells</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_RootSizeCells">#size-cells</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_MemReservations">内存保留条目</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_SelectedNode">选中节点</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_SelectedNodePath">节点路径</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_SelectedNodeProps">属性数</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_SelectedNodeChildren">子节点数</x:String>
 
     <!-- 设备确认对话框 -->
     <x:String x:Key="Editor_Yes">是</x:String>

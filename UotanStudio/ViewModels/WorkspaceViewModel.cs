@@ -59,10 +59,31 @@ public class WorkspaceViewModel : ViewModelBase
     /// <para>要打开的文档文件路径。</para>
     /// The path of the document file to open.
     /// </param>
-    public async Task OpenDocumentAsync(string path)
+    /// <param name="mode">
+    /// <para>请求的打开方式；默认 <c>Auto</c> 由文件类型+后缀综合判定。</para>
+    /// The requested open mode; default <c>Auto</c> decided by file type+extension.
+    /// </param>
+    public async Task OpenDocumentAsync(string path, EditorOpenMode mode = EditorOpenMode.Auto)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
+            return;
+        }
+
+        // Auto 模式：按扩展名+内容综合解析，命中 DTB/DTBO 即走双栏编辑器，
+        // 避免 .dtb 落入 FileViewModel 被当作普通二进制（十六进制）打开。
+        // Auto mode: resolve by extension+content; DTB/DTBO blobs route to the
+        // dual-pane editor instead of being opened as a plain binary (hex) document.
+        if (mode == EditorOpenMode.Auto)
+        {
+            mode = FileOpenMode.ResolveMode(path);
+        }
+
+        // 设备树二进制：走 DTB 双栏编辑器。
+        // Device-tree blobs open in the DTB dual-pane editor.
+        if (mode == EditorOpenMode.Dtb)
+        {
+            await OpenDtbAsync(path);
             return;
         }
 
@@ -81,6 +102,14 @@ public class WorkspaceViewModel : ViewModelBase
 
         if (existing is not null)
         {
+            // 已打开文档：若请求方式不同则切换视图模式并重载。
+            // Already-open document: switch view mode and reload when a different mode is requested.
+            if (mode != EditorOpenMode.Auto && existing.OpenMode != mode)
+            {
+                existing.OpenMode = mode;
+                await existing.LoadContentAsync(fullPath, mode);
+            }
+
             documentDock.ActiveDockable = existing;
             return;
         }
@@ -89,13 +118,62 @@ public class WorkspaceViewModel : ViewModelBase
         {
             Title = Path.GetFileName(fullPath),
             FilePath = fullPath,
-            Language = SyntaxLanguageRegistry.GetLanguageId(fullPath) ?? string.Empty
+            Language = SyntaxLanguageRegistry.GetLanguageId(fullPath) ?? string.Empty,
+            OpenMode = mode
         };
 
         _factory.AddDockable(documentDock, document);
         documentDock.ActiveDockable = document;
 
-        await document.LoadContentAsync(fullPath);
+        await document.LoadContentAsync(fullPath, mode);
+    }
+
+    /// <summary>
+    /// <para>在文档区以 DTB 双栏编辑器打开指定的设备树二进制文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="DtbEditorViewModel"/>。</para>
+    /// Opens the given device-tree blob in the DTB dual-pane editor in the document area: focuses it if
+    /// already open; otherwise creates and loads a <see cref="DtbEditorViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的 DTB 文件路径。</para>
+    /// The path of the DTB file to open.
+    /// </param>
+    public async Task OpenDtbAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?
+            .OfType<DtbEditorViewModel>()
+            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+
+        var document = new DtbEditorViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        };
+
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+
+        await document.LoadAsync(fullPath);
     }
 
     /// <summary>
@@ -123,7 +201,21 @@ public class WorkspaceViewModel : ViewModelBase
             return;
         }
 
-        WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dock.ActiveDockable as FileViewModel));
+        // 按活动文档类型发送对应重载的消息，属性面板据此切换展示路径。
+        // Send the matching message overload by document type so the properties panel can switch paths.
+        var active = dock.ActiveDockable;
+        switch (active)
+        {
+            case DtbEditorViewModel dtb:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dtb));
+                break;
+            case FileViewModel file:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(file));
+                break;
+            default:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage((FileViewModel?)null));
+                break;
+        }
     }
 
     /// <summary>

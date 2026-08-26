@@ -42,5 +42,12 @@
     <x:String x:Key="ProjectExplorer_Outer">外部</x:String>
     <x:String x:Key="ProjectExplorer_Inner">内部</x:String>
     <x:String x:Key="ProjectExplorer_Innermost">最内层</x:String>
+    <x:String x:Key="Explorer_OpenAsText">以文本打开</x:String>
+    <x:String x:Key="Explorer_OpenAsHex">以十六进制打开</x:String>
+    <x:String x:Key="Explorer_OpenAsDtb">以设备树打开</x:String>
+    <x:String x:Key="Dock_Dtb_Save">保存</x:String>
+    <x:String x:Key="Dock_Dtb_Tree">设备树</x:String>
+    <x:String x:Key="Dock_Dtb_Source">设备树源</x:String>
+    <x:String x:Key="Dock_Dtb_CompileError">编译错误</x:String>
 
 </ResourceDictionary>

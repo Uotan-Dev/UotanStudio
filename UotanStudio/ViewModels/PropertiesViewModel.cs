@@ -89,6 +89,8 @@ internal partial class PropertiesViewModel : Tool
                 PropertiesContentType.Node => LanguageService.Instance.GetString("Dock_Properties_Type_Node"),
                 PropertiesContentType.Image => LanguageService.Instance.GetString("Dock_Properties_Type_Image"),
                 PropertiesContentType.FileAnalysis => LanguageService.Instance.GetString("Dock_Properties_Type_FileAnalysis"),
+                PropertiesContentType.TextDocument => LanguageService.Instance.GetString("Dock_Properties_Type_TextDocument"),
+                PropertiesContentType.DtbDocument => LanguageService.Instance.GetString("Dock_Properties_Type_DtbDocument"),
                 _ => string.Empty,
             };
 
@@ -108,6 +110,7 @@ internal partial class PropertiesViewModel : Tool
         WeakReferenceMessenger.Default.Register<ImageSelectionChangedMessage>(this, OnImageSelectionChanged);
         WeakReferenceMessenger.Default.Register<FileAnalysisCompletedMessage>(this, OnFileAnalysisCompleted);
         WeakReferenceMessenger.Default.Register<ActiveDocumentChangedMessage>(this, OnActiveDocumentChanged);
+        WeakReferenceMessenger.Default.Register<DtbNodeSelectionChangedMessage>(this, OnDtbNodeSelectionChanged);
     }
 
     /// <summary>
@@ -135,12 +138,29 @@ internal partial class PropertiesViewModel : Tool
     /// active document's analysis results; clears the panel when the document is <c>null</c> or has
     /// no analysis (non-binary).
     /// </summary>
+    /// <summary>
+    /// <para>响应活动文档切换消息，按文档类型（固件分析/文本/设备树）刷新属性行；
+    /// 文档为 <c>null</c> 时清空面板。</para>
+    /// Responds to active-document-changed messages by refreshing property rows according to the
+    /// document type (firmware analysis / text / device tree); clears the panel when the document is
+    /// <c>null</c>.
+    /// </summary>
     private void OnActiveDocumentChanged(object recipient, ActiveDocumentChangedMessage message)
     {
+        // DTB 编辑器文档：走设备树展示路径。
+        // DTB editor document: route through the device-tree display path.
+        if (message.DtbDocument is { } dtb)
+        {
+            RefreshForDtbDocument(dtb);
+            return;
+        }
+
         var doc = message.Document;
         if (doc is null)
         {
-            if (ContentType == PropertiesContentType.FileAnalysis)
+            if (ContentType == PropertiesContentType.FileAnalysis
+                || ContentType == PropertiesContentType.TextDocument
+                || ContentType == PropertiesContentType.DtbDocument)
             {
                 Properties.Clear();
                 SelectedNodeTitle = string.Empty;
@@ -150,12 +170,41 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        // 切换到已打开文档时，用该文档已缓存的分析结果刷新属性面板。
-        // Refresh the properties panel with the document's cached analysis results on switch.
-        RefreshForFileAnalysis(new FileAnalysisCompletedMessage(
-            doc.Analysis.ToList(),
-            doc.DetectedFormat,
-            doc.FilePath));
+        // 二进制文档：用已缓存的分析结果刷新属性面板。
+        // Binary document: refresh with the document's cached analysis results.
+        if (doc.IsBinary)
+        {
+            RefreshForFileAnalysis(new FileAnalysisCompletedMessage(
+                doc.Analysis.ToList(),
+                doc.DetectedFormat,
+                doc.FilePath));
+            return;
+        }
+
+        // 文本文档：展示文本相关属性。
+        // Text document: display text-related properties.
+        RefreshForTextDocument(doc);
+    }
+
+    /// <summary>
+    /// <para>响应设备树节点选中变更消息，刷新选中节点详情。</para>
+    /// Responds to DTB node-selection-changed messages by refreshing the selected node details.
+    /// </summary>
+    private void OnDtbNodeSelectionChanged(object recipient, DtbNodeSelectionChangedMessage message)
+    {
+        // 仅当当前展示的是设备树文档时才联动更新选中节点详情。
+        // Only update the selected-node details when the panel is currently showing a DTB document.
+        if (ContentType != PropertiesContentType.DtbDocument)
+        {
+            return;
+        }
+
+        if (message.Editor is null)
+        {
+            return;
+        }
+
+        RefreshForDtbNode(message.Editor, message.Node);
     }
 
     /// <summary>
@@ -225,6 +274,102 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
+    /// <para>刷新文本文档的属性行（文件名、路径、大小、编码、行数、字符数、语法语言）。</para>
+    /// Refreshes property rows for a text document (file name, path, size, encoding, line count,
+    /// character count, syntax language).
+    /// </summary>
+    public void RefreshForTextDocument(FileViewModel doc)
+    {
+        Properties.Clear();
+        if (doc is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.TextDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.FilePath ?? doc.Title;
+
+        var svc = LanguageService.Instance;
+        var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FileName"), fileName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FilePath"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Encoding"), doc.DetectedEncoding ?? "UTF-8"));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Language"), string.IsNullOrEmpty(doc.Language) ? "plain" : doc.Language));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_LineCount"), doc.LineCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_CharCount"), doc.CharCount.ToString("N0")));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for text document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新设备树文档的属性行（文件名、路径、大小、节点总数、根节点 compatible、
+    /// #address-cells、#size-cells、内存保留条目数）。</para>
+    /// Refreshes property rows for a device-tree document (file name, path, size, total node count,
+    /// root compatible, #address-cells, #size-cells, memory-reservation count).
+    /// </summary>
+    public void RefreshForDtbDocument(DtbEditorViewModel doc)
+    {
+        Properties.Clear();
+        if (doc is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.DtbDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.FilePath ?? doc.Title;
+
+        var svc = LanguageService.Instance;
+        var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_FileName"), fileName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_FilePath"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_NodeCount"), doc.NodeCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_RootCompatible"), doc.RootCompatible));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_RootAddressCells"), doc.RootAddressCells));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_RootSizeCells"), doc.RootSizeCells));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_MemReservations"), doc.MemoryReservationCount.ToString("N0")));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新设备树选中节点的详情属性行（节点路径、属性数、子节点数）。</para>
+    /// Refreshes property rows for the selected device-tree node (node path, property count, child count).
+    /// </summary>
+    public void RefreshForDtbNode(DtbEditorViewModel editor, DtbNodeViewModel? node)
+    {
+        Properties.Clear();
+        if (node is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.DtbDocument;
+        HasSelection = true;
+        SelectedNodeTitle = node.FullPath;
+
+        var svc = LanguageService.Instance;
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_SelectedNode"), node.Name));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_SelectedNodePath"), node.FullPath));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_SelectedNodeProps"), node.Node.Properties.Count.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_SelectedNodeChildren"), node.Node.Children.Count.ToString("N0")));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB node '{node.FullPath}'");
+    }
+
+    /// <summary>
     /// <para>刷新指定文件分析结果的属性行。分析为 <c>null</c> 时显示占位。</para>
     /// Refreshes property rows for the specified file analysis results. Shows a placeholder when analysis is <c>null</c>.
     /// </summary>
@@ -243,11 +388,9 @@ internal partial class PropertiesViewModel : Tool
         HasSelection = true;
         SelectedNodeTitle = analysis.FilePath ?? analysis.DetectedFormat ?? "Analysis";
 
-        if (!string.IsNullOrEmpty(analysis.DetectedFormat))
-        {
-            Properties.Add(new PropertyRow("Format", analysis.DetectedFormat));
-        }
-
+        // Analysis 已包含 "Format" 行（由 FileViewModel 写入），此处不再单独追加，避免重复。
+        // The Analysis list already carries the "Format" row (written by FileViewModel),
+        // so adding it again here would duplicate the entry.
         foreach (var row in analysis.Analysis)
         {
             Properties.Add(new PropertyRow(row.Name, row.Value));
@@ -326,5 +469,17 @@ public enum PropertiesContentType
     /// <para>文件分析结果。</para>
     /// File analysis results.
     /// </summary>
-    FileAnalysis
+    FileAnalysis,
+
+    /// <summary>
+    /// <para>文本文档信息。</para>
+    /// Text document information.
+    /// </summary>
+    TextDocument,
+
+    /// <summary>
+    /// <para>设备树文档信息。</para>
+    /// Device-tree document information.
+    /// </summary>
+    DtbDocument
 }

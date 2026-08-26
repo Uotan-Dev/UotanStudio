@@ -41,6 +41,7 @@ public static class SyntaxLanguageRegistry
             ".cs" => "csharp",
             ".md" => "markdown",
             ".yaml" or ".yml" => "yaml",
+            ".dts" or ".dtsi" => "dts",
             _ => null
         };
     }

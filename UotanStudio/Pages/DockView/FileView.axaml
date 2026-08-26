@@ -23,8 +23,6 @@
                          Language="{Binding Language}"
                          IsVisible="{Binding !IsBinary}" />
 
-    <!-- 二进制视图：16 进制查看器占满整个区域。
-         （固件结构分析结果已改由属性面板展示，不再在此显示，避免与 16 进制视图重叠。） -->
     <controls:HexViewer Grid.Row="1" Name="HexEditor" Data="{Binding RawBytes}"
                         IsVisible="{Binding IsBinary}" />
 

@@ -3,13 +3,15 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
+using UotanStudio.Pages.DockControl;
 using UotanStudio.ViewModels;
 
 namespace UotanStudio.Pages.DockView;
 
 /// <summary>
-/// <para>项目资源管理器视图，处理目录展开加载与文件节点的双击打开。</para>
-/// Project explorer view, handling directory expansion loading and double-click opening of file nodes.
+/// <para>项目资源管理器视图，处理目录展开加载、文件双击打开与右键打开方式。</para>
+/// Project explorer view, handling directory expansion loading, double-click opening and the
+/// right-click open-with menu for file nodes.
 /// </summary>
 public partial class ProjectExplorerView : UserControl
 {
@@ -36,6 +38,29 @@ public partial class ProjectExplorerView : UserControl
         if (e.Source is Control { DataContext: ExplorerNode node } && !node.IsDirectory && !node.IsPlaceholder)
         {
             WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.Path));
+        }
+    }
+
+    private void OnOpenAsText(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.Text);
+    }
+
+    private void OnOpenAsHex(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.Hex);
+    }
+
+    private void OnOpenAsDtb(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.Dtb);
+    }
+
+    private void OpenWith(EditorOpenMode mode)
+    {
+        if (ProjectTree.SelectedItem is ExplorerNode node && !node.IsDirectory && !node.IsPlaceholder)
+        {
+            WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(node.Path, mode));
         }
     }
 }

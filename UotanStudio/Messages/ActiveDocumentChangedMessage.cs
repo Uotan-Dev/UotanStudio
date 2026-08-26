@@ -1,5 +1,6 @@
 namespace UotanStudio.Messages;
 
+using Dock.Model.Mvvm.Controls;
 using UotanStudio.ViewModels;
 
 /// <summary>
@@ -12,15 +13,29 @@ using UotanStudio.ViewModels;
 public class ActiveDocumentChangedMessage
 {
     /// <summary>
-    /// <para>获取新激活的文档视图模型；<c>null</c> 表示文档区已无活动文档。</para>
-    /// Gets the newly activated document view model; <c>null</c> when the document area has no
-    /// active document.
+    /// <para>获取新激活的 <see cref="FileViewModel"/> 文档；非文本/二进制文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="FileViewModel"/> document; <c>null</c> for non-file
+    /// documents (e.g. DTB editor).
     /// </summary>
     public FileViewModel? Document { get; }
 
     /// <summary>
-    /// <para>创建活动文档变更消息。</para>
-    /// Creates an active document changed message.
+    /// <para>获取新激活的 <see cref="DtbEditorViewModel"/> 文档；非设备树文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="DtbEditorViewModel"/> document; <c>null</c> for non-DTB
+    /// documents.
+    /// </summary>
+    public DtbEditorViewModel? DtbDocument { get; }
+
+    /// <summary>
+    /// <para>获取新激活文档的通用 <see cref="Document"/> 句柄；便于订阅方做类型分支。</para>
+    /// Gets the generic <see cref="Document"/> handle of the newly activated document, for
+    /// type-dispatching by subscribers.
+    /// </summary>
+    public Document? ActiveDocument { get; }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（FileViewModel 路径）。</para>
+    /// Creates an active document changed message (FileViewModel path).
     /// </summary>
     /// <param name="document">
     /// <para>新激活的文档视图模型；可为 <c>null</c>。</para>
@@ -29,5 +44,20 @@ public class ActiveDocumentChangedMessage
     public ActiveDocumentChangedMessage(FileViewModel? document)
     {
         Document = document;
+        ActiveDocument = document;
+    }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（DtbEditorViewModel 路径）。</para>
+    /// Creates an active document changed message (DtbEditorViewModel path).
+    /// </summary>
+    /// <param name="dtbDocument">
+    /// <para>新激活的 DTB 编辑器视图模型；可为 <c>null</c>。</para>
+    /// The newly activated DTB editor view model; may be <c>null</c>.
+    /// </param>
+    public ActiveDocumentChangedMessage(DtbEditorViewModel? dtbDocument)
+    {
+        DtbDocument = dtbDocument;
+        ActiveDocument = dtbDocument;
     }
 }

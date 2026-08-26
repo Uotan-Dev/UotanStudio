@@ -73,6 +73,24 @@ internal class ProjectExplorerViewModel : Tool
 /// </summary>
 public sealed partial class ExplorerNode : ObservableObject
 {
+    /// <summary>
+    /// <para>资源管理器右键「以文本打开」菜单项的本地化标题。</para>
+    /// Localized title of the "open as text" context-menu item in the explorer.
+    /// </summary>
+    public static string OpenAsTextHeader => LanguageService.Instance.GetString("Explorer_OpenAsText");
+
+    /// <summary>
+    /// <para>资源管理器右键「以十六进制打开」菜单项的本地化标题。</para>
+    /// Localized title of the "open as hex" context-menu item in the explorer.
+    /// </summary>
+    public static string OpenAsHexHeader => LanguageService.Instance.GetString("Explorer_OpenAsHex");
+
+    /// <summary>
+    /// <para>资源管理器右键「以设备树打开」菜单项的本地化标题。</para>
+    /// Localized title of the "open as device tree" context-menu item in the explorer.
+    /// </summary>
+    public static string OpenAsDtbHeader => LanguageService.Instance.GetString("Explorer_OpenAsDtb");
+
     private bool _childrenLoaded;
 
     /// <summary>

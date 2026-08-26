@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Messages;
+using UotanStudio.Pages.DockControl;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels;
@@ -21,6 +22,12 @@ namespace UotanStudio.ViewModels;
 public partial class FileViewModel : Document
 {
     private bool _isLoading;
+
+    /// <summary>
+    /// <para>魔数嗅探缓冲区（libmagic 风格兜底，避免每文件分配）。</para>
+    /// Reusable magic-sniff buffer (libmagic-style fallback, avoids per-file allocation).
+    /// </summary>
+    private readonly byte[] _magicProbeBuffer = new byte[4096];
 
     /// <summary>
     /// <para>文件原始字节数据（用于 16 进制查看）。</para>
@@ -84,6 +91,13 @@ public partial class FileViewModel : Document
     private bool _isBinary;
 
     /// <summary>
+    /// <para>文档的打开方式；由资源管理器等请求传入，控制视图模式选择。</para>
+    /// The open mode of the document; supplied by open-mode requests, controlling the chosen view.
+    /// </summary>
+    [ObservableProperty]
+    private EditorOpenMode _openMode = EditorOpenMode.Auto;
+
+    /// <summary>
     /// <para>固件格式分析结果（键值对列表），UI 绑定此项。</para>
     /// Firmware format analysis results (key-value pairs), bound by the UI.
     /// </summary>
@@ -108,28 +122,33 @@ public partial class FileViewModel : Document
 
     /// <summary>
     /// <para>异步读取指定文件内容到 <see cref="Text"/>，并初始化 <see cref="FilePath"/>；
-    /// 加载期间与加载完成后均不标记为已修改。对二进制文件自动启用 16 进制查看与结构分析。</para>
+    /// 加载期间与加载完成后均不标记为已修改。按扩展名与内容综合判定是否启用 16 进制查看。</para>
     /// Asynchronously loads the file content at the given path into <see cref="Text"/> and initializes
     /// <see cref="FilePath"/>; the document is not marked dirty during or after loading.
-    /// For binary files, hex viewing and structure analysis are enabled automatically.
+    /// Whether hex viewing is enabled is decided by extension and content.
     /// </summary>
     /// <param name="path">
     /// <para>要加载的文件路径。</para>
     /// The file path to load.
     /// </param>
-    public async Task LoadContentAsync(string path)
+    /// <param name="mode">
+    /// <para>请求的打开方式；默认 <c>Auto</c>，按类型+后缀+内容综合判定。</para>
+    /// The requested open mode; default <c>Auto</c>, decided by type+extension+content.
+    /// </param>
+    public async Task LoadContentAsync(string path, EditorOpenMode mode = EditorOpenMode.Auto)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
             return;
         }
 
+        OpenMode = mode;
         FilePath = path;
         _isLoading = true;
         try
         {
             RawBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
-            IsBinary = IsBinaryFile(RawBytes);
+            IsBinary = ResolveBinary(mode, path, RawBytes);
 
             if (IsBinary)
             {
@@ -139,6 +158,7 @@ public partial class FileViewModel : Document
             else
             {
                 Text = await File.ReadAllTextAsync(path).ConfigureAwait(true);
+                DetectedEncoding = DetectEncoding(RawBytes);
                 ClearAnalysis();
             }
 
@@ -148,6 +168,159 @@ public partial class FileViewModel : Document
         {
             _isLoading = false;
             IsDirty = false;
+        }
+    }
+
+    /// <summary>
+    /// <para>检测到的文本编码名称；非文本文档时为 <c>null</c>。</para>
+    /// Detected text encoding name; <c>null</c> for non-text documents.
+    /// </summary>
+    [ObservableProperty] private string? _detectedEncoding;
+
+    /// <summary>
+    /// <para>文本总行数（按 <c>\n</c> 计）；空文本为 0。</para>
+    /// Total line count of the text (counted by <c>\n</c>); 0 for empty text.
+    /// </summary>
+    public int LineCount
+    {
+        get
+        {
+            if (string.IsNullOrEmpty(Text))
+            {
+                return 0;
+            }
+
+            var count = 0;
+            foreach (var c in Text)
+            {
+                if (c == '\n')
+                {
+                    count++;
+                }
+            }
+
+            // 末尾无换行符时，最后一行仍需计数。
+            // Count the final line when it does not end with a newline.
+            if (Text.Length > 0 && Text[^1] != '\n')
+            {
+                count++;
+            }
+
+            return count;
+        }
+    }
+
+    /// <summary>
+    /// <para>文本字符数（<see cref="Text"/> 的长度）。</para>
+    /// Character count of the text (length of <see cref="Text"/>).
+    /// </summary>
+    public int CharCount => Text?.Length ?? 0;
+
+    /// <summary>
+    /// <para>通过 BOM 与字节模式推测文本编码名称；无法确定时回落为 <c>UTF-8</c>。</para>
+    /// Sniffs the text encoding name from BOM and byte patterns, falling back to <c>UTF-8</c> when
+    /// undeterminable.
+    /// </summary>
+    /// <param name="data">
+    /// <para>文件的原始字节。</para>
+    /// The raw file bytes.
+    /// </param>
+    /// <returns>编码名称（如 <c>UTF-8</c>、<c>UTF-16 LE</c>、<c>ASCII</c>）。</returns>
+    private static string DetectEncoding(byte[] data)
+    {
+        if (data is null || data.Length == 0)
+        {
+            return "UTF-8";
+        }
+
+        // BOM 探测：UTF-8 (EF BB BF)、UTF-16 LE (FF FE)、UTF-16 BE (FE FF)、UTF-32 LE (FF FE 00 00)。
+        // BOM detection for UTF-8/UTF-16 LE/BE/UTF-32 LE.
+        if (data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF)
+        {
+            return "UTF-8 (BOM)";
+        }
+
+        if (data.Length >= 2 && data[0] == 0xFF && data[1] == 0xFE)
+        {
+            return data.Length >= 4 && data[2] == 0x00 && data[3] == 0x00 ? "UTF-32 LE" : "UTF-16 LE";
+        }
+
+        if (data.Length >= 2 && data[0] == 0xFE && data[1] == 0xFF)
+        {
+            return "UTF-16 BE";
+        }
+
+        // 无 BOM 时按字节分布推断：所有字节均 < 0x80 视为 ASCII；出现成对的 0x00 视为 UTF-16。
+        // Without BOM, infer by byte distribution: all < 0x80 → ASCII; paired 0x00 → UTF-16.
+        var checkLength = Math.Min(data.Length, 4096);
+        var hasHighByte = false;
+        var looksUtf16Le = false;
+        var looksUtf16Be = false;
+        var zeroCount = 0;
+        for (var i = 0; i < checkLength; i++)
+        {
+            var b = data[i];
+            if (b == 0)
+            {
+                zeroCount++;
+            }
+
+            if (b >= 0x80)
+            {
+                hasHighByte = true;
+            }
+        }
+
+        if (checkLength >= 2 && zeroCount > checkLength / 4)
+        {
+            // 大量空字节，倾向于 UTF-16；按奇偶位置判定字节序。
+            // Many null bytes → likely UTF-16; endianness decided by null-byte position.
+            looksUtf16Le = data[1] == 0;
+            looksUtf16Be = data[0] == 0;
+        }
+
+        if (looksUtf16Le)
+        {
+            return "UTF-16 LE";
+        }
+
+        if (looksUtf16Be)
+        {
+            return "UTF-16 BE";
+        }
+
+        if (!hasHighByte)
+        {
+            return "ASCII";
+        }
+
+        return "UTF-8";
+    }
+
+    /// <summary>
+    /// <para>按打开方式、扩展名与内容综合判定是否为二进制（应走十六进制编辑器）。
+    /// <c>Text</c> 强制为文本；<c>Hex</c> 强制为二进制；<c>Auto</c> 依据扩展名白名单与内容探测。</para>
+    /// Decides whether the file is binary (opens in the hex editor) from open mode, extension and content.
+    /// <c>Text</c> forces text; <c>Hex</c> forces binary; <c>Auto</c> uses the extension whitelist and content sniffing.
+    /// </summary>
+    private static bool ResolveBinary(EditorOpenMode mode, string path, byte[] data)
+    {
+        switch (mode)
+        {
+            case EditorOpenMode.Text:
+                return false;
+            case EditorOpenMode.Hex:
+                return true;
+            case EditorOpenMode.Dtb:
+                return false;
+            default:
+                var ext = Path.GetExtension(path);
+                if (FileOpenMode.IsKnownBinaryExtension(ext))
+                {
+                    return true;
+                }
+
+                return IsBinaryFile(data);
         }
     }
 
@@ -197,7 +370,24 @@ public partial class FileViewModel : Document
             var handler = FormatDetector.Detect(path);
             if (handler is null)
             {
-                AddAnalysis("Format", "Unknown / 未知格式");
+                // FormatDetector 未识别时，尝试纯托管魔数嗅探（libmagic 风格）兜底
+                // Fall back to pure-managed magic sniffing (libmagic style) when FormatDetector misses
+                string? magic = null;
+                try
+                {
+                    const int probeSize = 4096;
+                    using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, probeSize, FileOptions.SequentialScan);
+                    int read = fs.Read(_magicProbeBuffer, 0, probeSize);
+                    magic = ManagedMagic.Detect(_magicProbeBuffer.AsSpan(0, read));
+                }
+                catch
+                {
+                    // 嗅探失败不影响主流程
+                    // Sniff failures must not break the main flow
+                }
+
+                string format = magic ?? "Unknown / 未知格式";
+                AddAnalysis("Format", format);
                 AddAnalysis("Size", $"{new FileInfo(path).Length:N0} bytes");
                 NotifyAnalysisComplete(path);
                 return;

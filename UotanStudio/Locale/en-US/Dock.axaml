@@ -47,6 +47,31 @@
     <x:String x:Key="Dock_Properties_Type_Node">Node</x:String>
     <x:String x:Key="Dock_Properties_Type_Image">Image</x:String>
     <x:String x:Key="Dock_Properties_Type_FileAnalysis">File Analysis</x:String>
+    <x:String x:Key="Dock_Properties_Type_TextDocument">Text Document</x:String>
+    <x:String x:Key="Dock_Properties_Type_DtbDocument">Device Tree</x:String>
+
+    <!-- Text document properties panel labels -->
+    <x:String x:Key="Dock_Properties_Text_FileName">File Name</x:String>
+    <x:String x:Key="Dock_Properties_Text_FilePath">File Path</x:String>
+    <x:String x:Key="Dock_Properties_Text_FileSize">File Size</x:String>
+    <x:String x:Key="Dock_Properties_Text_Encoding">Encoding</x:String>
+    <x:String x:Key="Dock_Properties_Text_LineCount">Line Count</x:String>
+    <x:String x:Key="Dock_Properties_Text_CharCount">Character Count</x:String>
+    <x:String x:Key="Dock_Properties_Text_Language">Language</x:String>
+
+    <!-- Device tree document properties panel labels -->
+    <x:String x:Key="Dock_Properties_Dtb_FileName">File Name</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_FilePath">File Path</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_FileSize">File Size</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_NodeCount">Total Nodes</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_RootCompatible">Root Compatible</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_RootAddressCells">#address-cells</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_RootSizeCells">#size-cells</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_MemReservations">Memory Reservations</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_SelectedNode">Selected Node</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_SelectedNodePath">Node Path</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_SelectedNodeProps">Property Count</x:String>
+    <x:String x:Key="Dock_Properties_Dtb_SelectedNodeChildren">Child Count</x:String>
 
     <!-- Device confirmation dialogs -->
     <x:String x:Key="Editor_Yes">Yes</x:String>

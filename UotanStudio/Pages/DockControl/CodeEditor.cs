@@ -1,7 +1,6 @@
-﻿using System;
+using System;
 using Avalonia;
 using Avalonia.Data;
-using Avalonia.Media;
 using Avalonia.Styling;
 using AvaloniaEdit;
 using AvaloniaEdit.TextMate;
@@ -9,7 +8,14 @@ using TextMateSharp.Grammars;
 
 namespace UotanStudio.Pages.DockControl;
 
-public class CodeEditor : TextEditor
+/// <summary>
+/// <para>基于 AvaloniaEdit <see cref="TextEditor"/> 的代码编辑器控件，布局选项在
+/// <c>CodeEditor.axaml</c> 中声明，本文件承载可绑定属性桥接与 TextMate 主题语法高亮逻辑。</para>
+/// A code editor control built on the AvaloniaEdit <see cref="TextEditor"/>. Layout options are
+/// declared in <c>CodeEditor.axaml</c>; this file hosts the bindable-property bridging and the
+/// TextMate theming / syntax-highlighting logic.
+/// </summary>
+public partial class CodeEditor : TextEditor
 {
     public static readonly StyledProperty<string?> LanguageProperty =
         AvaloniaProperty.Register<CodeEditor, string?>(nameof(Language));
@@ -44,9 +50,7 @@ public class CodeEditor : TextEditor
 
     public CodeEditor()
     {
-        ShowLineNumbers = true;
-        FontFamily = FontFamily.Parse("Consolas");
-        FlowDirection = FlowDirection.LeftToRight;
+        InitializeComponent();
 
         TextChanged += (_, _) => SetValue(TextProperty, base.Text);
         ActualThemeVariantChanged += (_, _) => UpdateEditorTheme();

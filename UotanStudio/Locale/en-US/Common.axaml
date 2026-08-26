@@ -42,5 +42,12 @@
     <x:String x:Key="ProjectExplorer_Outer">Outer</x:String>
     <x:String x:Key="ProjectExplorer_Inner">Inner</x:String>
     <x:String x:Key="ProjectExplorer_Innermost">Innermost</x:String>
+    <x:String x:Key="Explorer_OpenAsText">Open as Text</x:String>
+    <x:String x:Key="Explorer_OpenAsHex">Open as Hex</x:String>
+    <x:String x:Key="Explorer_OpenAsDtb">Open as Device Tree</x:String>
+    <x:String x:Key="Dock_Dtb_Save">Save</x:String>
+    <x:String x:Key="Dock_Dtb_Tree">Device Tree</x:String>
+    <x:String x:Key="Dock_Dtb_Source">Device Tree Source</x:String>
+    <x:String x:Key="Dock_Dtb_CompileError">Compile Error</x:String>
 
 </ResourceDictionary>
