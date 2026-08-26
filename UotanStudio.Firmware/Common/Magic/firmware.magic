@@ -1,0 +1,46 @@
+# UotanStudio 内置精炼 magic 规则
+# 仅包含上游 file(1) Magdir 中缺失或简化的固件/Android 镜像/引导/文件系统魔数。
+# 已与上游 android/archive/compress/elf/filesystems/linux/sun 查重，剔除全部重复规则。
+# 格式：offset  type  test  description
+
+# ELF 可执行/可链接格式（父规则 + 子规则细化，对齐上游 elf.magic 结构）
+0	string	\177ELF	Executable and Linkable Format (ELF)
+>4	byte	0x01	32-bit
+>4	byte	0x02	64-bit
+>5	byte	0x01	little-endian
+>5	byte	0x02	big-endian
+
+# Android vendor boot image（上游 android.magic 无此条目）
+0	string	VNDRBOOT	Android vendor boot image
+
+# Android device tree overlay（DTBH / DTBO；上游无）
+0	string	DTBH	Android device tree overlay image
+0	string	DTBO	Android device tree overlay image
+
+# Android OTA payload（"CrAU"；上游无）
+0	string	CrAU	Android OTA payload
+
+# Android Verified Boot image（"AVBf"；上游无）
+0	string	AVBf	Android Verified Boot image
+
+# Rockchip firmware（"Rkfw" / "RKAF"；上游 android.magic 仅 BOOT，无 Rkfw/RKAF）
+0	string	Rkfw	Rockchip firmware image
+0	string	RKAF	Rockchip firmware image
+
+# LZ4 frame（"04 22 4d 18"；上游 compress.magic 无此版本）
+0	string	\x04\x22\x4d\x18	LZ4 frame compressed data
+
+# LZ4 legacy（"02 21 4c 18"；上游 compress.magic 无）
+0	string	\x02\x21\x4c\x18	LZ4 legacy compressed data
+
+# Zstandard frame（"28 b5 2f fd"；上游 compress.magic 无）
+0	string	\x28\xb5\x2f\xfd	Zstandard compressed data
+
+# ext2/3/4 超级块魔数（偏移 0x38，小端 0xef53；上游 filesystems.magic 用偏移 0x438，此处保留 0x38 兜底）
+0x38	leshort	0xef53	ext2/3/4 filesystem
+
+# squashfs v4 little-endian（"73 71 73 68"；上游 filesystems.magic 有，但为 hsqs → 与本条等价，保留作为精简兜底）
+0	lelong	0x73717368	squashfs filesystem
+
+# erofs（"e0 e5 e1 e2"；上游 filesystems.magic 无）
+0	belong	0xe0e5e1e2	erofs filesystem

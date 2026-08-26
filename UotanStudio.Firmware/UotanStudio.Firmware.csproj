@@ -9,6 +9,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- 上游 file(1) 可读 magic 文本规则（github.com/file/file 的 magic/Magdir/），作为嵌入式资源 -->
+    <EmbeddedResource Include="Common\Magic\android.magic" />
+    <EmbeddedResource Include="Common\Magic\archive.magic" />
+    <EmbeddedResource Include="Common\Magic\compress.magic" />
+    <EmbeddedResource Include="Common\Magic\elf.magic" />
+    <EmbeddedResource Include="Common\Magic\filesystems.magic" />
+    <EmbeddedResource Include="Common\Magic\linux.magic" />
+    <EmbeddedResource Include="Common\Magic\sun.magic" />
+    <!-- 内置精炼 magic 规则（固件相关子集），运行时由 ManagedMagic 加载 -->
+    <EmbeddedResource Include="Common\Magic\firmware.magic" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Compression / binary processing (used across formats) -->
     <PackageReference Include="BrotliSharpLib" />
     <PackageReference Include="BsDiff" />
