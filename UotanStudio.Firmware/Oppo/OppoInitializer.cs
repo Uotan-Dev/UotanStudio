@@ -78,10 +78,34 @@ public static class OppoInitializer
             var originalPosition = stream.Position;
             try
             {
+                // ELF 前置排除：裸 ELF kernel（无后缀或 .img）末尾反转字节可能恰好满足
+                // 可打印 ASCII 启发式，导致被误判为 OFP MTK。头部为 \x7FELF 时直接返回 null。
+                // ELF pre-exclusion: a bare ELF kernel's de-shuffled tail bytes can accidentally satisfy
+                // the printable-ASCII heuristic and be misidentified as OFP MTK. Bail out when the header
+                // starts with \x7FELF.
+                stream.Position = 0;
+                if (stream.Length >= 4)
+                {
+                    Span<byte> head = stackalloc byte[4];
+                    if (stream.Read(head) == 4 && head[0] == 0x7F && head[1] == (byte)'E' && head[2] == (byte)'L' && head[3] == (byte)'F')
+                    {
+                        return null;
+                    }
+                }
+
                 stream.Position = fileSize - OfpMtkHeader.Size;
                 var headerBuffer = new byte[OfpMtkHeader.Size];
                 var bytesRead = stream.Read(headerBuffer, 0, OfpMtkHeader.Size);
                 if (bytesRead != OfpMtkHeader.Size)
+                {
+                    return null;
+                }
+
+                // 原始尾部全零（零填充）不可能是 MTK 头：解混淆后必为密钥重复串（如 "geyixue..."），
+                // 属裸内核/镜像的零填充尾部，而非真实 OFP MTK 头。
+                // A fully-zero raw tail is zero padding (bare kernels/images), never a real MTK header:
+                // de-obfuscating zeros yields the repeated shuffle key, which is printable ASCII.
+                if (FormatDetector.IsAllZeros(headerBuffer.AsSpan(0, 46)))
                 {
                     return null;
                 }

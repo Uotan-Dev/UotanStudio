@@ -37,10 +37,44 @@ public sealed class OppoFormatHandler : IFormatHandler
         }
 
         var extension = Path.GetExtension(filePath);
-        var extensionMatch = extension.Equals(".ofp", StringComparison.OrdinalIgnoreCase)
+        var strongExtension = extension.Equals(".ofp", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".ops", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".ozip", StringComparison.OrdinalIgnoreCase)
-            || extension.Equals(".bin", StringComparison.OrdinalIgnoreCase);
+            || extension.Equals(".ozip", StringComparison.OrdinalIgnoreCase);
+        var genericBin = extension.Equals(".bin", StringComparison.OrdinalIgnoreCase);
+
+        // 仅识别带 Oppo 特定后缀（.ofp/.ops/.ozip/.bin）的文件：无后缀或其它后缀
+        // 一律不做内容嗅探，避免裸内核/镜像被误判为 OFP。
+        // Only recognize files with an Oppo-specific extension (.ofp/.ops/.ozip/.bin):
+        // files without such a suffix are never content-sniffed, preventing bare kernels/images
+        // from being misidentified as OFP.
+        if (!strongExtension && !genericBin)
+        {
+            return false;
+        }
+
+        // 检查头部是否 ELF（裸内核等）或 ARM64 内核镜像（魔数 "ARM\x64" 位于偏移 0x38），
+        // 这类裸内核一律不归入 OFP。
+        // Bail out when the file is a bare kernel (ELF magic, or ARM64 Image magic "ARM\x64" at offset 0x38).
+        try
+        {
+            using var fs = File.OpenRead(filePath);
+            Span<byte> head = stackalloc byte[0x3C];
+            var read = fs.Read(head);
+            if (read >= 4 && head[0] == 0x7F && head[1] == (byte)'E' && head[2] == (byte)'L' && head[3] == (byte)'F')
+            {
+                return false;
+            }
+            if (read >= 0x3C
+                && head[0x38] == (byte)'A' && head[0x39] == (byte)'R'
+                && head[0x3A] == (byte)'M' && head[0x3B] == (byte)'d')
+            {
+                return false;
+            }
+        }
+        catch
+        {
+            // 读取头部失败时按既有扩展名规则继续，避免抛出。
+        }
 
         try
         {
@@ -53,10 +87,12 @@ public sealed class OppoFormatHandler : IFormatHandler
         }
         catch
         {
-            return extensionMatch;
+            return strongExtension;
         }
 
-        return extensionMatch;
+        // 强扩展名（.ofp/.ops/.ozip）可裸放行；泛 .bin 仅在内容嗅探命中时返回 true。
+        // Strong extensions (.ofp/.ops/.ozip) pass by extension; generic .bin requires content confirmation.
+        return strongExtension;
     }
 
     /// <summary>
