@@ -1,3 +1,4 @@
+using UotanStudio.ViewModels.Shell;
 using UotanStudio.Services.Devices;
 using System;
 using System.Globalization;
@@ -11,7 +12,7 @@ using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.ViewModels;
-using UotanStudio.Views;
+using UotanStudio.Views.Shell;
 
 namespace UotanStudio;
 

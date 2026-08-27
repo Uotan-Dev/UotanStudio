@@ -1,5 +1,6 @@
 namespace UotanStudio.Messages;
 
+using UotanStudio.ViewModels.Editors;
 using System.Collections.Generic;
 
 /// <summary>
@@ -14,7 +15,7 @@ public class FileAnalysisCompletedMessage
     /// <para>获取分析结果键值对列表。</para>
     /// Gets the analysis result key-value pairs.
     /// </summary>
-    public IReadOnlyList<ViewModels.PropertyRow> Analysis { get; }
+    public IReadOnlyList<UotanStudio.ViewModels.Editors.PropertyRow> Analysis { get; }
 
     /// <summary>
     /// <para>获取检测到的固件格式名称；未识别时为 <c>null</c>。</para>
@@ -32,7 +33,7 @@ public class FileAnalysisCompletedMessage
     /// <para>创建文件分析完成消息。</para>
     /// Creates a file analysis completed message.
     /// </summary>
-    public FileAnalysisCompletedMessage(IReadOnlyList<ViewModels.PropertyRow> analysis, string? detectedFormat, string? filePath)
+    public FileAnalysisCompletedMessage(IReadOnlyList<UotanStudio.ViewModels.Editors.PropertyRow> analysis, string? detectedFormat, string? filePath)
     {
         Analysis = analysis;
         DetectedFormat = detectedFormat;

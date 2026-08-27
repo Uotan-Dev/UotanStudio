@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
+			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+			 x:Class="UotanStudio.Views.Workspace.ProjectExplorerView"
+			 x:DataType="viewmodels:ProjectExplorerViewModel">
+	<TreeView x:Name="ProjectTree" Height="680" ItemsSource="{Binding TreeViewContent}" DoubleTapped="OnTreeDoubleTapped">
+		<TreeView.ItemTemplate>
+			<TreeDataTemplate x:DataType="viewmodels:ExplorerNode" ItemsSource="{Binding Children}">
+				<TextBlock Text="{Binding Name}">
+					<TextBlock.ContextMenu>
+						<ContextMenu>
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsTextHeader}"
+									  IsVisible="{Binding !IsDirectory}"
+									  Click="OnOpenAsText" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsHexHeader}"
+									  IsVisible="{Binding !IsDirectory}"
+									  Click="OnOpenAsHex" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDtbHeader}"
+							    IsVisible="{Binding !IsDirectory}"
+							    Click="OnOpenAsDtb" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDexHeader}"
+							    IsVisible="{Binding !IsDirectory}"
+							    Click="OnOpenAsDex" />
+						</ContextMenu>
+					</TextBlock.ContextMenu>
+				</TextBlock>
+			</TreeDataTemplate>
+		</TreeView.ItemTemplate>
+	</TreeView>
+</UserControl>

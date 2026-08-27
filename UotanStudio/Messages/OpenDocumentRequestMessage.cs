@@ -1,4 +1,4 @@
-using UotanStudio.Pages.DockControl;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Messages;
 

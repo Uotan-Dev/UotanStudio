@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        Title="{DynamicResource Menu_About}"
+        Width="420" Height="320"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        WindowDecorations="Full"
+        x:Class="UotanStudio.Views.Shell.AboutDialog">
+    <Grid Margin="24" RowDefinitions="Auto,Auto,Auto,*,Auto">
+        <!-- Logo -->
+        <Image Grid.Row="0" Source="/Assets/UotanToolbox.png" Width="64" Height="64"
+               HorizontalAlignment="Center" Margin="0,0,0,8" />
+
+        <!-- App name -->
+        <TextBlock Grid.Row="1" Text="UotanStudio"
+                   FontSize="20" FontWeight="Bold"
+                   HorizontalAlignment="Center" />
+
+        <!-- Version -->
+        <TextBlock Grid.Row="2" HorizontalAlignment="Center" FontSize="12" Opacity="0.7">
+            <Run Text="{DynamicResource About_Version}" />
+            <Run Text="1.0.0" />
+        </TextBlock>
+
+        <!-- Description -->
+        <TextBlock Grid.Row="3" Text="{DynamicResource About_Description}"
+                   FontSize="12" Opacity="0.8"
+                   HorizontalAlignment="Center"
+                   TextWrapping="Wrap" TextAlignment="Center"
+                   VerticalAlignment="Center" Margin="0,8" />
+
+        <!-- Close button -->
+        <Button Grid.Row="4" Content="{DynamicResource About_Close}"
+                Click="OnCloseClick"
+                HorizontalAlignment="Center"
+                MinWidth="100" Margin="0,8,0,0" />
+    </Grid>
+</Window>

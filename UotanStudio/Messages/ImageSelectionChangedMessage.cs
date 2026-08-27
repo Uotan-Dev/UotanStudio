@@ -1,3 +1,4 @@
+using UotanStudio.ViewModels.Workspace;
 namespace UotanStudio.Messages;
 
 /// <summary>
@@ -12,7 +13,7 @@ public class ImageSelectionChangedMessage
     /// <para>获取当前选中的镜像条目；<c>null</c> 表示已清空选择。</para>
     /// Gets the currently selected image entry; <c>null</c> means the selection was cleared.
     /// </summary>
-    public ViewModels.ImageEntryViewModel? Image { get; }
+    public UotanStudio.ViewModels.Workspace.ImageEntryViewModel? Image { get; }
 
     /// <summary>
     /// <para>创建镜像选中变更消息。</para>
@@ -22,7 +23,7 @@ public class ImageSelectionChangedMessage
     /// <para>当前选中的镜像条目；<c>null</c> 表示清空选择。</para>
     /// The currently selected image entry; <c>null</c> clears the selection.
     /// </param>
-    public ImageSelectionChangedMessage(ViewModels.ImageEntryViewModel? image)
+    public ImageSelectionChangedMessage(UotanStudio.ViewModels.Workspace.ImageEntryViewModel? image)
     {
         Image = image;
     }

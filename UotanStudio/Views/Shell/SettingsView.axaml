@@ -1,0 +1,90 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Shell"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="900"
+             x:Class="UotanStudio.Views.Shell.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+    <Grid>
+        <!-- Main Content -->
+        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24,16" Spacing="24" MaxWidth="800">
+
+                <!-- Section 1: Appearance -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{DynamicResource Settings_Appearance}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+
+                    <!-- Theme Selection -->
+                    <TextBlock Text="{DynamicResource Settings_Theme}" FontSize="13" Margin="0,4,0,0" />
+                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="0,4,0,0">
+                        <RadioButton Content="{DynamicResource Settings_ThemeFollowSystem}"
+                                     GroupName="ThemeGroup"
+                                     IsChecked="{Binding IsSystemTheme, Mode=TwoWay}" />
+                        <RadioButton Content="{DynamicResource Settings_ThemeLightMode}"
+                                     GroupName="ThemeGroup"
+                                     IsChecked="{Binding IsLightTheme, Mode=TwoWay}" />
+                        <RadioButton Content="{DynamicResource Settings_ThemeDarkMode}"
+                                     GroupName="ThemeGroup"
+                                     IsChecked="{Binding IsDarkTheme, Mode=TwoWay}" />
+                    </StackPanel>
+
+                    </StackPanel>
+
+                <!-- Section 2: Language -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{DynamicResource Settings_Language}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_Language}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ComboBox Grid.Row="0" Grid.Column="1"
+                                  ItemsSource="{Binding Languages}"
+                                  SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                                  DisplayMemberBinding="{Binding DisplayName}"
+                                  HorizontalAlignment="Stretch" />
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_LanguagePreview}"
+                                   VerticalAlignment="Center" FontSize="12" Opacity="0.7" Margin="0,8,0,0" />
+                        <TextBlock Grid.Row="1" Grid.Column="1"
+                                   Text="{Binding LanguagePreviewText}"
+                                   FontSize="13" FontStyle="Italic"
+                                   Margin="0,8,0,0" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Section 3: General -->
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{DynamicResource Settings_General}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto" Margin="0,4">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AutoSave}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ToggleSwitch Grid.Row="0" Grid.Column="1"
+                                      IsChecked="{Binding AutoSave, Mode=TwoWay}" />
+                    </Grid>
+                </StackPanel>
+
+                <!-- Section 4: Reset to Defaults -->
+                <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,8,0,32">
+                    <Button Content="{DynamicResource Settings_ResetToDefaults}"
+                            Command="{Binding ResetToDefaultsCommand}" />
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Toast Notification Overlay -->
+        <Border HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,24"
+                IsVisible="{Binding IsToastVisible}"
+                CornerRadius="8" Padding="12,8"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                BorderThickness="1">
+            <TextBlock Text="{Binding ToastMessage}" FontSize="13" />
+        </Border>
+    </Grid>
+</UserControl>

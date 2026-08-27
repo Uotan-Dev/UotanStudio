@@ -6,8 +6,6 @@
              xmlns:converters="using:UotanStudio.Converters"
              xmlns:viewmodels="using:UotanStudio.ViewModels"
              xmlns:devices="using:UotanStudio.ViewModels.Devices"
-             xmlns:pages="using:UotanStudio.Pages"
-             xmlns:dockview="using:UotanStudio.Pages.DockView"
              x:Class="UotanStudio.App"
              RequestedThemeVariant="Default">
 

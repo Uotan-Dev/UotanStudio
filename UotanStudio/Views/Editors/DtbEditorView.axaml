@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.DtbEditorView"
+             x:DataType="viewmodels:DtbEditorViewModel">
+  <DockPanel>
+    <!-- 顶部工具栏：保存按钮 + 编译错误状态 -->
+    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="{x:Static viewmodels:DtbEditorViewModel.SaveLabel}"
+                Command="{Binding SaveCommand}" />
+        <TextBlock Text="{Binding CompileError}"
+                   VerticalAlignment="Center"
+                   Foreground="Red"
+                   TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </DockPanel>
+    </Border>
+
+    <!-- 设备节点树（左） + DTS 源码（右） -->
+    <Grid ColumnDefinitions="280,*">
+      <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+        <TreeView x:Name="NodeTree"
+                  ItemsSource="{Binding Nodes}"
+                  SelectionChanged="OnNodeTreeSelectionChanged">
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate x:DataType="viewmodels:DtbNodeViewModel" ItemsSource="{Binding Children}">
+              <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+      </Border>
+
+      <controls:CodeEditor Grid.Column="1" x:Name="SourceEditor"
+                           Text="{Binding Source, Mode=TwoWay}"
+                           Language="dts" />
+    </Grid>
+  </DockPanel>
+</UserControl>

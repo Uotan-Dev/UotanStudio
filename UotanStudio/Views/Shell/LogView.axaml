@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.ViewModels.Shell"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="UotanStudio.Views.Shell.LogView"
+             x:DataType="vm:LogViewModel">
+  <Grid RowDefinitions="Auto,*">
+    <!-- 顶栏：标题与操作按钮 -->
+    <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Log_Panel_Title}"
+                   FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+        <Button DockPanel.Dock="Right" HorizontalAlignment="Right"
+                Padding="6,2" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBlock Text="{DynamicResource Log_Clear}" FontSize="11" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Margin="0,0,6,0"
+                Padding="6,2" Click="OnExportClick" ToolTip.Tip="{DynamicResource Log_Export}">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <TextBlock Text="{DynamicResource Log_Export}" FontSize="11" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <TextBlock VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+    <!-- 日志列表：使用虚拟化 ListBox，避免大体积日志全集物化导致的性能开销 -->
+    <ListBox Grid.Row="1" Name="LogList"
+             ItemsSource="{Binding Entries}"
+             Background="Transparent" BorderThickness="0"
+             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+             ScrollViewer.VerticalScrollBarVisibility="Auto">
+      <ListBox.ItemTemplate>
+        <DataTemplate DataType="vm:LogViewModel+LogEntryViewModel">
+          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1"
+                      PointerPressed="OnEntryPointerPressed"
+                      Background="Transparent"
+                      Cursor="Hand">
+            <TextBlock Text="{Binding Timestamp}" FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextForeground}"
+                       FontFamily="Consolas,monospace" />
+            <TextBlock Text="{Binding Level}" FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextForeground}"
+                       FontFamily="Consolas,monospace" Width="56" />
+            <TextBlock Text="{Binding Source}" FontSize="12"
+                       Foreground="{DynamicResource SecondaryTextForeground}"
+                       FontFamily="Consolas,monospace" Width="140" />
+            <TextBlock Text="{Binding Message}" FontSize="12"
+                       TextWrapping="NoWrap"
+                       FontFamily="Consolas,monospace" />
+          </StackPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </Grid>
+</UserControl>

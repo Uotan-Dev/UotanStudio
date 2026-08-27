@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.DexEditorView"
+             x:DataType="viewmodels:DexEditorViewModel">
+  <DockPanel>
+    <!-- 顶部工具栏：保存（重建）按钮 + 解析错误状态 -->
+    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="{x:Static viewmodels:DexEditorViewModel.SaveLabel}"
+                Command="{Binding SaveCommand}"
+                IsEnabled="{Binding IsBusy, Converter={x:Static BoolConverters.Not}}" />
+        <TextBlock Text="{Binding CompileError}"
+                   VerticalAlignment="Center"
+                   Foreground="Red"
+                   TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </DockPanel>
+    </Border>
+
+    <!-- 结构树（左：类/方法/字段） + 反汇编文本（右），后台加载时叠加忙碌动画 -->
+    <Grid>
+      <Grid ColumnDefinitions="280,*">
+        <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+          <TreeView x:Name="ClassTree"
+                    ItemsSource="{Binding Classes}"
+                    SelectionChanged="OnClassTreeSelectionChanged">
+            <TreeView.ItemTemplate>
+              <TreeDataTemplate x:DataType="viewmodels:DexTreeNodeViewModel" ItemsSource="{Binding Children}">
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                  <TextBlock Text="{Binding Kind}" FontSize="10" Opacity="0.6" FontFamily="Consolas" />
+                  <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
+                </StackPanel>
+              </TreeDataTemplate>
+            </TreeView.ItemTemplate>
+          </TreeView>
+        </Border>
+
+        <controls:CodeEditor Grid.Column="1" x:Name="SourceEditor"
+                             Text="{Binding Source, Mode=TwoWay}"
+                             IsReadOnly="True" />
+      </Grid>
+
+      <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="{Binding IsBusy}" ZIndex="1"
+              Background="#A0000000">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="12">
+          <ProgressBar Width="220" IsIndeterminate="True" />
+          <TextBlock Text="{x:Static viewmodels:DexEditorViewModel.BusyLabel}"
+                     Foreground="White" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

@@ -1,7 +1,0 @@
-<edit:TextEditor xmlns="https://github.com/avaloniaui"
-                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:edit="using:AvaloniaEdit"
-                x:Class="UotanStudio.Pages.DockControl.CodeEditor"
-                ShowLineNumbers="True"
-                FontFamily="Consolas"
-                FlowDirection="LeftToRight" />

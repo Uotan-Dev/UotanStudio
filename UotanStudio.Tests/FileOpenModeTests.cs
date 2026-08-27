@@ -1,5 +1,5 @@
 using System.Text;
-using UotanStudio.Pages.DockControl;
+using UotanStudio.Views.Controls;
 using Xunit;
 
 namespace UotanStudio.Tests;

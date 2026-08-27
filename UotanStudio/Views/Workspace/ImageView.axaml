@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="UotanStudio.Views.Workspace.ImageView"
+             x:DataType="viewmodels:ImageViewModel">
+  <Grid RowDefinitions="*,Auto">
+    <!-- 镜像列表 -->
+    <ListBox Grid.Row="0" Name="ImagesList"
+             ItemsSource="{Binding Images}"
+             SelectedItem="{Binding SelectedImage, Mode=TwoWay}"
+             Background="Transparent" BorderThickness="0">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="viewmodels:ImageEntryViewModel">
+          <Grid ColumnDefinitions="Auto,*,Auto" Margin="4,3">
+            <avalonia:MaterialIcon Grid.Column="0" Kind="FileOutline" Width="16" Height="16"
+                                   Margin="0,0,8,0" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource AccentColor}" />
+            <StackPanel Grid.Column="1" Spacing="1">
+              <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                         TextTrimming="CharacterEllipsis" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{Binding Format}" FontSize="10" Opacity="0.6" />
+                <TextBlock Text="{Binding SizeBytes, StringFormat='{}{0:N0} B'}" FontSize="10" Opacity="0.5" />
+              </StackPanel>
+            </StackPanel>
+            <avalonia:MaterialIcon Grid.Column="2" Kind="CheckCircle" Width="14" Height="14"
+                                   VerticalAlignment="Center" Margin="6,0,0,0"
+                                   Foreground="{DynamicResource AccentColor}"
+                                   IsVisible="{Binding IsSelected}" />
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+
+    <!-- 底部按钮区 -->
+    <Border Grid.Row="1" Padding="6" Background="{DynamicResource ControlFillColorDefaultBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <StackPanel Spacing="6">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button MinWidth="90" Command="{Binding ExtractSelectedCommand}"
+                  ToolTip.Tip="{DynamicResource ImageView_ExtractHint}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <avalonia:MaterialIcon Kind="PackageDown" Width="14" Height="14" />
+              <TextBlock Text="{DynamicResource ImageView_ExtractSelected}" FontSize="11" />
+            </StackPanel>
+          </Button>
+          <Button MinWidth="90" Command="{Binding SynthesizeImgCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <avalonia:MaterialIcon Kind="ImagePlus" Width="14" Height="14" />
+              <TextBlock Text="{DynamicResource ImageView_SynthesizeImg}" FontSize="11" />
+            </StackPanel>
+          </Button>
+          <Button MinWidth="90" Command="{Binding SynthesizeBrCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <avalonia:MaterialIcon Kind="ArchivePlus" Width="14" Height="14" />
+              <TextBlock Text="{DynamicResource ImageView_SynthesizeBr}" FontSize="11" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button MinWidth="90" Command="{Binding DeleteSelectedCommand}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <avalonia:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
+              <TextBlock Text="{DynamicResource ImageView_DeleteSelected}" FontSize="11" />
+            </StackPanel>
+          </Button>
+          <Button MinWidth="90" Command="{Binding SynthesizeSuperCommand}"
+                  ToolTip.Tip="{DynamicResource ImageView_SuperHint}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <avalonia:MaterialIcon Kind="LayersPlus" Width="14" Height="14" />
+              <TextBlock Text="{DynamicResource ImageView_SynthesizeSuper}" FontSize="11" />
+            </StackPanel>
+          </Button>
+          <Button MinWidth="90" Command="{Binding SynthesizeDatCommand}"
+                  ToolTip.Tip="{DynamicResource ImageView_DatHint}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <avalonia:MaterialIcon Kind="FileMultipleOutline" Width="14" Height="14" />
+              <TextBlock Text="{DynamicResource ImageView_SynthesizeDat}" FontSize="11" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>

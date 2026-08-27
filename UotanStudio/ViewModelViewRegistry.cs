@@ -1,8 +1,11 @@
+using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Workspace;
 using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
-using UotanStudio.Pages;
-using UotanStudio.Pages.DockView;
+using UotanStudio.Views.Devices;
+using UotanStudio.Views.Editors;
+using UotanStudio.Views.Workspace;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Devices;
 

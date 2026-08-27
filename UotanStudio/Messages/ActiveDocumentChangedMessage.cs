@@ -1,5 +1,6 @@
 namespace UotanStudio.Messages;
 
+using UotanStudio.ViewModels.Editors;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.ViewModels;
 
