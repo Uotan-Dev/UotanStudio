@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
 using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.Views.Editors;
@@ -19,14 +21,17 @@ public partial class ManifestEditorView : UserControl
     }
 
     /// <summary>
-    /// <para>左栏结构树选中变更：同步 ViewModel 选中项，驱动右栏属性面板。</para>
-    /// Left tree selection changed: syncs the ViewModel selection, driving the right properties pane.
+    /// <para>左栏结构树选中变更：同步 ViewModel 选中项，并广播节点选中消息
+    /// （供属性面板展示选中元素的详情）。</para>
+    /// Left tree selection changed: syncs the ViewModel selection and broadcasts a node-selection
+    /// message so the properties panel can show the selected element's details.
     /// </summary>
     private void OnTreeSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
         if (DataContext is ManifestEditorViewModel vm)
         {
             vm.SelectedNode = ElementTree.SelectedItem as ManifestTreeNodeViewModel;
+            WeakReferenceMessenger.Default.Send(new ManifestNodeSelectionChangedMessage(vm, vm.SelectedNode));
         }
     }
 }

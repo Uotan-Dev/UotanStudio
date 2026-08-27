@@ -35,6 +35,27 @@ public class ActiveDocumentChangedMessage
     public DexEditorViewModel? DexDocument { get; }
 
     /// <summary>
+    /// <para>获取新激活的 <see cref="ManifestEditorViewModel"/> 文档；非 Manifest 文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="ManifestEditorViewModel"/> document; <c>null</c> for
+    /// non-Manifest documents.
+    /// </summary>
+    public ManifestEditorViewModel? ManifestDocument { get; }
+
+    /// <summary>
+    /// <para>获取新激活的 <see cref="ArscEditorViewModel"/> 文档；非 ARSC 文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="ArscEditorViewModel"/> document; <c>null</c> for non-ARSC
+    /// documents.
+    /// </summary>
+    public ArscEditorViewModel? ArscDocument { get; }
+
+    /// <summary>
+    /// <para>获取新激活的 <see cref="ApkEditorViewModel"/> 文档；非 APK 文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="ApkEditorViewModel"/> document; <c>null</c> for non-APK
+    /// documents.
+    /// </summary>
+    public ApkEditorViewModel? ApkDocument { get; }
+
+    /// <summary>
     /// <para>获取新激活文档的通用 <see cref="Document"/> 句柄；便于订阅方做类型分支。</para>
     /// Gets the generic <see cref="Document"/> handle of the newly activated document, for
     /// type-dispatching by subscribers.
@@ -81,5 +102,47 @@ public class ActiveDocumentChangedMessage
     {
         DexDocument = dexDocument;
         ActiveDocument = dexDocument;
+    }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（ManifestEditorViewModel 路径）。</para>
+    /// Creates an active document changed message (ManifestEditorViewModel path).
+    /// </summary>
+    /// <param name="manifestDocument">
+    /// <para>新激活的 Manifest 编辑器视图模型；可为 <c>null</c>。</para>
+    /// The newly activated Manifest editor view model; may be <c>null</c>.
+    /// </param>
+    public ActiveDocumentChangedMessage(ManifestEditorViewModel? manifestDocument)
+    {
+        ManifestDocument = manifestDocument;
+        ActiveDocument = manifestDocument;
+    }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（ArscEditorViewModel 路径）。</para>
+    /// Creates an active document changed message (ArscEditorViewModel path).
+    /// </summary>
+    /// <param name="arscDocument">
+    /// <para>新激活的 ARSC 编辑器视图模型；可为 <c>null</c>。</para>
+    /// The newly activated ARSC editor view model; may be <c>null</c>.
+    /// </param>
+    public ActiveDocumentChangedMessage(ArscEditorViewModel? arscDocument)
+    {
+        ArscDocument = arscDocument;
+        ActiveDocument = arscDocument;
+    }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（ApkEditorViewModel 路径）。</para>
+    /// Creates an active document changed message (ApkEditorViewModel path).
+    /// </summary>
+    /// <param name="apkDocument">
+    /// <para>新激活的 APK 编辑器视图模型；可为 <c>null</c>。</para>
+    /// The newly activated APK editor view model; may be <c>null</c>.
+    /// </param>
+    public ActiveDocumentChangedMessage(ApkEditorViewModel? apkDocument)
+    {
+        ApkDocument = apkDocument;
+        ActiveDocument = apkDocument;
     }
 }
