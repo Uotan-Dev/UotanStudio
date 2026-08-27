@@ -1,5 +1,5 @@
 using UotanStudio.Comm.Protocols.Bootrom;
-using UotanStudio.Core.Flash;
+using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

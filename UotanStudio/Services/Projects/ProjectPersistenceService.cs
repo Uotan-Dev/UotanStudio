@@ -1,4 +1,4 @@
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Projects;
 
 /// <summary>
 /// Image entry data transfer object, carrying the image's project-relative path and metadata.

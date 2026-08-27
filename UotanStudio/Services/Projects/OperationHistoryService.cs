@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Projects;
 
 /// <summary>
 /// Kinds of workspace operations that can be reconstructed across sessions.

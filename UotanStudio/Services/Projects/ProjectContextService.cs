@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Projects;
 
 /// <summary>
 /// Current solution context service (singleton), holding the state and directory layout of the opened

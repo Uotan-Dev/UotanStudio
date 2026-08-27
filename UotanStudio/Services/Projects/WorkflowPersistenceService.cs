@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UotanStudio.ViewModels.NodeViewModels;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Projects;
 
 /// <summary>
 /// <para>工作流快照 JSON 序列化上下文（AOT 源生成）。</para>

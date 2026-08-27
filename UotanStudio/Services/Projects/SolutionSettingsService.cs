@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Projects;
 
 /// <summary>
 /// Solution settings JSON serialization context (AOT source-generated).

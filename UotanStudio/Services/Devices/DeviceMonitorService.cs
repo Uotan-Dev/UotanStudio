@@ -12,7 +12,7 @@ using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Devices;
 
 /// <summary>
 /// <para>设备传输类型。</para>

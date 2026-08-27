@@ -1,8 +1,9 @@
+using UotanStudio.Services.Devices;
 using System;
 using System.Globalization;
 using System.Threading.Tasks;
 using Avalonia;
-using UotanStudio.Core.Flash;
+using UotanStudio.Services.Flash;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.ViewModels.Devices;

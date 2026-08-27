@@ -19,7 +19,7 @@ using UotanStudio.Firmware.Oppo.Models;
 using UotanStudio.Firmware.Payload;
 using UotanStudio.Firmware.Sparse;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Firmware;
 
 /// <summary>
 /// Firmware operation result, carrying success flag and output summary.

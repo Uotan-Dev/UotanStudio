@@ -1,3 +1,4 @@
+using UotanStudio.Services.Devices;
 using System;
 using System.IO;
 using System.Threading;
@@ -6,12 +7,12 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Core.Flash;
+using UotanStudio.Services.Flash;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Devices;
 
-namespace UotanStudio.Core.Backup;
+namespace UotanStudio.Services.Flash;
 
 /// <summary>
 /// <para>备份/还原服务：读取设备分区镜像落盘，以及反向刷回。Fastboot 路径用

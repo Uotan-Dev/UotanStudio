@@ -1,3 +1,4 @@
+using UotanStudio.Services.Devices;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,7 +16,7 @@ using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Devices;
 
-namespace UotanStudio.Core.Flash;
+namespace UotanStudio.Services.Flash;
 
 /// <summary>
 /// <para>真实刷写服务：通过 UotanStudio.Comm 协议层把镜像刷写到设备分区，

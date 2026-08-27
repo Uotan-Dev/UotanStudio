@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UotanStudio.Firmware.Dex;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Firmware;
 
 /// <summary>
 /// <para>DEX 综合服务，封装 DEX 文件解析、反汇编（Smali 文本）与重建写入功能，基于 UotanStudio.Firmware.Dex 生态。</para>

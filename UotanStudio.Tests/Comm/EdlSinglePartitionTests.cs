@@ -1,7 +1,8 @@
 using System.Text;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
-using UotanStudio.Core.Flash;
+using UotanStudio.Services.Flash;
+using UotanStudio.Services.Devices;
 using UotanStudio.Services;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -128,12 +129,12 @@ public class EdlSinglePartitionTests
         dir.WriteBytes("boot.img", new byte[1024]);
         var imagePath = Path.Combine(dir.Path, "boot.img");
 
-        var device = new UotanStudio.ViewModels.Devices.DeviceInfo(new UotanStudio.Services.DetectedDevice
+        var device = new UotanStudio.ViewModels.Devices.DeviceInfo(new UotanStudio.Services.Devices.DetectedDevice
         {
             Key = "edl-test",
             Serial = "TEST-EDL",
             Protocol = DeviceProtocolKind.Edl,
-            Transport = UotanStudio.Services.DeviceTransportKind.Usb
+            Transport = UotanStudio.Services.Devices.DeviceTransportKind.Usb
         });
 
         var result = await FlashService.FlashImageAsync(device, "boot", imagePath, null, CancellationToken.None);

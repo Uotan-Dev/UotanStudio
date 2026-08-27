@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Core.Backup;
+using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

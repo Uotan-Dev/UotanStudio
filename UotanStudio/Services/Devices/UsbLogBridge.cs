@@ -1,7 +1,7 @@
 using System;
 using UotanStudio.Comm.Diagnostics;
 
-namespace UotanStudio.Services;
+namespace UotanStudio.Services.Devices;
 
 /// <summary>
 /// <para>将 UotanStudio.Comm 的 USB 诊断日志桥接到统一日志服务（<see cref="LogService"/>）。</para>

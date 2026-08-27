@@ -1,3 +1,4 @@
+using UotanStudio.Services.Firmware;
 using System;
 using System.Threading.Tasks;
 using Avalonia;

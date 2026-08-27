@@ -1,4 +1,5 @@
 using UotanStudio.Services;
+using UotanStudio.Services.Projects;
 using Xunit;
 
 namespace UotanStudio.Tests.Services;

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 
-namespace UotanStudio.Core.Flash;
+namespace UotanStudio.Services.Flash;
 
 /// <summary>
 /// <para>Rockchip parameter 文件中的单个分区条目。</para>

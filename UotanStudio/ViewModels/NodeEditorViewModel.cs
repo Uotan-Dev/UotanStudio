@@ -1,3 +1,4 @@
+using UotanStudio.Services.Projects;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -884,7 +885,7 @@ public partial class NodeEditorViewModel : ViewModelBase
     /// <para>表示异步操作的任务。</para>
     /// A task representing the async operation.
     /// </returns>
-    public async Task LoadFromAsync(Services.WorkflowSnapshot snapshot)
+    public async Task LoadFromAsync(Services.Projects.WorkflowSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Clear();
