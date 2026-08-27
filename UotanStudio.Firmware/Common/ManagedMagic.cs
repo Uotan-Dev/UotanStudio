@@ -163,6 +163,31 @@ public static class ManagedMagic
             return "Device tree blob";
         }
 
+        // Linux kernel ARM64 boot Image：偏移 0x38 处魔数 "ARM\x64"（41 52 4d 64）
+        if (header.Length >= 0x3C && header[0x38] == (byte)'A' && header[0x39] == (byte)'R'
+            && header[0x3A] == (byte)'M' && header[0x3B] == 0x64)
+        {
+            return "Linux kernel ARM64 boot executable Image";
+        }
+
+        // Linux kernel RISC-V boot Image：偏移 0x38 处魔数 "RSC\x05"（52 53 43 05）
+        if (header.Length >= 0x3C && header[0x38] == (byte)'R' && header[0x39] == (byte)'S'
+            && header[0x3A] == (byte)'C' && header[0x3B] == 0x05)
+        {
+            return "Linux kernel RISC-V boot executable Image";
+        }
+
+        // Linux kernel ARM boot zImage：偏移 0x24 处小端 0x016f2818（18 28 6f 01）或大端 0x016f2818（01 6f 28 18）
+        if (header.Length >= 0x28)
+        {
+            bool leArm = header[0x24] == 0x18 && header[0x25] == 0x28 && header[0x26] == 0x6F && header[0x27] == 0x01;
+            bool beArm = header[0x24] == 0x01 && header[0x25] == 0x6F && header[0x26] == 0x28 && header[0x27] == 0x18;
+            if (leArm || beArm)
+            {
+                return "Linux kernel ARM boot executable zImage";
+            }
+        }
+
         // ext2/3/4 超级块：偏移 0x38 处的魔数 0xef53 (小端 53 ef)
         if (header.Length >= 0x3A && header[0x38] == 0x53 && header[0x39] == 0xEF)
         {

@@ -13,6 +13,10 @@
 # Android vendor boot image（上游 android.magic 无此条目）
 0	string	VNDRBOOT	Android vendor boot image
 
+# Android binary XML（AXML：APK 内 AndroidManifest.xml / res/*.xml 的二进制形态，含大量 NUL 字节；
+# 上游 android.magic 无，须在文本路由之前识别，避免按 .xml 扩展名误当 UTF-8 文本打开）
+0	string	\x03\x00\x08\x00	Android binary XML (AXML)
+
 # Android device tree overlay（DTBH / DTBO；上游无）
 0	string	DTBH	Android device tree overlay image
 0	string	DTBO	Android device tree overlay image
@@ -44,3 +48,13 @@
 
 # erofs（"e0 e5 e1 e2"；上游 filesystems.magic 无）
 0	belong	0xe0e5e1e2	erofs filesystem
+
+# Linux kernel ARM64 boot Image（偏移 0x38 处 lelong 0x644d5241 = "ARM\x64"；上游 linux.magic 有但运行时未加载，此处补齐）
+0x38	lelong	0x644d5241	Linux kernel ARM64 boot executable Image
+
+# Linux kernel ARM boot zImage（偏移 0x24 处小端/大端 0x016f2818；同上补齐）
+0x24	lelong	0x016f2818	Linux kernel ARM boot executable zImage
+0x24	belong	0x016f2818	Linux kernel ARM boot executable zImage
+
+# Linux kernel RISC-V boot Image（偏移 0x38 处 "RSC\x05"；同上补齐）
+0x38	string	RSC\x05	Linux kernel RISC-V boot executable Image

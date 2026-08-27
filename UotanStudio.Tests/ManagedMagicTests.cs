@@ -52,6 +52,42 @@ public class ManagedMagicTests
     private static byte[] RockchipRkfw => Encoding.ASCII.GetBytes("Rkfw");
     private static byte[] RockchipRkaf => Encoding.ASCII.GetBytes("RKAF");
 
+    // Linux kernel ARM64 boot Image：偏移 0x38 处魔数 "ARM\x64"（41 52 4d 64）
+    private static byte[] LinuxKernelArm64Image => BuildKernelImage("ARM", 0x64);
+
+    // Linux kernel RISC-V boot Image：偏移 0x38 处魔数 "RSC\x05"（52 53 43 05）
+    private static byte[] LinuxKernelRiscVImage => BuildKernelImage("RSC", 0x05);
+
+    // Linux kernel ARM boot zImage：偏移 0x24 处小端 0x016f2818（18 28 6f 01）
+    private static byte[] LinuxKernelArmZImage => BuildKernelZImage(bigEndian: false);
+
+    // Linux kernel ARM boot zImage：偏移 0x24 处大端 0x016f2818（01 6f 28 18）
+    private static byte[] LinuxKernelArmZImageBE => BuildKernelZImage(bigEndian: true);
+
+    private static byte[] BuildKernelImage(string threeAscii, byte fourth)
+    {
+        byte[] header = new byte[0x40];
+        header[0x38] = (byte)threeAscii[0];
+        header[0x39] = (byte)threeAscii[1];
+        header[0x3A] = (byte)threeAscii[2];
+        header[0x3B] = fourth;
+        return header;
+    }
+
+    private static byte[] BuildKernelZImage(bool bigEndian)
+    {
+        byte[] header = new byte[0x28];
+        if (bigEndian)
+        {
+            header[0x24] = 0x01; header[0x25] = 0x6F; header[0x26] = 0x28; header[0x27] = 0x18;
+        }
+        else
+        {
+            header[0x24] = 0x18; header[0x25] = 0x28; header[0x26] = 0x6F; header[0x27] = 0x01;
+        }
+        return header;
+    }
+
     [Fact]
     public void Detect_Elf_AArch64_Executable()
     {
@@ -170,6 +206,22 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_RockchipRkaf() =>
         Assert.Equal("Rockchip firmware image", ManagedMagic.Detect(RockchipRkaf));
+
+    [Fact]
+    public void Detect_LinuxKernelArm64Image() =>
+        Assert.Equal("Linux kernel ARM64 boot executable Image", ManagedMagic.Detect(LinuxKernelArm64Image));
+
+    [Fact]
+    public void Detect_LinuxKernelRiscVImage() =>
+        Assert.Equal("Linux kernel RISC-V boot executable Image", ManagedMagic.Detect(LinuxKernelRiscVImage));
+
+    [Fact]
+    public void Detect_LinuxKernelArmZImage() =>
+        Assert.Equal("Linux kernel ARM boot executable zImage", ManagedMagic.Detect(LinuxKernelArmZImage));
+
+    [Fact]
+    public void Detect_LinuxKernelArmZImageBE() =>
+        Assert.Equal("Linux kernel ARM boot executable zImage", ManagedMagic.Detect(LinuxKernelArmZImageBE));
 
     [Fact]
     public void Detect_Unknown_ReturnsNull() =>
@@ -400,7 +452,7 @@ public class ManagedMagicTests
 
         ManagedMagic.ClearRules();
         // 嵌入式规则集保留
-        Assert.Equal(1, ManagedMagic.GetLoadedRuleSets().Count);
+        Assert.Single(ManagedMagic.GetLoadedRuleSets());
     }
 
     [Fact]
@@ -732,5 +784,356 @@ public class UpstreamMagicIntegrationTests
             buffer[offset] = (byte)(value & 0xFF);
             buffer[offset + 1] = (byte)(value >> 8);
         }
+    }
+}
+
+/// <summary>
+/// <para>增强型托管魔数引擎测试：覆盖 libmagic 语义对齐后的新特性——
+/// u 无符号前缀、type&amp;mask / type|mask 等掩码运算、'~' 反相、'&amp;'/'^' 位关系运算、
+/// '&amp;' 续接偏移、字符串修饰符（/c 忽略大小写、search/N、pstring）、regex 类型、
+/// \b NOSPACE 描述、default 指令、name/use 指令与任意深度子规则递归。</para>
+/// Enhanced managed magic engine tests: cover the libmagic-aligned features — u unsigned prefix,
+/// type&amp;mask / type|mask mask ops, '~' inverse, '&amp;'/'^' bitwise relations, '&amp;'
+/// continuation offsets, string modifiers (/c case-insensitive, search/N, pstring), regex type,
+/// \b NOSPACE descriptions, default directive, name/use directives and arbitrary-depth recursion.
+/// </summary>
+public class ManagedMagicEnhancedTests
+{
+    private static MagicRuleSet Parse(string text) => MagicRuleParser.Parse(text, "test");
+
+    private static MagicMatch Match(string ruleText, params byte[] data)
+    {
+        MagicRuleSet rs = Parse(ruleText);
+        return rs.Match(data, data.Length);
+    }
+
+    // ====== u 无符号前缀 ======
+
+    [Fact]
+    public void UnsignedUbyte_Match()
+    {
+        // ubyte 0x80：按无符号比较，0x80（128）应等于 0x80
+        MagicMatch m = Match("0\tubyte\t0x80\tunsigned byte", 0x80);
+        Assert.True(m.IsMatch);
+        Assert.Equal("unsigned byte", m.Description);
+    }
+
+    [Fact]
+    public void UnsignedUbyte_GreaterThan_UnsignedSemantics()
+    {
+        // ubyte > 0x7f：值 0x80 无符号 128 > 127 → 命中（有符号 -128 > 127 则不命中）
+        MagicMatch m = Match("0\tubyte\t>0x7f\tunsigned gt", 0x80);
+        Assert.True(m.IsMatch);
+    }
+
+    [Fact]
+    public void UnsignedUlelong_Match()
+    {
+        // ulelong 0xffffffff（小端 8 字节中的 4 字节 ff ff ff ff）
+        byte[] data = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00];
+        MagicMatch m = Match("0\tulelong\t0xffffffff\tunsigned lelong", data);
+        Assert.True(m.IsMatch);
+    }
+
+    // ====== 掩码运算 ======
+
+    [Fact]
+    public void MaskOp_And_TypeMask()
+    {
+        // byte&0x80 =0x80：仅第 7 位为 1 时命中
+        Assert.True(Match("0\tbyte&0x80\t0x80\tmasked", 0x80).IsMatch);
+        Assert.True(Match("0\tbyte&0x80\t0x80\tmasked", 0xFF).IsMatch);
+        Assert.False(Match("0\tbyte&0x80\t0x80\tmasked", 0x7F).IsMatch);
+    }
+
+    [Fact]
+    public void MaskOp_Or_TypeMask()
+    {
+        // byte|0x01 =0x41：值 0x40 → 0x41 命中；值 0x00 → 0x01 不命中
+        Assert.True(Match("0\tbyte|0x01\t0x41\tmasked or", 0x40).IsMatch);
+        Assert.False(Match("0\tbyte|0x01\t0x41\tmasked or", 0x00).IsMatch);
+    }
+
+    [Fact]
+    public void MaskOp_Xor_TypeMask()
+    {
+        // byte^0x0f =0x00：值 0x0f → 0x00 命中
+        Assert.True(Match("0\tbyte^0x0f\t0x00\tmasked xor", 0x0F).IsMatch);
+        Assert.False(Match("0\tbyte^0x0f\t0x00\tmasked xor", 0x01).IsMatch);
+    }
+
+    [Fact]
+    public void MaskOp_Add_TypeMask()
+    {
+        // leshort+4 =0x10：值 0x0c → 0x10 命中
+        byte[] data = [0x0C, 0x00];
+        Assert.True(Match("0\tleshort+4\t0x10\tmasked add", data).IsMatch);
+    }
+
+    [Fact]
+    public void MaskInverse_Tilde()
+    {
+        // byte&~0x80 =0x7f：值 0x00 → (~0) & ... 语义：读取值先按掩码运算再取反
+        // 值 0x00：0x00 & 0x80 = 0x00，取反 = 0xff → 不等于 0x7f
+        Assert.False(Match("0\tbyte&~0x80\t0x7f\tinverse", 0x00).IsMatch);
+        // 值 0x7f：0x7f & 0x80 = 0x00，取反 = 0xff → 仍不等于 0x7f
+        Assert.False(Match("0\tbyte&~0x80\t0x7f\tinverse", 0x7F).IsMatch);
+        // 值 0x80：0x80 & 0x80 = 0x80，取反 = 0x7f → 命中
+        Assert.True(Match("0\tbyte&~0x80\t0x7f\tinverse", 0x80).IsMatch);
+    }
+
+    // ====== '&' / '^' 位关系运算 ======
+
+    [Fact]
+    public void Reln_BitAnd_AllBitsSet()
+    {
+        // byte &0x05：匹配 (v & 5) == 5 → 0x07 命中、0x04 不命中
+        Assert.True(Match("0\tbyte\t&0x05\tbitand", 0x07).IsMatch);
+        Assert.False(Match("0\tbyte\t&0x05\tbitand", 0x04).IsMatch);
+    }
+
+    [Fact]
+    public void Reln_BitXor_NotAllBitsSet()
+    {
+        // byte ^0x05：匹配 (v & 5) != 5 → 0x04 命中、0x05 不命中
+        Assert.True(Match("0\tbyte\t^0x05\tbitxor", 0x04).IsMatch);
+        Assert.False(Match("0\tbyte\t^0x05\tbitxor", 0x05).IsMatch);
+    }
+
+    // ====== '&' 续接偏移 ======
+
+    [Fact]
+    public void ContinuationOffset_Ampersand_RelativeToParentEnd()
+    {
+        // 顶层 string "AB" 在偏移 0 匹配（结束位置 2）；子规则 "&0 byte 0x43" 相对结束位置 → 偏移 2
+        string rules = """
+            0	string	AB	prefix
+            >&0	byte	0x43	suffix C
+            """;
+        MagicRuleSet rs = Parse(rules);
+        // 偏移 2 处为 'C' → 命中，描述拼接 "prefix suffix C"
+        MagicMatch m = rs.Match(Encoding.ASCII.GetBytes("AB\x43"), 3);
+        Assert.True(m.IsMatch);
+        Assert.Contains("suffix C", m.Description);
+        // 偏移 2 处为 'D' → 子规则不命中，顶层仍命中
+        MagicMatch m2 = rs.Match(Encoding.ASCII.GetBytes("AB\x44"), 3);
+        Assert.True(m2.IsMatch);
+        Assert.DoesNotContain("suffix", m2.Description);
+    }
+
+    // ====== 字符串修饰符 ======
+
+    [Fact]
+    public void StringModifier_IgnoreCase()
+    {
+        // string/c：忽略大小写
+        Assert.True(Match("0\tstring/c\tmagic!\tci", Encoding.ASCII.GetBytes("MAGIC!")).IsMatch);
+        Assert.True(Match("0\tstring/c\tmagic!\tci", Encoding.ASCII.GetBytes("magic!")).IsMatch);
+        Assert.False(Match("0\tstring/c\tmagic!\tci", Encoding.ASCII.GetBytes("nope!")).IsMatch);
+    }
+
+    [Fact]
+    public void StringModifier_FullWord()
+    {
+        // string/f：整词匹配，后缀须为空白或结束
+        Assert.True(Match("0\tstring/f\tboot\tfw", Encoding.ASCII.GetBytes("boot ")).IsMatch);
+        Assert.False(Match("0\tstring/f\tboot\tfw", Encoding.ASCII.GetBytes("bootloader")).IsMatch);
+    }
+
+    [Fact]
+    public void SearchType_WithinRange()
+    {
+        // search/8：在 8 字节范围内搜索 "EFI"
+        byte[] data = new byte[32];
+        Array.Copy(Encoding.ASCII.GetBytes("EFI"), 0, data, 5, 3);
+        MagicMatch m = Match("0\tsearch/8\tEFI\tEFI found", data);
+        Assert.True(m.IsMatch);
+        // 超出范围不命中
+        byte[] data2 = new byte[32];
+        Array.Copy(Encoding.ASCII.GetBytes("EFI"), 0, data2, 20, 3);
+        Assert.False(Match("0\tsearch/8\tEFI\tEFI found", data2).IsMatch);
+    }
+
+    [Fact]
+    public void PString_LengthPrefixed()
+    {
+        // pstring/B：1 字节长度前缀
+        byte[] data = [0x03, (byte)'A', (byte)'B', (byte)'C'];
+        Assert.True(Match("0\tpstring/B\tABC\tpstring", data).IsMatch);
+        byte[] data2 = [0x03, (byte)'A', (byte)'B', (byte)'X'];
+        Assert.False(Match("0\tpstring/B\tABC\tpstring", data2).IsMatch);
+    }
+
+    // ====== regex 类型 ======
+
+    [Fact]
+    public void RegexType_BasicMatch()
+    {
+        // regex：Dalvik dex 魔数 "dex\n[0-9]{2}"
+        byte[] data = Encoding.ASCII.GetBytes("dex\n035");
+        MagicMatch m = Match("0\tregex\tdex\\n[0-9]{2}\tDalvik dex file", data);
+        Assert.True(m.IsMatch);
+        Assert.Contains("Dalvik dex file", m.Description);
+    }
+
+    [Fact]
+    public void RegexType_NoMatch()
+    {
+        Assert.False(Match("0\tregex\tdex\\n[0-9]{2}\tDalvik dex file", Encoding.ASCII.GetBytes("dexX035")).IsMatch);
+    }
+
+    // ====== \b NOSPACE 描述 ======
+
+    [Fact]
+    public void NoSpace_Backspace_Description_NoLeadingSpace()
+    {
+        string rules = """
+            0	string	AB	prefix
+            >2	string	CD	\b, suffix
+            """;
+        MagicRuleSet rs = Parse(rules);
+        MagicMatch m = rs.Match(Encoding.ASCII.GetBytes("ABCD"), 4);
+        Assert.True(m.IsMatch);
+        // NOSPACE：", suffix" 直接拼接，无前导空格
+        Assert.Equal("prefix, suffix", m.Description);
+    }
+
+    [Fact]
+    public void Space_Separator_Default()
+    {
+        string rules = """
+            0	string	AB	prefix
+            >2	string	CD	+ suffix
+            """;
+        MagicRuleSet rs = Parse(rules);
+        MagicMatch m = rs.Match(Encoding.ASCII.GetBytes("ABCD"), 4);
+        Assert.Equal("prefix + suffix", m.Description);
+    }
+
+    // ====== default 指令 ======
+
+    [Fact]
+    public void Default_Matches_WhenNoSiblingMatched()
+    {
+        string rules = """
+            0	string	AB	prefix
+            >2	byte	0x01	one
+            >2	default	x	other
+            """;
+        MagicRuleSet rs = Parse(rules);
+        // 偏移 2 为 0x01 → 子规则 "one" 命中，default 不参与
+        MagicMatch m1 = rs.Match([(byte)'A', (byte)'B', 0x01], 3);
+        Assert.Contains("one", m1.Description);
+        Assert.DoesNotContain("other", m1.Description);
+        // 偏移 2 为 0x02 → 子规则未命中，default 兜底
+        MagicMatch m2 = rs.Match([(byte)'A', (byte)'B', 0x02], 3);
+        Assert.Contains("other", m2.Description);
+    }
+
+    // ====== name / use 指令 ======
+
+    [Fact]
+    public void NameUse_Directives()
+    {
+        string rules = """
+            0	name	tar-file
+            >257	string	!ustar	
+            >>257	ulong	=0	
+            0	string	PK\003\004	zip
+            >0	use	tar-file
+            """;
+        MagicRuleSet rs = Parse(rules);
+        // 构造 tar 头：偏移 257 处 "ustar" → !ustar 不命中 → name 体不参与
+        byte[] tar = new byte[300];
+        Array.Copy(Encoding.ASCII.GetBytes("ustar"), 0, tar, 257, 5);
+        MagicMatch m1 = rs.Match(tar, tar.Length);
+        // 顶层 PK 规则不匹配 → 整体不命中
+        Assert.False(m1.IsMatch);
+        // 构造 PK 头：顶层 zip 命中，use tar-file 展开（偏移 257 无 "ustar"，ulong=0 命中）
+        byte[] pk = new byte[300];
+        pk[0] = (byte)'P'; pk[1] = (byte)'K'; pk[2] = 0x03; pk[3] = 0x04;
+        MagicMatch m2 = rs.Match(pk, pk.Length);
+        Assert.True(m2.IsMatch);
+        Assert.Contains("zip", m2.Description);
+    }
+
+    // ====== 任意深度子规则递归 ======
+
+    [Fact]
+    public void DeepNestedSubRules_RecursiveMatch()
+    {
+        // 三层子规则：filesystems.magic 等上游文件常见 >>>> 深层级
+        string rules = """
+            0	string	MAGIC	top
+            >5	byte	0x01	level1
+            >>8	string	DATA	level2
+            >>>12	byte	0xFF	level3
+            """;
+        byte[] data = new byte[16];
+        Array.Copy(Encoding.ASCII.GetBytes("MAGIC"), 0, data, 0, 5);
+        data[5] = 0x01;
+        Array.Copy(Encoding.ASCII.GetBytes("DATA"), 0, data, 8, 4);
+        data[12] = 0xFF;
+        MagicRuleSet rs = Parse(rules);
+        MagicMatch m = rs.Match(data, data.Length);
+        Assert.True(m.IsMatch);
+        Assert.Contains("level1", m.Description);
+        Assert.Contains("level2", m.Description);
+        Assert.Contains("level3", m.Description);
+    }
+
+    [Fact]
+    public void DeepNested_ChildFailure_StopsDescend()
+    {
+        string rules = """
+            0	string	MAGIC	top
+            >5	byte	0x01	level1
+            >>8	string	DATA	level2
+            """;
+        // level1 命中但 level2 不命中 → 顶层 + level1 描述
+        byte[] data = new byte[12];
+        Array.Copy(Encoding.ASCII.GetBytes("MAGIC"), 0, data, 0, 5);
+        data[5] = 0x01;
+        Array.Copy(Encoding.ASCII.GetBytes("XXXX"), 0, data, 8, 4);
+        MagicMatch m = Match(rules, data);
+        Assert.True(m.IsMatch);
+        Assert.Contains("level1", m.Description);
+        Assert.DoesNotContain("level2", m.Description);
+    }
+
+    // ====== date 类型 ======
+
+    [Fact]
+    public void DateType_FormatsValue()
+    {
+        // date：1970-01-02 00:00:00 UTC = 86400 秒（大端 00 01 51 80）
+        byte[] data = [0x00, 0x01, 0x51, 0x80];
+        MagicMatch m = Match("0\tbedate\tx\tcompiled %s", data);
+        Assert.True(m.IsMatch);
+        Assert.Contains("1970-01-02", m.Description);
+    }
+
+    // ====== 间接偏移（含掩码） ======
+
+    [Fact]
+    public void IndirectOffset_WithMaskAndAddend()
+    {
+        // (0.lelong&0xff+4)：偏移 0 读 lelong（小端 04 00 00 00 = 4），&0xff → 4，+4 → 8，偏移 8 处 "ABCD"
+        byte[] data = new byte[16];
+        data[0] = 0x04; data[1] = 0x00; data[2] = 0x00; data[3] = 0x00;
+        data[8] = (byte)'A'; data[9] = (byte)'B'; data[10] = (byte)'C'; data[11] = (byte)'D';
+        MagicMatch m = Match("(0.lelong&0xff+4)\tstring\tABCD\tindirect target", data);
+        Assert.True(m.IsMatch);
+    }
+
+    // ====== 负偏移（从文件末尾） ======
+
+    [Fact]
+    public void NegativeOffset_FromEndOfFile()
+    {
+        // -4 byte 0x5A：文件长度 6，从末尾数 4 字节 → 偏移 2 处应为 0x5A
+        byte[] data = [0x00, 0x00, 0x5A, 0x00, 0x00, 0x00];
+        MagicMatch m = Match("-4\tbyte\t0x5A\tfrom end", data);
+        Assert.True(m.IsMatch);
     }
 }
