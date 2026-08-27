@@ -24,11 +24,14 @@ public static class InstructionDecoder
         // 第一遍：收集 31t 指令（packed-switch 0x2b / sparse-switch 0x2c / fill-array-data 0x26）
         // 引用的 payload 目标偏移（代码单元索引）。0x0100/0x0200/0x0300 本身也可能是合法指令
         // （move v0,v0 等），因此只有被 31t 明确引用的偏移才按 payload 解析。
+        // 同时统计指令条数：raw.Length 是多单元指令的高估上界，直接用其预容量会浪费内存。
         // Pass 1: collect payload target offsets (in code units) referenced by 31t instructions
         // (packed-switch 0x2b / sparse-switch 0x2c / fill-array-data 0x26). Since 0x0100/0x0200/0x0300
         // can also be ordinary instructions (e.g. move v0,v0), only offsets referenced by a 31t
-        // instruction are decoded as payloads.
-        var payloadTargets = new HashSet<int>();
+        // instruction are decoded as payloads. The pass also counts instructions so the result list
+        // is pre-sized accurately instead of over-allocating for raw.Length.
+        List<int>? payloadTargets = null;
+        var instructionCount = 0;
         var scan = 0;
         while (scan < raw.Length)
         {
@@ -37,14 +40,15 @@ public static class InstructionDecoder
             if (scanOpcode is 0x26 or 0x2b or 0x2c && scan + 2 < raw.Length)
             {
                 var rel = (int)((uint)(raw[scan + 1] | (raw[scan + 2] << 16)));
-                payloadTargets.Add(scan + rel);
+                (payloadTargets ??= []).Add(scan + rel);
             }
             scan += Math.Max(1, OpCodes.GetSize(scanOpcode));
+            instructionCount++;
         }
 
         // 第二遍：实际解码。
         // Pass 2: actual decode.
-        var instructions = new List<Instruction>(raw.Length);
+        var instructions = new List<Instruction>(instructionCount);
         var index = 0;
         while (index < raw.Length)
         {
@@ -53,7 +57,8 @@ public static class InstructionDecoder
 
             // 仅在 31t 引用的 payload 目标偏移处，才把标识字当作伪指令 payload 解析。
             // Only treat the ident word as a pseudo-instruction payload at 31t-referenced offsets.
-            if (payloadTargets.Contains(index) && (unit == 0x0100 || unit == 0x0200 || unit == 0x0300))
+            if (payloadTargets is { Count: > 0 } targets && targets.Contains(index)
+                && (unit == 0x0100 || unit == 0x0200 || unit == 0x0300))
             {
                 var consumed = DecodePayload(raw, index, instructions, unit);
                 index += consumed;
@@ -262,12 +267,13 @@ public static class InstructionDecoder
                     var f = (byte)((raw[index + 2] >> 12) & 0x0f);
                     // 仅取后 count 个寄存器（C..G 中从 G 往回数 count 个），顺序 C 先 G 后
                     // Only the last 'count' registers of {C,D,E,F,G} are arguments, in C-first order.
-                    var regs = new List<int>(count);
-                    if (count > 0) regs.Insert(0, g);
-                    if (count > 1) regs.Insert(0, f);
-                    if (count > 2) regs.Insert(0, e);
-                    if (count > 3) regs.Insert(0, d);
-                    if (count > 4) regs.Insert(0, c);
+                    var regs = new int[count];
+                    var pos = count;
+                    if (count > 0) regs[--pos] = g;
+                    if (count > 1) regs[--pos] = f;
+                    if (count > 2) regs[--pos] = e;
+                    if (count > 3) regs[--pos] = d;
+                    if (count > 4) regs[--pos] = c;
                     var refIdx = raw[index + 1];
                     return [regs, ResolveRef(dex, refIdx, info.RefKind)];
                 }
@@ -275,8 +281,8 @@ public static class InstructionDecoder
                 {
                     var count = aa;
                     var first = raw[index + 2];
-                    var regs = new List<int>(count);
-                    for (var i = 0; i < count; i++) regs.Add(first + i);
+                    var regs = new int[count];
+                    for (var i = 0; i < count; i++) regs[i] = first + i;
                     var refIdx = raw[index + 1];
                     return [regs, ResolveRef(dex, refIdx, info.RefKind)];
                 }
@@ -290,12 +296,13 @@ public static class InstructionDecoder
                     var d = (byte)((raw[index + 2] >> 4) & 0x0f);
                     var e = (byte)((raw[index + 2] >> 8) & 0x0f);
                     var f = (byte)((raw[index + 2] >> 12) & 0x0f);
-                    var regs = new List<int>(count);
-                    if (count > 0) regs.Insert(0, g);
-                    if (count > 1) regs.Insert(0, f);
-                    if (count > 2) regs.Insert(0, e);
-                    if (count > 3) regs.Insert(0, d);
-                    if (count > 4) regs.Insert(0, c);
+                    var regs = new int[count];
+                    var pos = count;
+                    if (count > 0) regs[--pos] = g;
+                    if (count > 1) regs[--pos] = f;
+                    if (count > 2) regs[--pos] = e;
+                    if (count > 3) regs[--pos] = d;
+                    if (count > 4) regs[--pos] = c;
                     var methodRef = raw[index + 1];
                     var protoRef = raw[index + 3];
                     return [regs, ResolveRef(dex, methodRef, info.RefKind), ResolveProtoRef(dex, protoRef)];
@@ -304,8 +311,8 @@ public static class InstructionDecoder
                 {
                     var count = aa;
                     var first = raw[index + 2];
-                    var regs = new List<int>(count);
-                    for (var i = 0; i < count; i++) regs.Add(first + i);
+                    var regs = new int[count];
+                    for (var i = 0; i < count; i++) regs[i] = first + i;
                     var methodRef = raw[index + 1];
                     var protoRef = raw[index + 3];
                     return [regs, ResolveRef(dex, methodRef, info.RefKind), ResolveProtoRef(dex, protoRef)];
@@ -341,7 +348,23 @@ public static class InstructionDecoder
                     var method = dex.GetMethod(index);
                     if (method == null) return index;
                     var proto = dex.GetProto(method.ProtoIndex);
-                    var parameters = proto == null ? [] : proto.ParameterTypeIndices.Select(dex.FormatType).ToArray();
+                    string[] parameters;
+                    if (proto == null)
+                    {
+                        parameters = [];
+                    }
+                    else
+                    {
+                        // 手写循环代替 LINQ：invoke 指令热路径，避免 Select/ToArray 的迭代器与委托分配。
+                        // Hand-rolled loop instead of LINQ: this is the invoke hot path, and it avoids
+                        // iterator/delegate allocations from Select/ToArray.
+                        var indices = proto.ParameterTypeIndices;
+                        parameters = new string[indices.Length];
+                        for (var i = 0; i < indices.Length; i++)
+                        {
+                            parameters[i] = dex.FormatType(indices[i]);
+                        }
+                    }
                     var returnType = proto == null ? "?" : dex.FormatType(proto.ReturnTypeIndex);
                     return new MethodRefOperand(dex.FormatType(method.ClassIndex), dex.GetString(method.NameIndex), returnType, parameters);
                 }

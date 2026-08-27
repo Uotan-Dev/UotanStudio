@@ -22,28 +22,11 @@
       </DockPanel>
     </Border>
 
-    <!-- 结构树（左：类/方法/字段） + 反汇编文本（右），后台加载时叠加忙碌动画 -->
+    <!-- 全量反汇编文本（只读），后台加载时叠加忙碌动画 -->
     <Grid>
-      <Grid ColumnDefinitions="280,*">
-        <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-          <TreeView x:Name="ClassTree"
-                    ItemsSource="{Binding Classes}"
-                    SelectionChanged="OnClassTreeSelectionChanged">
-            <TreeView.ItemTemplate>
-              <TreeDataTemplate x:DataType="viewmodels:DexTreeNodeViewModel" ItemsSource="{Binding Children}">
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                  <TextBlock Text="{Binding Kind}" FontSize="10" Opacity="0.6" FontFamily="Consolas" />
-                  <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
-                </StackPanel>
-              </TreeDataTemplate>
-            </TreeView.ItemTemplate>
-          </TreeView>
-        </Border>
-
-        <controls:CodeEditor Grid.Column="1" x:Name="SourceEditor"
-                             Text="{Binding Source, Mode=TwoWay}"
-                             IsReadOnly="True" />
-      </Grid>
+      <controls:CodeEditor x:Name="SourceEditor"
+                           Text="{Binding Source, Mode=TwoWay}"
+                           IsReadOnly="True" />
 
       <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="{Binding IsBusy}" ZIndex="1"
               Background="#A0000000">

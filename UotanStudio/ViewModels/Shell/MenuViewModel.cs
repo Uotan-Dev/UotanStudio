@@ -297,6 +297,13 @@ public partial class MenuViewModel : ViewModelBase
         // Rebuild the image list: only entries whose files still exist are added.
         var images = ImageViewModel.EnsureInstance();
         images.Images.Clear();
+
+        // 无条件重置打包设置，避免新工程缺少设置时残留上一工程的配置。
+        // Reset packing settings unconditionally so a new project without settings doesn't retain the
+        // previous project's configuration.
+        var projectSettings = ProjectSettingViewModel.EnsureInstance();
+        projectSettings.ApplyFromDto(new ProjectSettingsDto());
+
         var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(ProjectContextService.Instance.FirmwareProjectPath ?? string.Empty);
         if (firmware is not null)
         {
@@ -319,12 +326,18 @@ public partial class MenuViewModel : ViewModelBase
 
             if (firmware.Settings is not null)
             {
-                ProjectSettingViewModel.EnsureInstance().ApplyFromDto(firmware.Settings);
+                projectSettings.ApplyFromDto(firmware.Settings);
             }
         }
 
-        // 重建节点画布。
-        // Rebuild the node canvas.
+        // 重建节点画布：无论节点项目文件是否存在都先清空，避免残留上一工程画布。
+        // Rebuild the node canvas: clear it first regardless of whether the node project file exists,
+        // so the previous project's canvas never leaks into the newly opened solution.
+        if (NodeEditorVM != null)
+        {
+            NodeEditorVM.Clear();
+        }
+
         var node = await SolutionPersistenceService.LoadNodeProjectAsync(ProjectContextService.Instance.NodeProjectPath ?? string.Empty);
         if (NodeEditorVM != null && node is not null)
         {
@@ -427,6 +440,7 @@ public partial class MenuViewModel : ViewModelBase
         }
 
         await PersistToAsync(path);
+        WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
         RecordRecentProject(path);
     }
 

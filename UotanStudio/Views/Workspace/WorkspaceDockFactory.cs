@@ -16,6 +16,9 @@ namespace UotanStudio.Views.Workspace;
 
 public class WorkspaceDockFactory : Factory
 {
+    private ProjectExplorerViewModel? _projectExplorer;
+    private PropertiesViewModel? _properties;
+
     public override IRootDock CreateLayout()
     {
         var svc = LanguageService.Instance;
@@ -25,7 +28,7 @@ public class WorkspaceDockFactory : Factory
         projectSetting.Title = LanguageService.Instance.GetString("Dock_ProjectSetting");
         projectSetting.CanClose = true;
 
-        var projectExplorer = new ProjectExplorerViewModel
+        var projectExplorer = _projectExplorer = new ProjectExplorerViewModel
         {
             Id = "ProjectExplorer",
             Title = LanguageService.Instance.GetString("Dock_ProjectExplorer"),
@@ -37,7 +40,7 @@ public class WorkspaceDockFactory : Factory
         imagesView.Title = LanguageService.Instance.GetString("Dock_ImagesView");
         imagesView.CanClose = true;
 
-        var properties = new PropertiesViewModel
+        var properties = _properties = new PropertiesViewModel
         {
             Id = "Properties",
             Title = LanguageService.Instance.GetString("Dock_Properties"),
@@ -135,8 +138,8 @@ public class WorkspaceDockFactory : Factory
     {
         ContextLocator = new Dictionary<string, Func<object?>>
         {
-            ["ProjectExplorer"] = () => LanguageService.Instance.GetString("Dock_ProjectExplorer"),
-            ["Properties"] = () => LanguageService.Instance.GetString("Dock_Properties"),
+            ["ProjectExplorer"] = () => _projectExplorer ??= new ProjectExplorerViewModel { Id = "ProjectExplorer" },
+            ["Properties"] = () => _properties ??= new PropertiesViewModel { Id = "Properties" },
             ["Device"] = () => DeviceViewModel.EnsureInstance()
         };
 
@@ -223,6 +226,20 @@ public class WorkspaceDockFactory : Factory
         catch
         {
             // 忽略任何移除过程中的错误
+        }
+
+        // 文档关闭后立即释放大对象（解析模型/原始字节/树节点），避免内存占用保持不降。
+        // Release large objects as soon as a document is closed so the memory footprint drops.
+        if (dockable is UotanStudio.ViewModels.Editors.DexEditorViewModel dexEditor)
+        {
+            try
+            {
+                dexEditor.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
         }
     }
 }

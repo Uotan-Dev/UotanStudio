@@ -33,6 +33,8 @@ internal static class ViewModelViewRegistry
         [typeof(FileViewModel)] = () => new FileView(),
         [typeof(DtbEditorViewModel)] = () => new DtbEditorView(),
         [typeof(DexEditorViewModel)] = () => new DexEditorView(),
+        [typeof(ManifestEditorViewModel)] = () => new ManifestEditorView(),
+        [typeof(ArscEditorViewModel)] = () => new ArscEditorView(),
         [typeof(ImageViewModel)] = () => new ImageView(),
         [typeof(ProjectExplorerViewModel)] = () => new ProjectExplorerView(),
         [typeof(ProjectSettingViewModel)] = () => new ProjectSettingView(),

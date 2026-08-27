@@ -1,0 +1,69 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.ManifestEditorView"
+             x:DataType="viewmodels:ManifestEditorViewModel">
+  <DockPanel>
+    <!-- 顶部工具栏：保存（重建）按钮 + 解析错误状态 -->
+    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="{x:Static viewmodels:ManifestEditorViewModel.SaveLabel}"
+                Command="{Binding SaveCommand}"
+                IsEnabled="{Binding IsBusy, Converter={x:Static BoolConverters.Not}}" />
+        <TextBlock Text="{Binding CompileError}"
+                   VerticalAlignment="Center"
+                   Foreground="Red"
+                   TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </DockPanel>
+    </Border>
+
+    <!-- 左：元素结构树；右上：选中元素属性；右下：XML 文本预览 -->
+    <Grid ColumnDefinitions="260,*">
+      <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+        <TreeView x:Name="ElementTree"
+                  ItemsSource="{Binding Nodes}"
+                  SelectionChanged="OnTreeSelectionChanged">
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate x:DataType="viewmodels:ManifestTreeNodeViewModel" ItemsSource="{Binding Children}">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <TextBlock Text="&lt;" FontSize="10" Opacity="0.5" FontFamily="Consolas" />
+                <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
+              </StackPanel>
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+      </Border>
+
+      <Grid Grid.Column="1" RowDefinitions="*,*">
+        <Border Grid.Row="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Padding="6,4" FontSize="11" Opacity="0.7"
+                       Text="Attributes" />
+            <ScrollViewer>
+              <ItemsControl ItemsSource="{Binding Attributes}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="viewmodels:ManifestAttributeRow">
+                    <Grid ColumnDefinitions="150,*" Margin="4,2">
+                      <TextBlock Grid.Column="0" Text="{Binding Name}" FontFamily="Consolas"
+                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <TextBox Grid.Column="1" Text="{Binding Value, Mode=TwoWay}" FontFamily="Consolas" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+          </DockPanel>
+        </Border>
+
+        <controls:CodeEditor Grid.Row="1" x:Name="SourceEditor"
+                             Text="{Binding Source, Mode=TwoWay}"
+                             IsReadOnly="True" />
+      </Grid>
+    </Grid>
+  </DockPanel>
+</UserControl>

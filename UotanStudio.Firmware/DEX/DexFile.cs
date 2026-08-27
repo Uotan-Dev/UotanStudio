@@ -206,28 +206,46 @@ public sealed class DexFile
     {
         if (string.IsNullOrEmpty(descriptor)) return "?";
         var arrayDepth = 0;
-        var d = descriptor;
-        while (d.Length > 0 && d[0] == '[')
-        {
-            arrayDepth++;
-            d = d[1..];
-        }
+        while (arrayDepth < descriptor.Length && descriptor[arrayDepth] == '[') arrayDepth++;
+        if (arrayDepth == descriptor.Length) return descriptor; // 全为 '[' 的退化输入
 
-        string name = d[0] switch
+        var bodyStart = arrayDepth;
+        var body = descriptor[bodyStart];
+
+        string name;
+        if (body == 'L' && descriptor.Length - bodyStart > 2)
         {
-            'L' when d.Length > 2 => d[1..^1].Replace('/', '.'),
-            'V' => "void",
-            'Z' => "boolean",
-            'B' => "byte",
-            'S' => "short",
-            'C' => "char",
-            'I' => "int",
-            'J' => "long",
-            'F' => "float",
-            'D' => "double",
-            _ => d
-        };
-        return name + new string('[', arrayDepth);
+            // 类描述符：单次分配构建（去首 'L' 尾 ';'，'/' 替换为 '.'），避免切片与 Replace 的多次分配。
+            // Class descriptor: build in one allocation (strip the leading 'L' and trailing ';',
+            // replace '/' with '.') to avoid the slice/Replace allocations.
+            var innerStart = bodyStart + 1;
+            var innerLen = descriptor.Length - bodyStart - 2;
+            name = string.Create(innerLen, (descriptor, innerStart), static (span, state) =>
+            {
+                for (var i = 0; i < span.Length; i++)
+                {
+                    var c = state.descriptor[state.innerStart + i];
+                    span[i] = c == '/' ? '.' : c;
+                }
+            });
+        }
+        else
+        {
+            name = body switch
+            {
+                'V' => "void",
+                'Z' => "boolean",
+                'B' => "byte",
+                'S' => "short",
+                'C' => "char",
+                'I' => "int",
+                'J' => "long",
+                'F' => "float",
+                'D' => "double",
+                _ => descriptor[bodyStart..]
+            };
+        }
+        return arrayDepth == 0 ? name : name + new string('[', arrayDepth);
     }
 
     /// <summary>

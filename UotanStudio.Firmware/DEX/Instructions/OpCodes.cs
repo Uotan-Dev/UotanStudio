@@ -99,6 +99,7 @@ public sealed record OpCodeInfo(string Mnemonic, InstructionFormat Format, RefKi
 public static class OpCodes
 {
     private static readonly OpCodeInfo[] Table = BuildTable();
+    private static readonly byte[] Sizes = BuildSizes();
 
     /// <summary>
     /// <para>获取指定操作码的元数据；未知操作码返回 null。</para>
@@ -110,25 +111,33 @@ public static class OpCodes
     /// <para>获取指令大小（16 位代码单元数）。</para>
     /// Gets the instruction size in 16-bit code units.
     /// </summary>
-    public static int GetSize(byte opcode)
+    public static int GetSize(byte opcode) => Sizes[opcode];
+
+    private static byte[] BuildSizes()
     {
-        var info = Table[opcode];
-        return info.Format switch
+        var sizes = new byte[256];
+        for (var i = 0; i < 256; i++)
         {
-            InstructionFormat.Format10x or InstructionFormat.Format12x or InstructionFormat.Format11n
-                or InstructionFormat.Format11x or InstructionFormat.Format10t => 1,
-            InstructionFormat.Format20t or InstructionFormat.Format22x or InstructionFormat.Format21t
-                or InstructionFormat.Format21s or InstructionFormat.Format21h or InstructionFormat.Format21c
-                or InstructionFormat.Format23x or InstructionFormat.Format22b => 2,
-            InstructionFormat.Format22t or InstructionFormat.Format22s or InstructionFormat.Format22c
-                or InstructionFormat.Format30t or InstructionFormat.Format32x or InstructionFormat.Format31i
-                or InstructionFormat.Format31t or InstructionFormat.Format31c or InstructionFormat.Format35c
-                or InstructionFormat.Format3rc => 3,
-            InstructionFormat.Format45cc or InstructionFormat.Format4rcc => 4,
-            InstructionFormat.Format51l => 5,
-            _ => 1
-        };
+            sizes[i] = SizeOf(Table[i].Format);
+        }
+        return sizes;
     }
+
+    private static byte SizeOf(InstructionFormat format) => format switch
+    {
+        InstructionFormat.Format10x or InstructionFormat.Format12x or InstructionFormat.Format11n
+            or InstructionFormat.Format11x or InstructionFormat.Format10t => 1,
+        InstructionFormat.Format20t or InstructionFormat.Format22x or InstructionFormat.Format21t
+            or InstructionFormat.Format21s or InstructionFormat.Format21h or InstructionFormat.Format21c
+            or InstructionFormat.Format23x or InstructionFormat.Format22b => 2,
+        InstructionFormat.Format22t or InstructionFormat.Format22s or InstructionFormat.Format22c
+            or InstructionFormat.Format30t or InstructionFormat.Format32x or InstructionFormat.Format31i
+            or InstructionFormat.Format31t or InstructionFormat.Format31c or InstructionFormat.Format35c
+            or InstructionFormat.Format3rc => 3,
+        InstructionFormat.Format45cc or InstructionFormat.Format4rcc => 4,
+        InstructionFormat.Format51l => 5,
+        _ => 1
+    };
 
     private static OpCodeInfo[] BuildTable()
     {

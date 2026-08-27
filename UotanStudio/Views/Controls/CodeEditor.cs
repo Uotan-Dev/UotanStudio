@@ -48,6 +48,25 @@ public partial class CodeEditor : TextEditor
         set => SetValue(TextProperty, value);
     }
 
+    /// <summary>
+    /// <para>TextMate 高亮安装实例（首次安装/主题变化时重建并释放旧实例；语言变化时仅更新语法）。</para>
+    /// The TextMate highlight installation (created on first install or theme change, releasing the
+    /// previous one; language changes only update the grammar).
+    /// </summary>
+    private TextMate.Installation? _installation;
+
+    /// <summary>
+    /// <para>当前安装 TextMate 时的注册选项（用于解析语法作用域名）。</para>
+    /// The registry options used for the current TextMate installation (to resolve grammar scope names).
+    /// </summary>
+    private RegistryOptions? _options;
+
+    /// <summary>
+    /// <para>当前安装 TextMate 时的主题（用于检测主题切换）。</para>
+    /// The theme used for the current TextMate installation (to detect theme switches).
+    /// </summary>
+    private ThemeName? _installedTheme;
+
     public CodeEditor()
     {
         InitializeComponent();
@@ -87,19 +106,32 @@ public partial class CodeEditor : TextEditor
                     ? ThemeName.LightPlus
                     : ThemeName.DarkPlus;
 
-        var options = new RegistryOptions(theme);
-
-        var installation = this.InstallTextMate(options);
-
         try
         {
-            var scopeName = options.GetScopeByLanguageId(languageId);
-            installation.SetGrammar(scopeName);
+            // 首次安装或主题变化时重建 TextMate 安装（InstallTextMate 在安装时绑定主题）。
+            // 不调用 SetTheme：GetTheme(scopeName) 对部分语言（如 xml）会返回无效/空主题，
+            // 导致 TextMateSharp 内部 ParseTheme 抛 NullReferenceException。
+            // Rebuild the TextMate installation on first install or theme change (InstallTextMate
+            // binds the theme at install time). SetTheme is deliberately NOT used: GetTheme(scopeName)
+            // yields an invalid/null theme for some languages (e.g. xml), which makes TextMateSharp's
+            // internal ParseTheme throw a NullReferenceException.
+            if (_installation is null || _installedTheme != theme)
+            {
+                _installation?.Dispose();
+                _options = new RegistryOptions(theme);
+                _installation = this.InstallTextMate(_options);
+                _installedTheme = theme;
+            }
+
+            // 语法（语言）变化时仅更新 grammar，不重建安装。
+            // Grammar (language) changes only update the grammar, without rebuilding the installation.
+            var scopeName = _options!.GetScopeByLanguageId(languageId);
+            _installation.SetGrammar(scopeName);
         }
         catch
         {
-            // 无效的 languageId 时忽略，不安装语法高亮，避免崩溃。
-            // Invalid language ids are ignored: syntax highlighting is skipped instead of crashing.
+            // 高亮安装/更新失败时忽略，保留无高亮但可用的编辑器。
+            // Ignore highlight install/update failures, keeping the editor usable without highlighting.
         }
     }
 }

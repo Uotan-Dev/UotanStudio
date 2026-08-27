@@ -42,6 +42,8 @@ public static class FirmwareFormatRegistry
             Register(new UpdateApp.UpdateAppFormatHandler());
             Register(new Dt.DtFormatHandler());
             Register(new Dex.DexFormatHandler());
+            Register(new AXml.AXmlFormatHandler());
+            Register(new Arsc.ArscFormatHandler());
 
             IsRegistered = true;
         }

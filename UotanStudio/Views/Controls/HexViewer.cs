@@ -179,9 +179,29 @@ public class HexViewer : Grid
             AddHandler(PointerReleasedEvent, OnPointerReleased, handledEventsToo: true);
             AddHandler(KeyDownEvent, OnKeyDown, handledEventsToo: true);
             AddHandler(TextInputEvent, OnTextInput, handledEventsToo: true);
-            // 主题切换（LightColors/DarkColors 字典替换）后强制重绘，
-            // 否则 Render 内解析的 Hex* 画刷不会自动刷新。
+        }
+
+        /// <summary>
+        /// <para>进入可视树时订阅主题变更：LightColors/DarkColors 字典替换后强制重绘，
+        /// 否则 Render 内解析的 Hex* 画刷不会自动刷新。</para>
+        /// Subscribes to theme changes while attached to the visual tree so the custom-rendered
+        /// brushes (resolved inside Render) refresh after LightColors/DarkColors dictionary swaps.
+        /// </summary>
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
             LanguageService.ThemeChanged += OnThemeChanged;
+        }
+
+        /// <summary>
+        /// <para>离开可视树时退订主题变更，避免静态事件持有已卸载控件导致内存泄漏。</para>
+        /// Unsubscribes from theme changes when detached, so the static event does not keep
+        /// unloaded controls (and their data) alive.
+        /// </summary>
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+            LanguageService.ThemeChanged -= OnThemeChanged;
         }
 
         private void OnThemeChanged(object? sender, EventArgs e)

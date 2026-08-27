@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Firmware.Dex.Instructions;
 using UotanStudio.Firmware.Dex.Model;
@@ -104,7 +105,7 @@ internal static class DexReader
             var start = p;
             while (p < data.Length && data[p] != 0) p++;
             if (p >= data.Length) throw new DexException($"String data {i} is not NUL-terminated");
-            dex.Strings.Add(Mutf8.Decode(data.AsSpan(start, p - start), p - start));
+            dex.Strings.Add(Mutf8.Decode(data, start, p - start));
             _ = utf16Size; // 长度仅用于校验，解码以字节为准；长度以字节为准
         }
     }
@@ -148,10 +149,20 @@ internal static class DexReader
         EnsureRange(data, offset, 4, "type_list");
         var size = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset));
         var result = new int[size];
-        for (var i = 0; i < size; i++)
+        var listSpan = data.AsSpan(offset + 4, checked((int)size * 2));
+        if (BitConverter.IsLittleEndian)
         {
-            var typeIdx = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 4 + i * 2));
-            result[i] = typeIdx;
+            // 小端主机：整段 reinterpret 为 ushort，批量拷贝代替逐项 BinaryPrimitives 调用。
+            // Little-endian hosts: reinterpret the whole slice as ushort and copy in bulk.
+            var units = MemoryMarshal.Cast<byte, ushort>(listSpan);
+            for (var i = 0; i < size; i++) result[i] = units[i];
+        }
+        else
+        {
+            for (var i = 0; i < size; i++)
+            {
+                result[i] = BinaryPrimitives.ReadUInt16LittleEndian(listSpan[(i * 2)..]);
+            }
         }
         return result;
     }
@@ -301,10 +312,21 @@ internal static class DexReader
         var insnsStart = baseOffset + 16;
         EnsureRange(data, insnsStart, checked((int)insnsSize * 2), "code_item insns");
 
-        var raw = new ushort[insnsSize];
-        for (var i = 0; i < insnsSize; i++)
+        var insnsSpan = data.AsSpan(insnsStart, checked((int)insnsSize * 2));
+        ushort[] raw;
+        if (BitConverter.IsLittleEndian)
         {
-            raw[i] = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(insnsStart + i * 2));
+            // 小端主机：整段 reinterpret 为 ushort 批量拷贝（memcpy 级），代替逐单元读取。
+            // Little-endian hosts: reinterpret the whole slice as ushort and copy in bulk (memcpy-level).
+            raw = MemoryMarshal.Cast<byte, ushort>(insnsSpan).ToArray();
+        }
+        else
+        {
+            raw = new ushort[insnsSize];
+            for (var i = 0; i < insnsSize; i++)
+            {
+                raw[i] = BinaryPrimitives.ReadUInt16LittleEndian(insnsSpan[(i * 2)..]);
+            }
         }
 
         var code = new CodeItem
@@ -315,9 +337,13 @@ internal static class DexReader
             RawInsns = raw
         };
 
-        // 解码指令（含伪指令 payload）
-        // Decode instructions (including pseudo-instruction payloads).
-        code.Instructions.AddRange(InstructionDecoder.Decode(raw, dex));
+        // 注意：此处不预解码指令。CodeItem.Instructions 保持为空，由 Disassembler 在
+        // 实际反汇编时按需解码（DisassembleMethod 已处理 Instructions 为空的路径）。
+        // 这样打开大 DEX 时不会为每个方法生成全套 Instruction 对象（内存大头）。
+        // Note: instructions are NOT pre-decoded here. CodeItem.Instructions stays empty and is
+        // decoded on demand by the Disassembler (DisassembleMethod already handles empty lists).
+        // This avoids materializing the full instruction object graph for every method when a
+        // large DEX is opened (the biggest memory hotspot).
 
         if (triesSize > 0)
         {

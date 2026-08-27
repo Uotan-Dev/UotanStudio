@@ -83,10 +83,22 @@ internal static class DexWriter
 
         // ---- type_ids（描述符字符串索引）----
         // ---- type_ids (descriptor string indices) ----
+        // 一次性构建字符串 → 索引字典：类型表通常数万项，逐项线性扫描字符串表是 O(n²)。
+        // Build the string → index map once: the type table can have tens of thousands of entries,
+        // and linear-scanning the string table per entry would be O(n²).
+        var stringIndex = new Dictionary<string, int>(dex.Strings.Count, StringComparer.Ordinal);
+        for (var i = 0; i < dex.Strings.Count; i++)
+        {
+            stringIndex.TryAdd(dex.Strings[i], i); // 与 IndexOf 一致：保留首个出现索引
+        }
+
         var typeIdsOffset = (int)ms.Position;
         foreach (var descriptor in dex.Types)
         {
-            var idx = IndexOfString(dex, descriptor);
+            if (!stringIndex.TryGetValue(descriptor, out var idx))
+            {
+                throw new DexException($"String '{descriptor}' is referenced by the type table but missing from the string table");
+            }
             w.Write((uint)idx);
         }
         Align(w, 4);
@@ -570,17 +582,17 @@ internal static class DexWriter
             // try_item array and the catch handler list.
             Align(w, 4);
 
-            // 先把处理器列表编码到临时流，得到每个 handler 相对列表起始（size 字段）的偏移（handler_off）。
-            // Encode the handler list into a temp stream first to learn each handler's offset
-            // relative to the list start (the size field), which is what handler_off means.
-            using var hms = new MemoryStream();
-            using var hw = new BinaryWriter(hms, Encoding.UTF8, leaveOpen: true);
+            // 每个 handler 相对列表起始（size 字段）的偏移可预计算（编码长度已知），
+            // 无需临时流缓存编码结果，避免每个 code_item 一次 MemoryStream 分配。
+            // Each handler's offset relative to the list start (the size field) is computable
+            // up front from its encoded length, so no per-code_item temp stream is needed.
             var listHeaderSize = Leb128.Uleb128Size((uint)code.Handlers.Count);
             var handlerOffsets = new int[code.Handlers.Count];
+            var running = listHeaderSize;
             for (var i = 0; i < code.Handlers.Count; i++)
             {
-                handlerOffsets[i] = (int)hms.Position + listHeaderSize;
-                WriteCatchHandler(hw, code.Handlers[i]);
+                handlerOffsets[i] = running;
+                running += CatchHandlerSize(code.Handlers[i]);
             }
 
             foreach (var t in code.Tries)
@@ -595,9 +607,32 @@ internal static class DexWriter
 
             // encoded_catch_handler_list：uleb128 数量 + 各 handler。
             WriteUleb128(w, (uint)code.Handlers.Count);
-            w.Write(hms.ToArray());
+            foreach (var handler in code.Handlers)
+            {
+                WriteCatchHandler(w, handler);
+            }
         }
         return start;
+    }
+
+    /// <summary>
+    /// <para>计算单个 encoded_catch_handler 的编码字节长度（与 <see cref="WriteCatchHandler"/> 一致）。</para>
+    /// Computes the encoded byte length of one encoded_catch_handler (consistent with <see cref="WriteCatchHandler"/>).
+    /// </summary>
+    private static int CatchHandlerSize(CatchHandler handler)
+    {
+        var typedCount = handler.Entries.Count;
+        var size = Leb128.Sleb128Size(handler.HasCatchAll ? -typedCount : typedCount);
+        foreach (var entry in handler.Entries)
+        {
+            size += Leb128.Uleb128Size((uint)entry.TypeIndex);
+            size += Leb128.Uleb128Size((uint)entry.Address);
+        }
+        if (handler.HasCatchAll)
+        {
+            size += Leb128.Uleb128Size((uint)handler.CatchAllAddress);
+        }
+        return size;
     }
 
     /// <summary>
@@ -761,16 +796,6 @@ internal static class DexWriter
         return n;
     }
 
-    private static int IndexOfString(DexFile dex, string value)
-    {
-        var idx = dex.Strings.IndexOf(value);
-        if (idx < 0)
-        {
-            throw new DexException($"String '{value}' is referenced by the type table but missing from the string table");
-        }
-        return idx;
-    }
-
     private static void WriteDiff(BinaryWriter w, int index, ref int previous)
     {
         WriteUleb128(w, (uint)(index - previous));
@@ -779,16 +804,16 @@ internal static class DexWriter
 
     private static void WriteUleb128(BinaryWriter w, uint value)
     {
-        var buffer = new byte[5];
+        Span<byte> buffer = stackalloc byte[5];
         var end = Leb128.WriteUleb128(buffer, 0, value);
-        w.Write(buffer, 0, end);
+        w.Write(buffer[..end]);
     }
 
     private static void WriteSleb128(BinaryWriter w, int value)
     {
-        var buffer = new byte[5];
+        Span<byte> buffer = stackalloc byte[5];
         var end = Leb128.WriteSleb128(buffer, 0, value);
-        w.Write(buffer, 0, end);
+        w.Write(buffer[..end]);
     }
 
     private static void WriteOffsetPlaceholder(BinaryWriter w) => w.Write(0u);
@@ -805,13 +830,25 @@ internal static class DexWriter
     /// </summary>
     private static uint Adler32(ReadOnlySpan<byte> data)
     {
+        // 每 NMAX 字节取模一次（zlib 标准做法）：5552 满足 255n(n+1)/2 + (n+1)(BASE-1) ≤ 2^32-1，
+        // 期间 a/b 不会溢出 32 位，同时省去逐字节取模。
+        // Modulo once per NMAX bytes (zlib's approach): 5552 satisfies
+        // 255n(n+1)/2 + (n+1)(BASE-1) ≤ 2^32-1, so a/b never overflow 32 bits and per-byte mod is avoided.
         const uint mod = 65521;
+        const int nmax = 5552;
         var a = 1u;
         var b = 0u;
-        foreach (var t in data)
+        var i = 0;
+        while (i < data.Length)
         {
-            a = (a + t) % mod;
-            b = (b + a) % mod;
+            var end = Math.Min(i + nmax, data.Length);
+            while (i < end)
+            {
+                a += data[i++];
+                b += a;
+            }
+            a %= mod;
+            b %= mod;
         }
         return (b << 16) | a;
     }

@@ -114,7 +114,6 @@ internal partial class PropertiesViewModel : Tool
         WeakReferenceMessenger.Default.Register<FileAnalysisCompletedMessage>(this, OnFileAnalysisCompleted);
         WeakReferenceMessenger.Default.Register<ActiveDocumentChangedMessage>(this, OnActiveDocumentChanged);
         WeakReferenceMessenger.Default.Register<DtbNodeSelectionChangedMessage>(this, OnDtbNodeSelectionChanged);
-        WeakReferenceMessenger.Default.Register<DexNodeSelectionChangedMessage>(this, OnDexNodeSelectionChanged);
     }
 
     /// <summary>
@@ -218,27 +217,6 @@ internal partial class PropertiesViewModel : Tool
         }
 
         RefreshForDtbNode(message.Editor, message.Node);
-    }
-
-    /// <summary>
-    /// <para>响应 DEX 结构树节点选中变更消息，刷新选中节点详情。</para>
-    /// Responds to DEX node-selection-changed messages by refreshing the selected node details.
-    /// </summary>
-    private void OnDexNodeSelectionChanged(object recipient, DexNodeSelectionChangedMessage message)
-    {
-        // 仅当当前展示的是 DEX 文档时才联动更新选中节点详情。
-        // Only update the selected-node details when the panel is currently showing a DEX document.
-        if (ContentType != PropertiesContentType.DexDocument)
-        {
-            return;
-        }
-
-        if (message.Editor is null)
-        {
-            return;
-        }
-
-        RefreshForDexNode(message.Editor, message.Node);
     }
 
     /// <summary>
@@ -436,34 +414,6 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_TypeCount"), doc.TypeCount.ToString("N0")));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DEX document '{doc.FilePath}'");
-    }
-
-    /// <summary>
-    /// <para>刷新 DEX 选中节点（类/方法/字段）的详情属性行。</para>
-    /// Refreshes property rows for the selected DEX node (class/method/field).
-    /// </summary>
-    public void RefreshForDexNode(DexEditorViewModel editor, DexTreeNodeViewModel? node)
-    {
-        Properties.Clear();
-        if (node is null)
-        {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
-            return;
-        }
-
-        ContentType = PropertiesContentType.DexDocument;
-        HasSelection = true;
-        SelectedNodeTitle = node.Name;
-
-        var svc = LanguageService.Instance;
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_SelectedNode"), node.Name));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_SelectedNodeKind"), node.Kind));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_SelectedNodeDetail"), node.Detail));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_SelectedNodeChildren"), node.Children.Count.ToString("N0")));
-
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DEX node '{node.Name}'");
     }
 
     /// <summary>

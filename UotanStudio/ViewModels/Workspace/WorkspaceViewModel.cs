@@ -97,6 +97,22 @@ public class WorkspaceViewModel : ViewModelBase
             return;
         }
 
+        // AXML（AndroidManifest.xml 等二进制 XML）：走 Manifest 编辑器。
+        // AXML (AndroidManifest.xml and other binary XML): open in the Manifest editor.
+        if (mode == EditorOpenMode.Axml)
+        {
+            await OpenManifestAsync(path);
+            return;
+        }
+
+        // ARSC（resources.arsc）：走 ARSC 资源表编辑器。
+        // ARSC (resources.arsc): open in the ARSC resource-table editor.
+        if (mode == EditorOpenMode.Arsc)
+        {
+            await OpenArscAsync(path);
+            return;
+        }
+
         var documentDock = _documentDock ??= FindDocumentsPane();
         if (documentDock is null)
         {
@@ -223,6 +239,102 @@ public class WorkspaceViewModel : ViewModelBase
         }
 
         var document = new DexEditorViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        };
+
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+
+        await document.LoadAsync(fullPath);
+    }
+
+    /// <summary>
+    /// <para>在文档区以 Manifest 编辑器打开指定的 AXML 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="ManifestEditorViewModel"/>。</para>
+    /// Opens the given AXML file in the Manifest editor in the document area: focuses it if already
+    /// open; otherwise creates and loads a <see cref="ManifestEditorViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的 AXML 文件路径。</para>
+    /// The path of the AXML file to open.
+    /// </param>
+    public async Task OpenManifestAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?
+            .OfType<ManifestEditorViewModel>()
+            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+
+        var document = new ManifestEditorViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        };
+
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+
+        await document.LoadAsync(fullPath);
+    }
+
+    /// <summary>
+    /// <para>在文档区以 ARSC 资源表编辑器打开指定的 resources.arsc 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="ArscEditorViewModel"/>。</para>
+    /// Opens the given resources.arsc file in the ARSC resource-table editor in the document area:
+    /// focuses it if already open; otherwise creates and loads an <see cref="ArscEditorViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的 ARSC 文件路径。</para>
+    /// The path of the ARSC file to open.
+    /// </param>
+    public async Task OpenArscAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?
+            .OfType<ArscEditorViewModel>()
+            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+
+        var document = new ArscEditorViewModel
         {
             Title = Path.GetFileName(fullPath),
             FilePath = fullPath

@@ -29,7 +29,7 @@ public static class Disassembler
         foreach (var cls in dex.Classes)
         {
             sb.AppendLine();
-            sb.Append(DisassembleClass(dex, cls));
+            AppendDisassembleClass(sb, dex, cls);
         }
         return sb.ToString();
     }
@@ -43,7 +43,12 @@ public static class Disassembler
         ArgumentNullException.ThrowIfNull(dex);
         ArgumentNullException.ThrowIfNull(cls);
         var sb = new StringBuilder(1024);
+        AppendDisassembleClass(sb, dex, cls);
+        return sb.ToString();
+    }
 
+    private static void AppendDisassembleClass(StringBuilder sb, DexFile dex, ClassDefinition cls)
+    {
         var access = AccessFlags.Format(cls.AccessFlags);
         var className = dex.FormatType(cls.TypeIndex);
         sb.Append(".class ").Append(access).Append(access.Length > 0 ? " " : string.Empty).AppendLine(className);
@@ -98,9 +103,8 @@ public static class Disassembler
         foreach (var m in cls.DirectMethods.Concat(cls.VirtualMethods))
         {
             sb.AppendLine();
-            sb.Append(DisassembleMethod(dex, m, cls));
+            AppendDisassembleMethod(sb, dex, m, cls);
         }
-        return sb.ToString();
     }
 
     private static void AppendFieldAnnotations(StringBuilder sb, DexFile dex, ClassDefinition cls, int fieldIndex)
@@ -124,30 +128,37 @@ public static class Disassembler
         if (method == null) return string.Empty;
 
         var sb = new StringBuilder(512);
+        AppendDisassembleMethod(sb, dex, encodedMethod, cls);
+        return sb.ToString();
+    }
+
+    private static void AppendDisassembleMethod(StringBuilder sb, DexFile dex, EncodedMethod encodedMethod, ClassDefinition? cls)
+    {
+        var method = dex.GetMethod(encodedMethod.MethodIndex);
+        if (method == null) return;
+
         var proto = dex.GetProto(method.ProtoIndex);
         var access = AccessFlags.Format(encodedMethod.AccessFlags);
 
-        var signature = new StringBuilder();
-        signature.Append(dex.GetString(method.NameIndex)).Append('(');
+        sb.Append(".method ").Append(access).Append(access.Length > 0 ? " " : string.Empty)
+          .Append(dex.GetString(method.NameIndex)).Append('(');
         if (proto != null)
         {
             for (var i = 0; i < proto.ParameterTypeIndices.Length; i++)
             {
-                if (i > 0) signature.Append(", ");
-                signature.Append(dex.FormatType(proto.ParameterTypeIndices[i]));
+                if (i > 0) sb.Append(", ");
+                sb.Append(dex.FormatType(proto.ParameterTypeIndices[i]));
             }
         }
-        signature.Append(')');
-        signature.Append(proto != null ? dex.FormatType(proto.ReturnTypeIndex) : "?");
-
-        sb.Append(".method ").Append(access).Append(access.Length > 0 ? " " : string.Empty).AppendLine(signature.ToString());
+        sb.Append(')');
+        sb.Append(proto != null ? dex.FormatType(proto.ReturnTypeIndex) : "?").AppendLine();
 
         var code = encodedMethod.Code;
         if (code == null)
         {
             AppendMethodAnnotations(sb, dex, cls, encodedMethod.MethodIndex, code: null);
             sb.AppendLine(".end method");
-            return sb.ToString();
+            return;
         }
 
         // 程序化构造的 CodeItem 可能未解码指令；此处按需解码
@@ -165,7 +176,7 @@ public static class Disassembler
 
         // 分支标签与异常标签：为所有分支目标 / try 区间 / handler 入口生成 label
         // Branch and exception labels: one label per branch target / try range / handler entry.
-        var labels = new SortedSet<int>();
+        var labels = new HashSet<int>();
         foreach (var insn in instructions)
         {
             foreach (var operand in insn.Operands)
@@ -238,11 +249,12 @@ public static class Disassembler
                     foreach (var c in ends.CatchLines) sb.Append("    ").AppendLine(c);
                 }
             }
-            sb.Append("    ").Append(insn.Mnemonic).Append(' ').AppendLine(FormatOperands(insn));
+            sb.Append("    ").Append(insn.Mnemonic).Append(' ');
+            AppendOperands(sb, insn);
+            sb.AppendLine();
         }
 
         sb.AppendLine(".end method");
-        return sb.ToString();
     }
 
     /// <summary>
@@ -410,53 +422,92 @@ public static class Disassembler
         _ => c.ToString()
     };
 
-    private static string FormatOperands(Instruction insn)
+    private static void AppendOperands(StringBuilder sb, Instruction insn)
     {
-        if (insn.Operands.Count == 0) return string.Empty;
+        if (insn.Operands.Count == 0) return;
 
         // 寄存器列表（invoke 的 {v0, v1}）作为首个操作数时单独格式化
         // A register list (invoke's {v0, v1}) as the first operand is formatted separately.
         if (insn.Operands[0] is IReadOnlyList<int> regs)
         {
-            var sb = new StringBuilder();
-            sb.Append('{').Append(string.Join(", ", regs.Select(r => "v" + r))).Append('}');
+            sb.Append('{');
+            for (var i = 0; i < regs.Count; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append('v').Append(regs[i]);
+            }
+            sb.Append('}');
             for (var i = 1; i < insn.Operands.Count; i++)
             {
-                sb.Append(", ").Append(FormatOperand(insn.Operands[i]));
+                sb.Append(", ");
+                AppendOperand(sb, insn.Operands[i]);
             }
-            return sb.ToString();
+            return;
         }
 
-        return string.Join(", ", insn.Operands.Select(FormatOperand));
-    }
-
-    private static string FormatOperand(object? operand)
-    {
-        return operand switch
+        for (var i = 0; i < insn.Operands.Count; i++)
         {
-            null => "<null>",
-            BranchTargetOperand target => ":label_" + target.Offset.ToString("X4"),
-            LiteralOperand literal => FormatNumber(literal.Value),
-            TypeRefOperand type => type.Descriptor,
-            FieldRefOperand field => $"{field.OwnerClass}->{field.Name}:{field.Type}",
-            MethodRefOperand method => $"{method.OwnerClass}->{method.Name}({string.Join(", ", method.Parameters)}){method.ReturnType}",
-            PayloadOperand payload => FormatPayload(payload),
-            int reg => $"v{reg}",
-            string value => $"\"{EscapeString(value)}\"",
-            _ => Convert.ToString(operand, System.Globalization.CultureInfo.InvariantCulture) ?? "?"
-        };
+            if (i > 0) sb.Append(", ");
+            AppendOperand(sb, insn.Operands[i]);
+        }
     }
 
-    private static string FormatNumber(long value)
-        => value is >= 0 and <= 0xFFFF ? "#0x" + value.ToString("X") : "#0x" + value.ToString("X8");
-
-    private static string FormatPayload(PayloadOperand payload)
+    private static void AppendOperand(StringBuilder sb, object? operand)
     {
-        var sb = new StringBuilder();
+        switch (operand)
+        {
+            case null:
+                sb.Append("<null>");
+                break;
+            case BranchTargetOperand target:
+                sb.Append(":label_").Append(target.Offset.ToString("X4"));
+                break;
+            case LiteralOperand literal:
+                AppendNumber(sb, literal.Value);
+                break;
+            case TypeRefOperand type:
+                sb.Append(type.Descriptor);
+                break;
+            case FieldRefOperand field:
+                sb.Append(field.OwnerClass).Append("->").Append(field.Name).Append(':').Append(field.Type);
+                break;
+            case MethodRefOperand method:
+                sb.Append(method.OwnerClass).Append("->").Append(method.Name).Append('(');
+                for (var i = 0; i < method.Parameters.Length; i++)
+                {
+                    if (i > 0) sb.Append(", ");
+                    sb.Append(method.Parameters[i]);
+                }
+                sb.Append(')').Append(method.ReturnType);
+                break;
+            case PayloadOperand payload:
+                AppendPayload(sb, payload);
+                break;
+            case int reg:
+                sb.Append('v').Append(reg);
+                break;
+            case string value:
+                sb.Append('"').Append(EscapeString(value)).Append('"');
+                break;
+            default:
+                sb.Append(Convert.ToString(operand, System.Globalization.CultureInfo.InvariantCulture) ?? "?");
+                break;
+        }
+    }
+
+    private static void AppendNumber(StringBuilder sb, long value)
+    {
+        sb.Append("#0x").Append(value is >= 0 and <= 0xFFFF ? value.ToString("X") : value.ToString("X8"));
+    }
+
+    private static void AppendPayload(StringBuilder sb, PayloadOperand payload)
+    {
         sb.Append(payload.Kind);
         if (payload.Kind == "packed-switch")
         {
-            sb.Append(" first_key=").Append(payload.FirstKey).Append(" targets=[").Append(string.Join(", ", payload.Values.Take(8))).Append(']');
+            sb.Append(" first_key=").Append(payload.FirstKey).Append(" targets=[");
+            AppendValueList(sb, payload.Values);
+            sb.Append(']');
         }
         else if (payload.Kind == "sparse-switch")
         {
@@ -468,9 +519,20 @@ public static class Disassembler
         }
         else
         {
-            sb.Append('[').Append(string.Join(", ", payload.Values.Take(8))).Append(']');
+            sb.Append('[');
+            AppendValueList(sb, payload.Values);
+            sb.Append(']');
         }
-        return sb.ToString();
+    }
+
+    private static void AppendValueList(StringBuilder sb, int[] values)
+    {
+        var count = Math.Min(values.Length, 8);
+        for (var i = 0; i < count; i++)
+        {
+            if (i > 0) sb.Append(", ");
+            sb.Append(values[i]);
+        }
     }
 
     private static string EscapeString(string value)

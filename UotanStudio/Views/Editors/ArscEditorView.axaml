@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.ArscEditorView"
+             x:DataType="viewmodels:ArscEditorViewModel">
+  <Grid ColumnDefinitions="320,*">
+    <!-- 左：包→类型→配置→条目 资源树 -->
+    <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+      <TreeView x:Name="ResourceTree"
+                ItemsSource="{Binding Nodes}"
+                SelectionChanged="OnTreeSelectionChanged">
+        <TreeView.ItemTemplate>
+          <TreeDataTemplate x:DataType="viewmodels:ArscTreeNodeViewModel" ItemsSource="{Binding Children}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
+            </StackPanel>
+          </TreeDataTemplate>
+        </TreeView.ItemTemplate>
+      </TreeView>
+    </Border>
+
+    <!-- 右：选中节点详情 -->
+    <DockPanel Grid.Column="1">
+      <TextBlock DockPanel.Dock="Top" Padding="6,4" FontSize="11" Opacity="0.7"
+                 Text="{Binding CompileError, FallbackValue=' '}"
+                 Foreground="Red"
+                 IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <ScrollViewer>
+        <ItemsControl ItemsSource="{Binding Details}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="viewmodels:ArscDetailRow">
+              <Grid ColumnDefinitions="180,*" Margin="6,2">
+                <TextBlock Grid.Column="0" Text="{Binding Key}" FontFamily="Consolas"
+                           Foreground="{DynamicResource AccentColor}"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <TextBox Grid.Column="1" Text="{Binding Value}" FontFamily="Consolas"
+                         IsReadOnly="True" TextWrapping="Wrap" />
+              </Grid>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </DockPanel>
+  </Grid>
+</UserControl>

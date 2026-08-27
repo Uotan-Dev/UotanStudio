@@ -37,9 +37,13 @@ public class DexRoundTripTests
 
         var method = cls.DirectMethods.First(m => loaded.GetString(loaded.GetMethod(m.MethodIndex)!.NameIndex) == "main");
         Assert.NotNull(method.Code);
-        Assert.Equal(2, method.Code!.Instructions.Count);
-        Assert.Equal("const/4", method.Code.Instructions[0].Mnemonic);
-        Assert.Equal("return-void", method.Code.Instructions[1].Mnemonic);
+        // 惰性解码：解析时不再预解码指令，原始指令流保留，反汇编时按需解码。
+        // Lazy decode: instructions are no longer pre-decoded at parse time; the raw stream is kept
+        // and decoded on demand by the disassembler.
+        Assert.Equal(2, method.Code!.RawInsns.Length);
+        var smali = Disassembler.DisassembleMethod(loaded, method, cls);
+        Assert.Contains("const/4", smali);
+        Assert.Contains("return-void", smali);
     }
 
     [Fact]

@@ -1,23 +1,22 @@
 using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Dex;
-using UotanStudio.Firmware.Dex.Model;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>DEX 编辑器视图模型（仿设备树面板）：左栏结构树（类/方法/字段）+ 右栏反汇编文本，
-/// 支持解析、统计与重建写出。</para>
-/// DEX editor view model (modeled on the device-tree panel): a left structure tree (class/method/field)
-/// plus a right disassembly text pane, supporting parsing, statistics and rebuild-write.
+/// <para>DEX 编辑器视图模型：右栏显示全量反汇编（Smali）文本，支持解析、统计与重建写出。
+/// 不提供左栏结构树导航——大 DEX 打开时数万树节点与 TreeView 控件是主要内存开销，
+/// 删除树后仅保留反汇编代码，内存占用显著下降。</para>
+/// DEX editor view model: the right pane shows the full disassembly (Smali) text, with parse,
+/// statistics and rebuild-write support. There is no left structure-tree navigation — tens of
+/// thousands of tree nodes and TreeView controls were the main memory cost when opening a large
+/// DEX; dropping the tree keeps only the disassembly text and cuts the memory footprint sharply.
 /// </summary>
 public partial class DexEditorViewModel : Document
 {
@@ -46,22 +45,10 @@ public partial class DexEditorViewModel : Document
     [ObservableProperty] private string? _filePath;
 
     /// <summary>
-    /// <para>右栏反汇编文本（只读）。</para>
-    /// The right-pane disassembly text (read-only).
+    /// <para>反汇编文本（只读，加载时全量生成）。</para>
+    /// The disassembly text (read-only; generated in full on load).
     /// </summary>
     [ObservableProperty] private string _source = string.Empty;
-
-    /// <summary>
-    /// <para>左栏结构树根节点（类）。</para>
-    /// The left-pane structure tree root nodes (classes).
-    /// </summary>
-    public ObservableCollection<DexTreeNodeViewModel> Classes { get; } = [];
-
-    /// <summary>
-    /// <para>当前选中的树节点（左栏选择联动）。</para>
-    /// The currently selected tree node (left-pane selection linkage).
-    /// </summary>
-    [ObservableProperty] private DexTreeNodeViewModel? _selectedNode;
 
     /// <summary>
     /// <para>最后一次解析错误文本；为空表示无错误。</para>
@@ -139,8 +126,8 @@ public partial class DexEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>异步加载 DEX 文件：读取字节 → 解析 → 构建结构树与反汇编文本。</para>
-    /// Asynchronously loads a DEX file: read bytes, parse, and build the structure tree and disassembly text.
+    /// <para>异步加载 DEX 文件：读取字节 → 解析 → 全量反汇编生成文本。</para>
+    /// Asynchronously loads a DEX file: read bytes, parse, and generate the full disassembly text.
     /// </summary>
     /// <param name="path">DEX 文件路径。<para>DEX file path.</para></param>
     public async Task LoadAsync(string path)
@@ -159,8 +146,8 @@ public partial class DexEditorViewModel : Document
             var bytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
             RawBytes = bytes;
 
-            // 将 CPU 密集的解析、反汇编与结构树构建放到线程池执行，避免阻塞 UI 线程。
-            // Offload the CPU-bound parse, disassembly and tree build to the thread pool to keep the UI responsive.
+            // 将 CPU 密集的解析与反汇编放到线程池执行，避免阻塞 UI 线程。
+            // Offload the CPU-bound parse and disassembly to the thread pool to keep the UI responsive.
             DexLoadResult result;
             try
             {
@@ -169,18 +156,11 @@ public partial class DexEditorViewModel : Document
             catch (Exception ex)
             {
                 CompileError = $"Failed to parse DEX: {ex.Message}";
-                Classes.Clear();
                 Source = string.Empty;
                 return;
             }
 
             _dex = result.Dex;
-            Classes.Clear();
-            foreach (var node in result.ClassNodes)
-            {
-                Classes.Add(node);
-            }
-
             Source = result.Source;
             CompileError = string.Empty;
             IsDirty = false;
@@ -221,73 +201,46 @@ public partial class DexEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>在后台线程执行 DEX 解析、反汇编、结构树构建与统计，返回供 UI 线程应用的结果。</para>
-    /// Parses the DEX, disassembles, builds the structure tree and computes statistics on a
-    /// background thread, returning results to be applied on the UI thread.
+    /// <para>在后台线程执行 DEX 解析、全量反汇编与统计，返回供 UI 线程应用的结果。</para>
+    /// Parses the DEX, disassembles it in full and computes statistics on a background thread,
+    /// returning results to be applied on the UI thread.
     /// </summary>
     /// <param name="bytes">DEX 原始字节。<para>The raw DEX bytes.</para></param>
-    /// <returns>包含解析模型、反汇编文本、结构树与统计的结果对象。</returns>
+    /// <returns>包含解析模型、反汇编文本与统计的结果对象。</returns>
     private static DexLoadResult LoadModel(byte[] bytes)
     {
         var dex = DexFile.Load(bytes);
 
-        var nodes = new List<DexTreeNodeViewModel>(dex.Classes.Count);
         var methodCount = 0;
         var fieldCount = 0;
         foreach (var cls in dex.Classes)
         {
-            nodes.Add(BuildClassNode(dex, cls));
             methodCount += cls.DirectMethods.Count + cls.VirtualMethods.Count;
             fieldCount += cls.StaticFields.Count + cls.InstanceFields.Count;
         }
 
-        return new DexLoadResult(dex, nodes, Disassembler.DisassembleAll(dex), methodCount, fieldCount);
+        // 全量反汇编：解析时为惰性解码（不预生成指令对象），此处按需解码每个方法生成 Smali 文本。
+        // Full disassembly: parsing is lazily decoded (no instruction objects are materialized up
+        // front); each method is decoded on demand here to produce the Smali text.
+        var source = Disassembler.DisassembleAll(dex);
+        return new DexLoadResult(dex, source, methodCount, fieldCount);
     }
 
-    private static DexTreeNodeViewModel BuildClassNode(DexFile dex, ClassDefinition cls)
+    /// <summary>
+    /// <para>释放文档持有的模型与视图数据（文档关闭时调用）：清空反汇编文本、原始字节与解析模型。
+    /// 此后 VM 不再强持有大对象，内存可被 GC 回收。</para>
+    /// Releases the model and view data held by this document (called when the document is closed):
+    /// clears the disassembly text, raw bytes and parsed model. The VM no longer holds large objects,
+    /// letting the GC reclaim the memory.
+    /// </summary>
+    public void Cleanup()
     {
-        var className = dex.FormatType(cls.TypeIndex);
-        var node = new DexTreeNodeViewModel(className, "class", AccessFlags.Format(cls.AccessFlags));
-
-        foreach (var f in cls.StaticFields.Concat(cls.InstanceFields))
-        {
-            var field = dex.GetField(f.FieldIndex);
-            if (field is null) continue;
-            var fieldName = dex.GetString(field.NameIndex);
-            var fieldType = dex.FormatType(field.TypeIndex);
-            node.Children.Add(new DexTreeNodeViewModel(fieldName, "field", $": {fieldType}"));
-        }
-
-        foreach (var m in cls.DirectMethods.Concat(cls.VirtualMethods))
-        {
-            var method = dex.GetMethod(m.MethodIndex);
-            if (method is null) continue;
-            var methodName = dex.GetString(method.NameIndex);
-            var proto = dex.GetProto(method.ProtoIndex);
-            var signature = BuildSignature(dex, proto);
-            node.Children.Add(new DexTreeNodeViewModel(methodName, "method", signature));
-        }
-
-        return node;
-    }
-
-    private static string BuildSignature(DexFile dex, ProtoDefinition? proto)
-    {
-        if (proto is null)
-        {
-            return "()?";
-        }
-
-        var sb = new System.Text.StringBuilder();
-        sb.Append('(');
-        for (var i = 0; i < proto.ParameterTypeIndices.Length; i++)
-        {
-            if (i > 0) sb.Append(", ");
-            sb.Append(dex.FormatType(proto.ParameterTypeIndices[i]));
-        }
-        sb.Append(')');
-        sb.Append(dex.FormatType(proto.ReturnTypeIndex));
-        return sb.ToString();
+        Source = string.Empty;
+        CompileError = string.Empty;
+        RawBytes = null;
+        _dex = null;
+        MethodCount = 0;
+        FieldCount = 0;
     }
 
     /// <summary>
@@ -295,13 +248,11 @@ public partial class DexEditorViewModel : Document
     /// One-shot result data of a background DEX load.
     /// </summary>
     /// <param name="Dex">解析后的 DEX 模型。<para>The parsed DEX model.</para></param>
-    /// <param name="ClassNodes">左栏结构树根节点（类）。<para>Left-pane structure tree root nodes (classes).</para></param>
-    /// <param name="Source">反汇编文本。<para>The disassembly text.</para></param>
+    /// <param name="Source">全量反汇编文本。<para>The full disassembly text.</para></param>
     /// <param name="MethodCount">方法总数。<para>Total method count.</para></param>
     /// <param name="FieldCount">字段总数。<para>Total field count.</para></param>
     private sealed record DexLoadResult(
         DexFile Dex,
-        List<DexTreeNodeViewModel> ClassNodes,
         string Source,
         int MethodCount,
         int FieldCount);

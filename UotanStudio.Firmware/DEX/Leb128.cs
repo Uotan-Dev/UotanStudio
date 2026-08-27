@@ -56,7 +56,7 @@ public static class Leb128
     /// <para>把无符号整数编码为 LEB128 字节序列。</para>
     /// Encodes an unsigned integer into a LEB128 byte sequence.
     /// </summary>
-    public static int WriteUleb128(byte[] buffer, int offset, uint value)
+    public static int WriteUleb128(Span<byte> buffer, int offset, uint value)
     {
         do
         {
@@ -72,7 +72,7 @@ public static class Leb128
     /// <para>把有符号整数编码为 LEB128 字节序列。</para>
     /// Encodes a signed integer into a LEB128 byte sequence.
     /// </summary>
-    public static int WriteSleb128(byte[] buffer, int offset, int value)
+    public static int WriteSleb128(Span<byte> buffer, int offset, int value)
     {
         var more = true;
         while (more)

@@ -38,7 +38,19 @@ public enum EditorOpenMode
     /// <para>以 DEX 双栏编辑器打开（结构树 + 反汇编）。</para>
     /// Open in the DEX dual-pane editor (structure tree + disassembly).
     /// </summary>
-    Dex
+    Dex,
+
+    /// <summary>
+    /// <para>以 Manifest 编辑器打开（AXML：AndroidManifest.xml 等二进制 XML）。</para>
+    /// Open in the Manifest editor (AXML: AndroidManifest.xml and other binary XML files).
+    /// </summary>
+    Axml,
+
+    /// <summary>
+    /// <para>以 ARSC 资源表编辑器打开（resources.arsc）。</para>
+    /// Open in the ARSC resource-table editor (resources.arsc).
+    /// </summary>
+    Arsc
 }
 
 /// <summary>
@@ -117,10 +129,27 @@ public static class FileOpenMode
     /// </param>
     public static EditorOpenMode ResolveMode(string path, byte[]? header)
     {
+        // AXML 内容探测优先：AndroidManifest.xml 等二进制 XML 即使扩展名为 .xml（会被文本路由
+        // 拦截）也应走 Manifest 编辑器，避免按 UTF-8 文本打开乱码。
+        // AXML content sniffing first: binary XML files such as AndroidManifest.xml carry a .xml
+        // extension (which the text route would claim), so the AXML magic must win to avoid opening
+        // them as mangled UTF-8 text.
+        if (header is not null && UotanStudio.Firmware.AXml.AXmlParser.IsAxml(header))
+        {
+            return EditorOpenMode.Axml;
+        }
+
         var mode = ResolveMode(path);
         if (mode != EditorOpenMode.Auto)
         {
             return mode;
+        }
+
+        // ARSC 内容探测：resources.arsc 为 0x0002 表头。
+        // ARSC content sniffing: resources.arsc carries the 0x0002 table header.
+        if (header is not null && UotanStudio.Firmware.Arsc.ArscParser.IsArsc(header))
+        {
+            return EditorOpenMode.Arsc;
         }
 
         // Auto 分支的 magic 兜底：识别出强二进制类型视为十六进制。
