@@ -93,8 +93,8 @@ public sealed class ArscFormatHandler : IFormatHandler
     /// <inheritdoc />
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
-        // ARSC 重建（表结构调整）暂不支持；原样拷贝输入文件。
-        // ARSC rebuild (table restructure) is not supported yet; copy the input verbatim.
+        // ARSC 重建：解析模型后由 ArscWriter 重新序列化（支持值级编辑后的写回）。
+        // ARSC rebuild: parse the model, then re-serialize via ArscWriter (supports value-level edits).
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -102,13 +102,16 @@ public sealed class ArscFormatHandler : IFormatHandler
             {
                 return Task.FromResult(FirmwareOpResult.Fail("Output path is empty"));
             }
+
+            var table = Load(inputPath);
+            var bytes = ArscWriter.Write(table);
             var directory = Path.GetDirectoryName(outputPath);
             if (!string.IsNullOrEmpty(directory))
             {
                 Directory.CreateDirectory(directory);
             }
-            System.IO.File.Copy(inputPath, outputPath, overwrite: true);
-            return Task.FromResult(FirmwareOpResult.Ok($"Copied ARSC to {outputPath}", [outputPath]));
+            System.IO.File.WriteAllBytes(outputPath, bytes);
+            return Task.FromResult(FirmwareOpResult.Ok($"Rebuilt ARSC written to {outputPath}", [outputPath]));
         }
         catch (OperationCanceledException)
         {
@@ -116,7 +119,7 @@ public sealed class ArscFormatHandler : IFormatHandler
         }
         catch (Exception ex)
         {
-            return Task.FromResult(FirmwareOpResult.Fail($"ARSC copy failed: {ex.Message}"));
+            return Task.FromResult(FirmwareOpResult.Fail($"ARSC rebuild failed: {ex.Message}"));
         }
     }
 

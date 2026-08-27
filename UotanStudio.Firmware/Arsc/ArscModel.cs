@@ -208,6 +208,12 @@ public sealed class ResPackage
     /// <summary>类型表（按文件顺序；含 ResTableTypeSpec 与 ResTableType）。<para>Type tables (in file order).</para></summary>
     public List<ResType> Types { get; } = [];
 
+    /// <summary>
+    /// <para>类型规范标志（typeId → ResTableTypeSpec 的 flags 数组，重建时原样保留）。</para>
+    /// Type-spec flags (typeId → ResTableTypeSpec flags array, preserved verbatim on rebuild).
+    /// </summary>
+    public Dictionary<byte, uint[]> TypeSpecFlags { get; } = [];
+
     /// <summary>按类型 ID 与配置分组的类型表计数（统计展示用）。<para>Type table counts grouped by ID (for stats).</para></summary>
     public int TypeCount => Types.Count;
 }

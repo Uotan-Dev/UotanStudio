@@ -23,13 +23,13 @@ public partial class ManifestEditorViewModel : Document
     /// <para>保存按钮的本地化标题。</para>
     /// The localized title of the save button.
     /// </summary>
-    public static string SaveLabel => LanguageService.Instance.GetString("Dock_Dex_Save");
+    public static string SaveLabel => LanguageService.Instance.GetString("Dock_Manifest_Save");
 
     /// <summary>
     /// <para>加载中提示文案的本地化标题。</para>
     /// The localized title of the busy/loading label.
     /// </summary>
-    public static string BusyLabel => LanguageService.Instance.GetString("Dock_Dex_Disassembling");
+    public static string BusyLabel => LanguageService.Instance.GetString("Dock_Manifest_Busy");
 
     /// <summary>
     /// <para>是否正在后台解析（联动忙碌指示动画）。</para>
@@ -301,9 +301,11 @@ public partial class ManifestAttributeRow : ObservableObject
                 _attribute.ValueData = b ? 1u : 0u;
                 break;
             case AXmlValueType.String when _stringPool is not null:
-                // 字符串池索引无法在只读池中修改；保留原值（完整字符串编辑需重建池）。
-                // String-pool indices cannot be edited on the read-only pool; the value stays as-is
-                // (full string editing would require rebuilding the pool).
+                // 字符串池重建：把新值 Intern 进池并更新 ValueData 索引，保存时由 AXmlWriter
+                // 按池顺序重建，任意字符串值均可编辑。
+                // String-pool rebuild: intern the new value and update the ValueData index; the
+                // AXmlWriter rebuilds the pool on save, so arbitrary string values are editable.
+                _attribute.ValueData = (uint)_stringPool.Intern(value);
                 break;
         }
     }

@@ -50,6 +50,16 @@ public static class AXmlWriter
             Intern(ns.Uri);
         }
 
+        // 先按原顺序 Intern 模型字符串池的全部字符串：String 型属性值的 ValueData 直接引用池
+        // 索引，重建后必须仍指向同一字符串，因此保持原索引稳定（新字符串追加在末尾）。
+        // Intern the model string pool in order first: String-typed attribute values reference pool
+        // indices via ValueData, so those indices must stay stable after rebuild (new strings are
+        // appended at the end).
+        for (var i = 0; i < doc.StringPool.Count; i++)
+        {
+            Intern(doc.StringPool.GetString(i));
+        }
+
         // 元素/属性收集：显式栈遍历（避免递归过深）。
         // Element/attribute collection via an explicit stack (avoids deep recursion).
         var stack = new Stack<AXmlElement>();

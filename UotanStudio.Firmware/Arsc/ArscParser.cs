@@ -144,8 +144,16 @@ public static class ArscParser
 
                 case ResTableTypeSpecType:
                     {
+                        // ResTable_typeSpec: header(8) + id(1) + res0(1) + res1(2)
+                        //                    + entryCount(4) + flags[entryCount]
                         var specId = data[pos + 8];
-                        typeSpecIds.Add(specId);
+                        var specEntryCount = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 12)));
+                        var flags = new uint[specEntryCount];
+                        for (var f = 0; f < specEntryCount; f++)
+                        {
+                            flags[f] = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 16 + f * 4));
+                        }
+                        pkg.TypeSpecFlags[specId] = flags;
                         break;
                     }
 
@@ -176,7 +184,9 @@ public static class ArscParser
         var type = new ResType
         {
             Id = id,
-            TypeNameIndex = 0,
+            // AOSP 约定：typeStrings 池索引 = typeId - 1。
+            // AOSP convention: the typeStrings pool index equals typeId - 1.
+            TypeNameIndex = Math.Max(0, id - 1),
             ConfigDescription = ParseConfig(data, offset + 20),
             ConfigHex = Convert.ToHexString(data.AsSpan(offset + 20, configActualSize))
         };

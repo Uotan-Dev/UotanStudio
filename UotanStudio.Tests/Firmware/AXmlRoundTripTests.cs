@@ -100,6 +100,44 @@ public class AXmlRoundTripTests
         Assert.Equal(doc.Root.Attributes.Count, doc2.Root.Attributes.Count);
     }
 
+    [Fact]
+    public void EditStringValue_RebuildsPoolAndPreservesValue()
+    {
+        // 模拟编辑器编辑 String 型属性：Intern 新字符串并更新 ValueData，重建后值应保留。
+        // Simulates editing a String-typed attribute: intern a new string, update ValueData,
+        // then rebuild — the edited value must survive the round trip.
+        var first = AXmlWriter.Write(BuildDocument());
+        var doc = AXmlParser.Parse(first);
+
+        // 找到 String 型属性（package 的 RawValue 是字符串，但这里编辑 ValueData 指向的值：
+        // 直接改 RawValue 分支走的是文本；对 String 型无 RawValue 的属性，模拟 Intern 更新。
+        // Locate a String-typed attribute; edit its pool-backed value via Intern + ValueData.
+        var target = doc.Root.Attributes.First(a => a.ValueType == AXmlValueType.String && a.RawValue is not null);
+        target.RawValue = "com.example.renamed";
+
+        var rebuilt = AXmlWriter.Write(doc);
+        var doc2 = AXmlParser.Parse(rebuilt);
+
+        var renamed = doc2.Root.Attributes.First(a => a.Name == "package");
+        Assert.Equal("com.example.renamed", renamed.RawValue);
+
+        // 无 RawValue 的 String 型属性（ValueData 直接引用池）：Intern 后索引稳定。
+        // String-typed attribute without RawValue (ValueData references the pool directly):
+        // interning keeps the index stable across the rebuild.
+        var valueOnly = new AXmlAttribute
+        {
+            Name = "label",
+            ValueType = AXmlValueType.String,
+            ValueData = (uint)doc.StringPool.Intern("original-label")
+        };
+        doc.Root.Attributes.Add(valueOnly);
+
+        var rebuilt2 = AXmlWriter.Write(doc);
+        var doc3 = AXmlParser.Parse(rebuilt2);
+        var label = doc3.Root.Attributes.First(a => a.Name == "label");
+        Assert.Equal("original-label", label.FormatValue(doc3.StringPool));
+    }
+
     /// <summary>
     /// <para>构造用于往返测试的 AXML 模型：manifest 根 + application 子元素。</para>
     /// Builds the AXML model for round-trip tests: a manifest root plus an application child.
