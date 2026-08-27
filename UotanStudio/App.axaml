@@ -23,30 +23,6 @@
 
     <Application.DataTemplates>
         <local:ViewLocator/>
-        <DataTemplate DataType="viewmodels:FileViewModel">
-          <dockview:FileView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:DtbEditorViewModel">
-          <dockview:DtbEditorView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:DexEditorViewModel">
-          <dockview:DexEditorView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:ImageViewModel">
-          <dockview:ImageView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:ProjectExplorerViewModel">
-          <dockview:ProjectExplorerView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:ProjectSettingViewModel">
-          <dockview:ProjectSettingView />
-      </DataTemplate>
-      <DataTemplate DataType="viewmodels:PropertiesViewModel">
-          <dockview:PropertiesView />
-      </DataTemplate>
-      <DataTemplate DataType="devices:DeviceViewModel">
-          <pages:DeviceView />
-      </DataTemplate>
     </Application.DataTemplates>
 
     <Application.Styles>
