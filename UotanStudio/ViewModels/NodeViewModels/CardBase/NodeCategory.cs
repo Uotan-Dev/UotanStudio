@@ -12,6 +12,11 @@ public enum NodeCategory
     /// </summary>
     Firmware,
     /// <summary>
+    /// <para>DEX 工具节点。</para>
+    /// DEX tool node.
+    /// </summary>
+    Dex,
+    /// <summary>
     /// <para>烧录操作节点。</para>
     /// Flash operation node.
     /// </summary>

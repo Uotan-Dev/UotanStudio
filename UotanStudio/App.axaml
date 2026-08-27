@@ -29,6 +29,9 @@
       <DataTemplate DataType="viewmodels:DtbEditorViewModel">
           <dockview:DtbEditorView />
       </DataTemplate>
+      <DataTemplate DataType="viewmodels:DexEditorViewModel">
+          <dockview:DexEditorView />
+      </DataTemplate>
       <DataTemplate DataType="viewmodels:ImageViewModel">
           <dockview:ImageView />
       </DataTemplate>

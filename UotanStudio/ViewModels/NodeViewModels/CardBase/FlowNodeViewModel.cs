@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Media;
 using NodifyM.Avalonia.ViewModelBase;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
@@ -21,7 +23,6 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     private bool _isSelected;
     private NodeExecutionStatus _executionStatus = NodeExecutionStatus.Idle;
     private string _typeKey = string.Empty;
-    private bool _isMissing;
 
     /// <summary>
     /// <para>节点实例唯一标识。</para>
@@ -76,7 +77,56 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     public NodeExecutionStatus ExecutionStatus
     {
         get => _executionStatus;
-        set => SetProperty(ref _executionStatus, value);
+        set
+        {
+            if (SetProperty(ref _executionStatus, value))
+            {
+                OnPropertyChanged(nameof(StatusBorderBrush));
+                OnPropertyChanged(nameof(StatusDisplay));
+            }
+        }
+    }
+
+    /// <summary>
+    /// <para>获取当前执行状态对应的边框画刷，用于画布节点高亮（Idle 透明、Running 主题强调色、
+    /// Succeeded 绿、Failed 红、Cancelled/Skipped/Pending 灰）。</para>
+    /// Gets the border brush for the current execution status, used to highlight nodes on the canvas
+    /// (Idle transparent, Running theme accent, Succeeded green, Failed red, Cancelled/Skipped/Pending gray).
+    /// </summary>
+    public IBrush StatusBorderBrush => ExecutionStatus switch
+    {
+        NodeExecutionStatus.Running => AccentBorderBrush,
+        NodeExecutionStatus.Succeeded => SuccessBorderBrush,
+        NodeExecutionStatus.Failed => FailureBorderBrush,
+        NodeExecutionStatus.Cancelled or NodeExecutionStatus.Skipped or NodeExecutionStatus.Pending => MutedBorderBrush,
+        _ => IdleBorderBrush
+    };
+
+    /// <summary>
+    /// <para>获取本地化的执行状态文本（如 “运行中” / “Running”）。</para>
+    /// Gets the localized execution status text (e.g. “运行中” / “Running”).
+    /// </summary>
+    public string StatusDisplay => LanguageService.Instance.GetString("Node_Status_" + ExecutionStatus);
+
+    private static readonly IBrush IdleBorderBrush = Brushes.Transparent;
+    private static readonly IBrush SuccessBorderBrush = new SolidColorBrush(Colors.Green);
+    private static readonly IBrush FailureBorderBrush = new SolidColorBrush(Colors.Red);
+    private static readonly IBrush MutedBorderBrush = new SolidColorBrush(Colors.Gray);
+
+    /// <summary>
+    /// <para>从当前主题解析强调色画刷（近似 DynamicResource 语义），主题切换后重新求值。</para>
+    /// Resolves the accent-color brush from the current theme (approximating DynamicResource semantics); re-evaluated after a theme switch.
+    /// </summary>
+    private static IBrush AccentBorderBrush
+    {
+        get
+        {
+            if (Application.Current is { } app
+                && app.TryGetResource("AccentColor", app.ActualThemeVariant, out var value)
+                && value is Color color)
+                return new SolidColorBrush(color);
+            return new SolidColorBrush(Color.Parse("#0078d4"));
+        }
     }
 
     /// <summary>
@@ -91,14 +141,51 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
     }
 
     /// <summary>
-    /// <para>获取或设置节点是否为缺失占位（加载时无法匹配已注册节点类型）。</para>
-    /// Gets or sets whether the node is a missing placeholder (its type was not found in the registry on load).
+    /// <para>获取或设置节点可配置值的类型（Text/Number/Boolean/Path），供常量等可配置节点在属性面板编辑。
+    /// 默认 <c>Text</c>；非可配置节点忽略。</para>
+    /// Gets or sets the configurable value type of the node (Text/Number/Boolean/Path), edited in the properties
+    /// panel for configurable nodes such as constants. Defaults to <c>Text</c>; ignored by non-configurable nodes.
     /// </summary>
-    public bool IsMissing
-    {
-        get => _isMissing;
-        set => SetProperty(ref _isMissing, value);
-    }
+    public virtual string NodeValueType { get; set; } = "Text";
+
+    /// <summary>
+    /// <para>获取或设置节点可配置的值，供常量等可配置节点在属性面板编辑；非可配置节点忽略。</para>
+    /// Gets or sets the configurable value of the node, edited in the properties panel for configurable nodes;
+    /// ignored by non-configurable nodes.
+    /// </summary>
+    public virtual string NodeValue { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <para>获取节点是否为常量输入节点（属性面板据此显示常量编辑区）。</para>
+    /// Gets whether the node is a constant-input node (the properties panel shows the constant editor for it).
+    /// </summary>
+    public virtual bool IsConstantNode => false;
+
+    /// <summary>
+    /// <para>获取节点是否为工程镜像引用节点（属性面板据此显示镜像选择编辑区）。</para>
+    /// Gets whether the node is a project-image reference node (the properties panel shows the image picker for it).
+    /// </summary>
+    public virtual bool IsProjectImageNode => false;
+
+    /// <summary>
+    /// <para>获取或设置选中的工程镜像相对路径（ProjectImage 节点属性面板绑定）；非镜像节点忽略。</para>
+    /// Gets or sets the selected project-image relative path (bound by the ProjectImage node's properties
+    /// panel); ignored by non-image nodes.
+    /// </summary>
+    public virtual string SelectedImage { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <para>获取可选的工程镜像相对路径列表（ProjectImage 节点属性面板绑定）；非镜像节点返回空列表。</para>
+    /// Gets the selectable project-image relative paths (bound by the ProjectImage node's properties panel);
+    /// non-image nodes return an empty list.
+    /// </summary>
+    public virtual IReadOnlyList<string> AvailableImages => [];
+
+    /// <summary>
+    /// <para>可配置值类型的可选项（Text/Number/Boolean/Path），供属性面板下拉框使用。</para>
+    /// The selectable value types (Text/Number/Boolean/Path), used by the properties-panel combo box.
+    /// </summary>
+    public static IReadOnlyList<string> ValueTypeOptions { get; } = ["Text", "Number", "Boolean", "Path"];
 
     /// <summary>
     /// <para>获取节点的输入连接器集合。</para>

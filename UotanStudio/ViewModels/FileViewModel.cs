@@ -299,19 +299,31 @@ public partial class FileViewModel : Document
 
     /// <summary>
     /// <para>按打开方式、扩展名与内容综合判定是否为二进制（应走十六进制编辑器）。
-    /// <c>Text</c> 强制为文本；<c>Hex</c> 强制为二进制；<c>Auto</c> 依据扩展名白名单与内容探测。</para>
+    /// <c>Text</c> 强制为文本；<c>Hex</c> 强制为二进制；<c>Auto</c> 依据扩展名白名单与内容探测。
+    /// 即使请求为 <c>Text</c>，内容明显为二进制（含 NUL 字节，如 AXML / UTF-16 无 BOM）时仍按二进制
+    /// 处理，避免在代码编辑器中显示大量 NUL 字符图标。</para>
     /// Decides whether the file is binary (opens in the hex editor) from open mode, extension and content.
-    /// <c>Text</c> forces text; <c>Hex</c> forces binary; <c>Auto</c> uses the extension whitelist and content sniffing.
+    /// <c>Text</c> forces text; <c>Hex</c> forces binary; <c>Auto</c> uses the extension whitelist and content
+    /// sniffing. Even for <c>Text</c>, content that is clearly binary (NUL bytes present, e.g. AXML or
+    /// UTF-16 without BOM) is still treated as binary, so the code editor does not show NUL glyphs.
     /// </summary>
     private static bool ResolveBinary(EditorOpenMode mode, string path, byte[] data)
     {
         switch (mode)
         {
             case EditorOpenMode.Text:
-                return false;
+                // 内容兜底：带文本 BOM（UTF-8/16）的文件仍是文本，正常解码；
+                // 无 BOM 但含大量 NUL 字节（如 Android 二进制 AXML）按十六进制打开，
+                // 避免在代码编辑器中显示大量 NUL 字符图标。
+                // Content fallback: files with a text BOM (UTF-8/16) are still text and decode
+                // normally; NUL-heavy content without a BOM (e.g. Android binary AXML) opens as
+                // hex so the code editor does not render NUL glyphs.
+                return !HasTextBom(data) && IsBinaryFile(data);
             case EditorOpenMode.Hex:
                 return true;
             case EditorOpenMode.Dtb:
+                return false;
+            case EditorOpenMode.Dex:
                 return false;
             default:
                 var ext = Path.GetExtension(path);
@@ -322,6 +334,26 @@ public partial class FileViewModel : Document
 
                 return IsBinaryFile(data);
         }
+    }
+
+    /// <summary>
+    /// <para>判断字节流是否带文本 BOM（UTF-8 / UTF-16 LE / UTF-16 BE）。</para>
+    /// Determines whether the byte stream starts with a text BOM (UTF-8 / UTF-16 LE / UTF-16 BE).
+    /// </summary>
+    private static bool HasTextBom(byte[] data)
+    {
+        if (data.Length < 2)
+        {
+            return false;
+        }
+
+        if (data[0] == 0xEF && data[1] == 0xBB)
+        {
+            return data.Length >= 3 && data[2] == 0xBF;
+        }
+
+        return data[0] == 0xFF && data[1] == 0xFE   // UTF-16 LE（含 UTF-32 LE 前缀）
+               || data[0] == 0xFE && data[1] == 0xFF; // UTF-16 BE
     }
 
     /// <summary>

@@ -1,0 +1,133 @@
+using System;
+using System.Globalization;
+using System.Threading.Tasks;
+using Avalonia;
+using UotanStudio.Core.Flash;
+using UotanStudio.Services;
+using UotanStudio.Services.Execution;
+using UotanStudio.ViewModels.Devices;
+
+namespace UotanStudio.ViewModels.NodeViewModels;
+
+/// <summary>
+/// <para>设备属性查询节点视图模型：通过 <see cref="FlashService.GetDevicePropertyAsync"/>
+/// 查询设备属性（fastboot getvar / ADB getprop）并把值写入 Value 端口。</para>
+/// Device property query node view model: queries a device property
+/// (fastboot getvar / ADB getprop) via <see cref="FlashService.GetDevicePropertyAsync"/> and
+/// writes the value to the Value port.
+/// </summary>
+public class DevicePropertyNodeViewModel : FlowNodeViewModel
+{
+    /// <summary>
+    /// <para>创建具有指定标题的设备属性查询节点。</para>
+    /// Creates a device property query node with the specified title.
+    /// </summary>
+    /// <param name="title">
+    /// <para>节点的显示标题。</para>
+    /// The display title of the node.
+    /// </param>
+    public DevicePropertyNodeViewModel(string title) : base(title, NodeCategory.Flash)
+    {
+    }
+
+    /// <summary>
+    /// <para>创建默认的设备属性查询节点。</para>
+    /// Creates a default device property query node.
+    /// </summary>
+    public static DevicePropertyNodeViewModel CreateDevicePropertyNode()
+    {
+        var node = new DevicePropertyNodeViewModel("Get Property")
+        {
+            Location = new Point(100, 100),
+            TypeKey = "Flash.GetProp"
+        };
+        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Name", PortType = NodePortType.Text });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Value", PortType = NodePortType.Text });
+        return node;
+    }
+
+    /// <summary>
+    /// <para>按节点类型键（TypeKey）分发属性查询逻辑：Flash.GetProp 查询设备属性并输出值。</para>
+    /// Dispatches the property query logic by the node type key (TypeKey): Flash.GetProp queries the
+    /// device property and outputs the value.
+    /// </summary>
+    /// <param name="context">
+    /// <para>执行上下文。</para>
+    /// The execution context.
+    /// </param>
+    /// <returns>
+    /// <para>表示异步执行的任务。</para>
+    /// A task representing the asynchronous execution.
+    /// </returns>
+    public override async Task ExecuteAsync(INodeExecutionContext context)
+    {
+        try
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            switch (TypeKey)
+            {
+                case "Flash.GetProp":
+                    await ExecuteGetPropAsync(context).ConfigureAwait(false);
+                    break;
+                default:
+                    await base.ExecuteAsync(context).ConfigureAwait(false);
+                    break;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            context.Log.Write(LogLevel.Error, Title, $"Get property failed: {ex.Message}  属性查询失败。");
+        }
+    }
+
+    private async Task ExecuteGetPropAsync(INodeExecutionContext context)
+    {
+        var device = NodeDataUtil.ToDevice(ReadInput("Device"));
+        if (device is null)
+        {
+            context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
+            WriteOutput("Value", string.Empty);
+            return;
+        }
+
+        var name = Text(ReadInput("Name"));
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            context.Log.Write(LogLevel.Warn, Title, "No property name specified. 未指定属性名。");
+            WriteOutput("Value", string.Empty);
+            return;
+        }
+
+        var result = await FlashService.GetDevicePropertyAsync(
+            new DeviceInfo(device), name, context.CancellationToken).ConfigureAwait(false);
+        var value = result.Success ? ExtractValue(result.Summary, name) : string.Empty;
+        WriteOutput("Value", value);
+        context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
+            result.Success
+                ? $"{result.Summary}  属性查询完成。"
+                : $"Get property failed: {result.Summary}  属性查询失败。");
+    }
+
+    /// <summary>
+    /// <para>从 <c>name=value</c> 摘要中提取值部分（等号之后；无等号时原样返回）。</para>
+    /// Extracts the value portion from a <c>name=value</c> summary (after the first '='; returns the
+    /// whole text when no '=' is present).
+    /// </summary>
+    private static string ExtractValue(string summary, string name)
+    {
+        if (string.IsNullOrEmpty(summary))
+        {
+            return string.Empty;
+        }
+
+        var eq = summary.IndexOf('=');
+        return eq >= 0 ? summary[(eq + 1)..] : name;
+    }
+
+    private static string? Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture);
+}

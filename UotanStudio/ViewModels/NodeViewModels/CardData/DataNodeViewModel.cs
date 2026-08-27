@@ -95,9 +95,10 @@ public class DataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>执行与节点标题对应的数据处理逻辑：Read File 读取文件、Format Convert 做格式转换、Checksum 计算哈希、Compare 比较两段数据。</para>
-    /// Executes the data-processing logic matching the node title: Read File reads a file, Format Convert performs conversion,
-    /// Checksum computes a hash, and Compare compares two data chunks.
+    /// <para>按节点类型键（TypeKey）分发对应的数据处理逻辑：Data.ReadFile 读取文件、Data.Convert 做格式转换、
+    /// Data.Checksum 计算哈希、Data.Compare 比较两段数据。</para>
+    /// Dispatches data-processing logic by the node type key (TypeKey): Data.ReadFile reads a file, Data.Convert performs
+    /// conversion, Data.Checksum computes a hash, and Data.Compare compares two data chunks.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -110,18 +111,18 @@ public class DataNodeViewModel : FlowNodeViewModel
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
         var token = context.CancellationToken;
-        switch (Title)
+        switch (TypeKey)
         {
-            case "Read File":
+            case "Data.ReadFile":
                 ExecuteReadFile(context);
                 break;
-            case "Format Convert":
+            case "Data.Convert":
                 ExecuteConvert(context);
                 break;
-            case "Checksum":
+            case "Data.Checksum":
                 ExecuteChecksum(context);
                 break;
-            case "Compare":
+            case "Data.Compare":
                 ExecuteCompare(context);
                 break;
             default:

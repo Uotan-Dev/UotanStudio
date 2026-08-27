@@ -18,7 +18,11 @@
     <x:String x:Key="Node_ConnectionsLabel"> connections</x:String>
     <x:String x:Key="Node_NoSelection">Select a node to view properties</x:String>
     <x:String x:Key="Node_StatusReady">Ready</x:String>
-    <x:String x:Key="Node_MissingNode">Missing node</x:String>
+    <x:String x:Key="Node_Const_ValueType">Value Type</x:String>
+    <x:String x:Key="Node_Const_Value">Value</x:String>
+    <x:String x:Key="Node_Const_Hint">Broadcasts a fixed value to connected downstream ports.</x:String>
+    <x:String x:Key="Node_ProjImg_Select">Image</x:String>
+    <x:String x:Key="Node_ProjImg_Hint">Outputs the absolute path of the selected project image.</x:String>
 
     <!-- Node Names -->
     <x:String x:Key="Node_Firmware_Unpack">Unpack Firmware</x:String>
@@ -29,7 +33,14 @@
     <x:String x:Key="Node_Firmware_MergeSignature">Merge Signature</x:String>
     <x:String x:Key="Node_Firmware_MergeDualSlot">Merge Dual Slot</x:String>
     <x:String x:Key="Node_Firmware_FlashBoot">Flash Bootloader</x:String>
-    <x:String x:Key="Node_Flash_Connect">Connect Device</x:String>
+    <x:String x:Key="Node_Firmware_CpioUnpack">CPIO Unpack</x:String>
+    <x:String x:Key="Node_Firmware_CpioPack">CPIO Pack</x:String>
+    <x:String x:Key="Node_Firmware_SuperUnpack">Super Unpack</x:String>
+    <x:String x:Key="Node_Firmware_SuperPack">Super Pack</x:String>
+    <x:String x:Key="Node_Firmware_Sparse">Sparse Convert</x:String>
+    <x:String x:Key="Node_Firmware_Dat">Write DAT</x:String>
+    <x:String x:Key="Node_Flash_SelectDevice">Select Device</x:String>
+    <x:String x:Key="Node_Flash_GetProp">Get Property</x:String>
     <x:String x:Key="Node_Flash_Flash">Flash Partition</x:String>
     <x:String x:Key="Node_Flash_Erase">Erase Partition</x:String>
     <x:String x:Key="Node_Flash_Reboot">Reboot Device</x:String>
@@ -38,6 +49,10 @@
     <x:String x:Key="Node_Flash_OtaSideload">OTA Sideload</x:String>
     <x:String x:Key="Node_Flash_OverwriteFirmware">Overwrite Firmware</x:String>
     <x:String x:Key="Node_Data_ReadFile">Read File</x:String>
+    <x:String x:Key="Node_Data_Constant">Constant</x:String>
+    <x:String x:Key="Node_Data_ProjectImage">Project Image</x:String>
+    <x:String x:Key="Node_Data_Decrypt">Decrypt</x:String>
+    <x:String x:Key="Node_Data_Decompress">Decompress</x:String>
     <x:String x:Key="Node_Data_Convert">Format Convert</x:String>
     <x:String x:Key="Node_Data_Checksum">Checksum</x:String>
     <x:String x:Key="Node_Data_Compare">Compare</x:String>
@@ -52,13 +67,11 @@
     <x:String x:Key="Node_Flow_Loop">Loop</x:String>
     <x:String x:Key="Node_Flow_Delay">Delay</x:String>
     <x:String x:Key="Node_Flow_Parallel">Parallel</x:String>
-    <x:String x:Key="Node_Flow_Sequence">Sequence</x:String>
     <x:String x:Key="Node_Flow_Terminate">Terminate</x:String>
     <x:String x:Key="Node_Output_Log">Log Output</x:String>
     <x:String x:Key="Node_Output_Progress">Progress Report</x:String>
     <x:String x:Key="Node_Output_Save">Save Result</x:String>
     <x:String x:Key="Node_Output_Notify">Notify</x:String>
-    <x:String x:Key="Node_Output_Email">Send Email</x:String>
     <x:String x:Key="Node_Output_Console">Console Output</x:String>
     <x:String x:Key="Node_Output_FileExport">File Export</x:String>
 
@@ -98,5 +111,28 @@
     <x:String x:Key="Node_CatData">Data</x:String>
     <x:String x:Key="Node_CatFlow">Flow</x:String>
     <x:String x:Key="Node_CatOutput">Output</x:String>
+    <x:String x:Key="Node_CatDex">DEX</x:String>
+
+    <!-- Node Property Panel -->
+    <x:String x:Key="Node_Prop_Category">Category</x:String>
+    <x:String x:Key="Node_Prop_Status">Status</x:String>
+    <x:String x:Key="Node_Prop_Type">Type</x:String>
+    <x:String x:Key="Node_Prop_Location">Location</x:String>
+    <x:String x:Key="Node_Prop_Inputs">Inputs</x:String>
+    <x:String x:Key="Node_Prop_Outputs">Outputs</x:String>
+
+    <!-- Node Status -->
+    <x:String x:Key="Node_Status_Idle">Idle</x:String>
+    <x:String x:Key="Node_Status_Pending">Pending</x:String>
+    <x:String x:Key="Node_Status_Running">Running</x:String>
+    <x:String x:Key="Node_Status_Succeeded">Succeeded</x:String>
+    <x:String x:Key="Node_Status_Failed">Failed</x:String>
+    <x:String x:Key="Node_Status_Skipped">Skipped</x:String>
+    <x:String x:Key="Node_Status_Cancelled">Cancelled</x:String>
+
+    <!-- DEX Tools -->
+    <x:String x:Key="Node_Dex_Parse">Parse DEX</x:String>
+    <x:String x:Key="Node_Dex_Disassemble">Disassemble DEX</x:String>
+    <x:String x:Key="Node_Dex_Rebuild">Rebuild DEX</x:String>
 
 </ResourceDictionary>

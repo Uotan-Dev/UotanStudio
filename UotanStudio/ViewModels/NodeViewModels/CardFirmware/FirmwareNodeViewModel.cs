@@ -95,10 +95,10 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>执行与节点标题对应的固件逻辑：Unpack Firmware 解包（boot/oppo）、Pack Firmware 打包（boot/cpio）、
-    /// Verify Signature 校验 AVB 签名或计算哈希、Extract Partition 从 payload 提取分区。</para>
-    /// Executes the firmware logic matching the node title: Unpack Firmware unpacks (boot/oppo), Pack Firmware packs
-    /// (boot/cpio), Verify Signature verifies the AVB signature or computes a hash, and Extract Partition extracts a
+    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Unpack 解包（boot/oppo）、Firmware.Pack 打包（boot/cpio）、
+    /// Firmware.Verify 校验 AVB 签名或计算哈希、Firmware.Extract 从 payload 提取分区。</para>
+    /// Dispatches firmware logic by the node type key (TypeKey): Firmware.Unpack unpacks (boot/oppo), Firmware.Pack packs
+    /// (boot/cpio), Firmware.Verify verifies the AVB signature or computes a hash, and Firmware.Extract extracts a
     /// partition from a payload.
     /// </summary>
     /// <param name="context">
@@ -113,18 +113,18 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
     {
         try
         {
-            switch (Title)
+            switch (TypeKey)
             {
-                case "Unpack Firmware":
+                case "Firmware.Unpack":
                     await ExecuteUnpackAsync(context).ConfigureAwait(false);
                     break;
-                case "Pack Firmware":
+                case "Firmware.Pack":
                     await ExecutePackAsync(context).ConfigureAwait(false);
                     break;
-                case "Verify Signature":
+                case "Firmware.Verify":
                     await ExecuteVerifyAsync(context).ConfigureAwait(false);
                     break;
-                case "Extract Partition":
+                case "Firmware.Extract":
                     await ExecuteExtractAsync(context).ConfigureAwait(false);
                     break;
                 default:

@@ -1146,7 +1146,7 @@ public static class DtsFormat
             for (var i = 0; i < node.Children.Count; i++)
             {
                 if (i == 0 && node.Properties.Count > 0)
-            AppendLine(string.Empty);
+                    AppendLine(string.Empty);
                 WriteNode(node.Children[i]);
             }
 

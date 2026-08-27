@@ -32,7 +32,13 @@ public enum EditorOpenMode
     /// <para>以设备树双栏编辑器打开（DTB/DTBO）。</para>
     /// Open in the device-tree dual-pane editor (DTB/DTBO).
     /// </summary>
-    Dtb
+    Dtb,
+
+    /// <summary>
+    /// <para>以 DEX 双栏编辑器打开（结构树 + 反汇编）。</para>
+    /// Open in the DEX dual-pane editor (structure tree + disassembly).
+    /// </summary>
+    Dex
 }
 
 /// <summary>
@@ -66,6 +72,13 @@ public static class FileOpenMode
         if (IsDtbExtension(ext))
         {
             return EditorOpenMode.Dtb;
+        }
+
+        // DEX 二进制：走 DEX 双栏编辑器（结构树 + 反汇编）。
+        // DEX blobs open in the DEX dual-pane editor (structure tree + disassembly).
+        if (IsDexExtension(ext))
+        {
+            return EditorOpenMode.Dex;
         }
 
         // 设备树源文件按文本（语法高亮）打开。
@@ -127,6 +140,13 @@ public static class FileOpenMode
     public static bool IsDtbExtension(string? ext) =>
         ext is not null && ext.Equals(".dtb", StringComparison.OrdinalIgnoreCase)
         || ext is not null && ext.Equals(".dtbo", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <para>是否为 DEX 扩展名。</para>
+    /// Whether the extension is a DEX one.
+    /// </summary>
+    public static bool IsDexExtension(string? ext) =>
+        ext is not null && ext.Equals(".dex", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// <para>是否为 DTS 设备树源文件扩展名。</para>

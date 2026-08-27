@@ -42,23 +42,6 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的邮件发送节点。</para>
-    /// Creates a default send-email node.
-    /// </summary>
-    public static ExtendedOutputNodeViewModel CreateSendEmailNode()
-    {
-        var node = new ExtendedOutputNodeViewModel("Send Email")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Output.Email"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "To", PortType = NodePortType.Text });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Subject", PortType = NodePortType.Text });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Body", PortType = NodePortType.Text });
-        return node;
-    }
-
-    /// <summary>
     /// <para>创建默认的控制台输出节点。</para>
     /// Creates a default console-output node that prints text to stdout.
     /// </summary>
@@ -90,9 +73,10 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>执行与节点标题对应的扩展输出逻辑：Notify 通知、Send Email 发邮件（在当前环境记录日志）、Console Output 控制台输出、File Export 文件导出。</para>
-    /// Executes the extended output logic matching the node title: Notify emits a notification-style log entry, Send Email
-    /// records an email summary, Console Output prints to the console and log, and File Export writes a file.
+    /// <para>按节点类型键（TypeKey）分发对应的扩展输出逻辑：Output.Notify 通知、
+    /// Output.Console 控制台输出、Output.FileExport 文件导出。</para>
+    /// Dispatches extended output logic by the node type key (TypeKey): Output.Notify emits a notification-style log entry,
+    /// Output.Console prints to the console and log, and Output.FileExport writes a file.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -104,18 +88,15 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
-        switch (Title)
+        switch (TypeKey)
         {
-            case "Notify":
+            case "Output.Notify":
                 context.Log.Write(LogLevel.Warn, Title, $"NOTIFY: {NodeDataUtil.ToDisplay(ReadInput("Message"))}  通知。");
                 break;
-            case "Send Email":
-                ExecuteEmail(context);
-                break;
-            case "Console Output":
+            case "Output.Console":
                 ExecuteConsole(context);
                 break;
-            case "File Export":
+            case "Output.FileExport":
                 ExecuteFileExport(context);
                 break;
             default:
@@ -124,16 +105,6 @@ public class ExtendedOutputNodeViewModel : FlowNodeViewModel
 
         context.CancellationToken.ThrowIfCancellationRequested();
         return Task.CompletedTask;
-    }
-
-    private void ExecuteEmail(INodeExecutionContext context)
-    {
-        var to = NodeDataUtil.ToDisplay(ReadInput("To"));
-        var subject = NodeDataUtil.ToDisplay(ReadInput("Subject"));
-        var body = NodeDataUtil.ToDisplay(ReadInput("Body"));
-        // 应用未接入 SMTP 客户端；此处将待发邮件详情写入日志，供后续接入真实邮件服务。
-        // No SMTP client is wired into the app; the pending email is written to the log for later integration.
-        context.Log.Write(LogLevel.Info, Title, $"EMAIL to:{to} subject:'{subject}' body:{body.Length} chars  待发邮件已记录。");
     }
 
     private void ExecuteConsole(INodeExecutionContext context)

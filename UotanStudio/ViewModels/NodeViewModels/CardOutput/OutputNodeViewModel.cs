@@ -75,9 +75,9 @@ public class OutputNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>执行与节点标题对应的输出逻辑：Log Output 写日志、Progress Report 上报进度、Save Result 保存文件。</para>
-    /// Executes the output logic matching the node title: Log Output writes a log entry, Progress Report reports progress,
-    /// and Save Result writes a file.
+    /// <para>按节点类型键（TypeKey）分发对应的输出逻辑：Output.Log 写日志、Output.Progress 上报进度、Output.Save 保存文件。</para>
+    /// Dispatches the output logic by the node type key (TypeKey): Output.Log writes a log entry, Output.Progress reports
+    /// progress, and Output.Save writes a file.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -89,15 +89,15 @@ public class OutputNodeViewModel : FlowNodeViewModel
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
-        switch (Title)
+        switch (TypeKey)
         {
-            case "Log Output":
+            case "Output.Log":
                 ExecuteLog(context);
                 break;
-            case "Progress Report":
+            case "Output.Progress":
                 ExecuteProgress(context);
                 break;
-            case "Save Result":
+            case "Output.Save":
                 ExecuteSave(context);
                 break;
             default:

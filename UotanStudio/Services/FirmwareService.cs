@@ -12,6 +12,7 @@ using UotanStudio.Firmware.BootImage;
 using UotanStudio.Firmware.Cpio;
 using UotanStudio.Firmware.Cpio.Extraction;
 using UotanStudio.Firmware.Cpio.Model;
+using UotanStudio.Firmware.Dat;
 using UotanStudio.Firmware.Lp;
 using UotanStudio.Firmware.Oppo;
 using UotanStudio.Firmware.Oppo.Models;
@@ -538,6 +539,48 @@ public sealed class FirmwareService
     private static int? GetInt(JsonObject json, string key) => json[key] is JsonValue value && value.TryGetValue<int>(out var result) ? result : null;
 
     /// <summary>
+    /// Detects whether a file starts with the Android sparse image magic.
+    /// <para>检测文件是否以 Android sparse 镜像魔数开头。</para>
+    /// </summary>
+    private static bool IsSparseImage(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            Span<byte> header = stackalloc byte[4];
+            var read = stream.Read(header);
+            return read >= 4 && header[0] == 0x3a && header[1] == 0xff && header[2] == 0x26 && header[3] == 0xed;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Copies exactly <paramref name="length"/> bytes from <paramref name="source"/> to <paramref name="target"/>,
+    /// honoring the cancellation token, throwing <see cref="EndOfStreamException"/> on premature EOF.
+    /// <para>从 <paramref name="source"/> 向 <paramref name="target"/> 精确复制 <paramref name="length"/> 字节，
+    /// 遵循取消令牌，过早到达流尾时抛出 <see cref="EndOfStreamException"/>。</para>
+    /// </summary>
+    private static void CopyRange(Stream source, Stream target, long length, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[1024 * 1024];
+        var remaining = length;
+        while (remaining > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+            if (read == 0)
+            {
+                throw new EndOfStreamException($"Unexpected end of stream; expected {length} bytes.");
+            }
+            target.Write(buffer, 0, read);
+            remaining -= read;
+        }
+    }
+
+    /// <summary>
     /// Reads metadata of an Oppo firmware package (auto-detecting OFP/OPS/OZIP), outputting format and entry count.
     /// <para>读取 Oppo 固件包（自动检测 OFP/OPS/OZIP）的元数据，输出格式与条目数。</para>
     /// </summary>
@@ -610,6 +653,208 @@ public sealed class FirmwareService
         {
             return new FirmwareOpResult { Success = false, Summary = ex.Message };
         }
+    }
+
+    /// <summary>
+    /// Unpacks the logical partition images from an Android super (LP) image into an output directory by
+    /// parsing the LP metadata (via <see cref="MetadataReader"/>) and copying each partition's linear extent
+    /// range out of the image file. Sparse super images are first expanded to a temporary raw file.
+    /// <para>解析 Android super（LP）镜像的 LP 元数据（经 <see cref="MetadataReader"/>），并按各分区线性
+    /// extent 范围从镜像文件复制出逻辑分区镜像到输出目录。稀疏格式的 super 镜像先展开为临时 raw 文件。</para>
+    /// </summary>
+    /// <param name="superPath">The super image file path. <para>super 镜像文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory for the extracted partition images. <para>分区镜像输出目录。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result, Entries is the extracted partition name list. <para>操作结果，Entries 为已提取的分区名称列表。</para></returns>
+    public async Task<FirmwareOpResult> UnpackSuperAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run<FirmwareOpResult>(() =>
+        {
+            string? tempRaw = null;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(superPath) || !File.Exists(superPath))
+                {
+                    return FirmwareOpResult.Fail($"Super image not found: {superPath ?? "<empty>"}  找不到 super 镜像。");
+                }
+
+                // Android super 镜像通常是 sparse 格式，需先展开为 raw 临时文件以便随机读取分区。
+                // Android super images are usually sparse; expand to a temporary raw file for random-access partition reads.
+                var sourcePath = superPath;
+                if (IsSparseImage(superPath))
+                {
+                    tempRaw = Path.Combine(Path.GetTempPath(), $"uotan_super_{Guid.NewGuid():N}.raw");
+                    using (var sparse = SparseReader.FromImageFile(superPath))
+                    using (var raw = new FileStream(tempRaw, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        sparse.WriteRawToStream(raw);
+                    }
+                    sourcePath = tempRaw;
+                }
+
+                Directory.CreateDirectory(outputDirectory);
+                using var stream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                var metadata = MetadataReader.ReadFromImageStream(stream);
+                var firstLogicalSector = metadata.BlockDevices.Count > 0 ? metadata.BlockDevices[0].FirstLogicalSector : 0UL;
+
+                var extracted = new List<string>();
+                foreach (var partition in metadata.Partitions)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var name = partition.NameString;
+                    if (string.IsNullOrEmpty(name))
+                    {
+                        continue;
+                    }
+
+                    // 取第一个线性 extent；不支持零填充或多 extent 布局时给出清晰错误而非崩溃。
+                    // Use the first linear extent; return a clear error (rather than crash) for unsupported layouts.
+                    LpMetadataExtent linear = default;
+                    var foundLinear = false;
+                    for (uint i = 0; i < partition.NumExtents; i++)
+                    {
+                        var extent = metadata.Extents[(int)(partition.FirstExtentIndex + i)];
+                        if (extent.TargetType == MetadataFormat.LP_TARGET_TYPE_LINEAR)
+                        {
+                            linear = extent;
+                            foundLinear = true;
+                            break;
+                        }
+                    }
+
+                    if (!foundLinear)
+                    {
+                        return FirmwareOpResult.Fail($"Partition '{name}' has no linear extent; unsupported super layout.  分区 '{name}' 无线性 extent，不支持该 super 布局。");
+                    }
+
+                    var offset = (long)((firstLogicalSector + linear.TargetData) * MetadataFormat.LP_SECTOR_SIZE);
+                    var length = (long)linear.NumSectors * MetadataFormat.LP_SECTOR_SIZE;
+                    if (offset < 0 || length <= 0 || offset + length > stream.Length)
+                    {
+                        return FirmwareOpResult.Fail($"Partition '{name}' extent out of range (offset={offset}, length={length}).  分区 '{name}' extent 超出镜像范围。");
+                    }
+
+                    var outputPath = Path.Combine(outputDirectory, name);
+                    using (var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        stream.Position = offset;
+                        CopyRange(stream, output, length, cancellationToken);
+                    }
+
+                    extracted.Add(name);
+                }
+
+                return new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"Extracted {extracted.Count} partition(s) from super to {outputDirectory}  已从 super 解出 {extracted.Count} 个分区。",
+                    Entries = extracted
+                };
+            }
+            catch (OperationCanceledException)
+            {
+                return FirmwareOpResult.Fail("Super unpack cancelled.  解包 super 已取消。");
+            }
+            catch (Exception ex)
+            {
+                return FirmwareOpResult.Fail(ex.Message);
+            }
+            finally
+            {
+                if (tempRaw != null && File.Exists(tempRaw))
+                {
+                    File.Delete(tempRaw);
+                }
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Converts an image between raw and Android sparse formats (a thin wrapper over
+    /// <see cref="SparseImageConverter"/>): <c>toSparse = true</c> calls <see cref="SparseImageConverter.ConvertRawToSparse(string, string, uint)"/>,
+    /// <c>false</c> calls <see cref="SparseImageConverter.ConvertSparseToRaw(IEnumerable{string}, string)"/>.
+    /// <para>在 raw 与 Android sparse 格式之间转换镜像（<see cref="SparseImageConverter"/> 的薄封装）：
+    /// <c>toSparse = true</c> 调用 <see cref="SparseImageConverter.ConvertRawToSparse(string, string, uint)"/>，
+    /// <c>false</c> 调用 <see cref="SparseImageConverter.ConvertSparseToRaw(IEnumerable{string}, string)"/>。</para>
+    /// </summary>
+    /// <param name="inputPath">The input image file path. <para>输入镜像文件路径。</para></param>
+    /// <param name="outputPath">The output image file path. <para>输出镜像文件路径。</para></param>
+    /// <param name="toSparse">Whether to convert raw to sparse (<c>true</c>) or sparse to raw (<c>false</c>). <para>是否转换为稀疏格式（<c>true</c> 为 raw→sparse，<c>false</c> 为 sparse→raw）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> ConvertSparseAsync(string inputPath, string outputPath, bool toSparse, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run<FirmwareOpResult>(() =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(inputPath) || !File.Exists(inputPath))
+                {
+                    return FirmwareOpResult.Fail($"Input image not found: {inputPath ?? "<empty>"}  找不到输入镜像。");
+                }
+
+                if (toSparse)
+                {
+                    SparseImageConverter.ConvertRawToSparse(inputPath, outputPath);
+                }
+                else
+                {
+                    SparseImageConverter.ConvertSparseToRaw([inputPath], outputPath);
+                }
+
+                var direction = toSparse ? "raw -> sparse" : "sparse -> raw";
+                return new FirmwareOpResult { Success = true, Summary = $"Converted image ({direction}): {outputPath}  已转换镜像（{direction}）。" };
+            }
+            catch (Exception ex)
+            {
+                return FirmwareOpResult.Fail(ex.Message);
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes an Android OTA v4 DAT image pair (a thin wrapper over <see cref="DatWriter"/>): the input raw
+    /// image is converted into a <c>.new.dat</c> data file plus a derived <c>.transfer.list</c>. Note that
+    /// <see cref="DatWriter"/> consumes a raw image (not a transfer list), so the <paramref name="transferListPath"/>
+    /// parameter is the source raw image path; <paramref name="outputPath"/> is the <c>.new.dat</c> output and the
+    /// <c>.transfer.list</c> path is derived from it.
+    /// <para>写出 Android OTA v4 DAT 镜像对（<see cref="DatWriter"/> 的薄封装）：将输入 raw 镜像转为
+    /// <c>.new.dat</c> 数据文件与推导出的 <c>.transfer.list</c>。注意 <see cref="DatWriter"/> 的输入是
+    /// 原始镜像（而非 transfer list），因此 <paramref name="transferListPath"/> 实为源镜像路径，
+    /// <paramref name="outputPath"/> 为 <c>.new.dat</c> 输出，<c>.transfer.list</c> 路径由它推导。</para>
+    /// </summary>
+    /// <param name="transferListPath">The source raw image file path (the DAT pair is derived from it). <para>源原始镜像文件路径（DAT 镜像对由它生成）。</para></param>
+    /// <param name="outputPath">The output <c>.new.dat</c> file path. <para>输出 <c>.new.dat</c> 文件路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> WriteDatAsync(string transferListPath, string outputPath, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run<FirmwareOpResult>(() =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(transferListPath) || !File.Exists(transferListPath))
+                {
+                    return FirmwareOpResult.Fail($"Input image not found: {transferListPath ?? "<empty>"}  找不到输入镜像。");
+                }
+
+                var transferListOut = Path.GetFileName(outputPath).EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
+                    ? outputPath[..^".new.dat".Length] + ".transfer.list"
+                    : outputPath + ".transfer.list";
+
+                DatWriter.Write(transferListPath, outputPath, transferListOut);
+
+                return new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"Wrote DAT image pair: {outputPath} / {transferListOut}  已写出 DAT 镜像对。"
+                };
+            }
+            catch (Exception ex)
+            {
+                return FirmwareOpResult.Fail(ex.Message);
+            }
+        }, cancellationToken);
     }
 
     /// <summary>

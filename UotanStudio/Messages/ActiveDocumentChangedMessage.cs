@@ -27,6 +27,13 @@ public class ActiveDocumentChangedMessage
     public DtbEditorViewModel? DtbDocument { get; }
 
     /// <summary>
+    /// <para>获取新激活的 <see cref="DexEditorViewModel"/> 文档；非 DEX 文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="DexEditorViewModel"/> document; <c>null</c> for non-DEX
+    /// documents.
+    /// </summary>
+    public DexEditorViewModel? DexDocument { get; }
+
+    /// <summary>
     /// <para>获取新激活文档的通用 <see cref="Document"/> 句柄；便于订阅方做类型分支。</para>
     /// Gets the generic <see cref="Document"/> handle of the newly activated document, for
     /// type-dispatching by subscribers.
@@ -59,5 +66,19 @@ public class ActiveDocumentChangedMessage
     {
         DtbDocument = dtbDocument;
         ActiveDocument = dtbDocument;
+    }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（DexEditorViewModel 路径）。</para>
+    /// Creates an active document changed message (DexEditorViewModel path).
+    /// </summary>
+    /// <param name="dexDocument">
+    /// <para>新激活的 DEX 编辑器视图模型；可为 <c>null</c>。</para>
+    /// The newly activated DEX editor view model; may be <c>null</c>.
+    /// </param>
+    public ActiveDocumentChangedMessage(DexEditorViewModel? dexDocument)
+    {
+        DexDocument = dexDocument;
+        ActiveDocument = dexDocument;
     }
 }

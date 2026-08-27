@@ -56,6 +56,11 @@ public partial class ProjectExplorerView : UserControl
         OpenWith(EditorOpenMode.Dtb);
     }
 
+    private void OnOpenAsDex(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.Dex);
+    }
+
     private void OpenWith(EditorOpenMode mode)
     {
         if (ProjectTree.SelectedItem is ExplorerNode node && !node.IsDirectory && !node.IsPlaceholder)

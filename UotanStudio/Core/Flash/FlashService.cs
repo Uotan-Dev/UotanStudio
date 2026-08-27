@@ -78,6 +78,326 @@ public static class FlashService
     }
 
     /// <summary>
+    /// <para>擦除单个分区（仅 fastboot 协议）：经 <see cref="FastbootFactory"/> 打开会话并执行
+    /// <c>erase &lt;partition&gt;</c>。非 fastboot 设备返回失败结果。</para>
+    /// Erases a single partition (fastboot protocol only): opens a session via
+    /// <see cref="FastbootFactory"/> and executes <c>erase &lt;partition&gt;</c>. Non-fastboot
+    /// devices yield a failure result.
+    /// </summary>
+    /// <param name="device"><para>目标设备。</para>The target device.</param>
+    /// <param name="partition"><para>要擦除的分区名。</para>The partition name to erase.</param>
+    /// <param name="progress"><para>可选的擦除进度报告器。</para>Optional erase progress reporter.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <returns>擦除结果。</returns>
+    public static async Task<FlashResult> ErasePartitionAsync(
+        DeviceInfo device, string partition, IProgress<FlashProgress>? progress, CancellationToken ct)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(device);
+            if (string.IsNullOrWhiteSpace(partition))
+            {
+                throw new ArgumentException("Partition must not be empty.", nameof(partition));
+            }
+
+            if (device.Protocol != DeviceProtocolKind.Fastboot)
+            {
+                return new FlashResult { Success = false, Summary = "Erase only supported via fastboot. 擦除仅支持 fastboot 模式。" };
+            }
+
+            Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
+            return await Task.Run(() =>
+            {
+                var usb = DeviceMonitorService.Instance.OpenUsbSession(device.Device);
+                if (usb is null)
+                {
+                    throw new InvalidOperationException("No USB transport available for the fastboot device. 无法获取 fastboot 设备的 USB 传输。");
+                }
+
+                var factory = new FastbootFactory();
+                if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession fastboot)
+                {
+                    throw new InvalidOperationException("The device does not expose a fastboot interface. 设备未暴露 fastboot 接口。");
+                }
+
+                using var session = fastboot;
+                if (!session.IsConnected)
+                {
+                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
+                }
+
+                ct.ThrowIfCancellationRequested();
+                Report(progress, partition, 30, $"Erasing {partition}... 正在擦除分区...");
+                var response = session.ErasePartition(partition);
+                response.ThrowIfFailed();
+                Report(progress, partition, 100, $"Erase complete: {partition}. 分区擦除完成。");
+                return new FlashResult
+                {
+                    Success = true,
+                    Summary = $"Erased partition '{partition}' via fastboot."
+                };
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return new FlashResult { Success = false, Summary = "Flash canceled." };
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "FlashService", $"Erase {partition} failed: {ex.Message}");
+            return new FlashResult { Success = false, Summary = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// <para>擦除设备上的全部分区（仅 fastboot 协议）：通过 <c>getvar:all</c> 枚举
+    /// <c>partition-type</c>/<c>partition-size</c> 上报的分区，逐个执行 erase 并汇报累计进度。
+    /// 非 fastboot 设备返回失败结果。</para>
+    /// Erases every partition on the device (fastboot protocol only): enumerates the partitions
+    /// reported via <c>getvar:all</c> as <c>partition-type</c>/<c>partition-size</c> keys and erases
+    /// each in turn, reporting cumulative progress. Non-fastboot devices yield a failure result.
+    /// </summary>
+    /// <param name="device"><para>目标设备。</para>The target device.</param>
+    /// <param name="progress"><para>可选的擦除进度报告器。</para>Optional erase progress reporter.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <returns>擦除结果。</returns>
+    public static async Task<FlashResult> EraseAllAsync(
+        DeviceInfo device, IProgress<FlashProgress>? progress, CancellationToken ct)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(device);
+
+            if (device.Protocol != DeviceProtocolKind.Fastboot)
+            {
+                return new FlashResult { Success = false, Summary = "Erase all only supported via fastboot. 整机擦除仅支持 fastboot 模式。" };
+            }
+
+            Report(progress, null, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
+            return await Task.Run(() =>
+            {
+                var usb = DeviceMonitorService.Instance.OpenUsbSession(device.Device);
+                if (usb is null)
+                {
+                    throw new InvalidOperationException("No USB transport available for the fastboot device. 无法获取 fastboot 设备的 USB 传输。");
+                }
+
+                var factory = new FastbootFactory();
+                if (!factory.TryCreate(usb, out var protocolSession) || protocolSession is not FastbootSession fastboot)
+                {
+                    throw new InvalidOperationException("The device does not expose a fastboot interface. 设备未暴露 fastboot 接口。");
+                }
+
+                using var session = fastboot;
+                if (!session.IsConnected)
+                {
+                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
+                }
+
+                var partitions = EnumeratePartitions(session);
+                if (partitions.Count == 0)
+                {
+                    throw new InvalidOperationException(
+                        "No partitions reported by getvar:all; cannot erase all. getvar:all 未返回分区列表，无法整机擦除。");
+                }
+
+                var erased = 0;
+                foreach (var partition in partitions)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    Report(progress, partition, (int)(erased * 100L / partitions.Count),
+                        $"Erasing {partition}... 正在擦除分区 {partition}...");
+                    var response = session.ErasePartition(partition);
+                    response.ThrowIfFailed();
+                    erased++;
+                }
+
+                Report(progress, null, 100, "Erase-all complete. 整机擦除完成。");
+                return new FlashResult
+                {
+                    Success = true,
+                    Summary = $"Erased {erased} partitions via fastboot."
+                };
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return new FlashResult { Success = false, Summary = "Flash canceled." };
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "FlashService", $"Erase-all failed: {ex.Message}");
+            return new FlashResult { Success = false, Summary = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// <para>通过 ADB 把 OTA 包推送到 recovery sideload 模式：连接 ADB 会话后重启到 sideload、
+    /// 等待设备重新出现，再把包流式推送到 <c>/sideload/package.zip</c>。</para>
+    /// Pushes an OTA package to the device in recovery sideload mode via ADB: connects the ADB
+    /// session, reboots into sideload, waits for the device to reappear, then streams the package
+    /// to <c>/sideload/package.zip</c>.
+    /// </summary>
+    /// <param name="device"><para>目标设备。</para>The target device.</param>
+    /// <param name="otaPackagePath"><para>OTA 镜像（zip）完整路径。</para>Full path of the OTA (zip) package.</param>
+    /// <param name="progress"><para>可选的推送进度报告器。</para>Optional push progress reporter.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <returns>侧载结果。</returns>
+    public static async Task<FlashResult> FlashSideloadAsync(
+        DeviceInfo device, string otaPackagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(device);
+            if (string.IsNullOrWhiteSpace(otaPackagePath))
+            {
+                throw new ArgumentException("OTA package path must not be empty.", nameof(otaPackagePath));
+            }
+
+            if (!File.Exists(otaPackagePath))
+            {
+                throw new FileNotFoundException($"OTA image not found: {otaPackagePath} OTA 镜像不存在。", otaPackagePath);
+            }
+
+            Report(progress, "sideload", 0, "Opening ADB session... 正在打开 ADB 会话...");
+            var session = DeviceMonitorService.Instance.OpenAdbSession(device.Device)
+                ?? throw new InvalidOperationException("No ADB session available for the selected device. 无法为所选设备建立 ADB 会话。");
+            using var adb = session;
+            adb.Connect();
+            if (!adb.IsConnected)
+            {
+                throw new InvalidOperationException("ADB session is not connected. ADB 会话未连接。");
+            }
+
+            Report(progress, "sideload", 5, "Rebooting into sideload mode... 正在重启进入 sideload 模式...");
+            RebootToSideload(adb);
+            await WaitForSideloadReconnectAsync(adb, ct).ConfigureAwait(false);
+            await Task.Run(() => PushSideloadFile(adb, otaPackagePath, progress, ct), ct).ConfigureAwait(false);
+            Report(progress, "sideload", 100, "Sideload complete. OTA 侧载完成。");
+            return new FlashResult
+            {
+                Success = true,
+                Summary = $"Sideloaded {Path.GetFileName(otaPackagePath)} via ADB."
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            return new FlashResult { Success = false, Summary = "Flash canceled." };
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "FlashService", $"Sideload {Path.GetFileName(otaPackagePath)} failed: {ex.Message}");
+            return new FlashResult { Success = false, Summary = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// <para>查询设备属性：fastboot 走 <c>getvar &lt;name&gt;</c>（<see cref="FastbootSession.GetVariable"/>），
+    /// ADB 走 <c>getprop &lt;name&gt;</c>（<see cref="AdbSession.CreateDeviceServices"/> 的 GetProp），
+    /// 结果以 <c>name=value</c> 形式放入 <see cref="FlashResult.Summary"/>。</para>
+    /// Queries a device property: <c>getvar &lt;name&gt;</c> (<see cref="FastbootSession.GetVariable"/>)
+    /// on fastboot, <c>getprop &lt;name&gt;</c> (GetProp on <see cref="AdbSession.CreateDeviceServices"/>)
+    /// on ADB; the value is placed into <see cref="FlashResult.Summary"/> as <c>name=value</c>.
+    /// </summary>
+    /// <param name="device"><para>目标设备。</para>The target device.</param>
+    /// <param name="propertyName"><para>属性/变量名。</para>The property/variable name.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <returns>查询结果（值在 <see cref="FlashResult.Summary"/> 中）。</returns>
+    public static async Task<FlashResult> GetDevicePropertyAsync(
+        DeviceInfo device, string propertyName, CancellationToken ct)
+    {
+        try
+        {
+            ArgumentNullException.ThrowIfNull(device);
+            if (string.IsNullOrWhiteSpace(propertyName))
+            {
+                throw new ArgumentException("Property name must not be empty.", nameof(propertyName));
+            }
+
+            return await Task.Run(() =>
+            {
+                if (device.Protocol == DeviceProtocolKind.Fastboot)
+                {
+                    Report(null, "fastboot", 0, $"Querying fastboot variable '{propertyName}'... 正在查询 fastboot 变量...");
+                    var fbSession = DeviceMonitorService.Instance.OpenFastbootSession(device.Device)
+                        ?? throw new InvalidOperationException("No fastboot session available for the selected device. 无法为所选设备建立 fastboot 会话。");
+                    using var fastboot = fbSession;
+                    if (!fastboot.IsConnected)
+                    {
+                        throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
+                    }
+
+                    var fbValue = fastboot.GetVariable(propertyName, useCache: false);
+                    Report(null, "fastboot", 100, $"Variable '{propertyName}' = '{fbValue}'. 变量查询完成。");
+                    return new FlashResult { Success = true, Summary = $"{propertyName}={fbValue}" };
+                }
+
+                if (device.Protocol == DeviceProtocolKind.Adb)
+                {
+                    Report(null, "adb", 0, $"Querying property '{propertyName}'... 正在查询系统属性...");
+                    var adbSession = DeviceMonitorService.Instance.OpenAdbSession(device.Device)
+                        ?? throw new InvalidOperationException("No ADB session available for the selected device. 无法为所选设备建立 ADB 会话。");
+                    using var adb = adbSession;
+                    adb.Connect();
+                    if (!adb.IsConnected)
+                    {
+                        throw new InvalidOperationException("ADB session is not connected. ADB 会话未连接。");
+                    }
+
+                    var value = adb.CreateDeviceServices().GetProp(propertyName);
+                    Report(null, "adb", 100, $"Property '{propertyName}' = '{value}'. 属性查询完成。");
+                    return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
+                }
+
+                return new FlashResult { Success = false, Summary = "Get property is only supported via adb or fastboot. 属性查询仅支持 ADB 或 fastboot 模式。" };
+            }, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return new FlashResult { Success = false, Summary = "Flash canceled." };
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "FlashService", $"Get property '{propertyName}' failed: {ex.Message}");
+            return new FlashResult { Success = false, Summary = ex.Message };
+        }
+    }
+
+    /// <summary>
+    /// <para>枚举 fastboot 设备上报的分区名：解析 <c>getvar:all</c> 中 <c>partition-type:</c> /
+    /// <c>partition-size:</c> 前缀的变量键，去重后返回。</para>
+    /// Enumerates the partition names reported by a fastboot device: parses the
+    /// <c>partition-type:</c> / <c>partition-size:</c> prefixed variable keys from
+    /// <c>getvar:all</c>, deduplicated.
+    /// </summary>
+    private static List<string> EnumeratePartitions(FastbootSession session)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var variables = session.GetAllVariables();
+        foreach (var key in variables.Keys)
+        {
+            if (key.StartsWith(FastbootConstants.VarPartitionTypePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var name = key[FastbootConstants.VarPartitionTypePrefix.Length..];
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    names.Add(name);
+                }
+            }
+            else if (key.StartsWith(FastbootConstants.VarPartitionSizePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var name = key[FastbootConstants.VarPartitionSizePrefix.Length..];
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    names.Add(name);
+                }
+            }
+        }
+
+        return names.ToList();
+    }
+
+    /// <summary>
     /// <para>Fastboot 路径：经 <see cref="FastbootFactory"/> 打开会话并执行
     /// <c>flash &lt;partition&gt; &lt;image&gt;</c>，逐块上报进度。</para>
     /// Fastboot path: opens a session via <see cref="FastbootFactory"/> and executes
@@ -125,12 +445,12 @@ public static class FlashService
     }
 
     /// <summary>
-    /// <para>EDL 路径：优先解析镜像目录中的 rawprogram*.xml，按分区匹配执行单分区直刷；
-    /// 分区未命中时回退到整包刷写（<see cref="FlashEdlBundleAsync"/>，现状保留）。无
+    /// <para>EDL 路径：解析镜像目录中的 rawprogram*.xml，按分区匹配执行单分区直刷；
+    /// 分区未命中时返回失败（软件未发布，无旧整包回退兼容需求）。无
     /// rawprogram 时给出清晰错误。</para>
     /// EDL path: parses the rawprogram*.xml in the image directory and performs a
-    /// single-partition flash when the partition matches; falls back to the full-bundle
-    /// flash (<see cref="FlashEdlBundleAsync"/>, preserved behaviour) when nothing matches.
+    /// single-partition flash when the partition matches; an unmatched partition returns a
+    /// failure result (no legacy full-bundle fallback is kept for unreleased builds).
     /// A clear error is raised when no rawprogram is present.
     /// </summary>
     private static async Task<FlashResult> FlashEdlAsync(
@@ -150,71 +470,15 @@ public static class FlashService
         var target = FindEdlTarget(entries, partition, imagePath);
         if (target is null)
         {
-            // Backward-compatible fallback: the old FlashEdlAsync always flashed the whole
-            // bundle, so an unmatched partition keeps that behaviour instead of erroring.
-            // 向后兼容回退：旧 FlashEdlAsync 总是整包刷写，分区未命中时保持该行为。
             Report(progress, partition, 0,
-                $"Partition '{partition}' not found in rawprogram; flashing the full bundle. 分区 '{partition}' 未在 rawprogram 中匹配到，将整包刷写。");
-            return await FlashEdlBundleAsync(device, imagePath, progress, ct).ConfigureAwait(false);
+                $"Partition '{partition}' not found in rawprogram. 分区 '{partition}' 未在 rawprogram 中匹配到。");
+            return new FlashResult { Success = false, Summary = $"Partition '{partition}' not found in rawprogram. 分区 '{partition}' 未在 rawprogram 中匹配到。" };
         }
 
         var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
             ?? throw new InvalidOperationException("No EDL session available for the selected device. 无法为所选设备建立 EDL 会话。");
         using var edl = session;
         return await FlashEdlPartitionAsync(edl, target, imageDir, progress, ct).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// <para>EDL 整包路径：rawprogram*.xml + patch*.xml 经 <see cref="FlashBundleOrchestrator"/>
-    /// 全量编排刷写，适配其阶段进度。</para>
-    /// EDL full-bundle path: orchestrates rawprogram*.xml + patch*.xml through
-    /// <see cref="FlashBundleOrchestrator"/>, adapting its phase progress.
-    /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
-    /// <param name="imagePath"><para>刷写包内任意镜像文件路径（用于定位镜像目录）。</para>
-    /// Any image file inside the bundle (used to locate the image directory).</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>刷写结果。</returns>
-    public static async Task<FlashResult> FlashEdlBundleAsync(
-        DeviceInfo device, string imagePath,
-        IProgress<FlashProgress>? progress, CancellationToken ct)
-    {
-        Report(progress, null, 0, "Looking for EDL bundle... 正在查找 EDL 刷写包...");
-        var imageDir = Path.GetDirectoryName(Path.GetFullPath(imagePath)) ?? string.Empty;
-        var rawProgramPath = Directory.EnumerateFiles(imageDir, "rawprogram*.xml", SearchOption.TopDirectoryOnly).FirstOrDefault();
-        if (rawProgramPath is null)
-        {
-            throw new InvalidOperationException(
-                "No rawprogram*.xml found in the image directory; an EDL bundle (rawprogram + images) is required. 镜像目录中未找到 rawprogram*.xml，EDL 刷写需要完整刷写包。");
-        }
-
-        var patchPath = Directory.EnumerateFiles(imageDir, "patch*.xml", SearchOption.TopDirectoryOnly).FirstOrDefault();
-        var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
-            ?? throw new InvalidOperationException("No EDL session available for the selected device. 无法为所选设备建立 EDL 会话。");
-        using var edl = session;
-
-        var bundleProgress = new Progress<FlashBundleProgress>(p =>
-        {
-            var percent = p.Total > 0 ? (int)(p.Current * 100L / p.Total) : 0;
-            Report(progress, null, Math.Clamp(percent, 0, 100), p.Message);
-        });
-
-        var result = await new FlashBundleOrchestrator(edl)
-            .FlashBundleAsync(rawProgramPath, patchPath, imageDir, bundleProgress, ct)
-            .ConfigureAwait(false);
-        if (!result.IsSuccess)
-        {
-            var detail = result.Errors.Count > 0 ? string.Join("; ", result.Errors) : "Unknown EDL failure.";
-            throw new InvalidOperationException(detail);
-        }
-
-        Report(progress, null, 100, "EDL bundle flash complete. EDL 刷写包刷写完成。");
-        return new FlashResult
-        {
-            Success = true,
-            Summary = $"EDL bundle flashed ({result.ProgramEntriesProcessed} program entries, {result.TotalBytesWritten} bytes)."
-        };
     }
 
     /// <summary>

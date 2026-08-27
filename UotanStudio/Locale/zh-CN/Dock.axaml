@@ -49,6 +49,7 @@
     <x:String x:Key="Dock_Properties_Type_FileAnalysis">文件分析</x:String>
     <x:String x:Key="Dock_Properties_Type_TextDocument">文本文档</x:String>
     <x:String x:Key="Dock_Properties_Type_DtbDocument">设备树</x:String>
+    <x:String x:Key="Dock_Properties_Type_DexDocument">DEX</x:String>
 
     <!-- 文本文档属性面板标签 -->
     <x:String x:Key="Dock_Properties_Text_FileName">文件名</x:String>
@@ -72,6 +73,21 @@
     <x:String x:Key="Dock_Properties_Dtb_SelectedNodePath">节点路径</x:String>
     <x:String x:Key="Dock_Properties_Dtb_SelectedNodeProps">属性数</x:String>
     <x:String x:Key="Dock_Properties_Dtb_SelectedNodeChildren">子节点数</x:String>
+
+    <!-- DEX 文档属性面板标签 -->
+    <x:String x:Key="Dock_Properties_Dex_FileName">文件名</x:String>
+    <x:String x:Key="Dock_Properties_Dex_FilePath">文件路径</x:String>
+    <x:String x:Key="Dock_Properties_Dex_FileSize">文件大小</x:String>
+    <x:String x:Key="Dock_Properties_Dex_Version">DEX 版本</x:String>
+    <x:String x:Key="Dock_Properties_Dex_ClassCount">类数</x:String>
+    <x:String x:Key="Dock_Properties_Dex_MethodCount">方法数</x:String>
+    <x:String x:Key="Dock_Properties_Dex_FieldCount">字段数</x:String>
+    <x:String x:Key="Dock_Properties_Dex_StringCount">字符串数</x:String>
+    <x:String x:Key="Dock_Properties_Dex_TypeCount">类型数</x:String>
+    <x:String x:Key="Dock_Properties_Dex_SelectedNode">选中项</x:String>
+    <x:String x:Key="Dock_Properties_Dex_SelectedNodeKind">种类</x:String>
+    <x:String x:Key="Dock_Properties_Dex_SelectedNodeDetail">详情</x:String>
+    <x:String x:Key="Dock_Properties_Dex_SelectedNodeChildren">子项数</x:String>
 
     <!-- 设备确认对话框 -->
     <x:String x:Key="Editor_Yes">是</x:String>

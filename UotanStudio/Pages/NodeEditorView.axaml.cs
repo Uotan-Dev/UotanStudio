@@ -1,6 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using UotanStudio.ViewModels;
+using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.Pages;
 
@@ -44,6 +46,36 @@ public partial class NodeEditorView : UserControl
                 var node = item.CreateNode();
                 vm.AddNode(node);
             }
+        }
+    }
+
+    /// <summary>
+    /// <para>路径端口「浏览」按钮：通过存储提供程序弹出文件选择器，把所选路径写入该端口的初始值。</para>
+    /// Path-port browse button: opens a storage-provider file picker and writes the chosen path into the port's initial value.
+    /// </summary>
+    /// <param name="sender">The browse button whose Tag carries the target connector.</param>
+    /// <param name="e">Routed event args.</param>
+    private async void OnBrowsePathClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: NodeConnectorViewModel connector } || VisualRoot is not Window window)
+        {
+            return;
+        }
+
+        var storage = window.StorageProvider;
+        if (storage is null)
+        {
+            return;
+        }
+
+        var files = await storage.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+        {
+            Title = "Select file",
+            AllowMultiple = false
+        });
+        if (files is { Count: > 0 } && files[0].TryGetLocalPath() is { Length: > 0 } localPath)
+        {
+            connector.InitialValue = localPath;
         }
     }
 }

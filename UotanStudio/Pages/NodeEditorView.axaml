@@ -79,7 +79,7 @@
         <Border DockPanel.Dock="Bottom" Height="24" Padding="8,2"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding ExecutionStatus}"
+                <TextBlock DockPanel.Dock="Right" Text="{Binding SelectedNode.StatusDisplay}"
                            FontSize="11" VerticalAlignment="Center"
                            Foreground="{DynamicResource SecondaryTextBrush}" />
                 <TextBlock FontSize="11" VerticalAlignment="Center"
@@ -93,6 +93,24 @@
                     <Run Text="{DynamicResource Node_ConnectionsLabel}" />
                 </TextBlock>
             </DockPanel>
+        </Border>
+
+        <!-- 底部执行日志面板（状态栏上方） -->
+        <Border DockPanel.Dock="Bottom" MaxHeight="180"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Expander Header="{DynamicResource Node_ExecLog}" IsExpanded="False" Padding="6,2">
+                <ListBox ItemsSource="{Binding ExecutionLog}"
+                         MaxHeight="150"
+                         Background="Transparent" BorderThickness="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       TextTrimming="CharacterEllipsis" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Expander>
         </Border>
 
         <!-- 左侧工具箱面板 -->
@@ -154,7 +172,7 @@
 
                             <!-- 节点类别 -->
                             <Grid ColumnDefinitions="Auto,*">
-                                <TextBlock Grid.Column="0" Text="Category"
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Category}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
@@ -165,18 +183,18 @@
 
                             <!-- 执行状态 -->
                             <Grid ColumnDefinitions="Auto,*">
-                                <TextBlock Grid.Column="0" Text="Status"
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Status}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
                                 <TextBlock Grid.Column="1"
-                                           Text="{Binding SelectedNode.ExecutionStatus}"
+                                           Text="{Binding SelectedNode.StatusDisplay}"
                                            FontSize="12" />
                             </Grid>
 
                             <!-- 节点类型键 -->
                             <Grid ColumnDefinitions="Auto,*">
-                                <TextBlock Grid.Column="0" Text="Type"
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Type}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
@@ -185,15 +203,9 @@
                                            FontSize="12" />
                             </Grid>
 
-                            <!-- 缺失节点占位标记 -->
-                            <TextBlock Text="{DynamicResource Node_MissingNode}"
-                                       FontSize="12" FontWeight="SemiBold"
-                                       Foreground="Red"
-                                       IsVisible="{Binding SelectedNode.IsMissing}" />
-
                             <!-- 位置 -->
                             <Grid ColumnDefinitions="Auto,*">
-                                <TextBlock Grid.Column="0" Text="Location"
+                                <TextBlock Grid.Column="0" Text="{DynamicResource Node_Prop_Location}"
                                            FontSize="11"
                                            Foreground="{DynamicResource SecondaryTextBrush}"
                                            Margin="0,0,8,0" />
@@ -207,23 +219,84 @@
 
                             <Separator Margin="0,4" />
 
-                            <!-- 输入端口 -->
-                            <TextBlock Text="Inputs"
+                            <!-- 常量节点的值类型与值编辑器 -->
+                            <StackPanel Spacing="4"
+                                        IsVisible="{Binding SelectedNode.IsConstantNode}">
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_ValueType}"
+                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                               Margin="0,4,8,0" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1" FontSize="12"
+                                              ItemsSource="{x:Static nodeVm:FlowNodeViewModel.ValueTypeOptions}"
+                                              SelectedItem="{Binding SelectedNode.NodeValueType, Mode=TwoWay}" />
+                                </Grid>
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_Const_Value}"
+                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                               Margin="0,4,8,0" />
+                                    <TextBox Grid.Column="1" FontSize="12" Height="24"
+                                             Text="{Binding SelectedNode.NodeValue, Mode=TwoWay}" />
+                                </Grid>
+                                <TextBlock FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Text="{DynamicResource Node_Const_Hint}" />
+                            </StackPanel>
+
+                            <!-- 工程镜像引用节点的镜像选择编辑区 -->
+                            <StackPanel Spacing="4"
+                                        IsVisible="{Binding SelectedNode.IsProjectImageNode}">
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <TextBlock Grid.Column="0" Text="{DynamicResource Node_ProjImg_Select}"
+                                               FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"
+                                               Margin="0,4,8,0" VerticalAlignment="Center" />
+                                    <ComboBox Grid.Column="1" FontSize="12"
+                                              ItemsSource="{Binding SelectedNode.AvailableImages}"
+                                              SelectedItem="{Binding SelectedNode.SelectedImage, Mode=TwoWay}" />
+                                </Grid>
+                                <TextBlock FontSize="11"
+                                           Foreground="{DynamicResource SecondaryTextBrush}"
+                                           Text="{DynamicResource Node_ProjImg_Hint}" />
+                            </StackPanel>
+
+                            <!-- 输入端口：为 Text/Number/Boolean/Path 类型提供初始值编辑器 -->
+                            <TextBlock Text="{DynamicResource Node_Prop_Inputs}"
                                        FontSize="11" FontWeight="SemiBold"
                                        Foreground="{DynamicResource SecondaryTextBrush}" />
                             <ItemsControl ItemsSource="{Binding SelectedNode.Input}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
-                                        <TextBlock FontSize="12" Margin="0,1">
-                                            <Run Text="• " />
-                                            <Run Text="{Binding Title}" />
-                                        </TextBlock>
+                                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,2">
+                                            <TextBlock Grid.Column="0" FontSize="12" Margin="0,2,8,0"
+                                                       VerticalAlignment="Center">
+                                                <Run Text="• " />
+                                                <Run Text="{Binding Title}" />
+                                            </TextBlock>
+                                            <!-- 文本 / 路径：文本框 + 路径浏览 -->
+                                            <TextBox Grid.Column="1" FontSize="12" Height="24"
+                                                     Text="{Binding InitialValue, Mode=TwoWay}"
+                                                     IsVisible="{Binding IsTextOrPathPort}">
+                                            </TextBox>
+                                            <!-- 数值：数值框 -->
+                                            <NumericUpDown Grid.Column="1" FontSize="12" Height="24"
+                                                           Value="{Binding InitialNumberValue, Mode=TwoWay}"
+                                                           IsVisible="{Binding IsNumberPort}" />
+                                            <!-- 布尔：开关 -->
+                                            <CheckBox Grid.Column="1" FontSize="12"
+                                                      IsChecked="{Binding InitialBooleanValue, Mode=TwoWay}"
+                                                      IsVisible="{Binding IsBooleanPort}"
+                                                      VerticalContentAlignment="Center" />
+                                            <Button Grid.Column="2" Content="…" Width="26" Height="24" Padding="0"
+                                                    Margin="4,0,0,0" FontSize="12"
+                                                    IsVisible="{Binding IsPathPort}"
+                                                    Click="OnBrowsePathClick"
+                                                    Tag="{Binding}" />
+                                        </Grid>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
                             <!-- 输出端口 -->
-                            <TextBlock Text="Outputs"
+                            <TextBlock Text="{DynamicResource Node_Prop_Outputs}"
                                        FontSize="11" FontWeight="SemiBold"
                                        Foreground="{DynamicResource SecondaryTextBrush}"
                                        Margin="0,4,0,0" />
@@ -260,7 +333,9 @@
                         <nodify:Node Header="{Binding Title}"
                                      Input="{Binding Input}"
                                      Output="{Binding Output}"
-                                     Location="{Binding Location, Mode=TwoWay}">
+                                     Location="{Binding Location, Mode=TwoWay}"
+                                     BorderBrush="{Binding StatusBorderBrush}"
+                                     BorderThickness="2">
                             <nodify:Node.InputConnectorTemplate>
                                 <DataTemplate DataType="{x:Type nodeVm:NodeConnectorViewModel}">
                                     <nodify:NodeInput IsConnected="{Binding IsConnected}"

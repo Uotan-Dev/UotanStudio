@@ -87,6 +87,14 @@ public class WorkspaceViewModel : ViewModelBase
             return;
         }
 
+        // DEX 二进制：走 DEX 双栏编辑器（结构树 + 反汇编）。
+        // DEX blobs open in the DEX dual-pane editor (structure tree + disassembly).
+        if (mode == EditorOpenMode.Dex)
+        {
+            await OpenDexAsync(path);
+            return;
+        }
+
         var documentDock = _documentDock ??= FindDocumentsPane();
         if (documentDock is null)
         {
@@ -177,6 +185,54 @@ public class WorkspaceViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <para>在文档区以 DEX 双栏编辑器打开指定的 DEX 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="DexEditorViewModel"/>。</para>
+    /// Opens the given DEX file in the DEX dual-pane editor in the document area: focuses it if
+    /// already open; otherwise creates and loads a <see cref="DexEditorViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的 DEX 文件路径。</para>
+    /// The path of the DEX file to open.
+    /// </param>
+    public async Task OpenDexAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?
+            .OfType<DexEditorViewModel>()
+            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+
+        var document = new DexEditorViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        };
+
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+
+        await document.LoadAsync(fullPath);
+    }
+
+    /// <summary>
     /// <para>订阅文档区 <see cref="IDock.ActiveDockable"/> 变更，在用户切换已打开文档标签时
     /// 发送 <see cref="ActiveDocumentChangedMessage"/>，使属性面板等订阅方刷新显示。</para>
     /// Subscribes to the document dock's <see cref="IDock.ActiveDockable"/> changes, sending an
@@ -208,6 +264,9 @@ public class WorkspaceViewModel : ViewModelBase
         {
             case DtbEditorViewModel dtb:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dtb));
+                break;
+            case DexEditorViewModel dex:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dex));
                 break;
             case FileViewModel file:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(file));

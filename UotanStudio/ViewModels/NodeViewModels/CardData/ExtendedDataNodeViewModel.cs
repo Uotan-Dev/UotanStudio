@@ -115,9 +115,10 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>执行与节点标题对应的扩展数据处理逻辑：Concat 拼接、Slice 切片、Encrypt 加密、Compress 压缩、Byte Swap 字节序转换。</para>
-    /// Executes the extended data-processing logic matching the node title: Concat concatenates, Slice extracts a range,
-    /// Encrypt encrypts, Compress compresses, and Byte Swap converts byte order.
+    /// <para>按节点类型键（TypeKey）分发对应的扩展数据处理逻辑：Data.Concat 拼接、Data.Slice 切片、Data.Encrypt 加密、
+    /// Data.Compress 压缩、Data.ByteSwap 字节序转换。</para>
+    /// Dispatches extended data-processing logic by the node type key (TypeKey): Data.Concat concatenates, Data.Slice extracts
+    /// a range, Data.Encrypt encrypts, Data.Compress compresses, and Data.ByteSwap converts byte order.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -129,21 +130,21 @@ public class ExtendedDataNodeViewModel : FlowNodeViewModel
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
-        switch (Title)
+        switch (TypeKey)
         {
-            case "Concat":
+            case "Data.Concat":
                 ExecuteConcat(context);
                 break;
-            case "Slice":
+            case "Data.Slice":
                 ExecuteSlice(context);
                 break;
-            case "Encrypt":
+            case "Data.Encrypt":
                 ExecuteEncrypt(context);
                 break;
-            case "Compress":
+            case "Data.Compress":
                 ExecuteCompress(context);
                 break;
-            case "Byte Swap":
+            case "Data.ByteSwap":
                 ExecuteByteSwap(context);
                 break;
             default:

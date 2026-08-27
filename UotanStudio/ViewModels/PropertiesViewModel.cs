@@ -91,6 +91,7 @@ internal partial class PropertiesViewModel : Tool
                 PropertiesContentType.FileAnalysis => LanguageService.Instance.GetString("Dock_Properties_Type_FileAnalysis"),
                 PropertiesContentType.TextDocument => LanguageService.Instance.GetString("Dock_Properties_Type_TextDocument"),
                 PropertiesContentType.DtbDocument => LanguageService.Instance.GetString("Dock_Properties_Type_DtbDocument"),
+                PropertiesContentType.DexDocument => LanguageService.Instance.GetString("Dock_Properties_Type_DexDocument"),
                 _ => string.Empty,
             };
 
@@ -111,6 +112,7 @@ internal partial class PropertiesViewModel : Tool
         WeakReferenceMessenger.Default.Register<FileAnalysisCompletedMessage>(this, OnFileAnalysisCompleted);
         WeakReferenceMessenger.Default.Register<ActiveDocumentChangedMessage>(this, OnActiveDocumentChanged);
         WeakReferenceMessenger.Default.Register<DtbNodeSelectionChangedMessage>(this, OnDtbNodeSelectionChanged);
+        WeakReferenceMessenger.Default.Register<DexNodeSelectionChangedMessage>(this, OnDexNodeSelectionChanged);
     }
 
     /// <summary>
@@ -155,12 +157,21 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
+        // DEX 编辑器文档：走 DEX 展示路径。
+        // DEX editor document: route through the DEX display path.
+        if (message.DexDocument is { } dex)
+        {
+            RefreshForDexDocument(dex);
+            return;
+        }
+
         var doc = message.Document;
         if (doc is null)
         {
             if (ContentType == PropertiesContentType.FileAnalysis
                 || ContentType == PropertiesContentType.TextDocument
-                || ContentType == PropertiesContentType.DtbDocument)
+                || ContentType == PropertiesContentType.DtbDocument
+                || ContentType == PropertiesContentType.DexDocument)
             {
                 Properties.Clear();
                 SelectedNodeTitle = string.Empty;
@@ -205,6 +216,27 @@ internal partial class PropertiesViewModel : Tool
         }
 
         RefreshForDtbNode(message.Editor, message.Node);
+    }
+
+    /// <summary>
+    /// <para>响应 DEX 结构树节点选中变更消息，刷新选中节点详情。</para>
+    /// Responds to DEX node-selection-changed messages by refreshing the selected node details.
+    /// </summary>
+    private void OnDexNodeSelectionChanged(object recipient, DexNodeSelectionChangedMessage message)
+    {
+        // 仅当当前展示的是 DEX 文档时才联动更新选中节点详情。
+        // Only update the selected-node details when the panel is currently showing a DEX document.
+        if (ContentType != PropertiesContentType.DexDocument)
+        {
+            return;
+        }
+
+        if (message.Editor is null)
+        {
+            return;
+        }
+
+        RefreshForDexNode(message.Editor, message.Node);
     }
 
     /// <summary>
@@ -370,6 +402,69 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
+    /// <para>刷新 DEX 文档的属性行（文件名、路径、大小、版本、类/方法/字段/字符串/类型计数）。</para>
+    /// Refreshes property rows for a DEX document (file name, path, size, version, and class/method/
+    /// field/string/type counts).
+    /// </summary>
+    public void RefreshForDexDocument(DexEditorViewModel doc)
+    {
+        Properties.Clear();
+        if (doc is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.DexDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.FilePath ?? doc.Title;
+
+        var svc = LanguageService.Instance;
+        var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_FileName"), fileName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_FilePath"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_Version"), doc.Version));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_ClassCount"), doc.ClassCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_MethodCount"), doc.MethodCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_FieldCount"), doc.FieldCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_StringCount"), doc.StringCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_TypeCount"), doc.TypeCount.ToString("N0")));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DEX document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新 DEX 选中节点（类/方法/字段）的详情属性行。</para>
+    /// Refreshes property rows for the selected DEX node (class/method/field).
+    /// </summary>
+    public void RefreshForDexNode(DexEditorViewModel editor, DexTreeNodeViewModel? node)
+    {
+        Properties.Clear();
+        if (node is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.DexDocument;
+        HasSelection = true;
+        SelectedNodeTitle = node.Name;
+
+        var svc = LanguageService.Instance;
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_SelectedNode"), node.Name));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_SelectedNodeKind"), node.Kind));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_SelectedNodeDetail"), node.Detail));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_SelectedNodeChildren"), node.Children.Count.ToString("N0")));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DEX node '{node.Name}'");
+    }
+
+    /// <summary>
     /// <para>刷新指定文件分析结果的属性行。分析为 <c>null</c> 时显示占位。</para>
     /// Refreshes property rows for the specified file analysis results. Shows a placeholder when analysis is <c>null</c>.
     /// </summary>
@@ -481,5 +576,11 @@ public enum PropertiesContentType
     /// <para>设备树文档信息。</para>
     /// Device-tree document information.
     /// </summary>
-    DtbDocument
+    DtbDocument,
+
+    /// <summary>
+    /// <para>DEX 文档信息。</para>
+    /// DEX document information.
+    /// </summary>
+    DexDocument
 }

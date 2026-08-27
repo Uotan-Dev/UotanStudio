@@ -264,6 +264,11 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
 
+        // 合并磁盘上最新的最近打开项目列表，避免防抖保存覆盖「最近打开」记录。
+        // Merge the latest recent-projects list from disk so the debounced save never wipes the MRU record.
+        var latest = SettingsPersistenceService.Instance.LoadSettings();
+        _appSettings.RecentProjects = latest.RecentProjects;
+
         SettingsPersistenceService.Instance.SaveSettings(_appSettings);
 
         ShowToast(LanguageService.Instance.GetString("Settings_SettingsSaved"));

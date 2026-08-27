@@ -171,6 +171,24 @@ public partial class NodeEditorViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <para>执行日志面板条目集合（底部面板展示），记录执行引擎、编辑器及节点状态变更。</para>
+    /// Execution log panel entries (shown in the bottom panel), recording engine, editor and node status changes.
+    /// </summary>
+    public ObservableCollection<string> ExecutionLog { get; } = [];
+
+    /// <summary>
+    /// <para>执行期间订阅 LogService 的退订委托。</para>
+    /// Unsubscribe delegate for the LogService subscription during execution.
+    /// </summary>
+    private Action? _executionLogUnsubscribe;
+
+    /// <summary>
+    /// <para>执行日志允许的日志来源集合（Engine、NodeEditor 或任一节点 Title）。</para>
+    /// Allowed log sources for the execution log (Engine, NodeEditor, or any node Title).
+    /// </summary>
+    private readonly HashSet<string> _executionLogSources = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// <para>获取是否能执行撤销操作。</para>
     /// Gets whether an undo operation is available.
     /// </summary>
@@ -352,6 +370,62 @@ public partial class NodeEditorViewModel : ViewModelBase
     private void InitializeToolbox()
     {
         var svc = LanguageService.Instance;
+
+        // 集中注册全部既有节点工厂，确保工程加载（LoadFromAsync）能按 TypeKey 重建具体节点而非缺失占位
+        // Centrally register all existing node factories so LoadFromAsync can rebuild concrete nodes by TypeKey.
+        NodeTypeRegistry.Register("Firmware.Unpack", () => NodeViewModels.FirmwareNodeViewModel.CreateUnpackNode());
+        NodeTypeRegistry.Register("Firmware.Pack", () => NodeViewModels.FirmwareNodeViewModel.CreatePackNode());
+        NodeTypeRegistry.Register("Firmware.Verify", () => NodeViewModels.FirmwareNodeViewModel.CreateVerifyNode());
+        NodeTypeRegistry.Register("Firmware.Extract", () => NodeViewModels.FirmwareNodeViewModel.CreateExtractNode());
+        NodeTypeRegistry.Register("Firmware.OtaDelta", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode());
+        NodeTypeRegistry.Register("Firmware.MergeSignature", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode());
+        NodeTypeRegistry.Register("Firmware.MergeDualSlot", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode());
+        NodeTypeRegistry.Register("Firmware.FlashBoot", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateFlashBootNode());
+        NodeTypeRegistry.Register("Firmware.CpioUnpack", () => NodeViewModels.CpioNodeViewModel.CreateCpioUnpackNode());
+        NodeTypeRegistry.Register("Firmware.CpioPack", () => NodeViewModels.CpioNodeViewModel.CreateCpioPackNode());
+        NodeTypeRegistry.Register("Firmware.SuperUnpack", () => NodeViewModels.SuperNodeViewModel.CreateSuperUnpackNode());
+        NodeTypeRegistry.Register("Firmware.SuperPack", () => NodeViewModels.SuperNodeViewModel.CreateSuperPackNode());
+        NodeTypeRegistry.Register("Firmware.Sparse", () => NodeViewModels.SparseNodeViewModel.CreateSparseNode());
+        NodeTypeRegistry.Register("Firmware.Dat", () => NodeViewModels.DatNodeViewModel.CreateDatNode());
+        NodeTypeRegistry.Register("Flash.SelectDevice", () => NodeViewModels.SelectDeviceNodeViewModel.CreateSelectDeviceNode());
+        NodeTypeRegistry.Register("Flash.GetProp", () => NodeViewModels.DevicePropertyNodeViewModel.CreateDevicePropertyNode());
+        NodeTypeRegistry.Register("Flash.Flash", () => NodeViewModels.FlashNodeViewModel.CreateFlashNode());
+        NodeTypeRegistry.Register("Flash.Erase", () => NodeViewModels.FlashNodeViewModel.CreateEraseNode());
+        NodeTypeRegistry.Register("Flash.Reboot", () => NodeViewModels.FlashNodeViewModel.CreateRebootNode());
+        NodeTypeRegistry.Register("Flash.Bootloader", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateFlashBootloaderNode());
+        NodeTypeRegistry.Register("Flash.EraseAll", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateEraseAllNode());
+        NodeTypeRegistry.Register("Flash.OtaSideload", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOtaSideloadNode());
+        NodeTypeRegistry.Register("Flash.OverwriteFirmware", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOverwriteFirmwareNode());
+        NodeTypeRegistry.Register("Data.ReadFile", () => NodeViewModels.DataNodeViewModel.CreateFileReadNode());
+        NodeTypeRegistry.Register("Data.Constant", () => NodeViewModels.ConstantNodeViewModel.CreateConstantNode());
+        NodeTypeRegistry.Register("Data.ProjectImage", () => NodeViewModels.ProjectImageNodeViewModel.CreateProjectImageNode());
+        NodeTypeRegistry.Register("Data.Decrypt", () => NodeViewModels.DecryptNodeViewModel.CreateDecryptNode());
+        NodeTypeRegistry.Register("Data.Decompress", () => NodeViewModels.DecompressNodeViewModel.CreateDecompressNode());
+        NodeTypeRegistry.Register("Data.Convert", () => NodeViewModels.DataNodeViewModel.CreateConvertNode());
+        NodeTypeRegistry.Register("Data.Checksum", () => NodeViewModels.DataNodeViewModel.CreateChecksumNode());
+        NodeTypeRegistry.Register("Data.Compare", () => NodeViewModels.DataNodeViewModel.CreateCompareNode());
+        NodeTypeRegistry.Register("Data.Concat", () => NodeViewModels.ExtendedDataNodeViewModel.CreateConcatNode());
+        NodeTypeRegistry.Register("Data.Slice", () => NodeViewModels.ExtendedDataNodeViewModel.CreateSliceNode());
+        NodeTypeRegistry.Register("Data.Encrypt", () => NodeViewModels.ExtendedDataNodeViewModel.CreateEncryptNode());
+        NodeTypeRegistry.Register("Data.Compress", () => NodeViewModels.ExtendedDataNodeViewModel.CreateCompressNode());
+        NodeTypeRegistry.Register("Data.ByteSwap", () => NodeViewModels.ExtendedDataNodeViewModel.CreateByteSwapNode());
+        NodeTypeRegistry.Register("Flow.Start", () => NodeViewModels.FlowControlNodeViewModel.CreateStartNode());
+        NodeTypeRegistry.Register("Flow.End", () => NodeViewModels.FlowControlNodeViewModel.CreateEndNode());
+        NodeTypeRegistry.Register("Flow.Branch", () => NodeViewModels.FlowControlNodeViewModel.CreateBranchNode());
+        NodeTypeRegistry.Register("Flow.Loop", () => NodeViewModels.FlowControlNodeViewModel.CreateLoopNode());
+        NodeTypeRegistry.Register("Flow.Delay", () => NodeViewModels.FlowControlNodeViewModel.CreateDelayNode());
+        NodeTypeRegistry.Register("Flow.Parallel", () => NodeViewModels.FlowControlNodeViewModel.CreateParallelNode());
+        NodeTypeRegistry.Register("Flow.Terminate", () => NodeViewModels.FlowControlNodeViewModel.CreateTerminateNode());
+        NodeTypeRegistry.Register("Output.Log", () => NodeViewModels.OutputNodeViewModel.CreateLogNode());
+        NodeTypeRegistry.Register("Output.Progress", () => NodeViewModels.OutputNodeViewModel.CreateProgressNode());
+        NodeTypeRegistry.Register("Output.Save", () => NodeViewModels.OutputNodeViewModel.CreateSaveNode());
+        NodeTypeRegistry.Register("Output.Notify", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateNotifyNode());
+        NodeTypeRegistry.Register("Output.Console", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateConsoleOutputNode());
+        NodeTypeRegistry.Register("Output.FileExport", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateFileExportNode());
+        NodeTypeRegistry.Register("Dex.Parse", () => NodeViewModels.DexNodeViewModel.CreateParseNode());
+        NodeTypeRegistry.Register("Dex.Disassemble", () => NodeViewModels.DexNodeViewModel.CreateDisassembleNode());
+        NodeTypeRegistry.Register("Dex.Rebuild", () => NodeViewModels.DexNodeViewModel.CreateRebuildNode());
+
         ToolboxCategories.Add(new NodeToolboxCategory(
             svc.GetString("Node_CatFirmware"),
             NodeViewModels.NodeCategory.Firmware,
@@ -364,6 +438,12 @@ public partial class NodeEditorViewModel : ViewModelBase
                 new NodeToolboxItem(svc.GetString("Node_Firmware_MergeSignature"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode()),
                 new NodeToolboxItem(svc.GetString("Node_Firmware_MergeDualSlot"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode()),
                 new NodeToolboxItem(svc.GetString("Node_Firmware_FlashBoot"), () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateFlashBootNode()),
+                new NodeToolboxItem(svc.GetString("Node_Firmware_CpioUnpack"), () => NodeViewModels.CpioNodeViewModel.CreateCpioUnpackNode()),
+                new NodeToolboxItem(svc.GetString("Node_Firmware_CpioPack"), () => NodeViewModels.CpioNodeViewModel.CreateCpioPackNode()),
+                new NodeToolboxItem(svc.GetString("Node_Firmware_SuperUnpack"), () => NodeViewModels.SuperNodeViewModel.CreateSuperUnpackNode()),
+                new NodeToolboxItem(svc.GetString("Node_Firmware_SuperPack"), () => NodeViewModels.SuperNodeViewModel.CreateSuperPackNode()),
+                new NodeToolboxItem(svc.GetString("Node_Firmware_Sparse"), () => NodeViewModels.SparseNodeViewModel.CreateSparseNode()),
+                new NodeToolboxItem(svc.GetString("Node_Firmware_Dat"), () => NodeViewModels.DatNodeViewModel.CreateDatNode()),
             ]
         ));
 
@@ -371,7 +451,7 @@ public partial class NodeEditorViewModel : ViewModelBase
             svc.GetString("Node_CatFlash"),
             NodeViewModels.NodeCategory.Flash,
             [
-                new NodeToolboxItem(svc.GetString("Node_Flash_Connect"), () => NodeViewModels.FlashNodeViewModel.CreateConnectNode()),
+                new NodeToolboxItem(svc.GetString("Node_Flash_SelectDevice"), () => NodeViewModels.SelectDeviceNodeViewModel.CreateSelectDeviceNode()),
                 new NodeToolboxItem(svc.GetString("Node_Flash_Flash"), () => NodeViewModels.FlashNodeViewModel.CreateFlashNode()),
                 new NodeToolboxItem(svc.GetString("Node_Flash_Erase"), () => NodeViewModels.FlashNodeViewModel.CreateEraseNode()),
                 new NodeToolboxItem(svc.GetString("Node_Flash_Reboot"), () => NodeViewModels.FlashNodeViewModel.CreateRebootNode()),
@@ -386,6 +466,8 @@ public partial class NodeEditorViewModel : ViewModelBase
             svc.GetString("Node_CatData"),
             NodeViewModels.NodeCategory.Data,
             [
+                new NodeToolboxItem(svc.GetString("Node_Data_Constant"), () => NodeViewModels.ConstantNodeViewModel.CreateConstantNode()),
+                new NodeToolboxItem(svc.GetString("Node_Data_ProjectImage"), () => NodeViewModels.ProjectImageNodeViewModel.CreateProjectImageNode()),
                 new NodeToolboxItem(svc.GetString("Node_Data_ReadFile"), () => NodeViewModels.DataNodeViewModel.CreateFileReadNode()),
                 new NodeToolboxItem(svc.GetString("Node_Data_Convert"), () => NodeViewModels.DataNodeViewModel.CreateConvertNode()),
                 new NodeToolboxItem(svc.GetString("Node_Data_Checksum"), () => NodeViewModels.DataNodeViewModel.CreateChecksumNode()),
@@ -393,7 +475,9 @@ public partial class NodeEditorViewModel : ViewModelBase
                 new NodeToolboxItem(svc.GetString("Node_Data_Concat"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateConcatNode()),
                 new NodeToolboxItem(svc.GetString("Node_Data_Slice"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateSliceNode()),
                 new NodeToolboxItem(svc.GetString("Node_Data_Encrypt"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateEncryptNode()),
+                new NodeToolboxItem(svc.GetString("Node_Data_Decrypt"), () => NodeViewModels.DecryptNodeViewModel.CreateDecryptNode()),
                 new NodeToolboxItem(svc.GetString("Node_Data_Compress"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateCompressNode()),
+                new NodeToolboxItem(svc.GetString("Node_Data_Decompress"), () => NodeViewModels.DecompressNodeViewModel.CreateDecompressNode()),
                 new NodeToolboxItem(svc.GetString("Node_Data_ByteSwap"), () => NodeViewModels.ExtendedDataNodeViewModel.CreateByteSwapNode()),
             ]
         ));
@@ -408,7 +492,6 @@ public partial class NodeEditorViewModel : ViewModelBase
                 new NodeToolboxItem(svc.GetString("Node_Flow_Loop"), () => NodeViewModels.FlowControlNodeViewModel.CreateLoopNode()),
                 new NodeToolboxItem(svc.GetString("Node_Flow_Delay"), () => NodeViewModels.FlowControlNodeViewModel.CreateDelayNode()),
                 new NodeToolboxItem(svc.GetString("Node_Flow_Parallel"), () => NodeViewModels.FlowControlNodeViewModel.CreateParallelNode()),
-                new NodeToolboxItem(svc.GetString("Node_Flow_Sequence"), () => NodeViewModels.FlowControlNodeViewModel.CreateSequenceNode()),
                 new NodeToolboxItem(svc.GetString("Node_Flow_Terminate"), () => NodeViewModels.FlowControlNodeViewModel.CreateTerminateNode()),
             ]
         ));
@@ -421,9 +504,20 @@ public partial class NodeEditorViewModel : ViewModelBase
                 new NodeToolboxItem(svc.GetString("Node_Output_Progress"), () => NodeViewModels.OutputNodeViewModel.CreateProgressNode()),
                 new NodeToolboxItem(svc.GetString("Node_Output_Save"), () => NodeViewModels.OutputNodeViewModel.CreateSaveNode()),
                 new NodeToolboxItem(svc.GetString("Node_Output_Notify"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateNotifyNode()),
-                new NodeToolboxItem(svc.GetString("Node_Output_Email"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateSendEmailNode()),
                 new NodeToolboxItem(svc.GetString("Node_Output_Console"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateConsoleOutputNode()),
                 new NodeToolboxItem(svc.GetString("Node_Output_FileExport"), () => NodeViewModels.ExtendedOutputNodeViewModel.CreateFileExportNode()),
+            ]
+        ));
+
+        // DEX 工具分类：由并行协作者提供 DexNodeViewModel 与 NodeCategory.Dex
+        // DEX tool category: DexNodeViewModel and NodeCategory.Dex are provided by a parallel collaborator.
+        ToolboxCategories.Add(new NodeToolboxCategory(
+            svc.GetString("Node_CatDex"),
+            NodeViewModels.NodeCategory.Dex,
+            [
+                new NodeToolboxItem(svc.GetString("Node_Dex_Parse"), () => NodeViewModels.DexNodeViewModel.CreateParseNode()),
+                new NodeToolboxItem(svc.GetString("Node_Dex_Disassemble"), () => NodeViewModels.DexNodeViewModel.CreateDisassembleNode()),
+                new NodeToolboxItem(svc.GetString("Node_Dex_Rebuild"), () => NodeViewModels.DexNodeViewModel.CreateRebuildNode()),
             ]
         ));
     }
@@ -564,6 +658,18 @@ public partial class NodeEditorViewModel : ViewModelBase
         ExecutionProgress = 0.0;
         _runCts = new CancellationTokenSource();
 
+        // 清空执行日志并订阅相关日志源（Engine、NodeEditor 或任一节点 Title）
+        // Clear the execution log and subscribe to relevant log sources (Engine, NodeEditor, or any node Title).
+        ExecutionLog.Clear();
+        _executionLogSources.Clear();
+        _executionLogSources.Add("Engine");
+        _executionLogSources.Add("NodeEditor");
+        foreach (var n in Nodes)
+        {
+            if (!string.IsNullOrEmpty(n.Title)) _executionLogSources.Add(n.Title);
+        }
+        _executionLogUnsubscribe = _log.Subscribe(OnExecutionLogEnqueued);
+
         try
         {
             _engine ??= new NodeExecutionEngine(_log);
@@ -602,6 +708,11 @@ public partial class NodeEditorViewModel : ViewModelBase
         }
         finally
         {
+            // 退订执行日志，避免跨次运行的重复收集
+            // Unsubscribe from the execution log to avoid duplicate collection across runs.
+            _executionLogUnsubscribe?.Invoke();
+            _executionLogUnsubscribe = null;
+
             IsExecuting = false;
             if (_engine != null)
             {
@@ -647,8 +758,47 @@ public partial class NodeEditorViewModel : ViewModelBase
 
     private void OnNodeStatusChanged(object? sender, NodeStatusChangedEventArgs e)
     {
-        // 节点状态变更由引擎触发；此处可更新节点视觉状态
-        // FlowNodeViewModel 尚未内置 Status 字段，后续可扩展
+        // 节点状态变更：向执行日志写一行 “<Title> -> <状态>”，并记录一条调试日志
+        // Node status changed: append “<Title> -> <status>” to the execution log and write a debug log entry.
+        var node = e.Node;
+        void Append()
+        {
+            ExecutionLog.Add($"{node.Title} -> {node.StatusDisplay}");
+        }
+
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Append();
+        }
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(Append);
+        }
+
+        _log.Write(LogLevel.Debug, "NodeEditor", $"Node '{node.Title}' status changed to {node.ExecutionStatus}  节点状态变更。");
+    }
+
+    /// <summary>
+    /// <para>执行日志条目回调：按来源过滤（Engine、NodeEditor 或任一节点 Title），并调度到 UI 线程追加。</para>
+    /// Execution log entry callback: filters by source (Engine, NodeEditor, or any node Title) and appends on the UI thread.
+    /// </summary>
+    private void OnExecutionLogEnqueued(object? sender, LogEntry entry)
+    {
+        if (!_executionLogSources.Contains(entry.Source)) return;
+
+        void Append()
+        {
+            ExecutionLog.Add($"[{entry.Timestamp:HH:mm:ss}] {entry.Source}: {entry.Message}");
+        }
+
+        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        {
+            Append();
+        }
+        else
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(Append);
+        }
     }
 
     private void OnExecutionCompleted(object? sender, ExecutionCompletedEventArgs e)
@@ -739,8 +889,9 @@ public partial class NodeEditorViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(snapshot);
         Clear();
 
-        // 重建节点：按 TypeKey 查注册表创建具体节点；未注册时创建缺失占位节点
-        // Rebuild nodes: create concrete nodes via the registry by TypeKey; create a missing placeholder when unregistered.
+        // 重建节点：按 TypeKey 查注册表创建具体节点；未注册的类型跳过并告警（软件未发布，无旧工程兼容需求）
+        // Rebuild nodes: create concrete nodes via the registry by TypeKey; skip and warn on unregistered types
+        // (no released builds exist, so there are no legacy projects to keep loading).
         var created = new System.Collections.Generic.Dictionary<string, NodeViewModels.FlowNodeViewModel>(StringComparer.OrdinalIgnoreCase);
         foreach (var dto in snapshot.Nodes)
         {
@@ -748,17 +899,31 @@ public partial class NodeEditorViewModel : ViewModelBase
             {
                 category = NodeViewModels.NodeCategory.Firmware;
             }
-            NodeViewModels.FlowNodeViewModel node;
-            if (!string.IsNullOrEmpty(dto.TypeKey) && NodeTypeRegistry.Contains(dto.TypeKey))
+            if (string.IsNullOrEmpty(dto.TypeKey) || !NodeTypeRegistry.Contains(dto.TypeKey))
             {
-                node = NodeTypeRegistry.Create(dto.TypeKey)!;
+                _log.Write(LogLevel.Warn, "NodeEditor", $"Unknown node type '{dto.TypeKey}' skipped while loading workflow.");
+                continue;
             }
-            else
-            {
-                node = new NodeViewModels.FlowNodeViewModel(dto.Title, category) { IsMissing = true };
-                _log.Write(LogLevel.Warn, "NodeEditor", $"Missing node type '{dto.TypeKey}' - placeholder created");
-            }
+            var node = NodeTypeRegistry.Create(dto.TypeKey)!;
             node.Location = new Point(dto.X, dto.Y);
+            // 恢复输入端口初始值：标题匹配输入端口，值为字符串；数字/布尔按原类型宽松转换。
+            // Restore input initial values: match input ports by title; the value is a string, leniently converted for numbers/booleans.
+            if (dto.InputInitialValues is { Count: > 0 })
+            {
+                foreach (var kv in dto.InputInitialValues)
+                {
+                    var input = node.Input.FirstOrDefault(c => string.Equals(c.Title, kv.Key, StringComparison.Ordinal));
+                    if (input is null || input.PortType == NodeViewModels.NodePortType.Flow) continue;
+                    input.InitialValue = input.PortType switch
+                    {
+                        NodeViewModels.NodePortType.Number
+                            when double.TryParse(kv.Value, System.Globalization.NumberStyles.Float,
+                                System.Globalization.CultureInfo.InvariantCulture, out var n) => n,
+                        NodeViewModels.NodePortType.Boolean when bool.TryParse(kv.Value, out var b) => b,
+                        _ => kv.Value
+                    };
+                }
+            }
             Nodes.Add(node); // 加载操作直接写入画布，不进入撤销栈
             if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
         }

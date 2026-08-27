@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -33,13 +34,116 @@ public partial class MenuViewModel : ViewModelBase
     private ActiveTab _currentTab = ActiveTab.Workspace;
 
     /// <summary>
-    /// <para>创建菜单视图模型，订阅激活面板切换消息以维护 <see cref="_currentTab"/>。</para>
-    /// Creates the menu view model, subscribing to active-tab-changed messages to maintain <see cref="_currentTab"/>.
+    /// <para>创建菜单视图模型，订阅激活面板切换消息以维护 <see cref="_currentTab"/>，并加载最近打开项目列表。</para>
+    /// Creates the menu view model, subscribing to active-tab-changed messages to maintain <see cref="_currentTab"/>
+    /// and loading the recent projects list.
     /// </summary>
     public MenuViewModel()
     {
         WeakReferenceMessenger.Default.Register<ActiveTabChangedMessage>(this, OnActiveTabChanged);
+        RecentProjects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentProjects));
+        LoadRecentProjects();
     }
+
+    /// <summary>
+    /// <para>最近打开的解决方案列表（最新在前），用于「最近打开」子菜单。</para>
+    /// Recently opened solutions (most recent first), backing the "Open Recent" submenu.
+    /// </summary>
+    public ObservableCollection<RecentProjectEntry> RecentProjects { get; } = [];
+
+    /// <summary>
+    /// <para>是否存在最近打开记录，驱动「最近打开」菜单项是否可用。</para>
+    /// Whether any recent projects exist, gating the "Open Recent" menu item's availability.
+    /// </summary>
+    public bool HasRecentProjects => RecentProjects.Count > 0;
+
+    /// <summary>
+    /// <para>最多保留的最近打开项目数。</para>
+    /// Maximum number of recent projects kept.
+    /// </summary>
+    private const int MaxRecentProjects = 10;
+
+    /// <summary>
+    /// <para>从应用设置加载最近打开项目列表（仅保留实际存在的文件）。</para>
+    /// Loads the recent projects list from application settings, keeping only entries whose files still exist.
+    /// </summary>
+    private void LoadRecentProjects()
+    {
+        RecentProjects.Clear();
+        var saved = SettingsPersistenceService.Instance.LoadSettings().RecentProjects;
+        if (saved is null)
+        {
+            return;
+        }
+
+        foreach (var path in saved)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                continue;
+            }
+
+            RecentProjects.Add(CreateRecentEntry(path));
+        }
+    }
+
+    /// <summary>
+    /// <para>记录一个最近打开的解决方案：去重置顶、裁剪数量并持久化。</para>
+    /// Records a recently opened solution: deduplicates to the top, trims the list and persists it.
+    /// </summary>
+    /// <param name="path"><para>解决方案文件完整路径。</para>The full solution file path.</param>
+    private void RecordRecentProject(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = RecentProjects.FirstOrDefault(e => string.Equals(e.Path, fullPath, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            RecentProjects.Remove(existing);
+        }
+
+        RecentProjects.Insert(0, CreateRecentEntry(fullPath));
+        while (RecentProjects.Count > MaxRecentProjects)
+        {
+            RecentProjects.RemoveAt(RecentProjects.Count - 1);
+        }
+
+        PersistRecentProjects();
+    }
+
+    /// <summary>
+    /// <para>将最近打开项目列表持久化到应用设置（合并写入，不覆盖其他设置项）。</para>
+    /// Persists the recent projects list to application settings (merged write, preserving other settings).
+    /// </summary>
+    private void PersistRecentProjects()
+    {
+        SettingsPersistenceService.Instance.UpdateRecentProjects(RecentProjects.Select(e => e.Path).ToList());
+    }
+
+    /// <summary>
+    /// <para>创建一个最近项目条目，其打开命令直接调用 <see cref="OpenProjectFromPathAsync"/>；
+    /// 打开失败（如文件已被删除）时自动移除该条目并持久化。</para>
+    /// Creates a recent project entry whose open command invokes <see cref="OpenProjectFromPathAsync"/>;
+    /// on failure (e.g. the file was deleted) the entry is removed and persisted automatically.
+    /// </summary>
+    /// <param name="path"><para>解决方案文件完整路径。</para>The full solution file path.</param>
+    private RecentProjectEntry CreateRecentEntry(string path) =>
+        new(path, new AsyncRelayCommand(async () =>
+        {
+            if (!await OpenProjectFromPathAsync(path))
+            {
+                var entry = RecentProjects.FirstOrDefault(e => string.Equals(e.Path, path, StringComparison.OrdinalIgnoreCase));
+                if (entry is not null)
+                {
+                    RecentProjects.Remove(entry);
+                    PersistRecentProjects();
+                }
+            }
+        }));
 
     /// <summary>
     /// <para>响应激活面板切换：更新 <see cref="_currentTab"/> 并通知节点编辑器相关命令重新计算可用性。</para>
@@ -141,6 +245,7 @@ public partial class MenuViewModel : ViewModelBase
         await SolutionSettingsService.SaveAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings());
 
         WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+        RecordRecentProject(path);
     }
 
     /// <summary>
@@ -238,6 +343,7 @@ public partial class MenuViewModel : ViewModelBase
 
         WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
         Services.LogService.Instance.Write(LogLevel.Info, "Menu", $"Opened solution: {path}");
+        RecordRecentProject(path);
         return true;
     }
 
@@ -318,6 +424,7 @@ public partial class MenuViewModel : ViewModelBase
         }
 
         await PersistToAsync(path);
+        RecordRecentProject(path);
     }
 
     /// <summary>

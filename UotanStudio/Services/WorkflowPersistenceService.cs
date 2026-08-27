@@ -107,10 +107,33 @@ public static class WorkflowPersistenceService
                 Category = n.Category.ToString(),
                 X = n.Location.X,
                 Y = n.Location.Y,
-                TypeKey = n.TypeKey
+                TypeKey = n.TypeKey,
+                InputInitialValues = BuildInitialValueMap(n)
             });
         }
         return result;
+    }
+
+    private static Dictionary<string, string>? BuildInitialValueMap(FlowNodeViewModel node)
+    {
+        Dictionary<string, string>? map = null;
+        foreach (var connector in node.Input)
+        {
+            if (connector is not { HasPersistableInitialValue: true } || connector.InitialValue is null)
+            {
+                continue;
+            }
+
+            var text = System.Convert.ToString(connector.InitialValue, System.Globalization.CultureInfo.InvariantCulture);
+            if (string.IsNullOrEmpty(text))
+            {
+                continue;
+            }
+
+            (map ??= []).Add(connector.Title, text);
+        }
+
+        return map;
     }
 
     private static List<ConnectionDto> BuildConnectionDtos(IReadOnlyList<NodeConnectionViewModel> connections)
@@ -195,6 +218,12 @@ public sealed class NodeDto
     /// Stable node type key matching a NodeTypeRegistry key.
     /// </summary>
     public string TypeKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <para>输入端口用户编辑初始值映射（端口标题 → 字符串值）。仅持久化用户显式填写的值。</para>
+    /// User-edited initial values of input ports (port title → string value). Only explicitly set values are persisted.
+    /// </summary>
+    public Dictionary<string, string>? InputInitialValues { get; set; }
 }
 
 /// <summary>

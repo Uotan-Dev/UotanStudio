@@ -32,7 +32,18 @@
 							<avalonia:MaterialIcon Kind="FolderOpen" Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
-					<MenuItem Header="{DynamicResource Menu_OpenRecent}" IsEnabled="False" />
+					<MenuItem Header="{DynamicResource Menu_OpenRecent}"
+							  IsEnabled="{Binding MenuVM.HasRecentProjects}"
+							  ItemsSource="{Binding MenuVM.RecentProjects}">
+						<!-- 注意：不能用 ItemTemplate 嵌套 MenuItem（会容器套容器且外层无 Command 被禁用），
+						     须用 ItemContainerTheme 直接给生成的 MenuItem 容器设置 Header/Command。 -->
+						<MenuItem.ItemContainerTheme>
+							<ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+								<Setter Property="Header" Value="{Binding DisplayName, x:DataType=vm:RecentProjectEntry}" />
+								<Setter Property="Command" Value="{Binding OpenCommand, x:DataType=vm:RecentProjectEntry}" />
+							</ControlTheme>
+						</MenuItem.ItemContainerTheme>
+					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_Save}" Command="{Binding MenuVM.SaveCommand}" InputGesture="Ctrl+S">
 						<MenuItem.Icon>

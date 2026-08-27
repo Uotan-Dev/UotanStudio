@@ -12,6 +12,7 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
     private Guid _id = Guid.NewGuid();
     private int _maxConnections;
     private object? _data;
+    private object? _initialValue;
 
     /// <summary>
     /// <para>获取或设置连接器的唯一标识符。</para>
@@ -43,6 +44,88 @@ public partial class NodeConnectorViewModel : ConnectorViewModelBase
         get => _data;
         set => SetProperty(ref _data, value);
     }
+
+    /// <summary>
+    /// <para>获取或设置该端口的用户编辑初始值。执行引擎在端口未连接上游时，用此值填充 <see cref="Data"/>；
+    /// 连接上游时，初始值被忽略（上游值优先）。用于在属性面板为未连接输入端口直接填写常量。</para>
+    /// Gets or sets the user-edited initial value of this port. The engine fills <see cref="Data"/> with this
+    /// value when the port has no upstream connection; a connected upstream value takes precedence. Used to
+    /// provide a constant directly on an unconnected input port via the properties panel.
+    /// </summary>
+    public object? InitialValue
+    {
+        get => _initialValue;
+        set => SetProperty(ref _initialValue, value);
+    }
+
+    /// <summary>
+    /// <para>是否存在需要持久化的非空初始值（用户显式填写过）。Output 端口或 Flow/Any 端口无初始值语义，返回 <c>false</c>。</para>
+    /// Whether a non-null initial value worth persisting exists (explicitly set by the user). Output ports and
+    /// Flow/Any ports have no initial-value semantics and return <c>false</c>.
+    /// </summary>
+    public bool HasPersistableInitialValue
+        => _initialValue is not null
+           && IsInput
+           && PortType is NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean;
+
+    /// <summary>
+    /// <para>是否为文本或路径输入端口（在属性面板渲染文本框）。</para>
+    /// Whether this is a text or path input port (renders a text box in the properties panel).
+    /// </summary>
+    public bool IsTextOrPathPort
+        => PortType is NodePortType.Text or NodePortType.Path;
+
+    /// <summary>
+    /// <para>是否为路径输入端口（显示路径浏览按钮）。</para>
+    /// Whether this is a path input port (shows a path-browse button).
+    /// </summary>
+    public bool IsPathPort => PortType == NodePortType.Path;
+
+    /// <summary>
+    /// <para>是否为数值输入端口（渲染数值框）。</para>
+    /// Whether this is a numeric input port (renders a numeric box).
+    /// </summary>
+    public bool IsNumberPort => PortType == NodePortType.Number;
+
+    /// <summary>
+    /// <para>是否为布尔输入端口（渲染开关）。</para>
+    /// Whether this is a boolean input port (renders a toggle).
+    /// </summary>
+    public bool IsBooleanPort => PortType == NodePortType.Boolean;
+
+    /// <summary>
+    /// <para>数值端口的初始值（double 表示），供属性面板双向绑定。</para>
+    /// Initial value of a numeric port expressed as <c>double</c>, for properties-panel two-way binding.
+    /// </summary>
+    public double InitialNumberValue
+    {
+        get => _initialValue is double d ? d : NodeDataUtil.ToDouble(_initialValue, 0);
+        set
+        {
+            InitialValue = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// <para>布尔端口的初始值，供属性面板双向绑定。</para>
+    /// Initial value of a boolean port, for properties-panel two-way binding.
+    /// </summary>
+    public bool InitialBooleanValue
+    {
+        get => _initialValue is bool b ? b : NodeDataUtil.ToBool(_initialValue, false);
+        set
+        {
+            InitialValue = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// <para>获取该端口是否为输入端口（来自 <see cref="ConnectorViewModelBase"/> 的 IsInput 属性语义）。</para>
+    /// Gets whether this port is an input port (from the <see cref="ConnectorViewModelBase"/> IsInput semantics).
+    /// </summary>
+    public bool IsInput { get; set; }
 
     /// <summary>
     /// <para>获取或设置该端口的类型，用于约束连接兼容性；默认 <see cref="NodePortType.Any"/>。</para>

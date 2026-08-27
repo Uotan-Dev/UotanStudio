@@ -91,6 +91,12 @@ public sealed partial class ExplorerNode : ObservableObject
     /// </summary>
     public static string OpenAsDtbHeader => LanguageService.Instance.GetString("Explorer_OpenAsDtb");
 
+    /// <summary>
+    /// <para>资源管理器右键「以 DEX 打开」菜单项的本地化标题。</para>
+    /// Localized title of the "open as DEX" context-menu item in the explorer.
+    /// </summary>
+    public static string OpenAsDexHeader => LanguageService.Instance.GetString("Explorer_OpenAsDex");
+
     private bool _childrenLoaded;
 
     /// <summary>

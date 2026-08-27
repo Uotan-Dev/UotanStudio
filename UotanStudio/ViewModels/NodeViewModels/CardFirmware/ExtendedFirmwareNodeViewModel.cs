@@ -92,10 +92,11 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>执行与节点标题对应的扩展固件逻辑：OTA Delta 记录差分任务、Merge Signature 把签名追加进镜像、
-    /// Merge Dual Slot 拼接 A/B 槽位、Flash Boot 记录 bootloader 刷写任务。</para>
-    /// Executes the extended firmware logic matching the node title: OTA Delta records a delta task, Merge Signature appends
-    /// a signature into the image, Merge Dual Slot concatenates the A/B slots, and Flash Boot records a bootloader flash task.
+    /// <para>按节点类型键（TypeKey）分发对应的扩展固件逻辑：Firmware.OtaDelta 记录差分任务、Firmware.MergeSignature 把签名追加进镜像、
+    /// Firmware.MergeDualSlot 拼接 A/B 槽位、Firmware.FlashBoot 记录 bootloader 刷写任务。</para>
+    /// Dispatches extended firmware logic by the node type key (TypeKey): Firmware.OtaDelta records a delta task,
+    /// Firmware.MergeSignature appends a signature into the image, Firmware.MergeDualSlot concatenates the A/B slots,
+    /// and Firmware.FlashBoot records a bootloader flash task.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -107,19 +108,19 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
-        switch (Title)
+        switch (TypeKey)
         {
-            case "OTA Delta":
+            case "Firmware.OtaDelta":
                 context.Log.Write(LogLevel.Warn, Title,
                     "OTA delta generation requires a bsdiff engine (not bundled); parameters recorded.  生成差分包需要 bsdiff 引擎（未内置），已记录参数。");
                 break;
-            case "Merge Signature":
+            case "Firmware.MergeSignature":
                 ExecuteMergeSignature(context);
                 break;
-            case "Merge Dual Slot":
+            case "Firmware.MergeDualSlot":
                 ExecuteMergeDualSlot(context);
                 break;
-            case "Flash Boot":
+            case "Firmware.FlashBoot":
                 {
                     var bootloader = Convert.ToString(ReadInput("Bootloader"), System.Globalization.CultureInfo.InvariantCulture);
                     WriteOutput("Status", "queued");

@@ -7,8 +7,8 @@ using UotanStudio.Services.Execution;
 namespace UotanStudio.ViewModels.NodeViewModels;
 
 /// <summary>
-/// <para>流程控制节点视图模型，提供开始、结束、条件分支、循环、延迟、并行、顺序和终止功能。</para>
-/// Flow control node view model, providing start, end, conditional branch, loop, delay, parallel, sequence, and termination capabilities.
+/// <para>流程控制节点视图模型，提供开始、结束、条件分支、循环、延迟、并行和终止功能。</para>
+/// Flow control node view model, providing start, end, conditional branch, loop, delay, parallel, and termination capabilities.
 /// </summary>
 public class FlowControlNodeViewModel : FlowNodeViewModel
 {
@@ -123,23 +123,6 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的顺序执行节点，等待多个输入全部完成后再输出。</para>
-    /// Creates a default sequence node that waits for all inputs to complete before firing its output.
-    /// </summary>
-    public static FlowControlNodeViewModel CreateSequenceNode()
-    {
-        var node = new FlowControlNodeViewModel("Sequence")
-        {
-            Location = new Point(100, 100),
-            TypeKey = "Flow.Sequence"
-        };
-        node.Input.Add(new NodeConnectorViewModel { Title = "Input A", PortType = NodePortType.Flow });
-        node.Input.Add(new NodeConnectorViewModel { Title = "Input B", PortType = NodePortType.Flow });
-        node.Output.Add(new NodeConnectorViewModel { Title = "Flow", PortType = NodePortType.Flow });
-        return node;
-    }
-
-    /// <summary>
     /// <para>创建默认的终止节点，立即中止整个工作流执行。</para>
     /// Creates a default terminate node that immediately aborts the entire workflow execution.
     /// </summary>
@@ -156,10 +139,11 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>执行与节点标题对应的流程控制逻辑：Start/End 标记、Branch 按条件选路径、Loop 记录循环次数、Delay 延迟、
-    /// Parallel/Sequence 记录并行/汇聚语义、Terminate 中止整个工作流。</para>
-    /// Executes the flow-control logic matching the node title: Start/End are markers, Branch selects a path by condition,
-    /// Loop records the iteration count, Delay pauses, Parallel/Sequence record concurrency/join semantics, and Terminate aborts the workflow.
+    /// <para>按节点类型键（TypeKey）分发对应的流程控制逻辑：Flow.Start/End 标记、Flow.Branch 按条件选路径、Flow.Loop 记录循环次数、
+    /// Flow.Delay 延迟、Flow.Parallel/Sequence 记录并行/汇聚语义、Flow.Terminate 中止整个工作流。</para>
+    /// Dispatches flow-control logic by the node type key (TypeKey): Flow.Start/End are markers, Flow.Branch selects a path by
+    /// condition, Flow.Loop records the iteration count, Flow.Delay pauses, Flow.Parallel/Sequence record concurrency/join
+    /// semantics, and Flow.Terminate aborts the workflow.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -171,29 +155,26 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     /// </returns>
     public override Task ExecuteAsync(INodeExecutionContext context)
     {
-        switch (Title)
+        switch (TypeKey)
         {
-            case "Start":
+            case "Flow.Start":
                 context.Log.Write(LogLevel.Info, Title, "Workflow entered.  工作流入口。");
                 break;
-            case "End":
+            case "Flow.End":
                 context.Log.Write(LogLevel.Info, Title, "Workflow reached the end node.  到达结束节点。");
                 break;
-            case "Branch":
+            case "Flow.Branch":
                 ExecuteBranch(context);
                 break;
-            case "Loop":
+            case "Flow.Loop":
                 ExecuteLoop(context);
                 break;
-            case "Delay":
+            case "Flow.Delay":
                 return ExecuteDelayAsync(context);
-            case "Parallel":
+            case "Flow.Parallel":
                 context.Log.Write(LogLevel.Info, Title, "Parallel branches dispatched.  分支并行分派。");
                 break;
-            case "Sequence":
-                context.Log.Write(LogLevel.Info, Title, "All inputs joined before proceeding.  汇聚等待完成。");
-                break;
-            case "Terminate":
+            case "Flow.Terminate":
                 context.Log.Write(LogLevel.Warn, Title, "Terminate requested.  请求终止工作流。");
                 throw new OperationCanceledException("Workflow terminated by Terminate node");
             default:

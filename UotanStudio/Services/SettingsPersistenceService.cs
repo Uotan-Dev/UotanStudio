@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
@@ -106,6 +107,13 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("connectionStyleIndex")]
     public int ConnectionStyleIndex { get; set; }
+
+    /// <summary>
+    /// <para>获取或设置最近打开的解决方案路径列表（最新在前）。</para>
+    /// Gets or sets the list of recently opened solution paths (most recent first).
+    /// </summary>
+    [JsonPropertyName("recentProjects")]
+    public List<string> RecentProjects { get; set; } = [];
 }
 
 /// <summary>
@@ -172,9 +180,6 @@ public class SettingsPersistenceService
             var json = File.ReadAllText(_settingsFilePath);
             var settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings) ?? new AppSettings();
 
-            // 迁移旧格式：如果 cultureName 为空但 JSON 中存在 languagePreference 字段，则进行映射
-            MigrateFromLegacyFormat(settings, json);
-
             return settings;
         }
         catch (JsonException)
@@ -224,6 +229,22 @@ public class SettingsPersistenceService
     }
 
     /// <summary>
+    /// <para>更新最近打开的解决方案列表：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
+    /// Updates the recently opened solutions list: merges on top of the latest settings on disk so other
+    /// settings are never overwritten.
+    /// </summary>
+    /// <param name="recentProjects">
+    /// <para>新的最近打开路径列表（最新在前）。</para>
+    /// The new recent project paths (most recent first).
+    /// </param>
+    public void UpdateRecentProjects(List<string> recentProjects)
+    {
+        var settings = LoadSettings();
+        settings.RecentProjects = recentProjects ?? [];
+        SaveSettings(settings);
+    }
+
+    /// <summary>
     /// <para>重置所有设置为默认值并保存到文件。</para>
     /// Resets all settings to default values and saves to file.
     /// </summary>
@@ -236,51 +257,5 @@ public class SettingsPersistenceService
         var defaults = new AppSettings();
         SaveSettings(defaults);
         return defaults;
-    }
-
-    /// <summary>
-    /// <para>将旧版的 languagePreference 枚举值迁移到 cultureName 字符串格式。</para>
-    /// Migrates the legacy languagePreference enum value to the cultureName string format.
-    /// </summary>
-    /// <param name="settings">
-    /// <para>要迁移的设置实例。</para>
-    /// The settings instance to migrate.
-    /// </param>
-    /// <param name="rawJson">
-    /// <para>原始 JSON 字符串。</para>
-    /// The raw JSON string.
-    /// </param>
-    private static void MigrateFromLegacyFormat(AppSettings settings, string? rawJson)
-    {
-        if (rawJson is null || !string.IsNullOrEmpty(settings.CultureName))
-            return;
-
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(rawJson);
-            if (doc.RootElement.TryGetProperty("languagePreference", out var prop))
-            {
-                var legacyValue = prop.ValueKind == System.Text.Json.JsonValueKind.Number
-                    ? prop.GetInt32()
-                    : prop.ValueKind == System.Text.Json.JsonValueKind.String
-#pragma warning disable CS0618 // Type or member is obsolete
-                        ? (int)Enum.Parse(typeof(LanguagePreference), prop.GetString() ?? "0")
-#pragma warning restore CS0618 // Type or member is obsolete
-                        : -1;
-
-                settings.CultureName = legacyValue switch
-                {
-                    1 => "en-US",     // LanguagePreference.English
-                    2 => "zh-CN",     // LanguagePreference.Chinese
-                    _ => string.Empty // LanguagePreference.System or unknown
-                };
-
-                Debug.WriteLine($"[SettingsPersistenceService] Migrated legacy languagePreference '{legacyValue}' to cultureName '{settings.CultureName}'");
-            }
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            // 忽略解析错误，使用默认值
-        }
     }
 }

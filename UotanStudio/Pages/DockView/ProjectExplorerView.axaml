@@ -19,8 +19,11 @@
 									  IsVisible="{Binding !IsDirectory}"
 									  Click="OnOpenAsHex" />
 							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDtbHeader}"
-									  IsVisible="{Binding !IsDirectory}"
-									  Click="OnOpenAsDtb" />
+							    IsVisible="{Binding !IsDirectory}"
+							    Click="OnOpenAsDtb" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDexHeader}"
+							    IsVisible="{Binding !IsDirectory}"
+							    Click="OnOpenAsDex" />
 						</ContextMenu>
 					</TextBlock.ContextMenu>
 				</TextBlock>

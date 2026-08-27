@@ -10,6 +10,9 @@ public enum NodePortType
     /// <summary><para>任意类型（通配，可与任何类型连接）。</para>Any type (wildcard, connects to anything).</summary>
     Any,
 
+    /// <summary><para>设备句柄（<c>DetectedDevice</c>/<c>DeviceInfo</c>）。</para>Device handle (DetectedDevice/DeviceInfo).</summary>
+    Device,
+
     /// <summary><para>流程控制信号（Start/End/Branch 等）。</para>Flow-control signal (Start/End/Branch, etc.).</summary>
     Flow,
 

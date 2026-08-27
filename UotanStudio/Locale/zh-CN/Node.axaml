@@ -18,7 +18,11 @@
     <x:String x:Key="Node_ConnectionsLabel"> 连接</x:String>
     <x:String x:Key="Node_NoSelection">选择节点以查看属性</x:String>
     <x:String x:Key="Node_StatusReady">就绪</x:String>
-    <x:String x:Key="Node_MissingNode">缺失节点</x:String>
+    <x:String x:Key="Node_Const_ValueType">值类型</x:String>
+    <x:String x:Key="Node_Const_Value">值</x:String>
+    <x:String x:Key="Node_Const_Hint">向连接的下游端口广播固定值。</x:String>
+    <x:String x:Key="Node_ProjImg_Select">镜像</x:String>
+    <x:String x:Key="Node_ProjImg_Hint">输出所选工程镜像的绝对路径。</x:String>
 
     <!-- 节点名称 -->
     <x:String x:Key="Node_Firmware_Unpack">解包固件</x:String>
@@ -29,7 +33,14 @@
     <x:String x:Key="Node_Firmware_MergeSignature">合并签名</x:String>
     <x:String x:Key="Node_Firmware_MergeDualSlot">合并双卡</x:String>
     <x:String x:Key="Node_Firmware_FlashBoot">刷写 Bootloader</x:String>
-    <x:String x:Key="Node_Flash_Connect">连接设备</x:String>
+    <x:String x:Key="Node_Firmware_CpioUnpack">解包 CPIO</x:String>
+    <x:String x:Key="Node_Firmware_CpioPack">打包 CPIO</x:String>
+    <x:String x:Key="Node_Firmware_SuperUnpack">解包 super</x:String>
+    <x:String x:Key="Node_Firmware_SuperPack">合成 super</x:String>
+    <x:String x:Key="Node_Firmware_Sparse">稀疏转换</x:String>
+    <x:String x:Key="Node_Firmware_Dat">写出 DAT</x:String>
+    <x:String x:Key="Node_Flash_SelectDevice">选择设备</x:String>
+    <x:String x:Key="Node_Flash_GetProp">获取设备属性</x:String>
     <x:String x:Key="Node_Flash_Flash">刷入分区</x:String>
     <x:String x:Key="Node_Flash_Erase">擦除分区</x:String>
     <x:String x:Key="Node_Flash_Reboot">重启设备</x:String>
@@ -38,6 +49,10 @@
     <x:String x:Key="Node_Flash_OtaSideload">OTA 侧载</x:String>
     <x:String x:Key="Node_Flash_OverwriteFirmware">覆盖固件</x:String>
     <x:String x:Key="Node_Data_ReadFile">读取文件</x:String>
+    <x:String x:Key="Node_Data_Constant">常量</x:String>
+    <x:String x:Key="Node_Data_ProjectImage">工程镜像</x:String>
+    <x:String x:Key="Node_Data_Decrypt">解密</x:String>
+    <x:String x:Key="Node_Data_Decompress">解压</x:String>
     <x:String x:Key="Node_Data_Convert">格式转换</x:String>
     <x:String x:Key="Node_Data_Checksum">校验和</x:String>
     <x:String x:Key="Node_Data_Compare">比较</x:String>
@@ -52,13 +67,11 @@
     <x:String x:Key="Node_Flow_Loop">循环</x:String>
     <x:String x:Key="Node_Flow_Delay">延迟</x:String>
     <x:String x:Key="Node_Flow_Parallel">并行</x:String>
-    <x:String x:Key="Node_Flow_Sequence">顺序执行</x:String>
     <x:String x:Key="Node_Flow_Terminate">终止</x:String>
     <x:String x:Key="Node_Output_Log">日志输出</x:String>
     <x:String x:Key="Node_Output_Progress">进度报告</x:String>
     <x:String x:Key="Node_Output_Save">保存结果</x:String>
     <x:String x:Key="Node_Output_Notify">通知</x:String>
-    <x:String x:Key="Node_Output_Email">发送邮件</x:String>
     <x:String x:Key="Node_Output_Console">控制台输出</x:String>
     <x:String x:Key="Node_Output_FileExport">文件导出</x:String>
 
@@ -98,5 +111,28 @@
     <x:String x:Key="Node_CatData">数据处理</x:String>
     <x:String x:Key="Node_CatFlow">流程控制</x:String>
     <x:String x:Key="Node_CatOutput">输出</x:String>
+    <x:String x:Key="Node_CatDex">DEX 工具</x:String>
+
+    <!-- 节点属性面板 -->
+    <x:String x:Key="Node_Prop_Category">类别</x:String>
+    <x:String x:Key="Node_Prop_Status">状态</x:String>
+    <x:String x:Key="Node_Prop_Type">类型</x:String>
+    <x:String x:Key="Node_Prop_Location">位置</x:String>
+    <x:String x:Key="Node_Prop_Inputs">输入端口</x:String>
+    <x:String x:Key="Node_Prop_Outputs">输出端口</x:String>
+
+    <!-- 节点状态 -->
+    <x:String x:Key="Node_Status_Idle">未执行</x:String>
+    <x:String x:Key="Node_Status_Pending">排队中</x:String>
+    <x:String x:Key="Node_Status_Running">运行中</x:String>
+    <x:String x:Key="Node_Status_Succeeded">成功</x:String>
+    <x:String x:Key="Node_Status_Failed">失败</x:String>
+    <x:String x:Key="Node_Status_Skipped">已跳过</x:String>
+    <x:String x:Key="Node_Status_Cancelled">已取消</x:String>
+
+    <!-- DEX 工具 -->
+    <x:String x:Key="Node_Dex_Parse">解析 DEX</x:String>
+    <x:String x:Key="Node_Dex_Disassemble">逆向 DEX</x:String>
+    <x:String x:Key="Node_Dex_Rebuild">编译 DEX</x:String>
 
 </ResourceDictionary>

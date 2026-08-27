@@ -1,16 +1,6 @@
 namespace UotanStudio.Services;
 
 /// <summary>
-/// Shared project DTOs used by the solution/firmware/node persistence layer. The legacy single-file
-/// <c>.uotan</c> snapshot has been replaced by the VS-like layout in <see cref="SolutionPersistenceService"/>.
-/// <para>解决方案/固件/节点持久化层共享的项目 DTO。旧版单文件 <c>.uotan</c> 快照已由
-/// <see cref="SolutionPersistenceService"/> 中的 VS 式布局取代。</para>
-/// </summary>
-public static class ProjectDtos
-{
-}
-
-/// <summary>
 /// Image entry data transfer object, carrying the image's project-relative path and metadata.
 /// <para>镜像条目数据传输对象，承载镜像在项目内的相对路径与元信息。</para>
 /// </summary>

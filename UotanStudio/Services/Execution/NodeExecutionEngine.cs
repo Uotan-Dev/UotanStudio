@@ -199,6 +199,16 @@ public sealed class NodeExecutionEngine
     /// </param>
     private static void FlowInputs(FlowNodeViewModel target, IReadOnlyDictionary<string, FlowNodeViewModel> byId, IReadOnlyList<NodeConnection>? connections)
     {
+        // 先把用户为未连接输入端口填写的初始值注入 Data，再让上游连接值覆盖之（若有）。
+        // First inject user-set initial values for unconnected inputs, then let connected upstream values override them (when present).
+        foreach (var input in target.Input)
+        {
+            if (input is { Data: null } && input.InitialValue is not null)
+            {
+                input.Data = input.InitialValue;
+            }
+        }
+
         if (connections == null) return;
 
         foreach (var conn in connections)

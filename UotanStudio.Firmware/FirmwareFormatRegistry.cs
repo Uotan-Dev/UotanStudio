@@ -41,6 +41,7 @@ public static class FirmwareFormatRegistry
             Register(new Dz.DzFormatHandler());
             Register(new UpdateApp.UpdateAppFormatHandler());
             Register(new Dt.DtFormatHandler());
+            Register(new Dex.DexFormatHandler());
 
             IsRegistered = true;
         }
