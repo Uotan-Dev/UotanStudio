@@ -2,7 +2,7 @@ using System.Text;
 using UotanStudio.Views.Controls;
 using Xunit;
 
-namespace UotanStudio.Tests;
+namespace UotanStudio.Tests.Views;
 
 /// <summary>
 /// File open-mode resolution tests driven by extension and optional header bytes.

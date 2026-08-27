@@ -1,7 +1,7 @@
 using UotanStudio.Views.Controls;
 using Xunit;
 
-namespace UotanStudio.Tests.Services;
+namespace UotanStudio.Tests.Views;
 
 /// <summary>
 /// Syntax language registry tests: verify extension → TextMate language id mapping and the fallback

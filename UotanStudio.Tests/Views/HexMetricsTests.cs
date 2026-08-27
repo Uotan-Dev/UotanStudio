@@ -1,7 +1,7 @@
 using UotanStudio.Views.Controls;
 using Xunit;
 
-namespace UotanStudio.Tests.Services;
+namespace UotanStudio.Tests.Views;
 
 /// <summary>
 /// Hex metrics geometry tests: verify coordinate ↔ byte-index conversions, line math and bounds clamping.

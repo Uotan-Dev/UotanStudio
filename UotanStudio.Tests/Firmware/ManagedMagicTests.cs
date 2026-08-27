@@ -4,7 +4,7 @@ using System.Text;
 using UotanStudio.Firmware.Common;
 using Xunit;
 
-namespace UotanStudio.Tests;
+namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// Pure-managed magic engine tests for core file-type signatures.

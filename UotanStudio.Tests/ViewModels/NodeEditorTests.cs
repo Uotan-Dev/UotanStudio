@@ -6,7 +6,7 @@ using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
 using Xunit;
 
-namespace UotanStudio.Tests;
+namespace UotanStudio.Tests.ViewModels;
 
 /// <summary>
 /// <para>节点编辑器后端测试：覆盖执行引擎的数据流/拓扑排序/取消，以及撤销重做命令栈。</para>
