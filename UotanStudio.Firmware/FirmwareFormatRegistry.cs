@@ -44,6 +44,7 @@ public static class FirmwareFormatRegistry
             Register(new Dex.DexFormatHandler());
             Register(new AXml.AXmlFormatHandler());
             Register(new Arsc.ArscFormatHandler());
+            Register(new Apk.ApkFormatHandler());
 
             IsRegistered = true;
         }

@@ -94,6 +94,9 @@ internal partial class PropertiesViewModel : Tool
                 PropertiesContentType.TextDocument => LanguageService.Instance.GetString("Dock_Properties_Type_TextDocument"),
                 PropertiesContentType.DtbDocument => LanguageService.Instance.GetString("Dock_Properties_Type_DtbDocument"),
                 PropertiesContentType.DexDocument => LanguageService.Instance.GetString("Dock_Properties_Type_DexDocument"),
+                PropertiesContentType.ManifestDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ManifestDocument"),
+                PropertiesContentType.ArscDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ArscDocument"),
+                PropertiesContentType.ApkDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ApkDocument"),
                 _ => string.Empty,
             };
 
@@ -114,6 +117,8 @@ internal partial class PropertiesViewModel : Tool
         WeakReferenceMessenger.Default.Register<FileAnalysisCompletedMessage>(this, OnFileAnalysisCompleted);
         WeakReferenceMessenger.Default.Register<ActiveDocumentChangedMessage>(this, OnActiveDocumentChanged);
         WeakReferenceMessenger.Default.Register<DtbNodeSelectionChangedMessage>(this, OnDtbNodeSelectionChanged);
+        WeakReferenceMessenger.Default.Register<ManifestNodeSelectionChangedMessage>(this, OnManifestNodeSelectionChanged);
+        WeakReferenceMessenger.Default.Register<ArscNodeSelectionChangedMessage>(this, OnArscNodeSelectionChanged);
     }
 
     /// <summary>
@@ -166,13 +171,40 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
+        // Manifest 编辑器文档：走 Manifest 展示路径。
+        // Manifest editor document: route through the Manifest display path.
+        if (message.ManifestDocument is { } manifest)
+        {
+            RefreshForManifestDocument(manifest);
+            return;
+        }
+
+        // ARSC 编辑器文档：走 ARSC 展示路径。
+        // ARSC editor document: route through the ARSC display path.
+        if (message.ArscDocument is { } arsc)
+        {
+            RefreshForArscDocument(arsc);
+            return;
+        }
+
+        // APK 编辑器文档：走 APK 展示路径。
+        // APK editor document: route through the APK display path.
+        if (message.ApkDocument is { } apk)
+        {
+            RefreshForApkDocument(apk);
+            return;
+        }
+
         var doc = message.Document;
         if (doc is null)
         {
             if (ContentType == PropertiesContentType.FileAnalysis
                 || ContentType == PropertiesContentType.TextDocument
                 || ContentType == PropertiesContentType.DtbDocument
-                || ContentType == PropertiesContentType.DexDocument)
+                || ContentType == PropertiesContentType.DexDocument
+                || ContentType == PropertiesContentType.ManifestDocument
+                || ContentType == PropertiesContentType.ArscDocument
+                || ContentType == PropertiesContentType.ApkDocument)
             {
                 Properties.Clear();
                 SelectedNodeTitle = string.Empty;
@@ -351,6 +383,226 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_MemReservations"), doc.MemoryReservationCount.ToString("N0")));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新 Manifest 文档的属性行（文件名、路径、大小、元素/属性/字符串计数）。</para>
+    /// Refreshes property rows for a Manifest document (file name, path, size, element/attribute/
+    /// string counts).
+    /// </summary>
+    public void RefreshForManifestDocument(ManifestEditorViewModel doc)
+    {
+        Properties.Clear();
+        if (doc is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.ManifestDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.FilePath ?? doc.Title;
+
+        var svc = LanguageService.Instance;
+        var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_FileName"), fileName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_FilePath"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_ElementCount"), doc.ElementCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_AttributeCount"), doc.AttributeCount.ToString("N0")));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Manifest document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新 Manifest 选中元素的详情属性行（元素名、命名空间、属性数、子元素数、文本）。</para>
+    /// Refreshes property rows for the selected Manifest element (name, namespace, attribute count,
+    /// child count, text).
+    /// </summary>
+    public void RefreshForManifestNode(ManifestEditorViewModel editor, ManifestTreeNodeViewModel? node)
+    {
+        Properties.Clear();
+        if (node is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.ManifestDocument;
+        HasSelection = true;
+        SelectedNodeTitle = node.Name;
+
+        var svc = LanguageService.Instance;
+        var element = node.Element;
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNode"), node.Name));
+        if (element.Namespace is { Length: > 0 })
+        {
+            Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNodeNs"), element.Namespace));
+        }
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNodeAttrs"), element.Attributes.Count.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNodeChildren"), element.Children.Count.ToString("N0")));
+        if (element.Text is { Length: > 0 })
+        {
+            Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNodeText"), element.Text));
+        }
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Manifest node '{node.Name}'");
+    }
+
+    /// <summary>
+    /// <para>刷新 APK 文档的属性行（文件名、路径、大小、包名、版本、SDK、ABI、权限数）。</para>
+    /// Refreshes property rows for an APK document (file name, path, size, package name, version,
+    /// SDK, ABIs, permission count).
+    /// </summary>
+    public void RefreshForApkDocument(ApkEditorViewModel doc)
+    {
+        Properties.Clear();
+        if (doc is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.ApkDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.FilePath ?? doc.Title;
+
+        var svc = LanguageService.Instance;
+        var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_FileName"), fileName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_FilePath"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_FileSize"), doc.SizeDisplay));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_PackageName"), doc.PackageName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_VersionName"), doc.VersionName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_VersionCode"), doc.VersionCodeDisplay));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Sdk"), doc.SdkDisplay));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Abis"), doc.AbiDisplay));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Permissions"), doc.Info?.Permissions.Count.ToString("N0") ?? "0"));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for APK document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新 ARSC 文档的属性行（文件名、路径、包/类型表/条目计数）。</para>
+    /// Refreshes property rows for an ARSC document (file name, path, package/type-table/entry counts).
+    /// </summary>
+    public void RefreshForArscDocument(ArscEditorViewModel doc)
+    {
+        Properties.Clear();
+        if (doc is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.ArscDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.FilePath ?? doc.Title;
+
+        var svc = LanguageService.Instance;
+        var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_FileName"), fileName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_FilePath"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_PackageCount"), doc.PackageCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_TypeCount"), doc.TypeCount.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_EntryCount"), doc.EntryCount.ToString("N0")));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for ARSC document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新 ARSC 选中节点的详情属性行（按包/类型/条目层级展示）。</para>
+    /// Refreshes property rows for the selected ARSC node (per package/type/entry level).
+    /// </summary>
+    public void RefreshForArscNode(ArscEditorViewModel editor, ArscTreeNodeViewModel? node)
+    {
+        Properties.Clear();
+        if (node is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.ArscDocument;
+        HasSelection = true;
+        SelectedNodeTitle = node.Name;
+
+        var svc = LanguageService.Instance;
+        switch (node.Payload)
+        {
+            case UotanStudio.Firmware.Arsc.ResPackage pkg:
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNode"), pkg.Name));
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeKind"), $"0x{pkg.Id:x2}"));
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeChildren"), pkg.Types.Count.ToString("N0")));
+                break;
+
+            case UotanStudio.Firmware.Arsc.ResType type:
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNode"), $"0x{type.Id:x2}"));
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeKind"), "type"));
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeDetail"), type.ConfigDescription));
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeChildren"), type.Entries.Count.ToString("N0")));
+                break;
+
+            case UotanStudio.ViewModels.Editors.ResEntryEntry entry:
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNode"), entry.Key));
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeKind"), entry.Entry.Value?.Type.ToString() ?? "<null>"));
+                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeDetail"), entry.ValueText));
+                break;
+        }
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for ARSC node '{node.Name}'");
+    }
+
+    /// <summary>
+    /// <para>响应 ARSC 节点选中变更消息，刷新选中节点详情。</para>
+    /// Responds to ARSC node-selection-changed messages by refreshing the selected node details.
+    /// </summary>
+    private void OnArscNodeSelectionChanged(object recipient, ArscNodeSelectionChangedMessage message)
+    {
+        // 仅当当前展示的是 ARSC 文档时才联动更新选中节点详情。
+        // Only update the selected-node details when the panel is currently showing an ARSC document.
+        if (ContentType != PropertiesContentType.ArscDocument)
+        {
+            return;
+        }
+
+        if (message.Editor is null)
+        {
+            return;
+        }
+
+        RefreshForArscNode(message.Editor, message.Node);
+    }
+
+    /// <summary>
+    /// <para>响应 Manifest 节点选中变更消息，刷新选中元素详情。</para>
+    /// Responds to Manifest node-selection-changed messages by refreshing the selected element details.
+    /// </summary>
+    private void OnManifestNodeSelectionChanged(object recipient, ManifestNodeSelectionChangedMessage message)
+    {
+        // 仅当当前展示的是 Manifest 文档时才联动更新选中元素详情。
+        // Only update the selected-element details when the panel is currently showing a Manifest document.
+        if (ContentType != PropertiesContentType.ManifestDocument)
+        {
+            return;
+        }
+
+        if (message.Editor is null)
+        {
+            return;
+        }
+
+        RefreshForManifestNode(message.Editor, message.Node);
     }
 
     /// <summary>
@@ -534,5 +786,23 @@ public enum PropertiesContentType
     /// <para>DEX 文档信息。</para>
     /// DEX document information.
     /// </summary>
-    DexDocument
+    DexDocument,
+
+    /// <summary>
+    /// <para>Manifest 文档信息。</para>
+    /// Manifest document information.
+    /// </summary>
+    ManifestDocument,
+
+    /// <summary>
+    /// <para>ARSC 文档信息。</para>
+    /// ARSC document information.
+    /// </summary>
+    ArscDocument,
+
+    /// <summary>
+    /// <para>APK 文档信息。</para>
+    /// APK document information.
+    /// </summary>
+    ApkDocument
 }

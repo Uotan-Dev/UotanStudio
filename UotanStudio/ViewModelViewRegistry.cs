@@ -35,6 +35,8 @@ internal static class ViewModelViewRegistry
         [typeof(DexEditorViewModel)] = () => new DexEditorView(),
         [typeof(ManifestEditorViewModel)] = () => new ManifestEditorView(),
         [typeof(ArscEditorViewModel)] = () => new ArscEditorView(),
+        [typeof(HexEditorViewModel)] = () => new HexEditorView(),
+        [typeof(ApkEditorViewModel)] = () => new ApkEditorView(),
         [typeof(ImageViewModel)] = () => new ImageView(),
         [typeof(ProjectExplorerViewModel)] = () => new ProjectExplorerView(),
         [typeof(ProjectSettingViewModel)] = () => new ProjectSettingView(),

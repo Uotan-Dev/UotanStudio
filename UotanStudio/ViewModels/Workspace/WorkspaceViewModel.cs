@@ -129,6 +129,22 @@ public class WorkspaceViewModel : ViewModelBase
             return;
         }
 
+        // 十六进制：走专用 Hex 编辑器（HexView 控件）。
+        // Hex: open in the dedicated Hex editor (HexView control).
+        if (mode == EditorOpenMode.Hex)
+        {
+            await OpenHexAsync(path);
+            return;
+        }
+
+        // APK 包：走 APK 元数据编辑器（图标/包名/版本/权限/ABI）。
+        // APK packages open in the APK metadata editor (icon/package/version/permissions/ABIs).
+        if (mode == EditorOpenMode.Apk)
+        {
+            await OpenApkAsync(path);
+            return;
+        }
+
         var documentDock = _documentDock ??= FindDocumentsPane();
         if (documentDock is null)
         {
@@ -363,6 +379,102 @@ public class WorkspaceViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <para>在文档区以 Hex 编辑器打开指定的二进制文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="HexEditorViewModel"/>。</para>
+    /// Opens the given binary file in the Hex editor in the document area: focuses it if already
+    /// open; otherwise creates and loads a <see cref="HexEditorViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的二进制文件路径。</para>
+    /// The path of the binary file to open.
+    /// </param>
+    public async Task OpenHexAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?
+            .OfType<HexEditorViewModel>()
+            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+
+        var document = new HexEditorViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        };
+
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+
+        await document.LoadAsync(fullPath);
+    }
+
+    /// <summary>
+    /// <para>在文档区以 APK 元数据编辑器打开指定的 APK 文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="ApkEditorViewModel"/>。</para>
+    /// Opens the given APK file in the APK metadata editor in the document area: focuses it if already
+    /// open; otherwise creates and loads an <see cref="ApkEditorViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的 APK 文件路径。</para>
+    /// The path of the APK file to open.
+    /// </param>
+    public async Task OpenApkAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?
+            .OfType<ApkEditorViewModel>()
+            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+
+        var document = new ApkEditorViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        };
+
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+
+        await document.LoadAsync(fullPath);
+    }
+
+    /// <summary>
     /// <para>订阅文档区 <see cref="IDock.ActiveDockable"/> 变更，在用户切换已打开文档标签时
     /// 发送 <see cref="ActiveDocumentChangedMessage"/>，使属性面板等订阅方刷新显示。</para>
     /// Subscribes to the document dock's <see cref="IDock.ActiveDockable"/> changes, sending an
@@ -397,6 +509,15 @@ public class WorkspaceViewModel : ViewModelBase
                 break;
             case DexEditorViewModel dex:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dex));
+                break;
+            case ManifestEditorViewModel manifest:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(manifest));
+                break;
+            case ArscEditorViewModel arsc:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(arsc));
+                break;
+            case ApkEditorViewModel apk:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(apk));
                 break;
             case FileViewModel file:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(file));

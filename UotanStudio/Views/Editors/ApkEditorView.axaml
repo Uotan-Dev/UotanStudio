@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.ApkEditorView"
+             x:DataType="viewmodels:ApkEditorViewModel">
+  <DockPanel>
+    <!-- 顶部错误条 -->
+    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1">
+      <TextBlock Text="{Binding CompileError}" VerticalAlignment="Center" Foreground="Red"
+                 TextTrimming="CharacterEllipsis"
+                 IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </Border>
+
+    <ScrollViewer>
+      <StackPanel Margin="16" Spacing="16">
+
+        <!-- 概览：图标 + 包名/版本/大小 -->
+        <Grid ColumnDefinitions="96,*" Margin="0,8,0,0">
+          <Border Grid.Column="0" Width="88" Height="88" CornerRadius="12"
+                  Background="{DynamicResource ControlFillColorDefaultBrush}"
+                  VerticalAlignment="Top">
+            <Grid>
+              <Image Source="{Binding IconBitmap}" Stretch="Uniform"
+                     IsVisible="{Binding HasIcon}" />
+              <TextBlock Text="APK" FontSize="28" FontWeight="Bold" Opacity="0.35"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                         IsVisible="{Binding HasIcon, Converter={x:Static BoolConverters.Not}}" />
+            </Grid>
+          </Border>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+            <TextBlock Text="{Binding PackageName}" FontSize="20" FontWeight="SemiBold"
+                       TextWrapping="Wrap" />
+            <TextBlock FontSize="12" Opacity="0.75">
+              <Run Text="{Binding VersionName}" />
+              <Run Text="(" /><Run Text="{Binding VersionCodeDisplay}" /><Run Text=")" />
+            </TextBlock>
+            <TextBlock Text="{Binding SizeDisplay}" FontSize="12" Opacity="0.6" />
+          </StackPanel>
+        </Grid>
+
+        <!-- 详细信息：SDK / ABI / 权限 -->
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+          <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="150,*">
+              <TextBlock Grid.Column="0" Text="SDK" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="1" Text="{Binding SdkDisplay}" TextWrapping="Wrap" />
+            </Grid>
+            <Grid ColumnDefinitions="150,*">
+              <TextBlock Grid.Column="0" Text="ABI" FontWeight="SemiBold" />
+              <TextBlock Grid.Column="1" Text="{Binding AbiDisplay}" TextWrapping="Wrap" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="Permissions" FontWeight="SemiBold" FontSize="13" />
+            <TextBlock Text="{Binding PermissionsDisplay}" FontFamily="Consolas" FontSize="12"
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>
