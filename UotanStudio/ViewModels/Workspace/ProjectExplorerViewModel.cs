@@ -98,6 +98,30 @@ public sealed partial class ExplorerNode : ObservableObject
     /// </summary>
     public static string OpenAsDexHeader => LanguageService.Instance.GetString("Explorer_OpenAsDex");
 
+    /// <summary>
+    /// <para>资源管理器右键「以 Manifest 打开（AXML）」菜单项的本地化标题。</para>
+    /// Localized title of the "open as Manifest (AXML)" context-menu item in the explorer.
+    /// </summary>
+    public static string OpenAsAxmlHeader => LanguageService.Instance.GetString("Explorer_OpenAsAxml");
+
+    /// <summary>
+    /// <para>资源管理器右键「以 ARSC 打开」菜单项的本地化标题。</para>
+    /// Localized title of the "open as ARSC" context-menu item in the explorer.
+    /// </summary>
+    public static string OpenAsArscHeader => LanguageService.Instance.GetString("Explorer_OpenAsArsc");
+
+    /// <summary>
+    /// <para>资源管理器右键「以 APK 打开」菜单项的本地化标题。</para>
+    /// Localized title of the "open as APK" context-menu item in the explorer.
+    /// </summary>
+    public static string OpenAsApkHeader => LanguageService.Instance.GetString("Explorer_OpenAsApk");
+
+    /// <summary>
+    /// <para>资源管理器右键「打开方式」子菜单的本地化标题。</para>
+    /// Localized title of the "open with" submenu in the explorer.
+    /// </summary>
+    public static string OpenAsMenuHeader => LanguageService.Instance.GetString("Explorer_OpenAsMenu");
+
     private bool _childrenLoaded;
 
     /// <summary>

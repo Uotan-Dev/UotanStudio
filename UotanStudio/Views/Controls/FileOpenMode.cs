@@ -50,7 +50,13 @@ public enum EditorOpenMode
     /// <para>以 ARSC 资源表编辑器打开（resources.arsc）。</para>
     /// Open in the ARSC resource-table editor (resources.arsc).
     /// </summary>
-    Arsc
+    Arsc,
+
+    /// <summary>
+    /// <para>以 APK 元数据编辑器打开（Android Package，展示图标/包名/版本/权限/ABI）。</para>
+    /// Open in the APK metadata editor (Android Package; shows icon/package/version/permissions/ABIs).
+    /// </summary>
+    Apk
 }
 
 /// <summary>
@@ -91,6 +97,20 @@ public static class FileOpenMode
         if (IsDexExtension(ext))
         {
             return EditorOpenMode.Dex;
+        }
+
+        // ARSC 资源表：走 ARSC 编辑器（resources.arsc 等）。
+        // ARSC resource tables open in the ARSC editor (resources.arsc etc.).
+        if (IsArscExtension(ext))
+        {
+            return EditorOpenMode.Arsc;
+        }
+
+        // APK 包：走 APK 元数据编辑器（优先于已知二进制列表中的 .apk→Hex）。
+        // APK packages open in the APK metadata editor (before the known-binary .apk→Hex entry).
+        if (IsApkExtension(ext))
+        {
+            return EditorOpenMode.Apk;
         }
 
         // 设备树源文件按文本（语法高亮）打开。
@@ -176,6 +196,20 @@ public static class FileOpenMode
     /// </summary>
     public static bool IsDexExtension(string? ext) =>
         ext is not null && ext.Equals(".dex", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <para>是否为 ARSC 资源表扩展名。</para>
+    /// Whether the extension is an ARSC resource-table one.
+    /// </summary>
+    public static bool IsArscExtension(string? ext) =>
+        ext is not null && ext.Equals(".arsc", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <para>是否为 APK 包扩展名。</para>
+    /// Whether the extension is an APK package one.
+    /// </summary>
+    public static bool IsApkExtension(string? ext) =>
+        ext is not null && ext.Equals(".apk", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// <para>是否为 DTS 设备树源文件扩展名。</para>

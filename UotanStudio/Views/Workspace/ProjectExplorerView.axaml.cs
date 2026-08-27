@@ -62,6 +62,21 @@ public partial class ProjectExplorerView : UserControl
         OpenWith(EditorOpenMode.Dex);
     }
 
+    private void OnOpenAsAxml(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.Axml);
+    }
+
+    private void OnOpenAsArsc(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.Arsc);
+    }
+
+    private void OnOpenAsApk(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.Apk);
+    }
+
     private void OpenWith(EditorOpenMode mode)
     {
         if (ProjectTree.SelectedItem is ExplorerNode node && !node.IsDirectory && !node.IsPlaceholder)

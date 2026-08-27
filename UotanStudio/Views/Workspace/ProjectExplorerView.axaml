@@ -10,22 +10,27 @@
 		<TreeView.ItemTemplate>
 			<TreeDataTemplate x:DataType="viewmodels:ExplorerNode" ItemsSource="{Binding Children}">
 				<TextBlock Text="{Binding Name}">
-					<TextBlock.ContextMenu>
-						<ContextMenu>
+				<TextBlock.ContextMenu>
+					<ContextMenu>
+						<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsMenuHeader}"
+								  IsVisible="{Binding !IsDirectory}">
 							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsTextHeader}"
-									  IsVisible="{Binding !IsDirectory}"
-									  Click="OnOpenAsText" />
+								  Click="OnOpenAsText" />
 							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsHexHeader}"
-									  IsVisible="{Binding !IsDirectory}"
 									  Click="OnOpenAsHex" />
 							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDtbHeader}"
-							    IsVisible="{Binding !IsDirectory}"
-							    Click="OnOpenAsDtb" />
+									  Click="OnOpenAsDtb" />
 							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDexHeader}"
-							    IsVisible="{Binding !IsDirectory}"
-							    Click="OnOpenAsDex" />
-						</ContextMenu>
-					</TextBlock.ContextMenu>
+									  Click="OnOpenAsDex" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsAxmlHeader}"
+									  Click="OnOpenAsAxml" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsArscHeader}"
+									  Click="OnOpenAsArsc" />
+							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsApkHeader}"
+									  Click="OnOpenAsApk" />
+						</MenuItem>
+					</ContextMenu>
+				</TextBlock.ContextMenu>
 				</TextBlock>
 			</TreeDataTemplate>
 		</TreeView.ItemTemplate>

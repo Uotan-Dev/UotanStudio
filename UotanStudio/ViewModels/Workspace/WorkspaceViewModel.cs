@@ -78,7 +78,23 @@ public class WorkspaceViewModel : ViewModelBase
         // dual-pane editor instead of being opened as a plain binary (hex) document.
         if (mode == EditorOpenMode.Auto)
         {
-            mode = FileOpenMode.ResolveMode(path);
+            // 读取文件头参与内容探测：AXML（.xml 二进制）与 ARSC 按魔数路由到专用编辑器，
+            // 否则 .xml 会被文本路由拦截、.arsc 落回 Auto 而无法自动打开对应视图。
+            // Read the header for content sniffing: AXML (binary .xml) and ARSC route to their
+            // dedicated editors by magic, otherwise .xml would be claimed by the text route and
+            // .arsc would fall back to Auto instead of its dedicated view.
+            byte[]? header = null;
+            try
+            {
+                header = UotanStudio.Firmware.Common.FormatDetector.ReadHeader(path, 12);
+            }
+            catch
+            {
+                // 头部读取失败（文件被占用等）时退回纯扩展名解析。
+                // Fall back to extension-only resolution when the header cannot be read.
+            }
+
+            mode = FileOpenMode.ResolveMode(path, header);
         }
 
         // 设备树二进制：走 DTB 双栏编辑器。
