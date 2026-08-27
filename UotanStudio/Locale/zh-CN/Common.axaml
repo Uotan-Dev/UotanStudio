@@ -46,11 +46,22 @@
     <x:String x:Key="Explorer_OpenAsHex">以十六进制打开</x:String>
     <x:String x:Key="Explorer_OpenAsDtb">以设备树打开</x:String>
     <x:String x:Key="Explorer_OpenAsDex">以 DEX 打开</x:String>
+    <x:String x:Key="Explorer_OpenAsAxml">以 Manifest 打开</x:String>
+    <x:String x:Key="Explorer_OpenAsArsc">以 ARSC 打开</x:String>
+    <x:String x:Key="Explorer_OpenAsApk">以 APK 打开</x:String>
+    <x:String x:Key="Explorer_OpenAsMenu">打开方式</x:String>
     <x:String x:Key="Dock_Dtb_Save">保存</x:String>
     <x:String x:Key="Dock_Dtb_Tree">设备树</x:String>
     <x:String x:Key="Dock_Dtb_Source">设备树源</x:String>
     <x:String x:Key="Dock_Dtb_CompileError">编译错误</x:String>
     <x:String x:Key="Dock_Dex_Save">重建并保存</x:String>
     <x:String x:Key="Dock_Dex_Disassembling">正在解析与反汇编，请稍候…</x:String>
+    <x:String x:Key="Dock_Manifest_Save">重建并保存</x:String>
+    <x:String x:Key="Dock_Manifest_Busy">正在解析 Manifest，请稍候…</x:String>
+    <x:String x:Key="Dock_Arsc_Save">重建并保存</x:String>
+    <x:String x:Key="Dock_Arsc_Busy">正在解析资源表，请稍候…</x:String>
+    <x:String x:Key="Dock_Hex_Save">保存</x:String>
+    <x:String x:Key="Dock_Hex_Busy">正在加载文件，请稍候…</x:String>
+    <x:String x:Key="Dock_Apk_Busy">正在分析 APK，请稍候…</x:String>
 
 </ResourceDictionary>

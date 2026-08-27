@@ -46,11 +46,22 @@
     <x:String x:Key="Explorer_OpenAsHex">Open as Hex</x:String>
     <x:String x:Key="Explorer_OpenAsDtb">Open as Device Tree</x:String>
     <x:String x:Key="Explorer_OpenAsDex">Open as DEX</x:String>
+    <x:String x:Key="Explorer_OpenAsAxml">Open as Manifest</x:String>
+    <x:String x:Key="Explorer_OpenAsArsc">Open as ARSC</x:String>
+    <x:String x:Key="Explorer_OpenAsApk">Open as APK</x:String>
+    <x:String x:Key="Explorer_OpenAsMenu">Open With</x:String>
     <x:String x:Key="Dock_Dtb_Save">Save</x:String>
     <x:String x:Key="Dock_Dtb_Tree">Device Tree</x:String>
     <x:String x:Key="Dock_Dtb_Source">Device Tree Source</x:String>
     <x:String x:Key="Dock_Dtb_CompileError">Compile Error</x:String>
     <x:String x:Key="Dock_Dex_Save">Rebuild &amp; Save</x:String>
     <x:String x:Key="Dock_Dex_Disassembling">Parsing and disassembling, please wait…</x:String>
+    <x:String x:Key="Dock_Manifest_Save">Rebuild &amp; Save</x:String>
+    <x:String x:Key="Dock_Manifest_Busy">Parsing manifest, please wait…</x:String>
+    <x:String x:Key="Dock_Arsc_Save">Rebuild &amp; Save</x:String>
+    <x:String x:Key="Dock_Arsc_Busy">Parsing resource table, please wait…</x:String>
+    <x:String x:Key="Dock_Hex_Save">Save</x:String>
+    <x:String x:Key="Dock_Hex_Busy">Loading file, please wait…</x:String>
+    <x:String x:Key="Dock_Apk_Busy">Analyzing APK, please wait…</x:String>
 
 </ResourceDictionary>

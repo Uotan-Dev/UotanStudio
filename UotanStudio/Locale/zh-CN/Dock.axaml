@@ -50,6 +50,9 @@
     <x:String x:Key="Dock_Properties_Type_TextDocument">文本文档</x:String>
     <x:String x:Key="Dock_Properties_Type_DtbDocument">设备树</x:String>
     <x:String x:Key="Dock_Properties_Type_DexDocument">DEX</x:String>
+    <x:String x:Key="Dock_Properties_Type_ManifestDocument">Manifest</x:String>
+    <x:String x:Key="Dock_Properties_Type_ArscDocument">ARSC</x:String>
+    <x:String x:Key="Dock_Properties_Type_ApkDocument">APK</x:String>
 
     <!-- 文本文档属性面板标签 -->
     <x:String x:Key="Dock_Properties_Text_FileName">文件名</x:String>
@@ -85,9 +88,43 @@
     <x:String x:Key="Dock_Properties_Dex_StringCount">字符串数</x:String>
     <x:String x:Key="Dock_Properties_Dex_TypeCount">类型数</x:String>
     <x:String x:Key="Dock_Properties_Dex_SelectedNode">选中项</x:String>
-    <x:String x:Key="Dock_Properties_Dex_SelectedNodeKind">种类</x:String>
+    <x:String x:Key="Dock_Properties_Dex_SelectedNodeKind">类型</x:String>
     <x:String x:Key="Dock_Properties_Dex_SelectedNodeDetail">详情</x:String>
     <x:String x:Key="Dock_Properties_Dex_SelectedNodeChildren">子项数</x:String>
+
+    <!-- Manifest 文档属性面板标签 -->
+    <x:String x:Key="Dock_Properties_Manifest_FileName">文件名称</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_FilePath">文件路径</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_FileSize">文件大小</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_ElementCount">元素数</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_AttributeCount">属性数</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_SelectedNode">选中元素</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_SelectedNodeNs">命名空间</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_SelectedNodeAttrs">属性数</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_SelectedNodeChildren">子元素数</x:String>
+    <x:String x:Key="Dock_Properties_Manifest_SelectedNodeText">文本</x:String>
+
+    <!-- ARSC 文档属性面板标签 -->
+    <x:String x:Key="Dock_Properties_Arsc_FileName">文件名称</x:String>
+    <x:String x:Key="Dock_Properties_Arsc_FilePath">文件路径</x:String>
+    <x:String x:Key="Dock_Properties_Arsc_PackageCount">包数</x:String>
+    <x:String x:Key="Dock_Properties_Arsc_TypeCount">类型表数</x:String>
+    <x:String x:Key="Dock_Properties_Arsc_EntryCount">条目数</x:String>
+    <x:String x:Key="Dock_Properties_Arsc_SelectedNode">选中项</x:String>
+    <x:String x:Key="Dock_Properties_Arsc_SelectedNodeKind">类型</x:String>
+    <x:String x:Key="Dock_Properties_Arsc_SelectedNodeDetail">详情</x:String>
+    <x:String x:Key="Dock_Properties_Arsc_SelectedNodeChildren">子项数</x:String>
+
+    <!-- APK 文档属性面板标签 -->
+    <x:String x:Key="Dock_Properties_Apk_FileName">文件名称</x:String>
+    <x:String x:Key="Dock_Properties_Apk_FilePath">文件路径</x:String>
+    <x:String x:Key="Dock_Properties_Apk_FileSize">文件大小</x:String>
+    <x:String x:Key="Dock_Properties_Apk_PackageName">包名</x:String>
+    <x:String x:Key="Dock_Properties_Apk_VersionName">版本名</x:String>
+    <x:String x:Key="Dock_Properties_Apk_VersionCode">版本号</x:String>
+    <x:String x:Key="Dock_Properties_Apk_Sdk">SDK</x:String>
+    <x:String x:Key="Dock_Properties_Apk_Abis">ABI</x:String>
+    <x:String x:Key="Dock_Properties_Apk_Permissions">权限数</x:String>
 
     <!-- 设备确认对话框 -->
     <x:String x:Key="Editor_Yes">是</x:String>
