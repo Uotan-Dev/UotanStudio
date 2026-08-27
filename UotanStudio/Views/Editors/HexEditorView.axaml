@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.HexEditorView"
+             x:DataType="viewmodels:HexEditorViewModel">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- 顶部工具栏：文件路径 + 保存按钮 -->
+    <Border Grid.Row="0" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" Content="{x:Static viewmodels:HexEditorViewModel.SaveLabel}"
+                Command="{Binding SaveCommand}"
+                IsEnabled="{Binding IsBusy, Converter={x:Static BoolConverters.Not}}" />
+        <TextBlock Text="{Binding FilePath}"
+                   VerticalAlignment="Center"
+                   FontSize="11" Opacity="0.7"
+                   TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+
+    <!-- Hex 视图：自绘制 HexViewer 控件承载二进制查看/编辑（编辑就地写回 RawBytes） -->
+    <controls:HexViewer Grid.Row="1" Data="{Binding RawBytes}"
+                        BytesEdited="OnBytesEdited" />
+
+    <!-- 底部状态栏：文件大小 + 编辑状态 -->
+    <Border Grid.Row="2" Padding="6,3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <TextBlock Text="{Binding SizeDisplay}" FontSize="10" Opacity="0.6" />
+        <TextBlock Text="{Binding IsDirty, StringFormat='[*]'}"
+                   FontSize="10" Foreground="Orange"
+                   IsVisible="{Binding IsDirty}" />
+      </StackPanel>
+    </Border>
+  </Grid>
+</UserControl>
