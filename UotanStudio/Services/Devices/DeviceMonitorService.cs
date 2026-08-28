@@ -145,7 +145,16 @@ public sealed class DeviceMonitorService : IDisposable
                 return;
             }
             var monitor = new DeviceMonitor(new AdbSocket(client.EndPoint));
-            monitor.DeviceChanged += (_, _) => ScheduleChange();
+            monitor.DeviceChanged += (_, _) =>
+            {
+                // adb server 通道的设备变更（连接/断开/状态切换）明确写入全局日志，
+                // 与 USB 热插拔日志区分来源，便于排查设备发现链路。
+                // Log adb-server channel device changes (connect/disconnect/state) explicitly
+                // so they are distinguishable from USB hotplug events when tracing discovery.
+                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                    "adb server channel device change detected; rescanning device list.");
+                ScheduleChange();
+            };
             monitor.Start();
             _adbMonitor = monitor;
             LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Official adb server detected; network devices will be merged.");
@@ -355,6 +364,12 @@ public sealed class DeviceMonitorService : IDisposable
                     Transport = DeviceTransportKind.Tcp,
                     State = d.State.ToString().ToLowerInvariant(),
                 });
+
+                // 网络设备来自 adb server 通道（非 USB 直连），明确记录以便用户区分。
+                // Network devices come from the adb server channel (not direct USB); log them
+                // explicitly so the transport is obvious.
+                LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                    $"adb server channel device: {d.Serial} (TCP)");
             }
         }
 
