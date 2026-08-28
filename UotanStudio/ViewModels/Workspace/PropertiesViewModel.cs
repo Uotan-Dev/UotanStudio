@@ -93,6 +93,8 @@ internal partial class PropertiesViewModel : Tool
                 PropertiesContentType.ManifestDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ManifestDocument"),
                 PropertiesContentType.ArscDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ArscDocument"),
                 PropertiesContentType.ApkDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ApkDocument"),
+                PropertiesContentType.FirmwareDocument => LanguageService.Instance.GetString("Dock_Properties_Type_FirmwareDocument"),
+                PropertiesContentType.HexDocument => LanguageService.Instance.GetString("Dock_Properties_Type_HexDocument"),
                 _ => string.Empty,
             };
 
@@ -191,6 +193,22 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
+        // 固件信息文档：走固件展示路径。
+        // Firmware-info document: route through the firmware display path.
+        if (message.FirmwareDocument is { } firmware)
+        {
+            RefreshForFirmwareDocument(firmware);
+            return;
+        }
+
+        // Hex 编辑器文档：走 Hex 展示路径。
+        // Hex editor document: route through the Hex display path.
+        if (message.HexDocument is { } hex)
+        {
+            RefreshForHexDocument(hex);
+            return;
+        }
+
         var doc = message.Document;
         if (doc is null)
         {
@@ -200,7 +218,9 @@ internal partial class PropertiesViewModel : Tool
                 || ContentType == PropertiesContentType.DexDocument
                 || ContentType == PropertiesContentType.ManifestDocument
                 || ContentType == PropertiesContentType.ArscDocument
-                || ContentType == PropertiesContentType.ApkDocument)
+                || ContentType == PropertiesContentType.ApkDocument
+                || ContentType == PropertiesContentType.FirmwareDocument
+                || ContentType == PropertiesContentType.HexDocument)
             {
                 Properties.Clear();
                 SelectedNodeTitle = string.Empty;
@@ -482,6 +502,75 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Permissions"), doc.Info?.Permissions.Count.ToString("N0") ?? "0"));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for APK document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新固件信息文档的属性行（文件名、路径、格式名、摘要、元数据键值与组件/条目计数）。</para>
+    /// Refreshes property rows for a firmware-info document (file name, path, format name, summary,
+    /// metadata key-values and component/entry counts).
+    /// </summary>
+    public void RefreshForFirmwareDocument(FirmwareInfoViewModel doc)
+    {
+        Properties.Clear();
+        if (doc is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.FirmwareDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.FilePath ?? doc.Title;
+
+        var svc = LanguageService.Instance;
+        var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_FileName"), fileName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_FilePath"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_Format"), doc.FormatName));
+        if (!string.IsNullOrEmpty(doc.Summary))
+        {
+            Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_Summary"), doc.Summary));
+        }
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_MetadataCount"), doc.Metadata.Count.ToString("N0")));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_Components"), doc.Components.Count.ToString("N0")));
+
+        foreach (var row in doc.Metadata)
+        {
+            Properties.Add(new PropertyRow(row.Name, row.Value));
+        }
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for firmware document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新 Hex 文档的属性行（文件名、路径、文件大小、字节数）。</para>
+    /// Refreshes property rows for a Hex document (file name, path, file size, byte count).
+    /// </summary>
+    public void RefreshForHexDocument(HexEditorViewModel doc)
+    {
+        Properties.Clear();
+        if (doc is null)
+        {
+            SelectedNodeTitle = string.Empty;
+            HasSelection = false;
+            ContentType = PropertiesContentType.None;
+            return;
+        }
+
+        ContentType = PropertiesContentType.HexDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.FilePath ?? doc.Title;
+
+        var svc = LanguageService.Instance;
+        var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_FileName"), fileName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_FilePath"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_ByteCount"), doc.SizeDisplay));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Hex document '{doc.FilePath}'");
     }
 
     /// <summary>
@@ -800,5 +889,17 @@ public enum PropertiesContentType
     /// <para>APK 文档信息。</para>
     /// APK document information.
     /// </summary>
-    ApkDocument
+    ApkDocument,
+
+    /// <summary>
+    /// <para>固件信息文档。</para>
+    /// Firmware-info document.
+    /// </summary>
+    FirmwareDocument,
+
+    /// <summary>
+    /// <para>Hex 十六进制文档信息。</para>
+    /// Hex document information.
+    /// </summary>
+    HexDocument
 }

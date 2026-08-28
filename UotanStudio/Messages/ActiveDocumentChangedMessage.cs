@@ -55,6 +55,20 @@ public class ActiveDocumentChangedMessage
     public ApkEditorViewModel? ApkDocument { get; }
 
     /// <summary>
+    /// <para>获取新激活的 <see cref="FirmwareInfoViewModel"/> 文档；非固件信息文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="FirmwareInfoViewModel"/> document; <c>null</c> for
+    /// non-firmware-info documents.
+    /// </summary>
+    public FirmwareInfoViewModel? FirmwareDocument { get; }
+
+    /// <summary>
+    /// <para>获取新激活的 <see cref="HexEditorViewModel"/> 文档；非 Hex 文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="HexEditorViewModel"/> document; <c>null</c> for non-Hex
+    /// documents.
+    /// </summary>
+    public HexEditorViewModel? HexDocument { get; }
+
+    /// <summary>
     /// <para>获取新激活文档的通用 <see cref="Document"/> 句柄；便于订阅方做类型分支。</para>
     /// Gets the generic <see cref="Document"/> handle of the newly activated document, for
     /// type-dispatching by subscribers.
@@ -143,5 +157,33 @@ public class ActiveDocumentChangedMessage
     {
         ApkDocument = apkDocument;
         ActiveDocument = apkDocument;
+    }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（FirmwareInfoViewModel 路径）。</para>
+    /// Creates an active document changed message (FirmwareInfoViewModel path).
+    /// </summary>
+    /// <param name="firmwareDocument">
+    /// <para>新激活的固件信息视图模型；可为 <c>null</c>。</para>
+    /// The newly activated firmware-info view model; may be <c>null</c>.
+    /// </param>
+    public ActiveDocumentChangedMessage(FirmwareInfoViewModel? firmwareDocument)
+    {
+        FirmwareDocument = firmwareDocument;
+        ActiveDocument = firmwareDocument;
+    }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（HexEditorViewModel 路径）。</para>
+    /// Creates an active document changed message (HexEditorViewModel path).
+    /// </summary>
+    /// <param name="hexDocument">
+    /// <para>新激活的 Hex 编辑器视图模型；可为 <c>null</c>。</para>
+    /// The newly activated Hex editor view model; may be <c>null</c>.
+    /// </param>
+    public ActiveDocumentChangedMessage(HexEditorViewModel? hexDocument)
+    {
+        HexDocument = hexDocument;
+        ActiveDocument = hexDocument;
     }
 }

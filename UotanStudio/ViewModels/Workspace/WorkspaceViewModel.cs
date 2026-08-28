@@ -189,6 +189,15 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadContentAsync(fullPath, mode);
+
+        // 内容加载完成后补发活动文档消息，使属性面板刷新出行数/字符数/编码等真实值
+        // （ActiveDockable 在加载前就已触发一次刷新，当时文本尚未就绪，属性为缺省值）。
+        // Re-send the active-document message after content loads so the properties panel shows
+        // the real line/char counts and encoding (the first refresh fired before the text was ready).
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+        }
     }
 
     /// <summary>
@@ -237,6 +246,15 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadAsync(fullPath);
+
+        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
+        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
+        // Re-send the active-document message after load so the properties panel shows real values
+        // (the first refresh fired when the document data was not yet ready).
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dtbDocument: document));
+        }
     }
 
     /// <summary>
@@ -285,6 +303,15 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadAsync(fullPath);
+
+        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
+        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
+        // Re-send the active-document message after load so the properties panel shows real values
+        // (the first refresh fired when the document data was not yet ready).
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dexDocument: document));
+        }
     }
 
     /// <summary>
@@ -333,6 +360,15 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadAsync(fullPath);
+
+        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
+        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
+        // Re-send the active-document message after load so the properties panel shows real values
+        // (the first refresh fired when the document data was not yet ready).
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(manifestDocument: document));
+        }
     }
 
     /// <summary>
@@ -381,6 +417,15 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadAsync(fullPath);
+
+        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
+        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
+        // Re-send the active-document message after load so the properties panel shows real values
+        // (the first refresh fired when the document data was not yet ready).
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+        }
     }
 
     /// <summary>
@@ -429,6 +474,15 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadAsync(fullPath);
+
+        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
+        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
+        // Re-send the active-document message after load so the properties panel shows real values
+        // (the first refresh fired when the document data was not yet ready).
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+        }
     }
 
     /// <summary>
@@ -477,6 +531,15 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadAsync(fullPath);
+
+        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
+        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
+        // Re-send the active-document message after load so the properties panel shows real values
+        // (the first refresh fired when the document data was not yet ready).
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(apkDocument: document));
+        }
     }
 
     /// <summary>
@@ -533,6 +596,15 @@ public class WorkspaceViewModel : ViewModelBase
             LogService.Instance.Write(LogLevel.Error, "Workspace",
                 $"Failed to open firmware info for '{fullPath}': {ex.Message}");
         }
+
+        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
+        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
+        // Re-send the active-document message after load so the properties panel shows real values
+        // (the first refresh fired when the document data was not yet ready).
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+        {
+            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+        }
     }
 
     /// <summary>
@@ -579,6 +651,12 @@ public class WorkspaceViewModel : ViewModelBase
                 break;
             case ApkEditorViewModel apk:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(apk));
+                break;
+            case FirmwareInfoViewModel firmware:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(firmware));
+                break;
+            case HexEditorViewModel hex:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(hex));
                 break;
             case FileViewModel file:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(file));
