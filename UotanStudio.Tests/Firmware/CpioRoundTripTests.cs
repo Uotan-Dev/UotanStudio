@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.Cpio;
+using UotanStudio.Firmware.Cpio.Formats.Tar;
 using UotanStudio.Firmware.Cpio.Model;
 using UotanStudio.Firmware.Cpio.Writing;
 using Xunit;
@@ -123,5 +124,159 @@ public class CpioRoundTripTests
         // Only the TRAILER!!! entry is present; reading yields no entries.
         using var readStream = new MemoryStream(bytes, writable: false);
         Assert.Empty(archive.ReadAll(readStream, ArchiveFormat.NewAscii));
+    }
+
+    [Fact]
+    public void PackNewc_WithFileStreamData_RoundTrips()
+    {
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"cpio_stream_newc_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            var fileA = Path.Combine(tmpDir, "a.bin");
+            var fileB = Path.Combine(tmpDir, "b.bin");
+            var contentA = BuildBytes(4096, 3);
+            var contentB = BuildBytes(4096, 11);
+            File.WriteAllBytes(fileA, contentA);
+            File.WriteAllBytes(fileB, contentB);
+
+            var entries = new[]
+            {
+                BuildStreamedEntry("a.bin", fileA),
+                BuildStreamedEntry("b.bin", fileB),
+            };
+
+            var archive = new CpioArchive();
+            byte[] packed;
+            using (var ms = new MemoryStream())
+            {
+                archive.SaveAll(ms, entries, ArchiveFormat.NewAscii, new WriteOptions { IncludeTrailer = true });
+                packed = ms.ToArray();
+            }
+
+            using var readStream = new MemoryStream(packed, writable: false);
+            var unpacked = archive.ReadAll(readStream, ArchiveFormat.NewAscii);
+
+            Assert.Equal(2, unpacked.Count);
+            Assert.Equal(contentA, unpacked.Single(e => e.Name == "a.bin").Data);
+            Assert.Equal(contentB, unpacked.Single(e => e.Name == "b.bin").Data);
+        }
+        finally
+        {
+            Directory.Delete(tmpDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PackTar_WithFileStreamData_RoundTrips()
+    {
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"cpio_stream_tar_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            var fileA = Path.Combine(tmpDir, "a.bin");
+            var fileB = Path.Combine(tmpDir, "b.bin");
+            var contentA = BuildBytes(8192, 5);
+            var contentB = BuildBytes(2048, 9);
+            File.WriteAllBytes(fileA, contentA);
+            File.WriteAllBytes(fileB, contentB);
+
+            var entries = new[]
+            {
+                BuildStreamedEntry("a.bin", fileA),
+                BuildStreamedEntry("b.bin", fileB),
+            };
+
+            var archive = new CpioArchive();
+            byte[] packed;
+            using (var ms = new MemoryStream())
+            {
+                archive.SaveAll(ms, entries, ArchiveFormat.Ustar, new WriteOptions { IncludeTrailer = true });
+                packed = ms.ToArray();
+            }
+
+            using var readStream = new MemoryStream(packed, writable: false);
+            var unpacked = archive.ReadAll(readStream, ArchiveFormat.Ustar);
+
+            Assert.Equal(2, unpacked.Count);
+            Assert.Equal(contentA, unpacked.Single(e => e.Name == "a.bin").Data);
+            Assert.Equal(contentB, unpacked.Single(e => e.Name == "b.bin").Data);
+        }
+        finally
+        {
+            Directory.Delete(tmpDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TarArchiveReader_ReadEntries_StreamsPayloads()
+    {
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"cpio_stream_read_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        try
+        {
+            var fileA = Path.Combine(tmpDir, "a.bin");
+            var contentA = BuildBytes(4096, 13);
+            File.WriteAllBytes(fileA, contentA);
+
+            var archive = new CpioArchive();
+            byte[] packed;
+            using (var ms = new MemoryStream())
+            {
+                archive.SaveAll(ms, [BuildStreamedEntry("a.bin", fileA)], ArchiveFormat.Ustar, new WriteOptions());
+                packed = ms.ToArray();
+            }
+
+            // 惰性流式读取：条目的负载经 DataStream 暴露，须在进入下一条目前消费。
+            // Lazy streaming read: payload is exposed via DataStream and must be consumed
+            // before the reader advances to the next entry.
+            var reader = new TarArchiveReader();
+            using var src = new MemoryStream(packed, writable: false);
+            byte[] streamed = [];
+            foreach (var entry in reader.ReadEntriesStreaming(src))
+            {
+                using var sink = new MemoryStream();
+                Assert.NotNull(entry.DataStream);
+                entry.DataStream!.CopyTo(sink);
+                streamed = sink.ToArray();
+            }
+
+            Assert.Equal(contentA, streamed);
+        }
+        finally
+        {
+            Directory.Delete(tmpDir, recursive: true);
+        }
+    }
+
+    private static ArchiveEntry BuildStreamedEntry(string name, string filePath)
+    {
+        return new ArchiveEntry
+        {
+            Name = name,
+            LinkName = null,
+            Data = [],
+            DataStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read),
+            Metadata = new ArchiveEntryMetadata
+            {
+                FileType = CpioFileType.Regular,
+                Mode = 0x81A4, // S_IFREG | 0644
+                UserId = 1000,
+                GroupId = 1000,
+                LinkCount = 1,
+                ModificationTimeUnixSeconds = 1_700_000_100,
+                UnixPermissions = 0x1A4,
+            },
+        };
+    }
+
+    private static byte[] BuildBytes(int length, int factor)
+    {
+        var data = new byte[length];
+        for (var i = 0; i < length; i++)
+        {
+            data[i] = (byte)((i * factor) & 0xFF);
+        }
+        return data;
     }
 }

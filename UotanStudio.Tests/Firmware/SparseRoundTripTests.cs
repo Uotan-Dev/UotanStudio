@@ -120,6 +120,147 @@ public class SparseRoundTripTests
         Assert.Equal(payload, raw.AsSpan(0, payload.Length).ToArray());
     }
 
+    [Fact]
+    public void FromImageFile_StreamsRawChunks_WithoutMaterializing()
+    {
+        using var sparse = new SparseFile(BlockSize, BlockSize * 4);
+        var payload = BuildBytes(BlockSize * 3, 7);
+        sparse.AddRawChunk(payload);
+        sparse.AddFillChunk(0xDEADBEEF, BlockSize);
+
+        var tmp = Path.Combine(Path.GetTempPath(), $"sparse_stream_{Guid.NewGuid():N}.img");
+        try
+        {
+            using (var fs = File.Create(tmp))
+            {
+                sparse.WriteToStream(fs, sparse: true);
+            }
+
+            // 从磁盘加载：RAW 块应保持流式引用源文件范围，而非物化为 MemoryDataProvider。
+            // Loading from disk must keep the RAW chunk backed by a stream range, not materialize it.
+            using var loaded = SparseReader.FromImageFile(tmp);
+            var rawChunk = loaded.Chunks.Single(c => c.Header.ChunkType == (ushort)ChunkType.Raw);
+            Assert.IsType<StreamDataProvider>(rawChunk.DataProvider);
+            Assert.Equal(BlockSize * 3, rawChunk.DataProvider!.Length);
+
+            byte[] rawOriginal;
+            using (var rawMs = new MemoryStream())
+            {
+                sparse.WriteRawToStream(rawMs);
+                rawOriginal = rawMs.ToArray();
+            }
+
+            byte[] rawLoaded;
+            using (var rawMs = new MemoryStream())
+            {
+                loaded.WriteRawToStream(rawMs);
+                rawLoaded = rawMs.ToArray();
+            }
+
+            Assert.Equal(rawOriginal, rawLoaded);
+        }
+        finally
+        {
+            if (File.Exists(tmp))
+            {
+                File.Delete(tmp);
+            }
+        }
+    }
+
+    [Fact]
+    public void FromImageFile_WithCrc32_ValidatesStreaming()
+    {
+        using var sparse = new SparseFile(BlockSize, BlockSize * 3);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 2, 3));
+        sparse.AddFillChunk(0x11223344, BlockSize);
+
+        var tmp = Path.Combine(Path.GetTempPath(), $"sparse_crc_stream_{Guid.NewGuid():N}.img");
+        try
+        {
+            using (var fs = File.Create(tmp))
+            {
+                sparse.WriteToStream(fs, sparse: true, includeCrc: true);
+            }
+
+            // validateCrc 在加载时对 RAW 块做池化增量 CRC，且不物化数据。
+            // validateCrc computes the CRC incrementally over pooled buffers without materializing.
+            using var loaded = SparseReader.FromImageFile(tmp, validateCrc: true);
+
+            byte[] rawOriginal;
+            using (var rawMs = new MemoryStream())
+            {
+                sparse.WriteRawToStream(rawMs);
+                rawOriginal = rawMs.ToArray();
+            }
+
+            byte[] rawLoaded;
+            using (var rawMs = new MemoryStream())
+            {
+                loaded.WriteRawToStream(rawMs);
+                rawLoaded = rawMs.ToArray();
+            }
+
+            Assert.Equal(rawOriginal, rawLoaded);
+        }
+        finally
+        {
+            if (File.Exists(tmp))
+            {
+                File.Delete(tmp);
+            }
+        }
+    }
+
+    [Fact]
+    public void ResparseImage_SplitsIntoStreamingPieces_AndReassembles()
+    {
+        using var sparse = new SparseFile(BlockSize, BlockSize * 6);
+        sparse.AddRawChunk(BuildBytes(BlockSize * 3, 11));
+        sparse.AddFillChunk(0xCAFEBABE, BlockSize * 3);
+
+        var tmpDir = Path.Combine(Path.GetTempPath(), $"sparse_resp_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tmpDir);
+        var input = Path.Combine(tmpDir, "input.img");
+        try
+        {
+            using (var fs = File.Create(input))
+            {
+                sparse.WriteToStream(fs, sparse: true);
+            }
+
+            // ResparseImage 现在直接流式切分，不再经 MemoryStream 中转整张 raw。
+            // ResparseImage now splits directly from the source without a whole-raw MemoryStream.
+            SparseImageConverter.ResparseImage(input, Path.Combine(tmpDir, "part{0}.img"), BlockSize * 4);
+
+            byte[] expected;
+            using (var rawMs = new MemoryStream())
+            {
+                sparse.WriteRawToStream(rawMs);
+                expected = rawMs.ToArray();
+            }
+
+            var parts = Directory.EnumerateFiles(tmpDir, "part*.img").OrderBy(f => f, StringComparer.Ordinal).ToList();
+            Assert.Equal(2, parts.Count);
+
+            using var combined = new MemoryStream();
+            foreach (var part in parts)
+            {
+                using var split = SparseReader.FromImageFile(part);
+                split.WriteRawToStream(combined);
+            }
+
+            Assert.Equal(expected, combined.ToArray());
+        }
+        finally
+        {
+            if (Directory.Exists(tmpDir))
+            {
+                Directory.Delete(tmpDir, recursive: true);
+            }
+        }
+    }
+
     private static byte[] BuildBytes(uint length, int factor)
     {
         var data = new byte[length];

@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.IO.Hashing;
+using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.Compress;
 using UotanStudio.Firmware.Compress.Compressors;
 using Xunit;
@@ -57,6 +60,16 @@ public class CompressionRoundTripTests
     }
 
     [Fact]
+    public void Lzop_StoredBlockWithAllChecksumFlags_Decompresses()
+    {
+        var payload = BuildPayload(1024);
+        const uint flags = 0x00000001 | 0x00000002 | 0x00010000 | 0x00020000;
+        var lzop = BuildMinimalLzop(payload, compressedBlock: null, flags);
+
+        Assert.Equal(payload, LzopCompressor.Decompress(lzop));
+    }
+
+    [Fact]
     public void Lzop_Lzo1xCompressedBlock_Decompresses()
     {
         // Hand-crafted LZO1X-1 stream: 4 literals + long match (distance 4, length 34) + EOF marker.
@@ -83,6 +96,78 @@ public class CompressionRoundTripTests
         Assert.Empty(LzopCompressor.Decompress(lzop));
     }
 
+    [Fact]
+    public void Lzop_StoredBlockLargerThan256KiB_Decompresses()
+    {
+        var payload = BuildPayload(300 * 1024);
+        var lzop = BuildMinimalLzop(payload, compressedBlock: null);
+
+        Assert.Equal(payload, LzopCompressor.Decompress(lzop));
+    }
+
+    [Theory]
+    [InlineData(64U * 1024 * 1024 + 1, 1U)]
+    [InlineData(64U * 1024 * 1024 + 1, 64U * 1024 * 1024 + 1)]
+    public void Lzop_BlockBeyondSupportedCeilingIsRejectedBeforeAllocation(uint uncompressedSize, uint compressedSize)
+    {
+        var lzop = BuildMinimalLzop([0], compressedBlock: null);
+        BinaryPrimitives.WriteUInt32BigEndian(lzop.AsSpan(31, 4), uncompressedSize);
+        BinaryPrimitives.WriteUInt32BigEndian(lzop.AsSpan(35, 4), compressedSize);
+
+        var exception = Assert.Throws<CompressionException>(() => LzopCompressor.Decompress(lzop));
+        Assert.Contains("supported maximum", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(1025U, 1U)]
+    [InlineData(1025U, 1025U)]
+    public void Lzop_BlockDeclarationsExceedingOutputLimitAreRejectedBeforeAllocation(uint uncompressedSize, uint compressedSize)
+    {
+        var lzop = BuildMinimalLzop([0], compressedBlock: null);
+        BinaryPrimitives.WriteUInt32BigEndian(lzop.AsSpan(31, 4), uncompressedSize);
+        BinaryPrimitives.WriteUInt32BigEndian(lzop.AsSpan(35, 4), compressedSize);
+
+        var exception = Assert.Throws<CompressionException>(() => LzopCompressor.Decompress(lzop, 1024));
+        Assert.Contains("output limit", exception.Message);
+    }
+
+    [Fact]
+    public void BoundedStreams_RestrictRangeAndOutput()
+    {
+        using var source = new MemoryStream([0, 1, 2, 3, 4, 5]);
+        using var bounded = new BoundedReadStream(source, 2, 3, leaveOpen: true);
+        using var destination = new MemoryStream();
+        StreamCopy.CopyExactly(bounded, destination, 3);
+        Assert.Equal(new byte[] { 2, 3, 4 }, destination.ToArray());
+        Assert.Equal(3, bounded.Position);
+
+        using var limited = new CountingWriteStream(Stream.Null, 2);
+        limited.Write([1, 2]);
+        Assert.Throws<IOException>(() => limited.WriteByte(3));
+    }
+
+    [Fact]
+    public void Decompress_OutputLimitIsEnforced()
+    {
+        var payload = BuildPayload(4096);
+        var compressed = CompressionService.Compress(payload, CompressionFormat.Gzip);
+        using var input = new MemoryStream(compressed);
+        using var output = new MemoryStream();
+
+        Assert.ThrowsAny<Exception>(() => CompressionService.Decompress(input, output, CompressionFormat.Gzip, 1024, TestContext.Current.CancellationToken));
+        Assert.True(output.Length <= 1024);
+    }
+
+    [Fact]
+    public void Lz4Legacy_RejectsOversizedAndTruncatedBlockLength()
+    {
+        byte[] oversized = [0x02, 0x21, 0x4C, 0x18, 0xFF, 0xFF, 0xFF, 0x7F];
+        byte[] truncated = [0x02, 0x21, 0x4C, 0x18, 0x01, 0x02];
+
+        Assert.Throws<CompressionException>(() => Lz4Compressor.DecompressLegacy(oversized));
+        Assert.Throws<CompressionException>(() => Lz4Compressor.DecompressLegacy(truncated));
+    }
+
     private static byte[] BuildPayload(int length)
     {
         var rng = new Random(0x5EED);
@@ -104,7 +189,7 @@ public class CompressionRoundTripTests
     /// <para>构造最小有效 lzop 文件（版本 0x0900、无校验和、无过滤）：魔数 + 头 + 一个数据块
     /// （存储块或 LZO1X 压缩块）+ 零长度结束标记。</para>
     /// </summary>
-    private static byte[] BuildMinimalLzop(byte[] payload, byte[]? compressedBlock)
+    private static byte[] BuildMinimalLzop(byte[] payload, byte[]? compressedBlock, uint flags = 0)
     {
         using var ms = new MemoryStream();
         ms.Write([0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A]); // magic
@@ -113,7 +198,7 @@ public class CompressionRoundTripTests
         WriteUInt16BE(header, 0x0900); // version
         WriteUInt16BE(header, 0x0100); // lib_version
         header.WriteByte(1);           // method: LZO1X_1
-        WriteUInt32BE(header, 0);      // flags: none
+        WriteUInt32BE(header, flags);  // checksum flags
         WriteUInt32BE(header, 0);      // mode
         WriteUInt32BE(header, 0);      // mtime_low
         header.WriteByte(0);           // filename length
@@ -125,18 +210,14 @@ public class CompressionRoundTripTests
         WriteUInt32BE(ms, headerChecksum);
 
         // One block.
-        if (compressedBlock is null)
-        {
-            WriteUInt32BE(ms, (uint)payload.Length); // uncompressed size
-            WriteUInt32BE(ms, (uint)payload.Length); // compressed size (stored block)
-            ms.Write(payload);
-        }
-        else
-        {
-            WriteUInt32BE(ms, (uint)payload.Length);           // uncompressed size
-            WriteUInt32BE(ms, (uint)compressedBlock.Length);   // compressed size
-            ms.Write(compressedBlock);
-        }
+        var block = compressedBlock ?? payload;
+        WriteUInt32BE(ms, (uint)payload.Length);
+        WriteUInt32BE(ms, (uint)block.Length);
+        if ((flags & 0x00000001) != 0) WriteUInt32BE(ms, Adler32(payload));
+        if ((flags & 0x00010000) != 0) WriteUInt32BE(ms, Crc32.HashToUInt32(payload));
+        if ((flags & 0x00000002) != 0) WriteUInt32BE(ms, Adler32(block));
+        if ((flags & 0x00020000) != 0) WriteUInt32BE(ms, Crc32.HashToUInt32(block));
+        ms.Write(block);
 
         // End marker.
         WriteUInt32BE(ms, 0);

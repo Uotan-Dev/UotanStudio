@@ -44,6 +44,18 @@ dotnet publish UotanStudio.Desktop -c Release -r win-x64
 - `AvaloniaMcp.Diagnostics`（`UotanStudio.Desktop/Program.cs` 末尾 `.UseMcpDiagnostics()`）：启动命名管道 MCP 诊断服务器。
 - `Dock.Avalonia.Diagnostics`（`MainWindow` 打开时 `AttachDockDebugOverlay()`）：按 F9 显示 Dock 布局覆盖诊断。
 
+### 1.1 有界流式 IO（固件库强制）
+`UotanStudio.Firmware` 处理的固件、分区与压缩数据均视为**不可信且可能达到数十 GB**；新增或修改解析、提取、构建、压缩/解压代码时必须遵循：
+- **Stream-first / FileStream-first**：文件路径 API 内部直接打开流；禁止以 `File.ReadAllBytes`、无界 `ReadToEnd`、`MemoryStream.ToArray` 或整镜像 `byte[]` 作为大文件主路径。`byte[]` API 仅作为明确的小型元数据或便利包装。
+- **所有范围必须有界**：外部长度、偏移、块数、extent、chunk count 在使用前以 `long`/`ulong` 和 `checked` 验证；范围检查使用 `offset <= length && size <= length - offset`，避免 `offset + size` 溢出。
+- **精确复制与截断失败**：固定长度数据使用 `Common/Streams/StreamCopy.CopyExactly[Async]` 或等价循环；提前 EOF 必须抛出格式异常，不得静默生成部分输出。
+- **解压必须限制输出**：调用 `CompressionService` 的有界重载并由格式语义提供 `maximumOutputBytes`（如 Payload 目标 extents、EROFS cluster、NTPi OriginalSize）；禁止对不可信数据执行无上限解压。
+- **随机访问使用范围流**：优先用 `Common/Streams/BoundedReadStream` 或格式专用 bounded stream 表示 `(offset,length)`；解析器只保留元数据与文件范围，提取时再流式复制。
+- **多 extent 输出必须严格映射**：Payload 等格式使用 `ExtentWriteStream` 映射目标区间，拒绝超长输出并在完成时校验精确长度。
+- **构建器采用两遍模型**：第一遍扫描并计算布局，第二遍 `FileStream.SetLength` 后定位写入/回填；禁止为 EXT4、EROFS、Sparse、super 等大型输出构造完整镜像数组。
+- **输出原子提交**：不可信输入的提取/解压先写同目录临时文件，全部长度、哈希和格式校验成功后再原子替换；失败或取消时清理临时文件。
+- 公共流包装器位于 `UotanStudio.Firmware/Common/Streams/`；新增 public 类型/成员须提供中英文 XML 文档并保持 AOT 兼容。
+
 ### 2. 节点编辑器（NodifyM）
 1. 节点定义与注册：所有节点视图模型继承 `FlowNodeViewModel`（`UotanStudio.ViewModels.NodeViewModels`），工厂方法 `XxxNodeViewModel.CreateXxxNode()` 在初始化器中设置稳定 `TypeKey`（如 `"Firmware.Unpack"`、`"Data.ReadFile"`）与各连接器的 `PortType`。`NodeTypeRegistry`（`NodeViewModels/NodeTypeRegistry.cs`）以 TypeKey 注册工厂；**节点工厂在 `NodeEditorViewModel.InitializeToolbox` 中集中注册**（既有节点直接 `NodeTypeRegistry.Register(key, () => CreateXxxNode())`，DEX 节点经 `DexNodeViewModel.RegisterNodes()`），同时以 `NodeToolboxItem(name, () => CreateXxxNode())` 声明工具箱，分类为 `Firmware` / `Flash` / `Data` / `Flow` / `Output` / `Dex`。**各节点 `ExecuteAsync` 一律按 `TypeKey` 分发（`switch (TypeKey)`），不得按显示标题分发。**
 2. 端口类型约束：`NodePortType` 枚举（`Any`/`Flow`/`Path`/`Data`/`Text`/`Number`/`Boolean`）由 `NodeConnectorViewModel.PortType` 承载，兼容性判定在 `NodeDataUtil.CanConnect`（`Any` 通配、其余须相等），`NodeEditorViewModel.CreateConnection` 拒绝不兼容连接；端口类型徽章显示在节点图标连接器上。

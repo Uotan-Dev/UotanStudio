@@ -51,6 +51,47 @@ public class AvbSignatureVerificationTests
         Assert.False(result.HashIsValid);
     }
 
+    [Theory]
+    [InlineData(12)] // authentication_data_block_size
+    [InlineData(20)] // auxiliary_data_block_size
+    public void Verify_TamperedSerializedBlockSizeField_Fails(int fieldOffset)
+    {
+        using var rsa = RSA.Create(2048);
+        var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
+        vbmeta[fieldOffset + 7] ^= 1;
+
+        var result = AvbSignatureVerifier.Verify(vbmeta, trustedPublicKey: rsa);
+
+        Assert.False(result.SignatureIsValid);
+        Assert.False(result.HashIsValid);
+    }
+
+    [Fact]
+    public void Verify_OverflowingStoredHashRange_DoesNotThrowAndFails()
+    {
+        using var rsa = RSA.Create(2048);
+        var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
+        WriteUInt64BE(vbmeta, 32, ulong.MaxValue);
+        WriteUInt64BE(vbmeta, 40, 1);
+
+        var result = AvbSignatureVerifier.Verify(vbmeta);
+
+        Assert.False(result.HashIsValid);
+        Assert.False(result.SignatureIsValid);
+    }
+
+    [Fact]
+    public void Verify_PssSignature_IsRejected()
+    {
+        using var rsa = RSA.Create(2048);
+        var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa, RSASignaturePadding.Pss);
+
+        var result = AvbSignatureVerifier.Verify(vbmeta);
+
+        Assert.True(result.HashIsValid);
+        Assert.False(result.SignatureIsValid);
+    }
+
     [Fact]
     public void Verify_WrongTrustedKey_Fails()
     {
@@ -96,12 +137,13 @@ public class AvbSignatureVerificationTests
     /// <summary>
     /// Builds a minimal self-signed vbmeta image:
     /// <code>[256-byte header][auth block: sha256 hash + rsa2048 signature][aux block: AVB public key blob]</code>
-    /// The signing input follows the AVB convention: the 256-byte header with the two block-size
-    /// fields zeroed, concatenated with the auxiliary data block (no descriptors / empty salt).
-    /// <para>构造最小自签名 vbmeta 镜像。签名输入遵循 AVB 约定：两个块大小字段清零后的
-    /// 256 字节头拼接辅助数据块（无描述符 / 空盐）。</para>
+    /// The signing input follows the AVB convention: the original serialized 256-byte header
+    /// concatenated with the auxiliary data block (no descriptors / empty salt).
+    /// <para>构造最小自签名 vbmeta 镜像。签名输入遵循 AVB 约定：原始序列化 256 字节头
+    /// 拼接辅助数据块（无描述符 / 空盐）。</para>
     /// </summary>
-    private static (byte[] Vbmeta, byte[] PublicKeyBlob) BuildMinimalSelfSignedVbmeta(RSA rsa)
+    private static (byte[] Vbmeta, byte[] PublicKeyBlob) BuildMinimalSelfSignedVbmeta(
+        RSA rsa, RSASignaturePadding? signaturePadding = null)
     {
         var modulus = rsa.ExportParameters(false).Modulus!;
         var publicKeyBlob = BuildAvbRsaPublicKeyBlob(modulus);
@@ -131,14 +173,13 @@ public class AvbSignatureVerificationTests
         WriteUInt32BE(header, 124, 0);                      // rollback_index_location
         Encoding.ASCII.GetBytes("test self-signed vbmeta").CopyTo(header, 128);
 
-        var zeroedHeader = (byte[])header.Clone();
-        Array.Clear(zeroedHeader, 12, 8);
-        Array.Clear(zeroedHeader, 20, 8);
-
-        var signingInput = zeroedHeader.Concat(publicKeyBlob).ToArray();
+        var signingInput = header.Concat(publicKeyBlob).ToArray();
 
         var hash = SHA256.HashData(signingInput);
-        var signature = rsa.SignData(signingInput, HashAlgorithmName.SHA256, RSASignaturePadding.Pss);
+        var signature = rsa.SignData(
+            signingInput,
+            HashAlgorithmName.SHA256,
+            signaturePadding ?? RSASignaturePadding.Pkcs1);
 
         var image = new byte[AvbSignatureVerifier.HeaderSize + authSize + auxSize];
         header.CopyTo(image, 0);

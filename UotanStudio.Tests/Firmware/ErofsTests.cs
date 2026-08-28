@@ -145,4 +145,127 @@ public class ErofsTests
         Assert.Equal("one", File.ReadAllText(System.IO.Path.Combine(unpackDir, "file1.txt")));
         Assert.Equal(new byte[] { 1, 2, 3, 4, 5 }, File.ReadAllBytes(System.IO.Path.Combine(unpackDir, "sub", "file2.bin")));
     }
+
+    [Fact]
+    public void BuildParse_FilePathFactory_StreamsOnDemand()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "file.txt", "stream payload");
+        temp.WriteBytes("dir/data.bin", [1, 2, 3]);
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
+        var imagePath = System.IO.Path.Combine(temp.Path, "image.erofs");
+        File.WriteAllBytes(imagePath, image);
+
+        using var parser = new ErofsParser(imagePath);
+        var paths = parser.EnumerateFiles()
+            .Select(entry => entry.Path)
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToList();
+        Assert.Equal(new[] { "dir/data.bin", "file.txt" }, paths);
+        Assert.Equal("stream payload", Encoding.UTF8.GetString(parser.ReadFileBytes("file.txt")));
+        Assert.Equal(new byte[] { 1, 2, 3 }, parser.ReadFileBytes("dir/data.bin"));
+        Assert.Equal(image.Length, parser.ImageSize);
+    }
+
+    [Fact]
+    public void BuildParse_StreamConstructor_SeekableFileStream_RoundTrips()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "file.txt", "stream payload");
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var imagePath = System.IO.Path.Combine(temp.Path, "image.erofs");
+        File.WriteAllBytes(imagePath, image);
+
+        using var fs = File.OpenRead(imagePath);
+        using var parser = new ErofsParser(fs);
+        Assert.Equal("stream payload", Encoding.UTF8.GetString(parser.ReadFileBytes("file.txt")));
+    }
+
+    [Fact]
+    public void BuildParse_FilePathFactory_ExtractToDirectory_WritesAllFiles()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "file.txt", "payload");
+        temp.WriteBytes("dir/data.bin", [1, 2, 3]);
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
+        var imagePath = System.IO.Path.Combine(temp.Path, "image.erofs");
+        File.WriteAllBytes(imagePath, image);
+        var outDir = System.IO.Path.Combine(temp.Path, "out");
+
+        using var parser = new ErofsParser(imagePath);
+        parser.ExtractToDirectory(outDir);
+
+        Assert.Equal("payload", File.ReadAllText(System.IO.Path.Combine(outDir, "file.txt")));
+        Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(System.IO.Path.Combine(outDir, "dir", "data.bin")));
+    }
+
+    [Fact]
+    public void Parser_RejectsImageTooSmallForSuperblock()
+    {
+        Assert.Throws<FormatException>(() => new ErofsParser(new byte[100]));
+    }
+
+    [Fact]
+    public void Parser_RejectsTruncatedImage_MissingMetadata()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "file.txt", "payload");
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions());
+
+        // 只保留超级块及少量后续字节：根 inode / 目录块落在被截断的区域。
+        // Keep only the superblock plus a few trailing bytes: the root inode / directory blocks are gone.
+        var truncated = image.Take(ErofsSuperblock.SuperblockOffset + ErofsSuperblock.SuperblockSize + 8).ToArray();
+        using var parser = new ErofsParser(truncated);
+        Assert.Throws<InvalidDataException>(() => parser.EnumerateFiles());
+    }
+
+    [Fact]
+    public void Parser_RejectsTruncatedImage_FileDataOutOfBounds()
+    {
+        using var temp = new TempDirectory();
+        var payload = string.Concat(Enumerable.Repeat("0123456789abcdef", 2000));
+        WriteText(temp, "large.txt", payload);
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+
+        // 裁掉镜像尾部大量文件数据（远超末尾块的填充字节），使文件数据落在镜像边界之外。
+        // Truncate a large chunk off the image tail (well past trailing block padding) so the file
+        // data falls outside the image bounds.
+        var truncated = image[..Math.Max(1, image.Length - 20_000)].ToArray();
+        using var parser = new ErofsParser(truncated);
+        Assert.Throws<InvalidDataException>(() => parser.ReadFileBytes("large.txt"));
+    }
+
+    [Fact]
+    public void Parser_TruncatedImage_ExtractThrows_AndLeavesNoPartialFiles()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "small.txt", "payload");
+        var payload = string.Concat(Enumerable.Repeat("0123456789abcdef", 2000));
+        WriteText(temp, "large.txt", payload);
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var truncated = image[..Math.Max(1, image.Length - 20_000)].ToArray();
+        var imagePath = System.IO.Path.Combine(temp.Path, "truncated.erofs");
+        File.WriteAllBytes(imagePath, truncated);
+        var outDir = System.IO.Path.Combine(temp.Path, "out");
+
+        using var parser = new ErofsParser(imagePath);
+        Assert.Throws<InvalidDataException>(() => parser.ExtractToDirectory(outDir));
+        Assert.Empty(Directory.GetFiles(outDir, "*.tmp-*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public async Task FormatHandler_ReadMetadata_TruncatedImage_ReturnsFailure()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "file.txt", "payload");
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions());
+        var truncated = image.Take(ErofsSuperblock.SuperblockOffset + ErofsSuperblock.SuperblockSize + 8).ToArray();
+        var imagePath = System.IO.Path.Combine(temp.Path, "truncated.erofs");
+        File.WriteAllBytes(imagePath, truncated);
+
+        var handler = new ErofsFormatHandler();
+        var result = await handler.ReadMetadataAsync(imagePath, TestContext.Current.CancellationToken);
+        Assert.False(result.Success);
+        Assert.Contains("EROFS", result.Summary);
+    }
 }
