@@ -65,9 +65,85 @@ internal partial class ImageViewModel : Tool
     public ImageViewModel()
     {
         Instance = this;
+        // 订阅工程上下文变更：打开工程时自动扫描 images/ 目录注册已知镜像格式，
+        // 关闭工程时清空列表。
+        // Subscribe to project-context changes: on open, auto-register known image formats from the
+        // images/ directory; on close, clear the list.
+        WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
+
         // 注册跨会话操作历史重建工厂，使重启后可恢复撤销栈。
         // Register the cross-session history reconstructor so the undo stack can be restored after restart.
         OperationHistoryService.ReconstructOperation = ReconstructOperation;
+    }
+
+    /// <summary>
+    /// <para>响应工程上下文变更消息：打开工程时异步扫描 <c>images/</c> 目录并注册已知镜像格式，
+    /// 关闭工程时清空镜像列表。</para>
+    /// Responds to project-context-changed messages: asynchronously scans the <c>images/</c> directory
+    /// and registers known image formats on open, and clears the list on close.
+    /// </summary>
+    private async void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message)
+    {
+        await RefreshProjectImagesAsync();
+    }
+
+    /// <summary>
+    /// <para>扫描当前工程 <c>images/</c> 目录，把已知镜像格式的文件自动注册到镜像列表；
+    /// 未打开工程或目录不存在时清空列表。已存在条目跳过，避免重复。</para>
+    /// Scans the current project's <c>images/</c> directory, auto-registering files with known image
+    /// formats; clears the list when no project is open or the directory is missing. Existing entries
+    /// are skipped to avoid duplicates.
+    /// </summary>
+    private async Task RefreshProjectImagesAsync()
+    {
+        var context = ProjectContextService.Instance;
+        Images.Clear();
+
+        if (!context.IsProjectOpen || string.IsNullOrEmpty(context.ImagesDirectory) || !Directory.Exists(context.ImagesDirectory))
+        {
+            return;
+        }
+
+        // 目录枚举与格式探测在后台线程执行，避免大目录/大文件头读取阻塞 UI。
+        // Directory enumeration and format probing run on a background thread so large folders or
+        // header reads never block the UI.
+        var discovered = await Task.Run(() =>
+        {
+            var list = new List<(string Relative, long Size, string Format)>();
+            foreach (var file in Directory.EnumerateFiles(context.ImagesDirectory))
+            {
+                var format = DetectFormat(file);
+                if (format == "unknown")
+                {
+                    continue;
+                }
+
+                var relative = context.RelativePath(file);
+                if (relative is not null)
+                {
+                    list.Add((relative, new FileInfo(file).Length, format));
+                }
+            }
+            return list;
+        }).ConfigureAwait(true);
+
+        foreach (var (relative, size, format) in discovered)
+        {
+            if (Images.Any(i => i.RelativePath == relative))
+            {
+                continue;
+            }
+
+            Images.Add(new ImageEntryViewModel
+            {
+                DisplayName = Path.GetFileName(relative),
+                RelativePath = relative,
+                SizeBytes = size,
+                Format = format
+            });
+        }
+
+        LogService.Instance.Write(LogLevel.Info, "Images", $"Auto-registered {discovered.Count} known image(s)  自动注册 {discovered.Count} 个已知镜像");
     }
 
     /// <summary>

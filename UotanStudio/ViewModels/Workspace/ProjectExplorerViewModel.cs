@@ -25,12 +25,36 @@ internal class ProjectExplorerViewModel : Tool
     public AvaloniaList<ExplorerNode> TreeViewContent { get; } = [];
 
     /// <summary>
+    /// <para>监听工程 <c>images/</c> 与 <c>intermediate/</c> 目录的文件系统变更，
+    /// 在外部增删改后自动同步树结构。</para>
+    /// Watches the project <c>images/</c> and <c>intermediate/</c> directories so the tree
+    /// auto-syncs after external file changes.
+    /// </summary>
+    private FileSystemWatcher? _watcher;
+
+    /// <summary>
+    /// <para>文件系统变更事件的防抖计时器：合并高频事件（批量复制等）后统一刷新。</para>
+    /// Debounce timer for file-system events: coalesces bursts (bulk copies etc.) into one refresh.
+    /// </summary>
+    private readonly System.Threading.Timer _fsDebounceTimer;
+
+    /// <summary>
     /// <para>创建项目资源管理器视图模型，订阅工程上下文变更消息并构建初始目录树。</para>
     /// Creates the project explorer view model, subscribing to project-context-changed messages and building the initial directory tree.
     /// </summary>
     public ProjectExplorerViewModel()
     {
         WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
+
+        // 防抖 400ms：连续文件系统事件合并为一次刷新，避免复制大文件时的刷新风暴。
+        // Debounce 400ms: coalesce bursts of file-system events into a single refresh to avoid a
+        // refresh storm when copying large files.
+        _fsDebounceTimer = new System.Threading.Timer(
+            _ => Avalonia.Threading.Dispatcher.UIThread.Post(ApplyFileSystemChanges),
+            null,
+            Timeout.Infinite,
+            Timeout.Infinite);
+
         Refresh();
     }
 
@@ -44,10 +68,10 @@ internal class ProjectExplorerViewModel : Tool
 
     /// <summary>
     /// <para>重建目录树：以当前工程的 <c>images/</c> 与 <c>intermediate/</c> 目录为根；
-    /// 未打开工程或目录不存在时显示空树，不抛出异常。</para>
+    /// 未打开工程或目录不存在时显示空树，不抛出异常。重建同时重启文件系统监听。</para>
     /// Rebuilds the directory tree rooted at the current project's <c>images/</c> and
     /// <c>intermediate/</c> directories; shows an empty tree without throwing when no project is
-    /// open or the directories do not exist.
+    /// open or the directories do not exist. Also restarts the file-system watcher.
     /// </summary>
     public void Refresh()
     {
@@ -55,6 +79,7 @@ internal class ProjectExplorerViewModel : Tool
         var svc = ProjectContextService.Instance;
         AddRoot(svc.ImagesDirectory);
         AddRoot(svc.IntermediateDirectory);
+        RestartWatcher(svc);
     }
 
     private void AddRoot(string? directory)
@@ -62,6 +87,72 @@ internal class ProjectExplorerViewModel : Tool
         if (directory is not null && Directory.Exists(directory))
         {
             TreeViewContent.Add(new ExplorerNode(directory, isDirectory: true));
+        }
+    }
+
+    /// <summary>
+    /// <para>重启文件系统监听：监听工程根目录下所有变更（<c>images/</c>、<c>intermediate/</c> 等），
+    /// 递归包含子目录；未打开工程时停止监听。</para>
+    /// Restarts the file-system watcher on the project root (covering <c>images/</c>,
+    /// <c>intermediate/</c> etc.) with recursive subdirectories; stops watching when no project is open.
+    /// </summary>
+    private void RestartWatcher(ProjectContextService svc)
+    {
+        if (_watcher is not null)
+        {
+            _watcher.Changed -= OnFileSystemChanged;
+            _watcher.Created -= OnFileSystemChanged;
+            _watcher.Deleted -= OnFileSystemChanged;
+            _watcher.Renamed -= OnFileSystemChanged;
+            _watcher.Dispose();
+            _watcher = null;
+        }
+
+        if (!svc.IsProjectOpen || string.IsNullOrEmpty(svc.RootDirectory))
+        {
+            return;
+        }
+
+        try
+        {
+            _watcher = new FileSystemWatcher(svc.RootDirectory)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName
+                               | NotifyFilters.DirectoryName
+                               | NotifyFilters.LastWrite
+                               | NotifyFilters.Size
+            };
+            _watcher.Changed += OnFileSystemChanged;
+            _watcher.Created += OnFileSystemChanged;
+            _watcher.Deleted += OnFileSystemChanged;
+            _watcher.Renamed += OnFileSystemChanged;
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception)
+        {
+            // 监听启动失败（路径不可达等）不影响资源管理器基本功能。
+            // A failed watcher start (unreachable path etc.) must not break the explorer.
+        }
+    }
+
+    private void OnFileSystemChanged(object sender, FileSystemEventArgs e)
+    {
+        // 防抖：重置计时器，批量事件合并为一次刷新。
+        // Debounce: reset the timer so a burst of events becomes a single refresh.
+        _fsDebounceTimer.Change(400, Timeout.Infinite);
+    }
+
+    /// <summary>
+    /// <para>在 UI 线程应用文件系统变更：对已加载的目录节点重新扫描，保持展开状态。</para>
+    /// Applies file-system changes on the UI thread: re-scans loaded directory nodes while
+    /// preserving their expansion state.
+    /// </summary>
+    private void ApplyFileSystemChanges()
+    {
+        foreach (var root in TreeViewContent)
+        {
+            root.RefreshDescendants();
         }
     }
 }
@@ -205,6 +296,32 @@ public sealed partial class ExplorerNode : ObservableObject
         catch (Exception)
         {
             // 目录不可读等异常时保持空子节点，不中断资源管理器
+        }
+    }
+
+    /// <summary>
+    /// <para>对已加载的目录节点重新扫描子节点（外部文件变更后同步）；未展开的目录保持惰性。
+    /// 递归刷新已展开的后代目录，使树结构跟上磁盘内容。</para>
+    /// Re-scans children of directories that have already been loaded (syncing after external file
+    /// changes); not-yet-expanded directories stay lazy. Recursively refreshes expanded descendants
+    /// so the tree mirrors the disk content.
+    /// </summary>
+    public void RefreshDescendants()
+    {
+        if (!IsDirectory)
+        {
+            return;
+        }
+
+        if (_childrenLoaded)
+        {
+            _childrenLoaded = false;
+            EnsureChildrenLoaded();
+        }
+
+        foreach (var child in Children)
+        {
+            child.RefreshDescendants();
         }
     }
 
