@@ -503,6 +503,67 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
+    /// <para>按打包设置面板的当前设置，从选中镜像的解包目录重新打包系统分区镜像
+    /// （ext4/erofs，可选 sparse）到 <c>intermediate/img/</c> 并登记历史。</para>
+    /// Repacks the selected image's unpack directory into a system-partition image (ext4/erofs,
+    /// optionally sparse) according to the current packing settings panel, outputting to
+    /// <c>intermediate/img/</c> and recording history.
+    /// </summary>
+    [RelayCommand]
+    private async Task PackImageAsync()
+    {
+        var image = SelectedImage;
+        if (image is null)
+        {
+            return;
+        }
+
+        if (!ProjectContextService.Instance.IsProjectOpen)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Pack image aborted: no project is open  打包镜像中止：尚未打开工程");
+            return;
+        }
+
+        var name = GetEntryBaseName(image);
+        try
+        {
+            var unpackDir = ProjectContextService.Instance.EnsureIntermediateDirectory(name);
+            if (!Directory.Exists(unpackDir) || !Directory.EnumerateFileSystemEntries(unpackDir).Any())
+            {
+                LogService.Instance.Write(LogLevel.Warn, "Images", $"Pack image aborted: unpack directory is empty ({unpackDir})  打包镜像中止：解包目录为空（{unpackDir}）");
+                return;
+            }
+
+            var outputDir = ProjectContextService.Instance.EnsureIntermediateDirectory("img");
+            var outputPath = Path.Combine(outputDir, name + "-packed.img");
+            LogService.Instance.Write(LogLevel.Info, "Images", $"Packing system image from {unpackDir}  正在打包系统镜像（源：{unpackDir}）");
+            var result = await PackingService.PackImageAsync(unpackDir, outputPath);
+            if (!result.Success)
+            {
+                LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
+                return;
+            }
+
+            LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
+            OperationHistoryService.Instance.Record(
+                $"Pack image {image.DisplayName}",
+                new HistoryOperationDto
+                {
+                    Kind = HistoryOperationKind.SynthesizeImg,
+                    Description = $"Pack image {image.DisplayName}",
+                    DisplayName = image.DisplayName,
+                    OutputPaths = [outputPath]
+                },
+                () => DeleteFileSafe(outputPath),
+                () => { });
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Images", $"Pack image failed: {ex.Message}  打包镜像失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// <para>从 ramdisk（或解包）目录打包 CPIO 到 <c>intermediate/br/</c> 并登记历史。</para>
     /// Packs a CPIO archive from the ramdisk (or unpack) directory to <c>intermediate/br/</c> and records history.
     /// </summary>
