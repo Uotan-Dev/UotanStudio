@@ -1,4 +1,3 @@
-using System.Text;
 using UotanStudio.Firmware.Dex;
 using Xunit;
 

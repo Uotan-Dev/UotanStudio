@@ -1,9 +1,8 @@
 using System.Text;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
-using UotanStudio.Services.Flash;
 using UotanStudio.Services.Devices;
-using UotanStudio.Services;
+using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
