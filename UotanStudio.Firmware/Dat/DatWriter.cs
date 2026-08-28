@@ -1,4 +1,5 @@
 using System.Text;
+using UotanStudio.Firmware.Compress.Compressors;
 
 namespace UotanStudio.Firmware.Dat;
 
@@ -30,12 +31,33 @@ public static class DatWriter
     /// </summary>
     /// <param name="inputImagePath">The input raw image file path. <para>输入原始镜像文件路径。</para></param>
     /// <param name="outputDatPath">The output <c>.new.dat</c> file path. <para>输出 <c>.new.dat</c> 文件路径。</para></param>
-    /// <param name="outputTransferListPath">The output <c>.transfer.list</c> file path. <para>输出 <c>.transfer.list</c> 文件路径。</para>
+    /// <param name="outputTransferListPath">The output <c>.transfer.list</c> file path. <para>输出 <c>.transfer.list</c> 文件路径。</para></param>
     public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath)
+        => Write(inputImagePath, outputDatPath, outputTransferListPath, new DatWriteOptions());
+
+    /// <summary>
+    /// Writes a raw image as a DAT image pair with the given options. With
+    /// <see cref="DatWriteOptions.CompressWithBrotli"/> the <c>.new.dat</c> is replaced by a Brotli-compressed
+    /// <c>.new.dat.br</c> (the transfer list stays unchanged); with
+    /// <see cref="DatWriteOptions.MaxCommandRangeBlocks"/> &gt; 0 the merged <c>new</c> ranges are split into
+    /// multiple <c>new</c> commands whose range sets each stay within the block limit. In both cases the
+    /// <c>.new.dat</c> byte layout is identical to the default overload.
+    /// <para>使用给定选项将原始镜像写出为 DAT 镜像对。设置 <see cref="DatWriteOptions.CompressWithBrotli"/> 时
+    /// <c>.new.dat</c> 会被替换为 Brotli 压缩的 <c>.new.dat.br</c>（transfer list 保持不变）；设置
+    /// <see cref="DatWriteOptions.MaxCommandRangeBlocks"/> &gt; 0 时合并后的 <c>new</c> 范围会被拆分为多条
+    /// <c>new</c> 命令，每条命令的范围集都不超过该块数上限。两种情况下 <c>.new.dat</c> 的字节布局都与
+    /// 默认重载一致。</para>
+    /// </summary>
+    /// <param name="inputImagePath">The input raw image file path. <para>输入原始镜像文件路径。</para></param>
+    /// <param name="outputDatPath">The output <c>.new.dat</c> file path. <para>输出 <c>.new.dat</c> 文件路径。</para></param>
+    /// <param name="outputTransferListPath">The output <c>.transfer.list</c> file path. <para>输出 <c>.transfer.list</c> 文件路径。</para></param>
+    /// <param name="options">The writer options. <para>写入器选项。</para></param>
+    public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath, DatWriteOptions options)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputImagePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDatPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputTransferListPath);
+        ArgumentNullException.ThrowIfNull(options);
 
         var totalBytes = new FileInfo(inputImagePath).Length;
         var totalBlocks = (totalBytes + BlockSize - 1) / BlockSize;
@@ -45,72 +67,142 @@ public static class DatWriter
 
         // 单遍扫描：分类块、合并相邻同类型范围，并按序把数据块写入 .new.dat。
         // Single pass: classify blocks, merge adjacent same-type ranges, and write data blocks to .new.dat in order.
-        using var input = new FileStream(inputImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.SequentialScan);
-        using var output = new FileStream(outputDatPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize);
-        var buffer = new byte[BlockSize];
-        long block = 0;
-        long? newStart = null;
-        long? zeroStart = null;
-        while (block < totalBlocks)
+        using (var input = new FileStream(inputImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.SequentialScan))
+        using (var output = new FileStream(outputDatPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
         {
-            var read = ReadBlock(input, buffer);
-            var isZero = IsZeroBlock(buffer, read);
-            if (isZero)
+            var buffer = new byte[BlockSize];
+            long block = 0;
+            long? newStart = null;
+            long? zeroStart = null;
+            while (block < totalBlocks)
             {
-                if (newStart is not null)
+                var read = ReadBlock(input, buffer);
+                var isZero = IsZeroBlock(buffer, read);
+                if (isZero)
                 {
-                    newRanges.Add(new BlockRange(newStart.Value, block));
-                    newStart = null;
+                    if (newStart is not null)
+                    {
+                        newRanges.Add(new BlockRange(newStart.Value, block));
+                        newStart = null;
+                    }
+
+                    zeroStart ??= block;
+                }
+                else
+                {
+                    if (zeroStart is not null)
+                    {
+                        zeroRanges.Add(new BlockRange(zeroStart.Value, block));
+                        zeroStart = null;
+                    }
+
+                    newStart ??= block;
+                    if (read < BlockSize)
+                    {
+                        Array.Clear(buffer, read, BlockSize - read);
+                    }
+
+                    output.Write(buffer, 0, BlockSize);
                 }
 
-                zeroStart ??= block;
+                block++;
             }
-            else
+
+            if (newStart is not null)
             {
-                if (zeroStart is not null)
-                {
-                    zeroRanges.Add(new BlockRange(zeroStart.Value, block));
-                    zeroStart = null;
-                }
-
-                newStart ??= block;
-                if (read < BlockSize)
-                {
-                    Array.Clear(buffer, read, BlockSize - read);
-                }
-
-                output.Write(buffer, 0, BlockSize);
+                newRanges.Add(new BlockRange(newStart.Value, block));
             }
 
-            block++;
+            if (zeroStart is not null)
+            {
+                zeroRanges.Add(new BlockRange(zeroStart.Value, block));
+            }
         }
 
-        if (newStart is not null)
+        using (var writer = new StreamWriter(outputTransferListPath))
         {
-            newRanges.Add(new BlockRange(newStart.Value, block));
+            writer.WriteLine("4");
+            writer.WriteLine(totalBlocks);
+            writer.WriteLine("0");
+            writer.WriteLine("0");
+            WriteNewCommands(writer, newRanges, options.MaxCommandRangeBlocks);
+            if (zeroRanges.Count > 0)
+            {
+                writer.WriteLine($"zero {FormatRanges(zeroRanges)}");
+            }
         }
 
-        if (zeroStart is not null)
+        if (options.CompressWithBrotli)
         {
-            zeroRanges.Add(new BlockRange(zeroStart.Value, block));
+            CompressDatWithBrotli(outputDatPath);
+        }
+    }
+
+    /// <summary>
+    /// Writes the <c>new</c> command lines, splitting the merged ranges into multiple commands when
+    /// <paramref name="maxBlocksPerCommand"/> is greater than zero. Range splitting never changes the order of
+    /// the non-zero blocks, so the <c>.new.dat</c> byte layout stays identical to the unsplit output.
+    /// <para>写出 <c>new</c> 命令行；当 <paramref name="maxBlocksPerCommand"/> 大于 0 时将合并后的范围拆分为
+    /// 多条命令。范围拆分不会改变非零块的顺序，因此 <c>.new.dat</c> 的字节布局与未拆分时完全一致。</para>
+    /// </summary>
+    private static void WriteNewCommands(TextWriter writer, List<BlockRange> ranges, int maxBlocksPerCommand)
+    {
+        if (ranges.Count == 0)
+        {
+            return;
         }
 
-        input.Dispose();
-        output.Dispose();
-        using var writer = new StreamWriter(outputTransferListPath);
-        writer.WriteLine("4");
-        writer.WriteLine(totalBlocks);
-        writer.WriteLine("0");
-        writer.WriteLine("0");
-        if (newRanges.Count > 0)
+        if (maxBlocksPerCommand <= 0)
         {
-            writer.WriteLine($"new {FormatRanges(newRanges)}");
+            writer.WriteLine($"new {FormatRanges(ranges)}");
+            return;
         }
 
-        if (zeroRanges.Count > 0)
+        var commandRanges = new List<BlockRange>();
+        long commandBlocks = 0;
+        foreach (var range in ranges)
         {
-            writer.WriteLine($"zero {FormatRanges(zeroRanges)}");
+            var start = range.Start;
+            while (start < range.End)
+            {
+                var capacity = maxBlocksPerCommand - commandBlocks;
+                if (capacity <= 0)
+                {
+                    writer.WriteLine($"new {FormatRanges(commandRanges)}");
+                    commandRanges.Clear();
+                    commandBlocks = 0;
+                    continue;
+                }
+
+                var take = (int)Math.Min(range.End - start, capacity);
+                commandRanges.Add(new BlockRange(start, start + take));
+                commandBlocks += take;
+                start += take;
+            }
         }
+
+        if (commandRanges.Count > 0)
+        {
+            writer.WriteLine($"new {FormatRanges(commandRanges)}");
+        }
+    }
+
+    /// <summary>
+    /// Brotli-compresses the <c>.new.dat</c> file into <c>.new.dat.br</c> (streaming, with the compressor's
+    /// default options) and deletes the uncompressed file.
+    /// <para>将 <c>.new.dat</c> 文件流式 Brotli 压缩为 <c>.new.dat.br</c>（使用压缩器默认选项）并删除未压缩
+    /// 的文件。</para>
+    /// </summary>
+    private static void CompressDatWithBrotli(string datPath)
+    {
+        var brPath = datPath + ".br";
+        using (var input = new FileStream(datPath, FileMode.Open, FileAccess.Read, FileShare.Read, StreamBufferSize, FileOptions.SequentialScan))
+        using (var output = new FileStream(brPath, FileMode.Create, FileAccess.Write, FileShare.None, StreamBufferSize))
+        {
+            BrotliCompressor.Compress(input, output);
+        }
+
+        File.Delete(datPath);
     }
 
     /// <summary>
