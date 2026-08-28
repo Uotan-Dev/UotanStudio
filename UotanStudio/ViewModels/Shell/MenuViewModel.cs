@@ -1,11 +1,4 @@
-using UotanStudio.ViewModels.Workspace;
-using UotanStudio.ViewModels.Nodes;
-using UotanStudio.Services.Projects;
-using System;
 using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -14,6 +7,10 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Projects;
+using UotanStudio.Services.Workspace;
+using UotanStudio.ViewModels.Nodes;
+using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Shell;
 
 namespace UotanStudio.ViewModels.Shell;
@@ -714,6 +711,35 @@ public partial class MenuViewModel : ViewModelBase
     {
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
     }
+
+    // ===== 窗口 / Window =====
+
+    /// <summary>
+    /// <para>工作区停靠面板服务；「窗口」菜单项通过其可见性属性绑定 IsChecked，并调用显示/隐藏命令。</para>
+    /// Workspace dock panel service; the Window menu items bind IsChecked to its visibility
+    /// properties and invoke its show/hide commands.
+    /// </summary>
+    public WorkspacePanelService WorkspacePanels => WorkspacePanelService.Instance;
+
+    /// <summary><para>显示或隐藏项目资源管理器面板。</para>Show or hide the Project Explorer panel.</summary>
+    [RelayCommand]
+    private void ToggleProjectExplorer() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ProjectExplorer);
+
+    /// <summary><para>显示或隐藏打包设置面板。</para>Show or hide the packing settings panel.</summary>
+    [RelayCommand]
+    private void ToggleProjectSetting() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ProjectSetting);
+
+    /// <summary><para>显示或隐藏设备面板。</para>Show or hide the device panel.</summary>
+    [RelayCommand]
+    private void ToggleDevicePanel() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Device);
+
+    /// <summary><para>显示或隐藏镜像管理面板。</para>Show or hide the image manager panel.</summary>
+    [RelayCommand]
+    private void ToggleImagesView() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ImagesView);
+
+    /// <summary><para>显示或隐藏属性面板。</para>Show or hide the properties panel.</summary>
+    [RelayCommand]
+    private void ToggleProperties() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Properties);
 
     // ===== 工具 / Tools =====
 

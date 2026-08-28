@@ -38,6 +38,14 @@
     <x:String x:Key="Menu_ZoomOut">缩小</x:String>
     <x:String x:Key="Menu_ResetZoom">重置缩放</x:String>
 
+    <!-- 窗口菜单 -->
+    <x:String x:Key="Menu_Window">窗口</x:String>
+    <x:String x:Key="Menu_WindowProjectExplorer">项目资源管理器</x:String>
+    <x:String x:Key="Menu_WindowProjectSetting">打包设置</x:String>
+    <x:String x:Key="Menu_WindowDevice">设备</x:String>
+    <x:String x:Key="Menu_WindowImages">镜像管理</x:String>
+    <x:String x:Key="Menu_WindowProperties">属性</x:String>
+
     <!-- 工具菜单 -->
     <x:String x:Key="Menu_FlashTools">烧录工具</x:String>
     <x:String x:Key="Menu_FirmwareTools">固件工具</x:String>

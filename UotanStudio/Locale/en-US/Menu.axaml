@@ -38,6 +38,14 @@
     <x:String x:Key="Menu_ZoomOut">Zoom Out</x:String>
     <x:String x:Key="Menu_ResetZoom">Reset Zoom</x:String>
 
+    <!-- Window menu -->
+    <x:String x:Key="Menu_Window">Window</x:String>
+    <x:String x:Key="Menu_WindowProjectExplorer">Project Explorer</x:String>
+    <x:String x:Key="Menu_WindowProjectSetting">Packing Settings</x:String>
+    <x:String x:Key="Menu_WindowDevice">Device</x:String>
+    <x:String x:Key="Menu_WindowImages">Images</x:String>
+    <x:String x:Key="Menu_WindowProperties">Properties</x:String>
+
     <!-- Tools menu -->
     <x:String x:Key="Menu_FlashTools">Flash Tools</x:String>
     <x:String x:Key="Menu_FirmwareTools">Firmware Tools</x:String>

@@ -1,16 +1,13 @@
-using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Devices;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
-using UotanStudio.ViewModels;
+using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views.Devices;
 
 namespace UotanStudio.Views.Workspace;
 
@@ -82,7 +79,10 @@ public class WorkspaceDockFactory : Factory
             Title = "LeftPane",
             Proportion = 0.25,
             ActiveDockable = projectExplorer,
-            VisibleDockables = CreateList<IDockable>(projectExplorer, projectSetting, device)
+            // 打包设置面板默认隐藏：工厂仍持有其引用，供「窗口」菜单重新显示。
+            // The packing settings panel starts hidden; the factory keeps its reference so the
+            // "Window" menu can show it again later.
+            VisibleDockables = CreateList<IDockable>(projectExplorer, device)
         };
 
         var bottomTools = new ToolDock
@@ -130,6 +130,15 @@ public class WorkspaceDockFactory : Factory
         rootDock.ActiveDockable = mainLayout;
         rootDock.DefaultDockable = mainLayout;
         rootDock.VisibleDockables = CreateList<IDockable>(mainLayout);
+
+        // 把各工作区面板登记到面板服务，供「窗口」菜单显示/隐藏/聚焦。
+        // Register each workspace panel with the panel service for the Window menu.
+        var panels = WorkspacePanelService.Instance;
+        panels.Register(WorkspacePanelService.ProjectExplorer, projectExplorer, leftTools, visible: true);
+        panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: false);
+        panels.Register(WorkspacePanelService.Device, device, leftTools, visible: true);
+        panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
+        panels.Register(WorkspacePanelService.Properties, properties, rightTools, visible: true);
 
         return rootDock;
     }
@@ -190,7 +199,7 @@ public class WorkspaceDockFactory : Factory
         }
         catch
         {
-            // 忽略任何异常，确保不崩溃
+            // 关闭流程中的异常不阻断用户操作。
         }
     }
 
@@ -203,8 +212,10 @@ public class WorkspaceDockFactory : Factory
                 return;
             }
 
+            IDock? ownerDock = null;
             if (dockable.Owner is IDock dock)
             {
+                ownerDock = dock;
                 if (dock.VisibleDockables != null)
                 {
                     var list = dock.VisibleDockables.ToList();
@@ -222,10 +233,17 @@ public class WorkspaceDockFactory : Factory
             }
 
             dockable.Owner = null;
+
+            // 用户经停靠区关闭按钮移除面板后，同步「窗口」菜单的可见性状态。
+            // After a panel is removed via the dock's close button, sync the Window menu visibility.
+            if (ownerDock is not null)
+            {
+                WorkspacePanelService.Instance.OnDockContentsChanged(ownerDock);
+            }
         }
         catch
         {
-            // 忽略任何移除过程中的错误
+            // 移除过程中的异常不阻断关闭流程。
         }
 
         // 文档关闭后立即释放大对象（解析模型/原始字节/树节点），避免内存占用保持不降。

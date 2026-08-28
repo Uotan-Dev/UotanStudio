@@ -97,6 +97,33 @@
 					<MenuItem Header="{DynamicResource Menu_ResetZoom}" Command="{Binding MenuVM.ResetZoomCommand}" InputGesture="Ctrl+0" />
 				</MenuItem>
 
+				<!-- 窗口 / Window -->
+				<MenuItem Padding="8 0">
+					<MenuItem.Header>
+						<TextBlock Text="{DynamicResource Menu_Window}" FontSize="13" FontWeight="SemiBold" />
+					</MenuItem.Header>
+					<MenuItem Header="{DynamicResource Menu_WindowProjectExplorer}"
+							  ToggleType="CheckBox"
+							  IsChecked="{Binding MenuVM.WorkspacePanels.ProjectExplorerVisible, Mode=OneWay}"
+							  Command="{Binding MenuVM.ToggleProjectExplorerCommand}" />
+					<MenuItem Header="{DynamicResource Menu_WindowProjectSetting}"
+							  ToggleType="CheckBox"
+							  IsChecked="{Binding MenuVM.WorkspacePanels.ProjectSettingVisible, Mode=OneWay}"
+							  Command="{Binding MenuVM.ToggleProjectSettingCommand}" />
+					<MenuItem Header="{DynamicResource Menu_WindowDevice}"
+							  ToggleType="CheckBox"
+							  IsChecked="{Binding MenuVM.WorkspacePanels.DeviceVisible, Mode=OneWay}"
+							  Command="{Binding MenuVM.ToggleDevicePanelCommand}" />
+					<MenuItem Header="{DynamicResource Menu_WindowImages}"
+							  ToggleType="CheckBox"
+							  IsChecked="{Binding MenuVM.WorkspacePanels.ImagesViewVisible, Mode=OneWay}"
+							  Command="{Binding MenuVM.ToggleImagesViewCommand}" />
+					<MenuItem Header="{DynamicResource Menu_WindowProperties}"
+							  ToggleType="CheckBox"
+							  IsChecked="{Binding MenuVM.WorkspacePanels.PropertiesVisible, Mode=OneWay}"
+							  Command="{Binding MenuVM.TogglePropertiesCommand}" />
+				</MenuItem>
+
 				<!-- 工具 / Tools -->
 				<MenuItem Padding="8 0">
 				 <MenuItem.Header>
