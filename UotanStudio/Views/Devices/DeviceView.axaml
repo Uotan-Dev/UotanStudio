@@ -97,6 +97,26 @@
                         ToolTip.Tip="{DynamicResource Device_RebootEdl}">
                     <avalonia:MaterialIcon Kind="DownloadOutline" Width="16" Height="16" />
                 </Button>
+                <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
+                        Margin="4,0" />
+                <!-- 快速固件操作：命令按选中设备协议启用（CanExecute）。 -->
+                <!-- Quick firmware operations: enabled by the selected device protocol (CanExecute). -->
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding OpenAdbShellCommand}"
+                        ToolTip.Tip="{DynamicResource Device_OpenAdbShell}">
+                    <avalonia:MaterialIcon Kind="Terminal" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding FastbootReadInfoCommand}"
+                        ToolTip.Tip="{DynamicResource Device_FastbootReadInfo}">
+                    <avalonia:MaterialIcon Kind="InformationOutline" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding QuickFlashCommand}"
+                        CommandParameter="boot"
+                        ToolTip.Tip="{DynamicResource Device_QuickFlash}">
+                    <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
+                </Button>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.7" Margin="8,0" />
             </StackPanel>
@@ -133,6 +153,21 @@
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:DeviceInfo}">
                                 <StackPanel Spacing="6" Margin="10,8">
+                                    <StackPanel.ContextMenu>
+                                        <ContextMenu>
+                                            <MenuItem Header="{DynamicResource Device_Connect}" Click="OnConnectMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_Disconnect}" Click="OnDisconnectMenuClick" />
+                                            <Separator />
+                                            <MenuItem Header="{DynamicResource Device_Reboot}" Click="OnRebootMenuClick" CommandParameter="system" />
+                                            <MenuItem Header="{DynamicResource Device_RebootBootloader}" Click="OnRebootMenuClick" CommandParameter="bootloader" />
+                                            <MenuItem Header="{DynamicResource Device_RebootRecovery}" Click="OnRebootMenuClick" CommandParameter="recovery" />
+                                            <MenuItem Header="{DynamicResource Device_RebootEdl}" Click="OnRebootMenuClick" CommandParameter="edl" />
+                                            <Separator />
+                                            <MenuItem Header="{DynamicResource Device_OpenAdbShell}" Click="OnOpenAdbShellMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_FastbootReadInfo}" Click="OnFastbootReadInfoMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_QuickFlash}" Click="OnQuickFlashMenuClick" />
+                                        </ContextMenu>
+                                    </StackPanel.ContextMenu>
                                     <!-- 序列号 -->
                                     <TextBlock Text="{Binding Serial}" FontWeight="SemiBold" FontSize="13" />
                                     <!-- 模式 + 类型徽标 -->

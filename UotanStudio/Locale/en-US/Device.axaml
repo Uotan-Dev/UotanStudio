@@ -20,6 +20,9 @@
     <x:String x:Key="Device_GroupEdl">EDL Devices</x:String>
     <x:String x:Key="Device_GroupRkdl">RKDL Devices</x:String>
     <x:String x:Key="Device_EmptyHint">Click Refresh to scan connected devices.</x:String>
+    <x:String x:Key="Device_OpenAdbShell">Open ADB Shell</x:String>
+    <x:String x:Key="Device_FastbootReadInfo">Read Fastboot Device Info</x:String>
+    <x:String x:Key="Device_QuickFlash">Quick Flash to boot Partition</x:String>
 
     <!-- Device detail two-column layout -->
     <x:String x:Key="Device_DetailPlaceholder">Select a device to view details</x:String>
