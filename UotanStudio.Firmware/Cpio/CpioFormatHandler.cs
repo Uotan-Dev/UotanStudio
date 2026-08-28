@@ -117,10 +117,15 @@ public sealed class CpioFormatHandler : IFormatHandler
                     ["EntryCount"] = summaries.Count.ToString(),
                 };
 
+                var components = summaries
+                    .Select(s => FirmwareComponent.Of(s.Name, s.DataLength))
+                    .ToList();
+
                 return FirmwareOpResult.Ok(
                     $"{summaries.Count} entries in '{filePath}'.",
                     [.. summaries.Select(s => s.Name)],
-                    metadata);
+                    metadata,
+                    components);
             }
             catch (OperationCanceledException)
             {

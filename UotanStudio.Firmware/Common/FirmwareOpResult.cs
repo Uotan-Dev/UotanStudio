@@ -1,6 +1,33 @@
 namespace UotanStudio.Firmware.Common;
 
 /// <summary>
+/// A structured component entry inside a firmware container (e.g. a payload partition or a
+/// boot-image kernel/ramdisk), carrying its name and size for list display.
+/// <para>固件容器内的结构化组件条目（如 payload 分区、boot 镜像的 kernel/ramdisk），
+/// 携带名称与大小供列表展示。</para>
+/// </summary>
+public sealed class FirmwareComponent
+{
+    /// <summary>
+    /// Gets the component name (e.g. "system" or "kernel").
+    /// <para>获取组件名称（如 "system" 或 "kernel"）。</para>
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the component size in bytes; 0 when unknown.
+    /// <para>获取组件字节大小；未知时为 0。</para>
+    /// </summary>
+    public long SizeBytes { get; init; }
+
+    /// <summary>
+    /// Creates a component entry.
+    /// <para>创建组件条目。</para>
+    /// </summary>
+    public static FirmwareComponent Of(string name, long sizeBytes) => new() { Name = name, SizeBytes = sizeBytes };
+}
+
+/// <summary>
 /// Firmware operation result, carrying success flag and output summary.
 /// <para>固件操作结果,承载成功标志与输出摘要。</para>
 /// </summary>
@@ -31,11 +58,24 @@ public sealed class FirmwareOpResult
     public IReadOnlyDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 
     /// <summary>
+    /// Gets the structured component list (name + size) when the format exposes it; empty otherwise.
+    /// <para>获取结构化组件列表（名称 + 大小）；格式未提供时为空。</para>
+    /// </summary>
+    public IReadOnlyList<FirmwareComponent> Components { get; init; } = [];
+
+    /// <summary>
     /// Creates a success result.
     /// <para>创建成功结果。</para>
     /// </summary>
-    public static FirmwareOpResult Ok(string summary, IReadOnlyList<string>? entries = null, IReadOnlyDictionary<string, string>? metadata = null)
-        => new() { Success = true, Summary = summary, Entries = entries ?? [], Metadata = metadata ?? new Dictionary<string, string>() };
+    public static FirmwareOpResult Ok(string summary, IReadOnlyList<string>? entries = null, IReadOnlyDictionary<string, string>? metadata = null, IReadOnlyList<FirmwareComponent>? components = null)
+        => new()
+        {
+            Success = true,
+            Summary = summary,
+            Entries = entries ?? [],
+            Metadata = metadata ?? new Dictionary<string, string>(),
+            Components = components ?? []
+        };
 
     /// <summary>
     /// Creates a failure result.

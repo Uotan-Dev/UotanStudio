@@ -75,6 +75,27 @@
           </StackPanel>
         </Border>
 
+        <!-- 组件列表（名称 + 大小） -->
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                IsVisible="{Binding HasComponents}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.ComponentsLabel}"
+                       FontWeight="SemiBold" FontSize="13" />
+            <ItemsControl ItemsSource="{Binding Components}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="viewmodels:PropertyRow">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,2">
+                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontFamily="Consolas" FontSize="12"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
         <!-- 条目列表 -->
         <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 IsVisible="{Binding HasEntries}">

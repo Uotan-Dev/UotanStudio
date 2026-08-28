@@ -79,7 +79,13 @@ public sealed class BootImageFormatHandler : IFormatHandler
                         ["OsVersion"] = h.OsVersionString,
                         ["CommandLine"] = h.CommandLine,
                         ["KernelCompression"] = h.KernelCompression.ToString()
-                    });
+                    }, components:
+                    [
+                        FirmwareComponent.Of("kernel", h.KernelSize),
+                        FirmwareComponent.Of("ramdisk", h.RamdiskSize),
+                        FirmwareComponent.Of("second", h.SecondSize),
+                        FirmwareComponent.Of("dtb", h.DtbSize)
+                    ]);
                 }
 
                 if (magic == VendorBootMagic)

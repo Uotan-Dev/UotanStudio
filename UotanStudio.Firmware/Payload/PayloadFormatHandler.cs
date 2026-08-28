@@ -1,6 +1,7 @@
 using System.Text;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Firmware.Payload.Core;
+using UotanStudio.Firmware.Payload.Models;
 
 namespace UotanStudio.Firmware.Payload;
 
@@ -78,10 +79,15 @@ public sealed class PayloadFormatHandler : IFormatHandler
                     ["MinorVersion"] = metadata.Manifest.MinorVersion.ToString(),
                 };
 
+                var components = PartitionInfoHelper.ComputePartitionInfo(metadata.Manifest)
+                    .Select(p => FirmwareComponent.Of(p.Name, (long)p.SizeBytes))
+                    .ToList();
+
                 return FirmwareOpResult.Ok(
                     $"Read {metadata.PartitionNames.Count} partitions from '{filePath}'.",
                     metadata.PartitionNames,
-                    meta);
+                    meta,
+                    components);
             }
             catch (OperationCanceledException)
             {

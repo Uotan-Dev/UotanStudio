@@ -28,9 +28,34 @@ public sealed class AvbFormatHandler : IFormatHandler
         }
         try
         {
-            var bytes = File.ReadAllBytes(filePath);
-            return AvbFooter.TryLoad(bytes) != null
-                   || (bytes.Length >= AvbVBMetaImageHeader.Size && AvbVBMetaImageHeader.FromBytes(bytes).IsValid());
+            // 只流式读取头部（VBMeta 头 256 字节）与尾部（Footer 84 字节），避免整文件驻留内存
+            // （大型 .img 可达数百 MB，整读会造成 GB 级峰值）。
+            // Stream only the head (256-byte VBMeta header) and the tail (84-byte footer) instead of
+            // loading the whole file (large .img images can be hundreds of MB).
+            using var fs = File.OpenRead(filePath);
+
+            if (fs.Length >= AvbVBMetaImageHeader.Size)
+            {
+                Span<byte> head = stackalloc byte[AvbVBMetaImageHeader.Size];
+                fs.Position = 0;
+                if (fs.Read(head) == AvbVBMetaImageHeader.Size
+                    && AvbVBMetaImageHeader.FromBytes(head).IsValid())
+                {
+                    return true;
+                }
+            }
+
+            if (fs.Length >= AvbFooter.Size)
+            {
+                Span<byte> tail = stackalloc byte[AvbFooter.Size];
+                fs.Position = fs.Length - AvbFooter.Size;
+                if (fs.Read(tail) == AvbFooter.Size && AvbFooter.TryLoad(tail) is not null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
         catch
         {
@@ -41,45 +66,69 @@ public sealed class AvbFormatHandler : IFormatHandler
     /// <inheritdoc />
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        try
+        // 同步解析放在后台线程，避免大型镜像的头部/尾部读取阻塞 UI。
+        // Run the synchronous parsing on a background thread so the head/tail reads of large images
+        // never block the UI.
+        return Task.Run(() =>
         {
-            var bytes = File.ReadAllBytes(filePath);
-
-            // Prefer a standalone VBMeta image (magic AVB0); fall back to AVB footer verification.
-            if (bytes.Length >= AvbVBMetaImageHeader.Size && AvbVBMetaImageHeader.FromBytes(bytes).IsValid())
+            try
             {
-                var header = AvbVBMetaImageHeader.FromBytes(bytes);
-                var summary = $"VBMeta header parsed.\nAlgorithm: {header.AlgorithmType}\n" +
-                              $"Descriptors size: {header.DescriptorsSize} bytes\n" +
-                              $"Rollback index: {header.RollbackIndex}\nRelease: {header.ReleaseString}";
-                return Task.FromResult(FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
+                using var fs = new FileStream(
+                    filePath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    bufferSize: 4096,
+                    FileOptions.SequentialScan);
+
+                // Prefer a standalone VBMeta image (magic AVB0 at the head); fall back to AVB footer.
+                if (fs.Length >= AvbVBMetaImageHeader.Size)
                 {
-                    ["AlgorithmType"] = header.AlgorithmType.ToString(),
-                    ["DescriptorsSize"] = header.DescriptorsSize.ToString(),
-                    ["RollbackIndex"] = header.RollbackIndex.ToString(),
-                    ["ReleaseString"] = header.ReleaseString
-                }));
-            }
+                    Span<byte> head = stackalloc byte[AvbVBMetaImageHeader.Size];
+                    fs.Position = 0;
+                    if (fs.Read(head) == AvbVBMetaImageHeader.Size)
+                    {
+                        var header = AvbVBMetaImageHeader.FromBytes(head);
+                        if (header.IsValid())
+                        {
+                            var summary = $"VBMeta header parsed.\nAlgorithm: {header.AlgorithmType}\n" +
+                                          $"Descriptors size: {header.DescriptorsSize} bytes\n" +
+                                          $"Rollback index: {header.RollbackIndex}\nRelease: {header.ReleaseString}";
+                            return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
+                            {
+                                ["AlgorithmType"] = header.AlgorithmType.ToString(),
+                                ["DescriptorsSize"] = header.DescriptorsSize.ToString(),
+                                ["RollbackIndex"] = header.RollbackIndex.ToString(),
+                                ["ReleaseString"] = header.ReleaseString
+                            });
+                        }
+                    }
+                }
 
-            var footer = AvbFooter.TryLoad(bytes);
-            if (footer == null)
-            {
-                return Task.FromResult(FirmwareOpResult.Fail("No AVB footer or VBMeta image found."));
-            }
+                if (fs.Length >= AvbFooter.Size)
+                {
+                    Span<byte> tail = stackalloc byte[AvbFooter.Size];
+                    fs.Position = fs.Length - AvbFooter.Size;
+                    if (fs.Read(tail) == AvbFooter.Size && AvbFooter.TryLoad(tail) is { } footer)
+                    {
+                        var summary = $"AVB signed image.\nAlgorithm: {footer.AlgorithmName}\n" +
+                                       $"Auth data: {footer.AuthDataSize} bytes at offset {footer.AuthDataOffset}";
+                        return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
+                        {
+                            ["AlgorithmName"] = footer.AlgorithmName,
+                            ["AuthDataOffset"] = footer.AuthDataOffset.ToString(),
+                            ["AuthDataSize"] = footer.AuthDataSize.ToString()
+                        });
+                    }
+                }
 
-            var summary2 = $"AVB signed image.\nAlgorithm: {footer.Value.AlgorithmName}\n" +
-                           $"Auth data: {footer.Value.AuthDataSize} bytes at offset {footer.Value.AuthDataOffset}";
-            return Task.FromResult(FirmwareOpResult.Ok(summary2, metadata: new Dictionary<string, string>
+                return FirmwareOpResult.Fail("No AVB footer or VBMeta image found.");
+            }
+            catch (Exception ex)
             {
-                ["AlgorithmName"] = footer.Value.AlgorithmName,
-                ["AuthDataOffset"] = footer.Value.AuthDataOffset.ToString(),
-                ["AuthDataSize"] = footer.Value.AuthDataSize.ToString()
-            }));
-        }
-        catch (Exception ex)
-        {
-            return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
-        }
+                return FirmwareOpResult.Fail(ex.Message);
+            }
+        }, cancellationToken);
     }
 
     /// <inheritdoc />

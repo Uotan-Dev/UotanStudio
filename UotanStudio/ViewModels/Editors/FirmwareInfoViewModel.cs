@@ -47,6 +47,12 @@ public partial class FirmwareInfoViewModel : Document
     public static string EntriesLabel => LanguageService.Instance.GetString("FirmwareInfo_Entries");
 
     /// <summary>
+    /// <para>「组件」分区标题的本地化文本。</para>
+    /// The localized "components" section title.
+    /// </summary>
+    public static string ComponentsLabel => LanguageService.Instance.GetString("FirmwareInfo_Components");
+
+    /// <summary>
     /// <para>加载中提示的本地化文本。</para>
     /// The localized loading hint.
     /// </summary>
@@ -119,6 +125,12 @@ public partial class FirmwareInfoViewModel : Document
     [ObservableProperty] private bool _hasEntries;
 
     /// <summary>
+    /// <para>组件分区是否非空（驱动分区显示）。</para>
+    /// Whether the components section is non-empty (drives its visibility).
+    /// </summary>
+    [ObservableProperty] private bool _hasComponents;
+
+    /// <summary>
     /// <para>元数据键值对列表（UI 绑定）。</para>
     /// The metadata key-value list (bound by the UI).
     /// </summary>
@@ -129,6 +141,12 @@ public partial class FirmwareInfoViewModel : Document
     /// The entry-name list (bound by the UI).
     /// </summary>
     public ObservableCollection<string> Entries { get; } = [];
+
+    /// <summary>
+    /// <para>组件名称-大小行列表（UI 绑定）。</para>
+    /// The component name-size row list (bound by the UI).
+    /// </summary>
+    public ObservableCollection<PropertyRow> Components { get; } = [];
 
     /// <summary>
     /// <para>创建固件元数据面板视图模型。</para>
@@ -167,8 +185,10 @@ public partial class FirmwareInfoViewModel : Document
         Summary = string.Empty;
         Metadata.Clear();
         Entries.Clear();
+        Components.Clear();
         HasMetadata = false;
         HasEntries = false;
+        HasComponents = false;
 
         try
         {
@@ -189,7 +209,11 @@ public partial class FirmwareInfoViewModel : Document
             FormatName = handler.FormatName;
             IsRecognized = true;
 
-            var result = await handler.ReadMetadataAsync(path).ConfigureAwait(true);
+            // 部分 handler 的解析是同步实现（Apk/Arsc/Dt/Nb0/Ntpi 等直接读文件），
+            // 必须在后台线程执行，否则整文件读取会阻塞 UI。
+            // Some handlers parse synchronously (Apk/Arsc/Dt/Nb0/Ntpi etc. read files directly);
+            // run them on a background thread so the file reads never block the UI.
+            var result = await Task.Run(() => handler.ReadMetadataAsync(path)).ConfigureAwait(true);
             if (!result.Success)
             {
                 ErrorMessage = result.Summary;
@@ -208,14 +232,24 @@ public partial class FirmwareInfoViewModel : Document
             }
             HasMetadata = Metadata.Count > 0;
 
-            if (result.Entries is not null)
+            // 结构化组件列表优先（名称 + 大小），未提供时回退到纯名称条目列表。
+            // Prefer the structured component list (name + size); fall back to the plain name list.
+            if (result.Components is { Count: > 0 })
+            {
+                foreach (var component in result.Components)
+                {
+                    Components.Add(new PropertyRow(component.Name, FormatSize(component.SizeBytes)));
+                }
+                HasComponents = Components.Count > 0;
+            }
+            else if (result.Entries is not null)
             {
                 foreach (var entry in result.Entries)
                 {
                     Entries.Add(entry);
                 }
+                HasEntries = Entries.Count > 0;
             }
-            HasEntries = Entries.Count > 0;
         }
         catch (Exception ex)
         {
@@ -239,8 +273,10 @@ public partial class FirmwareInfoViewModel : Document
     {
         Metadata.Clear();
         Entries.Clear();
+        Components.Clear();
         HasMetadata = false;
         HasEntries = false;
+        HasComponents = false;
         FormatName = string.Empty;
         Summary = string.Empty;
         ErrorMessage = string.Empty;
@@ -248,5 +284,31 @@ public partial class FirmwareInfoViewModel : Document
         IsRecognized = false;
         IsBusy = false;
         FilePath = null;
+    }
+
+    /// <summary>
+    /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
+    /// Formats a byte count into a human-readable size string (e.g. "1.5 MB"); 0 bytes shows "0 B".
+    /// </summary>
+    private static string FormatSize(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "0 B";
+        }
+
+        var abs = Math.Abs(bytes);
+        var units = new[] { "B", "KB", "MB", "GB", "TB" };
+        var unit = 0;
+        var value = (double)abs;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0
+            ? $"{bytes} {units[0]}"
+            : $"{value:0.##} {units[unit]}";
     }
 }
