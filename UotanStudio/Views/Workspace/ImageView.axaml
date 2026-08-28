@@ -16,6 +16,18 @@
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="viewmodels:ImageEntryViewModel">
           <Grid ColumnDefinitions="Auto,*,Auto" Margin="4,3">
+            <Grid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="{DynamicResource ImageView_ExtractSelected}" Click="OnExtractMenuClick" />
+                <MenuItem Header="{DynamicResource ImageView_SynthesizeImg}" Click="OnSynthesizeImgMenuClick" />
+                <MenuItem Header="{DynamicResource ImageView_SynthesizeBr}" Click="OnSynthesizeBrMenuClick" />
+                <Separator />
+                <MenuItem Header="{DynamicResource ImageView_SynthesizeSuper}" Click="OnSynthesizeSuperMenuClick" />
+                <MenuItem Header="{DynamicResource ImageView_SynthesizeDat}" Click="OnSynthesizeDatMenuClick" />
+                <Separator />
+                <MenuItem Header="{DynamicResource ImageView_DeleteSelected}" Click="OnDeleteMenuClick" />
+              </ContextMenu>
+            </Grid.ContextMenu>
             <avalonia:MaterialIcon Grid.Column="0" Kind="FileOutline" Width="16" Height="16"
                                    Margin="0,0,8,0" VerticalAlignment="Center"
                                    Foreground="{DynamicResource AccentColor}" />
