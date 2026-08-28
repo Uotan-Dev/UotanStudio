@@ -7,7 +7,7 @@
              x:Class="UotanStudio.Views.Shell.LogView"
              x:DataType="vm:LogViewModel">
   <Grid RowDefinitions="Auto,*">
-    <!-- 顶栏：标题与操作按钮 -->
+    <!-- 顶栏：标题、筛选与操作按钮 -->
     <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>
         <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Log_Panel_Title}"
@@ -24,6 +24,32 @@
             <TextBlock Text="{DynamicResource Log_Export}" FontSize="11" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11"
+                     VerticalAlignment="Center" />
+          <ComboBox Width="110" ItemsSource="{Binding Levels}"
+                    SelectedItem="{Binding LevelFilter}"
+                    HorizontalAlignment="Left">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}"
+                           FontSize="11" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{DynamicResource Log_SourceFilter}" FontSize="11" Margin="12,0,0,0"
+                     VerticalAlignment="Center" />
+          <ComboBox Width="140" ItemsSource="{Binding Sources}"
+                    SelectedItem="{Binding SourceFilter}"
+                    HorizontalAlignment="Left">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}"
+                           FontSize="11" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
         <TextBlock VerticalAlignment="Center" />
       </DockPanel>
     </Border>

@@ -26,21 +26,23 @@ public partial class LogView : UserControl
     {
         InitializeComponent();
         LogList.Loaded += (_, _) => AttachScroller();
+        // 路由事件订阅内部滚动器的滚动变化：无需先解析内部 ScrollViewer 实例，
+        // 且能统一在用户滚轮滚动与新条目追加时同步自动滚动状态。
+        // Subscribe to the inner scroller's scroll changes via the routed event: no need to
+        // resolve the internal ScrollViewer instance first, and both wheel scrolling and new
+        // entry appends funnel through one handler that syncs the auto-scroll state.
+        LogList.AddHandler(ScrollViewer.ScrollChangedEvent, OnScrollChanged);
     }
 
     /// <summary>
-    /// <para>解析 ListBox 内部滚动容器并订阅滚动事件。</para>
-    /// Resolves the ListBox internal scroll container and subscribes to its scroll events.
+    /// <para>解析 ListBox 内部滚动容器并订阅条目集合变更。</para>
+    /// Resolves the ListBox internal scroll container and subscribes to entry collection changes.
     /// </summary>
     private void AttachScroller()
     {
         if (_logScroller is null)
         {
             _logScroller = LogList.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            if (_logScroller is not null)
-            {
-                _logScroller.ScrollChanged += (_, _) => OnScrollChanged();
-            }
         }
 
         if (DataContext is LogViewModel vm && !_subscribed)
@@ -175,14 +177,25 @@ public partial class LogView : UserControl
     }
 
     /// <summary>
-    /// <para>滚动变化时，若自动滚动开启则跟随至最新条目。</para>
-    /// On scroll change, follows the latest entry when auto-scroll is enabled.
+    /// <para>滚动变化时同步自动滚动状态：用户滚到列表底部时恢复自动滚动，
+    /// 向上翻阅历史时暂停自动滚动（否则每次滚动都会被拉回底部，表现为滚轮无效）。</para>
+    /// Syncs the auto-scroll state on scroll changes: restores auto-scroll when the user reaches
+    /// the bottom, and pauses it while browsing history upwards (otherwise every wheel tick would
+    /// snap back to the bottom, making the wheel appear dead).
     /// </summary>
-    private void OnScrollChanged()
+    private void OnScrollChanged(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is LogViewModel { AutoScroll: true })
+        if (DataContext is not LogViewModel vm || _logScroller is null)
         {
-            ScrollToEnd();
+            return;
+        }
+
+        // 容差 4px：列表不满一屏或滚动器尚未布局时也视为在底部。
+        // A 4px tolerance: an undersized list or an unlaid-out scroller still counts as bottom.
+        var atBottom = _logScroller.Offset.Y + _logScroller.Viewport.Height >= _logScroller.Extent.Height - 4;
+        if (vm.AutoScroll != atBottom)
+        {
+            vm.AutoScroll = atBottom;
         }
     }
 

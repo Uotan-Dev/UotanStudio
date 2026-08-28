@@ -16,6 +16,7 @@
             </ResourceDictionary.MergedDictionaries>
             <converters:IntEqualConverter x:Key="IntEqualConverter" />
             <converters:StringNotNullOrEmptyConverter x:Key="StringNotNullOrEmptyConverter" />
+            <converters:LogFilterDisplayConverter x:Key="LogFilterDisplayConverter" />
         </ResourceDictionary>
     </Application.Resources>
 
