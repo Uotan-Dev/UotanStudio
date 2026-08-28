@@ -436,6 +436,18 @@ public partial class FileViewModel : Document
                     }
                 }
 
+                // 把组件/分区条目列表上屏，使属性面板在仅有 Metadata 之外也能看到封装内容。
+                // Surface the entry/partition list so the properties panel shows the encapsulated
+                // components even when the handler exposes no metadata.
+                if (result.Entries is { Count: > 0 })
+                {
+                    AddAnalysis("Entries", result.Entries.Count.ToString("N0"));
+                    foreach (var entry in result.Entries)
+                    {
+                        AddAnalysis("Entry", entry);
+                    }
+                }
+
                 if (!string.IsNullOrEmpty(result.Summary))
                 {
                     AddAnalysis("Summary", result.Summary);
