@@ -65,33 +65,34 @@ public static class SparseImageConverter
 
     /// <summary>
     /// Splits a large sparse image into multiple sparse images of a specified maximum size.
-    /// <para>将大型稀疏镜像拆分为指定最大大小的多个稀疏镜像。</para>
+    /// Streams each split directly from the source without materializing the whole raw image.
+    /// <para>将大型稀疏镜像拆分为指定最大大小的多个稀疏镜像。
+    /// 直接流式输出每个分片，不再物化整张 raw 镜像。</para>
     /// </summary>
     /// <param name="inputFile">The path to the input sparse image file. <para>输入稀疏镜像文件路径。</para></param>
     /// <param name="outputPattern">Output path pattern; may include {0} for the index. <para>输出文件路径模式;可包含 {0} 作为索引占位符。</para></param>
     /// <param name="maxFileSize">Maximum size in bytes for each split file. <para>每个拆分文件的最大字节数。</para></param>
     public static void ResparseImage(string inputFile, string outputPattern, long maxFileSize)
     {
+        ArgumentException.ThrowIfNullOrEmpty(inputFile);
+        ArgumentException.ThrowIfNullOrEmpty(outputPattern);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxFileSize, 1);
+
         using var sparseFile = SparseReader.FromImageFile(inputFile);
-        var rawStream = new MemoryStream();
-        sparseFile.WriteRawToStream(rawStream);
-        rawStream.Position = 0;
-
         var blockSize = sparseFile.Header.BlockSize;
-        var splitCount = (int)((rawStream.Length + maxFileSize - 1) / maxFileSize);
+        var totalLength = checked((long)sparseFile.Header.TotalBlocks * blockSize);
+        var splitCount = totalLength == 0 ? 0 : checked(((totalLength - 1) / maxFileSize) + 1);
 
-        for (var i = 0; i < splitCount; i++)
+        for (long i = 0; i < splitCount; i++)
         {
-            var start = i * maxFileSize;
-            var len = Math.Min(maxFileSize, rawStream.Length - start);
-            rawStream.Position = start;
-            var part = new byte[len];
-            rawStream.ReadExactly(part);
+            var start = checked(i * maxFileSize);
+            var len = Math.Min(maxFileSize, totalLength - start);
 
             var outPath = outputPattern.Contains("{0}") ? string.Format(outputPattern, i) : $"{outputPattern}.{i:D2}";
             using var fs = new FileStream(outPath, FileMode.Create, FileAccess.Write);
             var sparse = new SparseFile(blockSize, len);
-            sparse.AddRawChunk(new MemoryDataProvider(part), (uint)((len + blockSize - 1) / blockSize));
+            var splitBlocks = checked((uint)(checked(len + blockSize - 1L) / blockSize));
+            sparse.AddRawChunk(new SparseFileRangeProvider(sparseFile, start, len), splitBlocks);
             sparse.WriteToStream(fs, sparse: true);
         }
     }

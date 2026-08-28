@@ -111,13 +111,14 @@ public sealed class AvbFormatHandler : IFormatHandler
                     fs.Position = fs.Length - AvbFooter.Size;
                     if (fs.Read(tail) == AvbFooter.Size && AvbFooter.TryLoad(tail) is { } footer)
                     {
-                        var summary = $"AVB signed image.\nAlgorithm: {footer.AlgorithmName}\n" +
-                                       $"Auth data: {footer.AuthDataSize} bytes at offset {footer.AuthDataOffset}";
+                        var summary = $"AVB signed image.\nFooter version: {footer.VersionMajor}.{footer.VersionMinor}\n" +
+                                       $"VBMeta: {footer.VbmetaSize} bytes at offset {footer.VbmetaOffset}";
                         return FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
                         {
-                            ["AlgorithmName"] = footer.AlgorithmName,
-                            ["AuthDataOffset"] = footer.AuthDataOffset.ToString(),
-                            ["AuthDataSize"] = footer.AuthDataSize.ToString()
+                            ["FooterVersion"] = $"{footer.VersionMajor}.{footer.VersionMinor}",
+                            ["OriginalImageSize"] = footer.OriginalImageSize.ToString(),
+                            ["VbmetaOffset"] = footer.VbmetaOffset.ToString(),
+                            ["VbmetaSize"] = footer.VbmetaSize.ToString()
                         });
                     }
                 }
@@ -156,15 +157,25 @@ public sealed class AvbFormatHandler : IFormatHandler
 
             // AVB footer on a boot image: extract the auth data block.
             var footerResult = AvbVerifier.Verify(bytes);
-            if (footerResult.IsSigned && footerResult.Footer.HasValue)
+            if (footerResult.Footer.HasValue && footerResult.VBMetaHeader.HasValue &&
+                (footerResult.IsValid || footerResult.VBMetaHeader.Value.AlgorithmType == AvbSignatureVerifier.AlgorithmNone))
             {
-                Directory.CreateDirectory(outputDirectory);
                 var f = footerResult.Footer.Value;
-                var authPath2 = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(filePath)}.avb-auth.bin");
-                var authData = bytes.AsSpan((int)f.AuthDataOffset, (int)f.AuthDataSize).ToArray();
+                var imageLength = (ulong)bytes.Length;
+                if (f.VbmetaOffset > imageLength ||
+                    f.VbmetaSize > imageLength - f.VbmetaOffset ||
+                    f.VbmetaOffset > int.MaxValue ||
+                    f.VbmetaSize > int.MaxValue)
+                {
+                    return Task.FromResult(FirmwareOpResult.Fail("AVB footer VBMeta range is invalid."));
+                }
+
+                Directory.CreateDirectory(outputDirectory);
+                var authPath2 = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(filePath)}.vbmeta.bin");
+                var authData = bytes.AsSpan((int)f.VbmetaOffset, (int)f.VbmetaSize).ToArray();
                 File.WriteAllBytes(authPath2, authData);
                 return Task.FromResult(FirmwareOpResult.Ok(
-                    $"Extracted AVB authentication data to {authPath2}", entries: [authPath2]));
+                    $"Extracted VBMeta image to {authPath2}", entries: [authPath2]));
             }
 
             return Task.FromResult(FirmwareOpResult.Fail("File is not an AVB-signed image or VBMeta image."));

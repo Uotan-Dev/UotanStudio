@@ -1,4 +1,5 @@
-using System.Buffers;
+using System.Security.Cryptography;
+using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.NTPi.Compression;
 using UotanStudio.Firmware.NTPi.Crypto;
 using UotanStudio.Firmware.NTPi.Exceptions;
@@ -8,7 +9,7 @@ using UotanStudio.Firmware.NTPi.Models;
 namespace UotanStudio.Firmware.NTPi.Reader;
 
 /// <summary>
-/// <para>负责从 NTPI 固件包的 Region6 中提取和解密单个文件。</para>
+/// <para>负责从 NTPI 固件包的 Region6 中按块流式提取和解密单个文件。</para>
 /// Responsible for extracting and decrypting individual files from Region6 of NTPI firmware packages.
 /// </summary>
 /// <remarks>
@@ -17,90 +18,147 @@ namespace UotanStudio.Firmware.NTPi.Reader;
 /// </remarks>
 internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compressor compressor)
 {
+    private const int NtEncodeHeaderSize = 112;
     private readonly ICryptoProvider _cryptoProvider = cryptoProvider ?? throw new ArgumentNullException(nameof(cryptoProvider));
     private readonly ILzma2Compressor _compressor = compressor ?? throw new ArgumentNullException(nameof(compressor));
 
     /// <summary>
-    /// <para>从 Region6 数据中提取指定文件条目的原始数据。</para>
-    /// Extracts the raw data for the specified file entry from Region6 data.
+    /// <para>将指定文件条目的原始数据提取为内存字节数组。</para>
+    /// Extracts the raw data for the specified file entry into an in-memory byte array.
     /// </summary>
-    public byte[] ExtractFileFromRegion6(byte[] region6Data, int region6Offset, KeyMapKeyProvider keyMapProvider, FileEntry entry)
+    public byte[] ExtractFileToMemory(Stream source, long region6Offset, long region6Length, KeyMapKeyProvider keyMapProvider, FileEntry entry)
     {
-        long totalDecompressedSize = Math.Max((int)entry.OriginalLength, (int)entry.Length);
-        var outputBuffer = ArrayPool<byte>.Shared.Rent((int)totalDecompressedSize);
-        try
-        {
-            var outputOffset = 0;
-            var currentOffset = region6Offset + entry.Offset;
-            var endOffset = region6Offset + entry.Offset + entry.Length;
-            var blockIdx = 0;
-            const int ntEncodeHeaderSize = 112;
-            var zeroIv = KeyMapKeyProvider.GetZeroIv();
+        ArgumentNullException.ThrowIfNull(source);
+        var initialCapacity = (int)Math.Min(Math.Max(entry.OriginalLength, 0), 64 * 1024);
+        using var output = new MemoryStream(initialCapacity);
+        ExtractFileToStream(source, region6Offset, region6Length, keyMapProvider, entry, output);
+        return output.ToArray();
+    }
 
-            var blockKeyBuffer = new byte[32];
-            while (currentOffset < endOffset)
+    /// <summary>
+    /// <para>按块从 Region6 流式提取文件:FileStream→解密流→有界解码→输出流。</para>
+    /// Streams a file from Region6 block by block: FileStream→decrypt stream→bounded decoder→output stream.
+    /// </summary>
+    /// <param name="source">可定位的 NTPI 文件流。<para>The seekable NTPI file stream.</para></param>
+    /// <param name="region6Offset">Region6 在文件中的绝对偏移。<para>The absolute Region6 offset in the file.</para></param>
+    /// <param name="region6Length">Region6 的长度。<para>The Region6 length.</para></param>
+    /// <param name="keyMapProvider">Region6 块密钥提供者。<para>The Region6 block key provider.</para></param>
+    /// <param name="entry">文件索引条目。<para>The file index entry.</para></param>
+    /// <param name="output">解压结果输出流。<para>The output stream receiving the decompressed data.</para></param>
+    public void ExtractFileToStream(Stream source, long region6Offset, long region6Length, KeyMapKeyProvider keyMapProvider, FileEntry entry, Stream output, long trustedOutputLimit = long.MaxValue)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(keyMapProvider);
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(output);
+
+        if (entry.Offset < 0 || entry.Length < 0 || entry.OriginalLength < 0)
+        {
+            throw new InvalidFormatException($"File entry '{entry.Name}' has negative offset/length fields.");
+        }
+        if (trustedOutputLimit < 0 || entry.OriginalLength > trustedOutputLimit)
+        {
+            throw new InvalidFormatException($"File entry '{entry.Name}' exceeds its trusted output limit.");
+        }
+        if (region6Offset < 0 || region6Length < 0 || region6Offset > source.Length || region6Length > source.Length - region6Offset)
+        {
+            throw new InvalidFormatException("Region6 range exceeds the NTPI file boundaries.");
+        }
+        if (entry.Offset > region6Length || entry.Length > region6Length - entry.Offset)
+        {
+            throw new InvalidFormatException(
+                $"File entry '{entry.Name}' (offset {entry.Offset}, length {entry.Length}) exceeds Region6 boundaries.");
+        }
+        if (entry.OriginalLength == 0 && entry.Length == 0)
+        {
+            var emptyHash = StructHelper.ComputeSha256Hex([]);
+            if (!string.IsNullOrEmpty(entry.FileSha256Hash) &&
+                !string.Equals(emptyHash, entry.FileSha256Hash, StringComparison.OrdinalIgnoreCase))
             {
-                if (currentOffset + ntEncodeHeaderSize > region6Data.Length)
+                throw new IntegrityVerificationException($"SHA-256 hash mismatch for empty file '{entry.Name}'.");
+            }
+            return;
+        }
+        if (entry.Length < NtEncodeHeaderSize)
+        {
+            throw new InvalidFormatException($"File entry '{entry.Name}' is shorter than an NTENCODE header ({NtEncodeHeaderSize} bytes).");
+        }
+
+        var region6End = checked(region6Offset + region6Length);
+        var entryEnd = checked(region6Offset + entry.Offset + entry.Length);
+        var zeroIv = KeyMapKeyProvider.GetZeroIv();
+        var blockKeyBuffer = new byte[32];
+        var encodeHeaderBuffer = new byte[NtEncodeHeaderSize];
+        var blockPos = 0L;
+        var blockIdx = 0;
+
+        using var lengthBound = new CountingWriteStream(output, Math.Min(entry.OriginalLength, trustedOutputLimit), leaveOpen: true);
+        using var hashing = new NtpiHashingWriteStream(lengthBound, leaveOpen: true);
+
+        while (blockPos < entry.Length)
+        {
+            var blockStart = checked(region6Offset + entry.Offset + blockPos);
+            if (blockStart > entryEnd || NtEncodeHeaderSize > Math.Min(region6End, entryEnd) - blockStart)
+            {
+                throw new InvalidFormatException(
+                    $"NTENCODE header for file '{entry.Name}' at offset {blockStart} exceeds Region6 boundaries.");
+            }
+
+            var encryptedSize = 0L;
+            try
+            {
+                source.Position = blockStart;
+                source.ReadExactly(encodeHeaderBuffer);
+                if (!StructHelper.IsNtEncodeMagic(encodeHeaderBuffer))
                 {
                     throw new InvalidFormatException(
-                        $"NtEncodeHeader for file '{entry.Name}' at offset {currentOffset} exceeds Region6 boundaries.");
+                        $"Invalid NTENCODE header at offset {blockStart} in Region6 for file '{entry.Name}'.");
                 }
 
-                if (!StructHelper.IsNtEncodeMagic(region6Data, (int)currentOffset))
+                encryptedSize = (long)StructHelper.ReadNtEncodeOriginalSize(encodeHeaderBuffer);
+                if (encryptedSize <= 0 || encryptedSize > Math.Min(region6End, entryEnd) - (blockStart + NtEncodeHeaderSize))
                 {
                     throw new InvalidFormatException(
-                        $"Invalid NTENCODE header at offset {currentOffset} in Region6 for file '{entry.Name}'.");
+                        $"Encrypted data for file '{entry.Name}' at offset {blockStart} exceeds Region6 boundaries.");
                 }
 
                 keyMapProvider.GetKey(entry.KeyIndex, blockIdx, blockKeyBuffer);
 
-                var encryptedSize = (long)StructHelper.ReadNtEncodeOriginalSize(region6Data, (int)currentOffset);
-                if (currentOffset + ntEncodeHeaderSize + encryptedSize > region6Data.Length)
-                {
-                    throw new InvalidFormatException(
-                        $"Encrypted data for file '{entry.Name}' at offset {currentOffset} exceeds Region6 boundaries.");
-                }
-
-                var encryptedSizeInt = (int)encryptedSize;
-                var encryptedData = ArrayPool<byte>.Shared.Rent(encryptedSizeInt);
-                try
-                {
-                    Buffer.BlockCopy(region6Data, (int)currentOffset + ntEncodeHeaderSize, encryptedData, 0, encryptedSizeInt);
-
-                    var dataToDecrypt = encryptedSizeInt == encryptedData.Length
-                        ? encryptedData
-                        : encryptedData.AsSpan(0, encryptedSizeInt).ToArray();
-                    var decrypted = _cryptoProvider.Decrypt(dataToDecrypt, blockKeyBuffer, zeroIv);
-                    var decompressed = _compressor.Decompress(decrypted);
-
-                    if (outputOffset + decompressed.Length > outputBuffer.Length)
-                    {
-                        var newSize = Math.Max(outputBuffer.Length * 2, outputOffset + decompressed.Length);
-                        var newBuffer = ArrayPool<byte>.Shared.Rent(newSize);
-                        Buffer.BlockCopy(outputBuffer, 0, newBuffer, 0, outputOffset);
-                        ArrayPool<byte>.Shared.Return(outputBuffer);
-                        outputBuffer = newBuffer;
-                    }
-
-                    Buffer.BlockCopy(decompressed, 0, outputBuffer, outputOffset, decompressed.Length);
-                    outputOffset += decompressed.Length;
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(encryptedData);
-                }
-
-                currentOffset += ntEncodeHeaderSize + encryptedSize;
-                blockIdx++;
+                var declaredRemaining = entry.OriginalLength - lengthBound.BytesWritten;
+                var trustedRemaining = trustedOutputLimit - lengthBound.BytesWritten;
+                var remaining = Math.Min(declaredRemaining, trustedRemaining);
+                using var encryptedRange = new BoundedReadStream(source, blockStart + NtEncodeHeaderSize, encryptedSize, leaveOpen: true);
+                using var decrypt = _cryptoProvider.CreateDecryptStream(encryptedRange, blockKeyBuffer, zeroIv, leaveOpen: true);
+                _compressor.Decompress(decrypt, hashing, remaining);
+            }
+            catch (Exception ex) when (ex is CryptographicException or EndOfStreamException or ArgumentOutOfRangeException)
+            {
+                throw new InvalidFormatException(
+                    $"Failed to extract file '{entry.Name}': the encrypted or compressed data is truncated or corrupt.", ex);
             }
 
-            var result = new byte[outputOffset];
-            Buffer.BlockCopy(outputBuffer, 0, result, 0, outputOffset);
-            return result;
+            blockPos += NtEncodeHeaderSize + encryptedSize;
+            blockIdx++;
         }
-        finally
+
+        if (blockPos != entry.Length)
         {
-            ArrayPool<byte>.Shared.Return(outputBuffer);
+            throw new InvalidFormatException(
+                $"NTENCODE blocks for file '{entry.Name}' do not exactly fill its declared entry length.");
+        }
+
+        if (entry.OriginalLength > 0 && lengthBound.BytesWritten != entry.OriginalLength)
+        {
+            throw new IntegrityVerificationException(
+                $"File '{entry.Name}' extracted length mismatch: expected {entry.OriginalLength} bytes, got {lengthBound.BytesWritten} bytes.");
+        }
+
+        var computed = hashing.GetHashHex();
+        if (!string.IsNullOrEmpty(entry.FileSha256Hash) &&
+            !string.Equals(computed, entry.FileSha256Hash, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IntegrityVerificationException(
+                $"SHA-256 hash mismatch for file '{entry.Name}': expected {entry.FileSha256Hash}, got {computed}.");
         }
     }
 
@@ -111,6 +169,8 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     /// <returns>哈希匹配时返回 true,否则抛出异常。</returns>
     public void VerifyHash(FileEntry entry, byte[] data)
     {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(data);
         var computed = StructHelper.ComputeSha256Hex(data);
         if (!string.IsNullOrEmpty(entry.FileSha256Hash) &&
             !string.Equals(computed, entry.FileSha256Hash, StringComparison.OrdinalIgnoreCase))

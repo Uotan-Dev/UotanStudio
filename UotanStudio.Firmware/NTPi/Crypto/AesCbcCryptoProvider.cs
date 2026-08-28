@@ -59,6 +59,66 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         return encryptor.TransformFinalBlock(paddedData, 0, paddedData.Length);
     }
 
+    /// <inheritdoc />
+    public Stream CreateDecryptStream(Stream input, byte[] key, byte[] iv, bool leaveOpen = true)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(iv);
+        if (!input.CanRead)
+        {
+            throw new ArgumentException("The stream must be readable.", nameof(input));
+        }
+
+        Aes? aes = null;
+        ICryptoTransform? decryptor = null;
+        try
+        {
+            aes = CreateAes();
+            aes.Key = key;
+            aes.IV = iv;
+            decryptor = aes.CreateDecryptor();
+            var crypto = new CryptoStream(input, decryptor, CryptoStreamMode.Read, leaveOpen);
+            return new OwningCryptoStream(crypto, decryptor, aes);
+        }
+        catch
+        {
+            decryptor?.Dispose();
+            aes?.Dispose();
+            throw;
+        }
+    }
+
+    /// <inheritdoc />
+    public Stream CreateEncryptStream(Stream output, byte[] key, byte[] iv, bool leaveOpen = true)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(iv);
+        if (!output.CanWrite)
+        {
+            throw new ArgumentException("The stream must be writable.", nameof(output));
+        }
+
+        Aes? aes = null;
+        ICryptoTransform? encryptor = null;
+        try
+        {
+            aes = CreateAes();
+            aes.Key = key;
+            aes.IV = iv;
+            encryptor = aes.CreateEncryptor();
+            var crypto = new CryptoStream(output, encryptor, CryptoStreamMode.Write, leaveOpen);
+            return new ZeroPaddingEncryptStream(crypto, encryptor, aes);
+        }
+        catch
+        {
+            encryptor?.Dispose();
+            aes?.Dispose();
+            throw;
+        }
+    }
+
     /// <summary>
     /// <para>计算数据填充至 AES 块大小边界后的总大小。</para>
     /// Calculates the total size after padding data to the AES block size boundary.
@@ -67,6 +127,88 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
     {
         var remainder = dataLength % BlockSize;
         return remainder == 0 ? dataLength : dataLength + (BlockSize - remainder);
+    }
+
+    private sealed class OwningCryptoStream(CryptoStream inner, ICryptoTransform transform, Aes aes) : Stream
+    {
+        private bool _disposed;
+        public override bool CanRead => !_disposed && inner.CanRead;
+        public override bool CanSeek => false;
+        public override bool CanWrite => !_disposed && inner.CanWrite;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
+        public override void Flush() => inner.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override int Read(Span<byte> buffer) => inner.Read(buffer);
+        public override void Write(byte[] buffer, int offset, int count) => inner.Write(buffer, offset, count);
+        public override void Write(ReadOnlySpan<byte> buffer) => inner.Write(buffer);
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try { inner.Dispose(); }
+                finally
+                {
+                    transform.Dispose();
+                    aes.Dispose();
+                    _disposed = true;
+                }
+            }
+            base.Dispose(disposing);
+        }
+    }
+
+    private sealed class ZeroPaddingEncryptStream(CryptoStream inner, ICryptoTransform transform, Aes aes) : Stream
+    {
+        private long _bytesWritten;
+        private bool _disposed;
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => !_disposed;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => _bytesWritten; set => throw new NotSupportedException(); }
+        public override void Flush() => inner.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            inner.Write(buffer, offset, count);
+            _bytesWritten = checked(_bytesWritten + count);
+        }
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            inner.Write(buffer);
+            _bytesWritten = checked(_bytesWritten + buffer.Length);
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (!_disposed && disposing)
+            {
+                try
+                {
+                    var remainder = (int)(_bytesWritten % BlockSize);
+                    if (remainder != 0)
+                    {
+                        inner.Write(new byte[BlockSize - remainder]);
+                    }
+                    inner.FlushFinalBlock();
+                }
+                finally
+                {
+                    try { inner.Dispose(); }
+                    finally
+                    {
+                        transform.Dispose();
+                        aes.Dispose();
+                        _disposed = true;
+                    }
+                }
+            }
+            base.Dispose(disposing);
+        }
     }
 
     private static byte[] PadToBlockSize(byte[] data)

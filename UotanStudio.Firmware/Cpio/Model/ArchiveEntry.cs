@@ -29,4 +29,38 @@ public sealed class ArchiveEntry
     /// <para>获取条目的原始负载字节。</para>
     /// </summary>
     public required byte[] Data { get; init; }
+
+    /// <summary>
+    /// Gets a stream providing the entry payload. When non-null, writers stream from it
+    /// instead of <see cref="Data"/>. The writer that consumes the entry disposes the stream.
+    /// <para>获取提供条目负载的流。非 null 时写入方优先从其流式读取，而非使用 Data。
+    /// 消费该条目的写入方负责释放该流。</para>
+    /// </summary>
+    public Stream? DataStream { get; init; }
+
+    /// <summary>Gets a payload stream lazily when the writer consumes this entry.</summary>
+    public Func<Stream>? DataStreamFactory { get; init; }
+
+    /// <summary>Gets the explicitly declared payload length, required for non-seekable or factory streams.</summary>
+    public long? DeclaredDataLength { get; init; }
+
+    /// <summary>
+    /// Gets the payload length. Unknown streaming lengths are rejected rather than treated as zero.
+    /// </summary>
+    public long DataLength
+    {
+        get
+        {
+            if (DeclaredDataLength is < 0)
+            {
+                throw new InvalidDataException($"Entry '{Name}' has a negative declared payload length.");
+            }
+
+            return DeclaredDataLength ?? (DataStream is { CanSeek: true } stream
+                ? stream.Length
+                : DataStream is not null || DataStreamFactory is not null
+                    ? throw new InvalidOperationException($"Entry '{Name}' has a streaming payload with unknown length.")
+                    : Data.LongLength);
+        }
+    }
 }

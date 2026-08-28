@@ -18,6 +18,8 @@ public static class LzopCompressor
     public static ReadOnlySpan<byte> Magic => [0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A];
 
     private const int MagicSize = 9;
+    // Supported interoperability ceiling; lzop's common 256 KiB block size is not a format limit.
+    private const uint MaximumBlockSize = 64 * 1024 * 1024;
     private const int M2MaxOffset = 0x0800;
 
     // lzop header flag bits.
@@ -36,211 +38,146 @@ public static class LzopCompressor
     /// <returns><c>true</c> when the magic matches. <para>魔数匹配时返回 <c>true</c>。</para></returns>
     public static bool IsLzopFormat(byte[]? data) => data is { Length: >= MagicSize } && data.AsSpan(0, MagicSize).SequenceEqual(Magic);
 
-    /// <summary>
-    /// Decompresses an LZOP file into its original bytes.
-    /// <para>将 LZOP 文件解压为原始字节。</para>
-    /// </summary>
-    /// <param name="data">The LZOP container bytes. <para>LZOP 容器字节。</para></param>
-    /// <returns>The decompressed original data. <para>解压后的原始数据。</para></returns>
-    /// <exception cref="ArgumentNullException">data 为 null 时抛出。</exception>
-    /// <exception cref="CompressionException">数据不是 LZOP、头校验失败或块解压失败时抛出。</exception>
-    public static byte[] Decompress(byte[] data)
+    /// <summary>Decompresses an LZOP file into its original bytes.</summary>
+    public static byte[] Decompress(byte[] data) => Decompress(data, long.MaxValue);
+
+    /// <summary>Decompresses LZOP data while enforcing a total output limit.</summary>
+    public static byte[] Decompress(byte[] data, long maximumOutputBytes)
     {
         ArgumentNullException.ThrowIfNull(data);
+        using var input = new MemoryStream(data, writable: false);
+        using var output = new MemoryStream();
+        Decompress(input, output, maximumOutputBytes);
+        return output.ToArray();
+    }
 
-        if (data.Length < MagicSize)
-        {
-            throw new CompressionException("Invalid LZOP data: too small 无效的 LZOP 数据：过小。");
-        }
-
-        if (!IsLzopFormat(data))
-        {
-            throw new CompressionException("Invalid LZOP data: wrong magic 无效的 LZOP 数据：魔数错误。");
-        }
+    /// <summary>逐块流式解压 LZOP 数据并限制累计输出。<para>Streams LZOP blocks to the output while enforcing a cumulative output limit.</para></summary>
+    public static void Decompress(Stream input, Stream output, long maximumOutputBytes)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumOutputBytes);
 
         try
         {
-            var offset = MagicSize;
+            var magic = ReadBytes(input, MagicSize, "magic");
+            if (!magic.AsSpan().SequenceEqual(Magic))
+                throw new CompressionException("Invalid LZOP data: wrong magic 无效的 LZOP 数据：魔数错误。");
 
-            // ---- Header ----
-            if (offset + 2 > data.Length)
+            using var header = new MemoryStream();
+            ushort ReadHeaderUInt16()
             {
-                throw new CompressionException("Invalid LZOP header: truncated version 无效的 LZOP 头：版本截断。");
+                var bytes = ReadBytes(input, 2, "header");
+                header.Write(bytes);
+                return BinaryPrimitives.ReadUInt16BigEndian(bytes);
+            }
+            uint ReadHeaderUInt32()
+            {
+                var bytes = ReadBytes(input, 4, "header");
+                header.Write(bytes);
+                return BinaryPrimitives.ReadUInt32BigEndian(bytes);
+            }
+            byte ReadHeaderByte()
+            {
+                var value = input.ReadByte();
+                if (value < 0) throw new CompressionException("Invalid LZOP header: truncated 无效的 LZOP 头：截断。");
+                header.WriteByte((byte)value);
+                return (byte)value;
             }
 
-            var version = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(offset, 2));
-            offset += 2;
+            var version = ReadHeaderUInt16();
             if (version < 0x0900)
-            {
-                throw new CompressionException($"Invalid LZOP header: unsupported version {version:X4} 无效的 LZOP 头：不支持的版本。");
-            }
+                throw new CompressionException($"Invalid LZOP header: unsupported version {version:X4}.");
+            _ = ReadHeaderUInt16(); // library version
+            if (version >= 0x0940) _ = ReadHeaderUInt16();
+            _ = ReadHeaderByte(); // method
+            if (version >= 0x0940) _ = ReadHeaderByte();
+            var flags = ReadHeaderUInt32();
+            if ((flags & FFilter) != 0) _ = ReadHeaderUInt32();
+            _ = ReadHeaderUInt32(); // mode
+            _ = ReadHeaderUInt32(); // mtime low
+            if (version >= 0x0940) _ = ReadHeaderUInt32();
+            var nameLength = ReadHeaderByte();
+            header.Write(ReadBytes(input, nameLength, "file name"));
 
-            offset += 2; // lib_version
-            if (version >= 0x0940)
-            {
-                offset += 2; // version_needed_to_extract
-            }
-
-            if (offset + 1 > data.Length)
-            {
-                throw new CompressionException("Invalid LZOP header: truncated method 无效的 LZOP 头：方法字段截断。");
-            }
-
-            offset += 1; // method
-            if (version >= 0x0940)
-            {
-                offset += 1; // level
-            }
-
-            if (offset + 4 > data.Length)
-            {
-                throw new CompressionException("Invalid LZOP header: truncated flags 无效的 LZOP 头：标志截断。");
-            }
-
-            var flags = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, 4));
-            offset += 4;
-            var useCrc32 = (flags & (FHCrc32 | FCrc32U | FCrc32C)) != 0;
-            var hasUncompressedChecksum = (flags & (FAdler32U | FCrc32U)) != 0;
-            var hasCompressedChecksum = (flags & (FAdler32C | FCrc32C)) != 0;
-
-            if ((flags & FFilter) != 0)
-            {
-                offset += 4;
-            }
-
-            offset += 4; // mode
-            offset += 4; // mtime_low
-            if (version >= 0x0940)
-            {
-                offset += 4; // mtime_high
-            }
-
-            if (offset + 1 > data.Length)
-            {
-                throw new CompressionException("Invalid LZOP header: truncated name length 无效的 LZOP 头：文件名长度截断。");
-            }
-
-            var nameLen = data[offset++];
-            if (offset + nameLen > data.Length)
-            {
-                throw new CompressionException("Invalid LZOP header: truncated name 无效的 LZOP 头：文件名截断。");
-            }
-
-            offset += nameLen;
-
-            // ---- Header checksum (covers everything after the magic, excluding this field) ----
-            if (offset + 4 > data.Length)
-            {
-                throw new CompressionException("Invalid LZOP header: truncated header checksum 无效的 LZOP 头：头校验和截断。");
-            }
-
-            var storedHeaderChecksum = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, 4));
-            offset += 4;
-            var headerLength = offset - MagicSize - 4;
-            var computedHeaderChecksum = useCrc32
-                ? Crc32Hash(data, MagicSize, headerLength)
-                : Adler32(data, MagicSize, headerLength);
+            var storedHeaderChecksum = ReadUInt32(input, "header checksum");
+            var headerBytes = header.GetBuffer();
+            var computedHeaderChecksum = (flags & FHCrc32) != 0
+                ? Crc32Hash(headerBytes, 0, checked((int)header.Length))
+                : Adler32(headerBytes, 0, checked((int)header.Length));
             if (storedHeaderChecksum != computedHeaderChecksum)
-            {
                 throw new CompressionException("Invalid LZOP data: header checksum mismatch 无效的 LZOP 数据：头校验和不匹配。");
-            }
 
-            using var output = new MemoryStream();
-
-            // ---- Blocks ----
-            while (offset + 4 <= data.Length)
+            var hasUncompressedAdler32 = (flags & FAdler32U) != 0;
+            var hasUncompressedCrc32 = (flags & FCrc32U) != 0;
+            var hasCompressedAdler32 = (flags & FAdler32C) != 0;
+            var hasCompressedCrc32 = (flags & FCrc32C) != 0;
+            long totalOutput = 0;
+            while (true)
             {
-                var uncompressedSize = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, 4));
-                offset += 4;
-                if (uncompressedSize == 0)
-                {
-                    break; // end marker
-                }
+                var uncompressedSize = ReadUInt32(input, "block size");
+                if (uncompressedSize == 0) return;
+                var compressedSize = ReadUInt32(input, "compressed block size");
+                // 256 KiB is merely lzop's conventional block size, not a format limit. Apply
+                // the supported ceiling and caller limit to both declarations before allocating
+                // either the compressed or decompressed block buffer.
+                if (compressedSize > uncompressedSize || compressedSize > MaximumBlockSize || uncompressedSize > MaximumBlockSize)
+                    throw new CompressionException($"Invalid LZOP block size (supported maximum {MaximumBlockSize} bytes) 无效的 LZOP 块大小。");
+                var remainingOutputBytes = maximumOutputBytes - totalOutput;
+                if (compressedSize > remainingOutputBytes || uncompressedSize > remainingOutputBytes)
+                    throw new CompressionException($"LZOP block exceeds the output limit of {maximumOutputBytes} bytes.");
 
-                if (offset + 4 > data.Length)
-                {
-                    throw new CompressionException("Invalid LZOP data: truncated block header 无效的 LZOP 数据：块头截断。");
-                }
+                // Checksums occur independently in format order: uncompressed Adler/CRC,
+                // followed by compressed Adler/CRC. A stored block may carry all four.
+                var uncompressedAdler32 = hasUncompressedAdler32 ? ReadUInt32(input, "uncompressed Adler-32") : 0;
+                var uncompressedCrc32 = hasUncompressedCrc32 ? ReadUInt32(input, "uncompressed CRC-32") : 0;
+                var compressedAdler32 = hasCompressedAdler32 ? ReadUInt32(input, "compressed Adler-32") : 0;
+                var compressedCrc32 = hasCompressedCrc32 ? ReadUInt32(input, "compressed CRC-32") : 0;
+                var block = ReadBytes(input, (int)compressedSize, "block data");
+                if (hasCompressedAdler32 && Adler32(block, 0, block.Length) != compressedAdler32)
+                    throw new CompressionException("Invalid LZOP data: compressed Adler-32 mismatch.");
+                if (hasCompressedCrc32 && Crc32Hash(block, 0, block.Length) != compressedCrc32)
+                    throw new CompressionException("Invalid LZOP data: compressed CRC-32 mismatch.");
 
-                var compressedSize = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, 4));
-                offset += 4;
-
-                uint uncompressedChecksum = 0;
-                if (hasUncompressedChecksum)
-                {
-                    if (offset + 4 > data.Length)
-                    {
-                        throw new CompressionException("Invalid LZOP data: truncated uncompressed checksum 无效的 LZOP 数据：未压缩校验和截断。");
-                    }
-
-                    uncompressedChecksum = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset, 4));
-                    offset += 4;
-                }
-
-                if (hasCompressedChecksum)
-                {
-                    offset += 4;
-                }
-
-                if (compressedSize > uncompressedSize)
-                {
-                    throw new CompressionException("Invalid LZOP data: compressed block larger than uncompressed 无效的 LZOP 数据：压缩块大于未压缩块。");
-                }
-
-                if (offset + (int)compressedSize > data.Length)
-                {
-                    throw new CompressionException("Invalid LZOP data: truncated block data 无效的 LZOP 数据：块数据截断。");
-                }
-
-                var blockOut = new byte[uncompressedSize];
+                byte[] decoded;
                 if (compressedSize == uncompressedSize)
                 {
-                    // Stored block.
-                    data.AsSpan(offset, (int)uncompressedSize).CopyTo(blockOut);
+                    decoded = block;
                 }
                 else
                 {
-                    var decoded = Lzo1xDecompressSafe(data, offset, (int)compressedSize, blockOut);
-                    if (decoded != (int)uncompressedSize)
-                    {
-                        throw new CompressionException(
-                            $"Invalid LZOP data: block decompressed to {decoded} bytes, expected {uncompressedSize} 无效的 LZOP 数据：块解压结果长度不符。");
-                    }
+                    decoded = new byte[(int)uncompressedSize];
+                    var count = Lzo1xDecompressSafe(block, 0, block.Length, decoded);
+                    if (count != decoded.Length)
+                        throw new CompressionException($"Invalid LZOP data: block decompressed to {count} bytes, expected {uncompressedSize}.");
                 }
 
-                if (hasUncompressedChecksum)
-                {
-                    var actualChecksum = useCrc32
-                        ? Crc32Hash(blockOut, 0, blockOut.Length)
-                        : Adler32(blockOut, 0, blockOut.Length);
-                    if (actualChecksum != uncompressedChecksum)
-                    {
-                        // Some lzop files store Adler32 even when CRC32 flags are set; try the other.
-                        var otherChecksum = useCrc32
-                            ? Adler32(blockOut, 0, blockOut.Length)
-                            : Crc32Hash(blockOut, 0, blockOut.Length);
-                        if (otherChecksum != uncompressedChecksum)
-                        {
-                            throw new CompressionException("Invalid LZOP data: uncompressed checksum mismatch 无效的 LZOP 数据：未压缩校验和不匹配。");
-                        }
-                    }
-                }
-
-                output.Write(blockOut, 0, blockOut.Length);
-                offset += (int)compressedSize;
+                if (hasUncompressedAdler32 && Adler32(decoded, 0, decoded.Length) != uncompressedAdler32)
+                    throw new CompressionException("Invalid LZOP data: uncompressed Adler-32 mismatch.");
+                if (hasUncompressedCrc32 && Crc32Hash(decoded, 0, decoded.Length) != uncompressedCrc32)
+                    throw new CompressionException("Invalid LZOP data: uncompressed CRC-32 mismatch.");
+                output.Write(decoded);
+                totalOutput = checked(totalOutput + decoded.Length);
             }
-
-            return output.ToArray();
         }
-        catch (CompressionException)
-        {
-            throw;
-        }
-        catch (Exception ex)
+        catch (CompressionException) { throw; }
+        catch (Exception ex) when (ex is EndOfStreamException or IOException or OverflowException)
         {
             throw new CompressionException($"LZOP decompression failed: {ex.Message} LZOP 解压失败。", ex);
         }
     }
+
+    private static byte[] ReadBytes(Stream input, int count, string field)
+    {
+        var bytes = new byte[count];
+        try { input.ReadExactly(bytes); }
+        catch (EndOfStreamException ex) { throw new CompressionException($"Invalid LZOP data: truncated {field}.", ex); }
+        return bytes;
+    }
+
+    private static uint ReadUInt32(Stream input, string field) => BinaryPrimitives.ReadUInt32BigEndian(ReadBytes(input, 4, field));
+
+    private static uint Checksum(byte[] data, bool crc32) => crc32 ? Crc32Hash(data, 0, data.Length) : Adler32(data, 0, data.Length);
 
     /// <summary>
     /// Safe LZO1X-1 decompression, ported from minilzo's <c>lzo1x_decompress_safe</c> with bounds checks.

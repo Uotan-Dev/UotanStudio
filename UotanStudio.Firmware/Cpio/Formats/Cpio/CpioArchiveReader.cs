@@ -215,10 +215,15 @@ public sealed class CpioArchiveReader
         var nameRaw = ReadExact(stream, checked((int)nameSize));
         var name = Encoding.UTF8.GetString(nameRaw.AsSpan(0, checked((int)nameSize - 1)));
 
-        // odc uses no alignment padding.
-        var data = ReadExact(stream, checked((int)fileSize));
-
         var fileType = CpioFieldParser.ToFileType(mode);
+        var hpSpecial = format == ArchiveFormat.HpOldAscii
+            && fileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
+        var payloadSize = hpSpecial ? 0L : fileSize;
+        // HP odc stores the special-device major/minor in the filesize field, but no payload follows.
+        var data = ReadExact(stream, checked((int)payloadSize));
+        var hpDeviceMajor = hpSpecial ? (uint)(fileSize >> 16) : rdev;
+        var hpDeviceMinor = hpSpecial ? (uint)(fileSize & 0xFFFF) : 0U;
+
         return new ArchiveEntry
         {
             Name = name,
@@ -234,8 +239,8 @@ public sealed class CpioArchiveReader
                 ModificationTimeUnixSeconds = mtime,
                 DeviceMajor = dev,
                 DeviceMinor = 0,
-                RDeviceMajor = rdev,
-                RDeviceMinor = 0,
+                RDeviceMajor = hpDeviceMajor,
+                RDeviceMinor = hpDeviceMinor,
                 FileType = fileType,
                 UnixPermissions = CpioFieldParser.ToPermissions(mode),
             },
@@ -281,14 +286,16 @@ public sealed class CpioArchiveReader
         SkipPadding(stream, CpioConstants.OldBinaryHeaderSize + nameSize, 2);
 
         var fileSize = CpioFieldParser.ComposeUInt32(fileSizeHigh, fileSizeLow);
-        var data = ReadExact(stream, checked((int)fileSize));
-        SkipPadding(stream, checked((int)fileSize), 2);
-
         var mode32 = (uint)mode;
-        var hpDeviceMajor = format == ArchiveFormat.HpBinary ? fileSizeHigh : (uint)rdev;
-        var hpDeviceMinor = format == ArchiveFormat.HpBinary ? fileSizeLow : 0U;
-
         var fileType = CpioFieldParser.ToFileType(mode32);
+        var hpSpecial = format == ArchiveFormat.HpBinary
+            && fileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
+        var payloadSize = hpSpecial ? 0U : fileSize;
+        var data = ReadExact(stream, checked((int)payloadSize));
+        SkipPadding(stream, checked((int)payloadSize), 2);
+
+        var hpDeviceMajor = hpSpecial ? fileSizeHigh : (uint)rdev;
+        var hpDeviceMinor = hpSpecial ? fileSizeLow : 0U;
         return new ArchiveEntry
         {
             Name = name,

@@ -7,6 +7,10 @@ namespace UotanStudio.Firmware.Sparse;
 public sealed class SparseFile : IDisposable
 {
     private readonly List<SparseChunk> _chunks = [];
+    private readonly List<IDisposable> _ownedResources = [];
+    private bool _disposed;
+
+    internal void Own(IDisposable resource) => _ownedResources.Add(resource);
 
     /// <summary>
     /// Initializes an empty sparse file with default settings.
@@ -23,7 +27,9 @@ public sealed class SparseFile : IDisposable
     /// </summary>
     public SparseFile(uint blockSize, long totalSize)
     {
-        var totalBlocks = (uint)((totalSize + blockSize - 1) / blockSize);
+        ArgumentOutOfRangeException.ThrowIfZero(blockSize);
+        ArgumentOutOfRangeException.ThrowIfNegative(totalSize);
+        var totalBlocks = DivideRoundUpToUInt32(totalSize, blockSize);
         Header = SparseHeader.CreateDefault(blockSize, totalBlocks);
     }
 
@@ -95,7 +101,7 @@ public sealed class SparseFile : IDisposable
     /// </summary>
     public void AddFillChunk(uint fillValue, long sizeInBytes, uint? blockIndex = null)
     {
-        var sizeInBlocks = (uint)((sizeInBytes + Header.BlockSize - 1) / Header.BlockSize);
+        var sizeInBlocks = DivideRoundUpToUInt32(sizeInBytes, Header.BlockSize);
         var startBlock = blockIndex ?? CurrentBlock;
         var header = new ChunkHeader
         {
@@ -112,7 +118,7 @@ public sealed class SparseFile : IDisposable
     /// </summary>
     public void AddDontCareChunk(long sizeInBytes, uint? blockIndex = null)
     {
-        var sizeInBlocks = (uint)((sizeInBytes + Header.BlockSize - 1) / Header.BlockSize);
+        var sizeInBlocks = DivideRoundUpToUInt32(sizeInBytes, Header.BlockSize);
         var startBlock = blockIndex ?? CurrentBlock;
         var header = new ChunkHeader
         {
@@ -129,7 +135,8 @@ public sealed class SparseFile : IDisposable
     /// </summary>
     public void Resize(long newSize)
     {
-        var newTotalBlocks = (uint)((newSize + Header.BlockSize - 1) / Header.BlockSize);
+        ArgumentOutOfRangeException.ThrowIfNegative(newSize);
+        var newTotalBlocks = DivideRoundUpToUInt32(newSize, Header.BlockSize);
         Header = Header with { TotalBlocks = newTotalBlocks };
     }
 
@@ -234,6 +241,15 @@ public sealed class SparseFile : IDisposable
         }
     }
 
+    private static uint DivideRoundUpToUInt32(long value, uint divisor)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(value);
+        ArgumentOutOfRangeException.ThrowIfZero(divisor);
+        var quotient = value / divisor;
+        if (value % divisor != 0) quotient++;
+        return checked((uint)quotient);
+    }
+
     private void AddChunkSorted(SparseChunk chunk)
     {
         var index = _chunks.Count;
@@ -250,10 +266,39 @@ public sealed class SparseFile : IDisposable
     /// </summary>
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+        _disposed = true;
+        List<Exception>? errors = null;
         foreach (var chunk in _chunks)
         {
-            chunk.Dispose();
+            try
+            {
+                chunk.Dispose();
+            }
+            catch (Exception ex)
+            {
+                (errors ??= []).Add(ex);
+            }
         }
         _chunks.Clear();
+        foreach (var resource in _ownedResources)
+        {
+            try
+            {
+                resource.Dispose();
+            }
+            catch (Exception ex)
+            {
+                (errors ??= []).Add(ex);
+            }
+        }
+        _ownedResources.Clear();
+        if (errors is { Count: > 0 })
+        {
+            throw errors.Count == 1 ? errors[0] : new AggregateException(errors);
+        }
     }
 }

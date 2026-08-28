@@ -1,5 +1,6 @@
 using System.Text;
 using SharpCompress.Compressors.LZMA;
+using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.NTPi.Exceptions;
 using UotanStudio.Firmware.NTPi.Helpers;
 using UotanStudio.Firmware.NTPi.Models;
@@ -12,6 +13,9 @@ namespace UotanStudio.Firmware.NTPi.Compression;
 /// </summary>
 public interface ILzma2Compressor
 {
+    // Compatibility only: byte-array implementations are bounded solely by the CLR array limit.
+    private const int NtDecompressHeaderSize = 112;
+
     /// <summary>
     /// <para>解压包含 NtDecompressHeader 的压缩数据。</para>
     /// Decompresses data that includes the NtDecompressHeader.
@@ -23,6 +27,104 @@ public interface ILzma2Compressor
     /// Compresses data into a format that includes the NtDecompressHeader.
     /// </summary>
     byte[] Compress(byte[] data, ulong originalSize);
+
+    /// <summary>
+    /// <para>流式解压包含 NtDecompressHeader 的压缩流,输出字节数受 maximumOutputBytes 限制。</para>
+    /// Streams-decompresses a stream containing the NtDecompressHeader, bounding the
+    /// number of output bytes by maximumOutputBytes.
+    /// </summary>
+    /// <remarks>
+    /// <para>输出上限取调用方传入值与 NtDecompressHeader.OriginalSize 的较小值。</para>
+    /// The output limit is the smaller of the caller-provided value and
+    /// NtDecompressHeader.OriginalSize.
+    /// </remarks>
+    void Decompress(Stream input, Stream output, long maximumOutputBytes)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumOutputBytes);
+
+        var header = new byte[NtDecompressHeaderSize];
+        input.ReadExactly(header);
+        var parsed = StructHelper.ReadNtDecompressHeader(header);
+        if (!parsed.IsValid())
+        {
+            throw new InvalidDataException("Invalid NTDECOMP header in legacy decompression fallback.");
+        }
+        if (parsed.OriginalSize > (ulong)maximumOutputBytes)
+        {
+            throw new InvalidDataException(
+                $"Declared decompressed size {parsed.OriginalSize} exceeds the {maximumOutputBytes}-byte limit.");
+        }
+        if (parsed.OriginalSize > (ulong)Array.MaxLength || parsed.ProcessedSize == 0 ||
+            parsed.ProcessedSize > (ulong)(Array.MaxLength - NtDecompressHeaderSize))
+        {
+            throw new NotSupportedException(
+                "The legacy byte-array decompressor fallback exceeds the CLR byte-array limit; override the stream overload.");
+        }
+
+        var totalLength = checked(NtDecompressHeaderSize + (int)parsed.ProcessedSize);
+        var compressed = new byte[totalLength];
+        header.CopyTo(compressed, 0);
+        input.ReadExactly(compressed.AsSpan(NtDecompressHeaderSize));
+        for (var paddingLength = 0; ; paddingLength++)
+        {
+            var trailing = input.ReadByte();
+            if (trailing == -1)
+            {
+                break;
+            }
+            if (trailing != 0 || paddingLength == 15)
+            {
+                throw new InvalidDataException(
+                    "Compressed input trailing data must be fewer than 16 bytes of zero AES padding.");
+            }
+        }
+
+        var result = Decompress(compressed);
+        if ((ulong)result.LongLength != parsed.OriginalSize)
+        {
+            throw new InvalidDataException(
+                $"Decompressed output length {result.LongLength} does not match declared size {parsed.OriginalSize}.");
+        }
+        output.Write(result, 0, result.Length);
+    }
+
+    /// <summary>
+    /// <para>流式压缩输入流为包含 NtDecompressHeader 的格式。</para>
+    /// Streams-compresses the input stream into a format that includes the NtDecompressHeader.
+    /// </summary>
+    void Compress(Stream input, Stream output, ulong originalSize)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(output);
+        if (originalSize > (ulong)Array.MaxLength)
+        {
+            throw new NotSupportedException(
+                "The legacy byte-array compressor fallback exceeds the CLR byte-array limit; override the stream overload.");
+        }
+
+        using var buffer = new MemoryStream((int)originalSize);
+        var copyBuffer = new byte[81920];
+        ulong remaining = originalSize;
+        while (remaining != 0)
+        {
+            var read = input.Read(copyBuffer, 0, (int)Math.Min((ulong)copyBuffer.Length, remaining));
+            if (read == 0)
+            {
+                throw new EndOfStreamException("Input ended before the declared original size was consumed.");
+            }
+            buffer.Write(copyBuffer, 0, read);
+            remaining -= (ulong)read;
+        }
+        if (input.ReadByte() != -1)
+        {
+            throw new InvalidDataException("Input contains data beyond the declared original size.");
+        }
+
+        var result = Compress(buffer.ToArray(), originalSize);
+        output.Write(result, 0, result.Length);
+    }
 }
 
 /// <summary>
@@ -50,18 +152,33 @@ public sealed class Lzma2Compressor : ILzma2Compressor
 
         var header = ReadAndValidateHeader(data);
 
-        var payloadSize = (int)header.ProcessedSize;
-        if (payloadSize <= 0 || HeaderSize + payloadSize > data.Length)
+        // This overload must materialize the complete result in one byte array. Reject an
+        // impossible declaration before constructing a decoder or allocating output storage.
+        if (header.OriginalSize > (ulong)Array.MaxLength)
         {
-            payloadSize = data.Length - HeaderSize;
+            throw new Lzma2CompressionException(
+                $"Declared decompressed size {header.OriginalSize} exceeds the byte-array output limit.");
         }
+
+        if (header.ProcessedSize is 0 or > int.MaxValue)
+        {
+            throw new Lzma2CompressionException("Invalid ProcessedSize in NtDecompressHeader.");
+        }
+        var payloadSize = (int)header.ProcessedSize;
+        if (payloadSize > data.Length - HeaderSize)
+        {
+            throw new Lzma2CompressionException(
+                $"ProcessedSize {payloadSize} exceeds the remaining compressed input {data.Length - HeaderSize}.");
+        }
+
+        ValidateTrailingAesPadding(data.AsSpan(HeaderSize + payloadSize));
 
         byte[] result;
         var originalSize = (long)header.OriginalSize;
 
-        if (originalSize is > 0 and <= int.MaxValue)
+        if (originalSize > 0)
         {
-            result = new byte[originalSize];
+            result = new byte[(int)originalSize];
             using var preallocatedStream = new MemoryStream(result, 0, (int)originalSize, true);
             try
             {
@@ -79,9 +196,10 @@ public sealed class Lzma2Compressor : ILzma2Compressor
                 throw new Lzma2CompressionException("Failed to decompress LZMA2 data. The compressed data may be corrupted.", ex);
             }
 
-            if (preallocatedStream.Length != originalSize)
+            if (preallocatedStream.Position != originalSize)
             {
-                result = result.AsSpan(0, (int)preallocatedStream.Length).ToArray();
+                throw new Lzma2CompressionException(
+                    $"Decompressed output length {preallocatedStream.Position} does not match declared size {originalSize}.");
             }
         }
         else
@@ -105,7 +223,122 @@ public sealed class Lzma2Compressor : ILzma2Compressor
             result = outputStream.ToArray();
         }
 
+        if ((ulong)result.LongLength != header.OriginalSize)
+        {
+            throw new Lzma2CompressionException(
+                $"Decompressed output length {result.LongLength} does not match declared size {header.OriginalSize}.");
+        }
+
         return result;
+    }
+
+    /// <inheritdoc />
+    public void Decompress(Stream input, Stream output, long maximumOutputBytes)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumOutputBytes);
+
+        var headerBuffer = new byte[HeaderSize];
+        input.ReadExactly(headerBuffer);
+        var header = StructHelper.ReadNtDecompressHeader(headerBuffer);
+        if (!header.IsValid())
+        {
+            throw new ArgumentException(
+                $"Invalid NtDecompressHeader Magic: expected 'NTDECOMP', got '{header.GetMagicString()}'.");
+        }
+
+        if (header.OriginalSize > (ulong)long.MaxValue || header.OriginalSize > (ulong)maximumOutputBytes)
+        {
+            throw new Lzma2CompressionException(
+                $"Declared decompressed size {header.OriginalSize} exceeds the {maximumOutputBytes}-byte output limit.");
+        }
+        if (header.ProcessedSize is 0 or > long.MaxValue)
+        {
+            throw new Lzma2CompressionException("Invalid ProcessedSize in NtDecompressHeader.");
+        }
+        var payloadSize = (long)header.ProcessedSize;
+        if (input.CanSeek && payloadSize > input.Length - input.Position)
+        {
+            throw new Lzma2CompressionException(
+                $"ProcessedSize {payloadSize} exceeds the remaining compressed input {input.Length - input.Position}.");
+        }
+
+        var originalSize = (long)header.OriginalSize;
+
+        using var limitedOutput = new CountingWriteStream(output, originalSize, leaveOpen: true);
+        try
+        {
+            if (header.DecompressSubtype == Lzma1Subtype)
+            {
+                if (payloadSize <= 5)
+                {
+                    throw new Lzma2CompressionException("LZMA1 data is too short to contain valid properties.");
+                }
+
+                var properties = new byte[5];
+                input.ReadExactly(properties);
+
+                var compressedDataSize = payloadSize - 5;
+                using var boundedInput = new ReadLimitedStream(input, compressedDataSize);
+                using var lzma = LzmaStream.Create(properties, boundedInput, compressedDataSize, originalSize);
+                lzma.CopyTo(limitedOutput);
+                if (boundedInput.Position != compressedDataSize)
+                {
+                    throw new Lzma2CompressionException(
+                        $"Compressed payload was not fully consumed ({boundedInput.Position}/{compressedDataSize} bytes).");
+                }
+            }
+            else
+            {
+                using var boundedInput = new ReadLimitedStream(input, payloadSize);
+                using var lzma = LzmaStream.Create(new byte[1], boundedInput);
+                lzma.CopyTo(limitedOutput);
+                if (boundedInput.Position != payloadSize)
+                {
+                    throw new Lzma2CompressionException(
+                        $"Compressed payload was not fully consumed ({boundedInput.Position}/{payloadSize} bytes).");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not ArgumentNullException and not ArgumentException and not Lzma2CompressionException)
+        {
+            throw new Lzma2CompressionException("Failed to decompress LZMA2 data. The compressed data may be corrupted.", ex);
+        }
+
+        if (limitedOutput.BytesWritten != originalSize)
+        {
+            throw new Lzma2CompressionException(
+                $"Decompressed output length {limitedOutput.BytesWritten} does not match declared size {originalSize}.");
+        }
+
+        ValidateTrailingAesPadding(input);
+    }
+
+    private static void ValidateTrailingAesPadding(ReadOnlySpan<byte> padding)
+    {
+        if (padding.Length > 15 || padding.IndexOfAnyExcept((byte)0) >= 0)
+        {
+            throw new Lzma2CompressionException(
+                "Compressed input trailing data must be fewer than 16 bytes of zero AES padding.");
+        }
+    }
+
+    private static void ValidateTrailingAesPadding(Stream input)
+    {
+        for (var paddingLength = 0; ; paddingLength++)
+        {
+            var value = input.ReadByte();
+            if (value == -1)
+            {
+                return;
+            }
+            if (value != 0 || paddingLength == 15)
+            {
+                throw new Lzma2CompressionException(
+                    "Compressed input trailing data must be fewer than 16 bytes of zero AES padding.");
+            }
+        }
     }
 
     private static void DecompressLzma2(byte[] data, int payloadSize, MemoryStream outputStream)
@@ -189,6 +422,88 @@ public sealed class Lzma2Compressor : ILzma2Compressor
         Buffer.BlockCopy(compressedBuffer, 0, result, HeaderSize + 5, compressedLength);
 
         return result;
+    }
+
+    /// <inheritdoc />
+    public void Compress(Stream input, Stream output, ulong originalSize)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(output);
+        if (originalSize == 0)
+        {
+            throw new ArgumentException("Data cannot be empty.", nameof(originalSize));
+        }
+        if (originalSize > long.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(nameof(originalSize));
+        }
+
+        var spoolPath = Path.Combine(Path.GetTempPath(), $"ntpi-lzma-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            byte[] properties;
+            long compressedLength;
+            using (var compressedStream = new FileStream(spoolPath, FileMode.CreateNew, FileAccess.ReadWrite,
+                       FileShare.None, 81920, FileOptions.SequentialScan | FileOptions.DeleteOnClose))
+            {
+                try
+                {
+                    using (var lzma = LzmaStream.Create(LzmaEncoderProperties.Default, false, compressedStream))
+                    {
+                        var remaining = (long)originalSize;
+                        var buffer = new byte[81920];
+                        while (remaining > 0)
+                        {
+                            var read = input.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                            if (read == 0)
+                            {
+                                throw new Lzma2CompressionException(
+                                    $"Input ended before the declared original size of {originalSize} bytes was consumed.");
+                            }
+
+                            lzma.Write(buffer, 0, read);
+                            remaining -= read;
+                        }
+
+                        if (input.ReadByte() != -1)
+                        {
+                            throw new Lzma2CompressionException(
+                                $"Input contains data beyond the declared original size of {originalSize} bytes; pass a bounded stream for a subrange.");
+                        }
+
+                        properties = lzma.Properties;
+                    }
+                    compressedLength = compressedStream.Length;
+
+                    var payloadLength = checked(5UL + (ulong)compressedLength);
+                    var headerBuffer = new byte[HeaderSize];
+                    var header = new NtDecompressHeader
+                    {
+                        Magic = NtDecompMagic,
+                        PrimaryType = 1,
+                        DecompressSubtype = Lzma1Subtype,
+                        Padding = 0,
+                        ProcessedSize = payloadLength,
+                        OriginalSize = originalSize,
+                        Padding2 = ZeroPadding2
+                    };
+
+                    StructHelper.WriteNtDecompressHeader(header, headerBuffer);
+                    output.Write(headerBuffer, 0, HeaderSize);
+                    output.Write(properties, 0, Math.Min(properties.Length, 5));
+                    compressedStream.Position = 0;
+                    compressedStream.CopyTo(output);
+                }
+                catch (Exception ex) when (ex is not ArgumentNullException and not ArgumentException and not Lzma2CompressionException)
+                {
+                    throw new Lzma2CompressionException("Failed to compress data using LZMA.", ex);
+                }
+            }
+        }
+        finally
+        {
+            try { File.Delete(spoolPath); } catch { /* DeleteOnClose is best effort on some file systems. */ }
+        }
     }
 
     private static NtDecompressHeader ReadAndValidateHeader(byte[] data)

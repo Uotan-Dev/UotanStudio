@@ -23,7 +23,13 @@ public sealed class CpioExtractor
         ArgumentNullException.ThrowIfNull(destinationDirectory);
 
         var opts = options ?? new ExtractOptions();
-        Directory.CreateDirectory(destinationDirectory);
+        var destinationRoot = Path.GetFullPath(destinationDirectory);
+        var volumeRoot = Path.GetPathRoot(destinationRoot)
+            ?? throw new InvalidDataException($"Destination '{destinationDirectory}' has no filesystem root.");
+        // Validate before the first mutation, including when the destination itself is a dangling link.
+        EnsureNoLinkAncestors(volumeRoot, destinationRoot);
+        Directory.CreateDirectory(destinationRoot);
+        EnsureNoLinkAncestors(volumeRoot, destinationRoot);
         var renameMap = NormalizeRenameMap(opts.RenameMap);
         var includePatterns = ResolveIncludePatterns(opts);
 
@@ -36,8 +42,10 @@ public sealed class CpioExtractor
                 continue;
             }
 
-            var targetPath = BuildSafePath(destinationDirectory, transformedEntry.Name, opts);
+            var targetPath = BuildSafePath(destinationRoot, transformedEntry.Name, opts);
+            EnsureNoLinkAncestors(destinationRoot, targetPath);
             EnsureParentDirectory(targetPath, opts.MakeDirectories);
+            EnsureNoLinkAncestors(destinationRoot, targetPath);
 
             switch (transformedEntry.Metadata.FileType)
             {
@@ -48,7 +56,7 @@ public sealed class CpioExtractor
                     ExtractSymbolicLink(transformedEntry, targetPath, opts);
                     break;
                 case CpioFileType.HardLink:
-                    ExtractHardLink(transformedEntry, targetPath, inodeMap, opts);
+                    ExtractHardLink(transformedEntry, destinationRoot, targetPath, inodeMap, opts);
                     break;
                 case CpioFileType.Fifo:
                 case CpioFileType.CharacterDevice:
@@ -56,19 +64,17 @@ public sealed class CpioExtractor
                     ExtractSpecialFile(targetPath, opts);
                     break;
                 case CpioFileType.Unknown:
-                    break;
                 case CpioFileType.Regular:
-                    break;
                 case CpioFileType.Socket:
-                    break;
                 default:
                     ExtractRegularLikeFile(transformedEntry, targetPath, opts);
                     RegisterInodeMapping(transformedEntry, targetPath, inodeMap, opts.DeviceIndependentHardlinks);
                     break;
             }
 
-            if (opts.RestoreModificationTime)
+            if (opts.RestoreModificationTime && transformedEntry.Metadata.FileType != CpioFileType.SymbolicLink)
             {
+                // Timestamp APIs may follow a link and mutate outside the extraction root.
                 TryRestoreMtime(targetPath, transformedEntry.Metadata.ModificationTimeUnixSeconds);
             }
 
@@ -88,12 +94,41 @@ public sealed class CpioExtractor
             File.Delete(targetPath);
         }
 
+        // 优先从 DataStream 流式写入；没有流式源时回退到内存字节。
+        // Prefer streaming from DataStream; fall back to the in-memory bytes.
+        if (entry.DataStream is not null || entry.DataStreamFactory is not null)
+        {
+            using var output = new FileStream(targetPath, FileMode.Create, FileAccess.Write);
+            using var opened = entry.DataStream is null
+                ? entry.DataStreamFactory?.Invoke() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.")
+                : null;
+            var source = entry.DataStream ?? opened!;
+            if (source.CanSeek)
+            {
+                source.Position = 0;
+            }
+            CopyExactly(source, output, entry.DataLength, entry.Name);
+            return;
+        }
+
+        ValidateInMemoryLength(entry);
         File.WriteAllBytes(targetPath, entry.Data);
     }
 
     private static void ExtractSymbolicLink(ArchiveEntry entry, string targetPath, ExtractOptions options)
     {
-        var linkTarget = entry.LinkName ?? Encoding.UTF8.GetString(entry.Data);
+        // CPIO links carry their target in the payload. Always consume a streamed payload even
+        // when LinkName was decoded already, both to validate it and to keep single-pass readers aligned.
+        string? payloadTarget = null;
+        if (entry.Data.Length > 0 || entry.DataStream is not null || entry.DataStreamFactory is not null)
+        {
+            payloadTarget = GetLinkText(entry);
+            if (entry.LinkName is not null && !string.Equals(entry.LinkName, payloadTarget, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException($"Symbolic link '{entry.Name}' target does not match its payload.");
+            }
+        }
+        var linkTarget = entry.LinkName ?? payloadTarget ?? string.Empty;
         if (File.Exists(targetPath) || Directory.Exists(targetPath))
         {
             if (!options.Overwrite)
@@ -117,6 +152,7 @@ public sealed class CpioExtractor
 
     private static void ExtractHardLink(
         ArchiveEntry entry,
+        string destinationRoot,
         string targetPath,
         Dictionary<(ulong Inode, uint DevMajor, uint DevMinor), string> inodeMap,
         ExtractOptions options)
@@ -133,16 +169,13 @@ public sealed class CpioExtractor
 
         if (entry.LinkName is { Length: > 0 })
         {
-            var parent = Path.GetDirectoryName(targetPath);
-            if (!string.IsNullOrEmpty(parent))
+            var linkTargetPath = BuildSafePath(destinationRoot, entry.LinkName, options);
+            EnsureNoLinkAncestors(destinationRoot, linkTargetPath);
+            if (File.Exists(linkTargetPath) || Directory.Exists(linkTargetPath))
             {
-                var linkTargetPath = BuildSafePath(parent, entry.LinkName, options);
-                if (File.Exists(linkTargetPath) || Directory.Exists(linkTargetPath))
-                {
-                    // Managed .NET has no portable hard-link API; fall back to a content copy.
-                    File.Copy(linkTargetPath, targetPath, overwrite: true);
-                    return;
-                }
+                // Managed .NET has no portable hard-link API; fall back to a content copy.
+                File.Copy(linkTargetPath, targetPath, overwrite: true);
+                return;
             }
         }
 
@@ -273,6 +306,71 @@ public sealed class CpioExtractor
         Directory.CreateDirectory(parent);
     }
 
+    private static void EnsureNoLinkAncestors(string root, string target)
+    {
+        var current = Path.GetFullPath(root);
+        CheckExistingNodeIsNotLink(current);
+        var relative = Path.GetRelativePath(current, Path.GetFullPath(target));
+        foreach (var component in relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries))
+        {
+            current = Path.Combine(current, component);
+            CheckExistingNodeIsNotLink(current);
+            if (!File.Exists(current) && !Directory.Exists(current) && !NodeLooksLikeLink(current)) break;
+        }
+    }
+
+    private static void CheckExistingNodeIsNotLink(string path)
+    {
+        if (NodeLooksLikeLink(path))
+        {
+            throw new InvalidDataException($"Extraction path '{path}' traverses a symbolic link or reparse point.");
+        }
+    }
+
+    private static bool NodeLooksLikeLink(string path)
+    {
+        // File.Exists and Directory.Exists both return false for dangling links. FileSystemInfo
+        // exposes LinkTarget without following the target on supported Windows and Unix runtimes.
+        foreach (FileSystemInfo info in new FileSystemInfo[] { new FileInfo(path), new DirectoryInfo(path) })
+        {
+            try
+            {
+                if (info.LinkTarget is not null) return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException) { }
+
+            try
+            {
+                if ((info.Attributes & FileAttributes.ReparsePoint) != 0) return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException) { }
+        }
+
+        try { return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException) { return false; }
+    }
+
+    private static void ValidateInMemoryLength(ArchiveEntry entry)
+    {
+        if (entry.DeclaredDataLength is { } declared && declared != entry.Data.LongLength)
+        {
+            throw new InvalidDataException($"Entry '{entry.Name}' declared length {declared} does not match its data length {entry.Data.LongLength}.");
+        }
+    }
+
+    private static void CopyExactly(Stream source, Stream destination, long length, string entryName)
+    {
+        var buffer = new byte[81920];
+        var remaining = length;
+        while (remaining > 0)
+        {
+            var read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+            if (read == 0) throw new EndOfStreamException($"Entry '{entryName}' ended before its declared length.");
+            destination.Write(buffer, 0, read);
+            remaining -= read;
+        }
+    }
+
     private static string NormalizeEntryPath(string entryName, ExtractOptions options)
     {
         var normalizedInput = entryName.Replace('\\', '/');
@@ -354,8 +452,42 @@ public sealed class CpioExtractor
             Name = ApplyRename(entry.Name, renameMap),
             LinkName = entry.LinkName is null ? null : ApplyRename(entry.LinkName, renameMap),
             Data = entry.Data,
+            DataStream = entry.DataStream,
+            DataStreamFactory = entry.DataStreamFactory,
+            DeclaredDataLength = entry.DeclaredDataLength,
             Metadata = entry.Metadata,
         };
+    }
+
+    /// <summary>
+    /// Resolves the symlink target text from <see cref="ArchiveEntry.Data"/> or, when the
+    /// payload is streamed, from <see cref="ArchiveEntry.DataStream"/>.
+    /// <para>从 ArchiveEntry.Data 或（负载为流式时）从 ArchiveEntry.DataStream 解析链接目标文本。</para>
+    /// </summary>
+    private static string GetLinkText(ArchiveEntry entry)
+    {
+        if (entry.Data.Length > 0)
+        {
+            ValidateInMemoryLength(entry);
+            return Encoding.UTF8.GetString(entry.Data);
+        }
+
+        if (entry.DataStream is not null || entry.DataStreamFactory is not null)
+        {
+            using var ms = new MemoryStream();
+            using var opened = entry.DataStream is null
+                ? entry.DataStreamFactory?.Invoke() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.")
+                : null;
+            var source = entry.DataStream ?? opened!;
+            if (source.CanSeek)
+            {
+                source.Position = 0;
+            }
+            CopyExactly(source, ms, entry.DataLength, entry.Name);
+            return Encoding.UTF8.GetString(ms.ToArray());
+        }
+
+        return string.Empty;
     }
 
     private static string ApplyRename(string path, IReadOnlyDictionary<string, string> renameMap)

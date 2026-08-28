@@ -20,6 +20,8 @@ internal class PayloadHeader
     /// <para>载荷头部的固定字节大小。</para>
     /// </summary>
     internal const int HeaderSize = 24;
+    private const ulong MaximumManifestLength = 512UL * 1024 * 1024;
+    private const uint MaximumMetadataSignatureLength = 64U * 1024 * 1024;
 
     // update_engine 官方支持的 minor 版本含 7（Android 10+ 部分机型使用），
     // manifest 的 protobuf 解析不受 minor 版本影响，仅作白名单校验。
@@ -109,14 +111,14 @@ internal class PayloadHeader
         }
 
         var manifestLength = BigEndianReader.ReadUInt64BigEndian(stream);
-        if (manifestLength == 0)
+        if (manifestLength == 0 || manifestLength > MaximumManifestLength)
         {
-            throw new InvalidManifestException("Manifest length must be greater than zero.");
+            throw new InvalidManifestException($"Manifest length must be between 1 and {MaximumManifestLength} bytes.");
         }
 
         var metadataSignatureLength = BigEndianReader.ReadUInt32BigEndian(stream);
-        return metadataSignatureLength == 0
-            ? throw new InvalidManifestException("Metadata signature length must be greater than zero.")
+        return metadataSignatureLength == 0 || metadataSignatureLength > MaximumMetadataSignatureLength
+            ? throw new InvalidManifestException($"Metadata signature length must be between 1 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);
     }
 
@@ -165,14 +167,14 @@ internal class PayloadHeader
         }
 
         var manifestLength = await BigEndianReader.ReadUInt64BigEndianAsync(stream).ConfigureAwait(false);
-        if (manifestLength == 0)
+        if (manifestLength == 0 || manifestLength > MaximumManifestLength)
         {
-            throw new InvalidManifestException("Manifest length must be greater than zero.");
+            throw new InvalidManifestException($"Manifest length must be between 1 and {MaximumManifestLength} bytes.");
         }
 
         var metadataSignatureLength = await BigEndianReader.ReadUInt32BigEndianAsync(stream).ConfigureAwait(false);
-        return metadataSignatureLength == 0
-            ? throw new InvalidManifestException("Metadata signature length must be greater than zero.")
+        return metadataSignatureLength == 0 || metadataSignatureLength > MaximumMetadataSignatureLength
+            ? throw new InvalidManifestException($"Metadata signature length must be between 1 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);
     }
 
@@ -223,14 +225,14 @@ internal class PayloadHeader
         }
 
         var manifestLength = BigEndianReader.ReadUInt64BigEndian(headerBytes, 12);
-        if (manifestLength == 0)
+        if (manifestLength == 0 || manifestLength > MaximumManifestLength)
         {
-            throw new InvalidManifestException("Manifest length must be greater than zero.");
+            throw new InvalidManifestException($"Manifest length must be between 1 and {MaximumManifestLength} bytes.");
         }
 
         var metadataSignatureLength = BigEndianReader.ReadUInt32BigEndian(headerBytes, 20);
-        return metadataSignatureLength == 0
-            ? throw new InvalidManifestException("Metadata signature length must be greater than zero.")
+        return metadataSignatureLength == 0 || metadataSignatureLength > MaximumMetadataSignatureLength
+            ? throw new InvalidManifestException($"Metadata signature length must be between 1 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);
     }
 

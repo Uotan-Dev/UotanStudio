@@ -10,6 +10,13 @@ namespace UotanStudio.Firmware.Ext4;
 /// bitmaps and fast symlinks.
 /// <para>全托管 ext4 镜像构建器：将源目录打包为有效的 ext4 文件系统镜像
 /// （4096 字节块、256 字节 inode），包含 extent、块/inode 位图与快速符号链接。</para>
+/// <para>Layout is computed in a first pass and the image is streamed out in a second pass:
+/// the output stream is <see cref="Stream.SetLength(long)"/>-preallocated and each region
+/// (superblock, group descriptor, bitmaps, inodes, leaf extent blocks and data blocks) is
+/// seeked to and written individually, so no full in-memory image array is ever built.
+/// 布局在第一遍扫描中计算，第二遍将镜像流式写出：先对输出流
+/// <see cref="Stream.SetLength(long)"/> 预分配，再逐个定位写入超级块、组描述符、
+/// 位图、inode、extent 叶块与数据块，全程不构造完整镜像数组。</para>
 /// </summary>
 public sealed class Ext4Builder
 {
@@ -51,6 +58,111 @@ public sealed class Ext4Builder
     /// </summary>
     public static byte[] Build(string sourceDirectory, Ext4Options? options = null)
     {
+        var effective = Validate(sourceDirectory, options);
+        using var image = new MemoryStream();
+        BuildCore(sourceDirectory, image, effective, 0, freshDestination: true, excludedFiles: []);
+        if (image.TryGetBuffer(out var buffer) && buffer.Offset == 0 && buffer.Count == buffer.Array!.Length)
+        {
+            return buffer.Array;
+        }
+
+        return buffer.AsSpan().ToArray();
+    }
+
+    /// <summary>
+    /// Builds an ext4 image from <paramref name="sourceDirectory"/> and writes it to <paramref name="outputPath"/>.
+    /// <para>从 <paramref name="sourceDirectory"/> 构建 ext4 镜像并写入 <paramref name="outputPath"/>。</para>
+    /// </summary>
+    public static void Build(string sourceDirectory, string outputPath, Ext4Options? options = null)
+    {
+        var effective = Validate(sourceDirectory, options);
+        var fullOutputPath = Path.GetFullPath(outputPath);
+        var directory = Path.GetDirectoryName(fullOutputPath)!;
+        var temporaryPath = Path.Combine(directory, $".{Path.GetFileName(fullOutputPath)}.{Guid.NewGuid():N}.tmp");
+        // Snapshot the source before creating a destination parent that may be inside it.
+        var plannedRoot = BuildTree(Path.GetFullPath(sourceDirectory), [fullOutputPath, temporaryPath]);
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            using (var output = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.None))
+            {
+                BuildCore(sourceDirectory, output, effective, 0, freshDestination: true, excludedFiles: [fullOutputPath, temporaryPath], plannedRoot);
+                output.Flush(flushToDisk: true);
+            }
+
+            File.Move(temporaryPath, fullOutputPath, overwrite: true);
+        }
+        finally
+        {
+            try { File.Delete(temporaryPath); } catch { /* Cleanup must not replace the build failure. */ }
+        }
+    }
+
+    /// <summary>
+    /// Builds an ext4 image from <paramref name="sourceDirectory"/> and streams it to
+    /// <paramref name="output"/>. Seekable streams are filled in place from their current
+    /// position; non-seekable streams are built through a bounded temporary file and copied.
+    /// <para>从 <paramref name="sourceDirectory"/> 构建 ext4 镜像并流式写入
+    /// <paramref name="output"/>。可寻址流从当前位置原位写入；不可寻址流通过有界临时文件构建后复制。</para>
+    /// </summary>
+    public static void Build(string sourceDirectory, Stream output, Ext4Options? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        if (!output.CanWrite)
+        {
+            throw new ArgumentException("The output stream must be writable.", nameof(output));
+        }
+
+        var effective = Validate(sourceDirectory, options);
+        var excludedFiles = output is FileStream fileStream ? new[] { Path.GetFullPath(fileStream.Name) } : [];
+        var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-ext4-{Guid.NewGuid():N}.tmp");
+        // Plan before probing SetLength, and exclude staging even when the source is the temp tree.
+        var stagingExclusions = excludedFiles.Append(Path.GetFullPath(temporaryPath)).ToArray();
+        var plannedRoot = BuildTree(Path.GetFullPath(sourceDirectory), stagingExclusions);
+        if (output.CanSeek && SupportsResizeWithoutMutation(output))
+        {
+            BuildCore(sourceDirectory, output, effective, output.Position, freshDestination: false, excludedFiles: stagingExclusions, plannedRoot);
+            return;
+        }
+
+        try
+        {
+            using (var staging = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
+                       FileOptions.SequentialScan))
+            {
+                BuildCore(sourceDirectory, staging, effective, 0, freshDestination: true, excludedFiles: stagingExclusions, plannedRoot);
+                staging.Position = 0;
+                staging.CopyTo(output);
+            }
+        }
+        finally
+        {
+            try { File.Delete(temporaryPath); } catch { /* Cleanup must not replace the build failure. */ }
+        }
+    }
+
+    private static bool SupportsResizeWithoutMutation(Stream output)
+    {
+        var position = output.Position;
+        try
+        {
+            // Setting the existing length is a non-mutating capability probe.
+            output.SetLength(output.Length);
+            return true;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        finally
+        {
+            output.Position = position;
+        }
+    }
+
+    private static Ext4Options Validate(string sourceDirectory, Ext4Options? options)
+    {
         options ??= new Ext4Options();
         var blockSize = options.BlockSize;
         var inodeSize = options.InodeSize;
@@ -69,7 +181,17 @@ public sealed class Ext4Builder
             throw new DirectoryNotFoundException($"Source directory not found: '{sourceDirectory}'.");
         }
 
-        var root = BuildTree(Path.GetFullPath(sourceDirectory));
+        return options;
+    }
+
+    private static void BuildCore(string sourceDirectory, Stream output, Ext4Options options, long baseOffset, bool freshDestination, IReadOnlyCollection<string> excludedFiles, Node? plannedRoot = null)
+    {
+        var blockSize = options.BlockSize;
+        var inodeSize = options.InodeSize;
+
+        // ---- First pass: scan and plan the layout (no image allocation). ----
+        // 第一遍：扫描并规划布局（不分配镜像）。
+        var root = plannedRoot ?? BuildTree(Path.GetFullPath(sourceDirectory), excludedFiles);
         var nodes = new List<Node>();
         var maxInode = AssignInodes(root, nodes);
 
@@ -88,42 +210,70 @@ public sealed class Ext4Builder
 
         AllocateDataBlocks(nodes, dataStart);
 
-        var image = new byte[checked(totalBlocks * blockSize)];
-        WriteSuperblock(image.AsSpan(), blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, usedBlocks, nodes.Count);
-        WriteGroupDescriptor(image.AsSpan(2048, 32), (uint)inodesPerGroup, totalBlocks, usedBlocks, nodes.Count, nodes.Count(static n => n.IsDirectory));
-        WriteBlockBitmap(image, usedBlocks, blockSize);
-        WriteInodeBitmap(image, nodes, blockSize);
+        // ---- Second pass: stream the image out. ----
+        // 第二遍：流式写出镜像。
+        var finalSize = checked(totalBlocks * blockSize);
+        var requiredEnd = checked(baseOffset + finalSize);
+        var oldLength = output.Length;
+        if (freshDestination || requiredEnd > oldLength)
+        {
+            output.SetLength(requiredEnd);
+        }
+        if (!freshDestination)
+        {
+            // Newly extended storage is already zero; clear only the part backed by old stream data.
+            var overlapLength = Math.Max(0, Math.Min(oldLength, requiredEnd) - baseOffset);
+            ZeroRegion(output, baseOffset, overlapLength);
+        }
+
+        var superblock = new byte[1024];
+        WriteSuperblock(superblock, blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, usedBlocks, nodes.Count);
+        WriteAt(output, baseOffset, 1024, superblock, superblock.Length);
+
+        var descriptor = new byte[32];
+        WriteGroupDescriptor(descriptor, (uint)inodesPerGroup, totalBlocks, usedBlocks, nodes.Count, nodes.Count(static n => n.IsDirectory));
+        WriteAt(output, baseOffset, 2048, descriptor, descriptor.Length);
+
+        var blockBitmap = new byte[blockSize];
+        WriteBlockBitmap(blockBitmap, usedBlocks);
+        WriteAt(output, baseOffset, blockSize, blockBitmap, blockBitmap.Length);
+
+        var inodeBitmap = new byte[blockSize];
+        WriteInodeBitmap(inodeBitmap, nodes);
+        WriteAt(output, baseOffset, 2L * blockSize, inodeBitmap, inodeBitmap.Length);
 
         foreach (var node in nodes)
         {
-            WriteInode(image, node, blockSize, inodeSize);
+            WriteInode(output, baseOffset, node, blockSize, inodeSize);
         }
 
         foreach (var node in nodes)
         {
-            WriteNodeData(image, node, blockSize);
+            WriteNodeData(output, baseOffset, node, blockSize);
         }
 
-        return image;
+        output.Position = checked(baseOffset + finalSize);
     }
 
-    /// <summary>
-    /// Builds an ext4 image from <paramref name="sourceDirectory"/> and writes it to <paramref name="outputPath"/>.
-    /// <para>从 <paramref name="sourceDirectory"/> 构建 ext4 镜像并写入 <paramref name="outputPath"/>。</para>
-    /// </summary>
-    public static void Build(string sourceDirectory, string outputPath, Ext4Options? options = null)
+    private static void ZeroRegion(Stream output, long offset, long length)
     {
-        var bytes = Build(sourceDirectory, options);
-        var directory = Path.GetDirectoryName(outputPath);
-        if (!string.IsNullOrEmpty(directory))
+        var zeros = new byte[1 << 16];
+        output.Position = offset;
+        while (length > 0)
         {
-            Directory.CreateDirectory(directory);
+            var count = (int)Math.Min(zeros.Length, length);
+            output.Write(zeros, 0, count);
+            length -= count;
         }
-
-        System.IO.File.WriteAllBytes(outputPath, bytes);
     }
 
-    private static Node BuildTree(string sourceRoot)
+    private static void WriteAt(Stream output, long baseOffset, long offset, byte[] data, int count)
+    {
+        output.Position = checked(baseOffset + offset);
+        output.Write(data, 0, count);
+    }
+
+    private static Node BuildTree(string sourceRoot, IReadOnlyCollection<string> excludedFiles)
     {
         var root = new Node
         {
@@ -133,16 +283,25 @@ public sealed class Ext4Builder
             IsDirectory = true,
             IsSymlink = false,
         };
-        Populate(root);
+        Populate(root, excludedFiles);
         return root;
     }
 
-    private static void Populate(Node node)
+    private static void Populate(Node node, IReadOnlyCollection<string> excludedFiles)
     {
         var children = Directory.EnumerateFileSystemEntries(node.FullPath)
             .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal);
         foreach (var childPath in children)
         {
+            // Apply exclusions before probing attributes or classifying links/directories: an excluded
+            // dangling symlink or inaccessible directory must never be touched.
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var fullChildPath = Path.GetFullPath(childPath);
+            if (excludedFiles.Any(excluded => string.Equals(fullChildPath, excluded, comparison)))
+            {
+                continue;
+            }
+
             var name = Path.GetFileName(childPath);
             var attributes = File.GetAttributes(childPath);
             var isSymlink = (attributes & FileAttributes.ReparsePoint) != 0;
@@ -173,7 +332,7 @@ public sealed class Ext4Builder
             node.Children.Add(child);
             if (isDirectory)
             {
-                Populate(child);
+                Populate(child, excludedFiles);
             }
         }
     }
@@ -350,7 +509,7 @@ public sealed class Ext4Builder
                 var n = fs.Read(buffer, read, want - read);
                 if (n <= 0)
                 {
-                    break;
+                    throw new EndOfStreamException($"Unexpected end of file '{fullPath}'.");
                 }
 
                 read += n;
@@ -416,51 +575,50 @@ public sealed class Ext4Builder
     }
 
     private static void WriteSuperblock(
-        Span<byte> image, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes)
+        Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes)
     {
-        var span = image.Slice(1024, 1024);
-        span.Clear();
-        WriteU32(span, 0x00, inodesPerGroup);
-        WriteU32(span, 0x04, (uint)totalBlocks);
-        WriteU32(span, 0x08, 0);
-        WriteU32(span, 0x0C, (uint)(totalBlocks - usedBlocks));
-        WriteU32(span, 0x10, inodesPerGroup - (uint)usedInodes);
-        WriteU32(span, 0x14, 0);
-        WriteU32(span, 0x18, (uint)(Log2(blockSize) - 10));
-        WriteU32(span, 0x1C, (uint)(Log2(blockSize) - 10));
-        WriteU32(span, 0x20, (uint)totalBlocks);
-        WriteU32(span, 0x24, (uint)totalBlocks);
-        WriteU32(span, 0x28, inodesPerGroup);
-        WriteU32(span, 0x2C, FixedTimestamp);
-        WriteU32(span, 0x30, FixedTimestamp);
-        WriteU16(span, 0x34, 0);
-        WriteU16(span, 0x36, 0xFFFF);
-        WriteU16(span, 0x38, 0xEF53);
-        WriteU16(span, 0x3A, 1);
-        WriteU16(span, 0x3C, 1);
-        WriteU16(span, 0x3E, 0);
-        WriteU32(span, 0x40, FixedTimestamp);
-        WriteU32(span, 0x44, 0);
-        WriteU32(span, 0x48, 0);
-        WriteU32(span, 0x4C, 1);
-        WriteU16(span, 0x50, 0);
-        WriteU16(span, 0x52, 0);
-        WriteU32(span, 0x54, FirstUsableInode);
-        WriteU16(span, 0x58, (ushort)inodeSize);
-        WriteU16(span, 0x5A, 0);
-        WriteU32(span, 0x5C, 0);
-        WriteU32(span, 0x60, 0x0001); // EXT4_FEATURE_INCOMPAT_EXTENTS
-        WriteU32(span, 0x64, 0);
-        FixedUuid.CopyTo(span[0x68..0x78]);
-        Encoding.ASCII.GetBytes("UOTANSTUDIO", span[0x78..0x88]);
-        WriteU32(span, 0xE8, 0);
-        WriteU16(span, 0xFC, 0);
-        WriteU16(span, 0xFE, 32); // s_desc_size
-        WriteU32(span, 0x100, 0);
-        WriteU32(span, 0x104, 0);
-        WriteU32(span, 0x150, 0); // s_blocks_count_hi
-        WriteU32(span, 0x154, 0); // s_r_blocks_count_hi
-        WriteU32(span, 0x158, 0); // s_free_blocks_count_hi
+        block.Clear();
+        WriteU32(block, 0x00, inodesPerGroup);
+        WriteU32(block, 0x04, (uint)totalBlocks);
+        WriteU32(block, 0x08, 0);
+        WriteU32(block, 0x0C, (uint)(totalBlocks - usedBlocks));
+        WriteU32(block, 0x10, inodesPerGroup - (uint)usedInodes);
+        WriteU32(block, 0x14, 0);
+        WriteU32(block, 0x18, (uint)(Log2(blockSize) - 10));
+        WriteU32(block, 0x1C, (uint)(Log2(blockSize) - 10));
+        WriteU32(block, 0x20, (uint)totalBlocks);
+        WriteU32(block, 0x24, (uint)totalBlocks);
+        WriteU32(block, 0x28, inodesPerGroup);
+        WriteU32(block, 0x2C, FixedTimestamp);
+        WriteU32(block, 0x30, FixedTimestamp);
+        WriteU16(block, 0x34, 0);
+        WriteU16(block, 0x36, 0xFFFF);
+        WriteU16(block, 0x38, 0xEF53);
+        WriteU16(block, 0x3A, 1);
+        WriteU16(block, 0x3C, 1);
+        WriteU16(block, 0x3E, 0);
+        WriteU32(block, 0x40, FixedTimestamp);
+        WriteU32(block, 0x44, 0);
+        WriteU32(block, 0x48, 0);
+        WriteU32(block, 0x4C, 1);
+        WriteU16(block, 0x50, 0);
+        WriteU16(block, 0x52, 0);
+        WriteU32(block, 0x54, FirstUsableInode);
+        WriteU16(block, 0x58, (ushort)inodeSize);
+        WriteU16(block, 0x5A, 0);
+        WriteU32(block, 0x5C, 0);
+        WriteU32(block, 0x60, 0x0001); // EXT4_FEATURE_INCOMPAT_EXTENTS
+        WriteU32(block, 0x64, 0);
+        FixedUuid.CopyTo(block[0x68..0x78]);
+        Encoding.ASCII.GetBytes("UOTANSTUDIO", block[0x78..0x88]);
+        WriteU32(block, 0xE8, 0);
+        WriteU16(block, 0xFC, 0);
+        WriteU16(block, 0xFE, 32); // s_desc_size
+        WriteU32(block, 0x100, 0);
+        WriteU32(block, 0x104, 0);
+        WriteU32(block, 0x150, 0); // s_blocks_count_hi
+        WriteU32(block, 0x154, 0); // s_r_blocks_count_hi
+        WriteU32(block, 0x158, 0); // s_free_blocks_count_hi
     }
 
     private static void WriteGroupDescriptor(
@@ -481,32 +639,26 @@ public sealed class Ext4Builder
         WriteU16(desc, 30, 0);
     }
 
-    private static void WriteBlockBitmap(byte[] image, long usedBlocks, int blockSize)
+    private static void WriteBlockBitmap(byte[] bitmap, long usedBlocks)
     {
-        var bitmap = new byte[blockSize];
         for (var i = 0L; i < usedBlocks; i++)
         {
             bitmap[(int)(i >> 3)] |= (byte)(1 << (int)(i & 7));
         }
-
-        Buffer.BlockCopy(bitmap, 0, image, blockSize, blockSize);
     }
 
-    private static void WriteInodeBitmap(byte[] image, List<Node> nodes, int blockSize)
+    private static void WriteInodeBitmap(byte[] bitmap, List<Node> nodes)
     {
-        var bitmap = new byte[blockSize];
         foreach (var node in nodes)
         {
             var bit = (int)(node.Inode - 1);
             bitmap[bit >> 3] |= (byte)(1 << (bit & 7));
         }
-
-        Buffer.BlockCopy(bitmap, 0, image, blockSize * 2, blockSize);
     }
 
-    private static void WriteInode(byte[] image, Node node, int blockSize, int inodeSize)
+    private static void WriteInode(Stream output, long baseOffset, Node node, int blockSize, int inodeSize)
     {
-        var inodeOffset = checked((int)((long)3 * blockSize + ((long)node.Inode - 1) * inodeSize));
+        var inodeOffset = checked((long)3 * blockSize + ((long)node.Inode - 1) * inodeSize);
         var inode = new byte[inodeSize];
         var isFastSymlink = node.IsSymlink && node.Size < 60;
 
@@ -541,11 +693,11 @@ public sealed class Ext4Builder
             WriteU32(inode, 108, (uint)(node.Size >> 32));
         }
 
-        Buffer.BlockCopy(inode, 0, image, inodeOffset, inodeSize);
+        WriteAt(output, baseOffset, inodeOffset, inode, inodeSize);
         for (var i = 0; i < leaves.Count; i++)
         {
-            var leafOffset = checked((int)(node.LeafBlocks[i] * blockSize));
-            Buffer.BlockCopy(leaves[i], 0, image, leafOffset, blockSize);
+            var leafOffset = checked(node.LeafBlocks[i] * blockSize);
+            WriteAt(output, baseOffset, leafOffset, leaves[i], blockSize);
         }
     }
 
@@ -634,7 +786,7 @@ public sealed class Ext4Builder
         WriteU32(dest, offset + 8, (uint)(extent.Start & 0xFFFFFFFF));
     }
 
-    private static void WriteNodeData(byte[] image, Node node, int blockSize)
+    private static void WriteNodeData(Stream output, long baseOffset, Node node, int blockSize)
     {
         if (node.IsSymlink && node.Size < 60)
         {
@@ -645,8 +797,8 @@ public sealed class Ext4Builder
         {
             for (var i = 0; i < node.DirectoryBlocks.Count; i++)
             {
-                var offset = checked((int)((node.DataStartBlock + i) * blockSize));
-                Buffer.BlockCopy(node.DirectoryBlocks[i], 0, image, offset, blockSize);
+                var offset = checked((node.DataStartBlock + i) * blockSize);
+                WriteAt(output, baseOffset, offset, node.DirectoryBlocks[i], blockSize);
             }
 
             return;
@@ -655,7 +807,7 @@ public sealed class Ext4Builder
         if (node.IsSymlink)
         {
             var bytes = Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty);
-            WriteBytesToBlocks(image, node, bytes, blockSize);
+            WriteBytesToBlocks(output, baseOffset, node, bytes, blockSize);
             return;
         }
 
@@ -683,20 +835,20 @@ public sealed class Ext4Builder
                     var n = fs.Read(buffer, read, want - read);
                     if (n <= 0)
                     {
-                        break;
+                        throw new EndOfStreamException($"Unexpected end of file '{node.FullPath}'.");
                     }
 
                     read += n;
                 }
 
-                var offset = checked((int)(assigned * blockSize));
-                Buffer.BlockCopy(buffer, 0, image, offset, want);
+                var offset = checked(assigned * blockSize);
+                WriteAt(output, baseOffset, offset, buffer, want);
                 assigned++;
             }
         }
     }
 
-    private static void WriteBytesToBlocks(byte[] image, Node node, byte[] bytes, int blockSize)
+    private static void WriteBytesToBlocks(Stream output, long baseOffset, Node node, byte[] bytes, int blockSize)
     {
         var buffer = new byte[blockSize];
         var assigned = node.DataStartBlock;
@@ -706,8 +858,8 @@ public sealed class Ext4Builder
             var want = Math.Min(blockSize, bytes.Length - i * blockSize);
             buffer.AsSpan().Clear();
             bytes.AsSpan(i * blockSize, want).CopyTo(buffer);
-            var offset = checked((int)(assigned * blockSize));
-            Buffer.BlockCopy(buffer, 0, image, offset, want);
+            var offset = checked(assigned * blockSize);
+            WriteAt(output, baseOffset, offset, buffer, want);
             assigned++;
         }
     }

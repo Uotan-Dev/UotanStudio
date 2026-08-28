@@ -55,6 +55,9 @@ internal class PayloadExtractor
     /// <para>当分区提取失败时抛出。</para>
     /// </exception>
     public void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize)
+        => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize, CancellationToken.None);
+
+    private void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(partition);
         ArgumentNullException.ThrowIfNull(outFilename);
@@ -64,100 +67,126 @@ internal class PayloadExtractor
             throw new ArgumentException("Output filename cannot be empty or whitespace.", nameof(outFilename));
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+        var fullOutputPath = Path.GetFullPath(outFilename);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
+        var tempPath = fullOutputPath + ".tmp-" + Guid.NewGuid().ToString("N");
         try
         {
-            using var outFile = new FileStream(outFilename, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 81920);
-
-            long totalSize = 0;
-            foreach (var op in partition.Operations)
+            using (var outFile = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920))
             {
-                foreach (var ext in op.DstExtents)
+
+                long totalSize = 0;
+                try
                 {
-                    totalSize += (long)ext.NumBlocks * blockSize;
+                    foreach (var op in partition.Operations)
+                    {
+                        foreach (var ext in op.DstExtents)
+                        {
+                            var endBlock = checked(ext.StartBlock + ext.NumBlocks);
+                            var endOffset = checked(endBlock * blockSize);
+                            totalSize = Math.Max(totalSize, checked((long)endOffset));
+                        }
+                    }
+                }
+                catch (OverflowException ex)
+                {
+                    throw new PartitionExtractionException("Destination extent end offset exceeds the supported range", partition.PartitionName, ex);
+                }
+
+                if (totalSize > 0)
+                {
+                    outFile.SetLength(totalSize);
+                }
+
+                object writeLock = new();
+                object streamLock = new();
+
+                var parallelOps = new List<InstallOperation>();
+                var sequentialOps = new List<InstallOperation>();
+
+                foreach (var op in partition.Operations)
+                {
+                    if (SequentialTypes.Contains(op.Type))
+                    {
+                        sequentialOps.Add(op);
+                    }
+                    else if (ParallelizableTypes.Contains(op.Type))
+                    {
+                        parallelOps.Add(op);
+                    }
+                }
+
+                Parallel.ForEach(
+                    parallelOps.OrderBy(o => o.DataOffset),
+                    new ParallelOptions
+                    {
+                        MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 4),
+                        CancellationToken = cancellationToken
+                    },
+                    op => OperationProcessor.ProcessOperation(op, outFile, stream, baseOffset, blockSize, writeLock, streamLock, cancellationToken));
+
+                foreach (var op in sequentialOps)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    switch (op.Type)
+                    {
+                        case InstallOperation.Types.Type.SourceCopy:
+                            OperationProcessor.ProcessSourceCopy(op, outFile, blockSize);
+                            break;
+                        case InstallOperation.Types.Type.SourceBsdiff:
+                            {
+                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
+                                OperationProcessor.ProcessSourceBsdiff(op, patchData, outFile, blockSize);
+                            }
+                            break;
+                        case InstallOperation.Types.Type.BrotliBsdiff:
+                            {
+                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
+                                OperationProcessor.ProcessBrotliBsdiff(op, patchData, outFile, blockSize);
+                            }
+                            break;
+                        case InstallOperation.Types.Type.Puffdiff:
+                            {
+                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
+                                OperationProcessor.ProcessPuffdiff(op, patchData, patchData.Length, outFile, blockSize);
+                            }
+                            break;
+                        case InstallOperation.Types.Type.Bsdiff:
+                            {
+                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
+                                OperationProcessor.ProcessBsdiff(op, patchData, outFile, blockSize);
+                            }
+                            break;
+                        case InstallOperation.Types.Type.Replace:
+                            break;
+                        case InstallOperation.Types.Type.ReplaceBz:
+                            break;
+                        case InstallOperation.Types.Type.Move:
+                            break;
+                        case InstallOperation.Types.Type.Zero:
+                            break;
+                        case InstallOperation.Types.Type.Discard:
+                            break;
+                        case InstallOperation.Types.Type.ReplaceXz:
+                            break;
+                        case InstallOperation.Types.Type.Zucchini:
+                            break;
+                        case InstallOperation.Types.Type.Lz4diffBsdiff:
+                            break;
+                        case InstallOperation.Types.Type.Lz4diffPuffdiff:
+                            break;
+                        default:
+                            break;
+                    }
                 }
             }
-
-            if (totalSize > 0)
-            {
-                outFile.SetLength(totalSize);
-            }
-
-            object writeLock = new();
-            object streamLock = new();
-
-            var parallelOps = new List<InstallOperation>();
-            var sequentialOps = new List<InstallOperation>();
-
-            foreach (var op in partition.Operations)
-            {
-                if (SequentialTypes.Contains(op.Type))
-                {
-                    sequentialOps.Add(op);
-                }
-                else if (ParallelizableTypes.Contains(op.Type))
-                {
-                    parallelOps.Add(op);
-                }
-            }
-
-            Parallel.ForEach(
-                parallelOps.OrderBy(o => o.DataOffset),
-                new ParallelOptions { MaxDegreeOfParallelism = Math.Min(Environment.ProcessorCount, 4) },
-                op => OperationProcessor.ProcessOperation(op, outFile, stream, baseOffset, blockSize, writeLock, streamLock));
-
-            foreach (var op in sequentialOps)
-            {
-                switch (op.Type)
-                {
-                    case InstallOperation.Types.Type.SourceCopy:
-                        OperationProcessor.ProcessSourceCopy(op, outFile, blockSize);
-                        break;
-                    case InstallOperation.Types.Type.SourceBsdiff:
-                        {
-                            var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                            OperationProcessor.ProcessSourceBsdiff(op, patchData, outFile, blockSize);
-                        }
-                        break;
-                    case InstallOperation.Types.Type.BrotliBsdiff:
-                        {
-                            var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                            OperationProcessor.ProcessBrotliBsdiff(op, patchData, outFile, blockSize);
-                        }
-                        break;
-                    case InstallOperation.Types.Type.Puffdiff:
-                        {
-                            var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                            OperationProcessor.ProcessPuffdiff(op, patchData, patchData.Length, outFile, blockSize);
-                        }
-                        break;
-                    case InstallOperation.Types.Type.Bsdiff:
-                        {
-                            var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                            OperationProcessor.ProcessBsdiff(op, patchData, outFile, blockSize);
-                        }
-                        break;
-                    case InstallOperation.Types.Type.Replace:
-                        break;
-                    case InstallOperation.Types.Type.ReplaceBz:
-                        break;
-                    case InstallOperation.Types.Type.Move:
-                        break;
-                    case InstallOperation.Types.Type.Zero:
-                        break;
-                    case InstallOperation.Types.Type.Discard:
-                        break;
-                    case InstallOperation.Types.Type.ReplaceXz:
-                        break;
-                    case InstallOperation.Types.Type.Zucchini:
-                        break;
-                    case InstallOperation.Types.Type.Lz4diffBsdiff:
-                        break;
-                    case InstallOperation.Types.Type.Lz4diffPuffdiff:
-                        break;
-                    default:
-                        break;
-                }
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(tempPath, fullOutputPath, true);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (PayloadUnsupportedOperationException)
         {
@@ -173,6 +202,10 @@ internal class PayloadExtractor
                 $"Failed to extract partition '{partition.PartitionName}' to '{outFilename}': {ex.Message}",
                 partition.PartitionName,
                 ex);
+        }
+        finally
+        {
+            File.Delete(tempPath);
         }
     }
 
@@ -208,7 +241,7 @@ internal class PayloadExtractor
     /// <para>当分区提取失败时抛出。</para>
     /// </exception>
     public Task ExtractPartitionAsync(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken = default)
-        => Task.Run(() => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize), cancellationToken);
+        => Task.Run(() => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize, cancellationToken), cancellationToken);
 
     /// <summary>
     /// Extracts all matching partitions from the manifest to the output directory.
@@ -262,7 +295,7 @@ internal class PayloadExtractor
                 continue;
             }
 
-            var outFilename = Path.Combine(outputDir, $"{partition.PartitionName}.img");
+            var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
             ExtractPartition(partition, outFilename, stream, baseOffset, manifest.BlockSize);
         }
     }
@@ -327,15 +360,54 @@ internal class PayloadExtractor
                 continue;
             }
 
-            var outFilename = Path.Combine(outputDir, $"{partition.PartitionName}.img");
+            var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
             await ExtractPartitionAsync(partition, outFilename, stream, baseOffset, manifest.BlockSize, cancellationToken).ConfigureAwait(false);
         }
     }
 
+    private static string GetSafeOutputPath(string outputDir, string name)
+    {
+        if (Path.IsPathRooted(name) || name.Contains('/') || name.Contains('\\') ||
+            name.Contains("..", StringComparison.Ordinal))
+        {
+            throw new PartitionExtractionException($"Invalid partition output name: {name}", name);
+        }
+
+        var root = Path.GetFullPath(outputDir);
+        var candidate = Path.GetFullPath(Path.Combine(root, name + ".img"));
+        var rootPrefix = root.EndsWith(Path.DirectorySeparatorChar) ? root : root + Path.DirectorySeparatorChar;
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!candidate.StartsWith(rootPrefix, comparison))
+        {
+            throw new PartitionExtractionException($"Partition output escapes output directory: {name}", name);
+        }
+        return candidate;
+    }
+
     private static byte[] ReadOperationData(InstallOperation op, Stream stream, ulong baseOffset, object streamLock)
     {
-        var data = new byte[op.DataLength];
-        var dataPos = (long)(baseOffset + op.DataOffset);
+        if (!stream.CanSeek)
+        {
+            throw new PartitionExtractionException("Payload stream must be seekable", string.Empty);
+        }
+
+        int dataLength;
+        long dataPos;
+        try
+        {
+            dataLength = checked((int)op.DataLength);
+            dataPos = checked((long)checked(baseOffset + op.DataOffset));
+        }
+        catch (OverflowException ex)
+        {
+            throw new PartitionExtractionException("Payload operation data offset or length exceeds the supported range", string.Empty, ex);
+        }
+        if (dataPos > stream.Length || dataLength > stream.Length - dataPos)
+        {
+            throw new PartitionExtractionException("Payload operation data range exceeds the stream length", string.Empty);
+        }
+
+        var data = new byte[dataLength];
         lock (streamLock)
         {
             stream.Seek(dataPos, SeekOrigin.Begin);

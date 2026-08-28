@@ -68,7 +68,7 @@ public sealed class ErofsFormatHandler : IFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var parser = new ErofsParser(File.ReadAllBytes(filePath));
+                using var parser = new ErofsParser(filePath);
                 var files = parser.EnumerateFiles();
                 var metadata = new Dictionary<string, string>
                 {
@@ -110,7 +110,7 @@ public sealed class ErofsFormatHandler : IFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var parser = new ErofsParser(File.ReadAllBytes(filePath));
+                using var parser = new ErofsParser(filePath);
                 parser.ExtractToDirectory(outputDirectory, options?.Overwrite ?? true);
                 var files = parser.EnumerateFiles();
                 return FirmwareOpResult.Ok(
@@ -145,10 +145,7 @@ public sealed class ErofsFormatHandler : IFormatHandler
                 }
 
                 var builder = new ErofsBuilder();
-                using (var fs = File.Create(outputPath))
-                {
-                    builder.Build(inputPath, fs, new ErofsOptions());
-                }
+                builder.Build(inputPath, outputPath, new ErofsOptions());
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");
             }

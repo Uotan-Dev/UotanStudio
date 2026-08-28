@@ -247,7 +247,7 @@ public static class Lz4Compressor
             var magicRead = ReadUpTo(input, magic);
             if (magicRead < 4)
             {
-                return; // 空输入
+                throw new CompressionException("LZ4_LEGACY 数据格式无效：魔数截断");
             }
 
             if (magic[0] != 0x02 || magic[1] != 0x21 || magic[2] != 0x4C || magic[3] != 0x18)
@@ -263,15 +263,25 @@ public static class Lz4Compressor
                 while (true)
                 {
                     var lenRead = ReadUpTo(input, lengthBuf);
-                    if (lenRead < 4)
+                    if (lenRead == 0)
                     {
                         break; // 正常结束（无更多块）
+                    }
+                    if (lenRead < 4)
+                    {
+                        throw new CompressionException("LZ4_LEGACY 数据格式无效：块长度头截断");
                     }
 
                     var blockLength = lengthBuf[0] | (lengthBuf[1] << 8) | (lengthBuf[2] << 16) | (lengthBuf[3] << 24);
                     if (blockLength <= 0)
                     {
-                        break;
+                        throw new CompressionException("LZ4_LEGACY 数据格式无效：块长度非法");
+                    }
+                    const int maxDecompressed = 8 * 1024 * 1024;
+                    var maximumBlockLength = LZ4Codec.MaximumOutputSize(maxDecompressed);
+                    if (blockLength > maximumBlockLength)
+                    {
+                        throw new CompressionException($"LZ4_LEGACY 数据格式无效：块长度超过安全上限 {maximumBlockLength}");
                     }
 
                     // 输入块缓冲也跨块复用 ArrayPool；池化数组可能大于块长，须精确读取。
@@ -290,8 +300,8 @@ public static class Lz4Compressor
                         throw new CompressionException("LZ4_LEGACY 数据格式无效：块数据截断");
                     }
 
-                    // LZ4 块最大膨胀率 255:1；用该上界作为输出缓冲，跨块复用 ArrayPool 减少分配。
-                    var maxDecompressed = blockLength < (int.MaxValue / 255) ? blockLength * 255 : int.MaxValue;
+                    // Legacy readers must accept the standard legacy frame block size (8 MiB),
+                    // while the writer remains free to emit smaller 64 KiB blocks.
                     if (pooled == null || pooled.Length < maxDecompressed)
                     {
                         if (pooled != null)

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 
 namespace UotanStudio.Firmware.Nb0;
@@ -45,7 +46,7 @@ public sealed class Nb0Packer
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(entries);
 
-        WriteNb0Core(stream, [.. entries], progress);
+        WriteNb0Core(stream, [.. entries], progress, CancellationToken.None);
     }
 
     /// <summary>
@@ -58,7 +59,7 @@ public sealed class Nb0Packer
         ArgumentNullException.ThrowIfNull(entries);
 
         var entryList = entries.ToList();
-        await Task.Run(() => WriteNb0Core(stream, entryList, progress), cancellationToken).ConfigureAwait(false);
+        await Task.Run(() => WriteNb0Core(stream, entryList, progress, cancellationToken), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -91,7 +92,7 @@ public sealed class Nb0Packer
     /// </summary>
     public static Nb0PackerBuilder CreateBuilder() => new();
 
-    private static void WriteNb0Core(Stream stream, List<Nb0Entry> entryList, IProgress<Nb0PackProgress>? progress)
+    private static void WriteNb0Core(Stream stream, List<Nb0Entry> entryList, IProgress<Nb0PackProgress>? progress, CancellationToken cancellationToken)
     {
         using var writer = new BinaryWriter(stream, Encoding.ASCII, leaveOpen: true);
 
@@ -100,8 +101,9 @@ public sealed class Nb0Packer
         long dataOffset = 0;
         foreach (var entry in entryList)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             entry.Header.DataOffset = dataOffset;
-            dataOffset += entry.Header.FileSize;
+            dataOffset = checked(dataOffset + entry.Header.FileSize);
         }
 
         foreach (var entry in entryList)
@@ -111,20 +113,72 @@ public sealed class Nb0Packer
 
         var total = entryList.Count;
         var completed = 0;
-        foreach (var entry in entryList)
+        var buffer = ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
+        try
         {
-            var data = entry.Data ?? (entry.FilePath is not null ? File.ReadAllBytes(entry.FilePath) : []);
-
-            writer.Write(data);
-            // NB0 entries are 4-byte aligned.
-            var pad = (4 - (data.Length % 4)) % 4;
-            for (var i = 0; i < pad; i++)
+            foreach (var entry in entryList)
             {
-                writer.Write((byte)0);
-            }
+                cancellationToken.ThrowIfCancellationRequested();
+                if (entry.Data is not null)
+                {
+                    if (entry.Data.LongLength != entry.Header.FileSize)
+                    {
+                        throw new InvalidDataException(
+                            $"Entry '{entry.Header.Name}' data size ({entry.Data.LongLength}) does not match the declared header size ({entry.Header.FileSize}).");
+                    }
+                    writer.Write(entry.Data);
+                    // NB0 entries are 4-byte aligned.
+                    var dataPad = (4 - (entry.Data.Length % 4)) % 4;
+                    for (var i = 0; i < dataPad; i++)
+                    {
+                        writer.Write((byte)0);
+                    }
+                }
+                else if (entry.FilePath is not null)
+                {
+                    // 从源文件分块流式复制，不再整文件读入内存。
+                    // Stream the source file in chunks instead of loading it into memory.
+                    using var source = new FileStream(entry.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.SequentialScan);
+                    if (source.Length != entry.Header.FileSize)
+                    {
+                        throw new InvalidDataException(
+                            $"File '{entry.FilePath}' size ({source.Length}) does not match the declared entry size ({entry.Header.FileSize}).");
+                    }
 
-            completed++;
-            progress?.Report(new Nb0PackProgress { TotalEntries = total, CompletedEntries = completed, CurrentEntryName = entry.Header.Name });
+                    var remaining = entry.Header.FileSize;
+                    while (remaining > 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var toRead = (int)Math.Min(buffer.Length, remaining);
+                        var read = source.Read(buffer, 0, toRead);
+                        if (read == 0)
+                        {
+                            throw new EndOfStreamException($"File '{entry.FilePath}' ended unexpectedly.");
+                        }
+
+                        writer.Write(buffer, 0, read);
+                        remaining -= read;
+                    }
+
+                    // NB0 entries are 4-byte aligned.
+                    var pad = (4 - (entry.Header.FileSize % 4)) % 4;
+                    for (var i = 0; i < pad; i++)
+                    {
+                        writer.Write((byte)0);
+                    }
+                }
+                else
+                {
+                    writer.Write(Array.Empty<byte>());
+                }
+
+                completed++;
+                progress?.Report(new Nb0PackProgress { TotalEntries = total, CompletedEntries = completed, CurrentEntryName = entry.Header.Name });
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 }

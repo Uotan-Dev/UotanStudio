@@ -8,6 +8,13 @@ namespace UotanStudio.Firmware.Erofs;
 /// 从目录打包 erofs 镜像的简化构建器（与 ErofsParser 严格对齐同一布局）。
 /// <para>A simplified erofs image builder that packs a directory (strictly aligned with the
 /// ErofsParser layout).</para>
+/// <para>Layout is planned in a first pass and the image is streamed out in a second pass:
+/// the output stream is <see cref="Stream.SetLength(long)"/>-preallocated and each region
+/// (superblock, data area, inodes, compressed index tables and directory blocks) is seeked
+/// to and written individually, so no full in-memory image array is ever built.
+/// 布局在第一遍扫描中规划，第二遍将镜像流式写出：先对输出流
+/// <see cref="Stream.SetLength(long)"/> 预分配，再逐个定位写入超级块、数据区、
+/// inode、压缩索引表与目录块，全程不构造完整镜像数组。</para>
 /// </summary>
 public sealed class ErofsBuilder
 {
@@ -19,34 +26,151 @@ public sealed class ErofsBuilder
     /// </summary>
     public byte[] Build(string directoryPath, ErofsOptions? options = null)
     {
+        var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-erofs-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            Build(directoryPath, temporaryPath, options);
+            using var image = new FileStream(temporaryPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (image.Length > Array.MaxLength)
+            {
+                throw new InvalidOperationException($"Image size {image.Length} exceeds the maximum byte-array length.");
+            }
+
+            var result = new byte[(int)image.Length];
+            image.ReadExactly(result);
+            return result;
+        }
+        finally
+        {
+            try { File.Delete(temporaryPath); } catch { /* Cleanup must not replace the primary failure. */ }
+        }
+    }
+
+    /// <summary>
+    /// 将目录原子打包到指定路径。构建使用目标同目录的临时文件，成功刷新后再覆盖目标。
+    /// <para>Atomically packs a directory to a path by building and flushing a temporary file
+    /// in the destination directory before replacing the destination.</para>
+    /// </summary>
+    public void Build(string directoryPath, string outputPath, ErofsOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(outputPath);
+        var fullOutputPath = Path.GetFullPath(outputPath);
+        var outputDirectory = Path.GetDirectoryName(fullOutputPath)!;
+        var temporaryPath = Path.Combine(outputDirectory, $".{Path.GetFileName(fullOutputPath)}.{Guid.NewGuid():N}.tmp");
+        // Collect before creating a destination parent that may be inside the source tree.
+        var effective = ValidateAndCollect(directoryPath, out var root, options, fullOutputPath, temporaryPath);
+        Directory.CreateDirectory(outputDirectory);
+
+        try
+        {
+            using (var temporary = new FileStream(
+                       temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
+                       FileOptions.SequentialScan))
+            {
+                BuildImage(root, effective, temporary, 0, freshDestination: true);
+                temporary.Flush(flushToDisk: true);
+            }
+
+            File.Move(temporaryPath, fullOutputPath, overwrite: true);
+        }
+        finally
+        {
+            try { File.Delete(temporaryPath); } catch { /* Cleanup must not replace the primary failure. */ }
+        }
+    }
+
+    /// <summary>
+    /// 将目录打包为 erofs 镜像并从输出流当前 Position 写入。可寻址流保留此前前缀；
+    /// 仅可写的不可寻址流通过临时文件顺序复制。
+    /// <para>Packs a directory starting at the output stream's current position. Seekable streams
+    /// retain their prefix; writable non-seekable streams are supported through file staging.</para>
+    /// </summary>
+    public void Build(string directoryPath, Stream output, ErofsOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        if (!output.CanWrite)
+        {
+            throw new ArgumentException("The output stream must be writable.", nameof(output));
+        }
+
+        var excludedPaths = output is FileStream fileStream
+            ? new[] { Path.GetFullPath(fileStream.Name) }
+            : [];
+        var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-erofs-{Guid.NewGuid():N}.tmp");
+        var stagingExclusions = excludedPaths.Append(Path.GetFullPath(temporaryPath)).ToArray();
+        var effective = ValidateAndCollect(directoryPath, out var root, options, stagingExclusions);
+        if (output.CanSeek && SupportsResizeWithoutMutation(output))
+        {
+            var baseOffset = output.Position;
+            BuildImage(root, effective, output, baseOffset, freshDestination: false);
+            return;
+        }
+
+        try
+        {
+            using (var staging = new FileStream(
+                       temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
+                       FileOptions.SequentialScan))
+            {
+                BuildImage(root, effective, staging, 0, freshDestination: true);
+                staging.Position = 0;
+                staging.CopyTo(output);
+            }
+        }
+        finally
+        {
+            try { File.Delete(temporaryPath); } catch { /* Cleanup must not replace the primary failure. */ }
+        }
+    }
+
+    private static bool SupportsResizeWithoutMutation(Stream output)
+    {
+        var position = output.Position;
+        try
+        {
+            output.SetLength(output.Length);
+            return true;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        finally
+        {
+            output.Position = position;
+        }
+    }
+
+    private static ErofsOptions ValidateAndCollect(
+        string directoryPath,
+        out BuildNode root,
+        ErofsOptions? options,
+        params string[] excludedPaths)
+    {
         ArgumentNullException.ThrowIfNull(directoryPath);
         if (!Directory.Exists(directoryPath))
         {
             throw new DirectoryNotFoundException($"Input path is not a directory: '{directoryPath}'.");
         }
 
-        var root = CollectNodes(directoryPath);
-        return BuildImage(root, options ?? new ErofsOptions());
+        var effective = options ?? new ErofsOptions();
+        effective.Validate();
+        var exclusions = excludedPaths.Length == 0
+            ? null
+            : new HashSet<string>(
+                excludedPaths.Select(Path.GetFullPath),
+                OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        root = CollectNodes(directoryPath, exclusions);
+        return effective;
     }
 
-    /// <summary>
-    /// 将目录打包为 erofs 镜像并写入输出流。
-    /// <para>Packs a directory into an erofs image and writes it to the output stream.</para>
-    /// </summary>
-    public void Build(string directoryPath, Stream output, ErofsOptions? options = null)
-    {
-        ArgumentNullException.ThrowIfNull(output);
-        var image = Build(directoryPath, options);
-        output.Write(image);
-    }
-
-    private static BuildNode CollectNodes(string directoryPath)
+    private static BuildNode CollectNodes(string directoryPath, HashSet<string>? excludedPaths)
     {
         var rootFull = Path.GetFullPath(directoryPath);
-        return CollectNode(rootFull, isRoot: true);
+        return CollectNode(rootFull, isRoot: true, excludedPaths);
     }
 
-    private static BuildNode CollectNode(string fullPath, bool isRoot)
+    private static BuildNode CollectNode(string fullPath, bool isRoot, HashSet<string>? excludedPaths)
     {
         var attributes = File.GetAttributes(fullPath);
         if ((attributes & FileAttributes.ReparsePoint) != 0)
@@ -61,7 +185,13 @@ public sealed class ErofsBuilder
             var node = new BuildNode { Name = name, IsDirectory = true, FullPath = fullPath };
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
-                node.Children.Add(CollectNode(childPath, isRoot: false));
+                var childFullPath = Path.GetFullPath(childPath);
+                if (excludedPaths?.Contains(childFullPath) == true)
+                {
+                    continue;
+                }
+
+                node.Children.Add(CollectNode(childFullPath, isRoot: false, excludedPaths));
             }
 
             return node;
@@ -71,12 +201,14 @@ public sealed class ErofsBuilder
         return new BuildNode { Name = name, IsDirectory = false, FullPath = fullPath, Size = info.Length };
     }
 
-    private byte[] BuildImage(BuildNode root, ErofsOptions options)
+    private static void BuildImage(BuildNode root, ErofsOptions options, Stream destination, long baseOffset, bool freshDestination)
     {
-        options.Validate();
+        using var output = new OffsetStream(destination, baseOffset);
         var blockSize = options.BlockSize;
         var clusterSize = blockSize;
 
+        // ---- First pass: plan the layout (no image allocation). ----
+        // 第一遍：规划布局（不分配镜像）。
         var ordered = new List<BuildNode>();
         CollectPreOrder(root, ordered);
 
@@ -171,7 +303,16 @@ public sealed class ErofsBuilder
             throw new InvalidOperationException($"Root nid {root.Nid} exceeds the 16-bit superblock field.");
         }
 
-        var image = new byte[totalBlocks * blockSize];
+        // ---- Second pass: stream the image out. ----
+        // 第二遍：流式写出镜像。
+        var finalSize = checked(totalBlocks * blockSize);
+        var oldLength = output.Length;
+        output.SetLength(finalSize);
+        if (!freshDestination)
+        {
+            // Newly extended storage is already zero; clear only bytes that overlap old content.
+            ZeroImage(output, Math.Min(oldLength, finalSize));
+        }
 
         // 超级块。Superblock.
         var superblock = new ErofsSuperblock
@@ -187,7 +328,9 @@ public sealed class ErofsBuilder
             Uuid = Guid.NewGuid().ToByteArray(),
             VolumeName = options.VolumeName,
         };
-        superblock.WriteTo(image.AsSpan(ErofsSuperblock.SuperblockOffset, ErofsSuperblock.SuperblockSize));
+        var superblockBuffer = new byte[ErofsSuperblock.SuperblockSize];
+        superblock.WriteTo(superblockBuffer);
+        WriteAt(output, ErofsSuperblock.SuperblockOffset, superblockBuffer, superblockBuffer.Length);
 
         // 数据区（先写数据，随后元数据中的压缩索引表才能引用块号）。
         // Data area first so the compressed index table can reference the block numbers.
@@ -200,36 +343,56 @@ public sealed class ErofsBuilder
 
             if (node.Inode.IsCompressed)
             {
-                WriteCompressedData(image, node, blockSize, options);
+                WriteCompressedData(output, node, blockSize, options);
             }
             else
             {
-                WriteFlatData(image, node, blockSize);
+                WriteFlatData(output, node, blockSize);
             }
         }
 
         // 元数据区：inode + 压缩索引表 + 目录块。Metadata area: inodes + compressed index tables + directory blocks.
         foreach (var node in ordered)
         {
-            var inodeOffset = (int)(MetaBlkAddr * (ulong)blockSize + node.Nid);
-            node.Inode.WriteTo(image.AsSpan(inodeOffset, node.Inode.OnDiskSize));
+            var inodeOffset = checked((long)MetaBlkAddr * blockSize + (long)node.Nid);
+            var inodeBuffer = new byte[node.Inode.OnDiskSize];
+            node.Inode.WriteTo(inodeBuffer);
+            WriteAt(output, inodeOffset, inodeBuffer, inodeBuffer.Length);
             if (node.Inode.IsCompressed)
             {
-                WritePclusterIndexes(image, inodeOffset + node.Inode.OnDiskSize, node);
+                WritePclusterIndexes(output, checked(inodeOffset + node.Inode.OnDiskSize), node);
             }
 
             if (node.IsDirectory)
             {
-                var dirOffset = (int)node.DataBlkAddr * blockSize;
+                var dirOffset = checked((long)node.DataBlkAddr * blockSize);
                 foreach (var block in node.DirBlocks)
                 {
-                    block.CopyTo(image, dirOffset);
+                    WriteAt(output, dirOffset, block, blockSize);
                     dirOffset += blockSize;
                 }
             }
         }
 
-        return image;
+        output.Position = finalSize;
+    }
+
+    private static void ZeroImage(Stream output, long length)
+    {
+        output.Position = 0;
+        var zeroes = new byte[1 << 16];
+        while (length > 0)
+        {
+            var count = (int)Math.Min(zeroes.Length, length);
+            output.Write(zeroes, 0, count);
+            length -= count;
+        }
+    }
+
+    private static void WriteAt(Stream output, long offset, byte[] data, int count)
+    {
+        output.Position = offset;
+        output.Write(data, 0, count);
     }
 
     private static void CollectPreOrder(BuildNode node, List<BuildNode> ordered)
@@ -337,18 +500,26 @@ public sealed class ErofsBuilder
         return blocks.ToArray();
     }
 
-    private static void WritePclusterIndexes(byte[] image, int indexOffset, BuildNode node)
+    private static void WritePclusterIndexes(Stream output, long indexOffset, BuildNode node)
     {
+        const int EntriesPerBatch = 1024;
         var pclusters = node.Pclusters!;
-        for (var i = 0; i < pclusters.Count; i++)
+        var batch = new byte[EntriesPerBatch * ErofsCompression.PclusterIndexSize];
+        output.Position = indexOffset;
+        for (var first = 0; first < pclusters.Count; first += EntriesPerBatch)
         {
-            var plan = pclusters[i];
-            new PclusterIndex(plan.BlockAddress, plan.CompressedLength, plan.Flags)
-                .WriteTo(image.AsSpan(indexOffset + i * ErofsCompression.PclusterIndexSize, ErofsCompression.PclusterIndexSize));
+            var count = Math.Min(EntriesPerBatch, pclusters.Count - first);
+            for (var i = 0; i < count; i++)
+            {
+                var plan = pclusters[first + i];
+                var entry = batch.AsSpan(i * ErofsCompression.PclusterIndexSize, ErofsCompression.PclusterIndexSize);
+                new PclusterIndex(plan.BlockAddress, plan.CompressedLength, plan.Flags).WriteTo(entry);
+            }
+            output.Write(batch, 0, count * ErofsCompression.PclusterIndexSize);
         }
     }
 
-    private static void WriteCompressedData(byte[] image, BuildNode node, int blockSize, ErofsOptions options)
+    private static void WriteCompressedData(Stream output, BuildNode node, int blockSize, ErofsOptions options)
     {
         var clusterSize = blockSize;
         var pclusters = node.Pclusters!;
@@ -372,18 +543,18 @@ public sealed class ErofsBuilder
                 read += n;
             }
 
-            var blockOffset = (int)plan.BlockAddress * blockSize;
+            var blockOffset = checked((long)plan.BlockAddress * blockSize);
             var compressedLength = ErofsCompression.Compress(buffer, 0, count, compressed, 0, compressed.Length, options.CompressionLevel);
             if (compressedLength <= 0 || compressedLength >= count)
             {
                 // 数据不可压缩：按原始方式存储。Incompressible data: stored plain.
-                buffer.AsSpan(0, count).CopyTo(image.AsSpan(blockOffset, count));
+                WriteAt(output, blockOffset, buffer, count);
                 plan.CompressedLength = (ushort)count;
                 plan.Flags = ErofsCompression.FlagPlain;
             }
             else
             {
-                compressed.AsSpan(0, compressedLength).CopyTo(image.AsSpan(blockOffset, compressedLength));
+                WriteAt(output, blockOffset, compressed, compressedLength);
                 plan.CompressedLength = (ushort)compressedLength;
                 plan.Flags = 0;
             }
@@ -392,7 +563,7 @@ public sealed class ErofsBuilder
         }
     }
 
-    private static void WriteFlatData(byte[] image, BuildNode node, int blockSize)
+    private static void WriteFlatData(Stream output, BuildNode node, int blockSize)
     {
         if (node.Size == 0)
         {
@@ -400,7 +571,7 @@ public sealed class ErofsBuilder
         }
 
         using var stream = File.OpenRead(node.FullPath);
-        var blockOffset = (long)node.DataBlkAddr * blockSize;
+        var blockOffset = checked((long)node.DataBlkAddr * blockSize);
         var remaining = node.Size;
         var buffer = new byte[1 << 16];
         while (remaining > 0)
@@ -411,7 +582,8 @@ public sealed class ErofsBuilder
                 throw new EndOfStreamException($"Unexpected end of file '{node.FullPath}'.");
             }
 
-            buffer.AsSpan(0, read).CopyTo(image.AsSpan((int)blockOffset, read));
+            output.Position = blockOffset;
+            output.Write(buffer, 0, read);
             blockOffset += read;
             remaining -= read;
         }
@@ -420,6 +592,76 @@ public sealed class ErofsBuilder
     private static long AlignUp(long value, int alignment) => (value + alignment - 1) & ~(long)(alignment - 1);
 
     private static long CeilDiv(long value, int divisor) => (value + divisor - 1) / divisor;
+
+    private sealed class OffsetStream(Stream inner, long baseOffset) : Stream
+    {
+        private long _position;
+
+        public override bool CanRead => false;
+        public override bool CanSeek => inner.CanSeek;
+        public override bool CanWrite => inner.CanWrite;
+        public override long Length => Math.Max(0, inner.Length - baseOffset);
+
+        public override long Position
+        {
+            get => _position;
+            set
+            {
+                ArgumentOutOfRangeException.ThrowIfNegative(value);
+                _position = value;
+                inner.Position = checked(baseOffset + value);
+            }
+        }
+
+        public override void Flush() => inner.Flush();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            var target = origin switch
+            {
+                SeekOrigin.Begin => offset,
+                SeekOrigin.Current => checked(_position + offset),
+                SeekOrigin.End => checked(Length + offset),
+                _ => throw new ArgumentOutOfRangeException(nameof(origin)),
+            };
+            Position = target;
+            return target;
+        }
+
+        public override void SetLength(long value)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(value);
+            var requiredEnd = checked(baseOffset + value);
+            if (requiredEnd > inner.Length)
+            {
+                inner.SetLength(requiredEnd);
+            }
+            if (_position > value)
+            {
+                Position = value;
+            }
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            inner.Position = checked(baseOffset + _position);
+            inner.Write(buffer, offset, count);
+            _position += count;
+        }
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            inner.Position = checked(baseOffset + _position);
+            inner.Write(buffer);
+            _position += buffer.Length;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            // The caller owns the destination stream.
+            base.Dispose(disposing);
+        }
+    }
 
     /// <summary>
     /// 构建树节点（打包中间模型）。

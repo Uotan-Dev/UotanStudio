@@ -1,5 +1,7 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.Cpio.Model;
 using UotanStudio.Firmware.Cpio.Writing;
 
@@ -29,33 +31,65 @@ public sealed class CpioArchiveWriter
         }
 
         var opts = options ?? new WriteOptions();
-        var normalizedEntries = NormalizeEntriesForFormat(entries, format);
-
-        foreach (var entry in normalizedEntries)
+        var writtenHardlinks = new HashSet<(ulong Inode, uint DevMaj, uint DevMin)>();
+        var directStreams = new HashSet<Stream>(ReferenceEqualityComparer.Instance);
+        Exception? primary = null;
+        try
         {
-            switch (format)
+            // Consume exactly once. Direct streams may be shared by later, not-yet-observable
+            // entries, so retain each distinct instance until enumeration has completed.
+            foreach (var yieldedEntry in entries)
             {
-                case ArchiveFormat.NewAscii:
-                case ArchiveFormat.CrcAscii:
-                    WriteNewAsciiLike(stream, entry, format, opts);
+                try
+                {
+                    if (yieldedEntry.DataStream is { } direct) directStreams.Add(direct);
+                    // Normalization may inspect DataLength, so it belongs inside the disposal guard.
+                    var entry = NormalizeHardlinkOnline(yieldedEntry, format, writtenHardlinks);
+                    switch (format)
+                    {
+                        case ArchiveFormat.NewAscii:
+                        case ArchiveFormat.CrcAscii:
+                            WriteNewAsciiLike(stream, entry, format, opts);
+                            break;
+                        case ArchiveFormat.OldAscii:
+                        case ArchiveFormat.HpOldAscii:
+                            WriteOldAsciiLike(stream, entry, format, opts);
+                            break;
+                        case ArchiveFormat.Binary:
+                        case ArchiveFormat.HpBinary:
+                            WriteBinaryLike(stream, entry, format, opts);
+                            break;
+                        case ArchiveFormat.Unknown:
+                        case ArchiveFormat.Tar:
+                        case ArchiveFormat.Ustar:
+                            break;
+                        default:
+                            throw new NotSupportedException($"Unsupported CPIO writer format: {format}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    primary = ex;
                     break;
-                case ArchiveFormat.OldAscii:
-                case ArchiveFormat.HpOldAscii:
-                    WriteOldAsciiLike(stream, entry, format, opts);
-                    break;
-                case ArchiveFormat.Binary:
-                case ArchiveFormat.HpBinary:
-                    WriteBinaryLike(stream, entry, format, opts);
-                    break;
-                case ArchiveFormat.Unknown:
-                    break;
-                case ArchiveFormat.Tar:
-                    break;
-                case ArchiveFormat.Ustar:
-                    break;
-                default:
-                    throw new NotSupportedException($"Unsupported CPIO writer format: {format}");
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            primary ??= ex;
+        }
+        finally
+        {
+            foreach (var direct in directStreams)
+            {
+                try { direct.Dispose(); }
+                catch (Exception ex) { primary = primary is null ? ex : new AggregateException(primary, ex); }
+            }
+        }
+
+        if (primary is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
         }
 
         if (opts.IncludeTrailer)
@@ -97,94 +131,69 @@ public sealed class CpioArchiveWriter
         }
     }
 
-    private static IReadOnlyList<ArchiveEntry> NormalizeEntriesForFormat(IEnumerable<ArchiveEntry> entries, ArchiveFormat format)
+    private static ArchiveEntry NormalizeHardlinkOnline(
+        ArchiveEntry entry,
+        ArchiveFormat format,
+        HashSet<(ulong Inode, uint DevMaj, uint DevMin)> writtenHardlinks)
     {
-        var materialized = entries.ToList();
-        if (format is not (ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii))
+        if (format is not (ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii)
+            || entry.Metadata.FileType != CpioFileType.Regular
+            || entry.Metadata.LinkCount <= 1
+            || entry.Metadata.Inode == 0)
         {
-            return materialized;
+            return entry;
         }
 
-        var result = new List<ArchiveEntry>(materialized.Count);
-        foreach (var entry in materialized)
+        var key = (entry.Metadata.Inode, entry.Metadata.DeviceMajor, entry.Metadata.DeviceMinor);
+        // Empty link placeholders may precede the one data carrier in newc archives.
+        // Do not claim the group until a non-empty carrier has actually been written.
+        if (!writtenHardlinks.Contains(key))
         {
-            result.Add(entry);
+            if (entry.DataLength > 0) writtenHardlinks.Add(key);
+            return entry;
         }
-
-        // Collapse duplicate inode regular files into a single data carrier
-        // so hardlink groups are serialized without duplicated payloads.
-        var groups = new Dictionary<(ulong Inode, uint DevMaj, uint DevMin), List<int>>();
-        for (var i = 0; i < result.Count; i++)
+        return new ArchiveEntry
         {
-            var entry = result[i];
-            if (entry.Metadata.FileType != CpioFileType.Regular || entry.Metadata.LinkCount <= 1 || entry.Metadata.Inode == 0)
-            {
-                continue;
-            }
-
-            var key = (entry.Metadata.Inode, entry.Metadata.DeviceMajor, entry.Metadata.DeviceMinor);
-            if (!groups.TryGetValue(key, out var list))
-            {
-                list = [];
-                groups[key] = list;
-            }
-
-            list.Add(i);
-        }
-
-        foreach (var (_, indexes) in groups)
-        {
-            if (indexes.Count <= 1)
-            {
-                continue;
-            }
-
-            var dataCarrierIndex = indexes[^1];
-            for (var i = indexes.Count - 1; i >= 0; i--)
-            {
-                var idx = indexes[i];
-                if (result[idx].Data.Length > 0)
-                {
-                    dataCarrierIndex = idx;
-                    break;
-                }
-            }
-
-            foreach (var idx in indexes)
-            {
-                if (idx == dataCarrierIndex)
-                {
-                    continue;
-                }
-
-                var original = result[idx];
-                result[idx] = new ArchiveEntry
-                {
-                    Name = original.Name,
-                    LinkName = null,
-                    Data = [],
-                    Metadata = original.Metadata,
-                };
-            }
-        }
-
-        return result;
+            Name = entry.Name,
+            LinkName = null,
+            Data = [],
+            DataStream = null,
+            DataStreamFactory = null,
+            DeclaredDataLength = 0,
+            Metadata = entry.Metadata,
+        };
     }
 
     private static void WriteNewAsciiLike(Stream stream, ArchiveEntry entry, ArchiveFormat format, WriteOptions options)
     {
         var nameBytes = Encoding.UTF8.GetBytes(entry.Name);
-        var payload = ResolvePayload(entry, options);
-        uint checksum = 0;
-        if (format == ArchiveFormat.CrcAscii)
-        {
-            foreach (var b in payload)
-            {
-                checksum += b;
-            }
-        }
+        var payloadLength = ResolvePayloadLength(entry, options);
+        ValidatePayloadLength(entry, payloadLength, uint.MaxValue, format);
 
-        var header = string.Concat(
+        FileStream? spool = null;
+        try
+        {
+            if (format == ArchiveFormat.CrcAscii
+                && !(options.CpioSymlinkAsDataPayload && entry.Metadata.FileType == CpioFileType.SymbolicLink)
+                && (entry.DataStream is { CanSeek: false } || entry.DataStreamFactory is not null))
+            {
+                if (entry.DataStreamFactory is { } factory)
+                {
+                    using var source = factory() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.");
+                    spool = CreatePayloadSpool(source, payloadLength, entry.Name, probeEof: true);
+                }
+                else
+                {
+                    spool = CreatePayloadSpool(entry.DataStream!, payloadLength, entry.Name, probeEof: false);
+                }
+                entry = CloneWithStream(entry, spool, payloadLength);
+            }
+
+            var checksum = format == ArchiveFormat.CrcAscii
+                ? ComputePayloadChecksum(entry, options, payloadLength)
+                : 0U;
+
+            var header = string.Concat(
             format == ArchiveFormat.CrcAscii ? CpioConstants.CrcAsciiMagic : CpioConstants.NewAsciiMagic,
             Hex8(entry.Metadata.Inode),
             Hex8(entry.Metadata.Mode),
@@ -192,7 +201,7 @@ public sealed class CpioArchiveWriter
             Hex8(entry.Metadata.GroupId),
             Hex8(entry.Metadata.LinkCount == 0 ? 1UL : entry.Metadata.LinkCount),
             Hex8((ulong)Math.Max(0, entry.Metadata.ModificationTimeUnixSeconds)),
-            Hex8((ulong)payload.Length),
+            Hex8((ulong)payloadLength),
             Hex8(entry.Metadata.DeviceMajor),
             Hex8(entry.Metadata.DeviceMinor),
             Hex8(entry.Metadata.RDeviceMajor),
@@ -200,31 +209,52 @@ public sealed class CpioArchiveWriter
             Hex8((ulong)nameBytes.Length + 1UL),
             Hex8(checksum));
 
-        var headerBytes = Encoding.ASCII.GetBytes(header);
-        stream.Write(headerBytes);
-        stream.Write(nameBytes);
-        stream.WriteByte(0);
-        WritePadding(stream, CpioConstants.NewAsciiHeaderSize + nameBytes.Length + 1, 4);
+            var headerBytes = Encoding.ASCII.GetBytes(header);
+            stream.Write(headerBytes);
+            stream.Write(nameBytes);
+            stream.WriteByte(0);
+            WritePadding(stream, CpioConstants.NewAsciiHeaderSize + nameBytes.Length + 1, 4);
 
-        stream.Write(payload);
-        WritePadding(stream, payload.Length, 4);
+            WritePayload(stream, entry, options, payloadLength);
+            WritePadding(stream, payloadLength, 4);
+        }
+        finally
+        {
+            if (spool is not null)
+            {
+                var path = spool.Name;
+                try
+                {
+                    spool.Dispose();
+                }
+                finally
+                {
+                    try { File.Delete(path); } catch { /* best-effort cleanup */ }
+                }
+            }
+        }
     }
 
     private static void WriteOldAsciiLike(Stream stream, ArchiveEntry entry, ArchiveFormat format, WriteOptions options)
     {
         var nameBytes = Encoding.UTF8.GetBytes(entry.Name);
-        var payload = ResolvePayload(entry, options);
+        var payloadLength = ResolvePayloadLength(entry, options);
+        ValidatePayloadLength(entry, payloadLength, 0x1FFFFFFFFL, format);
 
         var device = entry.Metadata.DeviceMajor & 0x3FFFFU;
         var rdev = entry.Metadata.RDeviceMajor & 0x3FFFFU;
         var mtime = Math.Max(0, entry.Metadata.ModificationTimeUnixSeconds);
-        var fileSize = (long)payload.Length;
-        if (format == ArchiveFormat.HpOldAscii && (entry.Metadata.FileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice))
+        var hpSpecial = format == ArchiveFormat.HpOldAscii
+            && entry.Metadata.FileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
+        if (hpSpecial && payloadLength != 0)
         {
-            // HP old ASCII stores special device identifiers in the filesize field.
-            fileSize = ((long)(entry.Metadata.RDeviceMajor & 0xFFFFU) << 16) | (entry.Metadata.RDeviceMinor & 0xFFFFU);
-            rdev = 0;
+            throw new InvalidDataException($"HP special-device entry '{entry.Name}' cannot contain payload data.");
         }
+        // HP odc encodes special-device major/minor in filesize while writing no payload.
+        var fileSize = hpSpecial
+            ? ((long)(entry.Metadata.RDeviceMajor & 0xFFFFU) << 16) | (entry.Metadata.RDeviceMinor & 0xFFFFU)
+            : payloadLength;
+        if (hpSpecial) rdev = 0;
 
         var header = string.Concat(
             CpioConstants.OldAsciiMagic,
@@ -245,13 +275,14 @@ public sealed class CpioArchiveWriter
         stream.WriteByte(0);
 
         // odc uses no alignment padding.
-        stream.Write(payload);
+        WritePayload(stream, entry, options, payloadLength);
     }
 
     private static void WriteBinaryLike(Stream stream, ArchiveEntry entry, ArchiveFormat format, WriteOptions options)
     {
         var nameBytes = Encoding.UTF8.GetBytes(entry.Name);
-        var payload = ResolvePayload(entry, options);
+        var payloadLength = ResolvePayloadLength(entry, options);
+        ValidatePayloadLength(entry, payloadLength, uint.MaxValue, format);
 
         Span<byte> header = stackalloc byte[CpioConstants.OldBinaryHeaderSize];
         WriteUInt16BigEndian(header[..2], CpioConstants.BinaryMagic);
@@ -268,12 +299,16 @@ public sealed class CpioArchiveWriter
         WriteUInt16BigEndian(header.Slice(18, 2), (ushort)(mtime & 0xFFFF));
         WriteUInt16BigEndian(header.Slice(20, 2), (ushort)(nameBytes.Length + 1));
 
-        var size = (uint)payload.Length;
-        if (format == ArchiveFormat.HpBinary && (entry.Metadata.FileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice))
+        var hpSpecial = format == ArchiveFormat.HpBinary
+            && entry.Metadata.FileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
+        if (hpSpecial && payloadLength != 0)
         {
-            // HP binary stores the device identifier in the filesize words for special files.
-            size = ((entry.Metadata.RDeviceMajor & 0xFFFFU) << 16) | (entry.Metadata.RDeviceMinor & 0xFFFFU);
+            throw new InvalidDataException($"HP special-device entry '{entry.Name}' cannot contain payload data.");
         }
+        // HP binary encodes special-device major/minor in the two filesize words.
+        var size = hpSpecial
+            ? ((entry.Metadata.RDeviceMajor & 0xFFFFU) << 16) | (entry.Metadata.RDeviceMinor & 0xFFFFU)
+            : (uint)payloadLength;
 
         WriteUInt16BigEndian(header.Slice(22, 2), (ushort)(size >> 16));
         WriteUInt16BigEndian(header.Slice(24, 2), (ushort)(size & 0xFFFF));
@@ -282,18 +317,193 @@ public sealed class CpioArchiveWriter
         stream.Write(nameBytes);
         stream.WriteByte(0);
         WritePadding(stream, CpioConstants.OldBinaryHeaderSize + nameBytes.Length + 1, 2);
-        stream.Write(payload);
-        WritePadding(stream, payload.Length, 2);
+        WritePayload(stream, entry, options, payloadLength);
+        WritePadding(stream, payloadLength, 2);
     }
 
-    private static byte[] ResolvePayload(ArchiveEntry entry, WriteOptions options)
+    /// <summary>
+    /// Resolves the payload length in bytes, preferring the streaming source when present.
+    /// <para>解析负载字节长度；存在流式源时优先取其长度。</para>
+    /// </summary>
+    private static long ResolvePayloadLength(ArchiveEntry entry, WriteOptions options)
     {
-        return options.CpioSymlinkAsDataPayload && entry.Metadata.FileType == CpioFileType.SymbolicLink
-            ? Encoding.UTF8.GetBytes(entry.LinkName ?? string.Empty)
-            : entry.Data;
+        if (options.CpioSymlinkAsDataPayload && entry.Metadata.FileType == CpioFileType.SymbolicLink)
+        {
+            return Encoding.UTF8.GetByteCount(entry.LinkName ?? string.Empty);
+        }
+
+        return entry.DataLength;
     }
 
-    private static void WritePadding(Stream stream, int payloadLength, int align)
+    /// <summary>
+    /// Computes the CRC ASCII payload checksum (sum of all payload bytes) without
+    /// materializing the payload when a seekable streaming source is available.
+    /// <para>在不物化负载的情况下计算 CRC ASCII 负载校验和（所有负载字节之和）；
+    /// 存在可寻址流式源时直接读取计算。</para>
+    /// </summary>
+    private static uint ComputePayloadChecksum(ArchiveEntry entry, WriteOptions options, long payloadLength)
+    {
+        if (options.CpioSymlinkAsDataPayload && entry.Metadata.FileType == CpioFileType.SymbolicLink)
+        {
+            uint total = 0;
+            foreach (var b in Encoding.UTF8.GetBytes(entry.LinkName ?? string.Empty))
+            {
+                total += b;
+            }
+            return total;
+        }
+
+        if (entry.DataStream is { } stream)
+        {
+            if (!stream.CanSeek)
+            {
+                throw new InvalidOperationException($"CRC CPIO entry '{entry.Name}' uses a single non-seekable stream; provide DataStreamFactory so checksum and payload can be read independently.");
+            }
+
+            stream.Position = 0;
+            var total = SumExactly(stream, payloadLength, entry.Name);
+            stream.Position = 0;
+            return total;
+        }
+
+        if (entry.DataStreamFactory is { } factory)
+        {
+            using var source = factory() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.");
+            return SumExactly(source, payloadLength, entry.Name);
+        }
+
+        uint sum = 0;
+        for (long i = 0; i < payloadLength; i++)
+        {
+            sum += entry.Data[checked((int)i)];
+        }
+        return sum;
+    }
+
+    private static uint SumExactly(Stream source, long length, string entryName)
+    {
+        uint total = 0;
+        var buffer = ArrayPool<byte>.Shared.Rent(81920);
+        try
+        {
+            var remaining = length;
+            while (remaining > 0)
+            {
+                var read = source.Read(buffer, 0, (int)Math.Min(remaining, buffer.Length));
+                if (read == 0)
+                {
+                    throw new EndOfStreamException($"Entry '{entryName}' ended before its declared length.");
+                }
+                for (var i = 0; i < read; i++)
+                {
+                    total += buffer[i];
+                }
+                remaining -= read;
+            }
+            return total;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    /// <summary>
+    /// Writes the entry payload, streaming from <see cref="ArchiveEntry.DataStream"/>
+    /// when present and falling back to <see cref="ArchiveEntry.Data"/> otherwise.
+    /// <para>写入条目负载；存在 DataStream 时流式拷贝，否则回退到 Data。</para>
+    /// </summary>
+    private static void WritePayload(Stream stream, ArchiveEntry entry, WriteOptions options, long payloadLength)
+    {
+        if (options.CpioSymlinkAsDataPayload && entry.Metadata.FileType == CpioFileType.SymbolicLink)
+        {
+            var bytes = Encoding.UTF8.GetBytes(entry.LinkName ?? string.Empty);
+            stream.Write(bytes);
+            return;
+        }
+
+        if (entry.DataStream is { } dataStream)
+        {
+            if (dataStream.CanSeek)
+            {
+                dataStream.Position = 0;
+            }
+            StreamCopy.CopyExactly(dataStream, stream, payloadLength);
+            return;
+        }
+
+        if (entry.DataStreamFactory is { } factory)
+        {
+            using var source = factory() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.");
+            StreamCopy.CopyExactly(source, stream, payloadLength);
+            if (source.ReadByte() != -1)
+            {
+                throw new InvalidDataException($"Entry '{entry.Name}' source contains data beyond its declared length {payloadLength}.");
+            }
+            return;
+        }
+
+        stream.Write(entry.Data, 0, checked((int)payloadLength));
+    }
+
+    private static void ValidatePayloadLength(ArchiveEntry entry, long payloadLength, long maximum, ArchiveFormat format)
+    {
+        if (entry.DataStream is null && entry.DataStreamFactory is null
+            && entry.DeclaredDataLength.HasValue && payloadLength != entry.Data.LongLength)
+        {
+            throw new InvalidDataException($"Entry '{entry.Name}' declared length {payloadLength} does not match its data length {entry.Data.LongLength}.");
+        }
+        if (payloadLength < 0)
+        {
+            throw new InvalidDataException($"Entry '{entry.Name}' has a negative payload length.");
+        }
+        if (payloadLength > maximum)
+        {
+            throw new InvalidDataException($"Entry '{entry.Name}' payload length {payloadLength} cannot be represented by {format}.");
+        }
+    }
+
+    private static FileStream CreatePayloadSpool(Stream source, long length, string entryName, bool probeEof)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"uotan-cpio-{Guid.NewGuid():N}.tmp");
+        try
+        {
+            var spool = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 81920, FileOptions.SequentialScan | FileOptions.DeleteOnClose);
+            try
+            {
+                StreamCopy.CopyExactly(source, spool, length);
+                if (probeEof && source.ReadByte() != -1)
+                {
+                    throw new InvalidDataException($"Entry '{entryName}' source contains data beyond its declared length {length}.");
+                }
+                spool.Position = 0;
+                return spool;
+            }
+            catch
+            {
+                spool.Dispose();
+                throw;
+            }
+        }
+        catch (Exception ex)
+        {
+            try { File.Delete(path); } catch { /* best-effort cleanup */ }
+            throw new InvalidDataException($"Unable to spool CRC payload for entry '{entryName}'.", ex);
+        }
+    }
+
+    private static ArchiveEntry CloneWithStream(ArchiveEntry entry, Stream stream, long length) => new()
+    {
+        Name = entry.Name,
+        LinkName = entry.LinkName,
+        Data = entry.Data,
+        DataStream = stream,
+        DataStreamFactory = null,
+        DeclaredDataLength = length,
+        Metadata = entry.Metadata,
+    };
+
+    private static void WritePadding(Stream stream, long payloadLength, int align)
     {
         if (align <= 1)
         {

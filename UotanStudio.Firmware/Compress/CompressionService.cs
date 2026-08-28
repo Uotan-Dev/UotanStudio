@@ -1,3 +1,4 @@
+using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.Compress.Compressors;
 using UotanStudio.Firmware.Compress.Internal.Xz;
 
@@ -153,18 +154,27 @@ public static class CompressionService
     /// <exception cref="ArgumentException">格式不受支持时抛出。<para>Thrown when the format is unsupported.</para></exception>
     /// <exception cref="CompressionException">解压失败时抛出。<para>Thrown when decompression fails.</para></exception>
     public static void Decompress(Stream input, Stream output, CompressionFormat format)
+        => Decompress(input, output, format, long.MaxValue, CancellationToken.None);
+
+    /// <summary>
+    /// 使用统一输出上限和取消支持进行流式解压。
+    /// <para>Decompresses a stream with a unified output limit and cancellation support.</para>
+    /// </summary>
+    /// <param name="input">待解压输入流。<para>The compressed input stream.</para></param>
+    /// <param name="output">结果输出流。<para>The output stream receiving decompressed data.</para></param>
+    /// <param name="format">压缩格式。<para>The compression format.</para></param>
+    /// <param name="maximumOutputBytes">允许输出的最大字节数。<para>The maximum number of output bytes allowed.</para></param>
+    /// <param name="cancellationToken">取消令牌。<para>The cancellation token.</para></param>
+    public static void Decompress(Stream input, Stream output, CompressionFormat format, long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
-        if (input == null)
-        {
-            throw new ArgumentNullException(nameof(input));
-        }
-
-        if (output == null)
-        {
-            throw new ArgumentNullException(nameof(output));
-        }
-
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumOutputBytes);
+        cancellationToken.ThrowIfCancellationRequested();
         ValidateForDecompression(format);
+
+        using var limitedOutput = new CountingWriteStream(output, maximumOutputBytes, leaveOpen: true, cancellationToken: cancellationToken);
+        output = limitedOutput;
 
         if (format == CompressionFormat.None)
         {
@@ -217,10 +227,19 @@ public static class CompressionService
             return;
         }
 
-        using var buffer = new MemoryStream();
-        input.CopyTo(buffer);
-        var result = DecompressCore(buffer.ToArray(), format);
-        output.Write(result, 0, result.Length);
+        if (format == CompressionFormat.Zopfli)
+        {
+            GzipCompressor.Decompress(input, output);
+            return;
+        }
+
+        if (format == CompressionFormat.Lzop)
+        {
+            LzopCompressor.Decompress(input, output, maximumOutputBytes);
+            return;
+        }
+
+        throw new CompressionException($"Streaming decompression is not supported for format: {format}");
     }
 
     // File API / 文件 API
@@ -262,20 +281,29 @@ public static class CompressionService
     /// <exception cref="ArgumentNullException">路径为 null 或空时抛出。<para>Thrown when a path is null or empty.</para></exception>
     /// <exception cref="CompressionException">解压失败时抛出。<para>Thrown when decompression fails.</para></exception>
     public static void DecompressFile(string inputPath, string outputPath, CompressionFormat format)
+        => DecompressFile(inputPath, outputPath, format, long.MaxValue, CancellationToken.None);
+
+    /// <summary>
+    /// 按指定格式有界解压文件；成功后原子替换目标，失败时清理临时文件。
+    /// <para>Decompresses a file with a limit, atomically replacing the destination on success and cleaning the temporary file on failure.</para>
+    /// </summary>
+    /// <param name="inputPath">输入文件路径。<para>Path to the input file.</para></param>
+    /// <param name="outputPath">输出文件路径。<para>Path to the output file.</para></param>
+    /// <param name="format">压缩格式。<para>The compression format.</para></param>
+    /// <param name="maximumOutputBytes">最大输出字节数。<para>The maximum output byte count.</para></param>
+    /// <param name="cancellationToken">取消令牌。<para>The cancellation token.</para></param>
+    public static void DecompressFile(string inputPath, string outputPath, CompressionFormat format, long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrEmpty(inputPath))
-        {
-            throw new ArgumentNullException(nameof(inputPath));
-        }
+        if (string.IsNullOrEmpty(inputPath)) throw new ArgumentNullException(nameof(inputPath));
+        if (string.IsNullOrEmpty(outputPath)) throw new ArgumentNullException(nameof(outputPath));
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumOutputBytes);
 
-        if (string.IsNullOrEmpty(outputPath))
+        WriteFileAtomically(outputPath, tempPath =>
         {
-            throw new ArgumentNullException(nameof(outputPath));
-        }
-
-        using var input = File.OpenRead(inputPath);
-        using var output = File.Create(outputPath);
-        Decompress(input, output, format);
+            using var input = File.OpenRead(inputPath);
+            using var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            Decompress(input, output, format, maximumOutputBytes, cancellationToken);
+        });
     }
 
     /// <summary>
@@ -287,6 +315,10 @@ public static class CompressionService
     /// <exception cref="ArgumentNullException">路径为 null 或空时抛出。<para>Thrown when a path is null or empty.</para></exception>
     /// <exception cref="CompressionException">解压失败时抛出。<para>Thrown when decompression fails.</para></exception>
     public static void DecompressFileAuto(string inputPath, string outputPath)
+        => DecompressFileAuto(inputPath, outputPath, long.MaxValue, CancellationToken.None);
+
+    /// <summary>Automatically detects and decompresses a file with an output limit.</summary>
+    public static void DecompressFileAuto(string inputPath, string outputPath, long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(inputPath))
         {
@@ -298,16 +330,21 @@ public static class CompressionService
             throw new ArgumentNullException(nameof(outputPath));
         }
 
-        using var input = File.OpenRead(inputPath);
-        var format = CompressionFormats.Detect(input);
-        if (format == CompressionFormat.None)
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumOutputBytes);
+        cancellationToken.ThrowIfCancellationRequested();
+        WriteFileAtomically(outputPath, tempPath =>
         {
-            // 无魔数的格式(Brotli 等)回退到扩展名推断。
-            // Formats without magic bytes (Brotli etc.) fall back to extension inference.
-            format = CompressionFormats.FromExtension(inputPath);
-        }
-        using var output = File.Create(outputPath);
-        Decompress(input, output, format);
+            using var input = File.OpenRead(inputPath);
+            var format = CompressionFormats.Detect(input);
+            if (format == CompressionFormat.None)
+            {
+                // 无魔数的格式(Brotli 等)回退到扩展名推断。
+                // Formats without magic bytes (Brotli etc.) fall back to extension inference.
+                format = CompressionFormats.FromExtension(inputPath);
+            }
+            using var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            Decompress(input, output, format, maximumOutputBytes, cancellationToken);
+        });
     }
 
     // Detection / 格式检测
@@ -349,6 +386,23 @@ public static class CompressionService
     }
 
     // Internals / 内部实现
+
+    private static void WriteFileAtomically(string outputPath, Action<string> write)
+    {
+        var fullPath = Path.GetFullPath(outputPath);
+        var directory = Path.GetDirectoryName(fullPath)!;
+        Directory.CreateDirectory(directory);
+        var tempPath = Path.Combine(directory, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            write(tempPath);
+            File.Move(tempPath, fullPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath)) File.Delete(tempPath);
+        }
+    }
 
     private static void ValidateForCompression(CompressionFormat format)
     {

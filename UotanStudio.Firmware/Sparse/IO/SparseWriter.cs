@@ -34,8 +34,15 @@ public static class SparseWriter
                 })
                 { StartBlock = currentBlock });
             }
-            finalChunks.Add(chunk);
-            currentBlock = chunk.StartBlock + chunk.Header.ChunkSize;
+            if ((ChunkType)chunk.Header.ChunkType == ChunkType.Raw)
+            {
+                AddSplitRawChunks(finalChunks, chunk, sparseFile.Header.BlockSize, sparseFile.Header.ChunkHeaderSize);
+            }
+            else
+            {
+                finalChunks.Add(chunk);
+            }
+            currentBlock = checked(chunk.StartBlock + chunk.Header.ChunkSize);
         }
 
         var outHeader = sparseFile.Header;
@@ -166,6 +173,36 @@ public static class SparseWriter
             var crcBuf = new byte[4];
             BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, crc.GetCurrentHashAsUInt32());
             stream.Write(crcBuf);
+        }
+    }
+
+    private static void AddSplitRawChunks(List<SparseChunk> output, SparseChunk chunk, uint blockSize, ushort headerSize)
+    {
+        if (blockSize == 0) throw new InvalidDataException("Sparse block size must be non-zero.");
+        var maxBlocks = (uint)((uint.MaxValue - (ulong)headerSize) / blockSize);
+        if (maxBlocks == 0) throw new InvalidDataException("Sparse block size is too large for a RAW chunk.");
+
+        var remaining = (long)chunk.Header.ChunkSize;
+        long blockOffset = 0;
+        while (remaining > 0)
+        {
+            var blocks = (uint)Math.Min(remaining, maxBlocks);
+            var byteOffset = checked(blockOffset * blockSize);
+            var byteLength = checked((long)blocks * blockSize);
+            var provider = chunk.DataProvider?.GetSubProvider(byteOffset, Math.Min(byteLength, Math.Max(0, chunk.DataProvider.Length - byteOffset)));
+            output.Add(new SparseChunk(new ChunkHeader
+            {
+                ChunkType = (ushort)ChunkType.Raw,
+                Reserved = chunk.Header.Reserved,
+                ChunkSize = blocks,
+                TotalSize = checked((uint)(headerSize + (ulong)byteLength)),
+            })
+            {
+                StartBlock = checked(chunk.StartBlock + (uint)blockOffset),
+                DataProvider = provider,
+            });
+            remaining -= blocks;
+            blockOffset = checked(blockOffset + blocks);
         }
     }
 

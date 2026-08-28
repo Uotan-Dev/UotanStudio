@@ -60,19 +60,26 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
             throw new DirectoryNotFoundException($"Input directory not found: {inputDir}");
         }
 
-        var files = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories);
+        var outputFullPath = Path.GetFullPath(outputFile);
+        var pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var files = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories)
+            .Where(path => !Path.GetFullPath(path).Equals(outputFullPath, pathComparison));
         var entries = new List<FileEntry>();
-        var fileData = new Dictionary<string, byte[]>();
+        var sourcePaths = new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var filePath in files.OrderBy(f => f, StringComparer.Ordinal))
         {
             var relativePath = GetRelativePath(inputDir, filePath).Replace('\\', '/');
-            var data = File.ReadAllBytes(filePath);
             entries.Add(new FileEntry { Name = relativePath });
-            fileData[relativePath] = data;
+            sourcePaths[relativePath] = filePath;
         }
 
-        PackFromEntries(entries, fileData, outputFile, major, minor, patch, progress, customRegionPayloads);
+        Stream OpenSource(FileEntry entry) => new FileStream(
+            sourcePaths[entry.Name], FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.SequentialScan);
+
+        PackCore(entries, OpenSource, outputFile, major, minor, patch, progress, customRegionPayloads);
     }
 
     /// <summary>
@@ -94,6 +101,42 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
         ArgumentNullException.ThrowIfNull(fileData);
         ArgumentNullException.ThrowIfNull(outputFile);
 
+        var validEntries = new List<FileEntry>();
+        foreach (var entry in entries)
+        {
+            if (fileData.TryGetValue(entry.Name, out var data))
+            {
+                validEntries.Add(new FileEntry
+                {
+                    Name = entry.Name,
+                    OriginalLength = data.Length,
+                    Length = entry.Length,
+                    FileSha256Hash = entry.FileSha256Hash,
+                    KeyIndex = entry.KeyIndex,
+                    Offset = entry.Offset
+                });
+            }
+        }
+
+        Stream OpenSource(FileEntry entry) => new MemoryStream(fileData[entry.Name], writable: false);
+
+        PackCore(validEntries, OpenSource, outputFile, major, minor, patch, progress, customRegionPayloads);
+    }
+
+    /// <summary>
+    /// <para>两遍扫描的核心打包流程:第一遍统计/哈希/布局,第二遍逐文件编码写入。</para>
+    /// Core two-pass packing: first pass computes stats/hash/layout, second pass encodes and writes files one by one.
+    /// </summary>
+    private void PackCore(
+        IReadOnlyList<FileEntry> entryList,
+        Func<FileEntry, Stream> openSource,
+        string outputFile,
+        ulong major,
+        ulong minor,
+        ulong patch,
+        IProgress<NtpiPackProgress>? progress,
+        Dictionary<RegionType, byte[]>? customRegionPayloads)
+    {
         var versionKeys = NtpiVersionRegistry.GetKeysForVersion(major, minor, patch)
             ?? throw new UnsupportedVersionException(major, minor, patch);
 
@@ -105,32 +148,54 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
             }
         }
 
-        var entryList = entries.ToList();
+        var fileCount = entryList.Count;
 
-        var keyMapEntries = Math.Max(DefaultKeyMapEntries, entryList.Count);
+        var keyMapEntries = Math.Max(DefaultKeyMapEntries, fileCount);
         var keyMap = NtpiPaddingHelper.GenerateRandomBytes(keyMapEntries * KeyMapEntrySize);
         var keyMapProvider = new KeyMapKeyProvider(keyMap);
         var zeroIv = KeyMapKeyProvider.GetZeroIv();
 
-        var fileCount = entryList.Count;
-        var keyIndices = new int[fileCount];
-        var validCount = 0;
+        // ---- First pass: stats / hash / layout. ----
+        var plans = new FilePlan[fileCount];
+        var offset = 0L;
         for (var i = 0; i < fileCount; i++)
         {
-            if (fileData.ContainsKey(entryList[i].Name))
+            var entry = entryList[i];
+            using var source = openSource(entry);
+            var plan = _fileProcessor.MeasureFile(entry, source, source.Length, i);
+            plan.Offset = offset;
+            if (plan.OriginalLength != 0)
             {
-                keyIndices[i] = validCount;
-                validCount++;
+                offset = checked(offset + NtEncodeHeaderSize + plan.EncryptedLength);
             }
-            else
+            plans[i] = plan;
+
+            progress?.Report(new NtpiPackProgress
             {
-                keyIndices[i] = -1;
-            }
+                TotalFiles = fileCount,
+                CompletedFiles = i + 1,
+                CurrentFileName = entry.Name,
+                Phase = NtpiPackPhase.ProcessingFiles
+            });
         }
 
-        var processedResults = _fileProcessor.ProcessFiles(entryList, fileData, keyMapProvider, zeroIv, keyIndices, 1, progress);
+        var region6Length = offset;
 
-        var buildResult = _regionBuilder.BuildRegions(processedResults, fileCount, keyMap, versionKeys, major, minor, patch, customRegionPayloads);
+        var fileEntries = new List<FileEntry>(fileCount);
+        foreach (var plan in plans)
+        {
+            fileEntries.Add(new FileEntry
+            {
+                Name = plan.Entry.Name,
+                OriginalLength = plan.OriginalLength,
+                Length = plan.OriginalLength == 0 ? 0 : NtEncodeHeaderSize + plan.EncryptedLength,
+                FileSha256Hash = plan.Sha256Hash,
+                KeyIndex = plan.KeyIndex,
+                Offset = plan.Offset
+            });
+        }
+
+        var buildResult = _regionBuilder.BuildRegions(fileEntries, region6Length, keyMap, versionKeys, major, minor, patch, customRegionPayloads);
 
         var outputDir = Path.GetDirectoryName(outputFile);
         if (!string.IsNullOrEmpty(outputDir) && !Directory.Exists(outputDir))
@@ -138,61 +203,84 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
             Directory.CreateDirectory(outputDir);
         }
 
+        var finalOutputPath = Path.GetFullPath(outputFile);
+        var tempOutputPath = Path.Combine(
+            Path.GetDirectoryName(finalOutputPath) ?? Directory.GetCurrentDirectory(),
+            $".{Path.GetFileName(finalOutputPath)}.{Guid.NewGuid():N}.tmp");
         try
         {
-            using var outputStream = new FileStream(outputFile, FileMode.Create, FileAccess.Write, FileShare.None, DefaultBufferSize, FileOptions.SequentialScan);
-
-            progress?.Report(new NtpiPackProgress
+            using (var outputStream = new FileStream(tempOutputPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, DefaultBufferSize, FileOptions.SequentialScan))
             {
-                TotalFiles = fileCount,
-                CompletedFiles = fileCount,
-                CurrentFileName = string.Empty,
-                Phase = NtpiPackPhase.WritingRegions
-            });
 
-            var ntpiHeaderBytes = new byte[NtpiHeaderSize];
-            StructHelper.WriteNtpiHeader(buildResult.Header, ntpiHeaderBytes);
-            outputStream.Write(ntpiHeaderBytes, 0, NtpiHeaderSize);
+                progress?.Report(new NtpiPackProgress
+                {
+                    TotalFiles = fileCount,
+                    CompletedFiles = fileCount,
+                    CurrentFileName = string.Empty,
+                    Phase = NtpiPackPhase.WritingRegions
+                });
 
-            foreach (var encryptedRegion in buildResult.EncryptedRegions)
-            {
-                outputStream.Write(encryptedRegion, 0, encryptedRegion.Length);
+                var ntpiHeaderBytes = new byte[NtpiHeaderSize];
+                StructHelper.WriteNtpiHeader(buildResult.Header, ntpiHeaderBytes);
+                outputStream.Write(ntpiHeaderBytes, 0, NtpiHeaderSize);
+
+                foreach (var encryptedRegion in buildResult.EncryptedRegions)
+                {
+                    outputStream.Write(encryptedRegion, 0, encryptedRegion.Length);
+                }
+
+                // ---- Second pass: encode and write each file into Region6. ----
+                progress?.Report(new NtpiPackProgress
+                {
+                    TotalFiles = fileCount,
+                    CompletedFiles = 0,
+                    CurrentFileName = string.Empty,
+                    Phase = NtpiPackPhase.WritingRegion6
+                });
+
+                for (var i = 0; i < fileCount; i++)
+                {
+                    var plan = plans[i];
+                    using var source = openSource(plan.Entry);
+                    _fileProcessor.EncodeFile(plan, source, outputStream, keyMapProvider, zeroIv);
+
+                    progress?.Report(new NtpiPackProgress
+                    {
+                        TotalFiles = fileCount,
+                        CompletedFiles = i + 1,
+                        CurrentFileName = plan.Entry.Name,
+                        Phase = NtpiPackPhase.WritingRegion6
+                    });
+                }
+
+                outputStream.Flush(flushToDisk: true);
             }
 
-            progress?.Report(new NtpiPackProgress
-            {
-                TotalFiles = fileCount,
-                CompletedFiles = fileCount,
-                CurrentFileName = string.Empty,
-                Phase = NtpiPackPhase.WritingRegion6
-            });
-
-            outputStream.Write(buildResult.Region6Data, 0, buildResult.Region6Length);
-
-            progress?.Report(new NtpiPackProgress
-            {
-                TotalFiles = fileCount,
-                CompletedFiles = fileCount,
-                CurrentFileName = string.Empty,
-                Phase = NtpiPackPhase.Completed
-            });
+            File.Move(tempOutputPath, finalOutputPath, overwrite: true);
         }
         catch
         {
             try
             {
-                if (File.Exists(outputFile))
-                {
-                    File.Delete(outputFile);
-                }
+                File.Delete(tempOutputPath);
             }
             catch
             {
-                // Preserve the original exception.
+                // Preserve the original exception and the previous package.
             }
             throw;
         }
+
+        progress?.Report(new NtpiPackProgress
+        {
+            TotalFiles = fileCount,
+            CompletedFiles = fileCount,
+            CurrentFileName = string.Empty,
+            Phase = NtpiPackPhase.Completed
+        });
     }
+
+    private const int NtEncodeHeaderSize = 112;
 
     private static string GetRelativePath(string baseDir, string filePath) => Path.GetRelativePath(baseDir, filePath);
 

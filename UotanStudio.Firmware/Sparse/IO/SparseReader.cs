@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Hashing;
 
@@ -22,8 +23,9 @@ public static class SparseReader
     }
 
     /// <summary>
-    /// Loads a <see cref="SparseFile"/> from a stream.
-    /// <para>从流加载 SparseFile。</para>
+    /// Loads a <see cref="SparseFile"/> lazily from a stream. The caller retains ownership
+    /// and must keep the stream open until the returned SparseFile is disposed.
+    /// <para>从流惰性加载 SparseFile；调用方保留所有权，并须保持流打开直到 SparseFile 被释放。</para>
     /// </summary>
     public static SparseFile FromStream(Stream stream, bool validateCrc = false, bool verbose = false)
     {
@@ -40,11 +42,7 @@ public static class SparseReader
 
         if (sparseFile.Header.FileHeaderSize > SparseFormat.SparseHeaderSize)
         {
-            if (!stream.CanSeek)
-            {
-                throw new InvalidDataException("Stream must be seekable when sparse file header is extended.");
-            }
-            stream.Seek(sparseFile.Header.FileHeaderSize - SparseFormat.SparseHeaderSize, SeekOrigin.Current);
+            SkipExtendedHeader(stream, sparseFile.Header.FileHeaderSize - SparseFormat.SparseHeaderSize);
         }
 
         Crc32? crc = validateCrc ? new Crc32() : null;
@@ -61,11 +59,7 @@ public static class SparseReader
 
                 if (sparseFile.Header.ChunkHeaderSize > SparseFormat.ChunkHeaderSize)
                 {
-                    if (!stream.CanSeek)
-                    {
-                        throw new InvalidDataException("Stream must be seekable when chunk headers are extended.");
-                    }
-                    stream.Seek(sparseFile.Header.ChunkHeaderSize - SparseFormat.ChunkHeaderSize, SeekOrigin.Current);
+                    SkipExtendedHeader(stream, sparseFile.Header.ChunkHeaderSize - SparseFormat.ChunkHeaderSize);
                 }
 
                 var chunk = new SparseChunk(chunkHeader) { StartBlock = currentBlock };
@@ -85,14 +79,43 @@ public static class SparseReader
                         {
                             throw new InvalidDataException($"Total size ({chunkHeader.TotalSize}) for RAW chunk {i} does not match expected data size ({expectedRawSize})");
                         }
-                        if (dataSize > int.MaxValue)
+                        // RAW 块不再整块物化：仅记录源流中的 [offset, length) 范围，
+                        // 由 StreamDataProvider 在需要时直接流式读取。CRC 校验用池化缓冲增量计算。
+                        // RAW chunks are no longer materialized in memory: we record the source range
+                        // and let StreamDataProvider stream it on demand. CRC is computed incrementally
+                        // through a pooled buffer.
+                        if (stream.CanSeek)
                         {
-                            throw new NotSupportedException($"Raw data for chunk {i} is too large ({dataSize} bytes)");
+                            var rawOffset = stream.Position;
+                            if (crc is not null)
+                            {
+                                AppendStream(crc, stream, dataSize);
+                            }
+                            else
+                            {
+                                SeekPastRangeExactly(stream, dataSize);
+                            }
+                            chunk.DataProvider = new StreamDataProvider(stream, rawOffset, dataSize, leaveOpen: true);
                         }
-                        var rawData = new byte[dataSize];
-                        stream.ReadExactly(rawData);
-                        crc?.Append(rawData);
-                        chunk.DataProvider = new MemoryDataProvider(rawData);
+                        else
+                        {
+                            // A forward-only source cannot back a lazy range. Spool exactly this bounded
+                            // RAW payload and let the provider own/delete the temporary file.
+                            var tempPath = Path.Combine(Path.GetTempPath(), $"uotan-sparse-{Guid.NewGuid():N}.tmp");
+                            try
+                            {
+                                using (var temp = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                                {
+                                    CopyRawExactly(stream, temp, crc, dataSize);
+                                }
+                                chunk.DataProvider = new TemporaryFileDataProvider(tempPath, dataSize);
+                            }
+                            catch
+                            {
+                                File.Delete(tempPath);
+                                throw;
+                            }
+                        }
                         break;
 
                     case ChunkType.Fill:
@@ -143,7 +166,13 @@ public static class SparseReader
         }
         catch (Exception ex) when (ex is not InvalidDataException and not NotSupportedException)
         {
+            sparseFile.Dispose();
             throw new InvalidDataException("Failed to parse sparse image", ex);
+        }
+        catch
+        {
+            sparseFile.Dispose();
+            throw;
         }
 
         return sparseFile;
@@ -155,8 +184,21 @@ public static class SparseReader
     /// </summary>
     public static SparseFile FromBuffer(byte[] buffer, bool validateCrc = false, bool verbose = false)
     {
-        using var ms = new MemoryStream(buffer, writable: false);
-        return FromStream(ms, validateCrc, verbose);
+        // 源流所有权随 SparseFile 转移：Dispose SparseFile 时一并关闭。
+        // The source stream's ownership transfers to the SparseFile: disposing the
+        // SparseFile closes it too.
+        var ms = new MemoryStream(buffer, writable: false);
+        try
+        {
+            var sparse = FromStream(ms, validateCrc, verbose);
+            sparse.Own(ms);
+            return sparse;
+        }
+        catch
+        {
+            ms.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -165,8 +207,21 @@ public static class SparseReader
     /// </summary>
     public static SparseFile FromImageFile(string filePath, bool validateCrc = false, bool verbose = false)
     {
-        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
-        return FromStream(stream, validateCrc, verbose);
+        // RAW 块改为流式引用源文件范围，因此流必须保持打开并由 SparseFile 生命周期管理。
+        // RAW chunks now reference the source file range lazily, so the stream must stay open
+        // and is managed by the SparseFile lifecycle (closed on Dispose).
+        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
+        try
+        {
+            var sparse = FromStream(stream, validateCrc, verbose);
+            sparse.Own(stream);
+            return sparse;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -175,15 +230,30 @@ public static class SparseReader
     /// </summary>
     public static SparseFile ImportAuto(string filePath, bool validateCrc = false, bool verbose = false)
     {
-        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        return ImportAuto(stream, validateCrc, verbose);
+        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        try
+        {
+            var sparse = ImportAuto(stream, validateCrc, verbose, leaveOpen: true);
+            sparse.Own(stream);
+            return sparse;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
     /// Automatically imports image data from a stream, detecting whether it is sparse or raw.
-    /// <para>自动从流导入镜像数据,检测其为稀疏格式还是原始格式。</para>
+    /// The caller retains ownership and must keep the stream open while the returned SparseFile is used.
+    /// <para>自动从流导入镜像数据，检测其为稀疏格式还是原始格式。调用方保留所有权，
+    /// 并须在使用返回的 SparseFile 期间保持流打开。</para>
     /// </summary>
-    public static SparseFile ImportAuto(Stream stream, bool validateCrc = false, bool verbose = false)
+    public static SparseFile ImportAuto(Stream stream, bool validateCrc = false, bool verbose = false) =>
+        ImportAuto(stream, validateCrc, verbose, leaveOpen: true);
+
+    private static SparseFile ImportAuto(Stream stream, bool validateCrc, bool verbose, bool leaveOpen)
     {
         Span<byte> headerData = stackalloc byte[SparseFormat.SparseHeaderSize];
         var pos = stream.Position;
@@ -195,12 +265,14 @@ public static class SparseReader
             return FromStream(stream, validateCrc, verbose);
         }
 
-        // Raw image: wrap the whole stream as a single raw chunk.
+        // Raw image: wrap the whole stream as a single lazy raw chunk. The caller-facing
+        // stream overload retains caller ownership; path overloads separately register ownership.
+        // 原始镜像包装为单个惰性 RAW 块；Stream 重载保留调用方所有权，路径重载另行注册所有权。
         var length = stream.Length - stream.Position;
         var blockSize = 4096u;
         var totalBlocks = (uint)((length + blockSize - 1) / blockSize);
         var sparseFile = new SparseFile(blockSize, length);
-        sparseFile.AddRawChunk(new StreamDataProvider(stream, stream.Position, length), totalBlocks);
+        sparseFile.AddRawChunk(new StreamDataProvider(stream, stream.Position, length, leaveOpen), totalBlocks);
         return sparseFile;
     }
 
@@ -263,6 +335,106 @@ public static class SparseReader
             var n = (int)Math.Min(buf.Length, remaining);
             crc.Append(buf[..n]);
             remaining -= n;
+        }
+    }
+
+    /// <summary>
+    /// Incrementally appends <paramref name="count"/> bytes read from <paramref name="stream"/>
+    /// to the CRC using a pooled buffer.
+    /// <para>使用池化缓冲从流中读取指定字节数并增量追加到 CRC。</para>
+    /// </summary>
+    private static void CopyRawExactly(Stream source, Stream destination, Crc32? crc, long count)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
+        try
+        {
+            var remaining = count;
+            while (remaining > 0)
+            {
+                var read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                if (read == 0)
+                {
+                    throw new EndOfStreamException("Unexpected end of stream in a RAW chunk.");
+                }
+                destination.Write(buffer, 0, read);
+                crc?.Append(buffer.AsSpan(0, read));
+                remaining -= read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static void AppendStream(Crc32 crc, Stream stream, long count)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
+        try
+        {
+            var remaining = count;
+            while (remaining > 0)
+            {
+                var toRead = (int)Math.Min(buffer.Length, remaining);
+                var read = stream.Read(buffer, 0, toRead);
+                if (read == 0)
+                {
+                    throw new EndOfStreamException("Unexpected end of stream while computing CRC over a RAW chunk.");
+                }
+                crc.Append(buffer.AsSpan(0, read));
+                remaining -= read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static void SeekPastRangeExactly(Stream stream, long count)
+    {
+        if (count < 0 || stream.Position > stream.Length - count)
+        {
+            throw new EndOfStreamException("Unexpected end of stream while skipping a RAW chunk.");
+        }
+
+        stream.Seek(count, SeekOrigin.Current);
+    }
+
+    /// <summary>
+    /// Discards <paramref name="count"/> bytes from a non-seekable stream using a pooled buffer.
+    /// <para>使用池化缓冲从不可寻址流中丢弃指定字节数。</para>
+    /// </summary>
+    private static void SkipExtendedHeader(Stream stream, long count)
+    {
+        if (stream.CanSeek)
+        {
+            SeekPastRangeExactly(stream, count);
+            return;
+        }
+        SkipStream(stream, count);
+    }
+
+    private static void SkipStream(Stream stream, long count)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(1024 * 1024);
+        try
+        {
+            var remaining = count;
+            while (remaining > 0)
+            {
+                var toRead = (int)Math.Min(buffer.Length, remaining);
+                var read = stream.Read(buffer, 0, toRead);
+                if (read == 0)
+                {
+                    throw new EndOfStreamException("Unexpected end of stream while skipping a RAW chunk.");
+                }
+                remaining -= read;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 }

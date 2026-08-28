@@ -31,16 +31,35 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
     /// <param name="stream">Source archive stream.<para>源归档流。</para></param>
     /// <param name="formatHint">Optional format hint used to skip format auto-detection.<para>可选的格式提示，用于跳过格式自动识别。</para></param>
     /// <returns>A list containing all archive entries.<para>包含全部归档条目的列表。</para></returns>
-    public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream, ArchiveFormat? formatHint = null) => [.. ReadEntries(stream, formatHint)];
+    public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream, ArchiveFormat? formatHint = null)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        var entries = new List<ArchiveEntry>();
+        foreach (var entry in ReadEntries(stream, formatHint))
+        {
+            entries.Add(Materialize(entry));
+        }
+        return entries;
+    }
 
     /// <summary>
-    /// Reads entries from an archive stream as a lazy sequence.
-    /// <para>以惰性序列从归档流中读取条目。</para>
+    /// Reads entries lazily while giving every returned entry independent, materialized data.
+    /// <para>惰性读取条目，同时为每个返回条目提供独立物化的数据。</para>
     /// </summary>
-    /// <param name="stream">Source archive stream.<para>源归档流。</para></param>
-    /// <param name="formatHint">Optional format hint used to skip format auto-detection.<para>可选的格式提示，用于跳过格式自动识别。</para></param>
-    /// <returns>An enumerable that yields archive entries as they are read.<para>读取时逐个产出归档条目的可枚举序列。</para></returns>
     public IEnumerable<ArchiveEntry> ReadEntries(Stream stream, ArchiveFormat? formatHint = null)
+    {
+        foreach (var entry in ReadEntriesStreaming(stream, formatHint))
+        {
+            yield return Materialize(entry);
+        }
+    }
+
+    /// <summary>
+    /// Reads entries as a single-pass streaming sequence. Each payload must be consumed before
+    /// requesting the next entry.
+    /// <para>以单遍流式序列读取条目；请求下一项前必须消费当前负载。</para>
+    /// </summary>
+    public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream, ArchiveFormat? formatHint = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
         if (formatHint is null && !stream.CanSeek)
@@ -51,9 +70,8 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         var format = formatHint ?? DetectFormat(stream);
         return format switch
         {
-            ArchiveFormat.Tar or ArchiveFormat.Ustar => _tarReader.ReadEntries(stream),
-            // 所有 CPIO 二进制/ASCII 变体由 CPIO reader 读取。
-            // All CPIO binary/ASCII variants are handled by the CPIO reader.
+            ArchiveFormat.Tar or ArchiveFormat.Ustar => _tarReader.ReadEntriesStreaming(stream),
+            // All CPIO variants are already independently materialized by the CPIO reader.
             _ => _cpioReader.ReadEntries(stream, format),
         };
     }
@@ -78,7 +96,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
     /// <param name="formatHint">Optional format hint used to skip format auto-detection.<para>可选的格式提示，用于跳过格式自动识别。</para></param>
     public void ExtractToDirectory(Stream stream, string destinationDirectory, ExtractOptions? options = null, ArchiveFormat? formatHint = null)
     {
-        var entries = ReadEntries(stream, formatHint);
+        var entries = ReadEntriesStreaming(stream, formatHint);
         _extractor.ExtractToDirectory(entries, destinationDirectory, options);
     }
 
@@ -189,26 +207,49 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         }
     }
 
-    private static IReadOnlyList<ArchiveEntry> PrepareEntriesForWrite(IEnumerable<ArchiveEntry> entries, WriteOptions options)
+    private static IEnumerable<ArchiveEntry> PrepareEntriesForWrite(IEnumerable<ArchiveEntry> entries, WriteOptions options)
     {
-        var transformed = new List<ArchiveEntry>();
+        ulong nextInode = 1;
+        var inodeMap = new Dictionary<(ulong Inode, uint DevMajor, uint DevMinor), ulong>();
         foreach (var entry in entries)
         {
-            transformed.Add(new ArchiveEntry
+            var metadata = ApplyOwnerOverride(entry.Metadata, options);
+            var deviceMajor = options.IgnoreDeviceNumbers ? 0U : metadata.DeviceMajor;
+            var deviceMinor = options.IgnoreDeviceNumbers ? 0U : metadata.DeviceMinor;
+            var inode = metadata.Inode;
+            if (options.RenumberInodes && inode != 0)
+            {
+                var key = (metadata.Inode, deviceMajor, deviceMinor);
+                if (!inodeMap.TryGetValue(key, out inode)) inodeMap[key] = inode = nextInode++;
+            }
+
+            yield return new ArchiveEntry
             {
                 Name = entry.Name,
                 LinkName = entry.LinkName,
                 Data = entry.Data,
-                Metadata = ApplyOwnerOverride(entry.Metadata, options),
-            });
+                DataStream = entry.DataStream,
+                DataStreamFactory = entry.DataStreamFactory,
+                DeclaredDataLength = entry.DeclaredDataLength,
+                Metadata = new ArchiveEntryMetadata
+                {
+                    Inode = inode,
+                    Mode = metadata.Mode,
+                    UserId = metadata.UserId,
+                    GroupId = metadata.GroupId,
+                    DeviceMajor = deviceMajor,
+                    DeviceMinor = deviceMinor,
+                    RDeviceMajor = metadata.RDeviceMajor,
+                    RDeviceMinor = metadata.RDeviceMinor,
+                    LinkCount = metadata.LinkCount,
+                    ModificationTimeUnixSeconds = metadata.ModificationTimeUnixSeconds,
+                    Checksum = metadata.Checksum,
+                    FileType = metadata.FileType,
+                    UnixPermissions = metadata.UnixPermissions,
+                    ExtendedAttributes = metadata.ExtendedAttributes,
+                },
+            };
         }
-
-        if (options.IgnoreDeviceNumbers || options.RenumberInodes)
-        {
-            ApplyMetadataNormalization(transformed, options);
-        }
-
-        return transformed;
     }
 
     private static void ApplyMetadataNormalization(List<ArchiveEntry> entries, WriteOptions options)
@@ -240,6 +281,9 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
                 Name = entry.Name,
                 LinkName = entry.LinkName,
                 Data = entry.Data,
+                DataStream = entry.DataStream,
+                DataStreamFactory = entry.DataStreamFactory,
+                DeclaredDataLength = entry.DeclaredDataLength,
                 Metadata = new ArchiveEntryMetadata
                 {
                     Inode = inode,
@@ -290,7 +334,40 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         {
             Name = entry.Name,
             LinkName = entry.LinkName,
-            DataLength = entry.Data.LongLength,
+            DataLength = entry.DataLength,
+            Metadata = entry.Metadata,
+        };
+    }
+
+    /// <summary>
+    /// Materializes a streaming entry's payload into <see cref="ArchiveEntry.Data"/>.
+    /// <para>将流式条目的负载物化到 ArchiveEntry.Data。</para>
+    /// </summary>
+    private static ArchiveEntry Materialize(ArchiveEntry entry)
+    {
+        if (entry.DataStream is null && entry.DataStreamFactory is null)
+        {
+            return entry;
+        }
+
+        using var ms = new MemoryStream();
+        using var opened = entry.DataStream is null
+            ? entry.DataStreamFactory?.Invoke() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.")
+            : null;
+        var source = entry.DataStream ?? opened!;
+        if (source.CanSeek)
+        {
+            source.Position = 0;
+        }
+        source.CopyTo(ms);
+        return new ArchiveEntry
+        {
+            Name = entry.Name,
+            LinkName = entry.LinkName,
+            Data = ms.ToArray(),
+            DataStream = null,
+            DataStreamFactory = null,
+            DeclaredDataLength = null,
             Metadata = entry.Metadata,
         };
     }

@@ -1,11 +1,9 @@
 using System.Buffers;
 using BrotliSharpLib;
 using BsDiff;
-using SharpCompress.Compressors.BZip2;
-using SharpCompress.Compressors.Xz;
+using UotanStudio.Firmware.Compress;
 using UotanStudio.Firmware.Payload.Exceptions;
 using UotanStudio.Firmware.Payload.Proto;
-using ZstdSharp;
 
 namespace UotanStudio.Firmware.Payload.Core;
 
@@ -51,83 +49,105 @@ internal static class OperationProcessor
         ulong baseOffset,
         uint blockSize,
         object writeLock,
-        object streamLock)
+        object streamLock,
+        CancellationToken cancellationToken = default)
     {
-        var dataLength = (int)op.DataLength;
-        var data = ArrayPool<byte>.Shared.Rent(dataLength);
+        cancellationToken.ThrowIfCancellationRequested();
+        long dataPos;
+        long dataLength;
         try
         {
-            var dataPos = (long)(baseOffset + op.DataOffset);
+            dataPos = checked((long)checked(baseOffset + op.DataOffset));
+            dataLength = checked((long)op.DataLength);
+        }
+        catch (OverflowException ex)
+        {
+            throw new PartitionExtractionException("Payload operation data offset or length exceeds Int64 range", string.Empty, ex);
+        }
 
-            lock (streamLock)
+        if (!stream.CanSeek)
+        {
+            throw new PartitionExtractionException("Payload stream must be seekable", string.Empty);
+        }
+        if (dataPos > stream.Length || dataLength > stream.Length - dataPos)
+        {
+            throw new PartitionExtractionException(
+                $"Operation data range [{dataPos}, {dataPos + dataLength}) exceeds payload stream length {stream.Length}",
+                string.Empty);
+        }
+
+        var isReplace = op.Type is InstallOperation.Types.Type.Replace
+            or InstallOperation.Types.Type.ReplaceBz
+            or InstallOperation.Types.Type.ReplaceXz
+            || op.Type == (InstallOperation.Types.Type)14;
+        if (isReplace)
+        {
+            // A streamed replacement writes its destination incrementally. Keep the output lock for
+            // the entire operation (including draining/verifying the input hash) so MOVE and other
+            // output-dependent operations cannot observe a partially replaced destination.
+            lock (writeLock)
             {
-                stream.Seek(dataPos, SeekOrigin.Begin);
-                var bytesRead = 0;
-                while (bytesRead < dataLength)
-                {
-                    var read = stream.Read(data, bytesRead, dataLength - bytesRead);
-                    if (read == 0)
-                    {
-                        break;
-                    }
-                    bytesRead += read;
-                }
-                if (bytesRead != dataLength)
-                {
-                    throw new PartitionExtractionException(
-                        $"Failed to read {dataLength} bytes from payload stream at offset {dataPos}, only {bytesRead} bytes read",
-                        string.Empty);
-                }
+                using var bounded = new LockedBoundedReadStream(stream, streamLock, dataPos, dataLength);
+                using var hashing = new HashingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
+                cancellationToken.ThrowIfCancellationRequested();
+                ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken);
+                hashing.Complete();
             }
+            return;
+        }
 
-            HashVerificationHelper.VerifyDataHash(data, dataLength, op);
+        if (op.DataLength > int.MaxValue)
+        {
+            throw new PartitionExtractionException(
+                $"Operation {op.Type} data length {op.DataLength} exceeds the supported byte-array limit {int.MaxValue}",
+                string.Empty);
+        }
+
+        var bufferLength = checked((int)op.DataLength);
+        var data = ArrayPool<byte>.Shared.Rent(bufferLength);
+        try
+        {
+            using var bounded = new LockedBoundedReadStream(stream, streamLock, dataPos, dataLength);
+            var bytesRead = 0;
+            while (bytesRead < bufferLength)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = bounded.Read(data, bytesRead, bufferLength - bytesRead);
+                if (read == 0) break;
+                bytesRead += read;
+            }
+            if (bytesRead != bufferLength)
+            {
+                throw new PartitionExtractionException($"Failed to read {bufferLength} operation data bytes; read {bytesRead}", string.Empty);
+            }
+            HashVerificationHelper.VerifyDataHash(data, bufferLength, op);
 
             lock (writeLock)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 switch (op.Type)
                 {
-                    case InstallOperation.Types.Type.Replace:
-                        ProcessReplace(op, data, dataLength, outFile, blockSize);
-                        break;
-                    case InstallOperation.Types.Type.ReplaceBz:
-                        ProcessReplaceBz(op, data, dataLength, outFile, blockSize);
-                        break;
-                    case InstallOperation.Types.Type.ReplaceXz:
-                        ProcessReplaceXz(op, data, dataLength, outFile, blockSize);
-                        break;
-                    case (InstallOperation.Types.Type)14: // REPLACE_ZSTD (not in proto but supported)
-                        ProcessReplaceZstd(op, data, dataLength, outFile, blockSize);
-                        break;
                     case InstallOperation.Types.Type.Zero:
                         ProcessZero(op, outFile, blockSize);
                         break;
                     case InstallOperation.Types.Type.Discard:
-                        // DISCARD produces undefined data on the physical medium; nothing to write.
                         break;
                     case InstallOperation.Types.Type.Move:
                         ProcessMove(op, outFile, blockSize);
                         break;
                     case InstallOperation.Types.Type.Bsdiff:
-                        break;
                     case InstallOperation.Types.Type.SourceCopy:
-                        break;
                     case InstallOperation.Types.Type.SourceBsdiff:
-                        break;
-                    case InstallOperation.Types.Type.Puffdiff:
-                        ProcessPuffdiff(op, data, dataLength, outFile, blockSize);
-                        break;
                     case InstallOperation.Types.Type.BrotliBsdiff:
-                        break;
                     case InstallOperation.Types.Type.Zucchini:
-                        break;
                     case InstallOperation.Types.Type.Lz4diffBsdiff:
-                        break;
                     case InstallOperation.Types.Type.Lz4diffPuffdiff:
                         break;
+                    case InstallOperation.Types.Type.Puffdiff:
+                        ProcessPuffdiff(op, data, bufferLength, outFile, blockSize);
+                        break;
                     default:
-                        throw new PayloadUnsupportedOperationException(
-                            $"Unsupported parallel operation type: {op.Type}",
-                            op.Type.ToString());
+                        throw new PayloadUnsupportedOperationException($"Unsupported parallel operation type: {op.Type}", op.Type.ToString());
                 }
             }
         }
@@ -159,7 +179,7 @@ internal static class OperationProcessor
         foreach (var srcExt in op.SrcExtents)
         {
             var srcPos = (long)(srcExt.StartBlock * blockSize);
-            var length = (int)(srcExt.NumBlocks * blockSize);
+            var length = CheckedInt32BlockLength(srcExt.NumBlocks, blockSize);
             var buffer = ArrayPool<byte>.Shared.Rent(length);
             try
             {
@@ -227,7 +247,7 @@ internal static class OperationProcessor
             foreach (var ext in op.SrcExtents)
             {
                 var srcPos = (long)(ext.StartBlock * blockSize);
-                var chunkLen = (int)(ext.NumBlocks * blockSize);
+                var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
                 outFile.Seek(srcPos, SeekOrigin.Begin);
                 var bytesRead = 0;
                 while (bytesRead < chunkLen)
@@ -252,7 +272,7 @@ internal static class OperationProcessor
             foreach (var ext in op.DstExtents)
             {
                 var dstPos = (long)(ext.StartBlock * blockSize);
-                var chunkLen = (int)(ext.NumBlocks * blockSize);
+                var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
                 outFile.Seek(dstPos, SeekOrigin.Begin);
                 outFile.Write(buffer, offset, chunkLen);
                 offset += chunkLen;
@@ -299,7 +319,7 @@ internal static class OperationProcessor
             foreach (var ext in op.SrcExtents)
             {
                 var srcPos = (long)(ext.StartBlock * blockSize);
-                var chunkLen = (int)(ext.NumBlocks * blockSize);
+                var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
                 outFile.Seek(srcPos, SeekOrigin.Begin);
                 var bytesRead = 0;
                 while (bytesRead < chunkLen)
@@ -376,7 +396,7 @@ internal static class OperationProcessor
             foreach (var ext in op.SrcExtents)
             {
                 var srcPos = (long)(ext.StartBlock * blockSize);
-                var chunkLen = (int)(ext.NumBlocks * blockSize);
+                var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
                 outFile.Seek(srcPos, SeekOrigin.Begin);
                 var bytesRead = 0;
                 while (bytesRead < chunkLen)
@@ -446,7 +466,7 @@ internal static class OperationProcessor
             foreach (var ext in op.SrcExtents)
             {
                 var srcPos = (long)(ext.StartBlock * blockSize);
-                var chunkLen = (int)(ext.NumBlocks * blockSize);
+                var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
                 outFile.Seek(srcPos, SeekOrigin.Begin);
                 var bytesRead = 0;
                 while (bytesRead < chunkLen)
@@ -537,36 +557,43 @@ internal static class OperationProcessor
         }
     }
 
-    private static void ProcessReplace(InstallOperation op, byte[] data, int dataLength, FileStream outFile, uint blockSize)
+    private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken)
     {
-        var outSeekPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-        outFile.Seek(outSeekPos, SeekOrigin.Begin);
-        outFile.Write(data, 0, dataLength);
-    }
-
-    private static void ProcessReplaceBz(InstallOperation op, byte[] data, int dataLength, FileStream outFile, uint blockSize)
-    {
-        var outSeekPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-        outFile.Seek(outSeekPos, SeekOrigin.Begin);
-        using var bzr = BZip2Stream.Create(new MemoryStream(data, 0, dataLength), SharpCompress.Compressors.CompressionMode.Decompress, false);
-        bzr.CopyTo(outFile);
-    }
-
-    private static void ProcessReplaceXz(InstallOperation op, byte[] data, int dataLength, FileStream outFile, uint blockSize)
-    {
-        var outSeekPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-        outFile.Seek(outSeekPos, SeekOrigin.Begin);
-        using var xzr = new XZStream(new MemoryStream(data, 0, dataLength));
-        xzr.CopyTo(outFile);
-    }
-
-    private static void ProcessReplaceZstd(InstallOperation op, byte[] data, int dataLength, FileStream outFile, uint blockSize)
-    {
-        var outSeekPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-        outFile.Seek(outSeekPos, SeekOrigin.Begin);
-        using var decompressor = new Decompressor();
-        var decompressed = decompressor.Unwrap(data.AsSpan(0, dataLength)).ToArray();
-        outFile.Write(decompressed, 0, decompressed.Length);
+        cancellationToken.ThrowIfCancellationRequested();
+        using var output = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: true, syncRoot: writeLock);
+        switch (op.Type)
+        {
+            case InstallOperation.Types.Type.Replace:
+                var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+                try
+                {
+                    while (true)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        var read = input.Read(buffer, 0, buffer.Length);
+                        if (read == 0) break;
+                        cancellationToken.ThrowIfCancellationRequested();
+                        output.Write(buffer, 0, read);
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
+                break;
+            case InstallOperation.Types.Type.ReplaceBz:
+                CompressionService.Decompress(input, output, CompressionFormat.Bzip2, output.Length, cancellationToken);
+                break;
+            case InstallOperation.Types.Type.ReplaceXz:
+                CompressionService.Decompress(input, output, CompressionFormat.Xz, output.Length, cancellationToken);
+                break;
+            case (InstallOperation.Types.Type)14:
+                CompressionService.Decompress(input, output, CompressionFormat.Zstd, output.Length, cancellationToken);
+                break;
+            default:
+                throw new PayloadUnsupportedOperationException($"Unsupported replace operation type: {op.Type}", op.Type.ToString());
+        }
+        output.Complete();
     }
 
     private static readonly byte[] ZeroBuffer = new byte[65536];
@@ -575,15 +602,43 @@ internal static class OperationProcessor
     {
         foreach (var ext in op.DstExtents)
         {
-            var pos = (long)(ext.StartBlock * blockSize);
+            long pos;
+            long remaining;
+            try
+            {
+                pos = checked((long)ext.StartBlock * (long)blockSize);
+                remaining = checked((long)ext.NumBlocks * (long)blockSize);
+            }
+            catch (OverflowException ex)
+            {
+                throw new PartitionExtractionException("ZERO extent size or offset exceeds Int64 range", string.Empty, ex);
+            }
             outFile.Seek(pos, SeekOrigin.Begin);
-            var remaining = (long)ext.NumBlocks * blockSize;
             while (remaining > 0)
             {
                 var toWrite = (int)Math.Min(remaining, ZeroBuffer.Length);
                 outFile.Write(ZeroBuffer, 0, toWrite);
                 remaining -= toWrite;
             }
+        }
+    }
+
+    private static int CheckedInt32BlockLength(ulong numBlocks, uint blockSize)
+    {
+        try
+        {
+            var length = checked(numBlocks * blockSize);
+            if (length > int.MaxValue)
+            {
+                throw new PartitionExtractionException(
+                    $"Extent byte length {length} exceeds the supported byte-array limit {int.MaxValue}",
+                    string.Empty);
+            }
+            return (int)length;
+        }
+        catch (OverflowException ex)
+        {
+            throw new PartitionExtractionException("Extent byte length overflow", string.Empty, ex);
         }
     }
 

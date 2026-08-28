@@ -57,7 +57,8 @@ public static class ChunkHelper
     /// <param name="chunkHeaderSize">Size of the chunk header in bytes (ushort). <para>数据块头部的字节大小。</para></param>
     /// <param name="blockSize">Size of a single block in bytes (uint). <para>单个块的字节大小。</para></param>
     /// <returns>The expected TotalSize value as a uint. <para>预期的 TotalSize 值。</para></returns>
-    public static uint GetExpectedTotalSize(ushort chunkType, uint chunkSize, ushort chunkHeaderSize, uint blockSize) => (uint)GetDiskSize(chunkType, chunkSize, chunkHeaderSize, blockSize);
+    public static uint GetExpectedTotalSize(ushort chunkType, uint chunkSize, ushort chunkHeaderSize, uint blockSize)
+        => checked((uint)GetDiskSize(chunkType, chunkSize, chunkHeaderSize, blockSize));
 
     /// <summary>
     /// Determines whether the specified chunk type contains splittable data (Raw or Fill).

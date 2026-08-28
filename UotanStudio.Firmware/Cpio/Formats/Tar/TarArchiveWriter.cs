@@ -4,34 +4,116 @@ using UotanStudio.Firmware.Cpio.Model;
 
 namespace UotanStudio.Firmware.Cpio.Formats.Tar;
 
-/// <summary>
-/// Writes TAR-family archives from normalized archive entries.
-/// <para>从规范化的归档条目写入 TAR 系归档。</para>
-/// </summary>
+/// <summary>Writes TAR-family archives from normalized archive entries.</summary>
 public sealed class TarArchiveWriter
 {
-    /// <summary>
-    /// Writes all provided entries to a TAR stream.
-    /// <para>将提供的全部条目写入 TAR 流。</para>
-    /// </summary>
-    /// <param name="stream">Destination archive stream.<para>目标归档流。</para></param>
-    /// <param name="entries">Entries to write.<para>待写入的条目。</para></param>
-    /// <param name="format">Target archive format (Tar for PAX, otherwise USTAR).<para>目标归档格式（Tar 为 PAX，其余为 USTAR）。</para></param>
+    /// <summary>Writes all provided entries to a TAR stream.</summary>
     public void WriteAll(Stream stream, IEnumerable<ArchiveEntry> entries, ArchiveFormat format)
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(entries);
 
-        var tarFormat = format == ArchiveFormat.Tar ? TarEntryFormat.Pax : TarEntryFormat.Ustar;
-        using var writer = new TarWriter(stream, tarFormat, leaveOpen: true);
-        foreach (var entry in entries)
+        // Consume exactly once and retain distinct direct streams until enumeration completes:
+        // later entries may share an instance and cannot be predicted without a second pass.
+        var directStreams = new HashSet<Stream>(ReferenceEqualityComparer.Instance);
+        Exception? primary = null;
+        try
         {
-            var tarEntry = CreateTarEntry(entry, format);
-            writer.WriteEntry(tarEntry);
+            using var writer = new TarWriter(stream, format == ArchiveFormat.Tar ? TarEntryFormat.Pax : TarEntryFormat.Ustar, leaveOpen: true);
+            foreach (var entry in entries)
+            {
+                Stream? factoryStream = null;
+                var probeFactoryEof = false;
+                DeclaredLengthReadStream? bounded = null;
+                try
+                {
+                    // TAR payload access is valid only for regular entries.
+                    var isRegular = entry.Metadata.FileType is CpioFileType.Regular or CpioFileType.Socket or CpioFileType.Unknown;
+                    var payloadLength = 0L;
+                    Stream? payload = null;
+                    if (isRegular)
+                    {
+                        // Register direct ownership before any property access (including length) can fail.
+                        if (entry.DataStream is { } owned) directStreams.Add(owned);
+                        payloadLength = entry.DataLength;
+                        ValidateInMemoryLength(entry, payloadLength);
+                        if (entry.DataStream is { } direct)
+                        {
+                            if (direct.CanSeek) direct.Position = 0;
+                            payload = direct;
+                        }
+                        else if (entry.DataStreamFactory is { } factory)
+                        {
+                            factoryStream = factory() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.");
+                            probeFactoryEof = true;
+                            payload = factoryStream;
+                        }
+                        else
+                        {
+                            factoryStream = new MemoryStream(entry.Data, writable: false);
+                            payload = factoryStream;
+                        }
+                    }
+
+                    if (payload is not null) bounded = new DeclaredLengthReadStream(payload, payloadLength, leaveOpen: true);
+                    writer.WriteEntry(CreateTarEntry(entry, format, bounded));
+                }
+                catch (Exception ex)
+                {
+                    primary = ex;
+                }
+                finally
+                {
+                    DisposePreserving(ref primary, bounded);
+                    if (primary is null && probeFactoryEof && factoryStream is not null)
+                    {
+                        try
+                        {
+                            if (factoryStream.ReadByte() != -1)
+                            {
+                                primary = new InvalidDataException($"Entry '{entry.Name}' source contains data beyond its declared length.");
+                            }
+                        }
+                        catch (Exception ex) { primary = ex; }
+                    }
+                    DisposePreserving(ref primary, factoryStream);
+                }
+
+                if (primary is not null)
+                {
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            primary ??= ex;
+        }
+        finally
+        {
+            foreach (var direct in directStreams) DisposePreserving(ref primary, direct);
+        }
+
+        if (primary is not null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(primary).Throw();
+    }
+
+    private static void ValidateInMemoryLength(ArchiveEntry entry, long payloadLength)
+    {
+        if (entry.DataStream is null && entry.DataStreamFactory is null
+            && entry.DeclaredDataLength.HasValue && payloadLength != entry.Data.LongLength)
+        {
+            throw new InvalidDataException($"Entry '{entry.Name}' declared length {payloadLength} does not match its data length {entry.Data.LongLength}.");
         }
     }
 
-    private static TarEntry CreateTarEntry(ArchiveEntry entry, ArchiveFormat format)
+    private static void DisposePreserving(ref Exception? primary, IDisposable? disposable)
+    {
+        if (disposable is null) return;
+        try { disposable.Dispose(); }
+        catch (Exception ex) { primary = primary is null ? ex : new AggregateException(primary, ex); }
+    }
+
+    private static TarEntry CreateTarEntry(ArchiveEntry entry, ArchiveFormat format, Stream? payload)
     {
         var entryType = entry.Metadata.FileType switch
         {
@@ -41,58 +123,26 @@ public sealed class TarArchiveWriter
             CpioFileType.CharacterDevice => TarEntryType.CharacterDevice,
             CpioFileType.BlockDevice => TarEntryType.BlockDevice,
             CpioFileType.Fifo => TarEntryType.Fifo,
-            // TAR 格式没有 Socket 类型，保守映射为普通文件；Unknown 同样回退为普通文件。
-            // TAR has no Socket entry type; fall back to a regular file. Unknown falls back likewise.
-            CpioFileType.Socket => TarEntryType.RegularFile,
-            CpioFileType.Unknown => TarEntryType.RegularFile,
-            CpioFileType.Regular => TarEntryType.RegularFile,
             _ => TarEntryType.RegularFile,
         };
-
-        var name = entryType == TarEntryType.Directory && !entry.Name.EndsWith("/", StringComparison.Ordinal)
-            ? entry.Name + "/"
-            : entry.Name;
-
+        var name = entryType == TarEntryType.Directory && !entry.Name.EndsWith("/", StringComparison.Ordinal) ? entry.Name + "/" : entry.Name;
         var tarEntry = format == ArchiveFormat.Tar
             ? new PaxTarEntry(entryType, name, BuildPaxExtendedAttributes(entry))
             : (TarEntry)new UstarTarEntry(entryType, name);
         tarEntry.Mode = (UnixFileMode)(entry.Metadata.UnixPermissions & 0x0FFF);
         tarEntry.Uid = checked((int)entry.Metadata.UserId);
         tarEntry.Gid = checked((int)entry.Metadata.GroupId);
-        if (entry.Metadata.ModificationTimeUnixSeconds > 0)
-        {
-            tarEntry.ModificationTime = DateTimeOffset.FromUnixTimeSeconds(entry.Metadata.ModificationTimeUnixSeconds);
-        }
-
-        if (entryType is TarEntryType.SymbolicLink or TarEntryType.HardLink)
-        {
-            tarEntry.LinkName = entry.LinkName ?? string.Empty;
-        }
-
-        if (entryType == TarEntryType.RegularFile)
-        {
-            tarEntry.DataStream = new MemoryStream(entry.Data, writable: false);
-        }
-
+        if (entry.Metadata.ModificationTimeUnixSeconds > 0) tarEntry.ModificationTime = DateTimeOffset.FromUnixTimeSeconds(entry.Metadata.ModificationTimeUnixSeconds);
+        if (entryType is TarEntryType.SymbolicLink or TarEntryType.HardLink) tarEntry.LinkName = entry.LinkName ?? string.Empty;
+        if (entryType == TarEntryType.RegularFile) tarEntry.DataStream = payload;
         return tarEntry;
     }
 
     private static IEnumerable<KeyValuePair<string, string>> BuildPaxExtendedAttributes(ArchiveEntry entry)
     {
-        if (entry.Metadata.ExtendedAttributes.Count == 0)
-        {
-            return [];
-        }
-
-        var result = new List<KeyValuePair<string, string>>(entry.Metadata.ExtendedAttributes.Count);
-        foreach (var (key, value) in entry.Metadata.ExtendedAttributes)
-        {
-            var paxKey = key.StartsWith("SCHILY.xattr.", StringComparison.Ordinal)
-                ? key
-                : "SCHILY.xattr." + key;
-            result.Add(new KeyValuePair<string, string>(paxKey, Encoding.UTF8.GetString(value)));
-        }
-
-        return result;
+        if (entry.Metadata.ExtendedAttributes.Count == 0) return [];
+        return entry.Metadata.ExtendedAttributes.Select(pair => new KeyValuePair<string, string>(
+            pair.Key.StartsWith("SCHILY.xattr.", StringComparison.Ordinal) ? pair.Key : "SCHILY.xattr." + pair.Key,
+            Encoding.UTF8.GetString(pair.Value)));
     }
 }

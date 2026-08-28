@@ -8,13 +8,23 @@ namespace UotanStudio.Firmware.NTPi.Writer;
 /// </summary>
 internal static class NtpiPaddingHelper
 {
-    private const int AesBlockSize = 16;
+    internal const int AesBlockSize = 16;
 
     /// <summary>
     /// <para>计算数据填充至 AES 块大小(16 字节)边界后的总大小。</para>
     /// Calculates the total size after padding data to the AES block size (16 bytes) boundary.
     /// </summary>
     public static int CalculatePaddedSize(int dataSize)
+    {
+        var remainder = dataSize % AesBlockSize;
+        return remainder == 0 ? dataSize : dataSize + (AesBlockSize - remainder);
+    }
+
+    /// <summary>
+    /// <para>以 long 计算数据填充至 AES 块大小(16 字节)边界后的总大小。</para>
+    /// Calculates the total size after padding data to the AES block size (16 bytes) boundary using long arithmetic.
+    /// </summary>
+    public static long CalculatePaddedSize(long dataSize)
     {
         var remainder = dataSize % AesBlockSize;
         return remainder == 0 ? dataSize : dataSize + (AesBlockSize - remainder);

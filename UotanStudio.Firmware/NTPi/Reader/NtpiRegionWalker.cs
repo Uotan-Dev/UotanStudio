@@ -17,6 +17,7 @@ namespace UotanStudio.Firmware.NTPi.Reader;
 /// </remarks>
 internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
 {
+    private const long MaximumStreamingRegionSize = 512L * 1024 * 1024;
     private readonly ICryptoProvider _cryptoProvider = cryptoProvider ?? throw new ArgumentNullException(nameof(cryptoProvider));
 
     /// <summary>
@@ -29,7 +30,7 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
         long currentOffset = NtpiHeader.Size;
         var currentRegion = header.FirstRegionHeader;
 
-        while (currentRegion.RegionSize > 0)
+        while (currentRegion.RegionSize > 0 || currentRegion.RegionType == (ulong)RegionType.Region6)
         {
             if (currentOffset + (long)currentRegion.RegionSize > fileLength)
             {
@@ -42,13 +43,19 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
 
             if (regionType == RegionType.Region6)
             {
-                onRegion(regionType, regionSize, fileData, (int)currentOffset);
+                onRegion(regionType, regionSize, fileData, checked((int)currentOffset));
                 break;
             }
 
             var (key, iv) = keyProvider.GetKey(regionType)
                 ?? throw new InvalidFormatException(
                     $"No decryption key found for region type {regionType} ({regionType.GetRegionName()}).");
+
+            if (regionSize > int.MaxValue)
+            {
+                throw new InvalidFormatException(
+                    $"Region {regionType} is too large for in-memory walking: {regionSize} bytes.");
+            }
 
             var regionSizeInt = (int)regionSize;
             var regionDataRent = ArrayPool<byte>.Shared.Rent(regionSizeInt);
@@ -77,7 +84,8 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
 
                 onRegion(regionType, regionSize, payload, 0);
 
-                if (blockHeader.NextHeader.RegionSize == 0)
+                if (blockHeader.NextHeader.RegionSize == 0 &&
+                    blockHeader.NextHeader.RegionType != (ulong)RegionType.Region6)
                 {
                     break;
                 }
@@ -102,10 +110,16 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
         long currentOffset = NtpiHeader.Size;
         var currentRegion = header.FirstRegionHeader;
 
-        while (currentRegion.RegionSize > 0)
+        while (currentRegion.RegionSize > 0 || currentRegion.RegionType == (ulong)RegionType.Region6)
         {
             var regionType = (RegionType)currentRegion.RegionType;
             var regionSize = (long)currentRegion.RegionSize;
+
+            if (regionSize < 0 || currentOffset > stream.Length || regionSize > stream.Length - currentOffset)
+            {
+                throw new InvalidFormatException(
+                    $"Region data exceeds file boundaries: offset {currentOffset} + size {regionSize} > file length {stream.Length}.");
+            }
 
             if (regionType == RegionType.Region6)
             {
@@ -117,11 +131,24 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
                 ?? throw new InvalidFormatException(
                     $"No decryption key found for region type {regionType} ({regionType.GetRegionName()}).");
 
+            if (regionSize > MaximumStreamingRegionSize || regionSize > int.MaxValue)
+            {
+                throw new InvalidFormatException($"Region {regionType} exceeds the streaming region limit of {MaximumStreamingRegionSize} bytes.");
+            }
+
             var regionSizeInt = (int)regionSize;
             var regionDataRent = ArrayPool<byte>.Shared.Rent(regionSizeInt);
             try
             {
-                NtpiStreamHelper.ReadExact(stream, regionDataRent, 0, regionSizeInt);
+                try
+                {
+                    NtpiStreamHelper.ReadExact(stream, regionDataRent, 0, regionSizeInt);
+                }
+                catch (EndOfStreamException ex)
+                {
+                    throw new InvalidFormatException(
+                        $"Region {regionType} is truncated: expected {regionSizeInt} bytes, but the file ended early.", ex);
+                }
 
                 var dataToDecrypt = regionSizeInt == regionDataRent.Length
                     ? regionDataRent
@@ -144,7 +171,8 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
 
                 onRegion(regionType, regionSize, payload);
 
-                if (blockHeader.NextHeader.RegionSize == 0)
+                if (blockHeader.NextHeader.RegionSize == 0 &&
+                    blockHeader.NextHeader.RegionType != (ulong)RegionType.Region6)
                 {
                     break;
                 }
@@ -183,7 +211,14 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
     public static NtpiHeader ReadHeaderFromStream(Stream stream)
     {
         var buffer = new byte[NtpiHeader.Size];
-        stream.ReadExactly(buffer);
+        try
+        {
+            stream.ReadExactly(buffer);
+        }
+        catch (EndOfStreamException ex)
+        {
+            throw new InvalidFormatException("NTPI file is truncated: the header is incomplete.", ex);
+        }
         return ValidateAndReadHeader(buffer);
     }
 

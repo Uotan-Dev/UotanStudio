@@ -57,22 +57,80 @@ public sealed class NtpiReader : IDisposable
     }
 
     /// <summary>
-    /// <para>将 NTPI 固件包解包到指定目录。</para>
-    /// Unpacks the NTPI firmware package to the specified directory.
+    /// <para>将 NTPI 固件包解包到指定目录(逐文件流式提取)。</para>
+    /// Unpacks the NTPI firmware package to the specified directory (streams extraction per file).
     /// </summary>
     public void Unpack(string filePath, string outputDir, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null)
+        => Unpack(filePath, outputDir, new NtpiUnpackOptions(), progress, fileFilter);
+
+    /// <summary>
+    /// <para>使用可信输出限制将 NTPI 固件包解包到指定目录。</para>
+    /// Unpacks an NTPI firmware package using trusted output limits.
+    /// </summary>
+    public void Unpack(string filePath, string outputDir, NtpiUnpackOptions options, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(filePath);
         ArgumentNullException.ThrowIfNull(outputDir);
+        ArgumentNullException.ThrowIfNull(options);
+        if (!options.DisableOutputLimits && (options.MaxFileOutputBytes < 0 || options.MaxTotalOutputBytes < 0))
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "NTPI unpack output limits must be non-negative.");
+        }
+        var maxFileOutput = options.DisableOutputLimits ? long.MaxValue : options.MaxFileOutputBytes;
+        var maxTotalOutput = options.DisableOutputLimits ? long.MaxValue : options.MaxTotalOutputBytes;
 
-        var parsed = Parse(filePath);
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException("NTPI file not found.", filePath);
+        }
+
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.RandomAccess);
+        var layout = WalkLayout(stream);
+
+        // Validate every declaration, including filtered entries, before creating or mutating output.
+        long declaredTotal = 0;
+        foreach (var entry in layout.FileEntries)
+        {
+            if (entry.OriginalLength < 0)
+            {
+                throw new InvalidFormatException($"File entry '{entry.Name}' has a negative original length.");
+            }
+            if (entry.OriginalLength > maxFileOutput)
+            {
+                throw new InvalidFormatException($"File entry '{entry.Name}' declares {entry.OriginalLength} output bytes, exceeding the trusted per-file limit {maxFileOutput}.");
+            }
+            try
+            {
+                declaredTotal = checked(declaredTotal + entry.OriginalLength);
+            }
+            catch (OverflowException ex)
+            {
+                throw new InvalidFormatException("The declared NTPI total output length overflows Int64.", ex);
+            }
+            if (declaredTotal > maxTotalOutput)
+            {
+                throw new InvalidFormatException($"Declared NTPI output {declaredTotal} bytes exceeds the trusted total limit {maxTotalOutput}.");
+            }
+        }
+
         Directory.CreateDirectory(outputDir);
 
-        var total = parsed.FileEntries.Count;
+        var total = layout.FileEntries.Count;
         var completed = 0;
+        long trustedRemaining = maxTotalOutput;
 
-        foreach (var entry in parsed.FileEntries)
+        if (total > 0 && !layout.HasRegion6)
+        {
+            throw new InvalidFormatException("File entries are present but the Region6 region is missing.");
+        }
+        if (total > 0 && layout.KeyMapProvider is null)
+        {
+            throw new InvalidFormatException("Region6 files are present but the KeyMap region is missing or empty.");
+        }
+        var keyMapProvider = layout.KeyMapProvider!;
+
+        foreach (var entry in layout.FileEntries)
         {
             if (fileFilter is not null && !fileFilter(entry.Name))
             {
@@ -80,24 +138,33 @@ public sealed class NtpiReader : IDisposable
                 continue;
             }
 
-            var data = parsed.ExtractedFiles.TryGetValue(entry.Name, out var value) ? value : null;
-            if (data is null)
+            var safeName = Path.GetFileName(entry.Name);
+            var outPath = Path.Combine(outputDir, safeName);
+            var tempPath = outPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
             {
-                // Extract on demand from Region6 data.
-                if (parsed.Regions.TryGetValue(RegionType.Region6, out var region6) && region6.Length > 0)
+                using (var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, DefaultBufferSize, FileOptions.SequentialScan))
                 {
-                    var keyMap = parsed.Regions.TryGetValue(RegionType.KeyMap, out var km) ? km : [];
-                    var keyMapProvider = new KeyMapKeyProvider(keyMap);
-                    data = _fileExtractor.ExtractFileFromRegion6(region6, 0, keyMapProvider, entry);
-                    _fileExtractor.VerifyHash(entry, data);
+                    var trustedFileLimit = Math.Min(entry.OriginalLength, trustedRemaining);
+                    _fileExtractor.ExtractFileToStream(stream, layout.Region6Offset, layout.Region6Length, keyMapProvider, entry, output, trustedFileLimit);
                 }
+                File.Move(tempPath, outPath, overwrite: true);
+                trustedRemaining -= entry.OriginalLength;
             }
-
-            if (data is not null)
+            catch
             {
-                var safeName = Path.GetFileName(entry.Name);
-                var outPath = Path.Combine(outputDir, safeName);
-                File.WriteAllBytes(outPath, data);
+                try
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
+                catch
+                {
+                    // Preserve the original exception.
+                }
+                throw;
             }
 
             completed++;
@@ -109,6 +176,10 @@ public sealed class NtpiReader : IDisposable
     /// <para>将 NTPI 固件包解析到内存中,返回头部、区域数据与提取的文件。</para>
     /// Parses the NTPI firmware package into memory, returning header, region data, and extracted files.
     /// </summary>
+    /// <remarks>
+    /// <para>此 API 为内存便捷包装;大规模包请使用 <see cref="Unpack"/> 进行流式提取。</para>
+    /// This API is an in-memory convenience wrapper; for large packages use <see cref="Unpack"/> to stream extraction.
+    /// </remarks>
     public NtpiParsedFile Parse(string filePath)
     {
         ThrowIfDisposed();
@@ -119,10 +190,8 @@ public sealed class NtpiReader : IDisposable
             throw new FileNotFoundException("NTPI file not found.", filePath);
         }
 
-        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.SequentialScan);
-        var fileData = new byte[stream.Length];
-        stream.ReadExactly(fileData);
-        return ParseCore(fileData, fileData.Length);
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.RandomAccess);
+        return ParseCore(stream);
     }
 
     private NtpiFileInfo ReadInfoCore(Stream stream)
@@ -138,63 +207,108 @@ public sealed class NtpiReader : IDisposable
         };
 
         _regionWalker.WalkRegionChainStreaming(stream, header, keyProvider,
-            onRegion: (type, size, payload) => result.Regions.Add((type, size)),
+            onRegion: (type, size, payload) =>
+            {
+                result.Regions.Add((type, size));
+                if (type == RegionType.FileIndex)
+                {
+                    result.FileEntries = NtpiRegionWalker.ParseFileEntries(payload);
+                }
+            },
             onRegion6Offset: (offset, size) => result.Regions.Add((RegionType.Region6, size)));
 
         return result;
     }
 
-    private NtpiParsedFile ParseCore(byte[] fileData, int fileLength)
+    private NtpiParsedFile ParseCore(Stream stream)
     {
-        var header = NtpiRegionWalker.ValidateAndReadHeader(fileData);
-        var keyProvider = new VersionKeyProvider(header.VersionMajor, header.VersionMinor, header.VersionPatch);
+        var layout = WalkLayout(stream);
 
-        var result = new NtpiParsedFile { Header = header };
-        byte[]? region6Data = null;
-        var region6Offset = 0;
-
-        _regionWalker.WalkRegionChain(fileData, fileLength, header, keyProvider,
-            onRegion: (type, size, payload, offset) =>
-            {
-                result.Regions[type] = payload;
-                if (type == RegionType.Region6)
-                {
-                    region6Data = payload;
-                    region6Offset = offset;
-                }
-            });
-
-        if (result.Regions.TryGetValue(RegionType.FileIndex, out var fileIndexData))
+        var result = new NtpiParsedFile { Header = layout.Header };
+        foreach (var (type, payload) in layout.Regions)
         {
-            result.FileEntries = NtpiRegionWalker.ParseFileEntries(fileIndexData);
+            result.Regions[type] = payload;
+        }
+        result.FileEntries = layout.FileEntries;
+
+        // Materialize Region6 only for the in-memory model; streaming callers use Unpack.
+        // A zero-sized Region6 is still a present, valid region for packages containing only empty files.
+        if (layout.HasRegion6)
+        {
+            stream.Position = layout.Region6Offset;
+            var region6 = new byte[layout.Region6Length];
+            stream.ReadExactly(region6);
+            result.Regions[RegionType.Region6] = region6;
         }
 
-        // Extract all files from Region6.
-        if (region6Data is { Length: > 0 } && result.FileEntries.Count > 0)
+        if (layout.FileEntries.Count > 0)
         {
-            var keyMap = result.Regions.TryGetValue(RegionType.KeyMap, out var km) ? km : [];
-            var keyMapProvider = new KeyMapKeyProvider(keyMap);
-            foreach (var entry in result.FileEntries)
+            if (!layout.HasRegion6)
             {
-                try
-                {
-                    var data = _fileExtractor.ExtractFileFromRegion6(region6Data, region6Offset, keyMapProvider, entry);
-                    _fileExtractor.VerifyHash(entry, data);
-                    result.ExtractedFiles[entry.Name] = data;
-                }
-                catch (IntegrityVerificationException)
-                {
-                    throw;
-                }
-                catch (Exception ex) when (ex is InvalidFormatException or NtpiException)
-                {
-                    throw;
-                }
+                throw new InvalidFormatException("File entries are present but the Region6 region is missing.");
+            }
+            if (layout.KeyMapProvider is null)
+            {
+                throw new InvalidFormatException("Region6 files are present but the KeyMap region is missing or empty.");
+            }
+            var keyMapProvider = layout.KeyMapProvider;
+
+            foreach (var entry in layout.FileEntries)
+            {
+                var data = _fileExtractor.ExtractFileToMemory(stream, layout.Region6Offset, layout.Region6Length, keyMapProvider, entry);
+                result.ExtractedFiles[entry.Name] = data;
             }
         }
 
         return result;
     }
+
+    /// <summary>
+    /// <para>解析阶段仅记录区域与文件的 offset、length 以及解密/压缩参数,不加载 Region6 数据。</para>
+    /// The parse phase records only region/file offsets, lengths, and decryption/compression
+    /// parameters without loading Region6 data.
+    /// </summary>
+    private ParsedLayout WalkLayout(Stream stream)
+    {
+        var header = NtpiRegionWalker.ReadHeaderFromStream(stream);
+        var keyProvider = new VersionKeyProvider(header.VersionMajor, header.VersionMinor, header.VersionPatch);
+
+        var regions = new Dictionary<RegionType, byte[]>();
+        var fileEntries = new List<FileEntry>();
+        var region6Offset = 0L;
+        var region6Length = 0L;
+        var hasRegion6 = false;
+
+        _regionWalker.WalkRegionChainStreaming(stream, header, keyProvider,
+            onRegion: (type, size, payload) =>
+            {
+                regions[type] = payload;
+                if (type == RegionType.FileIndex)
+                {
+                    fileEntries = NtpiRegionWalker.ParseFileEntries(payload);
+                }
+            },
+            onRegion6Offset: (offset, size) =>
+            {
+                hasRegion6 = true;
+                region6Offset = offset;
+                region6Length = size;
+            });
+
+        var keyMap = regions.TryGetValue(RegionType.KeyMap, out var km) ? km : [];
+        var keyMapProvider = keyMap.Length > 0 ? new KeyMapKeyProvider(keyMap) : null;
+
+        return new ParsedLayout(header, regions, fileEntries, hasRegion6, region6Offset, region6Length, keyMapProvider);
+    }
+
+    private readonly record struct ParsedLayout(
+        NtpiHeader Header,
+        Dictionary<RegionType, byte[]> Regions,
+        List<FileEntry> FileEntries,
+        bool HasRegion6,
+        long Region6Offset,
+        long Region6Length,
+        KeyMapKeyProvider? KeyMapProvider);
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 

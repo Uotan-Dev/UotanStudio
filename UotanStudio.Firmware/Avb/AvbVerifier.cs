@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
@@ -9,61 +10,40 @@ namespace UotanStudio.Firmware.Avb;
 /// </summary>
 public sealed class AvbVerifyResult
 {
-    /// <summary>
-    /// Gets or sets whether the image carries an AVB signature.
-    /// <para>获取或设置镜像是否携带 AVB 签名。</para>
-    /// </summary>
+    /// <summary>Gets or sets whether an AVB footer or structurally valid standalone VBMeta image was recognized. This does not imply a valid signature. <para>获取或设置是否识别到 AVB 尾部或结构有效的独立 VBMeta 镜像；不表示签名有效。</para></summary>
     public bool IsSigned { get; set; }
 
-    /// <summary>
-    /// Gets or sets whether the signature is valid.
-    /// <para>获取或设置签名是否有效。</para>
-    /// </summary>
+    /// <summary>Gets or sets whether verification succeeded. <para>获取或设置验证是否成功。</para></summary>
     public bool IsValid { get; set; }
 
-    /// <summary>
-    /// Gets or sets the error message when verification fails.
-    /// <para>获取或设置校验失败时的错误信息。</para>
-    /// </summary>
+    /// <summary>Gets or sets the error message when verification fails. <para>获取或设置验证失败时的错误信息。</para></summary>
     public string? ErrorMessage { get; set; }
 
-    /// <summary>
-    /// Gets or sets the parsed AVB footer, if present.
-    /// <para>获取或设置解析出的 AVB 尾部(若存在)。</para>
-    /// </summary>
+    /// <summary>Gets or sets the parsed AVB footer, if present. <para>获取或设置解析出的 AVB 尾部（若存在）。</para></summary>
     public AvbFooter? Footer { get; set; }
 
-    /// <summary>
-    /// Gets or sets the parsed VBMeta image header, if present.
-    /// <para>获取或设置解析出的 VBMeta 镜像头部(若存在)。</para>
-    /// </summary>
+    /// <summary>Gets or sets the parsed VBMeta image header, if present. <para>获取或设置解析出的 VBMeta 镜像头（若存在）。</para></summary>
     public AvbVBMetaImageHeader? VBMetaHeader { get; set; }
 }
 
 /// <summary>
-/// AVB 1.0 signature verification tool, ported from MagiskBoot's AvbTool.
-/// <para>AVB 1.0 签名验证工具,移植自 MagiskBoot 的 AvbTool。</para>
+/// Verifies Android Verified Boot footer images and standalone VBMeta images.
+/// <para>验证 Android Verified Boot 尾部镜像和独立 VBMeta 镜像。</para>
 /// </summary>
 public static class AvbVerifier
 {
-
-    /// <summary>
-    /// Checks whether the image carries an AVB footer.
-    /// <para>检查镜像是否携带 AVB 尾部。</para>
-    /// </summary>
+    /// <summary>Checks whether the image carries an AVB footer. <para>检查镜像是否携带 AVB 尾部。</para></summary>
+    /// <param name="imageData">The image bytes. <para>镜像字节。</para></param>
+    /// <returns><c>true</c> if a standard footer is present. <para>存在标准尾部时返回 <c>true</c>。</para></returns>
     public static bool IsSigned(byte[] imageData) => imageData.Length >= AvbFooter.Size && AvbFooter.TryLoad(imageData) != null;
 
-    /// <summary>
-    /// Verifies the AVB footer signature of a boot image.
-    /// <para>校验启动镜像的 AVB 尾部签名。</para>
-    /// </summary>
-    /// <param name="imageData">The boot image bytes. <para>启动镜像字节。</para></param>
-    /// <param name="certificateData">Optional X509 certificate data for RSA verification. <para>可选的 X509 证书数据,用于 RSA 校验。</para></param>
-    /// <returns>The verification result. <para>校验结果。</para></returns>
+    /// <summary>Verifies the complete VBMeta image referenced by an AVB footer. <para>验证 AVB 尾部所引用的完整 VBMeta 镜像。</para></summary>
+    /// <param name="imageData">The partition image bytes. <para>分区镜像字节。</para></param>
+    /// <param name="certificateData">Optional trusted X.509 certificate containing an RSA public key. <para>可选的受信任 X.509 证书，其中包含 RSA 公钥。</para></param>
+    /// <returns>The verification result. <para>验证结果。</para></returns>
     public static AvbVerifyResult Verify(byte[] imageData, byte[]? certificateData = null)
     {
-        var result = new AvbVerifyResult { IsSigned = false };
-
+        var result = new AvbVerifyResult();
         if (imageData.Length < AvbFooter.Size)
         {
             result.ErrorMessage = "Image too small to contain an AVB footer.";
@@ -73,127 +53,208 @@ public static class AvbVerifier
         var footer = AvbFooter.TryLoad(imageData);
         if (footer == null)
         {
-            result.ErrorMessage = "No AVB footer found.";
+            var footerBytes = imageData.AsSpan(imageData.Length - AvbFooter.Size, AvbFooter.Size);
+            if (footerBytes[..4].SequenceEqual("AVBf"u8))
+            {
+                var major = BinaryPrimitives.ReadUInt32BigEndian(footerBytes.Slice(4, 4));
+                var minor = BinaryPrimitives.ReadUInt32BigEndian(footerBytes.Slice(8, 4));
+                result.ErrorMessage = $"Unsupported AVB footer version {major}.{minor}; supported version is {AvbFooter.SupportedVersionMajor}.{AvbFooter.SupportedVersionMinor}.";
+            }
+            else
+            {
+                result.ErrorMessage = "No AVB footer found.";
+            }
             return result;
         }
 
         result.IsSigned = true;
-        result.Footer = footer.Value;
+        result.Footer = footer;
+        var footerOffset = (ulong)(imageData.Length - AvbFooter.Size);
+        if (footer.Value.OriginalImageSize > footer.Value.VbmetaOffset ||
+            footer.Value.VbmetaOffset > footerOffset ||
+            footer.Value.VbmetaSize > footerOffset - footer.Value.VbmetaOffset ||
+            footer.Value.VbmetaSize < AvbVBMetaImageHeader.Size ||
+            footer.Value.VbmetaOffset > int.MaxValue ||
+            footer.Value.VbmetaSize > int.MaxValue)
+        {
+            result.ErrorMessage = "Invalid AVB footer image size, VBMeta offset, or VBMeta size.";
+            return result;
+        }
 
+        var vbmetaOffset = (int)footer.Value.VbmetaOffset;
+        var vbmetaSize = (int)footer.Value.VbmetaSize;
+        var vbmeta = imageData.AsSpan(vbmetaOffset, vbmetaSize).ToArray();
+        AvbVBMetaImageHeader header;
         try
         {
-            var authDataOffset = (int)footer.Value.AuthDataOffset;
-            var authDataSize = (int)footer.Value.AuthDataSize;
-
-            if (authDataOffset <= 0 || authDataSize <= 0 ||
-                (ulong)(authDataOffset + authDataSize) > (ulong)imageData.Length)
-            {
-                result.IsValid = false;
-                result.ErrorMessage = "Invalid authentication data offset or size";
-                return result;
-            }
-
-            var hashSize = GetHashSize(footer.Value.AlgorithmName);
-            if (authDataSize < hashSize + 256)
-            {
-                result.IsValid = false;
-                result.ErrorMessage = "Authentication data too small";
-                return result;
-            }
-
-            var hashData = new byte[hashSize];
-            Array.Copy(imageData, authDataOffset, hashData, 0, hashSize);
-
-            var signatureData = new byte[authDataSize - hashSize];
-            Array.Copy(imageData, authDataOffset + hashSize, signatureData, 0, signatureData.Length);
-
-            var dataToHash = new byte[authDataOffset];
-            Array.Copy(imageData, dataToHash, authDataOffset);
-
-            var hashAlgorithm = GetHashAlgorithm(footer.Value.AlgorithmName);
-            var computedHash = SHA256.HashData(dataToHash);
-            if (hashAlgorithm != "SHA256")
-            {
-                computedHash = SHA512.HashData(dataToHash);
-            }
-
-            result.IsValid = false;
-
-            if (certificateData is { Length: > 0 })
-            {
-                var rsa = ExtractRsaPublicKeyFromCertificate(certificateData);
-                if (rsa != null)
-                {
-                    using (rsa)
-                    {
-                        result.IsValid = rsa.VerifyData(dataToHash, signatureData,
-                            hashAlgorithm == "SHA256" ? HashAlgorithmName.SHA256 : HashAlgorithmName.SHA512,
-                            RSASignaturePadding.Pkcs1);
-                    }
-                }
-                else
-                {
-                    result.ErrorMessage = "Failed to extract RSA public key from certificate";
-                }
-            }
-            else
-            {
-                // Without a certificate we can only verify the hash stored in the auth block.
-                var hashMatch = computedHash.AsSpan().SequenceEqual(hashData);
-                result.IsValid = hashMatch;
-                if (!hashMatch)
-                {
-                    result.ErrorMessage = "Hash mismatch: image content changed since signing.";
-                }
-            }
+            header = AvbVBMetaImageHeader.FromBytes(vbmeta);
         }
         catch (Exception ex)
         {
-            result.IsValid = false;
             result.ErrorMessage = ex.Message;
+            return result;
+        }
+
+        result.VBMetaHeader = header;
+        if (!header.IsValid())
+        {
+            result.ErrorMessage = "Invalid VBMeta header.";
+            return result;
+        }
+
+        if (!AvbSignatureVerifier.TryGetKeySizeAndHash(header.AlgorithmType, out _, out _))
+        {
+            result.ErrorMessage = $"Unknown VBMeta algorithm type {header.AlgorithmType}.";
+            return result;
+        }
+
+        if (!TryValidateVbmetaRanges(header, (ulong)vbmeta.Length, out var rangeError))
+        {
+            result.ErrorMessage = rangeError;
+            return result;
+        }
+
+        RSA? trustedKey = null;
+        try
+        {
+            if (certificateData is { Length: > 0 })
+            {
+                trustedKey = ExtractRsaPublicKeyFromCertificate(certificateData);
+                if (trustedKey == null)
+                {
+                    result.ErrorMessage = "Failed to extract RSA public key from certificate.";
+                    return result;
+                }
+            }
+
+            var signatureResult = AvbSignatureVerifier.Verify(vbmeta, trustedKey);
+            if (header.AlgorithmType == AvbSignatureVerifier.AlgorithmNone)
+            {
+                result.ErrorMessage = "VBMeta algorithm NONE is unsigned.";
+                return result;
+            }
+
+            result.IsValid = signatureResult.HashIsValid && signatureResult.SignatureIsValid;
+            if (!result.IsValid)
+            {
+                result.ErrorMessage = signatureResult.ErrorMessage ?? (trustedKey != null
+                    ? "VBMeta hash or trusted signature verification failed."
+                    : "VBMeta hash or embedded-key signature verification failed.");
+            }
+        }
+        finally
+        {
+            trustedKey?.Dispose();
         }
 
         return result;
     }
 
-    /// <summary>
-    /// Validates a standalone VBMeta image (magic "AVB0"), returning header summary.
-    /// <para>校验独立的 VBMeta 镜像(魔数 "AVB0"),返回头部摘要。</para>
-    /// </summary>
+    /// <summary>Validates a standalone VBMeta image and returns its parsed header. <para>验证独立 VBMeta 镜像并返回解析出的头。</para></summary>
+    /// <param name="imageData">The VBMeta image bytes. <para>VBMeta 镜像字节。</para></param>
+    /// <returns>The verification result. <para>验证结果。</para></returns>
     public static AvbVerifyResult VerifyVBMeta(byte[] imageData)
     {
-        var result = new AvbVerifyResult { IsSigned = false };
+        var result = new AvbVerifyResult();
         if (imageData.Length < AvbVBMetaImageHeader.Size)
         {
             result.ErrorMessage = "Image too small to contain a VBMeta header.";
             return result;
         }
 
-        var header = AvbVBMetaImageHeader.FromBytes(imageData);
+        AvbVBMetaImageHeader header;
+        try
+        {
+            header = AvbVBMetaImageHeader.FromBytes(imageData);
+        }
+        catch (Exception ex)
+        {
+            result.ErrorMessage = ex.Message;
+            return result;
+        }
+
         if (!header.IsValid())
         {
             result.ErrorMessage = "Invalid VBMeta magic (expected AVB0).";
             return result;
         }
 
-        result.IsSigned = true;
         result.VBMetaHeader = header;
-
-        // Check that declared offsets stay within the image.
-        var authSize = header.AuthenticationDataBlockSize;
-        var auxSize = header.AuxiliaryDataBlockSize;
-        var ok = authSize + auxSize <= (ulong)imageData.Length - AvbVBMetaImageHeader.Size;
-        result.IsValid = ok;
-        if (!ok)
+        if (!TryValidateVbmetaRanges(header, (ulong)imageData.Length, out var error, allowTrailingPadding: true))
         {
-            result.ErrorMessage = "VBMeta data blocks exceed image size.";
+            result.ErrorMessage = error;
+            return result;
         }
+
+        result.IsSigned = true;
+        if (header.AlgorithmType == AvbSignatureVerifier.AlgorithmNone)
+        {
+            result.ErrorMessage = "VBMeta algorithm NONE is unsigned.";
+            return result;
+        }
+
+        if (!AvbSignatureVerifier.TryGetKeySizeAndHash(header.AlgorithmType, out _, out _))
+        {
+            result.ErrorMessage = $"Unknown VBMeta algorithm type {header.AlgorithmType}.";
+            return result;
+        }
+
+        var signatureResult = AvbSignatureVerifier.Verify(imageData);
+        result.IsSigned = signatureResult.IsSigned;
+        result.IsValid = signatureResult.HashIsValid && signatureResult.SignatureIsValid;
+        if (!result.IsValid)
+        {
+            result.ErrorMessage = signatureResult.ErrorMessage ?? "VBMeta hash or embedded-key signature verification failed.";
+        }
+
         return result;
     }
 
-    private static int GetHashSize(string algorithmName) => algorithmName.StartsWith("SHA512", StringComparison.OrdinalIgnoreCase) ? 64 : 32;
+    private static bool TryValidateVbmetaRanges(AvbVBMetaImageHeader header, ulong vbmetaSize, out string? error, bool allowTrailingPadding = false)
+    {
+        if (header.AuthenticationDataBlockSize > ulong.MaxValue - header.AuxiliaryDataBlockSize)
+        {
+            error = "VBMeta authentication and auxiliary block sizes overflow.";
+            return false;
+        }
 
-    private static string GetHashAlgorithm(string algorithmName) => algorithmName.StartsWith("SHA512", StringComparison.OrdinalIgnoreCase) ? "SHA512" : "SHA256";
+        if (vbmetaSize < AvbVBMetaImageHeader.Size)
+        {
+            error = "VBMeta image is smaller than its header.";
+            return false;
+        }
+
+        var blocksSize = header.AuthenticationDataBlockSize + header.AuxiliaryDataBlockSize;
+        var availableSize = vbmetaSize - AvbVBMetaImageHeader.Size;
+        if (blocksSize > availableSize || (!allowTrailingPadding && blocksSize != availableSize))
+        {
+            error = "VBMeta authentication or auxiliary block exceeds the declared image size.";
+            return false;
+        }
+
+        if (!RangeWithin(header.HashOffset, header.HashSize, header.AuthenticationDataBlockSize) ||
+            !RangeWithin(header.SignatureOffset, header.SignatureSize, header.AuthenticationDataBlockSize) ||
+            !RangeWithin(header.PublicKeyOffset, header.PublicKeySize, header.AuxiliaryDataBlockSize) ||
+            !RangeWithin(header.PublicKeyMetadataOffset, header.PublicKeyMetadataSize, header.AuxiliaryDataBlockSize) ||
+            !RangeWithin(header.DescriptorsOffset, header.DescriptorsSize, header.AuxiliaryDataBlockSize))
+        {
+            error = "VBMeta authentication or auxiliary data range is out of bounds.";
+            return false;
+        }
+
+        if (header.AlgorithmType == AvbSignatureVerifier.AlgorithmNone &&
+            (header.AuthenticationDataBlockSize != 0 || header.HashSize != 0 || header.SignatureSize != 0))
+        {
+            error = "VBMeta algorithm NONE must not contain authentication data.";
+            return false;
+        }
+
+        error = null;
+        return true;
+    }
+
+    private static bool RangeWithin(ulong offset, ulong size, ulong containerSize) =>
+        offset <= containerSize && size <= containerSize - offset;
 
     private static RSA? ExtractRsaPublicKeyFromCertificate(byte[] certificateData)
     {
@@ -204,14 +265,7 @@ public static class AvbVerifier
         }
         catch
         {
-            try
-            {
-                return RSA.Create();
-            }
-            catch
-            {
-                return null;
-            }
+            return null;
         }
     }
 }

@@ -285,11 +285,41 @@ public sealed class CpioFormatHandler : IFormatHandler
     {
         var permissions = GetUnixPermissions(fullPath, fallback: 0x1A4);
         var info = new FileInfo(fullPath);
+        var expectedLength = info.Length;
+        var expectedWriteTime = info.LastWriteTimeUtc;
+        var expectedCreationTime = info.CreationTimeUtc;
+        // Best-effort TOCTOU mitigation only: reject links and revalidate observable attributes
+        // before/after opening. These attributes are not a stable cross-platform file identity,
+        // so callers must not treat this as a strong replacement-detection guarantee.
+        Stream OpenValidatedSource()
+        {
+            var before = new FileInfo(fullPath);
+            ValidateSourceIdentity(before, expectedLength, expectedWriteTime, expectedCreationTime);
+            var source = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+            try
+            {
+                if ((File.GetAttributes(fullPath) & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidDataException($"Source file '{fullPath}' became a symbolic link or reparse point.");
+                var after = new FileInfo(fullPath);
+                ValidateSourceIdentity(after, expectedLength, expectedWriteTime, expectedCreationTime);
+                if (source.Length != expectedLength)
+                    throw new InvalidDataException($"Source file '{fullPath}' changed after enumeration.");
+                return source;
+            }
+            catch
+            {
+                source.Dispose();
+                throw;
+            }
+        }
+
         return new ArchiveEntry
         {
             Name = ToArchiveRelativePath(fullPath, sourceRoot),
             LinkName = null,
-            Data = File.ReadAllBytes(fullPath),
+            Data = [],
+            DeclaredDataLength = expectedLength,
+            DataStreamFactory = OpenValidatedSource,
             Metadata = new ArchiveEntryMetadata
             {
                 Mode = CpioFieldParser.ToMode(CpioFileType.Regular, permissions),
@@ -319,6 +349,16 @@ public sealed class CpioFormatHandler : IFormatHandler
                 UnixPermissions = 0x1FF,
             },
         };
+    }
+
+    private static void ValidateSourceIdentity(FileInfo info, long length, DateTime writeTimeUtc, DateTime creationTimeUtc)
+    {
+        info.Refresh();
+        if (!info.Exists || info.Length != length || info.LastWriteTimeUtc != writeTimeUtc || info.CreationTimeUtc != creationTimeUtc
+            || (info.Attributes & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new InvalidDataException($"Source file '{info.FullName}' changed after enumeration.");
+        }
     }
 
     private static bool IsSymlink(string path) => (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0;

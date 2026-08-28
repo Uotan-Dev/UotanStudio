@@ -46,6 +46,7 @@ public sealed class Ext4Parser : IDisposable
     private const int SuperblockReadLength = 1024 + 360;
     private const uint RootInodeNumber = 2;
     private const int MaxExtentLeafPointers = 12; // 12 direct pointers in the indirect scheme
+    private const long MaximumGroupDescriptorTableSize = 512L * 1024 * 1024;
 
     private readonly Stream _stream;
     private Ext4Superblock _superblock = null!;
@@ -140,7 +141,12 @@ public sealed class Ext4Parser : IDisposable
         }
 
         _groups = new Ext4BlockGroup[groupCount];
-        var gdtBytes = new byte[groupCount * descSize];
+        var gdtLength = checked((long)groupCount * descSize);
+        if (gdtLength > MaximumGroupDescriptorTableSize || gdtLength > _stream.Length - 2048)
+        {
+            throw new InvalidDataException("ext4 group descriptor table exceeds the image bounds or supported metadata limit.");
+        }
+        var gdtBytes = new byte[checked((int)gdtLength)];
         _stream.Position = 2048;
         _stream.ReadExactly(gdtBytes);
         for (var i = 0; i < groupCount; i++)

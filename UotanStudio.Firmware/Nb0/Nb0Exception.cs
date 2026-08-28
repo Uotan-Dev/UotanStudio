@@ -27,8 +27,10 @@ public class Nb0Exception : Exception
 /// <para>使用指定的错误消息初始化 Nb0CorruptedException 的新实例。</para>
 /// Initializes a new instance of Nb0CorruptedException with a specified error message.
 /// </remarks>
-public sealed class Nb0CorruptedException(string message) : Nb0Exception(message)
+public sealed class Nb0CorruptedException : Nb0Exception
 {
+    public Nb0CorruptedException(string message) : base(message) { }
+    public Nb0CorruptedException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>

@@ -138,5 +138,5 @@ public class FileDataProvider(string filePath, long offset, long length) : ISpar
     /// Releases any resources held by the provider. This provider does not hold persistent resources.
     /// <para>释放提供程序持有的所有资源。此提供程序不持有持久资源。</para>
     /// </summary>
-    public void Dispose() { }
+    public virtual void Dispose() { }
 }

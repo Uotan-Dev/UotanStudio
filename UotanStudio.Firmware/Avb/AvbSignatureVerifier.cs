@@ -4,7 +4,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Digests;
-using Org.BouncyCastle.Crypto.Engines;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 using Org.BouncyCastle.Math;
@@ -73,8 +72,8 @@ public sealed class AvbSignatureVerifyResult
     public bool IsSigned { get; init; }
 
     /// <summary>
-    /// Gets whether the RSASSA-PSS / PKCS#1 v1.5 signature verified successfully.
-    /// <para>获取 RSASSA-PSS / PKCS#1 v1.5 签名是否验证成功。</para>
+    /// Gets whether the AVB-specified RSASSA-PKCS1-v1_5 signature verified successfully.
+    /// <para>获取 AVB 规定的 RSASSA-PKCS1-v1_5 签名是否验证成功。</para>
     /// </summary>
     public bool SignatureIsValid { get; init; }
 
@@ -122,21 +121,15 @@ public sealed class AvbSignatureVerifyResult
 }
 
 /// <summary>
-/// Verifies the RSASSA-PSS / PKCS#1 v1.5 signature of an Android Verified Boot (AVB) vbmeta image.
-/// <para>验证 Android Verified Boot（AVB）vbmeta 镜像的 RSASSA-PSS / PKCS#1 v1.5 签名。</para>
+/// Verifies the AVB-specified RSASSA-PKCS1-v1_5 signature of an Android Verified Boot (AVB) vbmeta image.
+/// <para>验证 Android Verified Boot（AVB）vbmeta 镜像的 AVB 规定 RSASSA-PKCS1-v1_5 签名。</para>
 /// </summary>
 /// <remarks>
-/// Layout facts (verified against real avbtool-generated images):
-/// the vbmeta header is 256 bytes; <c>authentication_data_block_size</c> / <c>auxiliary_data_block_size</c>
-/// live at offsets 12/20; hash/signature offsets are relative to the authentication data block; public key,
-/// descriptors and metadata offsets are relative to the auxiliary data block. The signing input is the
-/// header followed by the auxiliary data block; legacy avbtool forks may keep the two block-size fields
-/// intact while spec-strict tooling zeroes them before hashing/signing, so both forms are tried.
-/// <para>布局事实（已对照真实 avbtool 生成的镜像验证）：vbmeta 头为 256 字节；
-/// <c>authentication_data_block_size</c> / <c>auxiliary_data_block_size</c> 位于偏移 12/20；
-/// 哈希/签名偏移相对于认证数据块；公钥、描述符和元数据偏移相对于辅助数据块。签名输入为
-/// 头及其后的辅助数据块；旧式 avbtool 分支可能保留两个块大小字段不变，而符合规范的
-/// 工具在哈希/签名前将其清零，因此两种形式都会被尝试。</para>
+/// The signed data is exactly the serialized 256-byte vbmeta header followed by the auxiliary data block.
+/// Hash/signature offsets are relative to the authentication data block; public key, descriptors and metadata
+/// offsets are relative to the auxiliary data block.
+/// <para>签名数据严格为序列化的 256 字节 vbmeta 头及其后的辅助数据块。哈希/签名偏移相对于认证
+/// 数据块；公钥、描述符和元数据偏移相对于辅助数据块。</para>
 /// </remarks>
 public static class AvbSignatureVerifier
 {
@@ -362,36 +355,44 @@ public static class AvbSignatureVerifier
         var result = new AvbSignatureVerifyResult
         {
             IsSigned = false,
-            AlgorithmName = GetAlgorithmName(algorithmType),
-            Descriptors = ExtractDescriptors(vbmetaData)
+            AlgorithmName = GetAlgorithmName(algorithmType)
         };
 
         if (algorithmType == AlgorithmNone)
         {
-            result = With(result, ErrorMessage: "vbmeta image declares algorithm NONE (not signed). vbmeta 镜像声明算法为 NONE（未签名）。");
-            return result;
+            return With(result, ErrorMessage: "vbmeta image declares algorithm NONE (not signed). vbmeta 镜像声明算法为 NONE（未签名）。");
         }
 
-        if (sigSize == 0 || sigOffset + sigSize > authSize)
+        if (!TryGetKeySizeAndHash(algorithmType, out _, out _) ||
+            authSize > int.MaxValue || auxSize > int.MaxValue ||
+            authSize > (ulong)vbmetaData.Length - HeaderSize ||
+            auxSize > (ulong)vbmetaData.Length - HeaderSize - authSize)
         {
-            result = With(result, ErrorMessage: "vbmeta header declares no in-range signature. vbmeta 头未声明有效范围内的签名。");
-            return result;
+            return With(result, ErrorMessage: "vbmeta header declares invalid authentication or auxiliary block sizes. vbmeta 头声明的认证块或辅助块大小无效。");
         }
 
-        var sigStart = (int)(HeaderSize + sigOffset);
+        result = With(result, Descriptors: ExtractDescriptors(vbmetaData));
+        if (sigSize == 0 || sigOffset > authSize || sigSize > authSize - sigOffset ||
+            sigOffset > int.MaxValue || sigSize > int.MaxValue)
+        {
+            return With(result, ErrorMessage: "vbmeta header declares no in-range signature. vbmeta 头未声明有效范围内的签名。");
+        }
+
+        var sigStart = HeaderSize + (int)sigOffset;
         var signature = vbmetaData.AsSpan(sigStart, (int)sigSize).ToArray();
         result = With(result, IsSigned: true, StoredSignature: signature);
 
         // Verify the stored digest first (cheap and independent of the public key).
-        var salt = FindFirstSalt(result.Descriptors);
-        var (hashOk, storedHash, computedHash) = VerifyStoredHash(vbmetaData, salt, algorithmType, hashOffset, hashSize);
+        var (hashOk, storedHash, computedHash) = VerifyStoredHash(vbmetaData, algorithmType, hashOffset, hashSize);
         result = With(result, HashIsValid: hashOk, StoredHash: storedHash, ComputedHash: computedHash);
 
         RSA? key = trustedPublicKey;
         var embeddedKey = (RSA?)null;
         try
         {
-            if (key == null && pubKeySize > 0 && pubKeyOffset + pubKeySize <= auxSize)
+            if (key == null && pubKeySize > 0 &&
+                pubKeyOffset <= auxSize && pubKeySize <= auxSize - pubKeyOffset &&
+                pubKeyOffset <= int.MaxValue && pubKeySize <= int.MaxValue)
             {
                 var keyBlob = vbmetaData.AsSpan(HeaderSize + (int)authSize + (int)pubKeyOffset, (int)pubKeySize).ToArray();
                 embeddedKey = ImportAvbRsaPublicKey(keyBlob);
@@ -552,49 +553,27 @@ public static class AvbSignatureVerifier
 
         var authSize = BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(12, 8));
         var auxSize = BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(20, 8));
-        if (authSize + auxSize > (ulong)vbmetaData.Length - HeaderSize)
+        if (authSize > (ulong)vbmetaData.Length - HeaderSize ||
+            auxSize > (ulong)vbmetaData.Length - HeaderSize - authSize)
         {
             return false;
         }
 
-        var header = vbmetaData.AsSpan(0, HeaderSize).ToArray();
-        var aux = vbmetaData.AsSpan(HeaderSize + (int)authSize, (int)auxSize).ToArray();
-
-        var inputs = new List<byte[]> { Combine(header, aux) };
-        var zeroedHeader = (byte[])header.Clone();
-        BinaryPrimitives.WriteUInt64BigEndian(zeroedHeader.AsSpan(12, 8), 0);
-        BinaryPrimitives.WriteUInt64BigEndian(zeroedHeader.AsSpan(20, 8), 0);
-        inputs.Add(Combine(zeroedHeader, aux));
-
+        var signedData = Combine(
+            vbmetaData.AsSpan(0, HeaderSize).ToArray(),
+            vbmetaData.AsSpan(HeaderSize + (int)authSize, (int)auxSize).ToArray());
         var keyParams = ToRsaKeyParameters(key);
         if (keyParams == null)
         {
             return false;
         }
 
-        foreach (var input in inputs)
-        {
-            // Spec-strict tooling uses RSASSA-PSS; legacy avbtool forks use PKCS#1 v1.5.
-            if (VerifyWithPadding(input, signature, keyParams, hashName, usePss: true) ||
-                VerifyWithPadding(input, signature, keyParams, hashName, usePss: false))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool VerifyWithPadding(byte[] data, byte[] signature, RsaKeyParameters key, string hashName, bool usePss)
-    {
         try
         {
             IDigest digest = hashName == "SHA512" ? new Sha512Digest() : new Sha256Digest();
-            ISigner signer = usePss
-                ? new PssSigner(new RsaEngine(), digest, digest.GetDigestSize())
-                : new RsaDigestSigner(digest);
-            signer.Init(false, key);
-            signer.BlockUpdate(data, 0, data.Length);
+            ISigner signer = new RsaDigestSigner(digest);
+            signer.Init(false, keyParams);
+            signer.BlockUpdate(signedData, 0, signedData.Length);
             return signer.VerifySignature(signature);
         }
         catch
@@ -617,9 +596,11 @@ public static class AvbSignatureVerifier
     }
 
     private static (bool Ok, byte[]? StoredHash, byte[]? ComputedHash) VerifyStoredHash(
-        byte[] vbmetaData, byte[]? salt, uint algorithmType, ulong hashOffset, ulong hashSize)
+        byte[] vbmetaData, uint algorithmType, ulong hashOffset, ulong hashSize)
     {
-        if (hashSize == 0 || hashOffset + hashSize > BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(12, 8)))
+        var authSize = BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(12, 8));
+        if (hashSize == 0 || hashOffset > authSize || hashSize > authSize - hashOffset ||
+            hashOffset > int.MaxValue || hashSize > int.MaxValue)
         {
             return (false, null, null);
         }
@@ -630,49 +611,19 @@ public static class AvbSignatureVerifier
         }
 
         var storedHash = vbmetaData.AsSpan(HeaderSize + (int)hashOffset, (int)hashSize).ToArray();
-        var authSize = BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(12, 8));
         var auxSize = BinaryPrimitives.ReadUInt64BigEndian(vbmetaData.AsSpan(20, 8));
         if (authSize + auxSize > (ulong)vbmetaData.Length - HeaderSize)
         {
             return (false, storedHash, null);
         }
 
-        var header = vbmetaData.AsSpan(0, HeaderSize).ToArray();
-        var aux = vbmetaData.AsSpan(HeaderSize + (int)authSize, (int)auxSize).ToArray();
-        var zeroedHeader = (byte[])header.Clone();
-        BinaryPrimitives.WriteUInt64BigEndian(zeroedHeader.AsSpan(12, 8), 0);
-        BinaryPrimitives.WriteUInt64BigEndian(zeroedHeader.AsSpan(20, 8), 0);
-
-        var candidates = new List<byte[]> { Combine(header, aux), Combine(zeroedHeader, aux) };
-        if (salt is { Length: > 0 })
-        {
-            candidates.Add(Combine(salt, Combine(header, aux)));
-            candidates.Add(Combine(salt, Combine(zeroedHeader, aux)));
-        }
-
-        foreach (var candidate in candidates)
-        {
-            var computed = hashName == "SHA512" ? SHA512.HashData(candidate) : SHA256.HashData(candidate);
-            if (computed.AsSpan().SequenceEqual(storedHash))
-            {
-                return (true, storedHash, computed);
-            }
-        }
-
-        return (false, storedHash, null);
-    }
-
-    private static byte[]? FindFirstSalt(IReadOnlyList<AvbDescriptorInfo> descriptors)
-    {
-        foreach (var descriptor in descriptors)
-        {
-            if (descriptor.Tag == HashDescriptorTag && descriptor.Salt is { Length: > 0 })
-            {
-                return descriptor.Salt;
-            }
-        }
-
-        return null;
+        var signedData = Combine(
+            vbmetaData.AsSpan(0, HeaderSize).ToArray(),
+            vbmetaData.AsSpan(HeaderSize + (int)authSize, (int)auxSize).ToArray());
+        var computed = hashName == "SHA512" ? SHA512.HashData(signedData) : SHA256.HashData(signedData);
+        return computed.AsSpan().SequenceEqual(storedHash)
+            ? (true, storedHash, computed)
+            : (false, storedHash, computed);
     }
 
     private static byte[] Combine(byte[] first, byte[] second)

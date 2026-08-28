@@ -64,6 +64,10 @@ public static class PacExtractor
         ArgumentException.ThrowIfNullOrEmpty(outDir);
 
         Directory.CreateDirectory(outDir);
+        var outputRoot = Path.GetFullPath(outDir);
+        var rootPrefix = outputRoot.EndsWith(Path.DirectorySeparatorChar)
+            ? outputRoot
+            : outputRoot + Path.DirectorySeparatorChar;
 
         using var fs = new FileStream(imagePath, FileMode.Open, FileAccess.Read);
         using var reader = new BinaryReader(fs);
@@ -93,30 +97,50 @@ public static class PacExtractor
                 continue;
             }
 
+            ValidateOutputName(fileName);
+            var relativePath = fileName.Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar);
+            var fullPath = Path.GetFullPath(relativePath, outputRoot);
+            if (!fullPath.StartsWith(rootPrefix, PathComparison))
+            {
+                throw new InvalidDataException($"PAC entry escapes output directory: {fileName}");
+            }
+            if ((ulong)file.PacOffset > (ulong)fs.Length ||
+                (ulong)file.Size > (ulong)fs.Length - file.PacOffset)
+            {
+                throw new InvalidDataException($"PAC entry range is outside the image: {fileName}");
+            }
+
             fs.Seek(file.PacOffset, SeekOrigin.Begin);
-            var fullPath = Path.Combine(outDir, fileName);
-
-            var subDir = Path.GetDirectoryName(fullPath);
-            if (!string.IsNullOrEmpty(subDir) && !Directory.Exists(subDir))
+            var parentDirectory = Path.GetDirectoryName(fullPath)
+                ?? throw new InvalidDataException($"PAC entry has no output directory: {fileName}");
+            Directory.CreateDirectory(parentDirectory);
+            var tempPath = fullPath + ".tmp-" + Guid.NewGuid().ToString("N");
+            try
             {
-                Directory.CreateDirectory(subDir);
-            }
-
-            using var fo = new FileStream(fullPath, FileMode.Create, FileAccess.Write);
-            long remaining = file.Size;
-            var buffer = new byte[ChunkSize];
-            while (remaining > 0)
-            {
-                var toRead = (int)Math.Min(ChunkSize, remaining);
-                var read = fs.Read(buffer, 0, toRead);
-                if (read == 0)
+                using (var fo = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
-                    break;
+                    long remaining = file.Size;
+                    var buffer = new byte[ChunkSize];
+                    while (remaining > 0)
+                    {
+                        var toRead = (int)Math.Min(ChunkSize, remaining);
+                        var read = fs.Read(buffer, 0, toRead);
+                        if (read == 0)
+                        {
+                            throw new EndOfStreamException($"Unexpected EOF extracting PAC entry: {fileName}");
+                        }
+                        fo.Write(buffer, 0, read);
+                        remaining -= read;
+                    }
                 }
-                fo.Write(buffer, 0, read);
-                remaining -= read;
+                File.Move(tempPath, fullPath, true);
+                count++;
             }
-            count++;
+            finally
+            {
+                File.Delete(tempPath);
+            }
         }
         return count;
     }
@@ -165,6 +189,19 @@ public static class PacExtractor
         }
 
         return (headOk, head.DataCrc == calculatedDataCrc);
+    }
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+    private static void ValidateOutputName(string name)
+    {
+        var hasPortableRoot = name.Length > 0 && (name[0] is '/' or '\\' ||
+            (name.Length >= 2 && char.IsAsciiLetter(name[0]) && name[1] == ':'));
+        if (string.IsNullOrWhiteSpace(name) || Path.IsPathRooted(name) || hasPortableRoot || name.Contains('\0'))
+        {
+            throw new InvalidDataException($"Invalid PAC output name: {name}");
+        }
     }
 
     private static void ValidateHeader(SprdHead head)

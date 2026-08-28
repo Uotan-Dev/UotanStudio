@@ -16,20 +16,39 @@ public sealed class TarArchiveReader
     /// </summary>
     /// <param name="stream">Source archive stream.<para>源归档流。</para></param>
     /// <returns>A list containing all archive entries.<para>包含全部归档条目的列表。</para></returns>
-    public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream) => [.. ReadEntries(stream)];
+    public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        var entries = new List<ArchiveEntry>();
+        foreach (var entry in ReadEntries(stream))
+        {
+            entries.Add(entry);
+        }
+        return entries;
+    }
 
     /// <summary>
-    /// Reads TAR entries from a stream as a lazy sequence.
-    /// <para>以惰性序列从流中读取 TAR 条目。</para>
+    /// Reads TAR entries with independently usable, materialized payload data.
     /// </summary>
-    /// <param name="stream">Source archive stream.<para>源归档流。</para></param>
-    /// <returns>An enumerable that yields archive entries as they are read.<para>读取时逐个产出归档条目的可枚举序列。</para></returns>
     public IEnumerable<ArchiveEntry> ReadEntries(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        foreach (var entry in ReadEntriesStreaming(stream))
+        {
+            yield return Materialize(entry);
+        }
+    }
+
+    /// <summary>
+    /// Lazily reads TAR entries. A payload stream is ephemeral and must be consumed before
+    /// requesting the next entry.
+    /// </summary>
+    public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
 
         using var reader = new TarReader(stream, leaveOpen: true);
-        while (reader.GetNextEntry(copyData: true) is { } tarEntry)
+        while (reader.GetNextEntry(copyData: false) is { } tarEntry)
         {
             var fileType = tarEntry.EntryType switch
             {
@@ -59,24 +78,21 @@ public sealed class TarArchiveReader
                 _ => CpioFileType.Regular,
             };
 
-            var data = Array.Empty<byte>();
-            if (tarEntry.DataStream is not null)
-            {
-                using var ms = new MemoryStream();
-                tarEntry.DataStream.CopyTo(ms);
-                data = ms.ToArray();
-            }
-
             var mode = tarEntry.Mode;
             var uid = tarEntry.Uid;
             var gid = tarEntry.Gid;
             var xattrs = ExtractExtendedAttributes(tarEntry);
 
+            var isRegular = fileType == CpioFileType.Regular;
             yield return new ArchiveEntry
             {
                 Name = tarEntry.Name,
                 LinkName = tarEntry.LinkName,
-                Data = data,
+                // Only regular entries own TAR payloads. Do not touch Length/DataStream for
+                // metadata, directory, device, or link entries.
+                Data = [],
+                DataStream = isRegular ? tarEntry.DataStream : null,
+                DeclaredDataLength = isRegular ? tarEntry.Length : 0,
                 Metadata = new ArchiveEntryMetadata
                 {
                     Mode = checked((uint)(int)mode),
@@ -89,6 +105,33 @@ public sealed class TarArchiveReader
                 },
             };
         }
+    }
+
+    /// <summary>
+    /// Materializes a streaming entry's payload into <see cref="ArchiveEntry.Data"/>.
+    /// <para>将流式条目的负载物化到 ArchiveEntry.Data。</para>
+    /// </summary>
+    private static ArchiveEntry Materialize(ArchiveEntry entry)
+    {
+        if (entry.DataStream is null)
+        {
+            return entry;
+        }
+
+        using var ms = new MemoryStream();
+        var source = entry.DataStream;
+        if (source.CanSeek)
+        {
+            source.Position = 0;
+        }
+        source.CopyTo(ms);
+        return new ArchiveEntry
+        {
+            Name = entry.Name,
+            LinkName = entry.LinkName,
+            Data = ms.ToArray(),
+            Metadata = entry.Metadata,
+        };
     }
 
     private static IReadOnlyDictionary<string, byte[]> ExtractExtendedAttributes(TarEntry tarEntry)
