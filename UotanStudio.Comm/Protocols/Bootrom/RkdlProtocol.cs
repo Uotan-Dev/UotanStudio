@@ -301,16 +301,9 @@ public static class RkdlCrc
     /// <returns>The CRC-32 value. <para>CRC-32 值。</para></returns>
     public static uint Crc32(ReadOnlySpan<byte> data)
     {
-        var crc = 0xFFFFFFFF;
-        foreach (var b in data)
-        {
-            crc ^= b;
-            for (var i = 0; i < 8; i++)
-            {
-                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320u : crc >> 1;
-            }
-        }
-        return ~crc;
+        var crc = new System.IO.Hashing.Crc32();
+        crc.Append(data);
+        return crc.GetCurrentHashAsUInt32();
     }
 }
 

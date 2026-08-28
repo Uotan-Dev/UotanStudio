@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Hashing;
 
 namespace UotanStudio.Firmware.Sparse;
 
@@ -66,7 +67,7 @@ public static class SparseWriter
             stream.Write(pad);
         }
 
-        var checksum = includeCrc ? Crc32.Begin() : (uint?)null;
+        Crc32? crc = includeCrc ? new Crc32() : null;
         var buffer = new byte[BufferSize];
         var headerBuf = new byte[outHeader.ChunkHeaderSize];
         var fillValData = new byte[4];
@@ -107,10 +108,7 @@ public static class SparseWriter
                                 n = toRead;
                             }
                             stream.Write(buffer, 0, n);
-                            if (checksum.HasValue)
-                            {
-                                checksum = Crc32.Update(checksum.Value, buffer.AsSpan(0, n));
-                            }
+                            crc?.Append(buffer.AsSpan(0, n));
                             written += n;
                         }
                         break;
@@ -123,10 +121,7 @@ public static class SparseWriter
                         // 读取方将其逻辑展开为 chunkSize * blockSize。</para>
                         BinaryPrimitives.WriteUInt32LittleEndian(fillValData, chunk.FillValue);
                         stream.Write(fillValData, 0, 4);
-                        if (checksum.HasValue)
-                        {
-                            checksum = Crc32.UpdateRepeated(checksum.Value, chunk.FillValue, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
-                        }
+                        AppendRepeated(crc, chunk.FillValue, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
                         break;
                     }
 
@@ -138,11 +133,7 @@ public static class SparseWriter
                     break;
                 default:
                     {
-                        // DontCare: no payload.
-                        if (checksum.HasValue)
-                        {
-                            checksum = Crc32.UpdateZero(checksum.Value, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
-                        }
+                        AppendZeros(crc, (long)chunk.Header.ChunkSize * outHeader.BlockSize);
                         break;
                     }
             }
@@ -159,13 +150,10 @@ public static class SparseWriter
             };
             trailingHeader.WriteTo(headerBuf);
             stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
-            if (checksum.HasValue)
-            {
-                checksum = Crc32.UpdateZero(checksum.Value, (long)trailingBlocks * outHeader.BlockSize);
-            }
+            AppendZeros(crc, (long)trailingBlocks * outHeader.BlockSize);
         }
 
-        if (includeCrc && checksum.HasValue)
+        if (includeCrc && crc is not null)
         {
             var crcHeader = new ChunkHeader
             {
@@ -176,8 +164,47 @@ public static class SparseWriter
             crcHeader.WriteTo(headerBuf);
             stream.Write(headerBuf, 0, outHeader.ChunkHeaderSize);
             var crcBuf = new byte[4];
-            BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, Crc32.Finish(checksum.Value));
+            BinaryPrimitives.WriteUInt32LittleEndian(crcBuf, crc.GetCurrentHashAsUInt32());
             stream.Write(crcBuf);
+        }
+    }
+
+    private static void AppendRepeated(Crc32? crc, uint fillValue, long totalBytes)
+    {
+        if (crc is null)
+        {
+            return;
+        }
+
+        Span<byte> buf = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(buf, fillValue);
+        var full = (int)(totalBytes / 4);
+        for (var i = 0; i < full; i++)
+        {
+            crc.Append(buf);
+        }
+
+        var rem = (int)(totalBytes % 4);
+        if (rem > 0)
+        {
+            crc.Append(buf[..rem]);
+        }
+    }
+
+    private static void AppendZeros(Crc32? crc, long totalBytes)
+    {
+        if (crc is null)
+        {
+            return;
+        }
+
+        Span<byte> buf = stackalloc byte[4096];
+        var remaining = totalBytes;
+        while (remaining > 0)
+        {
+            var n = (int)Math.Min(buf.Length, remaining);
+            crc.Append(buf[..n]);
+            remaining -= n;
         }
     }
 }

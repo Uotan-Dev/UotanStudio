@@ -35,7 +35,7 @@ internal static class XzContainer
     {
         var check = checkType == CheckTypeCrc64
             ? WriteUInt64LE(Crc64.Compute(originalData))
-            : WriteUInt32LE(Crc32.Compute(originalData));
+            : WriteUInt32LE(ComputeCrc32(originalData));
 
         using var output = new MemoryStream();
         WriteContainer(output, lzma2Data, (ulong)originalData.Length, check, dictionarySize, checkType);
@@ -193,11 +193,22 @@ internal static class XzContainer
     /// <summary>写小端序 CRC32 到流中。</summary>
     private static void WriteCrc32(Stream stream, byte[] data)
     {
-        var crc = Crc32.Compute(data);
+        var crc = ComputeCrc32(data);
         stream.WriteByte((byte)(crc & 0xFF));
         stream.WriteByte((byte)((crc >> 8) & 0xFF));
         stream.WriteByte((byte)((crc >> 16) & 0xFF));
         stream.WriteByte((byte)((crc >> 24) & 0xFF));
+    }
+
+    /// <summary>
+    /// 计算标准 CRC-32（初始值 0xFFFFFFFF，最终异或 0xFFFFFFFF）。
+    /// <para>Computes the standard CRC-32 (initial value 0xFFFFFFFF, final XOR 0xFFFFFFFF).</para>
+    /// </summary>
+    private static uint ComputeCrc32(ReadOnlySpan<byte> data)
+    {
+        var crc = new System.IO.Hashing.Crc32();
+        crc.Append(data);
+        return crc.GetCurrentHashAsUInt32();
     }
 
     /// <summary>返回小端序 8 字节值。<para>Returns an 8-byte little-endian value.</para></summary>

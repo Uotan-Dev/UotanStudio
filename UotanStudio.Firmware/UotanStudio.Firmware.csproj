@@ -21,7 +21,6 @@
     <!-- Compression / binary processing (used across formats) -->
     <PackageReference Include="BrotliSharpLib" />
     <PackageReference Include="BsDiff" />
-    <PackageReference Include="Crc32.NET" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="K4os.Compression.LZ4" />
     <PackageReference Include="K4os.Compression.LZ4.Legacy" />

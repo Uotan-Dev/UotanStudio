@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Hashing;
 
 namespace UotanStudio.Firmware.Sparse;
 
@@ -46,7 +47,7 @@ public static class SparseReader
             stream.Seek(sparseFile.Header.FileHeaderSize - SparseFormat.SparseHeaderSize, SeekOrigin.Current);
         }
 
-        uint? checksum = validateCrc ? Crc32.Begin() : null;
+        Crc32? crc = validateCrc ? new Crc32() : null;
         try
         {
             uint currentBlock = 0;
@@ -90,10 +91,7 @@ public static class SparseReader
                         }
                         var rawData = new byte[dataSize];
                         stream.ReadExactly(rawData);
-                        if (checksum.HasValue)
-                        {
-                            checksum = Crc32.Update(checksum.Value, rawData);
-                        }
+                        crc?.Append(rawData);
                         chunk.DataProvider = new MemoryDataProvider(rawData);
                         break;
 
@@ -104,10 +102,7 @@ public static class SparseReader
                         }
                         stream.ReadExactly(buffer4);
                         chunk.FillValue = BinaryPrimitives.ReadUInt32LittleEndian(buffer4);
-                        if (checksum.HasValue)
-                        {
-                            checksum = Crc32.UpdateRepeated(checksum.Value, chunk.FillValue, expectedRawSize);
-                        }
+                        AppendRepeated(crc, chunk.FillValue, expectedRawSize);
                         break;
 
                     case ChunkType.DontCare:
@@ -115,10 +110,7 @@ public static class SparseReader
                         {
                             throw new InvalidDataException($"Data size ({dataSize}) for DONT_CARE chunk {i} must be 0");
                         }
-                        if (checksum.HasValue)
-                        {
-                            checksum = Crc32.UpdateZero(checksum.Value, expectedRawSize);
-                        }
+                        AppendZeros(crc, expectedRawSize);
                         break;
 
                     case ChunkType.Crc32:
@@ -128,9 +120,13 @@ public static class SparseReader
                         }
                         stream.ReadExactly(buffer4);
                         var fileCrc = BinaryPrimitives.ReadUInt32LittleEndian(buffer4);
-                        if (checksum.HasValue && fileCrc != Crc32.Finish(checksum.Value))
+                        if (crc is not null)
                         {
-                            throw new InvalidDataException($"CRC32 checksum mismatch: file has 0x{fileCrc:X8}, computed 0x{Crc32.Finish(checksum.Value):X8}");
+                            var computed = crc.GetCurrentHashAsUInt32();
+                            if (fileCrc != computed)
+                            {
+                                throw new InvalidDataException($"CRC32 checksum mismatch: file has 0x{fileCrc:X8}, computed 0x{computed:X8}");
+                            }
                         }
                         break;
 
@@ -229,5 +225,44 @@ public static class SparseReader
             index--;
         }
         chunks.Insert(index, chunk);
+    }
+
+    private static void AppendRepeated(Crc32? crc, uint fillValue, long totalBytes)
+    {
+        if (crc is null)
+        {
+            return;
+        }
+
+        Span<byte> buf = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(buf, fillValue);
+        var full = (int)(totalBytes / 4);
+        for (var i = 0; i < full; i++)
+        {
+            crc.Append(buf);
+        }
+
+        var rem = (int)(totalBytes % 4);
+        if (rem > 0)
+        {
+            crc.Append(buf[..rem]);
+        }
+    }
+
+    private static void AppendZeros(Crc32? crc, long totalBytes)
+    {
+        if (crc is null)
+        {
+            return;
+        }
+
+        Span<byte> buf = stackalloc byte[4096];
+        var remaining = totalBytes;
+        while (remaining > 0)
+        {
+            var n = (int)Math.Min(buf.Length, remaining);
+            crc.Append(buf[..n]);
+            remaining -= n;
+        }
     }
 }

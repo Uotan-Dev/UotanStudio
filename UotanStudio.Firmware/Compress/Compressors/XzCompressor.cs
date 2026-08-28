@@ -80,8 +80,6 @@ public static class XzCompressor
         {
             using var lzma2 = new MemoryStream();
 
-            // 增量校验：CRC32 或 CRC64。
-            // Incremental checksum: CRC32 or CRC64.
             var crc64State = 0xFFFFFFFFFFFFFFFFUL;
             var crc32 = new System.IO.Hashing.Crc32();
 
