@@ -76,7 +76,7 @@ public sealed class PayloadBuilder : IDisposable
     /// </exception>
     public PayloadBuilder WithMinorVersion(uint minorVersion)
     {
-        uint[] supportedVersions = [0, 2, 3, 4, 5, 6, 8, 9];
+        uint[] supportedVersions = [0, 2, 3, 4, 5, 6, 7, 8, 9];
         foreach (var v in supportedVersions)
         {
             if (v == minorVersion)
@@ -87,7 +87,7 @@ public sealed class PayloadBuilder : IDisposable
         }
 
         throw new ArgumentOutOfRangeException(nameof(minorVersion),
-            $"Minor version {minorVersion} is not supported. Supported values are: 0, 2, 3, 4, 5, 6, 8, 9.");
+            $"Minor version {minorVersion} is not supported. Supported values are: 0, 2, 3, 4, 5, 6, 7, 8, 9.");
     }
 
     /// <summary>

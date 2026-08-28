@@ -21,7 +21,11 @@ internal class PayloadHeader
     /// </summary>
     internal const int HeaderSize = 24;
 
-    private static readonly HashSet<uint> SupportedMinorVersions = [0, 2, 3, 4, 5, 6, 8, 9];
+    // update_engine 官方支持的 minor 版本含 7（Android 10+ 部分机型使用），
+    // manifest 的 protobuf 解析不受 minor 版本影响，仅作白名单校验。
+    // Official update_engine supports minor version 7 (used by some Android 10+ devices);
+    // manifest protobuf parsing is version-agnostic, so this is only a whitelist check.
+    private static readonly HashSet<uint> SupportedMinorVersions = [0, 2, 3, 4, 5, 6, 7, 8, 9];
 
     /// <summary>
     /// Gets the magic value read from the payload header, which identifies the file format.
