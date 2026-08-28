@@ -20,6 +20,7 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
 {
     private readonly ICommTransport _transport = transport ?? throw new ArgumentNullException(nameof(transport));
     private readonly int _timeoutMs = timeoutMs ?? EdlConstants.DefaultCommandTimeoutMs;
+    private const int ImageTransferBufferSize = 64 * 1024;
     private bool _disposed;
 
     /// <summary>
@@ -219,14 +220,7 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
 
                         ValidateReadRange(rp.DataOffset, rp.DataLength, img.Length, "READ_DATA");
                         img.Position = rp.DataOffset;
-                        var buf = new byte[rp.DataLength];
-                        var n = await img.ReadAsync(buf, cancellationToken);
-                        if (n < buf.Length)
-                        {
-                            Array.Resize(ref buf, n);
-                        }
-
-                        await WriteDataAsync(buf, cancellationToken);
+                        await TransferImageRangeAsync(img, rp.DataLength, "READ_DATA", cancellationToken);
                         break;
                     }
 
@@ -240,16 +234,14 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
                             throw new SaharaException($"Unknown image id {rp64.ImageId}");
                         }
 
-                        ValidateReadRange((long)rp64.DataOffset, (long)rp64.DataLength, img64.Length, "READ_DATA64");
-                        img64.Position = (long)rp64.DataOffset;
-                        var buf64 = new byte[rp64.DataLength];
-                        var n64 = await img64.ReadAsync(buf64, cancellationToken);
-                        if (n64 < buf64.Length)
+                        if (rp64.DataOffset > long.MaxValue || rp64.DataLength > long.MaxValue)
                         {
-                            Array.Resize(ref buf64, n64);
+                            throw new SaharaException("READ_DATA64 request exceeds supported stream range.");
                         }
 
-                        await WriteDataAsync(buf64, cancellationToken);
+                        ValidateReadRange((long)rp64.DataOffset, (long)rp64.DataLength, img64.Length, "READ_DATA64");
+                        img64.Position = (long)rp64.DataOffset;
+                        await TransferImageRangeAsync(img64, (long)rp64.DataLength, "READ_DATA64", cancellationToken);
                         break;
                     }
 
@@ -380,9 +372,43 @@ public sealed class SaharaProtocol(ICommTransport transport, int? timeoutMs = nu
         // the device's image hash and yields a confusing END_OF_IMAGE error later.
         // 越界请求必须显式失败：静默发送短读会使设备端镜像哈希失步，之后才报出令人困惑的
         // END_OF_IMAGE 错误。
-        if (offset < 0 || length < 0 || offset > imageLength || length > imageLength - offset)
+        if (offset < 0 || length < 0 || imageLength < 0 || offset > imageLength || length > imageLength - offset)
         {
             throw new SaharaException($"{command} requests invalid range: offset={offset}, length={length}, image length={imageLength}");
+        }
+    }
+
+    private async Task TransferImageRangeAsync(Stream image, long length, string command, CancellationToken cancellationToken)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(ImageTransferBufferSize);
+        try
+        {
+            var remaining = length;
+            while (remaining > 0)
+            {
+                var count = (int)Math.Min(remaining, buffer.Length);
+                var total = 0;
+                while (total < count)
+                {
+                    var read = await image.ReadAsync(buffer.AsMemory(total, count - total), cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                    {
+                        throw new SaharaException($"{command} image stream ended before the requested {length} bytes were read.");
+                    }
+                    total += read;
+                }
+
+                var written = await _transport.WriteAsync(buffer, 0, count, _timeoutMs, cancellationToken).ConfigureAwait(false);
+                if (written != count)
+                {
+                    throw new EdlException(EdlErrorCode.WritePortTimeout);
+                }
+                remaining -= count;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

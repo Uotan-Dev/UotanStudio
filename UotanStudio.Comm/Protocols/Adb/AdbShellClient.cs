@@ -75,6 +75,88 @@ public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 public sealed class AdbShellClient(AdbConnection connection, string command, string? term = null, bool pty = false)
 {
     private const int FrameHeaderSize = 5; // kind(1) + length(4)
+    private const int MaxFramePayloadSize = 16 * 1024 * 1024;
+
+    /// <summary>Incremental shell-v2 frame parser used across ADB WRTE chunk boundaries.</summary>
+    public sealed class FrameParser
+    {
+        private byte[] _buffer = [];
+        private int _start;
+        private int _end;
+
+        public IReadOnlyList<ShellFrame> Feed(byte[] data)
+        {
+            EnsureCapacity(data.Length);
+            data.CopyTo(_buffer, _end);
+            _end += data.Length;
+
+            var frames = new List<ShellFrame>();
+            while (_end - _start >= FrameHeaderSize)
+            {
+                var length = BitConverter.ToInt32(_buffer, _start + 1);
+                if (length < 0 || length > MaxFramePayloadSize)
+                {
+                    throw new InvalidDataException($"Invalid shell v2 frame length: {length}.");
+                }
+
+                if (_end - _start - FrameHeaderSize < length)
+                {
+                    break;
+                }
+
+                var payload = new byte[length];
+                Array.Copy(_buffer, _start + FrameHeaderSize, payload, 0, length);
+                frames.Add(new ShellFrame((ShellFrameKind)_buffer[_start], payload));
+                _start += FrameHeaderSize + length;
+            }
+
+            if (_start == _end)
+            {
+                _start = 0;
+                _end = 0;
+            }
+
+            return frames;
+        }
+
+        public void Complete()
+        {
+            if (_end != _start)
+            {
+                throw new InvalidDataException($"Shell v2 stream ended with a truncated frame ({_end - _start} buffered bytes).");
+            }
+        }
+
+        private void EnsureCapacity(int additionalLength)
+        {
+            var buffered = _end - _start;
+            if (_buffer.Length - _end >= additionalLength)
+            {
+                return;
+            }
+
+            if (_start > 0 && _buffer.Length - buffered >= additionalLength)
+            {
+                Array.Copy(_buffer, _start, _buffer, 0, buffered);
+                _start = 0;
+                _end = buffered;
+                return;
+            }
+
+            var required = buffered + additionalLength;
+            var capacity = Math.Max(256, _buffer.Length);
+            while (capacity < required)
+            {
+                capacity = checked(capacity * 2);
+            }
+
+            var replacement = new byte[capacity];
+            Array.Copy(_buffer, _start, replacement, 0, buffered);
+            _buffer = replacement;
+            _start = 0;
+            _end = buffered;
+        }
+    }
 
     private readonly AdbConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
     private readonly string _command = command ?? throw new ArgumentNullException(nameof(command));
@@ -108,6 +190,7 @@ public sealed class AdbShellClient(AdbConnection connection, string command, str
         using var stream = _connection.OpenStream(BuildServiceString());
         var stdout = new MemoryStream();
         var stderr = new MemoryStream();
+        var parser = new FrameParser();
         int? exitCode = null;
 
         while (exitCode is null)
@@ -120,10 +203,11 @@ public sealed class AdbShellClient(AdbConnection connection, string command, str
                     throw new TimeoutException($"Shell command did not complete within {timeoutMs} ms.");
                 }
 
+                parser.Complete();
                 break;
             }
 
-            foreach (var frame in ParseFrames(chunk))
+            foreach (var frame in parser.Feed(chunk))
             {
                 switch (frame.Kind)
                 {
@@ -142,6 +226,10 @@ public sealed class AdbShellClient(AdbConnection connection, string command, str
             }
         }
 
+        if (exitCode is not null)
+        {
+            parser.Complete();
+        }
         return new ShellResult(stdout.ToArray(), stderr.ToArray(), exitCode ?? 0);
     }
 
@@ -155,6 +243,7 @@ public sealed class AdbShellClient(AdbConnection connection, string command, str
     public int ExecuteStreaming(Action<byte[]>? onStdout, Action<byte[]>? onStderr, CancellationToken cancellationToken = default)
     {
         using var stream = _connection.OpenStream(BuildServiceString());
+        var parser = new FrameParser();
         int? exitCode = null;
 
         while (exitCode is null && !cancellationToken.IsCancellationRequested)
@@ -167,10 +256,11 @@ public sealed class AdbShellClient(AdbConnection connection, string command, str
                     continue;
                 }
 
+                parser.Complete();
                 break;
             }
 
-            foreach (var frame in ParseFrames(chunk))
+            foreach (var frame in parser.Feed(chunk))
             {
                 switch (frame.Kind)
                 {
@@ -189,6 +279,10 @@ public sealed class AdbShellClient(AdbConnection connection, string command, str
             }
         }
 
+        if (exitCode is not null)
+        {
+            parser.Complete();
+        }
         return exitCode ?? 0;
     }
 
@@ -200,40 +294,4 @@ public sealed class AdbShellClient(AdbConnection connection, string command, str
     /// <returns>The exit code, or null if the payload is empty. 退出码，负载为空时返回 null。</returns>
     private static int? ReadExitCode(byte[] payload) => payload is { Length: >= 4 } ? BitConverter.ToInt32(payload, 0) : payload is { Length: >= 1 } ? payload[0] : null;
 
-    /// <summary>
-    /// Parses shell v2 frames from raw data.
-    /// <para>从原始数据解析 shell v2 帧。</para>
-    /// </summary>
-    /// <param name="data">The raw data. 原始数据。</param>
-    /// <returns>Parsed shell frames. 解析后的 shell 帧。</returns>
-    private static List<ShellFrame> ParseFrames(byte[] data)
-    {
-        var frames = new List<ShellFrame>();
-        var offset = 0;
-        while (offset + FrameHeaderSize <= data.Length)
-        {
-            var kind = data[offset];
-            var length = BitConverter.ToInt32(data, offset + 1);
-            offset += FrameHeaderSize;
-
-            if (length < 0 || offset + length > data.Length)
-            {
-                // Truncated frame; treat the remainder as stdout data.
-                // <para>帧被截断；将剩余数据按 stdout 处理。</para>
-                var remainderLength = data.Length - offset;
-                var remainder = new byte[remainderLength];
-                Array.Copy(data, offset, remainder, 0, remainderLength);
-                frames.Add(new ShellFrame(ShellFrameKind.Stdout, remainder));
-                break;
-            }
-
-            var payload = new byte[length];
-            Array.Copy(data, offset, payload, 0, length);
-            offset += length;
-
-            frames.Add(new ShellFrame((ShellFrameKind)kind, payload));
-        }
-
-        return frames;
-    }
 }
