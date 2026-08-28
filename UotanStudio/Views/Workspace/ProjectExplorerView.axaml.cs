@@ -1,11 +1,10 @@
-using UotanStudio.ViewModels.Workspace;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
+using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
-using UotanStudio.ViewModels;
 
 namespace UotanStudio.Views.Workspace;
 
@@ -75,6 +74,11 @@ public partial class ProjectExplorerView : UserControl
     private void OnOpenAsApk(object? sender, RoutedEventArgs e)
     {
         OpenWith(EditorOpenMode.Apk);
+    }
+
+    private void OnOpenAsFirmware(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.Firmware);
     }
 
     private void OpenWith(EditorOpenMode mode)

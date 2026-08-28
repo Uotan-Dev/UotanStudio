@@ -1,13 +1,10 @@
+using Avalonia.Controls;
+using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
-using System;
-using System.Collections.Generic;
-using Avalonia.Controls;
 using UotanStudio.Views.Devices;
 using UotanStudio.Views.Editors;
 using UotanStudio.Views.Workspace;
-using UotanStudio.ViewModels;
-using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio;
 
@@ -37,6 +34,7 @@ internal static class ViewModelViewRegistry
         [typeof(ArscEditorViewModel)] = () => new ArscEditorView(),
         [typeof(HexEditorViewModel)] = () => new HexEditorView(),
         [typeof(ApkEditorViewModel)] = () => new ApkEditorView(),
+        [typeof(FirmwareInfoViewModel)] = () => new FirmwareInfoView(),
         [typeof(ImageViewModel)] = () => new ImageView(),
         [typeof(ProjectExplorerViewModel)] = () => new ProjectExplorerView(),
         [typeof(ProjectSettingViewModel)] = () => new ProjectSettingView(),

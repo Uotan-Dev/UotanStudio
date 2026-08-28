@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:sys="using:System"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.FirmwareInfoView"
+             x:DataType="viewmodels:FirmwareInfoViewModel">
+  <DockPanel>
+    <!-- 加载中提示条 -->
+    <Border DockPanel.Dock="Top" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            IsVisible="{Binding IsBusy}">
+      <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.LoadingLabel}"
+                 VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Border>
+
+    <!-- 错误区 -->
+    <Border DockPanel.Dock="Top" Padding="12,8" Background="#22C42B1C"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+            IsVisible="{Binding HasError}">
+      <StackPanel Spacing="4">
+        <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.ErrorLabel}"
+                   FontWeight="SemiBold" Foreground="Red" />
+        <TextBlock Text="{Binding ErrorMessage}" Foreground="Red" TextWrapping="Wrap" FontSize="12" />
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer>
+      <StackPanel Margin="16" Spacing="14">
+
+        <!-- 面板标题 -->
+        <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.TitleLabel}"
+                   FontSize="20" FontWeight="SemiBold" />
+
+        <!-- 格式名 -->
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                IsVisible="{Binding IsRecognized}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.FormatNameLabel}"
+                       FontWeight="SemiBold" FontSize="13" />
+            <TextBlock Text="{Binding FormatName}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <!-- 摘要 -->
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                IsVisible="{Binding IsRecognized}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.SummaryLabel}"
+                       FontWeight="SemiBold" FontSize="13" />
+            <TextBlock Text="{Binding Summary}" FontSize="12" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+
+        <!-- 元数据键值对 -->
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                IsVisible="{Binding HasMetadata}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.MetadataLabel}"
+                       FontWeight="SemiBold" FontSize="13" />
+            <ItemsControl ItemsSource="{Binding Metadata}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="viewmodels:PropertyRow">
+                  <Grid ColumnDefinitions="180,*" Margin="0,2">
+                    <TextBlock Grid.Column="0" Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontFamily="Consolas" FontSize="12"
+                               TextWrapping="Wrap" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+        <!-- 条目列表 -->
+        <Border Padding="12" CornerRadius="8" Background="{DynamicResource ControlFillColorDefaultBrush}"
+                IsVisible="{Binding HasEntries}">
+          <StackPanel Spacing="8">
+            <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.EntriesLabel}"
+                       FontWeight="SemiBold" FontSize="13" />
+            <ItemsControl ItemsSource="{Binding Entries}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="sys:String">
+                  <TextBlock Text="{Binding}" FontFamily="Consolas" FontSize="12"
+                             TextWrapping="Wrap" Margin="0,2" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

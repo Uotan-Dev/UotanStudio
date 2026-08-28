@@ -49,6 +49,7 @@
     <x:String x:Key="Explorer_OpenAsAxml">Open as Manifest</x:String>
     <x:String x:Key="Explorer_OpenAsArsc">Open as ARSC</x:String>
     <x:String x:Key="Explorer_OpenAsApk">Open as APK</x:String>
+    <x:String x:Key="Explorer_OpenAsFirmware">Open in Firmware Info</x:String>
     <x:String x:Key="Explorer_OpenAsMenu">Open With</x:String>
     <x:String x:Key="Dock_Dtb_Save">Save</x:String>
     <x:String x:Key="Dock_Dtb_Tree">Device Tree</x:String>
@@ -63,5 +64,13 @@
     <x:String x:Key="Dock_Hex_Save">Save</x:String>
     <x:String x:Key="Dock_Hex_Busy">Loading file, please wait…</x:String>
     <x:String x:Key="Dock_Apk_Busy">Analyzing APK, please wait…</x:String>
+    <x:String x:Key="FirmwareInfo_Title">Firmware Info</x:String>
+    <x:String x:Key="FirmwareInfo_FormatName">Format Name</x:String>
+    <x:String x:Key="FirmwareInfo_Summary">Summary</x:String>
+    <x:String x:Key="FirmwareInfo_Metadata">Metadata</x:String>
+    <x:String x:Key="FirmwareInfo_Entries">Entries</x:String>
+    <x:String x:Key="FirmwareInfo_Loading">Loading firmware info, please wait…</x:String>
+    <x:String x:Key="FirmwareInfo_Error">Failed to Read</x:String>
+    <x:String x:Key="FirmwareInfo_Unrecognized">Unrecognized file format</x:String>
 
 </ResourceDictionary>

@@ -1,15 +1,12 @@
-using UotanStudio.ViewModels.Editors;
-using UotanStudio.Views.Controls;
-using System;
 using System.ComponentModel;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
+using UotanStudio.Services;
+using UotanStudio.ViewModels.Editors;
+using UotanStudio.Views.Controls;
 using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.ViewModels.Workspace;
@@ -142,6 +139,14 @@ public class WorkspaceViewModel : ViewModelBase
         if (mode == EditorOpenMode.Apk)
         {
             await OpenApkAsync(path);
+            return;
+        }
+
+        // 固件元数据面板：扩展名命中格式处理器注册表（.img/.pac/.ops/.nb0 等）。
+        // Firmware metadata panel: extensions registered by the format handlers (.img/.pac/.ops/.nb0 etc.).
+        if (mode == EditorOpenMode.Firmware)
+        {
+            await OpenFirmwareAsync(path);
             return;
         }
 
@@ -472,6 +477,62 @@ public class WorkspaceViewModel : ViewModelBase
         documentDock.ActiveDockable = document;
 
         await document.LoadAsync(fullPath);
+    }
+
+    /// <summary>
+    /// <para>在文档区以固件元数据面板打开指定的固件文件：若已打开则聚焦并返回；
+    /// 否则创建并加载 <see cref="FirmwareInfoViewModel"/>。</para>
+    /// Opens the given firmware file in the firmware metadata panel in the document area: focuses it if
+    /// already open; otherwise creates and loads a <see cref="FirmwareInfoViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的固件文件路径。</para>
+    /// The path of the firmware file to open.
+    /// </param>
+    public async Task OpenFirmwareAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?
+            .OfType<FirmwareInfoViewModel>()
+            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+
+        var document = new FirmwareInfoViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        };
+
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+
+        try
+        {
+            await document.LoadAsync(fullPath);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Workspace",
+                $"Failed to open firmware info for '{fullPath}': {ex.Message}");
+        }
     }
 
     /// <summary>

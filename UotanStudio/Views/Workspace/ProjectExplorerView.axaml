@@ -28,6 +28,8 @@
 									  Click="OnOpenAsArsc" />
 							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsApkHeader}"
 									  Click="OnOpenAsApk" />
+							<MenuItem Header="{DynamicResource Explorer_OpenAsFirmware}"
+									  Click="OnOpenAsFirmware" />
 						</MenuItem>
 					</ContextMenu>
 				</TextBlock.ContextMenu>

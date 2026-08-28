@@ -14,10 +14,27 @@ public class FileOpenModeTests
     [InlineData("file.dts", EditorOpenMode.Text)]
     [InlineData("file.dtb", EditorOpenMode.Dtb)]
     [InlineData("file.dtbo", EditorOpenMode.Dtb)]
+    [InlineData("file.dex", EditorOpenMode.Dex)]
+    [InlineData("file.arsc", EditorOpenMode.Arsc)]
+    [InlineData("file.apk", EditorOpenMode.Apk)]
     [InlineData("file.png", EditorOpenMode.Auto)]
     [InlineData("file", EditorOpenMode.Auto)]
     [InlineData("file.cs", EditorOpenMode.Text)]
-    [InlineData("file.img", EditorOpenMode.Hex)]
+    [InlineData("file.xml", EditorOpenMode.Text)]
+    // 注册表驱动：固件格式处理器的典型扩展名 → 固件元数据面板。
+    // Registry-driven: typical firmware-handler extensions open in the firmware metadata panel.
+    [InlineData("file.img", EditorOpenMode.Firmware)]
+    [InlineData("file.pac", EditorOpenMode.Firmware)]
+    [InlineData("file.ops", EditorOpenMode.Firmware)]
+    [InlineData("file.nb0", EditorOpenMode.Firmware)]
+    [InlineData("file.ozip", EditorOpenMode.Firmware)]
+    [InlineData("file.payload", EditorOpenMode.Firmware)]
+    // 注册表未覆盖但仍属强二进制的残留扩展名 → 十六进制。
+    // Residual strongly-binary extensions outside the registry keep the hex editor.
+    [InlineData("file.dat", EditorOpenMode.Hex)]
+    [InlineData("file.zip", EditorOpenMode.Hex)]
+    [InlineData("file.elf", EditorOpenMode.Hex)]
+    [InlineData("file.so", EditorOpenMode.Hex)]
     public void ResolveMode_ByExtension(string path, EditorOpenMode expected)
     {
         Assert.Equal(expected, FileOpenMode.ResolveMode(path));
@@ -48,6 +65,6 @@ public class FileOpenModeTests
     {
         // null 头部不触发 magic 兜底。
         // A null header skips the magic fallback.
-        Assert.Equal(EditorOpenMode.Auto, FileOpenMode.ResolveMode("unknown", (byte[]?)null));
+        Assert.Equal(EditorOpenMode.Auto, FileOpenMode.ResolveMode("unknown", null));
     }
 }
