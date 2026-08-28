@@ -1,8 +1,6 @@
-using UotanStudio.Services.Projects;
-using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Services;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.Workspace;
 

@@ -1,12 +1,5 @@
-using UotanStudio.Services.Firmware;
-using UotanStudio.Services.Projects;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -15,6 +8,8 @@ using UotanStudio.Firmware.Dat;
 using UotanStudio.Firmware.Sparse;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.Workspace;
 

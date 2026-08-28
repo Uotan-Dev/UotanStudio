@@ -1,12 +1,8 @@
-using UotanStudio.Services.Devices;
-using System;
 using System.Globalization;
-using System.IO;
-using System.Threading.Tasks;
 using Avalonia;
-using UotanStudio.Services.Flash;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Flash;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.NodeViewModels;

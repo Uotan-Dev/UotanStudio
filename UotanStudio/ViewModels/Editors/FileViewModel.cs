@@ -1,15 +1,11 @@
-using System;
 using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Messages;
-using UotanStudio.Views.Controls;
 using UotanStudio.Services;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Editors;
 

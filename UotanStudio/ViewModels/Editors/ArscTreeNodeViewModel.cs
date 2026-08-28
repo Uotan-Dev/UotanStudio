@@ -1,6 +1,5 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using UotanStudio.Firmware.Arsc;
 
 namespace UotanStudio.ViewModels.Editors;
 

@@ -1,10 +1,9 @@
-using UotanStudio.ViewModels.Workspace;
-using UotanStudio.ViewModels.Nodes;
-using UotanStudio.Services.Projects;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
-using UotanStudio.Services;
+using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Nodes;
+using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.ViewModels.Shell;
 

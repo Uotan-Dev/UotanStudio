@@ -1,13 +1,11 @@
-using UotanStudio.Services.Projects;
-using System;
 using System.Collections.ObjectModel;
-using System.IO;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.Workspace;
 

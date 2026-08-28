@@ -1,16 +1,12 @@
-using UotanStudio.ViewModels.Editors;
-using UotanStudio.Services.Projects;
-using System;
 using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.NodeViewModels;
 
 namespace UotanStudio.ViewModels.Workspace;

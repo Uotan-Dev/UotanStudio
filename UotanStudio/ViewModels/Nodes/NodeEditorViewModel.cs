@@ -1,11 +1,4 @@
-using UotanStudio.ViewModels.Shell;
-using UotanStudio.Services.Projects;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Avalonia;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -14,6 +7,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.ViewModels.NodeViewModels.EditorCommands;
+using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.ViewModels.Nodes;
 
