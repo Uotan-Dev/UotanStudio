@@ -106,6 +106,11 @@ public sealed class OppoFormatHandler : IFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
+                // ParseAsync 全程流式（OPS/OfpQc 仅读尾部页 XML；OZip 解密到临时文件），
+                // 不把整文件驻留内存；放后台线程执行因此不阻塞 UI。
+                // ParseAsync is fully streamed (OPS/OfpQc read only the tail-page XML; OZip decrypts
+                // into a temp file), so nothing resides in memory; running on a background thread
+                // keeps the UI responsive.
                 var archive = await _reader.ParseAsync(filePath, cancellationToken).ConfigureAwait(false);
                 var metadata = archive.Metadata;
                 cancellationToken.ThrowIfCancellationRequested();
@@ -148,12 +153,16 @@ public sealed class OppoFormatHandler : IFormatHandler
                     meta["KeyId"] = metadata.KeyId;
                 }
 
-                var names = archive.Entries.Select(e => e.Name).ToList();
+                // 组件列表：条目名 + 大小（供固件信息面板展示内部组成结构）。
+                // Component list: entry names and sizes (for the firmware info panel structure view).
+                var components = archive.Entries
+                    .Select(e => FirmwareComponent.Of(e.Name, e.Size))
+                    .ToList();
 
                 return FirmwareOpResult.Ok(
                     $"Read {metadata.EntryCount} entries from '{filePath}' as {metadata.FormatName}.",
-                    names,
-                    meta);
+                    components: components,
+                    metadata: meta);
             }
             catch (OperationCanceledException)
             {

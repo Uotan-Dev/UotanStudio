@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Text;
 using UotanStudio.Firmware.Oppo.Crypto;
 using UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
 using UotanStudio.Firmware.Oppo.Helpers;
@@ -131,26 +133,19 @@ internal sealed class OzipFormatParser : IOppFormatParser
                     OzipDecryptor.DecryptFileWithAutoDetection(stream, fs);
                 }
 
-                using var archive = ZipFile.OpenRead(tempFile);
-
-                var entries = new List<OppEntry>(archive.Entries.Count);
-                foreach (var zipEntry in archive.Entries)
+                IReadOnlyList<OppEntry> entries;
+                try
                 {
-                    // Skip directory entries
-                    if (zipEntry.Length == 0 && zipEntry.FullName.EndsWith("/"))
-                    {
-                        continue;
-                    }
-
-                    entries.Add(new OppEntry
-                    {
-                        Name = zipEntry.FullName,
-                        Size = zipEntry.Length,
-                        EncryptedSize = 0,
-                        IsCompressed = zipEntry.CompressedLength < zipEntry.Length,
-                        PartitionType = "ozip",
-                        FileName = zipEntry.Name,
-                    });
+                    entries = ReadZipEntries(tempFile);
+                }
+                catch (InvalidDataException)
+                {
+                    // .NET ZipArchive 无法打开（中央目录损坏/ZIP64 变体等）时，
+                    // 回退到手动解析中央目录，仍能枚举出可读的真实条目。
+                    // When .NET ZipArchive cannot open the file (corrupt central directory / ZIP64
+                    // variants etc.), fall back to manually parsing the central directory so as many
+                    // real entries as possible are still enumerated.
+                    entries = ScanCentralDirectoryEntries(tempFile);
                 }
 
                 return entries.Count > 0
@@ -167,11 +162,129 @@ internal sealed class OzipFormatParser : IOppFormatParser
             // Decryption failed (no valid key found), fall back to single entry
             return FallbackSingleEntry(header);
         }
-        catch (InvalidDataException)
+    }
+
+    /// <summary>
+    /// <para>用 <see cref="ZipArchive"/> 读取临时文件中的全部非目录条目。</para>
+    /// Reads all non-directory entries of the temp ZIP file via <see cref="ZipArchive"/>.
+    /// </summary>
+    private static IReadOnlyList<OppEntry> ReadZipEntries(string zipPath)
+    {
+        using var archive = ZipFile.OpenRead(zipPath);
+
+        var entries = new List<OppEntry>(archive.Entries.Count);
+        foreach (var zipEntry in archive.Entries)
         {
-            // Decrypted data is not a valid ZIP archive, fall back to single entry
-            return FallbackSingleEntry(header);
+            // Skip directory entries
+            if (zipEntry.Length == 0 && zipEntry.FullName.EndsWith("/"))
+            {
+                continue;
+            }
+
+            entries.Add(new OppEntry
+            {
+                Name = zipEntry.FullName,
+                Size = zipEntry.Length,
+                EncryptedSize = 0,
+                IsCompressed = zipEntry.CompressedLength < zipEntry.Length,
+                PartitionType = "ozip",
+                FileName = zipEntry.Name,
+            });
         }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// <para>容错解析：从文件尾部定位 EOCD 并手工遍历中央目录（PK\x01\x02 记录），
+    /// 遇到损坏记录即停止，返回已解析出的条目。</para>
+    /// Tolerant parsing: locates the EOCD at the file tail and walks the central directory
+    /// (PK\x01\x02 records) by hand, stopping at the first corrupt record and returning the entries
+    /// parsed so far.
+    /// </summary>
+    private static IReadOnlyList<OppEntry> ScanCentralDirectoryEntries(string zipPath)
+    {
+        using var fs = File.OpenRead(zipPath);
+        if (fs.Length < 22)
+        {
+            return [];
+        }
+
+        // 在尾部 64KB 内反向查找 EOCD 签名 PK\x05\x06。
+        // Search backwards for the EOCD signature PK\x05\x06 within the last 64KB.
+        var tailLen = (int)Math.Min(fs.Length, 65536);
+        var tail = new byte[tailLen];
+        fs.Position = fs.Length - tailLen;
+        fs.ReadExactly(tail, 0, tailLen);
+
+        var eocdOffset = -1L;
+        for (var i = tailLen - 22; i >= 0; i--)
+        {
+            if (tail[i] == 0x50 && tail[i + 1] == 0x4B && tail[i + 2] == 0x05 && tail[i + 3] == 0x06)
+            {
+                eocdOffset = fs.Length - tailLen + i;
+                break;
+            }
+        }
+
+        if (eocdOffset < 0)
+        {
+            return [];
+        }
+
+        fs.Position = eocdOffset;
+        Span<byte> eocd = stackalloc byte[22];
+        fs.ReadExactly(eocd);
+
+        var cdOffset = BinaryPrimitives.ReadUInt32LittleEndian(eocd[16..]);
+        var cdSize = BinaryPrimitives.ReadUInt32LittleEndian(eocd[12..]);
+        if (cdOffset > fs.Length || cdSize > fs.Length - cdOffset)
+        {
+            return [];
+        }
+
+        fs.Position = cdOffset;
+        var cd = new byte[cdSize];
+        fs.ReadExactly(cd, 0, cd.Length);
+
+        var entries = new List<OppEntry>();
+        var pos = 0;
+        while (pos + 46 <= cd.Length)
+        {
+            // 中央目录记录签名 PK\x01\x02。
+            // Central directory record signature PK\x01\x02.
+            if (cd[pos] != 0x50 || cd[pos + 1] != 0x4B || cd[pos + 2] != 0x01 || cd[pos + 3] != 0x02)
+            {
+                break;
+            }
+
+            var nameLen = BinaryPrimitives.ReadUInt16LittleEndian(cd.AsSpan(pos + 28));
+            var extraLen = BinaryPrimitives.ReadUInt16LittleEndian(cd.AsSpan(pos + 30));
+            var commentLen = BinaryPrimitives.ReadUInt16LittleEndian(cd.AsSpan(pos + 32));
+            var recordLen = 46 + nameLen + extraLen + commentLen;
+            if (pos + recordLen > cd.Length)
+            {
+                // 损坏记录：停止解析，保留已解析条目。
+                // Corrupt record: stop parsing, keep the entries already parsed.
+                break;
+            }
+
+            var name = Encoding.UTF8.GetString(cd, pos + 46, nameLen);
+            var size = BinaryPrimitives.ReadUInt32LittleEndian(cd.AsSpan(pos + 24));
+            entries.Add(new OppEntry
+            {
+                Name = name,
+                Size = size,
+                EncryptedSize = 0,
+                IsCompressed = false,
+                PartitionType = "ozip",
+                FileName = Path.GetFileName(name),
+            });
+
+            pos += recordLen;
+        }
+
+        return entries;
     }
 
     /// <summary>
