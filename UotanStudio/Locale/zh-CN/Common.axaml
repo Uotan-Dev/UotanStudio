@@ -69,6 +69,7 @@
     <x:String x:Key="FirmwareInfo_Summary">摘要</x:String>
     <x:String x:Key="FirmwareInfo_Metadata">元数据</x:String>
     <x:String x:Key="FirmwareInfo_Entries">条目</x:String>
+    <x:String x:Key="FirmwareInfo_Components">组件</x:String>
     <x:String x:Key="FirmwareInfo_Loading">正在读取固件信息，请稍候…</x:String>
     <x:String x:Key="FirmwareInfo_Error">读取失败</x:String>
     <x:String x:Key="FirmwareInfo_Unrecognized">无法识别该文件格式</x:String>

@@ -53,6 +53,22 @@
     <x:String x:Key="Dock_Properties_Type_ManifestDocument">Manifest</x:String>
     <x:String x:Key="Dock_Properties_Type_ArscDocument">ARSC</x:String>
     <x:String x:Key="Dock_Properties_Type_ApkDocument">APK</x:String>
+    <x:String x:Key="Dock_Properties_Type_FirmwareDocument">Firmware</x:String>
+    <x:String x:Key="Dock_Properties_Type_HexDocument">Hex</x:String>
+
+    <!-- Firmware-info document properties panel labels -->
+    <x:String x:Key="Dock_Properties_Fw_FileName">File Name</x:String>
+    <x:String x:Key="Dock_Properties_Fw_FilePath">File Path</x:String>
+    <x:String x:Key="Dock_Properties_Fw_Format">Format</x:String>
+    <x:String x:Key="Dock_Properties_Fw_Summary">Summary</x:String>
+    <x:String x:Key="Dock_Properties_Fw_MetadataCount">Metadata Entries</x:String>
+    <x:String x:Key="Dock_Properties_Fw_Components">Components</x:String>
+
+    <!-- Hex document properties panel labels -->
+    <x:String x:Key="Dock_Properties_Hex_FileName">File Name</x:String>
+    <x:String x:Key="Dock_Properties_Hex_FilePath">File Path</x:String>
+    <x:String x:Key="Dock_Properties_Hex_FileSize">File Size</x:String>
+    <x:String x:Key="Dock_Properties_Hex_ByteCount">Bytes</x:String>
 
     <!-- Text document properties panel labels -->
     <x:String x:Key="Dock_Properties_Text_FileName">File Name</x:String>
@@ -145,5 +161,8 @@
     <x:String x:Key="Log_ExportDone">Logs exported to {0}</x:String>
     <x:String x:Key="Log_ExportFailed">Failed to export logs: {0}</x:String>
     <x:String x:Key="Log_CopyDone">Log entry copied to clipboard</x:String>
+    <x:String x:Key="Log_LevelFilter">Level</x:String>
+    <x:String x:Key="Log_SourceFilter">Source</x:String>
+    <x:String x:Key="Log_FilterAll">All</x:String>
 
 </ResourceDictionary>

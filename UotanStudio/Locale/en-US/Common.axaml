@@ -69,6 +69,7 @@
     <x:String x:Key="FirmwareInfo_Summary">Summary</x:String>
     <x:String x:Key="FirmwareInfo_Metadata">Metadata</x:String>
     <x:String x:Key="FirmwareInfo_Entries">Entries</x:String>
+    <x:String x:Key="FirmwareInfo_Components">Components</x:String>
     <x:String x:Key="FirmwareInfo_Loading">Loading firmware info, please wait…</x:String>
     <x:String x:Key="FirmwareInfo_Error">Failed to Read</x:String>
     <x:String x:Key="FirmwareInfo_Unrecognized">Unrecognized file format</x:String>
