@@ -89,7 +89,7 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_Elf_AArch64_Executable()
     {
-        string result = ManagedMagic.Detect(ElfAarch64Exec);
+        var result = ManagedMagic.Detect(ElfAarch64Exec);
         Assert.Contains("AArch64", result);
         Assert.Contains("executable", result);
     }
@@ -97,7 +97,7 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_Elf_ARM_Shared()
     {
-        string result = ManagedMagic.Detect(ElfArmShared);
+        var result = ManagedMagic.Detect(ElfArmShared);
         Assert.Contains("ARM", result);
         Assert.Contains("shared object", result);
     }
@@ -105,7 +105,7 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_Elf_X86_64_Executable()
     {
-        string result = ManagedMagic.Detect(ElfX86_64Exec);
+        var result = ManagedMagic.Detect(ElfX86_64Exec);
         Assert.Contains("x86-64", result);
         Assert.Contains("executable", result);
     }
@@ -113,7 +113,7 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_Elf_386_Relocatable()
     {
-        string result = ManagedMagic.Detect(Elf386Relocatable);
+        var result = ManagedMagic.Detect(Elf386Relocatable);
         Assert.Contains("x86", result);
         Assert.Contains("relocatable", result);
     }
@@ -121,7 +121,7 @@ public class ManagedMagicTests
     [Fact]
     public void Detect_Elf_RiscV_Shared()
     {
-        string result = ManagedMagic.Detect(ElfRiscVShared);
+        var result = ManagedMagic.Detect(ElfRiscVShared);
         Assert.Contains("RISC-V", result);
         Assert.Contains("shared object", result);
     }
@@ -130,7 +130,7 @@ public class ManagedMagicTests
     public void Detect_Elf_Minimal_WithoutMachine()
     {
         // 仅 8 字节头，e_machine 字段缺失 → 应回退为 "ELF executable"
-        string result = ManagedMagic.Detect(ElfMinimal);
+        var result = ManagedMagic.Detect(ElfMinimal);
         Assert.Equal("ELF executable", result);
     }
 
