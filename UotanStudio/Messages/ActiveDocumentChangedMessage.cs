@@ -1,8 +1,7 @@
 namespace UotanStudio.Messages;
 
-using UotanStudio.ViewModels.Editors;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.ViewModels;
+using UotanStudio.ViewModels.Editors;
 
 /// <summary>
 /// <para>活动文档变更消息，当文档区中当前激活的文档切换时发送，

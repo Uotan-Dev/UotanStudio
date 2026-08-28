@@ -1,7 +1,6 @@
 namespace UotanStudio.Messages;
 
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.ViewModels;
 
 /// <summary>
 /// <para>设备树节点选中变更消息，当 DTB 双栏编辑器左栏节点树选中项变化时发送，

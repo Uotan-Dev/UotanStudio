@@ -1,15 +1,9 @@
-using UotanStudio.Services.Devices;
-using System;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Services.Flash;
 using UotanStudio.Messages;
-using UotanStudio.Services;
+using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Services.Flash;

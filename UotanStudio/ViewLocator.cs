@@ -1,9 +1,7 @@
-using System;
 using System.Runtime.CompilerServices;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using UotanStudio.Services;
-using UotanStudio.ViewModels;
 
 namespace UotanStudio;
 

@@ -1,4 +1,3 @@
-using System;
 using UotanStudio.Comm.Diagnostics;
 
 namespace UotanStudio.Services.Devices;

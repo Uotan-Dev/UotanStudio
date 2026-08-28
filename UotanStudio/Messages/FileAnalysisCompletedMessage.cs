@@ -1,6 +1,5 @@
 namespace UotanStudio.Messages;
 
-using UotanStudio.ViewModels.Editors;
 using System.Collections.Generic;
 
 /// <summary>

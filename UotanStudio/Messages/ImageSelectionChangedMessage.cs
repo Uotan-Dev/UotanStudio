@@ -1,4 +1,3 @@
-using UotanStudio.ViewModels.Workspace;
 namespace UotanStudio.Messages;
 
 /// <summary>

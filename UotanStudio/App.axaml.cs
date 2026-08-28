@@ -1,8 +1,4 @@
-using UotanStudio.ViewModels.Shell;
-using UotanStudio.Services.Devices;
-using System;
 using System.Globalization;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -11,7 +7,8 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
-using UotanStudio.ViewModels;
+using UotanStudio.Services.Devices;
+using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
 
 namespace UotanStudio;
