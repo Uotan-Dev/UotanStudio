@@ -1,4 +1,3 @@
-using System;
 using Avalonia;
 using Dock.Settings;
 using UotanStudio.Services;

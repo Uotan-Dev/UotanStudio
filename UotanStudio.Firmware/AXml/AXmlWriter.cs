@@ -207,9 +207,9 @@ public static class AXmlWriter
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 16), (ushort)attrStart);
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 18), (ushort)attrSize);
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 20), (ushort)attrCount);
-        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 22), (ushort)0); // idIndex
-        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 24), (ushort)0); // classIndex
-        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 26), (ushort)0); // styleIndex
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 22), 0); // idIndex
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 24), 0); // classIndex
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 26), 0); // styleIndex
         pos += 28;
 
         foreach (var attr in el.Attributes)

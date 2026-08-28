@@ -126,7 +126,13 @@ public sealed class ResValue
         var value = raw / (float)0x10000; // 高位为 mantissa，低位 4 位为单位
         var unit = low4 switch
         {
-            0 => "px", 1 => "dip", 2 => "sp", 3 => "pt", 4 => "in", 5 => "mm", _ => string.Empty
+            0 => "px",
+            1 => "dip",
+            2 => "sp",
+            3 => "pt",
+            4 => "in",
+            5 => "mm",
+            _ => string.Empty
         };
         return value.ToString("0.###", CultureInfo.InvariantCulture) + unit;
     }

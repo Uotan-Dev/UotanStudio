@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
-using UotanStudio.Firmware.Dex.Instructions;
 using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex;
@@ -350,8 +349,8 @@ internal static class DexReader
             // insns 之后若为奇数代码单元需补齐 2 字节，使 try_item 数组 4 字节对齐。
             // After the insns array, an odd code-unit count needs a 2-byte pad so the try_item array is 4-byte aligned.
             var triesOffset = insnsStart + checked((int)insnsSize * 2) + ((insnsSize & 1) != 0 ? 2 : 0);
-            EnsureRange(data, triesOffset, checked((int)triesSize * 8), "code_item tries");
-            ReadTriesAndHandlers(data, triesOffset, (int)triesSize, code);
+            EnsureRange(data, triesOffset, checked(triesSize * 8), "code_item tries");
+            ReadTriesAndHandlers(data, triesOffset, triesSize, code);
         }
 
         if (debugInfoOff != 0)

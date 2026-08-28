@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace UotanStudio.Firmware.Apk;
 
 /// <summary>
