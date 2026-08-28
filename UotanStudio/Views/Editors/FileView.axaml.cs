@@ -1,7 +1,6 @@
-using UotanStudio.ViewModels.Editors;
 using Avalonia.Controls;
+using UotanStudio.ViewModels.Editors;
 using UotanStudio.Views.Controls;
-using UotanStudio.ViewModels;
 
 namespace UotanStudio.Views.Editors;
 

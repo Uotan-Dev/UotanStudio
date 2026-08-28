@@ -1,12 +1,9 @@
-using UotanStudio.ViewModels.Editors;
 using Avalonia.Controls;
 using Avalonia.Threading;
-using AvaloniaEdit;
-using AvaloniaEdit.Editing;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
-using UotanStudio.ViewModels;
+using UotanStudio.ViewModels.Editors;
 
 namespace UotanStudio.Views.Editors;
 

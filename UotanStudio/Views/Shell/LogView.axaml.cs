@@ -1,10 +1,4 @@
-using UotanStudio.ViewModels.Shell;
-using System;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -12,7 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using UotanStudio.Services;
-using UotanStudio.ViewModels;
+using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
 

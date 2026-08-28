@@ -1,9 +1,8 @@
-using UotanStudio.ViewModels.Shell;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
-using UotanStudio.ViewModels;
+using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
 

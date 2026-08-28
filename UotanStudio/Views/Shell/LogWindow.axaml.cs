@@ -1,6 +1,5 @@
-using UotanStudio.ViewModels.Shell;
 using Avalonia.Controls;
-using UotanStudio.ViewModels;
+using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
 

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
@@ -180,7 +178,7 @@ public class NodeDockFactory : Factory
         }
         catch
         {
-            // 忽略任何异常，确保不崩溃
+            // 关闭流程中的异常不阻断用户操作。
         }
     }
 
@@ -210,7 +208,7 @@ public class NodeDockFactory : Factory
         }
         catch
         {
-            // 忽略任何移除过程中的错误
+            // 移除过程中的异常不阻断关闭流程。
         }
     }
 }

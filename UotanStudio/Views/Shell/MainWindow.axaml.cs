@@ -1,7 +1,5 @@
 using UotanStudio.ViewModels.Shell;
-using System;
 using Avalonia.Controls;
-using UotanStudio.ViewModels;
 #if DEBUG
 using Dock.Avalonia.Diagnostics;
 #endif
@@ -45,7 +43,7 @@ public partial class MainWindow : Window
         }
         catch
         {
-            // 忽略清理过程中的任何错误，以防止应用程序崩溃
+            // 清理过程中的异常不阻断窗口关闭。
         }
     }
 }

@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace UotanStudio.Views.Controls;
 
 /// <summary>
