@@ -45,8 +45,10 @@ internal sealed record Ext4Inode
     public uint SizeLo { get; init; }
 
     /// <summary>
-    /// High 32 bits of the file size (i_size_high); only valid for large inodes.
-    /// <para>文件大小高 32 位（i_size_high）；仅对大 inode 有效。</para>
+    /// High 32 bits of the file size (i_size_high); the kernel reads it unconditionally
+    /// for regular files (the field occupies the historical i_dir_acl slot at offset 108).
+    /// <para>文件大小高 32 位（i_size_high）；内核无条件将其用于普通文件
+    /// （该字段占据偏移 108 处历史上的 i_dir_acl 槽位）。</para>
     /// </summary>
     public uint SizeHigh { get; init; }
 
@@ -130,9 +132,10 @@ internal sealed record Ext4Inode
 
     /// <summary>
     /// Parses an inode from raw bytes. <paramref name="inodeSize"/> must match the
-    /// filesystem inode size; i_size_high is read only for inode sizes of 256 bytes or more.
+    /// filesystem inode size; i_size_high is read unconditionally (offset 108 lies within
+    /// every inode size of at least 128 bytes, matching the kernel's ext4_isize()).
     /// <para>从原始字节解析 inode。<paramref name="inodeSize"/> 须与文件系统 inode 大小一致；
-    /// 仅当 inode 大小大于等于 256 字节时读取 i_size_high。</para>
+    /// i_size_high 无条件读取（偏移 108 位于任何不小于 128 字节的 inode 内，与内核 ext4_isize() 一致）。</para>
     /// </summary>
     public static Ext4Inode FromBytes(ReadOnlySpan<byte> data, int inodeSize)
     {
@@ -152,7 +155,7 @@ internal sealed record Ext4Inode
             Mode = BinaryPrimitives.ReadUInt16LittleEndian(data[0..2]),
             UidLo = BinaryPrimitives.ReadUInt16LittleEndian(data[2..4]),
             SizeLo = BinaryPrimitives.ReadUInt32LittleEndian(data[4..8]),
-            SizeHigh = inodeSize >= 256 ? BinaryPrimitives.ReadUInt32LittleEndian(data[108..112]) : 0,
+            SizeHigh = BinaryPrimitives.ReadUInt32LittleEndian(data[108..112]),
             BlocksLo = BinaryPrimitives.ReadUInt32LittleEndian(data[28..32]),
             Flags = BinaryPrimitives.ReadUInt32LittleEndian(data[32..36]),
             BlockData = data[40..100].ToArray(),

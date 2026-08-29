@@ -165,13 +165,17 @@ public class BuilderStreamingTests
         Assert.Equal(blocks * BlockSize, image.Length);
         Assert.True(blocks > size / BlockSize, "Streamed image is too small for the source payload.");
 
-        // Group descriptor: block bitmap block 1, inode bitmap block 2, inode table block 3.
+        // Group descriptor table starts in the block right after the superblock block
+        // ((s_first_data_block + 1) × block_size = block 1 for 4 KiB blocks): block bitmap block 2,
+        // inode bitmap block 3, inode table block 4.
+        // 组描述符表起始于超级块所在块之后的块（(s_first_data_block + 1) × 块大小，4 KiB 块为块 1）：
+        // 块位图块 2、inode 位图块 3、inode 表块 4。
         var descriptor = new byte[32];
-        image.Position = 2048;
+        image.Position = 1L * BlockSize;
         image.ReadExactly(descriptor);
-        Assert.Equal(1u, ReadU32(descriptor, 0));
-        Assert.Equal(2u, ReadU32(descriptor, 4));
-        Assert.Equal(3u, ReadU32(descriptor, 8));
+        Assert.Equal(2u, ReadU32(descriptor, 0));
+        Assert.Equal(3u, ReadU32(descriptor, 4));
+        Assert.Equal(4u, ReadU32(descriptor, 8));
 
         // The streamed image is a valid ext4 filesystem: read the 32 MiB payload back.
         using var parser = new Ext4Parser(outputPath);

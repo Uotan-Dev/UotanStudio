@@ -47,6 +47,7 @@ public sealed class Ext4Parser : IDisposable
     private const uint RootInodeNumber = 2;
     private const int MaxExtentLeafPointers = 12; // 12 direct pointers in the indirect scheme
     private const long MaximumGroupDescriptorTableSize = 512L * 1024 * 1024;
+    private const int MaxDirectoryDepth = 256; // guards against pathologically deep (or cyclic) trees
 
     private readonly Stream _stream;
     private Ext4Superblock _superblock = null!;
@@ -54,6 +55,7 @@ public sealed class Ext4Parser : IDisposable
     private int _blockSize;
     private int _inodeSize;
     private long _inodeTableOffset;
+    private byte[] _inodeBuffer = [];
     private readonly Dictionary<string, Ext4FileEntry> _entries = new(StringComparer.Ordinal);
     private bool _walked;
 
@@ -133,6 +135,7 @@ public sealed class Ext4Parser : IDisposable
         }
 
         _inodeSize = _superblock.InodeSize == 0 ? 256 : _superblock.InodeSize;
+        _inodeBuffer = new byte[_inodeSize];
         var descSize = _superblock.EffectiveDescSize;
         var groupCount = checked((int)((_superblock.BlocksCount + _superblock.BlocksPerGroup - 1) / _superblock.BlocksPerGroup));
         if (groupCount <= 0)
@@ -142,12 +145,17 @@ public sealed class Ext4Parser : IDisposable
 
         _groups = new Ext4BlockGroup[groupCount];
         var gdtLength = checked((long)groupCount * descSize);
-        if (gdtLength > MaximumGroupDescriptorTableSize || gdtLength > _stream.Length - 2048)
+        // The primary group descriptor table starts in the block right after the superblock
+        // block: (s_first_data_block + 1) * block_size (block 2 for 1 KiB, block 1 otherwise).
+        // 主块组描述符表起始于超级块所在块之后的块：(s_first_data_block + 1) * 块大小
+        //（1 KiB 块为块 2，其余为块 1）。
+        var gdtOffset = checked((long)(_superblock.FirstDataBlock + 1) * _blockSize);
+        if (gdtLength > MaximumGroupDescriptorTableSize || gdtLength > _stream.Length - gdtOffset)
         {
             throw new InvalidDataException("ext4 group descriptor table exceeds the image bounds or supported metadata limit.");
         }
         var gdtBytes = new byte[checked((int)gdtLength)];
-        _stream.Position = 2048;
+        _stream.Position = gdtOffset;
         _stream.ReadExactly(gdtBytes);
         for (var i = 0; i < groupCount; i++)
         {
@@ -155,6 +163,10 @@ public sealed class Ext4Parser : IDisposable
         }
 
         _inodeTableOffset = checked((long)_groups[0].InodeTable * _blockSize);
+        if (_inodeTableOffset < 0 || _inodeTableOffset >= _stream.Length)
+        {
+            throw new InvalidDataException("ext4 inode table lies outside the image bounds.");
+        }
     }
 
     /// <summary>
@@ -166,7 +178,7 @@ public sealed class Ext4Parser : IDisposable
     {
         if (!_walked)
         {
-            WalkDirectory(RootInodeNumber, string.Empty);
+            WalkDirectory(RootInodeNumber, string.Empty, new HashSet<uint>(), 0);
             _walked = true;
         }
 
@@ -299,8 +311,20 @@ public sealed class Ext4Parser : IDisposable
         return entry;
     }
 
-    private void WalkDirectory(uint dirInode, string prefix)
+    private void WalkDirectory(uint dirInode, string prefix, HashSet<uint> visitedDirectories, int depth)
     {
+        if (depth > MaxDirectoryDepth)
+        {
+            throw new InvalidDataException($"ext4 directory tree exceeds the maximum depth of {MaxDirectoryDepth}.");
+        }
+
+        if (!visitedDirectories.Add(dirInode))
+        {
+            // ext4 directories cannot be hardlinked; revisiting one means the image is corrupt.
+            // ext4 目录不允许硬链接；重复访问说明镜像损坏。
+            throw new InvalidDataException($"ext4 directory cycle detected at inode {dirInode}.");
+        }
+
         var inode = ReadInode(dirInode);
         var blockCount = (uint)((inode.Size + _blockSize - 1) / _blockSize);
         for (var logical = 0u; logical < blockCount; logical++)
@@ -337,7 +361,7 @@ public sealed class Ext4Parser : IDisposable
                 _entries[childPath] = new Ext4FileEntry(childPath, child.Size, entry.Inode, kind, symlinkTarget);
                 if (kind == Ext4EntryKind.Directory)
                 {
-                    WalkDirectory(entry.Inode, childPath);
+                    WalkDirectory(entry.Inode, childPath, visitedDirectories, depth + 1);
                 }
             }
         }
@@ -393,11 +417,16 @@ public sealed class Ext4Parser : IDisposable
 
     private Ext4Inode ReadInode(uint inodeNumber)
     {
+        if (inodeNumber == 0 || inodeNumber > _superblock.InodesCount)
+        {
+            throw new InvalidDataException($"ext4 inode number {inodeNumber} is out of range (1..{_superblock.InodesCount}).");
+        }
+
         var offset = checked(_inodeTableOffset + ((long)inodeNumber - 1) * _inodeSize);
-        var buffer = new byte[_inodeSize];
-        _stream.Position = offset;
-        _stream.ReadExactly(buffer);
-        return Ext4Inode.FromBytes(buffer, _inodeSize);
+        // The shared buffer is safe because Ext4Inode.FromBytes copies every field out of it.
+        // 共享缓冲是安全的，因为 Ext4Inode.FromBytes 会拷贝其中所有字段。
+        ReadExactlyAt(offset, _inodeBuffer);
+        return Ext4Inode.FromBytes(_inodeBuffer, _inodeSize);
     }
 
     private byte[] ReadBlock(ulong physicalBlock)
@@ -409,7 +438,17 @@ public sealed class Ext4Parser : IDisposable
 
     private void ReadBlockTo(ulong physicalBlock, byte[] buffer)
     {
-        var offset = checked((long)physicalBlock * _blockSize);
+        ReadExactlyAt(checked((long)physicalBlock * _blockSize), buffer);
+    }
+
+    private void ReadExactlyAt(long offset, byte[] buffer)
+    {
+        if (offset < 0 || offset > _stream.Length || buffer.Length > _stream.Length - offset)
+        {
+            throw new InvalidDataException(
+                $"ext4 read range at {offset} of {buffer.Length} bytes lies outside the image (length {_stream.Length}).");
+        }
+
         _stream.Position = offset;
         _stream.ReadExactly(buffer);
     }

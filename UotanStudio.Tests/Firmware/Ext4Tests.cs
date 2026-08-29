@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Ext4;
 using Xunit;
@@ -141,6 +142,147 @@ public class Ext4Tests
             {
                 File.Delete(imagePath);
             }
+        }
+        finally
+        {
+            DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void Builder_WritesGroupDescriptorAtStandardBlock1Location()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "a.txt"), "alpha");
+            Directory.CreateDirectory(Path.Combine(root, "sub"));
+            File.WriteAllText(Path.Combine(root, "sub", "b.txt"), "beta");
+
+            var image = Ext4Builder.Build(root);
+
+            // Superblock at offset 1024: 4 KiB blocks, s_first_data_block == 0.
+            // 偏移 1024 的超级块：4 KiB 块，s_first_data_block == 0。
+            Assert.Equal(0xEF53, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(1024 + 56, 2)));
+            Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 24, 4))); // s_log_block_size
+
+            // The primary GDT lives in the block right after the superblock block
+            // ((s_first_data_block + 1) * block_size = block 1 = byte offset 4096).
+            // 主组描述符表位于超级块块之后的块（(s_first_data_block + 1) * 块大小 = 块 1 = 偏移 4096）。
+            var gdtOffset = BlockSize;
+            Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset, 4)));        // bg_block_bitmap_lo
+            Assert.Equal(3u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset + 4, 4)));    // bg_inode_bitmap_lo
+            Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset + 8, 4)));    // bg_inode_table_lo
+
+            // Offset 2048 is the tail of block 0 (boot + superblock) and must not hold the GDT.
+            // 偏移 2048 位于块 0 尾部（引导 + 超级块），不应是 GDT。
+            Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(2048, 4)));
+
+            // The parser must locate the GDT at the same standard offset and round-trip the tree.
+            // 解析器必须在同一标准偏移定位 GDT 并正确往返目录树。
+            using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
+            var paths = parser.ListFiles().Select(static e => e.Path).OrderBy(static p => p, StringComparer.Ordinal).ToArray();
+            Assert.Equal(new[] { "a.txt", "sub", "sub/b.txt" }, paths);
+        }
+        finally
+        {
+            DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void Parser_TruncatedImage_ThrowsInvalidDataException()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "a.txt"), "alpha");
+            Directory.CreateDirectory(Path.Combine(root, "sub"));
+            File.WriteAllText(Path.Combine(root, "sub", "b.txt"), "beta");
+            var largeBytes = new byte[BlockSize * 8];
+            for (var i = 0; i < largeBytes.Length; i++)
+            {
+                largeBytes[i] = (byte)(i * 13 + 1);
+            }
+
+            File.WriteAllBytes(Path.Combine(root, "large.bin"), largeBytes);
+            var image = Ext4Builder.Build(root);
+
+            // Truncate to the end of the metadata region so every data block (directory blocks
+            // included) is gone while the superblock, GDT and inode table remain intact.
+            // 截断到元数据区末尾：所有数据块（含目录块）消失，而超级块、GDT 与 inode 表仍完整。
+            var inodesPerGroup = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 40, 4));
+            var inodeSize = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(1024 + 88, 2));
+            inodeSize = inodeSize == 0 ? (ushort)256 : inodeSize;
+            var inodesPerBlock = BlockSize / inodeSize;
+            var inodeTableBlocks = (inodesPerGroup + inodesPerBlock - 1) / inodesPerBlock;
+            var metadataBytes = (4 + (int)inodeTableBlocks) * BlockSize;
+            Assert.InRange(metadataBytes, 1, image.Length);
+            var truncated = image[..metadataBytes].ToArray();
+
+            // A truncated image must fail with a bounded format error, never with an
+            // out-of-range stream exception or an infinite loop.
+            // 截断镜像必须抛出有界格式错误，而非越界流异常或死循环。
+            Assert.Throws<InvalidDataException>(() =>
+            {
+                using var parser = new Ext4Parser(new MemoryStream(truncated, writable: false));
+                _ = parser.ListFiles();
+            });
+        }
+        finally
+        {
+            DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void Parser_DirectoryCycle_ThrowsInvalidDataExceptionInsteadOfHanging()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "subdir"));
+            File.WriteAllText(Path.Combine(root, "subdir", "inner.txt"), "inner");
+            File.WriteAllText(Path.Combine(root, "top.txt"), "top");
+
+            var image = Ext4Builder.Build(root);
+
+            // Locate the root directory (inode 2) data block via the GDT inode table and its extent.
+            // 通过 GDT 的 inode 表与 extent 定位根目录（inode 2）的数据块。
+            var inodeTableOffset = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(BlockSize + 8, 4)) * BlockSize);
+            var rootInodeOffset = inodeTableOffset + (2 - 1) * 256;
+            Assert.Equal(0xF30A, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(rootInodeOffset + 40, 2))); // extent magic
+            var rootDataBlock = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(rootInodeOffset + 40 + 20, 4)); // ee_start_lo
+            var rootDirOffset = checked((int)rootDataBlock * BlockSize);
+
+            var patched = false;
+            var offset = 0;
+            while (offset + 8 <= BlockSize)
+            {
+                var recordLength = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(rootDirOffset + offset + 4, 2));
+                if (recordLength < 8)
+                {
+                    break;
+                }
+
+                var nameLength = image[rootDirOffset + offset + 6];
+                var name = Encoding.UTF8.GetString(image, rootDirOffset + offset + 8, nameLength);
+                if (name == "subdir")
+                {
+                    // Point the directory entry back at the root inode to form a cycle.
+                    // 将该目录项指向根 inode 以形成环。
+                    BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(rootDirOffset + offset, 4), 2);
+                    patched = true;
+                    break;
+                }
+
+                offset += recordLength;
+            }
+
+            Assert.True(patched, "Test setup failed: 'subdir' directory entry not found.");
+
+            using var parser = new Ext4Parser(new MemoryStream(image, writable: false));
+            Assert.Throws<InvalidDataException>(() => parser.ListFiles());
         }
         finally
         {

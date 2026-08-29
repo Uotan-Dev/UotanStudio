@@ -202,7 +202,10 @@ public sealed class Ext4Builder
         var inodesPerGroup = RoundUpPowerOfTwo(Math.Max(maxInode, 16));
         var inodesPerInodeBlock = blockSize / inodeSize;
         var inodeTableBlocks = (inodesPerGroup + inodesPerInodeBlock - 1) / inodesPerInodeBlock;
-        var dataStart = 3L + inodeTableBlocks;
+        // Metadata overhead blocks: 0 = superblock, 1 = group descriptor table,
+        // 2 = block bitmap, 3 = inode bitmap; the inode table starts at block 4.
+        // 元数据开销块：0 = 超级块，1 = 组描述符表，2 = 块位图，3 = inode 位图；inode 表起始于块 4。
+        var dataStart = 4L + inodeTableBlocks;
         var totalDataBlocks = nodes.Sum(static n => n.DataBlockCount) + nodes.Sum(static n => (long)n.LeafBlocks.Length);
         var usedBlocks = dataStart + totalDataBlocks;
         var blocksPerGroup = RoundUpPowerOfTwo(Math.Max(usedBlocks, 8));
@@ -232,15 +235,17 @@ public sealed class Ext4Builder
 
         var descriptor = new byte[32];
         WriteGroupDescriptor(descriptor, (uint)inodesPerGroup, totalBlocks, usedBlocks, nodes.Count, nodes.Count(static n => n.IsDirectory));
-        WriteAt(output, baseOffset, 2048, descriptor, descriptor.Length);
+        // Primary GDT is the block right after the superblock block (block 1 for block sizes > 1 KiB).
+        // 主组描述符表位于超级块所在块之后的块（块大小大于 1 KiB 时为块 1）。
+        WriteAt(output, baseOffset, blockSize, descriptor, descriptor.Length);
 
         var blockBitmap = new byte[blockSize];
         WriteBlockBitmap(blockBitmap, usedBlocks);
-        WriteAt(output, baseOffset, blockSize, blockBitmap, blockBitmap.Length);
+        WriteAt(output, baseOffset, 2L * blockSize, blockBitmap, blockBitmap.Length);
 
         var inodeBitmap = new byte[blockSize];
         WriteInodeBitmap(inodeBitmap, nodes);
-        WriteAt(output, baseOffset, 2L * blockSize, inodeBitmap, inodeBitmap.Length);
+        WriteAt(output, baseOffset, 3L * blockSize, inodeBitmap, inodeBitmap.Length);
 
         foreach (var node in nodes)
         {
@@ -625,9 +630,9 @@ public sealed class Ext4Builder
         Span<byte> desc, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, int usedDirectories)
     {
         desc.Clear();
-        WriteU32(desc, 0, 1); // block bitmap
-        WriteU32(desc, 4, 2); // inode bitmap
-        WriteU32(desc, 8, 3); // inode table
+        WriteU32(desc, 0, 2); // block bitmap (block 2)
+        WriteU32(desc, 4, 3); // inode bitmap (block 3)
+        WriteU32(desc, 8, 4); // inode table (block 4)
         WriteU16(desc, 12, (ushort)(totalBlocks - usedBlocks));
         WriteU16(desc, 14, (ushort)(inodesPerGroup - (uint)usedInodes));
         WriteU16(desc, 16, (ushort)usedDirectories);
@@ -658,7 +663,7 @@ public sealed class Ext4Builder
 
     private static void WriteInode(Stream output, long baseOffset, Node node, int blockSize, int inodeSize)
     {
-        var inodeOffset = checked((long)3 * blockSize + ((long)node.Inode - 1) * inodeSize);
+        var inodeOffset = checked((long)4 * blockSize + ((long)node.Inode - 1) * inodeSize);
         var inode = new byte[inodeSize];
         var isFastSymlink = node.IsSymlink && node.Size < 60;
 
