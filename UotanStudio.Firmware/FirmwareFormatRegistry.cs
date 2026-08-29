@@ -30,6 +30,7 @@ public static class FirmwareFormatRegistry
             Register(new Lp.LpFormatHandler());
             Register(new Ext4.Ext4FormatHandler());
             Register(new Erofs.ErofsFormatHandler());
+            Register(new F2fs.F2fsFormatHandler());
             Register(new NTPi.NtpiFormatHandler());
             Register(new Nb0.Nb0FormatHandler());
             // Boot/Vendor boot images are detected by their leading magic
