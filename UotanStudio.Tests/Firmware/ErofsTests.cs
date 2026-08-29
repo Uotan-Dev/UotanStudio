@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Erofs;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -251,6 +252,92 @@ public class ErofsTests
         using var parser = new ErofsParser(imagePath);
         Assert.Throws<InvalidDataException>(() => parser.ExtractToDirectory(outDir));
         Assert.Empty(Directory.GetFiles(outDir, "*.tmp-*", SearchOption.AllDirectories));
+    }
+
+    [Fact]
+    public void Builder_WritesStandardCompressedIFormat()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "a.txt", "alpha");
+
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
+        var superblock = ErofsSuperblock.FromImage(image);
+        using var parser = new ErofsParser(image);
+        var entry = parser.EnumerateFiles().Single();
+
+        var inodeOffset = superblock.GetInodeOffset(entry.Nid);
+        var iFormat = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan((int)inodeOffset, 2));
+        // Kernel erofs_fs.h encoding: bit 0 = version (0 = compact), bits 1..3 = data layout
+        // (1 = EROFS_INODE_COMPRESSED_FULL), i.e. i_format == 0b0010 for a compact compressed file.
+        // 内核 erofs_fs.h 编码：位 0 = 版本（0 = compact），位 1..3 = 数据布局
+        //（1 = EROFS_INODE_COMPRESSED_FULL），即 compact 压缩文件 i_format == 0b0010。
+        Assert.Equal(0, iFormat & 0x1);
+        Assert.Equal(1, (iFormat >> 1) & 0x7);
+        Assert.Equal(ErofsInode.DataLayoutCompressed, (ushort)(iFormat & ErofsInode.DataLayoutMask));
+    }
+
+    [Fact]
+    public void Builder_WritesStandardFlatIFormat()
+    {
+        using var temp = new TempDirectory();
+        WriteText(temp, "a.txt", "alpha");
+
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var superblock = ErofsSuperblock.FromImage(image);
+        using var parser = new ErofsParser(image);
+        var entry = parser.EnumerateFiles().Single();
+
+        var iFormat = BinaryPrimitives.ReadUInt16LittleEndian(
+            image.AsSpan((int)superblock.GetInodeOffset(entry.Nid), 2));
+        Assert.Equal(0, iFormat);
+        Assert.Equal(ErofsInode.DataLayoutFlat, (ushort)(iFormat & ErofsInode.DataLayoutMask));
+    }
+
+    [Fact]
+    public void Parser_UnsupportedDataLayout_ThrowsInvalidDataException()
+    {
+        // Hand-crafted minimal image: a flat root directory plus one file inode using the
+        // inline (unsupported) data layout. The parser must fail loudly instead of reading garbage.
+        // 手工构造的最小镜像：扁平根目录 + 使用内联（不支持）布局的文件 inode。
+        const int blockSize = 4096;
+        var image = new byte[blockSize * 3];
+        new ErofsSuperblock
+        {
+            MagicValue = ErofsSuperblock.Magic,
+            BlockSizeBits = 12,
+            RootNid = 0,
+            Inos = 2,
+            Blocks = 3,
+            MetaBlkAddr = 1,
+        }.WriteTo(image.AsSpan(ErofsSuperblock.SuperblockOffset));
+
+        // Root directory inode (compact, flat) at metadata offset 0; directory data at block 2.
+        new ErofsInode
+        {
+            Advise = ErofsInode.DataLayoutFlat,
+            Mode = ErofsInode.ModeDirectory,
+            Size = blockSize,
+            U = 2,
+            Nlink = 2,
+        }.WriteTo(image.AsSpan(blockSize));
+
+        // File inode (compact, inline layout = unsupported) at metadata offset 32.
+        new ErofsInode
+        {
+            Advise = ErofsInode.DataLayoutInline,
+            Mode = ErofsInode.ModeRegularFile,
+        }.WriteTo(image.AsSpan(blockSize + ErofsInode.CompactSize));
+
+        // Directory block at block 2 with a single "x" entry (nid 32).
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(2 * blockSize), 32);
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(2 * blockSize + 8), (ushort)(blockSize - 1));
+        image[2 * blockSize + 10] = ErofsInode.FileTypeRegularFile;
+        image[3 * blockSize - 1] = (byte)'x';
+
+        using var parser = new ErofsParser(image);
+        var entry = parser.EnumerateFiles().Single();
+        Assert.Equal("x", entry.Path);
+        Assert.Throws<InvalidDataException>(() => parser.ReadFileBytes("x"));
     }
 
     [Fact]

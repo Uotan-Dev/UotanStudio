@@ -51,7 +51,7 @@ internal sealed class ErofsSuperblock
     private const int OffsetXattrPrefixCount = 91;
     private const int OffsetXattrPrefixStart = 92;
     private const int OffsetPackedNid = 96;
-    private const int OffsetXattrFilterReserved = 100;
+    private const int OffsetXattrFilterReserved = 104;
 
     /// <summary>魔数。Magic value.</summary>
     public uint MagicValue { get; init; }

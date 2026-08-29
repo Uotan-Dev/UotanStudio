@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO;
 using K4os.Compression.LZ4;
 
 namespace UotanStudio.Firmware.Erofs;
@@ -30,7 +31,16 @@ internal static class ErofsCompression
             return 0;
         }
 
-        return (int)((size + (ulong)clusterSize - 1) / (ulong)clusterSize);
+        // Avoid size + clusterSize - 1 overflowing, and require the result to fit an int
+        // so callers can bound the index table.
+        // 避免 size + clusterSize - 1 溢出；结果须能放入 int，以便调用方约束索引表。
+        var count = (size - 1) / (ulong)clusterSize + 1;
+        if (count > int.MaxValue)
+        {
+            throw new InvalidDataException($"Pcluster count {count} exceeds the supported limit of {int.MaxValue}.");
+        }
+
+        return (int)count;
     }
 
     /// <summary>

@@ -3,8 +3,8 @@ using System.Buffers.Binary;
 namespace UotanStudio.Firmware.Erofs;
 
 /// <summary>
-/// erofs inode：compact（32 字节）与 extended（72 字节）两种布局，均为小端。
-/// <para>EROFS inode: both compact (32 bytes) and extended (72 bytes) layouts, little-endian.</para>
+/// erofs inode：compact（32 字节）与 extended（64 字节）两种布局，均为小端。
+/// <para>EROFS inode: both compact (32 bytes) and extended (64 bytes) layouts, little-endian.</para>
 /// </summary>
 internal sealed class ErofsInode
 {
@@ -12,38 +12,34 @@ internal sealed class ErofsInode
     public const int CompactSize = 32;
 
     /// <summary>
-    /// extended inode 大小。Linux 内核 erofs_fs.h 的标准 extended inode 为 72 字节
-    /// （任务描述中的 64B 与标准布局不符，此处遵循内核标准以保证自洽）。
-    /// <para>Size of an extended inode. The standard extended inode in Linux erofs_fs.h is 72 bytes
-    /// (the 64B mentioned in the task deviates from the standard; this implementation follows the
-    /// kernel layout to stay self-consistent).</para>
+    /// extended inode 大小。按 Linux 内核 fs/erofs/erofs_fs.h 的 BUILD_BUG_ON，
+    /// 磁盘上的 extended inode 为 64 字节（compact 为 32 字节）。
+    /// <para>Size of an extended inode. Per the BUILD_BUG_ON in Linux fs/erofs/erofs_fs.h,
+    /// the on-disk extended inode is 64 bytes (the compact one is 32 bytes).</para>
     /// </summary>
-    public const int ExtendedSize = 72;
+    public const int ExtendedSize = 64;
 
-    // i_format 位域（本实现使用的标准子集）。i_format bit fields (subset used by this implementation).
-    /// <summary>数据布局位掩码。Data layout mask.</summary>
-    public const ushort DataLayoutMask = 0x7;
+    // i_format 位域（与内核 erofs_fs.h 一致）：
+    // 位 0 = 版本（1 = extended）；位 1..3 = 数据布局；位 4 = nlink_1 / dot_omitted。
+    // i_format bit fields (matching the kernel erofs_fs.h):
+    // bit 0 = version (1 = extended); bits 1..3 = data layout; bit 4 = nlink_1 / dot_omitted.
+    /// <summary>数据布局位掩码（i_format 位 1..3）。Data layout mask (i_format bits 1..3).</summary>
+    public const ushort DataLayoutMask = 0x7 << 1;
 
     /// <summary>扁平布局（未压缩，i_u = raw_blkaddr）。Flat layout (uncompressed, i_u = raw_blkaddr).</summary>
     public const ushort DataLayoutFlat = 0;
 
-    /// <summary>压缩布局（pcluster 按块对齐，i_u = compressed_blocks）。Compressed layout (block-aligned pclusters, i_u = compressed_blocks).</summary>
-    public const ushort DataLayoutCompressed = 1;
+    /// <summary>压缩布局（完整索引，i_u = compressed_blocks）。Compressed layout (full indexes, i_u = compressed_blocks).</summary>
+    public const ushort DataLayoutCompressed = 1 << 1;
 
     /// <summary>紧凑索引压缩布局（保留）。Compacted-index compression layout (reserved).</summary>
-    public const ushort DataLayoutCompactIndexes = 2;
+    public const ushort DataLayoutCompactIndexes = 3 << 1;
 
-    /// <summary>内联布局（保留）。Inline layout (reserved).</summary>
-    public const ushort DataLayoutInline = 3;
+    /// <summary>尾部内联布局（保留）。Inline layout (reserved).</summary>
+    public const ushort DataLayoutInline = 2 << 1;
 
-    /// <summary>含 xattr 标志。Has-xattr flag.</summary>
-    public const ushort FlagHasXattr = 1 << 3;
-
-    /// <summary>块映射标志。Block-mapped flag.</summary>
-    public const ushort FlagBlockMapped = 1 << 4;
-
-    /// <summary>extended inode 标志（本实现约定的位 5）。Extended-inode flag (bit 5, as chosen by this implementation).</summary>
-    public const ushort FlagExtended = 1 << 5;
+    /// <summary>extended inode 版本位（i_format 位 0，EROFS_INODE_LAYOUT_EXTENDED）。Extended-inode version bit (i_format bit 0, EROFS_INODE_LAYOUT_EXTENDED).</summary>
+    public const ushort FlagExtended = 1;
 
     /// <summary>i_mode 文件类型掩码。i_mode file type mask.</summary>
     public const ushort ModeTypeMask = 0xF000;
@@ -105,13 +101,16 @@ internal sealed class ErofsInode
     /// <summary>是否为 extended inode。Whether this is an extended inode.</summary>
     public bool IsExtended => (Advise & FlagExtended) != 0;
 
+    /// <summary>数据布局值（i_format 位 1..3，对应内核枚举 EROFS_INODE_*）。Data layout value (i_format bits 1..3, matching the kernel EROFS_INODE_* enum).</summary>
+    public ushort DataLayout => (ushort)((Advise & DataLayoutMask) >> 1);
+
     /// <summary>是否为目录。Whether this is a directory.</summary>
     public bool IsDirectory => (Mode & ModeTypeMask) == ModeDirectory;
 
     /// <summary>是否为普通文件。Whether this is a regular file.</summary>
     public bool IsRegularFile => (Mode & ModeTypeMask) == ModeRegularFile;
 
-    /// <summary>是否为压缩布局。Whether the data is compressed.</summary>
+    /// <summary>是否为压缩布局（完整索引）。Whether the data is compressed (full-index layout).</summary>
     public bool IsCompressed => (Advise & DataLayoutMask) == DataLayoutCompressed;
 
     /// <summary>磁盘占用大小（compact 或 extended）。On-disk size (compact or extended).</summary>

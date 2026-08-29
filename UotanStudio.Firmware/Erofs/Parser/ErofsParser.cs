@@ -122,6 +122,14 @@ public sealed class ErofsParser : IDisposable
 
             _superblock = ErofsSuperblock.FromBytes(
                 ReadBytes(ErofsSuperblock.SuperblockOffset, ErofsSuperblock.SuperblockSize, "Superblock"));
+            // The kernel only accepts blkszbits in [9, PAGE_SHIFT] (512..65536 bytes).
+            // 内核仅接受 blkszbits ∈ [9, PAGE_SHIFT]（512..65536 字节）。
+            if (_superblock.BlockSizeBits is < 9 or > 16)
+            {
+                throw new FormatException(
+                    $"Unsupported EROFS block size shift {_superblock.BlockSizeBits} (expected 9..16).");
+            }
+
             _blockSize = _superblock.BlockSize;
         }
         catch
@@ -484,6 +492,13 @@ public sealed class ErofsParser : IDisposable
             return;
         }
 
+        if (inode.DataLayout != ErofsInode.DataLayoutFlat)
+        {
+            // Fail loudly instead of silently reading the raw (e.g. compacted-index or inline) data.
+            // 显式失败而非静默把原始（如紧凑索引或内联）数据当作文件内容。
+            throw new InvalidDataException($"Unsupported EROFS data layout {inode.DataLayout} for inode nid {nid}.");
+        }
+
         WriteFlatData(inode, output);
     }
 
@@ -507,6 +522,11 @@ public sealed class ErofsParser : IDisposable
     private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output)
     {
         var clusterSize = _blockSize;
+        if (inode.Size > (ulong)_imageSize)
+        {
+            throw new InvalidDataException($"Compressed file size {inode.Size} exceeds the image size {_imageSize}.");
+        }
+
         var pclusterCount = ErofsCompression.PclusterCount(inode.Size, clusterSize);
         if (pclusterCount == 0)
         {
