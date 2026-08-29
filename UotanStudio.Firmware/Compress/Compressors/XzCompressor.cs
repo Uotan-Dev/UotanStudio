@@ -80,7 +80,7 @@ public static class XzCompressor
         {
             using var lzma2 = new MemoryStream();
 
-            var crc64State = 0xFFFFFFFFFFFFFFFFUL;
+            var crc64 = new System.IO.Hashing.Crc64();
             var crc32 = new System.IO.Hashing.Crc32();
 
             var total = Lzma2Encoder.Encode(input, lzma2, dictionarySize, maxDegreeOfParallelism,
@@ -88,7 +88,7 @@ public static class XzCompressor
                 {
                     if (checkType == XzContainer.CheckTypeCrc64)
                     {
-                        crc64State = Internal.Xz.Crc64.Append(crc64State, new ReadOnlySpan<byte>(win, offset, count));
+                        crc64.Append(new ReadOnlySpan<byte>(win, offset, count));
                     }
                     else
                     {
@@ -99,7 +99,7 @@ public static class XzCompressor
             byte[] check;
             if (checkType == XzContainer.CheckTypeCrc64)
             {
-                var crc = crc64State ^ 0xFFFFFFFFFFFFFFFFUL;
+                var crc = crc64.GetCurrentHashAsUInt64();
                 check = new byte[8];
                 for (var i = 0; i < 8; i++)
                 {

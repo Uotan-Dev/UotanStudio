@@ -608,27 +608,25 @@ public sealed class PayloadBuilder : IDisposable
         byte[] dataHash;
         ArraySegment<byte> compressedData;
 
-        using (var sha = SHA256.Create())
+        // SHA256.HashData 静态重载直接以流输入计算哈希，避免实例化与重复 Initialize。
+        // The static SHA256.HashData overload hashes the stream directly, avoiding instance
+        // creation and repeated Initialize calls.
+        srcHash = SHA256.HashData(inputStream);
+
+        inputStream.Seek(0, SeekOrigin.Begin);
+        var compressedStream = new MemoryStream();
+        CompressStream(inputStream, compressedStream, compressionType);
+
+        if (compressedStream.TryGetBuffer(out var buffer))
         {
-            srcHash = sha.ComputeHash(inputStream);
-
-            inputStream.Seek(0, SeekOrigin.Begin);
-            var compressedStream = new MemoryStream();
-            CompressStream(inputStream, compressedStream, compressionType);
-
-            sha.Initialize();
-
-            if (compressedStream.TryGetBuffer(out var buffer))
-            {
-                dataHash = sha.ComputeHash(buffer.Array!, buffer.Offset, buffer.Count);
-                compressedData = buffer;
-            }
-            else
-            {
-                var arr = compressedStream.ToArray();
-                dataHash = sha.ComputeHash(arr);
-                compressedData = new ArraySegment<byte>(arr);
-            }
+            dataHash = SHA256.HashData(buffer.AsSpan(0, buffer.Count));
+            compressedData = buffer;
+        }
+        else
+        {
+            var arr = compressedStream.ToArray();
+            dataHash = SHA256.HashData(arr);
+            compressedData = new ArraySegment<byte>(arr);
         }
 
         return new PartitionImageData

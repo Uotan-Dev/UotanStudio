@@ -34,7 +34,7 @@ internal static class XzContainer
     public static byte[] Wrap(byte[] lzma2Data, byte[] originalData, uint dictionarySize, byte checkType = CheckTypeCrc32)
     {
         var check = checkType == CheckTypeCrc64
-            ? WriteUInt64LE(Crc64.Compute(originalData))
+            ? WriteUInt64LE(System.IO.Hashing.Crc64.HashToUInt64(originalData))
             : WriteUInt32LE(ComputeCrc32(originalData));
 
         using var output = new MemoryStream();

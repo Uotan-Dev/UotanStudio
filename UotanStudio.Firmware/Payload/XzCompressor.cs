@@ -267,17 +267,7 @@ internal class XzCompressor
 
     private static void WriteCrc32Le(Stream stream, byte[] data)
     {
-        var crc = 0xFFFFFFFF;
-        for (var i = 0; i < data.Length; i++)
-        {
-            crc ^= data[i];
-            for (var j = 0; j < 8; j++)
-            {
-                crc = (crc >> 1) ^ (0xEDB88320U & (uint)-(int)(crc & 1));
-            }
-        }
-
-        crc = ~crc;
+        var crc = System.IO.Hashing.Crc32.HashToUInt32(data);
         Span<byte> crcBytes = stackalloc byte[4];
         BinaryPrimitives.WriteUInt32LittleEndian(crcBytes, crc);
         stream.Write(crcBytes);

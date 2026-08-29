@@ -130,10 +130,14 @@ public sealed class FirmwareService
             foreach (var file in Directory.EnumerateFiles(inputDirectory, "*", SearchOption.AllDirectories))
             {
                 var rel = Path.GetRelativePath(inputDirectory, file);
+                // 惰性打开文件流，避免把整个目录的所有文件一次性读入内存。
+                // Open each file lazily so the whole directory is never materialized in memory.
                 entries.Add(new ArchiveEntry
                 {
                     Name = rel.Replace('\\', '/'),
-                    Data = await File.ReadAllBytesAsync(file, cancellationToken),
+                    Data = [],
+                    DataStreamFactory = () => File.OpenRead(file),
+                    DeclaredDataLength = new FileInfo(file).Length,
                     Metadata = new ArchiveEntryMetadata
                     {
                         FileType = CpioFileType.Regular,
@@ -268,19 +272,17 @@ public sealed class FirmwareService
         try
         {
             Directory.CreateDirectory(outputDirectory);
-            var bytes = await File.ReadAllBytesAsync(bootPath, cancellationToken);
-            if (bytes.Length < 8)
-            {
-                return FirmwareOpResult.Fail($"File too small to be a boot image: {bytes.Length} bytes  文件过小，不是有效的 boot 镜像。");
-            }
 
-            var magic = Encoding.ASCII.GetString(bytes, 0, 8);
+            // 流式读取头部 8 字节判定镜像类型，避免整个镜像读入内存。
+            // Read the 8-byte header streamingly to decide the image type instead of loading the
+            // whole image into memory.
+            var magic = await ReadHeaderMagicAsync(bootPath, cancellationToken);
             switch (magic)
             {
                 case "ANDROID!":
                     using (var parser = new BootImageParser())
                     {
-                        parser.Parse(bytes);
+                        parser.ParseFile(bootPath);
                         WriteComponent(outputDirectory, "kernel", parser.Kernel);
                         WriteComponent(outputDirectory, "ramdisk", parser.Ramdisk);
                         WriteComponent(outputDirectory, "ramdisk.cpio", DecompressRamdisk(parser.Ramdisk, parser.Header.RamdiskCompression));
@@ -299,7 +301,7 @@ public sealed class FirmwareService
                 case "VNDRBOOT":
                     using (var parser = new VendorBootParser())
                     {
-                        parser.Parse(bytes);
+                        parser.ParseFile(bootPath);
                         WriteComponent(outputDirectory, "vendor_ramdisk", parser.VendorRamdisk);
                         WriteComponent(outputDirectory, "vendor_ramdisk.cpio", DecompressRamdisk(parser.VendorRamdisk, parser.Header.VendorRamdiskCompression));
                         WriteComponent(outputDirectory, "dtb", parser.Dtb);
@@ -393,6 +395,23 @@ public sealed class FirmwareService
         return compression == UotanStudio.Firmware.BootImage.CompressionType.None || raw.Length == 0
             ? raw
             : BootCompressor.TryDecompress(raw, compression) ?? raw;
+    }
+
+    /// <summary>
+    /// Reads the 8-byte magic of a boot / vendor_boot image without loading the whole file.
+    /// <para>只读取 boot / vendor_boot 镜像的 8 字节魔数，不加载整个文件。</para>
+    /// </summary>
+    private static async Task<string> ReadHeaderMagicAsync(string bootPath, CancellationToken cancellationToken)
+    {
+        using var fs = new FileStream(bootPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var buffer = new byte[8];
+        var read = await fs.ReadAsync(buffer, cancellationToken);
+        if (read < 8)
+        {
+            throw new InvalidDataException($"File too small to be a boot image: {read} bytes  文件过小，不是有效的 boot 镜像。");
+        }
+
+        return Encoding.ASCII.GetString(buffer, 0, read);
     }
 
     private static void WriteComponent(string directory, string name, byte[] data)

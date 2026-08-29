@@ -259,5 +259,16 @@ public class WorkspaceDockFactory : Factory
                 // 清理失败不影响关闭流程
             }
         }
+        else if (dockable is UotanStudio.ViewModels.Editors.FileManagerEditorViewModel fileManager)
+        {
+            try
+            {
+                fileManager.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
     }
 }
