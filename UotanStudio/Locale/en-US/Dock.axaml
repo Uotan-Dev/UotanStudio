@@ -64,6 +64,22 @@
     <x:String x:Key="Dock_Properties_Fw_MetadataCount">Metadata Entries</x:String>
     <x:String x:Key="Dock_Properties_Fw_Components">Components</x:String>
 
+    <!-- File manager document (ext4/EROFS/F2FS image tree) labels -->
+    <x:String x:Key="Dock_FileManager">File Manager</x:String>
+    <x:String x:Key="FileManager_Refresh">Refresh</x:String>
+    <x:String x:Key="FileManager_Extract">Extract</x:String>
+    <x:String x:Key="FileManager_Loading">Loading filesystem tree…</x:String>
+    <x:String x:Key="FileManager_FileCount">Files: {0}</x:String>
+    <x:String x:Key="FileManager_DirectoryCount">Directories: {0}</x:String>
+    <x:String x:Key="FileManager_ImageSize">Size: {0}</x:String>
+    <x:String x:Key="FileManager_Path">Path</x:String>
+    <x:String x:Key="FileManager_Size">Size</x:String>
+    <x:String x:Key="FileManager_Kind">Type</x:String>
+    <x:String x:Key="FileManager_KindFile">File</x:String>
+    <x:String x:Key="FileManager_KindDirectory">Directory</x:String>
+    <x:String x:Key="FileManager_KindSymlink">Symbolic Link</x:String>
+    <x:String x:Key="FileManager_Unrecognized">Not a recognized ext4/EROFS/F2FS filesystem image</x:String>
+
     <!-- Hex document properties panel labels -->
     <x:String x:Key="Dock_Properties_Hex_FileName">File Name</x:String>
     <x:String x:Key="Dock_Properties_Hex_FilePath">File Path</x:String>

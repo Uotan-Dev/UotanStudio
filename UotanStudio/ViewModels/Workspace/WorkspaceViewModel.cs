@@ -150,6 +150,15 @@ public class WorkspaceViewModel : ViewModelBase
             return;
         }
 
+        // 文件系统镜像（ext4/EROFS/F2FS raw img）：走文件管理器文档编辑器（内部目录树）。
+        // Filesystem images (ext4/EROFS/F2FS raw img) open in the file-manager document editor
+        // (internal directory tree).
+        if (mode == EditorOpenMode.FileSystem)
+        {
+            await OpenFileSystemAsync(path);
+            return;
+        }
+
         var documentDock = _documentDock ??= FindDocumentsPane();
         if (documentDock is null)
         {
@@ -605,6 +614,68 @@ public class WorkspaceViewModel : ViewModelBase
         {
             WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
         }
+    }
+
+    /// <summary>
+    /// <para>在文档区以文件管理器文档编辑器打开指定的文件系统镜像（ext4/EROFS/F2FS raw img）：
+    /// 若已打开则聚焦并返回；否则创建并加载 <see cref="FileManagerEditorViewModel"/>。</para>
+    /// Opens the given filesystem image (ext4/EROFS/F2FS raw img) in the file-manager document editor in
+    /// the document area: focuses it if already open; otherwise creates and loads a
+    /// <see cref="FileManagerEditorViewModel"/>.
+    /// </summary>
+    /// <param name="path">
+    /// <para>要打开的镜像文件路径。</para>
+    /// The path of the image file to open.
+    /// </param>
+    public async Task OpenFileSystemAsync(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?
+            .OfType<FileManagerEditorViewModel>()
+            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+
+        var document = new FileManagerEditorViewModel
+        {
+            Title = Path.GetFileName(fullPath),
+            FilePath = fullPath
+        };
+
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+
+        try
+        {
+            await document.LoadFromImageAsync(fullPath);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Workspace",
+                $"Failed to open filesystem image '{fullPath}': {ex.Message}");
+        }
+
+        // 不发送 ActiveDocumentChangedMessage：属性面板没有文件管理器文档的展示路径，
+        // 文档切换时由 OnDocumentDockPropertyChanged 的默认分支清空面板。
+        // No ActiveDocumentChangedMessage is sent: the properties panel has no display path for
+        // file-manager documents; OnDocumentDockPropertyChanged clears the panel via its default branch.
     }
 
     /// <summary>

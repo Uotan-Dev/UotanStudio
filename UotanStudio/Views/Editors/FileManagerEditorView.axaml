@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Editors.FileManagerEditorView"
+             x:DataType="viewmodels:FileManagerEditorViewModel">
+  <DockPanel>
+    <!-- 顶部工具栏：镜像信息 + 刷新/提取按钮 -->
+    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
+          <Button Content="{DynamicResource FileManager_Extract}" Command="{Binding ExtractSelectedCommand}" />
+          <Button Content="{DynamicResource FileManager_Refresh}" Command="{Binding RefreshCommand}" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <TextBlock Text="{Binding FormatName}" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding ImagePath}" FontFamily="Consolas" FontSize="12"
+                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding FileCountText}" FontSize="12" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding DirectoryCountText}" FontSize="12" VerticalAlignment="Center" />
+          <TextBlock Text="{Binding ImageSizeText}" FontSize="12" VerticalAlignment="Center" />
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- 加载进度指示 -->
+    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+            IsVisible="{Binding IsLoading}">
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <ProgressBar IsIndeterminate="True" Width="160" Height="4" />
+        <TextBlock Text="{DynamicResource FileManager_Loading}" FontSize="12"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+      </StackPanel>
+    </Border>
+
+    <!-- 错误区 -->
+    <Border DockPanel.Dock="Top" Padding="6,4" Background="#22C42B1C"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+            IsVisible="{Binding HasError}">
+      <TextBlock Text="{Binding ErrorMessage}" Foreground="Red" TextWrapping="Wrap" FontSize="12" />
+    </Border>
+
+    <!-- 文件树（左） + 选中条目详情（右） -->
+    <Grid ColumnDefinitions="320,*">
+      <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+        <TreeView x:Name="FileTree"
+                  ItemsSource="{Binding Entries}"
+                  SelectionChanged="OnFileTreeSelectionChanged"
+                  DoubleTapped="OnFileTreeDoubleTapped">
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate x:DataType="viewmodels:FileManagerEntryViewModel" ItemsSource="{Binding Children}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
+                <TextBlock Text="{Binding SizeText}" FontSize="11"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+              </StackPanel>
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+      </Border>
+
+      <!-- 详情区 -->
+      <Border Grid.Column="1" Padding="12" Background="{DynamicResource ControlFillColorDefaultBrush}">
+        <StackPanel Spacing="10">
+          <TextBlock Text="{Binding SelectedEntry.Name}" FontSize="18" FontWeight="SemiBold"
+                     TextTrimming="CharacterEllipsis" />
+          <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource FileManager_Path}"
+                       FontWeight="SemiBold" FontSize="12" />
+            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedEntry.Path}"
+                       FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource FileManager_Size}"
+                       FontWeight="SemiBold" FontSize="12" />
+            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.SizeText}" FontSize="12" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource FileManager_Kind}"
+                       FontWeight="SemiBold" FontSize="12" />
+            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEntry.KindText}" FontSize="12" />
+          </Grid>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
+</UserControl>

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using UotanStudio.Firmware;
 using UotanStudio.Firmware.Common;
 
@@ -62,7 +63,14 @@ public enum EditorOpenMode
     /// Open in the firmware metadata panel (format name/summary/metadata/entries, driven by the
     /// format-handler registry).
     /// </summary>
-    Firmware
+    Firmware,
+
+    /// <summary>
+    /// <para>以文件管理器文档编辑器打开（展示 ext4/EROFS/F2FS 等文件系统镜像的内部目录树）。</para>
+    /// Open in the file-manager document editor (shows the internal directory tree of filesystem
+    /// images such as ext4/EROFS/F2FS).
+    /// </summary>
+    FileSystem
 }
 
 /// <summary>
@@ -129,6 +137,18 @@ public static class FileOpenMode
             return EditorOpenMode.Text;
         }
 
+        // 文件系统镜像（ext4/EROFS/F2FS）：扩展名命中专用集合时以内容魔数确认后路由到文件管理器
+        // 编辑器。注意 .img 与固件格式重叠，必须用魔数判定（ext4 0xEF53@1080、erofs 0xE0F5E1E2@1024、
+        // f2fs 0xF2F52010@1024），未命中则继续走固件/十六进制分支。
+        // Filesystem images (ext4/EROFS/F2FS): when the extension matches the dedicated set, confirm by
+        // content magic before routing to the file-manager editor. .img overlaps with firmware formats,
+        // so the magic must decide (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024);
+        // otherwise the Firmware/Hex branches below take over.
+        if (IsFilesystemImageExtension(ext) && IsFilesystemImage(path))
+        {
+            return EditorOpenMode.FileSystem;
+        }
+
         // 固件元数据面板：扩展名命中格式处理器注册表聚合出的集合（.img/.pac/.ops/.nb0 等），
         // 其余专用编辑器已在上方优先拦截（如 .dtb/.dex/.arsc/.apk）。
         // Firmware metadata panel: the extension matches the set aggregated from the registered
@@ -175,6 +195,16 @@ public static class FileOpenMode
         if (header is not null && UotanStudio.Firmware.AXml.AXmlParser.IsAxml(header))
         {
             return EditorOpenMode.Axml;
+        }
+
+        // 文件系统镜像魔数优先：头部已提供且长度足够时直接命中（ext4 0xEF53@1080、
+        // erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024），不必再按扩展名回落固件面板。
+        // Filesystem image magic takes priority: when the header is provided and long enough, the magic
+        // decides directly (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024) without
+        // falling back to the firmware panel by extension.
+        if (header is not null && IsFilesystemMagic(header))
+        {
+            return EditorOpenMode.FileSystem;
         }
 
         var mode = ResolveMode(path);
@@ -235,6 +265,87 @@ public static class FileOpenMode
     /// </summary>
     public static bool IsDtsExtension(string? ext) =>
         ext is not null && ext.Equals(".dts", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <para>是否为文件系统镜像扩展名（.img/.ext4/.erofs/.f2fs）。</para>
+    /// Whether the extension is a filesystem-image one (.img/.ext4/.erofs/.f2fs).
+    /// </summary>
+    public static bool IsFilesystemImageExtension(string? ext)
+    {
+        if (ext is null)
+        {
+            return false;
+        }
+
+        return ext.Equals(".img", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".ext4", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".erofs", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".f2fs", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <para>判断文件内容是否命中 ext4/EROFS/F2FS 魔数。
+    /// 读取头部参与判定的最小长度：ext4 魔数（2 字节）位于 1080 → 需 1082 字节。</para>
+    /// Determines whether the file content matches an ext4/EROFS/F2FS magic. The minimal header length
+    /// needed is 1082 bytes (ext4 magic, 2 bytes, sits at offset 1080).
+    /// </summary>
+    /// <param name="path">
+    /// <para>文件名或完整路径。</para>
+    /// A file name or full path.
+    /// </param>
+    public static bool IsFilesystemImage(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, FilesystemHeaderLength);
+            return IsFilesystemMagic(header);
+        }
+        catch
+        {
+            // 读取失败按非文件系统镜像处理。
+            // A read failure is treated as a non-filesystem image.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <para>判断头部字节是否命中任意一种文件系统魔数（ext4/EROFS/F2FS）。</para>
+    /// Determines whether the header bytes match any filesystem magic (ext4/EROFS/F2FS).
+    /// </summary>
+    public static bool IsFilesystemMagic(ReadOnlySpan<byte> header) =>
+        IsExt4Magic(header) || IsErofsMagic(header) || IsF2fsMagic(header);
+
+    /// <summary>
+    /// <para>是否为 ext4 魔数（小端 0xEF53 位于偏移 1080）。</para>
+    /// Whether the header holds the ext4 magic (little-endian 0xEF53 at offset 1080).
+    /// </summary>
+    public static bool IsExt4Magic(ReadOnlySpan<byte> header) =>
+        header.Length >= 1082 && BinaryPrimitives.ReadUInt16LittleEndian(header.Slice(1080, 2)) == 0xEF53;
+
+    /// <summary>
+    /// <para>是否为 EROFS 魔数（小端 0xE0F5E1E2 位于偏移 1024）。</para>
+    /// Whether the header holds the EROFS magic (little-endian 0xE0F5E1E2 at offset 1024).
+    /// </summary>
+    public static bool IsErofsMagic(ReadOnlySpan<byte> header) =>
+        header.Length >= 1028 && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1024, 4)) == 0xE0F5E1E2;
+
+    /// <summary>
+    /// <para>是否为 F2FS 魔数（小端 0xF2F52010 位于偏移 1024）。</para>
+    /// Whether the header holds the F2FS magic (little-endian 0xF2F52010 at offset 1024).
+    /// </summary>
+    public static bool IsF2fsMagic(ReadOnlySpan<byte> header) =>
+        header.Length >= 1028 && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(1024, 4)) == 0xF2F52010;
+
+    /// <summary>
+    /// <para>文件系统魔数判定所需的头部读取长度（覆盖至 ext4 魔数尾部）。</para>
+    /// Header length read for filesystem magic detection (covers past the ext4 magic tail).
+    /// </summary>
+    private const int FilesystemHeaderLength = 1082;
 
     /// <summary>
     /// <para>是否为已知固件扩展名（应走固件元数据面板）。
