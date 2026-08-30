@@ -1,0 +1,226 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Compare"
+             xmlns:compareviews="using:UotanStudio.Views.Compare"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             x:Class="UotanStudio.Views.Compare.CompareView"
+             x:DataType="vm:CompareViewModel"
+             DragDrop.AllowDrop="True"
+             DragDrop.DragOver="OnDragOver"
+             DragDrop.Drop="OnDrop">
+  <!-- 透明背景必须显式给出：Avalonia 命中测试只落到有 Background 的元素，无背景时空白区域
+       InputHitTest 失败，DragDropDevice.GetTarget 返回 null 导致 OS 光标显示禁止。 -->
+  <!-- Transparent background is required: Avalonia hit-testing only lands on elements with a
+       Background, so without it InputHitTest fails on empty areas and DragDropDevice.GetTarget
+       returns null, making the OS cursor show the "not allowed" glyph. -->
+  <Grid Background="Transparent">
+    <!-- 空态提示：尚无比较内容时展示（拖入文件/文件夹或从「工具」菜单选择） -->
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
+                IsVisible="{Binding !HasComparison}">
+      <avalonia:MaterialIcon Kind="FileCompare" Width="48" Height="48" Opacity="0.35"
+                             HorizontalAlignment="Center" />
+      <TextBlock Text="{DynamicResource Compare_DropHint}" FontSize="14" Opacity="0.7"
+                 HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+    </StackPanel>
+
+    <!-- 统一双栏对比视图：文件夹 / 文本 / 二进制共用同一套左右双栏布局，
+         行模板由 CompareRowViewModel 的 Left* / Right* 属性驱动。 -->
+    <DockPanel IsVisible="{Binding HasComparison}">
+      <!-- 顶部工具栏：左右路径 + 按模式切换的按钮组 -->
+      <Border DockPanel.Dock="Top" Padding="6,4"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+        <Grid RowDefinitions="Auto" RowSpacing="6">
+          <DockPanel>
+            <!-- 文件夹模式：刷新 / 复制 / 删除 -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                        IsVisible="{Binding IsFolderMode}">
+              <Button Content="{DynamicResource Compare_Refresh}" Command="{Binding RefreshCommand}" />
+              <Button Content="{DynamicResource Compare_CopyLeftToRight}" Command="{Binding CopyLeftToRightCommand}" />
+              <Button Content="{DynamicResource Compare_CopyRightToLeft}" Command="{Binding CopyRightToLeftCommand}" />
+              <Button Content="{DynamicResource Compare_DeleteLeft}" Command="{Binding DeleteLeftCommand}" />
+              <Button Content="{DynamicResource Compare_DeleteRight}" Command="{Binding DeleteRightCommand}" />
+            </StackPanel>
+            <!-- 文本模式：上一/下一差异 + 汇总文本 -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                        IsVisible="{Binding IsTextMode}">
+              <Button Content="{DynamicResource Compare_PrevDiff}" Command="{Binding PrevDiffCommand}" />
+              <Button Content="{DynamicResource Compare_NextDiff}" Command="{Binding NextDiffCommand}" />
+              <TextBlock Text="{Binding StatsText}" FontSize="12" VerticalAlignment="Center" />
+            </StackPanel>
+            <!-- 二进制模式：十六进制原始/元数据切换 + 上一/下一差异 -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
+                        IsVisible="{Binding IsBinaryMode}">
+              <Button Content="{DynamicResource Compare_HexRaw}" Command="{Binding ToggleHexViewCommand}" />
+              <Button Content="{DynamicResource Compare_PrevDiff}" Command="{Binding PrevDiffCommand}" />
+              <Button Content="{DynamicResource Compare_NextDiff}" Command="{Binding NextDiffCommand}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock Text="{DynamicResource Compare_Left}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding LeftPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <TextBlock Text="↔" VerticalAlignment="Center" Opacity="0.6" />
+              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock Text="{DynamicResource Compare_Right}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding RightPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </StackPanel>
+          </DockPanel>
+
+        </Grid>
+      </Border>
+
+      <!-- 错误区 -->
+      <Border DockPanel.Dock="Top" Padding="6,4" Background="#22C42B1C"
+              BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+              IsVisible="{Binding HasError}">
+        <TextBlock Text="{Binding ErrorMessage}" Foreground="Red" TextWrapping="Wrap" FontSize="12" />
+      </Border>
+
+      <!-- 主体：左栏 / 分隔线 / 右栏 -->
+      <Grid ColumnDefinitions="*,1,*">
+        <!-- 左栏 -->
+        <Border Grid.Column="0">
+          <DockPanel>
+            <Border DockPanel.Dock="Top" Padding="6,4"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock Text="{DynamicResource Compare_Left}" FontWeight="SemiBold" FontSize="11" />
+                <TextBlock Text="{Binding LeftPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
+            <Grid>
+              <ListBox x:Name="LeftList"
+                       ItemsSource="{Binding LeftRows}"
+                       SelectionChanged="OnLeftSelectionChanged"
+                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                       ScrollViewer.VerticalScrollBarVisibility="Auto"
+                       Background="Transparent">
+                <ListBox.ItemContainerTheme>
+                  <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                  </ControlTheme>
+                </ListBox.ItemContainerTheme>
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <VirtualizingStackPanel />
+                  </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CompareRowViewModel">
+                    <Grid ColumnDefinitions="3,Auto,*,Auto" MinHeight="20">
+                      <!-- 仅左侧条目的橙色调淡色背景（Overlay） -->
+                      <Border Grid.ColumnSpan="4" Background="{Binding LeftTintBrush}"
+                              IsVisible="{Binding LeftTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <!-- 差异行整行高亮（Overlay：主题画刷随明暗主题切换） -->
+                      <Border Grid.ColumnSpan="4" Background="{DynamicResource DiffBackgroundBrush}"
+                              IsVisible="{Binding IsLeftDiff}" />
+                      <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
+                              Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsLeftEmpty}" />
+                      <TextBlock Grid.Column="1" Text="{Binding LeftLine}" FontSize="11" Opacity="0.6"
+                                 MinWidth="32" TextAlignment="Right" VerticalAlignment="Center" Margin="4,0"
+                                 IsVisible="{Binding !IsLeftEmpty}" />
+                      <TextBlock Grid.Column="2" Text="{Binding LeftText}" FontFamily="Consolas" FontSize="12"
+                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                 Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}"
+                                 IsVisible="{Binding !IsLeftEmpty}" />
+                      <TextBlock Grid.Column="3" Text="{Binding LeftSub}" FontSize="11" Opacity="0.6"
+                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,6,0"
+                                 IsVisible="{Binding !IsLeftEmpty}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <!-- 左栏空态提示：单侧留空等待拖入补齐 -->
+              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"
+                          IsVisible="{Binding !HasLeft}">
+                <TextBlock Text="{DynamicResource Compare_DropRightFolder}" IsVisible="{Binding IsFolderMode}"
+                           FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Text="{DynamicResource Compare_DropRightFile}" IsVisible="{Binding !IsFolderMode}"
+                           FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
+              </StackPanel>
+            </Grid>
+          </DockPanel>
+        </Border>
+
+        <!-- 中部分隔线 -->
+        <Border Grid.Column="1" Background="{DynamicResource BorderBrush}" />
+
+        <!-- 右栏 -->
+        <Border Grid.Column="2">
+          <DockPanel>
+            <Border DockPanel.Dock="Top" Padding="6,4"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock Text="{DynamicResource Compare_Right}" FontWeight="SemiBold" FontSize="11" />
+                <TextBlock Text="{Binding RightPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+            </Border>
+            <Grid>
+              <ListBox x:Name="RightList"
+                       ItemsSource="{Binding RightRows}"
+                       SelectionChanged="OnRightSelectionChanged"
+                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                       ScrollViewer.VerticalScrollBarVisibility="Auto"
+                       Background="Transparent">
+                <ListBox.ItemContainerTheme>
+                  <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                  </ControlTheme>
+                </ListBox.ItemContainerTheme>
+                <ListBox.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <VirtualizingStackPanel />
+                  </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CompareRowViewModel">
+                    <Grid ColumnDefinitions="3,Auto,*,Auto" MinHeight="20">
+                      <!-- 仅右侧条目的蓝色调淡色背景（Overlay） -->
+                      <Border Grid.ColumnSpan="4" Background="{Binding RightTintBrush}"
+                              IsVisible="{Binding RightTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <!-- 差异行整行高亮（Overlay：主题画刷随明暗主题切换） -->
+                      <Border Grid.ColumnSpan="4" Background="{DynamicResource DiffBackgroundBrush}"
+                              IsVisible="{Binding IsRightDiff}" />
+                      <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
+                              Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsRightEmpty}" />
+                      <TextBlock Grid.Column="1" Text="{Binding RightLine}" FontSize="11" Opacity="0.6"
+                                 MinWidth="32" TextAlignment="Right" VerticalAlignment="Center" Margin="4,0"
+                                 IsVisible="{Binding !IsRightEmpty}" />
+                      <TextBlock Grid.Column="2" Text="{Binding RightText}" FontFamily="Consolas" FontSize="12"
+                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                 Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}"
+                                 IsVisible="{Binding !IsRightEmpty}" />
+                      <TextBlock Grid.Column="3" Text="{Binding RightSub}" FontSize="11" Opacity="0.6"
+                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,6,0"
+                                 IsVisible="{Binding !IsRightEmpty}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <!-- 右栏空态提示：单侧留空等待拖入补齐 -->
+              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"
+                          IsVisible="{Binding !HasRight}">
+                <TextBlock Text="{DynamicResource Compare_DropRightFolder}" IsVisible="{Binding IsFolderMode}"
+                           FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
+                <TextBlock Text="{DynamicResource Compare_DropRightFile}" IsVisible="{Binding !IsFolderMode}"
+                           FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
+              </StackPanel>
+            </Grid>
+          </DockPanel>
+        </Border>
+      </Grid>
+    </DockPanel>
+  </Grid>
+</UserControl>

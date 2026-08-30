@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
 
@@ -13,6 +14,7 @@ public partial class MainViewModel : ViewModelBase
     public WorkspaceViewModel WorkspaceVM { get; } = new();
     public NodeEditorViewModel NodeEditorVM { get; } = new();
     public SettingsViewModel SettingsVM { get; } = new();
+    public CompareViewModel CompareVM { get; } = new();
 
     /// <summary>
     /// <para>窗口标题（含当前解决方案名），随解决方案打开/关闭更新。</para>

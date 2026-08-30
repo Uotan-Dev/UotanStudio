@@ -1,0 +1,361 @@
+using System.Collections;
+using System.Globalization;
+using System.Text;
+using UotanStudio.Services.Compare;
+
+namespace UotanStudio.ViewModels.Compare;
+
+/// <summary>
+/// <para>十六进制对比行的懒加载集合：按行索引按需读取两个文件并构造
+/// <see cref="CompareRowViewModel"/>（偏移/十六进制串/ASCII 串），供虚拟化 <c>ListBox</c>
+/// 随机索引取行；内置小窗口缓存与统一的锁，支持 UI 与后台并发访问。
+/// 每行字节数常量独立定义，不引用 <c>Views/Controls/HexMetrics</c>，
+/// 保持 ViewModels 层不依赖 Views 层。</para>
+/// Lazily loaded hex-compare row collection: reads both files by row index on demand to build
+/// <see cref="CompareRowViewModel"/> rows (offset/hex string/ASCII string) for a virtualized
+/// <c>ListBox</c>; a small window cache and a single lock make random access fast and safe for
+/// concurrent UI/background use. The bytes-per-line constant is defined here independently and does
+/// not reference <c>Views/Controls/HexMetrics</c>, keeping the ViewModels layer free of Views
+/// dependencies.
+/// </summary>
+public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>, IDisposable
+{
+    /// <summary>
+    /// <para>每行字节数。</para>
+    /// Bytes per row.
+    /// </summary>
+    private const int BytesPerLine = 16;
+
+    /// <summary>
+    /// <para>窗口缓存容量：保留最近访问的 256 行的字节，命中时避免重复 seek 与读取。</para>
+    /// Window-cache capacity: keeps the bytes of the 256 most recently accessed rows so cache hits
+    /// avoid repeated seeks and reads.
+    /// </summary>
+    private const int CacheCapacity = 256;
+
+    private readonly FileStream _leftStream;
+    private readonly FileStream _rightStream;
+    private readonly long _leftLength;
+    private readonly long _rightLength;
+    private readonly int _count;
+    private readonly IReadOnlyList<BinaryDiffRange> _diffRanges;
+    private readonly object _syncRoot = new();
+    private readonly CacheSlot[] _cache = new CacheSlot[CacheCapacity];
+
+    /// <summary>
+    /// <para>创建十六进制对比行集合：立即打开两个文件流、捕获文件长度并计算总行数，
+    /// 行字节在首次索引访问时懒加载读取。</para>
+    /// Creates the hex-compare row collection: opens both file streams immediately, captures the
+    /// file lengths and computes the total row count, while row bytes are lazily read on the first
+    /// access to each index.
+    /// </summary>
+    /// <param name="leftPath">左文件路径。<para>Left file path.</para></param>
+    /// <param name="rightPath">右文件路径。<para>Right file path.</para></param>
+    /// <param name="diffRanges">按 Offset 升序排列的差异区间列表。<para>Diff ranges sorted by Offset in ascending order.</para></param>
+    public CompareHexRowCollection(string leftPath, string rightPath, IReadOnlyList<BinaryDiffRange> diffRanges)
+    {
+        ArgumentNullException.ThrowIfNull(leftPath);
+        ArgumentNullException.ThrowIfNull(rightPath);
+        ArgumentNullException.ThrowIfNull(diffRanges);
+
+        _diffRanges = diffRanges;
+        try
+        {
+            _leftStream = new FileStream(leftPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+            _rightStream = new FileStream(rightPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+        }
+        catch
+        {
+            _leftStream?.Dispose();
+            _rightStream?.Dispose();
+            throw;
+        }
+
+        _leftLength = _leftStream.Length;
+        _rightLength = _rightStream.Length;
+        _count = (int)((Math.Max(_leftLength, _rightLength) + BytesPerLine - 1) / BytesPerLine);
+
+        for (var i = 0; i < CacheCapacity; i++)
+        {
+            _cache[i] = new CacheSlot();
+        }
+    }
+
+    /// <summary>
+    /// <para>总行数：按两侧文件较长者以 16 字节一行向上取整。</para>
+    /// Total row count: the longer of the two files rounded up to whole 16-byte rows.
+    /// </summary>
+    public int Count => _count;
+
+    /// <summary>
+    /// <para>获取指定行的对比行视图模型；行数据按需从两个文件读取（带最近 256 行窗口缓存），
+    /// 索引器可能被 UI 与后台线程同时调用，统一由同一把锁保护。</para>
+    /// Gets the compare row for the given index; row data is read from both files on demand (with a
+    /// 256-row window cache), and the indexer is safe to call concurrently from the UI and
+    /// background threads as a single lock guards all access.
+    /// </summary>
+    /// <param name="index">行索引（0 起）。<para>Row index (0-based).</para></param>
+    /// <returns><para>该行的对比行视图模型。</para> The compare row for the index.</returns>
+    public CompareRowViewModel this[int index]
+    {
+        get
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(index);
+            ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, _count);
+
+            lock (_syncRoot)
+            {
+                var slot = _cache[index % CacheCapacity];
+                if (slot.Index != index)
+                {
+                    var offset = (long)index * BytesPerLine;
+                    slot.LeftCount = ReadLine(_leftStream, offset, _leftLength, slot.Left);
+                    slot.RightCount = ReadLine(_rightStream, offset, _rightLength, slot.Right);
+                    slot.Index = index;
+                }
+
+                return BuildRow(index, slot);
+            }
+        }
+    }
+
+    /// <summary>
+    /// <para>逐行懒加载地枚举全部对比行。</para>
+    /// Enumerates every compare row, loading each row lazily.
+    /// </summary>
+    public IEnumerator<CompareRowViewModel> GetEnumerator()
+    {
+        for (var i = 0; i < _count; i++)
+        {
+            yield return this[i];
+        }
+    }
+
+    /// <summary>
+    /// <para>非泛型枚举器实现，转发到 <see cref="GetEnumerator"/>。</para>
+    /// Non-generic enumerator implementation forwarding to <see cref="GetEnumerator"/>.
+    /// </summary>
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    /// <summary>
+    /// <para>释放内部持有的两个文件流。</para>
+    /// Releases the two file streams held internally.
+    /// </summary>
+    public void Dispose()
+    {
+        _leftStream.Dispose();
+        _rightStream.Dispose();
+    }
+
+    /// <summary>
+    /// <para>按行索引与缓存槽中的数据构造对比行：偏移文本、十六进制字节串与 ASCII 串，
+    /// 缺失侧对应字段为空串；状态与高亮按 diffRanges 相交、仅左、仅右、相同的优先级判定。</para>
+    /// Builds a compare row from the row index and the cache slot: offset text, hex byte string and
+    /// ASCII string, with the missing side's fields empty; status and highlight follow the
+    /// diff-intersection, right-only, left-only, equal priority order.
+    /// </summary>
+    private CompareRowViewModel BuildRow(int index, CacheSlot slot)
+    {
+        var offset = (long)index * BytesPerLine;
+        var leftMissing = offset >= _leftLength;
+        var rightMissing = offset >= _rightLength;
+        var hasDiff = IntersectsDiff(offset);
+
+        FolderItemStatus status;
+        bool isLeftDiff;
+        bool isRightDiff;
+        if (hasDiff)
+        {
+            status = FolderItemStatus.Different;
+            isLeftDiff = true;
+            isRightDiff = true;
+        }
+        else if (leftMissing)
+        {
+            status = FolderItemStatus.RightOnly;
+            isLeftDiff = false;
+            isRightDiff = false;
+        }
+        else if (rightMissing)
+        {
+            status = FolderItemStatus.LeftOnly;
+            isLeftDiff = false;
+            isRightDiff = false;
+        }
+        else
+        {
+            status = FolderItemStatus.Equal;
+            isLeftDiff = false;
+            isRightDiff = false;
+        }
+
+        var offsetText = offset.ToString("X8", CultureInfo.InvariantCulture);
+        return new CompareRowViewModel(
+            status,
+            isDirectory: false,
+            depth: 0,
+            leftLine: leftMissing ? string.Empty : offsetText,
+            leftText: FormatHex(slot.Left, slot.LeftCount),
+            leftSub: FormatAscii(slot.Left, slot.LeftCount),
+            isLeftDiff,
+            rightLine: rightMissing ? string.Empty : offsetText,
+            rightText: FormatHex(slot.Right, slot.RightCount),
+            rightSub: FormatAscii(slot.Right, slot.RightCount),
+            isRightDiff);
+    }
+
+    /// <summary>
+    /// <para>判断给定行起始偏移是否与任一差异区间相交：
+    /// 区间满足 Offset &lt; 行末 且 Offset+Length &gt; 行始；diffRanges 按 Offset 升序且互不重叠，
+    /// 二分查找最后一个 Offset 小于行末的区间作为唯一候选即可。</para>
+    /// Determines whether the given row start offset intersects any diff range: a range qualifies
+    /// when Offset &lt; row end and Offset+Length &gt; row start; since diffRanges are sorted by
+    /// Offset and disjoint, binary-searching the last range with Offset below the row end yields the
+    /// only candidate.
+    /// </summary>
+    private bool IntersectsDiff(long rowStart)
+    {
+        if (_diffRanges.Count == 0)
+        {
+            return false;
+        }
+
+        var rowEnd = rowStart + BytesPerLine;
+        var lo = 0;
+        var hi = _diffRanges.Count - 1;
+        var candidate = -1;
+        while (lo <= hi)
+        {
+            var mid = lo + ((hi - lo) >> 1);
+            if (_diffRanges[mid].Offset < rowEnd)
+            {
+                candidate = mid;
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid - 1;
+            }
+        }
+
+        return candidate >= 0 && _diffRanges[candidate].Offset + _diffRanges[candidate].Length > rowStart;
+    }
+
+    /// <summary>
+    /// <para>从文件流读取一行的最多 16 字节到缓冲：先 seek 到行起始偏移，
+    /// 短文件读到多少算多少；该行完全超出文件长度时返回 0。</para>
+    /// Reads up to 16 bytes of one row from a stream into the buffer: seeks to the row start first
+    /// and reads as many bytes as the shorter file provides; returns 0 when the row lies entirely
+    /// beyond the end of the file.
+    /// </summary>
+    private static int ReadLine(FileStream stream, long offset, long length, byte[] buffer)
+    {
+        if (offset >= length)
+        {
+            return 0;
+        }
+
+        stream.Seek(offset, SeekOrigin.Begin);
+        var available = (int)Math.Min(BytesPerLine, length - offset);
+        var total = 0;
+        while (total < available)
+        {
+            var read = stream.Read(buffer, total, available - total);
+            if (read <= 0)
+            {
+                break;
+            }
+
+            total += read;
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// <para>把一行的字节格式化为两位大写的十六进制串，字节间以空格分隔（如 "0A FF 1B"）。</para>
+    /// Formats a row's bytes as two-digit uppercase hex digits separated by spaces (e.g. "0A FF 1B").
+    /// </summary>
+    private static string FormatHex(byte[] buffer, int count)
+    {
+        if (count <= 0)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder(count * 3);
+        for (var i = 0; i < count; i++)
+        {
+            if (i > 0)
+            {
+                sb.Append(' ');
+            }
+
+            sb.Append(buffer[i].ToString("X2", CultureInfo.InvariantCulture));
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// <para>把一行的字节格式化为 ASCII 串：可打印字符（0x20-0x7E）原样显示，其余用 '.' 代替。</para>
+    /// Formats a row's bytes as an ASCII string: printable characters (0x20-0x7E) are shown as-is,
+    /// everything else is replaced with '.'.
+    /// </summary>
+    private static string FormatAscii(byte[] buffer, int count)
+    {
+        if (count <= 0)
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder(count);
+        for (var i = 0; i < count; i++)
+        {
+            var b = buffer[i];
+            sb.Append(b is >= 0x20 and <= 0x7E ? (char)b : '.');
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// <para>缓存槽：保存最近一次读取到的行字节数据与读取长度，命中时避免重复 seek/读取；
+    /// 槽内字节缓冲被复用，配合统一的锁保护并发访问。</para>
+    /// A cache slot holding the byte data and read counts of the last row read into it, so cache
+    /// hits avoid repeated seeks and reads; its byte buffers are reused and guarded by the single
+    /// lock for concurrent access.
+    /// </summary>
+    private sealed class CacheSlot
+    {
+        /// <summary>
+        /// <para>槽内缓存的行索引；-1 表示未填充。</para>
+        /// Row index cached in this slot; -1 when not yet populated.
+        /// </summary>
+        public long Index = -1;
+
+        /// <summary>
+        /// <para>左侧实际读取到的字节数。</para>
+        /// Number of bytes actually read on the left side.
+        /// </summary>
+        public int LeftCount;
+
+        /// <summary>
+        /// <para>右侧实际读取到的字节数。</para>
+        /// Number of bytes actually read on the right side.
+        /// </summary>
+        public int RightCount;
+
+        /// <summary>
+        /// <para>左侧行字节缓冲。</para>
+        /// Left row byte buffer.
+        /// </summary>
+        public byte[] Left = new byte[BytesPerLine];
+
+        /// <summary>
+        /// <para>右侧行字节缓冲。</para>
+        /// Right row byte buffer.
+        /// </summary>
+        public byte[] Right = new byte[BytesPerLine];
+    }
+}
