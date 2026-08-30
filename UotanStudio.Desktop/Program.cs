@@ -1,6 +1,7 @@
 using Avalonia;
 using Dock.Settings;
 using UotanStudio.Services;
+using UotanStudio.Services.Cli;
 #if DEBUG
 using AvaloniaMcp.Diagnostics;
 #endif
@@ -13,8 +14,22 @@ sealed class Program
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
+        // 固件 CLI 子命令：不启动 Avalonia，直接走命令行解包/打包并返回退出码。
+        // Firmware CLI subcommand: do not start Avalonia; run the CLI and return its exit code.
+        if (args.Length > 0 && args[0] == "firmware")
+        {
+            return FirmwareCli.Run(args[1..]);
+        }
+
+        // 工作流 CLI 子命令：无头执行节点工作流并返回退出码。
+        // Workflow CLI subcommand: run a node workflow headlessly and return its exit code.
+        if (args.Length > 0 && args[0] == "workflow")
+        {
+            return WorkflowCli.Run(args[1..]);
+        }
+
         // 解析命令行参数（打开解决方案 / 导入文件 / 帮助 / 版本），其余参数仍传给 Avalonia。
         // Parse command-line options (open solution / import files / help / version); the rest are
         // still forwarded to Avalonia.
@@ -22,13 +37,13 @@ sealed class Program
         if (options.HelpRequested)
         {
             PrintHelp();
-            return;
+            return 0;
         }
 
         if (options.VersionRequested)
         {
             PrintVersion();
-            return;
+            return 0;
         }
 
         if (options.RegisterAssociations)
@@ -36,7 +51,7 @@ sealed class Program
             Console.WriteLine(FileAssociationService.Register()
                 ? "File associations registered.  文件关联已注册。"
                 : "Failed to register file associations.  文件关联注册失败。");
-            return;
+            return 0;
         }
 
         if (options.UnregisterAssociations)
@@ -44,12 +59,13 @@ sealed class Program
             Console.WriteLine(FileAssociationService.Unregister()
                 ? "File associations unregistered.  文件关联已注销。"
                 : "Failed to unregister file associations.  文件关联注销失败。");
-            return;
+            return 0;
         }
 
         App.StartupOptions = options;
         BuildAvaloniaApp()
             .StartWithClassicDesktopLifetime(args);
+        return 0;
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.

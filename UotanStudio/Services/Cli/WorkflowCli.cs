@@ -1,0 +1,325 @@
+using System.Text;
+using UotanStudio.Services.Execution;
+using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.ViewModels.Nodes;
+
+namespace UotanStudio.Services.Cli;
+
+/// <summary>
+/// Entry point for the <c>workflow</c> CLI subcommand. Runs a saved node workflow
+/// (<c>.uotannode</c>) headlessly: loads the snapshot, rebuilds nodes via
+/// <see cref="NodeFactoryRegistrar"/>, applies <c>--set</c> input overrides, executes with
+/// <see cref="NodeExecutionEngine"/>, and returns a process exit code. All output goes to
+/// <see cref="Console"/>; no Avalonia UI is started. AOT-friendly (no reflection).
+/// <para><c>workflow</c> CLI 子命令入口。无头运行已保存的节点工作流（<c>.uotannode</c>）：
+/// 加载快照、经 <see cref="NodeFactoryRegistrar"/> 重建节点、应用 <c>--set</c> 输入覆盖、
+/// 用 <see cref="NodeExecutionEngine"/> 执行并返回进程退出码。全部输出走 <see cref="Console"/>，
+/// 不启动 Avalonia UI。AOT 友好（无反射）。</para>
+/// </summary>
+public static class WorkflowCli
+{
+    /// <summary>
+    /// Runs the workflow CLI with the given arguments (the tokens after the literal
+    /// <c>workflow</c> token). Returns a process exit code.
+    /// </summary>
+    /// <para>以给定参数运行 workflow CLI（字面量 <c>workflow</c> 之后的 token），返回进程退出码。</para>
+    public static int Run(string[]? args)
+    {
+        try { Console.OutputEncoding = Encoding.UTF8; } catch { /* 控制台不支持编码则忽略 */ }
+
+        WorkflowCliArguments parse;
+        try
+        {
+            parse = Parse(args);
+        }
+        catch (WorkflowCliUsageException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            PrintUsage(Console.Error);
+            return FirmwareCliExitCodes.Usage;
+        }
+
+        if (parse.HelpRequested)
+        {
+            PrintUsage(Console.Out);
+            return FirmwareCliExitCodes.Ok;
+        }
+
+        return RunWorkflowAsync(parse).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// <para>加载并执行工作流；返回进程退出码（0 成功 / 1 失败或取消 / 2 用法错误）。</para>
+    /// Loads and executes the workflow; returns the process exit code (0 success / 1 failure or cancelled / 2 usage).
+    /// </summary>
+    private static async Task<int> RunWorkflowAsync(WorkflowCliArguments cli)
+    {
+        var path = cli.WorkflowPath!;
+        if (!File.Exists(path))
+        {
+            Console.Error.WriteLine($"Workflow file not found: {path}  工作流文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var snapshot = await WorkflowPersistenceService.LoadAsync(path).ConfigureAwait(false);
+        if (snapshot is null)
+        {
+            Console.Error.WriteLine($"Failed to load workflow: {path}  工作流加载失败");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        // 重建节点：按 TypeKey 查注册表；未注册类型跳过并告警。
+        // Rebuild nodes via the registry by TypeKey; unknown types are skipped with a warning.
+        NodeFactoryRegistrar.RegisterAll();
+
+        var nodes = new List<FlowNodeViewModel>(snapshot.Nodes.Count);
+        var created = new Dictionary<string, FlowNodeViewModel>(StringComparer.OrdinalIgnoreCase);
+        foreach (var dto in snapshot.Nodes)
+        {
+            if (string.IsNullOrEmpty(dto.TypeKey) || !NodeTypeRegistry.Contains(dto.TypeKey))
+            {
+                Console.Error.WriteLine($"Unknown node type '{dto.TypeKey}' skipped  未注册节点类型已跳过");
+                continue;
+            }
+            var node = NodeTypeRegistry.Create(dto.TypeKey)!;
+            node.Title = dto.Title;
+            RestoreInitialValues(node, dto.InputInitialValues);
+            nodes.Add(node);
+            if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
+        }
+
+        if (nodes.Count == 0)
+        {
+            Console.Error.WriteLine("Workflow contains no executable nodes  工作流无可执行节点");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        // 构建引擎连接：优先实例 ID；旧快照缺失时回退按连接器标题匹配。
+        // Build engine connections: prefer instance IDs; fall back to connector-title matching for legacy snapshots.
+        var connections = new List<NodeConnection>(snapshot.Connections.Count);
+        foreach (var cdto in snapshot.Connections)
+        {
+            FlowNodeViewModel? src = null, tgt = null;
+            if (!string.IsNullOrEmpty(cdto.SourceInstanceId)) created.TryGetValue(cdto.SourceInstanceId, out src);
+            if (!string.IsNullOrEmpty(cdto.TargetInstanceId)) created.TryGetValue(cdto.TargetInstanceId, out tgt);
+            src ??= nodes.FirstOrDefault(n => n.Output.Any(o => o.Title == cdto.SourceConnectorTitle));
+            tgt ??= nodes.FirstOrDefault(n => n.Input.Any(i => i.Title == cdto.TargetConnectorTitle));
+
+            if (src is null || tgt is null)
+            {
+                Console.Error.WriteLine(
+                    $"Could not resolve connection '{cdto.SourceConnectorTitle}' → '{cdto.TargetConnectorTitle}'  连接无法解析");
+                return FirmwareCliExitCodes.Failure;
+            }
+            connections.Add(new NodeConnection
+            {
+                SourceInstanceId = src.InstanceId,
+                SourceConnector = cdto.SourceConnectorTitle,
+                TargetInstanceId = tgt.InstanceId,
+                TargetConnector = cdto.TargetConnectorTitle
+            });
+        }
+
+        // 应用 --set 覆盖：NodeTitle.Port=Value，写入对应输入端口的 InitialValue。
+        // Apply --set overrides: NodeTitle.Port=Value written to the matching input port's InitialValue.
+        foreach (var (nodeSelector, port, value) in cli.Overrides)
+        {
+            var node = nodes.FirstOrDefault(n => string.Equals(n.Title, nodeSelector, StringComparison.OrdinalIgnoreCase))
+                       ?? nodes.FirstOrDefault(n => string.Equals(n.InstanceId, nodeSelector, StringComparison.OrdinalIgnoreCase));
+            if (node is null)
+            {
+                Console.Error.WriteLine($"--set: node not found: {nodeSelector}  节点未找到");
+                return FirmwareCliExitCodes.Usage;
+            }
+            var input = node.Input.FirstOrDefault(c => string.Equals(c.Title, port, StringComparison.Ordinal));
+            if (input is null)
+            {
+                Console.Error.WriteLine($"--set: input port '{port}' not found on node '{node.Title}'  输入端口未找到");
+                return FirmwareCliExitCodes.Usage;
+            }
+            input.InitialValue = ConvertInputValue(input.PortType, value);
+            input.Data = null; // 覆盖值经 InitialValue 注入  The override is injected via InitialValue.
+        }
+
+        var engine = new NodeExecutionEngine(new ConsoleLog());
+        var result = await engine.ExecuteAsync(nodes, connections, CancellationToken.None).ConfigureAwait(false);
+
+        Console.WriteLine($"Execution finished: {result.Status}  执行完成");
+        if (result.FailedNodes.Count > 0)
+        {
+            Console.Error.WriteLine($"Failed nodes ({result.FailedNodes.Count}): {string.Join(", ", result.FailedNodes)}");
+        }
+
+        return result.Status switch
+        {
+            ExecutionStatus.Succeeded => FirmwareCliExitCodes.Ok,
+            _ => FirmwareCliExitCodes.Failure,
+        };
+    }
+
+    /// <summary>
+    /// <para>恢复输入端口初始值：标题匹配输入端口，值为字符串；数字/布尔按原类型宽松转换。</para>
+    /// Restores input initial values: match input ports by title; values are strings, leniently converted
+    /// for numbers/booleans.
+    /// </summary>
+    private static void RestoreInitialValues(FlowNodeViewModel node, Dictionary<string, string>? initialValues)
+    {
+        if (initialValues is not { Count: > 0 }) return;
+        foreach (var kv in initialValues)
+        {
+            var input = node.Input.FirstOrDefault(c => string.Equals(c.Title, kv.Key, StringComparison.Ordinal));
+            if (input is null || input.PortType == NodePortType.Flow) continue;
+            input.InitialValue = ConvertInputValue(input.PortType, kv.Value);
+        }
+    }
+
+    /// <summary>
+    /// <para>按端口类型把字符串宽松转换为端口值（Number→double、Boolean→bool、其余原样）。</para>
+    /// Leniently converts a string to a port value by port type (Number→double, Boolean→bool, otherwise as-is).
+    /// </summary>
+    private static object ConvertInputValue(NodePortType portType, string value) => portType switch
+    {
+        NodePortType.Number when double.TryParse(value, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var n) => n,
+        NodePortType.Boolean when bool.TryParse(value, out var b) => b,
+        _ => value
+    };
+
+    /// <summary>
+    /// Parsed workflow CLI arguments.
+    /// <para>解析后的 workflow CLI 参数。</para>
+    /// </summary>
+    private sealed class WorkflowCliArguments
+    {
+        /// <summary>Workflow file path (positional).</summary>
+        /// <para>工作流文件路径（位置参数）。</para>
+        public string? WorkflowPath { get; set; }
+
+        /// <summary>Input overrides from <c>--set Node.Port=Value</c> (repeatable).</summary>
+        /// <para><c>--set Node.Port=Value</c> 输入覆盖（可重复）。</para>
+        public List<(string Node, string Port, string Value)> Overrides { get; } = [];
+
+        /// <summary>Whether help was requested.</summary>
+        /// <para>是否请求了帮助。</para>
+        public bool HelpRequested { get; set; }
+    }
+
+    /// <summary>
+    /// Parses workflow CLI arguments (hand-rolled, AOT-friendly).
+    /// <para>解析 workflow CLI 参数（手写解析器，AOT 友好）。</para>
+    /// </summary>
+    private static WorkflowCliArguments Parse(string[]? args)
+    {
+        var result = new WorkflowCliArguments();
+        if (args is null || args.Length == 0 || IsHelp(args[0]))
+        {
+            result.HelpRequested = true;
+            return result;
+        }
+
+        if (!string.Equals(args[0], "run", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new WorkflowCliUsageException($"Unknown workflow subcommand: {args[0]}  未知 workflow 子命令");
+        }
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                result.HelpRequested = true;
+                return result;
+            }
+            if (arg == "--set" || arg == "-s")
+            {
+                if (i + 1 >= args.Length)
+                {
+                    throw new WorkflowCliUsageException("'--set' requires a value: --set Node.Port=Value");
+                }
+                var spec = args[++i];
+                var separator = spec.IndexOf('.');
+                var assign = spec.IndexOf('=');
+                if (separator <= 0 || assign <= separator + 1 || assign == spec.Length - 1)
+                {
+                    throw new WorkflowCliUsageException($"Malformed --set value (expected Node.Port=Value): {spec}");
+                }
+                result.Overrides.Add((spec[..separator], spec[(separator + 1)..assign], spec[(assign + 1)..]));
+                continue;
+            }
+            if (arg.StartsWith("-", StringComparison.Ordinal))
+            {
+                throw new WorkflowCliUsageException($"Unknown flag for 'workflow run': {arg}");
+            }
+            if (result.WorkflowPath is null)
+            {
+                result.WorkflowPath = arg;
+            }
+            else
+            {
+                throw new WorkflowCliUsageException($"'workflow run' takes one workflow path; got extra: {arg}");
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(result.WorkflowPath))
+        {
+            throw new WorkflowCliUsageException("'workflow run' requires a workflow file path: workflow run <file.uotannode>");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Usage error carrier so <see cref="Parse"/> stays allocation-simple at call sites.
+    /// <para>用法错误载体，让 <see cref="Parse"/> 的调用点保持简洁。</para>
+    /// </summary>
+    private sealed class WorkflowCliUsageException(string message) : Exception(message);
+
+    private static bool IsHelp(string arg) => arg is "--help" or "-h";
+
+    /// <summary>
+    /// Prints the workflow CLI usage to the given writer.
+    /// <para>向给定文本写入器打印 workflow CLI 用法。</para>
+    /// </summary>
+    public static void PrintUsage(TextWriter writer)
+    {
+        writer.WriteLine();
+        writer.WriteLine("UotanStudio workflow CLI  工作流命令行工具");
+        writer.WriteLine();
+        writer.WriteLine("Usage:");
+        writer.WriteLine("  workflow run <file.uotannode> [options]");
+        writer.WriteLine();
+        writer.WriteLine("Options:");
+        writer.WriteLine("  -s, --set <Node.Port=Value>   Override an input port's initial value (repeatable)");
+        writer.WriteLine("  -h, --help                    Show this help and exit");
+        writer.WriteLine();
+        writer.WriteLine("Exit codes:");
+        writer.WriteLine("  0  Success");
+        writer.WriteLine("  1  Failure (execution failed/cancelled, workflow not found)");
+        writer.WriteLine("  2  Usage error (missing/extra args, unknown flag, bad --set)");
+        writer.WriteLine();
+        writer.WriteLine("Examples:");
+        writer.WriteLine("  workflow run my_flow.uotannode");
+        writer.WriteLine("  workflow run my_flow.uotannode --set \"ReadFile.Path=boot.img\" --set \"Loop.Count=3\"");
+    }
+
+    /// <summary>
+    /// A console-backed <see cref="IUnifiedLog"/> that streams engine/node logs to stdout.
+    /// <para>基于控制台的 <see cref="IUnifiedLog"/>，把引擎与节点日志流式输出到 stdout。</para>
+    /// </summary>
+    private sealed class ConsoleLog : IUnifiedLog
+    {
+        public void Write(LogLevel level, string source, string message)
+        {
+            if (level >= LogLevel.Info)
+            {
+                Console.WriteLine($"[{source}] {message}");
+            }
+        }
+
+        public void Write(LogLevel level, string source, string format, params object[] args)
+            => Write(level, source, string.Format(System.Globalization.CultureInfo.InvariantCulture, format, args));
+
+        public void SetMinimumLevel(LogLevel level) { }
+    }
+}

@@ -137,11 +137,13 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的流程控制逻辑：Flow.Start/End 标记、Flow.Branch 按条件选路径、Flow.Loop 记录循环次数、
-    /// Flow.Delay 延迟、Flow.Parallel/Sequence 记录并行/汇聚语义、Flow.Terminate 中止整个工作流。</para>
-    /// Dispatches flow-control logic by the node type key (TypeKey): Flow.Start/End are markers, Flow.Branch selects a path by
-    /// condition, Flow.Loop records the iteration count, Flow.Delay pauses, Flow.Parallel/Sequence record concurrency/join
-    /// semantics, and Flow.Terminate aborts the workflow.
+    /// <para>按节点类型键（TypeKey）分发对应的流程控制逻辑：Flow.Start/End 标记、Flow.Branch 按条件选路径（引擎据此跳过未选分支子图）、
+    /// Flow.Loop 校验迭代次数（引擎据此迭代执行 Body 子图并逐次写入 Index 输出）、Flow.Delay 延迟、
+    /// Flow.Parallel 分派并行语义（引擎并发执行各分支子图）、Flow.Terminate 中止整个工作流。</para>
+    /// Dispatches flow-control logic by the node type key (TypeKey): Flow.Start/End are markers, Flow.Branch selects a path
+    /// by condition (the engine skips the untaken branch sub-graph), Flow.Loop validates the iteration count (the engine
+    /// iterates the Body sub-graph writing the Index output per iteration), Flow.Delay pauses, Flow.Parallel dispatches
+    /// concurrency semantics (the engine runs branch sub-graphs concurrently), and Flow.Terminate aborts the workflow.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -194,8 +196,6 @@ public class FlowControlNodeViewModel : FlowNodeViewModel
     private void ExecuteLoop(INodeExecutionContext context)
     {
         var count = NodeDataUtil.ToInt(ReadInput("Count"), 0);
-        WriteOutput("Body", count);
-        WriteOutput("Index", count);
         context.Log.Write(LogLevel.Info, Title, $"Loop iterations planned: {count}.  计划循环 {count} 次。");
     }
 

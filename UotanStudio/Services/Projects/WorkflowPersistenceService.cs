@@ -45,12 +45,12 @@ public static class WorkflowPersistenceService
 
         try
         {
-            var snapshot = new WorkflowSnapshot
-            {
-                FormatVersion = 1,
-                Nodes = BuildNodeDtos(nodes),
-                Connections = BuildConnectionDtos(connections)
-            };
+        var snapshot = new WorkflowSnapshot
+        {
+            FormatVersion = 1,
+            Nodes = BuildNodeDtos(nodes),
+            Connections = BuildConnectionDtos(nodes, connections)
+        };
 
             await using var stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, snapshot, WorkflowJsonContext.Default.WorkflowSnapshot, cancellationToken).ConfigureAwait(false);
@@ -132,7 +132,12 @@ public static class WorkflowPersistenceService
         return map;
     }
 
-    private static List<ConnectionDto> BuildConnectionDtos(IReadOnlyList<NodeConnectionViewModel> connections)
+    /// <summary>
+    /// <para>由节点与连接集合构建连接 DTO 列表，解析每个连接器所属节点以持久化源/目标实例 ID（供无头执行等场景可靠重建拓扑）。</para>
+    /// Builds connection DTOs from node and connection collections, resolving each connector's owning node so that
+    /// source/target instance IDs can be persisted (reliable topology rebuild for headless execution and similar).
+    /// </summary>
+    public static List<ConnectionDto> BuildConnectionDtos(IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnectionViewModel> connections)
     {
         var result = new List<ConnectionDto>(connections.Count);
         foreach (var c in connections)
@@ -141,10 +146,28 @@ public static class WorkflowPersistenceService
             result.Add(new ConnectionDto
             {
                 SourceConnectorTitle = c.Source.Title,
-                TargetConnectorTitle = c.Target.Title
+                TargetConnectorTitle = c.Target.Title,
+                SourceInstanceId = FindOwnerNodeId(nodes, c.Source),
+                TargetInstanceId = FindOwnerNodeId(nodes, c.Target)
             });
         }
         return result;
+    }
+
+    /// <summary>
+    /// <para>按引用扫描查找连接器所属节点实例 ID；未找到返回 <c>null</c>。</para>
+    /// Finds the owning node instance ID of a connector by reference scan; returns <c>null</c> if not found.
+    /// </summary>
+    private static string? FindOwnerNodeId(IReadOnlyList<FlowNodeViewModel> nodes, NodeConnectorViewModel connector)
+    {
+        foreach (var n in nodes)
+        {
+            if (n.Input.Contains(connector) || n.Output.Contains(connector))
+            {
+                return n.InstanceId;
+            }
+        }
+        return null;
     }
 }
 
@@ -239,4 +262,18 @@ public sealed class ConnectionDto
     /// Target connector title.
     /// </summary>
     public string TargetConnectorTitle { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <para>源节点实例 ID（可选；旧版工程文件可能缺失，缺失时按连接器标题匹配重建）。</para>
+    /// Source node instance ID (optional; legacy project files may omit it, in which case rebuild falls
+    /// back to connector-title matching).
+    /// </summary>
+    public string? SourceInstanceId { get; set; }
+
+    /// <summary>
+    /// <para>目标节点实例 ID（可选；旧版工程文件可能缺失，缺失时按连接器标题匹配重建）。</para>
+    /// Target node instance ID (optional; legacy project files may omit it, in which case rebuild falls
+    /// back to connector-title matching).
+    /// </summary>
+    public string? TargetInstanceId { get; set; }
 }

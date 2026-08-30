@@ -491,14 +491,7 @@ public partial class MenuViewModel : ViewModelBase
                     TypeKey = n.TypeKey
                 })
                 .ToList(),
-            Connections = NodeEditorVM.Connections
-                .Where(c => c.Source is not null && c.Target is not null)
-                .Select(c => new ConnectionDto
-                {
-                    SourceConnectorTitle = c.Source!.Title,
-                    TargetConnectorTitle = c.Target!.Title
-                })
-                .ToList()
+            Connections = Services.Projects.WorkflowPersistenceService.BuildConnectionDtos(NodeEditorVM.Nodes, NodeEditorVM.Connections)
         };
 
         var solution = new SolutionSnapshot
@@ -526,6 +519,72 @@ public partial class MenuViewModel : ViewModelBase
     /// <summary>
     /// <para>导出当前工作区内容，弹出文件保存对话框选择导出路径。</para>
     /// Exports the current workspace contents, showing a file-save dialog to pick the export path.
+    /// </summary>
+    /// <summary>
+    /// <para>打开文件比较：先后选择两个文件并发送文件比较请求消息。</para>
+    /// Opens a file comparison: picks two files and sends the file-compare request message.
+    /// </summary>
+    [RelayCommand]
+    private async Task CompareFilesAsync()
+    {
+        var topLevel = TopLevel;
+        if (topLevel == null) return;
+
+        var left = await PickCompareFileAsync(topLevel);
+        if (left == null) return;
+
+        var right = await PickCompareFileAsync(topLevel);
+        if (right == null) return;
+
+        WeakReferenceMessenger.Default.Send(new OpenFileCompareRequestMessage { LeftPath = left, RightPath = right });
+    }
+
+    /// <summary>
+    /// <para>打开文件夹比较：先后选择两个文件夹并发送文件夹比较请求消息。</para>
+    /// Opens a folder comparison: picks two folders and sends the folder-compare request message.
+    /// </summary>
+    [RelayCommand]
+    private async Task CompareFoldersAsync()
+    {
+        var topLevel = TopLevel;
+        if (topLevel == null) return;
+
+        var left = await PickCompareFolderAsync(topLevel);
+        if (left == null) return;
+
+        var right = await PickCompareFolderAsync(topLevel);
+        if (right == null) return;
+
+        WeakReferenceMessenger.Default.Send(new OpenFolderCompareRequestMessage { LeftDirectory = left, RightDirectory = right });
+    }
+
+    private static async Task<string?> PickCompareFileAsync(TopLevel topLevel)
+    {
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Menu_CompareFiles"),
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("All files") { Patterns = ["*.*"] }
+            ]
+        });
+        return files.Count > 0 ? files[0].Path.LocalPath : null;
+    }
+
+    private static async Task<string?> PickCompareFolderAsync(TopLevel topLevel)
+    {
+        var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Menu_CompareFolders"),
+            AllowMultiple = false
+        });
+        return folders.Count > 0 ? folders[0].Path.LocalPath : null;
+    }
+
+    /// <summary>
+    /// <para>导出当前解决方案为 ZIP 存档。</para>
+    /// Exports the current solution as a ZIP archive.
     /// </summary>
     [RelayCommand]
     private async Task ExportAsync()
@@ -710,6 +769,13 @@ public partial class MenuViewModel : ViewModelBase
     private void GoToSettings()
     {
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
+    }
+
+    /// <summary><para>切换到对比选项卡。</para>Switch to the Compare tab.</summary>
+    [RelayCommand]
+    private void GoToCompare()
+    {
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Compare));
     }
 
     // ===== 窗口 / Window =====
@@ -950,7 +1016,9 @@ public enum NavigationTarget
     /// <summary><para>全局日志面板。</para>Global log panel.</summary>
     Log,
     /// <summary><para>设置。</para>Settings.</summary>
-    Settings
+    Settings,
+    /// <summary><para>对比视图。</para>Compare view.</summary>
+    Compare
 }
 
 /// <summary>
@@ -991,7 +1059,9 @@ public enum ActiveTab
     /// <summary><para>全局日志面板。</para>Global log panel.</summary>
     Log,
     /// <summary><para>设置面板。</para>Settings panel.</summary>
-    Settings
+    Settings,
+    /// <summary><para>对比视图面板。</para>Compare view panel.</summary>
+    Compare
 }
 
 /// <summary>

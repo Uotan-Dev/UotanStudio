@@ -367,60 +367,10 @@ public partial class NodeEditorViewModel : ViewModelBase
     {
         var svc = LanguageService.Instance;
 
-        // 集中注册全部既有节点工厂，确保工程加载（LoadFromAsync）能按 TypeKey 重建具体节点而非缺失占位
-        // Centrally register all existing node factories so LoadFromAsync can rebuild concrete nodes by TypeKey.
-        NodeTypeRegistry.Register("Firmware.Unpack", () => NodeViewModels.FirmwareNodeViewModel.CreateUnpackNode());
-        NodeTypeRegistry.Register("Firmware.Pack", () => NodeViewModels.FirmwareNodeViewModel.CreatePackNode());
-        NodeTypeRegistry.Register("Firmware.Verify", () => NodeViewModels.FirmwareNodeViewModel.CreateVerifyNode());
-        NodeTypeRegistry.Register("Firmware.Extract", () => NodeViewModels.FirmwareNodeViewModel.CreateExtractNode());
-        NodeTypeRegistry.Register("Firmware.OtaDelta", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateOtaDeltaNode());
-        NodeTypeRegistry.Register("Firmware.MergeSignature", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeSignatureNode());
-        NodeTypeRegistry.Register("Firmware.MergeDualSlot", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateMergeDualSlotNode());
-        NodeTypeRegistry.Register("Firmware.FlashBoot", () => NodeViewModels.ExtendedFirmwareNodeViewModel.CreateFlashBootNode());
-        NodeTypeRegistry.Register("Firmware.CpioUnpack", () => NodeViewModels.CpioNodeViewModel.CreateCpioUnpackNode());
-        NodeTypeRegistry.Register("Firmware.CpioPack", () => NodeViewModels.CpioNodeViewModel.CreateCpioPackNode());
-        NodeTypeRegistry.Register("Firmware.SuperUnpack", () => NodeViewModels.SuperNodeViewModel.CreateSuperUnpackNode());
-        NodeTypeRegistry.Register("Firmware.SuperPack", () => NodeViewModels.SuperNodeViewModel.CreateSuperPackNode());
-        NodeTypeRegistry.Register("Firmware.Sparse", () => NodeViewModels.SparseNodeViewModel.CreateSparseNode());
-        NodeTypeRegistry.Register("Firmware.Dat", () => NodeViewModels.DatNodeViewModel.CreateDatNode());
-        NodeTypeRegistry.Register("Flash.SelectDevice", () => NodeViewModels.SelectDeviceNodeViewModel.CreateSelectDeviceNode());
-        NodeTypeRegistry.Register("Flash.GetProp", () => NodeViewModels.DevicePropertyNodeViewModel.CreateDevicePropertyNode());
-        NodeTypeRegistry.Register("Flash.Flash", () => NodeViewModels.FlashNodeViewModel.CreateFlashNode());
-        NodeTypeRegistry.Register("Flash.Erase", () => NodeViewModels.FlashNodeViewModel.CreateEraseNode());
-        NodeTypeRegistry.Register("Flash.Reboot", () => NodeViewModels.FlashNodeViewModel.CreateRebootNode());
-        NodeTypeRegistry.Register("Flash.Bootloader", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateFlashBootloaderNode());
-        NodeTypeRegistry.Register("Flash.EraseAll", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateEraseAllNode());
-        NodeTypeRegistry.Register("Flash.OtaSideload", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOtaSideloadNode());
-        NodeTypeRegistry.Register("Flash.OverwriteFirmware", () => NodeViewModels.ExtendedFlashNodeViewModel.CreateOverwriteFirmwareNode());
-        NodeTypeRegistry.Register("Data.ReadFile", () => NodeViewModels.DataNodeViewModel.CreateFileReadNode());
-        NodeTypeRegistry.Register("Data.Constant", () => NodeViewModels.ConstantNodeViewModel.CreateConstantNode());
-        NodeTypeRegistry.Register("Data.ProjectImage", () => NodeViewModels.ProjectImageNodeViewModel.CreateProjectImageNode());
-        NodeTypeRegistry.Register("Data.Decrypt", () => NodeViewModels.DecryptNodeViewModel.CreateDecryptNode());
-        NodeTypeRegistry.Register("Data.Decompress", () => NodeViewModels.DecompressNodeViewModel.CreateDecompressNode());
-        NodeTypeRegistry.Register("Data.Convert", () => NodeViewModels.DataNodeViewModel.CreateConvertNode());
-        NodeTypeRegistry.Register("Data.Checksum", () => NodeViewModels.DataNodeViewModel.CreateChecksumNode());
-        NodeTypeRegistry.Register("Data.Compare", () => NodeViewModels.DataNodeViewModel.CreateCompareNode());
-        NodeTypeRegistry.Register("Data.Concat", () => NodeViewModels.ExtendedDataNodeViewModel.CreateConcatNode());
-        NodeTypeRegistry.Register("Data.Slice", () => NodeViewModels.ExtendedDataNodeViewModel.CreateSliceNode());
-        NodeTypeRegistry.Register("Data.Encrypt", () => NodeViewModels.ExtendedDataNodeViewModel.CreateEncryptNode());
-        NodeTypeRegistry.Register("Data.Compress", () => NodeViewModels.ExtendedDataNodeViewModel.CreateCompressNode());
-        NodeTypeRegistry.Register("Data.ByteSwap", () => NodeViewModels.ExtendedDataNodeViewModel.CreateByteSwapNode());
-        NodeTypeRegistry.Register("Flow.Start", () => NodeViewModels.FlowControlNodeViewModel.CreateStartNode());
-        NodeTypeRegistry.Register("Flow.End", () => NodeViewModels.FlowControlNodeViewModel.CreateEndNode());
-        NodeTypeRegistry.Register("Flow.Branch", () => NodeViewModels.FlowControlNodeViewModel.CreateBranchNode());
-        NodeTypeRegistry.Register("Flow.Loop", () => NodeViewModels.FlowControlNodeViewModel.CreateLoopNode());
-        NodeTypeRegistry.Register("Flow.Delay", () => NodeViewModels.FlowControlNodeViewModel.CreateDelayNode());
-        NodeTypeRegistry.Register("Flow.Parallel", () => NodeViewModels.FlowControlNodeViewModel.CreateParallelNode());
-        NodeTypeRegistry.Register("Flow.Terminate", () => NodeViewModels.FlowControlNodeViewModel.CreateTerminateNode());
-        NodeTypeRegistry.Register("Output.Log", () => NodeViewModels.OutputNodeViewModel.CreateLogNode());
-        NodeTypeRegistry.Register("Output.Progress", () => NodeViewModels.OutputNodeViewModel.CreateProgressNode());
-        NodeTypeRegistry.Register("Output.Save", () => NodeViewModels.OutputNodeViewModel.CreateSaveNode());
-        NodeTypeRegistry.Register("Output.Notify", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateNotifyNode());
-        NodeTypeRegistry.Register("Output.Console", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateConsoleOutputNode());
-        NodeTypeRegistry.Register("Output.FileExport", () => NodeViewModels.ExtendedOutputNodeViewModel.CreateFileExportNode());
-        NodeTypeRegistry.Register("Dex.Parse", () => NodeViewModels.DexNodeViewModel.CreateParseNode());
-        NodeTypeRegistry.Register("Dex.Disassemble", () => NodeViewModels.DexNodeViewModel.CreateDisassembleNode());
-        NodeTypeRegistry.Register("Dex.Rebuild", () => NodeViewModels.DexNodeViewModel.CreateRebuildNode());
+        // 集中注册全部既有节点工厂（供工程加载与无头执行按 TypeKey 重建），工具箱再叠加本地化条目
+        // Centrally register all existing node factories (for project loading and headless execution by TypeKey);
+        // the toolbox then adds localized entries on top.
+        NodeFactoryRegistrar.RegisterAll();
 
         ToolboxCategories.Add(new NodeToolboxCategory(
             svc.GetString("Node_CatFirmware"),
@@ -514,6 +464,20 @@ public partial class NodeEditorViewModel : ViewModelBase
                 new NodeToolboxItem(svc.GetString("Node_Dex_Parse"), () => NodeViewModels.DexNodeViewModel.CreateParseNode()),
                 new NodeToolboxItem(svc.GetString("Node_Dex_Disassemble"), () => NodeViewModels.DexNodeViewModel.CreateDisassembleNode()),
                 new NodeToolboxItem(svc.GetString("Node_Dex_Rebuild"), () => NodeViewModels.DexNodeViewModel.CreateRebuildNode()),
+                new NodeToolboxItem(svc.GetString("Node_Dex_Decompile"), () => NodeViewModels.DexNodeViewModel.CreateDecompileNode()),
+            ]
+        ));
+
+        // MCP 工具分类：调用设置页配置的外部 MCP 服务器（工具列举/调用）。
+        // MCP tool category: calls the externally configured MCP servers (tool listing/calling).
+        NodeTypeRegistry.Register("MCP.ListTools", () => NodeViewModels.McpNodeViewModel.CreateListToolsNode());
+        NodeTypeRegistry.Register("MCP.CallTool", () => NodeViewModels.McpNodeViewModel.CreateCallToolNode());
+        ToolboxCategories.Add(new NodeToolboxCategory(
+            svc.GetString("Node_CatMCP"),
+            NodeViewModels.NodeCategory.Mcp,
+            [
+                new NodeToolboxItem(svc.GetString("Node_MCP_ListTools"), () => NodeViewModels.McpNodeViewModel.CreateListToolsNode()),
+                new NodeToolboxItem(svc.GetString("Node_MCP_CallTool"), () => NodeViewModels.McpNodeViewModel.CreateCallToolNode()),
             ]
         ));
     }
@@ -924,19 +888,38 @@ public partial class NodeEditorViewModel : ViewModelBase
             if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
         }
 
-        // 重建连接：按连接器标题匹配源/目标节点上的端口（简易匹配，仅当标题唯一时成功）
+        // 重建连接：优先按持久化的源/目标实例 ID 精确匹配（新快照）；缺失时回退为按连接器标题匹配
+        //（简易匹配，仅当标题唯一时成功）。
+        // Rebuild connections: prefer exact matching via persisted source/target instance IDs (new snapshots);
+        // fall back to connector-title matching when absent (lenient matching, succeeds only when titles are unique).
         foreach (var cdto in snapshot.Connections)
         {
             NodeViewModels.NodeConnectorViewModel? src = null, tgt = null;
-            foreach (var n in Nodes)
+
+            if (!string.IsNullOrEmpty(cdto.SourceInstanceId) && created.TryGetValue(cdto.SourceInstanceId, out var srcNode))
             {
-                foreach (var oc in n.Output) { if (oc.Title == cdto.SourceConnectorTitle) { src = oc; break; } }
-                if (src != null) break;
+                src = srcNode.Output.FirstOrDefault(oc => oc.Title == cdto.SourceConnectorTitle);
             }
-            foreach (var n in Nodes)
+            if (!string.IsNullOrEmpty(cdto.TargetInstanceId) && created.TryGetValue(cdto.TargetInstanceId, out var tgtNode))
             {
-                foreach (var ic in n.Input) { if (ic.Title == cdto.TargetConnectorTitle) { tgt = ic; break; } }
-                if (tgt != null) break;
+                tgt = tgtNode.Input.FirstOrDefault(ic => ic.Title == cdto.TargetConnectorTitle);
+            }
+
+            if (src == null)
+            {
+                foreach (var n in Nodes)
+                {
+                    foreach (var oc in n.Output) { if (oc.Title == cdto.SourceConnectorTitle) { src = oc; break; } }
+                    if (src != null) break;
+                }
+            }
+            if (tgt == null)
+            {
+                foreach (var n in Nodes)
+                {
+                    foreach (var ic in n.Input) { if (ic.Title == cdto.TargetConnectorTitle) { tgt = ic; break; } }
+                    if (tgt != null) break;
+                }
             }
             if (src != null && tgt != null)
             {

@@ -133,6 +133,181 @@ public sealed class NodeEditorTests
         Assert.Equal(ExecutionStatus.Cancelled, result.Status);
     }
 
+    // ---- P0-1b: Engine real flow control ----
+
+    /// <summary>
+    /// <para>构造带 Flow 端口的测试节点。</para>
+    /// Creates a test node with Flow ports.
+    /// </summary>
+    private static TestNodeViewModel FlowNode(string title, string typeKey, string[] inputs, string[] outputs, Func<INodeExecutionContext, Task>? action = null)
+    {
+        var node = new TestNodeViewModel(title, NodeCategory.Flow) { Action = action, TypeKey = typeKey };
+        foreach (var input in inputs)
+        {
+            node.Input.Add(new NodeConnectorViewModel
+            {
+                Title = input,
+                IsInput = true,
+                PortType = input == "Condition" ? NodePortType.Boolean : input == "Count" ? NodePortType.Number : NodePortType.Flow
+            });
+        }
+        foreach (var output in outputs)
+        {
+            node.Output.Add(new NodeConnectorViewModel { Title = output, PortType = NodePortType.Flow });
+        }
+        return node;
+    }
+
+    [Fact]
+    public async Task Engine_Branch_SkipsUntakenSubGraph()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+
+        var branch = FlowNode("Branch", "Flow.Branch", ["Condition"], ["True", "False"]);
+        var onTrue = FlowNode("OnTrue", "Test.OnTrue", ["Flow"], []);
+        var onFalse = FlowNode("OnFalse", "Test.OnFalse", ["Flow"], []);
+        var executed = new List<string>();
+
+        branch.Input[0].InitialValue = true;
+        branch.Action = _ => { branch.WriteOutput("True", true); return Task.CompletedTask; };
+        onTrue.Action = _ => { executed.Add("true"); return Task.CompletedTask; };
+        onFalse.Action = _ => { executed.Add("false"); return Task.CompletedTask; };
+
+        var connections = new[]
+        {
+            Conn(branch, "True", onTrue, "Flow"),
+            Conn(branch, "False", onFalse, "Flow")
+        };
+
+        var result = await engine.ExecuteAsync([branch, onTrue, onFalse], connections, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(["true"], executed);
+        Assert.Equal(NodeExecutionStatus.Succeeded, onTrue.ExecutionStatus);
+        Assert.Equal(NodeExecutionStatus.Skipped, onFalse.ExecutionStatus);
+    }
+
+    [Fact]
+    public async Task Engine_Loop_IteratesBodySubGraph()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+
+        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Index"]);
+        var body1 = FlowNode("Body1", "Test.Body1", ["Flow"], []);
+        var body2 = FlowNode("Body2", "Test.Body2", ["Flow"], []);
+        var after = FlowNode("After", "Test.After", ["Flow"], []);
+        var runs = 0;
+
+        loop.Input[0].InitialValue = 3.0;
+        body1.Action = _ => { runs++; return Task.CompletedTask; };
+
+        var connections = new[]
+        {
+            Conn(loop, "Body", body1, "Flow"),
+            Conn(body1, "Flow", body2, "Flow"),
+            Conn(loop, "Body", after, "Flow")
+        };
+
+        var result = await engine.ExecuteAsync([loop, body1, body2, after], connections, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(3, runs);
+        Assert.Equal(NodeExecutionStatus.Succeeded, body2.ExecutionStatus);
+    }
+
+    [Fact]
+    public async Task Engine_Loop_WritesIndexPerIteration()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+
+        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Index"]);
+        var body = FlowNode("Body", "Test.Body", ["Flow"], []);
+        var indexes = new List<object?>();
+
+        loop.Input[0].InitialValue = 2.0;
+        body.Action = _ => { indexes.Add(loop.Output.First(o => o.Title == "Index").Data); return Task.CompletedTask; };
+
+        var connections = new[] { Conn(loop, "Body", body, "Flow") };
+
+        var result = await engine.ExecuteAsync([loop, body], connections, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(2, indexes.Count);
+        Assert.Equal(0, indexes[0]);
+        Assert.Equal(1, indexes[1]);
+    }
+
+    [Fact]
+    public async Task Engine_Parallel_RunsBranchesConcurrently()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+
+        var parallel = FlowNode("Parallel", "Flow.Parallel", ["Flow"], ["Branch A", "Branch B"]);
+        var a = FlowNode("A", "Test.A", ["Flow"], []);
+        var b = FlowNode("B", "Test.B", ["Flow"], []);
+
+        var insideParallel = 0;
+        var peak = 0;
+
+        Task Track(INodeExecutionContext _)
+        {
+            var current = Interlocked.Increment(ref insideParallel);
+            peak = Math.Max(peak, current);
+            Thread.Sleep(50);
+            Interlocked.Decrement(ref insideParallel);
+            return Task.CompletedTask;
+        }
+
+        a.Action = Track;
+        b.Action = Track;
+
+        var connections = new[]
+        {
+            Conn(parallel, "Branch A", a, "Flow"),
+            Conn(parallel, "Branch B", b, "Flow")
+        };
+
+        var result = await engine.ExecuteAsync([parallel, a, b], connections, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(NodeExecutionStatus.Succeeded, a.ExecutionStatus);
+        Assert.Equal(NodeExecutionStatus.Succeeded, b.ExecutionStatus);
+        Assert.Equal(2, peak);
+    }
+
+    [Fact]
+    public async Task Engine_Loop_ClampsExcessiveIterations()
+    {
+        var engine = new NodeExecutionEngine(new MemoryLog());
+
+        var loop = FlowNode("Loop", "Flow.Loop", ["Count"], ["Body", "Index"]);
+        var body = FlowNode("Body", "Test.Body", ["Flow"], []);
+        var runs = 0;
+
+        loop.Input[0].InitialValue = (double)NodeExecutionEngine.MaxLoopIterations * 10;
+        body.Action = _ => { runs++; return Task.CompletedTask; };
+
+        var connections = new[] { Conn(loop, "Body", body, "Flow") };
+
+        var result = await engine.ExecuteAsync([loop, body], connections, TestContext.Current.CancellationToken);
+
+        Assert.Equal(ExecutionStatus.Succeeded, result.Status);
+        Assert.Equal(NodeExecutionEngine.MaxLoopIterations, runs);
+    }
+
+    /// <summary>
+    /// <para>构造测试连接。</para>
+    /// Builds a test connection.
+    /// </summary>
+    private static NodeConnection Conn(FlowNodeViewModel source, string sourceConnector, FlowNodeViewModel target, string targetConnector)
+        => new()
+        {
+            SourceInstanceId = source.InstanceId,
+            SourceConnector = sourceConnector,
+            TargetInstanceId = target.InstanceId,
+            TargetConnector = targetConnector
+        };
+
     // ---- P0-2: Undo / Redo command stack ----
 
     [Fact]

@@ -1,6 +1,9 @@
+using System.Globalization;
 using Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Flash;
+using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 
@@ -74,8 +77,8 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>创建默认的 spl/uboot 刷写节点。</para>
-    /// Creates a default spl/uboot flashing node.
+    /// <para>创建默认的 spl/uboot 刷写节点，通过 Device 与 Bootloader 输入执行真实刷写。</para>
+    /// Creates a default spl/uboot flashing node that performs the real flash via the Device and Bootloader inputs.
     /// </summary>
     public static ExtendedFirmwareNodeViewModel CreateFlashBootNode()
     {
@@ -84,17 +87,20 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
             Location = new Point(100, 100),
             TypeKey = "Firmware.FlashBoot"
         };
+        node.Input.Add(new NodeConnectorViewModel { Title = "Device", PortType = NodePortType.Device });
         node.Input.Add(new NodeConnectorViewModel { Title = "Bootloader", PortType = NodePortType.Path });
         node.Output.Add(new NodeConnectorViewModel { Title = "Status", PortType = NodePortType.Text });
         return node;
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的扩展固件逻辑：Firmware.OtaDelta 记录差分任务、Firmware.MergeSignature 把签名追加进镜像、
-    /// Firmware.MergeDualSlot 拼接 A/B 槽位、Firmware.FlashBoot 记录 bootloader 刷写任务。</para>
-    /// Dispatches extended firmware logic by the node type key (TypeKey): Firmware.OtaDelta records a delta task,
-    /// Firmware.MergeSignature appends a signature into the image, Firmware.MergeDualSlot concatenates the A/B slots,
-    /// and Firmware.FlashBoot records a bootloader flash task.
+    /// <para>按节点类型键（TypeKey）分发对应的扩展固件逻辑：Firmware.OtaDelta 调用差分引擎生成差分包、
+    /// Firmware.MergeSignature 把签名追加进镜像、Firmware.MergeDualSlot 拼接 A/B 槽位、Firmware.FlashBoot
+    /// 调用 <see cref="FlashService.FlashImageAsync"/> 把引导加载程序刷写到设备。</para>
+    /// Dispatches extended firmware logic by the node type key (TypeKey): Firmware.OtaDelta generates a delta
+    /// package via the delta engine, Firmware.MergeSignature appends a signature into the image,
+    /// Firmware.MergeDualSlot concatenates the A/B slots, and Firmware.FlashBoot flashes the bootloader
+    /// image to the device via <see cref="FlashService.FlashImageAsync"/>.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -104,33 +110,38 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
     /// <para>表示异步执行的任务。</para>
     /// A task representing the asynchronous execution.
     /// </returns>
-    public override Task ExecuteAsync(INodeExecutionContext context)
+    public override async Task ExecuteAsync(INodeExecutionContext context)
     {
-        switch (TypeKey)
+        try
         {
-            case "Firmware.OtaDelta":
-                context.Log.Write(LogLevel.Warn, Title,
-                    "OTA delta generation requires a bsdiff engine (not bundled); parameters recorded.  生成差分包需要 bsdiff 引擎（未内置），已记录参数。");
-                break;
-            case "Firmware.MergeSignature":
-                ExecuteMergeSignature(context);
-                break;
-            case "Firmware.MergeDualSlot":
-                ExecuteMergeDualSlot(context);
-                break;
-            case "Firmware.FlashBoot":
-                {
-                    var bootloader = Convert.ToString(ReadInput("Bootloader"), System.Globalization.CultureInfo.InvariantCulture);
-                    WriteOutput("Status", "queued");
-                    context.Log.Write(LogLevel.Info, Title, $"Bootloader flash queued: {bootloader ?? "<empty>"}  已记录刷写任务。");
+            context.CancellationToken.ThrowIfCancellationRequested();
+            switch (TypeKey)
+            {
+                case "Firmware.OtaDelta":
+                    await ExecuteOtaDeltaAsync(context).ConfigureAwait(false);
                     break;
-                }
-            default:
-                return base.ExecuteAsync(context);
+                case "Firmware.MergeSignature":
+                    ExecuteMergeSignature(context);
+                    break;
+                case "Firmware.MergeDualSlot":
+                    ExecuteMergeDualSlot(context);
+                    break;
+                case "Firmware.FlashBoot":
+                    await ExecuteFlashBootAsync(context).ConfigureAwait(false);
+                    break;
+                default:
+                    await base.ExecuteAsync(context).ConfigureAwait(false);
+                    break;
+            }
         }
-
-        context.CancellationToken.ThrowIfCancellationRequested();
-        return Task.CompletedTask;
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            context.Log.Write(LogLevel.Error, Title, $"Extended firmware node failed: {ex.Message}  扩展固件节点执行失败。");
+        }
     }
 
     private void ExecuteMergeSignature(INodeExecutionContext context)
@@ -160,4 +171,73 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
         WriteOutput("Merged", merged);
         context.Log.Write(LogLevel.Info, Title, $"Merged slot A ({a.Length}B) + slot B ({b.Length}B).  已合并双槽。");
     }
+
+    private async Task ExecuteOtaDeltaAsync(INodeExecutionContext context)
+    {
+        var source = Text(ReadInput("Source"));
+        var target = Text(ReadInput("Target"));
+        if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
+        {
+            context.Log.Write(LogLevel.Warn, Title, $"Source image path invalid or missing: {source ?? "<empty>"}  源镜像路径无效或缺失。");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(target) || !File.Exists(target))
+        {
+            context.Log.Write(LogLevel.Warn, Title, $"Target image path invalid or missing: {target ?? "<empty>"}  目标镜像路径无效或缺失。");
+            return;
+        }
+
+        var targetFull = Path.GetFullPath(target);
+        var output = Path.Combine(
+            Path.GetDirectoryName(targetFull) ?? ".",
+            Path.GetFileNameWithoutExtension(targetFull) + ".delta");
+
+        context.Log.Write(LogLevel.Info, Title, $"Generating delta {source} -> {target}...  正在生成差分包...");
+        var result = await UotanStudio.Firmware.Diff.DeltaEngine.GenerateDeltaAsync(
+            source, target, output, context.CancellationToken).ConfigureAwait(false);
+
+        if (result.Success)
+        {
+            WriteOutput("Delta", output);
+            context.Log.Write(LogLevel.Info, Title,
+                $"Delta generated: {output} ({result.SourceLength} -> {result.DiffLength} bytes).  差分文件生成完成。");
+        }
+        else
+        {
+            context.Log.Write(LogLevel.Error, Title,
+                $"Delta generation failed: {result.ErrorMessage}  差分生成失败。");
+        }
+    }
+
+    private async Task ExecuteFlashBootAsync(INodeExecutionContext context)
+    {
+        var device = NodeDataUtil.ToDevice(ReadInput("Device"));
+        if (device is null)
+        {
+            context.Log.Write(LogLevel.Warn, Title, "No device connected. 未连接设备。");
+            WriteOutput("Status", "no-device");
+            return;
+        }
+
+        var bootloader = Text(ReadInput("Bootloader"));
+        if (string.IsNullOrWhiteSpace(bootloader) || !File.Exists(bootloader))
+        {
+            context.Log.Write(LogLevel.Warn, Title, $"Bootloader image path invalid or missing: {bootloader ?? "<empty>"}  引导镜像路径无效或缺失。");
+            WriteOutput("Status", "invalid-image");
+            return;
+        }
+
+        var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
+        var result = await FlashService.FlashImageAsync(
+            new DeviceInfo(device), "boot", bootloader, progress, context.CancellationToken).ConfigureAwait(false);
+
+        WriteOutput("Status", result.Summary);
+        context.Log.Write(result.Success ? LogLevel.Info : LogLevel.Error, Title,
+            result.Success
+                ? $"{result.Summary}  引导加载程序刷写完成。"
+                : $"Bootloader flash failed: {result.Summary}  引导加载程序刷写失败。");
+    }
+
+    private static string? Text(object? value) => Convert.ToString(value, CultureInfo.InvariantCulture);
 }

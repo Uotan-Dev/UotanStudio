@@ -8,6 +8,12 @@ namespace UotanStudio.Services.Execution;
 /// </summary>
 public sealed class NodeExecutionEngine
 {
+    /// <summary>
+    /// <para>循环节点单次执行的最大迭代数上限，防止错误配置的死循环工作流无限执行。</para>
+    /// Maximum iterations per Loop node execution, guarding misconfigured looping workflows from running forever.
+    /// </summary>
+    public const int MaxLoopIterations = 10_000;
+
     private readonly IUnifiedLog _log;
     private CancellationTokenSource? _cts;
     private volatile bool _isRunning;
@@ -97,8 +103,16 @@ public sealed class NodeExecutionEngine
             var completed = 0;
             var total = order.Count;
             var failedNodes = new List<string>();
+            var failLock = new object();
             var aborted = false;
             var byId = nodes.ToDictionary(n => n.InstanceId);
+            var flowOut = BuildFlowEdges(nodes, connections);
+
+            // 已被 Loop / Parallel 子图调度执行过的节点（主循环跳过），与 Branch 未选中分支涉及的节点（标记 Skipped）。
+            // Nodes already executed by Loop / Parallel sub-graph scheduling (skipped by the main loop),
+            // and nodes belonging to the untaken Branch sub-graph (marked Skipped).
+            var handledByFlow = new HashSet<string>();
+            var skippedByBranch = new HashSet<string>();
 
             foreach (var node in order)
             {
@@ -109,42 +123,56 @@ public sealed class NodeExecutionEngine
                     break;
                 }
 
-                // 设置 Running
-                node.ExecutionStatus = NodeExecutionStatus.Running;
-                NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+                if (handledByFlow.Contains(node.InstanceId))
+                {
+                    completed++;
+                    continue;
+                }
 
+                if (skippedByBranch.Contains(node.InstanceId))
+                {
+                    node.ExecutionStatus = NodeExecutionStatus.Skipped;
+                    NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+                    _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' skipped by branch condition");
+                    completed++;
+                    continue;
+                }
+
+                bool succeeded;
                 try
                 {
-                    // 先注入数据流：把上游输出端口值写入本节点对应输入端口
-                    FlowInputs(node, byId, connections);
-
-                    var context = new ExecutionContextImpl(_log, token,
-                        p => SafeReportProgress(completed, total, p));
-                    _log.Write(LogLevel.Info, "Engine", $"Executing node '{node.Title}' (id={node.InstanceId})");
-                    await node.ExecuteAsync(context).ConfigureAwait(false);
-
-                    node.ExecutionStatus = NodeExecutionStatus.Succeeded;
-                    NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
-                    _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' completed");
+                    succeeded = await ExecuteSingleNodeAsync(node, byId, connections, token,
+                        p => SafeReportProgress(completed, total, p)).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
-                    node.ExecutionStatus = NodeExecutionStatus.Cancelled;
-                    NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+                    _log.Write(LogLevel.Warn, "Engine", "Execution cancelled by user");
                     aborted = true;
                     break;
                 }
-                catch (Exception ex)
+                if (!succeeded)
                 {
-                    node.ExecutionStatus = NodeExecutionStatus.Failed;
-                    NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
-                    _log.Write(LogLevel.Error, "Engine", $"Node '{node.InstanceId}' failed: {ex.Message}");
-                    failedNodes.Add(node.InstanceId);
+                    lock (failLock) { failedNodes.Add(node.InstanceId); }
                 }
 
                 completed++;
                 var progress = (double)completed / Math.Max(1, total);
                 ProgressChanged?.Invoke(this, progress);
+
+                if (succeeded)
+                {
+                    try
+                    {
+                        await ApplyFlowControlAsync(node, byId, connections, order, flowOut, token,
+                            handledByFlow, skippedByBranch, failedNodes, failLock).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        _log.Write(LogLevel.Warn, "Engine", "Execution cancelled during flow control dispatch");
+                        aborted = true;
+                        break;
+                    }
+                }
             }
 
             var result = aborted
@@ -163,6 +191,218 @@ public sealed class NodeExecutionEngine
             _cts?.Dispose();
             _cts = null;
         }
+    }
+
+    /// <summary>
+    /// <para>提取控制流边：源连接器端口类型为 <see cref="NodePortType.Flow"/> 的连接。返回节点实例 ID 到 (输出端口标题， 目标节点) 列表的映射。</para>
+    /// Extracts control-flow edges: connections whose source connector port type is <see cref="NodePortType.Flow"/>.
+    /// Returns a mapping from node instance ID to the list of (output connector title, target node).
+    /// </summary>
+    private static Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> BuildFlowEdges(
+        IReadOnlyList<FlowNodeViewModel> nodes, IReadOnlyList<NodeConnection>? connections)
+    {
+        var map = new Dictionary<string, List<(string, FlowNodeViewModel)>>();
+        if (connections == null || connections.Count == 0) return map;
+
+        var byId = nodes.ToDictionary(n => n.InstanceId);
+        foreach (var conn in connections)
+        {
+            if (conn.SourceInstanceId == null || conn.TargetInstanceId == null) continue;
+            if (!byId.TryGetValue(conn.SourceInstanceId, out var sourceNode)) continue;
+            if (!byId.TryGetValue(conn.TargetInstanceId, out var targetNode)) continue;
+            if (string.IsNullOrWhiteSpace(conn.SourceConnector)) continue;
+
+            var sourceConnector = sourceNode.Output.FirstOrDefault(c =>
+                string.Equals(c.Title, conn.SourceConnector, StringComparison.Ordinal));
+            if (sourceConnector is not { PortType: NodePortType.Flow }) continue;
+
+            if (!map.TryGetValue(sourceNode.InstanceId, out var list))
+            {
+                list = [];
+                map[sourceNode.InstanceId] = list;
+            }
+            list.Add((conn.SourceConnector, targetNode));
+        }
+        return map;
+    }
+
+    /// <summary>
+    /// <para>执行单个节点：注入数据流、更新状态机并记录失败原因。返回是否执行成功。</para>
+    /// Executes a single node: injects data flow, updates the state machine, and records failures. Returns success.
+    /// </summary>
+    private async Task<bool> ExecuteSingleNodeAsync(
+        FlowNodeViewModel node,
+        IReadOnlyDictionary<string, FlowNodeViewModel> byId,
+        IReadOnlyList<NodeConnection>? connections,
+        CancellationToken token,
+        Action<double> progress)
+    {
+        node.ExecutionStatus = NodeExecutionStatus.Running;
+        NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+
+        try
+        {
+            FlowInputs(node, byId, connections);
+
+            var context = new ExecutionContextImpl(_log, token, progress);
+            _log.Write(LogLevel.Info, "Engine", $"Executing node '{node.Title}' (id={node.InstanceId})");
+            await node.ExecuteAsync(context).ConfigureAwait(false);
+
+            node.ExecutionStatus = NodeExecutionStatus.Succeeded;
+            NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+            _log.Write(LogLevel.Debug, "Engine", $"Node '{node.InstanceId}' completed");
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            node.ExecutionStatus = NodeExecutionStatus.Cancelled;
+            NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+            throw;
+        }
+        catch (Exception ex)
+        {
+            node.ExecutionStatus = NodeExecutionStatus.Failed;
+            NodeStatusChanged?.Invoke(this, new NodeStatusChangedEventArgs(node));
+            _log.Write(LogLevel.Error, "Engine", $"Node '{node.InstanceId}' failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <para>按节点类型键应用真实控制流语义：Flow.Branch 把未选中分支的下游控制流子图标记为 Skipped，
+    /// Flow.Loop 迭代执行 Body 子图（上限 <see cref="MaxLoopIterations"/>），Flow.Parallel 并发执行各分支子图。</para>
+    /// Applies real flow-control semantics by node type key: Flow.Branch marks the untaken branch's downstream
+    /// control-flow sub-graph as Skipped, Flow.Loop iterates the Body sub-graph (bounded by
+    /// <see cref="MaxLoopIterations"/>), and Flow.Parallel runs the branch sub-graphs concurrently.
+    /// </summary>
+    private async Task ApplyFlowControlAsync(
+        FlowNodeViewModel node,
+        IReadOnlyDictionary<string, FlowNodeViewModel> byId,
+        IReadOnlyList<NodeConnection> connections,
+        List<FlowNodeViewModel> topologicalOrder,
+        Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flowOut,
+        CancellationToken token,
+        HashSet<string> handledByFlow,
+        HashSet<string> skippedByBranch,
+        List<string> failedNodes,
+        object failLock)
+    {
+        switch (node.TypeKey)
+        {
+            case "Flow.Branch":
+            {
+                var trueConnector = node.Output.FirstOrDefault(c => string.Equals(c.Title, "True", StringComparison.Ordinal));
+                var condition = NodeDataUtil.ToBool(trueConnector?.Data, false);
+                var untakenTitle = condition ? "False" : "True";
+                var untaken = CollectFlowReachable(node, untakenTitle, flowOut);
+                foreach (var target in untaken) skippedByBranch.Add(target.InstanceId);
+                if (untaken.Count > 0)
+                {
+                    _log.Write(LogLevel.Info, "Engine",
+                        $"Branch '{node.InstanceId}' took '{(condition ? "True" : "False")}', skipping {untaken.Count} downstream node(s)");
+                }
+                break;
+            }
+            case "Flow.Loop":
+            {
+                var requested = NodeDataUtil.ToInt(node.ReadInput("Count"), 0);
+                var iterations = Math.Clamp(requested, 0, MaxLoopIterations);
+                if (requested > MaxLoopIterations)
+                {
+                    _log.Write(LogLevel.Warn, "Engine",
+                        $"Loop '{node.InstanceId}' requested {requested} iterations, clamped to {MaxLoopIterations}");
+                }
+                var body = CollectFlowReachable(node, "Body", flowOut);
+                if (body.Count == 0) break;
+
+                var bodyOrder = topologicalOrder.Where(body.Contains).ToList();
+                _log.Write(LogLevel.Info, "Engine",
+                    $"Loop '{node.InstanceId}' iterating body of {bodyOrder.Count} node(s) for {iterations} iteration(s)");
+
+                for (var i = 0; i < iterations; i++)
+                {
+                    token.ThrowIfCancellationRequested();
+                    node.WriteOutput("Index", i);
+                    _log.Write(LogLevel.Debug, "Engine", $"Loop '{node.InstanceId}' iteration {i + 1}/{iterations}");
+                    foreach (var bodyNode in bodyOrder)
+                    {
+                        var succeeded = await ExecuteSingleNodeAsync(bodyNode, byId, connections, token,
+                            p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
+                        if (!succeeded)
+                        {
+                            lock (failLock) { failedNodes.Add(bodyNode.InstanceId); }
+                        }
+                    }
+                }
+
+                foreach (var bodyNode in body) handledByFlow.Add(bodyNode.InstanceId);
+                break;
+            }
+            case "Flow.Parallel":
+            {
+                var branchConnectors = node.Output.Where(c => c.PortType == NodePortType.Flow).ToList();
+                if (branchConnectors.Count == 0) break;
+
+                var tasks = new List<Task>();
+                foreach (var connector in branchConnectors)
+                {
+                    var branch = CollectFlowReachable(node, connector.Title, flowOut);
+                    if (branch.Count == 0) continue;
+                    var branchOrder = topologicalOrder.Where(branch.Contains).ToList();
+                    foreach (var branchNode in branch) handledByFlow.Add(branchNode.InstanceId);
+
+                    _log.Write(LogLevel.Info, "Engine",
+                        $"Parallel '{node.InstanceId}' dispatching branch '{connector.Title}' with {branchOrder.Count} node(s)");
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        foreach (var branchNode in branchOrder)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            var succeeded = await ExecuteSingleNodeAsync(branchNode, byId, connections, token,
+                                p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
+                            if (!succeeded)
+                            {
+                                lock (failLock) { failedNodes.Add(branchNode.InstanceId); }
+                            }
+                        }
+                    }, token));
+                }
+
+                if (tasks.Count > 0) await Task.WhenAll(tasks).ConfigureAwait(false);
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <para>从指定节点的某个 Flow 输出端口出发，沿控制流边广度优先收集可达的下游节点集合（不含起始节点本身）。</para>
+    /// Collects the downstream nodes reachable via control-flow edges from the given Flow output port of the start
+    /// node (breadth-first, excluding the start node itself).
+    /// </summary>
+    private static HashSet<FlowNodeViewModel> CollectFlowReachable(
+        FlowNodeViewModel start, string outputConnector,
+        Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flowOut)
+    {
+        var visited = new HashSet<FlowNodeViewModel>();
+        if (!flowOut.TryGetValue(start.InstanceId, out var edges)) return visited;
+
+        var queue = new Queue<FlowNodeViewModel>();
+        foreach (var (connector, target) in edges)
+        {
+            if (!string.Equals(connector, outputConnector, StringComparison.Ordinal)) continue;
+            if (ReferenceEquals(target, start) || visited.Add(target)) queue.Enqueue(target);
+        }
+
+        while (queue.Count > 0)
+        {
+            var current = queue.Dequeue();
+            if (!flowOut.TryGetValue(current.InstanceId, out var outgoing)) continue;
+            foreach (var (_, target) in outgoing)
+            {
+                if (!ReferenceEquals(target, start) && visited.Add(target)) queue.Enqueue(target);
+            }
+        }
+        return visited;
     }
 
     /// <summary>
@@ -214,7 +454,10 @@ public sealed class NodeExecutionEngine
 
             var sourceConnector = sourceNode.Output.FirstOrDefault(c => string.Equals(c.Title, conn.SourceConnector, StringComparison.Ordinal));
             var targetConnector = target.Input.FirstOrDefault(c => string.Equals(c.Title, conn.TargetConnector, StringComparison.Ordinal));
-            if (sourceConnector != null && targetConnector != null)
+            // 仅当上游输出携带非空值时覆盖：Flow 端口等无数据输出的连接不得清掉用户填写的初始值。
+            // Only override when the upstream output carries a non-null value: connections on data-less ports
+            // (e.g. Flow) must not wipe user-provided initial values.
+            if (sourceConnector != null && targetConnector != null && sourceConnector.Data is not null)
             {
                 targetConnector.Data = sourceConnector.Data;
             }
