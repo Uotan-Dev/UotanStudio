@@ -1,6 +1,9 @@
+using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Security;
 using UotanStudio.Firmware.Avb;
 using Xunit;
 
@@ -134,6 +137,170 @@ public class AvbSignatureVerificationTests
         Assert.Equal(parameters.Modulus, imported.ExportParameters(false).Modulus);
     }
 
+    [Fact]
+    public async Task SignVbmeta_RoundTrip_AvbVerifierVerifies()
+    {
+        using var rsa = RSA.Create(2048);
+        var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var root = CreateTempDir();
+        try
+        {
+            var vbmetaPath = Path.Combine(root, "vbmeta.img");
+            var outputPath = Path.Combine(root, "vbmeta.signed.img");
+            await File.WriteAllBytesAsync(vbmetaPath, BuildUnsignedVbmetaTemplate(), TestContext.Current.CancellationToken);
+
+            var salt = new byte[Sha256Size];
+            RandomNumberGenerator.Fill(salt);
+            var imageData = new byte[8192];
+            RandomNumberGenerator.Fill(imageData);
+            var digest = SHA256.HashData(salt.Concat(imageData).ToArray());
+
+            var result = await AvbSigner.SignVbmetaAsync(
+                vbmetaPath,
+                privateKey,
+                outputPath,
+                [new AvbHashDescriptor { PartitionName = "boot", Salt = salt, Digest = digest }],
+                TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.ErrorMessage);
+            Assert.Equal(AlgorithmSha256Rsa2048, result.AlgorithmType);
+            Assert.Equal("SHA256_RSA2048", result.AlgorithmName);
+
+            var signed = await File.ReadAllBytesAsync(outputPath, TestContext.Current.CancellationToken);
+            var verify = AvbVerifier.VerifyVBMeta(signed);
+
+            Assert.True(verify.IsSigned);
+            Assert.True(verify.IsValid, verify.ErrorMessage);
+            Assert.Equal(AlgorithmSha256Rsa2048, verify.VBMetaHeader?.AlgorithmType);
+
+            var descriptor = Assert.Single(AvbSignatureVerifier.ExtractDescriptors(signed));
+            Assert.Equal("boot", descriptor.PartitionName);
+            Assert.Equal("sha256", descriptor.HashAlgorithm);
+            Assert.Equal(salt, descriptor.Salt);
+            Assert.Equal(digest, descriptor.Digest);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SignVbmeta_TamperedBytes_VerificationFails()
+    {
+        using var rsa = RSA.Create(2048);
+        var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var root = CreateTempDir();
+        try
+        {
+            var vbmetaPath = Path.Combine(root, "vbmeta.img");
+            var outputPath = Path.Combine(root, "vbmeta.signed.img");
+            await File.WriteAllBytesAsync(vbmetaPath, BuildUnsignedVbmetaTemplate(), TestContext.Current.CancellationToken);
+
+            var salt = new byte[Sha256Size];
+            RandomNumberGenerator.Fill(salt);
+            var digest = new byte[Sha256Size];
+            RandomNumberGenerator.Fill(digest);
+
+            var result = await AvbSigner.SignVbmetaAsync(
+                vbmetaPath, privateKey, outputPath,
+                [new AvbHashDescriptor { PartitionName = "boot", Salt = salt, Digest = digest }],
+                TestContext.Current.CancellationToken);
+            Assert.True(result.Success, result.ErrorMessage);
+
+            // Flip a byte inside the release string area of the header: parsing is unaffected,
+            // but the stored digest and signature no longer match.
+            var signed = await File.ReadAllBytesAsync(outputPath, TestContext.Current.CancellationToken);
+            signed[140] ^= 0xFF;
+
+            var verify = AvbVerifier.VerifyVBMeta(signed);
+
+            Assert.True(verify.IsSigned);
+            Assert.False(verify.IsValid);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AddHashFooter_RoundTrip_AvbVerifierVerifies()
+    {
+        using var rsa = RSA.Create(2048);
+        var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var root = CreateTempDir();
+        try
+        {
+            var imagePath = Path.Combine(root, "boot.img");
+            var outputPath = Path.Combine(root, "boot.signed.img");
+            var image = new byte[4096 * 3 + 1234]; // deliberately not 4K-aligned
+            RandomNumberGenerator.Fill(image);
+            await File.WriteAllBytesAsync(imagePath, image, TestContext.Current.CancellationToken);
+
+            var result = await AvbSigner.AddHashFooterAsync(
+                imagePath, "boot", privateKey, outputPath, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.ErrorMessage);
+            Assert.Equal(AlgorithmSha256Rsa2048, result.AlgorithmType);
+
+            var signed = await File.ReadAllBytesAsync(outputPath, TestContext.Current.CancellationToken);
+            var verify = AvbVerifier.Verify(signed);
+
+            Assert.True(verify.IsSigned);
+            Assert.True(verify.IsValid, verify.ErrorMessage);
+            Assert.True(verify.Footer.HasValue);
+
+            var footer = verify.Footer.Value;
+            Assert.Equal((ulong)image.Length, footer.OriginalImageSize);
+            Assert.Equal(0UL, footer.VbmetaOffset % 4096);
+            Assert.Equal((ulong)signed.Length - AvbFooter.Size, footer.VbmetaOffset + footer.VbmetaSize);
+
+            // The embedded vbmeta is self-contained and must verify on its own.
+            var vbmetaBytes = signed.AsSpan((int)footer.VbmetaOffset, (int)footer.VbmetaSize).ToArray();
+            var vbmetaVerify = AvbVerifier.VerifyVBMeta(vbmetaBytes);
+            Assert.True(vbmetaVerify.IsValid, vbmetaVerify.ErrorMessage);
+            Assert.Single(AvbSignatureVerifier.ExtractDescriptors(vbmetaBytes));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task AddHashFooter_TamperedVbmeta_VerificationFails()
+    {
+        using var rsa = RSA.Create(2048);
+        var privateKey = (RsaPrivateCrtKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
+        var root = CreateTempDir();
+        try
+        {
+            var imagePath = Path.Combine(root, "boot.img");
+            var outputPath = Path.Combine(root, "boot.signed.img");
+            await File.WriteAllBytesAsync(imagePath, new byte[4096 * 2], TestContext.Current.CancellationToken);
+
+            var result = await AvbSigner.AddHashFooterAsync(
+                imagePath, "boot", privateKey, outputPath, TestContext.Current.CancellationToken);
+            Assert.True(result.Success, result.ErrorMessage);
+
+            // Tamper a byte inside the appended vbmeta header (release string area).
+            var signed = await File.ReadAllBytesAsync(outputPath, TestContext.Current.CancellationToken);
+            var footer = AvbFooter.TryLoad(signed)!.Value;
+            var tampered = (byte[])signed.Clone();
+            tampered[(int)footer.VbmetaOffset + 140] ^= 0xFF;
+
+            var verify = AvbVerifier.Verify(tampered);
+
+            Assert.True(verify.IsSigned);
+            Assert.False(verify.IsValid);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     /// <summary>
     /// Builds a minimal self-signed vbmeta image:
     /// <code>[256-byte header][auth block: sha256 hash + rsa2048 signature][aux block: AVB public key blob]</code>
@@ -259,6 +426,67 @@ public class AvbSignatureVerificationTests
         for (var i = 0; i < 8; i++)
         {
             buffer[offset + i] = (byte)(value >> (56 - i * 8));
+        }
+    }
+
+    /// <summary>
+    /// Creates a unique temporary directory for a signing round-trip test.
+    /// <para>为签名往返测试创建唯一的临时目录。</para>
+    /// </summary>
+    private static string CreateTempDir()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "avb_signer_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    /// <summary>
+    /// Builds a minimal unsigned 256-byte VBMeta template ("AVB0" magic, libavb 1.0, algorithm NONE)
+    /// used as the source for <see cref="AvbSigner.SignVbmetaAsync"/>.
+    /// <para>构造供 <see cref="AvbSigner.SignVbmetaAsync"/> 作为源的最小未签名 256 字节 VBMeta 模板
+    /// （"AVB0" 魔数、libavb 1.0、算法 NONE）。</para>
+    /// </summary>
+    private static byte[] BuildUnsignedVbmetaTemplate()
+    {
+        var vbmeta = new byte[AvbVBMetaImageHeader.Size];
+        "AVB0"u8.CopyTo(vbmeta);
+        BinaryPrimitives.WriteUInt32BigEndian(vbmeta.AsSpan(4, 4), 1); // required_libavb_version_major
+        BinaryPrimitives.WriteUInt32BigEndian(vbmeta.AsSpan(8, 4), 0); // required_libavb_version_minor
+        Encoding.ASCII.GetBytes("test unsigned template").CopyTo(vbmeta, 128);
+        return vbmeta;
+    }
+
+    [Fact]
+    public async Task DisableVbmetaVerification_SetsFlagsAndZeroesAuthBlock()
+    {
+        using var rsa = RSA.Create(2048);
+        var (vbmeta, _) = BuildMinimalSelfSignedVbmeta(rsa);
+        var sourcePath = Path.Combine(Path.GetTempPath(), $"avb_disable_{Guid.NewGuid():N}.img");
+        var outputPath = sourcePath + ".disabled";
+        try
+        {
+            await File.WriteAllBytesAsync(sourcePath, vbmeta, TestContext.Current.CancellationToken);
+
+            var result = await AvbSigner.DisableVbmetaVerificationAsync(sourcePath, outputPath, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Success, result.ErrorMessage);
+
+            var patched = await File.ReadAllBytesAsync(outputPath, TestContext.Current.CancellationToken);
+            // 长度保持不变（认证块原位清零而非删除）。
+            // Length is unchanged (the authentication block is zeroed in place, not removed).
+            Assert.Equal(vbmeta.Length, patched.Length);
+            Assert.Equal(AvbSigner.VbmetaFlagHashtreeDisabled | AvbSigner.VbmetaFlagVerificationDisabled,
+                BinaryPrimitives.ReadUInt32BigEndian(patched.AsSpan(120, 4)));
+            // 认证块（头 256 字节之后，长度取自偏移 12 的大端 64 位值）应全为 0。
+            // The authentication block (after the 256-byte header, big-endian 64-bit size at offset 12) must be all zeros.
+            var authSize = (int)BinaryPrimitives.ReadUInt64BigEndian(patched.AsSpan(12, 8));
+            Assert.True(authSize > 0);
+            Assert.True(patched.AsSpan(256, authSize).IndexOfAnyExcept((byte)0) < 0);
+        }
+        finally
+        {
+            File.Delete(sourcePath);
+            File.Delete(outputPath);
         }
     }
 }

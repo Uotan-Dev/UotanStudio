@@ -228,13 +228,21 @@ public class BootImagePacker
     {
         var isV4 = Header.HeaderVersion == BootImageVersion.V4;
         uint pageSize = 4096;
-        Header.KernelSize = (uint)Kernel.Length;
-        Header.RamdiskSize = (uint)Ramdisk.Length;
+        Header.KernelSize = checked((uint)Kernel.Length);
+        Header.RamdiskSize = checked((uint)Ramdisk.Length);
 
         if (isV4)
         {
-            Header.SignatureSize = (uint)Signature.Length;
+            Header.SignatureSize = checked((uint)Signature.Length);
         }
+
+        // V3 头为 1580 字节、V4 头为 1584 字节；header_size 字段与实际 padding 保持一致，
+        // 组件偏移按该值页对齐，与官方 mkbootimg / BootImageParser 的布局一致。
+        // The V3 header is 1580 bytes and the V4 header is 1584 bytes; the header_size field is
+        // kept consistent with the actual padding, and component offsets are page-aligned from it
+        // (matching the official mkbootimg layout and BootImageParser).
+        var headerSize = isV4 ? 1584u : 1580u;
+        var effectiveHeaderSize = Header.HeaderSize >= headerSize ? Header.HeaderSize : headerSize;
 
         var writer = new BinaryWriter(output);
 
@@ -242,7 +250,7 @@ public class BootImagePacker
         writer.Write(Header.KernelSize);
         writer.Write(Header.RamdiskSize);
         writer.Write(Header.OsVersion);
-        writer.Write(Header.HeaderSize > 0 ? Header.HeaderSize : 1580u);
+        writer.Write(effectiveHeaderSize);
         writer.Write(0u);
         writer.Write(0u);
         writer.Write(0u);
@@ -259,8 +267,7 @@ public class BootImagePacker
             writer.Write(Header.SignatureSize);
         }
 
-        var headerSize = isV4 ? 1584u : 1580u;
-        while (output.Position < headerSize)
+        while (output.Position < effectiveHeaderSize)
         {
             writer.Write((byte)0);
         }

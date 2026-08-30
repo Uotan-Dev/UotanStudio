@@ -25,6 +25,15 @@ public sealed class OppEntry
     public long Size { get; init; }
 
     /// <summary>
+    /// <para>条目压缩后的数据大小（字节）；0 表示未压缩（store）或未知（ZipArchive 路径）。
+    /// 中央目录解析时填充，供手动提取回退定位数据区。</para>
+    /// Compressed data size of the entry in bytes; 0 for stored (uncompressed) entries or
+    /// when unknown (ZipArchive path). Filled during central-directory parsing for the
+    /// manual-extraction fallback to locate the data region.
+    /// </summary>
+    internal long CompressedSize { get; init; }
+
+    /// <summary>
     /// <para>加密部分的大小（字节），0 表示不加密。</para>
     /// Size of the encrypted portion (bytes), 0 means not encrypted.
     /// </summary>

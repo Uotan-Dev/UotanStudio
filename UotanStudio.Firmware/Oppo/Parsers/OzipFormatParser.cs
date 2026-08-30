@@ -53,24 +53,19 @@ internal sealed class OzipFormatParser : IOppFormatParser
                     detectedKey = OzipDecryptor.DecryptFileWithAutoDetection(stream, fs);
                 }
 
-                using var archive = ZipFile.OpenRead(tempFile);
-                var entryCount = 0;
-                foreach (var zipEntry in archive.Entries)
-                {
-                    if (zipEntry.Length == 0 && zipEntry.FullName.EndsWith("/"))
-                    {
-                        continue;
-                    }
-
-                    entryCount++;
-                }
+                // 与 ParseEntries 共用同一枚举逻辑：ZipArchive 打开失败（中央目录损坏等）时
+                // 自动回退手动扫描，保证元数据条目数与条目列表一致。
+                // Share the same enumeration logic with ParseEntries: when ZipArchive fails to
+                // open (corrupt central directory etc.), fall back to the manual scan so the
+                // metadata entry count always matches the entry list.
+                var entries = ReadZipEntriesWithFallback(tempFile);
 
                 return new OppMetadata
                 {
                     FormatName = "OZip",
                     Format = OppFormat.Ozip,
                     FileSize = fileSize,
-                    EntryCount = entryCount > 0 ? entryCount : 1,
+                    EntryCount = entries.Count > 0 ? entries.Count : 1,
                     KeyId = detectedKey.Description ?? detectedKey.KeyHex,
                     IsZipWrapped = false
                 };
@@ -133,20 +128,12 @@ internal sealed class OzipFormatParser : IOppFormatParser
                     OzipDecryptor.DecryptFileWithAutoDetection(stream, fs);
                 }
 
-                IReadOnlyList<OppEntry> entries;
-                try
-                {
-                    entries = ReadZipEntries(tempFile);
-                }
-                catch (InvalidDataException)
-                {
-                    // .NET ZipArchive 无法打开（中央目录损坏/ZIP64 变体等）时，
-                    // 回退到手动解析中央目录，仍能枚举出可读的真实条目。
-                    // When .NET ZipArchive cannot open the file (corrupt central directory / ZIP64
-                    // variants etc.), fall back to manually parsing the central directory so as many
-                    // real entries as possible are still enumerated.
-                    entries = ScanCentralDirectoryEntries(tempFile);
-                }
+                // 与 ParseMetadata 共用同一枚举逻辑：ZipArchive 打开失败（中央目录损坏等）时
+                // 自动回退手动扫描；两者均失败时异常向上传播由调用方处理。
+                // Share the same enumeration logic with ParseMetadata: ZipArchive failure
+                // (corrupt central directory etc.) falls back to the manual scan; if both
+                // fail the exception propagates to the caller.
+                var entries = ReadZipEntriesWithFallback(tempFile);
 
                 return entries.Count > 0
                     ? entries
@@ -161,6 +148,32 @@ internal sealed class OzipFormatParser : IOppFormatParser
         {
             // Decryption failed (no valid key found), fall back to single entry
             return FallbackSingleEntry(header);
+        }
+    }
+
+    /// <summary>
+    /// <para>用 <see cref="ZipArchive"/> 读取临时文件中的全部非目录条目；中央目录损坏
+    /// （EOCD 条目数与实际记录数不一致等）导致 <see cref="InvalidDataException"/> 时，
+    /// 回退到手动解析中央目录，保证元数据条目数与条目列表来自同一来源。</para>
+    /// Reads all non-directory entries of the temp ZIP file via <see cref="ZipArchive"/>;
+    /// when a corrupt central directory (e.g. EOCD entry count mismatching the actual
+    /// records) throws <see cref="InvalidDataException"/>, falls back to manual central
+    /// directory parsing so the metadata entry count and the entry list share one source.
+    /// </summary>
+    private static IReadOnlyList<OppEntry> ReadZipEntriesWithFallback(string zipPath)
+    {
+        try
+        {
+            return ReadZipEntries(zipPath);
+        }
+        catch (InvalidDataException)
+        {
+            // .NET ZipArchive 无法打开（中央目录损坏/ZIP64 变体等）时，
+            // 回退到手动解析中央目录，仍能枚举出可读的真实条目。
+            // When .NET ZipArchive cannot open the file (corrupt central directory / ZIP64
+            // variants etc.), fall back to manually parsing the central directory so as many
+            // real entries as possible are still enumerated.
+            return ScanCentralDirectoryEntries(zipPath);
         }
     }
 
@@ -255,7 +268,13 @@ internal sealed class OzipFormatParser : IOppFormatParser
             // Central directory record signature PK\x01\x02.
             if (cd[pos] != 0x50 || cd[pos + 1] != 0x4B || cd[pos + 2] != 0x01 || cd[pos + 3] != 0x02)
             {
-                break;
+                // 宽容模式：签名未命中时逐字节前进，跳过损坏区继续寻找下一条记录，
+                // 避免在第一条损坏记录处中断导致后续大文件（boot.img / 分区镜像等）丢失。
+                // Lenient mode: advance byte by byte past corrupt regions to find the next
+                // record, so a single bad record does not hide the remaining large files
+                // (boot.img / partition images etc.).
+                pos++;
+                continue;
             }
 
             var nameLen = BinaryPrimitives.ReadUInt16LittleEndian(cd.AsSpan(pos + 28));
@@ -264,27 +283,73 @@ internal sealed class OzipFormatParser : IOppFormatParser
             var recordLen = 46 + nameLen + extraLen + commentLen;
             if (pos + recordLen > cd.Length)
             {
-                // 损坏记录：停止解析，保留已解析条目。
-                // Corrupt record: stop parsing, keep the entries already parsed.
-                break;
+                // 损坏记录：跳过该签名继续向后寻找，保留已解析条目。
+                // Corrupt record: skip this signature and keep scanning; entries parsed so
+                // far are retained.
+                pos++;
+                continue;
             }
 
             var name = Encoding.UTF8.GetString(cd, pos + 46, nameLen);
+            // 压缩方法（偏移 10）、压缩大小（偏移 20）与本地文件头偏移（偏移 42）
+            // 供解包回退路径定位数据（data descriptor 条目的 LFH 大小字段为 0）。
+            // Compression method (offset 10), compressed size (offset 20) and local header
+            // offset (offset 42) let the manual extraction fallback locate each entry's data
+            // (data-descriptor entries carry zero sizes in the local header).
+            var compressionMethod = BinaryPrimitives.ReadUInt16LittleEndian(cd.AsSpan(pos + 10));
+            var compressedSize = BinaryPrimitives.ReadUInt32LittleEndian(cd.AsSpan(pos + 20));
+            var localHeaderOffset = BinaryPrimitives.ReadUInt32LittleEndian(cd.AsSpan(pos + 42));
             var size = BinaryPrimitives.ReadUInt32LittleEndian(cd.AsSpan(pos + 24));
+
+            // 校验本地文件头魔数 PK\x03\x04：宽容扫描在损坏区可能误匹配出伪记录
+            // （随机字节恰好组成 PK\x01\x02），其偏移字段不可用；魔数不符则跳过。
+            // Validate the local file header magic PK\x03\x04: the lenient scan may match
+            // a phantom record (random bytes accidentally forming PK\x01\x02) whose offset
+            // field is garbage; skip such records.
+            if (!IsValidLocalHeaderOffset(fs, localHeaderOffset))
+            {
+                pos++;
+                continue;
+            }
+
             entries.Add(new OppEntry
             {
                 Name = name,
                 Size = size,
+                CompressedSize = compressedSize,
                 EncryptedSize = 0,
-                IsCompressed = false,
+                IsCompressed = compressionMethod != 0,
                 PartitionType = "ozip",
                 FileName = Path.GetFileName(name),
+                Offset = localHeaderOffset,
             });
 
             pos += recordLen;
         }
 
         return entries;
+    }
+
+    /// <summary>
+    /// <para>检查指定偏移处是否为有效的 zip 本地文件头（PK\x03\x04），且偏移在文件范围内。</para>
+    /// Checks whether the given offset holds a valid ZIP local file header (PK\x03\x04)
+    /// and lies within the file.
+    /// </summary>
+    private static bool IsValidLocalHeaderOffset(FileStream fs, long offset)
+    {
+        if (offset < 0 || offset + 4 > fs.Length)
+        {
+            return false;
+        }
+
+        Span<byte> magic = stackalloc byte[4];
+        fs.Position = offset;
+        if (fs.Read(magic) != 4)
+        {
+            return false;
+        }
+
+        return magic[0] == 0x50 && magic[1] == 0x4B && magic[2] == 0x03 && magic[3] == 0x04;
     }
 
     /// <summary>

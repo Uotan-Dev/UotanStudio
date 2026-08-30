@@ -1,5 +1,7 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.Oppo.Crypto;
 using UotanStudio.Firmware.Oppo.Diagnostics;
 using UotanStudio.Firmware.Oppo.Helpers;
@@ -500,54 +502,114 @@ public sealed class OppReader
                 OzipDecryptor.DecryptFileWithAutoDetection(stream, fs);
             }
 
-            using var zip = ZipFile.OpenRead(tempFile);
-
-            foreach (var entry in archive.Entries)
+            try
             {
-                progress?.Report(new OppExtractProgress(total, completed, entry.Name));
-
-                var sanitized = SanitizeFileName(entry.Name);
-                if (string.IsNullOrWhiteSpace(sanitized) || sanitized == "." || sanitized == "..")
+                using var zip = ZipFile.OpenRead(tempFile);
+                foreach (var entry in archive.Entries)
                 {
-                    sanitized = $"entry_{completed}";
-                }
+                    progress?.Report(new OppExtractProgress(total, completed, entry.Name));
 
-                var outputPath = Path.Combine(outputDir, sanitized);
-                ValidateOutputPath(outputDir, outputPath);
+                    var sanitized = SanitizeFileName(entry.Name);
+                    if (string.IsNullOrWhiteSpace(sanitized) || sanitized == "." || sanitized == "..")
+                    {
+                        sanitized = $"entry_{completed}";
+                    }
 
-                if (File.Exists(outputPath) && !overwrite)
-                {
+                    var outputPath = Path.Combine(outputDir, sanitized);
+                    ValidateOutputPath(outputDir, outputPath);
+
+                    if (File.Exists(outputPath) && !overwrite)
+                    {
+                        completed++;
+                        continue;
+                    }
+
+                    var zipEntry = zip.GetEntry(entry.Name);
+                    if (zipEntry == null)
+                    {
+                        completed++;
+                        continue;
+                    }
+
+                    var outputDirForEntry = Path.GetDirectoryName(outputPath);
+                    if (!string.IsNullOrEmpty(outputDirForEntry) && !Directory.Exists(outputDirForEntry))
+                    {
+                        Directory.CreateDirectory(outputDirForEntry);
+                    }
+
+                    using var entryStream = zipEntry.Open();
+                    using var outputStream = new FileStream(
+                        outputPath,
+                        FileMode.Create,
+                        FileAccess.Write,
+                        FileShare.None,
+                        DefaultBufferSize,
+                        FileOptions.SequentialScan);
+                    entryStream.CopyTo(outputStream);
+
+                    extractedCount++;
                     completed++;
-                    continue;
-                }
 
-                var zipEntry = zip.GetEntry(entry.Name);
-                if (zipEntry == null)
+                    progress?.Report(new OppExtractProgress(total, completed, entry.Name));
+                }
+            }
+            catch (InvalidDataException)
+            {
+                // 中央目录损坏（EOCD 条目数与实际记录数不一致等）时 ZipArchive 无法打开，
+                // 回退到按本地文件头偏移手动提取，保证解包出的仍是解密后 zip 内条目。
+                // When the central directory is corrupt (EOCD entry count mismatching the
+                // actual records) ZipArchive cannot open; fall back to manual extraction by
+                // local-header offset so the unpacked files are still the decrypted ZIP's
+                // inner entries.
+                using var raw = new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.SequentialScan);
+                foreach (var entry in archive.Entries)
                 {
+                    progress?.Report(new OppExtractProgress(total, completed, entry.Name));
+
+                    var sanitized = SanitizeFileName(entry.Name);
+                    if (string.IsNullOrWhiteSpace(sanitized) || sanitized == "." || sanitized == "..")
+                    {
+                        sanitized = $"entry_{completed}";
+                    }
+
+                    var outputPath = Path.Combine(outputDir, sanitized);
+                    ValidateOutputPath(outputDir, outputPath);
+
+                    if (File.Exists(outputPath) && !overwrite)
+                    {
+                        completed++;
+                        continue;
+                    }
+
+                    if (entry.Offset <= 0)
+                    {
+                        // 中央目录扫描未提供本地文件头偏移（理论上不出现），跳过该条目。
+                        // No local-header offset from the central-directory scan (should not
+                        // happen); skip the entry.
+                        completed++;
+                        continue;
+                    }
+
+                    var outputDirForEntry = Path.GetDirectoryName(outputPath);
+                    if (!string.IsNullOrEmpty(outputDirForEntry) && !Directory.Exists(outputDirForEntry))
+                    {
+                        Directory.CreateDirectory(outputDirForEntry);
+                    }
+
+                    using var outputStream = new FileStream(
+                        outputPath,
+                        FileMode.Create,
+                        FileAccess.Write,
+                        FileShare.None,
+                        DefaultBufferSize,
+                        FileOptions.SequentialScan);
+                    ExtractZipEntryByLocalHeader(raw, entry, outputStream);
+
+                    extractedCount++;
                     completed++;
-                    continue;
+
+                    progress?.Report(new OppExtractProgress(total, completed, entry.Name));
                 }
-
-                var outputDirForEntry = Path.GetDirectoryName(outputPath);
-                if (!string.IsNullOrEmpty(outputDirForEntry) && !Directory.Exists(outputDirForEntry))
-                {
-                    Directory.CreateDirectory(outputDirForEntry);
-                }
-
-                using var entryStream = zipEntry.Open();
-                using var outputStream = new FileStream(
-                    outputPath,
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None,
-                    DefaultBufferSize,
-                    FileOptions.SequentialScan);
-                entryStream.CopyTo(outputStream);
-
-                extractedCount++;
-                completed++;
-
-                progress?.Report(new OppExtractProgress(total, completed, entry.Name));
             }
 
             return new OppExtractResult
@@ -560,6 +622,73 @@ public sealed class OppReader
         finally
         {
             try { File.Delete(tempFile); } catch { /* best effort */ }
+        }
+    }
+
+    /// <summary>
+    /// <para>按本地文件头（LFH）偏移手动提取 zip 条目：定位 PK\x03\x04 头，读取文件名/extra
+    /// 长度与压缩方法，跳过头部后按 store/deflate 解压数据。供中央目录损坏时回退使用。</para>
+    /// Manually extracts a ZIP entry by its local file header (LFH) offset: locates the
+    /// PK\x03\x04 header, reads name/extra lengths and the compression method, skips the
+    /// header, then decompresses store/deflate data. Used as the fallback when the central
+    /// directory is corrupt.
+    /// </summary>
+    private static void ExtractZipEntryByLocalHeader(Stream zip, OppEntry entry, Stream output)
+    {
+        zip.Position = entry.Offset;
+        Span<byte> lfh = stackalloc byte[30];
+        zip.ReadExactly(lfh);
+
+        // 本地文件头签名 PK\x03\x04。
+        // Local file header signature PK\x03\x04.
+        if (lfh[0] != 0x50 || lfh[1] != 0x4B || lfh[2] != 0x03 || lfh[3] != 0x04)
+        {
+            throw new InvalidDataException($"Invalid local file header at offset {entry.Offset}.");
+        }
+
+        var method = BinaryPrimitives.ReadUInt16LittleEndian(lfh[8..]);
+        var nameLen = BinaryPrimitives.ReadUInt16LittleEndian(lfh[26..]);
+        var extraLen = BinaryPrimitives.ReadUInt16LittleEndian(lfh[28..]);
+
+        // data descriptor 条目（flag bit 3）在本地文件头中大小为 0，真实压缩大小
+        // 来自中央目录记录；store 条目压缩大小等于未压缩大小。
+        // Data-descriptor entries (flag bit 3) carry zero sizes in the local header; the
+        // real compressed size comes from the central-directory record. Stored entries
+        // have a compressed size equal to their uncompressed size.
+        var compressedSize = entry.CompressedSize > 0
+            ? entry.CompressedSize
+            : BinaryPrimitives.ReadUInt32LittleEndian(lfh[18..]);
+        var uncompressedSize = entry.Size > 0
+            ? entry.Size
+            : BinaryPrimitives.ReadUInt32LittleEndian(lfh[22..]);
+
+        var dataStart = entry.Offset + 30L + nameLen + extraLen;
+        if (dataStart > zip.Length)
+        {
+            throw new InvalidDataException($"Local header of '{entry.Name}' points beyond the file end.");
+        }
+
+        zip.Position = dataStart;
+        using var bounded = new BoundedReadStream(zip, dataStart, compressedSize, leaveOpen: true);
+
+        switch (method)
+        {
+            case 0: // store：直接复制压缩字节（等于未压缩字节）。
+                // store: copy the bytes verbatim (compressed size equals uncompressed size).
+                StreamCopy.CopyExactly(bounded, output, compressedSize);
+                break;
+
+            case 8: // deflate：解压并限制输出上限，防解压炸弹。
+                // deflate: decompress with an output cap to guard against zip bombs.
+                using (var counting = new CountingWriteStream(output, uncompressedSize, leaveOpen: true))
+                using (var deflate = new DeflateStream(bounded, CompressionMode.Decompress, leaveOpen: true))
+                {
+                    deflate.CopyTo(counting);
+                }
+                break;
+
+            default:
+                throw new InvalidDataException($"Unsupported ZIP compression method {method} for '{entry.Name}'.");
         }
     }
 

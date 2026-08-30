@@ -213,26 +213,51 @@ public static class ApkParser
     /// </summary>
     private static string? ResolveIconPath(ResourceTable table, ZipArchive zip, uint iconReference)
     {
+        // 1. 按引用查表；无引用时兜底扫描（仅此情况才用兜底，避免引用解析失败却
+        //    返回任意无关图片路径）。
+        // 1. Look up the icon by resource reference; the fallback scan is used only
+        //    when there is no reference at all, so a failed lookup never resolves to
+        //    an unrelated image path.
         var path = iconReference != 0 ? LookupEntryPath(table, iconReference) : null;
-        path ??= ScanForImagePath(table);
+        if (path is null && iconReference == 0)
+        {
+            path = ScanForImagePath(table);
+        }
 
+        // 2. XML 图标（layer-list/adaptive-icon/vector）：递归解析引用链找位图；
+        //    找不到位图时保留 XML 路径本身（UI 按魔数识别为不可渲染并显示占位），
+        //    而不是回退到兜底扫描的错误小图。
+        // 2. XML icons (layer-list/adaptive-icon/vector): recursively walk the
+        //    reference chain for a bitmap; when none exists, keep the XML path
+        //    itself (the UI detects the AXML magic and shows a placeholder)
+        //    instead of falling back to a wrong scan result.
         if (path is not null && path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
         {
-            path = ResolveXmlIconPath(table, zip, path) ?? ScanForImagePath(table);
+            path = ResolveXmlIconPath(table, zip, path) ?? path;
         }
 
         return path is not null && zip.GetEntry(path) is not null ? path : null;
     }
 
     /// <summary>
-    /// <para>解析自适应图标 XML（AXML）：收集其中所有资源引用属性
-    /// （<c>background</c>/<c>foreground</c>/<c>drawable</c> 等），逐个查表返回首个位图路径。</para>
-    /// Resolves an adaptive-icon XML (AXML): collects every resource-reference attribute
-    /// (<c>background</c>/<c>foreground</c>/<c>drawable</c> etc.) and returns the first bitmap path
-    /// found by lookup.
+    /// <para>解析自适应/图层图标 XML（AXML）：收集其中所有资源引用属性
+    /// （<c>background</c>/<c>foreground</c>/<c>drawable</c> 等），逐个查表返回首个位图路径。
+    /// 引用可能仍指向另一个 XML（layer-list → vector 等），故递归解析直至位图；
+    /// 用已访问集合防循环引用。</para>
+    /// Resolves an adaptive/layer-list icon XML (AXML): collects every resource-reference
+    /// attribute (<c>background</c>/<c>foreground</c>/<c>drawable</c> etc.) and returns the
+    /// first bitmap path found by lookup. References may point to further XML files
+    /// (layer-list → vector etc.), so the chain is walked recursively until a bitmap is
+    /// found; a visited set guards against circular references.
     /// </summary>
-    private static string? ResolveXmlIconPath(ResourceTable table, ZipArchive zip, string xmlPath)
+    private static string? ResolveXmlIconPath(ResourceTable table, ZipArchive zip, string xmlPath, HashSet<string>? visited = null)
     {
+        visited ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (!visited.Add(xmlPath))
+        {
+            return null;
+        }
+
         var entry = zip.GetEntry(xmlPath);
         if (entry is null)
         {
@@ -264,14 +289,40 @@ public static class ApkParser
             return null;
         }
 
+        // Vector drawable 根：该 XML 本身可渲染，直接返回其路径（供 UI 解析为位图），
+        // 而不是继续找位图引用。
+        // A <vector> root is itself renderable: return its path directly (the UI parses it
+        // into a bitmap) instead of searching for bitmap references.
+        if (string.Equals(doc.Root.Name, "vector", StringComparison.Ordinal))
+        {
+            return xmlPath;
+        }
+
         var references = new List<uint>();
         CollectReferences(doc.Root, references);
         foreach (var refId in references)
         {
             var resolved = LookupEntryPath(table, refId);
-            if (resolved is not null && IsImagePath(resolved) && zip.GetEntry(resolved) is not null)
+            if (resolved is null)
+            {
+                continue;
+            }
+
+            if (IsImagePath(resolved) && zip.GetEntry(resolved) is not null)
             {
                 return resolved;
+            }
+
+            // 引用仍指向 XML：递归解析（layer-list → vector / adaptive-icon 嵌套）。
+            // The reference points at another XML: recurse (layer-list → vector,
+            // adaptive-icon nesting).
+            if (resolved.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                var nested = ResolveXmlIconPath(table, zip, resolved, visited);
+                if (nested is not null)
+                {
+                    return nested;
+                }
             }
         }
         return null;
@@ -358,15 +409,19 @@ public static class ApkParser
     }
 
     /// <summary>
-    /// <para>兜底：扫描所有资源类型的条目，返回第一个含图片扩展名的文件路径。
-    /// 不限定 drawable/mipmap 类型编号——实际 APK 的图标资源类型编号不固定
-    /// （Magisk 等位于 type 8），扩展名过滤已足够精确。</para>
-    /// Fallback: scans entries of every resource type, returning the first path with an image
-    /// extension. Not limited to drawable/mipmap type IDs — real APKs place icon resources under
-    /// varying type IDs (Magisk uses type 8), and the extension filter is precise enough.
+    /// <para>兜底：扫描所有资源类型的条目，优先返回资源名含 launcher/icon 的图片路径，
+    /// 其次返回任意图片扩展名路径。不限定 drawable/mipmap 类型编号——实际 APK 的图标
+    /// 资源类型编号不固定（Magisk 等位于 type 8），扩展名过滤已足够精确；按资源名
+    /// 排序可避免兜底命中与图标无关的首个图片（如渐变背景、占位小图）。</para>
+    /// Fallback: scans entries of every resource type, preferring image paths whose resource
+    /// name contains launcher/icon, then any image path. Not limited to drawable/mipmap type
+    /// IDs — real APKs place icon resources under varying type IDs (Magisk uses type 8), and
+    /// the extension filter is precise enough; ranking by resource name keeps the fallback
+    /// from returning an unrelated first image (gradient backgrounds, placeholder dots etc.).
     /// </summary>
     private static string? ScanForImagePath(ResourceTable table)
     {
+        string? fallback = null;
         foreach (var pkg in table.Packages)
         {
             foreach (var type in pkg.Types)
@@ -379,16 +434,28 @@ public static class ApkParser
                     }
 
                     var path = table.GlobalPool.GetString(checked((int)entry.Value.Data));
-                    if (path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-                        || path.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
-                        || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
+                    if (!IsImagePath(path))
+                    {
+                        continue;
+                    }
+
+                    if (fallback is null)
+                    {
+                        fallback = path;
+                    }
+
+                    // 资源名含 launcher/icon 的条目优先（如 ic_launcher.png）。
+                    // Prefer entries whose resource name mentions launcher/icon.
+                    var key = pkg.KeyStrings.GetString(entry.KeyIndex);
+                    if (key.Contains("launcher", StringComparison.OrdinalIgnoreCase)
+                        || key.Contains("icon", StringComparison.OrdinalIgnoreCase))
                     {
                         return path;
                     }
                 }
             }
         }
-        return null;
+        return fallback;
     }
 
     private static long ParseLong(string? text)

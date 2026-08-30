@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
@@ -159,9 +161,10 @@ public partial class ApkEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>从图标字节生成位图：仅 PNG/WebP/JPG 可渲染，其余（矢量 AXML 等）显示占位。</para>
-    /// Creates a bitmap from the icon bytes: only PNG/WebP/JPG are renderable; others (vector AXML
-    /// etc.) show a placeholder.
+    /// <para>从图标字节生成位图：PNG/WebP/JPG 直接解码；AXML vector drawable 解析并渲染；
+    /// 其余格式显示占位。</para>
+    /// Creates a bitmap from the icon bytes: PNG/WebP/JPG decode directly; AXML vector
+    /// drawables are parsed and rendered; other formats show a placeholder.
     /// </summary>
     private void LoadIcon(ApkInfo info)
     {
@@ -174,8 +177,18 @@ public partial class ApkEditorViewModel : Document
             return;
         }
 
-        // 魔数：PNG 89 50 4E 47；JPEG FF D8 FF；WebP RIFF..WEBP；其余（AXML 03 00 08 00 等）不渲染。
-        // Magic: PNG 89 50 4E 47; JPEG FF D8 FF; WebP RIFF..WEBP; others (AXML 03 00 08 00 etc.) skipped.
+        // AXML 魔数 03 00 08 00：vector drawable，解析并渲染为位图。
+        // AXML magic 03 00 08 00: vector drawable, parse and render it to a bitmap.
+        var isAxml = bytes[0] == 0x03 && bytes[1] == 0x00 && bytes[2] == 0x08 && bytes[3] == 0x00;
+        if (isAxml)
+        {
+            IconBitmap = RenderVectorIcon(bytes);
+            HasIcon = IconBitmap is not null;
+            return;
+        }
+
+        // 魔数：PNG 89 50 4E 47；JPEG FF D8 FF；WebP RIFF..WEBP；其余不渲染。
+        // Magic: PNG 89 50 4E 47; JPEG FF D8 FF; WebP RIFF..WEBP; others skipped.
         var isPng = bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47;
         var isJpeg = bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
         var isWebp = bytes[0] == (byte)'R' && bytes[1] == (byte)'I' && bytes[2] == (byte)'F' && bytes[3] == (byte)'F';
@@ -194,6 +207,76 @@ public partial class ApkEditorViewModel : Document
         {
             // 解码失败时保持占位。
             // Keep the placeholder when decoding fails.
+        }
+    }
+
+    /// <summary>
+    /// <para>解析 AXML vector drawable 并渲染为位图；解析或渲染失败时返回 <c>null</c>。</para>
+    /// Parses an AXML vector drawable and renders it to a bitmap; returns <c>null</c> when
+    /// parsing or rendering fails.
+    /// </summary>
+    private static Bitmap? RenderVectorIcon(byte[] bytes)
+    {
+        var vd = VectorDrawableParser.Parse(bytes);
+        if (vd is null || vd.Paths.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            // 位图输出尺寸取逻辑尺寸（dp）；视口坐标经缩放映射到该尺寸。
+            // The bitmap size is the logical size (dp); viewport coordinates are mapped
+            // onto it with a uniform scale.
+            var width = Math.Max(1, (int)Math.Round(vd.Width));
+            var height = Math.Max(1, (int)Math.Round(vd.Height));
+            var scaleX = vd.ViewportWidth > 0 ? width / vd.ViewportWidth : 1.0;
+            var scaleY = vd.ViewportHeight > 0 ? height / vd.ViewportHeight : 1.0;
+
+            var bitmap = new RenderTargetBitmap(new PixelSize(width, height), new Vector(96, 96));
+            using (var ctx = bitmap.CreateDrawingContext(true))
+            {
+                using (ctx.PushTransform(Matrix.CreateScale(scaleX, scaleY)))
+                {
+                    foreach (var path in vd.Paths)
+                    {
+                        Geometry geometry;
+                        try
+                        {
+                            geometry = Geometry.Parse(path.PathData);
+                        }
+                        catch
+                        {
+                            continue; // 单条路径数据损坏时跳过，不影响其余路径。
+                            // Skip a single malformed path; the others still render.
+                        }
+
+                        if (path.FillColor is { } fill)
+                        {
+                            ctx.DrawGeometry(
+                                new SolidColorBrush(Color.FromUInt32(fill), path.FillAlpha),
+                                null,
+                                geometry);
+                        }
+
+                        if (path.StrokeColor is { } stroke && path.StrokeWidth > 0)
+                        {
+                            ctx.DrawGeometry(
+                                null,
+                                new Pen(new SolidColorBrush(Color.FromUInt32(stroke), path.StrokeAlpha), path.StrokeWidth),
+                                geometry);
+                        }
+                    }
+                }
+            }
+
+            return bitmap;
+        }
+        catch
+        {
+            // 渲染失败（平台绘图不可用等）时保持占位。
+            // Keep the placeholder when rendering fails.
+            return null;
         }
     }
 

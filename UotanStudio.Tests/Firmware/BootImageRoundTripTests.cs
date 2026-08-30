@@ -15,6 +15,9 @@ public class BootImageRoundTripTests
     private static readonly byte[] TestRamdisk = BuildBytes(1024, factor: 3);
     private static readonly byte[] TestDtb = BuildBytes(512, factor: 11);
     private static readonly byte[] TestSignature = BuildBytes(256, factor: 13);
+    private static readonly byte[] TestVendorRamdisk = BuildBytes(4096, factor: 5);
+    private static readonly byte[] TestVendorDtb = BuildBytes(2048, factor: 17);
+    private static readonly byte[] TestVendorBootconfig = BuildBytes(512, factor: 23);
 
     [Fact]
     public void V2_UnpackRepack_PreservesComponentsAndKeyFields()
@@ -147,6 +150,128 @@ public class BootImageRoundTripTests
         Assert.Equal(TestKernel, parser2.Kernel);
         Assert.Equal(TestRamdisk, parser2.Ramdisk);
         Assert.Equal(TestSignature, parser2.Signature);
+    }
+
+    [Fact]
+    public void VendorBoot_V3_RoundTrip_PreservesComponentsAndKeyFields()
+    {
+        var packer = new VendorBootPacker
+        {
+            Header = new VendorBootHeader
+            {
+                HeaderVersion = 3,
+                PageSize = 4096,
+                KernelLoadAddress = 0x00100000,
+                RamdiskLoadAddress = 0x01000000,
+                TagsLoadAddress = 0x00000100,
+                VendorCmdline = "androidboot.vendor=test",
+            },
+            VendorRamdisk = TestVendorRamdisk,
+            Dtb = TestVendorDtb,
+        };
+
+        var image = packer.Pack();
+        Assert.StartsWith("VNDRBOOT", System.Text.Encoding.ASCII.GetString(image, 0, 8));
+
+        using var parser = new VendorBootParser();
+        parser.Parse(image);
+
+        Assert.Equal(3u, parser.Header.HeaderVersion);
+        Assert.Equal(packer.Header.PageSize, parser.Header.PageSize);
+        Assert.Equal(TestVendorRamdisk, parser.VendorRamdisk);
+        Assert.Equal(TestVendorDtb, parser.Dtb);
+        Assert.Equal(packer.Header.KernelLoadAddress, parser.Header.KernelLoadAddress);
+        Assert.Equal(packer.Header.RamdiskLoadAddress, parser.Header.RamdiskLoadAddress);
+        Assert.Equal(packer.Header.TagsLoadAddress, parser.Header.TagsLoadAddress);
+        Assert.Equal(packer.Header.VendorCmdline, parser.Header.VendorCmdline);
+        Assert.Equal(2112u, parser.Header.VendorHeaderSize);
+        Assert.Equal(0u, parser.Header.VendorBootconfigSize);
+        Assert.Empty(parser.RamdiskTable);
+
+        // Repack from the parser, then re-parse and verify components and key fields remain stable.
+        var repacked = VendorBootPacker.Repack(parser);
+        using var parser2 = new VendorBootParser();
+        parser2.Parse(repacked);
+
+        Assert.Equal(TestVendorRamdisk, parser2.VendorRamdisk);
+        Assert.Equal(TestVendorDtb, parser2.Dtb);
+        Assert.Equal(parser.Header.PageSize, parser2.Header.PageSize);
+        Assert.Equal(parser.Header.VendorHeaderSize, parser2.Header.VendorHeaderSize);
+        Assert.Equal(parser.Header.VendorCmdline, parser2.Header.VendorCmdline);
+    }
+
+    [Fact]
+    public void VendorBoot_V4_RoundTrip_PreservesComponentsTableAndBootconfig()
+    {
+        var packer = new VendorBootPacker
+        {
+            Header = new VendorBootHeader
+            {
+                HeaderVersion = 4,
+                PageSize = 4096,
+                KernelLoadAddress = 0x00100000,
+                RamdiskLoadAddress = 0x01000000,
+                TagsLoadAddress = 0x00000100,
+                VendorCmdline = "androidboot.vendor.slot_suffix=_a",
+            },
+            VendorRamdisk = TestVendorRamdisk,
+            Dtb = TestVendorDtb,
+            Bootconfig = TestVendorBootconfig,
+        };
+        packer.RamdiskTable.Add(new VendorRamdiskTableEntry
+        {
+            RamdiskOffset = 0,
+            RamdiskSize = 1024,
+            RamdiskType = 1,
+            RamdiskName = "platform",
+        });
+        packer.RamdiskTable.Add(new VendorRamdiskTableEntry
+        {
+            RamdiskOffset = 1024,
+            RamdiskSize = 1024,
+            RamdiskType = 3,
+            RamdiskName = "dlkm",
+        });
+
+        var image = packer.Pack();
+        Assert.StartsWith("VNDRBOOT", System.Text.Encoding.ASCII.GetString(image, 0, 8));
+
+        using var parser = new VendorBootParser();
+        parser.Parse(image);
+
+        Assert.Equal(4u, parser.Header.HeaderVersion);
+        Assert.Equal(TestVendorRamdisk, parser.VendorRamdisk);
+        Assert.Equal(TestVendorDtb, parser.Dtb);
+        Assert.Equal(TestVendorBootconfig, parser.Bootconfig);
+        Assert.Equal(packer.Header.VendorRamdiskTableSize, parser.Header.VendorRamdiskTableSize);
+        Assert.Equal(packer.Header.VendorRamdiskTableEntryNum, parser.Header.VendorRamdiskTableEntryNum);
+        Assert.Equal(packer.Header.VendorRamdiskTableEntrySize, parser.Header.VendorRamdiskTableEntrySize);
+        Assert.Equal(packer.Header.VendorBootconfigSize, parser.Header.VendorBootconfigSize);
+        Assert.Equal(packer.Header.VendorRamdiskTableOffset, parser.Header.VendorRamdiskTableOffset);
+
+        Assert.Equal(2, parser.RamdiskTable.Count);
+        Assert.Equal(0u, parser.RamdiskTable[0].RamdiskOffset);
+        Assert.Equal(1024u, parser.RamdiskTable[0].RamdiskSize);
+        Assert.Equal(1u, parser.RamdiskTable[0].RamdiskType);
+        Assert.Equal("platform", parser.RamdiskTable[0].RamdiskName);
+        Assert.Equal(1024u, parser.RamdiskTable[1].RamdiskOffset);
+        Assert.Equal(1024u, parser.RamdiskTable[1].RamdiskSize);
+        Assert.Equal(3u, parser.RamdiskTable[1].RamdiskType);
+        Assert.Equal("dlkm", parser.RamdiskTable[1].RamdiskName);
+
+        // Repack from the parser, then re-parse and verify components and the table remain stable.
+        var repacked = VendorBootPacker.Repack(parser);
+        using var parser2 = new VendorBootParser();
+        parser2.Parse(repacked);
+
+        Assert.Equal(TestVendorRamdisk, parser2.VendorRamdisk);
+        Assert.Equal(TestVendorDtb, parser2.Dtb);
+        Assert.Equal(TestVendorBootconfig, parser2.Bootconfig);
+        Assert.Equal(2, parser2.RamdiskTable.Count);
+        Assert.Equal(parser.RamdiskTable[0].RamdiskOffset, parser2.RamdiskTable[0].RamdiskOffset);
+        Assert.Equal(parser.RamdiskTable[0].RamdiskSize, parser2.RamdiskTable[0].RamdiskSize);
+        Assert.Equal(parser.RamdiskTable[0].RamdiskName, parser2.RamdiskTable[0].RamdiskName);
+        Assert.Equal(parser.RamdiskTable[1].RamdiskName, parser2.RamdiskTable[1].RamdiskName);
     }
 
     private static byte[] BuildBytes(int length, int factor)
