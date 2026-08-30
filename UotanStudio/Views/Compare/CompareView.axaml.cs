@@ -4,6 +4,7 @@ using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using System.ComponentModel;
 using System.Globalization;
@@ -30,6 +31,16 @@ public partial class CompareView : UserControl
     private bool _syncing;
     private bool _syncingSelection;
 
+    // 最近一次镜像写入的目标偏移（NaN=无标记）：抑制镜像回声——写入目标栏后，目标栏因布局/
+    // 异步触发的 ScrollChanged 会把偏移按行索引回写给源栏，拖动中改写源偏移会放大鼠标位移
+    // （上拉过量）；记录写入值并在回声到达时忽略，可切断该回环。
+    // Last mirrored write's target offset (NaN = none): suppresses mirror echoes — after writing
+    // the target pane, the target's layout/asynchronous ScrollChanged could mirror the offset back
+    // to the source pane by row index, and rewriting the source offset mid-drag amplifies the mouse
+    // movement (up-drag overshoot); recording the written value and ignoring the echo breaks it.
+    private double _mirroredLeftY = double.NaN;
+    private double _mirroredRightY = double.NaN;
+
     /// <summary>
     /// <para>行模板 <c>MinHeight</c>：各行恒为 20px，用于按偏移估算行索引（实测失败时兜底）。</para>
     /// Row-template <c>MinHeight</c>: every row is a fixed 20 px, used to estimate the row index
@@ -54,7 +65,12 @@ public partial class CompareView : UserControl
 
     private void OnViewLoaded(object? sender, RoutedEventArgs e)
     {
-        AttachScrollViewers();
+        // ListBox 的内部 ScrollViewer 随模板实例化后才存在：Loaded 时模板可能尚未应用
+        //（数据未加载/页面未激活），故延迟到布局完成后挂接；数据加载完成后还会再挂接一次。
+        // The inner ScrollViewer of a ListBox exists only after its template is realized: at Loaded
+        // the template may not be applied yet (no data / inactive page), so attach after layout;
+        // attaching again after data loads covers the template-realized case.
+        Dispatcher.UIThread.Post(AttachScrollViewers, DispatcherPriority.Loaded);
         ScrollToSelected();
     }
 
@@ -76,6 +92,8 @@ public partial class CompareView : UserControl
     {
         AttachOneScrollViewer(LeftList, ref _leftScroll);
         AttachOneScrollViewer(RightList, ref _rightScroll);
+        _mirroredLeftY = double.NaN;
+        _mirroredRightY = double.NaN;
     }
 
     /// <summary>
@@ -177,7 +195,7 @@ public partial class CompareView : UserControl
     /// </summary>
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        if (_syncing || sender is not ScrollViewer source)
+        if (sender is not ScrollViewer source)
         {
             return;
         }
@@ -190,6 +208,33 @@ public partial class CompareView : UserControl
         var sourceIsLeft = ReferenceEquals(source, _leftScroll);
         var target = sourceIsLeft ? _rightScroll : _leftScroll;
         if (target is null)
+        {
+            return;
+        }
+
+        // 镜像回声抑制：若本次滚动正是我们最近一次写入该栏的偏移（布局/异步延迟触发），
+        // 视为自己的回写，忽略并清除标记——否则偏移会被按行索引回写给正在拖动的源栏，
+        // 拖动中改写源偏移会放大鼠标位移（上拉过量）。
+        // Mirror-echo suppression: if this scroll is exactly the offset we last wrote to this pane
+        // (fired asynchronously by layout), treat it as our own echo, ignore it and clear the
+        // marker — otherwise the offset would be mirrored back to the pane being dragged by row
+        // index, and rewriting the source offset mid-drag amplifies the mouse movement.
+        var echo = sourceIsLeft ? _mirroredLeftY : _mirroredRightY;
+        if (!double.IsNaN(echo) && Math.Abs(source.Offset.Y - echo) < 0.5)
+        {
+            if (sourceIsLeft)
+            {
+                _mirroredLeftY = double.NaN;
+            }
+            else
+            {
+                _mirroredRightY = double.NaN;
+            }
+
+            return;
+        }
+
+        if (_syncing)
         {
             return;
         }
@@ -208,7 +253,24 @@ public partial class CompareView : UserControl
         _syncing = true;
         try
         {
+            var before = target.Offset.Y;
             ScrollListToIndex(targetList, target, index);
+            var after = target.Offset.Y;
+            if (Math.Abs(after - before) >= 0.5)
+            {
+                // 记录写入的目标偏移供回声抑制：同步触发时由 _syncing 拦截，
+                // 异步（布局）触发时靠该标记拦截。
+                // Record the written target offset for echo suppression: synchronous echoes are
+                // caught by _syncing, asynchronous (layout) echoes by this marker.
+                if (sourceIsLeft)
+                {
+                    _mirroredRightY = after;
+                }
+                else
+                {
+                    _mirroredLeftY = after;
+                }
+            }
         }
         finally
         {
@@ -403,12 +465,25 @@ public partial class CompareView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (!string.Equals(e.PropertyName, nameof(CompareViewModel.SelectedIndex), StringComparison.Ordinal))
+        if (string.Equals(e.PropertyName, nameof(CompareViewModel.SelectedIndex), StringComparison.Ordinal))
         {
+            ScrollToSelected();
             return;
         }
 
-        ScrollToSelected();
+        // 数据加载/模式切换后重新挂接滚动容器：Rows/LeftRows/RightRows 变化意味着列表已填充，
+        // 此时 ListBox 模板与内部 ScrollViewer 才真正实例化，之前的挂接可能失败。
+        // Re-attach the scroll containers after data loads or a mode switch: Rows/LeftRows/RightRows
+        // changes mean the lists are populated and the ListBox templates (and their inner
+        // ScrollViewers) are finally realized, so an earlier attach may have failed.
+        if (e.PropertyName is nameof(CompareViewModel.Rows)
+            or nameof(CompareViewModel.LeftRows)
+            or nameof(CompareViewModel.RightRows)
+            or nameof(CompareViewModel.Mode)
+            or nameof(CompareViewModel.HasComparison))
+        {
+            Dispatcher.UIThread.Post(AttachScrollViewers, DispatcherPriority.Loaded);
+        }
     }
 
     /// <summary>
@@ -436,8 +511,8 @@ public partial class CompareView : UserControl
         }
 
         var item = vm.Rows[index];
-        var leftIndex = IndexOf(vm.LeftRows, item);
-        var rightIndex = IndexOf(vm.RightRows, item);
+        var leftIndex = vm.LeftRows is null ? -1 : IndexOf(vm.LeftRows, item);
+        var rightIndex = vm.RightRows is null ? -1 : IndexOf(vm.RightRows, item);
 
         _syncing = true;
         try
@@ -520,12 +595,17 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// <para>拖放事件：把拖入的文件/文件夹路径交给视图模型打开比较（含 OS 拖拽的平台格式提取）。</para>
+    /// <para>拖放事件：把拖入的文件/文件夹路径交给视图模型打开比较（含 OS 拖拽的平台格式提取）。
+    /// 立即标记 <c>Handled</c> 并消费数据，再异步打开比较——避免异步异常导致拖放状态丢失。</para>
     /// Drop event: hands the dropped file/folder paths to the view model to open a comparison
-    /// (including platform-format extraction for OS drags).
+    /// (including platform-format extraction for OS drags). Marks <c>Handled</c> and consumes the
+    /// payload immediately, then opens the comparison asynchronously — so an async failure cannot
+    /// leave the drop unhandled.
     /// </summary>
     private async void OnDrop(object? sender, DragEventArgs e)
     {
+        e.Handled = true;
+
         if (DataContext is not CompareViewModel vm)
         {
             return;
@@ -536,8 +616,6 @@ public partial class CompareView : UserControl
         {
             await vm.TryOpenDroppedPathsAsync(paths);
         }
-
-        e.Handled = true;
     }
 
     /// <summary>

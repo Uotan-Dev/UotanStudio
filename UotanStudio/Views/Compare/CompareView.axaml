@@ -222,5 +222,14 @@
         </Border>
       </Grid>
     </DockPanel>
+
+    <!-- 加载中的 busy 指示：大文件比对 / 十六进制原始视图扫描期间显示（命令执行时按钮自身
+         也会变灰禁用，二者配合给出明确的进行中反馈）。 -->
+    <!-- Busy indicator while loading: shown during large-file comparisons / hex raw scans (the
+         executing command also disables its button, together giving clear in-progress feedback). -->
+    <Grid IsVisible="{Binding IsBusy}" IsHitTestVisible="False" Background="#22000000">
+      <ProgressBar Width="160" Height="6" IsIndeterminate="True"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Grid>
   </Grid>
 </UserControl>
