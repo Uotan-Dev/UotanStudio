@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Logging;
 using Dock.Settings;
 using UotanStudio.Services;
 using UotanStudio.Services.Cli;
@@ -78,13 +79,55 @@ sealed class Program
             {
                 CommandBarMergingEnabled = true,
                 CommandBarMergingScope = DockCommandBarMergingScope.ActiveDocument
-            })
-            .LogToTrace();
+            });
+
+        // Dock.Avalonia 主题模板在空态（Layout/ActiveDockable 为 null）下会触发大量
+        // "Value is null" 绑定警告（库已知噪音，功能无影响），用过滤 sink 静音。
+        // Dock.Avalonia theme templates emit many "Value is null" binding warnings in the empty
+        // state (null Layout/ActiveDockable) — known library noise with no functional impact,
+        // silenced via a filtered sink.
+        Logger.Sink = new FilteredTraceLogSink();
 #if DEBUG
         // 启动命名管道 MCP 诊断服务器，供 AI 助手/CLI 在线检查与交互当前运行的 Avalonia 应用。
         builder = builder.UseMcpDiagnostics();
 #endif
         return builder;
+    }
+
+    /// <summary>
+    /// <para>把 Avalonia 日志输出到 <see cref="System.Diagnostics.Trace"/>，但过滤
+    /// <see cref="LogArea.Binding"/> 类别的 Warning 及以下级别（Dock 模板空态绑定噪音）。</para>
+    /// Writes Avalonia logs to <see cref="System.Diagnostics.Trace"/> while filtering out
+    /// <see cref="LogArea.Binding"/> messages at Warning level and below (Dock template
+    /// empty-state binding noise).
+    /// </summary>
+    private sealed class FilteredTraceLogSink : ILogSink
+    {
+        /// <inheritdoc />
+        public bool IsEnabled(LogEventLevel level, string area)
+        {
+            if (level <= LogEventLevel.Warning && string.Equals(area, LogArea.Binding, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            return level >= LogEventLevel.Warning;
+        }
+
+        /// <inheritdoc />
+        public void Log(LogEventLevel level, string area, object? source, string messageTemplate)
+        {
+            System.Diagnostics.Trace.WriteLine($"{area}: {messageTemplate}");
+        }
+
+        /// <inheritdoc />
+        public void Log(LogEventLevel level, string area, object? source, string messageTemplate, object?[] propertyValues)
+        {
+            var message = propertyValues is { Length: > 0 }
+                ? string.Format(messageTemplate, propertyValues)
+                : messageTemplate;
+            System.Diagnostics.Trace.WriteLine($"{area}: {message}");
+        }
     }
 
     private static void PrintHelp()
