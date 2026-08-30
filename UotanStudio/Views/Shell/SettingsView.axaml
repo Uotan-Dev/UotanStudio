@@ -82,16 +82,16 @@
                             <DataTemplate x:DataType="mcp:McpServerConfig">
                                 <Grid ColumnDefinitions="120,80,130,140,*,36,52" ColumnSpacing="6" Margin="0,3">
                                     <TextBox Grid.Column="0" Text="{Binding Name}"
-                                             Watermark="{DynamicResource Settings_McpServerName}" />
+                                             PlaceholderText="{DynamicResource Settings_McpServerName}" />
                                     <ComboBox Grid.Column="1"
                                               ItemsSource="{Binding $parent[UserControl].DataContext.McpTransportKinds}"
                                               SelectedItem="{Binding Transport}" />
                                     <TextBox Grid.Column="2" Text="{Binding Command}"
-                                             Watermark="{DynamicResource Settings_McpCommand}" />
+                                             PlaceholderText="{DynamicResource Settings_McpCommand}" />
                                     <TextBox Grid.Column="3" Text="{Binding Arguments}"
-                                             Watermark="{DynamicResource Settings_McpArguments}" />
+                                             PlaceholderText="{DynamicResource Settings_McpArguments}" />
                                     <TextBox Grid.Column="4" Text="{Binding Url}"
-                                             Watermark="{DynamicResource Settings_McpUrl}" />
+                                             PlaceholderText="{DynamicResource Settings_McpUrl}" />
                                     <CheckBox Grid.Column="5" IsChecked="{Binding Enabled}" VerticalAlignment="Center"
                                               ToolTip.Tip="{DynamicResource Settings_McpEnabled}" />
                                     <Button Grid.Column="6" Content="{DynamicResource Settings_McpRemove}"
