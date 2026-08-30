@@ -48,21 +48,21 @@
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="CogOutline" Width="18" Margin="0 -10 0 0" />
-				</ContentPage.Icon>
-				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
-				</ContentPage.Header>
-				<shellviews:SettingsView DataContext="{Binding SettingsVM}" />
-			</ContentPage>
-			<ContentPage>
-				<ContentPage.Icon>
 					<avalonia:MaterialIcon Kind="FileCompare" Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Compare}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 				<compareviews:CompareView DataContext="{Binding CompareVM}" />
+			</ContentPage>
+			<ContentPage>
+				<ContentPage.Icon>
+					<avalonia:MaterialIcon Kind="CogOutline" Width="18" Margin="0 -10 0 0" />
+				</ContentPage.Icon>
+				<ContentPage.Header>
+					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Settings}" FontSize="13" FontWeight="SemiBold" />
+				</ContentPage.Header>
+				<shellviews:SettingsView DataContext="{Binding SettingsVM}" />
 			</ContentPage>
 			<ContentPage TabbedPage.IsTabEnabled="False">
 			</ContentPage>

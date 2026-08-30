@@ -34,8 +34,8 @@ public partial class MainView : UserControl
             {
                 NavigationTarget.Workspace => 3,
                 NavigationTarget.NodeEditor => 4,
-                NavigationTarget.Settings => 5,
-                NavigationTarget.Compare => 6,
+                NavigationTarget.Compare => 5,
+                NavigationTarget.Settings => 6,
                 _ => MainTabs.SelectedIndex
             };
             MainTabs.SelectedIndex = index;
@@ -64,8 +64,8 @@ public partial class MainView : UserControl
         {
             3 => ActiveTab.Workspace,
             4 => ActiveTab.NodeEditor,
-            5 => ActiveTab.Settings,
-            6 => ActiveTab.Compare,
+            5 => ActiveTab.Compare,
+            6 => ActiveTab.Settings,
             _ => ActiveTab.Workspace
         };
         WeakReferenceMessenger.Default.Send(new ActiveTabChangedMessage(tab));
