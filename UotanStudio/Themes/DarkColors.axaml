@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Themes.DarkColors">
     <Color x:Key="PageBackground">#1c1c1e</Color>
     <Color x:Key="CardBackground">#2c2c2e</Color>
     <Color x:Key="TextForeground">#fefefe</Color>
@@ -14,4 +15,15 @@
     <Color x:Key="HexSelectionBrush">#6659c2ff</Color>
     <Color x:Key="HexCaretBrush">#4cc2ff</Color>
     <Color x:Key="HexEditedBrush">#ff8a80</Color>
+    <!-- 二进制差异比对：差异行高亮画刷（深暖色）与前景画刷。 -->
+    <!-- Binary diff compare: diff-line highlight brush (dark warm) and its foreground. -->
+    <SolidColorBrush x:Key="DiffBackgroundBrush" Color="#5A3A00" />
+    <SolidColorBrush x:Key="DiffForegroundBrush" Color="#FFE1A8" />
+
+    <!-- Fluent 兼容键：次要文本画刷（Semi 主题未提供，视图多处 DynamicResource 引用；
+         缺失时解析回退默认色导致不随主题切换）。取 SecondaryTextForeground 颜色。 -->
+    <!-- Fluent-compatible key: secondary text brush (not provided by the Semi theme, yet
+         referenced via DynamicResource in several views; when missing, resolution falls
+         back to the default color and ignores theme switching). Uses SecondaryTextForeground. -->
+    <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="{StaticResource SecondaryTextForeground}" />
 </ResourceDictionary>

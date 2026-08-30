@@ -1,15 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
-    <!-- 临时关闭 AOT 兼容以支持 Avalonia 布局预览器；发布 AOT 时恢复：
-         <IsAotCompatible>true</IsAotCompatible> -->
-    <IsAotCompatible>false</IsAotCompatible>
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   
   <ItemGroup>
+    <!-- 仅显式包含非 XAML 资源（图标等）；.axaml 由 Avalonia 默认 glob（**/*.axaml）纳入，
+         显式重复声明 Locale/Themes 会与默认项重复，导致 AVLN2002 重复 x:Class。 -->
     <AvaloniaResource Include="Assets\**" />
-    <AvaloniaResource Include="Locale\**" />
-    <AvaloniaResource Include="Themes\**" />
   </ItemGroup>
 
 
@@ -47,6 +45,9 @@
     <PackageReference Include="Semi.Avalonia.Dock" />
     <PackageReference Include="NodifyM.Avalonia" />
     <PackageReference Include="AdvancedSharpAdbClient" />
+    <PackageReference Include="DiffPlex" />
+    <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 

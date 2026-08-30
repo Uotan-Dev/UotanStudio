@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.ZhCn.Menu">
 
     <!-- 顶级菜单 -->
     <x:String x:Key="Menu_File">文件</x:String>
@@ -55,6 +56,10 @@
     <!-- 底部选项卡 -->
     <x:String x:Key="Tab_Device">设备</x:String>
 
+    <!-- 镜像面板 -->
+    <x:String x:Key="ImageView_FlashAll">全部刷入</x:String>
+    <x:String x:Key="ImageView_FlashAllHint">将可刷写镜像按顺序批量刷入选中设备</x:String>
+
     <!-- 帮助菜单 -->
     <x:String x:Key="Menu_About">关于 UotanStudio</x:String>
     <x:String x:Key="Menu_Documentation">文档</x:String>
@@ -64,5 +69,8 @@
     <x:String x:Key="About_Version">版本</x:String>
     <x:String x:Key="About_Description">集固件解打包、开发板烧录与可视化编程于一体的一站式工具箱。</x:String>
     <x:String x:Key="About_Close">关闭</x:String>
+
+    <x:String x:Key="Menu_CompareFiles">文件比较</x:String>
+    <x:String x:Key="Menu_CompareFolders">文件夹比较</x:String>
 
 </ResourceDictionary>

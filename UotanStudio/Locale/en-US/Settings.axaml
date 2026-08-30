@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.EnUs.Settings">
 
     <x:String x:Key="Settings_General">General</x:String>
     <x:String x:Key="Settings_Firmware">Firmware Tools</x:String>
@@ -47,5 +48,20 @@
     <x:String x:Key="Settings_AutoDetect">Auto Detect</x:String>
     <x:String x:Key="Settings_AdbPath">ADB Path</x:String>
     <x:String x:Key="Settings_FastbootPath">Fastboot Path</x:String>
+    <x:String x:Key="Settings_Mcp">MCP</x:String>
+    <x:String x:Key="Settings_McpHint">Connect to MCP servers for AI tool orchestration; the toolbox MCP nodes call their tools by name.</x:String>
+    <x:String x:Key="Settings_McpServerName">Name</x:String>
+    <x:String x:Key="Settings_McpTransport">Transport</x:String>
+    <x:String x:Key="Settings_McpCommand">Command</x:String>
+    <x:String x:Key="Settings_McpArguments">Arguments</x:String>
+    <x:String x:Key="Settings_McpUrl">URL</x:String>
+    <x:String x:Key="Settings_McpEnabled">Enabled</x:String>
+    <x:String x:Key="Settings_McpAdd">Add Server</x:String>
+    <x:String x:Key="Settings_McpRemove">Remove</x:String>
+    <x:String x:Key="Settings_McpExpose">Expose as MCP server</x:String>
+    <x:String x:Key="Settings_McpExposePort">Port</x:String>
+    <x:String x:Key="Settings_McpSave">Save MCP Settings</x:String>
+    <x:String x:Key="Settings_OpenSourceNotice">This software uses or references the following open-source projects, each governed by its own license. Most use permissive licenses (MIT / Apache-2.0, etc.) and may be used in commercial projects free of charge; LGPL-3.0 components (e.g., LibUsbDotNet) impose certain obligations on distribution (e.g., providing modified source or dynamic linking). Avalonia is licensed under the MIT License and requires no additional commercial license.</x:String>
+    <x:String x:Key="Settings_OpenRepository">Repository</x:String>
 
 </ResourceDictionary>

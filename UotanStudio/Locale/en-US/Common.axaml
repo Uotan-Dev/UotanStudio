@@ -1,11 +1,13 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.EnUs.Common">
 
     <!-- Tabs -->
     <x:String x:Key="Tab_Workspace">Workspace</x:String>
     <x:String x:Key="Tab_Node">Node</x:String>
     <x:String x:Key="Tab_Log">Log</x:String>
     <x:String x:Key="Tab_Settings">Settings</x:String>
+    <x:String x:Key="Tab_Compare">Compare</x:String>
 
     <!-- ViewLocator -->
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
@@ -73,5 +75,41 @@
     <x:String x:Key="FirmwareInfo_Loading">Loading firmware info, please wait…</x:String>
     <x:String x:Key="FirmwareInfo_Error">Failed to Read</x:String>
     <x:String x:Key="FirmwareInfo_Unrecognized">Unrecognized file format</x:String>
+
+    <!-- PartitionEditor -->
+    <x:String x:Key="Dock_Partition_Save">Save</x:String>
+    <x:String x:Key="Dock_Partition_Partitions">Partitions</x:String>
+    <x:String x:Key="Dock_Partition_Properties">Properties</x:String>
+    <x:String x:Key="Dock_Partition_NoSelection">Select a partition to edit its properties.</x:String>
+    <x:String x:Key="Dock_Partition_Name">Name</x:String>
+    <x:String x:Key="Dock_Partition_Start">Start (sector)</x:String>
+    <x:String x:Key="Dock_Partition_Size">Size (sectors)</x:String>
+    <x:String x:Key="Dock_Partition_Type">Type</x:String>
+    <x:String x:Key="Dock_Partition_TypeHint">e.g. linear / zero / mtd / 0x83 / GPT GUID</x:String>
+
+    <!-- Compare tools -->
+    <x:String x:Key="Compare_Equal">Equal</x:String>
+    <x:String x:Key="Compare_Different">Different</x:String>
+    <x:String x:Key="Compare_LeftOnly">Left Only</x:String>
+    <x:String x:Key="Compare_RightOnly">Right Only</x:String>
+    <x:String x:Key="Compare_Left">Left</x:String>
+    <x:String x:Key="Compare_Right">Right</x:String>
+    <x:String x:Key="Compare_Refresh">Refresh</x:String>
+    <x:String x:Key="Compare_CopyLeftToRight">Copy → Right</x:String>
+    <x:String x:Key="Compare_CopyRightToLeft">Copy → Left</x:String>
+    <x:String x:Key="Compare_DeleteLeft">Delete Left</x:String>
+    <x:String x:Key="Compare_DeleteRight">Delete Right</x:String>
+    <x:String x:Key="Compare_OpenTextCompare">Open Text Compare</x:String>
+    <x:String x:Key="Compare_NextDiff">Next Difference</x:String>
+    <x:String x:Key="Compare_PrevDiff">Previous Difference</x:String>
+    <x:String x:Key="Compare_Summary">Summary</x:String>
+    <x:String x:Key="Compare_FileCompare">File Compare</x:String>
+    <x:String x:Key="Compare_FolderCompare">Folder Compare</x:String>
+    <x:String x:Key="Compare_DropHint">Drag two files or two folders here to compare them&#10;or pick them from the Tools menu.</x:String>
+    <x:String x:Key="Compare_DropRightFile">Drop another file here to compare as the right side</x:String>
+    <x:String x:Key="Compare_DropRightFolder">Drop another folder here to compare as the right side</x:String>
+    <x:String x:Key="Compare_HexRaw">Raw Hex Data</x:String>
+    <x:String x:Key="Compare_Metadata">Metadata</x:String>
+    <x:String x:Key="Compare_Unrecognized">Unrecognized firmware format</x:String>
 
 </ResourceDictionary>

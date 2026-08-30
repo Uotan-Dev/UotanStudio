@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.ZhCn.Dock">
 
     <x:String x:Key="Dock_ProjectExplorer">项目资源管理器</x:String>
     <x:String x:Key="Dock_Properties">属性</x:String>

@@ -1,11 +1,13 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.ZhCn.Common">
 
     <!-- 选项卡 -->
     <x:String x:Key="Tab_Workspace">工作区</x:String>
     <x:String x:Key="Tab_Node">节点</x:String>
     <x:String x:Key="Tab_Log">日志</x:String>
     <x:String x:Key="Tab_Settings">设置</x:String>
+    <x:String x:Key="Tab_Compare">对比</x:String>
 
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
@@ -73,5 +75,41 @@
     <x:String x:Key="FirmwareInfo_Loading">正在读取固件信息，请稍候…</x:String>
     <x:String x:Key="FirmwareInfo_Error">读取失败</x:String>
     <x:String x:Key="FirmwareInfo_Unrecognized">无法识别该文件格式</x:String>
+
+    <!-- PartitionEditor -->
+    <x:String x:Key="Dock_Partition_Save">保存</x:String>
+    <x:String x:Key="Dock_Partition_Partitions">分区</x:String>
+    <x:String x:Key="Dock_Partition_Properties">属性</x:String>
+    <x:String x:Key="Dock_Partition_NoSelection">请选择一个分区以编辑其属性。</x:String>
+    <x:String x:Key="Dock_Partition_Name">名称</x:String>
+    <x:String x:Key="Dock_Partition_Start">起始（扇区）</x:String>
+    <x:String x:Key="Dock_Partition_Size">大小（扇区）</x:String>
+    <x:String x:Key="Dock_Partition_Type">类型</x:String>
+    <x:String x:Key="Dock_Partition_TypeHint">如 linear / zero / mtd / 0x83 / GPT GUID</x:String>
+
+    <!-- Compare tools -->
+    <x:String x:Key="Compare_Equal">相等</x:String>
+    <x:String x:Key="Compare_Different">不同</x:String>
+    <x:String x:Key="Compare_LeftOnly">仅左侧</x:String>
+    <x:String x:Key="Compare_RightOnly">仅右侧</x:String>
+    <x:String x:Key="Compare_Left">左侧</x:String>
+    <x:String x:Key="Compare_Right">右侧</x:String>
+    <x:String x:Key="Compare_Refresh">刷新</x:String>
+    <x:String x:Key="Compare_CopyLeftToRight">复制到右侧</x:String>
+    <x:String x:Key="Compare_CopyRightToLeft">复制到左侧</x:String>
+    <x:String x:Key="Compare_DeleteLeft">删除左侧</x:String>
+    <x:String x:Key="Compare_DeleteRight">删除右侧</x:String>
+    <x:String x:Key="Compare_OpenTextCompare">打开文本比较</x:String>
+    <x:String x:Key="Compare_NextDiff">下一差异</x:String>
+    <x:String x:Key="Compare_PrevDiff">上一差异</x:String>
+    <x:String x:Key="Compare_Summary">汇总</x:String>
+    <x:String x:Key="Compare_FileCompare">文件比较</x:String>
+    <x:String x:Key="Compare_FolderCompare">文件夹比较</x:String>
+    <x:String x:Key="Compare_DropHint">将两个文件或两个文件夹拖入此处进行对比&#10;或从「工具」菜单中选择。</x:String>
+    <x:String x:Key="Compare_DropRightFile">请再拖入一个文件作为右侧进行对比</x:String>
+    <x:String x:Key="Compare_DropRightFolder">请再拖入一个文件夹作为右侧进行对比</x:String>
+    <x:String x:Key="Compare_HexRaw">十六进制原始数据</x:String>
+    <x:String x:Key="Compare_Metadata">元数据</x:String>
+    <x:String x:Key="Compare_Unrecognized">无法识别的固件格式</x:String>
 
 </ResourceDictionary>

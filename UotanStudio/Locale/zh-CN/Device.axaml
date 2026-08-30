@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.ZhCn.Device">
 
     <!-- 设备页面 -->
     <x:String x:Key="Device_Refresh">刷新</x:String>
@@ -77,5 +78,18 @@
     <x:String x:Key="Flash_Done">刷写完成</x:String>
     <x:String x:Key="Flash_Failed">刷写失败</x:String>
     <x:String x:Key="Flash_Canceled">刷写已取消</x:String>
+
+    <!-- 备份 / 还原 -->
+    <x:String x:Key="Device_BackupPartition">备份分区</x:String>
+    <x:String x:Key="Device_RestorePartition">还原分区</x:String>
+    <x:String x:Key="Backup_SaveTitle">保存分区备份</x:String>
+    <x:String x:Key="Backup_OpenTitle">选择分区镜像</x:String>
+    <x:String x:Key="Backup_BackingUp">正在备份</x:String>
+    <x:String x:Key="Backup_Restoring">正在还原</x:String>
+    <x:String x:Key="Backup_Done">备份完成</x:String>
+    <x:String x:Key="Backup_RestoreDone">还原完成</x:String>
+    <x:String x:Key="Backup_Failed">备份失败</x:String>
+    <x:String x:Key="Backup_RestoreFailed">还原失败</x:String>
+    <x:String x:Key="Backup_SelectRawProgram">选择 rawprogram XML（分区几何）</x:String>
 
 </ResourceDictionary>

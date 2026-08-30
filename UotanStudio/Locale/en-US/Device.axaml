@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.EnUs.Device">
 
     <!-- Device Page -->
     <x:String x:Key="Device_Refresh">Refresh</x:String>
@@ -77,5 +78,18 @@
     <x:String x:Key="Flash_Done">Flash done</x:String>
     <x:String x:Key="Flash_Failed">Flash failed</x:String>
     <x:String x:Key="Flash_Canceled">Flash canceled</x:String>
+
+    <!-- Backup / restore -->
+    <x:String x:Key="Device_BackupPartition">Backup Partition</x:String>
+    <x:String x:Key="Device_RestorePartition">Restore Partition</x:String>
+    <x:String x:Key="Backup_SaveTitle">Save Partition Backup</x:String>
+    <x:String x:Key="Backup_OpenTitle">Select Partition Image</x:String>
+    <x:String x:Key="Backup_BackingUp">Backing up</x:String>
+    <x:String x:Key="Backup_Restoring">Restoring</x:String>
+    <x:String x:Key="Backup_Done">Backup done</x:String>
+    <x:String x:Key="Backup_RestoreDone">Restore done</x:String>
+    <x:String x:Key="Backup_Failed">Backup failed</x:String>
+    <x:String x:Key="Backup_RestoreFailed">Restore failed</x:String>
+    <x:String x:Key="Backup_SelectRawProgram">Select rawprogram XML (partition geometry)</x:String>
 
 </ResourceDictionary>

@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.ZhCn.Node">
 
     <!-- 节点编辑器 -->
     <x:String x:Key="Node_Toolbox">工具箱</x:String>
@@ -134,5 +135,9 @@
     <x:String x:Key="Node_Dex_Parse">解析 DEX</x:String>
     <x:String x:Key="Node_Dex_Disassemble">逆向 DEX</x:String>
     <x:String x:Key="Node_Dex_Rebuild">编译 DEX</x:String>
+    <x:String x:Key="Node_Dex_Decompile">反编译 DEX</x:String>
+    <x:String x:Key="Node_CatMCP">MCP 工具</x:String>
+    <x:String x:Key="Node_MCP_ListTools">列举 MCP 工具</x:String>
+    <x:String x:Key="Node_MCP_CallTool">调用 MCP 工具</x:String>
 
 </ResourceDictionary>

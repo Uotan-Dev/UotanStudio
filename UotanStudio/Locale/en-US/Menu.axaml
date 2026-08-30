@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.EnUs.Menu">
 
     <!-- Top-level menus -->
     <x:String x:Key="Menu_File">File</x:String>
@@ -55,6 +56,10 @@
     <!-- Bottom tabs -->
     <x:String x:Key="Tab_Device">Device</x:String>
 
+    <!-- Image panel -->
+    <x:String x:Key="ImageView_FlashAll">Flash All</x:String>
+    <x:String x:Key="ImageView_FlashAllHint">Flash all flashable images to the selected device in order</x:String>
+
     <!-- Help menu -->
     <x:String x:Key="Menu_About">About UotanStudio</x:String>
     <x:String x:Key="Menu_Documentation">Documentation</x:String>
@@ -64,5 +69,8 @@
     <x:String x:Key="About_Version">Version</x:String>
     <x:String x:Key="About_Description">An integrated toolbox for firmware unpack/pack, board flashing and visual programming.</x:String>
     <x:String x:Key="About_Close">Close</x:String>
+
+    <x:String x:Key="Menu_CompareFiles">Compare Files</x:String>
+    <x:String x:Key="Menu_CompareFolders">Compare Folders</x:String>
 
 </ResourceDictionary>

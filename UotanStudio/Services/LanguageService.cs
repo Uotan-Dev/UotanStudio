@@ -6,8 +6,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Locale;
 using UotanStudio.Messages;
 using UotanStudio.Models;
+using UotanStudio.Themes;
 
 namespace UotanStudio.Services;
 
@@ -76,12 +78,6 @@ public sealed class LanguageService
     public static event EventHandler? ThemeChanged;
 
     /// <summary>
-    /// <para>获取语言包的基础 URI 前缀。</para>
-    /// Gets the base URI prefix for language packs.
-    /// </summary>
-    private const string LocaleBaseUri = "avares://UotanStudio/Locale";
-
-    /// <summary>
     /// <para>获取默认回退语言的文化名称。</para>
     /// Gets the culture name of the default fallback language.
     /// </summary>
@@ -121,9 +117,11 @@ public sealed class LanguageService
         var appResources = Application.Current!.Resources;
         var mergedDicts = appResources.MergedDictionaries;
 
-        // 移除所有旧的 Locale 资源
+        // 移除所有旧的 Locale 资源（含早期 ResourceInclude 与当前类型实例）
         var oldLocaleDicts = mergedDicts
-            .Where(d => d is ResourceInclude ri && ri.Source?.OriginalString.Contains("Locale") == true)
+            .Where(d => d is ResourceDictionary rd
+                && (d is ResourceInclude ri && ri.Source?.OriginalString.Contains("Locale") == true
+                    || rd.GetType().Namespace?.StartsWith("UotanStudio.Locale", StringComparison.Ordinal) == true))
             .ToList();
         foreach (var old in oldLocaleDicts)
         {
@@ -145,14 +143,11 @@ public sealed class LanguageService
         // 按模块加载语言资源
         foreach (var module in modules)
         {
-            var uri = new Uri($"{LocaleBaseUri}/{language}/{module}.axaml");
-
             try
             {
-                var resourceInclude = new ResourceInclude(uri) { Source = uri };
-                mergedDicts.Add(resourceInclude);
+                mergedDicts.Add(CreateLocaleDictionary(language, module));
             }
-            catch (Exception ex) when (ex is UriFormatException or ArgumentException)
+            catch (Exception ex) when (ex is ArgumentException)
             {
                 // 模块文件缺失，回退到默认语言
                 Debug.WriteLine($"[LanguageService] Module '{module}' not found for '{language}', falling back to '{FallbackCulture}'");
@@ -173,6 +168,38 @@ public sealed class LanguageService
     }
 
     /// <summary>
+    /// <para>按语言与模块名创建语言模块资源字典（AOT 安全：直接实例化带 <c>x:Class</c> 的
+    /// <see cref="ResourceDictionary"/> 类型，避免运行时 <see cref="ResourceInclude"/> 反射加载）；
+    /// 不支持的组合抛 <see cref="ArgumentException"/>。</para>
+    /// Creates a locale module resource dictionary by culture and module name (AOT-safe: instantiates
+    /// the <c>x:Class</c>'d <see cref="ResourceDictionary"/> type directly, avoiding runtime
+    /// <see cref="ResourceInclude"/> reflection loading); throws <see cref="ArgumentException"/> for
+    /// unsupported combinations.
+    /// </summary>
+    /// <param name="language">区域性名称（如 "en-US"、"zh-CN"）。<para>Culture name (e.g. "en-US", "zh-CN").</para></param>
+    /// <param name="module">模块名。<para>Module name.</para></param>
+    /// <returns><para>语言模块资源字典。</para>The locale module resource dictionary.</returns>
+    private static IResourceProvider CreateLocaleDictionary(string language, string module)
+    {
+        return (language, module) switch
+        {
+            ("en-US", "Common") => new global::UotanStudio.Locale.EnUs.Common(),
+            ("en-US", "Menu") => new global::UotanStudio.Locale.EnUs.Menu(),
+            ("en-US", "Dock") => new global::UotanStudio.Locale.EnUs.Dock(),
+            ("en-US", "Node") => new global::UotanStudio.Locale.EnUs.Node(),
+            ("en-US", "Settings") => new global::UotanStudio.Locale.EnUs.Settings(),
+            ("en-US", "Device") => new global::UotanStudio.Locale.EnUs.Device(),
+            ("zh-CN", "Common") => new global::UotanStudio.Locale.ZhCn.Common(),
+            ("zh-CN", "Menu") => new global::UotanStudio.Locale.ZhCn.Menu(),
+            ("zh-CN", "Dock") => new global::UotanStudio.Locale.ZhCn.Dock(),
+            ("zh-CN", "Node") => new global::UotanStudio.Locale.ZhCn.Node(),
+            ("zh-CN", "Settings") => new global::UotanStudio.Locale.ZhCn.Settings(),
+            ("zh-CN", "Device") => new global::UotanStudio.Locale.ZhCn.Device(),
+            _ => throw new ArgumentException($"Unsupported locale module: {language}/{module}", nameof(module)),
+        };
+    }
+
+    /// <summary>
     /// <para>加载回退语言的指定模块资源。</para>
     /// Loads the specified module resource from the fallback language.
     /// </summary>
@@ -190,9 +217,7 @@ public sealed class LanguageService
     {
         try
         {
-            var fallbackUri = new Uri($"{LocaleBaseUri}/{FallbackCulture}/{module}.axaml");
-            var fallbackInclude = new ResourceInclude(fallbackUri) { Source = fallbackUri };
-            mergedDicts.Add(fallbackInclude);
+            mergedDicts.Add(CreateLocaleDictionary(FallbackCulture, module));
         }
         catch (Exception ex)
         {
@@ -273,8 +298,9 @@ public sealed class LanguageService
     {
         ArgumentNullException.ThrowIfNull(themeKey);
 
-        var uri = new Uri($"avares://UotanStudio/Themes/{themeKey}.axaml");
-        var resourceInclude = new ResourceInclude(uri) { Source = uri };
+        var resourceInclude = themeKey == "DarkColors"
+            ? (IResourceProvider)new DarkColors()
+            : new LightColors();
 
         var appResources = Application.Current!.Resources;
         var mergedDicts = appResources.MergedDictionaries;
@@ -282,7 +308,8 @@ public sealed class LanguageService
         int themeIndex = -1;
         for (int i = 0; i < mergedDicts.Count; i++)
         {
-            if (mergedDicts[i] is ResourceInclude ri && ri.Source?.OriginalString.Contains("Themes") == true)
+            if (mergedDicts[i] is LightColors or DarkColors
+                || (mergedDicts[i] is ResourceInclude ri && ri.Source?.OriginalString.Contains("Themes") == true))
             {
                 themeIndex = i;
                 break;

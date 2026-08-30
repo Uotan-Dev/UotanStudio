@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Locale.EnUs.Node">
 
     <!-- Node Editor -->
     <x:String x:Key="Node_Toolbox">Toolbox</x:String>
@@ -134,5 +135,9 @@
     <x:String x:Key="Node_Dex_Parse">Parse DEX</x:String>
     <x:String x:Key="Node_Dex_Disassemble">Disassemble DEX</x:String>
     <x:String x:Key="Node_Dex_Rebuild">Rebuild DEX</x:String>
+    <x:String x:Key="Node_Dex_Decompile">Decompile DEX</x:String>
+    <x:String x:Key="Node_CatMCP">MCP</x:String>
+    <x:String x:Key="Node_MCP_ListTools">List MCP Tools</x:String>
+    <x:String x:Key="Node_MCP_CallTool">Call MCP Tool</x:String>
 
 </ResourceDictionary>
