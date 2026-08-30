@@ -57,7 +57,7 @@ public sealed class McpClientService
     {
         var config = FindConfig(serverName);
         var client = await GetClientAsync(config, ct).ConfigureAwait(false);
-        var tools = await client.ListToolsAsync((ModelContextProtocol.Protocol.ListToolsRequestParams?)null, ct).ConfigureAwait(false);
+        var tools = await client.ListToolsAsync(new ModelContextProtocol.Protocol.ListToolsRequestParams(), ct).ConfigureAwait(false);
         var names = new List<string>(tools.Tools.Count);
         foreach (var t in tools.Tools)
         {

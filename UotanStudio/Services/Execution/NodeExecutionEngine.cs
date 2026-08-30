@@ -278,7 +278,7 @@ public sealed class NodeExecutionEngine
     private async Task ApplyFlowControlAsync(
         FlowNodeViewModel node,
         IReadOnlyDictionary<string, FlowNodeViewModel> byId,
-        IReadOnlyList<NodeConnection> connections,
+        IReadOnlyList<NodeConnection>? connections,
         List<FlowNodeViewModel> topologicalOrder,
         Dictionary<string, List<(string Connector, FlowNodeViewModel Target)>> flowOut,
         CancellationToken token,

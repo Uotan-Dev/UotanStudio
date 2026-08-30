@@ -30,7 +30,7 @@ public sealed class FolderCompareServiceTests
             File.WriteAllText(Path.Combine(left, "left_only.txt"), "only on the left");
             File.WriteAllText(Path.Combine(right, "right_only.txt"), "only on the right");
 
-            var result = await FolderCompareService.Instance.CompareAsync(left, right);
+            var result = await FolderCompareService.Instance.CompareAsync(left, right, TestContext.Current.CancellationToken);
 
             // 四个文件条目：equal / different / left-only / right-only 各一。
             // Four file entries: one each of equal / different / left-only / right-only.
@@ -82,7 +82,7 @@ public sealed class FolderCompareServiceTests
             File.WriteAllText(Path.Combine(left, "sub", "diff.txt"), "left content");
             File.WriteAllText(Path.Combine(right, "sub", "diff.txt"), "right content");
 
-            var result = await FolderCompareService.Instance.CompareAsync(left, right);
+            var result = await FolderCompareService.Instance.CompareAsync(left, right, TestContext.Current.CancellationToken);
 
             // 子目录条目本身按目录报告，其内部文件用 '/' 拼接的相对路径分类。
             // The subdirectory entry is reported as a directory; files inside use '/' joined paths.
@@ -121,7 +121,7 @@ public sealed class FolderCompareServiceTests
             File.WriteAllText(Path.Combine(left, "payload.bin"), "AAAA");
             File.WriteAllText(Path.Combine(right, "payload.bin"), "ABAA");
 
-            var result = await FolderCompareService.Instance.CompareAsync(left, right);
+            var result = await FolderCompareService.Instance.CompareAsync(left, right, TestContext.Current.CancellationToken);
 
             var item = Assert.Single(result.Items);
             Assert.Equal("payload.bin", item.RelativePath);
@@ -148,7 +148,7 @@ public sealed class FolderCompareServiceTests
             Directory.CreateDirectory(left);
             Directory.CreateDirectory(right);
 
-            var result = await FolderCompareService.Instance.CompareAsync(left, right);
+            var result = await FolderCompareService.Instance.CompareAsync(left, right, TestContext.Current.CancellationToken);
 
             // 两个空目录：无任何可比较条目。
             // Two empty directories: nothing to compare.
@@ -178,7 +178,7 @@ public sealed class FolderCompareServiceTests
             const string payload = "nested payload";
             File.WriteAllText(Path.Combine(source, "sub", "nested.txt"), payload);
 
-            await FolderCompareService.Instance.CopyAsync(source, target, "sub/nested.txt");
+            await FolderCompareService.Instance.CopyAsync(source, target, "sub/nested.txt", TestContext.Current.CancellationToken);
 
             // 目标侧缺失的 sub 目录应由 CopyAsync 自动创建。
             // The missing sub directory on the target side must be created by CopyAsync.
@@ -203,7 +203,7 @@ public sealed class FolderCompareServiceTests
             var file = Path.Combine(target, "to-delete.txt");
             File.WriteAllText(file, "delete me");
 
-            await FolderCompareService.Instance.DeleteAsync(target, "to-delete.txt");
+            await FolderCompareService.Instance.DeleteAsync(target, "to-delete.txt", TestContext.Current.CancellationToken);
 
             Assert.False(File.Exists(file));
         }
