@@ -9,7 +9,9 @@ using UotanStudio.Firmware.Sparse;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Flash;
 using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -57,6 +59,14 @@ internal partial class ImageViewModel : Tool
         // Notify subscribers such as the properties panel to refresh with detailed image parameters.
         WeakReferenceMessenger.Default.Send(new ImageSelectionChangedMessage(value));
     }
+
+    /// <summary>
+    /// <para>获取或设置面板状态文本，回报批量刷入等操作的进度与结果。</para>
+    /// Gets or sets the panel status text, reporting progress and results of operations
+    /// such as batch flashing.
+    /// </summary>
+    [ObservableProperty]
+    private string _statusText = string.Empty;
 
     /// <summary>
     /// <para>创建镜像面板视图模型并注册单例实例。</para>
@@ -745,6 +755,77 @@ internal partial class ImageViewModel : Tool
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize super failed: {ex.Message}  合成 super 失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>把项目内可刷写的镜像（boot/raw/sparse）按顺序批量刷入当前选中设备：分区名优先取
+    /// <see cref="ImageEntryViewModel"/> 已有分区字段，缺省用文件名去扩展名；经
+    /// <see cref="BatchFlashService.FlashAllAsync"/> 逐分区复用 <see cref="FlashService.FlashImageAsync"/>
+    /// 执行，单分区失败会继续，进度与结果回报到状态文本。</para>
+    /// Flashes all flashable images (boot/raw/sparse) in the project to the currently selected device
+    /// in order: the partition name prefers an existing partition field on
+    /// <see cref="ImageEntryViewModel"/>, falling back to the file name without its extension; each
+    /// partition is flashed sequentially via <see cref="BatchFlashService.FlashAllAsync"/> which reuses
+    /// <see cref="FlashService.FlashImageAsync"/>, a single-partition failure does not stop the rest,
+    /// and progress/results are reported to the status text.
+    /// </summary>
+    [RelayCommand]
+    private async Task FlashAllAsync()
+    {
+        if (!ProjectContextService.Instance.IsProjectOpen)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash all aborted: no project is open  全选刷入中止：尚未打开工程");
+            return;
+        }
+
+        var device = DeviceViewModel.Instance?.SelectedDevice;
+        if (device is null)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash all aborted: no device selected  全选刷入中止：未选中设备");
+            return;
+        }
+
+        var entries = new List<(string Partition, string ImagePath)>();
+        foreach (var image in Images)
+        {
+            if (image.Format is not ("boot" or "raw" or "sparse"))
+            {
+                continue;
+            }
+
+            var path = ProjectContextService.Instance.ResolvePath(image.RelativePath);
+            if (path is null || !File.Exists(path))
+            {
+                LogService.Instance.Write(LogLevel.Warn, "Images", $"Flash all skipped missing file: {image.RelativePath}  全选刷入跳过缺失文件：{image.RelativePath}");
+                continue;
+            }
+
+            entries.Add((GetEntryBaseName(image), path));
+        }
+
+        if (entries.Count == 0)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash all aborted: no flashable images  全选刷入中止：无可刷写镜像");
+            return;
+        }
+
+        StatusText = $"Flashing {entries.Count} image(s)  正在刷入 {entries.Count} 个镜像";
+        try
+        {
+            var progress = new Progress<FlashProgress>(fp =>
+            {
+                var percent = Math.Clamp(fp.Percent, 0, 100);
+                StatusText = $"[{percent}%] {fp.Status}";
+            });
+            var result = await BatchFlashService.FlashAllAsync(device, entries, progress, CancellationToken.None).ConfigureAwait(true);
+            StatusText = result.Summary;
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Warn, "Images", result.Summary);
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Flash all failed: {ex.Message}  全选刷入失败：{ex.Message}";
+            LogService.Instance.Write(LogLevel.Error, "Images", $"Flash all failed: {ex.Message}  全选刷入失败：{ex.Message}");
         }
     }
 

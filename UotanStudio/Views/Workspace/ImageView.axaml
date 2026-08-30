@@ -25,6 +25,8 @@
                 <MenuItem Header="{DynamicResource ImageView_SynthesizeSuper}" Click="OnSynthesizeSuperMenuClick" />
                 <MenuItem Header="{DynamicResource ImageView_SynthesizeDat}" Click="OnSynthesizeDatMenuClick" />
                 <Separator />
+                <MenuItem Header="{DynamicResource ImageView_FlashAll}" Click="OnFlashAllMenuClick" />
+                <Separator />
                 <MenuItem Header="{DynamicResource ImageView_DeleteSelected}" Click="OnDeleteMenuClick" />
               </ContextMenu>
             </Grid.ContextMenu>
@@ -94,6 +96,17 @@
               <TextBlock Text="{DynamicResource ImageView_SynthesizeDat}" FontSize="11" />
             </StackPanel>
           </Button>
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <Button MinWidth="90" Command="{Binding FlashAllCommand}"
+                  ToolTip.Tip="{DynamicResource ImageView_FlashAllHint}">
+            <StackPanel Orientation="Horizontal" Spacing="4">
+              <avalonia:MaterialIcon Kind="Flash" Width="14" Height="14" />
+              <TextBlock Text="{DynamicResource ImageView_FlashAll}" FontSize="11" />
+            </StackPanel>
+          </Button>
+          <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
+                     FontSize="12" Opacity="0.7" Margin="8,0" />
         </StackPanel>
       </StackPanel>
     </Border>

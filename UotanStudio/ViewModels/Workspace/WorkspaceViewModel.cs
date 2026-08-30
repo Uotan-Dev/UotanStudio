@@ -5,6 +5,7 @@ using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Compare;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.Views.Controls;
 using UotanStudio.Views.Workspace;

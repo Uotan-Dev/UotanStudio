@@ -92,4 +92,13 @@ public partial class ImageView : UserControl
             vm.DeleteSelectedCommand.Execute(null);
         }
     }
+
+    /// <summary><para>把项目内可刷写镜像全量刷入选中设备。</para>Flash all flashable images to the selected device.</summary>
+    private void OnFlashAllMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ImageViewModel vm)
+        {
+            vm.FlashAllCommand.Execute(null);
+        }
+    }
 }
