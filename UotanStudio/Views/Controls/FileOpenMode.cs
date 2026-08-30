@@ -70,7 +70,15 @@ public enum EditorOpenMode
     /// Open in the file-manager document editor (shows the internal directory tree of filesystem
     /// images such as ext4/EROFS/F2FS).
     /// </summary>
-    FileSystem
+    FileSystem,
+
+    /// <summary>
+    /// <para>以分区表编辑器打开（Android LP super 元数据或 Rockchip parameter 分区表，
+    /// 展示分区名/起始/大小/类型并支持编辑保存）。</para>
+    /// Open in the partition-table editor (Android LP super metadata or Rockchip parameter partition
+    /// tables, showing name/start/size/type with edit-and-save support).
+    /// </summary>
+    Partition
 }
 
 /// <summary>
@@ -149,6 +157,26 @@ public static class FileOpenMode
             return EditorOpenMode.FileSystem;
         }
 
+        // 分区表内容探测（LP super 元数据）：仅当文件名/扩展名可能为 super 镜像时才读取内容，
+        // 避免对普通文件做多余 I/O；LP 几何魔数（0x616c4467 @4096）优先于固件面板接管 .img/.super。
+        // Partition-table content sniffing (LP super metadata): only reads content when the name or
+        // extension could be a super image, avoiding extra I/O for ordinary files; the LP geometry
+        // magic (0x616c4467 @4096) wins over the firmware panel for .img/.super files.
+        if (IsLpCandidatePath(path) && IsLpSuperImage(path))
+        {
+            return EditorOpenMode.Partition;
+        }
+
+        // GPT / MBR 分区表内容探测：候选路径（.img/.gpt/.mbr/.bin 或无扩展名）读取头部，
+        // GPT 魔数优先于 MBR（GPT 镜像含保护性 MBR，两者都会命中 0x55AA）。
+        // GPT / MBR partition-table content sniffing: candidate paths (.img/.gpt/.mbr/.bin or none)
+        // get a header read; the GPT magic wins over MBR (a GPT image carries a protective MBR so both
+        // would match 0x55AA).
+        if (IsPartitionTableCandidatePath(path) && (IsGptImage(path) || IsMbrImage(path)))
+        {
+            return EditorOpenMode.Partition;
+        }
+
         // 固件元数据面板：扩展名命中格式处理器注册表聚合出的集合（.img/.pac/.ops/.nb0 等），
         // 其余专用编辑器已在上方优先拦截（如 .dtb/.dex/.arsc/.apk）。
         // Firmware metadata panel: the extension matches the set aggregated from the registered
@@ -166,6 +194,15 @@ public static class FileOpenMode
         if (IsTextExtension(ext))
         {
             return EditorOpenMode.Text;
+        }
+
+        // 分区表内容探测（Rockchip parameter 文本）：扩展名不被任何专用编辑器接管
+        // （如无扩展名的 "parameter" 文件）时按内容判定。
+        // Partition-table content sniffing (Rockchip parameter text): files whose extension is not
+        // claimed by a dedicated editor (e.g. the extension-less "parameter" file) are decided by content.
+        if (IsRockchipParameter(path))
+        {
+            return EditorOpenMode.Partition;
         }
 
         return EditorOpenMode.Auto;
@@ -205,6 +242,31 @@ public static class FileOpenMode
         if (header is not null && IsFilesystemMagic(header))
         {
             return EditorOpenMode.FileSystem;
+        }
+
+        // LP super 元数据魔数优先：头部已提供且足够长（覆盖偏移 4096 的几何魔数）时直接命中，
+        // 即使扩展名为 .img/.super 会被固件面板接管。
+        // LP super metadata magic takes priority: when the header is provided and long enough (covers
+        // the geometry magic at offset 4096) it decides directly, even though .img/.super extensions
+        // are claimed by the firmware panel.
+        if (header is not null && IsLpMetadataMagic(header))
+        {
+            return EditorOpenMode.Partition;
+        }
+
+        // GPT / MBR 分区表魔数：GPT 优先（GPT 镜像含保护性 MBR，两者都会命中 0x55AA）。
+        // GPT / MBR partition-table magic: GPT first (a GPT image carries a protective MBR so both
+        // would match 0x55AA).
+        if (header is not null && (IsGptMagic(header) || IsMbrMagic(header)))
+        {
+            return EditorOpenMode.Partition;
+        }
+
+        // Rockchip parameter 文本特征（CMDLINE: 与 mtdparts=）。
+        // Rockchip parameter text characteristics (CMDLINE: and mtdparts=).
+        if (header is not null && IsRockchipParameterText(header))
+        {
+            return EditorOpenMode.Partition;
         }
 
         var mode = ResolveMode(path);
@@ -346,6 +408,224 @@ public static class FileOpenMode
     /// Header length read for filesystem magic detection (covers past the ext4 magic tail).
     /// </summary>
     private const int FilesystemHeaderLength = 1082;
+
+    /// <summary>
+    /// <para>LP super 元数据魔数判定所需的头部读取长度（偏移 4096 处的 4 字节几何魔数）。</para>
+    /// Header length read for LP super metadata magic detection (4-byte geometry magic at offset 4096).
+    /// </summary>
+    private const int LpMetadataHeaderLength = 4100;
+
+    /// <summary>
+    /// <para>Rockchip parameter 文本探测读取的头部长度（CMDLINE 行通常位于前 512 字节内）。</para>
+    /// Header length read for Rockchip parameter text detection (the CMDLINE line usually sits within
+    /// the first 512 bytes).
+    /// </summary>
+    private const int RockchipParameterHeaderLength = 512;
+
+    /// <summary>
+    /// <para>判断头部字节是否为 LP super 元数据（小端几何魔数 0x616c4467 位于偏移 4096）。</para>
+    /// Whether the header bytes hold LP super metadata (little-endian geometry magic 0x616c4467 at
+    /// offset 4096).
+    /// </summary>
+    public static bool IsLpMetadataMagic(ReadOnlySpan<byte> header) =>
+        header.Length >= LpMetadataHeaderLength
+        && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(4096, 4))
+            == UotanStudio.Firmware.Lp.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
+
+    /// <summary>
+    /// <para>判断头部字节是否为 Rockchip parameter 文本：内容须为可打印 ASCII/文本控制字符
+    /// （可跳过 UTF-8 BOM），且同时包含 <c>CMDLINE:</c> 与 <c>mtdparts=</c> 特征。</para>
+    /// Whether the header bytes hold Rockchip parameter text: the content must be printable
+    /// ASCII/text controls (a UTF-8 BOM may be skipped) and contain both <c>CMDLINE:</c> and
+    /// <c>mtdparts=</c> markers.
+    /// </summary>
+    public static bool IsRockchipParameterText(ReadOnlySpan<byte> header)
+    {
+        var offset = 0;
+        if (header.Length >= 3 && header[0] == 0xEF && header[1] == 0xBB && header[2] == 0xBF)
+        {
+            offset = 3;
+        }
+
+        var length = Math.Min(header.Length, RockchipParameterHeaderLength) - offset;
+        if (length < 32)
+        {
+            return false;
+        }
+
+        var text = new char[length];
+        for (var i = 0; i < length; i++)
+        {
+            var b = header[offset + i];
+            var isAscii = b is >= 0x20 and <= 0x7E;
+            var isControl = b is (byte)'\r' or (byte)'\n' or (byte)'\t';
+            if (!isAscii && !isControl)
+            {
+                return false;
+            }
+            text[i] = (char)b;
+        }
+
+        var content = new string(text);
+        return content.Contains("CMDLINE:", StringComparison.OrdinalIgnoreCase)
+            && content.Contains("mtdparts=", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <para>判断文件内容是否为 LP super 元数据（读取偏移 4096 处的几何魔数）。
+    /// 读取失败或内容不匹配返回 <c>false</c>。</para>
+    /// Determines whether the file content holds LP super metadata (reads the geometry magic at
+    /// offset 4096). Returns <c>false</c> on a read failure or mismatch.
+    /// </summary>
+    /// <param name="path">
+    /// <para>文件名或完整路径。</para>
+    /// A file name or full path.
+    /// </param>
+    public static bool IsLpSuperImage(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, LpMetadataHeaderLength);
+            return IsLpMetadataMagic(header);
+        }
+        catch
+        {
+            // 读取失败按非 LP 镜像处理。
+            // A read failure is treated as a non-LP image.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <para>判断文件内容是否为 Rockchip parameter 文本（读取文件起始处并检查 CMDLINE:/mtdparts= 特征）。
+    /// 读取失败或内容不匹配返回 <c>false</c>。</para>
+    /// Determines whether the file content is a Rockchip parameter text (reads the file start and
+    /// checks the CMDLINE:/mtdparts= markers). Returns <c>false</c> on a read failure or mismatch.
+    /// </summary>
+    /// <param name="path">
+    /// <para>文件名或完整路径。</para>
+    /// A file name or full path.
+    /// </param>
+    public static bool IsRockchipParameter(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, RockchipParameterHeaderLength);
+            return IsRockchipParameterText(header);
+        }
+        catch
+        {
+            // 读取失败按非 Rockchip parameter 处理。
+            // A read failure is treated as a non-Rockchip parameter file.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <para>文件名/扩展名是否可能为 LP super 镜像（避免对普通文件做内容读取）：
+    /// 文件名以 <c>super</c> 开头，或扩展名为 <c>.img</c>/<c>.super</c>。</para>
+    /// Whether the file name/extension could be an LP super image (avoids content reads for ordinary
+    /// files): the file name starts with <c>super</c>, or the extension is <c>.img</c>/<c>.super</c>.
+    /// </summary>
+    private static bool IsLpCandidatePath(string path)
+    {
+        var fileName = Path.GetFileName(path);
+        if (fileName.StartsWith("super", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var ext = Path.GetExtension(path);
+        return ext.Equals(".img", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".super", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <para>分区表内容探测所需的头部读取长度（覆盖 GPT 头魔数 @512 与 MBR 签名 @510）。</para>
+    /// Header length read for partition-table content detection (covers the GPT header magic @512
+    /// and the MBR signature @510).
+    /// </summary>
+    private const int PartitionHeaderLength = 520;
+
+    /// <summary>
+    /// <para>判断头部字节是否携带 GPT 签名（"EFI PART" @512）。</para>
+    /// Whether the header bytes carry the GPT signature ("EFI PART" @512).
+    /// </summary>
+    public static bool IsGptMagic(ReadOnlySpan<byte> header) =>
+        header.Length >= 520 && header.Slice(512, 8).SequenceEqual("EFI PART"u8);
+
+    /// <summary>
+    /// <para>判断头部字节是否携带 MBR 签名（0x55AA @510）。</para>
+    /// Whether the header bytes carry the MBR signature (0x55AA @510).
+    /// </summary>
+    public static bool IsMbrMagic(ReadOnlySpan<byte> header) =>
+        header.Length >= 512 && header[510] == 0x55 && header[511] == 0xAA;
+
+    /// <summary>
+    /// <para>判断文件内容是否为 GPT 分区表（读取头部并检查 "EFI PART" 签名）。
+    /// 读取失败或内容不匹配返回 <c>false</c>。</para>
+    /// Determines whether the file content is a GPT partition table (reads the header and checks the
+    /// "EFI PART" signature). Returns <c>false</c> on a read failure or mismatch.
+    /// </summary>
+    public static bool IsGptImage(string path) => IsPartitionImage(path, IsGptMagic);
+
+    /// <summary>
+    /// <para>判断文件内容是否为 MBR 分区表（读取头部并检查 0x55AA 签名）。
+    /// 读取失败或内容不匹配返回 <c>false</c>。</para>
+    /// Determines whether the file content is an MBR partition table (reads the header and checks the
+    /// 0x55AA signature). Returns <c>false</c> on a read failure or mismatch.
+    /// </summary>
+    public static bool IsMbrImage(string path) => IsPartitionImage(path, IsMbrMagic);
+
+    private static bool IsPartitionImage(string path, Func<ReadOnlySpan<byte>, bool> magic)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, PartitionHeaderLength);
+            return magic(header);
+        }
+        catch
+        {
+            // 读取失败按非分区表处理。
+            // A read failure is treated as a non-partition-table file.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <para>文件名/扩展名是否可能为 GPT/MBR 分区表镜像（避免对普通文件做内容读取）：
+    /// 扩展名为 <c>.img</c>/<c>.gpt</c>/<c>.mbr</c>/<c>.bin</c> 或无扩展名。</para>
+    /// Whether the file name/extension could be a GPT/MBR partition-table image (avoids content reads
+    /// for ordinary files): the extension is <c>.img</c>/<c>.gpt</c>/<c>.mbr</c>/<c>.bin</c> or absent.
+    /// </summary>
+    private static bool IsPartitionTableCandidatePath(string path)
+    {
+        var ext = Path.GetExtension(path);
+        if (ext.Length == 0)
+        {
+            return true;
+        }
+
+        return ext.Equals(".img", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".gpt", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".mbr", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".bin", StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// <para>是否为已知固件扩展名（应走固件元数据面板）。

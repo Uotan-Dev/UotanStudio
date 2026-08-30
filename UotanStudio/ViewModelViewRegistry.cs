@@ -31,6 +31,7 @@ internal static class ViewModelViewRegistry
         [typeof(DtbEditorViewModel)] = () => new DtbEditorView(),
         [typeof(DexEditorViewModel)] = () => new DexEditorView(),
         [typeof(ManifestEditorViewModel)] = () => new ManifestEditorView(),
+        [typeof(PartitionEditorViewModel)] = () => new PartitionEditorView(),
         [typeof(ArscEditorViewModel)] = () => new ArscEditorView(),
         [typeof(HexEditorViewModel)] = () => new HexEditorView(),
         [typeof(ApkEditorViewModel)] = () => new ApkEditorView(),
