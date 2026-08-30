@@ -17,8 +17,60 @@ dotnet test UotanStudio.slnx -c Debug
 # 启动应用（Desktop 为启动项目）
 dotnet run --project UotanStudio.Desktop
 
-# AOT 发布（依赖 IsAotCompatible / PublishAot；当前已临时关闭以支持 Avalonia 布局预览器，恢复方式见 §1）
+# AOT 发布（已恢复：IsAotCompatible / PublishAot / TrimMode=partial 均已启用，`dotnet publish -r win-x64` 发布冒烟通过；仅有 Dock.Avalonia 的 IL2026 裁剪警告，属第三方 XAML trampoline，TrimMode=partial 下可接受）
 dotnet publish UotanStudio.Desktop -c Release -r win-x64
+```
+
+### 固件 CLI（`firmware` 子命令）
+
+`UotanStudio.Desktop/Program.cs` 的 `Main` 在启动 Avalonia **之前**分发 `firmware` 子命令（单二进制即提供无 UI 的固件解包/打包 CLI；`Main` 返回 `int` 退出码）。CLI 逻辑位于 `UotanStudio/Services/Cli/`：
+
+| 文件 | 职责 |
+|---|---|
+| `Services/Cli/FirmwareCliCommand.cs` | 命令模型：`FirmwareCliVerb`（List/Info/Unpack/Pack/Flash/DisableVerification）、`FirmwareCliCommand`、`FirmwareCliParseResult` |
+| `Services/Cli/FirmwareCliParser.cs` | 手写纯解析器（AOT 友好，无反射）：`Parse(string[]? args) → FirmwareCliParseResult` |
+| `Services/Cli/FirmwareCli.cs` | 入口 `Run(string[]? args) → int`：注册 `FirmwareFormatRegistry.RegisterAll()` → `FormatDetector.Detect` / `ResolveByFormatName` → 分发到 `IFormatHandler` / `FlashService` / `FirmwareService`；进度经 `IFirmwareProgress` 打印到 stdout |
+| `Services/Cli/WorkflowCli.cs` | `workflow` 子命令入口：无头运行节点工作流（见下「工作流 CLI」） |
+
+命令面（中英双语帮助）：
+
+```
+UotanStudio firmware list                          # 列出已注册格式与扩展名
+UotanStudio firmware info <file>                   # 检测格式 + 读元数据
+UotanStudio firmware unpack <file> -o <dir> [--no-overwrite] [--format <名称>]
+UotanStudio firmware pack <input> -o <file> [--format <名称>]   # 目录→镜像；镜像→重打包
+UotanStudio firmware flash <image> -p <分区> [--serial <序列号>] # 无头刷写（Fastboot/EDL/RKDL/ADB）
+UotanStudio firmware disable-verification <vbmeta> -o <file>    # 置位禁校验标志并清零认证块（无需私钥）
+UotanStudio workflow run <file.uotannode> [--set 节点.端口=值 ...] # 无头执行节点工作流
+UotanStudio firmware --help | --version
+```
+
+退出码：`0` 成功 / `1` 失败（处理器错误、不支持格式、文件未找到）/ `2` 用法错误（缺参数/多参数/未知标志/未知子命令）。
+
+### 工作流 CLI（`workflow` 子命令）与节点流控
+
+- `Program.cs` 的 `Main` 同样在启动 Avalonia 前分发 `workflow` 子命令：`WorkflowPersistenceService.LoadAsync` 加载 `.uotannode` 快照 → `NodeFactoryRegistrar.RegisterAll()` 注册工厂 → 按 TypeKey 重建节点 → 构建引擎连接 → `NodeExecutionEngine.ExecuteAsync` 执行 → 按退出码约定返回。`--set 节点.端口=值`（可重复，节点按 Title 或 InstanceId 匹配）覆盖输入端口初始值。
+- **节点工厂注册**：`NodeFactoryRegistrar.RegisterAll()`（`ViewModels/Nodes/NodeFactoryRegistrar.cs`）集中登记全部 TypeKey → 工厂映射，UI 工具箱初始化与无头 CLI 共用；新增节点类型必须在此登记（`InitializeToolbox` 仅负责本地化工具箱条目）。
+- **连接持久化**：`ConnectionDto` 携带可选 `SourceInstanceId`/`TargetInstanceId`（`WorkflowPersistenceService.BuildConnectionDtos` 解析连接器所属节点写入）；`NodeEditorViewModel.LoadFromAsync` 与 WorkflowCli 优先按实例 ID 精确重建拓扑，缺失时回退按连接器标题匹配（旧版工程兼容）。
+- **真实流控**：`NodeExecutionEngine` 识别源端口类型为 `Flow` 的连接为控制流边——`Flow.Branch` 把未选中分支的下游子图标记为 `Skipped`；`Flow.Loop` 按 `Count` 输入迭代执行 Body 子图并逐次写 `Index` 输出（上限 `NodeExecutionEngine.MaxLoopIterations = 10000`）；`Flow.Parallel` 经 `Task.WhenAll` 并发执行各 Flow 输出端口的分支子图（分支内保持拓扑顺序）。
+- **数据流注入**：`FlowInputs` 先注入未连接输入端口的 `InitialValue`，再仅以上游**非空**输出值覆盖（Flow 端口等无数据连接不会清掉初始值）。
+
+`--format` 显式指定格式（按 `IFormatHandler.FormatName` 不区分大小写匹配，如 `CPIO/TAR Archive`、`Android OTA Payload (payload.bin)`、`EXT4`、`EROFS`、`Boot`）；省略时 `unpack` 自动检测，`pack` 目录默认走 EXT4、文件按内容检测。
+
+示例：
+
+```bash
+# 列出全部已注册固件格式
+dotnet run --project UotanStudio.Desktop -- firmware list
+
+# 解包 boot 镜像到目录
+dotnet run --project UotanStudio.Desktop -- firmware unpack boot.img -o boot_out/
+
+# 解包 payload.bin，显式指定格式
+dotnet run --project UotanStudio.Desktop -- firmware unpack payload.bin -o payload_out/ -f "Android OTA Payload (payload.bin)"
+
+# 把目录打包为 ext4 镜像
+dotnet run --project UotanStudio.Desktop -- firmware pack system_dir/ -o system.img -f ext4
 ```
 
 ## 解决方案结构
@@ -27,16 +79,17 @@ dotnet publish UotanStudio.Desktop -c Release -r win-x64
 
 | 项目 | 职责 |
 |---|---|
-| `UotanStudio.Comm` | 设备通信库：USB 多后端（WinUSB/LibUsb/Linux/MacOS/HarmonyOS）+ ADB / Fastboot / EDL / RKDL 协议会话 + TCP/UDP/串口/mDNS 传输。**零 Avalonia 依赖**，供应用层引用。 |
-| `UotanStudio.Firmware` | 固件解析库：boot image、Payload、Sparse、CPIO、AVB、压缩、DAT（Android v4 transfer list 写入，支持 `.new.dat.br` Brotli 输入与分段输出）、Oppo/NTPi/Nb0/Pac 等格式处理；**EXT4/EROFS/F2FS**（`Ext4/`、`Erofs/`、`F2fs/` 目录，全托管文件系统镜像解析/构建/压缩，`Ext4FormatHandler`/`ErofsFormatHandler`/`F2fsFormatHandler` 经 `FirmwareFormatRegistry` 注册；F2FS 支持 superblock/checkpoint/NAT/SIT/dnode 寻址与 inline data，double indirect 未实现）；**DEX**（`DEX/` 目录，Dalvik 解析/反汇编/重建）；**AXML**（`AXml/` 目录，Android 二进制 XML 解析/重建）；**ARSC**（`Arsc/` 目录，resources.arsc 资源表解析）。**零 Avalonia 依赖**。 |
-| `UotanStudio` | 应用层：Avalonia 资源/主题（`avares://UotanStudio/...`）、ViewModel（继承 `ViewModelBase` → `ObservableObject`，按特性分区于 `ViewModels/{Shell,Workspace,Editors,Devices,Nodes}/`）、视图（`Views/{Shell,Workspace,Editors,Devices,Nodes,Controls}/`，与 ViewModel 同构）、服务（按域分区于 `Services/{Devices,Firmware,Flash,Projects}/` 与根：`LanguageService`、`LogService`、`SettingsPersistenceService` 等）、消息（`WeakReferenceMessenger` 派生消息类在 `Messages/`）。 |
-| `UotanStudio.Desktop` | 启动项目：`WinExe`、`PublishAot=true`、`TrimMode=partial`（当前临时关闭，见 §1）。 |
+| `UotanStudio.Comm` | 设备通信库：USB 多后端（WinUSB/LibUsb/Linux/MacOS/HarmonyOS）+ ADB / Fastboot / EDL / RKDL 协议会话 + TCP/UDP/串口/mDNS 传输 + super 镜像构建/刷写（`SuperImageBuilder.Build` / `SuperFlashHelper.FlashSuper`，LP 元数据读写）。**零 Avalonia 依赖**，供应用层引用。 |
+| `UotanStudio.Firmware` | 固件解析库：boot image（V0–V4 解包；V0–V3 boot 打包与 vendor_boot V3/V4 打包，`BootImagePacker`/`VendorBootPacker`）、Payload、Sparse、CPIO、AVB（`AvbVerifier` 校验 + `AvbSigner` 签名：vbmeta RSASSA-PSS 签名、v2 hash footer 与 `DisableVbmetaVerificationAsync` 禁校验补丁（置位 flags 0x1|0x2 并清零认证块，无需私钥））、压缩、DAT（Android v4 transfer list 写入，支持 `.new.dat.br` Brotli 输入与分段输出）、Oppo/NTPi/Nb0/Pac 等格式处理；**OTA 差分**（`Diff/` 目录，`DeltaEngine` 基于 BsDiff 生成/应用镜像差分）；**EXT4/EROFS/F2FS**（`Ext4/`、`Erofs/`、`F2fs/` 目录，全托管文件系统镜像解析/构建/压缩，`Ext4FormatHandler`/`ErofsFormatHandler`/`F2fsFormatHandler` 经 `FirmwareFormatRegistry` 注册；F2FS 支持 superblock/checkpoint/NAT/SIT/dnode 寻址与 inline data，double indirect 未实现）；**DEX**（`DEX/` 目录，Dalvik 解析/反汇编/重建；**轻量化反编译**在 `DEX/Decompile/`：`BasicBlock`/`CfgBuilder`/`RegisterAnalyzer`/`MethodResolver`（重载解析：过滤 bridge/synthetic、按推断实参类型选最特定重载并对实参施加显式转型）/`ControlFlowStructuring`/`JavaCodegen`/`LightweightDecompiler`，参考 jadx 的 CFG 结构化思路，输出伪 Java 或字节码指导（BytecodeGuide 模式），明确不做 SSA/跨方法内联/lambda/泛型还原；`DexService.DecompileDexAsync` 供应用层调用）；**AXML**（`AXml/` 目录，Android 二进制 XML 解析/重建）；**ARSC**（`Arsc/` 目录，resources.arsc 资源表解析）。**零 Avalonia 依赖**。 |
+| `UotanStudio` | 应用层：Avalonia 资源/主题（`avares://UotanStudio/...`）、ViewModel（继承 `ViewModelBase` → `ObservableObject`，按特性分区于 `ViewModels/{Shell,Workspace,Editors,Devices,Nodes,Compare}/`）、视图（`Views/{Shell,Workspace,Editors,Devices,Nodes,Compare,Controls}/`，与 ViewModel 同构）、服务（按域分区于 `Services/{Devices,Firmware,Flash,Projects,Compare,Mcp}/` 与根：`LanguageService`、`LogService`、`SettingsPersistenceService` 等）、消息（`WeakReferenceMessenger` 派生消息类在 `Messages/`）；**MCP 能力**（`Services/Mcp/`：`McpClientService` 懒连接并调用外部 MCP server 工具（stdio/HTTP，实参为原始 JSON，AOT 安全）、`McpHostService` 把固件能力暴露为 MCP server（TCP 流传输，`UotanStudioMcpTools.firmware.info` 工具）、`McpServerConfig`/`McpTransportKind` 配置模型；设置页「MCP」区块维护服务器列表与暴露开关/端口并持久化到 `AppSettings`（`AppSettingsJsonContext` 已注册）；工具箱「MCP 工具」分类含 `MCP.ListTools`/`MCP.CallTool` 节点；基于官方 `ModelContextProtocol` SDK 2.2.0 与 `Microsoft.Extensions.DependencyInjection`，均 AOT 兼容）。 |
+| `UotanStudio.Desktop` | 启动项目：`WinExe`、`PublishAot=true`、`TrimMode=partial`（当前临时关闭，见 §1）。`Main` 返回 `int`，启动 Avalonia 前分发 `firmware` 子命令（无 UI 固件 CLI，见上「固件 CLI」）。 |
 
 ## 关键开发约定
 
-### 1. AOT 兼容性（强制；当前临时关闭）
-`UotanStudio.csproj` 与 `Desktop` 项目启用了 `IsAotCompatible` / `PublishAot`。**为支持 Avalonia 布局预览器，当前已在两个 csproj 中临时置为 `false`（`UotanStudio.csproj` 的 `IsAotCompatible`、`Desktop.csproj` 的 `PublishAot` / `IsAotCompatible` / `TrimMode`，注释中保留了恢复写法）；发布 AOT 前须恢复。** 以下约束在恢复后依然适用：
+### 1. AOT 兼容性（强制）
+`UotanStudio.csproj` 与 `Desktop` 项目已启用 `IsAotCompatible` / `PublishAot` / `TrimMode=partial`（曾为支持 Avalonia 布局预览器临时关闭，现已恢复并经 `dotnet publish -r win-x64` 发布冒烟验证）。以下约束在 AOT 下必须遵守：
 - **禁止 `Assembly.LoadFrom`、`Activator.CreateInstance(Type)` 等反射加载**。设备协议会话、USB 后端等均通过编译期类型直接构造（`UotanStudio.Comm` 提供工厂/会话类，无运行时加载）。
+- **禁止运行时 `new ResourceInclude(uri)` 动态加载 XAML**（AOT 裁剪下抛 "No precompiled XAML found"）。主题/语言资源字典一律带 `x:Class` + 代码后置 partial 类（`ThemeDictionaries.cs`/`EnUsDictionaries.cs`/`ZhCnDictionaries.cs`，构造函数 `AvaloniaXamlLoader.Load(this)`），切换经 `LanguageService.ApplyTheme` / `CreateLocaleDictionary` 类型实例化；`.axaml` 由 Avalonia 默认 glob（`**/*.axaml`）纳入，csproj 不得再显式 `AvaloniaResource Include="Locale\**"`/`Themes\**`（与默认项重复触发 AVLN2002 重复 x:Class）。
 - JSON 序列化使用**源生成**：`AppSettingsJsonContext : JsonSerializerContext`，配合 `AppSettingsJsonContext.Default.AppSettings`。新增需序列化的类型必须用 `[JsonSerializable]` 注册到该上下文。
 - View 解析无反射：`ViewLocator` 经 `ViewModelViewRegistry`（`UotanStudio/ViewModelViewRegistry.cs`）按 VM 类型显式查表构造视图，**不依赖反射**；新增 ViewModel 须在该注册表登记（View 与 ViewModel 均按特性分区，见 §5）。
 
@@ -57,27 +110,30 @@ dotnet publish UotanStudio.Desktop -c Release -r win-x64
 - 公共流包装器位于 `UotanStudio.Firmware/Common/Streams/`；新增 public 类型/成员须提供中英文 XML 文档并保持 AOT 兼容。
 
 ### 2. 节点编辑器（NodifyM）
-1. 节点定义与注册：所有节点视图模型继承 `FlowNodeViewModel`（`UotanStudio.ViewModels.NodeViewModels`），工厂方法 `XxxNodeViewModel.CreateXxxNode()` 在初始化器中设置稳定 `TypeKey`（如 `"Firmware.Unpack"`、`"Data.ReadFile"`）与各连接器的 `PortType`。`NodeTypeRegistry`（`NodeViewModels/NodeTypeRegistry.cs`）以 TypeKey 注册工厂；**节点工厂在 `NodeEditorViewModel.InitializeToolbox` 中集中注册**（既有节点直接 `NodeTypeRegistry.Register(key, () => CreateXxxNode())`，DEX 节点经 `DexNodeViewModel.RegisterNodes()`），同时以 `NodeToolboxItem(name, () => CreateXxxNode())` 声明工具箱，分类为 `Firmware` / `Flash` / `Data` / `Flow` / `Output` / `Dex`。**各节点 `ExecuteAsync` 一律按 `TypeKey` 分发（`switch (TypeKey)`），不得按显示标题分发。**
+1. 节点定义与注册：所有节点视图模型继承 `FlowNodeViewModel`（`UotanStudio.ViewModels.NodeViewModels`），工厂方法 `XxxNodeViewModel.CreateXxxNode()` 在初始化器中设置稳定 `TypeKey`（如 `"Firmware.Unpack"`、`"Data.ReadFile"`）与各连接器的 `PortType`。`NodeTypeRegistry`（`NodeViewModels/NodeTypeRegistry.cs`）以 TypeKey 注册工厂；**节点工厂在 `NodeEditorViewModel.InitializeToolbox` 中集中注册**（既有节点直接 `NodeTypeRegistry.Register(key, () => CreateXxxNode())`，DEX 节点经 `DexNodeViewModel.RegisterNodes()`），同时以 `NodeToolboxItem(name, () => CreateXxxNode())` 声明工具箱，分类为 `Firmware` / `Flash` / `Data` / `Flow` / `Output` / `Dex` / `Mcp`（Dex 分类含 `Dex.Parse` / `Dex.Disassemble` / `Dex.Rebuild` / `Dex.Decompile`——反编译节点输入 Dex Path/Output Path，输出 Result，把 DEX 还原为伪 Java 源码；MCP 分类含 `MCP.ListTools` / `MCP.CallTool`——列举服务器工具、以 JSON 实参调用工具并输出结果，经 `McpNodeViewModel` + `McpClientService` 调用设置页配置的 MCP 服务器）。**各节点 `ExecuteAsync` 一律按 `TypeKey` 分发（`switch (TypeKey)`），不得按显示标题分发。**
 2. 端口类型约束：`NodePortType` 枚举（`Any`/`Flow`/`Path`/`Data`/`Text`/`Number`/`Boolean`）由 `NodeConnectorViewModel.PortType` 承载，兼容性判定在 `NodeDataUtil.CanConnect`（`Any` 通配、其余须相等），`NodeEditorViewModel.CreateConnection` 拒绝不兼容连接；端口类型徽章显示在节点图标连接器上。
 3. 选择与属性面板：`NodeEditorView` 订阅 `NodifyEditor`（`SelectingItemsControl`）的 `SelectionChanged` 同步到 `SelectNode()`，驱动右侧属性面板与一键删除（删除 `IsSelected` 节点）。
-4. 工作流执行由 `NodeExecutionEngine`（拓扑排序 + 异步调度）驱动，状态通过事件回传画布。
+4. 工作流执行由 `NodeExecutionEngine`（拓扑排序 + 异步调度 + **真实流控**：Branch 标记 Skipped 子图 / Loop 迭代执行 Body 子图（上限 `MaxLoopIterations`）并逐次写 Index / Parallel 经 `Task.WhenAll` 并发执行分支子图；Flow 类型连接即控制流边）驱动，状态通过事件回传画布。
 5. 工程加载：`LoadFromAsync` 按 `NodeDto.TypeKey` 经 `NodeTypeRegistry` 重建具体节点；未注册 TypeKey 时跳过该节点并记录警告日志（软件未发布，无旧工程占位兼容需求）。
 6. 项目插件系统已移除：不再有 `IPlugin` / `PluginRegistry` / `UotanStudio.Abstractions` / `UotanStudio.Plugins.BuiltIn`。
 
 ### 3. 本地化（`Locale/`）
-- 资源字典 `Locale/{culture}/{Module}.axaml` 作为 `AvaloniaResource` 嵌入，运行时由 `LanguageService` 动态切换。
+- 资源字典 `Locale/{culture}/{Module}.axaml` 作为 `AvaloniaResource` 嵌入，运行时由 `LanguageService` 动态切换。**每个字典带 `x:Class`**（`Locale/en-US|zh-CN/*.axaml` → `UotanStudio.Locale.EnUs|ZhCn.*`，代码后置集中在 `UotanStudio/EnUsDictionaries.cs` / `ZhCnDictionaries.cs` 的 `partial class : ResourceDictionary`，构造函数 `AvaloniaXamlLoader.Load(this)`）；`LanguageService.CreateLocaleDictionary(culture, module)` 以类型实例化切换（AOT 安全），**禁止运行时 `new ResourceInclude(uri)` 反射加载**（裁剪下报 "No precompiled XAML found"）。
 - 模块：`Common`、`Dock`、`Menu`、`Node`、`Settings`、`Device`。
 - 新增键必须**同时在 `en-US` 和 `zh-CN` 中补齐**；查找键通过 `LanguageService.Instance.GetString("Key")`。
 - 添加新语言：创建 `Locale/{culture}/` 并在 `LanguageService` 注册。
+- **设置页开源致谢区块**：`SettingsView.axaml` 底部「开源致谢」区块展示本项目使用/参考的开源项目，数据源为 `SettingsViewModel.OpenSourceProjects`（`UotanStudio/Models/OpenSourceProject.cs`，静态只读集合，AOT 友好），每条含名称/描述/仓库链接/协议/作者 GitHub 链接与头像（GitHub avatar URL），「仓库」「作者」按钮经 `SettingsView.OnOpenLinkClick` 用系统浏览器打开链接；区块标题与商业许可说明文案来自 `Settings_OpenSourceCredits` / `Settings_OpenSourceNotice` / `Settings_OpenRepository` 本地化键。
 
 ### 4. 消息（`CommunityToolkit.Mvvm.Messaging`）
 跨组件通信统一用 `WeakReferenceMessenger.Default`。消息类定义在 `UotanStudio/Messages/`，命名约定 `XxxMessage` / `XxxChangedMessage`。发送用 `WeakReferenceMessenger.Default.Send(msg)`，接收方在 `App` 等处理类用 `.register<MessageType>(this, handler)`。
 
 ### 5. ViewModel 与 View 命名约定
-ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目录同构**：`ViewModels/{Shell,Workspace,Editors,Devices,Nodes}/` ↔ `Views/{Shell,Workspace,Editors,Devices,Nodes}/`（纯控件与布局工厂在 `Views/Controls/`、`Views/Workspace/WorkspaceDockFactory.cs`、`Views/Nodes/NodeDockFactory.cs`）。解析统一走 `ViewModelViewRegistry`（显式注册表，非反射）。ViewModel 统一继承 `ViewModelBase : ObservableObject`，属性用 `[ObservableProperty]` 自动生成。
+ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目录同构**：`ViewModels/{Shell,Workspace,Editors,Devices,Nodes,Compare}/` ↔ `Views/{Shell,Workspace,Editors,Devices,Nodes,Compare}/`（纯控件与布局工厂在 `Views/Controls/`、`Views/Workspace/WorkspaceDockFactory.cs`、`Views/Nodes/NodeDockFactory.cs`）。解析统一走 `ViewModelViewRegistry`（显式注册表，非反射）。ViewModel 统一继承 `ViewModelBase : ObservableObject`，属性用 `[ObservableProperty]` 自动生成。
 
 ### 6. 主题与样式
-- 主题资源：`Themes/LightColors.axaml` / `DarkColors.axaml`（`ResourceDictionary`，含 `PageBackground`、`AccentColor` 等画刷）。
+- 主题资源：`Themes/LightColors.axaml` / `DarkColors.axaml`（`ResourceDictionary`，含 `PageBackground`、`AccentColor` 等画刷）。**两字典带 `x:Class`**（`UotanStudio.Themes.LightColors|DarkColors`，代码后置在 `UotanStudio/ThemeDictionaries.cs`，构造函数 `AvaloniaXamlLoader.Load(this)`）；`LanguageService.ApplyTheme` 以类型实例化切换（`new LightColors()` / `new DarkColors()`），**禁止运行时 `new ResourceInclude(uri)` 反射加载**。
+- **Fluent 兼容键**：主题字典额外定义 `TextFillColorSecondaryBrush`（`SolidColorBrush`，取 `SecondaryTextForeground` 颜色）——Semi 主题不提供该键，视图多处 `DynamicResource` 引用，缺失时解析回退默认色导致不随主题切换。
+- **比对高亮键**：主题字典定义 `DiffBackgroundBrush`（`SolidColorBrush`：浅色主题 `#FFF3D9`，深色主题 `#5A3A00`），`BinaryCompareViewer` 双栏 hex 与文本比较的差异行高亮使用。
 - 样式层：Semi.Avalonia + Ursa + Material.Icons + NodifyM，在 `App.axaml` `Application.Styles` 合并。切换主题调用 `LanguageService.Instance.ApplyTheme("DarkColors")`。
 
 ### 7. 日志
@@ -87,8 +143,9 @@ ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目
 工作区（`WorkspaceView` / `WorkspaceDockFactory`，`Views/Workspace/`）承载 Dock 布局：
 - **面板构成**：左侧（项目资源管理器 / 设备；**打包设置面板默认隐藏**，经「窗口」菜单唤出）、中部文档区（`DocumentDock`，Id=`DocumentsPane`）、右侧（镜像管理 / 属性）；底部 `BottomPane` 保留为**空槽位**（无面板）。输出 / ADB 日志面板已移除，工作区操作日志统一走全局 `LogService`。面板显隐/聚焦由 `WorkspacePanelService`（`Services/Workspace/WorkspacePanelService.cs`，单例）统一管理，`WorkspaceDockFactory.CreateLayout` 用 `Register(key, dockable, host, visible)` 登记各面板，`CloseDockable` 关闭面板后回调 `OnDockContentsChanged` 同步可见状态。
 - **顶部菜单「窗口」栏目**：`MainWindow.axaml` 在 视图 与 工具 之间提供「窗口」菜单，各面板项以 CheckBox 形式勾选当前可见性（绑定 `WorkspacePanelService` 的可观察属性），命令由 `MenuViewModel` 的 `ToggleProjectExplorer` / `ToggleProjectSetting` / `ToggleDevicePanel` / `ToggleImagesView` / `ToggleProperties`（`[RelayCommand]`）转发到 `WorkspacePanelService.Toggle(key)`。窗口菜单**不管理**设备管理器 / 日志等独立窗口（仍由「工具」菜单打开）。
-- **文档编辑器**：`FileView` 使用 `Views/Controls/CodeEditor`（继承 AvaloniaEdit `TextEditor`，TextMate 语法高亮，LightPlus/DarkPlus 随主题切换）；`FileViewModel`（`ViewModels/Editors/`）承载 `Text` / `Language` / `FilePath` / `IsDirty`，`FileView` 双向绑定；语言按扩展名由 `SyntaxLanguageRegistry.GetLanguageId` 解析（`.prop/.rc→ini`、`.xml→xml`、`.json→json` 等）。`WorkspaceViewModel.OpenDocumentAsync(path)` 打开/聚焦文档，`App` 注册 `OpenDocumentRequestMessage` 转发。特殊格式走专用编辑器：DTB/DTBO → `DtbEditorViewModel`（左节点树 + 右 DTS 源码）；`.dex` → `DexEditorViewModel`（只读反汇编，经 `FirmwareFormatRegistry` 注册的 `UotanStudio.Firmware.Dex.DexFormatHandler` 解析，`DexService` 提供 Parse/Disassemble/Rebuild 服务）；AXML（`AndroidManifest.xml` 等二进制 XML）→ `ManifestEditorViewModel`（左元素结构树 + 右属性编辑与 XML 预览，经 `UotanStudio.Firmware.AXml.AXmlFormatHandler` 解析，保存时以 `AXmlWriter` 重建）；resources.arsc → `ArscEditorViewModel`（左包→类型→配置→条目资源树 + 右条目详情，经 `UotanStudio.Firmware.Arsc.ArscFormatHandler` 解析，只读浏览）；文件系统镜像（raw img：扩展名命中 `.img/.ext4/.erofs/.f2fs` 且内容魔数命中 ext4 `0xEF53`@1080 / EROFS `0xE0F5E1E2`@1024 / F2FS `0xF2F52010`@1024）→ `FileManagerEditorViewModel`（`ViewModels/Editors/`，左内部文件系统目录树 + 右条目详情，经 `Ext4Parser`/`ErofsParser`/`F2fsParser` 流式解析，支持刷新与提取选中条目；`FileOpenMode.ResolveMode` 在固件分支前按内容魔数路由到 `EditorOpenMode.FileSystem`）；固件文件（扩展名命中格式处理器注册表，如 `.img/.pac/.ops/.nb0`）→ `FirmwareInfoViewModel`（`ViewModels/Editors/`）+ `FirmwareInfoView`，只读展示格式名/摘要/元数据/条目，数据来自 `FormatDetector.Detect` + `IFormatHandler.ReadMetadataAsync`。打开方式由 `FileOpenMode.ResolveMode`（`EditorOpenMode`：`Auto/Text/Hex/Dtb/Dex/Axml/Arsc/Apk/Firmware/FileSystem`，AXML 按内容魔数优先于 `.xml` 文本路由，ARSC 按内容魔数兜底，文件系统镜像按内容魔数优先于固件面板；**已知固件扩展名集合由 `FormatDetector.RegisteredHandlers` 的 `FileExtensions` 聚合**，`IsFirmwareExtension` 统一驱动固件面板与 Hex 路由，避免双源维护）路由，资源管理器右键「打开方式」菜单（含「在固件信息中打开」）与双击（Auto 模式）复用同一消息。
-- **镜像面板**：`ImageViewModel`（`ViewModels/Workspace/ImageViewModel.cs`）为单例（`EnsureInstance()` / `Instance`），维护 `Images`（相对工程根目录的 `ImageEntryViewModel`）与 7 个命令（提取 / 合成 img / 合成 br / 删除 / 合成 super / 合成 dat / 打包镜像），操作经 `FirmwareService`（`Services/Firmware/FirmwareService.cs`，`SynthesizeSuperAsync` 等）、`PackingService`（`Services/Firmware/PackingService.cs`，按打包设置面板的镜像类型/格式/压缩选项调 `Ext4Builder`/`ErofsBuilder` 打包系统镜像）与 `UotanStudio.Firmware.Dat.DatWriter` 落到 `intermediate/`；文件菜单含「导入镜像」「导出镜像」。`ImageView`（`Views/Workspace/ImageView.axaml(.cs)`）为镜像条目提供**右键菜单**（提取/合成 img/br/super/dat/打包镜像/删除，Click 处理器先 `SelectedImage = 菜单条目` 再执行命令）。
+- **文档编辑器**：`FileView` 使用 `Views/Controls/CodeEditor`（继承 AvaloniaEdit `TextEditor`，TextMate 语法高亮，LightPlus/DarkPlus 随主题切换）；`FileViewModel`（`ViewModels/Editors/`）承载 `Text` / `Language` / `FilePath` / `IsDirty`，`FileView` 双向绑定；语言按扩展名由 `SyntaxLanguageRegistry.GetLanguageId` 解析（`.prop/.rc→ini`、`.xml→xml`、`.json→json` 等）。`WorkspaceViewModel.OpenDocumentAsync(path)` 打开/聚焦文档，`App` 注册 `OpenDocumentRequestMessage` 转发。特殊格式走专用编辑器：DTB/DTBO → `DtbEditorViewModel`（左节点树 + 右 DTS 源码）；`.dex` → `DexEditorViewModel`（只读反汇编，经 `FirmwareFormatRegistry` 注册的 `UotanStudio.Firmware.Dex.DexFormatHandler` 解析，`DexService` 提供 Parse/Disassemble/Rebuild 服务）；AXML（`AndroidManifest.xml` 等二进制 XML）→ `ManifestEditorViewModel`（左元素结构树 + 右属性编辑与 XML 预览，经 `UotanStudio.Firmware.AXml.AXmlFormatHandler` 解析，保存时以 `AXmlWriter` 重建）；resources.arsc → `ArscEditorViewModel`（左包→类型→配置→条目资源树 + 右条目详情，经 `UotanStudio.Firmware.Arsc.ArscFormatHandler` 解析，只读浏览）；文件系统镜像（raw img：扩展名命中 `.img/.ext4/.erofs/.f2fs` 且内容魔数命中 ext4 `0xEF53`@1080 / EROFS `0xE0F5E1E2`@1024 / F2FS `0xF2F52010`@1024）→ `FileManagerEditorViewModel`（`ViewModels/Editors/`，左内部文件系统目录树 + 右条目详情，经 `Ext4Parser`/`ErofsParser`/`F2fsParser` 流式解析，支持刷新与提取选中条目；`FileOpenMode.ResolveMode` 在固件分支前按内容魔数路由到 `EditorOpenMode.FileSystem`）；分区表（LP super 元数据或 Rockchip parameter 内容）→ `PartitionEditorViewModel`（`ViewModels/Editors/`，左分区树 + 右属性编辑（分区名/起始/大小/类型），LP 经 `UotanStudio.Firmware.Lp` 元数据读写，Rockchip 经 `RockchipParameter` 解析并重建 `CMDLINE: mtdparts=…` 保存，`FileOpenMode.ResolveMode` 按内容路由到 `EditorOpenMode.Partition`）；固件文件（扩展名命中格式处理器注册表，如 `.img/.pac/.ops/.nb0`）→ `FirmwareInfoViewModel`（`ViewModels/Editors/`）+ `FirmwareInfoView`，只读展示格式名/摘要/元数据/条目，数据来自 `FormatDetector.Detect` + `IFormatHandler.ReadMetadataAsync`。打开方式由 `FileOpenMode.ResolveMode`（`EditorOpenMode`：`Auto/Text/Hex/Dtb/Dex/Axml/Arsc/Apk/Firmware/FileSystem/Partition`，AXML 按内容魔数优先于 `.xml` 文本路由，ARSC 按内容魔数兜底，文件系统镜像按内容魔数优先于固件面板；**已知固件扩展名集合由 `FormatDetector.RegisteredHandlers` 的 `FileExtensions` 聚合**，`IsFirmwareExtension` 统一驱动固件面板与 Hex 路由，避免双源维护）路由，资源管理器右键「打开方式」菜单（含「在固件信息中打开」）与双击（Auto 模式）复用同一消息。
+- **文件/文件夹比较（BC 式）**：服务层在 `Services/Compare/`（`FolderCompareService` 递归目录比对：先比大小、再流式 SHA256，状态 Equal/Different/LeftOnly/RightOnly，含复制/删除动作；`TextDiffService` 基于 **DiffPlex** 的行级 diff + 行号对齐，大文件有界流式；`BinaryDiffService` 流式单遍字节差异区间 `BinaryDiffRange`/统计/`IsTextFile` NUL 探测）。**对比面板已重构为统一双栏视图**（与工作区/节点同级的底边导航栏页面，`ViewModels/Compare/` ↔ `Views/Compare/`，不占用文档区）：`CompareView` 左右分栏（左栏 | 分隔线 | 右栏），由唯一宿主 `CompareViewModel`（`ViewModels/Compare/`）承载三种内容模式 `CompareMode`（`Folder`/`Text`/`Binary`）；每栏经新建 `ComparePaneView` 或直接双 `ListBox` 渲染同一行模型 `CompareRowViewModel`（`ViewModels/Compare/`，含 `Status`/`Depth`/左右单元格文本/`IsLeftDiff` 等），但**左右各自绑定独立行列表**（`CompareViewModel.LeftRows`/`RightRows`，文件夹模式由 `RebuildSideRows` 按单元格空态过滤：仅左侧条目不显示在右侧、仅右侧条目不显示在左侧，不跨栏重复；文本/十六进制模式两侧共享 `Rows`）；仅单侧路径时该侧渲染内容、另一侧置空态提示（`Compare_DropRightFile`/`Compare_DropRightFolder`）；相同两侧都显示无高亮、不同两侧都显示并整行 `DiffBackgroundBrush` 差异高亮，仅单侧条目在所属侧整行淡色背景（`CompareRowViewModel.LeftTintBrush` 橙调 / `RightTintBrush` 蓝调，`ForFolder` 对 Equal/Different 两侧填名称与大小、LeftOnly/RightOnly 缺失侧单元格置空）；点击任一侧条目按引用在另一侧查找同一行对象联动选中（找不到则不联动，`_syncingSelection` 防回环）；两侧 `ListBox` 内 `ScrollViewer` 经代码后置同步滚动（`_syncing` 防回环）。**二进制/固件文件比较**：`OpenCompareFilesAsync` 内容嗅探——文本 → `Text` 模式（`TextDiffService` 流式行 diff）；二进制（含可识别固件 `.img` 等）→ `Binary` 模式默认展示解析元数据（`FormatDetector.Detect` + `IFormatHandler.ReadMetadataAsync` 得 `FirmwareOpResult`，左右并排显示格式名/摘要/键值/条目/组件），工具栏「`Compare_HexRaw`」按钮切换十六进制原始数据对比（`BinaryViewKind` `Metadata`↔`Hex`，hex 行经 `CompareHexRowCollection` 懒加载集合流式按需读取 + `BinaryDiffService.CompareRanges` 差异高亮，不整读大文件）。**已删除旧结构**：`CompareFolderView`/`CompareFileView`/`CompareBinaryView`（及各自 `.axaml.cs`）、`CompareFolderViewModel`/`CompareFileViewModel`/`CompareBinaryViewModel`、`FolderCompareItemViewModel`、`Views/Controls/BinaryCompareViewer.cs`（`HexViewer`/`HexMetrics` 仍保留供 `HexEditor` 使用）。文本比较（`TextDiffService`）与文件夹比较（`FolderCompareService`）服务层不变。**OS 文件拖拽**：`CompareView` 挂载 `DragDrop`（Avalonia 12 的 `DataTransfer`/`DataFormat.File` 双保险），拖入两个文件 → 按内容嗅探进入 `Text` 或 `Binary` 模式比较，两个目录 → `Folder` 模式文件夹比较，单个路径 → 替换当前比较的单侧（该侧渲染内容、另一侧置空态提示）。入口：「工具」菜单 `Menu_CompareFiles` / `Menu_CompareFolders` → `MenuViewModel.CompareFilesCommand` / `CompareFoldersCommand`（两次选择器）→ `OpenFileCompareRequestMessage` / `OpenFolderCompareRequestMessage` → `App.axaml.cs` 转发到 `MainViewModel.CompareVM`（单例宿主）并发送 `NavigateToTabMessage(NavigationTarget.Compare)` 切换底栏（索引 6）；「视图」菜单「对比」项与文件夹比较双击「不同」条目同样进入该页面。`Compare_*` 本地化键（空态提示/工具栏文案等）保留。DiffPlex 依赖集中在 `Directory.Packages.props`。
+- **镜像面板**：`ImageViewModel`（`ViewModels/Workspace/ImageViewModel.cs`）为单例（`EnsureInstance()` / `Instance`），维护 `Images`（相对工程根目录的 `ImageEntryViewModel`）与 8 个命令（提取 / 合成 img / 合成 br / 删除 / 合成 super / 合成 dat / 打包镜像 / 全选刷入），操作经 `FirmwareService`（`Services/Firmware/FirmwareService.cs`，`SynthesizeSuperAsync` 等）、`PackingService`（`Services/Firmware/PackingService.cs`，按打包设置面板的镜像类型/格式/压缩选项调 `Ext4Builder`/`ErofsBuilder` 打包系统镜像）与 `UotanStudio.Firmware.Dat.DatWriter` 落到 `intermediate/`；文件菜单含「导入镜像」「导出镜像」。`ImageView`（`Views/Workspace/ImageView.axaml(.cs)`）为镜像条目提供**右键菜单**（提取/合成 img/br/super/dat/打包镜像/删除/全部刷入，Click 处理器先 `SelectedImage = 菜单条目` 再执行命令）。全选刷入经 `BatchFlashService`（`Services/Flash/BatchFlashService.cs`，新建）按分区列表逐分区复用 `FlashService.FlashImageAsync`，单分区失败继续，进度回报 `StatusText`。
 - **工程文件（VS 式布局）**：`SolutionPersistenceService`（`Services/Projects/`，静态，`SolutionJsonContext` 源生成 JSON）读写三类文件——解决方案 `<名称>.uotan`（`SolutionSnapshot`：解决方案名 + 引用的固件/节点项目相对路径）、固件项目 `<名称>.uotanfw`（`FirmwareProjectSnapshot`：镜像清单 `ImageEntryDto`（相对路径）+ 打包设置 `ProjectSettingsDto`）、节点项目 `<名称>.uotannode`（`NodeProjectSnapshot`：节点画布 `NodeDto`+`ConnectionDto`）。新建 / 打开 / 保存由 `MenuViewModel` 编排；`MenuViewModel.OpenProjectFromPathAsync(path)` / `ImportFilesAsync(paths)` 供菜单与命令行共用。旧单文件 `.uotan`（`ProjectSnapshot`）已废弃。
 - **工程目录约定**：`ProjectContextService`（`Services/Projects/`，单例）承载当前解决方案：`RootDirectory` = 解决方案文件同名目录，`images/` 存导入镜像，`intermediate/<操作>/` 存中间产物（解包、合成、deleted），`.uotan/` 存会话状态（`settings.json` + `history.json`，类似 VS 的 `.vs/`）。镜像条目一律存相对路径。
 - **操作历史**：`OperationHistoryService`（`Services/Projects/`，单例）维护内存撤销/重做栈（容量 50），工作区操作通过 `Record(description, [HistoryOperationDto,] undo, redo)` 登记；带 `HistoryOperationDto` 的条目可经 `SaveAsync`/`LoadAsync` 持久化到 `.uotan/history.json` 并跨会话重建（重建工厂由 `ImageViewModel` 注册到 `ReconstructOperation`）。`MenuViewModel` 的 Undo/Redo 优先执行历史，未命中再转发 `NodeEditorActionMessage`。
@@ -100,9 +157,9 @@ ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目
 **核心组件：**
 - `DeviceMonitorService`：启动时执行全量 USB 扫描并监听热插拔（Windows 原生 WM_DEVICECHANGE，其他平台轮询快照）与 adb server 设备变更；结果缓存至下一次变更，提供 `Scan()` / `ForceRefreshAsync()` / `FindDeviceBySerial()` / `OpenUsbSession()` / `OpenAdbSession()` / `OpenFastbootSession()` / `OpenEdlSession()` / `OpenRkdlSession()` / `RebootAsync()`。与 Google 官方 adb server（127.0.0.1:5037）交互使用 `AdvancedSharpAdbClient`（探测结果缓存 3 秒，server 未运行时静默降级为仅 USB 源）。
 - `DetectedDevice` / `DeviceProtocolKind`（Adb/Fastboot/Edl/Rkdl）/ `DeviceTransportKind`（Usb/Tcp/Serial）：枚举结果模型，稳定键为 USB `DeviceKey` 或 `"tcp:host:port"`。
-- `DeviceViewModel`（`UotanStudio/ViewModels/Devices/`）为全局单例（`EnsureInstance()` / `Instance`），主窗口底部 Device 选项卡与 Workspace 停靠面板共享同一实例，避免双实例双订阅；`DeviceInfo` 包装枚举设备并承载拉取到的属性（ADB getprop / Fastboot getvar）。除基础的刷新/连接/断开/重启（system/bootloader/recovery/edl）外，还提供**快速固件操作**命令：`OpenAdbShellCommand`（仅 ADB，新控制台执行 `adb -s <serial> shell`）、`FastbootReadInfoCommand`（仅 Fastboot，读 getvar 分区信息）、`QuickFlashCommand`（ADB/Fastboot/EDL/RKDL，选镜像经 `FlashService.FlashImageAsync` 刷写，进度回报 `StatusText`，刷写前经 `FlashConfirmationRequested` 请求确认）；`DeviceView` 工具栏按钮与设备条目**右键菜单**（`Views/Devices/DeviceView.axaml(.cs)`，Click 处理器先 `SelectedDevice = 菜单设备` 再执行命令）均绑定这些命令。
-- 刷写：`UotanStudio/Services/Flash/FlashService` 统一封装 Fastboot 与 EDL（`Firehose`）两条路径，进度经 `FlashProgressMessage` 广播。
-- 固件：`UotanStudio/Services/Firmware/FirmwareService` 基于 `UotanStudio.Firmware` 封装 CPIO 解包/打包、Payload 提取、AVB 校验、Oppo 全格式读取等。
+- `DeviceViewModel`（`UotanStudio/ViewModels/Devices/`）为全局单例（`EnsureInstance()` / `Instance`），主窗口底部 Device 选项卡与 Workspace 停靠面板共享同一实例，避免双实例双订阅；`DeviceInfo` 包装枚举设备并承载拉取到的属性（ADB getprop / Fastboot getvar）。除基础的刷新/连接/断开/重启（system/bootloader/recovery/edl）外，还提供**快速固件操作**命令：`OpenAdbShellCommand`（仅 ADB，新控制台执行 `adb -s <serial> shell`）、`FastbootReadInfoCommand`（仅 Fastboot，读 getvar 分区信息）、`QuickFlashCommand`（ADB/Fastboot/EDL/RKDL，选镜像经 `FlashService.FlashImageAsync` 刷写，进度回报 `StatusText`，刷写前经 `FlashConfirmationRequested` 请求确认）、`BackupPartitionCommand`/`RestorePartitionCommand`（仅 Fastboot，经 `BackupService.BackupFastbootPartition`/`RestoreFastbootPartition` 备份/恢复分区镜像，进度回报 `StatusText`，进度经 `BackupProgressMessage` 转发统一日志）；`DeviceView` 工具栏按钮与设备条目**右键菜单**（`Views/Devices/DeviceView.axaml(.cs)`，Click 处理器先 `SelectedDevice = 菜单设备` 再执行命令）均绑定这些命令。
+- 刷写：`UotanStudio/Services/Flash/FlashService` 统一封装 Fastboot 与 EDL（`Firehose`）两条路径，进度经 `FlashProgressMessage` 广播；Fastboot 路径支持 **sparse 感知分片刷写**（`FlashImageChunked`：镜像 ≤ max-download-size 时单次 download+flash（稀疏原样交由 bootloader）；超过时转/拆为稀疏分片顺序刷写，行为对齐 AOSP fastboot）；Fastboot 路径在设置 `AppSettings.AutoBackupBeforeFlash`（`SettingsPersistenceService`）开启时，刷写前自动备份目标分区到工程 `.uotan/backup/`（失败仅记警告，不中断刷写）。
+- 固件：`UotanStudio/Services/Firmware/FirmwareService` 基于 `UotanStudio.Firmware` 封装 CPIO 解包/打包、Payload 提取、AVB 校验与签名（`VerifyAvbAsync` / `SignVbmetaAsync` / `AddHashFooterAsync`，经 `UotanStudio.Firmware.Avb.AvbSigner`）、Oppo 全格式读取等。
 - USB 诊断：`UsbLogBridge`（`UotanStudio/Services/Devices/UsbLogBridge.cs`，`IUsbLogger`）把 `UotanStudio.Comm` 的 `UsbTrace` 输出桥接到统一日志，`UsbLogBridge.Install()` 安装。
 
 **关键约定：**

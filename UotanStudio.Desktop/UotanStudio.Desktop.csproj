@@ -1,12 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-	  <!-- 临时关闭 AOT 发布配置以支持 Avalonia 布局预览器；发布 AOT 时恢复：
-	       <PublishAot>true</PublishAot>
-	       <IsAotCompatible>true</IsAotCompatible>
-	       <TrimMode>partial</TrimMode> -->
-    <PublishAot>false</PublishAot>
-    <IsAotCompatible>false</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <TrimMode>partial</TrimMode>
   </PropertyGroup>
 
   <PropertyGroup>
