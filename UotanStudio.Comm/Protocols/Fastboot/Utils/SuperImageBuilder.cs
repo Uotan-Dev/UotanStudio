@@ -138,7 +138,88 @@ public sealed class SuperLogicalPartition(
 }
 
 /// <summary>
-/// Parsed LP metadata (header + tables + partitions) for one metadata slot of a super image.
+/// A single extent of a logical partition, describing a contiguous run of 512-byte sectors.
+/// <para>逻辑分区的单个 extent，描述一段连续的 512 字节扇区。</para>
+/// </summary>
+/// <remarks>
+/// Initializes a new instance of the <see cref="SuperImageExtent"/> class.
+/// <para>初始化 <see cref="SuperImageExtent"/> 类的新实例。</para>
+/// </remarks>
+public sealed class SuperImageExtent(
+    ulong numSectors, uint targetType, ulong targetData, uint targetSource)
+{
+    /// <summary>Gets the number of 512-byte sectors in this extent. 此 extent 的 512 字节扇区数。</summary>
+    public ulong NumSectors { get; } = numSectors;
+
+    /// <summary>Gets the target type: <see cref="SuperImageBuilder.LinearTargetType"/> or
+    /// <see cref="SuperImageBuilder.ZeroTargetType"/>. 目标类型：<see cref="SuperImageBuilder.LinearTargetType"/>
+    /// 或 <see cref="SuperImageBuilder.ZeroTargetType"/>。</summary>
+    public uint TargetType { get; } = targetType;
+
+    /// <summary>Gets the starting sector, relative to the first logical sector of the block device.
+    /// 起始扇区（相对块设备的首个逻辑扇区）。</summary>
+    public ulong TargetData { get; } = targetData;
+
+    /// <summary>Gets the source block device index. 源块设备索引。</summary>
+    public uint TargetSource { get; } = targetSource;
+}
+
+/// <summary>
+/// A block device described by LP metadata, locating the logical partition data area.
+/// <para>LP 元数据描述的块设备，定位逻辑分区数据区。</para>
+/// </summary>
+/// <remarks>
+/// Initializes a new instance of the <see cref="SuperImageBlockDevice"/> class.
+/// <para>初始化 <see cref="SuperImageBlockDevice"/> 类的新实例。</para>
+/// </remarks>
+public sealed class SuperImageBlockDevice(
+    ulong firstLogicalSector, uint alignment, uint alignmentOffset, ulong size,
+    string partitionName, uint flags)
+{
+    /// <summary>Gets the first sector available for logical partitions. 可用于逻辑分区的首个扇区。</summary>
+    public ulong FirstLogicalSector { get; } = firstLogicalSector;
+
+    /// <summary>Gets the alignment requirement in bytes. 对齐要求（字节）。</summary>
+    public uint Alignment { get; } = alignment;
+
+    /// <summary>Gets the alignment offset relative to the first sector. 相对首个扇区的对齐偏移。</summary>
+    public uint AlignmentOffset { get; } = alignmentOffset;
+
+    /// <summary>Gets the total size of the block device in bytes. 块设备总大小（字节）。</summary>
+    public ulong Size { get; } = size;
+
+    /// <summary>Gets the backing partition name. 支撑该块设备的分区名称。</summary>
+    public string PartitionName { get; } = partitionName;
+
+    /// <summary>Gets the device flags. 设备标志。</summary>
+    public uint Flags { get; } = flags;
+}
+
+/// <summary>
+/// A partition specification used to build a super image with <see cref="SuperImageBuilder.Build"/>.
+/// <para>用于通过 <see cref="SuperImageBuilder.Build"/> 构建 super 镜像的分区规格。</para>
+/// </summary>
+/// <remarks>
+/// Initializes a new instance of the <see cref="SuperBuildPartition"/> class.
+/// <para>初始化 <see cref="SuperBuildPartition"/> 类的新实例。</para>
+/// </remarks>
+public sealed class SuperBuildPartition(string name, string groupName, long sizeInBytes, uint attributes = 0)
+{
+    /// <summary>Gets the logical partition name. 逻辑分区名称。</summary>
+    public string Name { get; } = name;
+
+    /// <summary>Gets the partition group name. 分区组名称。</summary>
+    public string GroupName { get; } = groupName;
+
+    /// <summary>Gets the partition size in bytes. 分区大小（字节）。</summary>
+    public long SizeInBytes { get; } = sizeInBytes;
+
+    /// <summary>Gets the partition attributes flags. 分区属性标志。</summary>
+    public uint Attributes { get; } = attributes;
+}
+
+/// <summary>
+/// Parsed LP metadata (header + tables + partitions + extents) for one metadata slot of a super image.
 /// <para>super 镜像某个元数据槽位的解析结果（头 + 表 + 分区）。</para>
 /// </summary>
 /// <remarks>
@@ -148,7 +229,10 @@ public sealed class SuperLogicalPartition(
 public sealed class SuperImageMetadata(
     LpGeometry geometry, int slot, uint majorVersion, uint minorVersion,
     uint headerSize, uint metadataSize, uint metadataMaxSize, uint metadataSlotCount,
-    IReadOnlyList<SuperLogicalPartition> partitions, IReadOnlyList<string> groupNames)
+    IReadOnlyList<SuperLogicalPartition> partitions,
+    IReadOnlyList<SuperImageExtent> extents,
+    IReadOnlyList<SuperImageBlockDevice> blockDevices,
+    IReadOnlyList<string> groupNames)
 {
     /// <summary>Gets the parsed geometry. 解析出的 geometry。</summary>
     public LpGeometry Geometry { get; } = geometry;
@@ -177,16 +261,23 @@ public sealed class SuperImageMetadata(
     /// <summary>Gets the logical partitions described by this metadata slot. 该槽位描述的逻辑分区。</summary>
     public IReadOnlyList<SuperLogicalPartition> Partitions { get; } = partitions;
 
+    /// <summary>Gets all extents referenced by the partitions, indexed by extent index.
+    /// 分区引用的全部 extent（按 extent 索引排列）。</summary>
+    public IReadOnlyList<SuperImageExtent> Extents { get; } = extents;
+
+    /// <summary>Gets the block devices described by this metadata slot. 该槽位描述的块设备。</summary>
+    public IReadOnlyList<SuperImageBlockDevice> BlockDevices { get; } = blockDevices;
+
     /// <summary>Gets the partition group names, indexed by group index. 按组索引排列的分区组名称。</summary>
     public IReadOnlyList<string> GroupNames { get; } = groupNames;
 }
 
 /// <summary>
-/// Reads super partition images: LP geometry / metadata header parsing and logical partition
-/// name enumeration. Building optimized super images requires the LP metadata writer from an
-/// external package and is intentionally left as a <see cref="NotSupportedException"/> skeleton.
-/// <para>读取 super 分区镜像：LP geometry / 元数据头解析与逻辑分区名枚举。构建优化的 super
-/// 镜像需要外部包的 LP 元数据写入器，有意保留为 <see cref="NotSupportedException"/> 骨架。</para>
+/// Reads and builds super partition images: LP geometry / metadata header parsing, logical
+/// partition enumeration, and self-contained LP metadata + super image construction that is
+/// readable back through <see cref="ReadMetadata"/>.
+/// <para>读取与构建 super 分区镜像：LP geometry / 元数据头解析、逻辑分区枚举，以及可被
+/// <see cref="ReadMetadata"/> 回读的自包含 LP 元数据与 super 镜像构建。</para>
 /// </summary>
 public sealed class SuperImageBuilder
 {
@@ -203,6 +294,18 @@ public sealed class SuperImageBuilder
     public const uint MetadataMagic = 0x414C5030;
 
     /// <summary>
+    /// Linear extent target type: data stored within the super device.
+    /// <para>线性 extent 目标类型：数据存储于 super 设备内。</para>
+    /// </summary>
+    public const uint LinearTargetType = 0;
+
+    /// <summary>
+    /// Zero-fill extent target type.
+    /// <para>零填充 extent 目标类型。</para>
+    /// </summary>
+    public const uint ZeroTargetType = 1;
+
+    /// <summary>
     /// Size of one geometry block in bytes; the primary geometry lives at offset 0 and the
     /// backup copy at offset <see cref="GeometryBlockSize"/>.
     /// <para>单个 geometry 块的大小（字节）；主 geometry 位于偏移 0，备份副本位于偏移
@@ -215,6 +318,48 @@ public sealed class SuperImageBuilder
     /// <para>liblp 扇区大小（字节）；所有 extent 以 512 字节扇区计量。</para>
     /// </summary>
     public const int LpSectorSize = 512;
+
+    /// <summary>
+    /// Offset of the metadata area within a built image: two geometry blocks precede it.
+    /// <para>构建镜像中元数据区的偏移：前面是两个 geometry 块。</para>
+    /// </summary>
+    private const int MetadataAreaStart = 2 * GeometryBlockSize;
+
+    /// <summary>Size of the LP metadata header region written by <see cref="Build"/>.
+    /// <see cref="Build"/> 写入的 LP 元数据头区域大小（字节）。</summary>
+    private const int MetadataHeaderSize = 256;
+
+    /// <summary>Size of one table descriptor entry in bytes. 单个表描述符条目的大小（字节）。</summary>
+    private const int TableDescriptorBytes = 12;
+
+    /// <summary>
+    /// Number of fixed bytes before the variable-length UTF-8 name in a partition table entry.
+    /// <para>分区表条目中变长 UTF-8 名称之前的固定字节数。</para>
+    /// </summary>
+    private const int PartitionEntryHeaderBytes = 24;
+
+    /// <summary>Size of one extent table entry in bytes. 单个 extent 表条目的大小（字节）。</summary>
+    private const int ExtentEntryBytes = 24;
+
+    /// <summary>
+    /// Number of fixed bytes before the variable-length UTF-8 name in a group table entry.
+    /// <para>组表条目中变长 UTF-8 名称之前的固定字节数。</para>
+    /// </summary>
+    private const int GroupEntryHeaderBytes = 16;
+
+    /// <summary>Size of one block device table entry in bytes. 单个块设备表条目的大小（字节）。</summary>
+    private const int BlockDeviceEntryBytes = 64;
+
+    /// <summary>Maximum UTF-8 byte length of partition and group names. 分区名与组名的最大 UTF-8 字节长度。</summary>
+    private const int MaxNameBytes = 36;
+
+    /// <summary>LP metadata major version written by <see cref="Build"/>.
+    /// <see cref="Build"/> 写入的 LP 元数据主版本号。</summary>
+    private const uint MetadataMajorVersion = 10;
+
+    /// <summary>LP metadata minor version written by <see cref="Build"/>.
+    /// <see cref="Build"/> 写入的 LP 元数据次版本号。</summary>
+    private const uint MetadataMinorVersion = 0;
 
     /// <summary>
     /// Returns whether the byte array is a super partition image (LP geometry magic present).
@@ -312,8 +457,12 @@ public sealed class SuperImageBuilder
             return null;
         }
 
+        var blockDevicesTable = ReadTable(blob, headerSize + 36, available);
         var extents = ReadExtents(blob, extentsTable.Value.Offset, extentsTable.Value.NumEntries, available);
         var groupNames = ReadGroupNames(blob, groupsTable.Value.Offset, groupsTable.Value.NumEntries, available);
+        var blockDevices = blockDevicesTable == null
+            ? []
+            : ReadBlockDevices(blob, blockDevicesTable.Value.Offset, blockDevicesTable.Value.NumEntries, available);
         var partitions = ReadPartitions(
             blob, partitionsTable.Value.Offset, partitionsTable.Value.NumEntries,
             extents, groupNames, available);
@@ -321,7 +470,7 @@ public sealed class SuperImageBuilder
         return new SuperImageMetadata(
             geometry, slot, majorVersion, minorVersion,
             headerSize, (uint)available, metadataMaxSize, metadataSlotCount,
-            partitions, groupNames);
+            partitions, extents, blockDevices, groupNames);
     }
 
     /// <summary>
@@ -374,28 +523,278 @@ public sealed class SuperImageBuilder
     }
 
     /// <summary>
-    /// Builds an optimized super image.
-    /// <para>构建优化的 super 镜像。</para>
+    /// Builds a super partition image (LP metadata + zero-filled logical partition extents)
+    /// that can be read back with <see cref="ReadMetadata"/>.
+    /// <para>构建可被 <see cref="ReadMetadata"/> 回读的 super 分区镜像（LP 元数据 + 零填充的
+    /// 逻辑分区 extent）。</para>
     /// </summary>
-    /// <remarks>
-    /// Skeleton only: building a super image requires the LP metadata writer and sparse image
-    /// generator from an external package (FirmwareKit.Lp). This project deliberately provides
-    /// parse/read helpers only, so building is not supported without adding that dependency.
-    /// <para>仅骨架：构建 super 镜像需要外部包（FirmwareKit.Lp）的 LP 元数据写入器与稀疏镜像
-    /// 生成器。本项目刻意只提供解析/读取辅助，未添加该依赖时不支持构建。</para>
-    /// </remarks>
+    /// <param name="partitions">The logical partitions to describe, in extent order.
+    /// 要描述的逻辑分区（按 extent 顺序）。</param>
     /// <param name="deviceSize">The super device size in bytes. super 设备大小（字节）。</param>
     /// <param name="metadataMaxSize">The metadata slot size in bytes. 元数据槽位大小（字节）。</param>
-    /// <param name="metadataSlotCount">The number of metadata slots. 元数据槽位数量。</param>
-    /// <param name="blockSize">The logical block size in bytes. 逻辑块大小（字节）。</param>
-    /// <returns>This method always throws. 本方法始终抛出异常。</returns>
-    /// <exception cref="NotSupportedException">Thrown because no external LP package is referenced. 因未引用外部 LP 包而抛出。</exception>
-    public byte[] Build(uint deviceSize, uint metadataMaxSize, uint metadataSlotCount, uint blockSize = 4096)
+    /// <param name="metadataSlotCount">The number of metadata slots (primary + backup copies).
+    /// 元数据槽位数量（主/备份副本）。</param>
+    /// <param name="blockSize">The logical block size in bytes (power of two, multiple of 512).
+    /// 逻辑块大小（字节，512 的二次幂倍数）。</param>
+    /// <returns>The complete super image bytes. 完整的 super 镜像字节。</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="partitions"/> is null.
+    /// <paramref name="partitions"/> 为 null 时抛出。</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="deviceSize"/>,
+    /// <paramref name="metadataMaxSize"/>, <paramref name="metadataSlotCount"/>,
+    /// <paramref name="blockSize"/> or a partition size is invalid.
+    /// 任一布局参数或分区大小无效时抛出。</exception>
+    /// <exception cref="ArgumentException">Thrown when a partition name or group name is empty or
+    /// too long. 分区名称或组名称为空或过长时抛出。</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the serialized metadata exceeds
+    /// <paramref name="metadataMaxSize"/>. 序列化元数据超过 <paramref name="metadataMaxSize"/> 时抛出。</exception>
+    public byte[] Build(
+        IReadOnlyList<SuperBuildPartition> partitions,
+        uint deviceSize,
+        uint metadataMaxSize,
+        uint metadataSlotCount,
+        uint blockSize = 4096)
     {
-        throw new NotSupportedException(
-            "Building super images requires the LP metadata writer (FirmwareKit.Lp), which is " +
-            "not referenced in this project. 构建 super 镜像需要 LP 元数据写入器（FirmwareKit.Lp），" +
-            "本项目未引用该包。");
+        ArgumentNullException.ThrowIfNull(partitions);
+        if (deviceSize == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(deviceSize), "Super device size must be positive. super 设备大小必须为正。");
+        }
+
+        if (metadataSlotCount == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(metadataSlotCount), "At least one metadata slot is required. 至少需要一个元数据槽位。");
+        }
+
+        if (metadataMaxSize < MetadataHeaderSize + (4 * TableDescriptorBytes))
+        {
+            throw new ArgumentOutOfRangeException(nameof(metadataMaxSize), "Metadata slot size is too small for an LP metadata header. 元数据槽位大小过小，无法容纳 LP 元数据头。");
+        }
+
+        if (blockSize == 0 || blockSize % LpSectorSize != 0 || (blockSize & (blockSize - 1)) != 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(blockSize), "Block size must be a non-zero power of two that is a multiple of 512. 块大小必须是非零且为 512 的整数倍的二次幂。");
+        }
+
+        // Group list: "default" first, then every referenced group in order of first appearance.
+        // 组列表："default" 在最前，其余按首次出现顺序排列。
+        var groupNames = BuildGroupNames(partitions);
+        var groupIndexes = new Dictionary<string, uint>(groupNames.Count, StringComparer.Ordinal);
+        for (var i = 0; i < groupNames.Count; i++)
+        {
+            groupIndexes[groupNames[i]] = (uint)i;
+        }
+
+        // Assign one linear extent per partition, starting at the first logical sector.
+        // 为每个分区分配一个线性 extent，从首个逻辑扇区起连续排布。
+        var extents = new (ulong NumSectors, ulong TargetData)[partitions.Count];
+        ulong nextSector = 0;
+        for (var i = 0; i < partitions.Count; i++)
+        {
+            var partition = partitions[i];
+            var nameBytes = Encoding.UTF8.GetBytes(partition.Name);
+            if (nameBytes.Length == 0 || nameBytes.Length > MaxNameBytes)
+            {
+                throw new ArgumentException($"Partition name must be 1..{MaxNameBytes} UTF-8 bytes. 分区名称必须是 1..{MaxNameBytes} 个 UTF-8 字节。", nameof(partitions));
+            }
+
+            if (partition.SizeInBytes < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(partitions), $"Partition '{partition.Name}' has a negative size. 分区 '{partition.Name}' 大小为负。");
+            }
+
+            var sectors = SectorCount(partition.SizeInBytes);
+            extents[i] = (sectors, nextSector);
+            nextSector = checked(nextSector + sectors);
+        }
+
+        // Image layout: two geometry blocks, primary metadata slots, logical data area, then
+        // backup metadata slots at the end of the device.
+        // 镜像布局：两个 geometry 块、主元数据槽位、逻辑数据区，设备末尾为备份元数据槽位。
+        var metadataAreaBytes = checked((ulong)metadataMaxSize * metadataSlotCount);
+        var firstLogicalByte = AlignUp((ulong)MetadataAreaStart + metadataAreaBytes, blockSize);
+        var firstLogicalSector = firstLogicalByte / LpSectorSize;
+        var dataBytes = checked(nextSector * LpSectorSize);
+        var backupStart = checked((ulong)deviceSize - metadataAreaBytes);
+        if (firstLogicalByte + dataBytes > backupStart)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(deviceSize),
+                $"Super device size {deviceSize} is too small; metadata and logical partitions need at least {firstLogicalByte + dataBytes + metadataAreaBytes} bytes. super 设备大小 {deviceSize} 过小；元数据与逻辑分区至少需要 {firstLogicalByte + dataBytes + metadataAreaBytes} 字节。");
+        }
+
+        var metadataBlob = BuildMetadataBlob(
+            partitions, groupIndexes, groupNames, extents,
+            firstLogicalSector, deviceSize, metadataMaxSize, metadataSlotCount, blockSize);
+
+        var image = new byte[deviceSize];
+        WriteGeometry(image, 0, metadataMaxSize, metadataSlotCount, blockSize);
+        WriteGeometry(image, GeometryBlockSize, metadataMaxSize, metadataSlotCount, blockSize);
+
+        for (uint slot = 0; slot < metadataSlotCount; slot++)
+        {
+            metadataBlob.CopyTo(image, checked((int)(MetadataAreaStart + (slot * metadataMaxSize))));
+            metadataBlob.CopyTo(image, checked((int)(backupStart + (slot * metadataMaxSize))));
+        }
+
+        return image;
+    }
+
+    private static List<string> BuildGroupNames(IReadOnlyList<SuperBuildPartition> partitions)
+    {
+        var groups = new List<string> { "default" };
+        foreach (var partition in partitions)
+        {
+            var name = GroupOf(partition.GroupName);
+            if (!groups.Contains(name, StringComparer.Ordinal))
+            {
+                groups.Add(name);
+            }
+        }
+
+        return groups;
+    }
+
+    private static string GroupOf(string? groupName) =>
+        string.IsNullOrWhiteSpace(groupName) ? "default" : groupName;
+
+    private static ulong SectorCount(long sizeInBytes) =>
+        (ulong)((sizeInBytes + LpSectorSize - 1L) / LpSectorSize);
+
+    private static ulong AlignUp(ulong value, ulong alignment) =>
+        (value + alignment - 1) / alignment * alignment;
+
+    private byte[] BuildMetadataBlob(
+        IReadOnlyList<SuperBuildPartition> partitions,
+        IReadOnlyDictionary<string, uint> groupIndexes,
+        IReadOnlyList<string> groupNames,
+        IReadOnlyList<(ulong NumSectors, ulong TargetData)> extents,
+        ulong firstLogicalSector,
+        uint deviceSize,
+        uint metadataMaxSize,
+        uint metadataSlotCount,
+        uint blockSize)
+    {
+        long partitionsTableLength = 0;
+        foreach (var partition in partitions)
+        {
+            partitionsTableLength = checked(partitionsTableLength + PartitionEntryHeaderBytes + Encoding.UTF8.GetByteCount(partition.Name));
+        }
+
+        long groupsTableLength = 0;
+        foreach (var name in groupNames)
+        {
+            groupsTableLength = checked(groupsTableLength + GroupEntryHeaderBytes + Encoding.UTF8.GetByteCount(name));
+        }
+
+        var extentsTableLength = checked(extents.Count * (long)ExtentEntryBytes);
+        long tablesStart = checked(MetadataHeaderSize + (4 * TableDescriptorBytes));
+        var partitionsTableOffset = tablesStart;
+        var extentsTableOffset = checked(partitionsTableOffset + partitionsTableLength);
+        var groupsTableOffset = checked(extentsTableOffset + extentsTableLength);
+        var blockDevicesTableOffset = checked(groupsTableOffset + groupsTableLength);
+        var metadataSize = checked(blockDevicesTableOffset + BlockDeviceEntryBytes);
+        if (metadataSize > metadataMaxSize)
+        {
+            throw new InvalidOperationException(
+                $"Serialized LP metadata ({metadataSize} bytes) exceeds the metadata slot size ({metadataMaxSize} bytes). 序列化的 LP 元数据（{metadataSize} 字节）超过元数据槽位大小（{metadataMaxSize} 字节）。");
+        }
+
+        var blob = new byte[metadataSize];
+        BinaryPrimitives.WriteUInt32LittleEndian(blob, MetadataMagic);
+        BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(4), MetadataMajorVersion);
+        BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(8), MetadataMinorVersion);
+        BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(12), (uint)MetadataHeaderSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(16), (uint)metadataSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(20), metadataMaxSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(24), metadataSlotCount);
+
+        WriteTableDescriptor(blob, MetadataHeaderSize + 0, partitionsTableOffset, (uint)partitions.Count, PartitionEntryHeaderBytes);
+        WriteTableDescriptor(blob, MetadataHeaderSize + 12, extentsTableOffset, (uint)extents.Count, ExtentEntryBytes);
+        WriteTableDescriptor(blob, MetadataHeaderSize + 24, groupsTableOffset, (uint)groupNames.Count, GroupEntryHeaderBytes);
+        WriteTableDescriptor(blob, MetadataHeaderSize + 36, blockDevicesTableOffset, 1, BlockDeviceEntryBytes);
+
+        // Partitions table: variable-length entries (fixed header + UTF-8 name).
+        // 分区表：变长条目（固定头 + UTF-8 名称）。
+        long cursor = partitionsTableOffset;
+        for (var i = 0; i < partitions.Count; i++)
+        {
+            var partition = partitions[i];
+            var nameBytes = Encoding.UTF8.GetBytes(partition.Name);
+            var span = blob.AsSpan((int)cursor);
+            BinaryPrimitives.WriteUInt32LittleEndian(span, (uint)nameBytes.Length);
+            BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(4), partition.Attributes);
+            BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(8), (uint)i);
+            BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(12), 1);
+            BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(16), groupIndexes[GroupOf(partition.GroupName)]);
+            nameBytes.CopyTo(span.Slice(PartitionEntryHeaderBytes));
+            cursor = checked(cursor + PartitionEntryHeaderBytes + nameBytes.Length);
+        }
+
+        // Extents table: fixed 24-byte entries.
+        // extent 表：固定 24 字节条目。
+        cursor = extentsTableOffset;
+        for (var i = 0; i < extents.Count; i++)
+        {
+            var span = blob.AsSpan((int)cursor);
+            BinaryPrimitives.WriteUInt64LittleEndian(span, extents[i].NumSectors);
+            BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(8), LinearTargetType);
+            BinaryPrimitives.WriteUInt64LittleEndian(span.Slice(12), extents[i].TargetData);
+            BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(20), 0);
+            cursor = checked(cursor + ExtentEntryBytes);
+        }
+
+        // Groups table: variable-length entries (fixed header + UTF-8 name).
+        // 组表：变长条目（固定头 + UTF-8 名称）。
+        cursor = groupsTableOffset;
+        foreach (var name in groupNames)
+        {
+            var nameBytes = Encoding.UTF8.GetBytes(name);
+            var span = blob.AsSpan((int)cursor);
+            BinaryPrimitives.WriteUInt32LittleEndian(span, (uint)nameBytes.Length);
+            nameBytes.CopyTo(span.Slice(GroupEntryHeaderBytes));
+            cursor = checked(cursor + GroupEntryHeaderBytes + nameBytes.Length);
+        }
+
+        // Block devices table: a single fixed 64-byte entry for the super device.
+        // 块设备表：单个固定 64 字节条目，对应 super 设备。
+        cursor = blockDevicesTableOffset;
+        var blockDevice = blob.AsSpan((int)cursor);
+        BinaryPrimitives.WriteUInt64LittleEndian(blockDevice, firstLogicalSector);
+        BinaryPrimitives.WriteUInt32LittleEndian(blockDevice.Slice(8), blockSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(blockDevice.Slice(12), 0);
+        BinaryPrimitives.WriteUInt64LittleEndian(blockDevice.Slice(16), deviceSize);
+        Encoding.UTF8.GetBytes("super").CopyTo(blockDevice.Slice(24));
+        BinaryPrimitives.WriteUInt32LittleEndian(blockDevice.Slice(60), 0);
+
+        return blob;
+    }
+
+    private static void WriteTableDescriptor(byte[] blob, int descriptorOffset, long tableOffset, uint numEntries, uint entrySize)
+    {
+        // The parser reads the descriptor in the order (numEntries, entrySize, offset).
+        // 解析器按 (numEntries, entrySize, offset) 的顺序读取描述符。
+        var span = blob.AsSpan(descriptorOffset);
+        BinaryPrimitives.WriteUInt32LittleEndian(span, numEntries);
+        BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(4), entrySize);
+        BinaryPrimitives.WriteUInt32LittleEndian(span.Slice(8), (uint)tableOffset);
+    }
+
+    private static void WriteGeometry(byte[] image, int offset, uint metadataMaxSize, uint metadataSlotCount, uint blockSize)
+    {
+        // liblp hashes the first 20 bytes (magic + struct_size + the still zeroed checksum
+        // field) and stores the result in the checksum field.
+        // liblp 对前 20 字节（magic + struct_size + 仍为零的校验和字段）求哈希并存入校验和字段。
+        var checksumInput = new byte[20];
+        BinaryPrimitives.WriteUInt32LittleEndian(checksumInput, GeometryMagic);
+        BinaryPrimitives.WriteUInt32LittleEndian(checksumInput.AsSpan(4), (uint)LpGeometry.StructSizeBytes);
+        var checksum = SHA256.HashData(checksumInput);
+
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset), GeometryMagic);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset + 4), (uint)LpGeometry.StructSizeBytes);
+        checksum.CopyTo(image.AsSpan(offset + 8));
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset + 40), metadataMaxSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset + 44), metadataSlotCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset + 48), blockSize);
     }
 
     private static (uint NumEntries, uint EntrySize, uint Offset)? ReadTable(ReadOnlySpan<byte> blob, long offset, long available)
@@ -408,18 +807,41 @@ public sealed class SuperImageBuilder
             BinaryPrimitives.ReadUInt32LittleEndian(blob.Slice((int)offset + 8, 4)));
     }
 
-    private static List<(ulong NumSectors, uint TargetType, uint TargetData)> ReadExtents(
+    private static List<SuperImageExtent> ReadExtents(
         ReadOnlySpan<byte> blob, uint offset, uint numEntries, long available)
     {
-        var result = new List<(ulong, uint, uint)>((int)Math.Min(numEntries, 1024));
+        var result = new List<SuperImageExtent>((int)Math.Min(numEntries, 1024));
         var cursor = (long)offset;
-        for (var i = 0; i < numEntries && cursor + 24 <= available; i++)
+        for (var i = 0; i < numEntries && cursor + ExtentEntryBytes <= available; i++)
         {
-            result.Add((
-                BinaryPrimitives.ReadUInt64LittleEndian(blob.Slice((int)cursor, 8)),
-                BinaryPrimitives.ReadUInt32LittleEndian(blob.Slice((int)cursor + 8, 4)),
-                BinaryPrimitives.ReadUInt32LittleEndian(blob.Slice((int)cursor + 12, 4))));
-            cursor += 24;
+            var span = blob.Slice((int)cursor, ExtentEntryBytes);
+            result.Add(new SuperImageExtent(
+                BinaryPrimitives.ReadUInt64LittleEndian(span),
+                BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(8)),
+                BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(12)),
+                BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(20))));
+            cursor += ExtentEntryBytes;
+        }
+
+        return result;
+    }
+
+    private static List<SuperImageBlockDevice> ReadBlockDevices(
+        ReadOnlySpan<byte> blob, uint offset, uint numEntries, long available)
+    {
+        var result = new List<SuperImageBlockDevice>((int)Math.Min(numEntries, 8));
+        var cursor = (long)offset;
+        for (var i = 0; i < numEntries && cursor + BlockDeviceEntryBytes <= available; i++)
+        {
+            var span = blob.Slice((int)cursor, BlockDeviceEntryBytes);
+            result.Add(new SuperImageBlockDevice(
+                BinaryPrimitives.ReadUInt64LittleEndian(span),
+                BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(8)),
+                BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(12)),
+                BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(16)),
+                DecodeUtf8(span.Slice(24, 36)),
+                BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(60))));
+            cursor += BlockDeviceEntryBytes;
         }
 
         return result;
@@ -450,12 +872,12 @@ public sealed class SuperImageBuilder
 
     private static List<SuperLogicalPartition> ReadPartitions(
         ReadOnlySpan<byte> blob, uint offset, uint numEntries,
-        IReadOnlyList<(ulong NumSectors, uint TargetType, uint TargetData)> extents,
+        IReadOnlyList<SuperImageExtent> extents,
         IReadOnlyList<string> groupNames, long available)
     {
         var result = new List<SuperLogicalPartition>((int)Math.Min(numEntries, 256));
         var cursor = (long)offset;
-        for (var i = 0; i < numEntries && cursor + 24 <= available; i++)
+        for (var i = 0; i < numEntries && cursor + PartitionEntryHeaderBytes <= available; i++)
         {
             var nameSize = BinaryPrimitives.ReadUInt32LittleEndian(blob.Slice((int)cursor, 4));
             var attributes = BinaryPrimitives.ReadUInt32LittleEndian(blob.Slice((int)cursor + 4, 4));
@@ -463,19 +885,19 @@ public sealed class SuperImageBuilder
             var numExtents = BinaryPrimitives.ReadUInt32LittleEndian(blob.Slice((int)cursor + 12, 4));
             var groupIndex = BinaryPrimitives.ReadUInt32LittleEndian(blob.Slice((int)cursor + 16, 4));
 
-            if (nameSize == 0 || cursor + 24 + nameSize > available)
+            if (nameSize == 0 || cursor + PartitionEntryHeaderBytes + nameSize > available)
             {
                 break;
             }
 
-            var name = DecodeUtf8(blob.Slice((int)cursor + 24, (int)nameSize));
+            var name = DecodeUtf8(blob.Slice((int)cursor + PartitionEntryHeaderBytes, (int)nameSize));
             var sizeInBytes = 0L;
             for (var e = 0; e < numExtents; e++)
             {
                 var extentIndex = firstExtentIndex + e;
                 if (extentIndex < extents.Count)
                 {
-                    sizeInBytes += (long)extents[(int)extentIndex].NumSectors * LpSectorSize;
+                    sizeInBytes = checked(sizeInBytes + (long)extents[(int)extentIndex].NumSectors * LpSectorSize);
                 }
             }
 
@@ -483,7 +905,7 @@ public sealed class SuperImageBuilder
             result.Add(new SuperLogicalPartition(
                 name, groupIndex, groupName, attributes, firstExtentIndex, numExtents, sizeInBytes));
 
-            cursor += 24 + nameSize;
+            cursor += PartitionEntryHeaderBytes + nameSize;
         }
 
         return result;

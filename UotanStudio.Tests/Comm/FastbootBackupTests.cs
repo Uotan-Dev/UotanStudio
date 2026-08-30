@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Comm.Protocols.Fastboot;
+using UotanStudio.Comm.Protocols.Fastboot.Utils;
 using UotanStudio.Services.Flash;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -86,6 +87,66 @@ public class FastbootBackupTests
         finally
         {
             session.Dispose();
+        }
+    }
+
+    [Fact]
+    public void BuildSuperImage_RoundTripsThroughReadMetadata()
+    {
+        const uint metadataMaxSize = 64 * 1024;
+        const uint metadataSlotCount = 2;
+
+        var partitions = new[]
+        {
+            new SuperBuildPartition("system", "default", 0x20000, attributes: 0x2),
+            new SuperBuildPartition("vendor", "default", 0x10000),
+            new SuperBuildPartition("odm", "vendor_data", 0x08000),
+        };
+
+        var builder = new SuperImageBuilder();
+        var image = builder.Build(partitions, deviceSize: 8 * 1024 * 1024, metadataMaxSize, metadataSlotCount);
+
+        Assert.True(builder.IsSuperImage(image));
+
+        var metadata = builder.ReadMetadata(image);
+        Assert.NotNull(metadata);
+        Assert.Equal(metadataSlotCount, metadata.MetadataSlotCount);
+        Assert.Equal(metadataMaxSize, metadata.MetadataMaxSize);
+        Assert.Equal(0, metadata.Slot);
+        Assert.True(metadata.Geometry.IsChecksumValid);
+        Assert.Equal(SuperImageBuilder.GeometryBlockSize, (int)metadata.Geometry.LogicalBlockSize);
+
+        Assert.Equal(partitions.Length, metadata.Partitions.Count);
+        for (var i = 0; i < partitions.Length; i++)
+        {
+            Assert.Equal(partitions[i].Name, metadata.Partitions[i].Name);
+            Assert.Equal(partitions[i].SizeInBytes, metadata.Partitions[i].SizeInBytes);
+            Assert.Equal(partitions[i].Attributes, metadata.Partitions[i].Attributes);
+            Assert.Equal(partitions[i].GroupName, metadata.Partitions[i].GroupName);
+        }
+
+        // Every partition maps to exactly one linear extent inside the image data area.
+        Assert.Equal(partitions.Length, metadata.Extents.Count);
+        var firstLogicalSector = Assert.Single(metadata.BlockDevices).FirstLogicalSector;
+        Assert.True(firstLogicalSector > 0);
+        for (var i = 0; i < partitions.Length; i++)
+        {
+            var extent = metadata.Extents[i];
+            Assert.Equal((ulong)(partitions[i].SizeInBytes / SuperImageBuilder.LpSectorSize), extent.NumSectors);
+            Assert.Equal(SuperImageBuilder.LinearTargetType, extent.TargetType);
+            var dataStart = (long)((firstLogicalSector + extent.TargetData) * (ulong)SuperImageBuilder.LpSectorSize);
+            var dataEnd = dataStart + partitions[i].SizeInBytes;
+            Assert.InRange(dataEnd, 1, image.Length);
+        }
+
+        // Backup copies: every metadata slot reads back identically.
+        for (uint slot = 0; slot < metadataSlotCount; slot++)
+        {
+            var slotMetadata = builder.ReadMetadata(image, (int)slot);
+            Assert.NotNull(slotMetadata);
+            Assert.Equal(metadata.MetadataSize, slotMetadata.MetadataSize);
+            Assert.Equal(metadata.Partitions.Count, slotMetadata.Partitions.Count);
+            Assert.Equal(metadata.Partitions[0].Name, slotMetadata.Partitions[0].Name);
         }
     }
 

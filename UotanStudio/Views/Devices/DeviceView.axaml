@@ -117,6 +117,18 @@
                         ToolTip.Tip="{DynamicResource Device_QuickFlash}">
                     <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
                 </Button>
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding BackupPartitionCommand}"
+                        CommandParameter="boot"
+                        ToolTip.Tip="{DynamicResource Device_BackupPartition}">
+                    <avalonia:MaterialIcon Kind="DatabaseArrowUp" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding RestorePartitionCommand}"
+                        CommandParameter="boot"
+                        ToolTip.Tip="{DynamicResource Device_RestorePartition}">
+                    <avalonia:MaterialIcon Kind="DatabaseArrowDown" Width="16" Height="16" />
+                </Button>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.7" Margin="8,0" />
             </StackPanel>
@@ -166,6 +178,8 @@
                                             <MenuItem Header="{DynamicResource Device_OpenAdbShell}" Click="OnOpenAdbShellMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_FastbootReadInfo}" Click="OnFastbootReadInfoMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_QuickFlash}" Click="OnQuickFlashMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_BackupPartition}" Click="OnBackupMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_RestorePartition}" Click="OnRestoreMenuClick" />
                                         </ContextMenu>
                                     </StackPanel.ContextMenu>
                                     <!-- 序列号 -->

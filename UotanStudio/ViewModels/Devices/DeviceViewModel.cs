@@ -6,7 +6,11 @@ using AdvancedSharpAdbClient;
 using AdvancedSharpAdbClient.Receivers;
 using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Protocols.Edl;
+using UotanStudio.Comm.Protocols.Edl.FlashBundle;
+using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
@@ -66,9 +70,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(CanOpenAdbShell));
                 OnPropertyChanged(nameof(CanFastbootReadInfo));
                 OnPropertyChanged(nameof(CanQuickFlash));
+                OnPropertyChanged(nameof(CanBackupRestore));
                 OpenAdbShellCommand.NotifyCanExecuteChanged();
                 FastbootReadInfoCommand.NotifyCanExecuteChanged();
                 QuickFlashCommand.NotifyCanExecuteChanged();
+                BackupPartitionCommand.NotifyCanExecuteChanged();
+                RestorePartitionCommand.NotifyCanExecuteChanged();
             }
         }
     }
@@ -108,6 +115,13 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         : $"Serial: {SelectedDevice.Serial}\nMode: {SelectedDevice.Mode}\nState: {SelectedDevice.State}\nTransport: {SelectedDevice.Transport}\nModel: {SelectedDevice.Model}\nAndroid: {SelectedDevice.AndroidVersion}";
 
     /// <summary>
+    /// <para>各分区最近一次转发到统一日志的备份/还原进度百分比，用于去重避免刷屏。</para>
+    /// Last backup/restore progress percent forwarded to the unified log per partition,
+    /// used to deduplicate repeated values and avoid flooding the log.
+    /// </summary>
+    private readonly Dictionary<string, int> _backupProgressByPartition = [];
+
+    /// <summary>
     /// <para>初始化设备视图模型：启动设备监视服务（含启动全量 USB 扫描与热插拔监听），
     /// 订阅设备变更事件并执行首次刷新。</para>
     /// Initializes the device view model: starts the device monitor service (which performs
@@ -120,11 +134,32 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         DeviceMonitorService.Instance.DevicesChanged += OnDevicesChanged;
         DeviceMonitorService.Instance.Start();
         _ = RefreshDevicesAsync();
+        WeakReferenceMessenger.Default.Register<BackupProgressMessage>(this, OnBackupProgress);
     }
 
     private void OnDevicesChanged(object? sender, EventArgs e) =>
         // 热插拔/adb server 变更触发的增量刷新：保留当前选择。
         Avalonia.Threading.Dispatcher.UIThread.Post(() => _ = RefreshDevicesAsync());
+
+    /// <summary>
+    /// <para>响应备份/还原进度消息，将进度转发到统一日志（按分区对百分比去重，避免刷屏）。</para>
+    /// Responds to backup/restore progress messages, forwarding progress to the unified log
+    /// (deduplicated by partition and percent to avoid flooding).
+    /// </summary>
+    private void OnBackupProgress(object recipient, BackupProgressMessage message)
+    {
+        var partition = message.Partition ?? string.Empty;
+        if (message.Percent < 100
+            && _backupProgressByPartition.TryGetValue(partition, out var last)
+            && last == message.Percent)
+        {
+            return;
+        }
+
+        _backupProgressByPartition[partition] = message.Percent;
+        LogService.Instance.Write(LogLevel.Info, "BackupService",
+            $"[{message.Percent}%] {message.Status}{(string.IsNullOrEmpty(partition) ? string.Empty : $" ({partition})")}");
+    }
 
     /// <summary>
     /// <para>刷新设备列表：调用设备监视服务执行全量扫描并按协议分组；
@@ -916,6 +951,13 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         or DeviceProtocolKind.Rkdl;
 
     /// <summary>
+    /// <para>是否可对选中设备执行分区备份/还原（Fastboot / EDL 模式设备）。</para>
+    /// Whether partition backup/restore is available for the selected device
+    /// (Fastboot / EDL mode devices).
+    /// </summary>
+    public bool CanBackupRestore => SelectedDevice?.Protocol is DeviceProtocolKind.Fastboot or DeviceProtocolKind.Edl;
+
+    /// <summary>
     /// <para>打开选中设备的 ADB Shell 终端：使用设置中配置的 ADB 路径（未配置则用 PATH 中的 adb），
     /// 在新控制台窗口执行 <c>adb -s &lt;serial&gt; shell</c>。</para>
     /// Opens an interactive ADB shell for the selected device in a new console window, running
@@ -1091,6 +1133,325 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>备份分区入口：为选中 Fastboot 设备经 <c>SaveFileDialog</c> 选择输出路径，
+    /// 打开 fastboot 会话后调用 <see cref="BackupService.BackupFastbootPartition"/> 备份指定分区，
+    /// 进度回报状态栏与统一日志，结果写状态栏。</para>
+    /// Backup entry: picks an output path for the selected Fastboot device via a save-file dialog,
+    /// opens a fastboot session and backs up the given partition through
+    /// <see cref="BackupService.BackupFastbootPartition"/>, reporting progress to the status bar
+    /// and writing the result back to it.
+    /// </summary>
+    /// <param name="partition"><para>目标分区名；null 时使用 "boot"。</para>The target partition; "boot" when null.</param>
+    [RelayCommand(CanExecute = nameof(CanBackupRestore))]
+    private async Task BackupPartitionAsync(object? partition)
+    {
+        var device = SelectedDevice;
+        if (device is null)
+        {
+            return;
+        }
+
+        var partitionName = partition as string;
+        if (string.IsNullOrWhiteSpace(partitionName))
+        {
+            partitionName = "boot";
+        }
+
+        var topLevel = TopLevelExtensions.GetTopLevel();
+        if (topLevel is null)
+        {
+            return;
+        }
+
+        if (device.Protocol == DeviceProtocolKind.Edl)
+        {
+            await BackupEdlPartitionCoreAsync(device, partitionName).ConfigureAwait(true);
+            return;
+        }
+
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = LanguageService.Instance.GetString("Backup_SaveTitle"),
+            SuggestedFileName = $"{partitionName}.img",
+            DefaultExtension = "img",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("Images") { Patterns = ["*.img"] },
+                new FilePickerFileType("All files") { Patterns = ["*.*"] }
+            ]
+        }).ConfigureAwait(true);
+        if (file is null)
+        {
+            return;
+        }
+
+        var outPath = file.Path.LocalPath;
+        StatusText = $"{LanguageService.Instance.GetString("Backup_BackingUp")} {partitionName}...";
+        try
+        {
+            var progress = new Progress<BackupProgress>(bp =>
+            {
+                var percent = Math.Clamp(bp.Percent, 0, 100);
+                StatusText = $"[{percent}%] {bp.Status}";
+            });
+            var result = await Task.Run(() =>
+            {
+                using var session = DeviceMonitorService.Instance.OpenFastbootSession(device.Device)
+                    ?? throw new InvalidOperationException("No fastboot session available. 无法建立 fastboot 会话。");
+                if (!session.IsConnected)
+                {
+                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
+                }
+
+                return BackupService.BackupFastbootPartition(session, partitionName, outPath, progress, CancellationToken.None);
+            }).ConfigureAwait(true);
+            StatusText = result.Success
+                ? $"{LanguageService.Instance.GetString("Backup_Done")} {partitionName}"
+                : $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                $"Backup {partitionName} from {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}";
+            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Backup {partitionName} from {device.Serial} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>还原分区入口：为选中 Fastboot 设备经 <c>OpenFileDialog</c> 选择镜像文件，
+    /// 打开 fastboot 会话后调用 <see cref="BackupService.RestoreFastbootPartition"/> 刷回指定分区，
+    /// 进度回报状态栏与统一日志，结果写状态栏。</para>
+    /// Restore entry: picks an image for the selected Fastboot device via an open-file dialog,
+    /// opens a fastboot session and restores the given partition through
+    /// <see cref="BackupService.RestoreFastbootPartition"/>, reporting progress to the status bar
+    /// and writing the result back to it.
+    /// </summary>
+    /// <param name="partition"><para>目标分区名；null 时使用 "boot"。</para>The target partition; "boot" when null.</param>
+    [RelayCommand(CanExecute = nameof(CanBackupRestore))]
+    private async Task RestorePartitionAsync(object? partition)
+    {
+        var device = SelectedDevice;
+        if (device is null)
+        {
+            return;
+        }
+
+        var partitionName = partition as string;
+        if (string.IsNullOrWhiteSpace(partitionName))
+        {
+            partitionName = "boot";
+        }
+
+        var topLevel = TopLevelExtensions.GetTopLevel();
+        if (topLevel is null)
+        {
+            return;
+        }
+
+        if (device.Protocol == DeviceProtocolKind.Edl)
+        {
+            await RestoreEdlPartitionCoreAsync(device, partitionName).ConfigureAwait(true);
+            return;
+        }
+
+        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Backup_OpenTitle"),
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Images") { Patterns = ["*.img", "*.bin"] },
+                new FilePickerFileType("All files") { Patterns = ["*.*"] }
+            ]
+        }).ConfigureAwait(true);
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        var imagePath = files[0].Path.LocalPath;
+        StatusText = $"{LanguageService.Instance.GetString("Backup_Restoring")} {partitionName}...";
+        try
+        {
+            var progress = new Progress<BackupProgress>(bp =>
+            {
+                var percent = Math.Clamp(bp.Percent, 0, 100);
+                StatusText = $"[{percent}%] {bp.Status}";
+            });
+            var result = await Task.Run(() =>
+            {
+                using var session = DeviceMonitorService.Instance.OpenFastbootSession(device.Device)
+                    ?? throw new InvalidOperationException("No fastboot session available. 无法建立 fastboot 会话。");
+                if (!session.IsConnected)
+                {
+                    throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
+                }
+
+                return BackupService.RestoreFastbootPartition(session, partitionName, imagePath, progress, CancellationToken.None);
+            }).ConfigureAwait(true);
+            StatusText = result.Success
+                ? $"{LanguageService.Instance.GetString("Backup_RestoreDone")} {partitionName}"
+                : $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                $"Restore {partitionName} to {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}";
+            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Restore {partitionName} to {device.Serial} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>EDL 备份核心流程：选择 rawprogram XML 解析分区几何与输出路径，打开 EDL 会话后经
+    /// <see cref="BackupService.ResolveEdlPartitionGeometry"/> 与 <see cref="BackupService.BackupEdlPartitionAsync"/>
+    /// 流式备份指定分区，进度回报状态栏与统一日志。</para>
+    /// EDL backup core flow: picks a rawprogram XML for partition geometry plus an output path,
+    /// opens an EDL session and streams the partition backup through
+    /// <see cref="BackupService.ResolveEdlPartitionGeometry"/> and
+    /// <see cref="BackupService.BackupEdlPartitionAsync"/>, reporting progress to the status bar
+    /// and the unified log.
+    /// </summary>
+    /// <param name="device"><para>选中的 EDL 设备。</para>The selected EDL device.</param>
+    /// <param name="partitionName"><para>目标分区名。</para>The target partition name.</param>
+    private async Task BackupEdlPartitionCoreAsync(DeviceInfo device, string partitionName)
+    {
+        var topLevel = TopLevelExtensions.GetTopLevel();
+        if (topLevel is null)
+        {
+            return;
+        }
+
+        var rawProgramFiles = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Backup_SelectRawProgram"),
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("rawprogram") { Patterns = ["*.xml"] },
+                new FilePickerFileType("All files") { Patterns = ["*.*"] }
+            ]
+        }).ConfigureAwait(true);
+        if (rawProgramFiles.Count == 0)
+        {
+            return;
+        }
+
+        var rawProgramPath = rawProgramFiles[0].Path.LocalPath;
+        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = LanguageService.Instance.GetString("Backup_SaveTitle"),
+            SuggestedFileName = $"{partitionName}.img",
+            DefaultExtension = "img",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("Images") { Patterns = ["*.img"] },
+                new FilePickerFileType("All files") { Patterns = ["*.*"] }
+            ]
+        }).ConfigureAwait(true);
+        if (file is null)
+        {
+            return;
+        }
+
+        var outPath = file.Path.LocalPath;
+        StatusText = $"{LanguageService.Instance.GetString("Backup_BackingUp")} {partitionName}...";
+        try
+        {
+            var progress = new Progress<BackupProgress>(bp =>
+            {
+                var percent = Math.Clamp(bp.Percent, 0, 100);
+                StatusText = $"[{percent}%] {bp.Status}";
+            });
+            var result = await Task.Run(() =>
+            {
+                using var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
+                    ?? throw new InvalidOperationException("No EDL session available. 无法建立 EDL 会话。");
+                var (startSector, sectorCount) = BackupService.ResolveEdlPartitionGeometry(rawProgramPath, partitionName);
+                return BackupService.BackupEdlPartitionAsync(session, partitionName, startSector, sectorCount, outPath, progress, CancellationToken.None);
+            }).ConfigureAwait(true);
+            StatusText = result.Success
+                ? $"{LanguageService.Instance.GetString("Backup_Done")} {partitionName}"
+                : $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}: {result.Summary}";
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                $"EDL backup {partitionName} from {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"{LanguageService.Instance.GetString("Backup_Failed")} {partitionName}";
+            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"EDL backup {partitionName} from {device.Serial} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>EDL 还原核心流程：选择 rawprogram XML，解析出目标分区条目后打开 EDL 会话，经
+    /// <see cref="BackupService.RestoreEdlPartitionAsync"/> 刷回该分区（镜像文件由 rawprogram
+    /// 条目引用定位），进度回报状态栏与统一日志。</para>
+    /// EDL restore core flow: picks a rawprogram XML, resolves the target partition entry,
+    /// opens an EDL session and restores the partition through
+    /// <see cref="BackupService.RestoreEdlPartitionAsync"/> (the image is located via the
+    /// rawprogram entry), reporting progress to the status bar and the unified log.
+    /// </summary>
+    /// <param name="device"><para>选中的 EDL 设备。</para>The selected EDL device.</param>
+    /// <param name="partitionName"><para>目标分区名。</para>The target partition name.</param>
+    private async Task RestoreEdlPartitionCoreAsync(DeviceInfo device, string partitionName)
+    {
+        var topLevel = TopLevelExtensions.GetTopLevel();
+        if (topLevel is null)
+        {
+            return;
+        }
+
+        var rawProgramFiles = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString("Backup_SelectRawProgram"),
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("rawprogram") { Patterns = ["*.xml"] },
+                new FilePickerFileType("All files") { Patterns = ["*.*"] }
+            ]
+        }).ConfigureAwait(true);
+        if (rawProgramFiles.Count == 0)
+        {
+            return;
+        }
+
+        var rawProgramPath = rawProgramFiles[0].Path.LocalPath;
+        var imageDir = Path.GetDirectoryName(Path.GetFullPath(rawProgramPath)) ?? string.Empty;
+        StatusText = $"{LanguageService.Instance.GetString("Backup_Restoring")} {partitionName}...";
+        try
+        {
+            var progress = new Progress<BackupProgress>(bp =>
+            {
+                var percent = Math.Clamp(bp.Percent, 0, 100);
+                StatusText = $"[{percent}%] {bp.Status}";
+            });
+            var result = await Task.Run(() =>
+            {
+                using var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
+                    ?? throw new InvalidOperationException("No EDL session available. 无法建立 EDL 会话。");
+                var entries = RawProgramParser.ParseAll([rawProgramPath], imageDir);
+                var entry = FlashService.FindEdlTarget(entries, partitionName, imagePath: null)
+                    ?? throw new InvalidOperationException(
+                        $"Partition '{partitionName}' not found in rawprogram: {rawProgramPath}. 分区 '{partitionName}' 未在 rawprogram 中匹配到。");
+                return BackupService.RestoreEdlPartitionAsync(session, entry, imageDir, progress, CancellationToken.None);
+            }).ConfigureAwait(true);
+            StatusText = result.Success
+                ? $"{LanguageService.Instance.GetString("Backup_RestoreDone")} {partitionName}"
+                : $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}: {result.Summary}";
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "DeviceManager",
+                $"EDL restore {partitionName} to {device.Serial}: {(result.Success ? "OK" : result.Summary)}");
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"{LanguageService.Instance.GetString("Backup_RestoreFailed")} {partitionName}";
+            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"EDL restore {partitionName} to {device.Serial} failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// <para>当需要确认快速刷写操作时引发，由视图处理对话框并将结果写入 TaskCompletionSource。</para>
     /// Raised when a quick flash operation needs confirmation; the view handles the dialog
     /// and writes the result to the TaskCompletionSource.
@@ -1104,6 +1465,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         DeviceMonitorService.Instance.DevicesChanged -= OnDevicesChanged;
+        WeakReferenceMessenger.Default.Unregister<BackupProgressMessage>(this);
         GC.SuppressFinalize(this);
     }
 }

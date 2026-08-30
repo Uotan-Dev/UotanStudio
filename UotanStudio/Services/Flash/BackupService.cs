@@ -244,10 +244,12 @@ public static class BackupService
     }
 
     /// <summary>
-    /// <para>EDL 设备级备份：解析 rawprogram 定位目标分区几何信息，打开会话后委托给
-    /// <see cref="BackupEdlPartitionAsync(EdlSession, RawProgramEntry, string, IProgress{BackupProgress}?, CancellationToken)"/>。</para>
-    /// EDL device-level backup: resolves the target partition geometry from a rawprogram,
-    /// opens a session and delegates to the session-level overload.
+    /// <para>EDL 设备级备份：通过 <see cref="ResolveEdlPartitionGeometry"/> 解析 rawprogram
+    /// 定位目标分区几何信息，打开会话后委托给几何参数重载
+    /// <see cref="BackupEdlPartitionAsync(EdlSession, string, long, long, string, IProgress{BackupProgress}?, CancellationToken)"/>。</para>
+    /// EDL device-level backup: resolves the target partition geometry from a rawprogram via
+    /// <see cref="ResolveEdlPartitionGeometry"/>, opens a session and delegates to the
+    /// geometry-based session-level overload.
     /// </summary>
     /// <param name="device"><para>目标设备。</para>The target device.</param>
     /// <param name="partition"><para>目标分区名（按 label/filename 匹配 rawprogram）。</para>
@@ -257,33 +259,29 @@ public static class BackupService
     /// Path of the rawprogram*.xml providing the partition geometry.</param>
     /// <param name="progress"><para>可选的备份进度报告器。</para>Optional backup progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>备份结果。</returns>
+    /// <returns>备份结果。 Backup result.</returns>
     public static async Task<BackupResult> BackupEdlPartitionAsync(
         DeviceInfo device, string partition, string outPath, string rawProgramPath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(device);
-        if (string.IsNullOrWhiteSpace(rawProgramPath) || !File.Exists(rawProgramPath))
+        if (string.IsNullOrWhiteSpace(partition))
         {
-            throw new FileNotFoundException($"rawprogram file not found: {rawProgramPath} rawprogram 文件不存在。", rawProgramPath);
+            throw new ArgumentException("Partition must not be empty.", nameof(partition));
         }
 
-        var imageDir = Path.GetDirectoryName(Path.GetFullPath(rawProgramPath)) ?? string.Empty;
-        var entries = RawProgramParser.ParseAll([rawProgramPath], imageDir);
-        var entry = FlashService.FindEdlTarget(entries, partition, imagePath: null)
-            ?? throw new InvalidOperationException(
-                $"Partition '{partition}' not found in rawprogram: {rawProgramPath}. 分区 '{partition}' 未在 rawprogram 中匹配到。");
-
+        var (startSector, sectorCount) = ResolveEdlPartitionGeometry(rawProgramPath, partition);
         var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
             ?? throw new InvalidOperationException("No EDL session available for the selected device. 无法为所选设备建立 EDL 会话。");
         using var edl = session;
-        return await BackupEdlPartitionAsync(edl, entry, outPath, progress, ct).ConfigureAwait(false);
+        return await BackupEdlPartitionAsync(edl, partition, startSector, sectorCount, outPath, progress, ct).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// <para>EDL 备份核心：经 Firehose <c>read</c> 读取分区并流式落盘。</para>
-    /// EDL backup core: reads the partition with a Firehose <c>read</c> and streams it to
-    /// disk.
+    /// <para>EDL 备份核心（rawprogram 条目版）：从条目解析扇区几何后经
+    /// <see cref="BackupEdlToFileAsync"/> 流式落盘。</para>
+    /// EDL backup core (rawprogram-entry based): resolves the sector geometry from the entry
+    /// and streams the partition to disk via <see cref="BackupEdlToFileAsync"/>.
     /// </summary>
     /// <param name="session"><para>EDL 会话（按需初始化）。</para>The EDL session, initialized on demand.</param>
     /// <param name="entry"><para>目标 rawprogram 条目（提供扇区几何信息）。</para>
@@ -291,7 +289,7 @@ public static class BackupService
     /// <param name="outPath"><para>落盘文件完整路径。</para>Full path of the output file.</param>
     /// <param name="progress"><para>可选的备份进度报告器。</para>Optional backup progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>备份结果。</returns>
+    /// <returns>备份结果。 Backup result.</returns>
     public static async Task<BackupResult> BackupEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string outPath,
         IProgress<BackupProgress>? progress, CancellationToken ct)
@@ -307,19 +305,137 @@ public static class BackupService
         var sectorSize = entry.SectorSizeInBytes > 0
             ? entry.SectorSizeInBytes
             : (firehose.Configuration.SectorSize > 0 ? firehose.Configuration.SectorSize : 4096);
-        var startSector = FlashService.ParseStartSectorValue(entry.StartSector);
         if (entry.NumPartitionSectors <= 0)
         {
             throw new InvalidOperationException(
                 $"rawprogram entry '{displayName}' has no num_partition_sectors; EDL backup cannot determine the partition size. 无法确定分区扇区数。");
         }
 
-        var totalBytes = entry.NumPartitionSectors * sectorSize;
+        return await BackupEdlToFileAsync(
+            session, displayName, entry.Filename, entry.PhysicalPartitionNumber,
+            FlashService.ParseStartSectorValue(entry.StartSector), entry.NumPartitionSectors, sectorSize,
+            outPath, progress, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <para>EDL 备份核心（几何参数版）：按显式起始扇区/扇区数经 Firehose <c>read</c> 流式落盘。
+    /// 几何可由 <see cref="ResolveEdlPartitionGeometry"/> 从 rawprogram 解析，也可来自其他分区表来源。</para>
+    /// EDL backup core (geometry-based): streams a partition to disk with an explicit start
+    /// sector and sector count via a Firehose <c>read</c>. The geometry may be resolved from a
+    /// rawprogram with <see cref="ResolveEdlPartitionGeometry"/> or come from any other
+    /// partition-table source.
+    /// </summary>
+    /// <param name="session"><para>EDL 会话（按需初始化）。</para>The EDL session, initialized on demand.</param>
+    /// <param name="partition"><para>目标分区名（用于进度展示与 read 文件名）。</para>
+    /// Target partition name (used for progress reporting and the read filename).</param>
+    /// <param name="startSector"><para>起始扇区。</para>The start sector.</param>
+    /// <param name="sectorCount"><para>要读取的扇区数。</para>The number of sectors to read.</param>
+    /// <param name="outPath"><para>落盘文件完整路径。</para>Full path of the output file.</param>
+    /// <param name="progress"><para>可选的备份进度报告器。</para>Optional backup progress reporter.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <returns>备份结果。 Backup result.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><para>起始扇区为负或扇区数为非正时抛出。</para>
+    /// Thrown when the start sector is negative or the sector count is not positive.</exception>
+    public static async Task<BackupResult> BackupEdlPartitionAsync(
+        EdlSession session, string partition, long startSector, long sectorCount,
+        string outPath, IProgress<BackupProgress>? progress, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (string.IsNullOrWhiteSpace(partition))
+        {
+            throw new ArgumentException("Partition must not be empty.", nameof(partition));
+        }
+
+        if (startSector < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(startSector), "Start sector must not be negative. 起始扇区不能为负。");
+        }
+
+        if (sectorCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sectorCount), "Sector count must be greater than zero. 扇区数必须大于 0。");
+        }
+
+        await session.EnsureInitializedAsync(cancellationToken: ct).ConfigureAwait(false);
+        var firehose = session.Firehose
+            ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
+        var sectorSize = firehose.Configuration.SectorSize > 0 ? firehose.Configuration.SectorSize : 4096;
+
+        return await BackupEdlToFileAsync(
+            session, partition, partition, 0, startSector, sectorCount, sectorSize,
+            outPath, progress, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <para>从 rawprogram XML 解析目标分区的几何信息（分区名→起始扇区/扇区数）。</para>
+    /// Resolves the geometry (start sector and sector count) of a target partition from a
+    /// rawprogram XML file.
+    /// </summary>
+    /// <param name="rawProgramPath"><para>rawprogram*.xml 文件路径（提供分区几何信息）。</para>
+    /// Path of the rawprogram*.xml providing the partition geometry.</param>
+    /// <param name="partition"><para>目标分区名（按 label/filename 匹配）。</para>
+    /// Target partition name (matched by label/filename in the rawprogram).</param>
+    /// <returns><para>分区几何：起始扇区与扇区数。</para>The partition geometry: start sector and sector count.</returns>
+    /// <exception cref="FileNotFoundException"><para>rawprogram 文件不存在时抛出。</para>
+    /// Thrown when the rawprogram file is missing.</exception>
+    /// <exception cref="InvalidOperationException"><para>分区未在 rawprogram 中匹配到，或无扇区数时抛出。</para>
+    /// Thrown when the partition is not found in the rawprogram or has no sector count.</exception>
+    public static (long StartSector, long SectorCount) ResolveEdlPartitionGeometry(string rawProgramPath, string partition)
+    {
+        if (string.IsNullOrWhiteSpace(rawProgramPath) || !File.Exists(rawProgramPath))
+        {
+            throw new FileNotFoundException($"rawprogram file not found: {rawProgramPath} rawprogram 文件不存在。", rawProgramPath);
+        }
+
+        var imageDir = Path.GetDirectoryName(Path.GetFullPath(rawProgramPath)) ?? string.Empty;
+        var entries = RawProgramParser.ParseAll([rawProgramPath], imageDir);
+        var entry = FlashService.FindEdlTarget(entries, partition, imagePath: null)
+            ?? throw new InvalidOperationException(
+                $"Partition '{partition}' not found in rawprogram: {rawProgramPath}. 分区 '{partition}' 未在 rawprogram 中匹配到。");
+        if (entry.NumPartitionSectors <= 0)
+        {
+            throw new InvalidOperationException(
+                $"rawprogram entry for '{partition}' has no num_partition_sectors; EDL backup cannot determine the partition size. 无法确定分区扇区数。");
+        }
+
+        return (FlashService.ParseStartSectorValue(entry.StartSector), entry.NumPartitionSectors);
+    }
+
+    /// <summary>
+    /// <para>EDL 备份落盘核心：确保会话初始化后经 Firehose <c>read</c> 流式读取分区并写入文件。</para>
+    /// EDL backup-to-file core: initializes the session on demand and streams the partition to
+    /// disk with a Firehose <c>read</c>.
+    /// </summary>
+    /// <param name="session"><para>EDL 会话。</para>The EDL session.</param>
+    /// <param name="displayName"><para>进度展示用分区名。</para>Partition name shown in progress.</param>
+    /// <param name="filename"><para>Firehose read 的目标文件名。</para>The target filename for the Firehose read.</param>
+    /// <param name="physicalPartition"><para>物理分区编号。</para>The physical partition number.</param>
+    /// <param name="startSector"><para>起始扇区。</para>The start sector.</param>
+    /// <param name="sectorCount"><para>要读取的扇区数。</para>The number of sectors to read.</param>
+    /// <param name="sectorSize"><para>扇区大小（字节）。</para>The sector size in bytes.</param>
+    /// <param name="outPath"><para>落盘文件完整路径。</para>Full path of the output file.</param>
+    /// <param name="progress"><para>可选的备份进度报告器。</para>Optional backup progress reporter.</param>
+    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
+    /// <returns>备份结果。 Backup result.</returns>
+    private static async Task<BackupResult> BackupEdlToFileAsync(
+        EdlSession session, string displayName, string filename, int physicalPartition,
+        long startSector, long sectorCount, long sectorSize,
+        string outPath, IProgress<BackupProgress>? progress, CancellationToken ct)
+    {
+        if (sectorCount <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(sectorCount), "Sector count must be greater than zero. 扇区数必须大于 0。");
+        }
+
+        await session.EnsureInitializedAsync(cancellationToken: ct).ConfigureAwait(false);
+        var firehose = session.Firehose
+            ?? throw new InvalidOperationException("EDL session has no Firehose protocol instance. EDL 会话缺少 Firehose 实例。");
+
         Report(progress, displayName, 10, $"Reading {displayName} via Firehose read... 正在通过 Firehose 读取分区...");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath)) ?? string.Empty);
         using var fs = File.Create(outPath);
         var response = await firehose.ReadToStreamAsync(
-            fs, startSector, entry.NumPartitionSectors, entry.Filename, entry.PhysicalPartitionNumber, ct).ConfigureAwait(false);
+            fs, startSector, sectorCount, filename, physicalPartition, ct).ConfigureAwait(false);
         if (!response.IsAck)
         {
             throw new InvalidOperationException($"Firehose read failed for '{displayName}'. Response: {response.RawValue}");

@@ -193,4 +193,22 @@ public partial class DeviceView : UserControl
             vm.QuickFlashCommand.Execute("boot");
         }
     }
+
+    /// <summary><para>备份右键菜单 Fastboot 设备的 boot 分区。</para>Back up the context-menu Fastboot device's boot partition.</summary>
+    private void OnBackupMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
+        {
+            vm.BackupPartitionCommand.Execute("boot");
+        }
+    }
+
+    /// <summary><para>还原右键菜单 Fastboot 设备的 boot 分区。</para>Restore the context-menu Fastboot device's boot partition.</summary>
+    private void OnRestoreMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
+        {
+            vm.RestorePartitionCommand.Execute("boot");
+        }
+    }
 }

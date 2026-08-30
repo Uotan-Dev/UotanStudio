@@ -254,6 +254,163 @@ public sealed class FirmwareService
     }
 
     /// <summary>
+    /// Signs an Android Verified Boot VBMeta image with the given RSA private key: rebuilds the header,
+    /// embeds the supplied hash descriptors and the AVB-format public key, and streams the signed image
+    /// to the output path. The output can be verified by <see cref="AvbVerifier.VerifyVBMeta"/>.
+    /// <para>使用给定 RSA 私钥对 Android Verified Boot VBMeta 镜像签名：重建头部、嵌入给定哈希
+    /// 描述符与 AVB 格式公钥，并将签名镜像流式写出到输出路径。输出可被
+    /// <see cref="AvbVerifier.VerifyVBMeta"/> 验证。</para>
+    /// </summary>
+    /// <param name="vbmetaPath">The source VBMeta image (header metadata is preserved).
+    /// <para>源 VBMeta 镜像（保留头部元数据）。</para></param>
+    /// <param name="privateKeyPath">The RSA private key file (PEM or DER). <para>RSA 私钥文件（PEM 或 DER）。</para></param>
+    /// <param name="outputPath">The output signed VBMeta image path. <para>输出的已签名 VBMeta 镜像路径。</para></param>
+    /// <param name="descriptors">The hash descriptors to embed. <para>要嵌入的哈希描述符。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> SignVbmetaAsync(
+        string vbmetaPath,
+        string privateKeyPath,
+        string outputPath,
+        IEnumerable<AvbHashDescriptor> descriptors,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            LogService.Instance.Write(LogLevel.Info, "Firmware", $"Signing VBMeta {vbmetaPath} -> {outputPath}");
+
+            var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
+            if (key == null)
+            {
+                return FirmwareOpResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
+            }
+
+            var result = await AvbSigner.SignVbmetaAsync(vbmetaPath, key, outputPath, descriptors, cancellationToken);
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Firmware",
+                result.Success
+                    ? $"VBMeta signed: {result.AlgorithmName}, {result.DescriptorCount} descriptor(s), {result.OutputSize} bytes -> {outputPath}"
+                    : $"VBMeta signing failed: {result.ErrorMessage}");
+
+            return result.Success
+                ? new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"Signed VBMeta ({result.AlgorithmName}, {result.DescriptorCount} descriptor(s)) -> {outputPath}  已签名 VBMeta（{result.AlgorithmName}，{result.DescriptorCount} 个描述符）。"
+                }
+                : FirmwareOpResult.Fail(result.ErrorMessage ?? "VBMeta signing failed. VBMeta 签名失败。");
+        }
+        catch (OperationCanceledException)
+        {
+            return FirmwareOpResult.Fail("VBMeta signing cancelled. VBMeta 签名已取消。");
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <para>一键禁用 VBMeta 镜像的 AVB 校验：置位 hashtree/verification 两个禁用标志并清零认证块
+    /// （见 <see cref="AvbSigner.DisableVbmetaVerificationAsync"/>），无需私钥。输出经临时文件原子提交。</para>
+    /// Disables AVB verification on a VBMeta image in one step: sets the hashtree/verification
+    /// disable flags and zeroes the authentication block (see
+    /// <see cref="AvbSigner.DisableVbmetaVerificationAsync"/>); no private key required. The output
+    /// is committed atomically via a temp file.
+    /// </summary>
+    /// <param name="vbmetaPath">The source VBMeta image. <para>源 VBMeta 镜像。</para></param>
+    /// <param name="outputPath">The patched output path (must differ from the source).
+    /// <para>补丁输出路径（必须与源不同）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> DisableVbmetaVerificationAsync(
+        string vbmetaPath,
+        string outputPath,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            LogService.Instance.Write(LogLevel.Info, "Firmware", $"Disabling AVB verification on {vbmetaPath} -> {outputPath}");
+
+            var result = await AvbSigner.DisableVbmetaVerificationAsync(vbmetaPath, outputPath, cancellationToken);
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Firmware",
+                result.Success
+                    ? $"AVB verification disabled -> {outputPath}"
+                    : $"Disable AVB verification failed: {result.ErrorMessage}");
+
+            return result.Success
+                ? new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"AVB verification disabled -> {outputPath}  已禁用 AVB 校验。"
+                }
+                : FirmwareOpResult.Fail(result.ErrorMessage ?? "Disable AVB verification failed. 禁用 AVB 校验失败。");
+        }
+        catch (OperationCanceledException)
+        {
+            return FirmwareOpResult.Fail("Disable AVB verification cancelled. 禁用 AVB 校验已取消。");
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Adds an AVB v2 hash footer to a partition image with the given RSA private key: streams the
+    /// image out while computing its digest, aligns to 4K, appends a signed self-contained VBMeta
+    /// image and the standard footer. The output can be verified by <see cref="AvbVerifier.Verify"/>.
+    /// <para>使用给定 RSA 私钥为分区镜像追加 AVB v2 哈希尾部：流式复制镜像的同时计算其摘要，
+    /// 对齐到 4K，追加签名后的自包含 VBMeta 镜像与标准尾部。输出可被
+    /// <see cref="AvbVerifier.Verify"/> 验证。</para>
+    /// </summary>
+    /// <param name="imagePath">The partition image to sign. <para>要签名的分区镜像。</para></param>
+    /// <param name="partitionName">The target partition name. <para>目标分区名称。</para></param>
+    /// <param name="privateKeyPath">The RSA private key file (PEM or DER). <para>RSA 私钥文件（PEM 或 DER）。</para></param>
+    /// <param name="outputPath">The output signed image path. <para>输出的已签名镜像路径。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> AddHashFooterAsync(
+        string imagePath,
+        string partitionName,
+        string privateKeyPath,
+        string outputPath,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            LogService.Instance.Write(LogLevel.Info, "Firmware", $"Adding AVB hash footer to {imagePath} -> {outputPath}");
+
+            var key = AvbSigner.LoadRsaPrivateKey(privateKeyPath);
+            if (key == null)
+            {
+                return FirmwareOpResult.Fail($"Failed to load RSA private key from '{privateKeyPath}'. 无法从 '{privateKeyPath}' 加载 RSA 私钥。");
+            }
+
+            var result = await AvbSigner.AddHashFooterAsync(imagePath, partitionName, key, outputPath, cancellationToken);
+            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Firmware",
+                result.Success
+                    ? $"AVB hash footer added: {result.AlgorithmName}, {result.OutputSize} bytes -> {outputPath}"
+                    : $"Adding AVB hash footer failed: {result.ErrorMessage}");
+
+            return result.Success
+                ? new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"Added AVB hash footer ({result.AlgorithmName}) -> {outputPath}  已添加 AVB 哈希尾部（{result.AlgorithmName}）。"
+                }
+                : FirmwareOpResult.Fail(result.ErrorMessage ?? "Adding AVB hash footer failed. 添加 AVB 哈希尾部失败。");
+        }
+        catch (OperationCanceledException)
+        {
+            return FirmwareOpResult.Fail("Adding AVB hash footer cancelled. 添加 AVB 哈希尾部已取消。");
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// Unpacks a boot or vendor_boot image into a component directory: <c>kernel</c>, <c>ramdisk</c>
     /// (raw) and <c>ramdisk.cpio</c> (decompressed per <see cref="BootCompressor"/> detection),
     /// <c>second</c>, <c>dtb</c>, <c>dtbo</c>, <c>signature</c>, plus a <c>header.json</c> that

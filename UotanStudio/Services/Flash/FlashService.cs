@@ -7,6 +7,7 @@ using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Messages;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Services.Flash;
@@ -422,20 +423,149 @@ public static class FlashService
                 throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
             }
 
+            TryBackupBeforeFlash(session, partition, progress, ct);
+
+            var summary = FlashImageChunked(session, partition, imagePath, progress, ct);
+            Report(progress, partition, 100, "Flash complete. 刷写完成。");
+            return new FlashResult { Success = true, Summary = summary };
+        }).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// <para>按 fastboot 的 max-download-size 刷写镜像：不超过上限时单次 download+flash（稀疏镜像
+    /// 原样交由 bootloader 解析）；超过上限时把镜像转为/拆分为若干不超过上限的稀疏分片并顺序刷写
+    /// （bootloader 在当前偏移处追加写入，与 AOSP fastboot 行为一致）。分片临时文件用后即删。</para>
+    /// Flashes an image honoring the fastboot max-download-size: images within the limit are sent in a
+    /// single download+flash (sparse payloads are passed through for the bootloader to decode); larger
+    /// images are converted to/split into sparse chunks no larger than the limit and flashed sequentially
+    /// (the bootloader appends each chunk at the current offset, matching AOSP fastboot behavior).
+    /// Chunk temp files are deleted afterwards.
+    /// </summary>
+    private static string FlashImageChunked(
+        FastbootSession session, string partition, string imagePath,
+        IProgress<FlashProgress>? progress, CancellationToken ct)
+    {
+        var maxDownloadSize = session.GetMaxDownloadSize();
+        var imageLength = new FileInfo(imagePath).Length;
+
+        static bool IsSparseImage(string path)
+        {
+            using var fs = File.OpenRead(path);
+            Span<byte> header = stackalloc byte[4];
+            return fs.Read(header) == 4 && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header) == UotanStudio.Firmware.Sparse.SparseFormat.SparseHeaderMagic;
+        }
+
+        if (imageLength <= maxDownloadSize)
+        {
             using var image = File.OpenRead(imagePath);
-            var totalBytes = image.Length;
             Report(progress, partition, 5, "Uploading image... 正在上传镜像...");
             var byteProgress = new Progress<long>(written =>
-                Report(progress, partition, totalBytes > 0 ? (int)Math.Min(100, written * 100L / totalBytes) : 0, "Uploading image... 正在上传镜像..."));
-            var response = session.FlashPartition(partition, image, totalBytes, byteProgress, ct);
+                Report(progress, partition, imageLength > 0 ? (int)Math.Min(100, written * 100L / imageLength) : 0, "Uploading image... 正在上传镜像..."));
+            var response = session.FlashPartition(partition, image, imageLength, byteProgress, ct);
             response.ThrowIfFailed();
-            Report(progress, partition, 100, "Flash complete. 刷写完成。");
-            return new FlashResult
+            return $"Flashed {partition} ({imageLength} bytes) via fastboot.";
+        }
+
+        var tempDir = Directory.CreateTempSubdirectory("uotan-flash-").FullName;
+        try
+        {
+            // 原始镜像先转稀疏；已是稀疏则直接拆分。
+            // Convert a raw image to sparse first; already-sparse images are split directly.
+            var sparsePath = IsSparseImage(imagePath)
+                ? imagePath
+                : Path.Combine(tempDir, "source.sparse");
+            if (!string.Equals(sparsePath, imagePath, StringComparison.OrdinalIgnoreCase))
             {
-                Success = true,
-                Summary = $"Flashed {partition} ({totalBytes} bytes) via fastboot."
-            };
-        }).ConfigureAwait(false);
+                Report(progress, partition, 2, "Converting to sparse... 正在转换为稀疏格式...");
+                UotanStudio.Firmware.Sparse.SparseImageConverter.ConvertRawToSparse(imagePath, sparsePath);
+            }
+
+            Report(progress, partition, 4, "Splitting sparse image... 正在拆分稀疏镜像...");
+            UotanStudio.Firmware.Sparse.SparseImageConverter.ResparseImage(
+                sparsePath, Path.Combine(tempDir, "chunk_{0}.sparse"), maxDownloadSize);
+
+            var chunks = Directory.GetFiles(tempDir, "chunk_*.sparse")
+                .OrderBy(c => int.TryParse(
+                    Path.GetFileNameWithoutExtension(c).AsSpan("chunk_".Length),
+                    System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : int.MaxValue)
+                .ToArray();
+
+            var totalBytes = chunks.Sum(c => new FileInfo(c).Length);
+            var bytesDone = 0L;
+            for (var i = 0; i < chunks.Length; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                using var chunk = File.OpenRead(chunks[i]);
+                var chunkLength = chunk.Length;
+                var index = i;
+                var chunkProgress = new Progress<long>(written =>
+                    Report(progress, partition, totalBytes > 0 ? (int)Math.Min(100, (bytesDone + written) * 100L / totalBytes) : 0,
+                        $"Uploading chunk {index + 1}/{chunks.Length}... 正在上传分片..."));
+                var chunkResponse = session.FlashPartition(partition, chunk, chunkLength, chunkProgress, ct);
+                chunkResponse.ThrowIfFailed();
+                bytesDone += chunkLength;
+            }
+
+            return $"Flashed {partition} ({totalBytes} bytes in {chunks.Length} sparse chunk(s)) via fastboot.";
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); } catch { /* 临时目录清理失败不阻断刷写结果 */ }
+        }
+    }
+
+    /// <summary>
+    /// <para>若设置「刷写前自动备份」已启用，在刷写前把 fastboot 目标分区备份到
+    /// 工程会话目录 <c>.uotan/backup/</c>（未打开工程时退化到临时目录）。
+    /// 备份进度并入现有刷写进度通道；备份失败仅记录警告日志，绝不中断刷写。</para>
+    /// If the "auto-backup before flash" setting is enabled, backs up the fastboot target
+    /// partition to the solution session directory <c>.uotan/backup/</c> before flashing
+    /// (falls back to the temp directory when no solution is open). Backup progress is
+    /// merged into the existing flash progress channel; a failed backup only logs a warning
+    /// and never aborts the flash.
+    /// </summary>
+    private static void TryBackupBeforeFlash(
+        FastbootSession session, string partition,
+        IProgress<FlashProgress>? progress, CancellationToken ct)
+    {
+        try
+        {
+            if (!SettingsPersistenceService.Instance.LoadSettings().AutoBackupBeforeFlash)
+            {
+                return;
+            }
+
+            var stateDir = ProjectContextService.Instance.StateDirectory;
+            var backupDir = Path.Combine(stateDir ?? Path.GetTempPath(), "backup");
+            Directory.CreateDirectory(backupDir);
+
+            var invalid = Path.GetInvalidFileNameChars();
+            var safePartition = partition.IndexOfAny(invalid) < 0
+                ? partition
+                : string.Concat(partition.Select(c => invalid.Contains(c) ? '_' : c));
+            var outPath = Path.Combine(backupDir, $"{safePartition}_{DateTime.Now:yyyyMMdd_HHmmss}.img");
+
+            var backupProgress = new Progress<BackupProgress>(bp =>
+                Report(progress, bp.Partition ?? partition, bp.Percent, bp.Status));
+            var result = BackupService.BackupFastbootPartition(session, partition, outPath, backupProgress, ct);
+            LogService.Instance.Write(
+                result.Success ? LogLevel.Info : LogLevel.Warn,
+                "FlashService",
+                result.Success
+                    ? $"Auto-backup before flash completed: {partition} -> {outPath}. 刷写前自动备份完成。"
+                    : $"Auto-backup before flash failed: {partition} ({result.Summary}); continuing flash. 刷写前自动备份失败，继续刷写。");
+        }
+        catch (OperationCanceledException)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FlashService",
+                "Auto-backup before flash canceled; continuing flash. 刷写前自动备份已取消，继续刷写。");
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "FlashService",
+                $"Auto-backup before flash failed: {partition} ({ex.Message}); continuing flash. 刷写前自动备份失败，继续刷写。");
+        }
     }
 
     /// <summary>
