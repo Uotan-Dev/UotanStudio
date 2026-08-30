@@ -31,6 +31,13 @@ public partial class CompareView : UserControl
     private bool _syncingSelection;
 
     /// <summary>
+    /// <para>行模板 <c>MinHeight</c>：各行恒为 20px，用于按偏移估算行索引（实测失败时兜底）。</para>
+    /// Row-template <c>MinHeight</c>: every row is a fixed 20 px, used to estimate the row index
+    /// from a scroll offset (fallback when measuring fails).
+    /// </summary>
+    private const double RowMinHeight = 20.0;
+
+    /// <summary>
     /// <para>创建对比页面视图并初始化组件。</para>
     /// Creates the compare-page view and initializes its components.
     /// </summary>
@@ -67,29 +74,74 @@ public partial class CompareView : UserControl
     /// </summary>
     private void AttachScrollViewers()
     {
-        var left = LeftList.FindDescendantOfType<ScrollViewer>();
-        if (left is not null && !ReferenceEquals(left, _leftScroll))
-        {
-            if (_leftScroll is not null)
-            {
-                _leftScroll.ScrollChanged -= OnScrollChanged;
-            }
+        AttachOneScrollViewer(LeftList, ref _leftScroll);
+        AttachOneScrollViewer(RightList, ref _rightScroll);
+    }
 
-            left.ScrollChanged += OnScrollChanged;
-            _leftScroll = left;
+    /// <summary>
+    /// <para>换绑单个 ListBox 的滚动容器：先退订旧实例，再订阅解析出的新实例（防重复订阅）。</para>
+    /// Re-binds one ListBox's scroll container: unsubscribes the old instance first, then
+    /// subscribes to the newly resolved one (avoids duplicate subscriptions).
+    /// </summary>
+    private void AttachOneScrollViewer(ListBox list, ref ScrollViewer? slot)
+    {
+        var scroller = ResolveListScrollViewer(list);
+        if (scroller is null || ReferenceEquals(scroller, slot))
+        {
+            return;
         }
 
-        var right = RightList.FindDescendantOfType<ScrollViewer>();
-        if (right is not null && !ReferenceEquals(right, _rightScroll))
+        if (slot is not null)
         {
-            if (_rightScroll is not null)
+            slot.ScrollChanged -= OnScrollChanged;
+        }
+
+        scroller.ScrollChanged += OnScrollChanged;
+        slot = scroller;
+    }
+
+    /// <summary>
+    /// <para>精确解析 ListBox 真正的内部滚动容器：优先取模板部件 <c>PART_ScrollViewer</c>
+    /// （即 <see cref="ListBox.Scroll"/>，随 ListBox 模板一起生成），避免 <c>FindDescendantOfType</c>
+    /// 命中外部/嵌套滚动容器；模板尚未应用时退而求其次，在子树内找包含 ItemsPanelRoot 的
+    /// 最内层 ScrollViewer，最后才回退到 <c>FindDescendantOfType</c>。</para>
+    /// Precisely resolves the real inner scroll container of a ListBox: prefers the template part
+    /// <c>PART_ScrollViewer</c> (exposed as <see cref="ListBox.Scroll"/>, created together with the
+    /// ListBox template) so outer/nested scroll containers are not picked up; when the template is
+    /// not yet applied, falls back to the innermost ScrollViewer in the subtree containing the
+    /// items panel root, and finally to <c>FindDescendantOfType</c>.
+    /// </summary>
+    private static ScrollViewer? ResolveListScrollViewer(ListBox list)
+    {
+        if (list.Scroll is ScrollViewer direct)
+        {
+            return direct;
+        }
+
+        var panelRoot = list.ItemsPanelRoot;
+        if (panelRoot is null)
+        {
+            return list.FindDescendantOfType<ScrollViewer>();
+        }
+
+        ScrollViewer? innermost = null;
+        var minDistance = int.MaxValue;
+        foreach (var candidate in list.GetVisualDescendants().OfType<ScrollViewer>())
+        {
+            if (!candidate.IsVisualAncestorOf(panelRoot))
             {
-                _rightScroll.ScrollChanged -= OnScrollChanged;
+                continue;
             }
 
-            right.ScrollChanged += OnScrollChanged;
-            _rightScroll = right;
+            var distance = panelRoot.CalculateDistanceFromAncestor(candidate);
+            if (distance >= 0 && distance < minDistance)
+            {
+                minDistance = distance;
+                innermost = candidate;
+            }
         }
+
+        return innermost ?? list.FindDescendantOfType<ScrollViewer>();
     }
 
     /// <summary>
@@ -112,13 +164,16 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// <para>左右栏同步滚动：把发起滚动的一栏的垂直偏移镜像到另一栏（只同步垂直方向，
-    /// 水平各自独立）。<c>_syncing</c> 防止镜像写入再次触发本回调形成回环；目标侧行数可能
-    /// 更少，偏移需夹取到其滚动范围（Extent − Viewport）内。</para>
-    /// Synchronized scrolling: mirrors the vertical offset of the scrolled pane to the other
-    /// (vertical only; each pane scrolls horizontally on its own). <c>_syncing</c> guards against
-    /// the mirrored write re-entering this handler in a loop; the target may have fewer rows, so
-    /// the offset is clamped to its scroll range (Extent − Viewport).
+    /// <para>左右栏同步滚动：把发起滚动的一栏当前**第一个可见行索引**换算成目标栏的垂直偏移
+    /// （索引 × 行高，并夹取到目标侧 Extent 内），使同一 Rows 行落在两侧同一水平高度。相比直接
+    /// 镜像像素偏移，行索引对齐对子像素漂移与虚拟化下 Extent 估算偏差更稳健；只同步垂直方向，
+    /// 水平各自独立。<c>_syncing</c> 防止回写再次触发本回调形成回环。</para>
+    /// Synchronized scrolling: converts the scrolled pane's current **first visible row index**
+    /// into the target pane's vertical offset (index × row height, clamped to the target's Extent),
+    /// keeping the same Rows row on the same horizontal position in both panes. Row-index alignment
+    /// is more robust than mirroring raw pixel offsets against sub-pixel drift and virtualized
+    /// Extent estimation; only the vertical axis is synced, horizontal stays independent.
+    /// <c>_syncing</c> guards against the mirrored write re-entering this handler in a loop.
     /// </summary>
     private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
@@ -127,24 +182,102 @@ public partial class CompareView : UserControl
             return;
         }
 
-        var target = ReferenceEquals(source, _leftScroll) ? _rightScroll : _leftScroll;
+        if (!ReferenceEquals(source, _leftScroll) && !ReferenceEquals(source, _rightScroll))
+        {
+            return;
+        }
+
+        var sourceIsLeft = ReferenceEquals(source, _leftScroll);
+        var target = sourceIsLeft ? _rightScroll : _leftScroll;
         if (target is null)
         {
             return;
         }
 
-        var maxVertical = Math.Max(0, target.Extent.Height - target.Viewport.Height);
-        var y = Math.Clamp(source.Offset.Y, 0, maxVertical);
+        var sourceList = sourceIsLeft ? LeftList : RightList;
+        var targetList = sourceIsLeft ? RightList : LeftList;
+
+        var rowHeight = GetRowHeight(sourceList);
+        if (rowHeight <= 0)
+        {
+            return;
+        }
+
+        var index = (int)Math.Floor(source.Offset.Y / rowHeight);
 
         _syncing = true;
         try
         {
-            target.Offset = new Vector(target.Offset.X, y);
+            ScrollListToIndex(targetList, target, index);
         }
         finally
         {
             _syncing = false;
         }
+    }
+
+    /// <summary>
+    /// <para>把 ListBox 滚到指定行索引：目标偏移 = 索引 × 行高（夹取到 Extent 内）。用偏移量
+    /// 精确设置而非 <see cref="ItemsControl.ScrollIntoView"/>——后者的语义是“滚到该项可见”，
+    /// 若该项已在视口内则不做任何滚动，两侧位置仍会不同步。滚动容器尚未解析时退化为
+    /// <c>ScrollIntoView</c> 尽力定位。目标偏移与当前偏差小于 0.5px 时跳过，避免无谓回写。</para>
+    /// Scrolls a ListBox to the given row index: target offset = index × row height (clamped to the
+    /// Extent). Uses an exact offset instead of <see cref="ItemsControl.ScrollIntoView"/>, whose
+    /// semantics are “scroll until the item is visible” and which does nothing when the item is
+    /// already in the viewport — leaving the panes misaligned. Falls back to <c>ScrollIntoView</c>
+    /// when the scroll container is not resolved yet. Skips when the target offset differs by less
+    /// than 0.5 px to avoid redundant writes.
+    /// </summary>
+    private static void ScrollListToIndex(ListBox list, ScrollViewer? scroll, int index)
+    {
+        if (list.ItemsSource is not IReadOnlyList<CompareRowViewModel> rows || rows.Count == 0)
+        {
+            return;
+        }
+
+        index = Math.Clamp(index, 0, rows.Count - 1);
+
+        if (scroll is null)
+        {
+            list.ScrollIntoView(index);
+            return;
+        }
+
+        var rowHeight = GetRowHeight(list);
+        if (rowHeight <= 0)
+        {
+            list.ScrollIntoView(index);
+            return;
+        }
+
+        var maxVertical = Math.Max(0, scroll.Extent.Height - scroll.Viewport.Height);
+        var y = Math.Clamp(index * rowHeight, 0, maxVertical);
+        if (Math.Abs(y - scroll.Offset.Y) < 0.5)
+        {
+            return;
+        }
+
+        scroll.Offset = new Vector(scroll.Offset.X, y);
+    }
+
+    /// <summary>
+    /// <para>取单行实际高度：从 ListBox 已生成的容器中实测首个非零高度（行模板
+    /// <c>MinHeight=20</c> 恒定，各侧行高一致）；尚未布局出容器时回退到固定 20。</para>
+    /// Returns the effective single-row height: measured from the first realized container with a
+    /// non-zero height (the row template fixes <c>MinHeight=20</c>, so all panes share the same row
+    /// height); falls back to a fixed 20 when no container is realized yet.
+    /// </summary>
+    private static double GetRowHeight(ListBox list)
+    {
+        foreach (var container in list.GetRealizedContainers())
+        {
+            if (container.Bounds.Height > 0)
+            {
+                return container.Bounds.Height;
+            }
+        }
+
+        return RowMinHeight;
     }
 
     // ===== 选中项联动 =====
@@ -279,11 +412,15 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// <para>选中项变化时让左右两栏都滚动到对应行（先按引用在两侧行列表中查找，
-    /// 找不到则忽略；文本/十六进制模式两侧共享同一列表可确保找到）。</para>
-    /// Scrolls both panes to the selected row when the selection changes (looks up the item by
-    /// reference in each pane's list; ignored when the item is not found — in text/hex mode both
-    /// panes share the same list so the item is always found).
+    /// <para>选中项变化时让左右两栏都精确滚到对应行索引（先按引用在两侧行列表中查找，
+    /// 找不到则忽略；文本/文件夹/十六进制模式两侧共享同一列表可确保找到）。用与滚动镜像
+    /// 相同的行索引对齐逻辑设置偏移，保证点选一行后同一 Rows 行落在两侧同一水平高度；
+    /// <c>_syncing</c> 防止两侧回写互相触发镜像。</para>
+    /// Scrolls both panes to the selected row index when the selection changes (looks the item up
+    /// by reference in each pane's list; ignored when the item is not found — all modes share the
+    /// same list so the item is always found). Uses the same row-index alignment as the scroll
+    /// mirror, so clicking a row keeps the same Rows row on the same horizontal position in both
+    /// panes; <c>_syncing</c> prevents the writes from mirroring each other.
     /// </summary>
     private void ScrollToSelected()
     {
@@ -301,13 +438,23 @@ public partial class CompareView : UserControl
         var item = vm.Rows[index];
         var leftIndex = IndexOf(vm.LeftRows, item);
         var rightIndex = IndexOf(vm.RightRows, item);
-        if (leftIndex >= 0)
+
+        _syncing = true;
+        try
         {
-            LeftList.ScrollIntoView(leftIndex);
+            if (leftIndex >= 0)
+            {
+                ScrollListToIndex(LeftList, _leftScroll, leftIndex);
+            }
+
+            if (rightIndex >= 0)
+            {
+                ScrollListToIndex(RightList, _rightScroll, rightIndex);
+            }
         }
-        if (rightIndex >= 0)
+        finally
         {
-            RightList.ScrollIntoView(rightIndex);
+            _syncing = false;
         }
     }
 
