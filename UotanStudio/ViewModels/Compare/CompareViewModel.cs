@@ -639,7 +639,14 @@ public sealed partial class CompareViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
+            // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
+            // 不得把新加载的 busy 状态置 false。
+            // Clear busy only while this load is still the current one: a cancelled older load
+            // must not clear the newer load's busy state.
+            if (ct == _loadCts.Token)
+            {
+                IsBusy = false;
+            }
         }
     }
 
@@ -773,15 +780,27 @@ public sealed partial class CompareViewModel : ViewModelBase
         ErrorMessage = string.Empty;
         try
         {
-            var ranges = await Task.Run(() => BinaryDiffService.Instance.CompareRanges(LeftPath, RightPath, ct), ct);
-            ct.ThrowIfCancellationRequested();
+            var maxLength = Math.Max(new FileInfo(LeftPath).Length, new FileInfo(RightPath).Length);
+            var rowDiffBitmap = new byte[BinaryDiffService.RowBitmapLength(maxLength)];
+            var stats = await Task.Run(() => BinaryDiffService.Instance.CompareStats(LeftPath, RightPath, rowDiffBitmap, ct), ct);
+            if (ct.IsCancellationRequested)
+            {
+                // 协作式取消：位图/统计基于部分扫描结果，直接丢弃并保持当前视图。
+                // Cooperative cancellation: the bitmap/stats came from a partial scan, discard them
+                // and keep the current view.
+                return;
+            }
 
             _currentHexRows?.Dispose();
-            var hex = new CompareHexRowCollection(LeftPath, RightPath, ranges);
+            var hex = new CompareHexRowCollection(LeftPath, RightPath, rowDiffBitmap);
             _currentHexRows = hex;
             Rows = hex;
             BinaryViewKind = BinaryViewKind.Hex;
             SelectedIndex = -1;
+            StatsText = string.Format(
+                LanguageService.Instance.GetString("Compare_Summary"),
+                stats.TotalDifferentBytes,
+                stats.RangeCount);
             HasError = false;
             ErrorMessage = string.Empty;
         }
@@ -798,7 +817,14 @@ public sealed partial class CompareViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
+            // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
+            // 不得把新加载的 busy 状态置 false。
+            // Clear busy only while this load is still the current one: a cancelled older load
+            // must not clear the newer load's busy state.
+            if (ct == _loadCts.Token)
+            {
+                IsBusy = false;
+            }
         }
     }
 
@@ -915,7 +941,14 @@ public sealed partial class CompareViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
+            // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
+            // 不得把新加载的 busy 状态置 false。
+            // Clear busy only while this load is still the current one: a cancelled older load
+            // must not clear the newer load's busy state.
+            if (ct == _loadCts.Token)
+            {
+                IsBusy = false;
+            }
         }
     }
 
@@ -977,31 +1010,44 @@ public sealed partial class CompareViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>加载双侧二进制比较：识别并读取两侧元数据生成元数据行，再流式汇总差异统计。</para>
-    /// Loads a two-sided binary comparison: detects and reads both sides' metadata into metadata rows,
-    /// then aggregates the diff statistics in a stream.
+    /// <para>加载双侧二进制比较：识别并读取两侧元数据生成元数据行（差异统计仅在切换十六进制
+    /// 原始视图时计算）。</para>
+    /// Loads a two-sided binary comparison: detects and reads both sides' metadata into metadata
+    /// rows (diff stats are computed only when switching to the hex-raw view).
     /// </summary>
     private async Task LoadBinaryBothSidesAsync(CancellationToken ct)
     {
-        var leftMeta = await Task.Run(() => ReadBinaryMetadata(LeftPath, ct), ct);
-        ct.ThrowIfCancellationRequested();
-        var rightMeta = await Task.Run(() => ReadBinaryMetadata(RightPath, ct), ct);
-        ct.ThrowIfCancellationRequested();
+        try
+        {
+            var leftMeta = await Task.Run(() => ReadBinaryMetadata(LeftPath, ct), ct);
+            ct.ThrowIfCancellationRequested();
+            var rightMeta = await Task.Run(() => ReadBinaryMetadata(RightPath, ct), ct);
+            ct.ThrowIfCancellationRequested();
 
-        _leftMetadata = leftMeta;
-        _rightMetadata = rightMeta;
-        BinaryViewKind = BinaryViewKind.Metadata;
-        Rows = BuildBinaryMetadataRows(leftMeta, rightMeta);
-        SelectedIndex = -1;
+            _leftMetadata = leftMeta;
+            _rightMetadata = rightMeta;
+            BinaryViewKind = BinaryViewKind.Metadata;
+            Rows = BuildBinaryMetadataRows(leftMeta, rightMeta);
+            SelectedIndex = -1;
 
-        var stats = await Task.Run(() => BinaryDiffService.Instance.CompareStats(LeftPath, RightPath, ct), ct);
-        ct.ThrowIfCancellationRequested();
-        StatsText = string.Format(
-            LanguageService.Instance.GetString("Compare_Summary"),
-            stats.TotalDifferentBytes,
-            stats.RangeCount);
-        HasError = false;
-        ErrorMessage = string.Empty;
+            // 不在此跑全文件差异扫描：二进制模式下 StatsText 不显示，且多 GB 固件的全量扫描
+            // 耗时数十秒，会让 busy 指示一直转；差异统计在切换十六进制原始视图时才需要
+            // （CompareStats 位图重载），由 ToggleHexView 计算。
+            // No full-file diff scan here: StatsText is not shown in binary mode, and a full scan
+            // of multi-GB firmware takes tens of seconds, keeping the busy indicator spinning; diff
+            // stats are only needed when switching to the hex-raw view (the CompareStats bitmap
+            // overload), computed by ToggleHexView.
+            HasError = false;
+            ErrorMessage = string.Empty;
+        }
+        catch (OperationCanceledException)
+        {
+            // 取消：保持当前状态，不向上传播（切换十六进制视图/重新加载会取消进行中的加载，
+            // 若此处不捕获，后台 Task 抛出的 OCE 可能成为未处理异常导致崩溃）。
+            // Cancelled: keep the current state and do not propagate — toggling the hex view or
+            // reloading cancels the in-flight load, and without this catch the OCE thrown inside
+            // the background Task could surface as an unhandled exception and crash the app.
+        }
     }
 
     /// <summary>
@@ -1320,10 +1366,18 @@ public sealed partial class CompareViewModel : ViewModelBase
 
     /// <summary>
     /// <para>由两侧元数据构建元数据视图行：格式名行、摘要行、键值对行（键并集）、条目行与组件行；
-    /// 缺失侧取值 "-"，两侧都无法识别时给出单条"无法识别"提示行。</para>
+    /// 条目与组件按**名称**对齐（两侧名称并集，同名条目落在同一水平行；仅单侧条目在缺失侧
+    /// 置空占位，不显示名称），键值对缺失侧取 "-"；**同名但值不同也判定为差异**——键值对值不同、
+    /// 组件大小不同均标记为 Different 并整行差异高亮，仅单侧存在的键/组件标记为 LeftOnly/RightOnly；
+    /// 两侧都无法识别时给出单条"无法识别"提示行。</para>
     /// Builds the metadata-view rows from both sides' metadata: a format-name row, summary rows,
-    /// key-value rows (key union), entry rows and component rows; the missing side shows "-", and a
-    /// single "unrecognized" hint row is produced when neither side is recognized.
+    /// key-value rows (key union), entry rows and component rows. Entries and components are aligned
+    /// **by name** (union of both sides' names; same-name items land on the same horizontal row, and
+    /// single-side items leave the missing side blank), while key-values show "-" on the missing side.
+    /// **Same-name items with different values also count as differences**: differing key-value pairs
+    /// and differing component sizes are marked Different with a full-row diff highlight, and keys or
+    /// components present on only one side are marked LeftOnly/RightOnly; a single "unrecognized" hint
+    /// row is produced when neither side is recognized.
     /// </summary>
     private static List<CompareRowViewModel> BuildBinaryMetadataRows(SideBinaryMetadata? left, SideBinaryMetadata? right)
     {
@@ -1379,38 +1433,91 @@ public sealed partial class CompareViewModel : ViewModelBase
 
         foreach (var key in keys)
         {
-            var leftValue = leftRecognized && left!.Metadata.TryGetValue(key, out var lv) ? lv : "-";
-            var rightValue = rightRecognized && right!.Metadata.TryGetValue(key, out var rv) ? rv : "-";
+            var leftValue = leftRecognized && left!.Metadata.TryGetValue(key, out var lv) ? lv : null;
+            var rightValue = rightRecognized && right!.Metadata.TryGetValue(key, out var rv) ? rv : null;
+            var hasLeft = leftValue is not null;
+            var hasRight = rightValue is not null;
+            var valueDiffers = hasLeft && hasRight
+                && !string.Equals(leftValue, rightValue, StringComparison.Ordinal);
+
+            // 同名键值对：值不同算差异（整行高亮）；仅单侧存在算单侧条目。
+            // Same-name key-values: differing values count as a difference (full-row highlight);
+            // keys present on only one side are single-side rows.
+            var status = valueDiffers ? FolderItemStatus.Different
+                : hasLeft && hasRight ? FolderItemStatus.Equal
+                : hasLeft ? FolderItemStatus.LeftOnly
+                : FolderItemStatus.RightOnly;
+
             rows.Add(new CompareRowViewModel(
-                FolderItemStatus.Equal, false, 1,
-                string.Empty, key, leftValue, false,
-                string.Empty, key, rightValue, false));
+                status, false, 1,
+                string.Empty, key, hasLeft ? leftValue! : "-", valueDiffers,
+                string.Empty, key, hasRight ? rightValue! : "-", valueDiffers));
         }
 
-        // 条目行（左右都显示条目名，缺失侧 "-"）。 Entry rows (both sides show the entry name, "-" when missing).
+        // 条目行（按名称对齐：两侧名称并集，同名条目同一水平行；仅单侧条目在缺失侧置空占位，
+        // 不显示名称——与文件夹模式一致）。 Entry rows (aligned by name: union of both sides'
+        // names, same-name entries share a row; single-side entries leave the missing side blank,
+        // matching the folder-mode behavior).
         var leftEntries = leftRecognized ? left!.Entries : [];
         var rightEntries = rightRecognized ? right!.Entries : [];
-        var entryCount = Math.Max(leftEntries.Count, rightEntries.Count);
-        for (var i = 0; i < entryCount; i++)
+        var entryNames = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var entry in leftEntries)
         {
-            rows.Add(new CompareRowViewModel(
-                FolderItemStatus.Equal, false, 1,
-                string.Empty, i < leftEntries.Count ? leftEntries[i] : "-", string.Empty, false,
-                string.Empty, i < rightEntries.Count ? rightEntries[i] : "-", string.Empty, false));
+            entryNames.Add(entry);
         }
 
-        // 组件行（名称 + 大小）。 Component rows (name + size).
+        foreach (var entry in rightEntries)
+        {
+            entryNames.Add(entry);
+        }
+
+        foreach (var name in entryNames)
+        {
+            var hasLeft = leftEntries.Contains(name);
+            var hasRight = rightEntries.Contains(name);
+            rows.Add(new CompareRowViewModel(
+                hasLeft && hasRight ? FolderItemStatus.Equal : hasLeft ? FolderItemStatus.LeftOnly : FolderItemStatus.RightOnly,
+                false, 1,
+                string.Empty, hasLeft ? name : string.Empty, string.Empty, false,
+                string.Empty, hasRight ? name : string.Empty, string.Empty, false));
+        }
+
+        // 组件行（名称 + 大小，同样按名称对齐；仅单侧组件在缺失侧置空）。
+        // Component rows (name + size, aligned by name too; single-side components leave the
+        // missing side blank).
         var leftComponents = leftRecognized ? left!.Components : [];
         var rightComponents = rightRecognized ? right!.Components : [];
-        var componentCount = Math.Max(leftComponents.Count, rightComponents.Count);
-        for (var i = 0; i < componentCount; i++)
+        var componentNames = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var component in leftComponents)
         {
-            var leftComponent = i < leftComponents.Count ? leftComponents[i] : null;
-            var rightComponent = i < rightComponents.Count ? rightComponents[i] : null;
+            componentNames.Add(component.Name);
+        }
+
+        foreach (var component in rightComponents)
+        {
+            componentNames.Add(component.Name);
+        }
+
+        foreach (var name in componentNames)
+        {
+            var leftComponent = leftComponents.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.Ordinal));
+            var rightComponent = rightComponents.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.Ordinal));
+            var hasLeft = leftComponent is not null;
+            var hasRight = rightComponent is not null;
+            var sizeDiffers = hasLeft && hasRight && leftComponent!.SizeBytes != rightComponent!.SizeBytes;
+
+            // 同名组件：大小不同算差异（整行高亮）；仅单侧存在算单侧条目。
+            // Same-name components: differing sizes count as a difference (full-row highlight);
+            // components present on only one side are single-side rows.
+            var status = sizeDiffers ? FolderItemStatus.Different
+                : hasLeft && hasRight ? FolderItemStatus.Equal
+                : hasLeft ? FolderItemStatus.LeftOnly
+                : FolderItemStatus.RightOnly;
+
             rows.Add(new CompareRowViewModel(
-                FolderItemStatus.Equal, false, 1,
-                string.Empty, leftComponent?.Name ?? "-", leftComponent is null ? "-" : FormatSize(leftComponent.SizeBytes), false,
-                string.Empty, rightComponent?.Name ?? "-", rightComponent is null ? "-" : FormatSize(rightComponent.SizeBytes), false));
+                status, false, 1,
+                string.Empty, hasLeft ? leftComponent!.Name : string.Empty, hasLeft ? FormatSize(leftComponent!.SizeBytes) : string.Empty, sizeDiffers,
+                string.Empty, hasRight ? rightComponent!.Name : string.Empty, hasRight ? FormatSize(rightComponent!.SizeBytes) : string.Empty, sizeDiffers));
         }
 
         return rows;

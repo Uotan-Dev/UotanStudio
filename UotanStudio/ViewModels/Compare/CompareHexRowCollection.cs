@@ -18,7 +18,7 @@ namespace UotanStudio.ViewModels.Compare;
 /// not reference <c>Views/Controls/HexMetrics</c>, keeping the ViewModels layer free of Views
 /// dependencies.
 /// </summary>
-public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>, IDisposable
+public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>, IList, IDisposable
 {
     /// <summary>
     /// <para>每行字节数。</para>
@@ -38,7 +38,7 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     private readonly long _leftLength;
     private readonly long _rightLength;
     private readonly int _count;
-    private readonly IReadOnlyList<BinaryDiffRange> _diffRanges;
+    private readonly byte[] _rowDiffBitmap;
     private readonly object _syncRoot = new();
     private readonly CacheSlot[] _cache = new CacheSlot[CacheCapacity];
 
@@ -51,14 +51,19 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// </summary>
     /// <param name="leftPath">左文件路径。<para>Left file path.</para></param>
     /// <param name="rightPath">右文件路径。<para>Right file path.</para></param>
-    /// <param name="diffRanges">按 Offset 升序排列的差异区间列表。<para>Diff ranges sorted by Offset in ascending order.</para></param>
-    public CompareHexRowCollection(string leftPath, string rightPath, IReadOnlyList<BinaryDiffRange> diffRanges)
+    /// <param name="rowDiffBitmap">行差异位图（每 16 字节行 1 bit，由
+    /// <see cref="BinaryDiffService.CompareStats(string, string, byte[], CancellationToken)"/> 生成）；
+    /// 长度必须不小于 <see cref="BinaryDiffService.RowBitmapLength"/> 的返回值。</param>
+    /// <param name="rowDiffBitmap">Row-diff bitmap (1 bit per 16-byte row, produced by
+    /// <see cref="BinaryDiffService.CompareStats(string, string, byte[], CancellationToken)"/>);
+    /// its length must be at least <see cref="BinaryDiffService.RowBitmapLength"/>'s return value.</param>
+    public CompareHexRowCollection(string leftPath, string rightPath, byte[] rowDiffBitmap)
     {
         ArgumentNullException.ThrowIfNull(leftPath);
         ArgumentNullException.ThrowIfNull(rightPath);
-        ArgumentNullException.ThrowIfNull(diffRanges);
+        ArgumentNullException.ThrowIfNull(rowDiffBitmap);
 
-        _diffRanges = diffRanges;
+        _rowDiffBitmap = rowDiffBitmap;
         try
         {
             _leftStream = new FileStream(leftPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
@@ -74,6 +79,14 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
         _leftLength = _leftStream.Length;
         _rightLength = _rightStream.Length;
         _count = (int)((Math.Max(_leftLength, _rightLength) + BytesPerLine - 1) / BytesPerLine);
+
+        var required = BinaryDiffService.RowBitmapLength(Math.Max(_leftLength, _rightLength));
+        if (_rowDiffBitmap.Length < required)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(rowDiffBitmap), _rowDiffBitmap.Length,
+                $"Row-diff bitmap must be at least {required} bytes for the given files.");
+        }
 
         for (var i = 0; i < CacheCapacity; i++)
         {
@@ -112,9 +125,15 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
                     slot.LeftCount = ReadLine(_leftStream, offset, _leftLength, slot.Left);
                     slot.RightCount = ReadLine(_rightStream, offset, _rightLength, slot.Right);
                     slot.Index = index;
+                    // 行 VM 随槽一并缓存：同一索引反复访问（滚动/虚拟化重新取行/两侧共享同一集合）
+                    // 直接复用实例，不再每次分配新 VM 与字符串。
+                    // The row VM is cached with the slot: repeated access to the same index (scrolling,
+                    // virtualizer re-fetching, both panes sharing the collection) reuses the instance
+                    // instead of allocating a new VM and strings every time.
+                    slot.Row = BuildRow(index, slot);
                 }
 
-                return BuildRow(index, slot);
+                return slot.Row!;
             }
         }
     }
@@ -136,6 +155,76 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     /// Non-generic enumerator implementation forwarding to <see cref="GetEnumerator"/>.
     /// </summary>
     IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    // ---- 非泛型 IList 只读实现 ----
+    // Avalonia 的 ItemsSourceView.Create 只对非泛型 IList 或 IReadOnlyList<object?> 采用可虚拟化
+    // 的 ListSourceView；仅实现泛型 IReadOnlyList<T> 的自定义集合（泛型不变性）会落入
+    // EnumerableSourceView——无 O(1) 索引访问，VirtualizingStackPanel 只能逐行物化，几十万行即
+    // 产生 GB 级内存。实现只读 IList 即可让 hex 列表像文本/文件夹模式（List<T>）一样虚拟化。
+    // ---- Read-only non-generic IList ----
+    // Avalonia's ItemsSourceView.Create only picks the virtualizable ListSourceView for the
+    // non-generic IList or IReadOnlyList<object?>; a custom collection implementing only the generic
+    // IReadOnlyList<T> (generic invariance) falls into EnumerableSourceView — no O(1) indexed access,
+    // so the VirtualizingStackPanel materializes every row, yielding gigabytes for hundreds of
+    // thousands of rows. Implementing a read-only IList lets the hex list virtualize like the
+    // text/folder modes (List<T>).
+
+    bool IList.IsReadOnly => true;
+
+    bool IList.IsFixedSize => true;
+
+    bool ICollection.IsSynchronized => false;
+
+    object ICollection.SyncRoot => this;
+
+    int ICollection.Count => _count;
+
+    object? IList.this[int index]
+    {
+        get => this[index];
+        set => throw new NotSupportedException();
+    }
+
+    int IList.Add(object? value) => throw new NotSupportedException();
+
+    void IList.Clear() => throw new NotSupportedException();
+
+    bool IList.Contains(object? value) => value is CompareRowViewModel row && IndexOfReference(row) >= 0;
+
+    int IList.IndexOf(object? value) => value is CompareRowViewModel row ? IndexOfReference(row) : -1;
+
+    void IList.Insert(int index, object? value) => throw new NotSupportedException();
+
+    void IList.Remove(object? value) => throw new NotSupportedException();
+
+    void IList.RemoveAt(int index) => throw new NotSupportedException();
+
+    void ICollection.CopyTo(Array array, int index)
+    {
+        ArgumentNullException.ThrowIfNull(array);
+        for (var i = 0; i < _count; i++)
+        {
+            array.SetValue(this[i], index + i);
+        }
+    }
+
+    /// <summary>
+    /// <para>按引用查找行 VM 的索引（集合复用缓存实例，同一索引始终返回同一引用）。</para>
+    /// Finds a row VM's index by reference (the collection reuses cached instances, so the same
+    /// index always returns the same reference).
+    /// </summary>
+    private int IndexOfReference(CompareRowViewModel target)
+    {
+        for (var i = 0; i < _count; i++)
+        {
+            if (ReferenceEquals(this[i], target))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
 
     /// <summary>
     /// <para>释放内部持有的两个文件流。</para>
@@ -205,40 +294,21 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
     }
 
     /// <summary>
-    /// <para>判断给定行起始偏移是否与任一差异区间相交：
-    /// 区间满足 Offset &lt; 行末 且 Offset+Length &gt; 行始；diffRanges 按 Offset 升序且互不重叠，
-    /// 二分查找最后一个 Offset 小于行末的区间作为唯一候选即可。</para>
-    /// Determines whether the given row start offset intersects any diff range: a range qualifies
-    /// when Offset &lt; row end and Offset+Length &gt; row start; since diffRanges are sorted by
-    /// Offset and disjoint, binary-searching the last range with Offset below the row end yields the
-    /// only candidate.
+    /// <para>判断给定行起始偏移所在的行是否含差异：行索引 = 起始偏移 / 16，位图字节 = 行 / 8，
+    /// 位 = 行 % 8；超出位图覆盖范围的行（两侧文件都缺失的尾部空行）返回 false。</para>
+    /// Determines whether the row at the given start offset contains a difference: row index =
+    /// start / 16, bitmap byte = row / 8, bit = row % 8; trailing rows beyond the bitmap's coverage
+    /// (rows past both files' ends) return false.
     /// </summary>
     private bool IntersectsDiff(long rowStart)
     {
-        if (_diffRanges.Count == 0)
+        var row = (int)(rowStart / BytesPerLine);
+        if (row / 8 >= _rowDiffBitmap.Length)
         {
             return false;
         }
 
-        var rowEnd = rowStart + BytesPerLine;
-        var lo = 0;
-        var hi = _diffRanges.Count - 1;
-        var candidate = -1;
-        while (lo <= hi)
-        {
-            var mid = lo + ((hi - lo) >> 1);
-            if (_diffRanges[mid].Offset < rowEnd)
-            {
-                candidate = mid;
-                lo = mid + 1;
-            }
-            else
-            {
-                hi = mid - 1;
-            }
-        }
-
-        return candidate >= 0 && _diffRanges[candidate].Offset + _diffRanges[candidate].Length > rowStart;
+        return (_rowDiffBitmap[row / 8] & (1 << (row % 8))) != 0;
     }
 
     /// <summary>
@@ -357,5 +427,12 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
         /// Right row byte buffer.
         /// </summary>
         public byte[] Right = new byte[BytesPerLine];
+
+        /// <summary>
+        /// <para>由本槽字节构造的行 VM；随槽缓存复用，索引命中时直接返回，不再重新分配。</para>
+        /// The row VM built from this slot's bytes; cached with the slot so a cache hit returns it
+        /// directly without allocating again.
+        /// </summary>
+        public CompareRowViewModel? Row;
     }
 }
