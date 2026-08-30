@@ -96,10 +96,15 @@ sealed class Program
 
     /// <summary>
     /// <para>把 Avalonia 日志输出到 <see cref="System.Diagnostics.Trace"/>，但过滤
-    /// <see cref="LogArea.Binding"/> 类别的 Warning 及以下级别（Dock 模板空态绑定噪音）。</para>
+    /// <see cref="LogArea.Binding"/> 类别的 Warning 及以下级别（Dock 模板空态绑定噪音）。
+    /// <c>Log</c> 方法内再次执行同样的过滤：AvaloniaMcp 诊断的 <c>BindingErrorLogSink</c>
+    /// 会绕过 <c>IsEnabled</c> 直接转发消息，若不加防御则噪音会漏出并在格式化时崩溃。</para>
     /// Writes Avalonia logs to <see cref="System.Diagnostics.Trace"/> while filtering out
     /// <see cref="LogArea.Binding"/> messages at Warning level and below (Dock template
-    /// empty-state binding noise).
+    /// empty-state binding noise). The same filter is re-applied inside <c>Log</c>: the
+    /// AvaloniaMcp diagnostic <c>BindingErrorLogSink</c> forwards messages without consulting
+    /// <c>IsEnabled</c>, so without this guard the noise would leak through and crash while
+    /// formatting.
     /// </summary>
     private sealed class FilteredTraceLogSink : ILogSink
     {
@@ -117,16 +122,47 @@ sealed class Program
         /// <inheritdoc />
         public void Log(LogEventLevel level, string area, object? source, string messageTemplate)
         {
+            if (!IsEnabled(level, area))
+            {
+                return;
+            }
+
             System.Diagnostics.Trace.WriteLine($"{area}: {messageTemplate}");
         }
 
         /// <inheritdoc />
         public void Log(LogEventLevel level, string area, object? source, string messageTemplate, object?[] propertyValues)
         {
+            if (!IsEnabled(level, area))
+            {
+                return;
+            }
+
             var message = propertyValues is { Length: > 0 }
-                ? string.Format(messageTemplate, propertyValues)
+                ? FormatTemplateSafely(messageTemplate, propertyValues)
                 : messageTemplate;
             System.Diagnostics.Trace.WriteLine($"{area}: {message}");
+        }
+
+        /// <summary>
+        /// <para>安全格式化日志模板：Avalonia 模板可能使用命名占位符（如 <c>{Binding}</c>），
+        /// 与 <see cref="string.Format(string, object?[])"/> 的索引占位符不兼容，解析会抛
+        /// <see cref="FormatException"/>；失败时回退为模板原文拼接参数值，保证不崩溃。</para>
+        /// Formats a log template safely: Avalonia templates may use named placeholders
+        /// (e.g. <c>{Binding}</c>) that are incompatible with <see cref="string.Format(string, object?[])"/>
+        /// index placeholders and would throw <see cref="FormatException"/>; on failure the raw
+        /// template plus its property values are emitted instead so logging never crashes.
+        /// </summary>
+        private static string FormatTemplateSafely(string template, object?[] values)
+        {
+            try
+            {
+                return string.Format(template, values);
+            }
+            catch (FormatException)
+            {
+                return $"{template} [{string.Join(", ", values)}]";
+            }
         }
     }
 
