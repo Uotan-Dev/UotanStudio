@@ -93,9 +93,13 @@ public sealed class McpClientService
     }
 
     /// <summary>
-    /// <para>从结果内容块中提取文本（递归处理文本块与嵌套的工具结果块）。</para>
-    /// Extracts text from result content blocks (recursively handling text blocks and nested
-    /// tool-result blocks).
+    /// <para>从结果内容块中提取文本：读取 text 块与 resource（内嵌资源）块中的文本，
+    /// 二进制资源（blob/图片/音频）不携带文本故跳过。新版规范（2026-07-28，SEP-2577）
+    /// 移除了 toolResult 内容块，工具结果改用 text/resource 等通用内容块承载。</para>
+    /// Extracts text from result content blocks: reads the text of text blocks and embedded-resource
+    /// blocks (their text resource), skipping binary resources (blob/image/audio) that carry no text.
+    /// The new spec (2026-07-28, SEP-2577) removed the toolResult content block; tool results are now
+    /// carried by generic content blocks such as text/resource.
     /// </summary>
     private static string ExtractContentText(IEnumerable<ContentBlock> blocks)
     {
@@ -107,8 +111,8 @@ public sealed class McpClientService
                 case TextContentBlock textBlock when !string.IsNullOrWhiteSpace(textBlock.Text):
                     sb.AppendLine(textBlock.Text);
                     break;
-                case ToolResultContentBlock toolResult:
-                    sb.Append(ExtractContentText(toolResult.Content));
+                case EmbeddedResourceBlock { Resource: TextResourceContents resource } when !string.IsNullOrWhiteSpace(resource.Text):
+                    sb.AppendLine(resource.Text);
                     break;
             }
         }
