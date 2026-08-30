@@ -8,6 +8,7 @@ using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Mcp;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
 
@@ -87,6 +88,25 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
         WeakReferenceMessenger.Default.Register<ExitApplicationMessage>(this, OnExitApplication);
         WeakReferenceMessenger.Default.Register<OpenDocumentRequestMessage>(this, OnOpenDocument);
+        WeakReferenceMessenger.Default.Register<OpenFileCompareRequestMessage>(this, OnOpenFileCompare);
+        WeakReferenceMessenger.Default.Register<OpenFolderCompareRequestMessage>(this, OnOpenFolderCompare);
+
+        // 启动 MCP 服务器宿主（设置页「暴露为 MCP 服务器」开启时）。
+        // Starts the MCP server host (when the settings page's "expose as MCP server" is enabled).
+        StartMcpHostIfEnabled();
+    }
+
+    /// <summary>
+    /// <para>按设置启动 MCP 服务器宿主（暴露开关与端口）。</para>
+    /// Starts the MCP server host per the settings (expose toggle and port).
+    /// </summary>
+    private static void StartMcpHostIfEnabled()
+    {
+        var settings = SettingsPersistenceService.Instance.LoadSettings();
+        if (settings.McpExposeEnabled && settings.McpExposePort > 0)
+        {
+            McpHostService.Instance.Start(settings.McpExposePort);
+        }
     }
 
     /// <summary>
@@ -212,6 +232,50 @@ public partial class App : Application
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "App", $"Open document failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>响应文件比较请求消息，转发给主窗口对比页面视图模型打开文件比较，并切换到对比选项卡。</para>
+    /// Responds to file-compare request messages by forwarding them to the main window's compare-page
+    /// view model, which opens the file comparison, and switches to the Compare tab.
+    /// </summary>
+    private async void OnOpenFileCompare(object recipient, OpenFileCompareRequestMessage message)
+    {
+        try
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+                && desktop.MainWindow?.DataContext is MainViewModel mainVm)
+            {
+                await mainVm.CompareVM.OpenCompareFilesAsync(message.LeftPath, message.RightPath);
+                WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Compare));
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "App", $"Open file compare failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>响应文件夹比较请求消息，转发给主窗口对比页面视图模型打开文件夹比较，并切换到对比选项卡。</para>
+    /// Responds to folder-compare request messages by forwarding them to the main window's compare-page
+    /// view model, which opens the folder comparison, and switches to the Compare tab.
+    /// </summary>
+    private async void OnOpenFolderCompare(object recipient, OpenFolderCompareRequestMessage message)
+    {
+        try
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+                && desktop.MainWindow?.DataContext is MainViewModel mainVm)
+            {
+                await mainVm.CompareVM.OpenCompareFoldersAsync(message.LeftDirectory, message.RightDirectory);
+                WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Compare));
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "App", $"Open folder compare failed: {ex.Message}");
         }
     }
 

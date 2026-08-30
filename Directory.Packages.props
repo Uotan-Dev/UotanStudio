@@ -53,6 +53,10 @@
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <!-- LZOP container parsing / zlib inflate helpers -->
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
+    <!-- Text diffing (line-level diff for the compare services) -->
+    <PackageVersion Include="DiffPlex" Version="1.9.0" />
+    <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.10" />
     <!-- Test packages (UotanStudio.Tests) -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
