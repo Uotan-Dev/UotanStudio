@@ -75,10 +75,28 @@ public class DexNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
+    /// <para>创建默认的 DEX 反编译节点（轻量化伪 Java 还原，内置重载解析）。</para>
+    /// Creates a default DEX decompile node (lightweight pseudo-Java restoration with overload resolution).
+    /// </summary>
+    public static DexNodeViewModel CreateDecompileNode()
+    {
+        var node = new DexNodeViewModel("Decompile DEX")
+        {
+            Location = new Point(100, 100),
+            TypeKey = "Dex.Decompile"
+        };
+        node.Input.Add(new NodeConnectorViewModel { Title = "Dex Path", PortType = NodePortType.Path });
+        node.Input.Add(new NodeConnectorViewModel { Title = "Output Path", PortType = NodePortType.Path });
+        node.Output.Add(new NodeConnectorViewModel { Title = "Result", PortType = NodePortType.Text });
+        return node;
+    }
+
+    /// <summary>
     /// <para>执行与节点 TypeKey 对应的 DEX 逻辑：Dex.Parse 解析描述、Dex.Disassemble 反汇编为 Smali、
-    /// Dex.Rebuild 重建写入新 DEX 文件。</para>
+    /// Dex.Rebuild 重建写入新 DEX 文件、Dex.Decompile 反编译为伪 Java 源码。</para>
     /// Executes the DEX logic matching the node TypeKey: Dex.Parse parses the description, Dex.Disassemble
-    /// disassembles to Smali, and Dex.Rebuild rebuilds a new DEX file.
+    /// disassembles to Smali, Dex.Rebuild rebuilds a new DEX file, and Dex.Decompile decompiles to
+    /// pseudo-Java source.
     /// </summary>
     /// <param name="context">
     /// <para>执行上下文。</para>
@@ -102,6 +120,9 @@ public class DexNodeViewModel : FlowNodeViewModel
                     break;
                 case "Dex.Rebuild":
                     await ExecuteRebuildAsync(context).ConfigureAwait(false);
+                    break;
+                case "Dex.Decompile":
+                    await ExecuteDecompileAsync(context).ConfigureAwait(false);
                     break;
                 default:
                     await base.ExecuteAsync(context).ConfigureAwait(false);
@@ -188,6 +209,35 @@ public class DexNodeViewModel : FlowNodeViewModel
 
         WriteOutput("Result", result.Summary);
         context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已重建。");
+    }
+
+    private async Task ExecuteDecompileAsync(INodeExecutionContext context)
+    {
+        var path = PathText(ReadInput("Dex Path"));
+        var outputPath = PathText(ReadInput("Output Path"));
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            context.Log.Write(LogLevel.Warn, Title, $"Dex path not found: {path ?? "<empty>"}  找不到 DEX 路径。");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            context.Log.Write(LogLevel.Warn, Title, "Output path is empty.  输出路径为空。");
+            return;
+        }
+
+        var result = await DexService.Instance
+            .DecompileDexAsync(path, outputPath, options: null, context.CancellationToken)
+            .ConfigureAwait(false);
+        if (!result.Success)
+        {
+            context.Log.Write(LogLevel.Error, Title, $"Decompile failed: {result.Summary}  反编译失败。");
+            return;
+        }
+
+        WriteOutput("Result", result.Summary);
+        context.Log.Write(LogLevel.Info, Title, $"{result.Summary}  已反编译。");
     }
 
     private static string? PathText(object? value) => Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture);

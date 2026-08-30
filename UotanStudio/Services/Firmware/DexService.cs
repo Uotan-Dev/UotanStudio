@@ -1,5 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware.Dex;
+using UotanStudio.Firmware.Dex.Decompile;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -111,6 +112,50 @@ public sealed class DexService
         catch (Exception ex)
         {
             return Task.FromResult(UotanStudio.Firmware.Common.FirmwareOpResult.Fail(ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// <para>反编译 DEX 文件为伪 Java 源码，写入指定路径（默认取 DEX 同目录的 <c>&lt;name&gt;.java</c>）。
+    /// 内置重载解析；输出模式由 <see cref="DecompileOptions"/> 控制。</para>
+    /// Decompiles a DEX file into pseudo-Java source, written to the specified path (defaults to
+    /// <c>&lt;name&gt;.java</c> next to the DEX file). Overload resolution is built in; the output
+    /// mode is controlled by <see cref="DecompileOptions"/>.
+    /// </summary>
+    /// <param name="path">DEX 文件路径。<para>DEX file path.</para></param>
+    /// <param name="outputPath">输出文件路径；为空时自动取 DEX 同目录下的 <c>&lt;name&gt;.java</c>。</param>
+    /// <param name="options">反编译选项；<c>null</c> 用默认值。<para>Decompiler options; <c>null</c> for defaults.</para></param>
+    /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
+    /// <returns>操作结果；Summary 含输出文件路径与字节数。</returns>
+    public async Task<UotanStudio.Firmware.Common.FirmwareOpResult> DecompileDexAsync(string path, string? outputPath, DecompileOptions? options = null, CancellationToken ct = default)
+    {
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            var dex = DexFile.Load(path);
+            var java = LightweightDecompiler.DecompileAll(dex, options ?? DecompileOptions.Default);
+
+            var name = Path.GetFileNameWithoutExtension(path);
+            var safeName = string.IsNullOrEmpty(name) ? "dex" : name;
+            outputPath ??= Path.Combine(
+                Path.GetDirectoryName(path) ?? ".",
+                safeName + ".java");
+
+            var directory = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
+            await File.WriteAllTextAsync(outputPath, java, Encoding.UTF8, ct).ConfigureAwait(false);
+
+            var summary = $"Decompiled DEX to {outputPath} ({Encoding.UTF8.GetByteCount(java)} bytes)";
+            return UotanStudio.Firmware.Common.FirmwareOpResult.Ok(summary, [outputPath]);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return UotanStudio.Firmware.Common.FirmwareOpResult.Fail(ex.Message);
         }
     }
 }

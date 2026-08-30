@@ -129,9 +129,9 @@ public static class OpCodes
             or InstructionFormat.Format11x or InstructionFormat.Format10t => 1,
         InstructionFormat.Format20t or InstructionFormat.Format22x or InstructionFormat.Format21t
             or InstructionFormat.Format21s or InstructionFormat.Format21h or InstructionFormat.Format21c
-            or InstructionFormat.Format23x or InstructionFormat.Format22b => 2,
-        InstructionFormat.Format22t or InstructionFormat.Format22s or InstructionFormat.Format22c
-            or InstructionFormat.Format30t or InstructionFormat.Format32x or InstructionFormat.Format31i
+            or InstructionFormat.Format23x or InstructionFormat.Format22b or InstructionFormat.Format22t
+            or InstructionFormat.Format22s or InstructionFormat.Format22c => 2,
+        InstructionFormat.Format30t or InstructionFormat.Format32x or InstructionFormat.Format31i
             or InstructionFormat.Format31t or InstructionFormat.Format31c or InstructionFormat.Format35c
             or InstructionFormat.Format3rc => 3,
         InstructionFormat.Format45cc or InstructionFormat.Format4rcc => 4,
@@ -259,12 +259,12 @@ public static class OpCodes
             (0x6f, "invoke-direct/range", InstructionFormat.Format3rc, RefKind.Method),
             (0x70, "invoke-static/range", InstructionFormat.Format3rc, RefKind.Method),
             (0x71, "invoke-interface/range", InstructionFormat.Format3rc, RefKind.Method),
-            (0x72, "neg-int", InstructionFormat.Format10x, RefKind.None),
+            (0x72, "neg-int", InstructionFormat.Format12x, RefKind.None),
             (0x73, "not-int", InstructionFormat.Format12x, RefKind.None),
-            (0x74, "neg-long", InstructionFormat.Format10x, RefKind.None),
+            (0x74, "neg-long", InstructionFormat.Format12x, RefKind.None),
             (0x75, "not-long", InstructionFormat.Format12x, RefKind.None),
-            (0x76, "neg-float", InstructionFormat.Format10x, RefKind.None),
-            (0x77, "neg-double", InstructionFormat.Format10x, RefKind.None),
+            (0x76, "neg-float", InstructionFormat.Format12x, RefKind.None),
+            (0x77, "neg-double", InstructionFormat.Format12x, RefKind.None),
             (0x78, "int-to-long", InstructionFormat.Format12x, RefKind.None),
             (0x79, "int-to-float", InstructionFormat.Format12x, RefKind.None),
             (0x7a, "int-to-double", InstructionFormat.Format12x, RefKind.None),
