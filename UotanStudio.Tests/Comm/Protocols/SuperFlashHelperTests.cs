@@ -183,6 +183,7 @@ public class SuperFlashHelperTests
         var firstLogicalSector = metadata.BlockDevices[0].FirstLogicalSector;
         var metadataImageLength = (int)(firstLogicalSector * SuperImageBuilder.LpSectorSize);
         var systemSize = (int)(metadata.Extents[0].NumSectors * SuperImageBuilder.LpSectorSize);
+        var vendorSize = (int)(metadata.Extents[1].NumSectors * SuperImageBuilder.LpSectorSize);
 
         transport.Enqueue("OKAY");
         transport.Enqueue($"DATA{metadataImageLength:x8}");
@@ -191,12 +192,16 @@ public class SuperFlashHelperTests
         transport.Enqueue($"DATA{systemSize:x8}");
         transport.Enqueue("OKAY");
         transport.Enqueue("OKAY");                          // flash:system
+        transport.Enqueue($"DATA{vendorSize:x8}");          // vendor 分区同样需要 download + flash 响应
+        transport.Enqueue("OKAY");
+        transport.Enqueue("OKAY");                          // flash:vendor
 
         using var session = NewSession(transport);
         new SuperFlashHelper(session).FlashSuper(superPath, wipe: true);
 
         Assert.Contains(transport.Writes, w => Text(w) == "update-super:super:wipe");
         Assert.Equal("flash:system", Text(transport.Writes[6]));
+        Assert.Equal("flash:vendor", Text(transport.Writes[9]));
     }
 
     [Fact]

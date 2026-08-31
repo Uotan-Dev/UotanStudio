@@ -16,6 +16,11 @@ public sealed class ScriptedCommTransport : ICommTransport
 {
     private readonly object _lock = new();
     private readonly Queue<byte[]> _reads = new();
+    // 上次部分消费后遗留的块剩余部分：作为字节流延续保持在"队首"，下一次读取优先消费，
+    // 不能 Enqueue 到队尾（否则会与后续独立入队的包错位）。
+    // Remainder of a partially-consumed chunk: it continues the byte stream and must be consumed
+    // next, NOT re-queued at the tail (that would interleave it with later independent packets).
+    private byte[]? _headRemainder;
     private bool _connected = true;
 
     /// <summary>Gets all bytes written through this transport, in order. 所有写入字节。</summary>
@@ -85,17 +90,27 @@ public sealed class ScriptedCommTransport : ICommTransport
     {
         lock (_lock)
         {
-            if (_reads.Count == 0)
+            byte[]? chunk;
+            if (_headRemainder is not null)
             {
-                return 0;
+                chunk = _headRemainder;
+                _headRemainder = null;
+            }
+            else
+            {
+                if (_reads.Count == 0)
+                {
+                    return 0;
+                }
+
+                chunk = _reads.Dequeue();
             }
 
-            var chunk = _reads.Dequeue();
             var n = Math.Min(length, chunk.Length);
             Array.Copy(chunk, 0, buffer, offset, n);
             if (n < chunk.Length)
             {
-                _reads.Enqueue(chunk[n..]);
+                _headRemainder = chunk[n..];
             }
 
             return n;
@@ -115,6 +130,7 @@ public sealed class ScriptedCommTransport : ICommTransport
         lock (_lock)
         {
             _reads.Clear();
+            _headRemainder = null;
         }
     }
 }

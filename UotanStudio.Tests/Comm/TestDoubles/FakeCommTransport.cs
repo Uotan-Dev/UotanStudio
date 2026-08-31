@@ -15,6 +15,11 @@ public class FakeCommTransport : ICommTransport
 {
     private readonly object _lock = new();
     private readonly Queue<byte[]> _reads = new();
+    // 上次部分消费后遗留的块剩余部分：作为字节流延续保持在"队首"，下一次读取优先消费，
+    // 不能 Enqueue 到队尾（否则会与后续独立入队的包错位）。
+    // Remainder of a partially-consumed chunk: it continues the byte stream and must be consumed
+    // next, NOT re-queued at the tail (that would interleave it with later independent packets).
+    private byte[]? _headRemainder;
     private bool _connected = true;
 
     /// <summary>Gets all bytes written through this transport, in order. 所有写入字节。</summary>
@@ -102,7 +107,7 @@ public class FakeCommTransport : ICommTransport
         {
             lock (_lock)
             {
-                _reads.Enqueue(chunk[n..]);
+                _headRemainder = chunk[n..];
                 Monitor.PulseAll(_lock);
             }
         }
@@ -125,7 +130,7 @@ public class FakeCommTransport : ICommTransport
         {
             lock (_lock)
             {
-                _reads.Enqueue(chunk[n..]);
+                _headRemainder = chunk[n..];
                 Monitor.PulseAll(_lock);
             }
         }
@@ -142,6 +147,7 @@ public class FakeCommTransport : ICommTransport
         lock (_lock)
         {
             _reads.Clear();
+            _headRemainder = null;
             Monitor.PulseAll(_lock);
         }
     }
@@ -150,6 +156,15 @@ public class FakeCommTransport : ICommTransport
     {
         lock (_lock)
         {
+            // 队首剩余部分优先于队列中的独立包（字节流延续）。
+            // The head remainder precedes independent queued packets (byte-stream continuity).
+            if (_headRemainder is not null)
+            {
+                var head = _headRemainder;
+                _headRemainder = null;
+                return head;
+            }
+
             if (_reads.Count > 0)
             {
                 return _reads.Dequeue();
@@ -182,6 +197,15 @@ public class FakeCommTransport : ICommTransport
         {
             lock (_lock)
             {
+                // 队首剩余部分优先于队列中的独立包（字节流延续）。
+                // The head remainder precedes independent queued packets (byte-stream continuity).
+                if (_headRemainder is not null)
+                {
+                    var head = _headRemainder;
+                    _headRemainder = null;
+                    return (true, head);
+                }
+
                 if (_reads.Count > 0)
                 {
                     return (true, _reads.Dequeue());

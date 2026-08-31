@@ -32,10 +32,15 @@ public class TcpTransportTests
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
+        // 必须先建立客户端连接再 accept：若先 await AcceptTcpClientAsync，客户端在
+        // await 之后才创建，accept 永远等不到连接而死锁挂起（与 Fastboot 版测试一致）。
+        // The client connection must be established BEFORE accepting: awaiting AcceptTcpClientAsync
+        // first would deadlock because the client is only created after the await, so the accept
+        // never gets a connection (matching the Fastboot tests' order).
+        using var client = new AdbTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
         var server = await listener.AcceptTcpClientAsync(TestContext.Current.CancellationToken);
         using var serverStream = server.GetStream();
 
-        using var client = new AdbTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
         Assert.True(client.IsConnected);
         Assert.Equal("127.0.0.1", client.Host);
         Assert.Equal(port, client.Port);
@@ -64,10 +69,11 @@ public class TcpTransportTests
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
+        // 与 WriteThenRead 相同：先建客户端再 accept，避免 accept 死锁。
+        // Same order as WriteThenRead: connect the client first, then accept, avoiding the deadlock.
+        using var client = new AdbTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
         var server = await listener.AcceptTcpClientAsync(TestContext.Current.CancellationToken);
         using var serverStream = server.GetStream();
-
-        using var client = new AdbTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
 
         // Send the 8 bytes in two writes; the exact-read must wait for both.
         // 分两次写入 8 字节；精确读取必须等两块都到达。
@@ -87,10 +93,12 @@ public class TcpTransportTests
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
+        // 与 WriteThenRead 相同：先建客户端再 accept，避免 accept 死锁。
+        // Same order as WriteThenRead: connect the client first, then accept, avoiding the deadlock.
+        using var client = new AdbTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
         var server = await listener.AcceptTcpClientAsync(TestContext.Current.CancellationToken);
         using var serverStream = server.GetStream();
 
-        using var client = new AdbTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
         await serverStream.WriteAsync("ping!"u8.ToArray(), TestContext.Current.CancellationToken);
 
         var buffer = new byte[5];

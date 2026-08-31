@@ -365,6 +365,15 @@ public class FlashBundleOrchestratorTests
 
     private static ScriptedCommTransport CreateBundleTransport(int commandAckCount)
     {
+        // 响应由写入序列驱动（而非预入队）：Sahara 被动 HELLO 探测在队列为空时立即超时，
+        // 随后 <nop> 探测 / <configure> 握手 / 各命令按写入内容获得对应应答，避免预入队
+        // 响应被被动探测提前消费导致后续命令空等满 120s 响应超时。
+        // Responses are driven by the write sequence (not pre-enqueued): the passive Sahara HELLO
+        // probe times out immediately on an empty queue, then the <nop> probe / <configure>
+        // handshake / each command receive the matching reply by write content, so pre-enqueued
+        // responses are never consumed by the passive probe and later commands do not idle for the
+        // full 120s response timeout.
+        var acksRemaining = commandAckCount;
         var transport = new ScriptedCommTransport
         {
             OnWrite = bytes =>
@@ -372,22 +381,41 @@ public class FlashBundleOrchestratorTests
                 var text = Encoding.UTF8.GetString(bytes);
                 // A running Firehose programmer answers the probe <nop> with logs + ACK.
                 // 运行中的 Firehose programmer 以日志 + ACK 应答探测 <nop>。
-                return text.Contains("<nop", StringComparison.Ordinal)
-                    ? [Encoding.UTF8.GetBytes(NopResponseXml)]
-                    : [];
+                if (text.Contains("<nop", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes(NopResponseXml)];
+                }
+
+                // The configure handshake is answered with the payload-negotiating ACK.
+                // configure 握手以携带负载协商的 ACK 应答。
+                if (text.Contains("<configure", StringComparison.Ordinal))
+                {
+                    return [Encoding.UTF8.GetBytes(ConfigureAckXml)];
+                }
+
+                // program/erase/patch 命令以普通 ACK 应答，数量受 commandAckCount 限制。
+                // Commands (program/erase/patch) are answered with a plain ACK, bounded by commandAckCount.
+                if (acksRemaining > 0 && (text.Contains("<program", StringComparison.Ordinal)
+                    || text.Contains("<erase", StringComparison.Ordinal)
+                    || text.Contains("<patch", StringComparison.Ordinal)))
+                {
+                    acksRemaining--;
+                    return [Encoding.UTF8.GetBytes(AckXml)];
+                }
+
+                return [];
             }
         };
-        transport.Enqueue(ConfigureAckXml);
-        for (var i = 0; i < commandAckCount; i++)
-        {
-            transport.Enqueue(AckXml);
-        }
-
         return transport;
     }
 
     private static long ParseStartSector(string value)
-        => long.TryParse(value, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var hex)
+    {
+        // NumberStyles.HexNumber 不接受 "0x" 前缀，先剥除再按十六进制解析。
+        // NumberStyles.HexNumber rejects the "0x" prefix; strip it before hex parsing.
+        var hexText = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? value[2..] : value;
+        return long.TryParse(hexText, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var hex)
             ? hex
             : long.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
+    }
 }

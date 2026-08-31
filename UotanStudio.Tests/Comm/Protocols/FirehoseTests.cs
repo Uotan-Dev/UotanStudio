@@ -295,6 +295,7 @@ public class FirehoseTests
     {
         var transport = new ScriptedCommTransport();
         transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
             <data>
             <response value="ACK" MaxPayloadSizeToTargetInBytes="8388608" MaxPayloadSizeFromTargetInBytes="16384"/>
             </data>
@@ -319,6 +320,7 @@ public class FirehoseTests
         // First configure is NAK'd and tells us the supported payload size.
         // 首个 configure 被 NAK 并告知支持的负载大小。
         transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
             <data>
             <response value="NAK" MaxPayloadSizeToTargetInBytes="8192"/>
             </data>
@@ -366,6 +368,7 @@ public class FirehoseTests
     {
         var transport = new ScriptedCommTransport();
         transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
             <data>
             <response value="NAK"/>
             </data>
@@ -431,6 +434,7 @@ public class FirehoseTests
     {
         var transport = new ScriptedCommTransport();
         transport.Enqueue("""
+            <?xml version="1.0" encoding="UTF-8" ?>
             <data>
             <response value="ACK" sector_size="4096"/>
             </data>

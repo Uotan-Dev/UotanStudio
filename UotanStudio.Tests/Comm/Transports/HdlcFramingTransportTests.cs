@@ -39,14 +39,34 @@ public class HdlcFramingTransportTests
     public void Hdlc_Encode_EscapesFlagAndEscapeBytesInsideBody()
     {
         // info deliberately contains the flag byte and the escape byte; both must be
-        // escaped so the body never contains a raw 0x7E / 0x7D.
-        // 负载刻意包含标志字节与转义字节；两者都必须被转义，帧体不得出现裸 0x7E/0x7D。
+        // escaped so the body never contains a raw 0x7E, and 0x7D appears only as a
+        // transparency prefix (never as a dangling escape prefix).
+        // 负载刻意包含标志字节与转义字节；两者都必须被转义，帧体不得出现裸 0x7E，
+        // 且 0x7D 只能作为转义前缀出现（不得有悬空的孤立转义前缀）。
         var info = new byte[] { 0x01, Hdlc.Flag, 0x02, Hdlc.Escape, 0x03, Hdlc.Flag, 0x7F };
         var frame = EncodeFrame(info);
 
         var body = frame[1..^1];
+        // 帧体不得包含裸标志字节（0x7E 只会出现在帧首尾）。
+        // The body must never contain a raw flag byte (0x7E only sits at the frame ends).
         Assert.DoesNotContain(body, b => b == Hdlc.Flag);
-        Assert.DoesNotContain(body, b => b == Hdlc.Escape);
+
+        // 0x7D 是转义前缀：其后必须跟 0x5E（0x7E 的转义形式）或 0x5D（0x7D 的转义形式），
+        // 不允许出现孤立/悬空的转义前缀。
+        // 0x7D is the transparency prefix: it must be followed by 0x5E (escaped 0x7E) or
+        // 0x5D (escaped 0x7D); a dangling escape prefix is forbidden.
+        for (var i = 0; i < body.Length; i++)
+        {
+            if (body[i] != Hdlc.Escape)
+            {
+                continue;
+            }
+
+            Assert.True(i + 1 < body.Length, "dangling escape prefix at end of body");
+            Assert.True(body[i + 1] is Hdlc.FlagXor or Hdlc.EscapeXor,
+                $"unexpected escape suffix 0x{body[i + 1]:X2} after 0x7D");
+            i++; // skip the escaped byte
+        }
 
         var dst = new byte[frame.Length];
         var n = Hdlc.ExtractInfo(frame, dst, out var error);

@@ -91,8 +91,14 @@ public class SaharaTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(SaharaMode.ImageTxPending, mode);
-        Assert.Equal(3, transport.Writes.Count);
-        Assert.Equal(image, transport.Writes[1]);
+        // 128KB 镜像大于 64KB 传输缓冲，被拆为两次写入：
+        // [0] HELLO_RESPONSE, [1..2] 分块 payload, [3] DONE。
+        // A 128KB image exceeds the 64KB transfer buffer, so it is written in two chunks:
+        // [0] HELLO_RESPONSE, [1..2] chunked payload, [3] DONE.
+        Assert.Equal(4, transport.Writes.Count);
+        var payload = transport.Writes[1].Concat(transport.Writes[2]).ToArray();
+        Assert.Equal(image, payload);
+        Assert.Equal(SaharaCommand.Done, ParseHeader(transport.Writes[3]).Command);
     }
 
     [Fact]
