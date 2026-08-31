@@ -38,6 +38,12 @@ public sealed class UsbApiRegistry
 
         ArgumentNullException.ThrowIfNull(factory);
 
+        // 大小写不敏感且 LastWins：先按忽略大小写移除旧 key（可能为不同拼写），再以本次
+        // 拼写插入，使 GetApiNames 反映最后一次注册的拼写，而非首次注册的拼写。
+        // Case-insensitive with last-wins semantics: remove any existing key under the
+        // case-insensitive comparer first, then insert with the current spelling so GetApiNames
+        // reflects the last registered spelling instead of the first one.
+        _factories.Remove(apiName);
         _factories[apiName] = factory;
         ProviderNameRegistered?.Invoke(apiName);
         ProviderRegistered?.Invoke(new RegisteredProviderPlaceholder(apiName));

@@ -201,7 +201,7 @@ public sealed class SuperFlashHelper(FastbootSession session, string mainPartiti
             var tempPath = Path.Combine(Path.GetTempPath(), $"uotan-super-{Guid.NewGuid():N}.img");
             try
             {
-                using (var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, CopyBufferSize))
+                using (var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, CopyBufferSize))
                 {
                     WriteLogicalPartition(image, metadata, partition, firstLogicalSector, output);
                     output.Flush();

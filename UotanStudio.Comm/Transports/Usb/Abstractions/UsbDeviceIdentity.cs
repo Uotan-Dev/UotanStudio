@@ -41,9 +41,12 @@ internal static class UsbDeviceIdentity
     /// <summary>
     /// Builds a physical identity key that is independent of the backend and the device
     /// path, so the same physical device is deduplicated across backends (native + libusb)
-    /// in monitoring. Based on VID/PID/interface triple/serial only.
+    /// in monitoring. Based on VID/PID/interface class+subclass/serial — the interface
+    /// PROTOCOL is deliberately excluded so a mode/protocol change on the same interface
+    /// is reported as a metadata change (Changed) rather than as a remove+add.
     /// <para>构建与后端和设备路径无关的物理身份键，使同一物理设备在监控中可跨后端
-    /// （native + libusb）去重。仅基于 VID/PID/接口三元组/序列号。</para>
+    /// （native + libusb）去重。仅基于 VID/PID/接口类+子类/序列号——有意排除接口协议号，
+    /// 使同一接口上的模式/协议变化被上报为元数据变化（Changed）而非移除+新增。</para>
     /// Devices without a serial number fall back to VID/PID/interface, which collapses
     /// identical unlabeled devices onto one key (documented limitation).
     /// <para>无序列号的设备退化为 VID/PID/接口，多个相同无标签设备会合并到同一个键
@@ -58,7 +61,6 @@ internal static class UsbDeviceIdentity
         var serial = info.SerialNumber ?? string.Empty;
         var interfaceClass = info.InterfaceClass?.ToString("X2") ?? string.Empty;
         var interfaceSubClass = info.InterfaceSubClass?.ToString("X2") ?? string.Empty;
-        var interfaceProtocol = info.InterfaceProtocol?.ToString("X2") ?? string.Empty;
 
         return string.Join("|", new[]
         {
@@ -66,7 +68,6 @@ internal static class UsbDeviceIdentity
             info.ProductId.ToString("X4"),
             interfaceClass,
             interfaceSubClass,
-            interfaceProtocol,
             serial
         });
     }
