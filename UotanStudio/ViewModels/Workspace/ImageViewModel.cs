@@ -406,8 +406,8 @@ internal partial class ImageViewModel : Tool
     [RelayCommand]
     private async Task ExtractSelectedAsync()
     {
-        var image = SelectedImage;
-        if (image is null)
+        var selectedImages = GetSelectedImages();
+        if (selectedImages.Count == 0)
         {
             return;
         }
@@ -418,6 +418,14 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
+        foreach (var image in selectedImages)
+        {
+            await ExtractImageAsync(image);
+        }
+    }
+
+    private async Task ExtractImageAsync(ImageEntryViewModel image)
+    {
         var source = GetSelectedSourcePath(image, "Extract");
         if (source is null)
         {
@@ -648,8 +656,8 @@ internal partial class ImageViewModel : Tool
     [RelayCommand]
     private async Task DeleteSelectedAsync()
     {
-        var image = SelectedImage;
-        if (image is null)
+        var selectedImages = GetSelectedImages();
+        if (selectedImages.Count == 0)
         {
             return;
         }
@@ -660,6 +668,19 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
+        foreach (var image in selectedImages)
+        {
+            await DeleteImageAsync(image);
+        }
+
+        if (SelectedImage is not null && !Images.Contains(SelectedImage))
+        {
+            SelectedImage = null;
+        }
+    }
+
+    private async Task DeleteImageAsync(ImageEntryViewModel image)
+    {
         var source = GetSelectedSourcePath(image, "Delete");
         if (source is null)
         {
@@ -672,7 +693,6 @@ internal partial class ImageViewModel : Tool
             var destination = GetUniqueFileName(deletedDir, Path.GetFileName(source));
             await Task.Run(() => File.Move(source, destination));
             Images.Remove(image);
-            SelectedImage = null;
             LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted {image.DisplayName} -> intermediate/deleted  已删除 {image.DisplayName}");
             OperationHistoryService.Instance.Record(
                 $"Delete {image.DisplayName}",
@@ -718,7 +738,7 @@ internal partial class ImageViewModel : Tool
 
         var settings = ProjectSettingViewModel.EnsureInstance();
         var partitions = new List<SuperPartitionInput>();
-        foreach (var image in Images)
+        foreach (var image in Images.Where(image => image.IsSelected))
         {
             if (image.Format is not ("raw" or "sparse"))
             {
@@ -798,7 +818,7 @@ internal partial class ImageViewModel : Tool
         }
 
         var entries = new List<(string Partition, string ImagePath)>();
-        foreach (var image in Images)
+        foreach (var image in Images.Where(image => image.IsSelected))
         {
             if (image.Format is not ("boot" or "raw" or "sparse"))
             {
@@ -929,6 +949,11 @@ internal partial class ImageViewModel : Tool
         }
 
         return source;
+    }
+
+    private IReadOnlyList<ImageEntryViewModel> GetSelectedImages()
+    {
+        return Images.Where(image => image.IsSelected).ToArray();
     }
 
     private static string GetEntryBaseName(ImageEntryViewModel image)
@@ -1174,6 +1199,14 @@ public sealed partial class ImageEntryViewModel : ObservableObject
     private long _sizeBytes;
 
     /// <summary>
+    /// <para>获取自动换算到最大合适单位的文件大小。</para>
+    /// Gets the file size converted to the largest suitable unit.
+    /// </summary>
+    public string DisplaySize => FormatSize(SizeBytes);
+
+    partial void OnSizeBytesChanged(long value) => OnPropertyChanged(nameof(DisplaySize));
+
+    /// <summary>
     /// <para>获取或设置镜像格式标识（boot/payload/cpio/oppo/sparse/raw/unknown）。</para>
     /// Gets or sets the image format identifier (boot/payload/cpio/oppo/sparse/raw/unknown).
     /// </summary>
@@ -1181,9 +1214,24 @@ public sealed partial class ImageEntryViewModel : ObservableObject
     private string _format = "unknown";
 
     /// <summary>
-    /// <para>获取或设置是否选中。</para>
-    /// Gets or sets whether the entry is selected.
+    /// <para>获取或设置是否加入批量操作选择集。</para>
+    /// Gets or sets whether the entry is included in the batch-operation selection.
     /// </summary>
     [ObservableProperty]
     private bool _isSelected;
+
+    private static string FormatSize(long bytes)
+    {
+        ReadOnlySpan<string> units = ["B", "KB", "MB", "GB", "TB", "PB", "EB"];
+        var size = (double)Math.Max(0, bytes);
+        var unitIndex = 0;
+
+        while (size >= 1024 && unitIndex < units.Length - 1)
+        {
+            size /= 1024d;
+            unitIndex++;
+        }
+
+        return $"{size:0.##} {units[unitIndex]}";
+    }
 }

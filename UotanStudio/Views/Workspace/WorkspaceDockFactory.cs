@@ -43,6 +43,8 @@ public class WorkspaceDockFactory : Factory
             Title = LanguageService.Instance.GetString("Dock_Properties"),
             CanClose = true
         };
+        var output = new Tool { Id = "Output", Title = "Output" };
+        var adbLog = new Tool { Id = "AdbLog", Title = "ADB Log" };
         var device = new WorkspaceDeviceTool { Id = "Device", Title = LanguageService.Instance.GetString("Dock_Device"), CanClose = true };
 
         var documentDock = new DocumentDock
@@ -59,7 +61,7 @@ public class WorkspaceDockFactory : Factory
         {
             Id = "RightPaneTop",
             Title = "RightPaneTop",
-            Proportion = 0.25,
+            Proportion = double.NaN,
             ActiveDockable = imagesView,
             VisibleDockables = CreateList<IDockable>(imagesView)
         };
@@ -68,7 +70,7 @@ public class WorkspaceDockFactory : Factory
         {
             Id = "RightPane",
             Title = "RightPane",
-            Proportion = 0.45,
+            Proportion = 0.35,
             ActiveDockable = properties,
             VisibleDockables = CreateList<IDockable>(properties)
         };
@@ -77,12 +79,9 @@ public class WorkspaceDockFactory : Factory
         {
             Id = "LeftPane",
             Title = "LeftPane",
-            Proportion = 0.25,
+            Proportion = 0.15,
             ActiveDockable = projectExplorer,
-            // 打包设置面板默认隐藏：工厂仍持有其引用，供「窗口」菜单重新显示。
-            // The packing settings panel starts hidden; the factory keeps its reference so the
-            // "Window" menu can show it again later.
-            VisibleDockables = CreateList<IDockable>(projectExplorer, device)
+            VisibleDockables = CreateList<IDockable>(projectExplorer, projectSetting)
         };
 
         var bottomTools = new ToolDock
@@ -91,20 +90,20 @@ public class WorkspaceDockFactory : Factory
             Title = "BottomPane",
             Proportion = 0.25,
             ActiveDockable = null,
-            VisibleDockables = CreateList<IDockable>()
+            VisibleDockables = CreateList<IDockable>(output, adbLog)
         };
 
         var mainLayout = new ProportionalDock
         {
             Orientation = Orientation.Horizontal,
-            Proportion = 0.2,
+            Proportion = double.NaN,
             VisibleDockables = CreateList<IDockable>(
                 leftTools,
                 new ProportionalDockSplitter(),
                 new ProportionalDock
                 {
                     Orientation = Orientation.Vertical,
-                    Proportion = 0.8,
+                    Proportion = 0.7,
                     VisibleDockables = CreateList<IDockable>(
                         documentDock,
                         new ProportionalDockSplitter(),
@@ -115,7 +114,7 @@ public class WorkspaceDockFactory : Factory
                 new ProportionalDock
                 {
                     Orientation = Orientation.Vertical,
-                    Proportion = 0.5,
+                    Proportion = 0.15,
                     VisibleDockables = CreateList<IDockable>(
                         rightToolsTop,
                         new ProportionalDockSplitter(),
@@ -135,8 +134,8 @@ public class WorkspaceDockFactory : Factory
         // Register each workspace panel with the panel service for the Window menu.
         var panels = WorkspacePanelService.Instance;
         panels.Register(WorkspacePanelService.ProjectExplorer, projectExplorer, leftTools, visible: true);
-        panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: false);
-        panels.Register(WorkspacePanelService.Device, device, leftTools, visible: true);
+        panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: true);
+        panels.Register(WorkspacePanelService.Device, device, leftTools, visible: false);
         panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
         panels.Register(WorkspacePanelService.Properties, properties, rightTools, visible: true);
 

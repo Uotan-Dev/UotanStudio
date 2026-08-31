@@ -1,40 +1,44 @@
 <UserControl xmlns="https://github.com/avaloniaui"
-			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-			 xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
-			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-			 x:Class="UotanStudio.Views.Workspace.ProjectExplorerView"
-			 x:DataType="viewmodels:ProjectExplorerViewModel">
-	<TreeView x:Name="ProjectTree" Height="680" ItemsSource="{Binding TreeViewContent}" DoubleTapped="OnTreeDoubleTapped">
-		<TreeView.ItemTemplate>
-			<TreeDataTemplate x:DataType="viewmodels:ExplorerNode" ItemsSource="{Binding Children}">
-				<TextBlock Text="{Binding Name}">
-				<TextBlock.ContextMenu>
-					<ContextMenu>
-						<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsMenuHeader}"
-								  IsVisible="{Binding !IsDirectory}">
-							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsTextHeader}"
-								  Click="OnOpenAsText" />
-							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsHexHeader}"
-									  Click="OnOpenAsHex" />
-							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDtbHeader}"
-									  Click="OnOpenAsDtb" />
-							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDexHeader}"
-									  Click="OnOpenAsDex" />
-							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsAxmlHeader}"
-									  Click="OnOpenAsAxml" />
-							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsArscHeader}"
-									  Click="OnOpenAsArsc" />
-							<MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsApkHeader}"
-									  Click="OnOpenAsApk" />
-							<MenuItem Header="{DynamicResource Explorer_OpenAsFirmware}"
-									  Click="OnOpenAsFirmware" />
-						</MenuItem>
-					</ContextMenu>
-				</TextBlock.ContextMenu>
-				</TextBlock>
-			</TreeDataTemplate>
-		</TreeView.ItemTemplate>
-	</TreeView>
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             x:Class="UotanStudio.Views.Workspace.ProjectExplorerView"
+             x:DataType="viewmodels:ProjectExplorerViewModel">
+    <TreeView x:Name="ProjectTree" Margin="0 5 0 0" ItemsSource="{Binding TreeViewContent}" DoubleTapped="OnTreeDoubleTapped">
+        <TreeView.ItemContainerTheme>
+            <ControlTheme TargetType="TreeViewItem"
+                          BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                <Setter Property="ContextMenu">
+                    <ContextMenu x:DataType="viewmodels:ExplorerNode">
+                        <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsMenuHeader}"
+                                  IsVisible="{Binding !IsDirectory}">
+                            <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsTextHeader}"
+                                      Click="OnOpenAsText" />
+                            <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsHexHeader}"
+                                      Click="OnOpenAsHex" />
+                            <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDtbHeader}"
+                                      Click="OnOpenAsDtb" />
+                            <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDexHeader}"
+                                      Click="OnOpenAsDex" />
+                            <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsAxmlHeader}"
+                                      Click="OnOpenAsAxml" />
+                            <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsArscHeader}"
+                                      Click="OnOpenAsArsc" />
+                            <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsApkHeader}"
+                                      Click="OnOpenAsApk" />
+                            <MenuItem Header="{DynamicResource Explorer_OpenAsFirmware}"
+                                      Click="OnOpenAsFirmware" />
+                        </MenuItem>
+                    </ContextMenu>
+                </Setter>
+            </ControlTheme>
+        </TreeView.ItemContainerTheme>
+        <TreeView.ItemTemplate>
+            <TreeDataTemplate x:DataType="viewmodels:ExplorerNode" ItemsSource="{Binding Children}">
+                <TextBlock Text="{Binding Name}" />
+            </TreeDataTemplate>
+        </TreeView.ItemTemplate>
+    </TreeView>
 </UserControl>

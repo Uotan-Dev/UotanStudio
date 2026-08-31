@@ -41,6 +41,15 @@ public partial class ProjectExplorerView : UserControl
         }
     }
 
+    private void OnTreePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.GetCurrentPoint(ProjectTree).Properties.PointerUpdateKind == PointerUpdateKind.RightButtonPressed &&
+            e.Source is Control { DataContext: ExplorerNode node })
+        {
+            ProjectTree.SelectedItem = node;
+        }
+    }
+
     private void OnOpenAsText(object? sender, RoutedEventArgs e)
     {
         OpenWith(EditorOpenMode.Text);

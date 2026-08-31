@@ -29,6 +29,7 @@
     <x:String x:Key="ImageView_OperationDone">Operation complete</x:String>
     <x:String x:Key="ImageView_FlashWizard">Flash Wizard</x:String>
     <x:String x:Key="ImageView_FlashWizardHint">Open the one-click flash wizard</x:String>
+    <x:String x:Key="ImageView_SelectHint">Include this image in batch operations</x:String>
 
     <!-- FirmwareInfo actions -->
     <x:String x:Key="FirmwareInfo_Verify">Verify</x:String>

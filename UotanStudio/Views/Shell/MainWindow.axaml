@@ -14,7 +14,7 @@
 	<DockPanel>
 		<Grid DockPanel.Dock="Top" Height="32" ColumnDefinitions="Auto,*">
 			<Image Grid.Column="0" Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
-			<StackPanel Grid.Column="1" Orientation="Horizontal" Margin="35 0 0 0">
+			<StackPanel Grid.Column="1" Orientation="Horizontal">
 			<Menu x:Name="TopMenu" HorizontalAlignment="Left">
 
 				<!-- 文件 / File -->

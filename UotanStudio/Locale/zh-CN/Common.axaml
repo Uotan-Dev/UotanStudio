@@ -29,6 +29,7 @@
     <x:String x:Key="ImageView_OperationDone">操作完成</x:String>
     <x:String x:Key="ImageView_FlashWizard">向导刷写</x:String>
     <x:String x:Key="ImageView_FlashWizardHint">打开一键刷写向导</x:String>
+    <x:String x:Key="ImageView_SelectHint">将此镜像加入批量操作</x:String>
 
     <!-- FirmwareInfo actions -->
     <x:String x:Key="FirmwareInfo_Verify">校验</x:String>
