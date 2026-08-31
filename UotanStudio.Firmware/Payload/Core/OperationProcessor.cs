@@ -1,9 +1,12 @@
 using System.Buffers;
 using BrotliSharpLib;
 using BsDiff;
+using K4os.Compression.LZ4.Streams;
+using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.Compress;
 using UotanStudio.Firmware.Payload.Exceptions;
 using UotanStudio.Firmware.Payload.Proto;
+using UotanStudio.Firmware.Zucchini;
 
 namespace UotanStudio.Firmware.Payload.Core;
 
@@ -514,9 +517,13 @@ internal static class OperationProcessor
     }
 
     /// <summary>
-    /// Processes a BSDIFF operation by applying a bsdiff patch against zero-filled source data
-    /// and writing the result to the destination extents.
-    /// <para>通过对零填充的源数据应用 bsdiff 补丁并将结果写入目标区间来处理 BSDIFF 操作。</para>
+    /// Processes a BSDIFF operation by reading source data from the output file (the base image
+    /// when one was provided) and applying a bsdiff patch against it, writing the result to the
+    /// destination extents. This mirrors <see cref="ProcessSourceBsdiff"/>; BSDIFF is the deprecated
+    /// predecessor of SOURCE_BSDIFF and per AOSP semantics always reads its source extents.
+    /// <para>通过从输出文件（提供基座时即基座镜像）读取源数据、对其应用 bsdiff 补丁并将结果写入
+    /// 目标区间来处理 BSDIFF 操作。该实现与 <see cref="ProcessSourceBsdiff"/> 一致；BSDIFF 是
+    /// SOURCE_BSDIFF 的已弃用前身，按 AOSP 语义始终从源区间读取数据。</para>
     /// </summary>
     /// <param name="op">The BSDIFF install operation to process.
     /// <para>要处理的 BSDIFF 安装操作。</para>
@@ -524,28 +531,147 @@ internal static class OperationProcessor
     /// <param name="data">The patch data blob read from the payload stream.
     /// <para>从载荷流读取的补丁数据块。</para>
     /// </param>
-    /// <param name="outFile">The output file stream to write patched data to.
-    /// <para>用于写入补丁数据的输出文件流。</para>
+    /// <param name="outFile">The output file stream to read source data from and write patched data to.
+    /// <para>用于读取源数据和写入补丁数据的输出文件流。</para>
     /// </param>
     /// <param name="blockSize">The block size used for extent calculations.
     /// <para>用于区间计算的块大小。</para>
     /// </param>
     internal static void ProcessBsdiff(InstallOperation op, byte[] data, FileStream outFile, uint blockSize)
+        => ProcessSourceBsdiff(op, data, outFile, blockSize);
+
+    /// <summary>
+    /// Processes a ZUCCHINI operation by reading the source base data at the source extents, applying
+    /// the Zucchini binary delta patch (RAW element subset) and writing the result to the destination
+    /// extents. Source and destination buffers are rented from the shared array pool, so peak memory
+    /// stays bounded by the source plus destination extent length and the patch data blob.
+    /// <para>处理 ZUCCHINI 操作：在源区间处读取源基准数据，应用 Zucchini 二进制差分补丁
+    /// （RAW 元素子集），并将结果写入目标区间。源与目标缓冲区均取自共享数组池，峰值内存
+    /// 由源与目标区间长度及补丁数据块之和限定。</para>
+    /// </summary>
+    /// <param name="op">The Zucchini install operation.
+    /// <para>ZUCCHINI 安装操作。</para>
+    /// </param>
+    /// <param name="data">The Zucchini patch data blob read from the payload stream.
+    /// <para>从载荷流读取的 Zucchini 补丁数据块。</para>
+    /// </param>
+    /// <param name="outFile">The output file stream to read source data from and write patched data to.
+    /// <para>用于读取源数据和写入补丁数据的输出文件流。</para>
+    /// </param>
+    /// <param name="blockSize">The block size used for extent calculations.
+    /// <para>用于区间计算的块大小。</para>
+    /// </param>
+    /// <exception cref="PartitionExtractionException">Thrown when source data cannot be read, the patch
+    /// is invalid or its CRC-32 checks fail, or the destination extents cannot be written.
+    /// <para>当无法读取源数据、补丁非法或其 CRC-32 校验失败、或无法写入目标区间时抛出。</para>
+    /// </exception>
+    internal static void ProcessZucchini(InstallOperation op, byte[] data, FileStream outFile, uint blockSize)
     {
+        long srcLength = 0;
+        foreach (var ext in op.SrcExtents)
+        {
+            srcLength += (long)ext.NumBlocks * blockSize;
+        }
+
         long dstLength = 0;
         foreach (var ext in op.DstExtents)
         {
             dstLength += (long)ext.NumBlocks * blockSize;
         }
 
-        var zeroData = ArrayPool<byte>.Shared.Rent((int)dstLength);
+        if (srcLength > int.MaxValue)
+        {
+            throw new PartitionExtractionException(
+                $"ZUCCHINI source length {srcLength} exceeds the supported byte-array limit {int.MaxValue}. " +
+                $"ZUCCHINI 源长度 {srcLength} 超过支持的字节数组上限 {int.MaxValue}。",
+                string.Empty);
+        }
+        if (dstLength > int.MaxValue)
+        {
+            throw new PartitionExtractionException(
+                $"ZUCCHINI destination length {dstLength} exceeds the supported byte-array limit {int.MaxValue}. " +
+                $"ZUCCHINI 目标长度 {dstLength} 超过支持的字节数组上限 {int.MaxValue}。",
+                string.Empty);
+        }
+
+        var oldData = ArrayPool<byte>.Shared.Rent((int)srcLength);
+        var newData = ArrayPool<byte>.Shared.Rent((int)dstLength);
         try
         {
-            Array.Clear(zeroData, 0, (int)dstLength);
+            ReadSourceExtents(op, oldData, (int)srcLength, outFile, blockSize);
 
-            using var oldDataStream = new MemoryStream(zeroData, 0, (int)dstLength);
+            HashVerificationHelper.VerifySourceHash(oldData, (int)srcLength, op);
+
+            try
+            {
+                ZucchiniPatchApplier.Apply(oldData.AsSpan(0, (int)srcLength), data, newData.AsSpan(0, (int)dstLength));
+            }
+            catch (ZucchiniException ex)
+            {
+                throw new PartitionExtractionException(
+                    $"ZUCCHINI patch application failed for operation at data offset {op.DataOffset}: {ex.Message} " +
+                    $"ZUCCHINI 补丁应用失败（数据偏移 {op.DataOffset}）。",
+                    string.Empty,
+                    ex);
+            }
+
+            using var output = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: true);
+            output.Write(newData, 0, (int)dstLength);
+            output.Complete();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(oldData);
+            ArrayPool<byte>.Shared.Return(newData);
+        }
+    }
+
+    /// <summary>
+    /// Processes an LZ4DIFF_BSDIFF operation: the attached data blob is an LZ4-compressed bsdiff
+    /// patch. The patch is decompressed under a strict output bound (source plus destination extent
+    /// length) to guard against decompression bombs, then applied against the source data read from
+    /// the output file (the base image when one was provided).
+    /// <para>处理 LZ4DIFF_BSDIFF 操作：附加的数据块是 LZ4 压缩的 bsdiff 补丁。补丁在严格的输出上限
+    /// （源区间与目标区间长度之和）下解压以防解压炸弹，随后对从输出文件（提供基座时即基座镜像）
+    /// 读取的源数据应用补丁。</para>
+    /// </summary>
+    /// <param name="op">The Lz4diffBsdiff install operation.
+    /// <para>LZ4DIFF_BSDIFF 安装操作。</para>
+    /// </param>
+    /// <param name="data">The LZ4-compressed patch data blob read from the payload stream.
+    /// <para>从载荷流读取的 LZ4 压缩补丁数据块。</para>
+    /// </param>
+    /// <param name="outFile">The output file stream to read source data from and write patched data to.
+    /// <para>用于读取源数据和写入补丁数据的输出文件流。</para>
+    /// </param>
+    /// <param name="blockSize">The block size used for extent calculations.
+    /// <para>用于区间计算的块大小。</para>
+    /// </param>
+    /// <exception cref="PartitionExtractionException">Thrown when source data cannot be read, the patch
+    /// exceeds the decompression bound, or the patch fails.
+    /// <para>当无法读取源数据、补丁超过解压上限或补丁失败时抛出。</para>
+    /// </exception>
+    internal static void ProcessLz4diffBsdiff(InstallOperation op, byte[] data, FileStream outFile, uint blockSize)
+    {
+        long srcLength = 0;
+        foreach (var ext in op.SrcExtents)
+        {
+            srcLength += (long)ext.NumBlocks * blockSize;
+        }
+
+        var oldData = ArrayPool<byte>.Shared.Rent((int)srcLength);
+        try
+        {
+            ReadSourceExtents(op, oldData, (int)srcLength, outFile, blockSize);
+
+            HashVerificationHelper.VerifySourceHash(oldData, (int)srcLength, op);
+
+            var maxPatchBytes = CheckedLz4PatchBound(srcLength, op, blockSize);
+            var patch = DecompressLz4Patch(data, maxPatchBytes);
+
+            using var oldDataStream = new MemoryStream(oldData, 0, (int)srcLength);
             using var newData = new MemoryStream();
-            BinaryPatch.Apply(oldDataStream, () => new MemoryStream(data), newData);
+            BinaryPatch.Apply(oldDataStream, () => new MemoryStream(patch, writable: false), newData);
 
             var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
             outFile.Seek(dstPos, SeekOrigin.Begin);
@@ -553,8 +679,165 @@ internal static class OperationProcessor
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(zeroData);
+            ArrayPool<byte>.Shared.Return(oldData);
         }
+    }
+
+    /// <summary>
+    /// Processes an LZ4DIFF_PUFFDIFF operation: the attached data blob is an LZ4-compressed puffdiff
+    /// patch. The patch is decompressed under a strict output bound (source plus destination extent
+    /// length) to guard against decompression bombs, then applied against the source data read from
+    /// the output file (the base image when one was provided).
+    /// <para>处理 LZ4DIFF_PUFFDIFF 操作：附加的数据块是 LZ4 压缩的 puffdiff 补丁。补丁在严格的输出
+    /// 上限（源区间与目标区间长度之和）下解压以防解压炸弹，随后对从输出文件（提供基座时即基座
+    /// 镜像）读取的源数据应用补丁。</para>
+    /// </summary>
+    /// <param name="op">The Lz4diffPuffdiff install operation.
+    /// <para>LZ4DIFF_PUFFDIFF 安装操作。</para>
+    /// </param>
+    /// <param name="data">The LZ4-compressed patch data blob read from the payload stream.
+    /// <para>从载荷流读取的 LZ4 压缩补丁数据块。</para>
+    /// </param>
+    /// <param name="outFile">The output file stream to read source data from and write patched data to.
+    /// <para>用于读取源数据和写入补丁数据的输出文件流。</para>
+    /// </param>
+    /// <param name="blockSize">The block size used for extent calculations.
+    /// <para>用于区间计算的块大小。</para>
+    /// </param>
+    /// <exception cref="PartitionExtractionException">Thrown when source data cannot be read, the patch
+    /// exceeds the decompression bound, or the patch fails.
+    /// <para>当无法读取源数据、补丁超过解压上限或补丁失败时抛出。</para>
+    /// </exception>
+    internal static void ProcessLz4diffPuffdiff(InstallOperation op, byte[] data, FileStream outFile, uint blockSize)
+    {
+        long srcLength = 0;
+        foreach (var ext in op.SrcExtents)
+        {
+            srcLength += (long)ext.NumBlocks * blockSize;
+        }
+
+        var oldData = ArrayPool<byte>.Shared.Rent((int)srcLength);
+        try
+        {
+            ReadSourceExtents(op, oldData, (int)srcLength, outFile, blockSize);
+
+            HashVerificationHelper.VerifySourceHash(oldData, (int)srcLength, op);
+
+            var maxPatchBytes = CheckedLz4PatchBound(srcLength, op, blockSize);
+            var patch = DecompressLz4Patch(data, maxPatchBytes);
+
+            var newData = PuffDiffApplier.Apply(patch, oldData.AsSpan(0, (int)srcLength));
+
+            var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
+            outFile.Seek(dstPos, SeekOrigin.Begin);
+            outFile.Write(newData, 0, newData.Length);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(oldData);
+        }
+    }
+
+    private static void ReadSourceExtents(InstallOperation op, byte[] buffer, int srcLength, FileStream outFile, uint blockSize)
+    {
+        var offset = 0;
+        foreach (var ext in op.SrcExtents)
+        {
+            var srcPos = (long)(ext.StartBlock * blockSize);
+            var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
+            outFile.Seek(srcPos, SeekOrigin.Begin);
+            var bytesRead = 0;
+            while (bytesRead < chunkLen)
+            {
+                var read = outFile.Read(buffer, offset + bytesRead, chunkLen - bytesRead);
+                if (read == 0)
+                {
+                    break;
+                }
+                bytesRead += read;
+            }
+            if (bytesRead != chunkLen)
+            {
+                throw new PartitionExtractionException(
+                    $"Failed to read {chunkLen} bytes of source data for {op.Type} at offset {srcPos}",
+                    string.Empty);
+            }
+            offset += bytesRead;
+        }
+
+        if (offset != srcLength)
+        {
+            throw new PartitionExtractionException(
+                $"Source extents produced {offset} bytes but {srcLength} were expected for {op.Type}",
+                string.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Decompresses an LZ4 frame whose decompressed size is bounded by <paramref name="maxOutputBytes"/>.
+    /// <para>解压 LZ4 帧，解压后大小以 <paramref name="maxOutputBytes"/> 为上限。</para>
+    /// </summary>
+    private static byte[] DecompressLz4Patch(byte[] data, int maxOutputBytes)
+    {
+        if (data.Length == 0)
+        {
+            throw new PartitionExtractionException("LZ4 diff patch data is empty", string.Empty);
+        }
+
+        try
+        {
+            using var input = new MemoryStream(data, writable: false);
+            using var decoder = LZ4Stream.Decode(input, leaveOpen: true);
+            using var output = new MemoryStream();
+            using (var bounded = new CountingWriteStream(output, maxOutputBytes, leaveOpen: true))
+            {
+                decoder.CopyTo(bounded);
+            }
+
+            return output.ToArray();
+        }
+        catch (IOException ex)
+        {
+            throw new PartitionExtractionException(
+                $"LZ4 diff patch decompression exceeded the output bound of {maxOutputBytes} bytes. " +
+                $"LZ4 差分补丁解压超过输出上限 {maxOutputBytes} 字节。",
+                string.Empty,
+                ex);
+        }
+        catch (Exception ex)
+        {
+            throw new PartitionExtractionException($"LZ4 diff patch decompression failed. LZ4 差分补丁解压失败。", string.Empty, ex);
+        }
+    }
+
+    private const int MinimumLz4PatchBound = 1 << 20; // 1 MiB floor so small valid patches (32-byte bsdiff header + control overhead) are not rejected.
+
+    private static int CheckedLz4PatchBound(long srcLength, InstallOperation op, uint blockSize)
+    {
+        long dstLength = 0;
+        foreach (var ext in op.DstExtents)
+        {
+            dstLength += (long)ext.NumBlocks * blockSize;
+        }
+
+        long bound;
+        try
+        {
+            bound = checked(srcLength + dstLength);
+        }
+        catch (OverflowException ex)
+        {
+            throw new PartitionExtractionException("LZ4 diff patch output bound overflow", string.Empty, ex);
+        }
+
+        if (bound > int.MaxValue)
+        {
+            throw new PartitionExtractionException(
+                $"LZ4 diff patch output bound {bound} exceeds the supported byte-array limit {int.MaxValue}. " +
+                $"LZ4 差分补丁输出上限 {bound} 超过支持的字节数组上限 {int.MaxValue}。",
+                string.Empty);
+        }
+        return Math.Max((int)bound, MinimumLz4PatchBound);
     }
 
     private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken)

@@ -26,7 +26,10 @@ internal class PayloadExtractor
         InstallOperation.Types.Type.SourceBsdiff,
         InstallOperation.Types.Type.BrotliBsdiff,
         InstallOperation.Types.Type.Puffdiff,
-        InstallOperation.Types.Type.Bsdiff
+        InstallOperation.Types.Type.Bsdiff,
+        InstallOperation.Types.Type.Zucchini,
+        InstallOperation.Types.Type.Lz4diffBsdiff,
+        InstallOperation.Types.Type.Lz4diffPuffdiff
     ];
 
     /// <summary>
@@ -48,16 +51,25 @@ internal class PayloadExtractor
     /// <param name="blockSize">The block size used for extent calculations.
     /// <para>用于区间计算的块大小。</para>
     /// </param>
+    /// <param name="sourceImages">Optional per-partition base image file path mapping. When a partition
+    /// with source-dependent operations is extracted, its base (old) partition image is streamed into
+    /// the temporary output file first so source extents resolve to base data instead of zero-filled
+    /// bytes. A partition with source-dependent operations and no matching base image throws
+    /// <see cref="PartitionExtractionException"/>.
+    /// <para>可选的每分区基座镜像文件路径映射。提取含源依赖操作的分区时，会先将该分区的基座
+    /// （旧）镜像流式写入临时输出文件，使源区间解析到基座数据而非零填充字节。含源依赖操作但
+    /// 没有对应基座镜像的分区会抛出 <see cref="PartitionExtractionException"/>。</para>
+    /// </param>
     /// <exception cref="PayloadUnsupportedOperationException">Thrown when an operation type is genuinely unsupported.
     /// <para>当操作类型确实不受支持时抛出。</para>
     /// </exception>
     /// <exception cref="PartitionExtractionException">Thrown when the partition extraction fails.
     /// <para>当分区提取失败时抛出。</para>
     /// </exception>
-    public void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize)
-        => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize, CancellationToken.None);
+    public void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, IReadOnlyDictionary<string, string>? sourceImages = null)
+        => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize, CancellationToken.None, sourceImages);
 
-    private void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken)
+    private void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? sourceImages)
     {
         ArgumentNullException.ThrowIfNull(partition);
         ArgumentNullException.ThrowIfNull(outFilename);
@@ -97,6 +109,50 @@ internal class PayloadExtractor
                 if (totalSize > 0)
                 {
                     outFile.SetLength(totalSize);
+                }
+
+                // Source-dependent operations (SOURCE_COPY/SOURCE_BSDIFF/BROTLI_BSDIFF/PUFFDIFF/
+                // BSDIFF/LZ4DIFF_*/ZUCCHINI) resolve their source extents against the base partition
+                // image. Without a base these would silently read zero-filled bytes and produce corrupt
+                // output, so a base is mandatory whenever such an operation is present.
+                // 源依赖操作（SOURCE_COPY/SOURCE_BSDIFF/BROTLI_BSDIFF/PUFFDIFF/BSDIFF/LZ4DIFF_*/ZUCCHINI）
+                // 从基座分区镜像解析其源区间。无基座时会静默读取零填充字节并产出损坏数据，
+                // 因此只要存在此类操作就必须提供基座。
+                var needsBase = partition.Operations.Any(op => IsSourceDependent(op.Type));
+                string? baseImagePath = null;
+                if (sourceImages != null && sourceImages.TryGetValue(partition.PartitionName, out var path) && !string.IsNullOrWhiteSpace(path))
+                {
+                    baseImagePath = path;
+                }
+
+                if (needsBase && baseImagePath == null)
+                {
+                    throw new PartitionExtractionException(
+                        $"Partition '{partition.PartitionName}' contains source-dependent operations but no base image was provided. " +
+                        "Provide a source payload or base image via sourcePayloadPath/sourceImages. " +
+                        $"分区 '{partition.PartitionName}' 包含源依赖操作但未提供基座镜像；请通过 sourcePayloadPath 或 sourceImages 提供基座。",
+                        partition.PartitionName);
+                }
+
+                if (baseImagePath != null)
+                {
+                    if (!File.Exists(baseImagePath))
+                    {
+                        throw new PartitionExtractionException(
+                            $"Base image file '{baseImagePath}' for partition '{partition.PartitionName}' does not exist. " +
+                            $"分区 '{partition.PartitionName}' 的基座镜像文件 '{baseImagePath}' 不存在。",
+                            partition.PartitionName);
+                    }
+
+                    // Stream the base (old) partition image into the output file so source extents
+                    // resolve to base data. The file was already sized to the destination; a shorter
+                    // base leaves the tail zero-filled while a longer one extends the file so source
+                    // reads can reach beyond the destination size during processing.
+                    // 将基座（旧）分区镜像流式写入输出文件，使源区间解析到基座数据。文件此前已按
+                    // 目标大小设定长度：较短的基座在尾部留零，较长的基座会扩展文件，以便处理期间
+                    // 源读取可到达目标大小之外的区域。
+                    using var baseStream = new FileStream(baseImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    baseStream.CopyTo(outFile);
                 }
 
                 object writeLock = new();
@@ -158,6 +214,24 @@ internal class PayloadExtractor
                                 OperationProcessor.ProcessBsdiff(op, patchData, outFile, blockSize);
                             }
                             break;
+                        case InstallOperation.Types.Type.Zucchini:
+                            {
+                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
+                                OperationProcessor.ProcessZucchini(op, patchData, outFile, blockSize);
+                            }
+                            break;
+                        case InstallOperation.Types.Type.Lz4diffBsdiff:
+                            {
+                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
+                                OperationProcessor.ProcessLz4diffBsdiff(op, patchData, outFile, blockSize);
+                            }
+                            break;
+                        case InstallOperation.Types.Type.Lz4diffPuffdiff:
+                            {
+                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
+                                OperationProcessor.ProcessLz4diffPuffdiff(op, patchData, outFile, blockSize);
+                            }
+                            break;
                         case InstallOperation.Types.Type.Replace:
                             break;
                         case InstallOperation.Types.Type.ReplaceBz:
@@ -170,15 +244,14 @@ internal class PayloadExtractor
                             break;
                         case InstallOperation.Types.Type.ReplaceXz:
                             break;
-                        case InstallOperation.Types.Type.Zucchini:
-                            break;
-                        case InstallOperation.Types.Type.Lz4diffBsdiff:
-                            break;
-                        case InstallOperation.Types.Type.Lz4diffPuffdiff:
-                            break;
                         default:
                             break;
                     }
+                }
+
+                if (outFile.Length > totalSize)
+                {
+                    outFile.SetLength(totalSize);
                 }
             }
             cancellationToken.ThrowIfCancellationRequested();
@@ -231,6 +304,11 @@ internal class PayloadExtractor
     /// <param name="cancellationToken">The token to monitor for cancellation requests.
     /// <para>用于监视取消请求的令牌。</para>
     /// </param>
+    /// <param name="sourceImages">Optional per-partition base image file path mapping. See
+    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>.
+    /// <para>可选的每分区基座镜像文件路径映射。参见
+    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>。</para>
+    /// </param>
     /// <returns>A task that represents the asynchronous extraction operation.
     /// <para>表示异步提取操作的任务。</para>
     /// </returns>
@@ -240,8 +318,8 @@ internal class PayloadExtractor
     /// <exception cref="PartitionExtractionException">Thrown when the partition extraction fails.
     /// <para>当分区提取失败时抛出。</para>
     /// </exception>
-    public Task ExtractPartitionAsync(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken = default)
-        => Task.Run(() => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize, cancellationToken), cancellationToken);
+    public Task ExtractPartitionAsync(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? sourceImages = null)
+        => Task.Run(() => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize, cancellationToken, sourceImages), cancellationToken);
 
     /// <summary>
     /// Extracts all matching partitions from the manifest to the output directory.
@@ -262,10 +340,16 @@ internal class PayloadExtractor
     /// <param name="outputDir">The output directory for extracted partition images.
     /// <para>提取的分区镜像的输出目录。</para>
     /// </param>
+    /// <param name="sourceImages">Optional per-partition base image file path mapping used as the base
+    /// (old) partition image for source-dependent operations. See
+    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>.
+    /// <para>可选的每分区基座镜像文件路径映射，作为源依赖操作的基座（旧）分区镜像。参见
+    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>。</para>
+    /// </param>
     /// <exception cref="PartitionExtractionException">Thrown when any partition extraction fails.
     /// <para>当任何分区提取失败时抛出。</para>
     /// </exception>
-    public void ExtractPartitions(DeltaArchiveManifest manifest, Stream stream, ulong baseOffset, string[] extractFiles, string outputDir)
+    public void ExtractPartitions(DeltaArchiveManifest manifest, Stream stream, ulong baseOffset, string[] extractFiles, string outputDir, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(stream);
@@ -296,7 +380,7 @@ internal class PayloadExtractor
             }
 
             var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
-            ExtractPartition(partition, outFilename, stream, baseOffset, manifest.BlockSize);
+            ExtractPartition(partition, outFilename, stream, baseOffset, manifest.BlockSize, CancellationToken.None, sourceImages);
         }
     }
 
@@ -322,13 +406,19 @@ internal class PayloadExtractor
     /// <param name="cancellationToken">The token to monitor for cancellation requests.
     /// <para>用于监视取消请求的令牌。</para>
     /// </param>
+    /// <param name="sourceImages">Optional per-partition base image file path mapping used as the base
+    /// (old) partition image for source-dependent operations. See
+    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>.
+    /// <para>可选的每分区基座镜像文件路径映射，作为源依赖操作的基座（旧）分区镜像。参见
+    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>。</para>
+    /// </param>
     /// <returns>A task that represents the asynchronous extraction operation.
     /// <para>表示异步提取操作的任务。</para>
     /// </returns>
     /// <exception cref="PartitionExtractionException">Thrown when any partition extraction fails.
     /// <para>当任何分区提取失败时抛出。</para>
     /// </exception>
-    public async Task ExtractPartitionsAsync(DeltaArchiveManifest manifest, Stream stream, ulong baseOffset, string[] extractFiles, string outputDir, CancellationToken cancellationToken = default)
+    public async Task ExtractPartitionsAsync(DeltaArchiveManifest manifest, Stream stream, ulong baseOffset, string[] extractFiles, string outputDir, CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(stream);
@@ -361,9 +451,19 @@ internal class PayloadExtractor
             }
 
             var outFilename = GetSafeOutputPath(outputDir, partition.PartitionName);
-            await ExtractPartitionAsync(partition, outFilename, stream, baseOffset, manifest.BlockSize, cancellationToken).ConfigureAwait(false);
+            await ExtractPartitionAsync(partition, outFilename, stream, baseOffset, manifest.BlockSize, cancellationToken, sourceImages).ConfigureAwait(false);
         }
     }
+
+    internal static bool IsSourceDependent(InstallOperation.Types.Type type) => type is
+        InstallOperation.Types.Type.SourceCopy or
+        InstallOperation.Types.Type.SourceBsdiff or
+        InstallOperation.Types.Type.BrotliBsdiff or
+        InstallOperation.Types.Type.Puffdiff or
+        InstallOperation.Types.Type.Bsdiff or
+        InstallOperation.Types.Type.Lz4diffBsdiff or
+        InstallOperation.Types.Type.Lz4diffPuffdiff or
+        InstallOperation.Types.Type.Zucchini;
 
     private static string GetSafeOutputPath(string outputDir, string name)
     {

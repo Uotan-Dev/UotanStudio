@@ -426,19 +426,32 @@ public static class PayloadParser
     /// <param name="outputDir">Output directory for extracted images.
     /// <para>提取镜像的输出目录。</para>
     /// </param>
+    /// <param name="sourcePayloadPath">Optional path to a base (old/full) payload whose same-named
+    /// partitions are used as the source base image for incremental payloads. Partitions named in
+    /// <paramref name="sourceImages"/> take precedence. The base payload must be a full payload or
+    /// itself resolvable through <paramref name="sourceImages"/>.
+    /// <para>可选的基座（旧/完整）载荷路径，其同名分区将作为增量载荷的源基座镜像。
+    /// <paramref name="sourceImages"/> 中指定的分区优先。基座载荷必须是完整载荷，或可经
+    /// <paramref name="sourceImages"/> 自身解析。</para>
+    /// </param>
+    /// <param name="sourceImages">Optional per-partition base image file path mapping used as the
+    /// source base image for source-dependent operations.
+    /// <para>可选的每分区基座镜像文件路径映射，作为源依赖操作的源基座镜像。</para>
+    /// </param>
     /// <exception cref="InvalidManifestException">Thrown when payload.bin is not found in the ZIP archive.
     /// <para>当在 ZIP 归档中未找到 payload.bin 时抛出。</para>
     /// </exception>
     /// <exception cref="PartitionExtractionException">Thrown when a partition extraction fails.
     /// <para>当分区提取失败时抛出。</para>
     /// </exception>
-    public static void Extract(string filepath, string[]? extractFiles = null, string? outputDir = null)
+    public static void Extract(string filepath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
         Guard.ThrowIfNull(filepath, nameof(filepath));
         Guard.ThrowIfNullOrWhiteSpace(filepath, nameof(filepath), "File path cannot be empty or whitespace.");
         extractFiles ??= [];
 
         string? tempPath = null;
+        var tempSourceFiles = new List<string>();
         try
         {
             var payloadType = DetectPayloadType(filepath);
@@ -449,13 +462,19 @@ public static class PayloadParser
 
             using var stream = File.OpenRead(tempPath ?? filepath);
             var (manifest, header) = ReadManifest(stream);
-            new PayloadExtractor().ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty);
+            var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
+            new PayloadExtractor().ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages);
         }
         finally
         {
             if (tempPath != null)
             {
                 TempFileHelper.SafeDelete(tempPath);
+            }
+
+            foreach (var f in tempSourceFiles)
+            {
+                TempFileHelper.SafeDelete(f);
             }
         }
     }
@@ -476,6 +495,18 @@ public static class PayloadParser
     /// <param name="cancellationToken">The token to monitor for cancellation requests.
     /// <para>用于监视取消请求的令牌。</para>
     /// </param>
+    /// <param name="sourcePayloadPath">Optional path to a base (old/full) payload whose same-named
+    /// partitions are used as the source base image for incremental payloads. Partitions named in
+    /// <paramref name="sourceImages"/> take precedence. The base payload must be a full payload or
+    /// itself resolvable through <paramref name="sourceImages"/>.
+    /// <para>可选的基座（旧/完整）载荷路径，其同名分区将作为增量载荷的源基座镜像。
+    /// <paramref name="sourceImages"/> 中指定的分区优先。基座载荷必须是完整载荷，或可经
+    /// <paramref name="sourceImages"/> 自身解析。</para>
+    /// </param>
+    /// <param name="sourceImages">Optional per-partition base image file path mapping used as the
+    /// source base image for source-dependent operations.
+    /// <para>可选的每分区基座镜像文件路径映射，作为源依赖操作的源基座镜像。</para>
+    /// </param>
     /// <returns>A task representing the asynchronous extraction operation.
     /// <para>表示异步提取操作的任务。</para>
     /// </returns>
@@ -485,13 +516,14 @@ public static class PayloadParser
     /// <exception cref="PartitionExtractionException">Thrown when a partition extraction fails.
     /// <para>当分区提取失败时抛出。</para>
     /// </exception>
-    public static async Task ExtractAsync(string filepath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default)
+    public static async Task ExtractAsync(string filepath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
         Guard.ThrowIfNull(filepath, nameof(filepath));
         Guard.ThrowIfNullOrWhiteSpace(filepath, nameof(filepath), "File path cannot be empty or whitespace.");
         extractFiles ??= [];
 
         string? tempPath = null;
+        var tempSourceFiles = new List<string>();
         try
         {
             var payloadType = DetectPayloadType(filepath);
@@ -502,14 +534,20 @@ public static class PayloadParser
 
             using var stream = File.OpenRead(tempPath ?? filepath);
             var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
+            var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
             var extractor = new PayloadExtractor();
-            await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken).ConfigureAwait(false);
+            await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages).ConfigureAwait(false);
         }
         finally
         {
             if (tempPath != null)
             {
                 TempFileHelper.SafeDelete(tempPath);
+            }
+
+            foreach (var f in tempSourceFiles)
+            {
+                TempFileHelper.SafeDelete(f);
             }
         }
     }
@@ -527,18 +565,42 @@ public static class PayloadParser
     /// <param name="outputDir">Output directory for extracted images.
     /// <para>提取镜像的输出目录。</para>
     /// </param>
+    /// <param name="sourcePayloadPath">Optional path to a base (old/full) payload whose same-named
+    /// partitions are used as the source base image for incremental payloads. Partitions named in
+    /// <paramref name="sourceImages"/> take precedence. The base payload must be a full payload or
+    /// itself resolvable through <paramref name="sourceImages"/>.
+    /// <para>可选的基座（旧/完整）载荷路径，其同名分区将作为增量载荷的源基座镜像。
+    /// <paramref name="sourceImages"/> 中指定的分区优先。基座载荷必须是完整载荷，或可经
+    /// <paramref name="sourceImages"/> 自身解析。</para>
+    /// </param>
+    /// <param name="sourceImages">Optional per-partition base image file path mapping used as the
+    /// source base image for source-dependent operations.
+    /// <para>可选的每分区基座镜像文件路径映射，作为源依赖操作的源基座镜像。</para>
+    /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="stream"/> is <c>null</c>.
     /// <para><paramref name="stream"/> 为 <c>null</c>。</para>
     /// </exception>
     /// <exception cref="PartitionExtractionException">Thrown when a partition extraction fails.
     /// <para>当分区提取失败时抛出。</para>
     /// </exception>
-    public static void Extract(Stream stream, string[]? extractFiles = null, string? outputDir = null)
+    public static void Extract(Stream stream, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
         Guard.ThrowIfNull(stream, nameof(stream));
         extractFiles ??= [];
-        var (manifest, header) = ReadManifest(stream);
-        new PayloadExtractor().ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty);
+        var tempSourceFiles = new List<string>();
+        try
+        {
+            var (manifest, header) = ReadManifest(stream);
+            var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
+            new PayloadExtractor().ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages);
+        }
+        finally
+        {
+            foreach (var f in tempSourceFiles)
+            {
+                TempFileHelper.SafeDelete(f);
+            }
+        }
     }
 
     /// <summary>
@@ -557,6 +619,18 @@ public static class PayloadParser
     /// <param name="cancellationToken">The token to monitor for cancellation requests.
     /// <para>用于监视取消请求的令牌。</para>
     /// </param>
+    /// <param name="sourcePayloadPath">Optional path to a base (old/full) payload whose same-named
+    /// partitions are used as the source base image for incremental payloads. Partitions named in
+    /// <paramref name="sourceImages"/> take precedence. The base payload must be a full payload or
+    /// itself resolvable through <paramref name="sourceImages"/>.
+    /// <para>可选的基座（旧/完整）载荷路径，其同名分区将作为增量载荷的源基座镜像。
+    /// <paramref name="sourceImages"/> 中指定的分区优先。基座载荷必须是完整载荷，或可经
+    /// <paramref name="sourceImages"/> 自身解析。</para>
+    /// </param>
+    /// <param name="sourceImages">Optional per-partition base image file path mapping used as the
+    /// source base image for source-dependent operations.
+    /// <para>可选的每分区基座镜像文件路径映射，作为源依赖操作的源基座镜像。</para>
+    /// </param>
     /// <returns>A task representing the asynchronous extraction operation.
     /// <para>表示异步提取操作的任务。</para>
     /// </returns>
@@ -566,13 +640,25 @@ public static class PayloadParser
     /// <exception cref="PartitionExtractionException">Thrown when a partition extraction fails.
     /// <para>当分区提取失败时抛出。</para>
     /// </exception>
-    public static async Task ExtractAsync(Stream stream, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default)
+    public static async Task ExtractAsync(Stream stream, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
         Guard.ThrowIfNull(stream, nameof(stream));
         extractFiles ??= [];
-        var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
-        var extractor = new PayloadExtractor();
-        await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken).ConfigureAwait(false);
+        var tempSourceFiles = new List<string>();
+        try
+        {
+            var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
+            var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
+            var extractor = new PayloadExtractor();
+            await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages).ConfigureAwait(false);
+        }
+        finally
+        {
+            foreach (var f in tempSourceFiles)
+            {
+                TempFileHelper.SafeDelete(f);
+            }
+        }
     }
 
     /// <summary>
@@ -593,6 +679,126 @@ public static class PayloadParser
     }
 
     #endregion
+
+    private static Dictionary<string, string>? ResolveSourceImages(
+        DeltaArchiveManifest manifest,
+        string[] extractFiles,
+        string? sourcePayloadPath,
+        IReadOnlyDictionary<string, string>? sourceImages,
+        List<string> tempSourceFiles)
+    {
+        if (string.IsNullOrWhiteSpace(sourcePayloadPath) && (sourceImages == null || sourceImages.Count == 0))
+        {
+            return null;
+        }
+
+        HashSet<string>? extractSet = extractFiles.Length > 0 ? [.. extractFiles] : null;
+        Dictionary<string, string>? resolved = null;
+
+        foreach (var partition in manifest.Partitions)
+        {
+            if (string.IsNullOrEmpty(partition.PartitionName))
+            {
+                continue;
+            }
+
+            if (extractSet != null && !extractSet.Contains(partition.PartitionName))
+            {
+                continue;
+            }
+
+            // Only partitions with source-dependent operations need a base image; skipping the rest
+            // avoids spurious errors when the source payload does not contain every partition.
+            // 只有含源依赖操作的分区才需要基座镜像；跳过其余分区可避免源载荷不包含某分区时报错。
+            if (!partition.Operations.Any(op => PayloadExtractor.IsSourceDependent(op.Type)))
+            {
+                continue;
+            }
+
+            string? basePath = null;
+            if (sourceImages != null && sourceImages.TryGetValue(partition.PartitionName, out var imagePath) && !string.IsNullOrWhiteSpace(imagePath))
+            {
+                basePath = imagePath;
+            }
+            else if (!string.IsNullOrWhiteSpace(sourcePayloadPath))
+            {
+                basePath = ExtractBaseImageFromSourcePayload(sourcePayloadPath, partition.PartitionName, sourceImages, tempSourceFiles);
+            }
+
+            if (basePath == null)
+            {
+                continue;
+            }
+
+            resolved ??= new Dictionary<string, string>(StringComparer.Ordinal);
+            resolved[partition.PartitionName] = basePath;
+        }
+
+        return resolved;
+    }
+
+    private static string ExtractBaseImageFromSourcePayload(
+        string sourcePayloadPath,
+        string partitionName,
+        IReadOnlyDictionary<string, string>? sourceImages,
+        List<string> tempSourceFiles)
+    {
+        var tempFile = TempFileHelper.CreateTempFile();
+        tempSourceFiles.Add(tempFile);
+        try
+        {
+            string? zipTemp = null;
+            try
+            {
+                var payloadType = DetectPayloadType(sourcePayloadPath);
+                if (payloadType == PayloadType.ZipArchive)
+                {
+                    zipTemp = ExtractPayloadFromZip(sourcePayloadPath);
+                }
+
+                using var stream = File.OpenRead(zipTemp ?? sourcePayloadPath);
+                var (manifest, header) = ReadManifest(stream);
+
+                PartitionUpdate? partition = null;
+                foreach (var p in manifest.Partitions)
+                {
+                    if (string.Equals(p.PartitionName, partitionName, StringComparison.Ordinal))
+                    {
+                        partition = p;
+                        break;
+                    }
+                }
+
+                if (partition == null)
+                {
+                    throw new PartitionExtractionException(
+                        $"Source payload '{sourcePayloadPath}' does not contain partition '{partitionName}'. " +
+                        $"源载荷 '{sourcePayloadPath}' 不包含分区 '{partitionName}'。",
+                        partitionName);
+                }
+
+                new PayloadExtractor().ExtractPartition(partition, tempFile, stream, header.BaseOffset, manifest.BlockSize, sourceImages);
+                return tempFile;
+            }
+            finally
+            {
+                if (zipTemp != null)
+                {
+                    TempFileHelper.SafeDelete(zipTemp);
+                }
+            }
+        }
+        catch (PartitionExtractionException ex)
+        {
+            throw new PartitionExtractionException(
+                $"Failed to extract base image for partition '{partitionName}' from source payload '{sourcePayloadPath}': " +
+                "the source payload must be a full payload or the partition must be supplied in sourceImages. " +
+                $"从源载荷 '{sourcePayloadPath}' 提取分区 '{partitionName}' 的基座镜像失败：" +
+                "源载荷必须是完整载荷，或需在 sourceImages 中提供该分区。",
+                partitionName,
+                ex);
+        }
+    }
 
     private static string ExtractPayloadFromZip(string filepath)
     {
