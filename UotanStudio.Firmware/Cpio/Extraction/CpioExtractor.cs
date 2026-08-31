@@ -341,7 +341,14 @@ public sealed class CpioExtractor
 
             try
             {
-                if ((info.Attributes & FileAttributes.ReparsePoint) != 0) return true;
+                // .NET 7+ returns (FileAttributes)(-1) for a non-existent path instead of throwing;
+                // a missing node is not a link, so treat it as "not a link" rather than matching
+                // ReparsePoint on an all-ones mask.
+                // .NET 7+ 对不存在的路径返回 (FileAttributes)(-1) 而非抛异常；不存在的节点
+                // 不是链接，不能因全 1 掩码命中 ReparsePoint 而被误判为链接。
+                var attributes = info.Attributes;
+                if (attributes == (FileAttributes)(-1)) continue;
+                if ((attributes & FileAttributes.ReparsePoint) != 0) return true;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException) { }
         }

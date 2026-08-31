@@ -194,6 +194,12 @@ public static class ZucchiniPatchApplier
             }
 
             oldData.Slice((int)srcPos, (int)copy).CopyTo(newData.Slice((int)dstPos, (int)copy));
+            // 源位置同样推进本次拷贝长度：skip 是"上一段拷贝结束到当前段开始"的间隔，
+            // 下一轮的源起点必须是本段末尾（与目标侧 newPos = dstPos + copy 对称）。
+            // The source position advances by this copy too: skip is the gap from the END of the
+            // previous copy to the start of the current one, so the next source start must be the
+            // end of this segment (symmetric with the destination side newPos = dstPos + copy).
+            srcPos += copy;
             newPos = dstPos + copy;
         }
 
