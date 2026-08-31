@@ -64,9 +64,9 @@
             <TextBlock Text="{Binding Display}" FontSize="11" Margin="8,3" />
           </DataTemplate>
         </TabControl.ItemTemplate>
-        <TabControl.SelectedContentTemplate>
+        <TabControl.ContentTemplate>
           <DataTemplate />
-        </TabControl.SelectedContentTemplate>
+        </TabControl.ContentTemplate>
       </TabControl>
       <!-- 日志列表：使用虚拟化 ListBox，避免大体积日志全集物化导致的性能开销 -->
       <ListBox Grid.Row="1" Name="LogList"
