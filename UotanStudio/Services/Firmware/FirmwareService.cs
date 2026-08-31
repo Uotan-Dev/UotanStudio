@@ -983,6 +983,32 @@ public sealed class FirmwareService
     }
 
     /// <summary>
+    /// Unpacks an Android sparse image to a directory: when the inner content is a filesystem
+    /// (ext4/erofs/f2fs) it is cascade-unpacked via the corresponding streaming parser, otherwise
+    /// it falls back to a plain raw conversion. A thin wrapper over
+    /// <see cref="SparseFormatHandler.UnpackAsync"/>.
+    /// <para>将 Android sparse 镜像解包到目录：内部内容为文件系统（ext4/erofs/f2fs）时通过对应
+    /// 的流式解析器级联解包，否则回退为普通 raw 转换。<see cref="SparseFormatHandler.UnpackAsync"/> 的薄封装。</para>
+    /// </summary>
+    /// <param name="sparsePath">The sparse image file path. <para>稀疏镜像文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> UnpackSparseImageAsync(string sparsePath, string outputDirectory, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() =>
+        {
+            var result = new SparseFormatHandler().UnpackAsync(sparsePath, outputDirectory, cancellationToken: cancellationToken).GetAwaiter().GetResult();
+            return new FirmwareOpResult
+            {
+                Success = result.Success,
+                Summary = result.Summary,
+                Entries = result.Entries,
+            };
+        }, cancellationToken);
+    }
+
+    /// <summary>
     /// Writes an Android OTA v4 DAT image pair (a thin wrapper over <see cref="DatWriter"/>): the input raw
     /// image is converted into a <c>.new.dat</c> data file plus a derived <c>.transfer.list</c>. Note that
     /// <see cref="DatWriter"/> consumes a raw image (not a transfer list), so the <paramref name="transferListPath"/>

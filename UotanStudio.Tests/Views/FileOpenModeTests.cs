@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.Sparse;
 using UotanStudio.Views.Controls;
 using Xunit;
 
@@ -118,6 +120,61 @@ public class FileOpenModeTests
         Assert.False(FileOpenMode.IsExt4Magic(new byte[1081]));
         Assert.False(FileOpenMode.IsErofsMagic(new byte[1027]));
         Assert.False(FileOpenMode.IsF2fsMagic(new byte[1027]));
+    }
+
+    [Fact]
+    public void IsSparseImage_DetectsSparseMagic()
+    {
+        using var temp = new TempFile();
+        // Android sparse 魔数 0xED26FF3A（小端）位于物理偏移 0。
+        // The Android sparse magic 0xED26FF3A (little-endian) sits at physical offset 0.
+        var bytes = new byte[4096];
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes, SparseFormat.SparseHeaderMagic);
+        File.WriteAllBytes(temp.Path, bytes);
+
+        Assert.True(FileOpenMode.IsSparseImage(temp.Path));
+        Assert.False(FileOpenMode.IsFilesystemImage(temp.Path));
+    }
+
+    [Fact]
+    public void ResolveMode_SparseWrappedExt4_ReturnsFileSystem()
+    {
+        // sparse 包装的 ext4 镜像（如 product.img）：物理魔数未命中文件系统，但逻辑偏移 1080 处
+        // 命中 ext4 魔数 0xEF53 → 路由到文件管理器编辑器。
+        // A sparse-wrapped ext4 image (e.g. product.img): the physical magic misses the filesystem, but
+        // the logical offset 1080 holds the ext4 magic 0xEF53 → routes to the file-manager editor.
+        using var temp = new TempFile();
+        using (var sparse = new SparseFile(4096, 4096))
+        {
+            var block = new byte[4096];
+            BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(1080, 2), 0xEF53);
+            sparse.AddRawChunk(block);
+            using var fs = File.Create(temp.Path);
+            sparse.WriteToStream(fs, sparse: true);
+        }
+
+        Assert.True(FileOpenMode.IsSparseImage(temp.Path));
+        Assert.True(FileOpenMode.IsFilesystemImage(temp.Path));
+        Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(temp.Path));
+    }
+
+    [Fact]
+    public void ResolveMode_SparseWithoutFilesystemMagic_FallsThroughToFirmware()
+    {
+        // sparse 内容不是文件系统（无逻辑文件系统魔数）时仍走固件面板。
+        // A sparse image whose content is not a filesystem (no logical filesystem magic) still goes to
+        // the firmware panel.
+        using var temp = new TempFile();
+        using (var sparse = new SparseFile(4096, 4096))
+        {
+            sparse.AddRawChunk(new byte[4096]); // 全零逻辑内容
+            using var fs = File.Create(temp.Path);
+            sparse.WriteToStream(fs, sparse: true);
+        }
+
+        Assert.True(FileOpenMode.IsSparseImage(temp.Path));
+        Assert.False(FileOpenMode.IsFilesystemImage(temp.Path));
+        Assert.Equal(EditorOpenMode.Firmware, FileOpenMode.ResolveMode(temp.Path));
     }
 
     /// <summary>

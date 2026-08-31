@@ -6,7 +6,9 @@ using UotanStudio.Firmware.Common;
 using UotanStudio.Firmware.Erofs;
 using UotanStudio.Firmware.Ext4;
 using UotanStudio.Firmware.F2fs;
+using UotanStudio.Firmware.Sparse;
 using UotanStudio.Services;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -32,6 +34,15 @@ public partial class FileManagerEditorViewModel : Document
     /// The opened image parser (ext4/EROFS/F2FS); held for the document lifetime, reused by refresh and extract.
     /// </summary>
     private IDisposable? _parser;
+
+    /// <summary>
+    /// <para>解析器不负责释放的额外资源（sparse 场景的 <see cref="SparseReadStream"/>，拥有并释放
+    /// SparseFile 及其源文件句柄）；文档关闭或重置时释放。</para>
+    /// Additional resource not released by the parser (the <see cref="SparseReadStream"/> in the sparse
+    /// case, owning and releasing the SparseFile and its source-file handle); released on document close
+    /// or reset.
+    /// </summary>
+    private IDisposable? _ownedSource;
 
     /// <summary>
     /// <para>最近一次解析得到的扁平条目列表（用于提取路径过滤与统计）。</para>
@@ -223,7 +234,9 @@ public partial class FileManagerEditorViewModel : Document
         _loadCts?.Dispose();
         _loadCts = null;
         _parser?.Dispose();
+        _ownedSource?.Dispose();
         _parser = null;
+        _ownedSource = null;
         _flatEntries = [];
         Entries.Clear();
         SelectedEntry = null;
@@ -287,12 +300,16 @@ public partial class FileManagerEditorViewModel : Document
     /// <param name="Parser">打开的解析器。<para>The opened parser.</para></param>
     /// <param name="FlatEntries">扁平条目列表。<para>The flat entry list.</para></param>
     /// <param name="Tree">构建好的树（根层）。<para>The built tree (root level).</para></param>
+    /// <param name="OwnedSource">解析器不负责释放的额外资源（如 sparse 逻辑流 <see cref="SparseReadStream"/>）；可为 null。
+    /// <para>Additional resource not released by the parser (e.g. the sparse logical stream
+    /// <see cref="SparseReadStream"/>); may be null.</para></param>
     private sealed record LoadResult(
         string FormatName,
         long ImageSize,
         IDisposable Parser,
         IReadOnlyList<FlatEntry> FlatEntries,
-        IReadOnlyList<FileManagerEntryViewModel> Tree);
+        IReadOnlyList<FileManagerEntryViewModel> Tree,
+        IDisposable? OwnedSource = null);
 
     /// <summary>
     /// <para>重新加载当前镜像。</para>
@@ -367,8 +384,10 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>按魔数识别镜像的文件系统格式（ext4 0xEF53@1080、erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024）。</para>
+    /// <para>按魔数识别镜像的文件系统格式（ext4 0xEF53@1080、erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024）。
+    /// 物理偏移未命中时，sparse 包装镜像（如 product.img）按逻辑偏移重新探测内部文件系统。</para>
     /// Detects the filesystem format of the image by magic (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024, f2fs 0xF2F52010@1024).
+    /// When the physical offset misses, sparse-wrapped images (e.g. product.img) are re-probed at the logical offset.
     /// </summary>
     /// <param name="path">
     /// <para>镜像文件路径。</para>
@@ -382,29 +401,59 @@ public partial class FileManagerEditorViewModel : Document
     {
         try
         {
-            var header = FormatDetector.ReadHeader(path, FilesystemHeaderLength);
-            if (header.Length >= 1082
-                && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+            // 先按物理偏移探测（raw 镜像直接命中）。
+            // Probe the physical header first (raw images match directly).
+            var kind = DetectKindFromHeader(FormatDetector.ReadHeader(path, FilesystemHeaderLength));
+            if (kind != FilesystemKind.Unknown)
             {
-                return FilesystemKind.Ext4;
+                return kind;
             }
 
-            if (header.Length >= 1028
-                && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
+            // 物理头部未命中：sparse 包装的镜像按逻辑偏移重新探测内部文件系统。
+            // Physical header missed: re-probe the logical header for sparse-wrapped images.
+            if (FileOpenMode.IsSparseImage(path))
             {
-                return FilesystemKind.Erofs;
-            }
-
-            if (header.Length >= 1028
-                && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
-            {
-                return FilesystemKind.F2fs;
+                var logical = SparseReader.PeekLogicalRange(path, 0, FilesystemHeaderLength);
+                kind = DetectKindFromHeader(logical);
+                if (kind != FilesystemKind.Unknown)
+                {
+                    return kind;
+                }
             }
         }
         catch
         {
             // 读取失败按未知格式处理。
             // A read failure is treated as an unknown format.
+        }
+
+        return FilesystemKind.Unknown;
+    }
+
+    /// <summary>
+    /// <para>按头部字节中的文件系统魔数识别格式（ext4 0xEF53@1080、erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024）。
+    /// 长度不足或未命中时返回 <see cref="FilesystemKind.Unknown"/>。</para>
+    /// Detects the filesystem kind from header bytes by magic (ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024,
+    /// f2fs 0xF2F52010@1024). Returns <see cref="FilesystemKind.Unknown"/> when too short or unmatched.
+    /// </summary>
+    private static FilesystemKind DetectKindFromHeader(byte[] header)
+    {
+        if (header.Length >= 1082
+            && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+        {
+            return FilesystemKind.Ext4;
+        }
+
+        if (header.Length >= 1028
+            && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
+        {
+            return FilesystemKind.Erofs;
+        }
+
+        if (header.Length >= 1028
+            && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
+        {
+            return FilesystemKind.F2fs;
         }
 
         return FilesystemKind.Unknown;
@@ -425,13 +474,35 @@ public partial class FileManagerEditorViewModel : Document
         UotanStudio.Firmware.FirmwareFormatRegistry.RegisterAll();
 
         var kind = DetectFilesystem(path);
+        // 输入是否为 sparse 包装镜像（如 product.img）：sparse 以逻辑流视图解析。
+        // Whether the input is sparse-wrapped (e.g. product.img): sparse images are parsed via a
+        // logical stream view.
+        var isSparse = FileOpenMode.IsSparseImage(path);
         switch (kind)
         {
             case FilesystemKind.Ext4:
+                if (isSparse)
+                {
+                    var (stream, imageSize, owned) = OpenSparseStream(path);
+                    return LoadExt4(stream, imageSize, owned, ct);
+                }
+
                 return LoadExt4(path, ct);
             case FilesystemKind.Erofs:
+                if (isSparse)
+                {
+                    var (stream, imageSize, owned) = OpenSparseStream(path);
+                    return LoadErofs(stream, imageSize, owned, ct);
+                }
+
                 return LoadErofs(path, ct);
             case FilesystemKind.F2fs:
+                if (isSparse)
+                {
+                    var (stream, imageSize, owned) = OpenSparseStream(path);
+                    return LoadF2fs(stream, imageSize, owned, ct);
+                }
+
                 return LoadF2fs(path, ct);
             default:
                 throw new InvalidDataException(
@@ -440,12 +511,52 @@ public partial class FileManagerEditorViewModel : Document
     }
 
     /// <summary>
-    /// <para>用 <see cref="Ext4Parser"/> 流式解析 ext4 镜像并构建树。</para>
-    /// Stream-parses an ext4 image with <see cref="Ext4Parser"/> and builds the tree.
+    /// <para>为 sparse 镜像打开逻辑流视图：<see cref="SparseReader.FromImageFile(string)"/> 构建
+    /// <see cref="SparseFile"/>，再以 <see cref="SparseReadStream"/> 包装。该流拥有并释放 SparseFile
+    /// （含源文件句柄），并作为 <see cref="LoadResult.OwnedSource"/> 返回以管理其生命周期。</para>
+    /// Opens a logical stream view for a sparse image: builds a <see cref="SparseFile"/> via
+    /// <see cref="SparseReader.FromImageFile(string)"/> and wraps it in a <see cref="SparseReadStream"/>.
+    /// The stream owns and releases the SparseFile (including the source-file handle) and is returned as
+    /// <see cref="LoadResult.OwnedSource"/> to manage its lifetime.
+    /// </summary>
+    private static (Stream Stream, long ImageSize, IDisposable OwnedSource) OpenSparseStream(string path)
+    {
+        var sparseFile = SparseReader.FromImageFile(path);
+        var stream = new SparseReadStream(sparseFile);
+        return (stream, stream.Length, stream);
+    }
+
+    /// <summary>
+    /// <para>用 <see cref="Ext4Parser"/> 流式解析 ext4 镜像并构建树（路径版本：解析器自持并释放 FileStream）。</para>
+    /// Stream-parses an ext4 image with <see cref="Ext4Parser"/> and builds the tree (path version: the
+    /// parser owns and disposes its FileStream).
     /// </summary>
     private static LoadResult LoadExt4(string path, CancellationToken ct)
     {
         var parser = new Ext4Parser(path);
+        return BuildExt4Result(parser, new FileInfo(path).Length, null, ct);
+    }
+
+    /// <summary>
+    /// <para>用 <see cref="Ext4Parser"/> 流式解析 ext4 镜像并构建树（流版本，供 sparse 镜像使用）。
+    /// <see cref="Ext4Parser"/> 持有并释放传入流；<see cref="SparseReadStream.Dispose()"/> 幂等，
+    /// 双释放安全，仍放入 <paramref name="ownedSource"/> 兜底。</para>
+    /// Stream-parses an ext4 image with <see cref="Ext4Parser"/> and builds the tree (stream version,
+    /// used for sparse images). <see cref="Ext4Parser"/> takes ownership of the stream;
+    /// <see cref="SparseReadStream.Dispose()"/> is idempotent, so a double dispose is safe, and the
+    /// stream is still tracked in <paramref name="ownedSource"/> as a fallback.
+    /// </summary>
+    private static LoadResult LoadExt4(Stream stream, long imageSize, IDisposable? ownedSource, CancellationToken ct)
+    {
+        return BuildExt4Result(new Ext4Parser(stream), imageSize, ownedSource, ct);
+    }
+
+    /// <summary>
+    /// <para>列出 ext4 条目、构建扁平列表与树，并组装 <see cref="LoadResult"/>。</para>
+    /// Lists the ext4 entries, builds the flat list and tree, and assembles the <see cref="LoadResult"/>.
+    /// </summary>
+    private static LoadResult BuildExt4Result(Ext4Parser parser, long imageSize, IDisposable? ownedSource, CancellationToken ct)
+    {
         var entries = parser.ListFiles();
         ct.ThrowIfCancellationRequested();
 
@@ -456,17 +567,41 @@ public partial class FileManagerEditorViewModel : Document
         }
 
         var tree = FileManagerTreeBuilder.Build(flat);
-        return new LoadResult("EXT4", new FileInfo(path).Length, parser, flat, tree);
+        return new LoadResult("EXT4", imageSize, parser, flat, tree, ownedSource);
     }
 
     /// <summary>
-    /// <para>用 <see cref="ErofsParser"/> 流式解析 EROFS 镜像并构建树（目录按路径合成）。</para>
-    /// Stream-parses an EROFS image with <see cref="ErofsParser"/> and builds the tree (directories are
-    /// synthesized from paths).
+    /// <para>用 <see cref="ErofsParser"/> 流式解析 EROFS 镜像并构建树（路径版本：解析器自持并释放 FileStream）。
+    /// 目录按路径合成。</para>
+    /// Stream-parses an EROFS image with <see cref="ErofsParser"/> and builds the tree (path version:
+    /// the parser owns and disposes its FileStream). Directories are synthesized from paths.
     /// </summary>
     private static LoadResult LoadErofs(string path, CancellationToken ct)
     {
         var parser = new ErofsParser(path);
+        return BuildErofsResult(parser, new FileInfo(path).Length, null, ct);
+    }
+
+    /// <summary>
+    /// <para>用 <see cref="ErofsParser"/> 流式解析 EROFS 镜像并构建树（流版本，供 sparse 镜像使用）。
+    /// <see cref="ErofsParser"/> 不释放传入流，必须由 <paramref name="ownedSource"/>
+    /// （即 <see cref="SparseReadStream"/>）负责释放。目录按路径合成。</para>
+    /// Stream-parses an EROFS image with <see cref="ErofsParser"/> and builds the tree (stream version,
+    /// used for sparse images). <see cref="ErofsParser"/> does not dispose the given stream;
+    /// <paramref name="ownedSource"/> (the <see cref="SparseReadStream"/>) must. Directories are
+    /// synthesized from paths.
+    /// </summary>
+    private static LoadResult LoadErofs(Stream stream, long imageSize, IDisposable? ownedSource, CancellationToken ct)
+    {
+        return BuildErofsResult(new ErofsParser(stream), imageSize, ownedSource, ct);
+    }
+
+    /// <summary>
+    /// <para>列出 EROFS 条目、构建扁平列表与树，并组装 <see cref="LoadResult"/>。</para>
+    /// Lists the EROFS entries, builds the flat list and tree, and assembles the <see cref="LoadResult"/>.
+    /// </summary>
+    private static LoadResult BuildErofsResult(ErofsParser parser, long imageSize, IDisposable? ownedSource, CancellationToken ct)
+    {
         var entries = parser.EnumerateFiles();
         ct.ThrowIfCancellationRequested();
 
@@ -477,16 +612,40 @@ public partial class FileManagerEditorViewModel : Document
         }
 
         var tree = FileManagerTreeBuilder.Build(flat);
-        return new LoadResult("EROFS", new FileInfo(path).Length, parser, flat, tree);
+        return new LoadResult("EROFS", imageSize, parser, flat, tree, ownedSource);
     }
 
     /// <summary>
-    /// <para>用 <see cref="F2fsParser"/> 流式解析 F2FS 镜像并构建树。</para>
-    /// Stream-parses an F2FS image with <see cref="F2fsParser"/> and builds the tree.
+    /// <para>用 <see cref="F2fsParser"/> 流式解析 F2FS 镜像并构建树（路径版本：解析器自持并释放 FileStream）。</para>
+    /// Stream-parses an F2FS image with <see cref="F2fsParser"/> and builds the tree (path version: the
+    /// parser owns and disposes its FileStream).
     /// </summary>
     private static LoadResult LoadF2fs(string path, CancellationToken ct)
     {
         var parser = new F2fsParser(path);
+        return BuildF2fsResult(parser, new FileInfo(path).Length, null, ct);
+    }
+
+    /// <summary>
+    /// <para>用 <see cref="F2fsParser"/> 流式解析 F2FS 镜像并构建树（流版本，供 sparse 镜像使用）。
+    /// <see cref="F2fsParser"/> 持有并释放传入流；<see cref="SparseReadStream.Dispose()"/> 幂等，
+    /// 双释放安全，仍放入 <paramref name="ownedSource"/> 兜底。</para>
+    /// Stream-parses an F2FS image with <see cref="F2fsParser"/> and builds the tree (stream version,
+    /// used for sparse images). <see cref="F2fsParser"/> takes ownership of the stream;
+    /// <see cref="SparseReadStream.Dispose()"/> is idempotent, so a double dispose is safe, and the
+    /// stream is still tracked in <paramref name="ownedSource"/> as a fallback.
+    /// </summary>
+    private static LoadResult LoadF2fs(Stream stream, long imageSize, IDisposable? ownedSource, CancellationToken ct)
+    {
+        return BuildF2fsResult(new F2fsParser(stream), imageSize, ownedSource, ct);
+    }
+
+    /// <summary>
+    /// <para>列出 F2FS 条目、构建扁平列表与树，并组装 <see cref="LoadResult"/>。</para>
+    /// Lists the F2FS entries, builds the flat list and tree, and assembles the <see cref="LoadResult"/>.
+    /// </summary>
+    private static LoadResult BuildF2fsResult(F2fsParser parser, long imageSize, IDisposable? ownedSource, CancellationToken ct)
+    {
         var entries = parser.ListFiles();
         ct.ThrowIfCancellationRequested();
 
@@ -497,7 +656,7 @@ public partial class FileManagerEditorViewModel : Document
         }
 
         var tree = FileManagerTreeBuilder.Build(flat);
-        return new LoadResult("F2FS", new FileInfo(path).Length, parser, flat, tree);
+        return new LoadResult("F2FS", imageSize, parser, flat, tree, ownedSource);
     }
 
     /// <summary>
@@ -507,7 +666,9 @@ public partial class FileManagerEditorViewModel : Document
     private void ApplyLoadResult(LoadResult result)
     {
         _parser?.Dispose();
+        _ownedSource?.Dispose();
         _parser = result.Parser;
+        _ownedSource = result.OwnedSource;
         _flatEntries = result.FlatEntries;
         FormatName = result.FormatName;
         ImageSize = result.ImageSize;
@@ -587,7 +748,9 @@ public partial class FileManagerEditorViewModel : Document
     private void ResetState()
     {
         _parser?.Dispose();
+        _ownedSource?.Dispose();
         _parser = null;
+        _ownedSource = null;
         _flatEntries = [];
         Entries.Clear();
         SelectedEntry = null;

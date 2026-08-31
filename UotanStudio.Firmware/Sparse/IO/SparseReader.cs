@@ -437,4 +437,30 @@ public static class SparseReader
             ArrayPool<byte>.Shared.Return(buffer);
         }
     }
+
+    /// <summary>
+    /// Reads up to <paramref name="count"/> logical (unsparsified) bytes of a sparse image
+    /// starting at <paramref name="offset"/>, without expanding the whole image. Primarily
+    /// used for filesystem magic detection on sparse images.
+    /// <para>不展开整个镜像，从稀疏镜像的 offset 处读取最多 count 个逻辑（非稀疏）字节。
+    /// 主要用于稀疏镜像的文件系统魔数探测。</para>
+    /// </summary>
+    /// <param name="filePath">Path to the sparse image file. <para>稀疏镜像文件路径。</para></param>
+    /// <param name="offset">Logical byte offset to start reading from. <para>起始读取的逻辑字节偏移。</para></param>
+    /// <param name="count">Maximum number of logical bytes to read. <para>要读取的最大逻辑字节数。</para></param>
+    /// <returns>The bytes actually read; fewer than <paramref name="count"/> when the end of
+    /// the image is reached. <para>实际读取到的字节数组；到达镜像末尾时可能少于 count。</para></returns>
+    public static byte[] PeekLogicalRange(string filePath, long offset, int count)
+    {
+        // 打开源文件流，并在作用域结束时随 SparseFile / SparseReadStream 一并释放。
+        // Open the source file stream; it is released together with the SparseFile and
+        // SparseReadStream when the scope exits.
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
+        using var sparseFile = FromImageFile(filePath);
+        using var logical = new SparseReadStream(sparseFile);
+        logical.Seek(offset, SeekOrigin.Begin);
+        var buffer = new byte[count];
+        var read = logical.Read(buffer, 0, buffer.Length);
+        return read == buffer.Length ? buffer : buffer.AsSpan(0, read).ToArray();
+    }
 }

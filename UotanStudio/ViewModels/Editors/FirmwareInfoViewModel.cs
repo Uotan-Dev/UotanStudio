@@ -570,6 +570,10 @@ public partial class FirmwareInfoViewModel : Document
             "Android OTA Payload (payload.bin)" => Task.Run(() => service.ExtractPayloadAsync(path, outputDirectory)),
             "Oppo Firmware (OFP/OPS/OZIP)" => Task.Run(() => service.ExtractOppoAsync(path, outputDirectory)),
             "Android Logical Partition (super)" => Task.Run(() => service.UnpackSuperAsync(path, outputDirectory)),
+            // Android sparse 镜像（如 product.img）：级联解出内部文件系统内容（非文件系统内容时服务内回退 .raw）。
+            // Android sparse images (e.g. product.img): cascade into the internal filesystem contents
+            // (falls back to .raw inside the service when the content is not a filesystem).
+            "Android Sparse Image (simg)" => Task.Run(() => service.UnpackSparseImageAsync(path, outputDirectory)),
             _ => Task.FromResult(FirmwareOpResult.Fail(UnpackUnsupportedLabel))
         };
     }

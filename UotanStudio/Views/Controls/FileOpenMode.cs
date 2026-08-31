@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware;
 using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.Sparse;
 
 namespace UotanStudio.Views.Controls;
 
@@ -347,9 +348,11 @@ public static class FileOpenMode
 
     /// <summary>
     /// <para>判断文件内容是否命中 ext4/EROFS/F2FS 魔数。
-    /// 读取头部参与判定的最小长度：ext4 魔数（2 字节）位于 1080 → 需 1082 字节。</para>
+    /// 读取头部参与判定的最小长度：ext4 魔数（2 字节）位于 1080 → 需 1082 字节。
+    /// 物理偏移未命中时，若为 sparse 包装镜像（如 product.img）则按逻辑偏移重新探测。</para>
     /// Determines whether the file content matches an ext4/EROFS/F2FS magic. The minimal header length
-    /// needed is 1082 bytes (ext4 magic, 2 bytes, sits at offset 1080).
+    /// needed is 1082 bytes (ext4 magic, 2 bytes, sits at offset 1080). When the physical offset misses,
+    /// sparse-wrapped images (e.g. product.img) are re-probed at the logical offset.
     /// </summary>
     /// <param name="path">
     /// <para>文件名或完整路径。</para>
@@ -364,13 +367,61 @@ public static class FileOpenMode
 
         try
         {
+            // 先按物理偏移的原始魔数判定（raw 镜像直接命中）。
+            // First check the raw magic at the physical offset (raw images match directly).
             var header = FormatDetector.ReadHeader(path, FilesystemHeaderLength);
-            return IsFilesystemMagic(header);
+            if (IsFilesystemMagic(header))
+            {
+                return true;
+            }
+
+            // 物理魔数未命中：sparse 包装的镜像（如 product.img）按逻辑偏移重新探测内部文件系统。
+            // Physical magic missed: for sparse-wrapped images (e.g. product.img) re-probe the internal
+            // filesystem by logical offset.
+            if (IsSparseImage(path))
+            {
+                var logical = SparseReader.PeekLogicalRange(path, 0, FilesystemHeaderLength);
+                return IsFilesystemMagic(logical);
+            }
+
+            return false;
         }
         catch
         {
             // 读取失败按非文件系统镜像处理。
             // A read failure is treated as a non-filesystem image.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// <para>判断文件是否为 Android sparse 格式镜像：物理偏移 0 处的小端魔数为 0xED26FF3A
+    /// （Android sparse 镜像头魔数）。读取失败或内容不匹配返回 <c>false</c>。</para>
+    /// Determines whether the file is an Android sparse image: the little-endian magic at physical offset
+    /// 0 is 0xED26FF3A (the Android sparse image header magic). Returns <c>false</c> on a read failure or
+    /// mismatch.
+    /// </summary>
+    /// <param name="path">
+    /// <para>文件名或完整路径。</para>
+    /// A file name or full path.
+    /// </param>
+    public static bool IsSparseImage(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            var magic = FormatDetector.ReadHeader(path, 4);
+            return magic.Length == 4
+                && BinaryPrimitives.ReadUInt32LittleEndian(magic) == SparseFormat.SparseHeaderMagic;
+        }
+        catch
+        {
+            // 读取失败按非 sparse 镜像处理。
+            // A read failure is treated as a non-sparse image.
             return false;
         }
     }

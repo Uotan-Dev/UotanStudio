@@ -5,6 +5,9 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Dat;
+using UotanStudio.Firmware.Erofs;
+using UotanStudio.Firmware.Ext4;
+using UotanStudio.Firmware.F2fs;
 using UotanStudio.Firmware.Sparse;
 using UotanStudio.Messages;
 using UotanStudio.Services;
@@ -12,6 +15,7 @@ using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Devices;
+using FormatDetector = UotanStudio.Firmware.Common.FormatDetector;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -431,7 +435,14 @@ internal partial class ImageViewModel : Tool
                 "payload" => await Task.Run(() => _firmware.ExtractPayloadAsync(source, outputDir)),
                 "cpio" => await Task.Run(() => _firmware.UnpackCpioAsync(source, outputDir)),
                 "oppo" => await Task.Run(() => _firmware.ExtractOppoAsync(source, outputDir)),
-                "sparse" or "raw" => await ConvertToRawAsync(source, outputDir, name),
+                // sparse 镜像级联解出内部文件系统内容（非文件系统内容时服务内回退 .raw）。
+                // Sparse images cascade into the internal filesystem contents (falls back to .raw
+                // inside the service when the content is not a filesystem).
+                "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(source, outputDir)),
+                // raw 物理镜像：命中文件系统魔数则用对应解析器级联解包，否则保留原字节流复制行为。
+                // Raw physical images: cascade with the matching parser when a filesystem magic hits,
+                // otherwise keep the original raw byte-stream copy behavior.
+                "raw" => await ExtractRawAsync(source, outputDir, name),
                 _ => FirmwareOpResult.Fail($"Unsupported image format: {image.Format}  不支持的镜像格式：{image.Format}")
             };
 
@@ -936,6 +947,82 @@ internal partial class ImageViewModel : Tool
             sparseFile.WriteRawToStream(output);
             return new FirmwareOpResult { Success = true, Summary = $"Converted {sourcePath} to raw at {outputPath}  已转为 raw：{outputPath}" };
         });
+    }
+
+    /// <summary>
+    /// <para>分解 raw 物理镜像：先按魔数探测是否为 ext4/erofs/f2fs 文件系统镜像，命中则用对应解析器
+    /// 级联解出内部文件系统内容；未命中则回退为原 raw 字节流复制。
+    /// （魔数判定读 1082 字节头部，仿照 <c>FileManagerEditorViewModel.DetectFilesystem</c>：
+    /// ext4 0xEF53@1080、erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024。）</para>
+    /// Extracts a raw physical image: probes the magic for an ext4/erofs/f2fs filesystem image and
+    /// cascades into its contents with the matching parser when matched; otherwise falls back to
+    /// copying the raw byte stream. (Magic detection reads a 1082-byte header, mirroring
+    /// FileManagerEditorViewModel.DetectFilesystem: ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024,
+    /// f2fs 0xF2F52010@1024.)
+    /// </summary>
+    private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name)
+    {
+        // 读取 1082 字节头部：ext4 魔数 0xEF53 位于 1080、erofs/f2fs 魔数位于 1024。
+        // Read a 1082-byte header: ext4 magic 0xEF53 at 1080, erofs/f2fs magic at 1024.
+        var header = FormatDetector.ReadHeader(sourcePath, 1082);
+
+        // ext4 文件系统镜像 → 级联解出内部文件系统内容。
+        // ext4 filesystem image → cascade into the filesystem contents.
+        if (header.Length >= 1082
+            && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+        {
+            return await Task.Run(() =>
+            {
+                using var parser = new Ext4Parser(sourcePath);
+                parser.ExtractToDirectory(outputDir);
+                var entries = parser.ListFiles();
+                return new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"Extracted {entries.Count} entries from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {entries.Count} 个条目到 '{outputDir}'"
+                };
+            });
+        }
+
+        // erofs 文件系统镜像 → 级联解出内部文件系统内容。
+        // erofs filesystem image → cascade into the filesystem contents.
+        if (header.Length >= 1028
+            && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
+        {
+            return await Task.Run(() =>
+            {
+                using var parser = new ErofsParser(sourcePath);
+                parser.ExtractToDirectory(outputDir);
+                var files = parser.EnumerateFiles();
+                return new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"Extracted {files.Count} files from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {files.Count} 个文件到 '{outputDir}'"
+                };
+            });
+        }
+
+        // f2fs 文件系统镜像 → 级联解出内部文件系统内容。
+        // f2fs filesystem image → cascade into the filesystem contents.
+        if (header.Length >= 1028
+            && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
+        {
+            return await Task.Run(() =>
+            {
+                using var parser = new F2fsParser(sourcePath);
+                parser.ExtractToDirectory(outputDir);
+                var entries = parser.ListFiles();
+                return new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"Extracted {entries.Count} entries from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {entries.Count} 个条目到 '{outputDir}'"
+                };
+            });
+        }
+
+        // 未命中文件系统魔数 → 保留原 raw 复制行为（按字节流落盘 .raw）。
+        // No filesystem magic matched → keep the original raw-copy behavior (write the byte stream as .raw).
+        return await ConvertToRawAsync(sourcePath, outputDir, name);
     }
 
     private static string GetUniqueFileName(string directory, string fileName)
