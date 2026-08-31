@@ -6,8 +6,16 @@
              xmlns:dock="using:Dock.Avalonia.Controls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.Workspace.WorkspaceView"
-             x:DataType="viewmodels:WorkspaceViewModel">
+             x:DataType="viewmodels:WorkspaceViewModel"
+             Background="Transparent"
+             DragDrop.AllowDrop="True"
+             DragDrop.DragOver="OnDragOver"
+             DragDrop.Drop="OnDrop">
 
+  <!-- 透明背景必须显式给出：Avalonia 命中测试只落到有 Background 的元素，空白区域
+       InputHitTest 失败会让 DragDropDevice.GetTarget 返回 null，OS 光标显示禁止。 -->
+  <!-- Transparent background is required so hit-testing lands on empty areas of this view;
+       otherwise the OS drag cursor may show the "not allowed" glyph. -->
   <dock:DockControl x:Name="DockControl"
                      Layout="{Binding Layout}"
                      IsDockingEnabled="True"
