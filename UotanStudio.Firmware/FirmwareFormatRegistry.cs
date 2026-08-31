@@ -43,6 +43,13 @@ public static class FirmwareFormatRegistry
             Register(new Pac.PacFormatHandler());
             Register(new Dz.DzFormatHandler());
             Register(new UpdateApp.UpdateAppFormatHandler());
+            // Android OTA 相关格式：DAT 镜像对（transfer.list + .new.dat）与 bsdiff 二进制差分补丁
+            // 均为 OTA/更新生态产物，与 UpdateApp 归类在一起；两者的扩展名/魔数都与其他处理器无冲突。
+            // Android OTA related formats: DAT image pairs (transfer.list + .new.dat) and bsdiff binary
+            // delta patches belong to the OTA/update ecosystem, grouped here next to UpdateApp; neither's
+            // extensions nor magic overlap with any other handler.
+            Register(new Dat.DatFormatHandler());
+            Register(new Diff.DiffFormatHandler());
             Register(new Dt.DtFormatHandler());
             Register(new Dex.DexFormatHandler());
             Register(new AXml.AXmlFormatHandler());
