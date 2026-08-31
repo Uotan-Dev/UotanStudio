@@ -132,7 +132,7 @@ public sealed class McpHostService
 /// <c>AddMcpServer</c>.
 /// </summary>
 [McpServerToolType]
-public sealed class UotanStudioMcpTools
+public sealed partial class UotanStudioMcpTools
 {
     /// <summary>
     /// <para>检测固件文件格式并返回元数据摘要。</para>
