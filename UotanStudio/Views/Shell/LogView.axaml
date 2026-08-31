@@ -53,33 +53,49 @@
         <TextBlock VerticalAlignment="Center" />
       </DockPanel>
     </Border>
-    <!-- 日志列表：使用虚拟化 ListBox，避免大体积日志全集物化导致的性能开销 -->
-    <ListBox Grid.Row="1" Name="LogList"
-             ItemsSource="{Binding Entries}"
-             Background="Transparent" BorderThickness="0"
-             ScrollViewer.HorizontalScrollBarVisibility="Auto"
-             ScrollViewer.VerticalScrollBarVisibility="Auto">
-      <ListBox.ItemTemplate>
-        <DataTemplate DataType="vm:LogViewModel+LogEntryViewModel">
-          <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1"
-                      PointerPressed="OnEntryPointerPressed"
-                      Background="Transparent"
-                      Cursor="Hand">
-            <TextBlock Text="{Binding Timestamp}" FontSize="12"
-                       Foreground="{DynamicResource SecondaryTextForeground}"
-                       FontFamily="Consolas,monospace" />
-            <TextBlock Text="{Binding Level}" FontSize="12"
-                       Foreground="{DynamicResource SecondaryTextForeground}"
-                       FontFamily="Consolas,monospace" Width="56" />
-            <TextBlock Text="{Binding Source}" FontSize="12"
-                       Foreground="{DynamicResource SecondaryTextForeground}"
-                       FontFamily="Consolas,monospace" Width="140" />
-            <TextBlock Text="{Binding Message}" FontSize="12"
-                       TextWrapping="NoWrap"
-                       FontFamily="Consolas,monospace" />
-          </StackPanel>
-        </DataTemplate>
-      </ListBox.ItemTemplate>
-    </ListBox>
+    <!-- 通道 Tab 与日志列表：通道筛选与级别/组件筛选叠加生效 -->
+    <Grid Grid.Row="1" RowDefinitions="Auto,*">
+      <!-- 通道 Tab：全部 / 通用 / 设备 / 烧录 / 固件 / 构建 -->
+      <TabControl Grid.Row="0" Padding="8,2,8,0"
+                  ItemsSource="{Binding Channels}"
+                  SelectedItem="{Binding SelectedChannel}">
+        <TabControl.ItemTemplate>
+          <DataTemplate DataType="vm:LogViewModel+LogChannelOption">
+            <TextBlock Text="{Binding Display}" FontSize="11" Margin="8,3" />
+          </DataTemplate>
+        </TabControl.ItemTemplate>
+        <TabControl.SelectedContentTemplate>
+          <DataTemplate />
+        </TabControl.SelectedContentTemplate>
+      </TabControl>
+      <!-- 日志列表：使用虚拟化 ListBox，避免大体积日志全集物化导致的性能开销 -->
+      <ListBox Grid.Row="1" Name="LogList"
+               ItemsSource="{Binding Entries}"
+               Background="Transparent" BorderThickness="0"
+               ScrollViewer.HorizontalScrollBarVisibility="Auto"
+               ScrollViewer.VerticalScrollBarVisibility="Auto">
+        <ListBox.ItemTemplate>
+          <DataTemplate DataType="vm:LogViewModel+LogEntryViewModel">
+            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,1"
+                        PointerPressed="OnEntryPointerPressed"
+                        Background="Transparent"
+                        Cursor="Hand">
+              <TextBlock Text="{Binding Timestamp}" FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextForeground}"
+                         FontFamily="Consolas,monospace" />
+              <TextBlock Text="{Binding Level}" FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextForeground}"
+                         FontFamily="Consolas,monospace" Width="56" />
+              <TextBlock Text="{Binding Source}" FontSize="12"
+                         Foreground="{DynamicResource SecondaryTextForeground}"
+                         FontFamily="Consolas,monospace" Width="140" />
+              <TextBlock Text="{Binding Message}" FontSize="12"
+                         TextWrapping="NoWrap"
+                         FontFamily="Consolas,monospace" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </Grid>
   </Grid>
 </UserControl>

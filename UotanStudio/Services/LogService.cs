@@ -13,6 +13,33 @@ public sealed record LogEntry(
     string Message);
 
 /// <summary>
+/// <para>日志通道分类，用于在日志面板中按来源（Source）对日志条目归类展示。</para>
+/// Log channel categories, used to group log entries by their source in the log panel.
+/// </summary>
+/// <remarks>
+/// <para>通道信息不写入 <see cref="LogEntry"/>，而是由 <see cref="LogService.ChannelOf"/> 在展示时按来源关键字映射。</para>
+/// Channel information is not stored in <see cref="LogEntry"/>; it is mapped at display time by
+/// <see cref="LogService.ChannelOf"/> based on source keywords.
+/// </remarks>
+public enum LogChannel
+{
+    /// <summary><para>通用通道：未匹配到其他通道关键字的日志。</para>General channel: logs that match no other channel keywords.</summary>
+    General,
+
+    /// <summary><para>设备通道：设备发现、连接、USB/ADB 等设备相关日志。</para>Device channel: device discovery, connection and USB/ADB logs.</summary>
+    Device,
+
+    /// <summary><para>烧录通道：刷机、烧录、分区写入等日志。</para>Flash channel: flashing and partition writing logs.</summary>
+    Flash,
+
+    /// <summary><para>固件通道：固件解包/打包、签名与镜像处理日志。</para>Firmware channel: firmware unpack/pack, signing and image processing logs.</summary>
+    Firmware,
+
+    /// <summary><para>构建通道：工作流、节点执行、打包与命令行工具日志。</para>Build channel: workflow, node execution, packing and CLI tool logs.</summary>
+    Build
+}
+
+/// <summary>
 /// <para>统一日志服务实现。所有方法（节点执行、设备协议、UI 命令等）均通过此推送文本，由主日志窗口订阅显示。</para>
 /// Unified log service implementation. All methods (node execution, device protocols, UI commands, etc.) push text through this; the main log window subscribes to display.
 /// </summary>
@@ -147,6 +174,71 @@ public sealed class LogService : IUnifiedLog
     public void Clear()
     {
         while (_entries.TryDequeue(out _)) { }
+    }
+
+    /// <summary>
+    /// <para>根据日志来源（Source）归类日志通道，供 <see cref="UotanStudio.ViewModels.Shell.LogViewModel"/> 按通道过滤展示。</para>
+    /// Classifies a log source into a <see cref="LogChannel"/>, used by the log panel to filter by channel.
+    /// </summary>
+    /// <remarks>
+    /// <para>按关键字归类（不区分大小写，顺序优先）：包含 Flash/Fastboot/EDL/Firehose/Sideload → <see cref="LogChannel.Flash"/>；
+    /// ADB/Device/USB/Usb/RKDL → <see cref="LogChannel.Device"/>；
+    /// Firmware/Payload/AVB/Ext4/Erofs/F2fs/DEX/Format → <see cref="LogChannel.Firmware"/>；
+    /// Build/Pack/Node/Workflow/Cli → <see cref="LogChannel.Build"/>；其余归 <see cref="LogChannel.General"/>。
+    /// 此方法不改动任何写入调用点，仅作展示层分类。</para>
+    /// Classified by keyword (case-insensitive, first match wins): Flash/Fastboot/EDL/Firehose/Sideload → <see cref="LogChannel.Flash"/>;
+    /// ADB/Device/USB/Usb/RKDL → <see cref="LogChannel.Device"/>;
+    /// Firmware/Payload/AVB/Ext4/Erofs/F2fs/DEX/Format → <see cref="LogChannel.Firmware"/>;
+    /// Build/Pack/Node/Workflow/Cli → <see cref="LogChannel.Build"/>; otherwise <see cref="LogChannel.General"/>.
+    /// This method does not modify any write call sites; it only classifies at the presentation layer.
+    /// </remarks>
+    /// <param name="source"><para>日志来源字符串。</para>Log source string.</param>
+    /// <returns><para>对应的日志通道。</para>The corresponding log channel.</returns>
+    public static LogChannel ChannelOf(string source)
+    {
+        if (string.IsNullOrEmpty(source))
+        {
+            return LogChannel.General;
+        }
+
+        if (ContainsAny(source, "Flash", "Fastboot", "EDL", "Firehose", "Sideload"))
+        {
+            return LogChannel.Flash;
+        }
+
+        if (ContainsAny(source, "ADB", "Device", "USB", "Usb", "RKDL"))
+        {
+            return LogChannel.Device;
+        }
+
+        if (ContainsAny(source, "Firmware", "Payload", "AVB", "Ext4", "Erofs", "F2fs", "DEX", "Format"))
+        {
+            return LogChannel.Firmware;
+        }
+
+        if (ContainsAny(source, "Build", "Pack", "Node", "Workflow", "Cli"))
+        {
+            return LogChannel.Build;
+        }
+
+        return LogChannel.General;
+    }
+
+    /// <summary>
+    /// <para>判断来源是否包含任一关键字（不区分大小写）。</para>
+    /// Determines whether the source contains any of the given keywords (case-insensitive).
+    /// </summary>
+    private static bool ContainsAny(string source, params string[] keywords)
+    {
+        foreach (var keyword in keywords)
+        {
+            if (source.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <inheritdoc />

@@ -42,8 +42,42 @@ public partial class LogViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>当前日志面板的展示条目集合（已按级别与组件筛选），UI 绑定此项。</para>
-    /// Collection of entries currently displayed in the log panel (filtered by level and source),
+    /// <para>通道筛选选项，承载通道值与本地化显示文本；<see cref="Value"/> 为 <c>null</c> 表示"全部通道"。</para>
+    /// Channel filter option, carrying a channel value and its localized display text; a <c>null</c> <see cref="Value"/> means "all channels".
+    /// </summary>
+    public sealed partial class LogChannelOption : ObservableObject
+    {
+        /// <summary><para>通道值；<c>null</c> 表示"全部通道"。</para>Channel value; <c>null</c> means "all channels".</summary>
+        public LogChannel? Value { get; }
+
+        /// <summary><para>本地化显示文本。</para>Localized display text.</summary>
+        [ObservableProperty] private string _display = string.Empty;
+
+        /// <summary>
+        /// <para>创建通道筛选选项。</para>
+        /// Creates a channel filter option.
+        /// </summary>
+        public LogChannelOption(LogChannel? value)
+        {
+            Value = value;
+            _display = Localize(value);
+        }
+
+        /// <summary>
+        /// <para>语言切换后刷新本地化显示文本。</para>
+        /// Refreshes the localized display text after a language change.
+        /// </summary>
+        public void RefreshDisplay() => Display = Localize(Value);
+
+        private static string Localize(LogChannel? value) =>
+            value is null
+                ? LanguageService.Instance.GetString("Log_Channel_All")
+                : LanguageService.Instance.GetString("Log_Channel_" + value.Value);
+    }
+
+    /// <summary>
+    /// <para>当前日志面板的展示条目集合（已按级别、组件与通道筛选），UI 绑定此项。</para>
+    /// Collection of entries currently displayed in the log panel (filtered by level, source and channel),
     /// bound by the UI.
     /// </summary>
     public ObservableCollection<LogEntryViewModel> Entries { get; } = [];
@@ -104,11 +138,37 @@ public partial class LogViewModel : ViewModelBase
     partial void OnSourceFilterChanged(string value) => ReapplyFilter();
 
     /// <summary>
-    /// <para>构造日志面板视图模型，订阅统一日志服务并回填历史缓冲。</para>
-    /// Constructs the log panel view model, subscribing to the unified log service and backfilling the historical buffer.
+    /// <para>通道筛选选项集合（五个通道 + 首项"全部通道"），供日志面板通道 Tab 绑定。</para>
+    /// Channel filter options (five channels plus a leading "all channels" item), bound by the channel tabs in the log panel.
+    /// </summary>
+    public ObservableCollection<LogChannelOption> Channels { get; } =
+    [
+        new(null),
+        new(LogChannel.General),
+        new(LogChannel.Device),
+        new(LogChannel.Flash),
+        new(LogChannel.Firmware),
+        new(LogChannel.Build),
+    ];
+
+    /// <summary>
+    /// <para>选中的通道筛选选项；其 <see cref="LogChannelOption.Value"/> 为 <c>null</c> 表示全部通道（默认）。
+    /// 按 <see cref="LogService.ChannelOf"/> 与级别、组件筛选叠加生效。</para>
+    /// The selected channel filter option; a <see cref="LogChannelOption.Value"/> of <c>null</c> means all channels
+    /// (the default). It is combined with the level and source filters via <see cref="LogService.ChannelOf"/>.
+    /// </summary>
+    [ObservableProperty] private LogChannelOption? _selectedChannel;
+
+    partial void OnSelectedChannelChanged(LogChannelOption? value) => ReapplyFilter();
+
+    /// <summary>
+    /// <para>构造日志面板视图模型，订阅统一日志服务与语言变更并回填历史缓冲。</para>
+    /// Constructs the log panel view model, subscribing to the unified log service and language changes and backfilling the historical buffer.
     /// </summary>
     public LogViewModel()
     {
+        SelectedChannel = Channels[0];
+        LanguageService.Instance.LanguageChanged += OnLanguageChanged;
         _unsubscribe = LogService.Instance.Subscribe(OnLogEnqueued);
         foreach (var e in LogService.Instance.Entries)
         {
@@ -170,12 +230,13 @@ public partial class LogViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// <para>判断条目是否命中当前级别与组件筛选。</para>
-    /// Determines whether the entry matches the current level and source filters.
+    /// <para>判断条目是否命中当前级别、组件与通道筛选。</para>
+    /// Determines whether the entry matches the current level, source and channel filters.
     /// </summary>
     private bool MatchesFilter(LogEntryViewModel vm) =>
         (LevelFilter is null || vm.Level >= LevelFilter.Value)
-        && (string.IsNullOrEmpty(SourceFilter) || string.Equals(vm.Source, SourceFilter, StringComparison.Ordinal));
+        && (string.IsNullOrEmpty(SourceFilter) || string.Equals(vm.Source, SourceFilter, StringComparison.Ordinal))
+        && (SelectedChannel?.Value is null || LogService.ChannelOf(vm.Source) == SelectedChannel.Value.Value);
 
     /// <summary>
     /// <para>按当前筛选条件重建展示集合。</para>
@@ -206,11 +267,28 @@ public partial class LogViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <para>语言变更时刷新通道 Tab 的本地化显示文本。</para>
+    /// Refreshes the localized channel tab text when the language changes.
+    /// </summary>
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        foreach (var option in Channels)
+        {
+            option.RefreshDisplay();
+        }
+    }
+
+    /// <summary>
     /// <para>析构时取消订阅，防止内存泄漏。</para>
     /// Unsubscribes on finalization to prevent memory leaks.
     /// </summary>
     ~LogViewModel()
     {
-        try { _unsubscribe?.Invoke(); } catch { /* 忽略析构异常 */ }
+        try
+        {
+            _unsubscribe?.Invoke();
+            LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
+        }
+        catch { /* 忽略析构异常 */ }
     }
 }
