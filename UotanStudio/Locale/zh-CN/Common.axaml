@@ -27,6 +27,51 @@
     <x:String x:Key="ImageView_NoSelection">未选中镜像</x:String>
     <x:String x:Key="ImageView_NoProject">尚未打开工程</x:String>
     <x:String x:Key="ImageView_OperationDone">操作完成</x:String>
+    <x:String x:Key="ImageView_FlashWizard">向导刷写</x:String>
+    <x:String x:Key="ImageView_FlashWizardHint">打开一键刷写向导</x:String>
+
+    <!-- FirmwareInfo actions -->
+    <x:String x:Key="FirmwareInfo_Verify">校验</x:String>
+    <x:String x:Key="FirmwareInfo_UnpackToProject">解包到工程目录</x:String>
+    <x:String x:Key="FirmwareInfo_Result">操作结果</x:String>
+    <x:String x:Key="FirmwareInfo_Verifying">正在校验…</x:String>
+    <x:String x:Key="FirmwareInfo_Unpacking">正在解包…</x:String>
+    <x:String x:Key="FirmwareInfo_NoProject">尚未打开工程，无法解包。</x:String>
+    <x:String x:Key="FirmwareInfo_UnpackUnsupported">当前格式不支持解包到工程目录。</x:String>
+
+    <!-- Log channels -->
+    <x:String x:Key="Log_Channel_All">全部通道</x:String>
+    <x:String x:Key="Log_Channel_General">通用</x:String>
+    <x:String x:Key="Log_Channel_Device">设备</x:String>
+    <x:String x:Key="Log_Channel_Flash">烧录</x:String>
+    <x:String x:Key="Log_Channel_Firmware">固件</x:String>
+    <x:String x:Key="Log_Channel_Build">构建</x:String>
+
+    <!-- Workspace drag-drop -->
+    <x:String x:Key="Workspace_DropNoFiles">拖入内容不含可打开的文件，已忽略</x:String>
+    <x:String x:Key="Workspace_DropOpenFailed">打开拖入文件失败</x:String>
+
+    <!-- Flash wizard -->
+    <x:String x:Key="FlashWizard_Title">一键刷写向导</x:String>
+    <x:String x:Key="FlashWizard_ImagesHeader">分区镜像</x:String>
+    <x:String x:Key="FlashWizard_DeviceHeader">目标设备</x:String>
+    <x:String x:Key="FlashWizard_RulesHeader">模式白名单规则</x:String>
+    <x:String x:Key="FlashWizard_NoDevice">未选择设备</x:String>
+    <x:String x:Key="FlashWizard_RuleFastboot">Fastboot 模式可刷任意分区（分区名非空）</x:String>
+    <x:String x:Key="FlashWizard_RuleEdl">EDL 模式需设备就绪且分区名匹配 rawprogram</x:String>
+    <x:String x:Key="FlashWizard_RuleRkdl">RKDL 模式需设备就绪且分区名非空</x:String>
+    <x:String x:Key="FlashWizard_RuleAdbNotSupported">ADB 仅支持 sideload 类操作，本向导不支持</x:String>
+    <x:String x:Key="FlashWizard_AfterFlashReboot">刷写完成后重启设备</x:String>
+    <x:String x:Key="FlashWizard_FlashButton">刷写</x:String>
+    <x:String x:Key="FlashWizard_RebootButton">重启设备</x:String>
+    <x:String x:Key="FlashWizard_CloseButton">关闭</x:String>
+    <x:String x:Key="FlashWizard_ConfirmTitle">确认刷写</x:String>
+    <x:String x:Key="FlashWizard_ConfirmMessage">确定要将镜像 {0} 刷写到 {1}（{2}）吗？此操作有风险，可能导致设备变砖。</x:String>
+    <x:String x:Key="FlashWizard_Canceled">已取消</x:String>
+    <x:String x:Key="FlashWizard_ImageNotFound">镜像文件不存在或无法解析路径</x:String>
+    <x:String x:Key="FlashWizard_InvalidPartition">分区名为空，无法刷写</x:String>
+    <x:String x:Key="FlashWizard_EdlPartitionNotFound">分区 {0} 未在 rawprogram 中匹配到</x:String>
+    <x:String x:Key="FlashWizard_AdbNotSupported">ADB 仅支持 sideload 类操作，不在本向导范围</x:String>
 
     <!-- Splash window -->
     <x:String x:Key="Splash_Subtitle">固件工具箱 · Firmware Toolbox</x:String>
