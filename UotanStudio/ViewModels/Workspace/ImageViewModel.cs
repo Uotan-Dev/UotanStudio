@@ -1041,6 +1041,22 @@ internal partial class ImageViewModel : Tool
             LogService.Instance.Write(LogLevel.Warn, "Images", $"Undo cleanup failed for {path}: {ex.Message}  撤销清理失败：{ex.Message}");
         }
     }
+
+    /// <summary>
+    /// <para>请求打开一键刷写向导窗口时引发，由镜像面板视图处理并弹出
+    /// <c>UotanStudio.Views.Workspace.FlashWizardView</c>。</para>
+    /// Raised when the one-click flash wizard window should be opened; the image panel view
+    /// handles it and shows <c>UotanStudio.Views.Workspace.FlashWizardView</c>.
+    /// </summary>
+    public event EventHandler? OpenFlashWizardRequested;
+
+    /// <summary>
+    /// <para>打开一键刷写向导：引发 <see cref="OpenFlashWizardRequested"/>，由视图弹出向导窗口。</para>
+    /// Opens the one-click flash wizard: raises <see cref="OpenFlashWizardRequested"/> so the view
+    /// shows the wizard window.
+    /// </summary>
+    [RelayCommand]
+    private void OpenFlashWizard() => OpenFlashWizardRequested?.Invoke(this, EventArgs.Empty);
 }
 
 /// <summary>

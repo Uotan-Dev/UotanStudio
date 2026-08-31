@@ -7,9 +7,23 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.Workspace.ImageView"
              x:DataType="viewmodels:ImageViewModel">
-  <Grid RowDefinitions="*,Auto">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- 顶部工具栏：一键刷写向导入口 -->
+    <Border Grid.Row="0" Padding="6" Background="{DynamicResource ControlFillColorDefaultBrush}"
+            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" Spacing="6">
+        <Button MinWidth="110" Command="{Binding OpenFlashWizardCommand}"
+                ToolTip.Tip="{DynamicResource ImageView_FlashWizardHint}">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <avalonia:MaterialIcon Kind="Flash" Width="14" Height="14" />
+            <TextBlock Text="{DynamicResource ImageView_FlashWizard}" FontSize="11" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Border>
+
     <!-- 镜像列表 -->
-    <ListBox Grid.Row="0" Name="ImagesList"
+    <ListBox Grid.Row="1" Name="ImagesList"
              ItemsSource="{Binding Images}"
              SelectedItem="{Binding SelectedImage, Mode=TwoWay}"
              Background="Transparent" BorderThickness="0">
@@ -51,7 +65,7 @@
     </ListBox>
 
     <!-- 底部按钮区 -->
-    <Border Grid.Row="1" Padding="6" Background="{DynamicResource ControlFillColorDefaultBrush}"
+    <Border Grid.Row="2" Padding="6" Background="{DynamicResource ControlFillColorDefaultBrush}"
             BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
       <StackPanel Spacing="6">
         <StackPanel Orientation="Horizontal" Spacing="6">

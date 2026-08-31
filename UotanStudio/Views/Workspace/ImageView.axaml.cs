@@ -1,13 +1,16 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Views.Workspace;
 
 /// <summary>
-/// <para>镜像管理面板视图，处理镜像条目的右键菜单命令（提取/合成/删除）。</para>
+/// <para>镜像管理面板视图，处理镜像条目的右键菜单命令（提取/合成/删除）与顶部
+/// 「向导刷写」按钮（弹出 <see cref="FlashWizardView"/>）。</para>
 /// Image manager panel view, handling the right-click commands on image entries
-/// (extract / synthesize / delete).
+/// (extract / synthesize / delete) and the top "Flash Wizard" button (opening
+/// <see cref="FlashWizardView"/>).
 /// </summary>
 public partial class ImageView : UserControl
 {
@@ -18,6 +21,38 @@ public partial class ImageView : UserControl
     public ImageView()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    /// <summary>
+    /// <para>镜像面板数据上下文绑定后订阅 <see cref="ImageViewModel.OpenFlashWizardRequested"/>，
+    /// 用于弹出向导窗口。</para>
+    /// Subscribes to <see cref="ImageViewModel.OpenFlashWizardRequested"/> once the image panel's
+    /// data context is bound, so the wizard window can be opened.
+    /// </summary>
+    private void OnDataContextChanged(object? sender, System.EventArgs e)
+    {
+        if (DataContext is ImageViewModel vm)
+        {
+            vm.OpenFlashWizardRequested -= OnOpenFlashWizardRequested;
+            vm.OpenFlashWizardRequested += OnOpenFlashWizardRequested;
+        }
+    }
+
+    /// <summary>
+    /// <para>打开一键刷写向导窗口（以当前宿主窗口为所有者）。</para>
+    /// Opens the one-click flash wizard window (owned by the current host window).
+    /// </summary>
+    private void OnOpenFlashWizardRequested(object? sender, System.EventArgs e)
+    {
+        var owner = this.FindAncestorOfType<Window>();
+        if (owner is null)
+        {
+            return;
+        }
+
+        var wizard = new FlashWizardView();
+        wizard.ShowDialog(owner);
     }
 
     /// <summary>
