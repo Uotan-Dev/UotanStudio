@@ -4,8 +4,8 @@ using Avalonia.Controls;
 namespace UotanStudio.Views.Controls;
 
 /// <summary>
-/// <para>按最小项宽度自动换行，并让每一行的子项等宽填满可用宽度。</para>
-/// Wraps children according to a minimum item width and justifies every line across the available width.
+/// <para>按子项的最小宽度和实际内容宽度自动换行，并让每一行填满可用宽度。</para>
+/// Wraps children according to both their minimum and content widths, then justifies every line.
 /// </summary>
 public sealed class JustifiedWrapPanel : Panel
 {
@@ -18,6 +18,9 @@ public sealed class JustifiedWrapPanel : Panel
     public static readonly StyledProperty<double> LineSpacingProperty =
         AvaloniaProperty.Register<JustifiedWrapPanel, double>(nameof(LineSpacing), 6d);
 
+    private readonly List<RowLayout> _rows = [];
+    private double[] _requiredWidths = [];
+
     static JustifiedWrapPanel()
     {
         AffectsMeasure<JustifiedWrapPanel>(MinItemWidthProperty, ItemSpacingProperty, LineSpacingProperty);
@@ -25,8 +28,8 @@ public sealed class JustifiedWrapPanel : Panel
     }
 
     /// <summary>
-    /// <para>获取或设置每个子项的最小宽度。</para>
-    /// Gets or sets the minimum width of each child.
+    /// <para>获取或设置每个子项的基础最小宽度；内容需要更宽时以内容宽度为准。</para>
+    /// Gets or sets the base minimum width; wider content raises the effective minimum.
     /// </summary>
     public double MinItemWidth
     {
@@ -56,6 +59,8 @@ public sealed class JustifiedWrapPanel : Panel
 
     protected override Size MeasureOverride(Size availableSize)
     {
+        _rows.Clear();
+
         if (Children.Count == 0)
         {
             return default;
@@ -64,88 +69,152 @@ public sealed class JustifiedWrapPanel : Panel
         var itemSpacing = Math.Max(0, ItemSpacing);
         var lineSpacing = Math.Max(0, LineSpacing);
         var minItemWidth = Math.Max(1, MinItemWidth);
-        var hasFiniteWidth = double.IsFinite(availableSize.Width);
-        var availableWidth = hasFiniteWidth
-            ? Math.Max(minItemWidth, availableSize.Width)
-            : Children.Count * minItemWidth + (Children.Count - 1) * itemSpacing;
-        var columns = CalculateColumnCount(availableWidth, minItemWidth, itemSpacing);
+        EnsureRequiredWidthCapacity();
 
-        var totalHeight = 0d;
-        var index = 0;
-        var line = 0;
-        while (index < Children.Count)
+        for (var index = 0; index < Children.Count; index++)
         {
-            var count = Math.Min(columns, Children.Count - index);
-            var itemWidth = CalculateItemWidth(availableWidth, count, itemSpacing);
-            var lineHeight = 0d;
-
-            for (var column = 0; column < count; column++)
-            {
-                var child = Children[index + column];
-                child.Measure(new Size(itemWidth, double.PositiveInfinity));
-                lineHeight = Math.Max(lineHeight, child.DesiredSize.Height);
-            }
-
-            if (line > 0)
-            {
-                totalHeight += lineSpacing;
-            }
-
-            totalHeight += lineHeight;
-            index += count;
-            line++;
+            var child = Children[index];
+            child.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _requiredWidths[index] = Math.Max(minItemWidth, child.DesiredSize.Width);
         }
 
+        if (!double.IsFinite(availableSize.Width))
+        {
+            var widths = _requiredWidths[..Children.Count];
+            var rowHeight = Children.Max(child => child.DesiredSize.Height);
+            _rows.Add(new RowLayout(0, widths, rowHeight));
+            return new Size(widths.Sum() + itemSpacing * Math.Max(0, widths.Length - 1), rowHeight);
+        }
+
+        var availableWidth = Math.Max(0, availableSize.Width);
+        var totalHeight = BuildMeasuredRows(availableWidth, itemSpacing, lineSpacing);
         return new Size(availableWidth, totalHeight);
     }
 
     protected override Size ArrangeOverride(Size finalSize)
     {
-        if (Children.Count == 0)
-        {
-            return finalSize;
-        }
-
         var itemSpacing = Math.Max(0, ItemSpacing);
         var lineSpacing = Math.Max(0, LineSpacing);
-        var minItemWidth = Math.Max(1, MinItemWidth);
-        var availableWidth = Math.Max(minItemWidth, finalSize.Width);
-        var columns = CalculateColumnCount(availableWidth, minItemWidth, itemSpacing);
-
         var y = 0d;
-        var index = 0;
-        while (index < Children.Count)
+
+        foreach (var row in _rows)
         {
-            var count = Math.Min(columns, Children.Count - index);
-            var itemWidth = CalculateItemWidth(availableWidth, count, itemSpacing);
-            var lineHeight = 0d;
-
-            for (var column = 0; column < count; column++)
+            var x = 0d;
+            for (var column = 0; column < row.Widths.Length; column++)
             {
-                lineHeight = Math.Max(lineHeight, Children[index + column].DesiredSize.Height);
+                Children[row.StartIndex + column].Arrange(new Rect(x, y, row.Widths[column], row.Height));
+                x += row.Widths[column] + itemSpacing;
             }
 
-            for (var column = 0; column < count; column++)
-            {
-                var x = column * (itemWidth + itemSpacing);
-                Children[index + column].Arrange(new Rect(x, y, itemWidth, lineHeight));
-            }
-
-            y += lineHeight + lineSpacing;
-            index += count;
+            y += row.Height + lineSpacing;
         }
 
         return finalSize;
     }
 
-    private int CalculateColumnCount(double availableWidth, double minItemWidth, double itemSpacing)
+    private double BuildMeasuredRows(double availableWidth, double itemSpacing, double lineSpacing)
     {
-        var count = (int)Math.Floor((availableWidth + itemSpacing) / (minItemWidth + itemSpacing));
-        return Math.Clamp(count, 1, Children.Count);
+        var totalHeight = 0d;
+        var rowStart = 0;
+        var rowWidth = 0d;
+
+        for (var index = 0; index < Children.Count; index++)
+        {
+            var requiredWidth = _requiredWidths[index];
+            var proposedWidth = index == rowStart
+                ? requiredWidth
+                : rowWidth + itemSpacing + requiredWidth;
+
+            if (index > rowStart && proposedWidth > availableWidth)
+            {
+                totalHeight = AddMeasuredRow(
+                    rowStart,
+                    index - rowStart,
+                    availableWidth,
+                    itemSpacing,
+                    lineSpacing,
+                    totalHeight);
+                rowStart = index;
+                rowWidth = requiredWidth;
+            }
+            else
+            {
+                rowWidth = proposedWidth;
+            }
+        }
+
+        return AddMeasuredRow(
+            rowStart,
+            Children.Count - rowStart,
+            availableWidth,
+            itemSpacing,
+            lineSpacing,
+            totalHeight);
     }
 
-    private static double CalculateItemWidth(double availableWidth, int count, double itemSpacing)
+    private double AddMeasuredRow(
+        int startIndex,
+        int count,
+        double availableWidth,
+        double itemSpacing,
+        double lineSpacing,
+        double totalHeight)
     {
-        return Math.Max(0, (availableWidth - (count - 1) * itemSpacing) / count);
+        var widths = new double[count];
+        var gapWidth = itemSpacing * Math.Max(0, count - 1);
+        var contentWidth = Math.Max(0, availableWidth - gapWidth);
+        var requiredWidth = 0d;
+
+        for (var column = 0; column < count; column++)
+        {
+            requiredWidth += _requiredWidths[startIndex + column];
+        }
+
+        if (requiredWidth <= contentWidth)
+        {
+            var extraWidth = (contentWidth - requiredWidth) / count;
+            for (var column = 0; column < count; column++)
+            {
+                widths[column] = _requiredWidths[startIndex + column] + extraWidth;
+            }
+        }
+        else if (count == 1)
+        {
+            widths[0] = contentWidth;
+        }
+        else
+        {
+            var scale = requiredWidth > 0 ? contentWidth / requiredWidth : 0;
+            for (var column = 0; column < count; column++)
+            {
+                widths[column] = _requiredWidths[startIndex + column] * scale;
+            }
+        }
+
+        var rowHeight = 0d;
+        for (var column = 0; column < count; column++)
+        {
+            var child = Children[startIndex + column];
+            child.Measure(new Size(widths[column], double.PositiveInfinity));
+            rowHeight = Math.Max(rowHeight, child.DesiredSize.Height);
+        }
+
+        if (_rows.Count > 0)
+        {
+            totalHeight += lineSpacing;
+        }
+
+        _rows.Add(new RowLayout(startIndex, widths, rowHeight));
+        return totalHeight + rowHeight;
     }
+
+    private void EnsureRequiredWidthCapacity()
+    {
+        if (_requiredWidths.Length != Children.Count)
+        {
+            _requiredWidths = new double[Children.Count];
+        }
+    }
+
+    private sealed record RowLayout(int StartIndex, double[] Widths, double Height);
 }

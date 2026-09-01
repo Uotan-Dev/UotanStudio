@@ -3,125 +3,184 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
-             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="850"
              x:Class="UotanStudio.Views.Workspace.ProjectSettingView"
              x:DataType="viewmodels:ProjectSettingViewModel">
-  <StackPanel Orientation="Vertical" Spacing="0">
-        <TextBlock HorizontalAlignment="Left"
-                   VerticalAlignment="Top"
-                   FontWeight="DemiBold"
-                   Text="{DynamicResource Dock_ProjectSetting}" />
-        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+  <ScrollViewer VerticalScrollBarVisibility="Auto"
+                HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Orientation="Vertical" Spacing="5">
+        <controls:ResponsiveFormRow Margin="8,15,5,0"
+                                    MinLabelWidth="75" MaxLabelWidth="180"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_ImageType}" />
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <RadioButton Width="80" FontSize="15" Content="EXT4" IsChecked="{Binding TypeEXT4}"/>
-                <RadioButton Width="80" FontSize="15" Content="EROFS" IsChecked="{Binding TypeEROFS}"/>
+            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
+                        HorizontalAlignment="Left">
+                <RadioButton FontSize="13" IsChecked="{Binding TypeEXT4}">
+                    <TextBlock Text="EXT4" TextWrapping="NoWrap" />
+                </RadioButton>
+                <RadioButton FontSize="13" IsChecked="{Binding TypeEROFS}">
+                    <TextBlock Text="EROFS" TextWrapping="NoWrap" />
+                </RadioButton>
             </StackPanel>
-        </StackPanel>
-        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,15,5,0"
+                                    MinLabelWidth="75" MaxLabelWidth="180"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_ImageFormat}" />
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <RadioButton Width="80" FontSize="15" Content="RAW" IsChecked="{Binding FormatRAW}"/>
-                <RadioButton Width="90" FontSize="15" Content="SPARSE" IsChecked="{Binding FormatSPARSE}"/>
+            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
+                        HorizontalAlignment="Left">
+                <RadioButton FontSize="13" IsChecked="{Binding FormatRAW}">
+                    <TextBlock Text="RAW" TextWrapping="NoWrap" />
+                </RadioButton>
+                <RadioButton FontSize="13" IsChecked="{Binding FormatSPARSE}">
+                    <TextBlock Text="SPARSE" TextWrapping="NoWrap" />
+                </RadioButton>
             </StackPanel>
-        </StackPanel>
-        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,15,5,0"
+                                    MinLabelWidth="75" MaxLabelWidth="180"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_EXT4RW}" />
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <RadioButton Width="80" FontSize="15" Content="RO" IsChecked="{Binding EXT4RO}"/>
-                <RadioButton Width="80" FontSize="15" Content="RW" IsChecked="{Binding EXT4RW}"/>
+            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
+                        HorizontalAlignment="Left">
+                <RadioButton FontSize="13" IsChecked="{Binding EXT4RO}">
+                    <TextBlock Text="RO" TextWrapping="NoWrap" />
+                </RadioButton>
+                <RadioButton FontSize="13" IsChecked="{Binding EXT4RW}">
+                    <TextBlock Text="RW" TextWrapping="NoWrap" />
+                </RadioButton>
             </StackPanel>
-        </StackPanel>
-        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,15,5,0"
+                                    MinLabelWidth="75" MaxLabelWidth="180"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_SizeCalc}" />
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <RadioButton Width="80" FontSize="15" Content="{DynamicResource Dock_Auto}" IsChecked="{Binding SizeAuto}"/>
-                <RadioButton Width="80" FontSize="15" Content="{DynamicResource Dock_OriginalSize}" IsChecked="{Binding SizeOri}"/>
+            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
+                        HorizontalAlignment="Left">
+                <RadioButton FontSize="13" IsChecked="{Binding SizeAuto}">
+                    <TextBlock Text="{DynamicResource Dock_Auto}" TextWrapping="NoWrap" />
+                </RadioButton>
+                <RadioButton FontSize="13" IsChecked="{Binding SizeOri}">
+                    <TextBlock Text="{DynamicResource Dock_OriginalSize}" TextWrapping="NoWrap" />
+                </RadioButton>
             </StackPanel>
-        </StackPanel>
-        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,15,5,0"
+                                    MinLabelWidth="75" MaxLabelWidth="180"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_EXT4Compress}" />
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <RadioButton Width="80" FontSize="15" Content="{DynamicResource Dock_NoCompress}" IsChecked="{Binding EXT4NoCompress}"/>
-                <RadioButton Width="80" FontSize="15" Content="{DynamicResource Dock_Compress}" IsChecked="{Binding EXT4Compress}"/>
+            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
+                        HorizontalAlignment="Left">
+                <RadioButton FontSize="13" IsChecked="{Binding EXT4NoCompress}">
+                    <TextBlock Text="{DynamicResource Dock_NoCompress}" TextWrapping="NoWrap" />
+                </RadioButton>
+                <RadioButton FontSize="13" IsChecked="{Binding EXT4Compress}">
+                    <TextBlock Text="{DynamicResource Dock_Compress}" TextWrapping="NoWrap" />
+                </RadioButton>
             </StackPanel>
-        </StackPanel>
-        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,15,5,0"
+                                    MinLabelWidth="75" MaxLabelWidth="180"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_EROFSAlgorithm}" />
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <RadioButton Width="80" FontSize="15" Content="lz4" IsChecked="{Binding EROFSLZ4}"/>
-                <RadioButton Width="80" FontSize="15" Content="lz4hc" IsChecked="{Binding EROFSLZ4HC}"/>
+            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
+                        HorizontalAlignment="Left">
+                <RadioButton FontSize="13" IsChecked="{Binding EROFSLZ4}">
+                    <TextBlock Text="lz4" TextWrapping="NoWrap" />
+                </RadioButton>
+                <RadioButton FontSize="13" IsChecked="{Binding EROFSLZ4HC}">
+                    <TextBlock Text="lz4hc" TextWrapping="NoWrap" />
+                </RadioButton>
             </StackPanel>
-        </StackPanel>
-        <StackPanel Margin="8,10,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,10,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center"
-                       Width="120"
-                       FontSize="15"
+                       FontSize="13"
+                       TextWrapping="Wrap"
                        Text="{DynamicResource Dock_EROFSCompLevel}" />
-            <ComboBox Width="145" ItemsSource="0123456789" SelectedIndex="{Binding EROFSComGrade}"></ComboBox>
-        </StackPanel>
-        <StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <ComboBox MinWidth="155" MaxWidth="240"
+                      HorizontalAlignment="Stretch" Padding="5"
+                      ItemsSource="0123456789" SelectedIndex="{Binding EROFSComGrade}" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,0,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+                       FontSize="13"
+                       TextWrapping="Wrap"
                        Text="{DynamicResource Dock_SUPERSize}" />
-            <TextBox Width="180" Text="{Binding SUPERSize}" FontSize="15"/>
-        </StackPanel>
-        <StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBox MinWidth="155" MaxWidth="240"
+                     HorizontalAlignment="Stretch" Padding="5"
+                     Text="{Binding SUPERSize}" FontSize="13" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,0,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+                       FontSize="13"
+                       TextWrapping="Wrap"
                        Text="{DynamicResource Dock_SUPERName}" />
-            <TextBox Width="180" Text="{Binding SUPERName}" FontSize="15"/>
-        </StackPanel>
-        <StackPanel Margin="8,15,0,0" Orientation="Horizontal" VerticalAlignment="Center">
-            <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+            <TextBox MinWidth="155" MaxWidth="240"
+                     HorizontalAlignment="Stretch" Padding="5"
+                     Text="{Binding SUPERName}" FontSize="13" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,15,5,0"
+                                    MinLabelWidth="75" MaxLabelWidth="180"
+                                    ColumnSpacing="5">
+            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
                        Text="{DynamicResource Dock_SUPERFormat}" />
-            <StackPanel Orientation="Horizontal" Spacing="5">
-                <RadioButton Width="80" FontSize="15" Content="RAW" IsChecked="{Binding SUPERRAW}"/>
-                <RadioButton Width="90" FontSize="15" Content="SPARSE" IsChecked="{Binding SUPERSPARSE}"/>
+            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
+                        HorizontalAlignment="Left">
+                <RadioButton FontSize="13" IsChecked="{Binding SUPERRAW}">
+                    <TextBlock Text="RAW" TextWrapping="NoWrap" />
+                </RadioButton>
+                <RadioButton FontSize="13" IsChecked="{Binding SUPERSPARSE}">
+                    <TextBlock Text="SPARSE" TextWrapping="NoWrap" />
+                </RadioButton>
             </StackPanel>
-        </StackPanel>
-        <StackPanel Margin="8,10,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,10,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center"
-                       Width="120"
-                       FontSize="15"
+                       FontSize="13"
+                       TextWrapping="Wrap"
                        Text="{DynamicResource Dock_BRCompLevel}" />
-            <ComboBox Width="145" ItemsSource="0123456789" SelectedIndex="{Binding BRComGrade}"></ComboBox>
-        </StackPanel>
-        <StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <ComboBox MinWidth="155" MaxWidth="240"
+                      HorizontalAlignment="Stretch" Padding="5"
+                      ItemsSource="0123456789" SelectedIndex="{Binding BRComGrade}" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,0,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center"
-                       Width="85"
-                       FontSize="15"
+                       FontSize="13"
+                       TextWrapping="Wrap"
                        Text="{DynamicResource Dock_UTCTime}" />
-            <TextBox Width="180" Text="{Binding UTCTime}" FontSize="15"/>
-        </StackPanel>
-        <StackPanel Margin="8,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBox MinWidth="155" MaxWidth="240"
+                     HorizontalAlignment="Stretch" Padding="5"
+                     Text="{Binding UTCTime}" FontSize="13" />
+        </controls:ResponsiveFormRow>
+        <controls:ResponsiveFormRow Margin="8,0,5,0"
+                                    MinLabelWidth="90" MaxLabelWidth="90"
+                                    ColumnSpacing="5">
             <TextBlock VerticalAlignment="Center"
-                       Width="100"
-                       FontSize="15"
+                       FontSize="13"
+                       TextWrapping="Wrap"
                        Text="{DynamicResource Dock_DATSegments}" />
-            <TextBox Width="165" Text="{Binding DATSeg}" FontSize="15" PlaceholderText="0-999"/>
-        </StackPanel>
+            <TextBox MinWidth="155" MaxWidth="240"
+                     HorizontalAlignment="Stretch" Padding="5"
+                     Text="{Binding DATSeg}" FontSize="13" PlaceholderText="0-999" />
+        </controls:ResponsiveFormRow>
     </StackPanel>
+  </ScrollViewer>
 </UserControl>

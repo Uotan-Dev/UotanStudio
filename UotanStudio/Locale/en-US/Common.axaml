@@ -13,12 +13,15 @@
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
 
     <!-- ImageView -->
-    <x:String x:Key="ImageView_ExtractSelected">Extract Selected</x:String>
-    <x:String x:Key="ImageView_SynthesizeImg">Synthesize img</x:String>
-    <x:String x:Key="ImageView_SynthesizeBr">Synthesize br</x:String>
-    <x:String x:Key="ImageView_DeleteSelected">Delete Selected</x:String>
-    <x:String x:Key="ImageView_SynthesizeSuper">Synthesize Super</x:String>
-    <x:String x:Key="ImageView_SynthesizeDat">Synthesize dat</x:String>
+    <x:String x:Key="ImageView_CommonImages">Unpack</x:String>
+    <x:String x:Key="ImageView_AllImages">Pack</x:String>
+    <x:String x:Key="ImageView_Refresh">Refresh</x:String>
+    <x:String x:Key="ImageView_ExtractSelected">Extract</x:String>
+    <x:String x:Key="ImageView_SynthesizeImg">Build IMG</x:String>
+    <x:String x:Key="ImageView_SynthesizeBr">Build BR</x:String>
+    <x:String x:Key="ImageView_DeleteSelected">Delete</x:String>
+    <x:String x:Key="ImageView_SynthesizeSuper">Build Super</x:String>
+    <x:String x:Key="ImageView_SynthesizeDat">Build DAT</x:String>
     <x:String x:Key="ImageView_ImportHint">Import images into the project images/ folder</x:String>
     <x:String x:Key="ImageView_ExportHint">Export the selected image to an external path</x:String>
     <x:String x:Key="ImageView_ExtractHint">Unpack the selected image to intermediate/</x:String>

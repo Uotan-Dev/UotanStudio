@@ -73,6 +73,13 @@ internal partial class ImageViewModel : Tool
     private string _statusText = string.Empty;
 
     /// <summary>
+    /// <para>获取或设置当前批量刷入操作的完成百分比。</para>
+    /// Gets or sets the completion percentage of the current batch-flash operation.
+    /// </summary>
+    [ObservableProperty]
+    private double _progressPercent;
+
+    /// <summary>
     /// <para>创建镜像面板视图模型并注册单例实例。</para>
     /// Creates the image panel view model and registers the singleton instance.
     /// </summary>
@@ -804,6 +811,8 @@ internal partial class ImageViewModel : Tool
     [RelayCommand]
     private async Task FlashAllAsync()
     {
+        ProgressPercent = 0;
+
         if (!ProjectContextService.Instance.IsProjectOpen)
         {
             LogService.Instance.Write(LogLevel.Warn, "Images", "Flash all aborted: no project is open  全选刷入中止：尚未打开工程");
@@ -847,14 +856,20 @@ internal partial class ImageViewModel : Tool
             var progress = new Progress<FlashProgress>(fp =>
             {
                 var percent = Math.Clamp(fp.Percent, 0, 100);
+                ProgressPercent = percent;
                 StatusText = $"[{percent}%] {fp.Status}";
             });
             var result = await BatchFlashService.FlashAllAsync(device, entries, progress, CancellationToken.None).ConfigureAwait(true);
+            if (result.Success)
+            {
+                ProgressPercent = 100;
+            }
             StatusText = result.Summary;
             LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Warn, "Images", result.Summary);
         }
         catch (Exception ex)
         {
+            ProgressPercent = 0;
             StatusText = $"Flash all failed: {ex.Message}  全选刷入失败：{ex.Message}";
             LogService.Instance.Write(LogLevel.Error, "Images", $"Flash all failed: {ex.Message}  全选刷入失败：{ex.Message}");
         }
