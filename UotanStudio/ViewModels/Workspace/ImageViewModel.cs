@@ -447,10 +447,9 @@ internal partial class ImageViewModel : Tool
                 // Sparse images cascade into the internal filesystem contents (falls back to .raw
                 // inside the service when the content is not a filesystem).
                 "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(source, outputDir)),
-                // raw 物理镜像：命中文件系统魔数则用对应解析器级联解包，否则保留原字节流复制行为。
-                // Raw physical images: cascade with the matching parser when a filesystem magic hits,
-                // otherwise keep the original raw byte-stream copy behavior.
-                "raw" => await ExtractRawAsync(source, outputDir, name),
+                // 文件系统镜像：用对应解析器级联解出内部文件系统内容。
+                // Filesystem images: cascade into the internal filesystem contents with the matching parser.
+                "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(source, outputDir, name),
                 _ => FirmwareOpResult.Fail($"Unsupported image format: {image.Format}  不支持的镜像格式：{image.Format}")
             };
 
@@ -1083,10 +1082,10 @@ internal partial class ImageViewModel : Tool
 
         try
         {
-            var header = new byte[8];
-            using var fs = File.OpenRead(filePath);
-            var read = fs.Read(header, 0, header.Length);
-            if (read >= 4)
+            // 读取 1082 字节头部：ext4 魔数 0xEF53 位于 1080、erofs/f2fs 魔数位于 1024。
+            // Read a 1082-byte header: ext4 magic 0xEF53 at 1080, erofs/f2fs magic at 1024.
+            var header = FormatDetector.ReadHeader(filePath, 1082);
+            if (header.Length >= 4)
             {
                 // Android sparse 魔数 0xED26FF3A（小端）。
                 // Android sparse magic 0xED26FF3A (little-endian).
@@ -1101,13 +1100,37 @@ internal partial class ImageViewModel : Tool
                 }
             }
 
-            if (read >= 8)
+            if (header.Length >= 8)
             {
                 var magic = Encoding.ASCII.GetString(header, 0, 8);
                 if (magic.StartsWith("ANDROID!", StringComparison.Ordinal) || magic.StartsWith("VNDRBOOT", StringComparison.Ordinal))
                 {
                     return "boot";
                 }
+            }
+
+            // ext4 文件系统镜像：魔数 0xEF53 位于偏移 1080。
+            // ext4 filesystem image: magic 0xEF53 at offset 1080.
+            if (header.Length >= 1082
+                && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+            {
+                return "ext4";
+            }
+
+            // erofs 文件系统镜像：魔数 0xE0F5E1E2 位于偏移 1024。
+            // erofs filesystem image: magic 0xE0F5E1E2 at offset 1024.
+            if (header.Length >= 1028
+                && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
+            {
+                return "erofs";
+            }
+
+            // f2fs 文件系统镜像：魔数 0xF2F52010 位于偏移 1024。
+            // f2fs filesystem image: magic 0xF2F52010 at offset 1024.
+            if (header.Length >= 1028
+                && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
+            {
+                return "f2fs";
             }
         }
         catch

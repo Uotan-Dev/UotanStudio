@@ -574,6 +574,9 @@ public partial class FirmwareInfoViewModel : Document
             // Android sparse images (e.g. product.img): cascade into the internal filesystem contents
             // (falls back to .raw inside the service when the content is not a filesystem).
             "Android Sparse Image (simg)" => Task.Run(() => service.UnpackSparseImageAsync(path, outputDirectory)),
+            // 文件系统镜像（ext4/erofs/f2fs）：通过对应流式解析器级联解包到目录。
+            // Filesystem images (ext4/erofs/f2fs): cascade-unpack into the directory via the matching streaming parser.
+            "EXT4" or "EROFS" or "F2FS" => Task.Run(() => service.UnpackFileSystemImageAsync(path, outputDirectory)),
             _ => Task.FromResult(FirmwareOpResult.Fail(UnpackUnsupportedLabel))
         };
     }

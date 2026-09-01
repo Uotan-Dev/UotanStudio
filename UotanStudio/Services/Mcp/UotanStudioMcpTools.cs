@@ -401,6 +401,9 @@ public sealed partial class UotanStudioMcpTools
             "Android OTA Payload (payload.bin)" => service.ExtractPayloadAsync(filePath, outputDirectory, FirstNonEmpty(extractFiles)),
             "Oppo Firmware (OFP/OPS/OZIP)" => service.ExtractOppoAsync(filePath, outputDirectory, overwrite: true, ct),
             "Android Logical Partition (super)" => service.UnpackSuperAsync(filePath, outputDirectory, ct),
+            // 文件系统镜像（ext4/erofs/f2fs）：通过对应流式解析器级联解包到目录。
+            // Filesystem images (ext4/erofs/f2fs): cascade-unpack into the directory via the matching streaming parser.
+            "EXT4" or "EROFS" or "F2FS" => service.UnpackFileSystemImageAsync(filePath, outputDirectory, ct),
             _ => Task.FromResult(FirmwareOpResult.Fail($"Unpack is not supported for format: {handler.FormatName}  不支持解包该格式：{handler.FormatName}")),
         };
     }

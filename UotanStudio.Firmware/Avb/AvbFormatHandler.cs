@@ -51,6 +51,15 @@ public sealed class AvbFormatHandler : IFormatHandler
                 fs.Position = fs.Length - AvbFooter.Size;
                 if (fs.Read(tail) == AvbFooter.Size && AvbFooter.TryLoad(tail) is not null)
                 {
+                    // AVB footer 是附加签名层：带 AVB 签名的文件系统/boot 镜像（Android 常见）
+                    // 应先按内容格式识别，避免 ext4/erofs/f2fs/boot 镜像被误判为 AVB。
+                    // An AVB footer is an appended signature layer: images signed with AVB (common
+                    // on Android) should be recognized by their content format first, so that
+                    // ext4/erofs/f2fs/boot images are not misdetected as AVB.
+                    if (HasKnownContentMagic(fs))
+                    {
+                        return false;
+                    }
                     return true;
                 }
             }
@@ -61,6 +70,66 @@ public sealed class AvbFormatHandler : IFormatHandler
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// 检查镜像头部是否命中已知内容格式魔数（ext4 0xEF53@1080 / erofs 0xE0F5E1E2@1024 /
+    /// f2fs 0xF2F52010@1024 / boot "ANDROID!"、"VNDRBOOT"@0）。流式读取，不驻留整文件。
+    /// <para>Checks whether the image head matches known content-format magic (ext4 0xEF53@1080 /
+    /// erofs 0xE0F5E1E2@1024 / f2fs 0xF2F52010@1024 / boot "ANDROID!", "VNDRBOOT"@0). Streams the
+    /// head without loading the whole file.</para>
+    /// </summary>
+    private static bool HasKnownContentMagic(FileStream fs)
+    {
+        Span<byte> head = stackalloc byte[1082];
+        fs.Position = 0;
+        var read = 0;
+        while (read < head.Length)
+        {
+            var n = fs.Read(head[read..]);
+            if (n <= 0)
+            {
+                break;
+            }
+            read += n;
+        }
+        if (read < 4)
+        {
+            return false;
+        }
+
+        // boot 镜像头部魔数 "ANDROID!" / "VNDRBOOT"。
+        // Boot image head magic "ANDROID!" / "VNDRBOOT".
+        if (read >= 8)
+        {
+            var bootMagic = System.Text.Encoding.ASCII.GetString(head[..8]);
+            if (bootMagic.StartsWith("ANDROID!", StringComparison.Ordinal) ||
+                bootMagic.StartsWith("VNDRBOOT", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        // erofs / f2fs 魔数位于偏移 1024。
+        // erofs / f2fs magic at offset 1024.
+        if (read >= 1028)
+        {
+            var fsMagic = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(head[1024..1028]);
+            if (fsMagic == 0xE0F5E1E2u || fsMagic == 0xF2F52010u)
+            {
+                return true;
+            }
+        }
+
+        // ext4 魔数 0xEF53 位于偏移 1080。
+        // ext4 magic 0xEF53 at offset 1080.
+        if (read >= 1082
+            && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(head[1080..1082]) == 0xEF53)
+        {
+            return true;
+        }
+
+        return false;
     }
 
     /// <inheritdoc />

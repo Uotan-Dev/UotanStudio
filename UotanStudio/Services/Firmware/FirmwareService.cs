@@ -6,7 +6,11 @@ using UotanStudio.Firmware.BootImage;
 using UotanStudio.Firmware.Cpio;
 using UotanStudio.Firmware.Cpio.Extraction;
 using UotanStudio.Firmware.Cpio.Model;
+using UotanStudio.Firmware.Common;
 using UotanStudio.Firmware.Dat;
+using UotanStudio.Firmware.Erofs;
+using UotanStudio.Firmware.Ext4;
+using UotanStudio.Firmware.F2fs;
 using UotanStudio.Firmware.Lp;
 using UotanStudio.Firmware.Oppo;
 using UotanStudio.Firmware.Oppo.Models;
@@ -1005,6 +1009,85 @@ public sealed class FirmwareService
                 Summary = result.Summary,
                 Entries = result.Entries,
             };
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Unpacks a filesystem image (ext4/erofs/f2fs) to a directory via the matching streaming parser.
+    /// The format is auto-detected from the image magic bytes; an unsupported or unrecognized image
+    /// returns a failed result without writing output.
+    /// <para>将文件系统镜像（ext4/erofs/f2fs）通过对应的流式解析器解包到目录。格式按镜像魔数自动
+    /// 识别；不支持或未识别的镜像返回失败结果且不写出文件。</para>
+    /// </summary>
+    /// <param name="imagePath">The filesystem image file path. <para>文件系统镜像文件路径。</para></param>
+    /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run<FirmwareOpResult>(() =>
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+                {
+                    return FirmwareOpResult.Fail($"Input image not found: {imagePath ?? "<empty>"}  找不到输入镜像。");
+                }
+
+                Directory.CreateDirectory(outputDirectory);
+                var header = FormatDetector.ReadHeader(imagePath, 1082);
+
+                // ext4：魔数 0xEF53 位于偏移 1080。
+                // ext4: magic 0xEF53 at offset 1080.
+                if (header.Length >= 1082
+                    && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
+                {
+                    using var parser = new Ext4Parser(imagePath);
+                    parser.ExtractToDirectory(outputDirectory);
+                    var entries = parser.ListFiles();
+                    return new FirmwareOpResult
+                    {
+                        Success = true,
+                        Summary = $"Extracted {entries.Count} entries from '{imagePath}' to '{outputDirectory}'  已从 '{imagePath}' 解出 {entries.Count} 个条目到 '{outputDirectory}'",
+                    };
+                }
+
+                // erofs：魔数 0xE0F5E1E2 位于偏移 1024。
+                // erofs: magic 0xE0F5E1E2 at offset 1024.
+                if (header.Length >= 1028
+                    && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
+                {
+                    using var parser = new ErofsParser(imagePath);
+                    parser.ExtractToDirectory(outputDirectory);
+                    var files = parser.EnumerateFiles();
+                    return new FirmwareOpResult
+                    {
+                        Success = true,
+                        Summary = $"Extracted {files.Count} files from '{imagePath}' to '{outputDirectory}'  已从 '{imagePath}' 解出 {files.Count} 个文件到 '{outputDirectory}'",
+                    };
+                }
+
+                // f2fs：魔数 0xF2F52010 位于偏移 1024。
+                // f2fs: magic 0xF2F52010 at offset 1024.
+                if (header.Length >= 1028
+                    && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
+                {
+                    using var parser = new F2fsParser(imagePath);
+                    parser.ExtractToDirectory(outputDirectory);
+                    var entries = parser.ListFiles();
+                    return new FirmwareOpResult
+                    {
+                        Success = true,
+                        Summary = $"Extracted {entries.Count} entries from '{imagePath}' to '{outputDirectory}'  已从 '{imagePath}' 解出 {entries.Count} 个条目到 '{outputDirectory}'",
+                    };
+                }
+
+                return FirmwareOpResult.Fail($"Unrecognized filesystem image (no ext4/erofs/f2fs magic): {imagePath}  未识别的文件系统镜像（无 ext4/erofs/f2fs 魔数）：{imagePath}");
+            }
+            catch (Exception ex)
+            {
+                return FirmwareOpResult.Fail(ex.Message);
+            }
         }, cancellationToken);
     }
 
