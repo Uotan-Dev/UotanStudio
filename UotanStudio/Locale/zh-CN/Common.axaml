@@ -13,6 +13,9 @@
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
 
     <!-- ImageView -->
+    <x:String x:Key="ImageView_CommonImages">解包</x:String>
+    <x:String x:Key="ImageView_AllImages">打包</x:String>
+    <x:String x:Key="ImageView_Refresh">刷新</x:String>
     <x:String x:Key="ImageView_ExtractSelected">分解选中文件</x:String>
     <x:String x:Key="ImageView_SynthesizeImg">合成img</x:String>
     <x:String x:Key="ImageView_SynthesizeBr">合成br</x:String>
