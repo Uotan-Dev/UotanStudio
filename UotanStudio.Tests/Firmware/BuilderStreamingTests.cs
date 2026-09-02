@@ -295,14 +295,15 @@ public class BuilderStreamingTests
         Assert.Equal(parser.BlockCount * parser.BlockSize, parser.ImageSize);
         Assert.Equal(parser.ImageSize, new FileInfo(outputPath).Length);
 
-        // Superblock key bytes: magic, meta block address = 1, total blocks.
+        // Superblock key bytes: magic, meta block address = 0 (inode table starts right after
+        // the 128-byte superblock slot, matching mkfs.erofs), total blocks.
         using (var image = File.OpenRead(outputPath))
         {
             var superblock = new byte[112];
             image.Position = 1024;
             image.ReadExactly(superblock);
             Assert.Equal(0xE0F5E1E2u, BinaryPrimitives.ReadUInt32LittleEndian(superblock));
-            Assert.Equal(1u, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(40, 4)));
+            Assert.Equal(0u, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(40, 4)));
             Assert.Equal((uint)parser.BlockCount, BinaryPrimitives.ReadUInt32LittleEndian(superblock.AsSpan(36, 4)));
         }
 

@@ -128,18 +128,35 @@ public class ErofsParserStreamingTests
             Nlink = 1,
         }.WriteTo(image.AsSpan(blockSize + ErofsInode.CompactSize));
 
-        // Compressed pcluster index table right after the 64-byte extended inode (offset 32 + 64).
-        new PclusterIndex(2, (ushort)compressedLength, 0)
-            .WriteTo(image.AsSpan(blockSize + ErofsInode.CompactSize + ErofsInode.ExtendedSize));
+        // Extended inode occupies 64 bytes, so the map header starts at the next 8-byte boundary
+        // (iloc + 64). Legacy full index: map header is all zeroes (advise 0 = legacy full index,
+        // LZ4, clusterbits 0), followed by 8 pad bytes, then one HEAD1 entry pointing at block 2.
+        // extended inode 占 64 字节，map header 从 iloc + 64 起（8 字节对齐）。legacy full 索引：
+        // map header 全零（advise 0 = legacy full、LZ4、clusterbits 0），随后 8 字节 pad，
+        // 然后一条指向块 2 的 HEAD1 条目。
+        var inodeLoc = blockSize + ErofsInode.CompactSize;
+        var headerOffset = inodeLoc + ErofsInode.ExtendedSize; // 4096+32+64，已 8 对齐
+        var entryOffset = headerOffset + 8 + 8; // map header(8B) + pad(8B)
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(entryOffset), 1); // HEAD1
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(entryOffset + 2), 0); // clusterofs
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(entryOffset + 4), 2); // blkaddr = 块 2
 
-        // Compressed data at block 2.
-        compressed.AsSpan(0, compressedLength).CopyTo(image.AsSpan(2 * blockSize));
+        // Compressed data right-aligned in block 2 (leading zero padding, as mkfs writes with the
+        // 0-padding feature; the reader skips the leading zeros via z_erofs_fixup_insize).
+        // 压缩数据右对齐写入块 2（前导 0 填充，同 mkfs 的 0-padding 写端；读端 fixup 跳过前导 0）。
+        var dataOffset = 2 * blockSize;
+        compressed.AsSpan(0, compressedLength).CopyTo(image.AsSpan(dataOffset + blockSize - compressedLength));
 
-        // Directory block at block 3 with a single "x" entry (nid 32).
-        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(3 * blockSize), 32);
-        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(3 * blockSize + 8), (ushort)(blockSize - 1));
-        image[3 * blockSize + 10] = ErofsInode.FileTypeRegularFile;
-        image[4 * blockSize - 1] = (byte)'x';
+        // Directory block at block 3 with a single "x" entry (nid 1): the dirent array is
+        // followed by the name area (de[0].nameoff anchors the name area). The file inode above
+        // sits at metadata offset 32 (block 1 + 32), i.e. nid 1.
+        // 块 3 的目录块含单条 "x" 条目（nid 1）：dirent 数组在前、名字区紧随；文件 inode
+        // 位于元数据偏移 32（块 1 + 32），即 nid 1。
+        var dirOffset = 3 * blockSize;
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(dirOffset), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(dirOffset + 8), ErofsDirectoryEntry.DirentSize);
+        image[dirOffset + 10] = ErofsInode.FileTypeRegularFile;
+        image[dirOffset + ErofsDirectoryEntry.DirentSize] = (byte)'x';
 
         using var parser = new ErofsParser(image);
         Assert.Equal(payload, parser.ReadFileBytes("x"));

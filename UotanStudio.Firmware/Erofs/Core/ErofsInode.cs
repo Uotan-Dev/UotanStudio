@@ -106,6 +106,18 @@ internal sealed class ErofsInode
     /// <summary>符号链接类型位。Symbolic-link type bits.</summary>
     public const ushort ModeSymlink = 0xA000;
 
+    /// <summary>字符设备类型位（S_IFCHR）。Character-device type bits (S_IFCHR).</summary>
+    public const ushort ModeCharacterDevice = 0x2000;
+
+    /// <summary>块设备类型位（S_IFBLK）。Block-device type bits (S_IFBLK).</summary>
+    public const ushort ModeBlockDevice = 0x6000;
+
+    /// <summary>命名管道类型位（S_IFIFO）。Named-pipe type bits (S_IFIFO).</summary>
+    public const ushort ModeFifo = 0x1000;
+
+    /// <summary>套接字类型位（S_IFSOCK）。Socket type bits (S_IFSOCK).</summary>
+    public const ushort ModeSocket = 0xC000;
+
     /// <summary>dirent 文件类型：未知。Dirent file type: unknown.</summary>
     public const byte FileTypeUnknown = 0;
 
@@ -115,7 +127,19 @@ internal sealed class ErofsInode
     /// <summary>dirent 文件类型：目录。Dirent file type: directory.</summary>
     public const byte FileTypeDirectory = 2;
 
-    /// <summary>dirent 文件类型：符号链接。Dirent file type: symbolic link.</summary>
+    /// <summary>dirent 文件类型：字符设备（EROFS_FT_CHRDEV = 3）。Dirent file type: char device.</summary>
+    public const byte FileTypeCharacterDevice = 3;
+
+    /// <summary>dirent 文件类型：块设备（EROFS_FT_BLKDEV = 4）。Dirent file type: block device.</summary>
+    public const byte FileTypeBlockDevice = 4;
+
+    /// <summary>dirent 文件类型：命名管道（EROFS_FT_FIFO = 5）。Dirent file type: named pipe.</summary>
+    public const byte FileTypeFifo = 5;
+
+    /// <summary>dirent 文件类型：套接字（EROFS_FT_SOCK = 6）。Dirent file type: socket.</summary>
+    public const byte FileTypeSocket = 6;
+
+    /// <summary>dirent 文件类型：符号链接（EROFS_FT_SYMLINK = 7）。Dirent file type: symbolic link.</summary>
     public const byte FileTypeSymlink = 7;
 
     /// <summary>i_format / i_advise。Format / advise field.</summary>
@@ -203,6 +227,39 @@ internal sealed class ErofsInode
 
     /// <summary>是否为符号链接。Whether this is a symbolic link.</summary>
     public bool IsSymlink => (Mode & ModeTypeMask) == ModeSymlink;
+
+    /// <summary>是否为字符设备。Whether this is a character device.</summary>
+    public bool IsCharacterDevice => (Mode & ModeTypeMask) == ModeCharacterDevice;
+
+    /// <summary>是否为块设备。Whether this is a block device.</summary>
+    public bool IsBlockDevice => (Mode & ModeTypeMask) == ModeBlockDevice;
+
+    /// <summary>是否为命名管道。Whether this is a named pipe (FIFO).</summary>
+    public bool IsFifo => (Mode & ModeTypeMask) == ModeFifo;
+
+    /// <summary>是否为套接字。Whether this is a socket.</summary>
+    public bool IsSocket => (Mode & ModeTypeMask) == ModeSocket;
+
+    /// <summary>
+    /// 由 i_mode 文件类型位推导 dirent 文件类型（对应内核 <c>erofs_mode_to_ftype</c>）。
+    /// 未知/非法类型返回 <see cref="FileTypeUnknown"/>。
+    /// <para>Derives the dirent file type from the i_mode type bits (kernel
+    /// <c>erofs_mode_to_ftype</c>). Returns <see cref="FileTypeUnknown"/> for unknown types.</para>
+    /// </summary>
+    public byte FileType
+    {
+        get
+        {
+            if (IsRegularFile) return FileTypeRegularFile;
+            if (IsDirectory) return FileTypeDirectory;
+            if (IsSymlink) return FileTypeSymlink;
+            if (IsCharacterDevice) return FileTypeCharacterDevice;
+            if (IsBlockDevice) return FileTypeBlockDevice;
+            if (IsFifo) return FileTypeFifo;
+            if (IsSocket) return FileTypeSocket;
+            return FileTypeUnknown;
+        }
+    }
 
     /// <summary>是否为压缩布局（完整索引或紧凑索引）。
     /// 内核 <c>erofs_inode_is_data_compressed</c> 同时匹配 <c>EROFS_INODE_COMPRESSED_FULL</c>

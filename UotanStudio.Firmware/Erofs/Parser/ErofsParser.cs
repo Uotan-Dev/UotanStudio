@@ -30,6 +30,22 @@ public sealed record ErofsFileEntry(
     /// <summary>是否目录。Whether this entry is a directory.</summary>
     public bool IsDirectory => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeDirectory;
 
+    /// <summary>是否字符设备。Whether this entry is a character device.</summary>
+    public bool IsCharacterDevice => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeCharacterDevice;
+
+    /// <summary>是否块设备。Whether this entry is a block device.</summary>
+    public bool IsBlockDevice => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeBlockDevice;
+
+    /// <summary>是否命名管道。Whether this entry is a named pipe (FIFO).</summary>
+    public bool IsFifo => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeFifo;
+
+    /// <summary>是否套接字。Whether this entry is a socket.</summary>
+    public bool IsSocket => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeSocket;
+
+    /// <summary>是否特殊文件（字符/块设备、FIFO、套接字；无数据内容）。
+    /// Whether this entry is a special file (char/block device, FIFO, socket; no data content).</summary>
+    public bool IsSpecialFile => IsCharacterDevice || IsBlockDevice || IsFifo || IsSocket;
+
     /// <summary>符号链接目标（仅 IsSymlink 时有值）。Symbolic link target (only set for symlinks).</summary>
     public string? SymlinkTarget { get; init; }
 
@@ -42,14 +58,21 @@ public sealed record ErofsFileEntry(
 /// 按需读取超级块 / inode / 目录块 / 压缩索引 / pcluster，不再整镜像载入内存。
 /// 数据布局与解压语义严格对齐 Linux 内核主线 fs/erofs/{zmap,dir,data}.c：
 /// 支持 flat / inline（tailpacking）/ compressed-full / compressed-compact / chunk-based 布局，
-/// LZ4 / LZMA / DEFLATE / ZSTD 四种算法，以及 dense 目录与共享 xattr。
+/// LZ4 / LZMA / DEFLATE / ZSTD 四种算法，以及 dense 目录、共享 xattr 与 fragment 引用。
+/// 未知 incompat 特性位在构造时显式拒绝；INTERLACED_PCLUSTER（仅 PLAIN 簇，读端旋转还原）
+/// 已支持；METABOX 特性（incompat 0x100）可解析超级块与经典 nid 路径，但 metabox 数据流内
+/// 的 inode 定位未实现（遇带 bit63 的 nid 显式报错，无真实样本可交叉验证）。
 /// <para>A streaming erofs image parser: holds a seekable source (a FileStream, an externally supplied
 /// Stream, or a lightweight wrapper over in-memory bytes) and reads the superblock, inodes, directory
 /// blocks, compressed indexes and pclusters on demand instead of loading the whole image into memory.
 /// Data mapping and decompression semantics strictly follow the mainline Linux kernel
 /// fs/erofs/{zmap,dir,data}.c: flat, inline (tailpacking), compressed-full, compressed-compact and
-/// chunk-based layouts, LZ4 / LZMA / DEFLATE / ZSTD algorithms, plus dense directories and shared
-/// xattrs.</para>
+/// chunk-based layouts, LZ4 / LZMA / DEFLATE / ZSTD algorithms, plus dense directories, shared
+/// xattrs and fragment references. Unknown incompat feature bits are rejected explicitly at
+/// construction; INTERLACED_PCLUSTER (PLAIN clusters only, rotated back on read) is supported; the
+/// METABOX feature (incompat 0x100) parses the superblock and classic-nid paths, but in-stream
+/// inode lookup inside the metabox data stream is not implemented (a bit-63 nid fails loudly; no
+/// real sample is available for cross-validation).</para>
 /// </summary>
 public sealed class ErofsParser : IDisposable
 {
@@ -60,6 +83,12 @@ public sealed class ErofsParser : IDisposable
     /// shared xattr area).</summary>
     private const long MaxMetadataComponentSize = 512L * 1024 * 1024;
 
+    /// <summary>dirent nid 的 METABOX 标记位（<c>EROFS_DIRENT_NID_METABOX_BIT = 63</c>）：
+    /// 置位表示低 63 位是 METABOX inode 数据流内的槽位索引，而非经典 nid。
+    /// METABOX marker bit of a dirent nid (<c>EROFS_DIRENT_NID_METABOX_BIT = 63</c>): when set, the
+    /// low 63 bits are a slot index inside the METABOX inode data stream rather than a classic nid.</summary>
+    private const ulong NidMetaboxFlag = 1UL << 63;
+
     private readonly Stream _stream;
     private readonly bool _ownsStream;
     private readonly long _baseOffset;
@@ -67,6 +96,7 @@ public sealed class ErofsParser : IDisposable
     private readonly object _streamLock = new();
     private readonly ErofsSuperblock _superblock;
     private readonly int _blockSize;
+    private readonly bool _hasMetabox;
     private List<ErofsFileEntry>? _fileTable;
     private ErofsInode? _packedInode;
 
@@ -167,6 +197,24 @@ public sealed class ErofsParser : IDisposable
                     $"Unsupported EROFS block size shift {_superblock.BlockSizeBits} (expected 9..16).");
             }
 
+            // 未知的不兼容特性位必须显式拒绝：内核同样拒绝无法理解的 incompat 位，静默忽略
+            // 会把镜像按错误布局解析（如未来新增位改变 inode 表或数据布局）。已知位并集
+            // 见 ErofsSuperblock.AllIncompat（含 LZ4_0PADDING/BIG_PCLUSTER/CHUNKED_FILE/
+            // DEVICE_TABLE/ZTAILPACKING/FRAGMENTS/XATTR_PREFIXES/48BIT/METABOX）。
+            // Unknown incompatible feature bits must be rejected explicitly: the kernel rejects
+            // incompat bits it cannot understand as well, and silently ignoring them would parse
+            // the image with the wrong layout (a future bit may change the inode table or data
+            // layout). The known-bit union is ErofsSuperblock.AllIncompat (LZ4_0PADDING/
+            // BIG_PCLUSTER/CHUNKED_FILE/DEVICE_TABLE/ZTAILPACKING/FRAGMENTS/XATTR_PREFIXES/
+            // 48BIT/METABOX).
+            var unknownIncompat = _superblock.FeatureIncompat & ~ErofsSuperblock.AllIncompat;
+            if (unknownIncompat != 0)
+            {
+                throw new FormatException(
+                    $"EROFS image uses unknown incompatible feature bits 0x{unknownIncompat:X8}.");
+            }
+
+            _hasMetabox = _superblock.HasMetabox;
             _blockSize = _superblock.BlockSize;
         }
         catch
@@ -260,6 +308,13 @@ public sealed class ErofsParser : IDisposable
         var inode = ReadInode(nid);
         WriteFileData(nid, inode, outputStream);
     }
+
+    /// <summary>
+    /// 判定 inode 是否为无数据内容的特殊文件（字符/块设备、FIFO、套接字）。
+    /// <para>Whether the inode is a special file with no data content (char/block device, FIFO, socket).</para>
+    /// </summary>
+    private static bool IsSpecialFile(ErofsInode inode)
+        => inode.IsCharacterDevice || inode.IsBlockDevice || inode.IsFifo || inode.IsSocket;
 
     /// <summary>
     /// 将镜像中全部文件解包到输出目录。每个文件先写入同目录临时文件，完整后再原子替换为目标文件；
@@ -475,7 +530,10 @@ public sealed class ErofsParser : IDisposable
             }
 
             if (entry.FileType == ErofsInode.FileTypeRegularFile ||
-                entry.FileType == ErofsInode.FileTypeSymlink)
+                entry.FileType == ErofsInode.FileTypeSymlink ||
+                entry.FileType is ErofsInode.FileTypeCharacterDevice or
+                    ErofsInode.FileTypeBlockDevice or ErofsInode.FileTypeFifo or
+                    ErofsInode.FileTypeSocket)
             {
                 var fileInode = ReadInode(entry.Nid);
                 var path = JoinPath(prefix, entry.Name);
@@ -500,6 +558,15 @@ public sealed class ErofsParser : IDisposable
                     {
                         fileEntry = fileEntry with { SymlinkTarget = null };
                     }
+                }
+                else if (fileInode.IsCharacterDevice || fileInode.IsBlockDevice ||
+                         fileInode.IsFifo || fileInode.IsSocket)
+                {
+                    // 特殊文件（设备/管道/套接字）无数据内容；不读取（其 i_u 存设备号）。
+                    // Special files (devices/pipes/sockets) carry no data; skip reading
+                    // (their i_u field holds the device number).
+                    result.Add(fileEntry);
+                    continue;
                 }
 
                 var xattrs = ReadXattrs(entry.Nid, fileInode);
@@ -623,6 +690,23 @@ public sealed class ErofsParser : IDisposable
 
     private ErofsInode ReadInode(ulong nid)
     {
+        // METABOX 特性（incompat 0x100）下，dirent 的 nid 可能带 bit63 标记：低 63 位不是经典
+        // inode 槽号，而是指向 metabox inode 数据流内的紧凑 inode 记录偏移。该流内定位当前
+        // 未实现（erofs-utils 1.8.6 的 mkfs 可生成 metabox 镜像，但本解析器未实现流内寻址，
+        // 无真实样本可交叉验证）；显式失败而非按经典 iloc 算出越界偏移静默误读。superblock
+        // 解析与经典 nid 路径不受影响。
+        // With the METABOX feature (incompat 0x100) a dirent nid may carry bit 63: the low 63 bits
+        // are then not a classic inode slot but an offset of a compact inode record inside the
+        // metabox inode data stream. In-stream addressing is not implemented here (erofs-utils
+        // 1.8.6 mkfs can produce metabox images, but this parser has no in-stream lookup and no
+        // real sample for cross-validation); fail loudly instead of silently misreading through a
+        // bogus classic iloc. Superblock parsing and classic-nid paths are unaffected.
+        if (_hasMetabox && (nid & NidMetaboxFlag) != 0)
+        {
+            throw new InvalidDataException(
+                $"Inode nid 0x{nid:X16} references the METABOX data stream, which is not supported by this parser.");
+        }
+
         var offset = _superblock.GetInodeOffset(nid);
         if (offset < 0 || offset > _imageSize - 2)
         {
@@ -722,6 +806,17 @@ public sealed class ErofsParser : IDisposable
 
     private void WriteFileData(ulong nid, ErofsInode inode, Stream output)
     {
+        if (IsSpecialFile(inode))
+        {
+            // 特殊文件（字符/块设备、FIFO、套接字）无数据内容：i_u 存设备号而非块地址，
+            // 按数据布局读取会得到错误字节。显式失败而非静默产出伪数据。
+            // Special files (char/block devices, FIFOs, sockets) carry no data: i_u holds the
+            // device number instead of a block address, so reading by data layout would yield
+            // garbage. Fail loudly instead of silently producing bogus bytes.
+            throw new InvalidDataException(
+                $"Inode nid {nid} is a special file (mode 0x{inode.Mode:X4}) with no data content.");
+        }
+
         switch (inode.DataLayout)
         {
             case ErofsInode.DataLayoutInline:
@@ -760,14 +855,13 @@ public sealed class ErofsParser : IDisposable
         // FLAT_INLINE = tail-packing：文件主体为 flat 数据（自 i_u 块起连续），仅最后一个
         // 不足一块的尾部内联在 inode + xattr 之后（内核 data.c __erofs_map_blocks：
         // pos = (ceil(size/blksz) - 1) * blksz；m_la < pos 时 m_pa = i_u*blksz + m_la，
-        // 否则从 iloc + isize + xattr_isize 读取内联尾部）。
+        // 否则从 iloc + isize + xattr_isize 读取内联尾部）。mkfs 的 flat 块数 =
+        // floor(size/blksz)（size 恰为整块时无内联尾）。
         // FLAT_INLINE means tail-packing: the bulk of the file is flat data (contiguous from the
         // i_u block) and only the trailing part (less than one block) is inlined right after the
-        // inode + xattrs (kernel data.c __erofs_map_blocks: pos = (ceil(size/blksz) - 1) * blksz;
-        // m_la < pos maps to m_pa = i_u*blksz + m_la, otherwise the inline tail is read from
-        // iloc + isize + xattr_isize).
-        var blockCount = CeilDiv(length, _blockSize);
-        var flatLength = checked((long)(blockCount - 1) * _blockSize);
+        // inode + xattrs. mkfs stores floor(size/blksz) flat blocks (no inline tail when size is an
+        // exact multiple of the block size).
+        var flatLength = (long)(inode.Size / (ulong)_blockSize * (ulong)_blockSize);
         if (flatLength > 0)
         {
             var flatStart = checked((long)inode.RawBlockAddress * _blockSize);
@@ -783,8 +877,6 @@ public sealed class ErofsParser : IDisposable
             CopyFromSource(output, tailStart, tailLength);
         }
     }
-
-    private static long CeilDiv(long value, int divisor) => (value + divisor - 1) / divisor;
 
     private void WriteFlatData(ErofsInode inode, Stream output)
     {
@@ -946,6 +1038,16 @@ public sealed class ErofsParser : IDisposable
         var bigPcluster2 = (advise & ZErofsMapHeader.AdviseBigPcluster2) != 0;
         var tailPacking = (advise & ZErofsMapHeader.AdviseInlinePcluster) != 0;
         var fragmentPcluster = (advise & ZErofsMapHeader.AdviseFragmentPcluster) != 0;
+        // 交错 pcluster（Z_EROFS_ADVISE_INTERLACED_PCLUSTER）：仅对 PLAIN 字面簇生效——mkfs
+        // 把相邻 pcluster 的数据交错填入同一物理块以消除块间空洞，读端需整块读入后按块内
+        // 偏移旋转还原（内核 z_erofs_map_blocks_fo：PLAIN 簇 + 该 advise → m_algorithmformat =
+        // INTERLACED；z_erofs_decompress 的 INTERLACED 分支做旋转复制）。
+        // Interlaced pclusters (Z_EROFS_ADVISE_INTERLACED_PCLUSTER) affect only PLAIN literal
+        // clusters: mkfs interleaves neighbouring pclusters into one physical block to remove
+        // intra-block holes, so the reader must load the whole block and rotate it back by the
+        // in-block offset (kernel z_erofs_map_blocks_fo: PLAIN + this advise →
+        // m_algorithmformat = INTERLACED; z_erofs_decompress handles it with a rotated copy).
+        var interlaced = (advise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0;
         if (bigPcluster1 != bigPcluster2)
         {
             // 内核要求 HEAD1/HEAD2 big-pcluster 标志一致；不一致视为损坏。
@@ -1048,16 +1150,52 @@ public sealed class ErofsParser : IDisposable
 
                 if (lc.Type == LclusterTypePlain)
                 {
-                    // 字面簇：数据未压缩，物理上从 pblk 块起始连续存放（clusterofs 是逻辑簇内
-                    // 偏移，只用于 m_la 计算，不叠加到物理位置；内核 z_erofs_map_blocks_fo 的
-                    // m_pa = erofs_pos(sb, m.pblk)，随后按 SHIFTED 直接复制 m_llen 字节）。
-                    // Literal cluster: data is stored uncompressed, contiguous from the pblk block
-                    // start (clusterofs is the logical in-cluster offset used only for m_la, never
-                    // added to the physical position; kernel z_erofs_map_blocks_fo sets
-                    // m_pa = erofs_pos(sb, m.pblk) then copies m_llen bytes as SHIFTED).
+                    // 字面簇：数据未压缩。普通情形（SHIFTED）物理上从 pblk 块起始连续存放；
+                    // clusterofs 是逻辑簇内偏移，只用于 m_la 计算，不叠加到物理位置（内核
+                    // z_erofs_map_blocks_fo 的 m_pa = erofs_pos(sb, m.pblk)，随后按 SHIFTED
+                    // 直接复制 m_llen 字节）。
+                    // Literal cluster: the data is stored uncompressed. In the normal (SHIFTED)
+                    // case it is contiguous from the pblk block start; clusterofs is the logical
+                    // in-cluster offset used only for m_la, never added to the physical position
+                    // (kernel z_erofs_map_blocks_fo sets m_pa = erofs_pos(sb, m.pblk) then copies
+                    // m_llen bytes as SHIFTED).
                     var dataStart = checked((long)lc.Pblk * _blockSize);
-                    CheckRange(dataStart, llen, "Plain lcluster data");
-                    CopyFromSource(output, dataStart, llen);
+                    if (!interlaced)
+                    {
+                        CheckRange(dataStart, llen, "Plain lcluster data");
+                        CopyFromSource(output, dataStart, llen);
+                        lcn = nextLcn;
+                        continue;
+                    }
+
+                    // 交错 pcluster（INTERLACED）：mkfs 把相邻 pcluster 交错填入同一物理块，
+                    // 字面数据在该块内从 skip = blkoff(m_la) 处起连续存放并绕回块首。读端
+                    // 整块读入后旋转还原（对照 erofs-utils z_erofs_decompress 的 INTERLACED
+                    // 分支：rightpart = min(blksz - skip, count)，先取 in[skip..]，再取块首
+                    // 剩余）。该特性仅由 mkfs 交错写端产生，真实镜像罕见；约束不符即显式失败。
+                    // Interlaced pcluster (INTERLACED): mkfs interleaves neighbouring pclusters
+                    // into one physical block, so the literal data starts at skip = blkoff(m_la)
+                    // inside the block and wraps around the block head. The reader loads the whole
+                    // block and rotates it back (cf. z_erofs_decompress INTERLACED branch:
+                    // rightpart = min(blksz - skip, count), take in[skip..] first then the block
+                    // head remainder). Only the mkfs interleaved writer produces this; real images
+                    // rarely do. Constraints that do not hold fail loudly.
+                    if (llen > _blockSize || llen < 0)
+                    {
+                        throw new InvalidDataException(
+                            $"Interlaced plain pcluster {lcn} of nid {nid} has length {llen} > block size {_blockSize}.");
+                    }
+
+                    var skip = (int)(mLa & (_blockSize - 1));
+                    CheckRange(dataStart, _blockSize, "Interlaced plain lcluster block");
+                    var rawBlock = ReadBytes(dataStart, _blockSize, "Interlaced plain lcluster block");
+                    var rightpart = Math.Min(_blockSize - skip, (int)llen);
+                    output.Write(rawBlock, skip, rightpart);
+                    if (llen > rightpart)
+                    {
+                        output.Write(rawBlock, 0, (int)llen - rightpart);
+                    }
+
                     lcn = nextLcn;
                     continue;
                 }
@@ -1076,15 +1214,24 @@ public sealed class ErofsParser : IDisposable
                     var next = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn + 1, out _, out _, out _);
                     if (next.Type != LclusterTypeNonHead)
                     {
+                        // 下一个条目是 PLAIN/HEAD 而非 CBLKCNT：单块 pcluster。
+                        // The next entry is PLAIN/HEAD rather than CBLKCNT: a one-block pcluster.
                         compressedBlocks = 1;
                     }
                     else
                     {
-                        if (next.Delta0 == 1)
+                        // 内核要求首个 NONHEAD 的 delta[0] == 1（带 CBLKCNT 的条目在解码时
+                        // 已把 delta[0] 归一化为 1 并将压缩块数放入 CompressedBlocks）；delta[0]
+                        // 非 1 才是损坏。对照 erofs-utils z_erofs_get_extent_compressedlen：
+                        // "if (m->delta[0] != 1) return -EFSCORRUPTED"。
+                        // The kernel requires delta[0] == 1 on the first NONHEAD (a CBLKCNT entry
+                        // is normalised to delta[0] == 1 at decode time with the block count in
+                        // CompressedBlocks); anything but 1 is corrupt. Cf. erofs-utils
+                        // z_erofs_get_extent_compressedlen: "if (m->delta[0] != 1) ... corrupt".
+                        if (next.Delta0 != 1 || next.CompressedBlocks == 0)
                         {
-                            // 内核要求首个 NONHEAD 的 delta[0] 为 1 且带 CBLKCNT。
-                            // The kernel requires delta[0] == 1 with CBLKCNT on the first NONHEAD.
-                            throw new InvalidDataException($"Bogus CBLKCNT @ lcn {lcn + 1} of nid {nid}.");
+                            throw new InvalidDataException(
+                                $"Bogus CBLKCNT @ lcn {lcn + 1} of nid {nid}.");
                         }
 
                         compressedBlocks = next.CompressedBlocks;
@@ -1178,10 +1325,14 @@ public sealed class ErofsParser : IDisposable
 
     /// <summary>
     /// 从 packed inode（fragment 特性）读取片段数据：packed_nid 指向特殊 packed inode，
-    /// 其数据区按 flat 布局读取，fragmentoff 为片段在其中的字节偏移。
-    /// <para>Reads fragment data from the packed inode (fragments feature): s_packed_nid points to the
-    /// special packed inode whose data area is read as a flat file; fragmentoff is the byte offset of
-    /// the fragment within it.</para>
+    /// 其数据按普通文件映射（flat 主体 + 可能的 FLAT_INLINE 尾部内联），fragmentoff 为片段
+    /// 在其中的逻辑字节偏移。严格对照内核 <c>fs/erofs/data.c</c> 对 packed inode 的处理：
+    /// packed inode 是一个普通 flat/inline 文件，fragment 只是其数据区间。
+    /// <para>Reads fragment data from the packed inode (fragments feature): s_packed_nid points to
+    /// the special packed inode whose data is mapped like an ordinary file (flat body plus an
+    /// optional FLAT_INLINE tail), and fragmentoff is the logical byte offset of the fragment
+    /// within it. Mirrors the kernel's <c>fs/erofs/data.c</c> handling of the packed inode: it is
+    /// an ordinary flat/inline file and a fragment is just one of its data ranges.</para>
     /// </summary>
     private void WritePackedData(ErofsInode fragmentInode, uint fragmentOff, Stream output)
     {
@@ -1204,10 +1355,36 @@ public sealed class ErofsParser : IDisposable
             return;
         }
 
-        // packed inode 数据区起点：flat 布局下 i_u 为起始块号；inline 布局下为 inline 数据。
-        // The packed inode data area: flat layout uses i_u as the start block; inline uses inline data.
+        // packed inode 数据区映射：flat 布局（含 FLAT_INLINE）下，前 floor(size/blk)*blk 字节
+        // 连续存放于 i_u 起始块，余数尾部内联在 inode + xattr 之后；纯 inline（i_u = 空洞
+        // 哨兵）时全部数据都在 inode 之后。fragment 区间可能完全落在 flat 段、完全落在
+        // inline 段，或跨两者，需分段复制。
+        // The packed inode data mapping: under the flat layouts (incl. FLAT_INLINE) the first
+        // floor(size/blk)*blk bytes live contiguously from the i_u block and the remainder is
+        // inlined after the inode + xattrs; under pure inline (i_u = hole sentinel) all data sits
+        // after the inode. A fragment range may fall entirely in the flat section, entirely in the
+        // inline section, or straddle both, so it is copied in segments.
+        var packedSize = (long)packed.Size;
+        if (fragmentOff >= packedSize || length > packedSize - fragmentOff)
+        {
+            throw new InvalidDataException(
+                $"Packed fragment range [{fragmentOff}..{fragmentOff + length}) exceeds the packed inode size {packedSize}.");
+        }
+
+        var inlineAll = packed.DataLayout == ErofsInode.DataLayoutInline &&
+                        packed.RawBlockAddress == uint.MaxValue; // i_u = EROFS_NULL_ADDR
+        if (packed.DataLayout == ErofsInode.DataLayoutInline && !inlineAll)
+        {
+            // FLAT_INLINE（tail-packing）：主体 flat 块 + 内联尾。
+            // FLAT_INLINE (tail-packing): flat body plus an inlined tail.
+            var flatLength = packedSize / _blockSize * _blockSize;
+            WritePackedRange(fragmentOff, length, flatLength, packed, packedNid, inlineStartIsFlat: false, output);
+            return;
+        }
+
         if (packed.DataLayout == ErofsInode.DataLayoutInline)
         {
+            // 纯 inline：全部数据在 inode 之后。Pure inline: everything after the inode.
             var start = _superblock.GetInodeOffset(packedNid) + packed.InlineDataOffset + fragmentOff;
             CheckRange(start, length, "Packed fragment data");
             CopyFromSource(output, start, length);
@@ -1219,9 +1396,73 @@ public sealed class ErofsParser : IDisposable
             throw new InvalidDataException($"Unsupported packed inode layout {packed.DataLayout} for nid {packedNid}.");
         }
 
-        var flatStart = checked((long)packed.RawBlockAddress * _blockSize + fragmentOff);
-        CheckRange(flatStart, length, "Packed fragment data");
-        CopyFromSource(output, flatStart, length);
+        // 纯 flat：全部数据连续存放。Pure flat: all data is contiguous.
+        WritePackedRange(fragmentOff, length, packedSize, packed, packedNid, inlineStartIsFlat: true, output);
+    }
+
+    /// <summary>
+    /// 按 flat/inline 分段映射 packed inode 的 [<paramref name="offset"/>,
+    /// <paramref name="offset"/> + <paramref name="length"/>) 区间并复制到输出。
+    /// <para>Maps and copies the range [<paramref name="offset"/>,
+    /// <paramref name="offset"/> + <paramref name="length"/>) of the packed inode across its flat
+    /// and inline sections.</para>
+    /// </summary>
+    /// <param name="inlineStartIsFlat">纯 flat（无内联尾）时为 true，inline 起点即 flat 终点。
+    /// True for pure-flat (no inlined tail): the inline start equals the flat end.</param>
+    private void WritePackedRange(
+        long offset,
+        long length,
+        long flatLength,
+        ErofsInode packed,
+        ulong packedNid,
+        bool inlineStartIsFlat,
+        Stream output)
+    {
+        var remaining = length;
+        var pos = offset;
+        if (pos < flatLength)
+        {
+            var flatBytes = Math.Min(remaining, flatLength - pos);
+            var flatStart = checked((long)packed.RawBlockAddress * _blockSize + pos);
+            CheckRange(flatStart, flatBytes, "Packed fragment data");
+            CopyFromSource(output, flatStart, flatBytes);
+            remaining -= flatBytes;
+            pos += flatBytes;
+        }
+
+        if (remaining <= 0)
+        {
+            return;
+        }
+
+        // 内联段（FLAT_INLINE 尾或纯 inline 整体）。Inline section (FLAT_INLINE tail or the whole
+        // pure-inline file). The inline section starts at InlineDataOffset; for FLAT_INLINE only the
+        // data beyond flatLength is stored inline, so the in-file offset must be rebased.
+        var inlineOffset = packed.InlineDataOffset;
+        var inlineStart = _superblock.GetInodeOffset(packedNid) + inlineOffset;
+        if (!inlineStartIsFlat)
+        {
+            // FLAT_INLINE：inline 起点对应文件偏移 flatLength。FLAT_INLINE: the inline section
+            // corresponds to file offset flatLength.
+            if (pos < flatLength)
+            {
+                throw new InvalidDataException("Packed fragment straddles the flat/inline boundary unexpectedly.");
+            }
+
+            inlineStart += pos - flatLength;
+        }
+        else
+        {
+            // 纯 flat 且调用方已保证无越界（flatLength == packed size）。Pure flat with the caller
+            // having verified bounds (flatLength == packed size); defensive check only.
+            if (pos >= flatLength)
+            {
+                throw new InvalidDataException("Packed fragment extends beyond a pure-flat packed inode.");
+            }
+        }
+
+        CheckRange(inlineStart, remaining, "Packed fragment data");
+        CopyFromSource(output, inlineStart, remaining);
     }
 
     /// <summary>
