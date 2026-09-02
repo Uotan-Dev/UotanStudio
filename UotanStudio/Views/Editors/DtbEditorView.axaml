@@ -2,28 +2,39 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.DtbEditorView"
              x:DataType="viewmodels:DtbEditorViewModel">
   <DockPanel>
-    <!-- 顶部工具栏：保存按钮 + 编译错误状态 -->
+    <!-- 顶部工具栏：文件路径 + 编译错误状态 -->
     <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>
-        <Button DockPanel.Dock="Right" Content="{x:Static viewmodels:DtbEditorViewModel.SaveLabel}"
-                Command="{Binding SaveCommand}" />
-        <TextBlock Text="{Binding CompileError}"
+        <TextBlock DockPanel.Dock="Right"
+                   Text="{Binding CompileError}"
+                   MaxWidth="360"
+                   Margin="12,0,0,0"
                    VerticalAlignment="Center"
                    Foreground="Red"
                    TextTrimming="CharacterEllipsis"
                    IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="{Binding FilePathDisplay}"
+                   FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" />
       </DockPanel>
     </Border>
 
     <!-- 设备节点树（左） + DTS 源码（右） -->
-    <Grid ColumnDefinitions="280,*">
-      <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" MinWidth="120" />
+        <ColumnDefinition Width="7" />
+        <ColumnDefinition Width="*" MinWidth="120" />
+      </Grid.ColumnDefinitions>
+
+      <Border Grid.Column="0">
         <TreeView x:Name="NodeTree"
                   ItemsSource="{Binding Nodes}"
                   SelectionChanged="OnNodeTreeSelectionChanged">
@@ -35,7 +46,28 @@
         </TreeView>
       </Border>
 
-      <controls:CodeEditor Grid.Column="1" x:Name="SourceEditor"
+      <Border Grid.Column="1"
+              Width="3"
+              HorizontalAlignment="Center"
+              Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+              IsHitTestVisible="False" />
+      <GridSplitter Grid.Column="1"
+                    ResizeDirection="Columns"
+                    ResizeBehavior="PreviousAndNext"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
+                    Background="Transparent"
+                    Cursor="SizeWestEast" />
+      <avalonia:MaterialIcon Grid.Column="1"
+                             Kind="DragVertical"
+                             Width="7" Height="20"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Foreground="{DynamicResource EditorPaneSplitterGripBrush}"
+                             IsHitTestVisible="False"
+                             Opacity="0.8" />
+
+      <controls:CodeEditor Grid.Column="2" x:Name="SourceEditor"
                            Text="{Binding Source, Mode=TwoWay}"
                            Language="dts" />
     </Grid>

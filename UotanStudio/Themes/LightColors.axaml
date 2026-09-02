@@ -15,6 +15,10 @@
     <Color x:Key="HexSelectionBrush">#6659c2ff</Color>
     <Color x:Key="HexCaretBrush">#0078d4</Color>
     <Color x:Key="HexEditedBrush">#c0504d</Color>
+    <!-- VS 风格编辑器分隔轨道：默认状态也与页面背景保持清晰对比。 -->
+    <!-- VS-style editor splitter track with clear contrast in its resting state. -->
+    <SolidColorBrush x:Key="EditorPaneSplitterBackgroundBrush" Color="#D6D8DC" />
+    <SolidColorBrush x:Key="EditorPaneSplitterGripBrush" Color="#4F555D" />
     <!-- 二进制差异比对：差异行高亮画刷（浅暖色）与前景画刷。 -->
     <!-- Binary diff compare: diff-line highlight brush (light warm) and its foreground. -->
     <SolidColorBrush x:Key="DiffBackgroundBrush" Color="#FFF3D9" />

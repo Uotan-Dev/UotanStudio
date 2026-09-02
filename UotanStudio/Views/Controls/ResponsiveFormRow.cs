@@ -15,6 +15,9 @@ public sealed class ResponsiveFormRow : Panel
     public static readonly StyledProperty<double> MaxLabelWidthProperty =
         AvaloniaProperty.Register<ResponsiveFormRow, double>(nameof(MaxLabelWidth), 180d);
 
+    public static readonly StyledProperty<double> MinEditorWidthProperty =
+        AvaloniaProperty.Register<ResponsiveFormRow, double>(nameof(MinEditorWidth), 0d);
+
     public static readonly StyledProperty<double> ColumnSpacingProperty =
         AvaloniaProperty.Register<ResponsiveFormRow, double>(nameof(ColumnSpacing), 0d);
 
@@ -32,11 +35,13 @@ public sealed class ResponsiveFormRow : Panel
         AffectsMeasure<ResponsiveFormRow>(
             MinLabelWidthProperty,
             MaxLabelWidthProperty,
+            MinEditorWidthProperty,
             ColumnSpacingProperty,
             RowSpacingProperty);
         AffectsArrange<ResponsiveFormRow>(
             MinLabelWidthProperty,
             MaxLabelWidthProperty,
+            MinEditorWidthProperty,
             ColumnSpacingProperty,
             RowSpacingProperty);
     }
@@ -59,6 +64,17 @@ public sealed class ResponsiveFormRow : Panel
     {
         get => GetValue(MaxLabelWidthProperty);
         set => SetValue(MaxLabelWidthProperty, value);
+    }
+
+    /// <summary>
+    /// <para>获取或设置输入控件保持横向布局所需的最小宽度；该值只决定换行时机，不限制上下布局中的实际宽度。</para>
+    /// Gets or sets the minimum editor width required to keep the horizontal layout; this value only
+    /// controls when stacking occurs and does not constrain the editor width in the stacked layout.
+    /// </summary>
+    public double MinEditorWidth
+    {
+        get => GetValue(MinEditorWidthProperty);
+        set => SetValue(MinEditorWidthProperty, value);
     }
 
     /// <summary>
@@ -106,7 +122,7 @@ public sealed class ResponsiveFormRow : Panel
         label.Measure(new Size(maxLabelWidth, double.PositiveInfinity));
         _labelWidth = Math.Clamp(label.DesiredSize.Width, minLabelWidth, maxLabelWidth);
 
-        var editorMinWidth = Math.Max(0, editor.MinWidth);
+        var editorMinWidth = Math.Max(Math.Max(0, editor.MinWidth), Math.Max(0, MinEditorWidth));
         _isStacked = hasFiniteWidth && _labelWidth + columnSpacing + editorMinWidth > availableWidth;
 
         if (_isStacked)

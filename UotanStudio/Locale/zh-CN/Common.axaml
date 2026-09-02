@@ -110,6 +110,7 @@
     <x:String x:Key="Dock_Dex_Disassembling">正在解析与反汇编，请稍候…</x:String>
     <x:String x:Key="Dock_Manifest_Save">重建并保存</x:String>
     <x:String x:Key="Dock_Manifest_Busy">正在解析 Manifest，请稍候…</x:String>
+    <x:String x:Key="Dock_Manifest_ToggleRightView">切换右侧视图</x:String>
     <x:String x:Key="Dock_Arsc_Save">重建并保存</x:String>
     <x:String x:Key="Dock_Arsc_Busy">正在解析资源表，请稍候…</x:String>
     <x:String x:Key="Dock_Hex_Save">保存</x:String>
