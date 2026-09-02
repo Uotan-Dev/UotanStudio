@@ -257,8 +257,12 @@ public class ErofsTests
     [Fact]
     public void Builder_WritesStandardCompressedIFormat()
     {
+        // mkfs 对小文件（≤ 一块）一律 tail-packing inline，不会压缩；压缩布局只出现在
+        // 真正有收益的可压文件上。此处用一段大文本触发压缩。
+        // mkfs never compresses small files (≤ one block) — those are tail-packed inline;
+        // compressed layouts only appear for large compressible inputs.
         using var temp = new TempDirectory();
-        WriteText(temp, "a.txt", "alpha");
+        WriteText(temp, "a.txt", string.Concat(Enumerable.Repeat("The quick brown fox jumps over the lazy dog. ", 100)));
 
         var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = true });
         var superblock = ErofsSuperblock.FromImage(image);
@@ -279,8 +283,13 @@ public class ErofsTests
     [Fact]
     public void Builder_WritesStandardFlatIFormat()
     {
+        // mkfs 仅在文件大小恰为整块倍数（无尾部内联）时使用纯 flat 布局；5B 小文件会
+        // tail-packing inline。用两整块的不可压数据验证 flat 编码。
+        // mkfs uses plain flat only when the file size is an exact multiple of the block size
+        // (no inline tail); a 5-byte file would be tail-packed inline. Use two whole blocks of
+        // incompressible data to exercise the flat encoding.
         using var temp = new TempDirectory();
-        WriteText(temp, "a.txt", "alpha");
+        WriteText(temp, "a.txt", string.Concat(Enumerable.Repeat("0123456789abcdef", 1024))); // 16384B = 4 整块
 
         var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
         var superblock = ErofsSuperblock.FromImage(image);
@@ -296,9 +305,10 @@ public class ErofsTests
     [Fact]
     public void Parser_UnsupportedDataLayout_ThrowsInvalidDataException()
     {
-        // Hand-crafted minimal image: a flat root directory plus one file inode using the
-        // inline (unsupported) data layout. The parser must fail loudly instead of reading garbage.
-        // 手工构造的最小镜像：扁平根目录 + 使用内联（不支持）布局的文件 inode。
+        // Hand-crafted minimal image: a flat root directory plus one file inode using a reserved
+        // (unsupported by the parser) data layout. The parser must fail loudly instead of reading
+        // garbage.
+        // 手工构造的最小镜像：扁平根目录 + 使用保留（解析器不支持）布局的文件 inode。
         const int blockSize = 4096;
         var image = new byte[blockSize * 3];
         new ErofsSuperblock
@@ -311,6 +321,9 @@ public class ErofsTests
             MetaBlkAddr = 1,
         }.WriteTo(image.AsSpan(ErofsSuperblock.SuperblockOffset));
 
+        // inode 表位于 meta_blkaddr(块 1) 起点：root(0) 与文件(1) 各占 32B 槽。
+        // The inode table starts at meta_blkaddr (block 1): root(0) and the file(1) each take a
+        // 32-byte slot.
         // Root directory inode (compact, flat) at metadata offset 0; directory data at block 2.
         new ErofsInode
         {
@@ -321,18 +334,22 @@ public class ErofsTests
             Nlink = 2,
         }.WriteTo(image.AsSpan(blockSize));
 
-        // File inode (compact, inline layout = unsupported) at metadata offset 32.
+        // File inode (compact, reserved layout 0x0A = unsupported) at metadata offset 32 (nid 1).
         new ErofsInode
         {
-            Advise = ErofsInode.DataLayoutInline,
+            Advise = (ushort)0x0A, // 未定义的 data layout（位 1..3 = 101）
             Mode = ErofsInode.ModeRegularFile,
+            Size = 1,
         }.WriteTo(image.AsSpan(blockSize + ErofsInode.CompactSize));
 
-        // Directory block at block 2 with a single "x" entry (nid 32).
-        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(2 * blockSize), 32);
-        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(2 * blockSize + 8), (ushort)(blockSize - 1));
-        image[2 * blockSize + 10] = ErofsInode.FileTypeRegularFile;
-        image[3 * blockSize - 1] = (byte)'x';
+        // Directory block at block 2: dirent 数组在前、名字区紧随（de[0].nameoff = 名字区起点）。
+        // Directory block at block 2: dirent array first, then the name area (de[0].nameoff
+        // anchors the name area).
+        var dirOffset = 2 * blockSize;
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(dirOffset), 1); // nid 1 = 文件
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(dirOffset + 8), ErofsDirectoryEntry.DirentSize);
+        image[dirOffset + 10] = ErofsInode.FileTypeRegularFile;
+        image[dirOffset + ErofsDirectoryEntry.DirentSize] = (byte)'x';
 
         using var parser = new ErofsParser(image);
         var entry = parser.EnumerateFiles().Single();
