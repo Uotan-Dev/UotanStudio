@@ -51,6 +51,20 @@ internal partial class ImageViewModel : Tool
     public ObservableCollection<ImageEntryViewModel> Images { get; } = [];
 
     /// <summary>
+    /// <para>获取或设置镜像筛选下拉框的可选项。</para>
+    /// Gets or sets the available items in the image-filter combo box.
+    /// </summary>
+    [ObservableProperty]
+    private ObservableCollection<string>? _imageFilterItems;
+
+    /// <summary>
+    /// <para>获取或设置是否显示镜像筛选下拉框；默认隐藏。</para>
+    /// Gets or sets whether the image-filter combo box is visible; hidden by default.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isImageFilterVisible;
+
+    /// <summary>
     /// <para>获取或设置当前选中的镜像条目。</para>
     /// Gets or sets the currently selected image entry.
     /// </summary>
