@@ -160,6 +160,110 @@ internal static class ErofsXattr
     }
 
     /// <summary>
+    /// 反查默认前缀表：把完整 xattr 名拆为（短前缀名称索引 + 剩余短名）。
+    /// 仅匹配内置短前缀（user. / trusted. / security. / system. 等）；不匹配返回 false。
+    /// <para>Reverse lookup of the default prefix table: splits a full xattr name into a
+    /// (short-prefix name index + remaining short name). Only built-in short prefixes match
+    /// (user. / trusted. / security. / system. etc.); returns false when nothing matches.</para>
+    /// </summary>
+    public static bool TrySplitShortName(string fullName, out byte nameIndex, out string shortName)
+    {
+        nameIndex = 0;
+        shortName = string.Empty;
+        if (string.IsNullOrEmpty(fullName))
+        {
+            return false;
+        }
+
+        for (byte i = 1; i < DefaultPrefixes.Length; i++)
+        {
+            var prefix = DefaultPrefixes[i];
+            if (prefix.Length > 0 && fullName.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                nameIndex = i;
+                shortName = fullName.Substring(prefix.Length);
+                return shortName.Length > 0;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 将条目列表编码为 inline xattr ibody（含 12 字节头；无共享条目时 h_shared_count = 0）。
+    /// 返回的字节区直接写在 inode 记录之后；调用方须把长度计入 inode 记录大小并设置
+    /// <see cref="ErofsInode.XattrICount"/>（= <c>(ibody 总字节 / 4) - 2</c>，满足
+    /// <c>12 + 4 * (icount - 1) == ibody 长度</c>）。
+    /// 名称须能拆为内置短前缀（见 <see cref="TrySplitShortName"/>），否则抛
+    /// <see cref="InvalidDataException"/>。
+    /// <para>Encodes a list of entries into an inline xattr ibody (including the 12-byte header;
+    /// h_shared_count = 0 when no shared entries are present). The returned bytes are written right
+    /// after the inode record; callers must count the length into the inode record size and set
+    /// <see cref="ErofsInode.XattrICount"/> (= <c>ibody length / 4 - 2</c> so that
+    /// <c>12 + 4 * (icount - 1) == ibody length</c>). Names must split into a built-in short
+    /// prefix (see <see cref="TrySplitShortName"/>), otherwise an
+    /// <see cref="InvalidDataException"/> is thrown.</para>
+    /// </summary>
+    public static byte[] EncodeInline(IReadOnlyList<ErofsXattrEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var body = new List<byte>(HeaderSize + entries.Count * 8);
+        body.AddRange(new byte[HeaderSize]); // 头：h_name_filter + h_shared_count(0) + 保留。
+        foreach (var entry in entries)
+        {
+            ArgumentNullException.ThrowIfNull(entry);
+            if (!TrySplitShortName(entry.Name, out var nameIndex, out var shortName))
+            {
+                throw new InvalidDataException(
+                    $"EROFS xattr name '{entry.Name}' does not match a built-in short prefix " +
+                    "(user./trusted./security./system. etc.); long-prefix tables are not supported by the writer.");
+            }
+
+            var nameBytes = Encoding.UTF8.GetBytes(shortName);
+            if (nameBytes.Length > byte.MaxValue)
+            {
+                throw new InvalidDataException($"EROFS xattr name '{entry.Name}' exceeds 255 bytes.");
+            }
+
+            var value = entry.Value ?? [];
+            if (value.Length > ushort.MaxValue)
+            {
+                throw new InvalidDataException($"EROFS xattr value for '{entry.Name}' exceeds 65535 bytes.");
+            }
+
+            var start = body.Count;
+            body.Add((byte)nameBytes.Length); // e_name_len
+            body.Add(nameIndex);              // e_name_index
+            body.Add((byte)value.Length);     // e_value_size (low)
+            body.Add((byte)(value.Length >> 8));
+            body.AddRange(nameBytes);
+            body.AddRange(value);
+            // 对齐到 4 字节（EROFS_XATTR_ALIGN）。Pad to 4 bytes (EROFS_XATTR_ALIGN).
+            while ((body.Count - start) % EntryAlignment != 0)
+            {
+                body.Add(0);
+            }
+        }
+
+        var ibody = body.ToArray();
+        // icount = ibody 总字节 / 4 - 2 ⇒ 12 + 4*(icount-1) = ibody 长度。
+        if (ibody.Length % 4 != 0)
+        {
+            throw new InvalidDataException("EROFS xattr ibody must be 4-byte aligned.");
+        }
+
+        return ibody;
+    }
+
+    /// <summary>
+    /// 由 ibody 总字节推导 <see cref="ErofsInode.XattrICount"/> 值（无 xattr 时返回 0）。
+    /// <para>Derives the <see cref="ErofsInode.XattrICount"/> value from the ibody byte length
+    /// (0 when there is no xattr).</para>
+    /// </summary>
+    public static ushort GetICountForIbodyLength(int ibodyLength)
+        => ibodyLength <= 0 ? (ushort)0 : checked((ushort)(ibodyLength / SharedIdUnitSize - 2));
+
+    /// <summary>
     /// 解析长 xattr 名称前缀表。表位于 superblock.xattr_prefix_start 指向的元数据区，共
     /// XattrPrefixCount 个条目，每个条目为 <c>{__u8 base_index; char infix[]}</c>（infix 以 NUL
     /// 结尾），即内核的 <c>struct erofs_xattr_long_prefix</c>。base_index 为短前缀索引，
