@@ -4,24 +4,60 @@ using System.Buffers.Binary;
 namespace UotanStudio.Firmware.Erofs;
 
 /// <summary>
-/// erofs 文件清单条目（路径 + 大小 + nid）。
-/// <para>An erofs file-list entry (path + size + nid).</para>
+/// erofs 文件清单条目（路径 + 大小 + nid + 元数据）。
+/// <para>An erofs file-list entry (path + size + nid + metadata).</para>
 /// </summary>
-public sealed record ErofsFileEntry(string Path, long Size, ulong Nid);
+public sealed record ErofsFileEntry(
+    string Path,
+    long Size,
+    ulong Nid)
+{
+    /// <summary>文件模式（含类型位，如 0x81A4）。File mode including the type bits.</summary>
+    public ushort Mode { get; init; }
+
+    /// <summary>uid。User id.</summary>
+    public uint Uid { get; init; }
+
+    /// <summary>gid。Group id.</summary>
+    public uint Gid { get; init; }
+
+    /// <summary>修改时间（Unix 秒）。Modification time in Unix seconds.</summary>
+    public ulong MTime { get; init; }
+
+    /// <summary>是否符号链接。Whether this entry is a symbolic link.</summary>
+    public bool IsSymlink => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeSymlink;
+
+    /// <summary>是否目录。Whether this entry is a directory.</summary>
+    public bool IsDirectory => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeDirectory;
+
+    /// <summary>符号链接目标（仅 IsSymlink 时有值）。Symbolic link target (only set for symlinks).</summary>
+    public string? SymlinkTarget { get; init; }
+
+    /// <summary>该文件的 xattr 列表（名称已含前缀解析）。Xattrs of this file (names prefix-resolved).</summary>
+    public IReadOnlyList<ErofsXattrEntry>? Xattrs { get; init; }
+}
 
 /// <summary>
 /// 流式 erofs 镜像解析器：持有可 seek 的数据源（FileStream、外部传入的 Stream，或对内存 byte[] 的轻量包装），
-/// 按需读取超级块 / inode / 目录块 / pcluster，不再整镜像载入内存。
+/// 按需读取超级块 / inode / 目录块 / 压缩索引 / pcluster，不再整镜像载入内存。
+/// 数据布局与解压语义严格对齐 Linux 内核主线 fs/erofs/{zmap,dir,data}.c：
+/// 支持 flat / inline（tailpacking）/ compressed-full / compressed-compact / chunk-based 布局，
+/// LZ4 / LZMA / DEFLATE / ZSTD 四种算法，以及 dense 目录与共享 xattr。
 /// <para>A streaming erofs image parser: holds a seekable source (a FileStream, an externally supplied
 /// Stream, or a lightweight wrapper over in-memory bytes) and reads the superblock, inodes, directory
-/// blocks and pclusters on demand instead of loading the whole image into memory.</para>
+/// blocks, compressed indexes and pclusters on demand instead of loading the whole image into memory.
+/// Data mapping and decompression semantics strictly follow the mainline Linux kernel
+/// fs/erofs/{zmap,dir,data}.c: flat, inline (tailpacking), compressed-full, compressed-compact and
+/// chunk-based layouts, LZ4 / LZMA / DEFLATE / ZSTD algorithms, plus dense directories and shared
+/// xattrs.</para>
 /// </summary>
 public sealed class ErofsParser : IDisposable
 {
     private const int CopyBufferSize = 1 << 20;
 
-    /// <summary>单次载入内存的元数据组件（目录数据 / 压缩索引表）大小上限，防止损坏镜像造成过量分配。
-    /// Upper bound for one in-memory metadata component (directory data / pcluster index table).</summary>
+    /// <summary>单次载入内存的元数据组件（目录数据 / 压缩索引表 / 共享 xattr）大小上限，防止损坏镜像造成过量分配。
+    /// Upper bound for one in-memory metadata component (directory data / compressed index table /
+    /// shared xattr area).</summary>
     private const long MaxMetadataComponentSize = 512L * 1024 * 1024;
 
     private readonly Stream _stream;
@@ -32,6 +68,7 @@ public sealed class ErofsParser : IDisposable
     private readonly ErofsSuperblock _superblock;
     private readonly int _blockSize;
     private List<ErofsFileEntry>? _fileTable;
+    private ErofsInode? _packedInode;
 
     /// <summary>
     /// 从镜像字节创建解析器（字节数组直接包装为内存流，不复制；校验偏移 1024 处的魔数）。
@@ -155,7 +192,7 @@ public sealed class ErofsParser : IDisposable
     /// 文件系统总块数（s_blocks）。
     /// <para>Total filesystem block count (s_blocks).</para>
     /// </summary>
-    public long BlockCount => _superblock.Blocks;
+    public long BlockCount => (long)_superblock.BlockCount64;
 
     /// <summary>
     /// 镜像总字节数（分区大小）。
@@ -170,16 +207,22 @@ public sealed class ErofsParser : IDisposable
     public long InodeCount => (long)_superblock.Inos;
 
     /// <summary>
-    /// 根目录 nid（s_root_nid）。
-    /// <para>Root directory nid (s_root_nid).</para>
+    /// 根目录 nid（s_root_nid；48 位布局下为 s_rootnid_8b）。
+    /// <para>Root directory nid (s_root_nid; s_rootnid_8b under the 48-bit layout).</para>
     /// </summary>
-    public ulong RootNid => _superblock.RootNid;
+    public ulong RootNid => _superblock.RootNid64;
 
     /// <summary>
     /// 卷名（s_volume_name）。
     /// <para>Volume name (s_volume_name).</para>
     /// </summary>
     public string VolumeName => _superblock.VolumeName;
+
+    /// <summary>
+    /// 超级块（供上层读取特性位等）。
+    /// <para>The superblock (for callers reading feature flags etc.).</para>
+    /// </summary>
+    internal ErofsSuperblock Superblock => _superblock;
 
     /// <summary>
     /// 遍历目录树并返回文件清单（路径使用 '/' 分隔）。
@@ -203,9 +246,10 @@ public sealed class ErofsParser : IDisposable
     }
 
     /// <summary>
-    /// 读取单个文件内容到输出流（uncompressed 直读，compressed 逐 pcluster 解压）。
-    /// <para>Reads a single file into the output stream (plain data read directly, compressed data
-    /// decompressed pcluster by pcluster).</para>
+    /// 读取单个文件内容到输出流（plain 直读，inline 直读，compressed 逐 pcluster 解压，chunk 逐块拼接）。
+    /// <para>Reads a single file into the output stream (plain data read directly, inline data read
+    /// directly, compressed data decompressed pcluster by pcluster, chunk-based data assembled chunk
+    /// by chunk).</para>
     /// </summary>
     public void ReadFile(string path, Stream outputStream)
     {
@@ -214,11 +258,6 @@ public sealed class ErofsParser : IDisposable
 
         var nid = FindFile(path);
         var inode = ReadInode(nid);
-        if (!inode.IsRegularFile)
-        {
-            throw new InvalidDataException($"'{path}' is not a regular file.");
-        }
-
         WriteFileData(nid, inode, outputStream);
     }
 
@@ -244,6 +283,15 @@ public sealed class ErofsParser : IDisposable
 
             if (!overwrite && File.Exists(target))
             {
+                continue;
+            }
+
+            if (entry.IsSymlink)
+            {
+                // 符号链接写入为文本目标文件（Windows 无可靠符号链接语义，写入目标路径文本）。
+                // Symlinks are written as a text file holding the target (Windows has no reliable
+                // symlink semantics; write the target path as text).
+                File.WriteAllText(target, entry.SymlinkTarget ?? string.Empty);
                 continue;
             }
 
@@ -387,7 +435,7 @@ public sealed class ErofsParser : IDisposable
     {
         var result = new List<ErofsFileEntry>();
         var visitedDirectories = new HashSet<ulong>();
-        WalkDirectory(_superblock.RootNid, string.Empty, visitedDirectories, result);
+        WalkDirectory(_superblock.RootNid64, string.Empty, visitedDirectories, result);
         return result;
     }
 
@@ -395,7 +443,10 @@ public sealed class ErofsParser : IDisposable
     {
         if (!visitedDirectories.Add(nid))
         {
-            throw new InvalidDataException($"Directory cycle detected at nid {nid}.");
+            // 已访问的目录（如 `..` 反向引用祖先）直接跳过，不视为错误。
+            // Already-visited directories (e.g. `..` back-references to ancestors) are skipped
+            // rather than treated as an error.
+            return;
         }
 
         var inode = ReadInode(nid);
@@ -404,26 +455,158 @@ public sealed class ErofsParser : IDisposable
             return;
         }
 
-        foreach (var entry in ReadDirectory(inode))
+        foreach (var entry in ReadDirectory(nid, inode))
         {
             if (entry.FileType == ErofsInode.FileTypeDirectory)
             {
+                // EROFS 目录条目可能含 `.`/`..` 自引用（nid 指向当前目录自身或其父目录），
+                // 跳过自引用以避免重复遍历；父目录引用已被 visitedDirectories 去重。
+                // EROFS directory entries may contain `.`/`..` self-references (nid pointing back to
+                // this directory or its parent); skip self-references to avoid re-traversal. Parent
+                // references are de-duplicated by visitedDirectories.
+                if (entry.Nid == nid)
+                {
+                    continue;
+                }
+
                 var directoryPath = JoinPath(prefix, entry.Name);
                 WalkDirectory(entry.Nid, directoryPath, visitedDirectories, result);
                 continue;
             }
 
-            if (entry.FileType == ErofsInode.FileTypeRegularFile)
+            if (entry.FileType == ErofsInode.FileTypeRegularFile ||
+                entry.FileType == ErofsInode.FileTypeSymlink)
             {
                 var fileInode = ReadInode(entry.Nid);
                 var path = JoinPath(prefix, entry.Name);
-                result.Add(new ErofsFileEntry(path, (long)fileInode.Size, entry.Nid));
+                var fileEntry = new ErofsFileEntry(path, (long)fileInode.Size, entry.Nid)
+                {
+                    Mode = fileInode.Mode,
+                    Uid = fileInode.Uid,
+                    Gid = fileInode.Gid,
+                    MTime = fileInode.CTime,
+                };
+                if (fileInode.IsSymlink)
+                {
+                    // 符号链接：目标即文件内容（inline 或 flat）。
+                    // Symlink: the target is the file content (inline or flat).
+                    try
+                    {
+                        using var buffer = new MemoryStream();
+                        WriteFileData(entry.Nid, fileInode, buffer);
+                        fileEntry = fileEntry with { SymlinkTarget = ReadSymlinkTarget(buffer) };
+                    }
+                    catch (Exception ex) when (ex is InvalidDataException or FormatException)
+                    {
+                        fileEntry = fileEntry with { SymlinkTarget = null };
+                    }
+                }
+
+                var xattrs = ReadXattrs(entry.Nid, fileInode);
+                if (xattrs is { Count: > 0 })
+                {
+                    fileEntry = fileEntry with { Xattrs = xattrs };
+                }
+
+                result.Add(fileEntry);
             }
         }
     }
 
+    private static string? ReadSymlinkTarget(Stream content)
+    {
+        content.Position = 0;
+        using var reader = new StreamReader(content, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 4096, leaveOpen: true);
+        var target = reader.ReadToEnd();
+        return string.IsNullOrEmpty(target) ? null : target;
+    }
+
     private static string JoinPath(string prefix, string name)
         => prefix.Length == 0 ? name : prefix + "/" + name;
+
+    /// <summary>
+    /// 读取 inode 的 xattr 列表：解析 inline xattr ibody（含共享 xattr id 引用解析）。
+    /// 解析失败或损坏时返回空列表（不阻断文件列举）。
+    /// <para>Reads the inode's xattr list: parses the inline xattr ibody (including shared xattr id
+    /// resolution). Returns an empty list on parse failure or corruption (never blocks enumeration).</para>
+    /// </summary>
+    private List<ErofsXattrEntry> ReadXattrs(ulong nid, ErofsInode inode)
+    {
+        var result = new List<ErofsXattrEntry>();
+        if (inode.XattrICount == 0)
+        {
+            return result;
+        }
+
+        try
+        {
+            // inline xattr ibody 紧随 inode 之后（ibody 大小 = XattrTotalSize）。
+            // The inline xattr ibody follows the inode (ibody size = XattrTotalSize).
+            var ibodyOffset = _superblock.GetInodeOffset(nid) + inode.OnDiskSize;
+            if (ibodyOffset < 0 || ibodyOffset > _imageSize - ErofsXattr.HeaderSize)
+            {
+                return result;
+            }
+
+            var ibody = ReadBytes(ibodyOffset, inode.XattrTotalSize, "xattr ibody");
+            var prefixTable = LoadXattrPrefixTable();
+            var entries = ErofsXattr.ParseInline(ibody, inode.XattrICount, prefixTable);
+            result.AddRange(entries);
+
+            // 共享 xattr 条目由 ibody 头部的 h_shared_count 个 u32 id 引用。
+            // Shared xattr entries are referenced by h_shared_count u32 ids in the ibody header.
+            var sharedIds = ErofsXattr.ParseSharedXattrIds(ibody, inode.XattrICount);
+            if (sharedIds.Length > 0 && _superblock.XattrBlkAddr != 0)
+            {
+                // 共享 xattr 区自 xattr_blkaddr 块起始；条目跨块时按需读取整个共享区。
+                // The shared xattr area starts at the xattr_blkaddr block; read the whole area on
+                // demand as entries may span blocks.
+                var sharedStart = (long)_superblock.XattrBlkAddr * _blockSize;
+                var sharedLength = Math.Min(_imageSize - sharedStart, MaxMetadataComponentSize);
+                if (sharedLength > 0)
+                {
+                    var sharedArea = ReadBytes(sharedStart, checked((int)sharedLength), "shared xattr area");
+                    foreach (var id in sharedIds)
+                    {
+                        if (ErofsXattr.TryParseSharedEntry(sharedArea, id, prefixTable, out var sharedEntry))
+                        {
+                            result.Add(sharedEntry);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is InvalidDataException or FormatException)
+        {
+            // xattr 解析失败不影响文件提取；忽略并返回已收集的条目。
+            // A failed xattr parse must not break file extraction; ignore and return what we have.
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// 加载长 xattr 名称前缀表（feature XATTR_PREFIXES）；无特性时返回 null。
+    /// <para>Loads the long xattr name prefix table (feature XATTR_PREFIXES); null without the
+    /// feature.</para>
+    /// </summary>
+    private IReadOnlyList<(byte BaseIndex, string Infix)>? LoadXattrPrefixTable()
+    {
+        if (!_superblock.HasXattrPrefixes || _superblock.XattrPrefixCount == 0)
+        {
+            return null;
+        }
+
+        var tableOffset = ErofsXattr.GetPrefixTableByteOffset(_superblock.XattrPrefixStart);
+        if (tableOffset < 0 || tableOffset > _imageSize)
+        {
+            return null;
+        }
+
+        var tableLength = Math.Min(_imageSize - tableOffset, MaxMetadataComponentSize);
+        var table = ReadBytes(tableOffset, checked((int)tableLength), "xattr prefix table");
+        return ErofsXattr.ParsePrefixTable(table, _superblock.XattrPrefixCount);
+    }
 
     private ulong FindFile(string path)
     {
@@ -457,50 +640,151 @@ public sealed class ErofsParser : IDisposable
         return ErofsInode.FromBytes(ReadBytes(offset, inodeSize, $"Inode nid {nid}"));
     }
 
-    private List<ErofsDirectoryEntry> ReadDirectory(ErofsInode inode)
+    /// <summary>
+    /// 目录块大小（superblock 的 s_dirblkbits 为 0 时等于块大小）。
+    /// <para>Directory block size (equal to the block size when s_dirblkbits is 0).</para>
+    /// </summary>
+    private int DirectoryBlockSize => _superblock.DirBlkBits == 0 ? _blockSize : 1 << _superblock.DirBlkBits;
+
+    private List<ErofsDirectoryEntry> ReadDirectory(ulong nid, ErofsInode inode)
     {
-        var start = checked((long)inode.RawBlockAddress * _blockSize);
-        var length = (long)inode.Size;
-        if (start < 0 || length < 0 || start > _imageSize || length > _imageSize - start)
+        var dirBlockSize = DirectoryBlockSize;
+        if (inode.DataLayout == ErofsInode.DataLayoutInline)
         {
-            throw new InvalidDataException("Directory data exceeds the image bounds.");
+            // inline 布局：目录数据紧随 inode 与 inline xattr 之后，位于同一元数据块内。
+            // Inline layout: the directory data follows the inode and inline xattrs within the same metadata block.
+            var start = _superblock.GetInodeOffset(nid) + inode.InlineDataOffset;
+            var length = (long)inode.Size;
+            CheckRange(start, length, "Inline directory data");
+            var data = ReadBytes(start, checked((int)Math.Min(length, MaxMetadataComponentSize)), "Inline directory data");
+            return ParseDirectoryData(data, dirBlockSize, length);
         }
-        if (length > MaxMetadataComponentSize)
+
+        if (inode.DataLayout != ErofsInode.DataLayoutFlat)
+        {
+            // 压缩布局的目录不存在（目录数据恒为 flat/inline）。
+            // Directories never use compressed layouts (directory data is always flat/inline).
+            throw new InvalidDataException($"Unsupported directory data layout {inode.DataLayout} for nid {nid}.");
+        }
+
+        // 扁平布局：i_u 为数据起始块号。
+        // Flat layout: i_u is the start block of the data.
+        var flatStart = checked((long)inode.RawBlockAddress * _blockSize);
+        var flatLength = (long)inode.Size;
+        CheckRange(flatStart, flatLength, "Directory data");
+        if (flatLength > MaxMetadataComponentSize)
         {
             throw new InvalidDataException(
-                $"Directory data size {length} exceeds the limit of {MaxMetadataComponentSize} bytes.");
+                $"Directory data size {flatLength} exceeds the limit of {MaxMetadataComponentSize} bytes.");
         }
 
         // 逐目录块按需读取，单块内存占用及目录总长度均有明确上限。
         // Read directory blocks on demand while bounding both per-block memory and total input.
         var result = new List<ErofsDirectoryEntry>();
-        for (var done = 0L; done < length; done += _blockSize)
+        for (var done = 0L; done < flatLength; done += dirBlockSize)
         {
-            var blockLength = (int)Math.Min(_blockSize, length - done);
-            var block = ReadBytes(start + done, blockLength, "Directory data");
-            result.AddRange(ErofsDirectoryEntry.ParseBlock(block));
+            var blockLength = (int)Math.Min(dirBlockSize, flatLength - done);
+            var block = ReadBytes(flatStart + done, blockLength, "Directory data");
+            result.AddRange(ParseDirectoryData(block, dirBlockSize, blockLength));
         }
 
         return result;
     }
 
+    /// <summary>
+    /// 解析单块目录数据：优先按内核 <c>erofs_fill_dentries</c> 语义解析 compact dirent；
+    /// 若首条目 nameoff 带 dense 高位标记（0x8000）则回退到 dense 解析（长名头槽位）。
+    /// <para>Parses one directory block: compact dirents per the kernel <c>erofs_fill_dentries</c>
+    /// semantics first; falls back to dense parsing (long-name head slots) when the first entry's
+    /// nameoff carries the dense high-bit flag (0x8000).</para>
+    /// </summary>
+    private static List<ErofsDirectoryEntry> ParseDirectoryData(ReadOnlySpan<byte> block, int blockSize, long totalLength)
+    {
+        if (block.Length >= ErofsDirectoryEntry.DirentSize)
+        {
+            var firstNameOff = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(8, 2));
+            if ((firstNameOff & ErofsDirectoryEntry.NameOffHeadFlag) != 0)
+            {
+                return ErofsDirectoryEntry.ParseDenseBlock(block, blockSize);
+            }
+        }
+
+        return ErofsDirectoryEntry.ParseBlock(block);
+    }
+
+    private void CheckRange(long offset, long length, string what)
+    {
+        if (offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset)
+        {
+            throw new InvalidDataException($"{what} exceeds the image bounds.");
+        }
+    }
+
     private void WriteFileData(ulong nid, ErofsInode inode, Stream output)
     {
-        if (inode.IsCompressed)
+        switch (inode.DataLayout)
         {
-            WriteCompressedData(nid, inode, output);
+            case ErofsInode.DataLayoutInline:
+                // inline 布局（EROFS_INODE_FLAT_INLINE）：文件数据紧随 inode 与 inline xattr 之后，
+                // 位于同一元数据块内；i_u 为哨兵 0xffffffff 时表示整个文件都是 inline 数据。
+                // Inline layout (EROFS_INODE_FLAT_INLINE): the file data follows the inode and inline
+                // xattrs within the same metadata block; when i_u is the sentinel 0xffffffff the whole
+                // file is inline data.
+                WriteInlineData(nid, inode, output);
+                break;
+            case ErofsInode.DataLayoutFlat:
+                WriteFlatData(inode, output);
+                break;
+            case ErofsInode.DataLayoutChunkBased:
+                WriteChunkData(nid, inode, output);
+                break;
+            case ErofsInode.DataLayoutCompressed:
+            case ErofsInode.DataLayoutCompactIndexes:
+                WriteCompressedData(nid, inode, output);
+                break;
+            default:
+                // Fail loudly instead of silently reading raw bytes as file content.
+                // 显式失败而非静默把原始字节当作文件内容。
+                throw new InvalidDataException($"Unsupported EROFS data layout {inode.DataLayout} for inode nid {nid}.");
+        }
+    }
+
+    private void WriteInlineData(ulong nid, ErofsInode inode, Stream output)
+    {
+        var length = (long)inode.Size;
+        if (length == 0)
+        {
             return;
         }
 
-        if (inode.DataLayout != ErofsInode.DataLayoutFlat)
+        // FLAT_INLINE = tail-packing：文件主体为 flat 数据（自 i_u 块起连续），仅最后一个
+        // 不足一块的尾部内联在 inode + xattr 之后（内核 data.c __erofs_map_blocks：
+        // pos = (ceil(size/blksz) - 1) * blksz；m_la < pos 时 m_pa = i_u*blksz + m_la，
+        // 否则从 iloc + isize + xattr_isize 读取内联尾部）。
+        // FLAT_INLINE means tail-packing: the bulk of the file is flat data (contiguous from the
+        // i_u block) and only the trailing part (less than one block) is inlined right after the
+        // inode + xattrs (kernel data.c __erofs_map_blocks: pos = (ceil(size/blksz) - 1) * blksz;
+        // m_la < pos maps to m_pa = i_u*blksz + m_la, otherwise the inline tail is read from
+        // iloc + isize + xattr_isize).
+        var blockCount = CeilDiv(length, _blockSize);
+        var flatLength = checked((long)(blockCount - 1) * _blockSize);
+        if (flatLength > 0)
         {
-            // Fail loudly instead of silently reading the raw (e.g. compacted-index or inline) data.
-            // 显式失败而非静默把原始（如紧凑索引或内联）数据当作文件内容。
-            throw new InvalidDataException($"Unsupported EROFS data layout {inode.DataLayout} for inode nid {nid}.");
+            var flatStart = checked((long)inode.RawBlockAddress * _blockSize);
+            CheckRange(flatStart, flatLength, "Tailpacked flat file data");
+            CopyFromSource(output, flatStart, flatLength);
         }
 
-        WriteFlatData(inode, output);
+        var tailLength = length - flatLength;
+        if (tailLength > 0)
+        {
+            var tailStart = _superblock.GetInodeOffset(nid) + inode.InlineDataOffset;
+            CheckRange(tailStart, tailLength, "Tailpacked inline data");
+            CopyFromSource(output, tailStart, tailLength);
+        }
     }
+
+    private static long CeilDiv(long value, int divisor) => (value + divisor - 1) / divisor;
 
     private void WriteFlatData(ErofsInode inode, Stream output)
     {
@@ -511,114 +795,728 @@ public sealed class ErofsParser : IDisposable
         }
 
         var start = checked((long)inode.RawBlockAddress * _blockSize);
-        if (start < 0 || length < 0 || start > _imageSize || length > _imageSize - start)
-        {
-            throw new InvalidDataException("File data exceeds the image bounds.");
-        }
-
+        CheckRange(start, length, "File data");
         CopyFromSource(output, start, length);
     }
 
-    private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output)
+    /// <summary>
+    /// 读取 chunk-based 文件（EROFS_INODE_CHUNK_BASED）：按 chunk 索引表逐块拼接数据。
+    /// chunk 索引（8 字节 erofs_inode_chunk_index：startblk_hi u16 + device_id u16 + startblk_lo u32）
+    /// 位于 inode + xattr 之后；chunk 大小 = 块大小 &lt;&lt; chunk blkbits（chunk format 低 5 位）。
+    /// EROFS_NULL_ADDR（0xFFFFFFFFFFFFFFFF）表示空洞（零填充）。
+    /// <para>Reads a chunk-based file (EROFS_INODE_CHUNK_BASED): assembles data chunk by chunk from
+    /// the chunk index table. Chunk indexes (8-byte erofs_inode_chunk_index: startblk_hi u16 +
+    /// device_id u16 + startblk_lo u32) sit right after the inode + xattrs; the chunk size equals
+    /// block size &lt;&lt; chunk blkbits (low 5 bits of the chunk format). EROFS_NULL_ADDR
+    /// (0xFFFFFFFFFFFFFFFF) marks a hole (zero fill).</para>
+    /// </summary>
+    private void WriteChunkData(ulong nid, ErofsInode inode, Stream output)
     {
-        var clusterSize = _blockSize;
-        if (inode.Size > (ulong)_imageSize)
-        {
-            throw new InvalidDataException($"Compressed file size {inode.Size} exceeds the image size {_imageSize}.");
-        }
-
-        var pclusterCount = ErofsCompression.PclusterCount(inode.Size, clusterSize);
-        if (pclusterCount == 0)
+        var length = (long)inode.Size;
+        if (length == 0)
         {
             return;
         }
 
-        var indexOffset = _superblock.GetInodeOffset(nid) + inode.OnDiskSize;
-        var indexLength = checked((long)pclusterCount * ErofsCompression.PclusterIndexSize);
-        if (indexOffset < 0 || indexLength < 0 || indexOffset > _imageSize || indexLength > _imageSize - indexOffset)
+        var chunkBlkBits = inode.ChunkFormatBlkBits;
+        var chunkSize = _blockSize << chunkBlkBits;
+        if (chunkSize <= 0)
         {
-            throw new InvalidDataException("Pcluster index table exceeds the image bounds.");
+            throw new InvalidDataException($"Invalid chunk size (blkbits {chunkBlkBits}) for nid {nid}.");
         }
 
-        if (indexLength > MaxMetadataComponentSize)
+        var chunkCount = (length + chunkSize - 1) / chunkSize;
+        var usesIndexes = inode.UsesChunkIndexes;
+        var indexTableOffset = _superblock.GetInodeOffset(nid) + inode.InlineDataOffset;
+        var indexBytes = usesIndexes
+            ? checked(chunkCount * 8L)
+            : checked(chunkCount * 4L);
+        if (indexBytes > MaxMetadataComponentSize)
         {
             throw new InvalidDataException(
-                $"Pcluster index table size {indexLength} exceeds the limit of {MaxMetadataComponentSize} bytes.");
+                $"Chunk index table size {indexBytes} exceeds the limit of {MaxMetadataComponentSize} bytes.");
         }
 
-        const int IndexEntriesPerBatch = 1024;
-        var decoded = ArrayPool<byte>.Shared.Rent(clusterSize);
-        var compressed = ArrayPool<byte>.Shared.Rent(ushort.MaxValue);
-        var indexBatch = ArrayPool<byte>.Shared.Rent(IndexEntriesPerBatch * ErofsCompression.PclusterIndexSize);
+        var index = ReadBytes(indexTableOffset, checked((int)indexBytes), "Chunk index table");
+        var remaining = length;
+        for (var i = 0; i < chunkCount && remaining > 0; i++)
+        {
+            var chunkLen = (int)Math.Min(chunkSize, remaining);
+            ulong startBlk;
+            if (usesIndexes)
+            {
+                var slot = index.AsSpan(i * 8, 8);
+                startBlk = ((ulong)BinaryPrimitives.ReadUInt16LittleEndian(slot) << 32)
+                           | BinaryPrimitives.ReadUInt32LittleEndian(slot.Slice(4));
+            }
+            else
+            {
+                // 4 字节块号数组（EROFS_BLOCK_MAP_ENTRY_SIZE）：块号按顺序拼接。
+                // 4-byte block-number array: block numbers concatenated in order.
+                startBlk = BinaryPrimitives.ReadUInt32LittleEndian(index.AsSpan(i * 4, 4));
+            }
+
+            if (startBlk == ErofsNullAddr)
+            {
+                // 空洞：零填充。Hole: zero fill.
+                var zeroes = new byte[Math.Min(chunkLen, 1 << 16)];
+                var zeroed = 0;
+                while (zeroed < chunkLen)
+                {
+                    var n = Math.Min(zeroes.Length, chunkLen - zeroed);
+                    output.Write(zeroes, 0, n);
+                    zeroed += n;
+                }
+
+                remaining -= chunkLen;
+                continue;
+            }
+
+            var dataStart = checked((long)startBlk * _blockSize);
+            CheckRange(dataStart, chunkLen, "Chunk data");
+            CopyFromSource(output, dataStart, chunkLen);
+            remaining -= chunkLen;
+        }
+    }
+
+    /// <summary>空洞哨兵块号（EROFS_NULL_ADDR = -1）。Hole sentinel block number (EROFS_NULL_ADDR = -1).</summary>
+    private const ulong ErofsNullAddr = ulong.MaxValue;
+
+    // ---- 压缩数据读取（内核 fs/erofs/zmap.c 语义）。Compressed data reading (kernel zmap.c). ----
+
+    private const byte LclusterTypePlain = 0;
+    private const byte LclusterTypeHead1 = 1;
+    private const byte LclusterTypeNonHead = 2;
+    private const byte LclusterTypeHead2 = 3;
+
+    /// <summary>z_erofs_map_header 之后、紧凑索引起始前的固定字节数（内核 Z_EROFS_MAP_HEADER_END 之后 8 字节）。
+    /// Fixed bytes between z_erofs_map_header and the full index start (8 bytes after Z_EROFS_MAP_HEADER_END).</summary>
+    private const int FullIndexStartPad = 8;
+
+    /// <summary>
+    /// 读取压缩文件（COMPRESSED_FULL / COMPRESSED_COMPACT）。严格对照内核
+    /// <c>z_erofs_fill_inode</c> + <c>z_erofs_map_blocks_fo</c> + <c>z_erofs_load_lcluster_from_disk</c>：
+    /// 读取 8 字节 z_erofs_map_header 确定算法与簇大小，按紧凑（4B/2B 位级）或完整（8B）索引逐
+    /// pcluster 解压，支持 big pcluster（D0_CBLKCNT）、PLAIN 字面簇、tailpacking（INLINE_PCLUSTER）
+    /// 与 fragment 引用。
+    /// <para>Reads a compressed file (COMPRESSED_FULL / COMPRESSED_COMPACT), strictly following the
+    /// kernel <c>z_erofs_fill_inode</c> + <c>z_erofs_map_blocks_fo</c> +
+    /// <c>z_erofs_load_lcluster_from_disk</c>: reads the 8-byte z_erofs_map_header to determine the
+    /// algorithm and cluster size, then decompresses pcluster by pcluster from compact (bit-level
+    /// 4B/2B) or full (8B) indexes, supporting big pclusters (D0_CBLKCNT), PLAIN literal clusters,
+    /// tailpacking (INLINE_PCLUSTER) and fragment references.</para>
+    /// </summary>
+    private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output)
+    {
+        var inodeLoc = _superblock.GetInodeOffset(nid);
+        // 压缩配置头 z_erofs_map_header（8 字节）位于 inode + xattr 之后、8 字节对齐处。
+        // The z_erofs_map_header (8 bytes) sits right after the inode + xattrs, aligned to 8 bytes.
+        var headerOffset = AlignUp(inodeLoc + inode.OnDiskSize + inode.XattrTotalSize, 8);
+        var headerBytes = ReadBytes(headerOffset, ZErofsMapHeader.Size, "compressed map header");
+        var header = ZErofsMapHeader.FromBytes(headerBytes);
+
+        // fragment-inode：整文件打包在 packed inode 中（h_clusterbits bit7）。
+        // Fragment inode: the whole file is packed into the packed inode (h_clusterbits bit 7).
+        if (header.IsFragmentInode)
+        {
+            var fragmentOff = header.FragmentOff & ~(1u << ZErofsMapHeader.FragmentInodeBit);
+            WritePackedData(inode, fragmentOff, output);
+            return;
+        }
+
+        var advise = header.Advise;
+        var algorithmHead1 = header.Algorithm;
+        // HEAD2 算法编码于 h_algorithmtype 高 4 位（内核 z_erofs_fill_inode）。
+        // The HEAD2 algorithm is encoded in the high nibble of h_algorithmtype (kernel z_erofs_fill_inode).
+        var algorithmHead2 = (ErofsAlgorithm)((header.AlgorithmType >> 4) & ZErofsMapHeader.AlgorithmTypeMask);
+        var lclusterBits = _superblock.BlockSizeBits + (header.ClusterBits & ZErofsMapHeader.LclusterBitsMask);
+        if (lclusterBits > 14)
+        {
+            throw new InvalidDataException($"Logical cluster size shift {lclusterBits} exceeds the limit of 14.");
+        }
+
+        var lclusterSize = 1 << lclusterBits;
+        var totalIdx = ErofsCompression.PclusterCount(inode.Size, lclusterSize);
+        if (totalIdx == 0)
+        {
+            return;
+        }
+
+        var bigPcluster1 = (advise & ZErofsMapHeader.AdviseBigPcluster1) != 0;
+        var bigPcluster2 = (advise & ZErofsMapHeader.AdviseBigPcluster2) != 0;
+        var tailPacking = (advise & ZErofsMapHeader.AdviseInlinePcluster) != 0;
+        var fragmentPcluster = (advise & ZErofsMapHeader.AdviseFragmentPcluster) != 0;
+        if (bigPcluster1 != bigPcluster2)
+        {
+            // 内核要求 HEAD1/HEAD2 big-pcluster 标志一致；不一致视为损坏。
+            // The kernel requires the HEAD1/HEAD2 big-pcluster advises to be consistent.
+            throw new InvalidDataException($"Inconsistent big-pcluster advises 0x{advise:X4} for nid {nid}.");
+        }
+
+        var compressed = ArrayPool<byte>.Shared.Rent(_blockSize * 2);
+        var decoded = ArrayPool<byte>.Shared.Rent(Math.Max(lclusterSize, _blockSize));
         try
         {
-            for (var first = 0; first < pclusterCount; first += IndexEntriesPerBatch)
+            long lcn = 0;
+            while (lcn < totalIdx)
             {
-                var batchCount = Math.Min(IndexEntriesPerBatch, pclusterCount - first);
-                lock (_streamLock)
+                var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out var ebase, out var compacted4bInitial, out var compacted2b);
+                if (lc.Type == LclusterTypeNonHead)
                 {
-                    _stream.Position = checked(_baseOffset + indexOffset + (long)first * ErofsCompression.PclusterIndexSize);
-                    _stream.ReadExactly(indexBatch, 0, batchCount * ErofsCompression.PclusterIndexSize);
+                    // NONHEAD 簇属于其前一个 HEAD pcluster，随 HEAD 一起解压；跳过。
+                    // This cluster belongs to the previous HEAD pcluster and is covered by its
+                    // decompressed data; skip it.
+                    lcn++;
+                    continue;
                 }
-                for (var batchIndex = 0; batchIndex < batchCount; batchIndex++)
+
+                // HEAD/PLAIN 簇：逻辑起点 mLa = (lcn << lclusterbits) | clusterofs。
+                // HEAD/PLAIN cluster: logical start mLa = (lcn << lclusterbits) | clusterofs.
+                var mLa = lcn * lclusterSize + lc.ClusterOfs;
+                if (mLa >= (long)inode.Size)
                 {
-                    var i = first + batchIndex;
-                    var entry = PclusterIndex.FromBytes(indexBatch.AsSpan(
-                        batchIndex * ErofsCompression.PclusterIndexSize,
-                        ErofsCompression.PclusterIndexSize));
-                    var remaining = (long)inode.Size - (long)i * clusterSize;
-                    var outputLength = (int)Math.Min(clusterSize, remaining);
-                    if (outputLength <= 0)
+                    lcn++;
+                    continue;
+                }
+
+                // 向后找下一个 HEAD（跳过 NONHEAD）以确定本 pcluster 的解压长度边界。
+                // Scan forward past NONHEAD clusters to find the next HEAD, bounding this pcluster.
+                var nextLcn = lcn + 1;
+                long nextMLa;
+                while (true)
+                {
+                    if (nextLcn >= totalIdx)
                     {
+                        nextMLa = (long)inode.Size;
                         break;
                     }
 
-                    var dataStart = checked((long)entry.BlockAddress * _blockSize);
-                    if (entry.IsPlain)
+                    var t2 = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, nextLcn, out _, out _, out _);
+                    if (t2.Type != LclusterTypeNonHead)
                     {
-                        if (dataStart < 0 || outputLength < 0 || dataStart > _imageSize || outputLength > _imageSize - dataStart)
-                        {
-                            throw new InvalidDataException("Plain pcluster data exceeds the image bounds.");
-                        }
+                        nextMLa = nextLcn * lclusterSize + t2.ClusterOfs;
+                        break;
+                    }
 
-                        CopyFromSource(output, dataStart, outputLength);
+                    nextLcn++;
+                }
+
+                var llen = Math.Min(nextMLa, (long)inode.Size) - mLa;
+                if (llen <= 0)
+                {
+                    lcn = nextLcn;
+                    continue;
+                }
+
+                if (llen > MaxMetadataComponentSize)
+                {
+                    throw new InvalidDataException(
+                        $"Pcluster decompressed size {llen} exceeds the limit of {MaxMetadataComponentSize} bytes.");
+                }
+
+                // 尾部打包（tailpacking）：最后一个 pcluster 的数据内联在 map header 之后。
+                // Tail packing: the last pcluster's data is inlined right after the map header.
+                var isTailPacked = tailPacking && nextLcn >= totalIdx;
+                if (isTailPacked)
+                {
+                    var idataSize = (int)header.IdataSize;
+                    if (idataSize < 0 || idataSize > llen)
+                    {
+                        throw new InvalidDataException($"Invalid tailpacking idata size {idataSize} for nid {nid}.");
+                    }
+
+                    if (idataSize == 0)
+                    {
+                        // 无内联数据时按字面簇处理（空洞？零填充）。No inline data: treat as a hole.
+                        WriteZeroes(output, llen);
+                        lcn = nextLcn;
                         continue;
                     }
 
-                    var compressedLength = entry.CompressedLength;
-                    if (dataStart < 0 || dataStart > _imageSize || compressedLength > _imageSize - dataStart)
+                    var tailStart = headerOffset + ZErofsMapHeader.Size;
+                    CheckRange(tailStart, idataSize, "Tailpacked data");
+                    CopyFromSource(output, tailStart, idataSize);
+                    // 尾部打包的剩余部分为逻辑空洞（零填充）。The rest of a tailpacked pcluster is a hole.
+                    if (llen > idataSize)
                     {
-                        throw new InvalidDataException("Compressed pcluster data exceeds the image bounds.");
+                        WriteZeroes(output, llen - idataSize);
                     }
 
-                    lock (_streamLock)
-                    {
-                        _stream.Position = checked(_baseOffset + dataStart);
-                        _stream.ReadExactly(compressed, 0, compressedLength);
-                    }
-
-                    var decodedLength = ErofsCompression.Decompress(
-                        compressed,
-                        0,
-                        compressedLength,
-                        decoded,
-                        0,
-                        outputLength);
-                    if (decodedLength != outputLength)
-                    {
-                        throw new InvalidDataException(
-                            $"Pcluster {i} decoded to {decodedLength} bytes, expected {outputLength}.");
-                    }
-
-                    output.Write(decoded, 0, outputLength);
+                    lcn = nextLcn;
+                    continue;
                 }
+
+                if (lc.Type == LclusterTypePlain)
+                {
+                    // 字面簇：数据未压缩，物理上从 pblk 块起始连续存放（clusterofs 是逻辑簇内
+                    // 偏移，只用于 m_la 计算，不叠加到物理位置；内核 z_erofs_map_blocks_fo 的
+                    // m_pa = erofs_pos(sb, m.pblk)，随后按 SHIFTED 直接复制 m_llen 字节）。
+                    // Literal cluster: data is stored uncompressed, contiguous from the pblk block
+                    // start (clusterofs is the logical in-cluster offset used only for m_la, never
+                    // added to the physical position; kernel z_erofs_map_blocks_fo sets
+                    // m_pa = erofs_pos(sb, m.pblk) then copies m_llen bytes as SHIFTED).
+                    var dataStart = checked((long)lc.Pblk * _blockSize);
+                    CheckRange(dataStart, llen, "Plain lcluster data");
+                    CopyFromSource(output, dataStart, llen);
+                    lcn = nextLcn;
+                    continue;
+                }
+
+                // HEAD1/HEAD2 压缩簇：确定压缩块数并解压。
+                // HEAD1/HEAD2 compressed cluster: determine the compressed block count and decompress.
+                var compressedBlocks = 1;
+                var headType = lc.Type;
+                var head1NotBig = headType == LclusterTypeHead1 && !bigPcluster1;
+                var plainOrHead2NotBig = (headType == LclusterTypePlain || headType == LclusterTypeHead2) && !bigPcluster2;
+                var atEof = (lcn << lclusterBits) >= (long)inode.Size;
+                if (!head1NotBig && !plainOrHead2NotBig && !atEof)
+                {
+                    // 需要从下一个 NONHEAD 的 D0_CBLKCNT 取得压缩块数（big pcluster）。
+                    // The compressed block count comes from the next NONHEAD's D0_CBLKCNT (big pcluster).
+                    var next = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn + 1, out _, out _, out _);
+                    if (next.Type != LclusterTypeNonHead)
+                    {
+                        compressedBlocks = 1;
+                    }
+                    else
+                    {
+                        if (next.Delta0 == 1)
+                        {
+                            // 内核要求首个 NONHEAD 的 delta[0] 为 1 且带 CBLKCNT。
+                            // The kernel requires delta[0] == 1 with CBLKCNT on the first NONHEAD.
+                            throw new InvalidDataException($"Bogus CBLKCNT @ lcn {lcn + 1} of nid {nid}.");
+                        }
+
+                        compressedBlocks = next.CompressedBlocks;
+                    }
+                }
+
+                var compressedByteLen = checked(compressedBlocks * _blockSize);
+                if (compressedByteLen <= 0 || lc.Pblk < 0)
+                {
+                    throw new InvalidDataException("Invalid compressed pcluster for nid {nid}.");
+                }
+
+                var pblkStart = checked((long)lc.Pblk * _blockSize);
+                CheckRange(pblkStart, compressedByteLen, "Compressed pcluster data");
+                if (compressedByteLen > compressed.Length)
+                {
+                    ArrayPool<byte>.Shared.Return(compressed);
+                    compressed = ArrayPool<byte>.Shared.Rent(compressedByteLen);
+                }
+
+                if (llen > decoded.Length)
+                {
+                    ArrayPool<byte>.Shared.Return(decoded);
+                    decoded = ArrayPool<byte>.Shared.Rent((int)llen);
+                }
+
+                lock (_streamLock)
+                {
+                    _stream.Position = checked(_baseOffset + pblkStart);
+                    _stream.ReadExactly(compressed, 0, compressedByteLen);
+                }
+
+                // LZ4_0PADDING / 压缩配置特性：压缩数据前可能存在 0 前缀（mkfs 写入时
+                // 从 dst-padding 起写），erofs-utils 解压前经 z_erofs_fixup_insize 跳过前导 0。
+                // Compressed data may carry a leading-zero prefix (0-padding feature: mkfs writes
+                // from dst - padding); erofs-utils skips it via z_erofs_fixup_insize before
+                // decompression.
+                var inputMargin = 0;
+                while (inputMargin < compressedByteLen && compressed[inputMargin] == 0)
+                {
+                    inputMargin++;
+                }
+
+                if (inputMargin >= compressedByteLen)
+                {
+                    throw new InvalidDataException(
+                        $"Pcluster {lcn} of nid {nid} is entirely zero-padded (no compressed data).");
+                }
+
+                var algorithm = headType == LclusterTypeHead2 ? algorithmHead2 : algorithmHead1;
+                int decodedLen;
+                try
+                {
+                    decodedLen = ErofsCompression.AlgorithmDecompress(
+                        algorithm, compressed, inputMargin, compressedByteLen - inputMargin, decoded, 0, (int)llen);
+                }
+                catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or ArgumentException)
+                {
+                    throw new InvalidDataException(
+                        $"Pcluster {lcn} of nid {nid} failed to decompress ({algorithm}): {ex.Message}");
+                }
+
+                if (decodedLen != (int)llen)
+                {
+                    throw new InvalidDataException(
+                        $"Pcluster {lcn} decoded to {decodedLen} bytes, expected {llen}.");
+                }
+
+                output.Write(decoded, 0, (int)llen);
+                lcn = nextLcn;
             }
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(indexBatch);
             ArrayPool<byte>.Shared.Return(compressed);
             ArrayPool<byte>.Shared.Return(decoded);
         }
     }
+
+    private static void WriteZeroes(Stream output, long count)
+    {
+        var zeroes = new byte[Math.Min(count, 1 << 16)];
+        var written = 0L;
+        while (written < count)
+        {
+            var n = (int)Math.Min(zeroes.Length, count - written);
+            output.Write(zeroes, 0, n);
+            written += n;
+        }
+    }
+
+    /// <summary>
+    /// 从 packed inode（fragment 特性）读取片段数据：packed_nid 指向特殊 packed inode，
+    /// 其数据区按 flat 布局读取，fragmentoff 为片段在其中的字节偏移。
+    /// <para>Reads fragment data from the packed inode (fragments feature): s_packed_nid points to the
+    /// special packed inode whose data area is read as a flat file; fragmentoff is the byte offset of
+    /// the fragment within it.</para>
+    /// </summary>
+    private void WritePackedData(ErofsInode fragmentInode, uint fragmentOff, Stream output)
+    {
+        var packedNid = _superblock.PackedNid;
+        if (packedNid == 0)
+        {
+            throw new InvalidDataException("Fragment inode without a packed inode (s_packed_nid == 0).");
+        }
+
+        _packedInode ??= ReadInode(packedNid);
+        var packed = _packedInode;
+        if (!packed.IsRegularFile && !packed.IsDirectory)
+        {
+            throw new InvalidDataException($"Packed inode nid {packedNid} is not a regular file.");
+        }
+
+        var length = (long)fragmentInode.Size;
+        if (length == 0)
+        {
+            return;
+        }
+
+        // packed inode 数据区起点：flat 布局下 i_u 为起始块号；inline 布局下为 inline 数据。
+        // The packed inode data area: flat layout uses i_u as the start block; inline uses inline data.
+        if (packed.DataLayout == ErofsInode.DataLayoutInline)
+        {
+            var start = _superblock.GetInodeOffset(packedNid) + packed.InlineDataOffset + fragmentOff;
+            CheckRange(start, length, "Packed fragment data");
+            CopyFromSource(output, start, length);
+            return;
+        }
+
+        if (packed.DataLayout != ErofsInode.DataLayoutFlat)
+        {
+            throw new InvalidDataException($"Unsupported packed inode layout {packed.DataLayout} for nid {packedNid}.");
+        }
+
+        var flatStart = checked((long)packed.RawBlockAddress * _blockSize + fragmentOff);
+        CheckRange(flatStart, length, "Packed fragment data");
+        CopyFromSource(output, flatStart, length);
+    }
+
+    /// <summary>
+    /// 加载并解码单个逻辑簇条目（紧凑 4B/2B 位级索引或完整 8B 索引），严格对照内核
+    /// <c>z_erofs_load_compact_lcluster</c> / <c>z_erofs_load_full_lcluster</c>。
+    /// <para>Loads and decodes a single logical-cluster entry (compact bit-level 4B/2B indexes or full
+    /// 8-byte indexes), strictly following the kernel <c>z_erofs_load_compact_lcluster</c> /
+    /// <c>z_erofs_load_full_lcluster</c>.</para>
+    /// </summary>
+    private LclusterEntry LoadLcluster(
+        ulong nid,
+        ErofsInode inode,
+        long headerOffset,
+        ushort advise,
+        int lclusterBits,
+        int totalIdx,
+        long lcn,
+        out long ebase,
+        out int compacted4bInitial,
+        out int compacted2b)
+    {
+        // ebase：紧凑索引表起始（map header 之后）。ebase: start of the compact index table.
+        ebase = headerOffset + ZErofsMapHeader.Size;
+        if (inode.DataLayout == ErofsInode.DataLayoutCompactIndexes)
+        {
+            compacted4bInitial = (int)(((32 - ebase % 32) / 4) & 7);
+            compacted2b = 0;
+            if ((advise & ZErofsMapHeader.AdviseCompacted2B) != 0 && compacted4bInitial < totalIdx)
+            {
+                compacted2b = (totalIdx - compacted4bInitial) / 16 * 16;
+            }
+
+            return LoadCompactLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, compacted4bInitial, compacted2b, lcn);
+        }
+
+        compacted4bInitial = 0;
+        compacted2b = 0;
+        return LoadFullLcluster(inode, headerOffset, lclusterBits, lcn);
+    }
+
+    /// <summary>
+    /// 解码紧凑索引中的单个逻辑簇条目（位级），移植自内核
+    /// <c>z_erofs_load_compact_lcluster</c> + <c>decode_compactedbits</c>，含 big-pcluster 回看分支。
+    /// <para>Decodes a single logical-cluster entry from the compact index (bit-level), ported from the
+    /// kernel <c>z_erofs_load_compact_lcluster</c> + <c>decode_compactedbits</c>, including the
+    /// big-pcluster lookback branch.</para>
+    /// </summary>
+    private LclusterEntry LoadCompactLcluster(
+        ulong nid,
+        ErofsInode inode,
+        long headerOffset,
+        ushort advise,
+        int lclusterBits,
+        int totalIdx,
+        int compacted4bInitial,
+        int compacted2b,
+        long lcn)
+    {
+        var bigPcluster = (advise & (ZErofsMapHeader.AdviseBigPcluster1 | ZErofsMapHeader.AdviseBigPcluster2)) != 0;
+        var amortizedShift = 2; // compact_4b：每簇 4 字节
+        var pos = headerOffset + ZErofsMapHeader.Size;
+        var l = lcn;
+        if (l >= compacted4bInitial)
+        {
+            pos += compacted4bInitial * 4;
+            l -= compacted4bInitial;
+            if (l < compacted2b)
+            {
+                amortizedShift = 1; // compact_2b：每簇 2 字节
+            }
+            else
+            {
+                pos += compacted2b * 2;
+                l -= compacted2b;
+            }
+        }
+
+        pos += l * (1 << amortizedShift);
+
+        int vcnt;
+        if ((1 << amortizedShift) == 4 && lclusterBits <= 14)
+        {
+            vcnt = 2;
+        }
+        else if ((1 << amortizedShift) == 2 && lclusterBits <= 12)
+        {
+            vcnt = 16;
+        }
+        else
+        {
+            throw new InvalidDataException(
+                $"Unsupported compact index layout (shift {amortizedShift}, lcluster bits {lclusterBits}).");
+        }
+
+        var packSize = vcnt << amortizedShift;
+        var bytesInPack = (int)(pos & (packSize - 1));
+        var i = bytesInPack >> amortizedShift;
+        var packStartRel = (int)(pos - (headerOffset + ZErofsMapHeader.Size) - bytesInPack);
+        if (packStartRel < 0)
+        {
+            throw new InvalidDataException("Compact index pack exceeds the image bounds.");
+        }
+
+        var ebase = headerOffset + ZErofsMapHeader.Size;
+        var indexLength = checked((long)totalIdx * 4 + 64);
+        if (indexLength > MaxMetadataComponentSize)
+        {
+            throw new InvalidDataException(
+                $"Compact index table size {indexLength} exceeds the limit of {MaxMetadataComponentSize} bytes.");
+        }
+
+        var index = ReadBytes(ebase, checked((int)Math.Min(indexLength, _imageSize - ebase)), "compact index table");
+        if (packStartRel + packSize > index.Length)
+        {
+            throw new InvalidDataException("Compact index pack exceeds the image bounds.");
+        }
+
+        var lobits = Math.Max(lclusterBits, 12); // ilog2(Z_EROFS_LI_D0_CBLKCNT) + 1 = 11 + 1
+        var encodebits = ((packSize - 4) * 8) / vcnt;
+        var (lo, type) = DecodeCompactedBits(index, packStartRel, lobits, encodebits * i);
+        if (type == LclusterTypeNonHead)
+        {
+            // NONHEAD：clusterofs = 1<<lclusterbits 哨兵；delta[0] 指向 HEAD 的距离。
+            // NONHEAD: clusterofs = 1<<lclusterbits sentinel; delta[0] = distance to the HEAD.
+            var clusterOfs = 1 << lclusterBits;
+            if ((lo & (1u << 11)) != 0)
+            {
+                // D0_CBLKCNT 标志（big pcluster 首个 NONHEAD 存储压缩块数）。
+                // D0_CBLKCNT flag: the first NONHEAD of a big pcluster stores the compressed block count.
+                return new LclusterEntry(type, clusterOfs, delta0: 1, delta1: 0, pblk: 0, compressedBlocks: (int)(lo & ~(1u << 11)));
+            }
+
+            if (i + 1 == vcnt)
+            {
+                // pack 内最后一个条目存的是 delta[1]；delta[0] 由前一条目间接推出。
+                // The last entry of the pack stores delta[1] instead; derive delta[0] from the previous one.
+                var (prevLo, prevType) = DecodeCompactedBits(index, packStartRel, lobits, encodebits * (i - 1));
+                if (prevType != LclusterTypeNonHead)
+                {
+                    prevLo = 0;
+                }
+                else if ((prevLo & (1u << 11)) != 0)
+                {
+                    prevLo = 1;
+                }
+
+                return new LclusterEntry(type, clusterOfs, delta0: prevLo + 1, delta1: lo, pblk: 0, compressedBlocks: 0);
+            }
+
+            return new LclusterEntry(type, clusterOfs, delta0: lo, delta1: 0, pblk: 0, compressedBlocks: 0);
+        }
+
+        // HEAD / PLAIN：clusterofs = lo；pblk = pack 尾部 blkaddr + 本 pack 内回看累计的物理块数。
+        // HEAD / PLAIN: clusterofs = lo; pblk = trailing blkaddr of the pack + lookback block count.
+        var clusterOfsH = (int)lo;
+        long nblk;
+        var j = i;
+        if (!bigPcluster)
+        {
+            nblk = 1;
+            while (j > 0)
+            {
+                j--;
+                var (prevLo2, prevType2) = DecodeCompactedBits(index, packStartRel, lobits, encodebits * j);
+                if (prevType2 == LclusterTypeNonHead)
+                {
+                    j -= (int)prevLo2;
+                }
+
+                if (j >= 0)
+                {
+                    nblk++;
+                }
+            }
+        }
+        else
+        {
+            // big-pcluster 回看：NONHEAD 带 CBLKCNT 时直接累加压缩块数，否则按 delta 回跳。
+            // Big-pcluster lookback: NONHEAD with CBLKCNT accumulates compressed blocks; otherwise
+            // jump back by delta.
+            nblk = 0;
+            while (j > 0)
+            {
+                j--;
+                var (prevLo3, prevType3) = DecodeCompactedBits(index, packStartRel, lobits, encodebits * j);
+                if (prevType3 == LclusterTypeNonHead)
+                {
+                    if ((prevLo3 & (1u << 11)) != 0)
+                    {
+                        j--;
+                        nblk += prevLo3 & ~(1u << 11);
+                        continue;
+                    }
+
+                    // big-pcluster 不允许普通 d0 == 1；按 d0 - 2 回跳。
+                    // Big pclusters must not have plain d0 == 1; jump back by d0 - 2.
+                    if (prevLo3 <= 1)
+                    {
+                        throw new InvalidDataException($"Corrupt big-pcluster delta for nid {nid}.");
+                    }
+
+                    j -= (int)prevLo3 - 2;
+                    continue;
+                }
+
+                nblk++;
+            }
+        }
+
+        var packBlkaddr = BinaryPrimitives.ReadUInt32LittleEndian(index.AsSpan(packStartRel + packSize - 4, 4));
+        var pblk = (long)packBlkaddr + nblk;
+        return new LclusterEntry(type, clusterOfsH, delta0: 0, delta1: 0, pblk: pblk, compressedBlocks: 0);
+    }
+
+    /// <summary>
+    /// 解码完整（8 字节）压缩索引条目，移植自内核 <c>z_erofs_load_full_lcluster</c>。
+    /// 完整索引起始于 <c>Z_EROFS_FULL_INDEX_START = Z_EROFS_MAP_HEADER_END + 8</c>。
+    /// <para>Decodes a full (8-byte) compressed index entry, ported from the kernel
+    /// <c>z_erofs_load_full_lcluster</c>. The full index starts at
+    /// <c>Z_EROFS_FULL_INDEX_START = Z_EROFS_MAP_HEADER_END + 8</c>.</para>
+    /// </summary>
+    private LclusterEntry LoadFullLcluster(ErofsInode inode, long headerOffset, int lclusterBits, long lcn)
+    {
+        var indexOffset = headerOffset + ZErofsMapHeader.Size + FullIndexStartPad + lcn * ZErofsLclusterIndex.Size;
+        if (indexOffset < 0 || indexOffset > _imageSize - ZErofsLclusterIndex.Size)
+        {
+            throw new InvalidDataException($"Full index entry {lcn} exceeds the image bounds.");
+        }
+
+        var entry = ZErofsLclusterIndex.FromBytes(ReadBytes(indexOffset, ZErofsLclusterIndex.Size, "full index entry"));
+        if (entry.IsNonHead)
+        {
+            // D0_CBLKCNT 判定针对 delta[0] 值（内核 z_erofs_load_full_lcluster）。
+            // The D0_CBLKCNT check applies to the delta[0] value (kernel z_erofs_load_full_lcluster).
+            if ((entry.Delta0 & ZErofsLclusterIndex.LiD0CblkCnt) != 0)
+            {
+                return new LclusterEntry(LclusterTypeNonHead, 1 << lclusterBits, delta0: 1, delta1: 0, pblk: 0, compressedBlocks: entry.Delta0 & ~ZErofsLclusterIndex.LiD0CblkCnt);
+            }
+
+            return new LclusterEntry(LclusterTypeNonHead, 1 << lclusterBits, delta0: entry.Delta0, delta1: entry.Delta1, pblk: 0, compressedBlocks: 0);
+        }
+
+        var type = entry.IsHead2 ? LclusterTypeHead2 : (entry.IsPlain ? LclusterTypePlain : LclusterTypeHead1);
+        if (entry.IsHole)
+        {
+            return new LclusterEntry(type, entry.ClusterOfs, delta0: 0, delta1: 0, pblk: -1, compressedBlocks: 0);
+        }
+
+        return new LclusterEntry(type, entry.ClusterOfs, delta0: 0, delta1: 0, pblk: (long)entry.Blkaddr, compressedBlocks: 0);
+    }
+
+    /// <summary>
+    /// 位级解码紧凑索引条目：<c>v = le32(in + pos/8) &gt;&gt; (pos &amp; 7)</c>；
+    /// 低 <paramref name="lobits"/> 位为 lo（clusterofs / delta），随后 2 位为簇类型。
+    /// <para>Bit-level compact index decode: <c>v = le32(in + pos/8) &gt;&gt; (pos &amp; 7)</c>;
+    /// the low <paramref name="lobits"/> bits are lo (clusterofs / delta) and the following 2 bits
+    /// are the cluster type.</para>
+    /// </summary>
+    private static (uint Lo, byte Type) DecodeCompactedBits(byte[] index, int packStartRel, int lobits, int bitPos)
+    {
+        var byteOffset = packStartRel + (bitPos >> 3);
+        if (byteOffset + 4 > index.Length)
+        {
+            throw new InvalidDataException("Compact index bits exceed the image bounds.");
+        }
+
+        var v = BinaryPrimitives.ReadUInt32LittleEndian(index.AsSpan(byteOffset, 4)) >> (bitPos & 7);
+        var lo = v & ((1u << lobits) - 1);
+        var type = (byte)((v >> lobits) & 3);
+        return (lo, type);
+    }
+
+    private static long AlignUp(long value, int alignment) => (value + alignment - 1) / alignment * alignment;
+
+    /// <summary>
+    /// 解码后的逻辑簇条目。Decoded logical-cluster entry.
+    /// </summary>
+    private readonly struct LclusterEntry
+    {
+        public byte Type { get; }
+        public int ClusterOfs { get; }
+        public uint Delta0 { get; }
+        public uint Delta1 { get; }
+        public long Pblk { get; }
+        public int CompressedBlocks { get; }
+
+        public LclusterEntry(byte type, int clusterOfs, uint delta0, uint delta1, long pblk, int compressedBlocks)
+        {
+            Type = type;
+            ClusterOfs = clusterOfs;
+            Delta0 = delta0;
+            Delta1 = delta1;
+            Pblk = pblk;
+            CompressedBlocks = compressedBlocks;
+        }
+    }
 }
+
