@@ -1,6 +1,9 @@
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Data;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.TextMate;
 using TextMateSharp.Grammars;
@@ -72,6 +75,18 @@ public partial class CodeEditor : TextEditor
 
         TextChanged += (_, _) => SetValue(TextProperty, base.Text);
         ActualThemeVariantChanged += (_, _) => UpdateEditorTheme();
+    }
+
+    /// <inheritdoc />
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+
+        // AvaloniaEdit disables auto-hide in its template, which leaves Semi scrollbars expanded.
+        foreach (var scrollViewer in this.GetVisualDescendants().OfType<ScrollViewer>())
+        {
+            scrollViewer.SetCurrentValue(ScrollViewer.AllowAutoHideProperty, true);
+        }
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)

@@ -8,11 +8,11 @@
              x:Class="UotanStudio.Views.Editors.FileView"
              x:DataType="viewmodels:FileViewModel">
   <Grid RowDefinitions="Auto,*,Auto">
-    <!-- 顶部工具栏：视图切换 -->
-    <Border Grid.Row="0" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <!-- 顶部文件路径 -->
+    <Border Grid.Row="0" Padding="6,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>
         <TextBlock DockPanel.Dock="Left" Text="{Binding FilePathDisplay}"
-                   FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                   FontSize="12" Opacity="0.7" VerticalAlignment="Center"
                    TextTrimming="CharacterEllipsis" />
       </DockPanel>
     </Border>
@@ -27,14 +27,13 @@
                         IsVisible="{Binding IsBinary}" />
 
     <!-- 底部状态栏 -->
-    <Border Grid.Row="2" Padding="6,3" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+    <Border Grid.Row="2" Padding="6,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
             IsVisible="{Binding IsBinary}">
       <StackPanel Orientation="Horizontal" Spacing="12">
-        <TextBlock Text="{Binding SizeDisplay}"
-                   FontSize="10" Opacity="0.6" />
-        <TextBlock Text="{Binding FormatDisplay}"
-                   FontSize="10" Opacity="0.6"
-                   IsVisible="{Binding DetectedFormat, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <TextBlock Text="{Binding SizeDisplay}" FontSize="12" Opacity="0.6" />
+        <TextBlock Text="{Binding IsDirty, StringFormat='[*]'}"
+                   FontSize="12" Foreground="Orange"
+                   IsVisible="{Binding IsDirty}" />
       </StackPanel>
     </Border>
   </Grid>

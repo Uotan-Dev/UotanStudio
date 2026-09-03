@@ -65,23 +65,30 @@ public class HexViewer : Grid
         _scroll = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Stretch
         };
         _viewport = new HexViewport(_scroll);
         _scroll.Content = _viewport;
 
         _gotoBox = new TextBox
         {
-            Width = 220,
-            Height = 28,
+            Width = 200,
+            Height = 26,
             FontFamily = FontFamily.Parse("Consolas"),
-            FontSize = 12,
+            FontSize = 13,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
             Margin = new Thickness(8, 8, 0, 0),
             IsVisible = false
         };
         _gotoBox.KeyDown += OnGotoKeyDown;
+        _scroll.SizeChanged += (_, _) =>
+        {
+            _viewport.InvalidateMeasure();
+            _viewport.InvalidateVisual();
+        };
 
         Children.Add(_scroll);
         Children.Add(_gotoBox);
@@ -142,7 +149,7 @@ public class HexViewer : Grid
     private sealed class HexViewport : Control
     {
         private const int BufferLines = 4;
-        private const double FontSize = 12;
+        private const double FontSize = 13;
         private static readonly Typeface MonospaceTypeface = new("Consolas");
 
         private readonly ScrollViewer _scroll;
@@ -233,20 +240,19 @@ public class HexViewer : Grid
 
         protected override Size MeasureOverride(Size availableSize)
         {
-            var totalLines = HexMetrics.TotalLines(_data?.Length ?? 0);
+            var availableWidth = double.IsFinite(availableSize.Width)
+                ? availableSize.Width
+                : _scroll.Viewport.Width;
+            var layout = HexMetrics.CreateLayout(availableWidth);
+            var totalLines = HexMetrics.TotalLines(_data?.Length ?? 0, layout.BytesPerLine);
             var height = HexMetrics.HeaderHeight + ((long)totalLines * HexMetrics.LineHeight);
-            return new Size(HexMetrics.ContentWidth, height);
+            return new Size(layout.ContentWidth, height);
         }
 
         public override void Render(DrawingContext context)
         {
             base.Render(context);
-            if (_data is null || _data.Length == 0)
-            {
-                return;
-            }
-
-            var totalLines = HexMetrics.TotalLines(_data.Length);
+            var layout = HexMetrics.CreateLayout(Bounds.Width);
             var scrollY = _scroll.Offset.Y;
             var viewportHeight = _scroll.Viewport.Height > 0 ? _scroll.Viewport.Height : Bounds.Height;
 
@@ -259,6 +265,13 @@ public class HexViewer : Grid
             var selectionBrush = ResolveBrush("HexSelectionBrush") ?? new SolidColorBrush(Color.FromArgb(0x66, 0x59, 0xC2, 0xFF));
             var caretBrush = ResolveBrush("HexCaretBrush") ?? Brushes.DeepSkyBlue;
 
+            DrawHeader(context, headerBrush, headerBackground, layout);
+            if (_data is null || _data.Length == 0)
+            {
+                return;
+            }
+
+            var totalLines = HexMetrics.TotalLines(_data.Length, layout.BytesPerLine);
             var firstLine = Math.Max(0, HexMetrics.LineFromY(scrollY) - BufferLines);
             var visible = (int)Math.Ceiling(viewportHeight / HexMetrics.LineHeight) + (2 * BufferLines);
             firstLine = Math.Clamp(firstLine, 0, totalLines - 1);
@@ -268,56 +281,83 @@ public class HexViewer : Grid
             {
                 var line = firstLine + i;
                 var y = HexMetrics.YFromLine(line);
-                var start = line * HexMetrics.BytesPerLine;
-                var available = Math.Min(HexMetrics.BytesPerLine, _data.Length - start);
+                var start = line * layout.BytesPerLine;
+                var available = Math.Min(layout.BytesPerLine, _data.Length - start);
 
-                DrawSelectionRects(context, line, start, available, selectionBrush);
-                DrawText(context, start.ToString("X8", CultureInfo.InvariantCulture), 4, y, offsetBrush);
+                DrawSelectionRects(context, line, start, available, selectionBrush, layout);
+                DrawCenteredText(
+                    context,
+                    start.ToString("X8", CultureInfo.InvariantCulture),
+                    0,
+                    layout.OffsetWidth,
+                    y,
+                    offsetBrush);
 
                 for (var b = 0; b < available; b++)
                 {
-                    var x = HexMetrics.XFromByteIndex(b, hexZone: true) + 2;
+                    var x = layout.XFromByteIndex(b, hexZone: true);
                     var isEdited = _editedOffsets.Contains(start + b);
-                    DrawText(context, _data[start + b].ToString("X2", CultureInfo.InvariantCulture), x, y, isEdited ? editedBrush : foreground);
-                }
+                    DrawCenteredText(
+                        context,
+                        _data[start + b].ToString("X2", CultureInfo.InvariantCulture),
+                        x,
+                        layout.HexCellWidth,
+                        y,
+                        isEdited ? editedBrush : foreground);
 
-                var ascii = new StringBuilder(HexMetrics.BytesPerLine);
-                for (var b = 0; b < HexMetrics.BytesPerLine; b++)
-                {
-                    if (b < available)
-                    {
-                        var ch = _data[start + b];
-                        ascii.Append(ch is >= 0x20 and < 0x7F ? (char)ch : '.');
-                    }
-                    else
-                    {
-                        ascii.Append(' ');
-                    }
+                    var ch = _data[start + b];
+                    DrawCenteredText(
+                        context,
+                        ch is >= 0x20 and < 0x7F ? ((char)ch).ToString() : ".",
+                        layout.XFromByteIndex(b, hexZone: false),
+                        layout.AsciiCellWidth,
+                        y,
+                        asciiBrush);
                 }
-
-                DrawText(context, ascii.ToString(), HexMetrics.AsciiZoneStart + 2, y, asciiBrush);
             }
 
-            DrawCaret(context, caretBrush);
+            var separatorPen = new Pen(headerBrush, 0.5);
+            var separatorBottom = Math.Min(Bounds.Height, scrollY + viewportHeight);
+            context.DrawLine(separatorPen, new Point(layout.HexZoneStart, scrollY), new Point(layout.HexZoneStart, separatorBottom));
+            context.DrawLine(separatorPen, new Point(layout.AsciiZoneStart, scrollY), new Point(layout.AsciiZoneStart, separatorBottom));
+
+            DrawCaret(context, caretBrush, layout);
         }
 
-        private void DrawHeader(DrawingContext context, IBrush headerBrush, IBrush background)
+        private static void DrawHeader(
+            DrawingContext context,
+            IBrush headerBrush,
+            IBrush background,
+            HexColumnLayout layout)
         {
-            context.FillRectangle(background, new Rect(0, 0, HexMetrics.ContentWidth, HexMetrics.HeaderHeight));
-            DrawText(context, "Offset", 4, 2, headerBrush);
+            context.FillRectangle(background, new Rect(0, 0, layout.ContentWidth, HexMetrics.HeaderHeight));
+            DrawCenteredText(context, "Offset", 0, layout.OffsetWidth, 0, headerBrush);
 
-            var hexLabel = new StringBuilder(HexMetrics.BytesPerLine * 3);
-            for (var i = 0; i < HexMetrics.BytesPerLine; i++)
+            for (var i = 0; i < layout.BytesPerLine; i++)
             {
-                hexLabel.Append(i.ToString("X", CultureInfo.InvariantCulture)).Append(' ');
+                DrawCenteredText(
+                    context,
+                    i.ToString("X2", CultureInfo.InvariantCulture),
+                    layout.XFromByteIndex(i, hexZone: true),
+                    layout.HexCellWidth,
+                    0,
+                    headerBrush);
             }
 
-            DrawText(context, hexLabel.ToString().TrimEnd(), HexMetrics.HexZoneStart + 2, 2, headerBrush);
-            DrawText(context, "ASCII", HexMetrics.AsciiZoneStart + 2, 2, headerBrush);
-            context.DrawLine(new Pen(headerBrush, 1), new Point(0, HexMetrics.HeaderHeight), new Point(HexMetrics.ContentWidth, HexMetrics.HeaderHeight));
+            DrawCenteredText(context, "ASCII", layout.AsciiZoneStart, layout.AsciiWidth, 0, headerBrush);
+            context.DrawLine(
+                new Pen(headerBrush, 1),
+                new Point(0, HexMetrics.HeaderHeight),
+                new Point(layout.ContentWidth, HexMetrics.HeaderHeight));
         }
 
-        private void DrawSelectionRects(DrawingContext context, int line, int start, int available, IBrush brush)
+        private void DrawSelectionRects(
+            DrawingContext context,
+            int line,
+            int start,
+            int available,
+            IBrush brush,
+            HexColumnLayout layout)
         {
             if (!_hasSelection || _selectionAnchor < 0)
             {
@@ -343,19 +383,19 @@ public class HexViewer : Grid
                 // 正确高亮的右侧出现一个更窄、位置偏移的重复高亮。
                 // Only highlight the hex-zone cell: the ASCII zone is no longer drawn separately,
                 // which otherwise produced a narrower, right-offset duplicate highlight beside the real one.
-                var hexX = HexMetrics.XFromByteIndex(byteInLine, hexZone: true);
-                context.FillRectangle(brush, new Rect(hexX, y, HexMetrics.HexCellWidth, HexMetrics.LineHeight));
+                var hexX = layout.XFromByteIndex(byteInLine, hexZone: true);
+                context.FillRectangle(brush, new Rect(hexX, y, layout.HexCellWidth, HexMetrics.LineHeight));
             }
         }
 
-        private void DrawCaret(DrawingContext context, IBrush brush)
+        private void DrawCaret(DrawingContext context, IBrush brush, HexColumnLayout layout)
         {
             if (_data is null || _data.Length == 0)
             {
                 return;
             }
 
-            var caretLine = (int)HexMetrics.LineFromOffset(_caretOffset);
+            var caretLine = (int)HexMetrics.LineFromOffset(_caretOffset, layout.BytesPerLine);
             var scrollY = _scroll.Offset.Y;
             var viewportHeight = _scroll.Viewport.Height > 0 ? _scroll.Viewport.Height : Bounds.Height;
             var firstVisible = HexMetrics.LineFromY(scrollY);
@@ -365,13 +405,19 @@ public class HexViewer : Grid
                 return;
             }
 
-            var byteInLine = HexMetrics.ByteInLineFromOffset(_caretOffset);
-            var x = HexMetrics.XFromByteIndex(byteInLine, _hexEditZone);
+            var byteInLine = HexMetrics.ByteInLineFromOffset(_caretOffset, layout.BytesPerLine);
+            var x = layout.XFromByteIndex(byteInLine, _hexEditZone);
             var y = HexMetrics.YFromLine(caretLine);
             context.FillRectangle(brush, new Rect(x, y + 2, 2, HexMetrics.LineHeight - 4));
         }
 
-        private static void DrawText(DrawingContext context, string text, double x, double y, IBrush brush)
+        private static void DrawCenteredText(
+            DrawingContext context,
+            string text,
+            double cellX,
+            double cellWidth,
+            double y,
+            IBrush brush)
         {
             var formatted = new FormattedText(
                 text,
@@ -380,7 +426,9 @@ public class HexViewer : Grid
                 MonospaceTypeface,
                 FontSize,
                 brush);
-            context.DrawText(formatted, new Point(x, y));
+            var x = cellX + Math.Max(0, (cellWidth - formatted.Width) / 2);
+            var textY = y + Math.Max(0, (HexMetrics.LineHeight - formatted.Height) / 2);
+            context.DrawText(formatted, new Point(x, textY));
         }
 
         private static IBrush? ResolveBrush(string key)
@@ -414,13 +462,14 @@ public class HexViewer : Grid
             }
 
             var position = e.GetPosition(this);
-            var offset = GetByteOffsetFromPosition(position);
+            var layout = HexMetrics.CreateLayout(Bounds.Width);
+            var offset = GetByteOffsetFromPosition(position, layout);
             if (offset < 0)
             {
                 return;
             }
 
-            _hexEditZone = HexMetrics.IsHexZone(position.X);
+            _hexEditZone = layout.IsHexZone(position.X);
             _selectionAnchor = offset;
             _hasSelection = false;
             _pendingHighNibble = false;
@@ -437,7 +486,7 @@ public class HexViewer : Grid
             }
 
             var position = e.GetPosition(this);
-            var offset = GetByteOffsetFromPosition(position);
+            var offset = GetByteOffsetFromPosition(position, HexMetrics.CreateLayout(Bounds.Width));
             if (offset < 0)
             {
                 return;
@@ -453,22 +502,22 @@ public class HexViewer : Grid
             _dragging = false;
         }
 
-        private long GetByteOffsetFromPosition(Point position)
+        private long GetByteOffsetFromPosition(Point position, HexColumnLayout layout)
         {
             var line = HexMetrics.LineFromY(position.Y);
-            if (line < 0 || line >= HexMetrics.TotalLines(_data!.Length))
+            if (line < 0 || line >= HexMetrics.TotalLines(_data!.Length, layout.BytesPerLine))
             {
                 return -1;
             }
 
-            var hexZone = HexMetrics.IsHexZone(position.X);
-            var byteInLine = HexMetrics.ByteIndexFromX(position.X, hexZone);
+            var hexZone = layout.IsHexZone(position.X);
+            var byteInLine = layout.ByteIndexFromX(position.X, hexZone);
             if (byteInLine < 0)
             {
                 return -1;
             }
 
-            var offset = (line * HexMetrics.BytesPerLine) + byteInLine;
+            var offset = (line * layout.BytesPerLine) + byteInLine;
             return Math.Min(offset, _data.Length - 1);
         }
 
@@ -484,6 +533,7 @@ public class HexViewer : Grid
             var extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
             var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
             var pageLines = Math.Max(1, (int)Math.Ceiling(_scroll.Viewport.Height / HexMetrics.LineHeight));
+            var bytesPerLine = HexMetrics.CreateLayout(Bounds.Width).BytesPerLine;
 
             switch (e.Key)
             {
@@ -494,19 +544,19 @@ public class HexViewer : Grid
                     MoveCaret(1, extend);
                     break;
                 case Key.Up:
-                    MoveCaret(-HexMetrics.BytesPerLine, extend);
+                    MoveCaret(-bytesPerLine, extend);
                     break;
                 case Key.Down:
-                    MoveCaret(HexMetrics.BytesPerLine, extend);
+                    MoveCaret(bytesPerLine, extend);
                     break;
                 case Key.PageUp:
-                    MoveCaret(-(pageLines * HexMetrics.BytesPerLine), extend);
+                    MoveCaret(-(pageLines * bytesPerLine), extend);
                     break;
                 case Key.PageDown:
-                    MoveCaret(pageLines * HexMetrics.BytesPerLine, extend);
+                    MoveCaret(pageLines * bytesPerLine, extend);
                     break;
                 case Key.Home:
-                    SetCaret(_caretOffset - (_caretOffset % HexMetrics.BytesPerLine));
+                    SetCaret(_caretOffset - (_caretOffset % bytesPerLine));
                     if (extend)
                     {
                         _hasSelection = true;
@@ -514,7 +564,7 @@ public class HexViewer : Grid
 
                     break;
                 case Key.End:
-                    SetCaret((_caretOffset - (_caretOffset % HexMetrics.BytesPerLine)) + (HexMetrics.BytesPerLine - 1));
+                    SetCaret((_caretOffset - (_caretOffset % bytesPerLine)) + (bytesPerLine - 1));
                     if (extend)
                     {
                         _hasSelection = true;
@@ -623,7 +673,8 @@ public class HexViewer : Grid
 
         private void EnsureCaretVisible()
         {
-            var caretLine = (int)HexMetrics.LineFromOffset(_caretOffset);
+            var bytesPerLine = HexMetrics.CreateLayout(Bounds.Width).BytesPerLine;
+            var caretLine = (int)HexMetrics.LineFromOffset(_caretOffset, bytesPerLine);
             var scrollY = _scroll.Offset.Y;
             var viewportHeight = _scroll.Viewport.Height;
             var firstVisible = HexMetrics.LineFromY(scrollY);
@@ -631,11 +682,15 @@ public class HexViewer : Grid
 
             if (caretLine < firstVisible)
             {
-                _scroll.Offset = new Vector(scrollY, Math.Max(0, HexMetrics.YFromLine(caretLine) - (BufferLines * HexMetrics.LineHeight)));
+                _scroll.Offset = new Vector(
+                    _scroll.Offset.X,
+                    Math.Max(0, HexMetrics.YFromLine(caretLine) - (BufferLines * HexMetrics.LineHeight)));
             }
             else if (caretLine > lastVisible - 1)
             {
-                _scroll.Offset = new Vector(scrollY, HexMetrics.YFromLine(caretLine) - Math.Max(0, viewportHeight - (2 * HexMetrics.LineHeight)));
+                _scroll.Offset = new Vector(
+                    _scroll.Offset.X,
+                    HexMetrics.YFromLine(caretLine) - Math.Max(0, viewportHeight - (2 * HexMetrics.LineHeight)));
             }
         }
 

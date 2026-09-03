@@ -308,13 +308,7 @@ public partial class FileViewModel : Document
         switch (mode)
         {
             case EditorOpenMode.Text:
-                // 内容兜底：带文本 BOM（UTF-8/16）的文件仍是文本，正常解码；
-                // 无 BOM 但含大量 NUL 字节（如 Android 二进制 AXML）按十六进制打开，
-                // 避免在代码编辑器中显示大量 NUL 字符图标。
-                // Content fallback: files with a text BOM (UTF-8/16) are still text and decode
-                // normally; NUL-heavy content without a BOM (e.g. Android binary AXML) opens as
-                // hex so the code editor does not render NUL glyphs.
-                return !HasTextBom(data) && IsBinaryFile(data);
+                return FileOpenMode.IsBinaryContent(data);
             case EditorOpenMode.Hex:
                 return true;
             case EditorOpenMode.Dtb:
@@ -328,60 +322,8 @@ public partial class FileViewModel : Document
                     return true;
                 }
 
-                return IsBinaryFile(data);
+                return FileOpenMode.IsBinaryContent(data);
         }
-    }
-
-    /// <summary>
-    /// <para>判断字节流是否带文本 BOM（UTF-8 / UTF-16 LE / UTF-16 BE）。</para>
-    /// Determines whether the byte stream starts with a text BOM (UTF-8 / UTF-16 LE / UTF-16 BE).
-    /// </summary>
-    private static bool HasTextBom(byte[] data)
-    {
-        if (data.Length < 2)
-        {
-            return false;
-        }
-
-        if (data[0] == 0xEF && data[1] == 0xBB)
-        {
-            return data.Length >= 3 && data[2] == 0xBF;
-        }
-
-        return data[0] == 0xFF && data[1] == 0xFE   // UTF-16 LE（含 UTF-32 LE 前缀）
-               || data[0] == 0xFE && data[1] == 0xFF; // UTF-16 BE
-    }
-
-    /// <summary>
-    /// <para>检测字节数组是否为二进制文件（包含空字节或大量非打印字符）。</para>
-    /// Detects whether a byte array is a binary file (contains null bytes or many non-printable chars).
-    /// </summary>
-    private static bool IsBinaryFile(byte[] data)
-    {
-        if (data.Length == 0)
-        {
-            return false;
-        }
-
-        // 检查前 8000 字节：若包含空字节或超过 30% 非打印字符则视为二进制。
-        // Check first 8000 bytes: binary if null bytes present or >30% non-printable.
-        var checkLength = Math.Min(data.Length, 8000);
-        var nonPrintable = 0;
-        for (var i = 0; i < checkLength; i++)
-        {
-            var b = data[i];
-            if (b == 0)
-            {
-                return true;
-            }
-
-            if (b < 0x20 && b != '\r' && b != '\n' && b != '\t')
-            {
-                nonPrintable++;
-            }
-        }
-
-        return (double)nonPrintable / checkLength > 0.3;
     }
 
     /// <summary>

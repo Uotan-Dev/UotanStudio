@@ -76,14 +76,14 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="viewmodels:ArscDetailRow">
                 <controls:ResponsiveFormRow Margin="8,3"
-                                            MinLabelWidth="108"
-                                            MaxLabelWidth="108"
+                                            MinLabelWidth="88"
+                                            MaxLabelWidth="88"
                                             MinEditorWidth="180"
-                                            ColumnSpacing="4"
+                                            ColumnSpacing="2"
                                             RowSpacing="2">
                   <TextBlock Text="{Binding Key}" FontFamily="Consolas"
-                             Foreground="{DynamicResource AccentColor}"
-                             VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                             VerticalAlignment="Center"
+                             TextWrapping="Wrap" />
                   <TextBox Text="{Binding Value, Mode=TwoWay}" FontFamily="Consolas"
                            IsReadOnly="{Binding IsEditable, Converter={x:Static BoolConverters.Not}}"
                            TextWrapping="Wrap" />

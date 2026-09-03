@@ -63,6 +63,30 @@ public class FileOpenModeTests
     }
 
     [Fact]
+    public void ResolveMode_WithGenericBinaryHeader_ReturnsHex()
+    {
+        var header = new byte[] { 0x41, 0x42, 0x00, 0x43, 0x44 };
+
+        Assert.Equal(EditorOpenMode.Hex, FileOpenMode.ResolveMode("unknown", header));
+    }
+
+    [Fact]
+    public void ResolveMode_BinaryContentOverridesTextExtension()
+    {
+        var header = new byte[] { 0x41, 0x00, 0x42, 0x00 };
+
+        Assert.Equal(EditorOpenMode.Hex, FileOpenMode.ResolveMode("disguised.txt", header));
+    }
+
+    [Fact]
+    public void ResolveMode_TextBomKeepsTextExtension()
+    {
+        var header = new byte[] { 0xFF, 0xFE, 0x41, 0x00 };
+
+        Assert.Equal(EditorOpenMode.Text, FileOpenMode.ResolveMode("utf16.txt", header));
+    }
+
+    [Fact]
     public void ResolveMode_NullHeader_IgnoresMagic()
     {
         // null 头部不触发 magic 兜底。

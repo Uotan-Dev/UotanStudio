@@ -37,7 +37,18 @@ public partial class HexEditorViewModel : Document
     /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
     /// </summary>
-    [ObservableProperty] private string? _filePath;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilePathDisplay))]
+    private string? _filePath;
+
+    /// <summary>
+    /// <para>本地化后的文件路径显示文本（顶部路径栏）。</para>
+    /// Localized file path display text (top path bar).
+    /// </summary>
+    public string FilePathDisplay =>
+        string.IsNullOrEmpty(FilePath)
+            ? string.Empty
+            : string.Format(LanguageService.Instance.GetString("Dock_File_PathFormat"), FilePath);
 
     /// <summary>
     /// <para>加载/保存错误文本；为空表示无错误。</para>

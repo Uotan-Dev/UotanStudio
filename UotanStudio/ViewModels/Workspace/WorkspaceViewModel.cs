@@ -76,15 +76,15 @@ public class WorkspaceViewModel : ViewModelBase
         // dual-pane editor instead of being opened as a plain binary (hex) document.
         if (mode == EditorOpenMode.Auto)
         {
-            // 读取文件头参与内容探测：AXML（.xml 二进制）与 ARSC 按魔数路由到专用编辑器，
-            // 否则 .xml 会被文本路由拦截、.arsc 落回 Auto 而无法自动打开对应视图。
-            // Read the header for content sniffing: AXML (binary .xml) and ARSC route to their
-            // dedicated editors by magic, otherwise .xml would be claimed by the text route and
-            // .arsc would fall back to Auto instead of its dedicated view.
+            // 有界读取文件头参与格式与二进制内容探测：专用格式按魔数路由，其余明显二进制
+            // 统一进入 HexEditorView，避免 FileView 内嵌 Hex 与手动 Hex 使用不同宿主。
+            // Read a bounded header for format and binary-content detection: dedicated formats route by
+            // magic, while other clear binary data consistently uses HexEditorView instead of FileView's
+            // embedded fallback viewer.
             byte[]? header = null;
             try
             {
-                header = UotanStudio.Firmware.Common.FormatDetector.ReadHeader(path, 12);
+                header = UotanStudio.Firmware.Common.FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
             }
             catch
             {

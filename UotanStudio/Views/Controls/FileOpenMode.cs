@@ -90,6 +90,12 @@ public enum EditorOpenMode
 public static class FileOpenMode
 {
     /// <summary>
+    /// <para>自动打开时用于格式与二进制内容判定的有界文件头长度。</para>
+    /// Bounded file-header length used for format and binary-content detection during automatic opening.
+    /// </summary>
+    public const int ContentProbeLength = 8192;
+
+    /// <summary>
     /// <para>解析指定文件应使用的打开方式。规则：<c>.dts→Text</c>、<c>.dtb/.dtbo→Dtb</c>、
     /// 已知固件扩展名（格式处理器注册表聚合，如 <c>.img/.pac/.ops/.nb0</c>）→<c>Firmware</c>、
     /// 已知二进制/固件扩展名→<c>Hex</c>、已知文本/代码扩展名→<c>Text</c>、其余→<c>Auto</c>。</para>
@@ -271,6 +277,11 @@ public static class FileOpenMode
         }
 
         var mode = ResolveMode(path);
+        if (mode == EditorOpenMode.Text && header is not null && IsBinaryContent(header))
+        {
+            return EditorOpenMode.Hex;
+        }
+
         if (mode != EditorOpenMode.Auto)
         {
             return mode;
@@ -290,7 +301,60 @@ public static class FileOpenMode
             return EditorOpenMode.Hex;
         }
 
+        // 未命中具体魔数的普通二进制仍统一进入专用 Hex 编辑器，避免先创建 FileView 后
+        // 再由其内部内容探测切换视图，造成自动打开与“以十六进制打开”的宿主样式不一致。
+        // Generic binary data without a known magic still uses the dedicated Hex editor. This avoids
+        // creating FileView first and switching its inner viewer later, which produced a different host UI.
+        if (header is not null && IsBinaryContent(header))
+        {
+            return EditorOpenMode.Hex;
+        }
+
         return EditorOpenMode.Auto;
+    }
+
+    /// <summary>
+    /// <para>通过有界内容样本判断文件是否明显为二进制。带 UTF 文本 BOM 的样本保持文本；
+    /// 否则出现 NUL，或控制字符占比超过 30%，即判为二进制。</para>
+    /// Determines whether a bounded content sample is clearly binary. Samples with a UTF text BOM remain
+    /// text; otherwise a NUL byte or more than 30% control characters classifies the sample as binary.
+    /// </summary>
+    public static bool IsBinaryContent(ReadOnlySpan<byte> data)
+    {
+        if (data.IsEmpty || HasTextBom(data))
+        {
+            return false;
+        }
+
+        var checkLength = Math.Min(data.Length, ContentProbeLength);
+        var nonPrintable = 0;
+        for (var i = 0; i < checkLength; i++)
+        {
+            var value = data[i];
+            if (value == 0)
+            {
+                return true;
+            }
+
+            if (value < 0x20 && value != (byte)'\r' && value != (byte)'\n' && value != (byte)'\t')
+            {
+                nonPrintable++;
+            }
+        }
+
+        return (double)nonPrintable / checkLength > 0.3d;
+    }
+
+    private static bool HasTextBom(ReadOnlySpan<byte> data)
+    {
+        if (data.Length >= 3 && data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF)
+        {
+            return true;
+        }
+
+        return data.Length >= 2
+               && (data[0] == 0xFF && data[1] == 0xFE
+                   || data[0] == 0xFE && data[1] == 0xFF);
     }
 
     /// <summary>
