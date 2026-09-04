@@ -358,7 +358,8 @@ public partial class PartitionEditorViewModel : Document
                     Type = type
                 },
                 i,
-                group));
+                group,
+                () => IsDirty = true));
         }
     }
 
@@ -377,7 +378,8 @@ public partial class PartitionEditorViewModel : Document
                     Type = "mtd"
                 },
                 i,
-                group: null));
+                group: null,
+                () => IsDirty = true));
         }
     }
 
@@ -477,7 +479,8 @@ public partial class PartitionEditorViewModel : Document
                     Type = entry.TypeGuid.ToString("D")
                 },
                 i,
-                group: null));
+                group: null,
+                () => IsDirty = true));
         }
     }
 
@@ -496,7 +499,8 @@ public partial class PartitionEditorViewModel : Document
                     Type = "0x" + partition.Type.ToString("X2", CultureInfo.InvariantCulture)
                 },
                 i,
-                group: null));
+                group: null,
+                () => IsDirty = true));
         }
     }
 
@@ -515,7 +519,8 @@ public partial class PartitionEditorViewModel : Document
                     Type = "0x" + partition.Type.ToString("X2", CultureInfo.InvariantCulture)
                 },
                 i,
-                group: null));
+                group: null,
+                () => IsDirty = true));
         }
     }
 
@@ -767,6 +772,7 @@ public partial class PartitionEditorViewModel : Document
 public partial class PartitionItemViewModel : ObservableObject
 {
     private readonly PartitionEntry _entry;
+    private readonly Action? _onChanged;
 
     /// <summary>
     /// <para>创建分区条目视图模型。</para>
@@ -775,9 +781,11 @@ public partial class PartitionItemViewModel : ObservableObject
     /// <param name="entry">条目数据。 The entry data.</param>
     /// <param name="index">条目在表中的索引。 The entry index in the table.</param>
     /// <param name="group">条目所属组（LP；Rockchip 为 <c>null</c>）。 The owning group (LP; <c>null</c> for Rockchip).</param>
-    public PartitionItemViewModel(PartitionEntry entry, int index, string? group)
+    /// <param name="onChanged">属性变更时的回调（标记文档为脏）。 Callback invoked on property change (marks document dirty).</param>
+    public PartitionItemViewModel(PartitionEntry entry, int index, string? group, Action? onChanged = null)
     {
         _entry = entry;
+        _onChanged = onChanged;
         Index = index;
         Group = group;
         Name = entry.Name;
@@ -803,24 +811,28 @@ public partial class PartitionItemViewModel : ObservableObject
     /// The partition name (editable).
     /// </summary>
     [ObservableProperty] private string _name;
+    partial void OnNameChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
     /// <para>分区起始显示值（可编辑，0x 十六进制）。</para>
     /// The partition start display value (editable, 0x-hex).
     /// </summary>
     [ObservableProperty] private string _start;
+    partial void OnStartChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
     /// <para>分区大小显示值（可编辑，0x 十六进制）。</para>
     /// The partition size display value (editable, 0x-hex).
     /// </summary>
     [ObservableProperty] private string _size;
+    partial void OnSizeChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
     /// <para>分区类型（可编辑；LP 写回 extent 目标类型，Rockchip 为展示字段）。</para>
     /// The partition type (editable; written back to the LP extent target type, display-only for Rockchip).
     /// </summary>
     [ObservableProperty] private string _type;
+    partial void OnTypeChanged(string value) => _onChanged?.Invoke();
 
     /// <summary>
     /// <para>解析后的起始扇区（<see cref="TryApply"/> 成功后的当前值）。</para>

@@ -7,12 +7,9 @@
              x:Class="UotanStudio.Views.Editors.PartitionEditorView"
              x:DataType="viewmodels:PartitionEditorViewModel">
   <DockPanel>
-    <!-- 顶部工具栏：数据源描述 + 保存按钮 + 解析错误状态 -->
+    <!-- 顶部工具栏：数据源描述 + 解析错误状态 -->
     <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>
-        <Button DockPanel.Dock="Right" Content="{x:Static viewmodels:PartitionEditorViewModel.SaveLabel}"
-                Command="{Binding SaveCommand}"
-                IsEnabled="{Binding IsBusy, Converter={x:Static BoolConverters.Not}}" />
         <TextBlock Text="{Binding SourceDescription}"
                    VerticalAlignment="Center"
                    FontSize="11" Opacity="0.7"

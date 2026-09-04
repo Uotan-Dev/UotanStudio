@@ -220,7 +220,7 @@ public partial class ManifestEditorViewModel : Document
 
         foreach (var attr in value.Element.Attributes)
         {
-            Attributes.Add(new ManifestAttributeRow(attr, _doc?.StringPool));
+            Attributes.Add(new ManifestAttributeRow(attr, _doc?.StringPool, () => IsDirty = true));
         }
     }
 
@@ -262,6 +262,7 @@ public partial class ManifestAttributeRow : ObservableObject
 {
     private readonly AXmlAttribute _attribute;
     private readonly AXmlStringPool? _stringPool;
+    private readonly Action? _onChanged;
 
     /// <summary>
     /// <para>创建属性行。</para>
@@ -269,10 +270,12 @@ public partial class ManifestAttributeRow : ObservableObject
     /// </summary>
     /// <param name="attribute">对应的 AXML 属性。<para>The backing AXML attribute.</para></param>
     /// <param name="stringPool">字符串池（值格式化用）。<para>The string pool (for value formatting).</para></param>
-    public ManifestAttributeRow(AXmlAttribute attribute, AXmlStringPool? stringPool)
+    /// <param name="onChanged">值变更时的回调（标记文档为脏）。<para>Callback invoked on value change (marks document dirty).</para></param>
+    public ManifestAttributeRow(AXmlAttribute attribute, AXmlStringPool? stringPool, Action? onChanged = null)
     {
         _attribute = attribute;
         _stringPool = stringPool;
+        _onChanged = onChanged;
         Name = attribute.Name;
         Value = attribute.FormatValue(stringPool);
     }
@@ -293,6 +296,7 @@ public partial class ManifestAttributeRow : ObservableObject
         if (_attribute.RawValue is not null)
         {
             _attribute.RawValue = value;
+            _onChanged?.Invoke();
             return;
         }
 
@@ -317,5 +321,7 @@ public partial class ManifestAttributeRow : ObservableObject
                 _attribute.ValueData = (uint)_stringPool.Intern(value);
                 break;
         }
+
+        _onChanged?.Invoke();
     }
 }
