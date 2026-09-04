@@ -28,19 +28,19 @@ namespace UotanStudio.ViewModels.Workspace;
 /// </summary>
 internal partial class ImageViewModel : Tool
 {
+    private static readonly Lazy<ImageViewModel> _lazyInstance = new(() => new ImageViewModel());
+
     /// <summary>
     /// <para>获取当前镜像面板单例实例，供主窗口与工作区停靠面板共享。</para>
     /// Gets the active image panel singleton, shared by the workspace dock and the top file menu.
     /// </summary>
-    public static ImageViewModel? Instance { get; private set; }
+    internal static ImageViewModel Instance => _lazyInstance.Value;
 
     /// <summary>
-    /// <para>确保镜像面板单例已创建并返回它；首次调用时构造并在构造函数中注册到 <see cref="Instance"/>，
-    /// 后续调用复用同一实例。</para>
-    /// Ensures the image panel singleton exists and returns it; the first call constructs the instance
-    /// (registered on <see cref="Instance"/> in the constructor) and later calls reuse the same instance.
+    /// <para>确保镜像面板单例已创建并返回它。</para>
+    /// Ensures the image panel singleton exists and returns it.
     /// </summary>
-    internal static ImageViewModel EnsureInstance() => Instance ??= new();
+    internal static ImageViewModel EnsureInstance() => Instance;
 
     private readonly FirmwareService _firmware = FirmwareService.Instance;
 
@@ -112,7 +112,6 @@ internal partial class ImageViewModel : Tool
     /// </summary>
     public ImageViewModel()
     {
-        Instance = this;
         // 订阅工程上下文变更：打开工程时自动扫描 images/ 目录注册已知镜像格式，
         // 关闭工程时清空列表。
         // Subscribe to project-context changes: on open, auto-register known image formats from the
