@@ -51,6 +51,15 @@ public static class FirmwareCliParser
             "pack" => ParsePack(args),
             "flash" => ParseFlash(args),
             "disable-verification" => ParseDisableVerification(args),
+            "verify" => ParseVerify(args),
+            "extract" => ParseExtract(args),
+            "super-unpack" => ParseSuperUnpack(args),
+            "super-pack" => ParseSuperPack(args),
+            "erase" => ParseErase(args),
+            "reboot" => ParseReboot(args),
+            "decompile-dex" => ParseDecompileDex(args),
+            "disassemble-dex" => ParseDisassembleDex(args),
+            "checksum" => ParseChecksum(args),
             _ => FirmwareCliParseResult.Fail($"Unknown firmware subcommand: {first}"),
         };
     }
@@ -399,6 +408,540 @@ public static class FirmwareCliParser
             Verb = FirmwareCliVerb.DisableVerification,
             InputPath = input,
             OutputPath = output,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseVerify(string[] args)
+    {
+        string? input = null;
+        string? publicKey = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.Verify,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "--public-key":
+                case "-k":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'--public-key' requires a value: --public-key <path>");
+                    }
+                    publicKey = args[++i];
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'verify': {arg}");
+                    }
+                    if (input is null)
+                    {
+                        input = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'verify' takes one vbmeta path; got extra: {arg}");
+                    }
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return FirmwareCliParseResult.Fail("'verify' requires a vbmeta/image path: firmware verify <file> [-k <public-key>]");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.Verify,
+            InputPath = input,
+            PublicKeyPath = publicKey,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseExtract(string[] args)
+    {
+        string? input = null;
+        string? output = null;
+        string? partition = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.Extract,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "--output-dir":
+                case "--output":
+                case "-o":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'-o' requires a value: -o <dir>");
+                    }
+                    output = args[++i];
+                    break;
+                case "--partition":
+                case "-p":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'--partition' requires a value: --partition <name>");
+                    }
+                    partition = args[++i];
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'extract': {arg}");
+                    }
+                    if (input is null)
+                    {
+                        input = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'extract' takes one payload path; got extra: {arg}");
+                    }
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return FirmwareCliParseResult.Fail("'extract' requires a payload.bin path: firmware extract <payload.bin> -o <dir> [-p <partition>]");
+        }
+
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return FirmwareCliParseResult.Fail("'extract' requires -o <dir>");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.Extract,
+            InputPath = input,
+            OutputPath = output,
+            Partition = partition,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseSuperUnpack(string[] args)
+    {
+        string? input = null;
+        string? output = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.SuperUnpack,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "--output-dir":
+                case "--output":
+                case "-o":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'-o' requires a value: -o <dir>");
+                    }
+                    output = args[++i];
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'super-unpack': {arg}");
+                    }
+                    if (input is null)
+                    {
+                        input = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'super-unpack' takes one super.img path; got extra: {arg}");
+                    }
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return FirmwareCliParseResult.Fail("'super-unpack' requires a super.img path: firmware super-unpack <super.img> -o <dir>");
+        }
+
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return FirmwareCliParseResult.Fail("'super-unpack' requires -o <dir>");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.SuperUnpack,
+            InputPath = input,
+            OutputPath = output,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseSuperPack(string[] args)
+    {
+        string? input = null;
+        string? output = null;
+        string? format = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.SuperPack,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "--output":
+                case "-o":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'-o' requires a value: -o <file>");
+                    }
+                    output = args[++i];
+                    break;
+                case "--format":
+                case "-f":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'--format' requires a value: --format <name>");
+                    }
+                    format = args[++i];
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'super-pack': {arg}");
+                    }
+                    if (input is null)
+                    {
+                        input = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'super-pack' takes one input directory; got extra: {arg}");
+                    }
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return FirmwareCliParseResult.Fail("'super-pack' requires an input directory: firmware super-pack <dir> -o <super.img>");
+        }
+
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return FirmwareCliParseResult.Fail("'super-pack' requires -o <file>");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.SuperPack,
+            InputPath = input,
+            OutputPath = output,
+            FormatName = format,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseErase(string[] args)
+    {
+        string? partition = null;
+        string? serial = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.Erase,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "--serial":
+                case "-d":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'--serial' requires a value: --serial <serial>");
+                    }
+                    serial = args[++i];
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'erase': {arg}");
+                    }
+                    if (partition is null)
+                    {
+                        partition = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'erase' takes one partition name; got extra: {arg}");
+                    }
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(partition))
+        {
+            return FirmwareCliParseResult.Fail("'erase' requires a partition name: firmware erase <partition> [-d <serial>]");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.Erase,
+            Partition = partition,
+            Serial = serial,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseReboot(string[] args)
+    {
+        string? mode = null;
+        string? serial = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.Reboot,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "--serial":
+                case "-d":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'--serial' requires a value: --serial <serial>");
+                    }
+                    serial = args[++i];
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'reboot': {arg}");
+                    }
+                    if (mode is null)
+                    {
+                        mode = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'reboot' takes one mode argument; got extra: {arg}");
+                    }
+                    break;
+            }
+        }
+
+        // Default mode is system (normal reboot).
+        mode ??= "system";
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.Reboot,
+            RebootMode = mode,
+            Serial = serial,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseDecompileDex(string[] args)
+    {
+        string? input = null;
+        string? output = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.DecompileDex,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "--output":
+                case "-o":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'-o' requires a value: -o <file>");
+                    }
+                    output = args[++i];
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'decompile-dex': {arg}");
+                    }
+                    if (input is null)
+                    {
+                        input = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'decompile-dex' takes one DEX path; got extra: {arg}");
+                    }
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return FirmwareCliParseResult.Fail("'decompile-dex' requires a DEX file path: firmware decompile-dex <file.dex> [-o <output>]");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.DecompileDex,
+            InputPath = input,
+            OutputPath = output,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseDisassembleDex(string[] args)
+    {
+        string? input = null;
+        string? output = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.DisassembleDex,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "--output-dir":
+                case "--output":
+                case "-o":
+                    if (i + 1 >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'-o' requires a value: -o <dir>");
+                    }
+                    output = args[++i];
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'disassemble-dex': {arg}");
+                    }
+                    if (input is null)
+                    {
+                        input = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'disassemble-dex' takes one DEX path; got extra: {arg}");
+                    }
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return FirmwareCliParseResult.Fail("'disassemble-dex' requires a DEX file path: firmware disassemble-dex <file.dex> [-o <dir>]");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.DisassembleDex,
+            InputPath = input,
+            OutputPath = output,
+        });
+    }
+
+    private static FirmwareCliParseResult ParseChecksum(string[] args)
+    {
+        string? input = null;
+
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.Checksum,
+                    HelpRequested = true,
+                });
+            }
+
+            if (arg.StartsWith("-", StringComparison.Ordinal))
+            {
+                return FirmwareCliParseResult.Fail($"Unknown flag for 'checksum': {arg}");
+            }
+            if (input is null)
+            {
+                input = arg;
+            }
+            else
+            {
+                return FirmwareCliParseResult.Fail($"'checksum' takes one file path; got extra: {arg}");
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return FirmwareCliParseResult.Fail("'checksum' requires a file path: firmware checksum <file>");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.Checksum,
+            InputPath = input,
         });
     }
 

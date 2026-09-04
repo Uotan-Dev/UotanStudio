@@ -29,6 +29,42 @@ public enum FirmwareCliVerb
     /// <summary>Disable AVB verification on a VBMeta image.</summary>
     /// <para>禁用 VBMeta 镜像的 AVB 校验。</para>
     DisableVerification,
+
+    /// <summary>Verify AVB signature on a VBMeta image.</summary>
+    /// <para>校验 VBMeta 镜像的 AVB 签名。</para>
+    Verify,
+
+    /// <summary>Extract partitions from an Android OTA payload.bin.</summary>
+    /// <para>从 Android OTA payload.bin 中提取分区。</para>
+    Extract,
+
+    /// <summary>Unpack an Android super (logical partition) image.</summary>
+    /// <para>解包 Android super（逻辑分区）镜像。</para>
+    SuperUnpack,
+
+    /// <summary>Pack directory contents into an Android super image.</summary>
+    /// <para>将目录内容打包为 Android super 镜像。</para>
+    SuperPack,
+
+    /// <summary>Erase a device partition (fastboot).</summary>
+    /// <para>擦除设备分区（fastboot）。</para>
+    Erase,
+
+    /// <summary>Reboot a device into a specified mode.</summary>
+    /// <para>将设备重启到指定模式。</para>
+    Reboot,
+
+    /// <summary>Decompile a DEX file to pseudo-Java source.</summary>
+    /// <para>将 DEX 文件反编译为伪 Java 源码。</para>
+    DecompileDex,
+
+    /// <summary>Disassemble a DEX file to Smali text.</summary>
+    /// <para>将 DEX 文件反汇编为 Smali 文本。</para>
+    DisassembleDex,
+
+    /// <summary>Compute streaming SHA-256 checksum of a file.</summary>
+    /// <para>计算文件的流式 SHA-256 校验和。</para>
+    Checksum,
 }
 
 /// <summary>
@@ -76,6 +112,14 @@ public sealed class FirmwareCliCommand
     /// <summary>Whether this command is a help/version-only invocation (no verb).</summary>
     /// <para>是否仅为帮助/版本调用（无子命令）。</para>
     public bool IsHelpOrVersion => HelpRequested || VersionRequested;
+
+    /// <summary>Target reboot mode (reboot only; e.g. system/bootloader/recovery/edl).</summary>
+    /// <para>目标重启模式（仅 reboot；如 system/bootloader/recovery/edl）。</para>
+    public string? RebootMode { get; init; }
+
+    /// <summary>Optional public key path for AVB verification (verify only).</summary>
+    /// <para>可选的 AVB 校验公钥路径（仅 verify）。</para>
+    public string? PublicKeyPath { get; init; }
 }
 
 /// <summary>

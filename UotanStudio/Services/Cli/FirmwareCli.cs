@@ -80,6 +80,15 @@ public static class FirmwareCli
             FirmwareCliVerb.Pack => RunPack(cmd),
             FirmwareCliVerb.Flash => RunFlash(cmd),
             FirmwareCliVerb.DisableVerification => RunDisableVerification(cmd),
+            FirmwareCliVerb.Verify => RunVerify(cmd),
+            FirmwareCliVerb.Extract => RunExtract(cmd),
+            FirmwareCliVerb.SuperUnpack => RunSuperUnpack(cmd),
+            FirmwareCliVerb.SuperPack => RunSuperPack(cmd),
+            FirmwareCliVerb.Erase => RunErase(cmd),
+            FirmwareCliVerb.Reboot => RunReboot(cmd),
+            FirmwareCliVerb.DecompileDex => RunDecompileDex(cmd),
+            FirmwareCliVerb.DisassembleDex => RunDisassembleDex(cmd),
+            FirmwareCliVerb.Checksum => RunChecksum(cmd),
             _ => FirmwareCliExitCodes.Failure,
         };
     }
@@ -368,6 +377,390 @@ public static class FirmwareCli
         return FirmwareCliExitCodes.Ok;
     }
 
+    /// <summary>
+    /// Verifies AVB signature on a VBMeta image headlessly.
+    /// <para>无头校验 VBMeta 镜像的 AVB 签名。</para>
+    /// </summary>
+    private static int RunVerify(FirmwareCliCommand cmd)
+    {
+        var input = cmd.InputPath!;
+        if (!File.Exists(input))
+        {
+            Console.Error.WriteLine($"File not found: {input}  文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        if (!string.IsNullOrWhiteSpace(cmd.PublicKeyPath) && !File.Exists(cmd.PublicKeyPath))
+        {
+            Console.Error.WriteLine($"Public key file not found: {cmd.PublicKeyPath}  公钥文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var result = FirmwareService.Instance
+            .VerifyAvbAsync(input, cmd.PublicKeyPath, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        if (!result.Success)
+        {
+            Console.Error.WriteLine(result.Summary);
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Console.WriteLine(result.Summary);
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Extracts partitions from an Android OTA payload.bin headlessly.
+    /// <para>无头从 Android OTA payload.bin 中提取分区。</para>
+    /// </summary>
+    private static int RunExtract(FirmwareCliCommand cmd)
+    {
+        var input = cmd.InputPath!;
+        if (!File.Exists(input))
+        {
+            Console.Error.WriteLine($"File not found: {input}  文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var outputDir = cmd.OutputPath!;
+        Directory.CreateDirectory(outputDir);
+
+        var result = FirmwareService.Instance
+            .ExtractPayloadAsync(input, outputDir, cmd.Partition)
+            .GetAwaiter().GetResult();
+
+        if (!result.Success)
+        {
+            Console.Error.WriteLine(result.Summary);
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Console.WriteLine(result.Summary);
+        if (result.Entries is { Count: > 0 })
+        {
+            Console.WriteLine($"Extracted partitions ({result.Entries.Count}):");
+            foreach (var e in result.Entries)
+            {
+                Console.WriteLine($"  - {e}");
+            }
+        }
+
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Unpacks an Android super (logical partition) image headlessly.
+    /// <para>无头解包 Android super（逻辑分区）镜像。</para>
+    /// </summary>
+    private static int RunSuperUnpack(FirmwareCliCommand cmd)
+    {
+        var input = cmd.InputPath!;
+        if (!File.Exists(input))
+        {
+            Console.Error.WriteLine($"File not found: {input}  文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var outputDir = cmd.OutputPath!;
+        Directory.CreateDirectory(outputDir);
+
+        var result = FirmwareService.Instance
+            .UnpackSuperAsync(input, outputDir, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        if (!result.Success)
+        {
+            Console.Error.WriteLine(result.Summary);
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Console.WriteLine(result.Summary);
+        if (result.Entries is { Count: > 0 })
+        {
+            Console.WriteLine($"Unpacked partitions ({result.Entries.Count}):");
+            foreach (var e in result.Entries)
+            {
+                Console.WriteLine($"  - {e}");
+            }
+        }
+
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Packs directory contents into an Android super image headlessly.
+    /// Scans the input directory for .img files, infers partition names from filenames,
+    /// and synthesizes a super image via <see cref="FirmwareService.SynthesizeSuperAsync"/>.
+    /// <para>无头将目录内容打包为 Android super 镜像。扫描输入目录的 .img 文件，
+    /// 从文件名推断分区名，经 <see cref="FirmwareService.SynthesizeSuperAsync"/> 合成。</para>
+    /// </summary>
+    private static int RunSuperPack(FirmwareCliCommand cmd)
+    {
+        var input = cmd.InputPath!;
+        if (!Directory.Exists(input))
+        {
+            Console.Error.WriteLine($"Directory not found: {input}  目录未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var output = cmd.OutputPath!;
+        var dir = Path.GetDirectoryName(output);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        // Scan for partition images in the directory.
+        var imageFiles = Directory.GetFiles(input, "*.img")
+            .Concat(Directory.GetFiles(input, "*.bin"))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (imageFiles.Length == 0)
+        {
+            Console.Error.WriteLine($"No .img/.bin files found in: {input}  目录中未找到 .img/.bin 文件");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var partitions = imageFiles.Select(f => new Firmware.SuperPartitionInput(
+            Path.GetFileNameWithoutExtension(f),
+            f)).ToList();
+
+        // Calculate device size: sum of all partition sizes + 4 MiB metadata overhead, aligned to 1 MiB.
+        long totalSize = partitions.Sum(p => new FileInfo(p.Path).Length);
+        var deviceSize = (ulong)((totalSize + 4 * 1024 * 1024 + 1024 * 1024 - 1) & ~(1024 * 1024 - 1));
+
+        Console.WriteLine($"Packing {partitions.Count} partitions into super image ({deviceSize / 1024 / 1024} MiB):");
+        foreach (var p in partitions)
+        {
+            Console.WriteLine($"  - {p.Name} ({new FileInfo(p.Path).Length / 1024} KiB)");
+        }
+
+        var result = FirmwareService.Instance
+            .SynthesizeSuperAsync(partitions, output, deviceSize, "default", CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        if (!result.Success)
+        {
+            Console.Error.WriteLine(result.Summary);
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Console.WriteLine(result.Summary);
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Erases a device partition headlessly via fastboot.
+    /// <para>无头通过 fastboot 擦除设备分区。</para>
+    /// </summary>
+    private static int RunErase(FirmwareCliCommand cmd)
+    {
+        var devices = Devices.DeviceMonitorService.Instance.Scan();
+        if (devices.Count == 0)
+        {
+            Console.Error.WriteLine("No flashable device detected  未检测到可刷写设备");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Devices.DetectedDevice? target = null;
+        if (!string.IsNullOrWhiteSpace(cmd.Serial))
+        {
+            target = devices.FirstOrDefault(d => string.Equals(d.Serial, cmd.Serial, StringComparison.OrdinalIgnoreCase));
+            if (target is null)
+            {
+                Console.Error.WriteLine($"Device with serial '{cmd.Serial}' not found  未找到指定序列号设备");
+                PrintDevices(devices);
+                return FirmwareCliExitCodes.Failure;
+            }
+        }
+        else if (devices.Count > 1)
+        {
+            Console.Error.WriteLine("Multiple devices detected; specify --serial  检测到多台设备，请用 --serial 指定");
+            PrintDevices(devices);
+            return FirmwareCliExitCodes.Failure;
+        }
+        else
+        {
+            target = devices[0];
+        }
+
+        var device = new ViewModels.Devices.DeviceInfo(target);
+        Console.WriteLine($"Erasing '{cmd.Partition}' on {target.Serial} ({target.Protocol})  开始擦除");
+
+        var result = Flash.FlashService.Default.ErasePartitionAsync(
+            device,
+            cmd.Partition!,
+            new Progress<Flash.FlashProgress>(p =>
+                Console.WriteLine($"[{p.Partition ?? cmd.Partition}] {p.Percent,3}%  {p.Status}")),
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        if (!result.Success)
+        {
+            Console.Error.WriteLine(result.Summary);
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Console.WriteLine(result.Summary);
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Reboots a device into a specified mode headlessly.
+    /// <para>无头将设备重启到指定模式。</para>
+    /// </summary>
+    private static int RunReboot(FirmwareCliCommand cmd)
+    {
+        var devices = Devices.DeviceMonitorService.Instance.Scan();
+        if (devices.Count == 0)
+        {
+            Console.Error.WriteLine("No device detected  未检测到设备");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Devices.DetectedDevice? target = null;
+        if (!string.IsNullOrWhiteSpace(cmd.Serial))
+        {
+            target = devices.FirstOrDefault(d => string.Equals(d.Serial, cmd.Serial, StringComparison.OrdinalIgnoreCase));
+            if (target is null)
+            {
+                Console.Error.WriteLine($"Device with serial '{cmd.Serial}' not found  未找到指定序列号设备");
+                PrintDevices(devices);
+                return FirmwareCliExitCodes.Failure;
+            }
+        }
+        else if (devices.Count > 1)
+        {
+            Console.Error.WriteLine("Multiple devices detected; specify --serial  检测到多台设备，请用 --serial 指定");
+            PrintDevices(devices);
+            return FirmwareCliExitCodes.Failure;
+        }
+        else
+        {
+            target = devices[0];
+        }
+
+        var mode = cmd.RebootMode ?? "system";
+        Console.WriteLine($"Rebooting {target.Serial} into '{mode}' ({target.Protocol})  正在重启");
+
+        var success = Devices.DeviceMonitorService.Instance
+            .RebootAsync(target, mode, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        if (!success)
+        {
+            Console.Error.WriteLine($"Failed to reboot device into '{mode}'  重启失败");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Console.WriteLine($"Device rebooting into '{mode}'  设备正在重启");
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Decompiles a DEX file to pseudo-Java source headlessly.
+    /// <para>无头将 DEX 文件反编译为伪 Java 源码。</para>
+    /// </summary>
+    private static int RunDecompileDex(FirmwareCliCommand cmd)
+    {
+        var input = cmd.InputPath!;
+        if (!File.Exists(input))
+        {
+            Console.Error.WriteLine($"File not found: {input}  文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var output = cmd.OutputPath;
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            var name = Path.GetFileNameWithoutExtension(input);
+            output = Path.Combine(
+                Path.GetDirectoryName(input) ?? ".",
+                (string.IsNullOrEmpty(name) ? "dex" : name) + "_decompiled.java");
+        }
+
+        var dir = Path.GetDirectoryName(output);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        var result = Firmware.DexService.Instance
+            .DecompileDexAsync(input, output, ct: CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        if (!result.Success)
+        {
+            Console.Error.WriteLine(result.Summary);
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Console.WriteLine(result.Summary);
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Disassembles a DEX file to Smali text headlessly.
+    /// <para>无头将 DEX 文件反汇编为 Smali 文本。</para>
+    /// </summary>
+    private static int RunDisassembleDex(FirmwareCliCommand cmd)
+    {
+        var input = cmd.InputPath!;
+        if (!File.Exists(input))
+        {
+            Console.Error.WriteLine($"File not found: {input}  文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var outputDir = cmd.OutputPath;
+
+        var result = Firmware.DexService.Instance
+            .DisassembleDexAsync(input, outputDir, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+        if (!result.Success)
+        {
+            Console.Error.WriteLine(result.Summary);
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        Console.WriteLine(result.Summary);
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// Computes a streaming SHA-256 checksum of a file headlessly.
+    /// <para>无头计算文件的流式 SHA-256 校验和。</para>
+    /// </summary>
+    private static int RunChecksum(FirmwareCliCommand cmd)
+    {
+        var input = cmd.InputPath!;
+        if (!File.Exists(input))
+        {
+            Console.Error.WriteLine($"File not found: {input}  文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        try
+        {
+            using var stream = new FileStream(input, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(stream);
+            var hex = Convert.ToHexString(hash).ToLowerInvariant();
+            var size = stream.Length;
+            Console.WriteLine($"SHA-256: {hex}");
+            Console.WriteLine($"Size:    {size} bytes ({size / 1024.0 / 1024.0:F2} MiB)");
+            Console.WriteLine($"File:    {Path.GetFileName(input)}");
+            return FirmwareCliExitCodes.Ok;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Checksum failed: {ex.Message}  校验和计算失败");
+            return FirmwareCliExitCodes.Failure;
+        }
+    }
+
     private static IFormatHandler? ResolveByFormatName(string formatName)
     {
         var name = formatName.Trim();
@@ -413,22 +806,32 @@ public static class FirmwareCli
         writer.WriteLine("  firmware <command> [options]");
         writer.WriteLine();
         writer.WriteLine("Commands:");
-        writer.WriteLine("  list                          List registered firmware formats");
-        writer.WriteLine("  info <file>                   Detect format and read metadata");
-        writer.WriteLine("  unpack <file> -o <dir>        Unpack a firmware file to a directory");
-        writer.WriteLine("  pack <input> -o <file>        Pack a directory/file into a firmware file");
-        writer.WriteLine("  flash <image> -p <partition>  Flash an image to a device partition (headless)");
-        writer.WriteLine("  disable-verification <v> -o <file>  Patch vbmeta to disable AVB verification");
+        writer.WriteLine("  list                              List registered firmware formats");
+        writer.WriteLine("  info <file>                       Detect format and read metadata");
+        writer.WriteLine("  unpack <file> -o <dir>            Unpack a firmware file to a directory");
+        writer.WriteLine("  pack <input> -o <file>            Pack a directory/file into a firmware file");
+        writer.WriteLine("  verify <file> [-k <key>]          Verify AVB signature on a vbmeta/image");
+        writer.WriteLine("  extract <payload> -o <dir>        Extract partitions from payload.bin");
+        writer.WriteLine("  super-unpack <super> -o <dir>     Unpack a super (logical partition) image");
+        writer.WriteLine("  super-pack <dir> -o <super>       Pack partition images into a super image");
+        writer.WriteLine("  flash <image> -p <partition>      Flash an image to a device partition");
+        writer.WriteLine("  erase <partition> [-d <serial>]   Erase a device partition (fastboot)");
+        writer.WriteLine("  reboot [mode] [-d <serial>]       Reboot device (system/bootloader/recovery/edl)");
+        writer.WriteLine("  decompile-dex <file.dex> [-o <f>] Decompile DEX to pseudo-Java source");
+        writer.WriteLine("  disassemble-dex <file> [-o <dir>] Disassemble DEX to Smali text");
+        writer.WriteLine("  checksum <file>                   Compute streaming SHA-256 checksum");
+        writer.WriteLine("  disable-verification <v> -o <f>   Patch vbmeta to disable AVB verification");
         writer.WriteLine();
         writer.WriteLine("Options:");
-        writer.WriteLine("  -o, --output-dir <dir>        Output directory (unpack)");
-        writer.WriteLine("  -o, --output <file>           Output file (pack)");
-        writer.WriteLine("  -f, --format <name>           Explicit format (e.g. ext4, erofs, payload, boot)");
-        writer.WriteLine("      --no-overwrite            Do not overwrite existing files (unpack)");
-        writer.WriteLine("  -p, --partition <name>        Target partition name (flash)");
-        writer.WriteLine("  -d, --serial <serial>         Target device serial (flash; required when multiple devices)");
-        writer.WriteLine("  -h, --help                    Show this help and exit");
-        writer.WriteLine("  -v, --version                 Show version and exit");
+        writer.WriteLine("  -o, --output-dir <dir>            Output directory");
+        writer.WriteLine("  -o, --output <file>               Output file");
+        writer.WriteLine("  -f, --format <name>               Explicit format (e.g. ext4, erofs, payload, boot)");
+        writer.WriteLine("      --no-overwrite                Do not overwrite existing files (unpack)");
+        writer.WriteLine("  -p, --partition <name>            Target partition name (flash/extract)");
+        writer.WriteLine("  -d, --serial <serial>             Target device serial");
+        writer.WriteLine("  -k, --public-key <path>           Trusted AVB public key (verify)");
+        writer.WriteLine("  -h, --help                        Show this help and exit");
+        writer.WriteLine("  -v, --version                     Show version and exit");
         writer.WriteLine();
         writer.WriteLine("Exit codes:");
         writer.WriteLine("  0  Success");
@@ -442,8 +845,17 @@ public static class FirmwareCli
         writer.WriteLine("  firmware unpack payload.bin -o payload_out/ -f payload");
         writer.WriteLine("  firmware pack system_dir/ -o system.img -f ext4");
         writer.WriteLine("  firmware pack boot_out/ -o boot_new.img -f boot");
+        writer.WriteLine("  firmware verify vbmeta.img");
+        writer.WriteLine("  firmware verify vbmeta.img -k public_key.bin");
+        writer.WriteLine("  firmware extract payload.bin -o extracted/ -p system");
+        writer.WriteLine("  firmware super-unpack super.img -o super_out/");
+        writer.WriteLine("  firmware super-pack super_out/ -o super_new.img");
         writer.WriteLine("  firmware flash boot.img -p boot");
         writer.WriteLine("  firmware flash system.img -p system -d 1234567890ABCDEF");
+        writer.WriteLine("  firmware erase userdata");
+        writer.WriteLine("  firmware erase cache -d 1234567890ABCDEF");
+        writer.WriteLine("  firmware reboot bootloader");
+        writer.WriteLine("  firmware reboot edl -d 1234567890ABCDEF");
         writer.WriteLine("  firmware disable-verification vbmeta.img -o vbmeta_disabled.img");
     }
 
