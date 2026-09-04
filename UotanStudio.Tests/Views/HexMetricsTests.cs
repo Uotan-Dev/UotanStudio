@@ -48,7 +48,9 @@ public class HexMetricsTests
         var layout = HexMetrics.CreateLayout(800);
 
         Assert.Equal(0, layout.ByteIndexFromX(layout.HexZoneStart, hexZone: true));
+        Assert.Equal(0, layout.ByteIndexFromX(layout.HexZoneStart + (layout.HexCellWidth * 0.95), hexZone: true));
         Assert.Equal(1, layout.ByteIndexFromX(layout.HexZoneStart + layout.HexCellWidth, hexZone: true));
+        Assert.Equal(1, layout.ByteIndexFromX(layout.HexZoneStart + (layout.HexCellWidth * 1.95), hexZone: true));
         Assert.Equal(layout.BytesPerLine - 1, layout.ByteIndexFromX(layout.HexZoneEnd - 1, hexZone: true));
         // 越界返回 -1
         Assert.Equal(-1, layout.ByteIndexFromX(layout.HexZoneStart - 1, hexZone: true));
@@ -61,6 +63,8 @@ public class HexMetricsTests
         var layout = HexMetrics.CreateLayout(800);
 
         Assert.Equal(0, layout.ByteIndexFromX(layout.AsciiZoneStart, hexZone: false));
+        Assert.Equal(0, layout.ByteIndexFromX(layout.AsciiZoneStart + (layout.AsciiCellWidth * 0.95), hexZone: false));
+        Assert.Equal(1, layout.ByteIndexFromX(layout.AsciiZoneStart + (layout.AsciiCellWidth * 1.95), hexZone: false));
         Assert.Equal(
             layout.BytesPerLine - 1,
             layout.ByteIndexFromX(
