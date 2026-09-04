@@ -1,13 +1,27 @@
 namespace UotanStudio.Services.Projects;
 
 /// <summary>
+/// Per-sub-project directory context.
+/// <para>每个子项目的目录上下文。</para>
+/// </summary>
+/// <param name="Name">Sub-project display name. <para>子项目显示名称。</para></param>
+/// <param name="RootPath">Absolute path of the sub-project root directory. <para>子项目根目录绝对路径。</para></param>
+/// <param name="FwProjectPath">Absolute path of the <c>.uotanfw</c> file. <para><c>.uotanfw</c> 文件绝对路径。</para></param>
+/// <param name="ImagesDir">Absolute path of the <c>images/</c> directory. <para><c>images/</c> 目录绝对路径。</para></param>
+/// <param name="OutputDir">Absolute path of the <c>output/</c> directory. <para><c>output/</c> 目录绝对路径。</para></param>
+public sealed record SubProjectContext(
+    string Name,
+    string RootPath,
+    string FwProjectPath,
+    string ImagesDir,
+    string OutputDir);
+
+/// <summary>
 /// Current solution context service (singleton), holding the state and directory layout of the opened
-/// <c>.uotan</c> solution: data root, firmware/node project files, session state directory <c>.uotan/</c>,
-/// image directory <c>images/</c>, intermediate directory <c>intermediate/</c>, and relative/absolute path
-/// conversion.
+/// <c>.uotan</c> solution: data root, sub-projects, node project file, session state directory
+/// <c>.uotan/</c>, and relative/absolute path conversion.
 /// <para>当前解决方案上下文服务（单例），承载已打开 <c>.uotan</c> 解决方案的状态与目录布局：
-/// 数据根目录、固件/节点项目文件、会话状态目录 <c>.uotan/</c>、镜像目录 <c>images/</c>、
-/// 中间产物目录 <c>intermediate/</c> 及相对/绝对路径转换。</para>
+/// 数据根目录、子项目列表、节点项目文件、会话状态目录 <c>.uotan/</c> 及相对/绝对路径转换。</para>
 /// </summary>
 public sealed class ProjectContextService
 {
@@ -42,10 +56,14 @@ public sealed class ProjectContextService
     public string? RootDirectory { get; private set; }
 
     /// <summary>
-    /// Firmware project file path (<c>RootDirectory/&lt;SolutionName&gt;.uotanfw</c>); <c>null</c> when no solution is open.
-    /// <para>固件项目文件路径（<c>RootDirectory/&lt;SolutionName&gt;.uotanfw</c>）；未打开解决方案时为 <c>null</c>。</para>
+    /// Firmware project file path — resolves to <see cref="ActiveSubProject"/>.<c>FwProjectPath</c>
+    /// when available; falls back to legacy single-project path. <c>null</c> when no solution is open.
+    /// <para>固件项目文件路径——优先取 <see cref="ActiveSubProject"/> 的 <c>FwProjectPath</c>；
+    /// 回退到旧版单项目路径。未打开解决方案时为 <c>null</c>。</para>
     /// </summary>
-    public string? FirmwareProjectPath { get; private set; }
+    public string? FirmwareProjectPath => ActiveSubProject?.FwProjectPath ?? LegacyFirmwareProjectPath;
+
+    private string? LegacyFirmwareProjectPath { get; set; }
 
     /// <summary>
     /// Node project file path (<c>RootDirectory/&lt;SolutionName&gt;.uotannode</c>); <c>null</c> when no solution is open.
@@ -60,16 +78,16 @@ public sealed class ProjectContextService
     public string? StateDirectory { get; private set; }
 
     /// <summary>
-    /// Image directory (<c>RootDirectory/images</c>); <c>null</c> when no solution is open.
-    /// <para>镜像目录（<c>RootDirectory/images</c>）；未打开解决方案时为 <c>null</c>。</para>
+    /// All sub-projects discovered in the current solution.
+    /// <para>当前解决方案中发现的所有子项目。</para>
     /// </summary>
-    public string? ImagesDirectory { get; private set; }
+    public IReadOnlyList<SubProjectContext> SubProjects { get; private set; } = [];
 
     /// <summary>
-    /// Intermediate output directory (<c>RootDirectory/intermediate</c>); <c>null</c> when no solution is open.
-    /// <para>中间产物目录（<c>RootDirectory/intermediate</c>）；未打开解决方案时为 <c>null</c>。</para>
+    /// The active (startup) sub-project used for pack/extract operations; <c>null</c> when no sub-projects exist.
+    /// <para>当前活动（启动）子项目，用于打包/解包操作；无子项目时为 <c>null</c>。</para>
     /// </summary>
-    public string? IntermediateDirectory { get; private set; }
+    public SubProjectContext? ActiveSubProject { get; private set; }
 
     /// <summary>
     /// Whether a solution is currently open.
@@ -78,15 +96,33 @@ public sealed class ProjectContextService
     public bool IsProjectOpen => CurrentSolutionPath is not null;
 
     /// <summary>
-    /// Opens the specified solution: sets the solution path/name and directory layout, ensuring the
-    /// <c>images/</c>, <c>intermediate/</c> and <c>.uotan/</c> directories exist.
-    /// <para>打开指定解决方案：设置解决方案路径/名称与目录布局，并确保 <c>images/</c>、<c>intermediate/</c>
-    /// 与 <c>.uotan/</c> 目录存在。</para>
+    /// Sets the active sub-project by name.
+    /// <para>按名称设置活动子项目。</para>
+    /// </summary>
+    /// <param name="name">Sub-project name. <para>子项目名称。</para></param>
+    /// <returns><c>true</c> if the sub-project was found and activated; <c>false</c> otherwise.</returns>
+    public bool SetActiveSubProject(string name)
+    {
+        var match = SubProjects.FirstOrDefault(sp =>
+            string.Equals(sp.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (match is null) return false;
+        ActiveSubProject = match;
+        return true;
+    }
+
+    /// <summary>
+    /// Opens the specified solution: sets the solution path/name and directory layout, scans for
+    /// sub-projects (<c>*.uotanfw</c> files), and ensures the <c>.uotan/</c> state directory exists.
+    /// <para>打开指定解决方案：设置解决方案路径/名称与目录布局，扫描子项目（<c>*.uotanfw</c> 文件），
+    /// 并确保 <c>.uotan/</c> 会话状态目录存在。</para>
     /// </summary>
     /// <param name="solutionPath">
     /// Full path of the solution file (<c>.uotan</c>). <para>解决方案文件（<c>.uotan</c>）全路径。</para>
     /// </param>
-    public void OpenSolution(string solutionPath)
+    /// <param name="snapshot">
+    /// The loaded solution snapshot (used to read sub-project references). <para>已加载的解决方案快照（读取子项目引用）。</para>
+    /// </param>
+    public void OpenSolution(string solutionPath, SolutionSnapshot? snapshot = null)
     {
         if (string.IsNullOrWhiteSpace(solutionPath))
         {
@@ -96,14 +132,64 @@ public sealed class ProjectContextService
         CurrentSolutionPath = Path.GetFullPath(solutionPath);
         RootDirectory = Path.ChangeExtension(CurrentSolutionPath, null);
         SolutionName = Path.GetFileName(RootDirectory);
-        FirmwareProjectPath = Path.Combine(RootDirectory, SolutionName + ".uotanfw");
         NodeProjectPath = Path.Combine(RootDirectory, SolutionName + ".uotannode");
         StateDirectory = Path.Combine(RootDirectory, ".uotan");
-        ImagesDirectory = Path.Combine(RootDirectory, "images");
-        IntermediateDirectory = Path.Combine(RootDirectory, "intermediate");
-        Directory.CreateDirectory(ImagesDirectory);
-        Directory.CreateDirectory(IntermediateDirectory);
         Directory.CreateDirectory(StateDirectory);
+
+        // Build sub-project list from snapshot or by scanning the root directory
+        var subProjects = new List<SubProjectContext>();
+
+        if (snapshot?.SubProjects is { Count: > 0 } spList)
+        {
+            // v2+ : use explicit sub-project references from the snapshot
+            foreach (var dto in spList)
+            {
+                var fwPath = Path.Combine(RootDirectory, dto.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(fwPath)) continue;
+                var subRoot = Path.GetDirectoryName(fwPath)!;
+                subProjects.Add(new SubProjectContext(
+                    dto.Name,
+                    subRoot,
+                    fwPath,
+                    Path.Combine(subRoot, "images"),
+                    Path.Combine(subRoot, "output")));
+            }
+        }
+        else if (snapshot is not null && !string.IsNullOrEmpty(snapshot.FirmwareProjectPath))
+        {
+            // v1 legacy: single firmware project — auto-migrate to sub-project
+            var fwPath = Path.Combine(RootDirectory, snapshot.FirmwareProjectPath.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(fwPath))
+            {
+                LegacyFirmwareProjectPath = fwPath;
+                var subRoot = Path.GetDirectoryName(fwPath)!;
+                var subName = Path.GetFileName(subRoot);
+                subProjects.Add(new SubProjectContext(
+                    subName,
+                    subRoot,
+                    fwPath,
+                    Path.Combine(subRoot, "images"),
+                    Path.Combine(subRoot, "output")));
+            }
+        }
+        else
+        {
+            // Fallback: scan root directory for *.uotanfw files
+            foreach (var fwFile in Directory.EnumerateFiles(RootDirectory, "*.uotanfw"))
+            {
+                var subRoot = Path.GetDirectoryName(fwFile)!;
+                var subName = Path.GetFileName(subRoot);
+                subProjects.Add(new SubProjectContext(
+                    subName,
+                    subRoot,
+                    fwFile,
+                    Path.Combine(subRoot, "images"),
+                    Path.Combine(subRoot, "output")));
+            }
+        }
+
+        SubProjects = subProjects;
+        ActiveSubProject = subProjects.FirstOrDefault();
     }
 
     /// <summary>
@@ -115,64 +201,47 @@ public sealed class ProjectContextService
         CurrentSolutionPath = null;
         SolutionName = null;
         RootDirectory = null;
-        FirmwareProjectPath = null;
+        LegacyFirmwareProjectPath = null;
         NodeProjectPath = null;
         StateDirectory = null;
-        ImagesDirectory = null;
-        IntermediateDirectory = null;
+        SubProjects = [];
+        ActiveSubProject = null;
     }
 
     /// <summary>
-    /// Ensures the image directory exists and returns its path.
-    /// <para>确保镜像目录存在并返回其路径。</para>
+    /// Ensures the active sub-project's <c>images/</c> directory exists and returns its path.
+    /// <para>确保当前活动子项目的 <c>images/</c> 目录存在并返回其路径。</para>
     /// </summary>
-    /// <returns>
-    /// The absolute image directory path. <para>镜像目录绝对路径。</para>
-    /// </returns>
     public string EnsureImagesDirectory()
     {
-        if (ImagesDirectory is null)
+        if (ActiveSubProject is null)
         {
-            throw new InvalidOperationException("No solution is open.  尚未打开解决方案。");
+            throw new InvalidOperationException("No solution is open or no sub-project is active.  尚未打开解决方案或无活动子项目。");
         }
 
-        Directory.CreateDirectory(ImagesDirectory);
-        return ImagesDirectory;
+        Directory.CreateDirectory(ActiveSubProject.ImagesDir);
+        return ActiveSubProject.ImagesDir;
     }
 
     /// <summary>
-    /// Ensures the intermediate sub-directory for the given operation exists and returns its path
-    /// (<c>intermediate/&lt;operation&gt;</c>).
-    /// <para>确保指定操作的中间产物子目录存在并返回其路径（<c>intermediate/&lt;operation&gt;</c>）。</para>
+    /// Ensures the active sub-project's <c>output/</c> directory exists and returns its path.
+    /// <para>确保当前活动子项目的 <c>output/</c> 目录存在并返回其路径。</para>
     /// </summary>
-    /// <param name="operation">
-    /// Operation name (used as the sub-directory name). <para>操作名（用作子目录名）。</para>
-    /// </param>
-    /// <returns>
-    /// The absolute intermediate sub-directory path. <para>中间产物子目录绝对路径。</para>
-    /// </returns>
-    public string EnsureIntermediateDirectory(string operation)
+    public string EnsureOutputDirectory()
     {
-        if (IntermediateDirectory is null)
+        if (ActiveSubProject is null)
         {
-            throw new InvalidOperationException("No solution is open.  尚未打开解决方案。");
+            throw new InvalidOperationException("No solution is open or no sub-project is active.  尚未打开解决方案或无活动子项目。");
         }
 
-        var dir = Path.Combine(IntermediateDirectory, operation);
-        Directory.CreateDirectory(dir);
-        return dir;
+        Directory.CreateDirectory(ActiveSubProject.OutputDir);
+        return ActiveSubProject.OutputDir;
     }
 
     /// <summary>
     /// Resolves a solution-root-relative path to an absolute path; returns <c>null</c> when no solution is open.
     /// <para>将相对解决方案根目录的路径解析为绝对路径；未打开解决方案时返回 <c>null</c>。</para>
     /// </summary>
-    /// <param name="relativePath">
-    /// Relative path (forward or back slashes both accepted). <para>相对路径（使用正斜杠或反斜杠均可）。</para>
-    /// </param>
-    /// <returns>
-    /// The absolute path; <c>null</c> when no solution is open. <para>绝对路径；未打开解决方案时为 <c>null</c>。</para>
-    /// </returns>
     public string? ResolvePath(string relativePath)
     {
         if (RootDirectory is null || string.IsNullOrWhiteSpace(relativePath))
@@ -188,12 +257,6 @@ public sealed class ProjectContextService
     /// outside the solution root or no solution is open.
     /// <para>将绝对路径转换为相对解决方案根目录的路径；路径不在解决方案根目录下或未打开解决方案时返回 <c>null</c>。</para>
     /// </summary>
-    /// <param name="absolutePath">
-    /// Absolute path. <para>绝对路径。</para>
-    /// </param>
-    /// <returns>
-    /// The relative path (forward slashes); <c>null</c> when it cannot be converted. <para>相对路径（以正斜杠分隔）；无法转换时为 <c>null</c>。</para>
-    /// </returns>
     public string? RelativePath(string absolutePath)
     {
         if (RootDirectory is null || string.IsNullOrWhiteSpace(absolutePath))

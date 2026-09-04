@@ -1,15 +1,19 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Messages;
+using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
 /// <para>打包设置面板视图模型（单例），承载镜像类型、格式、压缩、super 与 DAT 等打包选项，并负责
-/// 与 <see cref="ProjectSettingsDto"/> 双向映射以支持工程快照的保存与恢复。</para>
+/// 与 <see cref="ProjectSettingsDto"/> 双向映射以支持工程快照的保存与恢复。切换活动子项目时
+/// 自动加载对应设置。</para>
 /// Packing settings panel view model (singleton), holding image type, format, compression, super and
 /// DAT options, mapping bidirectionally with <see cref="ProjectSettingsDto"/> to support project
-/// snapshot save/restore.
+/// snapshot save/restore. Automatically loads settings when the active sub-project changes.
 /// </summary>
 internal partial class ProjectSettingViewModel : Tool
 {
@@ -35,12 +39,34 @@ internal partial class ProjectSettingViewModel : Tool
     private string projectName = "", sUPERSize = "9126805504", sUPERName = "qti_dynamic_partitions", uTCTime = "1230768000", dATSeg = "15";
 
     /// <summary>
-    /// <para>创建打包设置面板视图模型并注册单例实例。</para>
-    /// Creates the packing settings panel view model and registers the singleton instance.
+    /// <para>创建打包设置面板视图模型并注册单例实例；订阅工程上下文变更消息以在子项目切换时自动加载设置。</para>
+    /// Creates the packing settings panel view model and registers the singleton instance; subscribes to
+    /// project-context-changed messages to auto-load settings on sub-project switch.
     /// </summary>
     public ProjectSettingViewModel()
     {
         Instance = this;
+        WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
+    }
+
+    /// <summary>
+    /// <para>响应工程上下文变更：切换活动子项目时加载对应 <c>.uotanfw</c> 中的打包设置。</para>
+    /// Responds to project-context changes: loads the packing settings from the corresponding
+    /// <c>.uotanfw</c> when the active sub-project changes.
+    /// </summary>
+    private async void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message)
+    {
+        var context = ProjectContextService.Instance;
+        if (!context.IsProjectOpen || context.FirmwareProjectPath is null)
+        {
+            return;
+        }
+
+        var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(context.FirmwareProjectPath);
+        if (firmware?.Settings is not null)
+        {
+            ApplyFromDto(firmware.Settings);
+        }
     }
 
     /// <summary>

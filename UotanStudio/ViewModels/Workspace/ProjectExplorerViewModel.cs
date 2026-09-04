@@ -67,18 +67,19 @@ internal class ProjectExplorerViewModel : Tool
     private void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message) => Refresh();
 
     /// <summary>
-    /// <para>重建目录树：以当前工程的 <c>images/</c> 与 <c>intermediate/</c> 目录为根；
-    /// 未打开工程或目录不存在时显示空树，不抛出异常。重建同时重启文件系统监听。</para>
-    /// Rebuilds the directory tree rooted at the current project's <c>images/</c> and
-    /// <c>intermediate/</c> directories; shows an empty tree without throwing when no project is
-    /// open or the directories do not exist. Also restarts the file-system watcher.
+    /// <para>重建目录树：以当前解决方案根目录为根节点；未打开工程或目录不存在时显示空树，不抛出异常。
+    /// 重建同时重启文件系统监听。</para>
+    /// Rebuilds the directory tree rooted at the current solution root; shows an empty tree without
+    /// throwing when no project is open or the directory does not exist. Also restarts the file-system watcher.
     /// </summary>
     public void Refresh()
     {
         TreeViewContent.Clear();
         var svc = ProjectContextService.Instance;
-        AddRoot(svc.ImagesDirectory);
-        AddRoot(svc.IntermediateDirectory);
+        if (svc.RootDirectory is not null && Directory.Exists(svc.RootDirectory))
+        {
+            AddRoot(svc.RootDirectory);
+        }
         RestartWatcher(svc);
     }
 
@@ -285,6 +286,13 @@ public sealed partial class ExplorerNode : ObservableObject
         {
             foreach (var dir in Directory.EnumerateDirectories(Path))
             {
+                // 排除会话状态目录 .uotan/（类似 VS 的 .vs/），不在资源管理器中显示。
+                // Exclude the session state directory .uotan/ (like VS's .vs/) from the explorer.
+                if (string.Equals(System.IO.Path.GetFileName(dir), ".uotan", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 Children.Add(new ExplorerNode(dir, isDirectory: true));
             }
 

@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
+using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 
@@ -88,6 +89,18 @@ public partial class ProjectExplorerView : UserControl
     private void OnOpenAsFirmware(object? sender, RoutedEventArgs e)
     {
         OpenWith(EditorOpenMode.Firmware);
+    }
+
+    private void OnSetAsPackProject(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is ExplorerNode node && node.IsDirectory)
+        {
+            var dirName = System.IO.Path.GetFileName(node.Path);
+            if (!string.IsNullOrEmpty(dirName) && ProjectContextService.Instance.SetActiveSubProject(dirName))
+            {
+                WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+            }
+        }
     }
 
     private void OpenWith(EditorOpenMode mode)

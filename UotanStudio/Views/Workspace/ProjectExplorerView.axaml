@@ -12,6 +12,7 @@
                           BasedOn="{StaticResource {x:Type TreeViewItem}}">
                 <Setter Property="ContextMenu">
                     <ContextMenu x:DataType="viewmodels:ExplorerNode">
+                        <!-- 文件节点右键菜单：打开方式 -->
                         <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsMenuHeader}"
                                   IsVisible="{Binding !IsDirectory}">
                             <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsTextHeader}"
@@ -31,6 +32,10 @@
                             <MenuItem Header="{DynamicResource Explorer_OpenAsFirmware}"
                                       Click="OnOpenAsFirmware" />
                         </MenuItem>
+                        <!-- 目录节点右键菜单：设为打包项目 -->
+                        <MenuItem Header="{DynamicResource Explorer_SetAsPackProject}"
+                                  IsVisible="{Binding IsDirectory}"
+                                  Click="OnSetAsPackProject" />
                     </ContextMenu>
                 </Setter>
             </ControlTheme>

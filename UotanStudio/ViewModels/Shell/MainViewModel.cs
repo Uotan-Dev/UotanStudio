@@ -31,6 +31,7 @@ public partial class MainViewModel : ViewModelBase
     public MainViewModel()
     {
         MenuVM.NodeEditorVM = NodeEditorVM;
+        MenuVM.WorkspaceVM = WorkspaceVM;
         WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
         UpdateWindowTitle();
     }

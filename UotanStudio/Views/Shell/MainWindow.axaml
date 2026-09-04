@@ -11,6 +11,10 @@
    Icon="/Assets/UotanToolbox.png"
    Title=""
    ExtendClientAreaToDecorationsHint="True">
+	<Window.KeyBindings>
+		<KeyBinding Gesture="Ctrl+S" Command="{Binding MenuVM.SaveCommand}" />
+		<KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding MenuVM.SaveAsCommand}" />
+	</Window.KeyBindings>
 	<DockPanel>
 		<Grid DockPanel.Dock="Top" Height="32" ColumnDefinitions="Auto,*">
 			<Image Grid.Column="0" Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>

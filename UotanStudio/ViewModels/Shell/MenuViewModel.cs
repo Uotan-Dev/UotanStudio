@@ -209,13 +209,21 @@ public partial class MenuViewModel : ViewModelBase
         OperationHistoryService.Instance.Clear();
 
         var solutionName = ProjectContextService.Instance.SolutionName ?? Path.GetFileNameWithoutExtension(path);
-        var firmwarePath = ProjectContextService.Instance.FirmwareProjectPath
-            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName + ".uotanfw");
+        var rootDir = ProjectContextService.Instance.RootDirectory
+            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
         var nodePath = ProjectContextService.Instance.NodeProjectPath
-            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName + ".uotannode");
+            ?? Path.Combine(rootDir, solutionName + ".uotannode");
         var stateDir = ProjectContextService.Instance.StateDirectory
-            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName, ".uotan");
+            ?? Path.Combine(rootDir, ".uotan");
 
+        // Create the first sub-project directory structure
+        var subProjectDir = Path.Combine(rootDir, solutionName);
+        var subImagesDir = Path.Combine(subProjectDir, "images");
+        var subOutputDir = Path.Combine(subProjectDir, "output");
+        Directory.CreateDirectory(subImagesDir);
+        Directory.CreateDirectory(subOutputDir);
+
+        var firmwarePath = Path.Combine(subProjectDir, solutionName + ".uotanfw");
         var firmware = new FirmwareProjectSnapshot
         {
             FormatVersion = 1,
@@ -232,10 +240,13 @@ public partial class MenuViewModel : ViewModelBase
         };
         var solution = new SolutionSnapshot
         {
-            FormatVersion = 1,
+            FormatVersion = 2,
             SolutionName = solutionName,
-            FirmwareProjectPath = $"{solutionName}/{solutionName}.uotanfw",
-            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode"
+            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
+            SubProjects =
+            [
+                new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}/{solutionName}.uotanfw" }
+            ]
         };
 
         await SolutionPersistenceService.SaveFirmwareProjectAsync(firmwarePath, firmware);
@@ -243,6 +254,9 @@ public partial class MenuViewModel : ViewModelBase
         await SolutionPersistenceService.SaveSolutionAsync(path, solution);
         await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));
         await SolutionSettingsService.SaveAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings());
+
+        // Re-open to populate sub-project context from the saved snapshot
+        ProjectContextService.Instance.OpenSolution(path, solution);
 
         WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
         RecordRecentProject(path);
@@ -287,7 +301,7 @@ public partial class MenuViewModel : ViewModelBase
             return false;
         }
 
-        ProjectContextService.Instance.OpenSolution(path);
+        ProjectContextService.Instance.OpenSolution(path, solution);
         _currentProjectPath = path;
 
         // 重建镜像清单：仅加入实际存在的文件。
@@ -375,6 +389,77 @@ public partial class MenuViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <para>向当前解决方案添加新子项目：创建子项目目录结构（<c>images/</c>、<c>output/</c>、<c>.uotanfw</c>），
+    /// 重名时拒绝操作并记录全局日志。</para>
+    /// Adds a new sub-project to the current solution: creates the sub-project directory structure
+    /// (<c>images/</c>, <c>output/</c>, <c>.uotanfw</c>); refuses and logs on name collision.
+    /// </summary>
+    [RelayCommand]
+    private async Task AddSubProjectAsync()
+    {
+        var context = ProjectContextService.Instance;
+        if (!context.IsProjectOpen || context.RootDirectory is null)
+        {
+            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Add sub-project aborted: no solution is open  添加子项目中止：尚未打开解决方案");
+            return;
+        }
+
+        // 使用文件保存对话框作为名称输入（选择 .uotanfw 保存位置即确定子项目名称）
+        // Use the file-save dialog as name input (choosing the .uotanfw save location determines the sub-project name).
+        var topLevel = TopLevel;
+        if (topLevel == null) return;
+
+        var result = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = LanguageService.Instance.GetString("Menu_AddSubProject"),
+            SuggestedFileName = "NewDevice.uotanfw",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("UotanStudio Firmware Project") { Patterns = ["*.uotanfw"] }
+            ]
+        });
+
+        if (result is null) return;
+
+        var fwPath = result.TryGetLocalPath();
+        if (string.IsNullOrEmpty(fwPath)) return;
+
+        var subProjectDir = Path.GetDirectoryName(fwPath)!;
+        var subName = Path.GetFileNameWithoutExtension(fwPath);
+
+        // 重名拒绝：子项目目录已存在时拒绝操作。
+        // Duplicate rejection: refuse when the sub-project directory already exists.
+        if (context.SubProjects.Any(sp => string.Equals(sp.Name, subName, StringComparison.OrdinalIgnoreCase)))
+        {
+            Services.LogService.Instance.Write(LogLevel.Error, "Menu", $"Add sub-project aborted: \"{subName}\" already exists  添加子项目失败：\"{subName}\" 已存在");
+            return;
+        }
+
+        var imagesDir = Path.Combine(subProjectDir, "images");
+        var outputDir = Path.Combine(subProjectDir, "output");
+        Directory.CreateDirectory(imagesDir);
+        Directory.CreateDirectory(outputDir);
+
+        var firmware = new FirmwareProjectSnapshot
+        {
+            FormatVersion = 1,
+            ProjectName = subName,
+            Images = [],
+            Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
+        };
+        await SolutionPersistenceService.SaveFirmwareProjectAsync(fwPath, firmware);
+
+        Services.LogService.Instance.Write(LogLevel.Info, "Menu", $"Added sub-project: {subName}  已添加子项目：{subName}");
+
+        // 重新加载解决方案以刷新子项目列表
+        // Reload the solution to refresh the sub-project list.
+        if (_currentProjectPath is not null)
+        {
+            await OpenProjectFromPathAsync(_currentProjectPath);
+        }
+    }
+
+    /// <summary>
     /// <para>当前工程文件路径，由保存/打开操作填充。</para>
     /// Current project file path, populated by save/open operations.
     /// </summary>
@@ -387,18 +472,60 @@ public partial class MenuViewModel : ViewModelBase
     public NodeEditorViewModel? NodeEditorVM { get; set; }
 
     /// <summary>
-    /// <para>保存当前项目，若无路径则触发另存流程。</para>
-    /// Saves the current project, triggering Save As if there is no project path yet.
+    /// <para>当前工作区视图模型引用，由外部设置以便 Ctrl+S 保存活动文档。</para>
+    /// Current workspace view model reference, set externally so Ctrl+S can save the active document.
+    /// </summary>
+    public WorkspaceViewModel? WorkspaceVM { get; set; }
+
+    /// <summary>
+    /// <para>保存当前项目，若无路径则触发另存流程。先尝试保存当前活动的文档编辑器。</para>
+    /// Saves the current project (and the active document editor first, if applicable),
+    /// triggering Save As if there is no project path yet.
     /// </summary>
     [RelayCommand]
     private async Task SaveAsync()
     {
+        await SaveActiveDocumentAsync();
+
         if (string.IsNullOrEmpty(_currentProjectPath))
         {
             await SaveAsAsync();
             return;
         }
         await PersistToAsync(_currentProjectPath);
+    }
+
+    /// <summary>
+    /// <para>若当前活动文档具有 SaveCommand 且 IsDirty，则执行保存。</para>
+    /// If the active document has a SaveCommand and IsDirty, executes it.
+    /// </summary>
+    private async Task SaveActiveDocumentAsync()
+    {
+        if (WorkspaceVM?.Layout is null)
+        {
+            return;
+        }
+
+        var documentDock = WorkspaceVM.FindDocumentsPanePublic();
+        if (documentDock?.ActiveDockable is not { } active)
+        {
+            return;
+        }
+
+        // 各编辑器 ViewModel 的 SaveCommand 类型各异，统一通过反射-free 的模式匹配分派。
+        // Dispatch by pattern matching to avoid reflection — each editor exposes its own SaveCommand.
+        IAsyncRelayCommand? saveCmd = active switch
+        {
+            Editors.ManifestEditorViewModel m => m.SaveCommand,
+            Editors.DtbEditorViewModel d => d.SaveCommand,
+            Editors.PartitionEditorViewModel p => p.SaveCommand,
+            _ => null
+        };
+
+        if (saveCmd is not null && saveCmd.CanExecute(null))
+        {
+            await saveCmd.ExecuteAsync(null);
+        }
     }
 
     /// <summary>
@@ -415,7 +542,7 @@ public partial class MenuViewModel : ViewModelBase
             return;
         }
 
-        var oldImages = ProjectContextService.Instance.ImagesDirectory;
+        var oldImages = ProjectContextService.Instance.ActiveSubProject?.ImagesDir;
         var oldRoot = ProjectContextService.Instance.RootDirectory;
         _currentProjectPath = path;
         ProjectContextService.Instance.OpenSolution(path);
@@ -460,21 +587,8 @@ public partial class MenuViewModel : ViewModelBase
 
         var context = ProjectContextService.Instance;
         var solutionName = context.SolutionName ?? Path.GetFileNameWithoutExtension(path);
-
-        var firmware = new FirmwareProjectSnapshot
-        {
-            FormatVersion = 1,
-            ProjectName = solutionName,
-            Images = ImageViewModel.EnsureInstance().Images
-                .Select(i => new ImageEntryDto
-                {
-                    RelativePath = i.RelativePath,
-                    SizeBytes = i.SizeBytes,
-                    Format = i.Format
-                })
-                .ToList(),
-            Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
-        };
+        var rootDir = context.RootDirectory
+            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
 
         var node = new NodeProjectSnapshot
         {
@@ -494,22 +608,46 @@ public partial class MenuViewModel : ViewModelBase
             Connections = Services.Projects.WorkflowPersistenceService.BuildConnectionDtos(NodeEditorVM.Nodes, NodeEditorVM.Connections)
         };
 
+        // Build sub-project references and save each .uotanfw
+        var subProjectDtos = new List<SubProjectDto>();
+        foreach (var sp in context.SubProjects)
+        {
+            subProjectDtos.Add(new SubProjectDto
+            {
+                Name = sp.Name,
+                RelativePath = Path.GetRelativePath(rootDir, sp.FwProjectPath).Replace(Path.DirectorySeparatorChar, '/')
+            });
+
+            var firmware = new FirmwareProjectSnapshot
+            {
+                FormatVersion = 1,
+                ProjectName = sp.Name,
+                Images = ImageViewModel.EnsureInstance().Images
+                    .Select(i => new ImageEntryDto
+                    {
+                        RelativePath = i.RelativePath,
+                        SizeBytes = i.SizeBytes,
+                        Format = i.Format
+                    })
+                    .ToList(),
+                Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
+            };
+            await SolutionPersistenceService.SaveFirmwareProjectAsync(sp.FwProjectPath, firmware);
+        }
+
+        var nodePath = context.NodeProjectPath
+            ?? Path.Combine(rootDir, solutionName + ".uotannode");
+        var stateDir = context.StateDirectory
+            ?? Path.Combine(rootDir, ".uotan");
+
         var solution = new SolutionSnapshot
         {
-            FormatVersion = 1,
+            FormatVersion = 2,
             SolutionName = solutionName,
-            FirmwareProjectPath = $"{solutionName}/{solutionName}.uotanfw",
-            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode"
+            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
+            SubProjects = subProjectDtos.Count > 0 ? subProjectDtos : null
         };
 
-        var firmwarePath = context.FirmwareProjectPath
-            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName + ".uotanfw");
-        var nodePath = context.NodeProjectPath
-            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName + ".uotannode");
-        var stateDir = context.StateDirectory
-            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName, ".uotan");
-
-        await SolutionPersistenceService.SaveFirmwareProjectAsync(firmwarePath, firmware);
         await SolutionPersistenceService.SaveNodeProjectAsync(nodePath, node);
         await SolutionPersistenceService.SaveSolutionAsync(path, solution);
         await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));

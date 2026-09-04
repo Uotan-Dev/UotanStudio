@@ -16,6 +16,8 @@ namespace UotanStudio.Services.Projects;
 [JsonSerializable(typeof(ProjectSettingsDto))]
 [JsonSerializable(typeof(List<NodeDto>))]
 [JsonSerializable(typeof(List<ConnectionDto>))]
+[JsonSerializable(typeof(SubProjectDto))]
+[JsonSerializable(typeof(List<SubProjectDto>))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
@@ -137,17 +139,18 @@ public static class SolutionPersistenceService
 }
 
 /// <summary>
-/// Solution snapshot, carrying the <c>.uotan</c> solution file structure: solution name and the project
-/// files it references (relative to the solution file's directory).
-/// <para>解决方案快照，承载 <c>.uotan</c> 解决方案文件结构：解决方案名及其引用的项目文件（相对解决方案文件目录）。</para>
+/// Solution snapshot, carrying the <c>.uotan</c> solution file structure: solution name, sub-project
+/// list, and the node project file it references (relative to the solution file's directory).
+/// <para>解决方案快照，承载 <c>.uotan</c> 解决方案文件结构：解决方案名、子项目列表及引用的节点项目文件
+/// （相对解决方案文件目录）。</para>
 /// </summary>
 public sealed class SolutionSnapshot
 {
     /// <summary>
-    /// Solution file format version (currently 1).
-    /// <para>解决方案文件格式版本（当前为 1）。</para>
+    /// Solution file format version (currently 2; v1 is auto-migrated on load).
+    /// <para>解决方案文件格式版本（当前为 2；加载时自动迁移 v1）。</para>
     /// </summary>
-    public int FormatVersion { get; set; } = 1;
+    public int FormatVersion { get; set; } = 2;
 
     /// <summary>
     /// Solution name (without extension).
@@ -156,8 +159,9 @@ public sealed class SolutionSnapshot
     public string SolutionName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Firmware project file path relative to the solution file's directory.
-    /// <para>固件项目文件路径（相对解决方案文件目录）。</para>
+    /// Firmware project file path relative to the solution file's directory (v1 legacy; ignored when
+    /// <see cref="SubProjects"/> is non-empty).
+    /// <para>固件项目文件路径（相对解决方案文件目录，v1 遗留字段；<see cref="SubProjects"/> 非空时忽略）。</para>
     /// </summary>
     public string FirmwareProjectPath { get; set; } = string.Empty;
 
@@ -166,6 +170,32 @@ public sealed class SolutionSnapshot
     /// <para>节点项目文件路径（相对解决方案文件目录）。</para>
     /// </summary>
     public string NodeProjectPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Sub-project references (v2+). When this list is non-empty, <see cref="FirmwareProjectPath"/> is ignored.
+    /// <para>子项目引用列表（v2+）。此列表非空时，<see cref="FirmwareProjectPath"/> 被忽略。</para>
+    /// </summary>
+    public List<SubProjectDto>? SubProjects { get; set; }
+}
+
+/// <summary>
+/// Sub-project reference DTO, carrying the sub-project's display name and the relative path to its
+/// <c>.uotanfw</c> file.
+/// <para>子项目引用 DTO，承载子项目显示名称及其 <c>.uotanfw</c> 文件的相对路径。</para>
+/// </summary>
+public sealed class SubProjectDto
+{
+    /// <summary>
+    /// Sub-project display name (e.g. device codename).
+    /// <para>子项目显示名称（如设备代号）。</para>
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Relative path to the <c>.uotanfw</c> file (relative to the solution file's directory).
+    /// <para>指向 <c>.uotanfw</c> 文件的相对路径（相对解决方案文件目录）。</para>
+    /// </summary>
+    public string RelativePath { get; set; } = string.Empty;
 }
 
 /// <summary>

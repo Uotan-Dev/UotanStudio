@@ -744,6 +744,8 @@ public class WorkspaceViewModel : ViewModelBase
     /// Finds and caches the document area (DocumentsPane) by Id in the layout; returns <c>null</c> when
     /// the layout is not ready.
     /// </summary>
+    public DocumentDock? FindDocumentsPanePublic() => _documentDock ??= FindDocumentsPane();
+
     private DocumentDock? FindDocumentsPane()
     {
         if (Layout is not null && _factory.FindDockable(Layout, dockable => dockable.Id == "DocumentsPane") is DocumentDock documentDock)
