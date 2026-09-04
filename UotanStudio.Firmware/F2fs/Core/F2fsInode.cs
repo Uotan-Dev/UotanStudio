@@ -32,6 +32,11 @@ internal sealed record F2fsInode
     /// <summary>extra attr 标志（F2FS_EXTRA_ATTR）。Extra-attribute flag.</summary>
     public const byte ExtraAttrFlag = 0x20;
 
+    /// <summary>
+    /// inode 标志位：文件已压缩（F2FS_COMPR_FL = bit 27）。Inode flag: compressed file.
+    /// </summary>
+    public const uint ComprFlag = 0x0800_0000;
+
     // inode 内字段偏移（相对节点页起始）。Field offsets within the node page.
     private const int OffsetMode = 0;
     private const int OffsetAdvise = 2;
@@ -41,6 +46,12 @@ internal sealed record F2fsInode
     private const int OffsetLinks = 12;
     private const int OffsetSize = 16;
     private const int OffsetBlocks = 24;
+    private const int OffsetAtimeNsec = 32;
+    private const int OffsetCtimeNsec = 36;
+    private const int OffsetMtimeNsec = 40;
+    private const int OffsetAtime = 44;
+    private const int OffsetCtime = 48;
+    private const int OffsetMtime = 52;
     private const int OffsetGeneration = 68;
     private const int OffsetCurrentDepth = 72;
     private const int OffsetXattrNid = 76;
@@ -102,11 +113,41 @@ internal sealed record F2fsInode
     /// <summary>i_nid[5]：direct(2)/indirect(2)/double_indirect(1) 节点指针。Node id pointers.</summary>
     public uint[] Nid { get; init; } = [];
 
+    /// <summary>修改时间（秒，epoch）。Modification time (seconds since epoch).</summary>
+    public uint Mtime { get; init; }
+
+    /// <summary>修改时间纳秒部分。Modification time nanoseconds.</summary>
+    public uint MtimeNsec { get; init; }
+
+    /// <summary>状态变更时间（秒，epoch）。Change time (seconds since epoch).</summary>
+    public uint Ctime { get; init; }
+
+    /// <summary>状态变更时间纳秒部分。Change time nanoseconds.</summary>
+    public uint CtimeNsec { get; init; }
+
     /// <summary>extra inode 属性大小（i_extra_isize，字节）。Extra attribute size in bytes.</summary>
     public ushort ExtraIsize { get; init; }
 
     /// <summary>inline xattr 大小（i_inline_xattr_size，LE32 单位）。Inline xattr size in LE32 units.</summary>
     public ushort InlineXattrSize { get; init; }
+
+    /// <summary>
+    /// 压缩算法（i_advise 低 4 位：0=LZO,1=LZ4,2=ZSTD,3=LZORLE）。
+    /// <para>Compression algorithm (low 4 bits of i_advise).</para>
+    /// </summary>
+    public byte CompressAlgorithm { get; init; }
+
+    /// <summary>
+    /// 压缩簇大小的对数（i_advise 高 4 位；簇大小 = 1 &lt;&lt; (log_cluster_size + 12)）。
+    /// <para>Log cluster size (high 4 bits of i_advise; cluster = 1 &lt;&lt; (log + 12)).</para>
+    /// </summary>
+    public byte LogClusterSize { get; init; }
+
+    /// <summary>
+    /// 该文件是否为压缩文件（i_flags 含 F2FS_COMPR_FL）。
+    /// <para>Whether the file is compressed (F2FS_COMPR_FL set in i_flags).</para>
+    /// </summary>
+    public bool IsCompressed => (Flags & ComprFlag) != 0;
 
     /// <summary>是否为普通文件。Whether this is a regular file.</summary>
     public bool IsRegularFile => (Mode & ModeFormatMask) == ModeRegularFile;
@@ -165,16 +206,22 @@ internal sealed record F2fsInode
         var name = new byte[F2fsNode.NodeSize - OffsetName];
         node.Slice(OffsetName).CopyTo(name);
 
+        var advise = node[OffsetAdvise];
+
         return new F2fsInode
         {
             Mode = BinaryPrimitives.ReadUInt16LittleEndian(node[OffsetMode..]),
-            Advise = node[OffsetAdvise],
+            Advise = advise,
             Inline = node[OffsetInline],
             Uid = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetUid..]),
             Gid = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetGid..]),
             Links = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetLinks..]),
             Size = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetSize..]),
             Blocks = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetBlocks..]),
+            Mtime = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetMtime..]),
+            MtimeNsec = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetMtimeNsec..]),
+            Ctime = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetCtime..]),
+            CtimeNsec = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetCtimeNsec..]),
             XattrNid = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetXattrNid..]),
             Flags = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetFlags..]),
             Pino = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetPino..]),
@@ -186,6 +233,8 @@ internal sealed record F2fsInode
             Nid = nids,
             ExtraIsize = BinaryPrimitives.ReadUInt16LittleEndian(node[OffsetExtraIsize..]),
             InlineXattrSize = BinaryPrimitives.ReadUInt16LittleEndian(node[OffsetInlineXattrSize..]),
+            CompressAlgorithm = (byte)(advise & 0x0F),
+            LogClusterSize = (byte)((advise >> 4) & 0x0F),
         };
     }
 
@@ -202,13 +251,17 @@ internal sealed record F2fsInode
         }
 
         BinaryPrimitives.WriteUInt16LittleEndian(node[OffsetMode..], Mode);
-        node[OffsetAdvise] = Advise;
+        node[OffsetAdvise] = (byte)((CompressAlgorithm & 0x0F) | ((LogClusterSize & 0x0F) << 4));
         node[OffsetInline] = Inline;
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetUid..], Uid);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetGid..], Gid);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetLinks..], Links);
         BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetSize..], Size);
         BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetBlocks..], Blocks);
+        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetMtimeNsec..], MtimeNsec);
+        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetCtimeNsec..], CtimeNsec);
+        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetMtime..], Mtime);
+        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetCtime..], Ctime);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetGeneration..], 0);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetCurrentDepth..], CurrentDepth);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetXattrNid..], XattrNid);

@@ -45,6 +45,36 @@ public sealed class F2fsOptions
     public bool EnableSparse { get; init; } = true;
 
     /// <summary>
+    /// 卷 UUID（写入超级块 s_uuid）。null 时自动生成随机 UUID。
+    /// <para>Volume UUID (written to the superblock s_uuid). When null, a random UUID is generated.</para>
+    /// </summary>
+    public Guid? Uuid { get; init; }
+
+    /// <summary>
+    /// 启用压缩：尺寸大于一个簇（&gt; 64 KB，即至少跨越 2 个簇）的常规文件以 64 KB 簇为单位
+    /// 压缩数据块；完整簇仅当压缩后占用的物理块更少时才存储压缩版本，不值得压缩的簇与
+    /// 末尾部分簇按普通块存储，压缩文件内支持压缩簇与普通簇混合。
+    /// <para>Enables compression: regular files larger than one cluster (&gt; 64 KB, i.e. spanning at
+    /// least two clusters) compress their data in 64 KB cluster units; a full cluster is stored
+    /// compressed only when it then uses fewer physical blocks, while incompressible clusters and
+    /// the partial trailing cluster are stored as ordinary blocks. Compressed files may mix
+    /// compressed and ordinary clusters.</para>
+    /// </summary>
+    public bool EnableCompression { get; init; }
+
+    /// <summary>
+    /// 压缩算法（默认 LZ4）。
+    /// <para>Compression algorithm (default LZ4).</para>
+    /// </summary>
+    public CompressionAlgorithm CompressionAlgorithm { get; init; } = CompressionAlgorithm.Lz4;
+
+    /// <summary>
+    /// 压缩级别（0 = 算法默认值；LZ4 支持 0/1/3/5/9，ZSTD 支持 1–22）。
+    /// <para>Compression level (0 = algorithm default; LZ4 supports 0/1/3/5/9, ZSTD 1–22).</para>
+    /// </summary>
+    public int CompressionLevel { get; init; }
+
+    /// <summary>
     /// 校验并规整选项。
     /// <para>Validates and normalizes the options.</para>
     /// </summary>
@@ -70,6 +100,11 @@ public sealed class F2fsOptions
         if (SegmentCount < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(SegmentCount), "Segment count must not be negative.");
+        }
+
+        if (CompressionLevel < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(CompressionLevel), "Compression level must not be negative.");
         }
     }
 }

@@ -207,6 +207,68 @@ public sealed class F2fsParser : IDisposable
         {
             throw new InvalidDataException("F2FS checkpoint reports an empty filesystem.");
         }
+
+        // 读端 checksum 校验：superblock 和 checkpoint 的 CRC32（多项式 0xEDB88320）。
+        // 校验失败时记警告而非抛异常（兼容无 checksum 的旧镜像）。
+        // Read-side checksum validation: CRC32 (poly 0xEDB88320) for superblock and checkpoint.
+        // Log warning on mismatch instead of throwing (backward compatible with old images).
+        ValidateSuperblockChecksum();
+        ValidateCheckpointChecksum();
+    }
+
+    private const uint CrcPolynomial = 0xEDB88320;
+
+    private void ValidateSuperblockChecksum()
+    {
+        var raw = ReadBytes(F2fsSuperblock.SuperblockOffset, F2fsSuperblock.SuperblockSize, "Superblock CRC");
+        var storedCrc = BinaryPrimitives.ReadUInt32LittleEndian(raw.AsSpan(F2fsSuperblock.SuperblockSize - 4, 4));
+        if (storedCrc == 0)
+        {
+            return; // 旧镜像无 checksum。Old image without checksum.
+        }
+
+        var computed = ComputeCrc32(F2fsSuperblock.Magic, raw.AsSpan(0, F2fsSuperblock.SuperblockSize - 4));
+        if (computed != storedCrc)
+        {
+            System.Diagnostics.Debug.WriteLine($"F2FS superblock CRC mismatch: stored=0x{storedCrc:X8}, computed=0x{computed:X8}.");
+        }
+    }
+
+    private void ValidateCheckpointChecksum()
+    {
+        var cpOffset = _superblock.CpBlkaddr * _blockSize;
+        var raw = ReadBytes(cpOffset, _blockSize, "Checkpoint CRC");
+        var checksumOffset = _checkpoint.ChecksumOffset;
+        if (checksumOffset == 0 || checksumOffset + 4 > _blockSize)
+        {
+            return;
+        }
+
+        var storedCrc = BinaryPrimitives.ReadUInt32LittleEndian(raw.AsSpan((int)checksumOffset, 4));
+        if (storedCrc == 0)
+        {
+            return;
+        }
+
+        var computed = ComputeCrc32(F2fsSuperblock.Magic, raw.AsSpan(0, (int)checksumOffset));
+        if (computed != storedCrc)
+        {
+            System.Diagnostics.Debug.WriteLine($"F2FS checkpoint CRC mismatch: stored=0x{storedCrc:X8}, computed=0x{computed:X8}.");
+        }
+    }
+
+    private static uint ComputeCrc32(uint crc, ReadOnlySpan<byte> data)
+    {
+        foreach (var value in data)
+        {
+            crc ^= value;
+            for (var i = 0; i < 8; i++)
+            {
+                crc = (crc >> 1) ^ ((crc & 1) != 0 ? CrcPolynomial : 0);
+            }
+        }
+
+        return crc;
     }
 
     /// <summary>
@@ -530,16 +592,29 @@ public sealed class F2fsParser : IDisposable
             return ReadIndirectAddress(inode.Nid[2], level1, level2, logicalBlock);
         }
 
+        // Double indirect: i_nid[3] → single indirect nodes → direct nodes → data blocks.
+        // Each single indirect node covers perIndirect blocks; the double indirect node
+        // has AddrsPerBlock single-indirect entries.
         x -= perIndirect;
-        if (x < perIndirect)
+        var perDoubleIndirect = perIndirect * F2fsNode.AddrsPerBlock;
+        if (x < perDoubleIndirect)
         {
-            var level1 = (int)(x / F2fsNode.AddrsPerBlock);
-            var level2 = (int)(x % F2fsNode.AddrsPerBlock);
-            return ReadIndirectAddress(inode.Nid[3], level1, level2, logicalBlock);
+            var level1 = (int)(x / perIndirect);
+            var level2 = (int)(x % perIndirect);
+            return ReadDoubleIndirectAddress(inode.Nid[3], level1, level2, logicalBlock);
         }
 
-        // 超出实现支持的寻址深度（double indirect 未实现）。
-        // Beyond the supported mapping depth (double indirect is not implemented).
+        // i_nid[4] — second double indirect node (same structure as i_nid[3]).
+        x -= perDoubleIndirect;
+        if (x < perDoubleIndirect)
+        {
+            var level1 = (int)(x / perIndirect);
+            var level2 = (int)(x % perIndirect);
+            return ReadDoubleIndirectAddress(inode.Nid[4], level1, level2, logicalBlock);
+        }
+
+        // 超出实现支持的寻址深度。
+        // Beyond the supported mapping depth.
         return null;
     }
 
@@ -572,6 +647,50 @@ public sealed class F2fsParser : IDisposable
         return ReadDnodeAddress(directNid, level2, logicalBlock);
     }
 
+    /// <summary>
+    /// 读 double indirect 节点 → single indirect 节点 → direct 节点 → 数据块。
+    /// <para>Reads a double-indirect node, then a single-indirect node, then a direct node
+    /// to resolve a data block address.</para>
+    /// </summary>
+    /// <param name="doubleIndirectNid">double indirect 节点的 NID（来自 inode i_nid[3] 或 i_nid[4]）。</param>
+    /// <param name="level1">在 double indirect 节点 i_addr[] 中的索引，选择一个 single indirect 节点。</param>
+    /// <param name="level2">在该 single indirect 子树内的扁平偏移
+    /// （= direct_node_index * AddrsPerBlock + data_block_index）。</param>
+    /// <param name="logicalBlock">文件内逻辑块号（诊断用）。</param>
+    /// <returns>物理块地址，或 <c>null</c> 表示空洞/未分配。</returns>
+    private long? ReadDoubleIndirectAddress(
+        uint doubleIndirectNid,
+        int level1,
+        int level2,
+        uint logicalBlock)
+    {
+        if (doubleIndirectNid == 0 || level1 < 0 || level1 >= F2fsNode.AddrsPerBlock)
+        {
+            return null;
+        }
+
+        var doubleNode = ReadBlockChecked(
+            ReadNatBlockAddress(doubleIndirectNid),
+            $"Double indirect node {doubleIndirectNid} (logical {logicalBlock})");
+
+        // i_addr[level1] is the NID of a single indirect node.
+        var singleIndirectNid = BinaryPrimitives.ReadUInt32LittleEndian(doubleNode.AsSpan(level1 * 4, 4));
+        if (singleIndirectNid == 0)
+        {
+            return null;
+        }
+
+        // Decompose the flattened offset within the single-indirect subtree:
+        //   siLevel1 = which direct node (index into the single indirect node's i_addr[])
+        //   siLevel2 = which data block (index into the direct node's i_addr[])
+        var siLevel1 = level2 / F2fsNode.AddrsPerBlock;
+        var siLevel2 = level2 % F2fsNode.AddrsPerBlock;
+
+        // ReadIndirectAddress reads a single indirect node: i_addr[siLevel1] → directNid,
+        // then ReadDnodeAddress(directNid, siLevel2) → data block.
+        return ReadIndirectAddress(singleIndirectNid, siLevel1, siLevel2, logicalBlock);
+    }
+
     private void WriteFileData(uint nid, F2fsInode inode, Stream output)
     {
         if (inode.Size == 0)
@@ -587,7 +706,17 @@ public sealed class F2fsParser : IDisposable
             return;
         }
 
-        var maxSupportedBlocks = F2fsNode.Indirect1Block + (long)F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock;
+        if (inode.IsCompressed)
+        {
+            WriteCompressedFileData(inode, output);
+            return;
+        }
+
+        // Maximum: direct inode (923) + 2 direct nodes + single indirect + 2 double indirect nodes.
+        var perIndirect = (long)F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock;
+        var perDoubleIndirect = perIndirect * F2fsNode.AddrsPerBlock;
+        var maxSupportedBlocks = checked(
+            F2fsNode.Indirect1Block + perIndirect + 2 * perDoubleIndirect);
         var maxSupportedSize = checked(maxSupportedBlocks * _blockSize);
         if (inode.Size > (ulong)maxSupportedSize)
         {
@@ -610,6 +739,168 @@ public sealed class F2fsParser : IDisposable
             output.Write(buffer, 0, writeLength);
             remaining -= writeLength;
         }
+    }
+
+    /// <summary>
+    /// 压缩文件读路径：按压缩簇（1 &lt;&lt; (log_cluster_size + 12) 字节）逐簇读取。
+    /// 已压缩簇从首块读簇头并解压；未压缩簇按普通块读；簇内空洞补零。
+    /// <para>Compressed-file read path: reads cluster by cluster
+    /// (cluster = 1 &lt;&lt; (log_cluster_size + 12) bytes). Compressed clusters read a header from
+    /// the first block then decompress; uncompressed clusters read raw blocks; in-cluster holes are
+    /// zero-filled.</para>
+    /// </summary>
+    private void WriteCompressedFileData(F2fsInode inode, Stream output)
+    {
+        // 簇大小（字节）：1 << (log_cluster_size + 12)。默认 log=2 → 16KB（4 页）。
+        // Cluster size in bytes: 1 << (log_cluster_size + 12). Default log=2 → 16KB (4 pages).
+        var logShift = inode.LogClusterSize + 12;
+        if (logShift is < 12 or > 16)
+        {
+            throw new InvalidDataException(
+                $"F2FS compressed cluster log size {inode.LogClusterSize} is out of range.");
+        }
+
+        var clusterSize = 1 << logShift;
+        var clusterPages = clusterSize / _blockSize;
+        if (clusterPages <= 0)
+        {
+            throw new InvalidDataException("F2FS compressed cluster has non-positive page count.");
+        }
+
+        var blockSize = _blockSize;
+        var remaining = (long)inode.Size;
+        var blockCount = (uint)((remaining + blockSize - 1) / blockSize);
+        var algorithm = MapCompressAlgorithm(inode.CompressAlgorithm);
+
+        for (var logical = 0u; logical < blockCount; logical += (uint)clusterPages)
+        {
+            var clusterBlocks = (int)Math.Min(clusterPages, blockCount - logical);
+            var writeLength = (int)Math.Min((long)clusterSize, remaining);
+            if (clusterBlocks <= 0 || writeLength <= 0)
+            {
+                break;
+            }
+
+            var physical = MapBlock(inode, logical);
+            if (physical is null || physical == 0)
+            {
+                // 整簇空洞：补零。Entire cluster is a hole: zero-fill.
+                WriteZeros(output, writeLength);
+                remaining -= writeLength;
+                continue;
+            }
+
+            // 读首块以探查簇头。Read the first block to inspect the cluster header.
+            var firstBlock = ReadBlockChecked((ulong)physical, $"Compressed cluster first block (logical {logical})");
+            var header = F2fsCompressedCluster.FromBytes(firstBlock);
+
+            if (header.IsCompressed && header.UncompressedSize == clusterSize)
+            {
+                // 已压缩簇：从首块之后读 compressedSize 字节并解压。
+                // Compressed cluster: read compressedSize bytes after the header and decompress.
+                var compressedBytes = header.CompressedSize;
+                var compressed = new byte[compressedBytes];
+                var copied = 0;
+                var blocksToRead = (F2fsCompressedCluster.HeaderSize + compressedBytes + blockSize - 1) / blockSize;
+                for (var b = 0; b < blocksToRead && copied < compressedBytes; b++)
+                {
+                    byte[] blockData;
+                    if (b == 0)
+                    {
+                        blockData = firstBlock;
+                    }
+                    else
+                    {
+                        var blkAddr = MapBlock(inode, logical + (uint)b);
+                        if (blkAddr is null || blkAddr == 0)
+                        {
+                            break;
+                        }
+
+                        blockData = ReadBlockChecked((ulong)blkAddr, $"Compressed cluster block {b} (logical {logical + (uint)b})");
+                    }
+
+                    var srcOffset = b == 0 ? F2fsCompressedCluster.HeaderSize : 0;
+                    var available = blockData.Length - srcOffset;
+                    if (available <= 0)
+                    {
+                        break;
+                    }
+
+                    var toCopy = Math.Min(available, compressedBytes - copied);
+                    blockData.AsSpan(srcOffset, toCopy).CopyTo(compressed.AsSpan(copied));
+                    copied += toCopy;
+                }
+
+                if (copied < compressedBytes)
+                {
+                    throw new InvalidDataException(
+                        $"F2FS compressed cluster at logical block {logical} was truncated ({copied}/{compressedBytes} bytes).");
+                }
+
+                var decompressed = F2fsCompression.DecompressCluster(
+                    compressed,
+                    algorithm,
+                    header.UncompressedSize,
+                    clusterSize);
+
+                var toWrite = Math.Min(decompressed.Length, writeLength);
+                output.Write(decompressed, 0, toWrite);
+                if (toWrite < writeLength)
+                {
+                    WriteZeros(output, writeLength - toWrite);
+                }
+
+                remaining -= writeLength;
+            }
+            else
+            {
+                // 未压缩簇：按普通块读，空洞补零。
+                // Uncompressed cluster: read raw blocks, zero-fill holes.
+                var clusterBuffer = new byte[clusterSize];
+                for (var b = 0; b < clusterBlocks; b++)
+                {
+                    var blkAddr = MapBlock(inode, logical + (uint)b);
+                    if (blkAddr is null || blkAddr == 0)
+                    {
+                        continue;
+                    }
+
+                    var blockData = ReadBlockChecked((ulong)blkAddr, $"Uncompressed cluster block {b} (logical {logical + (uint)b})");
+                    blockData.AsSpan(0, Math.Min(blockSize, clusterBuffer.Length - b * blockSize))
+                        .CopyTo(clusterBuffer.AsSpan(b * blockSize));
+                }
+
+                output.Write(clusterBuffer, 0, writeLength);
+                remaining -= writeLength;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 将 inode i_advise 内的内核算法 ID 映射为 <see cref="CompressionAlgorithm"/>。
+    /// kernel: 0=LZO,1=LZ4,2=ZSTD,3=LZORLE。
+    /// <para>Maps the kernel algorithm id stored in i_advise to a <see cref="CompressionAlgorithm"/>
+    /// (kernel: 0=LZO,1=LZ4,2=ZSTD,3=LZORLE).</para>
+    /// </summary>
+    private static CompressionAlgorithm MapCompressAlgorithm(byte kernelAlgorithmId)
+        => kernelAlgorithmId switch
+        {
+            1 => CompressionAlgorithm.Lz4,
+            2 => CompressionAlgorithm.Zstd,
+            0 or 3 => CompressionAlgorithm.Lzo, // LZO/LZO-RLE 均不支持。LZO/RLE unsupported.
+            _ => throw new InvalidDataException(
+                $"Unknown F2FS compression algorithm id {kernelAlgorithmId}."),
+        };
+
+    private static void WriteZeros(Stream output, int count)
+    {
+        if (count <= 0)
+        {
+            return;
+        }
+
+        output.Write(new byte[count], 0, count);
     }
 
     private byte[] ReadBlockChecked(ulong blockAddress, string what)
