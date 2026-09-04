@@ -514,10 +514,27 @@ public partial class FirmwareInfoViewModel : Document
         ErrorMessage = string.Empty;
         try
         {
-            // 目标目录 = 工程 intermediate/<文件名>/ 子目录。
-            // Target directory = project intermediate/<file-name>/ sub-directory.
-            var outputDir = ProjectContextService.Instance
-                .EnsureIntermediateDirectory(Path.GetFileNameWithoutExtension(path));
+            // 目标目录 = 子项目根目录/<文件名>/ 子目录（与 images/ 同级）。
+            // Target directory = sub-project root/<file-name>/ sub-directory (same level as images/).
+            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
+            if (subProjectRoot is null)
+            {
+                OperationStatus = "No active sub-project  无活动子项目";
+                HasError = true;
+                ErrorMessage = OperationStatus;
+                return;
+            }
+
+            var outputDir = Path.Combine(subProjectRoot, Path.GetFileNameWithoutExtension(path));
+            if (Directory.Exists(outputDir))
+            {
+                OperationStatus = $"Directory \"{Path.GetFileNameWithoutExtension(path)}\" already exists  目录 \"{Path.GetFileNameWithoutExtension(path)}\" 已存在";
+                HasError = true;
+                ErrorMessage = OperationStatus;
+                return;
+            }
+
+            Directory.CreateDirectory(outputDir);
 
             var result = await DispatchUnpackAsync(path, outputDir).ConfigureAwait(true);
 
