@@ -300,7 +300,7 @@ public sealed partial class UotanStudioMcpTools
 
             var progress = new Progress<FlashProgress>(p =>
                 LogService.Instance.Write(LogLevel.Info, "McpTools", $"flash.image [{p.Partition ?? partition}] {p.Percent}% {p.Status}"));
-            var result = await FlashService.FlashImageAsync(device, partition, imagePath, progress, timeout.Token).ConfigureAwait(false);
+            var result = await FlashService.Default.FlashImageAsync(device, partition, imagePath, progress, timeout.Token).ConfigureAwait(false);
 
             var json = new JsonObject
             {

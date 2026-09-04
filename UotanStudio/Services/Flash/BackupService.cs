@@ -463,7 +463,7 @@ public static class BackupService
         ArgumentNullException.ThrowIfNull(entry);
 
         var bridge = new Progress<FlashProgress>(fp => Report(progress, fp.Partition, fp.Percent, fp.Status));
-        var result = await FlashService.FlashEdlPartitionAsync(session, entry, imageDir, bridge, ct).ConfigureAwait(false);
+        var result = await FlashService.Default.FlashEdlPartitionAsync(session, entry, imageDir, bridge, ct).ConfigureAwait(false);
         return new BackupResult { Success = result.Success, Summary = result.Summary };
     }
 

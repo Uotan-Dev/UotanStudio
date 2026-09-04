@@ -106,7 +106,7 @@ public class EdlSinglePartitionTests
             AutoDetectSectorSize = false
         });
 
-        var result = await FlashService.FlashEdlPartitionAsync(firehose, boot!, dir.Path, progress: null, CancellationToken.None);
+        var result = await FlashService.Default.FlashEdlPartitionAsync(firehose, boot!, dir.Path, progress: null, CancellationToken.None);
 
         Assert.True(result.Success, result.Summary);
 
@@ -136,7 +136,7 @@ public class EdlSinglePartitionTests
             Transport = UotanStudio.Services.Devices.DeviceTransportKind.Usb
         });
 
-        var result = await FlashService.FlashImageAsync(device, "boot", imagePath, null, CancellationToken.None);
+        var result = await FlashService.Default.FlashImageAsync(device, "boot", imagePath, null, CancellationToken.None);
 
         Assert.False(result.Success);
         Assert.Contains("rawprogram", result.Summary, StringComparison.OrdinalIgnoreCase);

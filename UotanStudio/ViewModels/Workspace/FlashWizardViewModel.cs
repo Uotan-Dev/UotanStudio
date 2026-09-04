@@ -260,7 +260,7 @@ public partial class FlashWizardViewModel : ViewModelBase, IDisposable
                 WeakReferenceMessenger.Default.Send(new FlashProgressMessage(fp.Partition, percent, fp.Status));
             });
 
-            var result = await FlashService.FlashImageAsync(device, partition, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
+            var result = await FlashService.Default.FlashImageAsync(device, partition, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
             if (result.Success)
             {
                 ProgressPercent = 100;

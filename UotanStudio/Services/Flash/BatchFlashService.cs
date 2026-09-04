@@ -55,7 +55,7 @@ public static class BatchFlashService
             progress?.Report(new FlashProgress(partition, 0, status));
             WeakReferenceMessenger.Default.Send(new FlashProgressMessage(partition, 0, status));
 
-            var result = await FlashService.FlashImageAsync(device, partition, imagePath, progress, ct).ConfigureAwait(false);
+            var result = await FlashService.Default.FlashImageAsync(device, partition, imagePath, progress, ct).ConfigureAwait(false);
             if (result.Success)
             {
                 succeeded++;

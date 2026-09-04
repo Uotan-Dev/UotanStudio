@@ -101,7 +101,7 @@ public class DevicePropertyNodeViewModel : FlowNodeViewModel
             return;
         }
 
-        var result = await FlashService.GetDevicePropertyAsync(
+        var result = await FlashService.Default.GetDevicePropertyAsync(
             new DeviceInfo(device), name, context.CancellationToken).ConfigureAwait(false);
         var value = result.Success ? ExtractValue(result.Summary, name) : string.Empty;
         WriteOutput("Value", value);

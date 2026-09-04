@@ -167,7 +167,7 @@ public static class FirmwareCli
         var device = new ViewModels.Devices.DeviceInfo(target);
         Console.WriteLine($"Flashing '{cmd.Partition}' ← {image} on {target.Serial} ({target.Protocol})  开始刷写");
 
-        var result = Flash.FlashService.FlashImageAsync(
+        var result = Flash.FlashService.Default.FlashImageAsync(
             device,
             cmd.Partition!,
             image,

@@ -1118,7 +1118,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 var percent = Math.Clamp(fp.Percent, 0, 100);
                 StatusText = $"[{percent}%] {fp.Status}";
             });
-            var result = await FlashService.FlashImageAsync(device, partitionName, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
+            var result = await FlashService.Default.FlashImageAsync(device, partitionName, imagePath, progress, CancellationToken.None).ConfigureAwait(true);
             StatusText = result.Success
                 ? $"{LanguageService.Instance.GetString("Flash_Done")} {partitionName}"
                 : $"{LanguageService.Instance.GetString("Flash_Failed")} {partitionName}: {result.Summary}";

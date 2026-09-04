@@ -160,7 +160,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.FlashImageAsync(
+        var result = await FlashService.Default.FlashImageAsync(
             new DeviceInfo(device), partition, image, progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Result", result.Success);
@@ -192,7 +192,7 @@ public class FlashNodeViewModel : FlowNodeViewModel
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.ErasePartitionAsync(
+        var result = await FlashService.Default.ErasePartitionAsync(
             new DeviceInfo(device), partition, progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Result", result.Success);

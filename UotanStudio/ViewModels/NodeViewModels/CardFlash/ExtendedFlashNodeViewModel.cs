@@ -168,7 +168,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.FlashImageAsync(
+        var result = await FlashService.Default.FlashImageAsync(
             new DeviceInfo(device), "bootloader", bootloader, progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", result.Summary);
@@ -189,7 +189,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.EraseAllAsync(
+        var result = await FlashService.Default.EraseAllAsync(
             new DeviceInfo(device), progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", result.Summary);
@@ -218,7 +218,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.FlashSideloadAsync(
+        var result = await FlashService.Default.FlashSideloadAsync(
             new DeviceInfo(device), package, progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", result.Summary);
@@ -253,7 +253,7 @@ public class ExtendedFlashNodeViewModel : FlowNodeViewModel
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.FlashImageAsync(
+        var result = await FlashService.Default.FlashImageAsync(
             new DeviceInfo(device), partition, firmware, progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", result.Summary);

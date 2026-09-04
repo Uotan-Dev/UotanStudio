@@ -229,7 +229,7 @@ public class ExtendedFirmwareNodeViewModel : FlowNodeViewModel
         }
 
         var progress = new Progress<FlashProgress>(p => context.ReportProgress(p.Percent / 100.0));
-        var result = await FlashService.FlashImageAsync(
+        var result = await FlashService.Default.FlashImageAsync(
             new DeviceInfo(device), "boot", bootloader, progress, context.CancellationToken).ConfigureAwait(false);
 
         WriteOutput("Status", result.Summary);

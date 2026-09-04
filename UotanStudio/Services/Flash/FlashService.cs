@@ -14,26 +14,23 @@ namespace UotanStudio.Services.Flash;
 
 /// <summary>
 /// <para>真实刷写服务：通过 UotanStudio.Comm 协议层把镜像刷写到设备分区，
-/// 统一封装 Fastboot / EDL / RKDL / ADB 四条路径并回报进度。禁止在此直接操作 USB 细节。</para>
+/// 统一封装 Fastboot / EDL / RKDL / ADB 四条路径并回报进度。禁止在此直接操作 USB 细节。
+/// 实现 <see cref="IFlashService"/>，可通过 DI 注入；<see cref="Default"/> 提供默认单例，
+/// 静态方法委托到单例以保持后向兼容。</para>
 /// Real flashing service: writes an image to a device partition through the
 /// UotanStudio.Comm protocol layer, unifying the Fastboot / EDL / RKDL / ADB paths with
-/// progress reporting. USB details must never be touched here directly.
+/// progress reporting. Implements <see cref="IFlashService"/> for DI; <see cref="Default"/>
+/// provides the default singleton; static methods delegate to it for backward compatibility.
 /// </summary>
-public static class FlashService
+public sealed class FlashService : IFlashService
 {
-    /// <summary>
-    /// <para>把指定镜像刷写到设备分区；异常被捕获并转为失败结果。</para>
-    /// Flashes the specified image to a device partition; exceptions are captured and
-    /// converted into a failure result.
-    /// </summary>
-    /// <param name="device"><para>目标设备。</para>The target device.</param>
-    /// <param name="partition"><para>目标分区名（如 boot；ADB 在线安装时可省略或传任意名）。</para>
-    /// Target partition name (e.g. boot; may be any name for ADB online install).</param>
-    /// <param name="imagePath"><para>镜像文件完整路径。</para>Full path of the image file.</param>
-    /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
-    /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
-    /// <returns>刷写结果。</returns>
-    public static async Task<FlashResult> FlashImageAsync(
+    /// <summary><para>默认单例实例。</para>The default singleton instance.</summary>
+    public static FlashService Default { get; } = new();
+
+    private FlashService() { }
+
+    /// <inheritdoc />
+    public async Task<FlashResult> FlashImageAsync(
         DeviceInfo device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -84,7 +81,7 @@ public static class FlashService
     /// <param name="progress"><para>可选的擦除进度报告器。</para>Optional erase progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
     /// <returns>擦除结果。</returns>
-    public static async Task<FlashResult> ErasePartitionAsync(
+    public async Task<FlashResult> ErasePartitionAsync(
         DeviceInfo device, string partition, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         try
@@ -156,7 +153,7 @@ public static class FlashService
     /// <param name="progress"><para>可选的擦除进度报告器。</para>Optional erase progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
     /// <returns>擦除结果。</returns>
-    public static async Task<FlashResult> EraseAllAsync(
+    public async Task<FlashResult> EraseAllAsync(
         DeviceInfo device, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         try
@@ -238,7 +235,7 @@ public static class FlashService
     /// <param name="progress"><para>可选的推送进度报告器。</para>Optional push progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
     /// <returns>侧载结果。</returns>
-    public static async Task<FlashResult> FlashSideloadAsync(
+    public async Task<FlashResult> FlashSideloadAsync(
         DeviceInfo device, string otaPackagePath, IProgress<FlashProgress>? progress, CancellationToken ct)
     {
         try
@@ -298,7 +295,7 @@ public static class FlashService
     /// <param name="propertyName"><para>属性/变量名。</para>The property/variable name.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
     /// <returns>查询结果（值在 <see cref="FlashResult.Summary"/> 中）。</returns>
-    public static async Task<FlashResult> GetDevicePropertyAsync(
+    public async Task<FlashResult> GetDevicePropertyAsync(
         DeviceInfo device, string propertyName, CancellationToken ct)
     {
         try
@@ -602,7 +599,7 @@ public static class FlashService
         var session = DeviceMonitorService.Instance.OpenEdlSession(device.Device)
             ?? throw new InvalidOperationException("No EDL session available for the selected device. 无法为所选设备建立 EDL 会话。");
         using var edl = session;
-        return await FlashEdlPartitionAsync(edl, target, imageDir, progress, ct).ConfigureAwait(false);
+        return await Default.FlashEdlPartitionAsync(edl, target, imageDir, progress, ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -617,7 +614,7 @@ public static class FlashService
     /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
     /// <returns>刷写结果。</returns>
-    public static async Task<FlashResult> FlashEdlPartitionAsync(
+    public async Task<FlashResult> FlashEdlPartitionAsync(
         EdlSession session, RawProgramEntry entry, string imageDir,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
@@ -641,7 +638,7 @@ public static class FlashService
     /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
     /// <param name="ct"><para>取消令牌。</para>Cancellation token.</param>
     /// <returns>刷写结果。</returns>
-    public static async Task<FlashResult> FlashEdlPartitionAsync(
+    public async Task<FlashResult> FlashEdlPartitionAsync(
         FirehoseProtocol firehose, RawProgramEntry entry, string imageDir,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
