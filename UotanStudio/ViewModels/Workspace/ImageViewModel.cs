@@ -65,6 +65,19 @@ internal partial class ImageViewModel : Tool
     private bool _isImageFilterVisible;
 
     /// <summary>
+    /// <para>获取或设置当前选中的镜像格式筛选项；<c>null</c> 或"全部"表示不过滤。</para>
+    /// Gets or sets the currently selected image-format filter; <c>null</c> or the "all" sentinel
+    /// means no filtering.
+    /// </summary>
+    [ObservableProperty]
+    private string? _selectedImageFilter;
+
+    partial void OnSelectedImageFilterChanged(string? value)
+    {
+        ApplyImageFilter(value);
+    }
+
+    /// <summary>
     /// <para>获取或设置当前选中的镜像条目。</para>
     /// Gets or sets the currently selected image entry.
     /// </summary>
@@ -134,7 +147,8 @@ internal partial class ImageViewModel : Tool
         var context = ProjectContextService.Instance;
         Images.Clear();
 
-        if (!context.IsProjectOpen || string.IsNullOrEmpty(context.ImagesDirectory) || !Directory.Exists(context.ImagesDirectory))
+        var imagesDir = context.ActiveSubProject?.ImagesDir;
+        if (!context.IsProjectOpen || string.IsNullOrEmpty(imagesDir) || !Directory.Exists(imagesDir))
         {
             return;
         }
@@ -145,7 +159,7 @@ internal partial class ImageViewModel : Tool
         var discovered = await Task.Run(() =>
         {
             var list = new List<(string Relative, long Size, string Format)>();
-            foreach (var file in Directory.EnumerateFiles(context.ImagesDirectory))
+            foreach (var file in Directory.EnumerateFiles(imagesDir))
             {
                 var format = DetectFormat(file);
                 if (format == "unknown")
@@ -179,6 +193,77 @@ internal partial class ImageViewModel : Tool
         }
 
         LogService.Instance.Write(LogLevel.Info, "Images", $"Auto-registered {discovered.Count} known image(s)  自动注册 {discovered.Count} 个已知镜像");
+
+        RebuildImageFilterItems();
+    }
+
+    /// <summary>
+    /// <para>根据当前镜像列表中的格式聚合筛选下拉框选项；仅存在两种及以上格式时显示下拉框。</para>
+    /// Rebuilds the image-filter combo box options from the formats present in the current image list;
+    /// the dropdown is shown only when two or more distinct formats exist.
+    /// </summary>
+    private void RebuildImageFilterItems()
+    {
+        var allLabel = LanguageService.Instance.GetString("ImageView_FilterAll");
+        if (string.IsNullOrEmpty(allLabel))
+        {
+            allLabel = "All";
+        }
+
+        var formats = Images
+            .Select(i => i.Format)
+            .Where(f => !string.IsNullOrEmpty(f))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (formats.Count < 2)
+        {
+            ImageFilterItems = null;
+            IsImageFilterVisible = false;
+            SelectedImageFilter = null;
+            return;
+        }
+
+        var items = new ObservableCollection<string> { allLabel };
+        foreach (var f in formats)
+        {
+            items.Add(f);
+        }
+
+        ImageFilterItems = items;
+        IsImageFilterVisible = true;
+
+        // 保持当前选中项有效；若无效则回退到"全部"。
+        // Keep the current selection valid; fall back to "All" when it no longer matches.
+        if (SelectedImageFilter is null || !items.Contains(SelectedImageFilter))
+        {
+            SelectedImageFilter = allLabel;
+        }
+        else
+        {
+            ApplyImageFilter(SelectedImageFilter);
+        }
+    }
+
+    /// <summary>
+    /// <para>按选中的格式筛选项过滤镜像列表的可见性。</para>
+    /// Filters the visibility of image entries based on the selected format filter.
+    /// </summary>
+    private void ApplyImageFilter(string? filter)
+    {
+        var allLabel = LanguageService.Instance.GetString("ImageView_FilterAll");
+        if (string.IsNullOrEmpty(allLabel))
+        {
+            allLabel = "All";
+        }
+
+        var isAll = string.IsNullOrEmpty(filter) || string.Equals(filter, allLabel, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var image in Images)
+        {
+            image.IsVisible = isAll || string.Equals(image.Format, filter, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     /// <summary>
@@ -310,7 +395,7 @@ internal partial class ImageViewModel : Tool
         }
 
         var context = ProjectContextService.Instance;
-        if (!context.IsProjectOpen)
+        if (!context.IsProjectOpen || context.ActiveSubProject is null)
         {
             LogService.Instance.Write(LogLevel.Warn, "Images", "Import aborted: no project is open  导入中止：尚未打开工程");
             return;
@@ -439,10 +524,17 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
-        foreach (var image in selectedImages)
+        ProgressPercent = 0;
+        for (var i = 0; i < selectedImages.Count; i++)
         {
+            var image = selectedImages[i];
+            StatusText = $"[{i + 1}/{selectedImages.Count}] Extracting {image.DisplayName}  正在分解 {image.DisplayName}";
             await ExtractImageAsync(image);
+            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
         }
+
+        StatusText = $"Extracted {selectedImages.Count} image(s)  已分解 {selectedImages.Count} 个镜像";
+        ProgressPercent = 100;
     }
 
     private async Task ExtractImageAsync(ImageEntryViewModel image)
@@ -453,11 +545,32 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
+        var context = ProjectContextService.Instance;
         var name = GetEntryBaseName(image);
         try
         {
-            var outputDir = ProjectContextService.Instance.EnsureIntermediateDirectory(name);
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Extracting {image.Format}: {image.RelativePath}  正在分解 {image.Format}：{image.RelativePath}");
+            // 解包产物输出到子项目根目录（与 images/ 同级），而非 intermediate/ 目录。
+            // Unpack output goes to the sub-project root (same level as images/), not intermediate/.
+            var subProjectRoot = context.ActiveSubProject?.RootPath;
+            if (subProjectRoot is null)
+            {
+                LogService.Instance.Write(LogLevel.Error, "Images", "Extract aborted: no active sub-project  分解中止：无活动子项目");
+                return;
+            }
+
+            var outputDir = Path.Combine(subProjectRoot, name);
+
+            // 重名拒绝：目标目录已存在时拒绝操作并记录全局日志。
+            // Duplicate rejection: refuse and log when the target directory already exists.
+            if (Directory.Exists(outputDir))
+            {
+                LogService.Instance.Write(LogLevel.Error, "Images", $"Extract aborted: directory \"{name}\" already exists at {outputDir}  解包失败：目录 \"{name}\" 已存在于 {outputDir}");
+                StatusText = $"Extract aborted: directory \"{name}\" already exists  解包失败：目录 \"{name}\" 已存在";
+                return;
+            }
+
+            Directory.CreateDirectory(outputDir);
+            LogService.Instance.Write(LogLevel.Info, "Images", $"Extracting {image.Format}: {image.RelativePath} -> {outputDir}  正在分解 {image.Format}：{image.RelativePath} -> {outputDir}");
             var result = image.Format switch
             {
                 "boot" => await Task.Run(() => _firmware.UnpackBootAsync(source, outputDir)),
@@ -519,20 +632,33 @@ internal partial class ImageViewModel : Tool
         }
 
         var name = GetEntryBaseName(image);
+        StatusText = $"Synthesizing boot image: {image.DisplayName}  正在合成 boot 镜像：{image.DisplayName}";
+        ProgressPercent = -1;
         try
         {
-            var unpackDir = ProjectContextService.Instance.EnsureIntermediateDirectory(name);
-            var outputDir = ProjectContextService.Instance.EnsureIntermediateDirectory("img");
+            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
+            if (subProjectRoot is null)
+            {
+                LogService.Instance.Write(LogLevel.Error, "Images", "Synthesize img aborted: no active sub-project  合成 img 中止：无活动子项目");
+                return;
+            }
+
+            var unpackDir = Path.Combine(subProjectRoot, name);
+            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
             var outputPath = Path.Combine(outputDir, name + "-synthesized.img");
             LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing boot image from {unpackDir}  正在从解包目录合成 boot 镜像");
             var result = await Task.Run(() => _firmware.PackBootAsync(unpackDir, outputPath));
             if (!result.Success)
             {
                 LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
+                StatusText = $"Synthesize img failed  合成 img 失败";
+                ProgressPercent = 0;
                 return;
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
+            StatusText = $"Synthesized boot image: {image.DisplayName}  已合成 boot 镜像：{image.DisplayName}";
+            ProgressPercent = 100;
             OperationHistoryService.Instance.Record(
                 $"Synthesize img {image.DisplayName}",
                 new HistoryOperationDto
@@ -548,6 +674,8 @@ internal partial class ImageViewModel : Tool
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize img failed: {ex.Message}  合成 img 失败：{ex.Message}");
+            StatusText = $"Synthesize img failed: {ex.Message}  合成 img 失败：{ex.Message}";
+            ProgressPercent = 0;
         }
     }
 
@@ -574,26 +702,41 @@ internal partial class ImageViewModel : Tool
         }
 
         var name = GetEntryBaseName(image);
+        StatusText = $"Packing system image: {image.DisplayName}  正在打包系统镜像：{image.DisplayName}";
+        ProgressPercent = -1;
         try
         {
-            var unpackDir = ProjectContextService.Instance.EnsureIntermediateDirectory(name);
-            if (!Directory.Exists(unpackDir) || !Directory.EnumerateFileSystemEntries(unpackDir).Any())
+            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
+            if (subProjectRoot is null)
             {
-                LogService.Instance.Write(LogLevel.Warn, "Images", $"Pack image aborted: unpack directory is empty ({unpackDir})  打包镜像中止：解包目录为空（{unpackDir}）");
+                LogService.Instance.Write(LogLevel.Error, "Images", "Pack image aborted: no active sub-project  打包镜像中止：无活动子项目");
                 return;
             }
 
-            var outputDir = ProjectContextService.Instance.EnsureIntermediateDirectory("img");
+            var unpackDir = Path.Combine(subProjectRoot, name);
+            if (!Directory.Exists(unpackDir) || !Directory.EnumerateFileSystemEntries(unpackDir).Any())
+            {
+                LogService.Instance.Write(LogLevel.Warn, "Images", $"Pack image aborted: unpack directory is empty ({unpackDir})  打包镜像中止：解包目录为空（{unpackDir}）");
+                StatusText = string.Empty;
+                ProgressPercent = 0;
+                return;
+            }
+
+            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
             var outputPath = Path.Combine(outputDir, name + "-packed.img");
             LogService.Instance.Write(LogLevel.Info, "Images", $"Packing system image from {unpackDir}  正在打包系统镜像（源：{unpackDir}）");
             var result = await PackingService.PackImageAsync(unpackDir, outputPath);
             if (!result.Success)
             {
                 LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
+                StatusText = $"Pack image failed  打包镜像失败";
+                ProgressPercent = 0;
                 return;
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
+            StatusText = $"Packed system image: {image.DisplayName}  已打包系统镜像：{image.DisplayName}";
+            ProgressPercent = 100;
             OperationHistoryService.Instance.Record(
                 $"Pack image {image.DisplayName}",
                 new HistoryOperationDto
@@ -609,6 +752,8 @@ internal partial class ImageViewModel : Tool
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Pack image failed: {ex.Message}  打包镜像失败：{ex.Message}");
+            StatusText = $"Pack image failed: {ex.Message}  打包镜像失败：{ex.Message}";
+            ProgressPercent = 0;
         }
     }
 
@@ -632,24 +777,37 @@ internal partial class ImageViewModel : Tool
         }
 
         var name = GetEntryBaseName(image);
+        StatusText = $"Synthesizing CPIO: {image.DisplayName}  正在打包 CPIO：{image.DisplayName}";
+        ProgressPercent = -1;
         try
         {
-            var unpackDir = ProjectContextService.Instance.EnsureIntermediateDirectory(name);
+            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
+            if (subProjectRoot is null)
+            {
+                LogService.Instance.Write(LogLevel.Error, "Images", "Synthesize br aborted: no active sub-project  合成 br 中止：无活动子项目");
+                return;
+            }
+
+            var unpackDir = Path.Combine(subProjectRoot, name);
             // 优先使用 boot 解包产物的 ramdisk 子目录，否则使用解包目录本身。
             // Prefer the ramdisk sub-directory produced by a boot unpack, otherwise the unpack directory.
             var ramdiskDir = Path.Combine(unpackDir, "ramdisk");
             var inputDir = Directory.Exists(ramdiskDir) ? ramdiskDir : unpackDir;
-            var outputDir = ProjectContextService.Instance.EnsureIntermediateDirectory("br");
+            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
             var outputPath = Path.Combine(outputDir, name + "-ramdisk.cpio");
             LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing cpio from {inputDir}  正在从 {inputDir} 打包 CPIO");
             var result = await Task.Run(() => _firmware.PackCpioAsync(inputDir, outputPath));
             if (!result.Success)
             {
                 LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
+                StatusText = $"Synthesize br failed  合成 br 失败";
+                ProgressPercent = 0;
                 return;
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
+            StatusText = $"Synthesized CPIO: {image.DisplayName}  已打包 CPIO：{image.DisplayName}";
+            ProgressPercent = 100;
             OperationHistoryService.Instance.Record(
                 $"Synthesize br {image.DisplayName}",
                 new HistoryOperationDto
@@ -665,6 +823,8 @@ internal partial class ImageViewModel : Tool
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize br failed: {ex.Message}  合成 br 失败：{ex.Message}");
+            StatusText = $"Synthesize br failed: {ex.Message}  合成 br 失败：{ex.Message}";
+            ProgressPercent = 0;
         }
     }
 
@@ -688,9 +848,13 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
-        foreach (var image in selectedImages)
+        ProgressPercent = 0;
+        for (var i = 0; i < selectedImages.Count; i++)
         {
+            var image = selectedImages[i];
+            StatusText = $"[{i + 1}/{selectedImages.Count}] Deleting {image.DisplayName}  正在删除 {image.DisplayName}";
             await DeleteImageAsync(image);
+            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
         }
 
         if (SelectedImage is not null && !Images.Contains(SelectedImage))
@@ -709,7 +873,15 @@ internal partial class ImageViewModel : Tool
 
         try
         {
-            var deletedDir = ProjectContextService.Instance.EnsureIntermediateDirectory("deleted");
+            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
+            if (subProjectRoot is null)
+            {
+                LogService.Instance.Write(LogLevel.Error, "Images", "Delete aborted: no active sub-project  删除中止：无活动子项目");
+                return;
+            }
+
+            var deletedDir = Path.Combine(subProjectRoot, ".deleted");
+            Directory.CreateDirectory(deletedDir);
             var destination = GetUniqueFileName(deletedDir, Path.GetFileName(source));
             await Task.Run(() => File.Move(source, destination));
             Images.Remove(image);
@@ -778,9 +950,11 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
+        StatusText = $"Synthesizing super image ({partitions.Count} partitions)  正在合成 super 镜像（{partitions.Count} 个分区）";
+        ProgressPercent = -1;
         try
         {
-            var outputDir = ProjectContextService.Instance.EnsureIntermediateDirectory("super");
+            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
             var outputPath = Path.Combine(outputDir, "super.img");
             var deviceSize = ulong.TryParse(settings.SUPERSize, out var parsed) && parsed > 0 ? parsed : 9_126_805_504UL;
             LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing super image with {partitions.Count} partition(s)  正在合成 super 镜像（{partitions.Count} 个分区）");
@@ -788,10 +962,14 @@ internal partial class ImageViewModel : Tool
             if (!result.Success)
             {
                 LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
+                StatusText = $"Synthesize super failed  合成 super 失败";
+                ProgressPercent = 0;
                 return;
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
+            StatusText = $"Synthesized super image  已合成 super 镜像";
+            ProgressPercent = 100;
             OperationHistoryService.Instance.Record(
                 "Synthesize super image",
                 new HistoryOperationDto
@@ -806,6 +984,8 @@ internal partial class ImageViewModel : Tool
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize super failed: {ex.Message}  合成 super 失败：{ex.Message}");
+            StatusText = $"Synthesize super failed: {ex.Message}  合成 super 失败：{ex.Message}";
+            ProgressPercent = 0;
         }
     }
 
@@ -916,9 +1096,11 @@ internal partial class ImageViewModel : Tool
         }
 
         var name = GetEntryBaseName(image);
+        StatusText = $"Synthesizing DAT: {image.DisplayName}  正在生成 DAT：{image.DisplayName}";
+        ProgressPercent = -1;
         try
         {
-            var outputDir = ProjectContextService.Instance.EnsureIntermediateDirectory("dat");
+            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
             var datPath = Path.Combine(outputDir, name + ".new.dat");
             var listPath = Path.Combine(outputDir, name + ".transfer.list");
             LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing DAT: {image.RelativePath}  正在生成 DAT：{image.RelativePath}");
@@ -940,6 +1122,8 @@ internal partial class ImageViewModel : Tool
 
             await Task.Run(() => DatWriter.Write(rawSource, datPath, listPath));
             LogService.Instance.Write(LogLevel.Info, "Images", $"Generated {datPath} + {listPath}  已生成 DAT 输出");
+            StatusText = $"Synthesized DAT: {image.DisplayName}  已生成 DAT：{image.DisplayName}";
+            ProgressPercent = 100;
             OperationHistoryService.Instance.Record(
                 $"Synthesize dat {image.DisplayName}",
                 new HistoryOperationDto
@@ -959,6 +1143,8 @@ internal partial class ImageViewModel : Tool
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize dat failed: {ex.Message}  合成 dat 失败：{ex.Message}");
+            StatusText = $"Synthesize dat failed: {ex.Message}  合成 dat 失败：{ex.Message}";
+            ProgressPercent = 0;
         }
     }
 
@@ -1215,6 +1401,20 @@ internal partial class ImageViewModel : Tool
     public event EventHandler? OpenFlashWizardRequested;
 
     /// <summary>
+    /// <para>手动刷新镜像列表：重新扫描工程 images/ 目录并注册已知格式镜像。</para>
+    /// Manually refreshes the image list: re-scans the project images/ directory and registers known-format images.
+    /// </summary>
+    [RelayCommand]
+    private async Task RefreshAsync()
+    {
+        StatusText = "Refreshing images  正在刷新镜像列表";
+        ProgressPercent = -1;
+        await RefreshProjectImagesAsync();
+        StatusText = $"Refreshed: {Images.Count} image(s)  已刷新：{Images.Count} 个镜像";
+        ProgressPercent = 0;
+    }
+
+    /// <summary>
     /// <para>打开一键刷写向导：引发 <see cref="OpenFlashWizardRequested"/>，由视图弹出向导窗口。</para>
     /// Opens the one-click flash wizard: raises <see cref="OpenFlashWizardRequested"/> so the view
     /// shows the wizard window.
@@ -1271,6 +1471,20 @@ public sealed partial class ImageEntryViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _isSelected;
+
+    /// <summary>
+    /// <para>获取或设置此条目是否通过当前筛选条件（供 DataGrid 行可见性绑定）。</para>
+    /// Gets or sets whether this entry passes the current filter (bound to DataGrid row visibility).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isVisible = true;
+
+    /// <summary>
+    /// <para>获取或设置此镜像是否已解包（子项目根目录下存在同名目录）。</para>
+    /// Gets or sets whether this image has been unpacked (a same-name directory exists at the sub-project root).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isUnpacked;
 
     private static string FormatSize(long bytes)
     {

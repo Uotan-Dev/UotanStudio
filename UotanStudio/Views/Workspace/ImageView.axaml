@@ -32,6 +32,7 @@
                     Classes="Small"
                     HorizontalAlignment="Right"
                     VerticalAlignment="Center"
+                    Command="{Binding RefreshCommand}"
                     ToolTip.Tip="{DynamicResource ImageView_Refresh}">
                 <avalonia:MaterialIcon Kind="Refresh" Width="14" Height="14" />
             </Button>
@@ -41,6 +42,7 @@
                   Classes="Small"
                   FontSize="12"
                   ItemsSource="{Binding ImageFilterItems}"
+                  SelectedItem="{Binding SelectedImageFilter}"
                   Margin="5,0,5,5"
                   HorizontalAlignment="Stretch"
                   IsVisible="{Binding IsImageFilterVisible}" />
@@ -61,6 +63,7 @@
             <DataGrid.RowTheme>
                 <ControlTheme TargetType="DataGridRow"
                               BasedOn="{StaticResource {x:Type DataGridRow}}">
+                    <Setter Property="IsVisible" Value="{Binding IsVisible, DataType=viewmodels:ImageEntryViewModel}" />
                     <Setter Property="ContextMenu">
                         <ContextMenu x:DataType="viewmodels:ImageEntryViewModel">
                             <MenuItem Header="{DynamicResource ImageView_ExtractSelected}" Click="OnExtractMenuClick" />
@@ -128,6 +131,11 @@
                                  Height="20"
                                  HorizontalAlignment="Stretch"
                                  CornerRadius="4" />
+                    <TextBlock Text="{Binding StatusText}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
                         <Button MinWidth="110" HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
@@ -188,6 +196,17 @@
                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
                                 <avalonia:MaterialIcon Grid.Column="0" Kind="FileMultipleOutline" Width="14" Height="14" />
                                 <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeDat}"
+                                           FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" MaxLines="2" />
+                            </Grid>
+                        </Button>
+                        <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                Command="{Binding PackImageCommand}"
+                                ToolTip.Tip="{DynamicResource ImageView_PackImageHint}">
+                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                <avalonia:MaterialIcon Grid.Column="0" Kind="Archive" Width="14" Height="14" />
+                                <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_PackImage}"
                                            FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                            VerticalAlignment="Center" MaxLines="2" />
                             </Grid>

@@ -33,6 +33,9 @@
     <x:String x:Key="ImageView_FlashWizard">向导刷写</x:String>
     <x:String x:Key="ImageView_FlashWizardHint">打开一键刷写向导</x:String>
     <x:String x:Key="ImageView_SelectHint">将此镜像加入批量操作</x:String>
+    <x:String x:Key="ImageView_PackImage">打包镜像</x:String>
+    <x:String x:Key="ImageView_PackImageHint">将解包目录重新打包为系统分区镜像</x:String>
+    <x:String x:Key="ImageView_FilterAll">全部</x:String>
 
     <!-- FirmwareInfo actions -->
     <x:String x:Key="FirmwareInfo_Verify">校验</x:String>
@@ -102,6 +105,8 @@
     <x:String x:Key="Explorer_OpenAsApk">以 APK 打开</x:String>
     <x:String x:Key="Explorer_OpenAsFirmware">在固件信息中打开</x:String>
     <x:String x:Key="Explorer_OpenAsMenu">打开方式</x:String>
+    <x:String x:Key="Explorer_SetAsPackProject">设为打包项目</x:String>
+    <x:String x:Key="Menu_AddSubProject">添加子项目</x:String>
     <x:String x:Key="Dock_Dtb_Save">保存</x:String>
     <x:String x:Key="Dock_Dtb_Tree">设备树</x:String>
     <x:String x:Key="Dock_Dtb_Source">设备树源</x:String>

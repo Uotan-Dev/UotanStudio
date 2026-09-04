@@ -33,6 +33,9 @@
     <x:String x:Key="ImageView_FlashWizard">Flash Wizard</x:String>
     <x:String x:Key="ImageView_FlashWizardHint">Open the one-click flash wizard</x:String>
     <x:String x:Key="ImageView_SelectHint">Include this image in batch operations</x:String>
+    <x:String x:Key="ImageView_PackImage">Pack Image</x:String>
+    <x:String x:Key="ImageView_PackImageHint">Repack the unpacked directory into a system partition image</x:String>
+    <x:String x:Key="ImageView_FilterAll">All</x:String>
 
     <!-- FirmwareInfo actions -->
     <x:String x:Key="FirmwareInfo_Verify">Verify</x:String>
@@ -102,6 +105,8 @@
     <x:String x:Key="Explorer_OpenAsApk">Open as APK</x:String>
     <x:String x:Key="Explorer_OpenAsFirmware">Open in Firmware Info</x:String>
     <x:String x:Key="Explorer_OpenAsMenu">Open With</x:String>
+    <x:String x:Key="Explorer_SetAsPackProject">Set as Pack Project</x:String>
+    <x:String x:Key="Menu_AddSubProject">Add Sub-Project</x:String>
     <x:String x:Key="Dock_Dtb_Save">Save</x:String>
     <x:String x:Key="Dock_Dtb_Tree">Device Tree</x:String>
     <x:String x:Key="Dock_Dtb_Source">Device Tree Source</x:String>
