@@ -46,6 +46,16 @@ public static class WorkflowCli
             return FirmwareCliExitCodes.Ok;
         }
 
+        if (parse.ListNodesRequested)
+        {
+            return RunListNodes(parse.JsonOutput);
+        }
+
+        if (parse.InspectRequested)
+        {
+            return RunInspect(parse.WorkflowPath!, parse.JsonOutput);
+        }
+
         return RunWorkflowAsync(parse).GetAwaiter().GetResult();
     }
 
@@ -203,6 +213,18 @@ public static class WorkflowCli
         /// <summary>Whether help was requested.</summary>
         /// <para>是否请求了帮助。</para>
         public bool HelpRequested { get; set; }
+
+        /// <summary>Whether list-nodes was requested.</summary>
+        /// <para>是否请求了列出节点类型。</para>
+        public bool ListNodesRequested { get; set; }
+
+        /// <summary>Whether list-nodes output should be JSON (default is human-readable).</summary>
+        /// <para>list-nodes 输出是否为 JSON（默认人类可读）。</para>
+        public bool JsonOutput { get; set; }
+
+        /// <summary>Whether inspect was requested.</summary>
+        /// <para>是否请求了 inspect 子命令。</para>
+        public bool InspectRequested { get; set; }
     }
 
     /// <summary>
@@ -215,6 +237,60 @@ public static class WorkflowCli
         if (args is null || args.Length == 0 || IsHelp(args[0]))
         {
             result.HelpRequested = true;
+            return result;
+        }
+
+        if (string.Equals(args[0], "list-nodes", StringComparison.OrdinalIgnoreCase))
+        {
+            result.ListNodesRequested = true;
+            for (var i = 1; i < args.Length; i++)
+            {
+                if (args[i] == "--json")
+                {
+                    result.JsonOutput = true;
+                }
+                else if (IsHelp(args[i]))
+                {
+                    result.HelpRequested = true;
+                }
+                else
+                {
+                    throw new WorkflowCliUsageException($"Unknown flag for 'list-nodes': {args[i]}");
+                }
+            }
+            return result;
+        }
+
+        if (string.Equals(args[0], "inspect", StringComparison.OrdinalIgnoreCase))
+        {
+            result.InspectRequested = true;
+            for (var i = 1; i < args.Length; i++)
+            {
+                if (args[i] == "--json")
+                {
+                    result.JsonOutput = true;
+                }
+                else if (IsHelp(args[i]))
+                {
+                    result.HelpRequested = true;
+                }
+                else if (args[i].StartsWith("-", StringComparison.Ordinal))
+                {
+                    throw new WorkflowCliUsageException($"Unknown flag for 'inspect': {args[i]}");
+                }
+                else if (result.WorkflowPath is null)
+                {
+                    result.WorkflowPath = args[i];
+                }
+                else
+                {
+                    throw new WorkflowCliUsageException($"'inspect' takes one workflow path; got extra: {args[i]}");
+                }
+            }
+            if (string.IsNullOrWhiteSpace(result.WorkflowPath) && !result.HelpRequested)
+            {
+                throw new WorkflowCliUsageException("'inspect' requires a workflow file path: workflow inspect <file.uotannode>");
+            }
             return result;
         }
 
@@ -278,6 +354,167 @@ public static class WorkflowCli
     private static bool IsHelp(string arg) => arg is "--help" or "-h";
 
     /// <summary>
+    /// <para>检查工作流文件结构并输出摘要（节点数、连接数、各节点类型与标题）。</para>
+    /// Inspects a workflow file and prints a summary (node count, connection count, per-node type and title).
+    /// </summary>
+    private static int RunInspect(string path, bool json)
+    {
+        if (!File.Exists(path))
+        {
+            Console.Error.WriteLine($"Workflow file not found: {path}  工作流文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var snapshot = WorkflowPersistenceService.LoadAsync(path).GetAwaiter().GetResult();
+        if (snapshot is null)
+        {
+            Console.Error.WriteLine($"Failed to load workflow: {path}  工作流加载失败");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        if (json)
+        {
+            var obj = new System.Text.Json.Nodes.JsonObject
+            {
+                ["path"] = path,
+                ["nodeCount"] = snapshot.Nodes.Count,
+                ["connectionCount"] = snapshot.Connections.Count,
+            };
+
+            var nodesArr = new System.Text.Json.Nodes.JsonArray();
+            foreach (var n in snapshot.Nodes)
+            {
+                nodesArr.Add(new System.Text.Json.Nodes.JsonObject
+                {
+                    ["typeKey"] = n.TypeKey ?? "(unknown)",
+                    ["title"] = n.Title ?? "(untitled)",
+                    ["instanceId"] = n.InstanceId ?? "",
+                    ["inputCount"] = n.InputInitialValues?.Count ?? 0,
+                });
+            }
+            obj["nodes"] = nodesArr;
+
+            var connsArr = new System.Text.Json.Nodes.JsonArray();
+            foreach (var c in snapshot.Connections)
+            {
+                connsArr.Add(new System.Text.Json.Nodes.JsonObject
+                {
+                    ["source"] = c.SourceConnectorTitle ?? "",
+                    ["target"] = c.TargetConnectorTitle ?? "",
+                    ["sourceInstance"] = c.SourceInstanceId ?? "",
+                    ["targetInstance"] = c.TargetInstanceId ?? "",
+                });
+            }
+            obj["connections"] = connsArr;
+
+            Console.WriteLine(obj.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        }
+        else
+        {
+            Console.WriteLine($"Workflow: {Path.GetFileName(path)}");
+            Console.WriteLine($"  Nodes:       {snapshot.Nodes.Count}");
+            Console.WriteLine($"  Connections: {snapshot.Connections.Count}");
+            Console.WriteLine();
+            Console.WriteLine("  Nodes:");
+            foreach (var n in snapshot.Nodes)
+            {
+                var inputs = n.InputInitialValues is { Count: > 0 }
+                    ? $"  [inputs: {string.Join(", ", n.InputInitialValues.Keys)}]"
+                    : "";
+                Console.WriteLine($"    [{n.TypeKey ?? "?"}] {n.Title ?? "(untitled)"}{inputs}");
+            }
+            Console.WriteLine();
+            Console.WriteLine("  Connections:");
+            foreach (var c in snapshot.Connections)
+            {
+                Console.WriteLine($"    {c.SourceConnectorTitle ?? "?"} → {c.TargetConnectorTitle ?? "?"}");
+            }
+        }
+
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
+    /// <para>列出全部已注册节点类型及其输入/输出端口定义。</para>
+    /// Lists all registered node types with their input/output port definitions.
+    /// </summary>
+    private static int RunListNodes(bool json)
+    {
+        NodeFactoryRegistrar.RegisterAll();
+        var keys = NodeTypeRegistry.Keys.OrderBy(k => k, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        if (json)
+        {
+            var arr = new System.Text.Json.Nodes.JsonArray();
+            foreach (var key in keys)
+            {
+                var node = NodeTypeRegistry.Create(key);
+                if (node is null) continue;
+
+                var obj = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["typeKey"] = key,
+                    ["title"] = node.Title,
+                };
+
+                var inputs = new System.Text.Json.Nodes.JsonArray();
+                foreach (var c in node.Input)
+                {
+                    inputs.Add(new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["title"] = c.Title,
+                        ["portType"] = c.PortType.ToString(),
+                    });
+                }
+                obj["input"] = inputs;
+
+                var outputs = new System.Text.Json.Nodes.JsonArray();
+                foreach (var c in node.Output)
+                {
+                    outputs.Add(new System.Text.Json.Nodes.JsonObject
+                    {
+                        ["title"] = c.Title,
+                        ["portType"] = c.PortType.ToString(),
+                    });
+                }
+                obj["output"] = outputs;
+
+                arr.Add(obj);
+            }
+
+            Console.WriteLine(arr.ToJsonString(new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true,
+            }));
+        }
+        else
+        {
+            Console.WriteLine($"Registered node types ({keys.Length}):");
+            Console.WriteLine("  已注册节点类型：");
+            Console.WriteLine();
+            foreach (var key in keys)
+            {
+                var node = NodeTypeRegistry.Create(key);
+                if (node is null) continue;
+
+                Console.WriteLine($"  [{key}] {node.Title}");
+                if (node.Input.Count > 0)
+                {
+                    Console.Write("    Input:  ");
+                    Console.WriteLine(string.Join(", ", node.Input.Select(c => $"{c.Title}({c.PortType})")));
+                }
+                if (node.Output.Count > 0)
+                {
+                    Console.Write("    Output: ");
+                    Console.WriteLine(string.Join(", ", node.Output.Select(c => $"{c.Title}({c.PortType})")));
+                }
+            }
+        }
+
+        return FirmwareCliExitCodes.Ok;
+    }
+
+    /// <summary>
     /// Prints the workflow CLI usage to the given writer.
     /// <para>向给定文本写入器打印 workflow CLI 用法。</para>
     /// </summary>
@@ -288,9 +525,17 @@ public static class WorkflowCli
         writer.WriteLine();
         writer.WriteLine("Usage:");
         writer.WriteLine("  workflow run <file.uotannode> [options]");
+        writer.WriteLine("  workflow list-nodes [--json]");
+        writer.WriteLine("  workflow inspect <file.uotannode> [--json]");
+        writer.WriteLine();
+        writer.WriteLine("Commands:");
+        writer.WriteLine("  run          Execute a saved workflow file headlessly");
+        writer.WriteLine("  list-nodes   List all registered node types and their ports");
+        writer.WriteLine("  inspect      Show the structure summary of a workflow file");
         writer.WriteLine();
         writer.WriteLine("Options:");
-        writer.WriteLine("  -s, --set <Node.Port=Value>   Override an input port's initial value (repeatable)");
+        writer.WriteLine("  -s, --set <Node.Port=Value>   Override an input port's initial value (repeatable, run only)");
+        writer.WriteLine("      --json                    Output as JSON (list-nodes only)");
         writer.WriteLine("  -h, --help                    Show this help and exit");
         writer.WriteLine();
         writer.WriteLine("Exit codes:");
@@ -301,6 +546,8 @@ public static class WorkflowCli
         writer.WriteLine("Examples:");
         writer.WriteLine("  workflow run my_flow.uotannode");
         writer.WriteLine("  workflow run my_flow.uotannode --set \"ReadFile.Path=boot.img\" --set \"Loop.Count=3\"");
+        writer.WriteLine("  workflow list-nodes");
+        writer.WriteLine("  workflow list-nodes --json");
     }
 
     /// <summary>
