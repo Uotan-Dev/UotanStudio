@@ -132,7 +132,7 @@ public class TcpTransportTests
     }
 
     [Fact]
-    public void FastbootTcpTransport_Handshake_RejectsNonFbResponse()
+    public async Task FastbootTcpTransport_Handshake_RejectsNonFbResponse()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -149,11 +149,11 @@ public class TcpTransportTests
         var exception = Assert.Throws<IOException>(() =>
             new FastbootTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000));
         Assert.Contains("handshake", exception.Message, StringComparison.OrdinalIgnoreCase);
-        serverTask.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await serverTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     [Fact]
-    public void FastbootTcpTransport_Handshake_RejectsUnsupportedVersion()
+    public async Task FastbootTcpTransport_Handshake_RejectsUnsupportedVersion()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -170,7 +170,7 @@ public class TcpTransportTests
         var exception = Assert.Throws<IOException>(() =>
             new FastbootTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000));
         Assert.Contains("version", exception.Message, StringComparison.OrdinalIgnoreCase);
-        serverTask.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        await serverTask.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     [Fact]

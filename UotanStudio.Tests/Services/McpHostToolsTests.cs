@@ -151,11 +151,11 @@ public sealed class McpHostToolsTests
     }
 
     [Fact]
-    public void FirmwareUnpack_MissingFile_ReturnsStructuredErrorJson()
+    public async Task FirmwareUnpack_MissingFile_ReturnsStructuredErrorJson()
     {
-        var result = Tools.FirmwareUnpack(
+        var result = await Tools.FirmwareUnpack(
             Path.Combine(Path.GetTempPath(), $"no-such-firmware-{Guid.NewGuid():N}.bin"),
-            ct: CancellationToken.None).GetAwaiter().GetResult();
+            ct: CancellationToken.None);
 
         using var doc = JsonDocument.Parse(result);
         Assert.False(doc.RootElement.GetProperty("success").GetBoolean());
@@ -164,13 +164,13 @@ public sealed class McpHostToolsTests
     }
 
     [Fact]
-    public void FirmwarePack_MissingSource_ReturnsStructuredErrorJson()
+    public async Task FirmwarePack_MissingSource_ReturnsStructuredErrorJson()
     {
-        var result = Tools.FirmwarePack(
+        var result = await Tools.FirmwarePack(
             inputDir: Path.Combine(Path.GetTempPath(), $"no-such-directory-{Guid.NewGuid():N}"),
             inputPath: null,
             outputPath: Path.Combine(Path.GetTempPath(), "out.cpio"),
-            ct: CancellationToken.None).GetAwaiter().GetResult();
+            ct: CancellationToken.None);
 
         using var doc = JsonDocument.Parse(result);
         Assert.False(doc.RootElement.GetProperty("success").GetBoolean());
@@ -178,7 +178,7 @@ public sealed class McpHostToolsTests
     }
 
     [Fact]
-    public void FirmwarePackAndUnpack_CpioRoundTrip_MatchesFiles()
+    public async Task FirmwarePackAndUnpack_CpioRoundTrip_MatchesFiles()
     {
         using var temp = new TempDirectory();
         var sourceDir = Path.Combine(temp.Path, "root");
@@ -187,12 +187,12 @@ public sealed class McpHostToolsTests
         File.WriteAllText(Path.Combine(sourceDir, "sub", "notes.txt"), "nested file\n");
 
         var cpioPath = Path.Combine(temp.Path, "out.cpio");
-        var packResult = Tools.FirmwarePack(
+        var packResult = await Tools.FirmwarePack(
             inputDir: sourceDir,
             inputPath: null,
             outputPath: cpioPath,
             format: "cpio",
-            ct: CancellationToken.None).GetAwaiter().GetResult();
+            ct: CancellationToken.None);
 
         using (var packDoc = JsonDocument.Parse(packResult))
         {
@@ -204,8 +204,7 @@ public sealed class McpHostToolsTests
         Assert.True(File.Exists(cpioPath));
 
         var unpackedDir = Path.Combine(temp.Path, "unpacked");
-        var unpackResult = Tools.FirmwareUnpack(cpioPath, outputDir: unpackedDir, ct: CancellationToken.None)
-            .GetAwaiter().GetResult();
+        var unpackResult = await Tools.FirmwareUnpack(cpioPath, outputDir: unpackedDir, ct: CancellationToken.None);
 
         using (var unpackDoc = JsonDocument.Parse(unpackResult))
         {
@@ -230,16 +229,16 @@ public sealed class McpHostToolsTests
     }
 
     [Fact]
-    public void FlashImage_UnknownSerial_ReturnsClearDeviceError()
+    public async Task FlashImage_UnknownSerial_ReturnsClearDeviceError()
     {
         using var temp = new TempDirectory();
         var imagePath = temp.Write("boot.img", "fake image content");
 
-        var result = Tools.FlashImage(
+        var result = await Tools.FlashImage(
             imagePath,
             "boot",
             serial: "MCP-TEST-NONEXISTENT-SERIAL-0000",
-            ct: CancellationToken.None).GetAwaiter().GetResult();
+            ct: CancellationToken.None);
 
         using var doc = JsonDocument.Parse(result);
         Assert.False(doc.RootElement.GetProperty("success").GetBoolean());

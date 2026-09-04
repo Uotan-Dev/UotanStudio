@@ -31,7 +31,7 @@ public class FastbootUdpTransportTests
     public async Task FastbootUdpTransport_HandshakeAndWrite_ReachesTarget()
     {
         using var target = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
-        var port = ((IPEndPoint)target.Client.LocalEndPoint).Port;
+        var port = ((IPEndPoint)target.Client.LocalEndPoint!).Port;
         var received = new List<byte[]>();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var targetTask = RunFakeTargetAsync(target, received, cts.Token);
@@ -63,7 +63,7 @@ public class FastbootUdpTransportTests
     public async Task FastbootUdpTransport_Read_ReturnsTargetPayload()
     {
         using var target = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
-        var port = ((IPEndPoint)target.Client.LocalEndPoint).Port;
+        var port = ((IPEndPoint)target.Client.LocalEndPoint!).Port;
         var received = new List<byte[]>();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var targetTask = RunFakeTargetAsync(target, received, cts.Token);
@@ -83,7 +83,7 @@ public class FastbootUdpTransportTests
     public async Task FastbootUdpTransport_GetStream_IsNotSupported()
     {
         using var target = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
-        var port = ((IPEndPoint)target.Client.LocalEndPoint).Port;
+        var port = ((IPEndPoint)target.Client.LocalEndPoint!).Port;
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var targetTask = RunFakeTargetAsync(target, [], cts.Token);
 

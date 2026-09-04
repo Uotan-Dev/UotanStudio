@@ -39,13 +39,13 @@ public sealed class SparseWrappedFilesystemTests
     }
 
     [Fact]
-    public void SparseFormatHandler_UnpackAsync_CascadesExt4Contents()
+    public async Task SparseFormatHandler_UnpackAsync_CascadesExt4Contents()
     {
         using var fixture = BuildExt4Fixture();
         var outDir = Path.Combine(Path.GetTempPath(), "uotan-sparse-unpack-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = new SparseFormatHandler().UnpackAsync(fixture.SparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+            var result = await new SparseFormatHandler().UnpackAsync(fixture.SparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(result.Success);
             Assert.True(File.Exists(Path.Combine(outDir, "hello.txt")));
@@ -60,13 +60,13 @@ public sealed class SparseWrappedFilesystemTests
     }
 
     [Fact]
-    public void SparseFormatHandler_UnpackAsync_CascadesErofsContents()
+    public async Task SparseFormatHandler_UnpackAsync_CascadesErofsContents()
     {
         using var fixture = BuildErofsFixture();
         var outDir = Path.Combine(Path.GetTempPath(), "uotan-sparse-unpack-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = new SparseFormatHandler().UnpackAsync(fixture.SparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+            var result = await new SparseFormatHandler().UnpackAsync(fixture.SparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.True(result.Success);
             Assert.True(File.Exists(Path.Combine(outDir, "hello.txt")));
@@ -79,7 +79,7 @@ public sealed class SparseWrappedFilesystemTests
     }
 
     [Fact]
-    public void SparseFormatHandler_UnpackAsync_NonFilesystem_FallsBackToRaw()
+    public async Task SparseFormatHandler_UnpackAsync_NonFilesystem_FallsBackToRaw()
     {
         // 内容为随机字节而非文件系统的 sparse：级联探测未命中，回退为转 .raw。
         // A sparse image whose content is random bytes (not a filesystem): the cascade probe misses and
@@ -99,7 +99,7 @@ public sealed class SparseWrappedFilesystemTests
             Assert.True(FileOpenMode.IsSparseImage(sparsePath));
             Assert.False(FileOpenMode.IsFilesystemImage(sparsePath));
 
-            var result = new SparseFormatHandler().UnpackAsync(sparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+            var result = await new SparseFormatHandler().UnpackAsync(sparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(result.Success);
             Assert.True(File.Exists(Path.Combine(outDir, "random.raw")));
             Assert.Equal(randomBytes, File.ReadAllBytes(Path.Combine(outDir, "random.raw")));
