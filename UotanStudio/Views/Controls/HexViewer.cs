@@ -256,6 +256,16 @@ public class HexViewer : Grid
             var scrollY = _scroll.Offset.Y;
             var viewportHeight = _scroll.Viewport.Height > 0 ? _scroll.Viewport.Height : Bounds.Height;
 
+            // Avalonia only hit-tests rendered geometry. Cover the visible viewport so the spacing
+            // around centered hex/ASCII glyphs remains part of each byte's pointer target.
+            var hitTestHeight = Math.Max(0, Math.Min(viewportHeight, Bounds.Height - scrollY));
+            if (hitTestHeight > 0)
+            {
+                context.FillRectangle(
+                    Brushes.Transparent,
+                    new Rect(0, scrollY, layout.ContentWidth, hitTestHeight));
+            }
+
             var foreground = ResolveBrush("HexForeground") ?? Brushes.Black;
             var offsetBrush = ResolveBrush("HexOffsetForeground") ?? Brushes.Gray;
             var asciiBrush = ResolveBrush("HexAsciiForeground") ?? Brushes.Gray;
@@ -474,6 +484,7 @@ public class HexViewer : Grid
             _hasSelection = false;
             _pendingHighNibble = false;
             _dragging = true;
+            e.Pointer.Capture(this);
             SetCaret(offset);
             e.Handled = true;
         }
@@ -492,6 +503,12 @@ public class HexViewer : Grid
                 return;
             }
 
+            if (offset == _caretOffset)
+            {
+                e.Handled = true;
+                return;
+            }
+
             _hasSelection = true;
             SetCaret(offset);
             e.Handled = true;
@@ -499,6 +516,23 @@ public class HexViewer : Grid
 
         private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
         {
+            if (!_dragging)
+            {
+                return;
+            }
+
+            _dragging = false;
+            if (e.Pointer.Captured == this)
+            {
+                e.Pointer.Capture(null);
+            }
+
+            e.Handled = true;
+        }
+
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        {
+            base.OnPointerCaptureLost(e);
             _dragging = false;
         }
 
