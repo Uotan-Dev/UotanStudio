@@ -33,6 +33,8 @@ public partial class MenuViewModel : ViewModelBase
     /// </remarks>
     private ActiveTab _currentTab = ActiveTab.Workspace;
 
+    private readonly ProjectOperationsService _projectOps = ProjectOperationsService.Instance;
+
     /// <summary>
     /// <para>创建菜单视图模型，订阅激活面板切换消息以维护 <see cref="_currentTab"/>，并加载最近打开项目列表。</para>
     /// Creates the menu view model, subscribing to active-tab-changed messages to maintain <see cref="_currentTab"/>
@@ -196,69 +198,7 @@ public partial class MenuViewModel : ViewModelBase
     /// </summary>
     private async Task CreateNewSolutionAsync(string path)
     {
-        ProjectContextService.Instance.OpenSolution(path);
-        _currentProjectPath = path;
-        // 新解决方案：清空画布、镜像清单与历史后立即保存空骨架。
-        // New solution: clear the canvas, image list and history, then immediately save the empty skeleton.
-        if (NodeEditorVM != null)
-        {
-            NodeEditorVM.Clear();
-        }
-
-        ImageViewModel.EnsureInstance().Images.Clear();
-        OperationHistoryService.Instance.Clear();
-
-        var solutionName = ProjectContextService.Instance.SolutionName ?? Path.GetFileNameWithoutExtension(path);
-        var rootDir = ProjectContextService.Instance.RootDirectory
-            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
-        var nodePath = ProjectContextService.Instance.NodeProjectPath
-            ?? Path.Combine(rootDir, solutionName + ".uotannode");
-        var stateDir = ProjectContextService.Instance.StateDirectory
-            ?? Path.Combine(rootDir, ".uotan");
-
-        // Create the first sub-project directory structure
-        var subProjectDir = Path.Combine(rootDir, solutionName);
-        var subImagesDir = Path.Combine(subProjectDir, "images");
-        var subOutputDir = Path.Combine(subProjectDir, "output");
-        Directory.CreateDirectory(subImagesDir);
-        Directory.CreateDirectory(subOutputDir);
-
-        var firmwarePath = Path.Combine(subProjectDir, solutionName + ".uotanfw");
-        var firmware = new FirmwareProjectSnapshot
-        {
-            FormatVersion = 1,
-            ProjectName = solutionName,
-            Images = [],
-            Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
-        };
-        var node = new NodeProjectSnapshot
-        {
-            FormatVersion = 1,
-            ProjectName = solutionName,
-            Nodes = [],
-            Connections = []
-        };
-        var solution = new SolutionSnapshot
-        {
-            FormatVersion = 2,
-            SolutionName = solutionName,
-            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
-            SubProjects =
-            [
-                new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}/{solutionName}.uotanfw" }
-            ]
-        };
-
-        await SolutionPersistenceService.SaveFirmwareProjectAsync(firmwarePath, firmware);
-        await SolutionPersistenceService.SaveNodeProjectAsync(nodePath, node);
-        await SolutionPersistenceService.SaveSolutionAsync(path, solution);
-        await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));
-        await SolutionSettingsService.SaveAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings());
-
-        // Re-open to populate sub-project context from the saved snapshot
-        ProjectContextService.Instance.OpenSolution(path, solution);
-
-        WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+        await _projectOps.CreateNewSolutionAsync(path);
         RecordRecentProject(path);
     }
 
@@ -288,90 +228,9 @@ public partial class MenuViewModel : ViewModelBase
     /// </summary>
     public async Task<bool> OpenProjectFromPathAsync(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-        {
-            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", $"Open aborted: missing file '{path}'");
-            return false;
-        }
-
-        var solution = await SolutionPersistenceService.LoadSolutionAsync(path);
-        if (solution is null)
-        {
-            Services.LogService.Instance.Write(LogLevel.Error, "Menu", $"Open aborted: failed to load solution '{path}'");
-            return false;
-        }
-
-        ProjectContextService.Instance.OpenSolution(path, solution);
-        _currentProjectPath = path;
-
-        // 重建镜像清单：仅加入实际存在的文件。
-        // Rebuild the image list: only entries whose files still exist are added.
-        var images = ImageViewModel.EnsureInstance();
-        images.Images.Clear();
-
-        // 无条件重置打包设置，避免新工程缺少设置时残留上一工程的配置。
-        // Reset packing settings unconditionally so a new project without settings doesn't retain the
-        // previous project's configuration.
-        var projectSettings = ProjectSettingViewModel.EnsureInstance();
-        projectSettings.ApplyFromDto(new ProjectSettingsDto());
-
-        var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(ProjectContextService.Instance.FirmwareProjectPath ?? string.Empty);
-        if (firmware is not null)
-        {
-            foreach (var dto in firmware.Images)
-            {
-                var absolute = ProjectContextService.Instance.ResolvePath(dto.RelativePath);
-                if (absolute is null || !File.Exists(absolute))
-                {
-                    continue;
-                }
-
-                images.Images.Add(new ImageEntryViewModel
-                {
-                    DisplayName = Path.GetFileName(dto.RelativePath),
-                    RelativePath = dto.RelativePath,
-                    SizeBytes = dto.SizeBytes,
-                    Format = dto.Format
-                });
-            }
-
-            if (firmware.Settings is not null)
-            {
-                projectSettings.ApplyFromDto(firmware.Settings);
-            }
-        }
-
-        // 重建节点画布：无论节点项目文件是否存在都先清空，避免残留上一工程画布。
-        // Rebuild the node canvas: clear it first regardless of whether the node project file exists,
-        // so the previous project's canvas never leaks into the newly opened solution.
-        if (NodeEditorVM != null)
-        {
-            NodeEditorVM.Clear();
-        }
-
-        var node = await SolutionPersistenceService.LoadNodeProjectAsync(ProjectContextService.Instance.NodeProjectPath ?? string.Empty);
-        if (NodeEditorVM != null && node is not null)
-        {
-            await NodeEditorVM.LoadFromAsync(new WorkflowSnapshot
-            {
-                FormatVersion = 1,
-                Nodes = node.Nodes,
-                Connections = node.Connections
-            });
-        }
-
-        // 恢复操作历史与解决方案设置。
-        // Restore the operation history and solution settings.
-        if (ProjectContextService.Instance.StateDirectory is { } stateDir)
-        {
-            await OperationHistoryService.Instance.LoadAsync(Path.Combine(stateDir, "history.json"));
-            await SolutionSettingsService.LoadAsync(Path.Combine(stateDir, "settings.json"));
-        }
-
-        WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
-        Services.LogService.Instance.Write(LogLevel.Info, "Menu", $"Opened solution: {path}");
-        RecordRecentProject(path);
-        return true;
+        var result = await _projectOps.OpenProjectFromPathAsync(path);
+        if (result) RecordRecentProject(path);
+        return result;
     }
 
     /// <summary>
@@ -380,12 +239,7 @@ public partial class MenuViewModel : ViewModelBase
     /// </summary>
     public async Task ImportFilesAsync(string[] paths)
     {
-        if (paths is null || paths.Length == 0)
-        {
-            return;
-        }
-
-        await ImageViewModel.EnsureInstance().ImportAsync(paths);
+        await _projectOps.ImportFilesAsync(paths);
     }
 
     /// <summary>
@@ -404,8 +258,6 @@ public partial class MenuViewModel : ViewModelBase
             return;
         }
 
-        // 使用文件保存对话框作为名称输入（选择 .uotanfw 保存位置即确定子项目名称）
-        // Use the file-save dialog as name input (choosing the .uotanfw save location determines the sub-project name).
         var topLevel = TopLevel;
         if (topLevel == null) return;
 
@@ -424,58 +276,38 @@ public partial class MenuViewModel : ViewModelBase
         var fwPath = result.TryGetLocalPath();
         if (string.IsNullOrEmpty(fwPath)) return;
 
-        var subProjectDir = Path.GetDirectoryName(fwPath)!;
-        var subName = Path.GetFileNameWithoutExtension(fwPath);
-
-        // 重名拒绝：子项目目录已存在时拒绝操作。
-        // Duplicate rejection: refuse when the sub-project directory already exists.
-        if (context.SubProjects.Any(sp => string.Equals(sp.Name, subName, StringComparison.OrdinalIgnoreCase)))
-        {
-            Services.LogService.Instance.Write(LogLevel.Error, "Menu", $"Add sub-project aborted: \"{subName}\" already exists  添加子项目失败：\"{subName}\" 已存在");
-            return;
-        }
-
-        var imagesDir = Path.Combine(subProjectDir, "images");
-        var outputDir = Path.Combine(subProjectDir, "output");
-        Directory.CreateDirectory(imagesDir);
-        Directory.CreateDirectory(outputDir);
-
-        var firmware = new FirmwareProjectSnapshot
-        {
-            FormatVersion = 1,
-            ProjectName = subName,
-            Images = [],
-            Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
-        };
-        await SolutionPersistenceService.SaveFirmwareProjectAsync(fwPath, firmware);
-
-        Services.LogService.Instance.Write(LogLevel.Info, "Menu", $"Added sub-project: {subName}  已添加子项目：{subName}");
-
-        // 重新加载解决方案以刷新子项目列表
-        // Reload the solution to refresh the sub-project list.
-        if (_currentProjectPath is not null)
-        {
-            await OpenProjectFromPathAsync(_currentProjectPath);
-        }
+        await _projectOps.AddSubProjectAsync(fwPath);
     }
 
     /// <summary>
     /// <para>当前工程文件路径，由保存/打开操作填充。</para>
     /// Current project file path, populated by save/open operations.
     /// </summary>
-    private string? _currentProjectPath;
+    private string? _currentProjectPath
+    {
+        get => _projectOps.CurrentProjectPath;
+        set => _projectOps.CurrentProjectPath = value;
+    }
 
     /// <summary>
     /// <para>当前节点编辑器视图模型引用，由外部设置以便持久化访问画布。</para>
     /// Current node editor view model reference, set externally so persistence can access the canvas.
     /// </summary>
-    public NodeEditorViewModel? NodeEditorVM { get; set; }
+    public NodeEditorViewModel? NodeEditorVM
+    {
+        get => _projectOps.NodeEditorVM;
+        set => _projectOps.NodeEditorVM = value;
+    }
 
     /// <summary>
     /// <para>当前工作区视图模型引用，由外部设置以便 Ctrl+S 保存活动文档。</para>
     /// Current workspace view model reference, set externally so Ctrl+S can save the active document.
     /// </summary>
-    public WorkspaceViewModel? WorkspaceVM { get; set; }
+    public WorkspaceViewModel? WorkspaceVM
+    {
+        get => _projectOps.WorkspaceVM;
+        set => _projectOps.WorkspaceVM = value;
+    }
 
     /// <summary>
     /// <para>保存当前项目，若无路径则触发另存流程。先尝试保存当前活动的文档编辑器。</para>
@@ -485,48 +317,17 @@ public partial class MenuViewModel : ViewModelBase
     [RelayCommand]
     private async Task SaveAsync()
     {
-        await SaveActiveDocumentAsync();
-
-        if (string.IsNullOrEmpty(_currentProjectPath))
+        if (!await _projectOps.SaveAsync())
         {
             await SaveAsAsync();
-            return;
         }
-        await PersistToAsync(_currentProjectPath);
     }
 
     /// <summary>
     /// <para>若当前活动文档具有 SaveCommand 且 IsDirty，则执行保存。</para>
     /// If the active document has a SaveCommand and IsDirty, executes it.
     /// </summary>
-    private async Task SaveActiveDocumentAsync()
-    {
-        if (WorkspaceVM?.Layout is null)
-        {
-            return;
-        }
-
-        var documentDock = WorkspaceVM.FindDocumentsPanePublic();
-        if (documentDock?.ActiveDockable is not { } active)
-        {
-            return;
-        }
-
-        // 各编辑器 ViewModel 的 SaveCommand 类型各异，统一通过反射-free 的模式匹配分派。
-        // Dispatch by pattern matching to avoid reflection — each editor exposes its own SaveCommand.
-        IAsyncRelayCommand? saveCmd = active switch
-        {
-            Editors.ManifestEditorViewModel m => m.SaveCommand,
-            Editors.DtbEditorViewModel d => d.SaveCommand,
-            Editors.PartitionEditorViewModel p => p.SaveCommand,
-            _ => null
-        };
-
-        if (saveCmd is not null && saveCmd.CanExecute(null))
-        {
-            await saveCmd.ExecuteAsync(null);
-        }
-    }
+    private async Task SaveActiveDocumentAsync() => await _projectOps.SaveActiveDocumentAsync();
 
     /// <summary>
     /// <para>另存为，弹出文件保存对话框选择新解决方案路径，复制镜像目录到新根目录后持久化。</para>
@@ -537,122 +338,16 @@ public partial class MenuViewModel : ViewModelBase
     private async Task SaveAsAsync()
     {
         var path = await PickProjectFileAsync(isSave: true);
-        if (path == null)
-        {
-            return;
-        }
-
-        var oldImages = ProjectContextService.Instance.ActiveSubProject?.ImagesDir;
-        var oldRoot = ProjectContextService.Instance.RootDirectory;
-        _currentProjectPath = path;
-        ProjectContextService.Instance.OpenSolution(path);
-
-        var newRoot = ProjectContextService.Instance.RootDirectory;
-        if (oldImages is not null && oldRoot is not null && newRoot is not null &&
-            !string.Equals(oldRoot, newRoot, StringComparison.OrdinalIgnoreCase) && Directory.Exists(oldImages))
-        {
-            // 复制镜像目录到新根目录，保持相对路径有效。
-            // Copy the image directory to the new root so relative paths stay valid.
-            var newImages = ProjectContextService.Instance.EnsureImagesDirectory();
-            await Task.Run(() =>
-            {
-                foreach (var file in Directory.EnumerateFiles(oldImages))
-                {
-                    File.Copy(file, Path.Combine(newImages, Path.GetFileName(file)), overwrite: true);
-                }
-            });
-        }
-
-        await PersistToAsync(path);
-        WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+        if (path == null) return;
+        await _projectOps.SaveAsAsync(path);
         RecordRecentProject(path);
     }
 
     /// <summary>
-    /// <para>将当前工程完整快照（工程名、镜像清单、打包设置、节点画布）写入指定路径。</para>
-    /// Writes the complete project snapshot (project name, image list, packing settings, node canvas)
-    /// to the specified path.
+    /// <para>将当前工程完整快照写入指定路径。</para>
+    /// Writes the complete project snapshot to the specified path.
     /// </summary>
-    /// <param name="path">
-    /// <para>目标工程文件路径。</para>
-    /// Target project file path.
-    /// </param>
-    private async Task PersistToAsync(string path)
-    {
-        if (NodeEditorVM == null)
-        {
-            Services.LogService.Instance.Write(LogLevel.Warn, "Menu", "Save aborted: no node editor bound");
-            return;
-        }
-
-        var context = ProjectContextService.Instance;
-        var solutionName = context.SolutionName ?? Path.GetFileNameWithoutExtension(path);
-        var rootDir = context.RootDirectory
-            ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
-
-        var node = new NodeProjectSnapshot
-        {
-            FormatVersion = 1,
-            ProjectName = solutionName,
-            Nodes = NodeEditorVM.Nodes
-                .Select(n => new NodeDto
-                {
-                    InstanceId = n.InstanceId,
-                    Title = n.Title,
-                    Category = n.Category.ToString(),
-                    X = n.Location.X,
-                    Y = n.Location.Y,
-                    TypeKey = n.TypeKey
-                })
-                .ToList(),
-            Connections = Services.Projects.WorkflowPersistenceService.BuildConnectionDtos(NodeEditorVM.Nodes, NodeEditorVM.Connections)
-        };
-
-        // Build sub-project references and save each .uotanfw
-        var subProjectDtos = new List<SubProjectDto>();
-        foreach (var sp in context.SubProjects)
-        {
-            subProjectDtos.Add(new SubProjectDto
-            {
-                Name = sp.Name,
-                RelativePath = Path.GetRelativePath(rootDir, sp.FwProjectPath).Replace(Path.DirectorySeparatorChar, '/')
-            });
-
-            var firmware = new FirmwareProjectSnapshot
-            {
-                FormatVersion = 1,
-                ProjectName = sp.Name,
-                Images = ImageViewModel.EnsureInstance().Images
-                    .Select(i => new ImageEntryDto
-                    {
-                        RelativePath = i.RelativePath,
-                        SizeBytes = i.SizeBytes,
-                        Format = i.Format
-                    })
-                    .ToList(),
-                Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
-            };
-            await SolutionPersistenceService.SaveFirmwareProjectAsync(sp.FwProjectPath, firmware);
-        }
-
-        var nodePath = context.NodeProjectPath
-            ?? Path.Combine(rootDir, solutionName + ".uotannode");
-        var stateDir = context.StateDirectory
-            ?? Path.Combine(rootDir, ".uotan");
-
-        var solution = new SolutionSnapshot
-        {
-            FormatVersion = 2,
-            SolutionName = solutionName,
-            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
-            SubProjects = subProjectDtos.Count > 0 ? subProjectDtos : null
-        };
-
-        await SolutionPersistenceService.SaveNodeProjectAsync(nodePath, node);
-        await SolutionPersistenceService.SaveSolutionAsync(path, solution);
-        await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));
-        await SolutionSettingsService.SaveAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings());
-    }
+    private async Task PersistToAsync(string path) => await _projectOps.PersistToAsync(path);
 
     /// <summary>
     /// <para>导出当前工作区内容，弹出文件保存对话框选择导出路径。</para>
