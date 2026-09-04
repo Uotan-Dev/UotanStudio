@@ -32,10 +32,13 @@
                             <MenuItem Header="{DynamicResource Explorer_OpenAsFirmware}"
                                       Click="OnOpenAsFirmware" />
                         </MenuItem>
-                        <!-- 目录节点右键菜单：设为打包项目 -->
-                        <MenuItem Header="{DynamicResource Explorer_SetAsPackProject}"
+                        <!-- 目录节点右键菜单：新建空子项目 / 导入现有子项目 -->
+                        <MenuItem Header="{DynamicResource Explorer_NewEmptySubProject}"
                                   IsVisible="{Binding IsDirectory}"
-                                  Click="OnSetAsPackProject" />
+                                  Click="OnNewEmptySubProject" />
+                        <MenuItem Header="{DynamicResource Explorer_ImportExistingSubProject}"
+                                  IsVisible="{Binding IsDirectory}"
+                                  Click="OnImportExistingSubProject" />
                     </ContextMenu>
                 </Setter>
             </ControlTheme>

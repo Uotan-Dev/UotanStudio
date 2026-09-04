@@ -55,11 +55,11 @@
         <ComboBox Grid.Row="1"
                   Classes="Small"
                   FontSize="12"
-                  ItemsSource="{Binding ImageFilterItems}"
-                  SelectedItem="{Binding SelectedImageFilter}"
+                  ItemsSource="{Binding SubProjectItems}"
+                  SelectedItem="{Binding SelectedSubProject}"
                   Margin="5,0,5,5"
                   HorizontalAlignment="Stretch"
-                  IsVisible="{Binding IsImageFilterVisible}" />
+                  IsVisible="{Binding IsSubProjectVisible}" />
 
         <!-- 镜像表格：当前行用于单文件操作，复选框用于批量选择。 -->
         <DataGrid Grid.Row="2" Name="ImagesGrid"

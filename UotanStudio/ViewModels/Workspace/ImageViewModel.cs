@@ -58,6 +58,11 @@ internal partial class ImageViewModel : Tool
     [NotifyPropertyChangedFor(nameof(IsUnpackMode))]
     private bool _isPackMode;
 
+    partial void OnIsPackModeChanged(bool value)
+    {
+        _ = RefreshProjectImagesAsync();
+    }
+
     /// <summary>
     /// <para>获取当前是否显示解包操作；设置为 true 时切换到解包模式。</para>
     /// Gets whether unpack actions are currently shown; setting this to true switches to unpack mode.
@@ -75,30 +80,39 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
-    /// <para>获取或设置镜像筛选下拉框的可选项。</para>
-    /// Gets or sets the available items in the image-filter combo box.
+    /// <para>获取子项目选择下拉框的可选项（子项目名称列表）。</para>
+    /// Gets the available items in the sub-project selector combo box (sub-project name list).
     /// </summary>
     [ObservableProperty]
-    private ObservableCollection<string>? _imageFilterItems;
+    private ObservableCollection<string>? _subProjectItems;
 
     /// <summary>
-    /// <para>获取或设置是否显示镜像筛选下拉框；默认隐藏。</para>
-    /// Gets or sets whether the image-filter combo box is visible; hidden by default.
+    /// <para>获取或设置是否显示子项目选择下拉框；当存在两个及以上子项目时显示。</para>
+    /// Gets or sets whether the sub-project selector combo box is visible;
+    /// shown when two or more sub-projects exist.
     /// </summary>
     [ObservableProperty]
-    private bool _isImageFilterVisible;
+    private bool _isSubProjectVisible;
 
     /// <summary>
-    /// <para>获取或设置当前选中的镜像格式筛选项；<c>null</c> 或"全部"表示不过滤。</para>
-    /// Gets or sets the currently selected image-format filter; <c>null</c> or the "all" sentinel
-    /// means no filtering.
+    /// <para>获取或设置当前选中的子项目名称；变更时切换活动子项目并刷新条目列表。</para>
+    /// Gets or sets the currently selected sub-project name; switching refreshes the entry list.
     /// </summary>
     [ObservableProperty]
-    private string? _selectedImageFilter;
+    private string? _selectedSubProject;
 
-    partial void OnSelectedImageFilterChanged(string? value)
+    partial void OnSelectedSubProjectChanged(string? value)
     {
-        ApplyImageFilter(value);
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        var context = ProjectContextService.Instance;
+        if (context.SetActiveSubProject(value))
+        {
+            _ = RefreshProjectImagesAsync();
+        }
     }
 
     /// <summary>
@@ -159,19 +173,51 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
-    /// <para>扫描当前工程 <c>images/</c> 目录，把已知镜像格式的文件自动注册到镜像列表；
-    /// 未打开工程或目录不存在时清空列表。已存在条目跳过，避免重复。</para>
-    /// Scans the current project's <c>images/</c> directory, auto-registering files with known image
-    /// formats; clears the list when no project is open or the directory is missing. Existing entries
-    /// are skipped to avoid duplicates.
+    /// <para>解包模式下排除的保留目录名集合（不区分大小写）。</para>
+    /// Reserved directory names excluded in pack mode (case-insensitive).
+    /// </summary>
+    private static readonly HashSet<string> ReservedDirNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "images", "output", ".deleted", ".uotan"
+    };
+
+    /// <summary>
+    /// <para>根据当前模式扫描工程条目：解包模式扫描 <c>images/</c> 目录中的可解包文件，
+    /// 打包模式扫描子项目根目录下的解包产物文件夹。未打开工程时清空列表。</para>
+    /// Scans project entries based on the current mode: in unpack mode scans <c>images/</c> for
+    /// unpackable files; in pack mode scans the sub-project root for unpacked result directories.
+    /// Clears the list when no project is open.
     /// </summary>
     private async Task RefreshProjectImagesAsync()
     {
         var context = ProjectContextService.Instance;
         Images.Clear();
 
+        if (!context.IsProjectOpen)
+        {
+            return;
+        }
+
+        RebuildSubProjectItems();
+
+        if (IsPackMode)
+        {
+            await RefreshPackEntriesAsync(context);
+        }
+        else
+        {
+            await RefreshUnpackEntriesAsync(context);
+        }
+    }
+
+    /// <summary>
+    /// <para>解包模式：扫描 <c>images/</c> 目录，把已知镜像格式的文件注册到列表。</para>
+    /// Unpack mode: scans the <c>images/</c> directory, registering files with known image formats.
+    /// </summary>
+    private async Task RefreshUnpackEntriesAsync(ProjectContextService context)
+    {
         var imagesDir = context.ActiveSubProject?.ImagesDir;
-        if (!context.IsProjectOpen || string.IsNullOrEmpty(imagesDir) || !Directory.Exists(imagesDir))
+        if (string.IsNullOrEmpty(imagesDir) || !Directory.Exists(imagesDir))
         {
             return;
         }
@@ -216,76 +262,98 @@ internal partial class ImageViewModel : Tool
         }
 
         LogService.Instance.Write(LogLevel.Info, "Images", $"Auto-registered {discovered.Count} known image(s)  自动注册 {discovered.Count} 个已知镜像");
-
-        RebuildImageFilterItems();
     }
 
     /// <summary>
-    /// <para>根据当前镜像列表中的格式聚合筛选下拉框选项；仅存在两种及以上格式时显示下拉框。</para>
-    /// Rebuilds the image-filter combo box options from the formats present in the current image list;
-    /// the dropdown is shown only when two or more distinct formats exist.
+    /// <para>打包模式：扫描子项目根目录下的一级子目录（排除保留目录），注册为可打包条目。</para>
+    /// Pack mode: scans first-level sub-directories of the sub-project root (excluding reserved ones),
+    /// registering them as packable entries.
     /// </summary>
-    private void RebuildImageFilterItems()
+    private async Task RefreshPackEntriesAsync(ProjectContextService context)
     {
-        var allLabel = LanguageService.Instance.GetString("ImageView_FilterAll");
-        if (string.IsNullOrEmpty(allLabel))
+        var subProjectRoot = context.ActiveSubProject?.RootPath;
+        if (string.IsNullOrEmpty(subProjectRoot) || !Directory.Exists(subProjectRoot))
         {
-            allLabel = "All";
-        }
-
-        var formats = Images
-            .Select(i => i.Format)
-            .Where(f => !string.IsNullOrEmpty(f))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        if (formats.Count < 2)
-        {
-            ImageFilterItems = null;
-            IsImageFilterVisible = false;
-            SelectedImageFilter = null;
             return;
         }
 
-        var items = new ObservableCollection<string> { allLabel };
-        foreach (var f in formats)
+        // 目录枚举在后台线程执行。
+        // Directory enumeration runs on a background thread.
+        var discovered = await Task.Run(() =>
         {
-            items.Add(f);
+            var list = new List<(string Name, string Relative)>();
+            foreach (var dir in Directory.EnumerateDirectories(subProjectRoot))
+            {
+                var name = Path.GetFileName(dir);
+                if (string.IsNullOrEmpty(name) || ReservedDirNames.Contains(name))
+                {
+                    continue;
+                }
+
+                var relative = context.RelativePath(dir);
+                if (relative is not null)
+                {
+                    list.Add((name, relative));
+                }
+            }
+            return list;
+        }).ConfigureAwait(true);
+
+        foreach (var (name, relative) in discovered)
+        {
+            if (Images.Any(i => i.RelativePath == relative))
+            {
+                continue;
+            }
+
+            Images.Add(new ImageEntryViewModel
+            {
+                DisplayName = name,
+                RelativePath = relative,
+                SizeBytes = 0,
+                Format = "folder",
+                IsDirectory = true
+            });
         }
 
-        ImageFilterItems = items;
-        IsImageFilterVisible = true;
-
-        // 保持当前选中项有效；若无效则回退到"全部"。
-        // Keep the current selection valid; fall back to "All" when it no longer matches.
-        if (SelectedImageFilter is null || !items.Contains(SelectedImageFilter))
-        {
-            SelectedImageFilter = allLabel;
-        }
-        else
-        {
-            ApplyImageFilter(SelectedImageFilter);
-        }
+        LogService.Instance.Write(LogLevel.Info, "Images", $"Auto-registered {discovered.Count} unpacked folder(s)  自动注册 {discovered.Count} 个解包文件夹");
     }
 
     /// <summary>
-    /// <para>按选中的格式筛选项过滤镜像列表的可见性。</para>
-    /// Filters the visibility of image entries based on the selected format filter.
+    /// <para>根据当前解决方案的子项目列表重建下拉框选项；存在两个及以上子项目时显示下拉框。</para>
+    /// Rebuilds the sub-project selector combo box from the current solution's sub-project list;
+    /// the dropdown is shown when two or more sub-projects exist.
     /// </summary>
-    private void ApplyImageFilter(string? filter)
+    private void RebuildSubProjectItems()
     {
-        var allLabel = LanguageService.Instance.GetString("ImageView_FilterAll");
-        if (string.IsNullOrEmpty(allLabel))
+        var context = ProjectContextService.Instance;
+        var subProjects = context.SubProjects;
+
+        if (subProjects.Count < 2)
         {
-            allLabel = "All";
+            SubProjectItems = null;
+            IsSubProjectVisible = false;
+
+            // 单子项目时确保选中项与活动子项目一致。
+            // Ensure selection matches the active sub-project when only one exists.
+            if (subProjects.Count == 1)
+            {
+                SelectedSubProject = subProjects[0].Name;
+            }
+
+            return;
         }
 
-        var isAll = string.IsNullOrEmpty(filter) || string.Equals(filter, allLabel, StringComparison.OrdinalIgnoreCase);
+        var items = new ObservableCollection<string>(subProjects.Select(sp => sp.Name));
+        SubProjectItems = items;
+        IsSubProjectVisible = true;
 
-        foreach (var image in Images)
+        // 保持当前选中项有效；若无效则回退到活动子项目。
+        // Keep the current selection valid; fall back to the active sub-project.
+        var activeName = context.ActiveSubProject?.Name;
+        if (SelectedSubProject is null || !items.Contains(SelectedSubProject))
         {
-            image.IsVisible = isAll || string.Equals(image.Format, filter, StringComparison.OrdinalIgnoreCase);
+            SelectedSubProject = activeName ?? items[0];
         }
     }
 
@@ -1108,9 +1176,17 @@ internal partial class ImageViewModel : Tool
         }
 
         var source = ProjectContextService.Instance.ResolvePath(image.RelativePath);
-        if (source is null || !File.Exists(source))
+        if (source is null)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Images", $"{operation} aborted: file not found: {image.RelativePath}  {operation}中止：找不到文件：{image.RelativePath}");
+            LogService.Instance.Write(LogLevel.Warn, "Images", $"{operation} aborted: path not found: {image.RelativePath}  {operation}中止：找不到路径：{image.RelativePath}");
+            return null;
+        }
+
+        // 目录条目（打包模式）检查 Directory.Exists，文件条目检查 File.Exists。
+        // Directory entries (pack mode) check Directory.Exists; file entries check File.Exists.
+        if (image.IsDirectory ? !Directory.Exists(source) : !File.Exists(source))
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images", $"{operation} aborted: not found: {image.RelativePath}  {operation}中止：找不到：{image.RelativePath}");
             return null;
         }
 
@@ -1422,6 +1498,13 @@ public sealed partial class ImageEntryViewModel : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _isUnpacked;
+
+    /// <summary>
+    /// <para>获取或设置此条目是否为目录（打包模式下的解包产物文件夹）。</para>
+    /// Gets or sets whether this entry is a directory (unpacked result folder in pack mode).
+    /// </summary>
+    [ObservableProperty]
+    private bool _isDirectory;
 
     private static string FormatSize(long bytes)
     {

@@ -34,7 +34,7 @@
     <x:String x:Key="ImageView_NoProject">No project is open</x:String>
     <x:String x:Key="ImageView_OperationDone">Operation complete</x:String>
     <x:String x:Key="ImageView_SelectHint">Include this image in batch operations</x:String>
-    <x:String x:Key="ImageView_FilterAll">All</x:String>
+    <x:String x:Key="ImageView_SelectProject">Project</x:String>
 
     <!-- FirmwareInfo actions -->
     <x:String x:Key="FirmwareInfo_Verify">Verify</x:String>
@@ -84,6 +84,8 @@
     <x:String x:Key="Explorer_OpenAsMenu">Open With</x:String>
     <x:String x:Key="Explorer_SetAsPackProject">Set as Pack Project</x:String>
     <x:String x:Key="Menu_AddSubProject">Add Sub-Project</x:String>
+    <x:String x:Key="Explorer_NewEmptySubProject">New Empty Sub-Project</x:String>
+    <x:String x:Key="Explorer_ImportExistingSubProject">Import Existing Sub-Project</x:String>
     <x:String x:Key="Dock_Dtb_Save">Save</x:String>
     <x:String x:Key="Dock_Dtb_Tree">Device Tree</x:String>
     <x:String x:Key="Dock_Dtb_Source">Device Tree Source</x:String>

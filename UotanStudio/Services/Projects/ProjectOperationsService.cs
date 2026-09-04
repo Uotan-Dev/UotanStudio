@@ -293,6 +293,71 @@ public sealed class ProjectOperationsService
     }
 
     /// <summary>
+    /// <para>将现有目录作为子项目导入当前解决方案：扫描目录中已有的镜像文件并注册，
+    /// 若目录下无 <c>.uotanfw</c> 文件则自动创建，<c>images/</c> 和 <c>output/</c>
+    /// 目录已存在时保留原内容。</para>
+    /// Imports an existing directory as a sub-project into the current solution: scans for existing
+    /// image files and registers them; creates a <c>.uotanfw</c> file if missing, preserving
+    /// existing <c>images/</c> and <c>output/</c> directories.
+    /// </summary>
+    /// <param name="dirPath"><para>要导入的目录绝对路径。</para>Absolute path of the directory to import.</param>
+    public async Task ImportSubProjectAsync(string dirPath)
+    {
+        var context = ProjectContextService.Instance;
+        if (!context.IsProjectOpen || context.RootDirectory is null)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Menu", "Import sub-project aborted: no solution is open  导入子项目中止：尚未打开解决方案");
+            return;
+        }
+
+        if (!Directory.Exists(dirPath))
+        {
+            LogService.Instance.Write(LogLevel.Error, "Menu", $"Import sub-project aborted: directory not found: {dirPath}  导入子项目中止：目录不存在：{dirPath}");
+            return;
+        }
+
+        var subName = Path.GetFileName(Path.TrimEndingDirectorySeparator(dirPath));
+        if (string.IsNullOrEmpty(subName))
+        {
+            LogService.Instance.Write(LogLevel.Error, "Menu", "Import sub-project aborted: invalid directory name  导入子项目中止：无效的目录名");
+            return;
+        }
+
+        if (context.SubProjects.Any(sp => string.Equals(sp.Name, subName, StringComparison.OrdinalIgnoreCase)))
+        {
+            LogService.Instance.Write(LogLevel.Error, "Menu", $"Import sub-project aborted: \"{subName}\" already exists  导入子项目中止：\"{subName}\" 已存在");
+            return;
+        }
+
+        // 确保 images/ 和 output/ 子目录存在。
+        // Ensure images/ and output/ sub-directories exist.
+        Directory.CreateDirectory(Path.Combine(dirPath, "images"));
+        Directory.CreateDirectory(Path.Combine(dirPath, "output"));
+
+        // 若目录下无 .uotanfw 文件则创建；已有时跳过以保留用户修改。
+        // Create a .uotanfw file if missing; skip if it already exists to preserve user changes.
+        var fwPath = Path.Combine(dirPath, subName + ".uotanfw");
+        if (!File.Exists(fwPath))
+        {
+            var firmware = new FirmwareProjectSnapshot
+            {
+                FormatVersion = 1,
+                ProjectName = subName,
+                Images = [],
+                Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
+            };
+            await SolutionPersistenceService.SaveFirmwareProjectAsync(fwPath, firmware);
+        }
+
+        LogService.Instance.Write(LogLevel.Info, "Menu", $"Imported sub-project: {subName} from {dirPath}  已导入子项目：{subName}（{dirPath}）");
+
+        if (CurrentProjectPath is not null)
+        {
+            await OpenProjectFromPathAsync(CurrentProjectPath);
+        }
+    }
+
+    /// <summary>
     /// <para>若当前活动文档具有 SaveCommand 且 IsDirty，则执行保存。</para>
     /// If the active document has a SaveCommand and IsDirty, executes it.
     /// </summary>

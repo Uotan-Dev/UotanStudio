@@ -34,7 +34,7 @@
     <x:String x:Key="ImageView_NoProject">尚未打开工程</x:String>
     <x:String x:Key="ImageView_OperationDone">操作完成</x:String>
     <x:String x:Key="ImageView_SelectHint">将此镜像加入批量操作</x:String>
-    <x:String x:Key="ImageView_FilterAll">全部</x:String>
+    <x:String x:Key="ImageView_SelectProject">项目</x:String>
 
     <!-- FirmwareInfo actions -->
     <x:String x:Key="FirmwareInfo_Verify">校验</x:String>
@@ -84,6 +84,8 @@
     <x:String x:Key="Explorer_OpenAsMenu">打开方式</x:String>
     <x:String x:Key="Explorer_SetAsPackProject">设为打包项目</x:String>
     <x:String x:Key="Menu_AddSubProject">添加子项目</x:String>
+    <x:String x:Key="Explorer_NewEmptySubProject">新建空子项目</x:String>
+    <x:String x:Key="Explorer_ImportExistingSubProject">导入现有子项目</x:String>
     <x:String x:Key="Dock_Dtb_Save">保存</x:String>
     <x:String x:Key="Dock_Dtb_Tree">设备树</x:String>
     <x:String x:Key="Dock_Dtb_Source">设备树源</x:String>

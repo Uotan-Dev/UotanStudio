@@ -91,15 +91,24 @@ public partial class ProjectExplorerView : UserControl
         OpenWith(EditorOpenMode.Firmware);
     }
 
-    private void OnSetAsPackProject(object? sender, RoutedEventArgs e)
+    private void OnNewEmptySubProject(object? sender, RoutedEventArgs e)
     {
         if (ProjectTree.SelectedItem is ExplorerNode node && node.IsDirectory)
         {
-            var dirName = System.IO.Path.GetFileName(node.Path);
-            if (!string.IsNullOrEmpty(dirName) && ProjectContextService.Instance.SetActiveSubProject(dirName))
+            var dirName = System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(node.Path));
+            if (!string.IsNullOrEmpty(dirName))
             {
-                WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+                var fwPath = System.IO.Path.Combine(node.Path, dirName + ".uotanfw");
+                _ = ProjectOperationsService.Instance.AddSubProjectAsync(fwPath);
             }
+        }
+    }
+
+    private void OnImportExistingSubProject(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is ExplorerNode node && node.IsDirectory)
+        {
+            _ = ProjectOperationsService.Instance.ImportSubProjectAsync(node.Path);
         }
     }
 
