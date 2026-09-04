@@ -95,6 +95,7 @@
     <x:String x:Key="Dock_Properties_Text_LineCount">行数</x:String>
     <x:String x:Key="Dock_Properties_Text_CharCount">字符数</x:String>
     <x:String x:Key="Dock_Properties_Text_Language">语法语言</x:String>
+    <x:String x:Key="Dock_Properties_Text_LanguageAuto">自动检测</x:String>
 
     <!-- 设备树文档属性面板标签 -->
     <x:String x:Key="Dock_Properties_Dtb_FileName">文件名</x:String>

@@ -70,6 +70,19 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <!-- 语法语言选择器（仅文本文档显示） -->
+        <StackPanel Spacing="4" Margin="0,8,0,0" IsVisible="{Binding HasLanguageSelector}">
+          <Border Padding="6,3" CornerRadius="3"
+                  Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <TextBlock Text="{DynamicResource Dock_Properties_Text_Language}"
+                       FontSize="12" FontWeight="SemiBold" Opacity="0.75"
+                       VerticalAlignment="Center" />
+          </Border>
+          <ComboBox ItemsSource="{Binding AvailableLanguages}"
+                    SelectedItem="{Binding SelectedLanguage}"
+                    HorizontalAlignment="Stretch"
+                    FontSize="13" />
+        </StackPanel>
       </StackPanel>
     </ScrollViewer>
   </Grid>

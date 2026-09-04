@@ -8,6 +8,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -73,6 +74,60 @@ internal partial class PropertiesViewModel : Tool
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ContentTypeDisplay))]
     private PropertiesContentType _contentType = PropertiesContentType.None;
+
+    /// <summary>
+    /// <para>当前活动的文本文档引用（语言选择器回写目标）；非文本文档时为 <c>null</c>。</para>
+    /// Reference to the current text document (target for language-selector write-back);
+    /// <c>null</c> when the active document is not a text document.
+    /// </summary>
+    private FileViewModel? _currentTextDocument;
+
+    /// <summary>
+    /// <para>语言选择器是否可见（仅文本文档类型显示）。</para>
+    /// Whether the language selector is visible (shown only for text document types).
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasLanguageSelector;
+
+    /// <summary>
+    /// <para>可用语法语言列表（显示名称），供 ComboBox 绑定。</para>
+    /// Available syntax language list (display names) for ComboBox binding.
+    /// </summary>
+    public ObservableCollection<string> AvailableLanguages { get; } = [];
+
+    /// <summary>
+    /// <para>当前选中的语法语言显示名称；用户在下拉栏切换时触发 <see cref="OnSelectedLanguageChanged"/>。</para>
+    /// Currently selected syntax language display name; triggers <see cref="OnSelectedLanguageChanged"/>
+    /// when the user switches in the dropdown.
+    /// </summary>
+    [ObservableProperty]
+    private string _selectedLanguage = string.Empty;
+
+    /// <summary>
+    /// <para>当用户在语言下拉栏中选择新语言时，将对应的语言标识写回当前文本文档。</para>
+    /// When the user selects a new language in the dropdown, writes the corresponding language id back
+    /// to the current text document.
+    /// </summary>
+    partial void OnSelectedLanguageChanged(string value)
+    {
+        if (_suppressLanguageChange || _currentTextDocument is not { } doc)
+        {
+            return;
+        }
+
+        if (string.IsNullOrEmpty(value))
+        {
+            // 「自动检测」选项：按扩展名重新计算。
+            // "Auto Detect" option: re-resolve by file extension.
+            var autoId = SyntaxLanguageRegistry.GetLanguageId(doc.FilePath ?? doc.Title) ?? string.Empty;
+            doc.Language = autoId;
+        }
+        else
+        {
+            var match = SyntaxLanguageRegistry.GetAllLanguages().FirstOrDefault(l => l.DisplayName == value);
+            doc.Language = match.Id;
+        }
+    }
 
     /// <summary>
     /// <para>本地化后的内容类型标签（属性面板头部徽章）。</para>
@@ -226,6 +281,7 @@ internal partial class PropertiesViewModel : Tool
                 SelectedNodeTitle = string.Empty;
                 HasSelection = false;
                 ContentType = PropertiesContentType.None;
+                ClearLanguageSelector();
             }
             return;
         }
@@ -346,6 +402,7 @@ internal partial class PropertiesViewModel : Tool
             SelectedNodeTitle = string.Empty;
             HasSelection = false;
             ContentType = PropertiesContentType.None;
+            ClearLanguageSelector();
             return;
         }
 
@@ -359,11 +416,76 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FilePath"), doc.FilePath ?? string.Empty));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Encoding"), doc.DetectedEncoding ?? "UTF-8"));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Language"), string.IsNullOrEmpty(doc.Language) ? "plain" : doc.Language));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_LineCount"), doc.LineCount.ToString("N0")));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_CharCount"), doc.CharCount.ToString("N0")));
 
+        // 语言选择器：填充可用语言列表并根据当前 Language 选中对应项。
+        // Language selector: populate available languages and select the one matching the current Language.
+        _currentTextDocument = doc;
+        PopulateLanguageSelector(doc.Language);
+
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for text document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>填充语言下拉栏并根据当前语言标识选中对应项。</para>
+    /// Populates the language dropdown and selects the item matching the current language id.
+    /// </summary>
+    private void PopulateLanguageSelector(string? currentLanguageId)
+    {
+        AvailableLanguages.Clear();
+        var svc = LanguageService.Instance;
+        var autoLabel = svc.GetString("Dock_Properties_Text_LanguageAuto");
+        AvailableLanguages.Add(string.IsNullOrEmpty(autoLabel) ? "Auto Detect" : autoLabel);
+
+        foreach (var lang in SyntaxLanguageRegistry.GetAllLanguages())
+        {
+            AvailableLanguages.Add(lang.DisplayName);
+        }
+
+        // 根据当前语言标识选中对应项；未识别时选中「自动检测」。
+        // Select the item matching the current language id; fall back to "Auto Detect" when unrecognized.
+        var match = SyntaxLanguageRegistry.GetAllLanguages().FirstOrDefault(l => l.Id == currentLanguageId);
+        _suppressLanguageChange = true;
+        try
+        {
+            SelectedLanguage = string.IsNullOrEmpty(match.Id)
+                ? AvailableLanguages[0]
+                : match.DisplayName;
+        }
+        finally
+        {
+            _suppressLanguageChange = false;
+        }
+
+        HasLanguageSelector = true;
+    }
+
+    /// <summary>
+    /// <para>语言选择器变更抑制标志（程序化设置 <see cref="SelectedLanguage"/> 时避免触发回写）。</para>
+    /// Language-selector change suppression flag (prevents write-back when programmatically setting
+    /// <see cref="SelectedLanguage"/>).
+    /// </summary>
+    private bool _suppressLanguageChange;
+
+    /// <summary>
+    /// <para>清除语言选择器状态（隐藏下拉栏、清空引用与列表）。</para>
+    /// Clears the language-selector state (hides the dropdown, clears reference and list).
+    /// </summary>
+    private void ClearLanguageSelector()
+    {
+        _currentTextDocument = null;
+        HasLanguageSelector = false;
+        AvailableLanguages.Clear();
+        _suppressLanguageChange = true;
+        try
+        {
+            SelectedLanguage = string.Empty;
+        }
+        finally
+        {
+            _suppressLanguageChange = false;
+        }
     }
 
     /// <summary>

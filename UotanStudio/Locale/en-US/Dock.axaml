@@ -95,6 +95,7 @@
     <x:String x:Key="Dock_Properties_Text_LineCount">Line Count</x:String>
     <x:String x:Key="Dock_Properties_Text_CharCount">Character Count</x:String>
     <x:String x:Key="Dock_Properties_Text_Language">Language</x:String>
+    <x:String x:Key="Dock_Properties_Text_LanguageAuto">Auto Detect</x:String>
 
     <!-- Device tree document properties panel labels -->
     <x:String x:Key="Dock_Properties_Dtb_FileName">File Name</x:String>
