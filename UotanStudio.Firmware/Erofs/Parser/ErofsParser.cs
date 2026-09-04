@@ -60,8 +60,9 @@ public sealed record ErofsFileEntry(
 /// 支持 flat / inline（tailpacking）/ compressed-full / compressed-compact / chunk-based 布局，
 /// LZ4 / LZMA / DEFLATE / ZSTD 四种算法，以及 dense 目录、共享 xattr 与 fragment 引用。
 /// 未知 incompat 特性位在构造时显式拒绝；INTERLACED_PCLUSTER（仅 PLAIN 簇，读端旋转还原）
-/// 已支持；METABOX 特性（incompat 0x100）可解析超级块与经典 nid 路径，但 metabox 数据流内
-/// 的 inode 定位未实现（遇带 bit63 的 nid 显式报错，无真实样本可交叉验证）。
+/// 已支持；METABOX 特性（incompat 0x100）在构造时读取 metabox inode 数据并缓存，
+/// ReadInode 遇带 bit63 的 nid 时从缓存的 metabox 数据中按槽位索引 * 32 解析紧凑 inode。
+/// 多设备支持：构造时可传入多设备流列表，解析设备表，chunk 数据按 device_id 路由到对应流。
 /// <para>A streaming erofs image parser: holds a seekable source (a FileStream, an externally supplied
 /// Stream, or a lightweight wrapper over in-memory bytes) and reads the superblock, inodes, directory
 /// blocks, compressed indexes and pclusters on demand instead of loading the whole image into memory.
@@ -69,10 +70,11 @@ public sealed record ErofsFileEntry(
 /// fs/erofs/{zmap,dir,data}.c: flat, inline (tailpacking), compressed-full, compressed-compact and
 /// chunk-based layouts, LZ4 / LZMA / DEFLATE / ZSTD algorithms, plus dense directories, shared
 /// xattrs and fragment references. Unknown incompat feature bits are rejected explicitly at
-/// construction; INTERLACED_PCLUSTER (PLAIN clusters only, rotated back on read) is supported; the
-/// METABOX feature (incompat 0x100) parses the superblock and classic-nid paths, but in-stream
-/// inode lookup inside the metabox data stream is not implemented (a bit-63 nid fails loudly; no
-/// real sample is available for cross-validation).</para>
+/// construction; INTERLACED_PCLUSTER (PLAIN clusters only, rotated back on read) is supported;
+/// the METABOX feature (incompat 0x100) reads and caches the metabox inode data at construction
+/// time, and ReadInode resolves bit-63 nids from the cached metabox data by slot-index * 32.
+/// Multi-device support: a constructor accepts a list of device streams, parses the device table,
+/// and routes chunk data reads to the correct device stream by device_id.</para>
 /// </summary>
 public sealed class ErofsParser : IDisposable
 {
@@ -97,6 +99,9 @@ public sealed class ErofsParser : IDisposable
     private readonly ErofsSuperblock _superblock;
     private readonly int _blockSize;
     private readonly bool _hasMetabox;
+    private readonly byte[]? _metaboxData;
+    private readonly Stream?[]? _deviceStreams;
+    private readonly ErofsDeviceSlot[]? _deviceSlots;
     private List<ErofsFileEntry>? _fileTable;
     private ErofsInode? _packedInode;
 
@@ -130,6 +135,35 @@ public sealed class ErofsParser : IDisposable
     public ErofsParser(string filePath)
         : this(OpenFileSource(filePath), ownsStream: true)
     {
+    }
+
+    public ErofsParser(IReadOnlyList<Stream> deviceStreams)
+        : this(ValidateDeviceStreams(deviceStreams)[0], ownsStream: false)
+    {
+        if (deviceStreams.Count < 2) return;
+        var streams = ValidateDeviceStreams(deviceStreams);
+        if (_deviceStreams is not null)
+        {
+            for (var i = 1; i < streams.Length && i < _deviceStreams.Length; i++)
+                _deviceStreams[i] = streams[i];
+        }
+        else
+        {
+            _deviceStreams = new Stream[streams.Length];
+            for (var i = 0; i < streams.Length; i++)
+                _deviceStreams[i] = streams[i];
+        }
+    }
+
+    private static Stream[] ValidateDeviceStreams(IReadOnlyList<Stream> deviceStreams)
+    {
+        ArgumentNullException.ThrowIfNull(deviceStreams);
+        if (deviceStreams.Count == 0)
+            throw new ArgumentException("At least one device stream is required.", nameof(deviceStreams));
+        var streams = new Stream[deviceStreams.Count];
+        for (var i = 0; i < deviceStreams.Count; i++)
+            streams[i] = deviceStreams[i] ?? throw new ArgumentNullException(nameof(deviceStreams), $"Device stream at index {i} is null.");
+        return streams;
     }
 
     private ErofsParser(Stream stream, bool ownsStream)
@@ -187,8 +221,23 @@ public sealed class ErofsParser : IDisposable
                 throw new FormatException($"Image too small to hold an EROFS superblock: {_imageSize} bytes.");
             }
 
-            _superblock = ErofsSuperblock.FromBytes(
-                ReadBytes(ErofsSuperblock.SuperblockOffset, ErofsSuperblock.SuperblockSize, "Superblock"));
+            // 超级块槽位 = 128 + sb_extslots * 16 字节；METABOX 的 s_metabox_nid 位于扩展槽
+            //（superblock 偏移 128，镜像字节 1152..1160）。先读 128 字节主槽位解析出
+            // sb_extslots，再按需扩读完整槽位，使 ErofsSuperblock.FromBytes 能取到扩展字段。
+            // The superblock slot is 128 + sb_extslots * 16 bytes; the METABOX s_metabox_nid lives
+            // in the extended slot (superblock offset 128, image bytes 1152..1160). Read the 128-byte
+            // main slot to learn sb_extslots, then re-read the full slot so FromBytes can reach the
+            // extended fields.
+            var sbCore = ReadBytes(ErofsSuperblock.SuperblockOffset, ErofsSuperblock.SuperblockSize, "Superblock");
+            var preliminarySuperblock = ErofsSuperblock.FromBytes(sbCore);
+            var sbSlotSize = ErofsSuperblock.SuperblockSize
+                             + preliminarySuperblock.SbExtSlots * ErofsSuperblock.ExtSlotSize;
+            _superblock = sbSlotSize > ErofsSuperblock.SuperblockSize
+                ? ErofsSuperblock.FromBytes(ReadBytes(
+                    ErofsSuperblock.SuperblockOffset,
+                    checked((int)Math.Min(sbSlotSize, _imageSize - ErofsSuperblock.SuperblockOffset)),
+                    "Superblock"))
+                : preliminarySuperblock;
             // The kernel only accepts blkszbits in [9, PAGE_SHIFT] (512..65536 bytes).
             // 内核仅接受 blkszbits ∈ [9, PAGE_SHIFT]（512..65536 字节）。
             if (_superblock.BlockSizeBits is < 9 or > 16)
@@ -216,6 +265,34 @@ public sealed class ErofsParser : IDisposable
 
             _hasMetabox = _superblock.HasMetabox;
             _blockSize = _superblock.BlockSize;
+
+            // METABOX 初始化：读取 metabox inode 的全部数据并缓存，供 ReadInode 解析 bit63 nid。
+            // METABOX init: read the full metabox inode data and cache it for bit-63 nid resolution.
+            if (_hasMetabox && _superblock.MetaBoxNid != 0)
+            {
+                _metaboxData = ReadMetaboxData(_superblock.MetaBoxNid);
+            }
+
+            // 多设备表初始化：当 s_extra_devices > 0 且 DEVICE_TABLE 特性开启时，
+            // 在 s_devt_slotoff * blockSize 处解析设备表。
+            // Multi-device table init: parse the device table when s_extra_devices > 0 and the
+            // DEVICE_TABLE feature is set.
+            if (_superblock.HasDeviceTable && _superblock.ExtraDevices > 0)
+            {
+                _deviceStreams = new Stream[_superblock.ExtraDevices + 1];
+                _deviceStreams[0] = _stream;
+                _deviceSlots = new ErofsDeviceSlot[_superblock.ExtraDevices + 1];
+                // 主设备槽位（设备 0）：块数为镜像总块数，映射偏移为 0。
+                // Primary device slot (device 0): total image blocks, mapping offset 0.
+                _deviceSlots[0] = new ErofsDeviceSlot { Blocks = (uint)_superblock.BlockCount64, MappedBlkAddr = 0 };
+                var devTableOffset = (long)_superblock.DevtSlotoff * _blockSize;
+                for (var i = 0; i < (int)_superblock.ExtraDevices; i++)
+                {
+                    var slotOffset = devTableOffset + (long)i * ErofsDeviceSlot.Size;
+                    var slotData = ReadBytes(slotOffset, ErofsDeviceSlot.Size, $"Device slot {i + 1}");
+                    _deviceSlots[i + 1] = ErofsDeviceSlot.FromBytes(slotData);
+                }
+            }
         }
         catch
         {
@@ -360,6 +437,14 @@ public sealed class ErofsParser : IDisposable
     /// </summary>
     public void Dispose()
     {
+        if (_deviceStreams is not null)
+        {
+            for (var i = 1; i < _deviceStreams.Length; i++)
+            {
+                _deviceStreams[i]?.Dispose();
+            }
+        }
+
         if (_ownsStream)
         {
             _stream.Dispose();
@@ -413,6 +498,66 @@ public sealed class ErofsParser : IDisposable
     /// <para>Reads <paramref name="length"/> bytes from the source; validates the range first
     /// (offset &lt;= len and size &lt;= len - offset), then reads exactly via ReadExactly.</para>
     /// </summary>
+    private byte[] ReadMetaboxData(ulong metaboxNid)
+    {
+        var metaboxOffset = _superblock.GetInodeOffset(metaboxNid);
+        if (metaboxOffset < 0 || metaboxOffset > _imageSize - 2)
+            throw new InvalidDataException($"METABOX inode nid {metaboxNid} is out of range.");
+
+        var advise = BinaryPrimitives.ReadUInt16LittleEndian(
+            ReadBytes(metaboxOffset, 2, "METABOX inode advise"));
+        var inodeSize = (advise & ErofsInode.FlagExtended) != 0 ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
+        if (metaboxOffset > _imageSize - inodeSize)
+            throw new InvalidDataException("METABOX inode exceeds the image bounds.");
+
+        var inode = ErofsInode.FromBytes(ReadBytes(metaboxOffset, inodeSize, "METABOX inode"));
+        var dataSize = (long)inode.Size;
+        if (dataSize <= 0) return [];
+        if (dataSize > MaxMetadataComponentSize)
+            throw new InvalidDataException($"METABOX inode data size {dataSize} exceeds the limit of {MaxMetadataComponentSize}.");
+
+        using var buffer = new MemoryStream();
+        switch (inode.DataLayout)
+        {
+            case ErofsInode.DataLayoutInline:
+            {
+                var inlineStart = metaboxOffset + inode.InlineDataOffset;
+                CheckRange(inlineStart, dataSize, "METABOX inline data");
+                CopyFromSource(buffer, inlineStart, dataSize);
+                break;
+            }
+            case ErofsInode.DataLayoutFlat:
+            {
+                var start = checked((long)inode.RawBlockAddress * _blockSize);
+                CheckRange(start, dataSize, "METABOX flat data");
+                CopyFromSource(buffer, start, dataSize);
+                break;
+            }
+            default:
+                throw new InvalidDataException($"Unsupported METABOX inode data layout {inode.DataLayout}.");
+        }
+
+        return buffer.ToArray();
+    }
+
+    private byte[] ReadDeviceBytes(int deviceId, long offset, int length, string what)
+    {
+        if (_deviceStreams is null || deviceId >= _deviceStreams.Length || _deviceStreams[deviceId] is null)
+            return ReadBytes(offset, length, what);
+
+        if (offset < 0 || length < 0)
+            throw new InvalidDataException($"{what} has invalid offset/length.");
+
+        var buffer = new byte[length];
+        lock (_streamLock)
+        {
+            _deviceStreams[deviceId]!.Position = offset;
+            _deviceStreams[deviceId]!.ReadExactly(buffer);
+        }
+
+        return buffer;
+    }
+
     private byte[] ReadBytes(long offset, int length, string what)
     {
         if (offset < 0 || length < 0 || offset > _imageSize || (long)length > _imageSize - offset)
@@ -691,20 +836,31 @@ public sealed class ErofsParser : IDisposable
     private ErofsInode ReadInode(ulong nid)
     {
         // METABOX 特性（incompat 0x100）下，dirent 的 nid 可能带 bit63 标记：低 63 位不是经典
-        // inode 槽号，而是指向 metabox inode 数据流内的紧凑 inode 记录偏移。该流内定位当前
-        // 未实现（erofs-utils 1.8.6 的 mkfs 可生成 metabox 镜像，但本解析器未实现流内寻址，
-        // 无真实样本可交叉验证）；显式失败而非按经典 iloc 算出越界偏移静默误读。superblock
-        // 解析与经典 nid 路径不受影响。
+        // inode 表槽号，而是 metabox inode 数据流（metabox 容器）内的紧凑 inode 槽位索引。
+        // 本解析器把 metabox inode 的全部数据缓存于 _metaboxData，此处按 slot × 32 定位 32 字节
+        // compact 记录。仅支持“纯 32 字节记录”；记录内联携带 xattr/尾部数据/索引表的 metabox
+        // inode 无法读回（写端 ErofsBuilder 也只把纯 flat 的普通文件放入 metabox 容器）。
         // With the METABOX feature (incompat 0x100) a dirent nid may carry bit 63: the low 63 bits
-        // are then not a classic inode slot but an offset of a compact inode record inside the
-        // metabox inode data stream. In-stream addressing is not implemented here (erofs-utils
-        // 1.8.6 mkfs can produce metabox images, but this parser has no in-stream lookup and no
-        // real sample for cross-validation); fail loudly instead of silently misreading through a
-        // bogus classic iloc. Superblock parsing and classic-nid paths are unaffected.
+        // are then not a classic inode-table slot but a compact-inode slot index inside the metabox
+        // inode data stream (the metabox container). The parser caches the full metabox inode data in
+        // _metaboxData and resolves such nids as slot × 32-byte compact records. Only pure 32-byte
+        // records are supported; a metabox inode record carrying inline xattrs/tails/index tables is
+        // not readable here (ErofsBuilder likewise only places plain flat regular files in the
+        // metabox container).
         if (_hasMetabox && (nid & NidMetaboxFlag) != 0)
         {
-            throw new InvalidDataException(
-                $"Inode nid 0x{nid:X16} references the METABOX data stream, which is not supported by this parser.");
+            if (_metaboxData is null || _metaboxData.Length == 0)
+                throw new InvalidDataException(
+                    $"Inode nid 0x{nid:X16} references the METABOX data stream, but no METABOX data was cached.");
+
+            var slotIndex = nid & ~NidMetaboxFlag;
+            var slotOffset = checked((long)slotIndex * ErofsSuperblock.CompactInodeSize);
+            if (slotOffset < 0 || slotOffset + ErofsSuperblock.CompactInodeSize > _metaboxData.Length)
+                throw new InvalidDataException(
+                    $"METABOX slot index {slotIndex} (offset {slotOffset}) is out of range (metabox data size {_metaboxData.Length}).");
+
+            return ErofsInode.FromBytes(
+                _metaboxData.AsSpan((int)slotOffset, ErofsSuperblock.CompactInodeSize));
         }
 
         var offset = _superblock.GetInodeOffset(nid);
@@ -935,11 +1091,13 @@ public sealed class ErofsParser : IDisposable
         {
             var chunkLen = (int)Math.Min(chunkSize, remaining);
             ulong startBlk;
+            var deviceId = 0;
             if (usesIndexes)
             {
                 var slot = index.AsSpan(i * 8, 8);
                 startBlk = ((ulong)BinaryPrimitives.ReadUInt16LittleEndian(slot) << 32)
                            | BinaryPrimitives.ReadUInt32LittleEndian(slot.Slice(4));
+                deviceId = BinaryPrimitives.ReadUInt16LittleEndian(slot.Slice(2));
             }
             else
             {
@@ -964,9 +1122,18 @@ public sealed class ErofsParser : IDisposable
                 continue;
             }
 
-            var dataStart = checked((long)startBlk * _blockSize);
-            CheckRange(dataStart, chunkLen, "Chunk data");
-            CopyFromSource(output, dataStart, chunkLen);
+            if (deviceId > 0 && _deviceStreams is not null && deviceId < _deviceStreams.Length)
+            {
+                var devOffset = checked((long)startBlk * _blockSize);
+                var devData = ReadDeviceBytes(deviceId, devOffset, chunkLen, "Multi-device chunk data");
+                output.Write(devData, 0, devData.Length);
+            }
+            else
+            {
+                var dataStart = checked((long)startBlk * _blockSize);
+                CheckRange(dataStart, chunkLen, "Chunk data");
+                CopyFromSource(output, dataStart, chunkLen);
+            }
             remaining -= chunkLen;
         }
     }

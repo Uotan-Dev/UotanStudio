@@ -307,11 +307,21 @@ internal static class ErofsCompression
         }
 
         var dictionarySize = ResolveLzmaDictionarySize(sourceLength, dictSize);
+        // LZMA 模型参数：posStateBits(pb)=2 / litContextBits(lc)=3 / litPosBits(lp)=0（与 MicroLZMA
+        // 属性字节公式 (pb*5+lp)*9+lc 对应的标准 0x5D 一致）。参数必须在压缩属性与首字节占位处
+        // 保持同一来源，否则解码端恢复的属性与编码端实际使用的不符，回环会 DataError。
+        // LZMA model parameters: pb=2 / lc=3 / lp=0 (the standard 0x5D property byte derived from
+        // (pb*5+lp)*9+lc). They must share a single source between the encoder properties and the
+        // first-byte placeholder, otherwise the decoder restores properties that differ from what
+        // the encoder actually used and the round trip fails with a DataError.
+        const int pb = 2;
+        const int lp = 0;
+        const int lc = 3;
         var encoder = new Encoder();
         encoder.SetCoderProperties(
             [CoderPropID.DictionarySize, CoderPropID.PosStateBits, CoderPropID.LitContextBits,
                 CoderPropID.LitPosBits, CoderPropID.Algorithm, CoderPropID.NumFastBytes],
-            [dictionarySize, 2, 3, 0, compressionLevel >= 5 ? 2 : 1, LzmaNumFastBytes(compressionLevel)]);
+            [dictionarySize, pb, lc, lp, compressionLevel >= 5 ? 2 : 1, LzmaNumFastBytes(compressionLevel)]);
 
         using var input = new MemoryStream(source, sourceIndex, sourceLength, writable: false);
         using var output = new BoundedWriteStream(target, targetIndex, targetLength);
@@ -323,7 +333,7 @@ internal static class ErofsCompression
         // pb=2/lp=0/lc=3 → ~0x5D = 0xA2) and replaces the raw LZMA1 stream's fixed leading 0x00
         // (liblzma MicroLZMA convention, cf. compressor_liblzma.c). So the encoder's first output
         // byte (always 0x00) must be dropped in favour of the ~props placeholder.
-        output.WriteByte(unchecked((byte)~(2 * 5 + 3)));
+        output.WriteByte(unchecked((byte)~((pb * 5 + lp) * 9 + lc)));
         using var raw = new MemoryStream();
         encoder.Code(input, raw, sourceLength, sourceLength, null);
         var rawBytes = raw.GetBuffer();
