@@ -53,7 +53,7 @@ public sealed class LogService : IUnifiedLog
     private readonly ConcurrentQueue<LogEntry> _entries = new();
     private readonly object _subscribersLock = new();
     private readonly List<EventHandler<LogEntry>> _subscribers = [];
-    private LogLevel _minimumLevel = LogLevel.Trace;
+    private volatile LogLevel _minimumLevel = LogLevel.Trace;
     private int _maxQueueSize = 5000;
 
     /// <summary>

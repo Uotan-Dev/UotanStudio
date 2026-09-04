@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
@@ -20,17 +21,23 @@ public sealed class McpHostService
     /// <summary><para>全局单例。</para>The global singleton.</summary>
     public static McpHostService Instance { get; } = new();
 
+    private readonly Lock _sync = new();
     private ServiceProvider? _provider;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Task? _acceptLoop;
+    private bool _isRunning;
 
     private McpHostService()
     {
     }
 
     /// <summary><para>是否正在监听。</para>Whether the host is listening.</summary>
-    public bool IsRunning { get; private set; }
+    public bool IsRunning
+    {
+        get { lock (_sync) return _isRunning; }
+        private set => _isRunning = value;
+    }
 
     /// <summary>
     /// <para>在指定端口启动 MCP 服务器（先停止已有实例）；工具经 DI 发现
@@ -41,19 +48,22 @@ public sealed class McpHostService
     /// <param name="port">监听端口。<para>Listening port.</para></param>
     public void Start(int port)
     {
-        Stop();
+        lock (_sync)
+        {
+            Stop();
 
-        var services = new ServiceCollection();
-        services.AddMcpServer(_ => { });
-        services.AddSingleton<UotanStudioMcpTools>();
-        _provider = services.BuildServiceProvider();
+            var services = new ServiceCollection();
+            services.AddMcpServer(_ => { });
+            services.AddSingleton<UotanStudioMcpTools>();
+            _provider = services.BuildServiceProvider();
 
-        _cts = new CancellationTokenSource();
-        _listener = new TcpListener(IPAddress.Loopback, port);
-        _listener.Start();
-        _acceptLoop = AcceptLoopAsync(_provider, _listener, _cts.Token);
-        IsRunning = true;
-        LogService.Instance.Write(LogLevel.Info, "McpHost", $"MCP server listening on 127.0.0.1:{port}");
+            _cts = new CancellationTokenSource();
+            _listener = new TcpListener(IPAddress.Loopback, port);
+            _listener.Start();
+            _acceptLoop = AcceptLoopAsync(_provider, _listener, _cts.Token);
+            IsRunning = true;
+            LogService.Instance.Write(LogLevel.Info, "McpHost", $"MCP server listening on 127.0.0.1:{port}");
+        }
     }
 
     /// <summary>
@@ -62,23 +72,26 @@ public sealed class McpHostService
     /// </summary>
     public void Stop()
     {
-        _cts?.Cancel();
-        try
+        lock (_sync)
         {
-            _listener?.Stop();
-        }
-        catch (Exception)
-        {
-            // 忽略停止期间的监听异常。
-            // Ignore listener exceptions during shutdown.
-        }
+            _cts?.Cancel();
+            try
+            {
+                _listener?.Stop();
+            }
+            catch (Exception)
+            {
+                // 忽略停止期间的监听异常。
+                // Ignore listener exceptions during shutdown.
+            }
 
-        _cts?.Dispose();
-        _provider?.Dispose();
-        _provider = null;
-        _listener = null;
-        _cts = null;
-        IsRunning = false;
+            _cts?.Dispose();
+            _provider?.Dispose();
+            _provider = null;
+            _listener = null;
+            _cts = null;
+            IsRunning = false;
+        }
     }
 
     /// <summary>

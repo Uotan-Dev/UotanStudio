@@ -51,23 +51,23 @@ public static class FormatDetector
         var fileExt = System.IO.Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
         if (!string.IsNullOrEmpty(fileExt))
         {
-            lock (Handlers)
+            List<IFormatHandler> snapshot;
+            lock (Handlers) { snapshot = [.. Handlers]; }
+
+            foreach (var handler in snapshot)
             {
-                foreach (var handler in Handlers)
+                if (handler.FileExtensions.Contains(fileExt))
                 {
-                    if (handler.FileExtensions.Contains(fileExt))
+                    try
                     {
-                        try
+                        if (handler.CanHandle(filePath))
                         {
-                            if (handler.CanHandle(filePath))
-                            {
-                                return handler;
-                            }
+                            return handler;
                         }
-                        catch
-                        {
-                            // A broken handler must not break detection of others.
-                        }
+                    }
+                    catch
+                    {
+                        // A broken handler must not break detection of others.
                     }
                 }
             }
@@ -75,21 +75,21 @@ public static class FormatDetector
 
         // 阶段二：无扩展名或扩展名未命中时，回落到按内容嗅探。
         // Phase 2: fall back to content sniffing when there is no extension or none matched.
-        lock (Handlers)
+        List<IFormatHandler> sniffSnapshot;
+        lock (Handlers) { sniffSnapshot = [.. Handlers]; }
+
+        foreach (var handler in sniffSnapshot)
         {
-            foreach (var handler in Handlers)
+            try
             {
-                try
+                if (handler.CanHandle(filePath))
                 {
-                    if (handler.CanHandle(filePath))
-                    {
-                        return handler;
-                    }
+                    return handler;
                 }
-                catch
-                {
-                    // A broken handler must not break detection of others.
-                }
+            }
+            catch
+            {
+                // A broken handler must not break detection of others.
             }
         }
         return null;
