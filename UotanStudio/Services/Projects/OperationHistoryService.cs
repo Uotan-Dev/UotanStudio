@@ -130,6 +130,7 @@ public sealed class OperationHistoryService
 
     private readonly Stack<HistoryEntry> _undoStack = new();
     private readonly Stack<HistoryEntry> _redoStack = new();
+    private readonly List<HistoryEntry> _trimBuffer = new(Capacity);
 
     private OperationHistoryService()
     {
@@ -182,18 +183,20 @@ public sealed class OperationHistoryService
         {
             // 丢弃最旧的超额条目：弹出全部，保留最新 Capacity 条再按原顺序还原。
             // Drop the oldest excess entries: pop everything, keep the newest Capacity entries,
-            // then restore them in order (all[0] is the newest, all[^1] the oldest).
-            var all = new List<HistoryEntry>(_undoStack.Count);
+            // then restore them in order (buffer[0] is the newest, buffer[^1] the oldest).
+            _trimBuffer.Clear();
             while (_undoStack.Count > 0)
             {
-                all.Add(_undoStack.Pop());
+                _trimBuffer.Add(_undoStack.Pop());
             }
 
-            var keep = Math.Min(all.Count, Capacity);
+            var keep = Math.Min(_trimBuffer.Count, Capacity);
             for (var i = keep - 1; i >= 0; i--)
             {
-                _undoStack.Push(all[i]);
+                _undoStack.Push(_trimBuffer[i]);
             }
+
+            _trimBuffer.Clear();
         }
     }
 
