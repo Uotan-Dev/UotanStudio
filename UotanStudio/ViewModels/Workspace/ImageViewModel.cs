@@ -606,7 +606,14 @@ internal partial class ImageViewModel : Tool
                 "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(source, outputDir)),
                 // 文件系统镜像：用对应解析器级联解出内部文件系统内容。
                 // Filesystem images: cascade into the internal filesystem contents with the matching parser.
-                "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(source, outputDir, name),
+                "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(source, outputDir, name,
+                    new Progress<(int processed, int total)>(p =>
+                    {
+                        if (p.total > 0)
+                        {
+                            ProgressPercent = (double)p.processed / p.total * 100;
+                        }
+                    })),
                 _ => FirmwareOpResult.Fail($"Unsupported image format: {image.Format}  不支持的镜像格式：{image.Format}")
             };
 
@@ -1144,7 +1151,7 @@ internal partial class ImageViewModel : Tool
     /// FileManagerEditorViewModel.DetectFilesystem: ext4 0xEF53@1080, erofs 0xE0F5E1E2@1024,
     /// f2fs 0xF2F52010@1024.)
     /// </summary>
-    private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name)
+    private static async Task<FirmwareOpResult> ExtractRawAsync(string sourcePath, string outputDir, string name, IProgress<(int processed, int total)>? progress = null)
     {
         // 读取 1082 字节头部：ext4 魔数 0xEF53 位于 1080、erofs/f2fs 魔数位于 1024。
         // Read a 1082-byte header: ext4 magic 0xEF53 at 1080, erofs/f2fs magic at 1024.
@@ -1158,7 +1165,7 @@ internal partial class ImageViewModel : Tool
             return await Task.Run(() =>
             {
                 using var parser = new Ext4Parser(sourcePath);
-                parser.ExtractToDirectory(outputDir);
+                parser.ExtractToDirectory(outputDir, progress: progress);
                 var entries = parser.ListFiles();
                 return new FirmwareOpResult
                 {
@@ -1176,7 +1183,7 @@ internal partial class ImageViewModel : Tool
             return await Task.Run(() =>
             {
                 using var parser = new ErofsParser(sourcePath);
-                parser.ExtractToDirectory(outputDir);
+                parser.ExtractToDirectory(outputDir, progress: progress);
                 var files = parser.EnumerateFiles();
                 return new FirmwareOpResult
                 {
@@ -1194,7 +1201,7 @@ internal partial class ImageViewModel : Tool
             return await Task.Run(() =>
             {
                 using var parser = new F2fsParser(sourcePath);
-                parser.ExtractToDirectory(outputDir);
+                parser.ExtractToDirectory(outputDir, progress: progress);
                 var entries = parser.ListFiles();
                 return new FirmwareOpResult
                 {

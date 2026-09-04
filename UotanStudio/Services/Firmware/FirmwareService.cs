@@ -1021,9 +1021,10 @@ public sealed class FirmwareService
     /// </summary>
     /// <param name="imagePath">The filesystem image file path. <para>文件系统镜像文件路径。</para></param>
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
+    /// <param name="progress">Optional progress reporter as (processed file count, total file count). <para>可选进度回调，值为 (已处理文件数, 文件总数)。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, CancellationToken cancellationToken = default)
+    public async Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default)
     {
         return await Task.Run<FirmwareOpResult>(() =>
         {
@@ -1043,7 +1044,7 @@ public sealed class FirmwareService
                     && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
                 {
                     using var parser = new Ext4Parser(imagePath);
-                    parser.ExtractToDirectory(outputDirectory);
+                    parser.ExtractToDirectory(outputDirectory, progress: progress);
                     var entries = parser.ListFiles();
                     return new FirmwareOpResult
                     {
@@ -1058,7 +1059,7 @@ public sealed class FirmwareService
                     && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
                 {
                     using var parser = new ErofsParser(imagePath);
-                    parser.ExtractToDirectory(outputDirectory);
+                    parser.ExtractToDirectory(outputDirectory, progress: progress);
                     var files = parser.EnumerateFiles();
                     return new FirmwareOpResult
                     {
@@ -1073,7 +1074,7 @@ public sealed class FirmwareService
                     && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
                 {
                     using var parser = new F2fsParser(imagePath);
-                    parser.ExtractToDirectory(outputDirectory);
+                    parser.ExtractToDirectory(outputDirectory, progress: progress);
                     var entries = parser.ListFiles();
                     return new FirmwareOpResult
                     {
