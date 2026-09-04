@@ -123,7 +123,11 @@ public sealed class ArscFormatHandler : IFormatHandler
         }
     }
 
-    private static ResourceTable Load(string filePath) => ArscParser.Parse(System.IO.File.ReadAllBytes(filePath));
+    private static ResourceTable Load(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        return ArscParser.Parse(fs);
+    }
 
     private static string FormatTable(ResourceTable table)
     {

@@ -206,45 +206,67 @@ public sealed class AvbFormatHandler : IFormatHandler
     {
         try
         {
-            var bytes = File.ReadAllBytes(filePath);
-            var result = AvbVerifier.VerifyVBMeta(bytes);
-            if (result.IsSigned && result.VBMetaHeader.HasValue)
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, FileOptions.SequentialScan);
+            var imageLength = fs.Length;
+
+            // 路径一：独立 VBMeta 镜像（头部含 AVB0 魔数）。仅读取头 + auth + aux 块，不载入整文件。
+            // Path 1: standalone VBMeta image (AVB0 magic at head). Read only header + auth + aux blocks.
+            if (imageLength >= AvbVBMetaImageHeader.Size)
             {
-                // Extract the raw data blocks (auth + auxiliary) as separate files.
-                Directory.CreateDirectory(outputDirectory);
-                var header = result.VBMetaHeader.Value;
-                var baseName = Path.GetFileNameWithoutExtension(filePath);
-                var authPath = Path.Combine(outputDirectory, $"{baseName}.authentication.bin");
-                var auxPath = Path.Combine(outputDirectory, $"{baseName}.auxiliary.bin");
-                var authLen = (int)Math.Min(header.AuthenticationDataBlockSize, (ulong)Math.Max(0, bytes.Length - AvbVBMetaImageHeader.Size));
-                var auxLen = (int)Math.Min(header.AuxiliaryDataBlockSize, (ulong)Math.Max(0, bytes.Length - AvbVBMetaImageHeader.Size - authLen));
-                File.WriteAllBytes(authPath, bytes.AsSpan(AvbVBMetaImageHeader.Size, authLen).ToArray());
-                File.WriteAllBytes(auxPath, bytes.AsSpan(AvbVBMetaImageHeader.Size + authLen, auxLen).ToArray());
-                return Task.FromResult(FirmwareOpResult.Ok(
-                    $"Extracted VBMeta data blocks to {outputDirectory}", entries: [authPath, auxPath]));
+                var vmResult = AvbVerifier.VerifyVBMetaFromStream(fs, imageLength);
+                if (vmResult.IsSigned && vmResult.VBMetaHeader.HasValue)
+                {
+                    Directory.CreateDirectory(outputDirectory);
+                    var header = vmResult.VBMetaHeader.Value;
+                    var baseName = Path.GetFileNameWithoutExtension(filePath);
+                    var authPath = Path.Combine(outputDirectory, $"{baseName}.authentication.bin");
+                    var auxPath = Path.Combine(outputDirectory, $"{baseName}.auxiliary.bin");
+                    var fileAvailable = imageLength - AvbVBMetaImageHeader.Size;
+                    var authLen = (int)Math.Min(header.AuthenticationDataBlockSize, (ulong)Math.Max(0, fileAvailable));
+                    var auxAvailable = fileAvailable - authLen;
+                    var auxLen = (int)Math.Min(header.AuxiliaryDataBlockSize, (ulong)Math.Max(0, auxAvailable));
+
+                    fs.Position = AvbVBMetaImageHeader.Size;
+                    var authData = new byte[authLen];
+                    fs.ReadExactly(authData);
+                    File.WriteAllBytes(authPath, authData);
+
+                    var auxData = new byte[auxLen];
+                    fs.ReadExactly(auxData);
+                    File.WriteAllBytes(auxPath, auxData);
+
+                    return Task.FromResult(FirmwareOpResult.Ok(
+                        $"Extracted VBMeta data blocks to {outputDirectory}", entries: [authPath, auxPath]));
+                }
             }
 
-            // AVB footer on a boot image: extract the auth data block.
-            var footerResult = AvbVerifier.Verify(bytes);
-            if (footerResult.Footer.HasValue && footerResult.VBMetaHeader.HasValue &&
-                (footerResult.IsValid || footerResult.VBMetaHeader.Value.AlgorithmType == AvbSignatureVerifier.AlgorithmNone))
+            // 路径二：带 AVB 尾部的镜像（boot/vendor_boot 等）。仅读取尾部 + VBMeta 区域。
+            // Path 2: image with AVB footer (boot/vendor_boot etc.). Read only tail + VBMeta region.
+            if (imageLength >= AvbFooter.Size)
             {
-                var f = footerResult.Footer.Value;
-                var imageLength = (ulong)bytes.Length;
-                if (f.VbmetaOffset > imageLength ||
-                    f.VbmetaSize > imageLength - f.VbmetaOffset ||
-                    f.VbmetaOffset > int.MaxValue ||
-                    f.VbmetaSize > int.MaxValue)
+                var footerResult = AvbVerifier.VerifyFromStream(fs, imageLength);
+                if (footerResult.Footer.HasValue && footerResult.VBMetaHeader.HasValue &&
+                    (footerResult.IsValid || footerResult.VBMetaHeader.Value.AlgorithmType == AvbSignatureVerifier.AlgorithmNone))
                 {
-                    return Task.FromResult(FirmwareOpResult.Fail("AVB footer VBMeta range is invalid."));
-                }
+                    var f = footerResult.Footer.Value;
+                    var imgLen = (ulong)imageLength;
+                    if (f.VbmetaOffset > imgLen ||
+                        f.VbmetaSize > imgLen - f.VbmetaOffset ||
+                        f.VbmetaOffset > long.MaxValue ||
+                        f.VbmetaSize > long.MaxValue)
+                    {
+                        return Task.FromResult(FirmwareOpResult.Fail("AVB footer VBMeta range is invalid."));
+                    }
 
-                Directory.CreateDirectory(outputDirectory);
-                var authPath2 = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(filePath)}.vbmeta.bin");
-                var authData = bytes.AsSpan((int)f.VbmetaOffset, (int)f.VbmetaSize).ToArray();
-                File.WriteAllBytes(authPath2, authData);
-                return Task.FromResult(FirmwareOpResult.Ok(
-                    $"Extracted VBMeta image to {authPath2}", entries: [authPath2]));
+                    Directory.CreateDirectory(outputDirectory);
+                    var vbmetaPath = Path.Combine(outputDirectory, $"{Path.GetFileNameWithoutExtension(filePath)}.vbmeta.bin");
+                    fs.Position = (long)f.VbmetaOffset;
+                    var vbmetaData = new byte[(int)f.VbmetaSize];
+                    fs.ReadExactly(vbmetaData);
+                    File.WriteAllBytes(vbmetaPath, vbmetaData);
+                    return Task.FromResult(FirmwareOpResult.Ok(
+                        $"Extracted VBMeta image to {vbmetaPath}", entries: [vbmetaPath]));
+                }
             }
 
             return Task.FromResult(FirmwareOpResult.Fail("File is not an AVB-signed image or VBMeta image."));

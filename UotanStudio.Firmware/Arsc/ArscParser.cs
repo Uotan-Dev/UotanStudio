@@ -31,6 +31,35 @@ public static class ArscParser
     /// </summary>
     /// <param name="data">ARSC 字节。<para>ARSC bytes.</para></param>
     /// <returns>解析后的资源表。<para>The parsed resource table.</para></returns>
+    /// <summary>
+    /// 从流读取 ARSC 数据并解析为资源表模型。单次分配，避免 <see cref="File.ReadAllBytes(string)"/> 的双倍分配。
+    /// <para>Reads ARSC data from a stream and parses it into a resource-table model. Single allocation,
+    /// avoids the double allocation of <see cref="File.ReadAllBytes(string)"/>.</para>
+    /// </summary>
+    /// <param name="stream">可读流。<para>A readable stream.</para></param>
+    /// <returns>解析后的资源表。<para>The parsed resource table.</para></returns>
+    public static ResourceTable Parse(Stream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        if (stream.CanSeek)
+        {
+            var length = stream.Length;
+            if (length > Array.MaxLength)
+            {
+                throw new ArscException($"ARSC stream length {length} exceeds maximum array length.");
+            }
+            var data = new byte[(int)length];
+            stream.ReadExactly(data);
+            return Parse(data);
+        }
+
+        // 不可定位流：读入 MemoryStream 后转数组（与旧行为一致，但仅限非 seek 场景）。
+        // Non-seekable stream: read into a MemoryStream then convert (same as before, only for non-seek).
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return Parse(ms.ToArray());
+    }
+
     public static ResourceTable Parse(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);

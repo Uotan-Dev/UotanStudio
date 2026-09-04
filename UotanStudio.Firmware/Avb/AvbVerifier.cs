@@ -210,6 +210,152 @@ public static class AvbVerifier
         return result;
     }
 
+    /// <summary>Verifies an AVB-signed image from a seekable stream, reading only the footer and the VBMeta region instead of loading the whole file. <para>从可定位流验证 AVB 签名镜像，仅读取尾部和 VBMeta 区域而非整文件。</para></summary>
+    /// <param name="stream">The seekable image stream. <para>可定位的镜像流。</para></param>
+    /// <param name="imageLength">The total image length in bytes. <para>镜像总字节数。</para></param>
+    /// <returns>The verification result. <para>验证结果。</para></returns>
+    public static AvbVerifyResult VerifyFromStream(Stream stream, long imageLength)
+    {
+        var result = new AvbVerifyResult();
+        if (imageLength < AvbFooter.Size)
+        {
+            result.ErrorMessage = "Image too small to contain an AVB footer.";
+            return result;
+        }
+
+        // 仅读取尾部 84 字节，不载入整文件。
+        // Read only the 84-byte tail; do not load the entire file.
+        Span<byte> tail = stackalloc byte[AvbFooter.Size];
+        stream.Position = imageLength - AvbFooter.Size;
+        stream.ReadExactly(tail);
+        var footer = AvbFooter.TryLoad(tail);
+        if (footer == null)
+        {
+            result.ErrorMessage = "No AVB footer found.";
+            return result;
+        }
+
+        result.IsSigned = true;
+        result.Footer = footer;
+        var footerOffset = (ulong)(imageLength - AvbFooter.Size);
+        if (footer.Value.OriginalImageSize > footer.Value.VbmetaOffset ||
+            footer.Value.VbmetaOffset > footerOffset ||
+            footer.Value.VbmetaSize > footerOffset - footer.Value.VbmetaOffset ||
+            footer.Value.VbmetaSize < AvbVBMetaImageHeader.Size ||
+            footer.Value.VbmetaOffset > long.MaxValue ||
+            footer.Value.VbmetaSize > long.MaxValue)
+        {
+            result.ErrorMessage = "Invalid AVB footer image size, VBMeta offset, or VBMeta size.";
+            return result;
+        }
+
+        // 仅读取 VBMeta 区域（头 + auth + aux），不载入整文件。
+        // Read only the VBMeta region (header + auth + aux); do not load the entire file.
+        var readOffset = (long)footer.Value.VbmetaOffset;
+        var readSize = (int)footer.Value.VbmetaSize;
+        var vbmeta = new byte[readSize];
+        stream.Position = readOffset;
+        stream.ReadExactly(vbmeta);
+
+        AvbVBMetaImageHeader header;
+        try
+        {
+            header = AvbVBMetaImageHeader.FromBytes(vbmeta);
+        }
+        catch (Exception ex)
+        {
+            result.ErrorMessage = ex.Message;
+            return result;
+        }
+
+        result.VBMetaHeader = header;
+        if (!header.IsValid())
+        {
+            result.ErrorMessage = "Invalid VBMeta header.";
+            return result;
+        }
+
+        if (!TryValidateVbmetaRanges(header, (ulong)vbmeta.Length, out var rangeError))
+        {
+            result.ErrorMessage = rangeError;
+            return result;
+        }
+
+        if (!AvbSignatureVerifier.TryGetKeySizeAndHash(header.AlgorithmType, out _, out _))
+        {
+            result.ErrorMessage = $"Unknown VBMeta algorithm type {header.AlgorithmType}.";
+            return result;
+        }
+
+        var signatureResult = AvbSignatureVerifier.Verify(vbmeta);
+        if (header.AlgorithmType == AvbSignatureVerifier.AlgorithmNone)
+        {
+            result.ErrorMessage = "VBMeta algorithm NONE is unsigned.";
+            return result;
+        }
+
+        result.IsValid = signatureResult.HashIsValid && signatureResult.SignatureIsValid;
+        if (!result.IsValid)
+        {
+            result.ErrorMessage = signatureResult.ErrorMessage ?? "VBMeta hash or embedded-key signature verification failed.";
+        }
+
+        return result;
+    }
+
+    /// <summary>Validates a standalone VBMeta image from a seekable stream, reading only the header and declared block sizes. <para>从可定位流验证独立 VBMeta 镜像，仅读取头部和声明的块大小。</para></summary>
+    /// <param name="stream">The seekable VBMeta stream. <para>可定位的 VBMeta 流。</para></param>
+    /// <param name="imageLength">The total image length in bytes. <para>镜像总字节数。</para></param>
+    /// <returns>The verification result. <para>验证结果。</para></returns>
+    public static AvbVerifyResult VerifyVBMetaFromStream(Stream stream, long imageLength)
+    {
+        var result = new AvbVerifyResult();
+        if (imageLength < AvbVBMetaImageHeader.Size)
+        {
+            result.ErrorMessage = "Image too small to contain a VBMeta header.";
+            return result;
+        }
+
+        // 仅读取 256 字节头部，不载入整文件。
+        // Read only the 256-byte header; do not load the entire file.
+        Span<byte> headerBytes = stackalloc byte[AvbVBMetaImageHeader.Size];
+        stream.Position = 0;
+        stream.ReadExactly(headerBytes);
+
+        AvbVBMetaImageHeader header;
+        try
+        {
+            header = AvbVBMetaImageHeader.FromBytes(headerBytes);
+        }
+        catch (Exception ex)
+        {
+            result.ErrorMessage = ex.Message;
+            return result;
+        }
+
+        if (!header.IsValid())
+        {
+            result.ErrorMessage = "Invalid VBMeta magic (expected AVB0).";
+            return result;
+        }
+
+        result.VBMetaHeader = header;
+        if (!TryValidateVbmetaRanges(header, (ulong)imageLength, out var error, allowTrailingPadding: true))
+        {
+            result.ErrorMessage = error;
+            return result;
+        }
+
+        result.IsSigned = true;
+        if (header.AlgorithmType == AvbSignatureVerifier.AlgorithmNone)
+        {
+            result.ErrorMessage = "VBMeta algorithm NONE is unsigned.";
+            return result;
+        }
+
+        return result;
+    }
+
     private static bool TryValidateVbmetaRanges(AvbVBMetaImageHeader header, ulong vbmetaSize, out string? error, bool allowTrailingPadding = false)
     {
         if (header.AuthenticationDataBlockSize > ulong.MaxValue - header.AuxiliaryDataBlockSize)
