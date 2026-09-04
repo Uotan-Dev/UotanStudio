@@ -123,6 +123,48 @@ internal sealed class Ext4Superblock
     public ushort DescSize { get; private init; }
 
     /// <summary>
+    /// Default hash version for directory indexes (s_def_hash_version); 4 = HALF_MD4.
+    /// <para>目录索引默认哈希版本（s_def_hash_version）；4 = HALF_MD4。</para>
+    /// </summary>
+    public byte DefHashVersion { get; private init; }
+
+    /// <summary>
+    /// Journal inode number (s_journal_inum); typically 8.
+    /// <para>日志 inode 号（s_journal_inum）；通常为 8。</para>
+    /// </summary>
+    public uint JournalInum { get; private init; }
+
+    /// <summary>
+    /// Head of the orphan inode list (s_last_orphan); 0 = empty.
+    /// <para>孤儿 inode 链表头（s_last_orphan）；0 = 空。</para>
+    /// </summary>
+    public uint LastOrphan { get; private init; }
+
+    /// <summary>
+    /// Filesystem state (s_state); 1 = clean, 2 = errors.
+    /// <para>文件系统状态（s_state）；1 = 正常，2 = 有错误。</para>
+    /// </summary>
+    public ushort State { get; private init; }
+
+    /// <summary>
+    /// UUID of the filesystem (s_uuid, 16 bytes).
+    /// <para>文件系统 UUID（s_uuid，16 字节）。</para>
+    /// </summary>
+    public byte[] Uuid { get; private init; } = [];
+
+    /// <summary>
+    /// Hash seed for directory indexes (s_hash_seed, 4 × uint32).
+    /// <para>目录索引哈希种子（s_hash_seed，4 个 uint32）。</para>
+    /// </summary>
+    public uint[] HashSeed { get; private init; } = [0, 0, 0, 0];
+
+    /// <summary>
+    /// Superblock metadata checksum (s_checksum, CRC32c).
+    /// <para>超级块元数据校验和（s_checksum，CRC32c）。</para>
+    /// </summary>
+    public uint Checksum { get; private init; }
+
+    /// <summary>
     /// Computed block size in bytes (1024 &lt;&lt; s_log_block_size).
     /// <para>计算得到的块大小（字节，1024 &lt;&lt; s_log_block_size）。</para>
     /// </summary>
@@ -175,14 +217,29 @@ internal sealed class Ext4Superblock
             BlocksPerGroup = BinaryPrimitives.ReadUInt32LittleEndian(span[32..36]),
             InodesPerGroup = BinaryPrimitives.ReadUInt32LittleEndian(span[40..44]),
             Magic = BinaryPrimitives.ReadUInt16LittleEndian(span[56..58]),
+            State = BinaryPrimitives.ReadUInt16LittleEndian(span[58..60]),
             RevLevel = BinaryPrimitives.ReadUInt32LittleEndian(span[76..80]),
             InodeSize = BinaryPrimitives.ReadUInt16LittleEndian(span[88..90]),
             FeatureCompat = BinaryPrimitives.ReadUInt32LittleEndian(span[92..96]),
             FeatureIncompat = BinaryPrimitives.ReadUInt32LittleEndian(span[96..100]),
             FeatureRoCompat = BinaryPrimitives.ReadUInt32LittleEndian(span[100..104]),
+            Uuid = span[104..120].ToArray(),
+            DefHashVersion = span[234],
+            JournalInum = BinaryPrimitives.ReadUInt32LittleEndian(span[224..228]),
+            LastOrphan = BinaryPrimitives.ReadUInt32LittleEndian(span[232..236]),
+            HashSeed =
+            [
+                BinaryPrimitives.ReadUInt32LittleEndian(span[236..240]),
+                BinaryPrimitives.ReadUInt32LittleEndian(span[240..244]),
+                BinaryPrimitives.ReadUInt32LittleEndian(span[244..248]),
+                BinaryPrimitives.ReadUInt32LittleEndian(span[248..252]),
+            ],
             DescSize = BinaryPrimitives.ReadUInt16LittleEndian(span[254..256]),
             BlocksCountHi = BinaryPrimitives.ReadUInt32LittleEndian(span[336..340]),
             FreeBlocksCountHi = BinaryPrimitives.ReadUInt32LittleEndian(span[344..348]),
+            Checksum = span.Length >= 360 + 60
+                ? BinaryPrimitives.ReadUInt32LittleEndian(span[356..360])
+                : 0u,
         };
         if (!result.IsValid)
         {

@@ -100,6 +100,12 @@ internal sealed record Ext4BlockGroup
     public ulong InodeTable => ((ulong)InodeTableHi << 32) | InodeTableLo;
 
     /// <summary>
+    /// Block group descriptor checksum (bg_checksum).
+    /// <para>块组描述符校验和（bg_checksum）。</para>
+    /// </summary>
+    public ushort Checksum { get; init; }
+
+    /// <summary>
     /// Parses one group descriptor. <paramref name="data"/> must be at least
     /// <paramref name="descSize"/> bytes; 64-bit fields are only read when
     /// <paramref name="descSize"/> is 64 or greater.
@@ -122,6 +128,7 @@ internal sealed record Ext4BlockGroup
             FreeBlocksCountLo = BinaryPrimitives.ReadUInt16LittleEndian(data[12..14]),
             FreeInodesCountLo = BinaryPrimitives.ReadUInt16LittleEndian(data[14..16]),
             UsedDirsCountLo = BinaryPrimitives.ReadUInt16LittleEndian(data[16..18]),
+            Checksum = BinaryPrimitives.ReadUInt16LittleEndian(data[30..32]),
         };
 
         if (descSize >= 64)

@@ -140,7 +140,9 @@ internal static class Ext4Extent
         }
 
         var leafOffset = 12 + found * 12;
-        var eiLeafLo = BinaryPrimitives.ReadUInt32LittleEndian(block[leafOffset..(leafOffset + 4)]);
+        // +4: ei_leaf_lo (physical block lo), +8: ei_leaf_hi (physical block hi).
+        // +0 是 ei_block（逻辑块号），不可用作物理地址。
+        var eiLeafLo = BinaryPrimitives.ReadUInt32LittleEndian(block[(leafOffset + 4)..(leafOffset + 8)]);
         var eiLeafHi = BinaryPrimitives.ReadUInt16LittleEndian(block[(leafOffset + 8)..(leafOffset + 10)]);
         var leafBlock = ((ulong)eiLeafHi << 32) | eiLeafLo;
         var leafBytes = readBlock(leafBlock);

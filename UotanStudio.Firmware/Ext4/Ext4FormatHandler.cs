@@ -129,10 +129,10 @@ public sealed class Ext4FormatHandler : IFormatHandler
                 Directory.CreateDirectory(directory);
             }
 
-            var bytes = Ext4Builder.Build(inputPath);
-            System.IO.File.WriteAllBytes(outputPath, bytes);
+            using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+            Ext4Builder.Build(inputPath, fs);
             return Task.FromResult(FirmwareOpResult.Ok(
-                $"Packed EXT4 image '{inputPath}' -> '{outputPath}' ({bytes.Length} bytes).",
+                $"Packed EXT4 image '{inputPath}' -> '{outputPath}' ({fs.Length} bytes).",
                 [outputPath]));
         }
         catch (OperationCanceledException)
