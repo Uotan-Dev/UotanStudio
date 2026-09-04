@@ -320,17 +320,22 @@ public sealed class Ext4Parser : IDisposable
     /// <para>将整个文件系统树提取到 <paramref name="outputDirectory"/>。
     /// 符号链接以原生符号链接创建（失败时回退为目标文本文件）。</para>
     /// </summary>
-    public void ExtractToDirectory(string outputDirectory, bool overwrite = true)
+    public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
 
-        foreach (var entry in ListFiles())
+        var entries = ListFiles();
+        var totalCount = entries.Count;
+        var processedCount = 0;
+        foreach (var entry in entries)
         {
             var targetPath = Path.Combine(outputDirectory, entry.Path);
             if (entry.Kind == Ext4EntryKind.Directory)
             {
                 Directory.CreateDirectory(targetPath);
+                processedCount++;
+                progress?.Report((processedCount, totalCount));
                 continue;
             }
 
@@ -359,11 +364,15 @@ public sealed class Ext4Parser : IDisposable
                     }
                 }
 
+                processedCount++;
+                progress?.Report((processedCount, totalCount));
                 continue;
             }
 
             if (File.Exists(targetPath) && !overwrite)
             {
+                processedCount++;
+                progress?.Report((processedCount, totalCount));
                 continue;
             }
 
@@ -371,6 +380,9 @@ public sealed class Ext4Parser : IDisposable
             {
                 ReadFile(entry.Path, output);
             }
+
+            processedCount++;
+            progress?.Report((processedCount, totalCount));
         }
     }
 

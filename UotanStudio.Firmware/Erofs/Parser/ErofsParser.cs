@@ -400,11 +400,14 @@ public sealed partial class ErofsParser : IDisposable
     /// in the same directory and atomically moved into place only once complete; a failure never
     /// leaves a partial output file behind.</para>
     /// </summary>
-    public void ExtractToDirectory(string outputDirectory, bool overwrite = true)
+    public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
-        foreach (var entry in EnumerateFiles())
+        var entries = EnumerateFiles().ToList();
+        var totalCount = entries.Count;
+        var processedCount = 0;
+        foreach (var entry in entries)
         {
             var target = Path.Combine(outputDirectory, entry.Path.Replace('/', Path.DirectorySeparatorChar));
             var parent = Path.GetDirectoryName(target);
@@ -415,6 +418,8 @@ public sealed partial class ErofsParser : IDisposable
 
             if (!overwrite && File.Exists(target))
             {
+                processedCount++;
+                progress?.Report((processedCount, totalCount));
                 continue;
             }
 
@@ -424,10 +429,14 @@ public sealed partial class ErofsParser : IDisposable
                 // Symlinks are written as a text file holding the target (Windows has no reliable
                 // symlink semantics; write the target path as text).
                 File.WriteAllText(target, entry.SymlinkTarget ?? string.Empty);
+                processedCount++;
+                progress?.Report((processedCount, totalCount));
                 continue;
             }
 
             ExtractFileAtomic(target, entry.Path, overwrite);
+            processedCount++;
+            progress?.Report((processedCount, totalCount));
         }
     }
 
