@@ -155,10 +155,11 @@ public class BuilderStreamingTests
         image.Position = 1024;
         image.ReadExactly(superblock);
 
-        // Key superblock bytes: s_magic 0xEF53, s_log_block_size=2, s_desc_size=32.
+        // Key superblock bytes: s_magic 0xEF53, s_log_block_size=2, s_desc_size=64
+        // (64-byte group descriptors, mke2fs default).
         Assert.Equal(0xEF53, ReadU16(superblock, 0x38));
         Assert.Equal(2u, ReadU32(superblock, 0x18));
-        Assert.Equal(32, ReadU16(superblock, 0xFE));
+        Assert.Equal(64, ReadU16(superblock, 0xFE));
 
         // Image length must be exactly blocks × block size (SetLength pre-allocation).
         var blocks = (long)ReadU32(superblock, 0x04);
@@ -417,6 +418,12 @@ public class BuilderStreamingTests
     {
         const int superblockOffset = 1024;
         var copy = (byte[])image.Clone();
+        // s_checksum (4) at 1024+4: the superblock CRC32 covers the build time and UUID,
+        // so it also differs between two builds. It is derived from those nondeterministic
+        // fields and must be erased alongside them.
+        // s_checksum（4）位于 1024+4：超级块 CRC32 覆盖构建时间与 UUID，故两次构建间亦不同；
+        // 它由上述非确定性字段推导而来，须一并抹除。
+        Array.Clear(copy, superblockOffset + 4, 4);
         // s_build_time (8) + s_build_time_nsec (4) at 1024+24.
         Array.Clear(copy, superblockOffset + 24, 12);
         // s_uuid (16) at 1024+48.

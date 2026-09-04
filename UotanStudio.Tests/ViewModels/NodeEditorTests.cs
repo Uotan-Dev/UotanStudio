@@ -248,13 +248,40 @@ public sealed class NodeEditorTests
 
         var insideParallel = 0;
         var peak = 0;
+        var started = 0;
+        var gate = new object();
+        using var bothStarted = new ManualResetEventSlim();
 
         Task Track(INodeExecutionContext _)
         {
-            var current = Interlocked.Increment(ref insideParallel);
-            peak = Math.Max(peak, current);
-            Thread.Sleep(50);
-            Interlocked.Decrement(ref insideParallel);
+            // Rendezvous: both branches must be running before either may proceed. This
+            // deterministically proves the engine dispatched the two branches concurrently,
+            // regardless of thread-pool load (a purely timing-based sleep can miss the overlap
+            // when the suite runs in parallel).
+            // 会合点：两条分支必须都已开始执行才能继续。这确定性地证明引擎并发分发了
+            // 两条分支（纯时序的 Sleep 在测试套件并行运行时可能错过重叠窗口）。
+            if (Interlocked.Increment(ref started) == 2)
+            {
+                bothStarted.Set();
+            }
+
+            if (!bothStarted.Wait(TimeSpan.FromSeconds(10)))
+            {
+                throw new InvalidOperationException("Parallel branches did not run concurrently.");
+            }
+
+            lock (gate)
+            {
+                var current = ++insideParallel;
+                peak = Math.Max(peak, current);
+            }
+
+            Thread.Sleep(20); // widen the overlap window; the rendezvous already guarantees concurrency
+            lock (gate)
+            {
+                insideParallel--;
+            }
+
             return Task.CompletedTask;
         }
 
