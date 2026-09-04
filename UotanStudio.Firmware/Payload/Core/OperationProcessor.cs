@@ -318,30 +318,7 @@ internal static class OperationProcessor
         var oldData = ArrayPool<byte>.Shared.Rent((int)srcLength);
         try
         {
-            var offset = 0;
-            foreach (var ext in op.SrcExtents)
-            {
-                var srcPos = (long)(ext.StartBlock * blockSize);
-                var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
-                outFile.Seek(srcPos, SeekOrigin.Begin);
-                var bytesRead = 0;
-                while (bytesRead < chunkLen)
-                {
-                    var read = outFile.Read(oldData, offset + bytesRead, chunkLen - bytesRead);
-                    if (read == 0)
-                    {
-                        break;
-                    }
-                    bytesRead += read;
-                }
-                if (bytesRead != chunkLen)
-                {
-                    throw new PartitionExtractionException(
-                        $"Failed to read {chunkLen} bytes of source data for SOURCE_BSDIFF at offset {srcPos}",
-                        string.Empty);
-                }
-                offset += bytesRead;
-            }
+            ReadSourceExtents(op, oldData, (int)srcLength, outFile, blockSize);
 
             HashVerificationHelper.VerifySourceHash(oldData, (int)srcLength, op);
 
@@ -395,30 +372,7 @@ internal static class OperationProcessor
         var oldData = ArrayPool<byte>.Shared.Rent((int)srcLength);
         try
         {
-            var offset = 0;
-            foreach (var ext in op.SrcExtents)
-            {
-                var srcPos = (long)(ext.StartBlock * blockSize);
-                var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
-                outFile.Seek(srcPos, SeekOrigin.Begin);
-                var bytesRead = 0;
-                while (bytesRead < chunkLen)
-                {
-                    var read = outFile.Read(oldData, offset + bytesRead, chunkLen - bytesRead);
-                    if (read == 0)
-                    {
-                        break;
-                    }
-                    bytesRead += read;
-                }
-                if (bytesRead != chunkLen)
-                {
-                    throw new PartitionExtractionException(
-                        $"Failed to read {chunkLen} bytes of source data for PUFFDIFF at offset {srcPos}",
-                        string.Empty);
-                }
-                offset += bytesRead;
-            }
+            ReadSourceExtents(op, oldData, (int)srcLength, outFile, blockSize);
 
             HashVerificationHelper.VerifySourceHash(oldData, (int)srcLength, op);
 
@@ -465,30 +419,7 @@ internal static class OperationProcessor
         var oldData = ArrayPool<byte>.Shared.Rent((int)srcLength);
         try
         {
-            var readOffset = 0;
-            foreach (var ext in op.SrcExtents)
-            {
-                var srcPos = (long)(ext.StartBlock * blockSize);
-                var chunkLen = CheckedInt32BlockLength(ext.NumBlocks, blockSize);
-                outFile.Seek(srcPos, SeekOrigin.Begin);
-                var bytesRead = 0;
-                while (bytesRead < chunkLen)
-                {
-                    var read = outFile.Read(oldData, readOffset + bytesRead, chunkLen - bytesRead);
-                    if (read == 0)
-                    {
-                        break;
-                    }
-                    bytesRead += read;
-                }
-                if (bytesRead != chunkLen)
-                {
-                    throw new PartitionExtractionException(
-                        $"Failed to read {chunkLen} bytes of source data for BROTLI_BSDIFF at offset {srcPos}",
-                        string.Empty);
-                }
-                readOffset += bytesRead;
-            }
+            ReadSourceExtents(op, oldData, (int)srcLength, outFile, blockSize);
 
             HashVerificationHelper.VerifySourceHash(oldData, (int)srcLength, op);
 
