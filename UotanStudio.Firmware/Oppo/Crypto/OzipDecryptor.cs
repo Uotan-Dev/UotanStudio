@@ -10,12 +10,12 @@ namespace UotanStudio.Firmware.Oppo.Crypto;
 /// </summary>
 /// <remarks>
 /// <para>
-/// OZip 加密算法对每 0x4000 (16384) 字节的块，仅加密前 16 字节（AES-ECB），
-/// 剩余 0x3FF0 字节保持明文。解密时需要通过尝试已知密钥来检测正确的密钥，
+/// OZip 加密算法先加密 16 字节前缀（AES-ECB），再保留随后的 0x4000 (16384) 字节明文，
+/// 因此每个加密单元的总步长为 0x4010。解密时需要通过尝试已知密钥来检测正确的密钥，
 /// 有效的密钥解密后会得到以 PK\x03\x04（ZIP 头）、AVB0 或 ANDR 开头的数据。
 /// </para>
-/// The OZip encryption algorithm encrypts only the first 16 bytes of each 0x4000 (16384) byte
-/// block using AES-ECB, leaving the remaining 0x3FF0 bytes as plaintext. Decryption requires
+/// The OZip encryption algorithm encrypts a 16-byte AES prefix, then leaves the following
+/// 0x4000 (16384) bytes as plaintext. Each encryption unit is therefore 0x4010 bytes. Decryption requires
 /// trying known keys to detect the correct one; a valid key produces output starting with
 /// PK\x03\x04 (ZIP header), AVB0, or ANDR.
 /// </remarks>
@@ -28,22 +28,22 @@ public static class OzipDecryptor
     private const int DataOffset = OzipHeader.DataOffset;
 
     /// <summary>
-    /// <para>每个加密块的大小（0x4000 = 16384 字节）。</para>
-    /// The size of each encryption block (0x4000 = 16384 bytes).
+    /// <para>每个加密前缀之后的明文块大小（0x4000 = 16384 字节）。</para>
+    /// The plaintext block size after each encrypted prefix (0x4000 = 16384 bytes).
     /// </summary>
-    private const int BlockSize = 0x4000;
+    internal const int PlaintextBlockSize = 0x4000;
 
     /// <summary>
     /// <para>每个块中加密部分的大小（16 字节，AES 块大小）。</para>
     /// The size of the encrypted portion within each block (16 bytes, AES block size).
     /// </summary>
-    private const int EncryptedSize = 16;
+    internal const int EncryptedSize = 16;
 
     /// <summary>
-    /// <para>每个块中明文部分的大小（0x3FF0 字节）。</para>
-    /// The size of the plaintext portion within each block (0x3FF0 bytes).
+    /// <para>一个完整加密单元的步长（16 字节密文 + 0x4000 字节明文）。</para>
+    /// The stride of one encryption unit (16 encrypted bytes plus 0x4000 plaintext bytes).
     /// </summary>
-    private const int PlaintextSize = BlockSize - EncryptedSize;
+    internal const int EncryptionUnitSize = EncryptedSize + PlaintextBlockSize;
 
     /// <summary>
     /// <para>ZIP 文件头的魔数字节 PK\x03\x04。</para>
@@ -118,6 +118,11 @@ public static class OzipDecryptor
                 nameof(aesKey));
         }
 
+        if (encryptedDataSize < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(encryptedDataSize));
+        }
+
         using var aes = Aes.Create();
         aes.Mode = CipherMode.ECB;
         aes.Padding = PaddingMode.None;
@@ -125,34 +130,33 @@ public static class OzipDecryptor
 
         var remaining = encryptedDataSize;
         var encryptedBuffer = new byte[EncryptedSize];
-        var plaintextBuffer = new byte[PlaintextSize];
+        var decryptedBuffer = new byte[EncryptedSize];
+        var plaintextBuffer = new byte[PlaintextBlockSize];
 
         while (remaining > 0)
         {
-            // Read and decrypt first 16 bytes of the block
-            var bytesRead = FillBuffer(input, encryptedBuffer, EncryptedSize);
-            if (bytesRead == 0)
+            if (remaining < EncryptedSize)
             {
-                break;
+                throw new InvalidOppFormatException(
+                    $"The OZip data ends with an incomplete {EncryptedSize}-byte encrypted prefix.");
             }
 
-            var toWrite = (int)Math.Min(bytesRead, remaining);
-            var decrypted = decryptor.TransformFinalBlock(encryptedBuffer, 0, bytesRead);
-            output.Write(decrypted, 0, toWrite);
-            remaining -= toWrite;
+            ReadExactly(input, encryptedBuffer, EncryptedSize);
+            if (decryptor.TransformBlock(encryptedBuffer, 0, EncryptedSize, decryptedBuffer, 0) != EncryptedSize)
+            {
+                throw new CryptographicException("AES did not decrypt a complete OZip block prefix.");
+            }
 
-            // Copy remaining plaintext bytes in the block
+            output.Write(decryptedBuffer, 0, EncryptedSize);
+            remaining -= EncryptedSize;
+
+            // Mode 1 stores 0x4000 plaintext bytes after every 16-byte encrypted prefix.
             if (remaining > 0)
             {
-                var plaintextToRead = (int)Math.Min(PlaintextSize, remaining);
-                var plaintextRead = FillBuffer(input, plaintextBuffer, plaintextToRead);
-                if (plaintextRead == 0)
-                {
-                    break;
-                }
-
-                output.Write(plaintextBuffer, 0, plaintextRead);
-                remaining -= plaintextRead;
+                var plaintextToRead = (int)Math.Min(PlaintextBlockSize, remaining);
+                ReadExactly(input, plaintextBuffer, plaintextToRead);
+                output.Write(plaintextBuffer, 0, plaintextToRead);
+                remaining -= plaintextToRead;
             }
         }
     }
@@ -188,26 +192,38 @@ public static class OzipDecryptor
         Guard.ThrowIfNull(input);
         Guard.ThrowIfNull(output);
 
-        var header = OzipHeader.ReadFrom(input);
-
-        // Read first 16 encrypted bytes for key detection
-        input.Position = DataOffset;
-        var firstEncrypted = new byte[EncryptedSize];
-        var bytesRead = FillBuffer(input, firstEncrypted, EncryptedSize);
-        if (bytesRead != EncryptedSize)
-        {
-            throw new OppDecryptionException(
-                "Unable to read the first 16 encrypted bytes for key detection.");
-        }
-
-        var keyEntry = DetectKey(firstEncrypted) ?? throw new OppDecryptionException(
-                "Unable to automatically detect the decryption key. No known key produces valid plaintext.");
-
-        // Reset to data offset and decrypt
-        input.Position = DataOffset;
-        Decrypt(input, output, keyEntry.KeyBytes, header.EncryptedDataSize);
+        using var decrypted = OpenDecryptedStream(input, out var keyEntry, leaveOpen: true);
+        decrypted.CopyTo(output);
 
         return keyEntry;
+    }
+
+    /// <summary>
+    /// Opens a seekable, on-demand decrypted view over an OZip stream and returns the detected key.
+    /// <para>在 OZip 流上打开可定位的按需解密视图，并返回自动检测到的密钥。</para>
+    /// </summary>
+    internal static OzipBlockDecryptStream OpenDecryptedStream(
+        Stream input,
+        out OzipKeyEntry keyEntry,
+        bool leaveOpen)
+    {
+        Guard.ThrowIfNull(input);
+
+        var header = OzipHeader.ReadFrom(input);
+        if (header.EncryptedDataSize < EncryptedSize
+            || header.EncryptedDataSize > input.Length - DataOffset)
+        {
+            throw new InvalidOppFormatException(
+                $"Invalid OZip data size {header.EncryptedDataSize}; available data is {Math.Max(0, input.Length - DataOffset)} bytes.");
+        }
+
+        input.Position = DataOffset;
+        var firstEncrypted = new byte[EncryptedSize];
+        ReadExactly(input, firstEncrypted, EncryptedSize);
+        keyEntry = DetectKey(firstEncrypted) ?? throw new OppDecryptionException(
+            "Unable to automatically detect the decryption key. No known key produces valid plaintext.");
+
+        return new OzipBlockDecryptStream(input, keyEntry.KeyBytes, header.EncryptedDataSize, leaveOpen);
     }
 
     /// <summary>
@@ -242,7 +258,7 @@ public static class OzipDecryptor
             data[2] == AndrMagic[2] && data[3] == AndrMagic[3];
     }
 
-    private static int FillBuffer(Stream stream, byte[] buffer, int count)
+    private static void ReadExactly(Stream stream, byte[] buffer, int count)
     {
         var totalRead = 0;
         while (totalRead < count)
@@ -250,12 +266,12 @@ public static class OzipDecryptor
             var bytesRead = stream.Read(buffer, totalRead, count - totalRead);
             if (bytesRead == 0)
             {
-                break;
+                throw new InvalidOppFormatException(
+                    $"Unexpected end of OZip data: expected {count} bytes but read {totalRead}.");
             }
 
             totalRead += bytesRead;
         }
 
-        return totalRead;
     }
 }

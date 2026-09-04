@@ -2,7 +2,6 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using UotanStudio.Firmware.Oppo.Crypto;
-using UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
 using UotanStudio.Firmware.Oppo.Helpers;
 using UotanStudio.Firmware.Oppo.Models;
 
@@ -23,6 +22,8 @@ namespace UotanStudio.Firmware.Oppo.Parsers;
 /// </remarks>
 internal sealed class OzipFormatParser : IOppFormatParser
 {
+    private const int MaxCentralDirectoryBytes = 64 * 1024 * 1024;
+
     /// <summary>
     /// <para>获取此解析器支持的固件格式。</para>
     /// Gets the firmware format supported by this parser.
@@ -42,38 +43,18 @@ internal sealed class OzipFormatParser : IOppFormatParser
 
         try
         {
-            var tempFile = Path.Combine(Path.GetTempPath(), $"UotanStudio.Oppo.Ozip.{Guid.NewGuid():N}.zip");
+            using var decrypted = OzipDecryptor.OpenDecryptedStream(stream, out var detectedKey, leaveOpen: true);
+            var entries = ReadZipEntriesWithFallback(decrypted);
 
-            try
+            return new OppMetadata
             {
-                stream.Position = 0;
-                OzipKeyEntry detectedKey;
-                using (var fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 8192, FileOptions.SequentialScan))
-                {
-                    detectedKey = OzipDecryptor.DecryptFileWithAutoDetection(stream, fs);
-                }
-
-                // 与 ParseEntries 共用同一枚举逻辑：ZipArchive 打开失败（中央目录损坏等）时
-                // 自动回退手动扫描，保证元数据条目数与条目列表一致。
-                // Share the same enumeration logic with ParseEntries: when ZipArchive fails to
-                // open (corrupt central directory etc.), fall back to the manual scan so the
-                // metadata entry count always matches the entry list.
-                var entries = ReadZipEntriesWithFallback(tempFile);
-
-                return new OppMetadata
-                {
-                    FormatName = "OZip",
-                    Format = OppFormat.Ozip,
-                    FileSize = fileSize,
-                    EntryCount = entries.Count > 0 ? entries.Count : 1,
-                    KeyId = detectedKey.Description ?? detectedKey.KeyHex,
-                    IsZipWrapped = false
-                };
-            }
-            finally
-            {
-                try { File.Delete(tempFile); } catch { /* best effort */ }
-            }
+                FormatName = "OZip",
+                Format = OppFormat.Ozip,
+                FileSize = fileSize,
+                EntryCount = entries.Count > 0 ? entries.Count : 1,
+                KeyId = detectedKey.Description ?? detectedKey.KeyHex,
+                IsZipWrapped = false
+            };
         }
         catch (OppDecryptionException)
         {
@@ -113,58 +94,41 @@ internal sealed class OzipFormatParser : IOppFormatParser
     {
         Guard.ThrowIfNull(stream);
 
+        var originalPosition = stream.Position;
         var header = OzipHeader.ReadFrom(stream);
 
         try
         {
-            // Decrypt OZIP data to a temporary file to handle large files (>2GB)
-            var tempFile = Path.Combine(Path.GetTempPath(), $"UotanStudio.Oppo.Ozip.{Guid.NewGuid():N}.zip");
-
-            try
-            {
-                stream.Position = 0;
-                using (var fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 8192, FileOptions.SequentialScan))
-                {
-                    OzipDecryptor.DecryptFileWithAutoDetection(stream, fs);
-                }
-
-                // 与 ParseMetadata 共用同一枚举逻辑：ZipArchive 打开失败（中央目录损坏等）时
-                // 自动回退手动扫描；两者均失败时异常向上传播由调用方处理。
-                // Share the same enumeration logic with ParseMetadata: ZipArchive failure
-                // (corrupt central directory etc.) falls back to the manual scan; if both
-                // fail the exception propagates to the caller.
-                var entries = ReadZipEntriesWithFallback(tempFile);
-
-                return entries.Count > 0
-                    ? entries
-                    : FallbackSingleEntry(header);
-            }
-            finally
-            {
-                try { File.Delete(tempFile); } catch { /* best effort */ }
-            }
+            using var decrypted = OzipDecryptor.OpenDecryptedStream(stream, out _, leaveOpen: true);
+            var entries = ReadZipEntriesWithFallback(decrypted);
+            return entries.Count > 0 ? entries : FallbackSingleEntry(header);
         }
         catch (OppDecryptionException)
         {
             // Decryption failed (no valid key found), fall back to single entry
             return FallbackSingleEntry(header);
         }
+        finally
+        {
+            stream.Position = originalPosition;
+        }
     }
 
     /// <summary>
-    /// <para>用 <see cref="ZipArchive"/> 读取临时文件中的全部非目录条目；中央目录损坏
+    /// <para>用 <see cref="ZipArchive"/> 读取解密视图中的全部非目录条目；中央目录损坏
     /// （EOCD 条目数与实际记录数不一致等）导致 <see cref="InvalidDataException"/> 时，
     /// 回退到手动解析中央目录，保证元数据条目数与条目列表来自同一来源。</para>
-    /// Reads all non-directory entries of the temp ZIP file via <see cref="ZipArchive"/>;
+    /// Reads all non-directory entries of the decrypted ZIP view via <see cref="ZipArchive"/>;
     /// when a corrupt central directory (e.g. EOCD entry count mismatching the actual
     /// records) throws <see cref="InvalidDataException"/>, falls back to manual central
     /// directory parsing so the metadata entry count and the entry list share one source.
     /// </summary>
-    private static IReadOnlyList<OppEntry> ReadZipEntriesWithFallback(string zipPath)
+    private static IReadOnlyList<OppEntry> ReadZipEntriesWithFallback(Stream zipStream)
     {
         try
         {
-            return ReadZipEntries(zipPath);
+            zipStream.Position = 0;
+            return ReadZipEntries(zipStream);
         }
         catch (InvalidDataException)
         {
@@ -173,17 +137,18 @@ internal sealed class OzipFormatParser : IOppFormatParser
             // When .NET ZipArchive cannot open the file (corrupt central directory / ZIP64
             // variants etc.), fall back to manually parsing the central directory so as many
             // real entries as possible are still enumerated.
-            return ScanCentralDirectoryEntries(zipPath);
+            zipStream.Position = 0;
+            return ScanCentralDirectoryEntries(zipStream);
         }
     }
 
     /// <summary>
-    /// <para>用 <see cref="ZipArchive"/> 读取临时文件中的全部非目录条目。</para>
-    /// Reads all non-directory entries of the temp ZIP file via <see cref="ZipArchive"/>.
+    /// <para>用 <see cref="ZipArchive"/> 读取解密 ZIP 视图中的全部非目录条目。</para>
+    /// Reads all non-directory entries from the decrypted ZIP view via <see cref="ZipArchive"/>.
     /// </summary>
-    private static IReadOnlyList<OppEntry> ReadZipEntries(string zipPath)
+    private static IReadOnlyList<OppEntry> ReadZipEntries(Stream zipStream)
     {
-        using var archive = ZipFile.OpenRead(zipPath);
+        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read, leaveOpen: true);
 
         var entries = new List<OppEntry>(archive.Entries.Count);
         foreach (var zipEntry in archive.Entries)
@@ -215,9 +180,8 @@ internal sealed class OzipFormatParser : IOppFormatParser
     /// (PK\x01\x02 records) by hand, stopping at the first corrupt record and returning the entries
     /// parsed so far.
     /// </summary>
-    private static IReadOnlyList<OppEntry> ScanCentralDirectoryEntries(string zipPath)
+    private static IReadOnlyList<OppEntry> ScanCentralDirectoryEntries(Stream fs)
     {
-        using var fs = File.OpenRead(zipPath);
         if (fs.Length < 22)
         {
             return [];
@@ -225,7 +189,7 @@ internal sealed class OzipFormatParser : IOppFormatParser
 
         // 在尾部 64KB 内反向查找 EOCD 签名 PK\x05\x06。
         // Search backwards for the EOCD signature PK\x05\x06 within the last 64KB.
-        var tailLen = (int)Math.Min(fs.Length, 65536);
+        var tailLen = (int)Math.Min(fs.Length, 65557);
         var tail = new byte[tailLen];
         fs.Position = fs.Length - tailLen;
         fs.ReadExactly(tail, 0, tailLen);
@@ -233,7 +197,8 @@ internal sealed class OzipFormatParser : IOppFormatParser
         var eocdOffset = -1L;
         for (var i = tailLen - 22; i >= 0; i--)
         {
-            if (tail[i] == 0x50 && tail[i + 1] == 0x4B && tail[i + 2] == 0x05 && tail[i + 3] == 0x06)
+            if (tail[i] == 0x50 && tail[i + 1] == 0x4B && tail[i + 2] == 0x05 && tail[i + 3] == 0x06
+                && i + 22 + BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(i + 20)) == tailLen)
             {
                 eocdOffset = fs.Length - tailLen + i;
                 break;
@@ -249,15 +214,18 @@ internal sealed class OzipFormatParser : IOppFormatParser
         Span<byte> eocd = stackalloc byte[22];
         fs.ReadExactly(eocd);
 
-        var cdOffset = BinaryPrimitives.ReadUInt32LittleEndian(eocd[16..]);
-        var cdSize = BinaryPrimitives.ReadUInt32LittleEndian(eocd[12..]);
-        if (cdOffset > fs.Length || cdSize > fs.Length - cdOffset)
+        var cdOffset32 = BinaryPrimitives.ReadUInt32LittleEndian(eocd[16..]);
+        var cdSize32 = BinaryPrimitives.ReadUInt32LittleEndian(eocd[12..]);
+
+        if (cdOffset32 == uint.MaxValue || cdSize32 == uint.MaxValue
+            || cdOffset32 > fs.Length || cdSize32 > fs.Length - cdOffset32
+            || cdSize32 > MaxCentralDirectoryBytes)
         {
             return [];
         }
 
-        fs.Position = cdOffset;
-        var cd = new byte[cdSize];
+        fs.Position = cdOffset32;
+        var cd = new byte[(int)cdSize32];
         fs.ReadExactly(cd, 0, cd.Length);
 
         var entries = new List<OppEntry>();
@@ -268,13 +236,7 @@ internal sealed class OzipFormatParser : IOppFormatParser
             // Central directory record signature PK\x01\x02.
             if (cd[pos] != 0x50 || cd[pos + 1] != 0x4B || cd[pos + 2] != 0x01 || cd[pos + 3] != 0x02)
             {
-                // 宽容模式：签名未命中时逐字节前进，跳过损坏区继续寻找下一条记录，
-                // 避免在第一条损坏记录处中断导致后续大文件（boot.img / 分区镜像等）丢失。
-                // Lenient mode: advance byte by byte past corrupt regions to find the next
-                // record, so a single bad record does not hide the remaining large files
-                // (boot.img / partition images etc.).
-                pos++;
-                continue;
+                break;
             }
 
             var nameLen = BinaryPrimitives.ReadUInt16LittleEndian(cd.AsSpan(pos + 28));
@@ -283,11 +245,7 @@ internal sealed class OzipFormatParser : IOppFormatParser
             var recordLen = 46 + nameLen + extraLen + commentLen;
             if (pos + recordLen > cd.Length)
             {
-                // 损坏记录：跳过该签名继续向后寻找，保留已解析条目。
-                // Corrupt record: skip this signature and keep scanning; entries parsed so
-                // far are retained.
-                pos++;
-                continue;
+                break;
             }
 
             var name = Encoding.UTF8.GetString(cd, pos + 46, nameLen);
@@ -308,8 +266,7 @@ internal sealed class OzipFormatParser : IOppFormatParser
             // field is garbage; skip such records.
             if (!IsValidLocalHeaderOffset(fs, localHeaderOffset))
             {
-                pos++;
-                continue;
+                break;
             }
 
             entries.Add(new OppEntry
@@ -335,7 +292,7 @@ internal sealed class OzipFormatParser : IOppFormatParser
     /// Checks whether the given offset holds a valid ZIP local file header (PK\x03\x04)
     /// and lies within the file.
     /// </summary>
-    private static bool IsValidLocalHeaderOffset(FileStream fs, long offset)
+    private static bool IsValidLocalHeaderOffset(Stream fs, long offset)
     {
         if (offset < 0 || offset + 4 > fs.Length)
         {
