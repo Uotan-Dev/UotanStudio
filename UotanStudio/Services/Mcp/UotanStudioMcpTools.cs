@@ -35,6 +35,80 @@ using FirmwareOpResult = UotanStudio.Services.Firmware.FirmwareOpResult;
 public sealed partial class UotanStudioMcpTools
 {
     /// <summary>
+    /// <para>检测固件文件格式并返回结构化 JSON 元数据摘要（格式名/摘要/条目/键值/组件）。</para>
+    /// Detects a firmware file's format and returns its metadata summary as structured JSON
+    /// (format name / summary / entries / metadata keys / components).
+    /// </summary>
+    [McpServerTool(Name = "firmware.info"), Description("Detects the format of a firmware file and returns its metadata summary (format, entries, metadata, components) as structured JSON.")]
+    public async Task<string> FirmwareInfo(string filePath, CancellationToken ct)
+    {
+        const string tool = "firmware.info";
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                return ErrorJson(tool, $"File not found: {filePath}  文件不存在：{filePath}");
+            }
+
+            FirmwareFormatRegistry.RegisterAll();
+            var handler = FormatDetector.Detect(filePath);
+            if (handler is null)
+            {
+                return ErrorJson(tool, $"Unknown firmware format: {filePath}  无法识别的固件格式：{filePath}");
+            }
+
+            var result = await handler.ReadMetadataAsync(filePath, ct).ConfigureAwait(false);
+            var json = new JsonObject
+            {
+                ["success"] = result.Success,
+                ["tool"] = tool,
+                ["format"] = handler.FormatName,
+                ["filePath"] = filePath,
+                ["summary"] = result.Summary,
+            };
+            if (!result.Success)
+            {
+                json["error"] = result.Summary;
+            }
+            if (result.Entries is { Count: > 0 })
+            {
+                var entries = new JsonArray();
+                foreach (var entry in result.Entries) entries.Add(JsonValue.Create(entry));
+                json["entries"] = entries;
+            }
+            if (result.Metadata is { Count: > 0 })
+            {
+                var meta = new JsonObject();
+                foreach (var (key, value) in result.Metadata) meta[key] = JsonValue.Create(value);
+                json["metadata"] = meta;
+            }
+            if (result.Components is { Count: > 0 })
+            {
+                var comps = new JsonArray();
+                foreach (var c in result.Components)
+                {
+                    comps.Add(new JsonObject
+                    {
+                        ["name"] = c.Name,
+                        ["sizeBytes"] = c.SizeBytes,
+                    });
+                }
+                json["components"] = comps;
+            }
+
+            return json.ToJsonString();
+        }
+        catch (OperationCanceledException)
+        {
+            return ErrorJson(tool, "Operation cancelled. 操作已取消。");
+        }
+        catch (Exception ex)
+        {
+            return ErrorJson(tool, ex.Message);
+        }
+    }
+
+    /// <summary>
     /// <para>按格式解包固件文件（CPIO/TAR、OTA payload.bin、boot/vendor_boot、Oppo OFP/OPS/OZIP、
     /// Android super）。格式优先使用 <paramref name="format"/> 指定（名称/扩展名/别名），否则自动探测；
     /// 解包方法按格式分派到 <see cref="FirmwareService"/>（与 FirmwareInfoViewModel 一致）。
@@ -329,6 +403,356 @@ public sealed partial class UotanStudioMcpTools
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "McpTools", $"flash.image failed: {ex.Message}");
+            return ErrorJson(tool, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <para>校验 VBMeta 镜像的 AVB 签名（RSASSA-PSS / PKCS#1 v1.5），返回结构化 JSON。
+    /// 可选提供受信任公钥文件（AVB extract_public_key 数据块、PEM 或 DER）；省略时使用
+    /// vbmeta 辅助数据块中内嵌的公钥。</para>
+    /// Verifies AVB signature on a VBMeta image (RSASSA-PSS / PKCS#1 v1.5) and returns structured JSON.
+    /// An optional trusted public key file (AVB extract_public_key blob, PEM or DER) may be provided;
+    /// when omitted the key embedded in the vbmeta auxiliary data block is used.
+    /// </summary>
+    [McpServerTool(Name = "firmware.verify"), Description("Verifies AVB signature on a VBMeta image and returns signature validity and descriptor summary as structured JSON.")]
+    public async Task<string> FirmwareVerify(
+        string filePath,
+        string? publicKeyPath = null,
+        CancellationToken ct = default)
+    {
+        const string tool = "firmware.verify";
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                return ErrorJson(tool, $"File not found: {filePath}  文件不存在：{filePath}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(publicKeyPath) && !File.Exists(publicKeyPath))
+            {
+                return ErrorJson(tool, $"Public key file not found: {publicKeyPath}  公钥文件不存在：{publicKeyPath}");
+            }
+
+            var result = await FirmwareService.Instance.VerifyAvbAsync(filePath, publicKeyPath, ct).ConfigureAwait(false);
+
+            var json = new JsonObject
+            {
+                ["success"] = result.Success,
+                ["tool"] = tool,
+                ["filePath"] = filePath,
+                ["summary"] = result.Summary,
+            };
+            if (!result.Success)
+            {
+                json["error"] = result.Summary;
+            }
+            if (result.Entries is { Count: > 0 })
+            {
+                var entries = new JsonArray();
+                foreach (var entry in result.Entries) entries.Add(JsonValue.Create(entry));
+                json["entries"] = entries;
+            }
+
+            return json.ToJsonString();
+        }
+        catch (OperationCanceledException)
+        {
+            return ErrorJson(tool, "Verification cancelled. 校验已取消。");
+        }
+        catch (Exception ex)
+        {
+            return ErrorJson(tool, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <para>从 Android OTA payload.bin 中提取分区镜像。可选指定分区名（缺省提取全部），
+    /// 返回结构化 JSON（含已提取分区列表）。</para>
+    /// Extracts partition images from an Android OTA payload.bin. Optionally specifies a partition name
+    /// (defaults to all); returns structured JSON with the extracted partition list.
+    /// </summary>
+    [McpServerTool(Name = "firmware.extract"), Description("Extracts partitions from an Android OTA payload.bin and returns the output directory and extracted partition list as structured JSON.")]
+    public async Task<string> FirmwareExtract(
+        string filePath,
+        string? outputDir = null,
+        string? partition = null,
+        CancellationToken ct = default)
+    {
+        const string tool = "firmware.extract";
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                return ErrorJson(tool, $"File not found: {filePath}  文件不存在：{filePath}");
+            }
+
+            var output = string.IsNullOrWhiteSpace(outputDir)
+                ? Path.Combine(Path.GetDirectoryName(filePath) ?? ".", Path.GetFileNameWithoutExtension(filePath) + "_extracted")
+                : outputDir;
+
+            var result = await FirmwareService.Instance.ExtractPayloadAsync(filePath, output, partition).ConfigureAwait(false);
+
+            var json = new JsonObject
+            {
+                ["success"] = result.Success,
+                ["tool"] = tool,
+                ["filePath"] = filePath,
+                ["outputDir"] = output,
+                ["summary"] = result.Summary,
+            };
+            if (!result.Success)
+            {
+                json["error"] = result.Summary;
+            }
+            if (result.Entries is { Count: > 0 })
+            {
+                var entries = new JsonArray();
+                foreach (var entry in result.Entries) entries.Add(JsonValue.Create(entry));
+                json["entries"] = entries;
+            }
+
+            return json.ToJsonString();
+        }
+        catch (OperationCanceledException)
+        {
+            return ErrorJson(tool, "Extraction cancelled. 提取已取消。");
+        }
+        catch (Exception ex)
+        {
+            return ErrorJson(tool, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <para>一键禁用 VBMeta 镜像的 AVB 校验（置位标志并清零认证块，无需私钥），
+    /// 输出到指定路径，返回结构化 JSON。</para>
+    /// Disables AVB verification on a VBMeta image (sets flags and zeroes authentication block,
+    /// no private key needed), writes to the specified path, and returns structured JSON.
+    /// </summary>
+    [McpServerTool(Name = "firmware.disable-verification"), Description("Disables AVB verification on a VBMeta image (sets disable flags and zeroes auth block, no key needed) and returns the output path as structured JSON.")]
+    public async Task<string> FirmwareDisableVerification(
+        string filePath,
+        string outputPath,
+        CancellationToken ct = default)
+    {
+        const string tool = "firmware.disable-verification";
+        try
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                return ErrorJson(tool, $"File not found: {filePath}  文件不存在：{filePath}");
+            }
+
+            if (string.IsNullOrWhiteSpace(outputPath))
+            {
+                return ErrorJson(tool, "Output path is empty. 输出路径为空。");
+            }
+
+            var parentDir = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+            if (!string.IsNullOrWhiteSpace(parentDir))
+            {
+                Directory.CreateDirectory(parentDir);
+            }
+
+            var result = await FirmwareService.Instance.DisableVbmetaVerificationAsync(filePath, outputPath, ct).ConfigureAwait(false);
+
+            var json = new JsonObject
+            {
+                ["success"] = result.Success,
+                ["tool"] = tool,
+                ["filePath"] = filePath,
+                ["outputPath"] = outputPath,
+                ["summary"] = result.Summary,
+            };
+            if (!result.Success)
+            {
+                json["error"] = result.Summary;
+            }
+
+            return json.ToJsonString();
+        }
+        catch (OperationCanceledException)
+        {
+            return ErrorJson(tool, "Operation cancelled. 操作已取消。");
+        }
+        catch (Exception ex)
+        {
+            return ErrorJson(tool, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <para>列举当前检测到的可刷写设备（Fastboot/EDL/RKDL/ADB），返回结构化 JSON
+    /// （含序列号、协议、传输类型列表）。</para>
+    /// Lists currently detected flashable devices (Fastboot/EDL/RKDL/ADB) and returns structured JSON
+    /// with serial, protocol, and transport type for each device.
+    /// </summary>
+    [McpServerTool(Name = "device.list"), Description("Lists currently detected flashable devices (ADB/Fastboot/EDL/RKDL) and returns their serial, protocol, and transport as structured JSON.")]
+    public string DeviceList()
+    {
+        const string tool = "device.list";
+        try
+        {
+            var devices = DeviceMonitorService.Instance.Scan();
+            var json = new JsonObject
+            {
+                ["success"] = true,
+                ["tool"] = tool,
+                ["count"] = devices.Count,
+            };
+
+            var arr = new JsonArray();
+            foreach (var d in devices)
+            {
+                arr.Add(new JsonObject
+                {
+                    ["serial"] = d.Serial,
+                    ["protocol"] = d.Protocol.ToString(),
+                    ["transport"] = d.Transport.ToString(),
+                });
+            }
+            json["devices"] = arr;
+
+            return json.ToJsonString();
+        }
+        catch (Exception ex)
+        {
+            return ErrorJson(tool, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <para>将设备重启到指定模式（system/bootloader/recovery/edl），返回结构化 JSON。</para>
+    /// Reboots a device into the specified mode (system/bootloader/recovery/edl) and returns structured JSON.
+    /// </summary>
+    [McpServerTool(Name = "device.reboot"), Description("Reboots a device into the specified mode (system/bootloader/recovery/edl) and returns the result as structured JSON.")]
+    public async Task<string> DeviceReboot(
+        string? serial = null,
+        string mode = "system",
+        CancellationToken ct = default)
+    {
+        const string tool = "device.reboot";
+        try
+        {
+            var devices = DeviceMonitorService.Instance.Scan();
+            DetectedDevice? target;
+            if (!string.IsNullOrWhiteSpace(serial))
+            {
+                target = devices.FirstOrDefault(d => string.Equals(d.Serial, serial, StringComparison.OrdinalIgnoreCase));
+                if (target is null)
+                {
+                    return ErrorJson(tool, $"Device with serial '{serial}' not found. Detected: {FormatSerials(devices)}  未找到序列号为 '{serial}' 的设备。");
+                }
+            }
+            else if (devices.Count == 1)
+            {
+                target = devices[0];
+            }
+            else if (devices.Count == 0)
+            {
+                return ErrorJson(tool, "No device detected. 未检测到设备。");
+            }
+            else
+            {
+                return ErrorJson(tool, $"Multiple devices detected; specify 'serial'. Detected: {FormatSerials(devices)}  检测到多台设备，请指定 serial。");
+            }
+
+            var success = await DeviceMonitorService.Instance.RebootAsync(target, mode, ct).ConfigureAwait(false);
+
+            var json = new JsonObject
+            {
+                ["success"] = success,
+                ["tool"] = tool,
+                ["serial"] = target.Serial,
+                ["protocol"] = target.Protocol.ToString(),
+                ["mode"] = mode,
+            };
+            if (!success)
+            {
+                json["error"] = $"Failed to reboot into '{mode}'. 重启到 '{mode}' 失败。";
+            }
+
+            return json.ToJsonString();
+        }
+        catch (OperationCanceledException)
+        {
+            return ErrorJson(tool, "Reboot cancelled or timed out. 重启已取消或超时。");
+        }
+        catch (Exception ex)
+        {
+            return ErrorJson(tool, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <para>擦除设备分区（仅 fastboot 协议），返回结构化 JSON。</para>
+    /// Erases a device partition (fastboot protocol only) and returns structured JSON.
+    /// </summary>
+    [McpServerTool(Name = "device.erase"), Description("Erases a device partition (fastboot only) and returns the result as structured JSON.")]
+    public async Task<string> DeviceErase(
+        string partition,
+        string? serial = null,
+        CancellationToken ct = default)
+    {
+        const string tool = "device.erase";
+        try
+        {
+            if (string.IsNullOrWhiteSpace(partition))
+            {
+                return ErrorJson(tool, "Partition name must not be empty. 分区名不能为空。");
+            }
+
+            var devices = DeviceMonitorService.Instance.Scan();
+            DetectedDevice? target;
+            if (!string.IsNullOrWhiteSpace(serial))
+            {
+                target = devices.FirstOrDefault(d => string.Equals(d.Serial, serial, StringComparison.OrdinalIgnoreCase));
+                if (target is null)
+                {
+                    return ErrorJson(tool, $"Device with serial '{serial}' not found. Detected: {FormatSerials(devices)}  未找到序列号为 '{serial}' 的设备。");
+                }
+            }
+            else if (devices.Count == 1)
+            {
+                target = devices[0];
+            }
+            else if (devices.Count == 0)
+            {
+                return ErrorJson(tool, "No flashable device detected. 未检测到可刷写设备。");
+            }
+            else
+            {
+                return ErrorJson(tool, $"Multiple devices detected; specify 'serial'. Detected: {FormatSerials(devices)}  检测到多台设备，请指定 serial。");
+            }
+
+            var device = new DeviceInfo(target);
+            var progress = new Progress<FlashProgress>(p =>
+                LogService.Instance.Write(LogLevel.Info, "McpTools", $"device.erase [{p.Partition ?? partition}] {p.Percent}% {p.Status}"));
+            var result = await FlashService.Default.ErasePartitionAsync(device, partition, progress, ct).ConfigureAwait(false);
+
+            var json = new JsonObject
+            {
+                ["success"] = result.Success,
+                ["tool"] = tool,
+                ["serial"] = target.Serial,
+                ["protocol"] = target.Protocol.ToString(),
+                ["partition"] = partition,
+                ["summary"] = result.Summary,
+            };
+            if (!result.Success)
+            {
+                json["error"] = result.Summary;
+            }
+
+            return json.ToJsonString();
+        }
+        catch (OperationCanceledException)
+        {
+            return ErrorJson(tool, "Erase cancelled or timed out. 擦除已取消或超时。");
+        }
+        catch (Exception ex)
+        {
             return ErrorJson(tool, ex.Message);
         }
     }
