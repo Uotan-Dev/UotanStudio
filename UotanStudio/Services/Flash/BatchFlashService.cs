@@ -15,16 +15,16 @@ namespace UotanStudio.Services.Flash;
 public static class BatchFlashService
 {
     /// <summary>
-    /// <para>顺序刷写多分区镜像；任一分区失败不会中断后续分区。每个分区的进度经
+    /// <para>顺序刷写由调用方筛选出的选中分区镜像；任一分区失败不会中断后续分区。每个分区的进度经
     /// <paramref name="progress"/> 回报，同时发送 <see cref="FlashProgressMessage"/> 供输出面板展示。</para>
-    /// Flashes multiple partition images in order; a single-partition failure never aborts the rest.
-    /// Per-partition progress is reported through <paramref name="progress"/> and broadcast as
-    /// <see cref="FlashProgressMessage"/> for the output panel.
+    /// Flashes the selected partition images filtered by the caller in order; a single-partition failure
+    /// never aborts the rest. Per-partition progress is reported through <paramref name="progress"/> and
+    /// broadcast as <see cref="FlashProgressMessage"/> for the output panel.
     /// </summary>
     /// <param name="device"><para>目标设备。</para>The target device.</param>
     /// <param name="entries">
-    /// <para>待刷写分区列表：(分区名, 镜像文件完整路径)。</para>
-    /// The partitions to flash: (partition name, full image file path).
+    /// <para>调用方筛选后的选中分区列表：(分区名, 镜像文件完整路径)。</para>
+    /// The caller-filtered selected partitions to flash: (partition name, full image file path).
     /// </param>
     /// <param name="progress"><para>可选的刷写进度报告器。</para>Optional flash progress reporter.</param>
     /// <param name="ct"><para>取消令牌；取消后停止刷写剩余分区。</para>
@@ -34,7 +34,7 @@ public static class BatchFlashService
     /// Aggregate result: <see cref="FlashResult.Success"/> is true when every partition succeeded,
     /// otherwise false with the failed partitions listed.
     /// </returns>
-    public static async Task<FlashResult> FlashAllAsync(
+    public static async Task<FlashResult> FlashSelectedAsync(
         DeviceInfo device,
         IReadOnlyList<(string Partition, string ImagePath)> entries,
         IProgress<FlashProgress>? progress,
@@ -74,8 +74,8 @@ public static class BatchFlashService
         }
 
         var summary = failures.Count == 0
-            ? $"Batch flash done: {succeeded}/{entries.Count} partition(s) OK  全选刷入完成：{succeeded}/{entries.Count} 个分区成功"
-            : $"Batch flash done: {succeeded}/{entries.Count} OK, failed: {string.Join(", ", failures)}  全选刷入完成：{succeeded}/{entries.Count} 成功，失败：{string.Join("；", failures)}";
+            ? $"Batch flash done: {succeeded}/{entries.Count} partition(s) OK  选中文件刷入完成：{succeeded}/{entries.Count} 个分区成功"
+            : $"Batch flash done: {succeeded}/{entries.Count} OK, failed: {string.Join(", ", failures)}  选中文件刷入完成：{succeeded}/{entries.Count} 成功，失败：{string.Join("；", failures)}";
         return new FlashResult { Success = failures.Count == 0, Summary = summary };
     }
 }

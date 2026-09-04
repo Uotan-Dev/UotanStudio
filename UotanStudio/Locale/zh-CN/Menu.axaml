@@ -56,10 +56,6 @@
     <!-- 底部选项卡 -->
     <x:String x:Key="Tab_Device">设备</x:String>
 
-    <!-- 镜像面板 -->
-    <x:String x:Key="ImageView_FlashAll">全部刷入</x:String>
-    <x:String x:Key="ImageView_FlashAllHint">将可刷写镜像按顺序批量刷入选中设备</x:String>
-
     <!-- 帮助菜单 -->
     <x:String x:Key="Menu_About">关于 UotanStudio</x:String>
     <x:String x:Key="Menu_Documentation">文档</x:String>

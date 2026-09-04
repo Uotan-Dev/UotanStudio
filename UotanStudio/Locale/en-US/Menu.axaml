@@ -56,10 +56,6 @@
     <!-- Bottom tabs -->
     <x:String x:Key="Tab_Device">Device</x:String>
 
-    <!-- Image panel -->
-    <x:String x:Key="ImageView_FlashAll">Flash All</x:String>
-    <x:String x:Key="ImageView_FlashAllHint">Flash all flashable images to the selected device in order</x:String>
-
     <!-- Help menu -->
     <x:String x:Key="Menu_About">About UotanStudio</x:String>
     <x:String x:Key="Menu_Documentation">Documentation</x:String>

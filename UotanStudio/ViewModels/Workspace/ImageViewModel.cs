@@ -51,6 +51,30 @@ internal partial class ImageViewModel : Tool
     public ObservableCollection<ImageEntryViewModel> Images { get; } = [];
 
     /// <summary>
+    /// <para>获取或设置当前是否显示打包操作。</para>
+    /// Gets or sets whether pack actions are currently shown.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUnpackMode))]
+    private bool _isPackMode;
+
+    /// <summary>
+    /// <para>获取当前是否显示解包操作；设置为 true 时切换到解包模式。</para>
+    /// Gets whether unpack actions are currently shown; setting this to true switches to unpack mode.
+    /// </summary>
+    public bool IsUnpackMode
+    {
+        get => !IsPackMode;
+        set
+        {
+            if (value)
+            {
+                IsPackMode = false;
+            }
+        }
+    }
+
+    /// <summary>
     /// <para>获取或设置镜像筛选下拉框的可选项。</para>
     /// Gets or sets the available items in the image-filter combo box.
     /// </summary>
@@ -679,84 +703,6 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
-    /// <para>按打包设置面板的当前设置，从选中镜像的解包目录重新打包系统分区镜像
-    /// （ext4/erofs，可选 sparse）到 <c>intermediate/img/</c> 并登记历史。</para>
-    /// Repacks the selected image's unpack directory into a system-partition image (ext4/erofs,
-    /// optionally sparse) according to the current packing settings panel, outputting to
-    /// <c>intermediate/img/</c> and recording history.
-    /// </summary>
-    [RelayCommand]
-    private async Task PackImageAsync()
-    {
-        var image = SelectedImage;
-        if (image is null)
-        {
-            return;
-        }
-
-        if (!ProjectContextService.Instance.IsProjectOpen)
-        {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Pack image aborted: no project is open  打包镜像中止：尚未打开工程");
-            return;
-        }
-
-        var name = GetEntryBaseName(image);
-        StatusText = $"Packing system image: {image.DisplayName}  正在打包系统镜像：{image.DisplayName}";
-        ProgressPercent = -1;
-        try
-        {
-            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
-            if (subProjectRoot is null)
-            {
-                LogService.Instance.Write(LogLevel.Error, "Images", "Pack image aborted: no active sub-project  打包镜像中止：无活动子项目");
-                return;
-            }
-
-            var unpackDir = Path.Combine(subProjectRoot, name);
-            if (!Directory.Exists(unpackDir) || !Directory.EnumerateFileSystemEntries(unpackDir).Any())
-            {
-                LogService.Instance.Write(LogLevel.Warn, "Images", $"Pack image aborted: unpack directory is empty ({unpackDir})  打包镜像中止：解包目录为空（{unpackDir}）");
-                StatusText = string.Empty;
-                ProgressPercent = 0;
-                return;
-            }
-
-            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
-            var outputPath = Path.Combine(outputDir, name + "-packed.img");
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Packing system image from {unpackDir}  正在打包系统镜像（源：{unpackDir}）");
-            var result = await PackingService.PackImageAsync(unpackDir, outputPath);
-            if (!result.Success)
-            {
-                LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
-                StatusText = $"Pack image failed  打包镜像失败";
-                ProgressPercent = 0;
-                return;
-            }
-
-            LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
-            StatusText = $"Packed system image: {image.DisplayName}  已打包系统镜像：{image.DisplayName}";
-            ProgressPercent = 100;
-            OperationHistoryService.Instance.Record(
-                $"Pack image {image.DisplayName}",
-                new HistoryOperationDto
-                {
-                    Kind = HistoryOperationKind.SynthesizeImg,
-                    Description = $"Pack image {image.DisplayName}",
-                    DisplayName = image.DisplayName,
-                    OutputPaths = [outputPath]
-                },
-                () => DeleteFileSafe(outputPath),
-                () => { });
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Images", $"Pack image failed: {ex.Message}  打包镜像失败：{ex.Message}");
-            StatusText = $"Pack image failed: {ex.Message}  打包镜像失败：{ex.Message}";
-            ProgressPercent = 0;
-        }
-    }
-
-    /// <summary>
     /// <para>从 ramdisk（或解包）目录打包 CPIO 到 <c>intermediate/br/</c> 并登记历史。</para>
     /// Packs a CPIO archive from the ramdisk (or unpack) directory to <c>intermediate/br/</c> and records history.
     /// </summary>
@@ -989,32 +935,32 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
-    /// <para>把项目内可刷写的镜像（boot/raw/sparse）按顺序批量刷入当前选中设备：分区名优先取
+    /// <para>把用户勾选的可刷写镜像（boot/raw/sparse）按顺序批量刷入当前选中设备：分区名优先取
     /// <see cref="ImageEntryViewModel"/> 已有分区字段，缺省用文件名去扩展名；经
-    /// <see cref="BatchFlashService.FlashAllAsync"/> 逐分区复用 <see cref="FlashService.FlashImageAsync"/>
+    /// <see cref="BatchFlashService.FlashSelectedAsync"/> 逐分区复用 <see cref="FlashService.FlashImageAsync"/>
     /// 执行，单分区失败会继续，进度与结果回报到状态文本。</para>
-    /// Flashes all flashable images (boot/raw/sparse) in the project to the currently selected device
+    /// Flashes the user-selected flashable images (boot/raw/sparse) to the currently selected device
     /// in order: the partition name prefers an existing partition field on
     /// <see cref="ImageEntryViewModel"/>, falling back to the file name without its extension; each
-    /// partition is flashed sequentially via <see cref="BatchFlashService.FlashAllAsync"/> which reuses
+    /// partition is flashed sequentially via <see cref="BatchFlashService.FlashSelectedAsync"/> which reuses
     /// <see cref="FlashService.FlashImageAsync"/>, a single-partition failure does not stop the rest,
     /// and progress/results are reported to the status text.
     /// </summary>
     [RelayCommand]
-    private async Task FlashAllAsync()
+    private async Task FlashSelectedAsync()
     {
         ProgressPercent = 0;
 
         if (!ProjectContextService.Instance.IsProjectOpen)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash all aborted: no project is open  全选刷入中止：尚未打开工程");
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash selected aborted: no project is open  选中文件刷入中止：尚未打开工程");
             return;
         }
 
         var device = DeviceViewModel.Instance?.SelectedDevice;
         if (device is null)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash all aborted: no device selected  全选刷入中止：未选中设备");
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash selected aborted: no device selected  选中文件刷入中止：未选中设备");
             return;
         }
 
@@ -1029,7 +975,7 @@ internal partial class ImageViewModel : Tool
             var path = ProjectContextService.Instance.ResolvePath(image.RelativePath);
             if (path is null || !File.Exists(path))
             {
-                LogService.Instance.Write(LogLevel.Warn, "Images", $"Flash all skipped missing file: {image.RelativePath}  全选刷入跳过缺失文件：{image.RelativePath}");
+                LogService.Instance.Write(LogLevel.Warn, "Images", $"Flash selected skipped missing file: {image.RelativePath}  选中文件刷入跳过缺失文件：{image.RelativePath}");
                 continue;
             }
 
@@ -1038,7 +984,7 @@ internal partial class ImageViewModel : Tool
 
         if (entries.Count == 0)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash all aborted: no flashable images  全选刷入中止：无可刷写镜像");
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash selected aborted: no flashable images selected  选中文件刷入中止：未勾选可刷写镜像");
             return;
         }
 
@@ -1051,7 +997,7 @@ internal partial class ImageViewModel : Tool
                 ProgressPercent = percent;
                 StatusText = $"[{percent}%] {fp.Status}";
             });
-            var result = await BatchFlashService.FlashAllAsync(device, entries, progress, CancellationToken.None).ConfigureAwait(true);
+            var result = await BatchFlashService.FlashSelectedAsync(device, entries, progress, CancellationToken.None).ConfigureAwait(true);
             if (result.Success)
             {
                 ProgressPercent = 100;
@@ -1062,8 +1008,8 @@ internal partial class ImageViewModel : Tool
         catch (Exception ex)
         {
             ProgressPercent = 0;
-            StatusText = $"Flash all failed: {ex.Message}  全选刷入失败：{ex.Message}";
-            LogService.Instance.Write(LogLevel.Error, "Images", $"Flash all failed: {ex.Message}  全选刷入失败：{ex.Message}");
+            StatusText = $"Flash selected failed: {ex.Message}  选中文件刷入失败：{ex.Message}";
+            LogService.Instance.Write(LogLevel.Error, "Images", $"Flash selected failed: {ex.Message}  选中文件刷入失败：{ex.Message}");
         }
     }
 
@@ -1392,14 +1338,6 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
-    /// <para>请求打开一键刷写向导窗口时引发，由镜像面板视图处理并弹出
-    /// <c>UotanStudio.Views.Workspace.FlashWizardView</c>。</para>
-    /// Raised when the one-click flash wizard window should be opened; the image panel view
-    /// handles it and shows <c>UotanStudio.Views.Workspace.FlashWizardView</c>.
-    /// </summary>
-    public event EventHandler? OpenFlashWizardRequested;
-
-    /// <summary>
     /// <para>手动刷新镜像列表：重新扫描工程 images/ 目录并注册已知格式镜像。</para>
     /// Manually refreshes the image list: re-scans the project images/ directory and registers known-format images.
     /// </summary>
@@ -1413,13 +1351,6 @@ internal partial class ImageViewModel : Tool
         ProgressPercent = 0;
     }
 
-    /// <summary>
-    /// <para>打开一键刷写向导：引发 <see cref="OpenFlashWizardRequested"/>，由视图弹出向导窗口。</para>
-    /// Opens the one-click flash wizard: raises <see cref="OpenFlashWizardRequested"/> so the view
-    /// shows the wizard window.
-    /// </summary>
-    [RelayCommand]
-    private void OpenFlashWizard() => OpenFlashWizardRequested?.Invoke(this, EventArgs.Empty);
 }
 
 /// <summary>

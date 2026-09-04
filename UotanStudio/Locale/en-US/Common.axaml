@@ -13,15 +13,18 @@
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
 
     <!-- ImageView -->
-    <x:String x:Key="ImageView_CommonImages">Unpack</x:String>
-    <x:String x:Key="ImageView_AllImages">Pack</x:String>
+    <x:String x:Key="ImageView_UnpackMode">Unpack</x:String>
+    <x:String x:Key="ImageView_PackMode">Pack</x:String>
     <x:String x:Key="ImageView_Refresh">Refresh</x:String>
     <x:String x:Key="ImageView_ExtractSelected">Extract</x:String>
     <x:String x:Key="ImageView_SynthesizeImg">Build IMG</x:String>
     <x:String x:Key="ImageView_SynthesizeBr">Build BR</x:String>
-    <x:String x:Key="ImageView_DeleteSelected">Delete</x:String>
+    <x:String x:Key="ImageView_DeleteSelected">Delete Selected</x:String>
     <x:String x:Key="ImageView_SynthesizeSuper">Build Super</x:String>
     <x:String x:Key="ImageView_SynthesizeDat">Build DAT</x:String>
+    <x:String x:Key="ImageView_FlashSelected">Flash Selected</x:String>
+    <x:String x:Key="ImageView_FlashSelectedHint">Flash the selected flashable images to the current device in order</x:String>
+    <x:String x:Key="ImageView_PackRom">Pack ROM</x:String>
     <x:String x:Key="ImageView_ImportHint">Import images into the project images/ folder</x:String>
     <x:String x:Key="ImageView_ExportHint">Export the selected image to an external path</x:String>
     <x:String x:Key="ImageView_ExtractHint">Unpack the selected image to intermediate/</x:String>
@@ -30,11 +33,7 @@
     <x:String x:Key="ImageView_NoSelection">No image selected</x:String>
     <x:String x:Key="ImageView_NoProject">No project is open</x:String>
     <x:String x:Key="ImageView_OperationDone">Operation complete</x:String>
-    <x:String x:Key="ImageView_FlashWizard">Flash Wizard</x:String>
-    <x:String x:Key="ImageView_FlashWizardHint">Open the one-click flash wizard</x:String>
     <x:String x:Key="ImageView_SelectHint">Include this image in batch operations</x:String>
-    <x:String x:Key="ImageView_PackImage">Pack Image</x:String>
-    <x:String x:Key="ImageView_PackImageHint">Repack the unpacked directory into a system partition image</x:String>
     <x:String x:Key="ImageView_FilterAll">All</x:String>
 
     <!-- FirmwareInfo actions -->
@@ -57,28 +56,6 @@
     <!-- Workspace drag-drop -->
     <x:String x:Key="Workspace_DropNoFiles">Dropped content contains no openable files; ignored.</x:String>
     <x:String x:Key="Workspace_DropOpenFailed">Failed to open dropped files.</x:String>
-
-    <!-- Flash wizard -->
-    <x:String x:Key="FlashWizard_Title">Flash Wizard</x:String>
-    <x:String x:Key="FlashWizard_ImagesHeader">Partition Images</x:String>
-    <x:String x:Key="FlashWizard_DeviceHeader">Target Device</x:String>
-    <x:String x:Key="FlashWizard_RulesHeader">Mode Whitelist Rules</x:String>
-    <x:String x:Key="FlashWizard_NoDevice">No device selected</x:String>
-    <x:String x:Key="FlashWizard_RuleFastboot">Fastboot mode can flash any partition (non-empty partition name)</x:String>
-    <x:String x:Key="FlashWizard_RuleEdl">EDL requires a ready device and the partition matched against rawprogram</x:String>
-    <x:String x:Key="FlashWizard_RuleRkdl">RKDL requires a ready device and a non-empty partition name</x:String>
-    <x:String x:Key="FlashWizard_RuleAdbNotSupported">ADB supports sideload only; not supported by this wizard</x:String>
-    <x:String x:Key="FlashWizard_AfterFlashReboot">Reboot device after flash</x:String>
-    <x:String x:Key="FlashWizard_FlashButton">Flash</x:String>
-    <x:String x:Key="FlashWizard_RebootButton">Reboot Device</x:String>
-    <x:String x:Key="FlashWizard_CloseButton">Close</x:String>
-    <x:String x:Key="FlashWizard_ConfirmTitle">Confirm Flash</x:String>
-    <x:String x:Key="FlashWizard_ConfirmMessage">Are you sure you want to flash {0} to {1} ({2})? This may brick your device.</x:String>
-    <x:String x:Key="FlashWizard_Canceled">Canceled</x:String>
-    <x:String x:Key="FlashWizard_ImageNotFound">Image file not found or path cannot be resolved</x:String>
-    <x:String x:Key="FlashWizard_InvalidPartition">Partition name is empty; cannot flash</x:String>
-    <x:String x:Key="FlashWizard_EdlPartitionNotFound">Partition {0} not found in rawprogram</x:String>
-    <x:String x:Key="FlashWizard_AdbNotSupported">ADB supports sideload only; out of this wizard's scope</x:String>
 
     <!-- Splash window -->
     <x:String x:Key="Splash_Subtitle">Firmware Toolbox</x:String>
