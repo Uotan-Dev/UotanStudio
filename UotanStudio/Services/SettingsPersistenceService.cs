@@ -237,7 +237,17 @@ public class SettingsPersistenceService
             }
 
             var json = JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings);
-            File.WriteAllText(_settingsFilePath, json);
+            var tempPath = _settingsFilePath + ".tmp";
+            try
+            {
+                File.WriteAllText(tempPath, json);
+                File.Move(tempPath, _settingsFilePath, overwrite: true);
+            }
+            catch
+            {
+                try { File.Delete(tempPath); } catch { /* cleanup best-effort */ }
+                throw;
+            }
         }
         catch (IOException ex)
         {
