@@ -179,7 +179,7 @@ internal readonly struct ZErofsMapHeader
     /// bytes 2-3).</para>
     /// </summary>
     public ZErofsMapHeader(ushort reserved1, ushort idataSize, ushort advise, byte algorithmType, byte clusterBits)
-        : this((uint)(reserved1 | ((uint)idataSize << 16)), advise, algorithmType, clusterBits)
+        : this(reserved1 | ((uint)idataSize << 16), advise, algorithmType, clusterBits)
     {
     }
 

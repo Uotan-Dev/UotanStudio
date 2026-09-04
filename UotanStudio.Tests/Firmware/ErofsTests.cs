@@ -337,7 +337,7 @@ public class ErofsTests
         // File inode (compact, reserved layout 0x0A = unsupported) at metadata offset 32 (nid 1).
         new ErofsInode
         {
-            Advise = (ushort)0x0A, // 未定义的 data layout（位 1..3 = 101）
+            Advise = 0x0A, // 未定义的 data layout（位 1..3 = 101）
             Mode = ErofsInode.ModeRegularFile,
             Size = 1,
         }.WriteTo(image.AsSpan(blockSize + ErofsInode.CompactSize));

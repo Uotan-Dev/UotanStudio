@@ -188,7 +188,7 @@ public class SuperImageBuilderTests
             Assert.Equal(10u, metadata.MajorVersion);
             Assert.Equal(2, metadata.Partitions.Count);
             Assert.Equal(2, metadata.Extents.Count);
-            Assert.Equal(1, metadata.BlockDevices.Count);
+            Assert.Single(metadata.BlockDevices);
             Assert.Equal("system", metadata.Partitions[0].Name);
             Assert.Equal("vendor", metadata.Partitions[1].Name);
         }

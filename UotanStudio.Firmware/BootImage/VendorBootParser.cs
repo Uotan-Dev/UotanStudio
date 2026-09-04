@@ -351,8 +351,8 @@ public class VendorBootParser : IDisposable
             EnsureParsed();
             var (offset, size, name) = component switch
             {
-                VendorBootComponent.VendorRamdisk => (_vendorRamdiskOffset, (long)_vendorRamdiskSize, "vendor ramdisk"),
-                VendorBootComponent.Dtb => (_dtbOffset, (long)_dtbSize, "DTB"),
+                VendorBootComponent.VendorRamdisk => (_vendorRamdiskOffset, _vendorRamdiskSize, "vendor ramdisk"),
+                VendorBootComponent.Dtb => (_dtbOffset, _dtbSize, "DTB"),
                 VendorBootComponent.Bootconfig => (_bootconfigOffset, (long)_bootconfigSize, "bootconfig"),
                 _ => throw new ArgumentOutOfRangeException(nameof(component))
             };
@@ -411,7 +411,7 @@ public class VendorBootParser : IDisposable
             long offset;
             try
             {
-                offset = checked(_vendorRamdiskOffset + (long)entry.RamdiskOffset);
+                offset = checked(_vendorRamdiskOffset + entry.RamdiskOffset);
             }
             catch (OverflowException ex)
             {
@@ -488,8 +488,8 @@ public class VendorBootParser : IDisposable
 
     private static byte[] ReadRange(Stream stream, long offset, int size, string component)
     {
-        ValidateRange(stream, offset, (long)size, component);
-        var position = checked((long)offset);
+        ValidateRange(stream, offset, size, component);
+        var position = checked(offset);
         var result = new byte[size];
         stream.Position = position;
         stream.ReadExactly(result);

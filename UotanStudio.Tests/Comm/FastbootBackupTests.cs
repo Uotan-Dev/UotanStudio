@@ -134,7 +134,7 @@ public class FastbootBackupTests
             var extent = metadata.Extents[i];
             Assert.Equal((ulong)(partitions[i].SizeInBytes / SuperImageBuilder.LpSectorSize), extent.NumSectors);
             Assert.Equal(SuperImageBuilder.LinearTargetType, extent.TargetType);
-            var dataStart = (long)((firstLogicalSector + extent.TargetData) * (ulong)SuperImageBuilder.LpSectorSize);
+            var dataStart = (long)((firstLogicalSector + extent.TargetData) * SuperImageBuilder.LpSectorSize);
             var dataEnd = dataStart + partitions[i].SizeInBytes;
             Assert.InRange(dataEnd, 1, image.Length);
         }

@@ -136,7 +136,7 @@ public class UsbTraceTests
         try
         {
             // The exception must not escape EmitTransfer (it is logged instead).
-            // 异常不得逃出 EmitTransfer（改为记录日志）。
+            // 异常不得逃出 EmitTransfer（内部记录日志）。
             UsbTrace.EmitTransfer(new UsbTransferEvent { Operation = UsbTransferOperation.Enumerate });
         }
         finally

@@ -290,87 +290,87 @@ public sealed class NodeExecutionEngine
         switch (node.TypeKey)
         {
             case "Flow.Branch":
-            {
-                var trueConnector = node.Output.FirstOrDefault(c => string.Equals(c.Title, "True", StringComparison.Ordinal));
-                var condition = NodeDataUtil.ToBool(trueConnector?.Data, false);
-                var untakenTitle = condition ? "False" : "True";
-                var untaken = CollectFlowReachable(node, untakenTitle, flowOut);
-                foreach (var target in untaken) skippedByBranch.Add(target.InstanceId);
-                if (untaken.Count > 0)
                 {
-                    _log.Write(LogLevel.Info, "Engine",
-                        $"Branch '{node.InstanceId}' took '{(condition ? "True" : "False")}', skipping {untaken.Count} downstream node(s)");
-                }
-                break;
-            }
-            case "Flow.Loop":
-            {
-                var requested = NodeDataUtil.ToInt(node.ReadInput("Count"), 0);
-                var iterations = Math.Clamp(requested, 0, MaxLoopIterations);
-                if (requested > MaxLoopIterations)
-                {
-                    _log.Write(LogLevel.Warn, "Engine",
-                        $"Loop '{node.InstanceId}' requested {requested} iterations, clamped to {MaxLoopIterations}");
-                }
-                var body = CollectFlowReachable(node, "Body", flowOut);
-                if (body.Count == 0) break;
-
-                var bodyOrder = topologicalOrder.Where(body.Contains).ToList();
-                _log.Write(LogLevel.Info, "Engine",
-                    $"Loop '{node.InstanceId}' iterating body of {bodyOrder.Count} node(s) for {iterations} iteration(s)");
-
-                for (var i = 0; i < iterations; i++)
-                {
-                    token.ThrowIfCancellationRequested();
-                    node.WriteOutput("Index", i);
-                    _log.Write(LogLevel.Debug, "Engine", $"Loop '{node.InstanceId}' iteration {i + 1}/{iterations}");
-                    foreach (var bodyNode in bodyOrder)
+                    var trueConnector = node.Output.FirstOrDefault(c => string.Equals(c.Title, "True", StringComparison.Ordinal));
+                    var condition = NodeDataUtil.ToBool(trueConnector?.Data, false);
+                    var untakenTitle = condition ? "False" : "True";
+                    var untaken = CollectFlowReachable(node, untakenTitle, flowOut);
+                    foreach (var target in untaken) skippedByBranch.Add(target.InstanceId);
+                    if (untaken.Count > 0)
                     {
-                        var succeeded = await ExecuteSingleNodeAsync(bodyNode, byId, connections, token,
-                            p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
-                        if (!succeeded)
-                        {
-                            lock (failLock) { failedNodes.Add(bodyNode.InstanceId); }
-                        }
+                        _log.Write(LogLevel.Info, "Engine",
+                            $"Branch '{node.InstanceId}' took '{(condition ? "True" : "False")}', skipping {untaken.Count} downstream node(s)");
                     }
+                    break;
                 }
-
-                foreach (var bodyNode in body) handledByFlow.Add(bodyNode.InstanceId);
-                break;
-            }
-            case "Flow.Parallel":
-            {
-                var branchConnectors = node.Output.Where(c => c.PortType == NodePortType.Flow).ToList();
-                if (branchConnectors.Count == 0) break;
-
-                var tasks = new List<Task>();
-                foreach (var connector in branchConnectors)
+            case "Flow.Loop":
                 {
-                    var branch = CollectFlowReachable(node, connector.Title, flowOut);
-                    if (branch.Count == 0) continue;
-                    var branchOrder = topologicalOrder.Where(branch.Contains).ToList();
-                    foreach (var branchNode in branch) handledByFlow.Add(branchNode.InstanceId);
-
-                    _log.Write(LogLevel.Info, "Engine",
-                        $"Parallel '{node.InstanceId}' dispatching branch '{connector.Title}' with {branchOrder.Count} node(s)");
-                    tasks.Add(Task.Run(async () =>
+                    var requested = NodeDataUtil.ToInt(node.ReadInput("Count"), 0);
+                    var iterations = Math.Clamp(requested, 0, MaxLoopIterations);
+                    if (requested > MaxLoopIterations)
                     {
-                        foreach (var branchNode in branchOrder)
+                        _log.Write(LogLevel.Warn, "Engine",
+                            $"Loop '{node.InstanceId}' requested {requested} iterations, clamped to {MaxLoopIterations}");
+                    }
+                    var body = CollectFlowReachable(node, "Body", flowOut);
+                    if (body.Count == 0) break;
+
+                    var bodyOrder = topologicalOrder.Where(body.Contains).ToList();
+                    _log.Write(LogLevel.Info, "Engine",
+                        $"Loop '{node.InstanceId}' iterating body of {bodyOrder.Count} node(s) for {iterations} iteration(s)");
+
+                    for (var i = 0; i < iterations; i++)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        node.WriteOutput("Index", i);
+                        _log.Write(LogLevel.Debug, "Engine", $"Loop '{node.InstanceId}' iteration {i + 1}/{iterations}");
+                        foreach (var bodyNode in bodyOrder)
                         {
-                            token.ThrowIfCancellationRequested();
-                            var succeeded = await ExecuteSingleNodeAsync(branchNode, byId, connections, token,
+                            var succeeded = await ExecuteSingleNodeAsync(bodyNode, byId, connections, token,
                                 p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
                             if (!succeeded)
                             {
-                                lock (failLock) { failedNodes.Add(branchNode.InstanceId); }
+                                lock (failLock) { failedNodes.Add(bodyNode.InstanceId); }
                             }
                         }
-                    }, token));
-                }
+                    }
 
-                if (tasks.Count > 0) await Task.WhenAll(tasks).ConfigureAwait(false);
-                break;
-            }
+                    foreach (var bodyNode in body) handledByFlow.Add(bodyNode.InstanceId);
+                    break;
+                }
+            case "Flow.Parallel":
+                {
+                    var branchConnectors = node.Output.Where(c => c.PortType == NodePortType.Flow).ToList();
+                    if (branchConnectors.Count == 0) break;
+
+                    var tasks = new List<Task>();
+                    foreach (var connector in branchConnectors)
+                    {
+                        var branch = CollectFlowReachable(node, connector.Title, flowOut);
+                        if (branch.Count == 0) continue;
+                        var branchOrder = topologicalOrder.Where(branch.Contains).ToList();
+                        foreach (var branchNode in branch) handledByFlow.Add(branchNode.InstanceId);
+
+                        _log.Write(LogLevel.Info, "Engine",
+                            $"Parallel '{node.InstanceId}' dispatching branch '{connector.Title}' with {branchOrder.Count} node(s)");
+                        tasks.Add(Task.Run(async () =>
+                        {
+                            foreach (var branchNode in branchOrder)
+                            {
+                                token.ThrowIfCancellationRequested();
+                                var succeeded = await ExecuteSingleNodeAsync(branchNode, byId, connections, token,
+                                    p => SafeReportProgress(0, 1, p)).ConfigureAwait(false);
+                                if (!succeeded)
+                                {
+                                    lock (failLock) { failedNodes.Add(branchNode.InstanceId); }
+                                }
+                            }
+                        }, token));
+                    }
+
+                    if (tasks.Count > 0) await Task.WhenAll(tasks).ConfigureAwait(false);
+                    break;
+                }
         }
     }
 

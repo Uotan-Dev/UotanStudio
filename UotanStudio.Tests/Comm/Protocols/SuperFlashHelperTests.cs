@@ -151,7 +151,7 @@ public class SuperFlashHelperTests
 
         using var session = NewSession(transport);
         var helper = new SuperFlashHelper(session);
-        helper.FlashSuper(superPath);
+        helper.FlashSuper(superPath, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(10, transport.Writes.Count);
         Assert.Equal("getvar:max-download-size", Text(transport.Writes[0]));
@@ -197,7 +197,7 @@ public class SuperFlashHelperTests
         transport.Enqueue("OKAY");                          // flash:vendor
 
         using var session = NewSession(transport);
-        new SuperFlashHelper(session).FlashSuper(superPath, wipe: true);
+        new SuperFlashHelper(session).FlashSuper(superPath, wipe: true, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Contains(transport.Writes, w => Text(w) == "update-super:super:wipe");
         Assert.Equal("flash:system", Text(transport.Writes[6]));
@@ -212,7 +212,7 @@ public class SuperFlashHelperTests
         var helper = new SuperFlashHelper(session);
 
         Assert.Throws<FileNotFoundException>(() =>
-            helper.FlashSuper(Path.Combine(Path.GetTempPath(), $"uotan-missing-super-{Guid.NewGuid():N}.img")));
+            helper.FlashSuper(Path.Combine(Path.GetTempPath(), $"uotan-missing-super-{Guid.NewGuid():N}.img"), cancellationToken: TestContext.Current.CancellationToken));
         Assert.Empty(transport.Writes);
     }
 
@@ -226,7 +226,7 @@ public class SuperFlashHelperTests
         using var session = NewSession(transport);
         var helper = new SuperFlashHelper(session);
 
-        Assert.Throws<InvalidDataException>(() => helper.FlashSuper(notSuper));
+        Assert.Throws<InvalidDataException>(() => helper.FlashSuper(notSuper, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Empty(transport.Writes);
     }
 

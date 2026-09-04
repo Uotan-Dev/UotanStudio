@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.IO;
 using ICSharpCode.SharpZipLib.Zip.Compression;
 using K4os.Compression.LZ4;
 using SevenZip;

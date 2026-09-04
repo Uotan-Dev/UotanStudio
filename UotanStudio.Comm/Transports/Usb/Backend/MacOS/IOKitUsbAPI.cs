@@ -341,8 +341,8 @@ internal static partial class IOKitUsbAPI
     // single indirection based on the IOKit C headers alone.
     // <para>读取 `self` 指向的 vtable 在 `offset`（0 基槽位）处的方法指针并包装为
     // 请求的委托类型。vtable 本身是 `self` 指向的首个指针；每槽一个 IntPtr 宽。
-    // 此双重解引用是重写前后端在 macOS 上验证过的调用形——请勿仅依据 IOKit C 头
-    // 文件将其改为单层解引用。</para>
+    // 此双重解引用是经 macOS 验证的调用形——IOKit C 头文件可能误导为单层解引用，
+    // 但实际需要双重解引用。</para>
     [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
         "AOT", "IL3050:MembersWithParametersRequireDynamicCode",
         Justification = "All T instantiations are delegate types declared statically in this file; NativeAOT generates their marshaling stubs at compile Time.")]

@@ -10,18 +10,20 @@ namespace UotanStudio;
 /// Given a view model, returns the corresponding view via <see cref="ViewModelViewRegistry"/>.
 /// </summary>
 /// <remarks>
-/// <para>不再使用反射；若 ViewModel 未注册，则返回带本地化提示的 <see cref="TextBlock"/>。
+/// <para>通过 <see cref="ViewModelViewRegistry"/> 查找视图，不使用反射；若 ViewModel 未注册，
+/// 则返回带本地化提示的 <see cref="TextBlock"/>。
 /// 已注册的 ViewModel 按实例缓存已创建的视图：Dock 标签切换时 ContentPresenter 会重新应用
 /// 模板并再次调用本方法，若不缓存会为每个打开中的文档反复重建视图（每个新视图都持有大文本
 /// 的编辑器 Document，导致来回切换标签时内存持续增长）。缓存以弱引用键关联 VM 实例，VM 被
 /// 回收后条目自动消失，不会反向延长 VM 生命周期。</para>
-/// No reflection is used; an unregistered ViewModel yields a <see cref="TextBlock"/> with a
-/// localized "not found" message. Views for registered ViewModels are cached per instance:
-/// when Dock tabs are switched, the ContentPresenter re-applies the template and calls this
-/// method again — without caching, every open document would get a fresh view (each holding an
-/// editor document with large text), making memory grow steadily while switching tabs back and
-/// forth. The cache keys on the VM instance via a weak table, so entries vanish once the VM is
-/// collected and never extend the VM's lifetime.
+/// Looks up views via <see cref="ViewModelViewRegistry"/> without reflection; an unregistered
+/// ViewModel yields a <see cref="TextBlock"/> with a localized "not found" message. Views for
+/// registered ViewModels are cached per instance: when Dock tabs are switched, the
+/// ContentPresenter re-applies the template and calls this method again — without caching,
+/// every open document would get a fresh view (each holding an editor document with large
+/// text), making memory grow steadily while switching tabs back and forth. The cache keys on
+/// the VM instance via a weak table, so entries vanish once the VM is collected and never
+/// extend the VM's lifetime.
 /// </remarks>
 public class ViewLocator : IDataTemplate
 {

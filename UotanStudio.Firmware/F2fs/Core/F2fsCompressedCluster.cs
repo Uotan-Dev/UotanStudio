@@ -104,7 +104,7 @@ internal sealed record F2fsCompressedCluster
 
         destination.Clear();
         destination[OffsetAlgorithm] = (byte)Algorithm;
-        destination[OffsetClusterPages] = (byte)ClusterSizePages;
+        destination[OffsetClusterPages] = ClusterSizePages;
         BinaryPrimitives.WriteInt32LittleEndian(destination[OffsetUncompressedSize..], UncompressedSize);
         BinaryPrimitives.WriteInt32LittleEndian(destination[OffsetCompressedSize..], CompressedSize);
     }

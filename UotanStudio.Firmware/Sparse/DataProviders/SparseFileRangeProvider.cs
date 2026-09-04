@@ -158,8 +158,8 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
                 break;
             }
 
-            var chunkStart = (long)chunk.StartBlock * blockSize;
-            var chunkEnd = chunkStart + (long)chunk.Header.ChunkSize * blockSize;
+            var chunkStart = chunk.StartBlock * blockSize;
+            var chunkEnd = chunkStart + chunk.Header.ChunkSize * blockSize;
             var overlapStart = Math.Max(requestedStart, chunkStart);
             var overlapEnd = Math.Min(requestedEnd, chunkEnd);
             if (overlapStart >= overlapEnd)

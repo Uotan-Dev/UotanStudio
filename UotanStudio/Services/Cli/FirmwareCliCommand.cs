@@ -1,5 +1,3 @@
-using UotanStudio.Firmware.Common;
-
 namespace UotanStudio.Services.Cli;
 
 /// <summary>

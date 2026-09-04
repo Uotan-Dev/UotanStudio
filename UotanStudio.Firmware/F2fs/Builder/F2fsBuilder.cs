@@ -646,7 +646,7 @@ public sealed class F2fsBuilder
                 $"File '{node.FullPath}' exceeds the maximum f2fs data size.");
         }
 
-        var indirectChildCount = indirectUsed > 0 ? (int)((indirectUsed + F2fsNode.AddrsPerBlock - 1) / F2fsNode.AddrsPerBlock) : 0;
+        var indirectChildCount = indirectUsed > 0 ? (indirectUsed + F2fsNode.AddrsPerBlock - 1) / F2fsNode.AddrsPerBlock : 0;
         if (direct1)
         {
             node.Dnodes.Add(new DnodePlan { LogicalStart = F2fsNode.DefAddrsPerInode });
@@ -679,8 +679,8 @@ public sealed class F2fsBuilder
 
             for (var i = 0; i < diIndirectCount; i++)
             {
-                var indirectStart = doubleIndirectLogicalStart + (long)i * perIndirectCapacity;
-                var remainingInIndirect = Math.Min(remainingForDoubleIndirect - (long)i * perIndirectCapacity, perIndirectCapacity);
+                var indirectStart = doubleIndirectLogicalStart + i * perIndirectCapacity;
+                var remainingInIndirect = Math.Min(remainingForDoubleIndirect - i * perIndirectCapacity, perIndirectCapacity);
                 var directCount = (int)((remainingInIndirect + F2fsNode.AddrsPerBlock - 1) / F2fsNode.AddrsPerBlock);
 
                 for (var j = 0; j < directCount; j++)
@@ -865,20 +865,20 @@ public sealed class F2fsBuilder
 
         layout.MainSegments = mainSegments;
         var blocksForSit = (mainSegments + F2fsNode.SitEntryPerBlock - 1) / F2fsNode.SitEntryPerBlock;
-        layout.SitSegments = 2 * (uint)((blocksForSit + BlocksPerSeg - 1) / BlocksPerSeg);
+        layout.SitSegments = 2 * ((blocksForSit + BlocksPerSeg - 1) / BlocksPerSeg);
         if (layout.SitSegments == 0)
         {
             layout.SitSegments = 2;
         }
 
-        var blocksForNat = (maxNid + (uint)F2fsNode.NatEntryPerBlock - 1) / (uint)F2fsNode.NatEntryPerBlock;
-        layout.NatSegments = 2 * (uint)((blocksForNat + (uint)BlocksPerSeg - 1) / (uint)BlocksPerSeg);
+        var blocksForNat = (maxNid + F2fsNode.NatEntryPerBlock - 1) / F2fsNode.NatEntryPerBlock;
+        layout.NatSegments = 2 * ((blocksForNat + BlocksPerSeg - 1) / BlocksPerSeg);
         if (layout.NatSegments < 2)
         {
             layout.NatSegments = 2;
         }
 
-        layout.SsaSegments = Math.Max(1u, (mainSegments + BlocksPerSeg - 1) / (uint)BlocksPerSeg);
+        layout.SsaSegments = Math.Max(1u, (mainSegments + BlocksPerSeg - 1) / BlocksPerSeg);
         layout.SitBlkaddr = Segment0Blkaddr + CkptSegments * BlocksPerSeg;
         layout.NatBlkaddr = layout.SitBlkaddr + layout.SitSegments * BlocksPerSeg;
         layout.SsaBlkaddr = layout.NatBlkaddr + layout.NatSegments * BlocksPerSeg;
@@ -889,7 +889,7 @@ public sealed class F2fsBuilder
         {
             var fixedSegments = CkptSegments + layout.SitSegments + layout.NatSegments + layout.SsaSegments;
             layout.MainSegments = (uint)(options.SegmentCount - fixedSegments);
-            layout.SsaSegments = Math.Max(1u, (layout.MainSegments + BlocksPerSeg - 1) / (uint)BlocksPerSeg);
+            layout.SsaSegments = Math.Max(1u, (layout.MainSegments + BlocksPerSeg - 1) / BlocksPerSeg);
             layout.TotalSegments = fixedSegments + layout.MainSegments;
             layout.MainBlkaddr = layout.SsaBlkaddr + layout.SsaSegments * BlocksPerSeg;
             if ((long)layout.MainSegments * BlocksPerSeg < mainBlocks)
@@ -900,7 +900,7 @@ public sealed class F2fsBuilder
             }
         }
 
-        layout.ImageBlocks = (long)Segment0Blkaddr + (long)layout.TotalSegments * BlocksPerSeg;
+        layout.ImageBlocks = Segment0Blkaddr + (long)layout.TotalSegments * BlocksPerSeg;
         return layout;
     }
 
@@ -1038,7 +1038,7 @@ public sealed class F2fsBuilder
 
         // 写 checkpoint pack 1（cp_blkaddr，cp_ver 奇数）与 pack 2（+512 块，cp_ver=0）。
         // Write checkpoint pack 1 (cp_blkaddr, odd cp_ver) and pack 2 (+512 blocks, cp_ver=0).
-        var pack1Block = checked((long)baseOffset + Segment0Blkaddr * F2fsNode.NodeSize);
+        var pack1Block = checked(baseOffset + Segment0Blkaddr * F2fsNode.NodeSize);
         var pack2Block = pack1Block + (long)BlocksPerSeg * F2fsNode.NodeSize;
         WriteCheckpointPack(output, pack1Block, CreateCheckpoint(1), versionBitmap);
         WriteCheckpointPack(output, pack2Block, CreateCheckpoint(0), versionBitmap);
@@ -1095,7 +1095,7 @@ public sealed class F2fsBuilder
             var entry = usedBlocks[segno];
             var blockIndex = segno / F2fsNode.SitEntryPerBlock;
             var entryIndex = segno % F2fsNode.SitEntryPerBlock;
-            var baseSitBlock = ((long)layout.SitBlkaddr + blockIndex * 2L) * blockSize;
+            var baseSitBlock = (layout.SitBlkaddr + blockIndex * 2L) * blockSize;
             sitBlock.AsSpan().Clear();
             var entryOffset = checked((int)entryIndex * 74);
             BinaryPrimitives.WriteUInt16LittleEndian(sitBlock.AsSpan(entryOffset, 2), (ushort)entry.Count);
@@ -1146,7 +1146,7 @@ public sealed class F2fsBuilder
             // blocks carry no per-block checksum (the read side only verifies superblock and
             // checkpoint CRCs).
 
-            var baseNatBlock = ((long)layout.NatBlkaddr + blockIndex * 2L) * F2fsNode.NodeSize;
+            var baseNatBlock = (layout.NatBlkaddr + blockIndex * 2L) * F2fsNode.NodeSize;
             WriteAt(output, baseOffset + baseNatBlock, natBlock);
             WriteAt(output, baseOffset + baseNatBlock + F2fsNode.NodeSize, natBlock);
         }
@@ -1170,7 +1170,7 @@ public sealed class F2fsBuilder
             {
                 for (var i = 0; i < node.DirBlocks.Count; i++)
                 {
-                    WriteAt(output, baseOffset + (long)node.DirBlockAddrs[i] * blockSize, node.DirBlocks[i]);
+                    WriteAt(output, baseOffset + node.DirBlockAddrs[i] * blockSize, node.DirBlocks[i]);
                 }
             }
         }
@@ -1232,7 +1232,7 @@ public sealed class F2fsBuilder
         }
 
         F2fsNodeFooter.WriteTo(block, node.Ino, node.Ino, 0, 1, node.InodeBlockAddr + 1);
-        WriteAt(output, baseOffset + (long)node.InodeBlockAddr * blockSize, block);
+        WriteAt(output, baseOffset + node.InodeBlockAddr * blockSize, block);
     }
 
     private static void WriteDnode(Stream output, long baseOffset, BuildNode file, DnodePlan dnode, int blockSize)
@@ -1257,7 +1257,7 @@ public sealed class F2fsBuilder
         }
 
         F2fsNodeFooter.WriteTo(block, dnode.Nid, file.Ino, flag, 1, dnode.BlockAddr + 1);
-        WriteAt(output, baseOffset + (long)dnode.BlockAddr * blockSize, block);
+        WriteAt(output, baseOffset + dnode.BlockAddr * blockSize, block);
     }
 
     private static void WriteFileDataBlocks(Stream output, long baseOffset, BuildNode node, int blockSize)
@@ -1283,7 +1283,7 @@ public sealed class F2fsBuilder
             var remaining = blockSize;
             while (remaining > 0)
             {
-                var read = source.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                var read = source.Read(buffer, 0, Math.Min(buffer.Length, remaining));
                 if (read <= 0)
                 {
                     // 文件末尾：剩余块尾补零（镜像已预分配为零）。EOF: the tail of the last
@@ -1293,7 +1293,7 @@ public sealed class F2fsBuilder
 
                 if (address != 0)
                 {
-                    var blockOffset = checked((long)address * blockSize + (blockSize - remaining));
+                    var blockOffset = checked(address * blockSize + (blockSize - remaining));
                     WriteAt(output, baseOffset + blockOffset, buffer.AsSpan(0, read));
                 }
 
@@ -1356,7 +1356,7 @@ public sealed class F2fsBuilder
                     }
 
                     var length = Math.Min(blockSize, payload.Length - b * blockSize);
-                    WriteAt(output, baseOffset + (long)address * blockSize, payload.AsSpan(b * blockSize, length));
+                    WriteAt(output, baseOffset + address * blockSize, payload.AsSpan(b * blockSize, length));
                 }
             }
             else
@@ -1371,7 +1371,7 @@ public sealed class F2fsBuilder
                     var length = Math.Min(blockSize, Math.Max(0, toRead - sourceOffset));
                     if (length > 0 && address != 0)
                     {
-                        WriteAt(output, baseOffset + (long)address * blockSize, clusterBuffer.AsSpan(sourceOffset, length));
+                        WriteAt(output, baseOffset + address * blockSize, clusterBuffer.AsSpan(sourceOffset, length));
                     }
                 }
             }

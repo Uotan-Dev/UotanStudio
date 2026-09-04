@@ -45,7 +45,7 @@ public sealed class SparseWrappedFilesystemTests
         var outDir = Path.Combine(Path.GetTempPath(), "uotan-sparse-unpack-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = new SparseFormatHandler().UnpackAsync(fixture.SparsePath, outDir).GetAwaiter().GetResult();
+            var result = new SparseFormatHandler().UnpackAsync(fixture.SparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken).GetAwaiter().GetResult();
 
             Assert.True(result.Success);
             Assert.True(File.Exists(Path.Combine(outDir, "hello.txt")));
@@ -66,7 +66,7 @@ public sealed class SparseWrappedFilesystemTests
         var outDir = Path.Combine(Path.GetTempPath(), "uotan-sparse-unpack-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = new SparseFormatHandler().UnpackAsync(fixture.SparsePath, outDir).GetAwaiter().GetResult();
+            var result = new SparseFormatHandler().UnpackAsync(fixture.SparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken).GetAwaiter().GetResult();
 
             Assert.True(result.Success);
             Assert.True(File.Exists(Path.Combine(outDir, "hello.txt")));
@@ -99,7 +99,7 @@ public sealed class SparseWrappedFilesystemTests
             Assert.True(FileOpenMode.IsSparseImage(sparsePath));
             Assert.False(FileOpenMode.IsFilesystemImage(sparsePath));
 
-            var result = new SparseFormatHandler().UnpackAsync(sparsePath, outDir).GetAwaiter().GetResult();
+            var result = new SparseFormatHandler().UnpackAsync(sparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken).GetAwaiter().GetResult();
             Assert.True(result.Success);
             Assert.True(File.Exists(Path.Combine(outDir, "random.raw")));
             Assert.Equal(randomBytes, File.ReadAllBytes(Path.Combine(outDir, "random.raw")));

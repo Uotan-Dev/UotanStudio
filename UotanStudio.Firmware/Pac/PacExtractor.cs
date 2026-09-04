@@ -105,8 +105,8 @@ public static class PacExtractor
             {
                 throw new InvalidDataException($"PAC entry escapes output directory: {fileName}");
             }
-            if ((ulong)file.PacOffset > (ulong)fs.Length ||
-                (ulong)file.Size > (ulong)fs.Length - file.PacOffset)
+            if (file.PacOffset > (ulong)fs.Length ||
+                file.Size > (ulong)fs.Length - file.PacOffset)
             {
                 throw new InvalidDataException($"PAC entry range is outside the image: {fileName}");
             }

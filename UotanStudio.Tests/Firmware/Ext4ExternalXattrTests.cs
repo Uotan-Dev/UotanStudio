@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Text;
 using UotanStudio.Firmware.Ext4;
 using UotanStudio.Firmware.Ext4.Core;
 using Xunit;

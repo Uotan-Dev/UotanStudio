@@ -6,7 +6,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
 using CommunityToolkit.Mvvm.Messaging;
-using UotanStudio.Locale;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Themes;

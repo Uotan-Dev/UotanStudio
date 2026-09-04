@@ -45,12 +45,12 @@ public static class WorkflowPersistenceService
 
         try
         {
-        var snapshot = new WorkflowSnapshot
-        {
-            FormatVersion = 1,
-            Nodes = BuildNodeDtos(nodes),
-            Connections = BuildConnectionDtos(nodes, connections)
-        };
+            var snapshot = new WorkflowSnapshot
+            {
+                FormatVersion = 1,
+                Nodes = BuildNodeDtos(nodes),
+                Connections = BuildConnectionDtos(nodes, connections)
+            };
 
             await using var stream = File.Create(path);
             await JsonSerializer.SerializeAsync(stream, snapshot, WorkflowJsonContext.Default.WorkflowSnapshot, cancellationToken).ConfigureAwait(false);

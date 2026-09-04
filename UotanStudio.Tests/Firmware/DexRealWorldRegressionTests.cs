@@ -4,9 +4,9 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// 真实世界 DEX 文件回归测试：magisk classes2.dex 曾在解析时报
+/// 真实世界 DEX 文件回归测试：magisk classes2.dex 解析时可能出现
 /// "Index was outside the bounds of the array"。
-/// <para>Real-world DEX regression test: the magisk classes2.dex once failed with
+/// <para>Real-world DEX regression test: the magisk classes2.dex can fail with
 /// "Index was outside the bounds of the array".</para>
 /// </summary>
 public class DexRealWorldRegressionTests

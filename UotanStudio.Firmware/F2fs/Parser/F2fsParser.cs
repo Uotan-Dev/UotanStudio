@@ -194,7 +194,7 @@ public sealed class F2fsParser : IDisposable
         // 避免后续随机读取时以 EndOfStreamException 泄漏。Validate the total image length against
         // the declared segment counts so truncated images (metadata/main area beyond EOF) are
         // rejected at construction instead of leaking an EndOfStreamException on later reads.
-        var declaredImageBlocks = checked((long)_superblock.SegmentCount * _blocksPerSeg + _superblock.Segment0Blkaddr);
+        var declaredImageBlocks = checked(_superblock.SegmentCount * _blocksPerSeg + _superblock.Segment0Blkaddr);
         var declaredImageSize = checked(declaredImageBlocks * _blockSize);
         if (_imageSize < declaredImageSize)
         {
@@ -473,7 +473,7 @@ public sealed class F2fsParser : IDisposable
         }
 
         var dataLength = (long)inode.Size;
-        if (inode.Size > (ulong)MaxDirectoryDataSize || dataLength < 0)
+        if (inode.Size > MaxDirectoryDataSize || dataLength < 0)
         {
             throw new InvalidDataException(
                 $"Directory data size {inode.Size} exceeds the limit of {MaxDirectoryDataSize} bytes.");
@@ -510,7 +510,7 @@ public sealed class F2fsParser : IDisposable
             return checkpoint;
         }
 
-        var pack2Block = checked((long)_superblock.CpBlkaddr + _blocksPerSeg);
+        var pack2Block = checked(_superblock.CpBlkaddr + _blocksPerSeg);
         var pack2 = ReadBlockChecked((ulong)pack2Block, "Checkpoint pack 2");
         return F2fsCheckpoint.FromBytes(pack2);
     }
@@ -775,7 +775,7 @@ public sealed class F2fsParser : IDisposable
         for (var logical = 0u; logical < blockCount; logical += (uint)clusterPages)
         {
             var clusterBlocks = (int)Math.Min(clusterPages, blockCount - logical);
-            var writeLength = (int)Math.Min((long)clusterSize, remaining);
+            var writeLength = (int)Math.Min(clusterSize, remaining);
             if (clusterBlocks <= 0 || writeLength <= 0)
             {
                 break;
@@ -921,7 +921,7 @@ public sealed class F2fsParser : IDisposable
 
     private byte[] ReadBytes(long offset, int length, string what)
     {
-        if (offset < 0 || length < 0 || offset > _imageSize || (long)length > _imageSize - offset)
+        if (offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset)
         {
             throw new InvalidDataException($"{what} exceeds the image bounds.");
         }

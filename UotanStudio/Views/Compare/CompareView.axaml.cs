@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data.Converters;
@@ -6,8 +8,6 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using System.ComponentModel;
-using System.Globalization;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Compare;
 

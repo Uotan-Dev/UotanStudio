@@ -585,7 +585,7 @@ public sealed class ErofsBuilder
                 node.Pclusters = TryPlanCompressed(node, blockSize, options);
                 if (node.Pclusters is not null)
                 {
-                    node.CompressedBlocks = (uint)node.Pclusters.Sum(p => (long)CeilDiv(p.CompressedLength, blockSize));
+                    node.CompressedBlocks = (uint)node.Pclusters.Sum(p => CeilDiv(p.CompressedLength, blockSize));
                     node.ClusterCount = (uint)CeilDiv(node.Size, blockSize);
                     node.CompactedIndexes = options.UseCompactedIndexes;
                     continue;
@@ -1282,7 +1282,7 @@ public sealed class ErofsBuilder
         // 符号链接：S_IFLNK|0777，目标字符串内联。Symlink: S_IFLNK|0777, target inlined.
         if (node.IsSymlink)
         {
-            inode.Mode = (ushort)(ErofsInode.ModeSymlink | 0x1FF); // S_IFLNK | 0777
+            inode.Mode = ErofsInode.ModeSymlink | 0x1FF; // S_IFLNK | 0777
             inode.Nlink = 1;
             inode.Size = (ulong)node.Size;
             inode.Advise |= ErofsInode.DataLayoutInline;
@@ -1304,7 +1304,7 @@ public sealed class ErofsBuilder
 
         if (node.IsDirectory)
         {
-            inode.Mode = (ushort)(ErofsInode.ModeDirectory | 0x1ED); // S_IFDIR | 0755
+            inode.Mode = ErofsInode.ModeDirectory | 0x1ED; // S_IFDIR | 0755
             inode.Nlink = (ulong)(2 + node.Children.Count(child => child.IsDirectory));
             inode.Size = node.DirBlocks <= 1
                 ? (ulong)EstimateDirPayloadLength(node)
@@ -1323,7 +1323,7 @@ public sealed class ErofsBuilder
         }
         else
         {
-            inode.Mode = (ushort)(ErofsInode.ModeRegularFile | 0x1A4); // S_IFREG | 0644
+            inode.Mode = ErofsInode.ModeRegularFile | 0x1A4; // S_IFREG | 0644
             inode.Nlink = 1;
             inode.Size = (ulong)node.Size;
             if (node.Pclusters is not null)
@@ -1438,7 +1438,7 @@ public sealed class ErofsBuilder
         }
 
         // 压缩后物理块数必须少于 flat。Compressed blocks must be fewer than flat storage.
-        if (plans.Sum(p => (long)CeilDiv(p.CompressedLength, blockSize)) >= totalClusters)
+        if (plans.Sum(p => CeilDiv(p.CompressedLength, blockSize)) >= totalClusters)
         {
             return null;
         }

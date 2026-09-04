@@ -43,8 +43,8 @@ internal sealed class ExtentWriteStream : Stream
         try
         {
             _extents = extents.Select(extent =>
-                (checked((long)extent.StartBlock * (long)blockSize),
-                 checked((long)extent.NumBlocks * (long)blockSize))).ToArray();
+                (checked((long)extent.StartBlock * blockSize),
+                 checked((long)extent.NumBlocks * blockSize))).ToArray();
             _length = _extents.Aggregate(0L, (total, extent) => checked(total + extent.Length));
             for (var i = 0; i < _extents.Length; i++)
             {
@@ -128,7 +128,7 @@ internal sealed class ExtentWriteStream : Stream
         {
             SkipEmptyExtents();
             var extent = _extents[_extentIndex];
-            var count = (int)Math.Min((long)buffer.Length, extent.Length - _extentPosition);
+            var count = (int)Math.Min(buffer.Length, extent.Length - _extentPosition);
             lock (_syncRoot)
             {
                 _output.Seek(checked(extent.Offset + _extentPosition), SeekOrigin.Begin);

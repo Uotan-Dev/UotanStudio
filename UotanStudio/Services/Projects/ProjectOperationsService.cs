@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
-using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;

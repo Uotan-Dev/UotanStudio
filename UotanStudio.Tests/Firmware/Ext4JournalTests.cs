@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
-using System.Text;
 using UotanStudio.Firmware.Ext4;
 using UotanStudio.Firmware.Ext4.Core;
 using UotanStudio.Firmware.Ext4.Journal;
@@ -122,7 +121,7 @@ public class Ext4JournalTests
         var entries = new List<(string Name, uint Inode, byte FileType)>();
         for (var i = 0; i < 100; i++)
         {
-            entries.Add(($"file_{i:D4}.txt", (uint)(i + 10), (byte)Ext4DirectoryEntry.TypeRegular));
+            entries.Add(($"file_{i:D4}.txt", (uint)(i + 10), Ext4DirectoryEntry.TypeRegular));
         }
 
         var seed = new uint[] { 0x12345678, 0x9ABCDEF0, 0x11223344, 0x55667788 };

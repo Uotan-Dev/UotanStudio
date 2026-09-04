@@ -259,7 +259,7 @@ public sealed class SuperFlashHelper(FastbootSession session, string mainPartiti
         var blockSize = metadata.Geometry.LogicalBlockSize == 0 ? 4096u : metadata.Geometry.LogicalBlockSize;
         var metadataBytes = (ulong)metadata.MetadataMaxSize * metadata.MetadataSlotCount;
         var firstLogicalByte = ((2UL * SuperImageBuilder.GeometryBlockSize) + metadataBytes + blockSize - 1) / blockSize * blockSize;
-        return firstLogicalByte / (ulong)SuperImageBuilder.LpSectorSize;
+        return firstLogicalByte / SuperImageBuilder.LpSectorSize;
     }
 
     /// <summary>

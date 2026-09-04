@@ -1,5 +1,3 @@
-using System;
-
 namespace UotanStudio.Firmware.Dex.Decompile;
 
 /// <summary>

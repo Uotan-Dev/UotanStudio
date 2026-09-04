@@ -302,7 +302,7 @@ public class FirehoseTests
             """);
 
         var protocol = CreateProtocol(transport);
-        var response = await protocol.ConfigureAsync(maxRetries: 2);
+        var response = await protocol.ConfigureAsync(maxRetries: 2, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
         Assert.Equal(8388608L, protocol.Configuration.MaxPayloadSizeToTarget);
@@ -328,7 +328,7 @@ public class FirehoseTests
         transport.Enqueue(AckXml);
 
         var protocol = CreateProtocol(transport);
-        var response = await protocol.ConfigureAsync(maxRetries: 2);
+        var response = await protocol.ConfigureAsync(maxRetries: 2, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
         Assert.Equal(8192L, protocol.Configuration.MaxPayloadSizeToTarget);
@@ -350,7 +350,7 @@ public class FirehoseTests
         Random.Shared.NextBytes(image);
         using var stream = new MemoryStream(image);
 
-        var response = await protocol.ProgramAsync(stream, 0x100, 4, "boot.img", 0);
+        var response = await protocol.ProgramAsync(stream, 0x100, 4, "boot.img", 0, TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
         Assert.Equal(2, transport.Writes.Count);
@@ -378,7 +378,7 @@ public class FirehoseTests
         using var stream = new MemoryStream(new byte[4096]);
 
         var exception = await Assert.ThrowsAsync<EdlException>(
-            () => protocol.ProgramAsync(stream, 0, 1, "boot.img", 0));
+            () => protocol.ProgramAsync(stream, 0, 1, "boot.img", 0, TestContext.Current.CancellationToken));
         Assert.Equal(EdlErrorCode.ProgramFailed, exception.ErrorCode);
     }
 
@@ -389,7 +389,7 @@ public class FirehoseTests
         transport.Enqueue(AckXml);
 
         var protocol = CreateProtocol(transport);
-        var response = await protocol.EraseAsync(0x100, 8, 0);
+        var response = await protocol.EraseAsync(0x100, 8, 0, TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
         var eraseXml = Encoding.UTF8.GetString(Assert.Single(transport.Writes));
@@ -404,7 +404,7 @@ public class FirehoseTests
         var transport = new ScriptedCommTransport();
         var protocol = CreateProtocol(transport);
 
-        var response = await protocol.PatchAsync("DISK", 0, 0, 0, "00", 1);
+        var response = await protocol.PatchAsync("DISK", 0, 0, 0, "00", 1, TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
         Assert.Equal("SKIPPED", response.RawValue);
@@ -418,7 +418,7 @@ public class FirehoseTests
         transport.Enqueue(AckXml);
 
         var protocol = CreateProtocol(transport);
-        var response = await protocol.WipeAsync(0, 8, 0);
+        var response = await protocol.WipeAsync(0, 8, 0, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
         Assert.Equal(2, transport.Writes.Count);
@@ -445,7 +445,7 @@ public class FirehoseTests
             StorageType = FirehoseStorageType.Emmc,
             AutoDetectSectorSize = false
         });
-        await protocol.AutoDetectSectorSizeAsync();
+        await protocol.AutoDetectSectorSizeAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(4096L, protocol.Configuration.SectorSize);
         var xml = Encoding.UTF8.GetString(Assert.Single(transport.Writes));
@@ -465,7 +465,7 @@ public class FirehoseTests
             StorageType = FirehoseStorageType.Ufs,
             AutoDetectSectorSize = false
         });
-        await protocol.AutoDetectSectorSizeAsync();
+        await protocol.AutoDetectSectorSizeAsync(TestContext.Current.CancellationToken);
 
         // UFS falls back to the large sector size (4096).
         // UFS 回退到较大扇区大小（4096）。
@@ -481,7 +481,7 @@ public class FirehoseTests
             StorageType = FirehoseStorageType.Nand,
             AutoDetectSectorSize = false
         });
-        await protocol.AutoDetectSectorSizeAsync();
+        await protocol.AutoDetectSectorSizeAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(0L, protocol.Configuration.SectorSize);
         Assert.Empty(transport.Writes);
@@ -505,7 +505,7 @@ public class FirehoseTests
         var sparse = BuildSparseImage(blockSize, chunkData);
         using var stream = new MemoryStream(sparse);
 
-        var response = await protocol.ProgramSparseAsync(stream, 0x100, "sparse.img", 0);
+        var response = await protocol.ProgramSparseAsync(stream, 0x100, "sparse.img", 0, TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
         // XML write + raw chunk payload write.
@@ -524,7 +524,7 @@ public class FirehoseTests
         transport.Enqueue(AckXml);
 
         var protocol = CreateProtocol(transport);
-        var response = await protocol.NopAsync();
+        var response = await protocol.NopAsync(TestContext.Current.CancellationToken);
 
         Assert.True(response.IsAck);
         var xml = Encoding.UTF8.GetString(Assert.Single(transport.Writes));

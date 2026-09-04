@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
-using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.ViewModels.Workspace;

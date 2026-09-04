@@ -14,7 +14,7 @@ namespace UotanStudio.Tests.Cli;
 /// <remarks>
 /// <para>注意：本机的 <c>D:\Source Code</c> 与 <c>C:\Users\...\AppData\Local\Temp</c> 均为
 /// Windows Junction / reparse point，<c>CpioExtractor.NodeLooksLikeLink</c> 会拒绝任何穿过
-/// 它们的解包路径。因此涉及 CPIO 解包写盘的往返测试在此环境下不可行，改为：
+/// 它们的解包路径。因此涉及 CPIO 解包写盘的往返测试在此环境下不可行，仅限：
 /// (1) 纯解析/退出码测试（不触盘）；
 /// (2) 内存 CPIO 往返（直接调 handler，不经 CpioExtractor 文件解包）；
 /// (3) pack 端到端（pack 写单文件，不触发 reparse point 检查）。</para>

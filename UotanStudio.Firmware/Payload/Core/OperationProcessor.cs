@@ -889,8 +889,8 @@ internal static class OperationProcessor
             long remaining;
             try
             {
-                pos = checked((long)ext.StartBlock * (long)blockSize);
-                remaining = checked((long)ext.NumBlocks * (long)blockSize);
+                pos = checked((long)ext.StartBlock * blockSize);
+                remaining = checked((long)ext.NumBlocks * blockSize);
             }
             catch (OverflowException ex)
             {

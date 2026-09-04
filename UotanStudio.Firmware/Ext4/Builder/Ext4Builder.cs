@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.IO.Hashing;
 using System.Text;
 using UotanStudio.Firmware.Ext4.Core;
 using UotanStudio.Firmware.Ext4.Journal;
@@ -300,14 +299,14 @@ public sealed class Ext4Builder
 
         // 重新计算精确的总块数。
         var group0Metadata = 1L + gdtBlocks + metaPerGroup; // 超级块 + GDT + 组 0 元数据
-        var totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks + (long)(groupCount - 1) * metaPerGroup;
+        var totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks + (groupCount - 1) * metaPerGroup;
         // 确保组数足够。
         if (totalBlocksNeeded > (long)groupCount * blocksPerGroup)
         {
             groupCount = (int)((totalBlocksNeeded + blocksPerGroup - 1) / blocksPerGroup);
             gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 32.0 / blockSize));
             group0Metadata = 1L + gdtBlocks + metaPerGroup;
-            totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks + (long)(groupCount - 1) * metaPerGroup;
+            totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks + (groupCount - 1) * metaPerGroup;
         }
 
         var totalBlocks = (long)groupCount * blocksPerGroup;
@@ -1133,7 +1132,7 @@ public sealed class Ext4Builder
         Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal)
     {
         block.Clear();
-        var totalInodes = (long)inodesPerGroup * ((totalBlocks + blocksPerGroup - 1) / blocksPerGroup);
+        var totalInodes = inodesPerGroup * ((totalBlocks + blocksPerGroup - 1) / blocksPerGroup);
         WriteU32(block, 0x00, (uint)Math.Min(totalInodes, uint.MaxValue)); // s_inodes_count
         WriteU32(block, 0x04, (uint)totalBlocks);                         // s_blocks_count_lo
         WriteU32(block, 0x08, 0);                                          // s_r_blocks_count_lo
@@ -1464,7 +1463,7 @@ public sealed class Ext4Builder
     {
         // inode 偏移：inode 表起始块 + inode 在表内的偏移。
         // Inode offset: inode table start block + inode offset within table.
-        var inodeTableStartBlock = (long)groups[(int)((node.Inode - 1) / (uint)inodesPerGroup)].InodeTableBlock;
+        var inodeTableStartBlock = groups[(int)((node.Inode - 1) / (uint)inodesPerGroup)].InodeTableBlock;
         var localInodeIndex = (long)((node.Inode - 1) % (uint)inodesPerGroup);
         var inodeOffset = checked(inodeTableStartBlock * blockSize + localInodeIndex * inodeSize);
         var inode = new byte[inodeSize];

@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware;
@@ -62,6 +63,8 @@ public sealed partial class UotanStudioMcpTools
     /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
     /// <returns>结构化 JSON 字符串（success/tool/format/filePath/outputDir/summary/entries/error）。</returns>
     [McpServerTool(Name = "firmware.unpack"), Description("Unpacks a firmware file by format (CPIO/TAR, OTA payload.bin, boot/vendor_boot, Oppo OFP/OPS/OZIP, Android super) and returns the output directory as structured JSON.")]
+    [RequiresUnreferencedCode()]
+    [RequiresDynamicCode()]
     public async Task<string> FirmwareUnpack(
         string filePath,
         string? outputDir = null,

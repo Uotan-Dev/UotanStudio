@@ -203,7 +203,7 @@ public sealed class Ext4Parser : IDisposable
         // block: (s_first_data_block + 1) * block_size (block 2 for 1 KiB, block 1 otherwise).
         // 主块组描述符表起始于超级块所在块之后的块：(s_first_data_block + 1) * 块大小
         //（1 KiB 块为块 2，其余为块 1）。
-        var gdtOffset = checked((long)(_superblock.FirstDataBlock + 1) * _blockSize);
+        var gdtOffset = checked((_superblock.FirstDataBlock + 1) * _blockSize);
         if (gdtLength > MaximumGroupDescriptorTableSize || gdtLength > _stream.Length - gdtOffset)
         {
             throw new InvalidDataException("ext4 group descriptor table exceeds the image bounds or supported metadata limit.");
@@ -932,7 +932,7 @@ public sealed class Ext4Parser : IDisposable
         // 构建 journal 块号 → 物理块号的映射。
         // Build journal block number → physical block number mapping.
         var journalBlocks = new Dictionary<uint, ulong>();
-        for (uint i = 0; i <= jsb.MaxLen && (long)i * _blockSize < journalSize; i++)
+        for (uint i = 0; i <= jsb.MaxLen && i * _blockSize < journalSize; i++)
         {
             var phys = MapBlock(journalInode, i);
             if (phys is not null)

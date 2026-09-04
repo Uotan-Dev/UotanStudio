@@ -286,7 +286,7 @@ public sealed class ErofsParser : IDisposable
                 // Primary device slot (device 0): total image blocks, mapping offset 0.
                 _deviceSlots[0] = new ErofsDeviceSlot { Blocks = (uint)_superblock.BlockCount64, MappedBlkAddr = 0 };
                 var devTableOffset = (long)_superblock.DevtSlotoff * _blockSize;
-                for (var i = 0; i < (int)_superblock.ExtraDevices; i++)
+                for (var i = 0; i < _superblock.ExtraDevices; i++)
                 {
                     var slotOffset = devTableOffset + (long)i * ErofsDeviceSlot.Size;
                     var slotData = ReadBytes(slotOffset, ErofsDeviceSlot.Size, $"Device slot {i + 1}");
@@ -520,19 +520,19 @@ public sealed class ErofsParser : IDisposable
         switch (inode.DataLayout)
         {
             case ErofsInode.DataLayoutInline:
-            {
-                var inlineStart = metaboxOffset + inode.InlineDataOffset;
-                CheckRange(inlineStart, dataSize, "METABOX inline data");
-                CopyFromSource(buffer, inlineStart, dataSize);
-                break;
-            }
+                {
+                    var inlineStart = metaboxOffset + inode.InlineDataOffset;
+                    CheckRange(inlineStart, dataSize, "METABOX inline data");
+                    CopyFromSource(buffer, inlineStart, dataSize);
+                    break;
+                }
             case ErofsInode.DataLayoutFlat:
-            {
-                var start = checked((long)inode.RawBlockAddress * _blockSize);
-                CheckRange(start, dataSize, "METABOX flat data");
-                CopyFromSource(buffer, start, dataSize);
-                break;
-            }
+                {
+                    var start = checked(inode.RawBlockAddress * _blockSize);
+                    CheckRange(start, dataSize, "METABOX flat data");
+                    CopyFromSource(buffer, start, dataSize);
+                    break;
+                }
             default:
                 throw new InvalidDataException($"Unsupported METABOX inode data layout {inode.DataLayout}.");
         }
@@ -560,7 +560,7 @@ public sealed class ErofsParser : IDisposable
 
     private byte[] ReadBytes(long offset, int length, string what)
     {
-        if (offset < 0 || length < 0 || offset > _imageSize || (long)length > _imageSize - offset)
+        if (offset < 0 || length < 0 || offset > _imageSize || length > _imageSize - offset)
         {
             throw new InvalidDataException($"{what} exceeds the image bounds.");
         }
@@ -773,7 +773,7 @@ public sealed class ErofsParser : IDisposable
                 // 共享 xattr 区自 xattr_blkaddr 块起始；条目跨块时按需读取整个共享区。
                 // The shared xattr area starts at the xattr_blkaddr block; read the whole area on
                 // demand as entries may span blocks.
-                var sharedStart = (long)_superblock.XattrBlkAddr * _blockSize;
+                var sharedStart = _superblock.XattrBlkAddr * _blockSize;
                 var sharedLength = Math.Min(_imageSize - sharedStart, MaxMetadataComponentSize);
                 if (sharedLength > 0)
                 {
@@ -909,7 +909,7 @@ public sealed class ErofsParser : IDisposable
 
         // 扁平布局：i_u 为数据起始块号。
         // Flat layout: i_u is the start block of the data.
-        var flatStart = checked((long)inode.RawBlockAddress * _blockSize);
+        var flatStart = checked(inode.RawBlockAddress * _blockSize);
         var flatLength = (long)inode.Size;
         CheckRange(flatStart, flatLength, "Directory data");
         if (flatLength > MaxMetadataComponentSize)
@@ -1020,7 +1020,7 @@ public sealed class ErofsParser : IDisposable
         var flatLength = (long)(inode.Size / (ulong)_blockSize * (ulong)_blockSize);
         if (flatLength > 0)
         {
-            var flatStart = checked((long)inode.RawBlockAddress * _blockSize);
+            var flatStart = checked(inode.RawBlockAddress * _blockSize);
             CheckRange(flatStart, flatLength, "Tailpacked flat file data");
             CopyFromSource(output, flatStart, flatLength);
         }
@@ -1042,7 +1042,7 @@ public sealed class ErofsParser : IDisposable
             return;
         }
 
-        var start = checked((long)inode.RawBlockAddress * _blockSize);
+        var start = checked(inode.RawBlockAddress * _blockSize);
         CheckRange(start, length, "File data");
         CopyFromSource(output, start, length);
     }
@@ -1326,7 +1326,7 @@ public sealed class ErofsParser : IDisposable
                     // in-cluster offset used only for m_la, never added to the physical position
                     // (kernel z_erofs_map_blocks_fo sets m_pa = erofs_pos(sb, m.pblk) then copies
                     // m_llen bytes as SHIFTED).
-                    var dataStart = checked((long)lc.Pblk * _blockSize);
+                    var dataStart = checked(lc.Pblk * _blockSize);
                     if (!interlaced)
                     {
                         CheckRange(dataStart, llen, "Plain lcluster data");
@@ -1411,7 +1411,7 @@ public sealed class ErofsParser : IDisposable
                     throw new InvalidDataException("Invalid compressed pcluster for nid {nid}.");
                 }
 
-                var pblkStart = checked((long)lc.Pblk * _blockSize);
+                var pblkStart = checked(lc.Pblk * _blockSize);
                 CheckRange(pblkStart, compressedByteLen, "Compressed pcluster data");
                 if (compressedByteLen > compressed.Length)
                 {
@@ -1590,7 +1590,7 @@ public sealed class ErofsParser : IDisposable
         if (pos < flatLength)
         {
             var flatBytes = Math.Min(remaining, flatLength - pos);
-            var flatStart = checked((long)packed.RawBlockAddress * _blockSize + pos);
+            var flatStart = checked(packed.RawBlockAddress * _blockSize + pos);
             CheckRange(flatStart, flatBytes, "Packed fragment data");
             CopyFromSource(output, flatStart, flatBytes);
             remaining -= flatBytes;
@@ -1840,7 +1840,7 @@ public sealed class ErofsParser : IDisposable
         }
 
         var packBlkaddr = BinaryPrimitives.ReadUInt32LittleEndian(index.AsSpan(packStartRel + packSize - 4, 4));
-        var pblk = (long)packBlkaddr + nblk;
+        var pblk = packBlkaddr + nblk;
         return new LclusterEntry(type, clusterOfsH, delta0: 0, delta1: 0, pblk: pblk, compressedBlocks: 0);
     }
 
@@ -1878,7 +1878,7 @@ public sealed class ErofsParser : IDisposable
             return new LclusterEntry(type, entry.ClusterOfs, delta0: 0, delta1: 0, pblk: -1, compressedBlocks: 0);
         }
 
-        return new LclusterEntry(type, entry.ClusterOfs, delta0: 0, delta1: 0, pblk: (long)entry.Blkaddr, compressedBlocks: 0);
+        return new LclusterEntry(type, entry.ClusterOfs, delta0: 0, delta1: 0, pblk: entry.Blkaddr, compressedBlocks: 0);
     }
 
     /// <summary>
@@ -1927,4 +1927,3 @@ public sealed class ErofsParser : IDisposable
         }
     }
 }
-

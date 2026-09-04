@@ -203,7 +203,7 @@ public class ZucchiniTests
         var op = new InstallOperation
         {
             Type = InstallOperation.Types.Type.Zucchini,
-            DstLength = (ulong)(4 * BlockSize)
+            DstLength = 4 * BlockSize
         };
         op.DstExtents.Add(new Extent { StartBlock = 0, NumBlocks = 4 });
 

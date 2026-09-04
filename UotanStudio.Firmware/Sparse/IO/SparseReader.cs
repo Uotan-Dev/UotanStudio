@@ -207,8 +207,8 @@ public static class SparseReader
     /// </summary>
     public static SparseFile FromImageFile(string filePath, bool validateCrc = false, bool verbose = false)
     {
-        // RAW 块改为流式引用源文件范围，因此流必须保持打开并由 SparseFile 生命周期管理。
-        // RAW chunks now reference the source file range lazily, so the stream must stay open
+        // RAW 块流式引用源文件范围，因此流必须保持打开并由 SparseFile 生命周期管理。
+        // RAW chunks reference the source file range lazily, so the stream must stay open
         // and is managed by the SparseFile lifecycle (closed on Dispose).
         var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
         try

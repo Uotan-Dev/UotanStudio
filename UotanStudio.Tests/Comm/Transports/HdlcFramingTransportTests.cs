@@ -1,5 +1,4 @@
 using System.Text;
-using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Hdlc;
 using UotanStudio.Comm.Transports.Hsuart;
 using UotanStudio.Tests.Comm.TestDoubles;
@@ -247,7 +246,7 @@ public class HdlcFramingTransportTests
         using var transport = new HdlcFramingTransport(inner);
 
         var payload = Encoding.ASCII.GetBytes("async round trip");
-        var written = await transport.WriteAsync(payload, 0, payload.Length, 1000);
+        var written = await transport.WriteAsync(payload, 0, payload.Length, 1000, TestContext.Current.CancellationToken);
         Assert.Equal(payload.Length, written);
 
         // Echo the frame back as device data (split across two chunks).
@@ -257,7 +256,7 @@ public class HdlcFramingTransportTests
         inner.Enqueue(frame[5..]);
 
         var buffer = new byte[256];
-        var n = await transport.ReadAsync(buffer, 0, buffer.Length, 1000);
+        var n = await transport.ReadAsync(buffer, 0, buffer.Length, 1000, TestContext.Current.CancellationToken);
         Assert.Equal(payload.Length, n);
         Assert.Equal(payload, buffer[..n]);
     }

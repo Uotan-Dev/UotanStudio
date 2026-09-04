@@ -155,13 +155,13 @@ public class VendorBootPacker
 
         // 以实际数据重新计算组件偏移（与 VendorBootParser.ExtractComponents 的推导一致）。
         // Offsets are recomputed from the actual data (consistent with VendorBootParser.ExtractComponents).
-        var ramdiskOffset = AlignToPage(checked((long)headerSize), pageSize);
-        var dtbOffset = AlignToPage(checked(ramdiskOffset + (long)vendorRamdiskSize), pageSize);
+        var ramdiskOffset = AlignToPage(checked(headerSize), pageSize);
+        var dtbOffset = AlignToPage(checked(ramdiskOffset + vendorRamdiskSize), pageSize);
         var tableOffset = version == 4
-            ? AlignToPage(checked(dtbOffset + (long)dtbSize), pageSize)
+            ? AlignToPage(checked(dtbOffset + dtbSize), pageSize)
             : 0;
         var bootconfigOffset = version == 4
-            ? AlignToPage(checked(tableOffset + (long)tableSize), pageSize)
+            ? AlignToPage(checked(tableOffset + tableSize), pageSize)
             : 0;
         if (version == 4 && (tableOffset > uint.MaxValue || bootconfigOffset > uint.MaxValue))
         {
@@ -246,7 +246,7 @@ public class VendorBootPacker
             // 补齐表区域到声明的页对齐大小，使 bootconfig 落在解析器推导的位置。
             // Pad the table region to the declared page-aligned size so bootconfig lands where
             // the parser derives it.
-            var tableEnd = checked(tableOffset + (long)tableSize);
+            var tableEnd = checked(tableOffset + tableSize);
             while (output.Position < tableEnd)
             {
                 writer.Write((byte)0);

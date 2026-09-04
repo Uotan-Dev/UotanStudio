@@ -1,9 +1,7 @@
 using System.ComponentModel;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using Microsoft.Extensions.DependencyInjection;
-using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware.Common;
 

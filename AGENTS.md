@@ -17,7 +17,7 @@ dotnet test UotanStudio.slnx -c Debug
 # 启动应用（Desktop 为启动项目）
 dotnet run --project UotanStudio.Desktop
 
-# AOT 发布（已恢复：IsAotCompatible / PublishAot / TrimMode=partial 均已启用，`dotnet publish -r win-x64` 发布冒烟通过；仅有 Dock.Avalonia 的 IL2026 裁剪警告，属第三方 XAML trampoline，TrimMode=partial 下可接受）
+# AOT 发布（IsAotCompatible / PublishAot / TrimMode=partial 均已启用，`dotnet publish -r win-x64` 发布冒烟通过；仅有 Dock.Avalonia 的 IL2026 裁剪警告，属第三方 XAML trampoline，TrimMode=partial 下可接受）
 dotnet publish UotanStudio.Desktop -c Release -r win-x64
 ```
 

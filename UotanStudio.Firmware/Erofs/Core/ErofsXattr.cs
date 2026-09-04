@@ -434,7 +434,7 @@ internal static class ErofsXattr
         var nameIndex = data[offset + 1];      // e_name_index
         var valueSize = BinaryPrimitives.ReadUInt16LittleEndian(data.Slice(offset + 2, 2)); // e_value_size
 
-        var payloadSize = (int)nameLen + valueSize;
+        var payloadSize = nameLen + valueSize;
         if (offset + EntryHeaderSize + payloadSize > data.Length)
             return false;
 

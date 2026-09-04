@@ -248,7 +248,7 @@ public sealed class Lzma2Compressor : ILzma2Compressor
                 $"Invalid NtDecompressHeader Magic: expected 'NTDECOMP', got '{header.GetMagicString()}'.");
         }
 
-        if (header.OriginalSize > (ulong)long.MaxValue || header.OriginalSize > (ulong)maximumOutputBytes)
+        if (header.OriginalSize > long.MaxValue || header.OriginalSize > (ulong)maximumOutputBytes)
         {
             throw new Lzma2CompressionException(
                 $"Declared decompressed size {header.OriginalSize} exceeds the {maximumOutputBytes}-byte output limit.");

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Text;
 using UotanStudio.Firmware.Dex.Model;
 
@@ -405,7 +404,8 @@ public static class RegisterAnalyzer
             {
                 item.Stmt = new AssignStmt(
                     new ArrayAccessExpr(ElementTypeOf(m), RegValue(state, ctx, rb), RegValue(state, ctx, rc)),
-                    RegValue(state, ctx, ra)) { Offset = insn.Offset };
+                    RegValue(state, ctx, ra))
+                { Offset = insn.Offset };
             }
 
             return item;

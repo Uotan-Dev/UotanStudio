@@ -86,7 +86,7 @@ internal static class Ext4Extent
             // ee_len & 0x7FFF and its contents read as zeros (a hole).
             // ee_len 高位为 1 表示未写 extent：实际长度是 ee_len & 0x7FFF，内容按零读取（洞）。
             var isUnwritten = eeRawLength > MaxExtentLength;
-            var eeLength = isUnwritten ? (uint)(eeRawLength & (MaxExtentLength - 1)) : eeRawLength;
+            var eeLength = isUnwritten ? eeRawLength & (MaxExtentLength - 1) : eeRawLength;
             if (logicalBlock >= eeBlock && logicalBlock - eeBlock < eeLength)
             {
                 if (isUnwritten)

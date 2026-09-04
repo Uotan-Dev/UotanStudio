@@ -8,14 +8,12 @@ using Avalonia.Platform.Storage;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Protocols.Adb;
-using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Edl.FlashBundle;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Flash;
-using UotanStudio.ViewModels;
 
 namespace UotanStudio.ViewModels.Devices;
 

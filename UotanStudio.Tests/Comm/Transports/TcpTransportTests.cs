@@ -102,7 +102,7 @@ public class TcpTransportTests
         await serverStream.WriteAsync("ping!"u8.ToArray(), TestContext.Current.CancellationToken);
 
         var buffer = new byte[5];
-        var read = await client.ReadAsync(buffer, 0, 5, 2000);
+        var read = await client.ReadAsync(buffer, 0, 5, 2000, TestContext.Current.CancellationToken);
         Assert.Equal(5, read);
         Assert.Equal("ping!"u8.ToArray(), buffer);
     }
@@ -144,12 +144,12 @@ public class TcpTransportTests
             using var stream = client.GetStream();
             await stream.ReadExactlyAsync(new byte[4], TestContext.Current.CancellationToken);
             await stream.WriteAsync("ZZ01"u8.ToArray(), TestContext.Current.CancellationToken);
-        });
+        }, TestContext.Current.CancellationToken);
 
         var exception = Assert.Throws<IOException>(() =>
             new FastbootTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000));
         Assert.Contains("handshake", exception.Message, StringComparison.OrdinalIgnoreCase);
-        serverTask.Wait(TimeSpan.FromSeconds(5));
+        serverTask.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -165,12 +165,12 @@ public class TcpTransportTests
             using var stream = client.GetStream();
             await stream.ReadExactlyAsync(new byte[4], TestContext.Current.CancellationToken);
             await stream.WriteAsync("FB00"u8.ToArray(), TestContext.Current.CancellationToken);
-        });
+        }, TestContext.Current.CancellationToken);
 
         var exception = Assert.Throws<IOException>(() =>
             new FastbootTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000));
         Assert.Contains("version", exception.Message, StringComparison.OrdinalIgnoreCase);
-        serverTask.Wait(TimeSpan.FromSeconds(5));
+        serverTask.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -190,7 +190,7 @@ public class TcpTransportTests
             var payload = new byte[length];
             await stream.ReadExactlyAsync(payload, TestContext.Current.CancellationToken);
             received = payload;
-        });
+        }, TestContext.Current.CancellationToken);
 
         using var client = new FastbootTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
         var data = Encoding.ASCII.GetBytes("getvar:version");
@@ -216,7 +216,7 @@ public class TcpTransportTests
             BinaryPrimitives.WriteUInt64BigEndian(header, (ulong)payload.Length);
             await stream.WriteAsync(header, TestContext.Current.CancellationToken);
             await stream.WriteAsync(payload, TestContext.Current.CancellationToken);
-        });
+        }, TestContext.Current.CancellationToken);
 
         using var client = new FastbootTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
         var buffer = new byte[64];
@@ -242,7 +242,7 @@ public class TcpTransportTests
             var header = new byte[8];
             BinaryPrimitives.WriteUInt64BigEndian(header, ulong.MaxValue);
             await stream.WriteAsync(header, TestContext.Current.CancellationToken);
-        });
+        }, TestContext.Current.CancellationToken);
 
         using var client = new FastbootTcpTransport("127.0.0.1", port, connectTimeoutMs: 5000);
         var exception = Assert.Throws<IOException>(() => client.Read(new byte[8], 0, 8, 2000));

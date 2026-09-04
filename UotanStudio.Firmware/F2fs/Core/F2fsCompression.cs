@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using K4os.Compression.LZ4;
 
 namespace UotanStudio.Firmware.F2fs;

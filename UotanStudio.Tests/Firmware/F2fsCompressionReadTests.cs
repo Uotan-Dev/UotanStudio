@@ -51,7 +51,7 @@ public class F2fsCompressionReadTests
         var node = new byte[F2fsNode.NodeSize];
 
         // i_advise 仍标记压缩算法（algorithm=1/LZ4，log_cluster_size=2），但 i_flags 不含压缩标志。
-        node[OffsetAdvise] = (byte)((1 & 0x0F) | ((2 & 0x0F) << 4));
+        node[OffsetAdvise] = (1 & 0x0F) | ((2 & 0x0F) << 4);
 
         // i_flags 清零（不含 F2FS_COMPR_FL）。
         BinaryPrimitives.WriteUInt32LittleEndian(node.AsSpan(OffsetFlags, 4), 0u);

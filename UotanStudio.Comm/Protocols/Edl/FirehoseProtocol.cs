@@ -183,7 +183,7 @@ public class FirehoseConfiguration
     /// Gets or sets the maximum number of consecutive configure timeouts before failing fast
     /// with ConnectionLost (0 = disabled, retry up to the attempt limit instead).
     /// <para>获取或设置连续 configure 超时后立即以 ConnectionLost 失败的上限（0 = 禁用，
-    /// 改为按尝试次数上限重试）。</para>
+    /// 按尝试次数上限重试）。</para>
     /// </summary>
     public int ConfigureMaxConsecutiveTimeouts { get; set; } = 3;
 

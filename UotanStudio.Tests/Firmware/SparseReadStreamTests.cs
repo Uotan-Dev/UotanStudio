@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using UotanStudio.Firmware.Sparse;
 using Xunit;
 

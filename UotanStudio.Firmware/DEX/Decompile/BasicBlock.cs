@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex.Decompile;

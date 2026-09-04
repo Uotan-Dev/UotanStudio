@@ -567,7 +567,7 @@ public static class AvbSigner
         var publicKeyBlob = BuildAvbRsaPublicKeyBlob(key, keyBits);
         var descriptorBytes = SerializeHashDescriptors(descriptors);
         var auxSize = checked((ulong)publicKeyBlob.Length + (ulong)descriptorBytes.Length);
-        var authSize = checked((ulong)Sha256Size + (ulong)keyNumBytes);
+        var authSize = checked(Sha256Size + (ulong)keyNumBytes);
 
         var header = BuildHeader(
             authSize, auxSize, algorithmType, publicKeyBlob.Length, descriptorBytes.Length,
@@ -615,7 +615,7 @@ public static class AvbSigner
         WriteUInt64BE(header, 32, 0);                        // hash_offset
         WriteUInt64BE(header, 40, Sha256Size);               // hash_size
         WriteUInt64BE(header, 48, Sha256Size);               // signature_offset
-        WriteUInt64BE(header, 56, (ulong)(authSize - Sha256Size)); // signature_size
+        WriteUInt64BE(header, 56, authSize - Sha256Size); // signature_size
         WriteUInt64BE(header, 64, 0);                        // public_key_offset
         WriteUInt64BE(header, 72, (ulong)publicKeySize);     // public_key_size
         WriteUInt64BE(header, 80, 0);                        // public_key_metadata_offset

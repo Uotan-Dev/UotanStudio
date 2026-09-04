@@ -270,7 +270,7 @@ internal sealed class ErofsSuperblock
     public int BlockSize => 1 << BlockSizeBits;
 
     /// <summary>元数据区起始字节偏移。Byte offset of the metadata area start.</summary>
-    public long MetadataByteOffset => (long)MetaBlkAddr * BlockSize;
+    public long MetadataByteOffset => MetaBlkAddr * BlockSize;
 
     /// <summary>
     /// 总块数（48 位布局下拼接 blocks_hi/lo）。Total block count (48-bit layout merges blocks_hi/lo).

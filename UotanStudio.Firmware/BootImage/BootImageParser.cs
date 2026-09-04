@@ -232,7 +232,7 @@ public class BootImageParser : IDisposable
     {
         // 复用 byte[] 重载解析 header 字段（headerBuf 长 2048，足解各版本 header）
         ParseV0V2(headerBuf, headerVersion);
-        // 组件改为从 fs 分段读取
+        // 组件从 fs 分段读取
         ExtractComponentsV0V2Stream(fs);
     }
 

@@ -89,8 +89,8 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
             // [DllImport(IOUSBHost)] throws DllNotFoundException.
             // <para>IOKit 经典 API（IOServiceMatching + IOCreatePlugInInterfaceForService，
             // 与谷歌 adb/fastboot usb_osx.cc 对齐）是唯一的 macOS 后端：它位于
-            // IOKit.framework，在每个 macOS 发行版上均可加载。原 IOUSBHost（IOUSBLib）
-            // 回退已移除——当前 macOS 上其框架主二进制缺失（仅剩 BridgeSupport 桩），
+            // IOKit.framework，在每个 macOS 发行版上均可加载。IOUSBHost（IOUSBLib）
+            // 不可用——当前 macOS 上其框架主二进制缺失（仅剩 BridgeSupport 桩），
             // 故每个 [DllImport(IOUSBHost)] 都抛 DllNotFoundException。</para>
             return IOKitUsbFinder.FindDevice(filter);
         }

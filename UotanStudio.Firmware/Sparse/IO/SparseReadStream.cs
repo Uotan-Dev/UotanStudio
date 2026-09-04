@@ -250,8 +250,8 @@ public sealed class SparseReadStream : Stream
         for (var i = lo; i < chunks.Count && written < buffer.Length; i++)
         {
             var chunk = chunks[i];
-            var chunkStart = (long)chunk.StartBlock * blockSize;
-            var chunkEnd = chunkStart + (long)chunk.Header.ChunkSize * blockSize;
+            var chunkStart = chunk.StartBlock * blockSize;
+            var chunkEnd = chunkStart + chunk.Header.ChunkSize * blockSize;
 
             if (chunkStart >= requestedEnd)
             {

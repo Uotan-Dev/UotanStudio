@@ -58,7 +58,7 @@ internal sealed class LockedBoundedReadStream : Stream
     /// <inheritdoc />
     public override int Read(Span<byte> buffer)
     {
-        var count = (int)Math.Min((long)buffer.Length, _length - _position);
+        var count = (int)Math.Min(buffer.Length, _length - _position);
         if (count == 0)
         {
             return 0;

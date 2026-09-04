@@ -611,10 +611,10 @@ public sealed class SuperImageBuilder
         // backup metadata slots at the end of the device.
         // 镜像布局：两个 geometry 块、主元数据槽位、逻辑数据区，设备末尾为备份元数据槽位。
         var metadataAreaBytes = checked((ulong)metadataMaxSize * metadataSlotCount);
-        var firstLogicalByte = AlignUp((ulong)MetadataAreaStart + metadataAreaBytes, blockSize);
+        var firstLogicalByte = AlignUp(MetadataAreaStart + metadataAreaBytes, blockSize);
         var firstLogicalSector = firstLogicalByte / LpSectorSize;
         var dataBytes = checked(nextSector * LpSectorSize);
-        var backupStart = checked((ulong)deviceSize - metadataAreaBytes);
+        var backupStart = checked(deviceSize - metadataAreaBytes);
         if (firstLogicalByte + dataBytes > backupStart)
         {
             throw new ArgumentOutOfRangeException(
@@ -703,7 +703,7 @@ public sealed class SuperImageBuilder
         BinaryPrimitives.WriteUInt32LittleEndian(blob, MetadataMagic);
         BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(4), MetadataMajorVersion);
         BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(8), MetadataMinorVersion);
-        BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(12), (uint)MetadataHeaderSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(12), MetadataHeaderSize);
         BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(16), (uint)metadataSize);
         BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(20), metadataMaxSize);
         BinaryPrimitives.WriteUInt32LittleEndian(blob.AsSpan(24), metadataSlotCount);
@@ -786,11 +786,11 @@ public sealed class SuperImageBuilder
         // liblp 对前 20 字节（magic + struct_size + 仍为零的校验和字段）求哈希并存入校验和字段。
         var checksumInput = new byte[20];
         BinaryPrimitives.WriteUInt32LittleEndian(checksumInput, GeometryMagic);
-        BinaryPrimitives.WriteUInt32LittleEndian(checksumInput.AsSpan(4), (uint)LpGeometry.StructSizeBytes);
+        BinaryPrimitives.WriteUInt32LittleEndian(checksumInput.AsSpan(4), LpGeometry.StructSizeBytes);
         var checksum = SHA256.HashData(checksumInput);
 
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset), GeometryMagic);
-        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset + 4), (uint)LpGeometry.StructSizeBytes);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset + 4), LpGeometry.StructSizeBytes);
         checksum.CopyTo(image.AsSpan(offset + 8));
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset + 40), metadataMaxSize);
         BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(offset + 44), metadataSlotCount);
