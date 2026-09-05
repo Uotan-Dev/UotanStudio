@@ -206,6 +206,7 @@ public sealed partial class F2fsBuilder
         WriteSit(output, baseOffset, layout, usedMainBlocks, blockSize);
         WriteNat(output, baseOffset, layout, nat);
         WriteMainArea(output, baseOffset, ordered, blockSize);
+        WriteSsa(output, baseOffset, layout, ordered, blockSize);
     }
 
     private static BuildNode CollectNodes(string fullSourcePath, IReadOnlyCollection<string> excludedPaths)
@@ -389,15 +390,10 @@ public sealed partial class F2fsBuilder
         // least one cluster is genuinely stored compressed (the read side routes on the inode flag).
         if (options.EnableCompression && !node.IsSymlink && size > F2fsCompression.ClusterBytes)
         {
-            if (options.CompressionAlgorithm == CompressionAlgorithm.Lzo)
-            {
-                // LZO 压缩不可用：回退未压缩路径（禁止产出 LZO 镜像）。
-                // LZO compression is unavailable: fall back to the uncompressed path (never emit an
-                // LZO image).
-                System.Diagnostics.Trace.TraceWarning(
-                    $"F2FS LZO compression is unsupported; '{node.FullPath}' is stored uncompressed.  LZO 压缩不受支持，该文件已回退未压缩。");
-            }
-            else if (TryPlanCompressedFileData(node, options))
+            // LZO(0)/LZ4(1)/ZSTD(2)/LZO-RLE(3) 均可写；LZO-RLE 以普通 LZO1X 位流落盘。
+            // LZO(0)/LZ4(1)/ZSTD(2)/LZO-RLE(3) are all writable; LZO-RLE is stored as a plain
+            // LZO1X bitstream.
+            if (TryPlanCompressedFileData(node, options))
             {
                 PlanDnodes(node, node.DataBlockCount);
                 return;
@@ -878,6 +874,9 @@ public sealed partial class F2fsBuilder
             layout.NatSegments = 2;
         }
 
+        // SSA 区每主区段需要一个 SSA 块（内核按 ssa_blkaddr + segno 寻址），512 块为一段。
+        // SSA area needs one block per main segment (kernel uses ssa_blkaddr + segno),
+        // 512 blocks per segment.
         layout.SsaSegments = Math.Max(1u, (mainSegments + BlocksPerSeg - 1) / BlocksPerSeg);
         layout.SitBlkaddr = Segment0Blkaddr + CkptSegments * BlocksPerSeg;
         layout.NatBlkaddr = layout.SitBlkaddr + layout.SitSegments * BlocksPerSeg;
@@ -950,6 +949,13 @@ public sealed partial class F2fsBuilder
 
     private static void CollectNatEntries(List<BuildNode> ordered, Dictionary<uint, (uint Ino, uint Block)> nat)
     {
+        // 内核保留 NID：node_ino(1) 和 meta_ino(2) 需要有效的 NAT 条目。
+        // mkfs.f2fs 为它们设置 block_addr=1，ino=各自的 NID。
+        // Kernel reserved NIDs: node_ino(1) and meta_ino(2) need valid NAT entries.
+        // mkfs.f2fs sets block_addr=1 for both, ino=their respective NID.
+        nat[NodeIno] = (NodeIno, 1);
+        nat[MetaIno] = (MetaIno, 1);
+
         foreach (var node in ordered)
         {
             nat[node.Ino] = (node.Ino, node.InodeBlockAddr);

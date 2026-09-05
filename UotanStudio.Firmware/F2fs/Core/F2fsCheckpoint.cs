@@ -145,9 +145,9 @@ internal sealed record F2fsCheckpoint
         BinaryPrimitives.WriteUInt64LittleEndian(block[OffsetCheckpointVer..], CheckpointVer);
         BinaryPrimitives.WriteUInt64LittleEndian(block[OffsetUserBlockCount..], UserBlockCount);
         BinaryPrimitives.WriteUInt64LittleEndian(block[OffsetValidBlockCount..], ValidBlockCount);
-        BinaryPrimitives.WriteUInt32LittleEndian(block[OffsetRsvdSegmentCount..], 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(block[OffsetOverprovSegmentCount..], 0);
-        BinaryPrimitives.WriteUInt32LittleEndian(block[OffsetFreeSegmentCount..], 0);
+        BinaryPrimitives.WriteUInt32LittleEndian(block[OffsetRsvdSegmentCount..], RsvdSegmentCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(block[OffsetOverprovSegmentCount..], OverprovSegmentCount);
+        BinaryPrimitives.WriteUInt32LittleEndian(block[OffsetFreeSegmentCount..], FreeSegmentCount);
         for (var i = 0; i < 8; i++)
         {
             BinaryPrimitives.WriteUInt32LittleEndian(block.Slice(OffsetCurNodeSegno + i * 4, 4), i < CurNodeSegno.Length ? CurNodeSegno[i] : uint.MaxValue);
