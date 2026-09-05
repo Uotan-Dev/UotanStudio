@@ -61,17 +61,38 @@ public class F2fsCompressionTests
     }
 
     [Fact]
-    public void Compress_Lzo_ThrowsNotSupported()
+    public void CompressAndDecompress_Lzo_RoundTrips()
     {
-        var data = new byte[1024];
-        Assert.Throws<NotSupportedException>(() =>
-            F2fsCompression.CompressCluster(data, CompressionAlgorithm.Lzo));
+        // LZO 由托管 LZO1X 实现支持（对齐内核 lzo1x_1_compress / lzo1x_decompress_safe）。
+        // LZO is supported by the managed LZO1X implementation (kernel lzo1x_1_compress /
+        // lzo1x_decompress_safe).
+        var original = new byte[65536];
+        for (var i = 0; i < original.Length; i++)
+        {
+            original[i] = (byte)(i % 17);
+        }
+
+        var compressed = F2fsCompression.CompressCluster(original, CompressionAlgorithm.Lzo);
+        Assert.NotNull(compressed);
+        Assert.True(compressed.Length < original.Length + F2fsCompression.ClusterHeaderSize);
+
+        var header = F2fsCompression.ParseHeader(compressed);
+        Assert.Equal(CompressionAlgorithm.Lzo, header.Algorithm);
+        Assert.Equal(original.Length, header.UncompressedSize);
+
+        var decompressed = F2fsCompression.DecompressCluster(
+            compressed.AsSpan(F2fsCompression.ClusterHeaderSize),
+            CompressionAlgorithm.Lzo,
+            header.UncompressedSize,
+            F2fsCompression.ClusterBytes);
+
+        Assert.Equal(original, decompressed);
     }
 
     [Fact]
-    public void Decompress_Lzo_ThrowsNotSupported()
+    public void Decompress_Lzo_GarbageData_ThrowsInvalidData()
     {
-        Assert.Throws<NotSupportedException>(() =>
+        Assert.ThrowsAny<InvalidDataException>(() =>
             F2fsCompression.DecompressCluster(
                 new byte[100], CompressionAlgorithm.Lzo, 1024, F2fsCompression.ClusterBytes));
     }

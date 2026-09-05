@@ -208,12 +208,12 @@ public class F2fsCompressionWriteTests
     }
 
     /// <summary>
-    /// LZO 不可用：构建时回退未压缩路径，读回一致且 inode 不带压缩标志。
-    /// <para>LZO is unavailable: the build falls back to the uncompressed path, contents read back
-    /// unchanged and no inode is flagged compressed.</para>
+    /// LZO 由托管 LZO1X 支持后：构建 LZO 压缩镜像，inode 带压缩标志，读回逐字节一致。
+    /// <para>With LZO supported by the managed LZO1X: the build emits an LZO-compressed image,
+    /// the inode is flagged compressed and the read-back matches byte-for-byte.</para>
     /// </summary>
     [Fact]
-    public void Builder_Lzo_NotSupported_FallsBackToUncompressed()
+    public void Builder_Lzo_CompressesAndReadsBack()
     {
         var root = CreateTempDirectory();
         try
@@ -229,9 +229,9 @@ public class F2fsCompressionWriteTests
             using var parser = new F2fsParser(new MemoryStream(image, writable: false));
             var entry = parser.ListFiles().Single(static e => e.Path == "text.bin");
             Assert.Equal(200 * 1024, (int)entry.Size);
-            Assert.Equal(200 * 1024, ReadFile(parser, "text.bin").Length);
+            Assert.Equal(CreateCompressibleBytes(200 * 1024), ReadFile(parser, "text.bin"));
             var inode = ReadInode(image, entry.Inode);
-            Assert.False(inode.IsCompressed);
+            Assert.True(inode.IsCompressed);
         }
         finally
         {

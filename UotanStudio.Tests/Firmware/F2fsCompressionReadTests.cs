@@ -88,15 +88,19 @@ public class F2fsCompressionReadTests
     }
 
     /// <summary>
-    /// LZO 压缩簇读路径最终委托给 F2fsCompression.DecompressCluster，后者对 LZO 抛
-    /// NotSupportedException。手工构造完整 dnode 镜像过于复杂，此处直接验证底层契约。
+    /// LZO 压缩簇读路径最终委托给 F2fsCompression.DecompressCluster（托管 LZO1X）。
+    /// 手工构造完整 dnode 镜像过于复杂，此处直接验证底层契约：垃圾数据抛
+    /// InvalidDataException 而非 NotSupportedException。
+    /// <para>The LZO compressed-cluster read path delegates to F2fsCompression.DecompressCluster
+    /// (managed LZO1X). Building a full dnode image by hand is complex, so this verifies the
+    /// underlying contract directly: garbage data throws InvalidDataException rather than
+    /// NotSupportedException.</para>
     /// </summary>
     [Fact]
-    public void Parser_LzoCompressedFile_ThrowsNotSupported()
+    public void Parser_LzoCompressedFile_GarbageData_ThrowsInvalidData()
     {
-        // 解析侧对 LZO 算法（内核 id 0）映射到 CompressionAlgorithm.Lzo，
-        // 解压时 F2fsCompression.DecompressCluster 抛 NotSupportedException。
-        Assert.Throws<NotSupportedException>(() =>
+        // 解析侧对 LZO 算法（内核 id 0/3）映射到 CompressionAlgorithm.Lzo。
+        Assert.ThrowsAny<InvalidDataException>(() =>
             F2fsCompression.DecompressCluster(
                 new byte[64],
                 CompressionAlgorithm.Lzo,
