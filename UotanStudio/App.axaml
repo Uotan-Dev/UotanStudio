@@ -33,5 +33,26 @@
         <semi:AvaloniaEditSemiTheme />
         <materialIcons:MaterialIconStyles />
         <StyleInclude Source="avares://NodifyM.Avalonia/Styles/ControlStyles.axaml" />
+        <Style Selector="HostWindow[IsToolWindow=False]">
+            <Setter Property="Title" Value="{DynamicResource Dock_Documents}" />
+            <Setter Property="ExtendClientAreaToDecorationsHint" Value="True" />
+            <Setter Property="ExtendClientAreaTitleBarHeightHint" Value="32" />
+            <Setter Property="WindowDecorations" Value="Full" />
+        </Style>
+        <Style Selector="MenuItem">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="MinHeight" Value="24" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Margin" Value="0" />
+        </Style>
+        <Style Selector="ContextMenu">
+            <Setter Property="Padding" Value="4" />
+        </Style>
+        <Style Selector="ContextMenu, ContextMenu MenuItem, MenuItem MenuItem">
+            <Setter Property="MinWidth" Value="200" />
+        </Style>
+        <Style Selector="Menu Separator, ContextMenu Separator">
+            <Setter Property="Margin" Value="4,2" />
+        </Style>
     </Application.Styles>
 </Application>

@@ -1,8 +1,10 @@
 using Avalonia.Controls;
+using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Devices;
+using UotanStudio.Views.Compare;
 using UotanStudio.Views.Editors;
 using UotanStudio.Views.Workspace;
 
@@ -27,6 +29,7 @@ internal static class ViewModelViewRegistry
     /// </summary>
     private static readonly Dictionary<Type, Func<Control>> _registry = new()
     {
+        [typeof(CompareViewModel)] = () => new CompareView(),
         [typeof(FileViewModel)] = () => new FileView(),
         [typeof(DtbEditorViewModel)] = () => new DtbEditorView(),
         [typeof(DexEditorViewModel)] = () => new DexEditorView(),

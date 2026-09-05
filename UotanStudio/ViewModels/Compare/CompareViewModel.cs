@@ -1,6 +1,7 @@
 using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Services;
@@ -59,19 +60,19 @@ public enum BinaryViewKind
 }
 
 /// <summary>
-/// <para>对比页面视图模型：统一双栏对比面板的唯一宿主，按 <see cref="CompareMode"/> 承载
+/// <para>工作区对比文档视图模型：统一双栏对比面板的宿主，按 <see cref="CompareMode"/> 承载
 /// 文件夹 / 文本 / 二进制三种比较。文件夹比较走 <see cref="FolderCompareService"/>，
 /// 文本走 <see cref="TextDiffService"/>（流式、有界），二进制先以 <see cref="FormatDetector"/> +
 /// <see cref="IFormatHandler.ReadMetadataAsync"/> 展示元数据，再以 <see cref="BinaryDiffService"/>
 /// 提供十六进制差异视图（懒加载）。</para>
-/// Compare-page view model: the single host of the unified two-column compare panel, carrying
+/// Workspace compare document view model: hosts the unified two-column compare panel, carrying
 /// folder / text / binary comparisons per <see cref="CompareMode"/>. Folder comparisons use
 /// <see cref="FolderCompareService"/>, text uses <see cref="TextDiffService"/> (streamed and bounded),
 /// and binary first shows metadata via <see cref="FormatDetector"/> +
 /// <see cref="IFormatHandler.ReadMetadataAsync"/>, then offers a lazily-loaded hex-diff view via
 /// <see cref="BinaryDiffService"/>.
 /// </summary>
-public sealed partial class CompareViewModel : ViewModelBase
+public sealed partial class CompareViewModel : Document
 {
     private CancellationTokenSource _loadCts = new();
     private FolderCompareResult? _lastFolderResult;
@@ -390,6 +391,31 @@ public sealed partial class CompareViewModel : ViewModelBase
         {
             ApplyFolderFilters();
         }
+    }
+
+    /// <summary>
+    /// <para>载入右键选中的路径：首次或文件/目录类型变化时填充左侧，否则填充或替换右侧。</para>
+    /// Loads an explorer selection on the left initially or when switching between files and folders;
+    /// otherwise fills or replaces the right side.
+    /// </summary>
+    /// <param name="path"><para>选中的文件或目录路径。</para>The selected file or directory path.</param>
+    public Task AddComparisonPathAsync(string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var isDirectory = Directory.Exists(fullPath);
+        if (!isDirectory && !File.Exists(fullPath))
+        {
+            throw new FileNotFoundException("Comparison path does not exist.", fullPath);
+        }
+
+        // 首次加载尚未完成时 Mode 可能仍为空态，按已设置的左侧路径决定配对。
+        // The first load may not have set Mode yet; use the assigned left path to pair selections.
+        var canPair = HasLeft && (isDirectory ? Directory.Exists(LeftPath) : File.Exists(LeftPath));
+        var left = canPair ? LeftPath : fullPath;
+        var right = canPair ? fullPath : string.Empty;
+        return isDirectory
+            ? OpenCompareFoldersAsync(left, right)
+            : OpenCompareFilesAsync(left, right);
     }
 
     /// <summary>
@@ -1391,7 +1417,7 @@ public sealed partial class CompareViewModel : ViewModelBase
             rows.Add(new CompareRowViewModel(
                 FolderItemStatus.Equal, false, 0,
                 string.Empty, unrecognized, string.Empty, false,
-                string.Empty, unrecognized, string.Empty, false));
+                string.Empty, right is null ? string.Empty : unrecognized, string.Empty, false));
             return rows;
         }
 
@@ -1399,7 +1425,7 @@ public sealed partial class CompareViewModel : ViewModelBase
         rows.Add(new CompareRowViewModel(
             FolderItemStatus.Equal, false, 0,
             string.Empty, leftRecognized ? left!.FormatName : "-", string.Empty, false,
-            string.Empty, rightRecognized ? right!.FormatName : "-", string.Empty, false));
+            string.Empty, rightRecognized ? right!.FormatName : right is null ? string.Empty : "-", string.Empty, false));
 
         // 摘要行（按行拆分）。 Summary rows (split by line).
         var leftSummary = leftRecognized ? SplitLines(left!.Summary) : [];
@@ -1410,7 +1436,7 @@ public sealed partial class CompareViewModel : ViewModelBase
             rows.Add(new CompareRowViewModel(
                 FolderItemStatus.Equal, false, 1,
                 string.Empty, i < leftSummary.Count ? leftSummary[i] : "-", string.Empty, false,
-                string.Empty, i < rightSummary.Count ? rightSummary[i] : "-", string.Empty, false));
+                string.Empty, i < rightSummary.Count ? rightSummary[i] : right is null ? string.Empty : "-", string.Empty, false));
         }
 
         // 元数据键值对（左右并排，取两字典键并集）。 Metadata key-values (side by side, key union).
@@ -1451,7 +1477,7 @@ public sealed partial class CompareViewModel : ViewModelBase
             rows.Add(new CompareRowViewModel(
                 status, false, 1,
                 string.Empty, key, hasLeft ? leftValue! : "-", valueDiffers,
-                string.Empty, key, hasRight ? rightValue! : "-", valueDiffers));
+                string.Empty, right is null ? string.Empty : key, hasRight ? rightValue! : right is null ? string.Empty : "-", valueDiffers));
         }
 
         // 条目行（按名称对齐：两侧名称并集，同名条目同一水平行；仅单侧条目在缺失侧置空占位，

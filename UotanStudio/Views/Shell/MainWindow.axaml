@@ -22,9 +22,9 @@
 			<Menu x:Name="TopMenu" HorizontalAlignment="Left">
 
 				<!-- 文件 / File -->
-				<MenuItem Padding="8 0">
+				<MenuItem>
 					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_File}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_File}" FontWeight="SemiBold" />
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_NewProject}" Command="{Binding MenuVM.NewProjectCommand}">
 						<MenuItem.Icon>
@@ -71,9 +71,9 @@
 				</MenuItem>
 
 				<!-- 编辑 / Edit -->
-				<MenuItem Padding="8 0">
+				<MenuItem>
 					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_Edit}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_Edit}" FontWeight="SemiBold" />
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_Undo}" Command="{Binding MenuVM.UndoCommand}" InputGesture="Ctrl+Z" />
 					<MenuItem Header="{DynamicResource Menu_Redo}" Command="{Binding MenuVM.RedoCommand}" InputGesture="Ctrl+Y" />
@@ -87,9 +87,9 @@
 				</MenuItem>
 
 				<!-- 视图 / View -->
-				<MenuItem Padding="8 0">
+				<MenuItem>
 					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_View}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_View}" FontWeight="SemiBold" />
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_Workspace}" Command="{Binding MenuVM.GoToWorkspaceCommand}" />
 					<MenuItem Header="{DynamicResource Menu_NodeEditor}" Command="{Binding MenuVM.GoToNodeEditorCommand}" />
@@ -103,9 +103,9 @@
 				</MenuItem>
 
 				<!-- 窗口 / Window -->
-				<MenuItem Padding="8 0">
+				<MenuItem>
 					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_Window}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_Window}" FontWeight="SemiBold" />
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_WindowProjectExplorer}"
 							  ToggleType="CheckBox"
@@ -130,9 +130,9 @@
 				</MenuItem>
 
 				<!-- 工具 / Tools -->
-				<MenuItem Padding="8 0">
+				<MenuItem>
 				 <MenuItem.Header>
-				  <TextBlock Text="{DynamicResource Menu_Tools}" FontSize="13" FontWeight="SemiBold" />
+				  <TextBlock Text="{DynamicResource Menu_Tools}" FontWeight="SemiBold" />
 				 </MenuItem.Header>
 				 <MenuItem Header="{DynamicResource Menu_DeviceManager}" Command="{Binding MenuVM.OpenDeviceCommand}">
 					<MenuItem.Icon>
@@ -149,9 +149,9 @@
 				</MenuItem>
 
 				<!-- 帮助 / Help -->
-				<MenuItem Padding="8 0">
+				<MenuItem>
 					<MenuItem.Header>
-						<TextBlock Text="{DynamicResource Menu_Help}" FontSize="13" FontWeight="SemiBold" />
+						<TextBlock Text="{DynamicResource Menu_Help}" FontWeight="SemiBold" />
 					</MenuItem.Header>
 					<MenuItem Header="{DynamicResource Menu_Documentation}" Command="{Binding MenuVM.DocumentationCommand}">
 						<MenuItem.Icon>

@@ -29,50 +29,53 @@
     <!-- 统一双栏对比视图：文件夹 / 文本 / 二进制共用同一套左右双栏布局，
          行模板由 CompareRowViewModel 的 Left* / Right* 属性驱动。 -->
     <DockPanel IsVisible="{Binding HasComparison}">
-      <!-- 顶部工具栏：左右路径 + 按模式切换的按钮组 -->
+      <!-- 按模式切换工具栏，路径显示在各侧栏头部。 -->
       <Border DockPanel.Dock="Top" Padding="6,4"
               BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-        <Grid RowDefinitions="Auto" RowSpacing="6">
-          <DockPanel>
-            <!-- 文件夹模式：刷新 / 复制 / 删除 -->
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                        IsVisible="{Binding IsFolderMode}">
-              <Button Content="{DynamicResource Compare_Refresh}" Command="{Binding RefreshCommand}" />
-              <Button Content="{DynamicResource Compare_CopyLeftToRight}" Command="{Binding CopyLeftToRightCommand}" />
-              <Button Content="{DynamicResource Compare_CopyRightToLeft}" Command="{Binding CopyRightToLeftCommand}" />
-              <Button Content="{DynamicResource Compare_DeleteLeft}" Command="{Binding DeleteLeftCommand}" />
-              <Button Content="{DynamicResource Compare_DeleteRight}" Command="{Binding DeleteRightCommand}" />
-            </StackPanel>
-            <!-- 文本模式：上一/下一差异 + 汇总文本 -->
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                        IsVisible="{Binding IsTextMode}">
-              <Button Content="{DynamicResource Compare_PrevDiff}" Command="{Binding PrevDiffCommand}" />
-              <Button Content="{DynamicResource Compare_NextDiff}" Command="{Binding NextDiffCommand}" />
-              <TextBlock Text="{Binding StatsText}" FontSize="12" VerticalAlignment="Center" />
-            </StackPanel>
-            <!-- 二进制模式：十六进制原始/元数据切换 + 上一/下一差异 -->
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center"
-                        IsVisible="{Binding IsBinaryMode}">
-              <Button Content="{DynamicResource Compare_HexRaw}" Command="{Binding ToggleHexViewCommand}" />
-              <Button Content="{DynamicResource Compare_PrevDiff}" Command="{Binding PrevDiffCommand}" />
-              <Button Content="{DynamicResource Compare_NextDiff}" Command="{Binding NextDiffCommand}" />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                <TextBlock Text="{DynamicResource Compare_Left}" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding LeftPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-              <TextBlock Text="↔" VerticalAlignment="Center" Opacity="0.6" />
-              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                <TextBlock Text="{DynamicResource Compare_Right}" FontWeight="SemiBold" />
-                <TextBlock Text="{Binding RightPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-              </StackPanel>
-            </StackPanel>
-          </DockPanel>
-
-        </Grid>
+        <WrapPanel>
+          <WrapPanel.Styles>
+            <Style Selector="Button">
+              <Setter Property="Width" Value="28" />
+              <Setter Property="Height" Value="26" />
+              <Setter Property="Padding" Value="4" />
+              <Setter Property="Margin" Value="0,0,4,0" />
+            </Style>
+            <Style Selector="avalonia|MaterialIcon">
+              <Setter Property="Width" Value="14" />
+              <Setter Property="Height" Value="14" />
+            </Style>
+          </WrapPanel.Styles>
+          <StackPanel Orientation="Horizontal" IsVisible="{Binding IsFolderMode}">
+            <Button ToolTip.Tip="{DynamicResource Compare_Refresh}" Command="{Binding RefreshCommand}">
+              <avalonia:MaterialIcon Kind="Refresh" />
+            </Button>
+            <Button ToolTip.Tip="{DynamicResource Compare_CopyLeftToRight}" Command="{Binding CopyLeftToRightCommand}">
+              <avalonia:MaterialIcon Kind="ArrowRight" />
+            </Button>
+            <Button ToolTip.Tip="{DynamicResource Compare_CopyRightToLeft}" Command="{Binding CopyRightToLeftCommand}">
+              <avalonia:MaterialIcon Kind="ArrowLeft" />
+            </Button>
+            <Button ToolTip.Tip="{DynamicResource Compare_DeleteLeft}" Command="{Binding DeleteLeftCommand}">
+              <avalonia:MaterialIcon Kind="Delete" />
+            </Button>
+            <Button ToolTip.Tip="{DynamicResource Compare_DeleteRight}" Command="{Binding DeleteRightCommand}">
+              <avalonia:MaterialIcon Kind="DeleteOutline" />
+            </Button>
+          </StackPanel>
+          <Button IsVisible="{Binding IsBinaryMode}" ToolTip.Tip="{DynamicResource Compare_HexRaw}" Command="{Binding ToggleHexViewCommand}">
+            <avalonia:MaterialIcon Kind="CodeBraces" />
+          </Button>
+          <StackPanel Orientation="Horizontal" IsVisible="{Binding !IsFolderMode}">
+            <Button ToolTip.Tip="{DynamicResource Compare_PrevDiff}" Command="{Binding PrevDiffCommand}">
+              <avalonia:MaterialIcon Kind="ArrowUp" />
+            </Button>
+            <Button ToolTip.Tip="{DynamicResource Compare_NextDiff}" Command="{Binding NextDiffCommand}">
+              <avalonia:MaterialIcon Kind="ArrowDown" />
+            </Button>
+          </StackPanel>
+          <TextBlock Text="{Binding StatsText}" IsVisible="{Binding IsTextMode}" FontSize="12"
+                     VerticalAlignment="Center" TextWrapping="Wrap" />
+        </WrapPanel>
       </Border>
 
       <!-- 错误区 -->
@@ -89,11 +92,11 @@
           <DockPanel>
             <Border DockPanel.Dock="Top" Padding="6,4"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
                 <TextBlock Text="{DynamicResource Compare_Left}" FontWeight="SemiBold" FontSize="11" />
-                <TextBlock Text="{Binding LeftPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                <TextBlock Grid.Column="1" Text="{Binding LeftPath}" ToolTip.Tip="{Binding LeftPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
-              </StackPanel>
+              </Grid>
             </Border>
             <Grid>
               <ListBox x:Name="LeftList"
@@ -159,11 +162,11 @@
           <DockPanel>
             <Border DockPanel.Dock="Top" Padding="6,4"
                     BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-              <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
                 <TextBlock Text="{DynamicResource Compare_Right}" FontWeight="SemiBold" FontSize="11" />
-                <TextBlock Text="{Binding RightPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                <TextBlock Grid.Column="1" Text="{Binding RightPath}" ToolTip.Tip="{Binding RightPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
                            TextTrimming="CharacterEllipsis" />
-              </StackPanel>
+              </Grid>
             </Border>
             <Grid>
               <ListBox x:Name="RightList"

@@ -65,6 +65,7 @@ public partial class CompareView : UserControl
 
     private void OnViewLoaded(object? sender, RoutedEventArgs e)
     {
+        OnDataContextChanged(sender, EventArgs.Empty);
         // ListBox 的内部 ScrollViewer 随模板实例化后才存在：Loaded 时模板可能尚未应用
         //（数据未加载/页面未激活），故延迟到布局完成后挂接；数据加载完成后还会再挂接一次。
         // The inner ScrollViewer of a ListBox exists only after its template is realized: at Loaded
@@ -77,6 +78,11 @@ public partial class CompareView : UserControl
     private void OnViewUnloaded(object? sender, RoutedEventArgs e)
     {
         DetachScrollViewers();
+        if (_vm is not null)
+        {
+            _vm.PropertyChanged -= OnViewModelPropertyChanged;
+            _vm = null;
+        }
     }
 
     /// <summary>
@@ -90,6 +96,11 @@ public partial class CompareView : UserControl
     /// </summary>
     private void AttachScrollViewers()
     {
+        if (!IsLoaded)
+        {
+            return;
+        }
+
         AttachOneScrollViewer(LeftList, ref _leftScroll);
         AttachOneScrollViewer(RightList, ref _rightScroll);
         _mirroredLeftY = double.NaN;

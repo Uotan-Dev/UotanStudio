@@ -89,6 +89,7 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<LanguageChangedMessage>(this, OnLanguageChanged);
         WeakReferenceMessenger.Default.Register<ExitApplicationMessage>(this, OnExitApplication);
         WeakReferenceMessenger.Default.Register<OpenDocumentRequestMessage>(this, OnOpenDocument);
+        WeakReferenceMessenger.Default.Register<OpenCompareRequestMessage>(this, OnOpenCompare);
         WeakReferenceMessenger.Default.Register<OpenFileCompareRequestMessage>(this, OnOpenFileCompare);
         WeakReferenceMessenger.Default.Register<OpenFolderCompareRequestMessage>(this, OnOpenFolderCompare);
 
@@ -237,19 +238,42 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// <para>响应文件比较请求消息，转发给主窗口对比页面视图模型打开文件比较，并切换到对比选项卡。</para>
-    /// Responds to file-compare request messages by forwarding them to the main window's compare-page
-    /// view model, which opens the file comparison, and switches to the Compare tab.
+    /// <para>打开或聚焦工作区对比文档，并将右键选中的路径加入比较。</para>
+    /// Opens or focuses the workspace compare document and adds the explorer selection when provided.
+    /// </summary>
+    private async void OnOpenCompare(object recipient, OpenCompareRequestMessage message)
+    {
+        try
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+                && desktop.MainWindow?.DataContext is MainViewModel mainVm
+                && mainVm.WorkspaceVM.OpenCompareDocument() is { } compare)
+            {
+                if (message.Path is { } path)
+                {
+                    await compare.AddComparisonPathAsync(path);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "App", $"Open compare failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>响应文件比较请求消息，在工作区对比文档中载入两个文件。</para>
+    /// Responds to file-compare requests by loading both files in the workspace compare document.
     /// </summary>
     private async void OnOpenFileCompare(object recipient, OpenFileCompareRequestMessage message)
     {
         try
         {
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow?.DataContext is MainViewModel mainVm)
+                && desktop.MainWindow?.DataContext is MainViewModel mainVm
+                && mainVm.WorkspaceVM.OpenCompareDocument() is { } compare)
             {
-                await mainVm.CompareVM.OpenCompareFilesAsync(message.LeftPath, message.RightPath);
-                WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Compare));
+                await compare.OpenCompareFilesAsync(message.LeftPath, message.RightPath);
             }
         }
         catch (Exception ex)
@@ -259,19 +283,18 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// <para>响应文件夹比较请求消息，转发给主窗口对比页面视图模型打开文件夹比较，并切换到对比选项卡。</para>
-    /// Responds to folder-compare request messages by forwarding them to the main window's compare-page
-    /// view model, which opens the folder comparison, and switches to the Compare tab.
+    /// <para>响应文件夹比较请求消息，在工作区对比文档中载入两个目录。</para>
+    /// Responds to folder-compare requests by loading both directories in the workspace compare document.
     /// </summary>
     private async void OnOpenFolderCompare(object recipient, OpenFolderCompareRequestMessage message)
     {
         try
         {
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow?.DataContext is MainViewModel mainVm)
+                && desktop.MainWindow?.DataContext is MainViewModel mainVm
+                && mainVm.WorkspaceVM.OpenCompareDocument() is { } compare)
             {
-                await mainVm.CompareVM.OpenCompareFoldersAsync(message.LeftDirectory, message.RightDirectory);
-                WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Compare));
+                await compare.OpenCompareFoldersAsync(message.LeftDirectory, message.RightDirectory);
             }
         }
         catch (Exception ex)

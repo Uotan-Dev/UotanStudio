@@ -32,20 +32,31 @@
                             <MenuItem Header="{DynamicResource Explorer_OpenAsFirmware}"
                                       Click="OnOpenAsFirmware" />
                         </MenuItem>
-                        <!-- 目录节点右键菜单：新建空子项目 / 导入现有子项目 -->
-                        <MenuItem Header="{DynamicResource Explorer_NewEmptySubProject}"
-                                  IsVisible="{Binding IsDirectory}"
-                                  Click="OnNewEmptySubProject" />
-                        <MenuItem Header="{DynamicResource Explorer_ImportExistingSubProject}"
-                                  IsVisible="{Binding IsDirectory}"
-                                  Click="OnImportExistingSubProject" />
+                        <MenuItem Header="{DynamicResource Explorer_Add}" IsVisible="{Binding IsDirectory}">
+                            <MenuItem Header="{DynamicResource Explorer_NewEmptySubProject}" Click="OnNewEmptySubProject" />
+                            <MenuItem Header="{DynamicResource Explorer_ImportExistingSubProject}" Click="OnImportExistingSubProject" />
+                            <MenuItem Header="{DynamicResource Explorer_NewFile}" />
+                            <MenuItem Header="{DynamicResource Explorer_NewFolder}" />
+                        </MenuItem>
+                        <Separator />
+                        <MenuItem Header="{DynamicResource ImageView_PackRom}" IsVisible="{Binding IsDirectory}" />
+                        <MenuItem Header="{DynamicResource Explorer_Unpack}" IsVisible="{Binding !IsDirectory}" />
+                        <MenuItem Header="{DynamicResource Explorer_StartCompare}" Click="OnStartCompare" />
+                        <Separator />
+                        <MenuItem Header="{DynamicResource Menu_Cut}" />
+                        <MenuItem Header="{DynamicResource Menu_Copy}" />
+                        <MenuItem Header="{DynamicResource Menu_Delete}" />
+                        <MenuItem Header="{DynamicResource Explorer_Rename}" />
+                        <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" />
+                        <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" />
+                        <MenuItem Header="{DynamicResource Explorer_OpenInTerminal}" IsVisible="{Binding IsDirectory}" />
                     </ContextMenu>
                 </Setter>
             </ControlTheme>
         </TreeView.ItemContainerTheme>
         <TreeView.ItemTemplate>
             <TreeDataTemplate x:DataType="viewmodels:ExplorerNode" ItemsSource="{Binding Children}">
-                <TextBlock Text="{Binding Name}" />
+                <TextBlock Text="{Binding Name}" FontSize="13" />
             </TreeDataTemplate>
         </TreeView.ItemTemplate>
     </TreeView>

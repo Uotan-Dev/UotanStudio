@@ -604,11 +604,11 @@ public partial class MenuViewModel : ViewModelBase
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Settings));
     }
 
-    /// <summary><para>切换到对比选项卡。</para>Switch to the Compare tab.</summary>
+    /// <summary><para>打开或聚焦工作区对比文档。</para>Open or focus the workspace compare document.</summary>
     [RelayCommand]
     private void GoToCompare()
     {
-        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Compare));
+        WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage());
     }
 
     // ===== 窗口 / Window =====
@@ -849,9 +849,7 @@ public enum NavigationTarget
     /// <summary><para>全局日志面板。</para>Global log panel.</summary>
     Log,
     /// <summary><para>设置。</para>Settings.</summary>
-    Settings,
-    /// <summary><para>对比视图。</para>Compare view.</summary>
-    Compare
+    Settings
 }
 
 /// <summary>
@@ -892,9 +890,7 @@ public enum ActiveTab
     /// <summary><para>全局日志面板。</para>Global log panel.</summary>
     Log,
     /// <summary><para>设置面板。</para>Settings panel.</summary>
-    Settings,
-    /// <summary><para>对比视图面板。</para>Compare view panel.</summary>
-    Compare
+    Settings
 }
 
 /// <summary>

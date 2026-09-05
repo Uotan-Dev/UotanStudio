@@ -167,8 +167,7 @@ public class WorkspaceDockFactory : Factory
     {
         var options = new Dock.Model.Core.DockManagerOptions { IsDockingEnabled = true };
         var hwnd = new HostWindow(options);
-        // 由主题自绘窗体装饰（WindowDrawnDecorations 标题栏 + 最小化/最大化/关闭按钮），
-        // 与主窗口的自绘窗体样式保持一致；不要启用原生 WindowDecorations，否则会叠加一整套外框。
+        // Floating document decorations are configured by the global HostWindow style.
         hwnd.ShowInTaskbar = true;
         hwnd.CanResize = true;
         return hwnd;
@@ -247,7 +246,11 @@ public class WorkspaceDockFactory : Factory
 
         // 文档关闭后立即释放大对象（解析模型/原始字节/树节点），避免内存占用保持不降。
         // Release large objects as soon as a document is closed so the memory footprint drops.
-        if (dockable is UotanStudio.ViewModels.Editors.DexEditorViewModel dexEditor)
+        if (dockable is UotanStudio.ViewModels.Compare.CompareViewModel compare)
+        {
+            compare.Cleanup();
+        }
+        else if (dockable is UotanStudio.ViewModels.Editors.DexEditorViewModel dexEditor)
         {
             try
             {

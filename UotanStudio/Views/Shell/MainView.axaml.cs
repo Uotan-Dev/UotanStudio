@@ -16,7 +16,7 @@ public partial class MainView : UserControl
 
         WeakReferenceMessenger.Default.Register<NavigateToTabMessage>(this, OnNavigateToTab);
         MainTabs.SelectionChanged += OnSelectionChanged;
-        // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex=4 对应）
+        // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex=3 对应）
         SendActiveTabChanged(MainTabs.SelectedIndex);
     }
 
@@ -34,8 +34,7 @@ public partial class MainView : UserControl
             {
                 NavigationTarget.Workspace => 3,
                 NavigationTarget.NodeEditor => 4,
-                NavigationTarget.Compare => 5,
-                NavigationTarget.Settings => 6,
+                NavigationTarget.Settings => 5,
                 _ => MainTabs.SelectedIndex
             };
             MainTabs.SelectedIndex = index;
@@ -64,8 +63,7 @@ public partial class MainView : UserControl
         {
             3 => ActiveTab.Workspace,
             4 => ActiveTab.NodeEditor,
-            5 => ActiveTab.Compare,
-            6 => ActiveTab.Settings,
+            5 => ActiveTab.Settings,
             _ => ActiveTab.Workspace
         };
         WeakReferenceMessenger.Default.Send(new ActiveTabChangedMessage(tab));

@@ -24,6 +24,7 @@ public partial class ProjectExplorerView : UserControl
     {
         InitializeComponent();
         ProjectTree.AddHandler(TreeViewItem.ExpandedEvent, OnItemExpanded);
+        ProjectTree.AddHandler(PointerPressedEvent, OnTreePointerPressed, RoutingStrategies.Tunnel);
     }
 
     private void OnItemExpanded(object? sender, RoutedEventArgs e)
@@ -54,6 +55,15 @@ public partial class ProjectExplorerView : UserControl
     private void OnOpenAsText(object? sender, RoutedEventArgs e)
     {
         OpenWith(EditorOpenMode.Text);
+    }
+
+    private void OnStartCompare(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { DataContext: ExplorerNode { IsPlaceholder: false } node })
+        {
+            ProjectTree.SelectedItem = node;
+            WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage { Path = node.Path });
+        }
     }
 
     private void OnOpenAsHex(object? sender, RoutedEventArgs e)

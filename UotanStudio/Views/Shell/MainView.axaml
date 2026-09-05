@@ -6,7 +6,6 @@
 			 xmlns:vm="using:UotanStudio.ViewModels.Shell"
 			 xmlns:workspaceviews="using:UotanStudio.Views.Workspace"
 			 xmlns:nodeviews="using:UotanStudio.Views.Nodes"
-			 xmlns:compareviews="using:UotanStudio.Views.Compare"
 			 xmlns:shellviews="using:UotanStudio.Views.Shell"
 			 mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
 			 x:Class="UotanStudio.Views.Shell.MainView"
@@ -45,15 +44,6 @@
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Node}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
 				<nodeviews:NodeEditorView DataContext="{Binding NodeEditorVM}" />
-			</ContentPage>
-			<ContentPage>
-				<ContentPage.Icon>
-					<avalonia:MaterialIcon Kind="FileCompare" Width="18" Margin="0 -10 0 0" />
-				</ContentPage.Icon>
-				<ContentPage.Header>
-					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Compare}" FontSize="13" FontWeight="SemiBold" />
-				</ContentPage.Header>
-				<compareviews:CompareView DataContext="{Binding CompareVM}" />
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>

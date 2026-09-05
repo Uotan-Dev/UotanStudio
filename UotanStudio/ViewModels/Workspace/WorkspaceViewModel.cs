@@ -5,7 +5,9 @@ using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Controls;
 using UotanStudio.Views.Workspace;
 
@@ -22,6 +24,7 @@ public class WorkspaceViewModel : ViewModelBase
     private IRootDock? _layout;
     private DocumentDock? _documentDock;
     private bool _subscribedDocumentDock;
+    private CompareViewModel? _compareDocument;
 
     /// <summary>
     /// <para>获取或设置 Dock 根布局。</para>
@@ -45,6 +48,40 @@ public class WorkspaceViewModel : ViewModelBase
         {
             _factory.InitLayout(Layout);
         }
+    }
+
+    /// <summary>
+    /// <para>在工作区文档区打开或聚焦对比文档，复用尚未关闭的实例并切换到工作区。</para>
+    /// Opens or focuses the compare document, reusing its instance until closed, and navigates to the workspace.
+    /// </summary>
+    /// <returns><para>对比文档；布局未就绪时为 null。</para>The compare document, or null if the layout is unavailable.</returns>
+    public CompareViewModel? OpenCompareDocument()
+    {
+        if (_compareDocument?.Owner is not IDock owner || owner.VisibleDockables?.Contains(_compareDocument) != true)
+        {
+            var documentDock = _documentDock ??= FindDocumentsPane();
+            if (documentDock is null)
+            {
+                return null;
+            }
+
+            EnsureDocumentDockSubscribed(documentDock);
+            _compareDocument = new CompareViewModel
+            {
+                Id = "CompareDocument",
+                Title = LanguageService.Instance.GetString("Tab_Compare"),
+                CanClose = true
+            };
+            _factory.AddDockable(documentDock, _compareDocument);
+        }
+
+        _factory.SetActiveDockable(_compareDocument);
+        if (_factory.FindRoot(_compareDocument) is { } root)
+        {
+            _factory.SetFocusedDockable(root, _compareDocument);
+        }
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
+        return _compareDocument;
     }
 
     /// <summary>
