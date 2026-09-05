@@ -136,6 +136,7 @@ ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目
 - **比对高亮键**：主题字典定义 `DiffBackgroundBrush`（`SolidColorBrush`：浅色主题 `#FFF3D9`，深色主题 `#5A3A00`），`BinaryCompareViewer` 双栏 hex 与文本比较的差异行高亮使用。
 - 样式层：Semi.Avalonia + Ursa + Material.Icons + NodifyM，在 `App.axaml` `Application.Styles` 合并。切换主题调用 `LanguageService.Instance.ApplyTheme("DarkColors")`。
 - **浮动文档标题栏**：`App.axaml` 对 `HostWindow[IsToolWindow=False]` 统一启用 `ExtendClientAreaToDecorationsHint=True`、`ExtendClientAreaTitleBarHeightHint=32`、`WindowDecorations=Full`，使用 Semi 的 `WindowDrawnDecorations` 绘制标题栏与窗口按钮，覆盖 Dock 默认的原生标题栏设置。`Title` 通过 `DynamicResource Dock_Documents` 统一显示“文档”（英文为“Documents”），文档标签仍显示各自名称。按属性匹配，不使用 Dock 当前未设置的 `:documentwindow` 伪类。工作区与节点编辑器的文档浮动窗口共用此样式；工具面板保留 Dock 的工具标题栏行为。
+- **浮动文档图标**：同一全局样式将 `HostWindow.Icon` 设为 `/Assets/UotanToolbox.png`，与主窗口共用系统图标。通过 `WindowDrawnDecorations` 模板中的 `PART_TitleTextPanel.Background` 使用 `ImageBrush` 在左侧绘制 25×25 的同一图片，标题文字左侧留白 40、右侧留白 136 并启用省略，保留 Semi 原有窗口按钮与拖动区域；主窗口已有的顶栏图片不受影响。
 - **全局紧凑菜单**：`App.axaml` 统一设置 `MenuItem` 字号 12、最小高度 24、内边距 `8,2`、外边距 0，`ContextMenu` 内边距 4，菜单内 `Separator` 外边距 `4,2`；通过 `ContextMenu, ContextMenu MenuItem, MenuItem MenuItem` 将右键菜单与下拉菜单项的最小宽度设为 200，顶部菜单栏标题按内容宽度显示；顶部菜单栏、下拉子菜单和右键菜单共用全局样式，视图中不再单独指定菜单字号与间距。
 
 ### 7. 日志

@@ -35,9 +35,19 @@
         <StyleInclude Source="avares://NodifyM.Avalonia/Styles/ControlStyles.axaml" />
         <Style Selector="HostWindow[IsToolWindow=False]">
             <Setter Property="Title" Value="{DynamicResource Dock_Documents}" />
+            <Setter Property="Icon" Value="/Assets/UotanToolbox.png" />
             <Setter Property="ExtendClientAreaToDecorationsHint" Value="True" />
             <Setter Property="ExtendClientAreaTitleBarHeightHint" Value="32" />
             <Setter Property="WindowDecorations" Value="Full" />
+        </Style>
+        <Style Selector="HostWindow[IsToolWindow=False] WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+            <Setter Property="Background">
+                <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+            </Setter>
+        </Style>
+        <Style Selector="HostWindow[IsToolWindow=False] WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel > TextBlock">
+            <Setter Property="Margin" Value="40,0,136,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         </Style>
         <Style Selector="MenuItem">
             <Setter Property="FontSize" Value="12" />
