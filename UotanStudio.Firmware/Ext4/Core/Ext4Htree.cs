@@ -39,6 +39,12 @@ internal static class Ext4Htree
     /// <para>dx_node limit/count offset (right after the 8-byte fake dirent).</para></summary>
     public const int DxNodeCountOffset = 8;
 
+    /// <summary>dx_tail 结构大小（字节：dt_reserved(4) + dt_checksum(4)）。
+    /// 当 metadata_csum 启用时，dx_root 和 dx_node 块尾部需追加 dx_tail。
+    /// <para>dx_tail structure size (dt_reserved(4) + dt_checksum(4)).
+    /// Appended at the end of dx_root and dx_node blocks when metadata_csum is enabled.</para></summary>
+    public const int DxTailSize = 8;
+
     /// <summary>哈希种子全零时使用的默认 MD4 初始化向量。<para>Default MD4 init vector used when the hash seed is all zeros.</para></summary>
     private static readonly uint[] DefaultHashInit = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476];
 
@@ -269,10 +275,17 @@ internal static class Ext4Htree
         uint parentInode,
         List<(string Name, uint Inode, byte FileType)> entries,
         int blockSize,
-        uint[] hashSeed)
+        uint[] hashSeed,
+        bool enableMetadataCsum = false,
+        byte[]? uuid = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(hashSeed);
+
+        // metadata_csum 启用时，dx_tail（12字节）占据块尾部，limit 需减去1个 dx_entry 槽。
+        // When metadata_csum is enabled, dx_tail (12 bytes) occupies the block tail,
+        // reducing the limit by1 dx_entry slot.
+        var csumOverhead = enableMetadataCsum ? DxTailSize : 0;
 
         var hashed = new List<(uint Hash, string Name, uint Inode, byte FileType)>(entries.Count);
         foreach (var (name, inode, fileType) in entries)
@@ -291,11 +304,11 @@ internal static class Ext4Htree
         {
             // 空目录由 Builder 走线性单块路径，这里只作防御性返回一个空根。
             // Empty directories are kept linear by the Builder; return an empty root defensively.
-            return new HtreePlan(BuildDxRootBlock(blockSize, directoryInode, parentInode, 0, 1, 0, []), [], [], 0);
+            return new HtreePlan(BuildDxRootBlock(blockSize, directoryInode, parentInode, 0, 1, 0, [], enableMetadataCsum, uuid), [], [], 0);
         }
 
-        var rootLimit = (blockSize - DotEntrySize - DotEntrySize - DxRootInfoSize) / DxEntrySize;
-        var nodeLimit = (blockSize - DxNodeCountOffset) / DxEntrySize;
+        var rootLimit = (blockSize - DotEntrySize - DotEntrySize - DxRootInfoSize - csumOverhead) / DxEntrySize;
+        var nodeLimit = (blockSize - DxNodeCountOffset - csumOverhead) / DxEntrySize;
         byte[] rootBlock;
         List<byte[]> indexBlocks;
 
@@ -304,7 +317,7 @@ internal static class Ext4Htree
             // 单层：dx_root 直接指向叶块（逻辑块 1..L），indirect_levels = 0。
             // Single level: dx_root points directly at the leaves (logical blocks 1..L).
             var children = BuildChildEntryList(leafFirstHashes, leafLastHashes, 0, leafBlocks.Count, leafBlockBase: 1);
-            rootBlock = BuildDxRootBlock(blockSize, directoryInode, parentInode, children.Count, rootLimit, 0, children);
+            rootBlock = BuildDxRootBlock(blockSize, directoryInode, parentInode, children.Count, rootLimit, 0, children, enableMetadataCsum, uuid);
             indexBlocks = [];
         }
         else
@@ -326,7 +339,7 @@ internal static class Ext4Htree
                 var firstLeaf = n * nodeLimit;
                 var nodeLeafCount = Math.Min(nodeLimit, leafCount - firstLeaf);
                 var nodeChildren = BuildChildEntryList(leafFirstHashes, leafLastHashes, firstLeaf, nodeLeafCount, leafBlockBase: 1);
-                nodeBlocks.Add(BuildDxNodeBlock(blockSize, nodeChildren.Count, nodeLimit, nodeChildren));
+                nodeBlocks.Add(BuildDxNodeBlock(blockSize, nodeChildren.Count, nodeLimit, nodeChildren, directoryInode, enableMetadataCsum, uuid));
 
                 var nodeBlock = (uint)(leafCount + 1 + n);
                 if (n == 0)
@@ -345,7 +358,7 @@ internal static class Ext4Htree
                 }
             }
 
-            rootBlock = BuildDxRootBlock(blockSize, directoryInode, parentInode, rootChildren.Count, rootLimit, 1, rootChildren);
+            rootBlock = BuildDxRootBlock(blockSize, directoryInode, parentInode, rootChildren.Count, rootLimit, 1, rootChildren, enableMetadataCsum, uuid);
             indexBlocks = nodeBlocks;
         }
 
@@ -464,23 +477,26 @@ internal static class Ext4Htree
         int count,
         int limit,
         int indirectLevels,
-        List<(uint Hash, uint Block)> children)
+        List<(uint Hash, uint Block)> children,
+        bool enableMetadataCsum = false,
+        byte[]? uuid = null)
     {
         var block = new byte[blockSize];
 
-        // "." 目录项。
+        // "." 目录项。file_type = 0（未启用 FILETYPE 特性时不写 file_type 字段）。
+        // "." entry. file_type = 0 (FILETYPE feature not enabled, so no file_type field).
         WriteU32(block, 0, directoryInode);
         WriteU16(block, 4, DotEntrySize);
         block[6] = 1;  // name_len
-        block[7] = 2;  // file_type = directory
+        block[7] = 0;  // file_type = 0 (no FILETYPE feature)
         block[8] = (byte)'.';
 
         // ".." 目录项，rec_len 覆盖块内剩余空间（dx 结构与索引数据藏于其尾部空闲区）。
         // ".." entry whose rec_len covers the rest of the block (the dx data lives in its slack).
         WriteU32(block, 12, parentInode);
         WriteU16(block, 16, (ushort)(blockSize - DotEntrySize));
-        block[18] = 2;
-        block[19] = 2;
+        block[18] = 2;  // name_len
+        block[19] = 0;  // file_type = 0 (no FILETYPE feature)
         block[20] = (byte)'.';
         block[21] = (byte)'.';
 
@@ -491,6 +507,13 @@ internal static class Ext4Htree
         block[DotEntrySize + DotEntrySize + 6] = (byte)indirectLevels;
 
         WriteDxEntries(block, DxRootCountOffset, count, limit, children);
+
+        // metadata_csum 启用时，在块尾写入 dx_tail（dt_reserved + dt_checksum）。
+        if (enableMetadataCsum)
+        {
+            WriteDxTail(block, DxRootCountOffset, count, limit, directoryInode, uuid);
+        }
+
         return block;
     }
 
@@ -503,7 +526,10 @@ internal static class Ext4Htree
         int blockSize,
         int count,
         int limit,
-        List<(uint Hash, uint Block)> children)
+        List<(uint Hash, uint Block)> children,
+        uint directoryInode = 0,
+        bool enableMetadataCsum = false,
+        byte[]? uuid = null)
     {
         var block = new byte[blockSize];
         WriteU32(block, 0, 0);                       // inode = 0
@@ -511,6 +537,13 @@ internal static class Ext4Htree
         // name_len = 0, file_type = 0 (zeroed).
 
         WriteDxEntries(block, DxNodeCountOffset, count, limit, children);
+
+        if (enableMetadataCsum)
+        {
+            // dx_node 的 checksum 也使用目录 inode 号（与 e2fsprogs ext2fs_dx_csum 一致）。
+            WriteDxTail(block, DxNodeCountOffset, count, limit, directoryInode, uuid);
+        }
+
         return block;
     }
 
@@ -541,6 +574,85 @@ internal static class Ext4Htree
     private static void WriteU16(byte[] bytes, int offset, ushort value) => BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(offset, 2), value);
 
     private static void WriteU32(byte[] bytes, int offset, uint value) => BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(offset, 4), value);
+
+    /// <summary>
+    /// 写入 dx_tail 结构并计算校验和。对齐 e2fsprogs 1.47.4 ext2fs_dx_csum 算法。
+    /// <para>dx_tail 位于 countOffset + limit * DxEntrySize 处（紧跟 dx_entry 数组末尾）。
+    /// 校验和计算：seed = crc32c(~0, uuid)，续算 inum(LE32)、generation(LE32)、
+    /// block[0 .. countOffset + count*8]、dt_reserved(4字节)、dummy_csum(0, 4字节)。
+    /// </para>
+    /// <para>Writes dx_tail and computes checksum matching e2fsprogs 1.47.4 ext2fs_dx_csum.
+    /// dx_tail is at countOffset + limit * DxEntrySize. Checksum covers:
+    /// seed=crc32c(~0,uuid), inum(LE32), generation(LE32), block[0..countOffset+count*8],
+    /// dt_reserved(4), dummy_csum=0(4).</para>
+    /// </summary>
+    private static void WriteDxTail(byte[] block, int countOffset, int count, int limit, uint directoryInode, byte[]? uuid)
+    {
+        // dx_tail 在 limit 位置（dx_entry 数组末尾）。
+        var tailOffset = countOffset + limit * DxEntrySize;
+        // dt_reserved = 0, dt_checksum = 0（计算前清零）。
+        block.AsSpan(tailOffset, DxTailSize).Clear();
+
+        // 按 e2fsprogs 1.47.4 ext2fs_dx_csum 算法计算校验和：
+        // crc = crc32c(csum_seed, &inum, sizeof(inum));
+        // crc = crc32c(crc, &gen, sizeof(gen));
+        // crc = crc32c(crc, buf, size);  // size = countOffset + count * 8
+        // crc = crc32c(crc, t, 4);       // dt_reserved (already zeroed)
+        // crc = crc32c(crc, &dummy_csum, 4); // dummy = 0
+        var crc = HtreeCrc32c(uuid ?? new byte[16], 0xFFFF_FFFF); // csum_seed = crc32c(~0, uuid)
+
+        // inum (LE32)
+        Span<byte> le4 = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(le4, directoryInode);
+        crc = HtreeCrc32c(le4, crc);
+
+        // generation (LE32) — 构建器恒为 0
+        crc = HtreeCrc32c(stackalloc byte[4], crc);
+
+        // block[0 .. countOffset + count * 8]
+        var size = countOffset + count * DxEntrySize;
+        if (size > tailOffset) size = tailOffset;
+        if (size > 0)
+        {
+            crc = HtreeCrc32c(block.AsSpan(0, size), crc);
+        }
+
+        // dt_reserved (4 bytes, already zeroed)
+        crc = HtreeCrc32c(block.AsSpan(tailOffset, 4), crc);
+
+        // dummy_csum (4 bytes of zeros)
+        crc = HtreeCrc32c(stackalloc byte[4], crc);
+
+        BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(tailOffset + 4, 4), crc);
+    }
+
+    // CRC32c 查找表（reflected, poly 0x82F63B78），与 Ext4Builder.Crc32c 相同。
+    private static readonly uint[] HtreeCrc32cTable = InitHtreeCrc32cTable();
+
+    private static uint HtreeCrc32c(ReadOnlySpan<byte> data, uint seed)
+    {
+        var crc = seed;
+        foreach (var b in data)
+        {
+            crc = HtreeCrc32cTable[(crc ^ b) & 0xFF] ^ (crc >> 8);
+        }
+        return crc;
+    }
+
+    private static uint[] InitHtreeCrc32cTable()
+    {
+        var table = new uint[256];
+        for (uint i = 0; i < 256; i++)
+        {
+            var v = i;
+            for (var j = 0; j < 8; j++)
+            {
+                v = (v & 1) != 0 ? (v >> 1) ^ 0x82F63B78 : v >> 1;
+            }
+            table[i] = v;
+        }
+        return table;
+    }
 
     /// <summary>
     /// htree 构建计划：RootBlock（目录逻辑块 0）、叶块（逻辑块 1..L）、索引块（两层树时位于叶块之后），

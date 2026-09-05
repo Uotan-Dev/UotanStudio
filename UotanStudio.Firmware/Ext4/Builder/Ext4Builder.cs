@@ -298,15 +298,22 @@ public sealed partial class Ext4Builder
         gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
 
         // 重新计算精确的总块数。
+        // 备份组（1, 3, 5, 7…）各有 1+gdtBlocks 的超级块+GDT 额外元数据。
+        // Recompute exact total blocks. Backup groups (1, 3, 5, 7…) each carry 1+gdtBlocks
+        // extra metadata for backup superblock+GDT.
+        var backupGroupCount = BackupSuperblockGroups(groupCount).Count();
         var group0Metadata = 1L + gdtBlocks + metaPerGroup; // 超级块 + GDT + 组 0 元数据
-        var totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks + (groupCount - 1) * metaPerGroup;
+        var totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks
+            + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks);
         // 确保组数足够。
         if (totalBlocksNeeded > (long)groupCount * blocksPerGroup)
         {
             groupCount = (int)((totalBlocksNeeded + blocksPerGroup - 1) / blocksPerGroup);
-            gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 32.0 / blockSize));
+            gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
+            backupGroupCount = BackupSuperblockGroups(groupCount).Count();
             group0Metadata = 1L + gdtBlocks + metaPerGroup;
-            totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks + (groupCount - 1) * metaPerGroup;
+            totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks
+                + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks);
         }
 
         var totalBlocks = (long)groupCount * blocksPerGroup;
@@ -314,6 +321,7 @@ public sealed partial class Ext4Builder
 
         // ---- 构建组信息并分配块。Build group info and allocate blocks. ----
         var groups = new List<GroupInfo>();
+        var backupGroups = new HashSet<int>(BackupSuperblockGroups(groupCount));
 
         for (var g = 0; g < groupCount; g++)
         {
@@ -328,9 +336,20 @@ public sealed partial class Ext4Builder
                 group.InodeTableBlock = group.InodeBitmapBlock + 1;
                 group.FirstDataBlock = group.InodeTableBlock + inodeTableBlocks;
             }
+            else if (backupGroups.Contains(g))
+            {
+                // 备份组（1, 3, 5, 7…）：备份超级块(1块) + 备份GDT(gdtBlocks) + 块位图 + inode位图 + inode表。
+                // Backup groups (1, 3, 5, 7…): backup superblock (1 block) + backup GDT (gdtBlocks)
+                // + block bitmap + inode bitmap + inode table.
+                group.BlockBitmapBlock = groupStart + 1 + gdtBlocks;
+                group.InodeBitmapBlock = group.BlockBitmapBlock + 1;
+                group.InodeTableBlock = group.InodeBitmapBlock + 1;
+                group.FirstDataBlock = group.InodeTableBlock + inodeTableBlocks;
+            }
             else
             {
-                // 其他组：块位图 + inode 位图 + inode 表。
+                // 非备份组：块位图 + inode 位图 + inode 表。
+                // Non-backup groups: block bitmap + inode bitmap + inode table.
                 group.BlockBitmapBlock = groupStart;
                 group.InodeBitmapBlock = groupStart + 1;
                 group.InodeTableBlock = groupStart + 2;
@@ -382,14 +401,14 @@ public sealed partial class Ext4Builder
         {
             var group = groups[g];
             var blockBitmap = new byte[blockSize];
-            WriteBlockBitmapForGroup(blockBitmap, group, blocksPerGroup, groupCount, gdtBlocks, inodeTableBlocks);
+            WriteBlockBitmapForGroup(blockBitmap, group, blocksPerGroup, groupCount, gdtBlocks, inodeTableBlocks, backupGroups);
             var inodeBitmap = new byte[blockSize];
-            WriteInodeBitmapForGroup(inodeBitmap, group, includeJournal ? JournalInodeNumber : 0u);
+            WriteInodeBitmapForGroup(inodeBitmap, group, blockSize, inodeSize, includeJournal ? JournalInodeNumber : 0u);
             bitmaps.Add((blockBitmap, inodeBitmap));
             totalFreeInodes += CountFreeInodes(inodeBitmap, group.InodesInGroup);
 
             var desc = gdtBuffer.AsSpan(g * 64, 64);
-            WriteGroupDescriptor(desc, group, g, uuid, blockBitmap, inodeBitmap, enableMetadataCsum, gdtBlocks, inodeTableBlocks);
+            WriteGroupDescriptor(desc, group, g, uuid, blockBitmap, inodeBitmap, enableMetadataCsum, gdtBlocks, inodeTableBlocks, backupGroups);
         }
 
         // 写超级块（组 0 + 备份组 1, 3, 5, 7…）。
@@ -807,7 +826,9 @@ public sealed partial class Ext4Builder
             var children = new List<(string Name, uint Inode, byte FileType)>(node.Children.Count);
             foreach (var child in node.Children)
             {
-                children.Add((child.Name, child.Inode, FileTypeOf(child)));
+                // FILETYPE 特性未启用，所有条目 file_type = 0。
+                // FILETYPE feature not enabled, all entries get file_type = 0.
+                children.Add((child.Name, child.Inode, (byte)0));
             }
 
             var plan = Ext4Htree.BuildHtree(
@@ -815,7 +836,9 @@ public sealed partial class Ext4Builder
                 node.Parent?.Inode ?? node.Inode,
                 children,
                 blockSize,
-                hashSeed);
+                hashSeed,
+                enableMetadataCsum,
+                uuid);
 
             var blocks = new List<byte[]>(1 + plan.LeafBlocks.Count + plan.IndexBlocks.Count) { plan.RootBlock };
             blocks.AddRange(plan.LeafBlocks);
@@ -1063,9 +1086,9 @@ public sealed partial class Ext4Builder
         WriteU16(block, 0x3C, 1);
         WriteU16(block, 0x3E, 0);
         WriteU32(block, 0x40, FixedTimestamp);
-        WriteU32(block, 0x44, 0);
-        WriteU32(block, 0x48, 0);
-        WriteU32(block, 0x4C, 1);
+        WriteU32(block, 0x44, 0);                                          // s_creator_os = LINUX
+        WriteU32(block, 0x48, 1);                                          // s_rev_level = EXT2_DYNAMIC_REV
+        WriteU32(block, 0x4C, 1);                                          // s_def_resuid = root
         WriteU16(block, 0x50, 0);
         WriteU16(block, 0x52, 0);
         WriteU32(block, 0x54, FirstUsableInode);
@@ -1123,7 +1146,8 @@ public sealed partial class Ext4Builder
 
     private static void WriteGroupDescriptor(
         Span<byte> desc, GroupInfo group, int groupIndex, byte[] uuid,
-        byte[] blockBitmap, byte[] inodeBitmap, bool enableMetadataCsum, long gdtBlocks, int inodeTableBlocks)
+        byte[] blockBitmap, byte[] inodeBitmap, bool enableMetadataCsum, long gdtBlocks, int inodeTableBlocks,
+        HashSet<int>? backupGroups = null)
     {
         // 64 字节组描述符布局（ext4_group_desc，s_desc_size=64）。
         desc.Clear();
@@ -1133,9 +1157,12 @@ public sealed partial class Ext4Builder
 
         // 空闲块数必须与块位图一致：位图标记了组内元数据块（超级块/GDT/块位图/inode 位图/inode 表）
         // 与数据块，故空闲块 = 组内块数 − 元数据 − 数据。
+        // 组 0 和备份组额外有 1+gdtBlocks 的超级块+GDT 元数据。
         // Free-block count must match the block bitmap: the bitmap marks the group's metadata blocks
         // (superblock/GDT/bitmaps/inode table) plus data, so free = group size − metadata − data.
-        var freeBlocks = group.BlocksInGroup - ((group.GroupIndex == 0 ? 1 + gdtBlocks : 0) + 2L + inodeTableBlocks) - group.UsedBlocks;
+        // Group 0 and backup groups have extra 1+gdtBlocks metadata for superblock+GDT.
+        var hasBackupMeta = group.GroupIndex == 0 || backupGroups is not null && backupGroups.Contains(group.GroupIndex);
+        var freeBlocks = group.BlocksInGroup - ((hasBackupMeta ? 1 + gdtBlocks : 0) + 2L + inodeTableBlocks) - group.UsedBlocks;
         // 空闲 inode 数以 inode 位图为准（含保留 inode 1..10），与 e2fsck 统计一致。
         // Free-inode count follows the inode bitmap (including reserved inodes 1..10), matching e2fsck.
         var freeInodes = CountFreeInodes(inodeBitmap, group.InodesInGroup);
@@ -1201,12 +1228,13 @@ public sealed partial class Ext4Builder
         }
     }
 
-    private static void WriteBlockBitmapForGroup(byte[] bitmap, GroupInfo group, int blocksPerGroup, int groupCount, long gdtBlocks, int inodeTableBlocks)
+    private static void WriteBlockBitmapForGroup(byte[] bitmap, GroupInfo group, int blocksPerGroup, int groupCount, long gdtBlocks, int inodeTableBlocks, HashSet<int>? backupGroups = null)
     {
         var groupStart = (long)group.GroupIndex * blocksPerGroup;
 
-        // 组 0：标记超级块(块0)、GDT(块1..gdtBlocks)。
-        if (group.GroupIndex == 0)
+        // 组 0 和备份组：标记超级块(块0)、GDT(块1..gdtBlocks)。
+        // Group 0 and backup groups: mark superblock (block 0) and GDT (blocks 1..gdtBlocks).
+        if (group.GroupIndex == 0 || (backupGroups is not null && backupGroups.Contains(group.GroupIndex)))
         {
             MarkBlockUsed(bitmap, 0);
             for (var b = 1L; b <= gdtBlocks; b++)
@@ -1239,13 +1267,17 @@ public sealed partial class Ext4Builder
         }
     }
 
-    private static void WriteInodeBitmapForGroup(byte[] bitmap, GroupInfo group, uint journalInode = 0)
+    private static void WriteInodeBitmapForGroup(byte[] bitmap, GroupInfo group, int blockSize, int inodeSize, uint journalInode = 0)
     {
-        // inode 位图块整体置 1：超出 inodes_per_group 的填充位必须为 1（e2fsck 要求），
-        // 组内已用 inode 也保持 1；随后只清空空闲 inode 位。
-        // Mark the whole inode bitmap block used, including the padding bits beyond inodes_per_group
-        // (e2fsck requires them set); used inodes stay set. Only the free inode slots are cleared.
-        bitmap.AsSpan().Fill(0xFF);
+        // 全零初始化，然后设置已用 inode 位和填充位。
+        // 保留 inode（1..FirstUsableInode-1）+ 已用数据 inode + 日志 inode 设置为1；
+        // inodes_per_group 范围内的空闲 inode 为0；
+        // 超出 inodes_per_group 的填充位设置为1（e2fsck "Padding at end of inode bitmap is not set"）。
+        // Initialize all-zero, then set used inode bits and padding bits.
+        // Reserved inodes (1..FirstUsableInode-1) + used data inodes + journal inode = 1;
+        // free inodes within inodes_per_group = 0;
+        // padding bits beyond inodes_per_group = 1 (e2fsck requires).
+        bitmap.AsSpan().Clear();
 
         var inodesPerGroup = group.InodesInGroup;
         var usedLocals = new HashSet<int>();
@@ -1255,22 +1287,35 @@ public sealed partial class Ext4Builder
         }
 
         // 日志 inode（属于组 0）也标记为已用。
-        // The journal inode (group 0) is marked used as well.
         if (journalInode > 0 && ((journalInode - 1) / (uint)inodesPerGroup) == (uint)group.GroupIndex)
         {
             usedLocals.Add((int)((journalInode - 1) % (uint)inodesPerGroup));
         }
 
-        // 保留 inode（1..FirstUsableInode-1，含坏块 inode 1 与保留位）必须保持已用，与 mke2fs/e2fsck 一致；
-        // 只清空从 FirstUsableInode 起的空闲 inode 位。
-        // Reserved inodes (1..FirstUsableInode-1, including the bad-block inode) stay marked used, as
-        // mke2fs/e2fsck expect; only free inode slots from FirstUsableInode onward are cleared.
-        for (var local = (int)(FirstUsableInode - 1); local < inodesPerGroup; local++)
+        // 设置保留 inode 和已用数据 inode 的位。
+        // 保留 inode（1..FirstUsableInode-1）仅在组 0 中存在；其他组无保留 inode。
+        // Set bits for reserved inodes and used data inodes.
+        // Reserved inodes (1..FirstUsableInode-1) only exist in group 0; other groups have none.
+        for (var local = 0; local < inodesPerGroup; local++)
         {
-            if (!usedLocals.Contains(local))
+            var isReserved = group.GroupIndex == 0 && local < (int)(FirstUsableInode - 1);
+            if (isReserved || usedLocals.Contains(local))
             {
-                bitmap[local >> 3] &= (byte)~(1 << (local & 7));
+                bitmap[local >> 3] |= (byte)(1 << (local & 7));
             }
+        }
+
+        // 超出 inode 表大小的填充位设置为 1（e2fsck 要求）。
+        // inode 表可能比 inodes_per_group 大（对齐到块），表内超出 inodes_per_group 的槽
+        // 无有效 inode 数据，e2fsck 期望对应位为 0；只有表外的位才设为 1。
+        // Padding bits beyond the inode table size set to 1 (e2fsck requires).
+        // The inode table may be larger than inodes_per_group (block-aligned); slots beyond
+        // inodes_per_group have no valid inode data, e2fsck expects their bits to be 0.
+        // Only bits beyond the inode table are set to 1.
+        var inodeTableSlots = ((inodesPerGroup + (blockSize / inodeSize) - 1) / (blockSize / inodeSize)) * (blockSize / inodeSize);
+        for (var local = inodeTableSlots; local < bitmap.Length * 8; local++)
+        {
+            bitmap[local >> 3] |= (byte)(1 << (local & 7));
         }
     }
 
