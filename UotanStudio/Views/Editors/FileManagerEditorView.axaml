@@ -2,87 +2,232 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:imaging="clr-namespace:Avalonia.Media.Imaging;assembly=Avalonia.Base"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.FileManagerEditorView"
              x:DataType="viewmodels:FileManagerEditorViewModel">
+  <UserControl.Resources>
+    <imaging:Bitmap x:Key="FolderIcon">avares://UotanStudio/Assets/folder.png</imaging:Bitmap>
+    <imaging:Bitmap x:Key="FileIcon">avares://UotanStudio/Assets/file.png</imaging:Bitmap>
+    <DataTemplate x:Key="FileListTemplate" x:DataType="viewmodels:FileManagerEntryViewModel">
+      <Grid ColumnDefinitions="30,*,64,Auto" RowDefinitions="Auto,Auto" Height="28" ToolTip.Tip="{Binding Path}">
+        <Grid Grid.Column="0" Grid.RowSpan="2" Width="24" Height="24" HorizontalAlignment="Left">
+          <Image Classes="entry-icon" Classes.directory="{Binding IsDirectory}" />
+          <avalonia:MaterialIcon Kind="LinkVariant" Width="10" Height="10" IsVisible="{Binding IsSymlink}"
+                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+        </Grid>
+        <TextBlock Grid.Column="1" Classes="entry-name" Text="{Binding Name}" FontSize="12" LineHeight="14"
+                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock Grid.Column="2" Grid.RowSpan="2" Text="{Binding SizeText}" FontSize="11" Margin="6,0,0,0"
+                   IsVisible="{Binding !IsDirectory}" TextAlignment="Right" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+        <TextBlock Classes="entry-kind" Text="{Binding KindText}" FontSize="11" LineHeight="14" VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+      </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="FileGridTemplate" x:DataType="viewmodels:FileManagerEntryViewModel">
+      <Grid RowDefinitions="28,28" RowSpacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}">
+        <Grid Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <Image Classes="entry-icon" Classes.directory="{Binding IsDirectory}" />
+          <avalonia:MaterialIcon Kind="LinkVariant" Width="10" Height="10" IsVisible="{Binding IsSymlink}"
+                                 HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+        </Grid>
+        <TextBlock Grid.Row="1" Text="{Binding Name}" FontSize="11" LineHeight="14"
+                   TextAlignment="Center" TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxLines="2" />
+      </Grid>
+    </DataTemplate>
+  </UserControl.Resources>
+  <UserControl.Styles>
+    <Style Selector="Button.Small, ToggleButton.Small">
+      <Setter Property="Width" Value="18" />
+      <Setter Property="Height" Value="18" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.Small avalonia|MaterialIcon, ToggleButton.Small avalonia|MaterialIcon">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+    </Style>
+    <Style Selector="TreeViewItem" x:DataType="viewmodels:FileManagerEntryViewModel">
+      <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+    </Style>
+    <Style Selector="ListBox.file-list">
+      <Setter Property="ItemTemplate" Value="{StaticResource FileListTemplate}" />
+      <Setter Property="ItemsPanel">
+        <ItemsPanelTemplate>
+          <VirtualizingStackPanel />
+        </ItemsPanelTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox.file-list > ListBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="CornerRadius" Value="4" />
+    </Style>
+    <Style Selector="ListBox.file-list.grid-view">
+      <Setter Property="ItemTemplate" Value="{StaticResource FileGridTemplate}" />
+      <Setter Property="ItemsPanel">
+        <ItemsPanelTemplate>
+          <WrapPanel ItemWidth="72" ItemHeight="72" ItemSpacing="4" LineSpacing="4" />
+        </ItemsPanelTemplate>
+      </Setter>
+    </Style>
+    <Style Selector="ListBox.file-list.grid-view > ListBoxItem">
+      <Setter Property="Width" Value="72" />
+      <Setter Property="Height" Value="72" />
+      <Setter Property="Padding" Value="4" />
+    </Style>
+    <Style Selector="Image.entry-icon">
+      <Setter Property="Source" Value="{StaticResource FileIcon}" />
+    </Style>
+    <Style Selector="Image.entry-icon.directory">
+      <Setter Property="Source" Value="{StaticResource FolderIcon}" />
+    </Style>
+    <Style Selector="TextBlock.entry-name">
+      <Setter Property="Grid.RowSpan" Value="2" />
+    </Style>
+    <Style Selector="TextBlock.entry-kind">
+      <Setter Property="Width" Value="110" />
+      <Setter Property="Grid.Column" Value="3" />
+      <Setter Property="Grid.RowSpan" Value="2" />
+      <Setter Property="Margin" Value="12,0,0,0" />
+    </Style>
+    <Style Selector="Grid.compact TextBlock.entry-name">
+      <Setter Property="Grid.RowSpan" Value="1" />
+    </Style>
+    <Style Selector="Grid.compact TextBlock.entry-kind">
+      <Setter Property="Width" Value="NaN" />
+      <Setter Property="Grid.Column" Value="1" />
+      <Setter Property="Grid.Row" Value="1" />
+      <Setter Property="Grid.RowSpan" Value="1" />
+      <Setter Property="Margin" Value="0" />
+    </Style>
+  </UserControl.Styles>
+
   <DockPanel>
-    <!-- 顶部工具栏：镜像信息 + 刷新/提取按钮 -->
-    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6">
-          <Button Content="{DynamicResource FileManager_Extract}" Command="{Binding ExtractSelectedCommand}" />
-          <Button Content="{DynamicResource FileManager_Refresh}" Command="{Binding RefreshCommand}" />
+    <Border DockPanel.Dock="Top" Padding="8,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <TextBlock Text="{Binding FormatName}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
+        <TextBlock x:Name="ImagePathText" Grid.Column="1" Text="{Binding ImagePath}" FontSize="12"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding ImagePath}" />
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0">
+          <Button Classes="Small" Command="{Binding ExtractSelectedCommand}"
+                  ToolTip.Tip="{DynamicResource FileManager_Extract}" AutomationProperties.Name="{DynamicResource FileManager_Extract}">
+            <avalonia:MaterialIcon Kind="DownloadOutline" />
+          </Button>
+          <Button Classes="Small" Command="{Binding RefreshCommand}"
+                  ToolTip.Tip="{DynamicResource FileManager_Refresh}" AutomationProperties.Name="{DynamicResource FileManager_Refresh}">
+            <avalonia:MaterialIcon Kind="Refresh" />
+          </Button>
+          <ToggleButton x:Name="ViewModeButton" Classes="Small" IsChecked="{Binding IsGridView, Mode=TwoWay}"
+                        AutomationProperties.Name="{DynamicResource FileManager_ViewMode}">
+            <ToolTip.Tip>
+              <Panel>
+                <TextBlock Text="{DynamicResource FileManager_GridView}" IsVisible="{Binding !IsGridView}" />
+                <TextBlock Text="{DynamicResource FileManager_ListView}" IsVisible="{Binding IsGridView}" />
+              </Panel>
+            </ToolTip.Tip>
+            <Panel>
+              <avalonia:MaterialIcon Kind="ViewGridOutline" IsVisible="{Binding !IsGridView}" />
+              <avalonia:MaterialIcon Kind="ViewListOutline" IsVisible="{Binding IsGridView}" />
+            </Panel>
+          </ToggleButton>
         </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-          <TextBlock Text="{Binding FormatName}" FontWeight="SemiBold" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding ImagePath}" FontFamily="Consolas" FontSize="12"
-                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding FileCountText}" FontSize="12" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding DirectoryCountText}" FontSize="12" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding ImageSizeText}" FontSize="12" VerticalAlignment="Center" />
-        </StackPanel>
-      </DockPanel>
+      </Grid>
     </Border>
 
-    <!-- 加载进度指示 -->
-    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
-            IsVisible="{Binding IsLoading}">
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <ProgressBar IsIndeterminate="True" Width="160" Height="4" />
-        <TextBlock Text="{DynamicResource FileManager_Loading}" FontSize="12"
-                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
-      </StackPanel>
+    <Border DockPanel.Dock="Top" Padding="8,4" IsVisible="{Binding IsLoading}">
+      <Grid ColumnDefinitions="32,*">
+        <ProgressBar IsIndeterminate="True" Height="4" VerticalAlignment="Center" />
+        <TextBlock Grid.Column="1" Text="{DynamicResource FileManager_Loading}" FontSize="12" Margin="8,0,0,0"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+      </Grid>
     </Border>
 
-    <!-- 错误区 -->
-    <Border DockPanel.Dock="Top" Padding="6,4" Background="#22C42B1C"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
-            IsVisible="{Binding HasError}">
-      <TextBlock Text="{Binding ErrorMessage}" Foreground="Red" TextWrapping="Wrap" FontSize="12" />
+    <Border DockPanel.Dock="Top" Padding="8,4" Background="#22C42B1C" IsVisible="{Binding HasError}">
+      <TextBlock Text="{Binding ErrorMessage}" Foreground="Red" TextWrapping="Wrap" FontSize="12" MaxHeight="72" />
     </Border>
 
-    <!-- 文件树（左） + 选中条目详情（右） -->
-    <Grid ColumnDefinitions="320,*">
-      <Border Grid.Column="0" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-        <TreeView x:Name="FileTree"
-                  ItemsSource="{Binding Entries}"
-                  SelectionChanged="OnFileTreeSelectionChanged"
-                  DoubleTapped="OnFileTreeDoubleTapped">
-          <TreeView.ItemTemplate>
-            <TreeDataTemplate x:DataType="viewmodels:FileManagerEntryViewModel" ItemsSource="{Binding Children}">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
-                <TextBlock Text="{Binding SizeText}" FontSize="11"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-              </StackPanel>
-            </TreeDataTemplate>
-          </TreeView.ItemTemplate>
-        </TreeView>
-      </Border>
+    <Border DockPanel.Dock="Bottom" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+      <WrapPanel>
+        <TextBlock Text="{Binding FileCountText}" FontSize="11" Margin="0,0,16,0" />
+        <TextBlock Text="{Binding DirectoryCountText}" FontSize="11" Margin="0,0,16,0" />
+        <TextBlock Text="{Binding ImageSizeText}" FontSize="11" />
+      </WrapPanel>
+    </Border>
 
-      <!-- 详情区 -->
-      <Border Grid.Column="1" Padding="12" Background="{DynamicResource ControlFillColorDefaultBrush}">
-        <StackPanel Spacing="10">
-          <TextBlock Text="{Binding SelectedEntry.Name}" FontSize="18" FontWeight="SemiBold"
-                     TextTrimming="CharacterEllipsis" />
-          <Grid ColumnDefinitions="96,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="6">
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource FileManager_Path}"
-                       FontWeight="SemiBold" FontSize="12" />
-            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedEntry.Path}"
-                       FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
+    <Grid x:Name="BrowserGrid" SizeChanged="OnBrowserSizeChanged" ClipToBounds="True">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" MinWidth="120" />
+        <ColumnDefinition Width="7" />
+        <ColumnDefinition Width="*" MinWidth="180" />
+      </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource FileManager_Size}"
-                       FontWeight="SemiBold" FontSize="12" />
-            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedEntry.SizeText}" FontSize="12" />
+      <TreeView x:Name="FileTree" Grid.Column="0" ItemsSource="{Binding DirectoryRoots}"
+                SelectedItem="{Binding CurrentDirectory, Mode=TwoWay}" IsEnabled="{Binding !IsLoading}"
+                ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <TreeView.ItemTemplate>
+          <TreeDataTemplate x:DataType="viewmodels:FileManagerEntryViewModel" ItemsSource="{Binding Directories}">
+            <Grid ColumnDefinitions="Auto,*" ToolTip.Tip="{Binding Path}">
+              <Image Source="{StaticResource FolderIcon}" Height="14" />
+              <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Margin="4,0,0,0"
+                         TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+            </Grid>
+          </TreeDataTemplate>
+        </TreeView.ItemTemplate>
+      </TreeView>
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource FileManager_Kind}"
-                       FontWeight="SemiBold" FontSize="12" />
-            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedEntry.KindText}" FontSize="12" />
+      <Border x:Name="SplitterLine" Grid.Column="1" Width="3" HorizontalAlignment="Center"
+              Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" IsHitTestVisible="False" />
+      <GridSplitter x:Name="PaneSplitter" Grid.Column="1" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                    HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" Cursor="SizeWestEast" />
+      <avalonia:MaterialIcon x:Name="SplitterGrip" Grid.Column="1" Kind="DragVertical" Width="7" Height="20"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             Foreground="{DynamicResource EditorPaneSplitterGripBrush}" IsHitTestVisible="False" Opacity="0.8" />
+
+      <Grid x:Name="FilePane" Grid.Column="2" RowDefinitions="Auto,*,Auto" SizeChanged="OnFilePaneSizeChanged">
+        <Border Padding="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="Auto,*">
+            <Button Classes="Small" Command="{Binding NavigateUpCommand}"
+                    ToolTip.Tip="{DynamicResource FileManager_NavigateUp}" AutomationProperties.Name="{DynamicResource FileManager_NavigateUp}">
+              <avalonia:MaterialIcon Kind="ArrowUp" />
+            </Button>
+            <TextBlock Grid.Column="1" Text="{Binding CurrentPath}" Margin="8,0,0,0" FontSize="12"
+                       FontFamily="Consolas" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding CurrentPath}" />
           </Grid>
-        </StackPanel>
-      </Border>
+        </Border>
+
+        <ListBox x:Name="FileList" Grid.Row="1" Classes="file-list" Classes.grid-view="{Binding IsGridView}"
+                 Margin="4" BorderThickness="0" Background="Transparent"
+                 ItemsSource="{Binding CurrentEntries}" SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
+                 IsEnabled="{Binding !IsLoading}" SelectionMode="Single"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 DoubleTapped="OnFileListDoubleTapped" KeyDown="OnFileListKeyDown" />
+
+        <TextBlock Grid.Row="1" Text="{DynamicResource FileManager_EmptyDirectory}" IsVisible="{Binding IsDirectoryEmpty}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" IsHitTestVisible="False" />
+
+        <Border Grid.Row="2" Padding="8,6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                IsVisible="{Binding SelectedEntry, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <Grid ColumnDefinitions="Auto,*">
+            <TextBlock Text="{DynamicResource FileManager_Path}" FontSize="11" Margin="0,0,8,0" />
+            <TextBlock Grid.Column="1" Text="{Binding SelectedEntry.Path}" FontSize="11" FontFamily="Consolas"
+                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SelectedEntry.Path}" />
+          </Grid>
+        </Border>
+      </Grid>
     </Grid>
   </DockPanel>
 </UserControl>

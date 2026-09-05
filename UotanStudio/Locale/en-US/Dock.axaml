@@ -68,6 +68,11 @@
     <!-- File manager document (ext4/EROFS/F2FS image tree) labels -->
     <x:String x:Key="Dock_FileManager">File Manager</x:String>
     <x:String x:Key="FileManager_Refresh">Refresh</x:String>
+    <x:String x:Key="FileManager_NavigateUp">Up one level</x:String>
+    <x:String x:Key="FileManager_ViewMode">Switch view</x:String>
+    <x:String x:Key="FileManager_ListView">List view</x:String>
+    <x:String x:Key="FileManager_GridView">Grid view</x:String>
+    <x:String x:Key="FileManager_EmptyDirectory">This directory is empty</x:String>
     <x:String x:Key="FileManager_Extract">Extract</x:String>
     <x:String x:Key="FileManager_Loading">Loading filesystem tree…</x:String>
     <x:String x:Key="FileManager_FileCount">Files: {0}</x:String>

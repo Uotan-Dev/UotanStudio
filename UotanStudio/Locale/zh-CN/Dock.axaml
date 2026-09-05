@@ -68,6 +68,11 @@
     <!-- 文件管理器文档（ext4/EROFS/F2FS 镜像目录树）标签 -->
     <x:String x:Key="Dock_FileManager">文件管理器</x:String>
     <x:String x:Key="FileManager_Refresh">刷新</x:String>
+    <x:String x:Key="FileManager_NavigateUp">返回上级目录</x:String>
+    <x:String x:Key="FileManager_ViewMode">切换视图</x:String>
+    <x:String x:Key="FileManager_ListView">列表视图</x:String>
+    <x:String x:Key="FileManager_GridView">网格视图</x:String>
+    <x:String x:Key="FileManager_EmptyDirectory">此目录为空</x:String>
     <x:String x:Key="FileManager_Extract">提取</x:String>
     <x:String x:Key="FileManager_Loading">正在加载文件系统树…</x:String>
     <x:String x:Key="FileManager_FileCount">文件数：{0}</x:String>

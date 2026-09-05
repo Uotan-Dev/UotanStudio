@@ -78,6 +78,18 @@ public partial class FileManagerEntryViewModel : ObservableObject
     public ObservableCollection<FileManagerEntryViewModel> Children { get; } = [];
 
     /// <summary>
+    /// <para>目录树仅显示子目录。</para>
+    /// Only child directories are shown in the navigation tree.
+    /// </summary>
+    public IEnumerable<FileManagerEntryViewModel> Directories => Children.Where(static entry => entry.IsDirectory);
+
+    /// <summary>
+    /// <para>父目录，镜像根目录为 null。</para>
+    /// The parent directory, or null for the image root.
+    /// </summary>
+    public FileManagerEntryViewModel? Parent { get; internal set; }
+
+    /// <summary>
     /// <para>条目大小的可读文本（如 "1.5 MB"）。</para>
     /// The human-readable size text of the entry (e.g. "1.5 MB").
     /// </summary>

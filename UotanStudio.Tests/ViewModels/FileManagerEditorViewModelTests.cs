@@ -61,6 +61,29 @@ public sealed class FileManagerEditorViewModelTests
                 Assert.Equal("inner content\n".Length, inner.Size);
                 Assert.Equal("subdir/inner.txt", inner.Path);
 
+                var imageRoot = Assert.Single(vm.DirectoryRoots);
+                Assert.Equal("/", vm.CurrentPath);
+                Assert.Same(imageRoot, vm.CurrentDirectory);
+                Assert.Equal(vm.Entries, vm.CurrentEntries);
+                Assert.Same(subdir, Assert.Single(imageRoot.Directories));
+                Assert.False(vm.NavigateUpCommand.CanExecute(null));
+                Assert.False(vm.ExtractSelectedCommand.CanExecute(null));
+
+                vm.OpenEntry(subdir);
+                Assert.Equal("/subdir", vm.CurrentPath);
+                Assert.Same(inner, Assert.Single(vm.CurrentEntries));
+                Assert.True(vm.NavigateUpCommand.CanExecute(null));
+                Assert.True(vm.ExtractSelectedCommand.CanExecute(null));
+                Assert.True(imageRoot.IsExpanded);
+
+                vm.OpenEntry(inner);
+                Assert.Same(subdir, vm.CurrentDirectory);
+                Assert.Same(inner, vm.SelectedEntry);
+
+                vm.NavigateUpCommand.Execute(null);
+                Assert.Same(imageRoot, vm.CurrentDirectory);
+                Assert.Same(subdir, vm.SelectedEntry);
+
                 // 符号链接未参与断言：Windows 下创建可能受开发者模式限制。
                 // Symlinks are not asserted: creating them on Windows may require developer mode.
             }
@@ -95,6 +118,9 @@ public sealed class FileManagerEditorViewModelTests
                 Assert.Equal(2, vm.FileCount);
                 Assert.Equal(1, vm.DirectoryCount);
 
+                vm.OpenEntry(Assert.Single(vm.Entries, static entry => entry.IsDirectory));
+                vm.OpenEntry(Assert.Single(vm.CurrentEntries));
+
                 // 刷新命令重新加载：状态被复位后重建。
                 // The refresh command reloads: state is reset and rebuilt.
                 await vm.RefreshCommand.ExecuteAsync(null);
@@ -105,6 +131,17 @@ public sealed class FileManagerEditorViewModelTests
                 Assert.Equal(2, vm.FileCount);
                 Assert.Equal(1, vm.DirectoryCount);
                 Assert.Contains(vm.Entries, static e => e.Name == "nested" && e.IsDirectory);
+                Assert.Equal("/nested", vm.CurrentPath);
+                Assert.Equal("nested/b.txt", vm.SelectedEntry?.Path);
+                Assert.Same(vm.SelectedEntry, Assert.Single(vm.CurrentEntries));
+
+                vm.Cleanup();
+                Assert.Empty(vm.DirectoryRoots);
+                Assert.Empty(vm.CurrentEntries);
+                Assert.Null(vm.CurrentDirectory);
+                Assert.Null(vm.SelectedEntry);
+                Assert.False(vm.NavigateUpCommand.CanExecute(null));
+                Assert.False(vm.ExtractSelectedCommand.CanExecute(null));
             }
             finally
             {
@@ -136,6 +173,9 @@ public sealed class FileManagerEditorViewModelTests
                 Assert.True(vm.HasError);
                 Assert.NotEmpty(vm.ErrorMessage);
                 Assert.Empty(vm.Entries);
+                Assert.Empty(vm.DirectoryRoots);
+                Assert.Empty(vm.CurrentEntries);
+                Assert.False(vm.IsDirectoryEmpty);
                 Assert.Equal(0, vm.FileCount);
                 Assert.Equal(0, vm.DirectoryCount);
                 Assert.False(vm.IsLoading);

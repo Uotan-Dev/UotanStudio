@@ -14,9 +14,9 @@ namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
 /// <para>文件管理器文档编辑器视图模型：以 Dock 文档展示支持文件系统格式的 raw img
-/// （ext4/EROFS/F2FS）内部的目录树，提供树浏览、条目详情与选中条目提取。</para>
+/// （ext4/EROFS/F2FS）内部的目录树，提供目录导航、文件列表与选中条目提取。</para>
 /// File-manager document editor view model: a Dock document showing the internal directory tree of
-/// raw filesystem images (ext4/EROFS/F2FS), with tree browsing, entry details and selected-entry
+/// raw filesystem images (ext4/EROFS/F2FS), with directory navigation, file lists and selected-entry
 /// extraction.
 /// </summary>
 public partial class FileManagerEditorViewModel : Document
@@ -93,10 +93,46 @@ public partial class FileManagerEditorViewModel : Document
     [ObservableProperty] private int _directoryCount;
 
     /// <summary>
-    /// <para>当前选中的树条目（详情区绑定）。</para>
-    /// The currently selected tree entry (details pane binding).
+    /// <para>当前选中的文件列表条目，用于路径显示和提取。</para>
+    /// The selected file-list entry, used for path display and extraction.
     /// </summary>
     [ObservableProperty] private FileManagerEntryViewModel? _selectedEntry;
+
+    /// <summary>
+    /// <para>当前浏览目录，同时绑定左侧目录树选中项。</para>
+    /// The current directory, also bound to the navigation tree selection.
+    /// </summary>
+    [ObservableProperty] private FileManagerEntryViewModel? _currentDirectory;
+
+    /// <summary>
+    /// <para>当前目录的直接子条目。</para>
+    /// The immediate entries of the current directory.
+    /// </summary>
+    [ObservableProperty] private IReadOnlyList<FileManagerEntryViewModel> _currentEntries = [];
+
+    /// <summary>
+    /// <para>是否使用方形图标网格；切换布局保留目录和选中项。</para>
+    /// Whether to use square icon tiles; changing layouts preserves the directory and selection.
+    /// </summary>
+    [ObservableProperty] private bool _isGridView = true;
+
+    /// <summary>
+    /// <para>目录树根节点，包含镜像根目录。</para>
+    /// Navigation tree roots, including the image root directory.
+    /// </summary>
+    public ObservableCollection<FileManagerEntryViewModel> DirectoryRoots { get; } = [];
+
+    /// <summary>
+    /// <para>当前目录的镜像内绝对路径。</para>
+    /// The current directory's absolute path inside the image.
+    /// </summary>
+    public string CurrentPath => "/" + CurrentDirectory?.Path;
+
+    /// <summary>
+    /// <para>已加载的当前目录是否为空。</para>
+    /// Whether the loaded current directory is empty.
+    /// </summary>
+    public bool IsDirectoryEmpty => !IsLoading && !HasError && CurrentDirectory is not null && CurrentEntries.Count == 0;
 
     /// <summary>
     /// <para>最后一次错误文本；为空表示无错误。</para>
@@ -153,22 +189,96 @@ public partial class FileManagerEditorViewModel : Document
     public IAsyncRelayCommand ExtractSelectedCommand { get; }
 
     /// <summary>
+    /// <para>返回上级目录。</para>
+    /// Navigates to the parent directory.
+    /// </summary>
+    public IRelayCommand NavigateUpCommand { get; }
+
+    /// <summary>
     /// <para>创建文件管理器编辑器视图模型并初始化命令。</para>
     /// Creates the file-manager editor view model and initializes its commands.
     /// </summary>
     public FileManagerEditorViewModel()
     {
-        RefreshCommand = new AsyncRelayCommand(RefreshAsync);
-        ExtractSelectedCommand = new AsyncRelayCommand(ExtractSelectedAsync);
+        RefreshCommand = new AsyncRelayCommand(RefreshAsync, () => !IsLoading && FilePath is not null);
+        ExtractSelectedCommand = new AsyncRelayCommand(ExtractSelectedAsync,
+            () => !IsLoading && _parser is not null && ExtractionEntry is not null);
+        NavigateUpCommand = new RelayCommand(NavigateUp, () => !IsLoading && CurrentDirectory?.Parent is not null);
     }
 
-    partial void OnFilePathChanged(string? value) => OnPropertyChanged(nameof(ImagePath));
+    partial void OnFilePathChanged(string? value)
+    {
+        OnPropertyChanged(nameof(ImagePath));
+        RefreshCommand.NotifyCanExecuteChanged();
+    }
 
     partial void OnImageSizeChanged(long value) => OnPropertyChanged(nameof(ImageSizeText));
 
     partial void OnFileCountChanged(int value) => OnPropertyChanged(nameof(FileCountText));
 
     partial void OnDirectoryCountChanged(int value) => OnPropertyChanged(nameof(DirectoryCountText));
+
+    private FileManagerEntryViewModel? ExtractionEntry => SelectedEntry ?? (CurrentDirectory?.Parent is not null ? CurrentDirectory : null);
+
+    partial void OnSelectedEntryChanged(FileManagerEntryViewModel? value) => ExtractSelectedCommand.NotifyCanExecuteChanged();
+
+    partial void OnCurrentDirectoryChanged(FileManagerEntryViewModel? value)
+    {
+        SelectedEntry = null;
+        CurrentEntries = value?.Children ?? (IReadOnlyList<FileManagerEntryViewModel>)[];
+        for (var parent = value?.Parent; parent is not null; parent = parent.Parent)
+        {
+            parent.IsExpanded = true;
+        }
+
+        OnPropertyChanged(nameof(CurrentPath));
+        OnPropertyChanged(nameof(IsDirectoryEmpty));
+        NavigateUpCommand.NotifyCanExecuteChanged();
+        ExtractSelectedCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnIsLoadingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsDirectoryEmpty));
+        RefreshCommand.NotifyCanExecuteChanged();
+        ExtractSelectedCommand.NotifyCanExecuteChanged();
+        NavigateUpCommand.NotifyCanExecuteChanged();
+    }
+
+    partial void OnHasErrorChanged(bool value) => OnPropertyChanged(nameof(IsDirectoryEmpty));
+
+    /// <summary>
+    /// <para>进入目录；文件和符号链接保持选中，不作为目录跟随。</para>
+    /// Enters a directory; files and symbolic links stay selected and are not followed as directories.
+    /// </summary>
+    public void OpenEntry(FileManagerEntryViewModel entry)
+    {
+        if (IsLoading)
+        {
+            return;
+        }
+
+        if (entry.IsDirectory)
+        {
+            CurrentDirectory = entry;
+        }
+        else
+        {
+            SelectedEntry = entry;
+        }
+    }
+
+    private void NavigateUp()
+    {
+        if (CurrentDirectory?.Parent is not { } parent)
+        {
+            return;
+        }
+
+        var previous = CurrentDirectory;
+        CurrentDirectory = parent;
+        SelectedEntry = previous;
+    }
 
     /// <summary>
     /// <para>异步加载镜像：识别文件系统格式 → 流式解析条目 → 构建文件树与统计。</para>
@@ -238,6 +348,8 @@ public partial class FileManagerEditorViewModel : Document
         _parser = null;
         _ownedSource = null;
         _flatEntries = [];
+        CurrentDirectory = null;
+        DirectoryRoots.Clear();
         Entries.Clear();
         SelectedEntry = null;
         FileCount = 0;
@@ -322,7 +434,28 @@ public partial class FileManagerEditorViewModel : Document
             return;
         }
 
+        var directoryPath = CurrentDirectory?.Path;
+        var selectionPath = SelectedEntry?.Path;
         await LoadFromImageAsync(FilePath);
+        if (DirectoryRoots.FirstOrDefault() is not { } root)
+        {
+            return;
+        }
+
+        var directory = root;
+        foreach (var part in (directoryPath ?? string.Empty).Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var child = directory.Directories.FirstOrDefault(entry => entry.Name == part);
+            if (child is null)
+            {
+                break;
+            }
+
+            directory = child;
+        }
+
+        CurrentDirectory = directory;
+        SelectedEntry = CurrentEntries.FirstOrDefault(entry => entry.Path == selectionPath);
     }
 
     /// <summary>
@@ -332,7 +465,7 @@ public partial class FileManagerEditorViewModel : Document
     /// </summary>
     private async Task ExtractSelectedAsync()
     {
-        var entry = SelectedEntry;
+        var entry = ExtractionEntry;
         if (entry is null || _parser is null || string.IsNullOrWhiteSpace(FilePath))
         {
             return;
@@ -679,6 +812,29 @@ public partial class FileManagerEditorViewModel : Document
             Entries.Add(node);
         }
 
+        var root = new FileManagerEntryViewModel("/", string.Empty, 0, FileEntryKind.Directory) { IsExpanded = true };
+        foreach (var node in result.Tree)
+        {
+            root.Children.Add(node);
+        }
+
+        var directories = new Stack<FileManagerEntryViewModel>();
+        directories.Push(root);
+        while (directories.TryPop(out var directory))
+        {
+            foreach (var child in directory.Children)
+            {
+                child.Parent = directory;
+                if (child.IsDirectory)
+                {
+                    directories.Push(child);
+                }
+            }
+        }
+
+        DirectoryRoots.Add(root);
+        CurrentDirectory = root;
+
         (FileCount, DirectoryCount) = CountEntries(result.Tree);
         HasError = false;
         ErrorMessage = string.Empty;
@@ -752,6 +908,8 @@ public partial class FileManagerEditorViewModel : Document
         _parser = null;
         _ownedSource = null;
         _flatEntries = [];
+        CurrentDirectory = null;
+        DirectoryRoots.Clear();
         Entries.Clear();
         SelectedEntry = null;
         FileCount = 0;
