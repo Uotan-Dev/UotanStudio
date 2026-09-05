@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Firmware.Common;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
@@ -53,7 +54,7 @@ public partial class App : Application
         _ = Task.Run(() => FileAssociationService.Register());
 
         // 注册全部固件格式处理器，供后续格式自动识别与结构分析使用。
-        UotanStudio.Firmware.FirmwareFormatRegistry.RegisterAll();
+        UotanStudio.Firmware.Common.FirmwareFormatRegistry.RegisterAll();
 
         // 仅初始化语言包注册表（纯内存操作，快速）；持久化设置的读取与主题/语言 XAML
         // 加载推迟到启动序列中执行，使启动窗能立刻显示，避免首帧出现前的同步阻塞。

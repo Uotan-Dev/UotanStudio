@@ -471,7 +471,7 @@ public partial class FileManagerEditorViewModel : Document
         // 幂等注册全部格式处理器（应用启动时通常已注册），与固件面板共用同一注册表语义。
         // Idempotently register every format handler (the app usually does at startup), sharing the
         // registry semantics with the firmware panel.
-        UotanStudio.Firmware.FirmwareFormatRegistry.RegisterAll();
+        FirmwareFormatRegistry.RegisterAll();
 
         var kind = DetectFilesystem(path);
         // 输入是否为 sparse 包装镜像（如 product.img）：sparse 以逻辑流视图解析。

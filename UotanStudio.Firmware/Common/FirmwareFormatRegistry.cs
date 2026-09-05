@@ -1,6 +1,4 @@
-using UotanStudio.Firmware.Common;
-
-namespace UotanStudio.Firmware;
+namespace UotanStudio.Firmware.Common;
 
 /// <summary>
 /// <para>注册 UotanStudio.Firmware 全部格式处理器到 FormatDetector。</para>
