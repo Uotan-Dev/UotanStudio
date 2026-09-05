@@ -90,7 +90,7 @@ internal static class OperationProcessor
             // output-dependent operations cannot observe a partially replaced destination.
             lock (writeLock)
             {
-                using var bounded = new LockedBoundedReadStream(stream, streamLock, dataPos, dataLength);
+                using var bounded = new Common.Streams.BoundedReadStream(stream, dataPos, dataLength, leaveOpen: true, syncRoot: streamLock);
                 using var hashing = new HashingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
                 cancellationToken.ThrowIfCancellationRequested();
                 ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken);
@@ -110,7 +110,7 @@ internal static class OperationProcessor
         var data = ArrayPool<byte>.Shared.Rent(bufferLength);
         try
         {
-            using var bounded = new LockedBoundedReadStream(stream, streamLock, dataPos, dataLength);
+            using var bounded = new Common.Streams.BoundedReadStream(stream, dataPos, dataLength, leaveOpen: true, syncRoot: streamLock);
             var bytesRead = 0;
             while (bytesRead < bufferLength)
             {

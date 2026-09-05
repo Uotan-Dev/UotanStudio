@@ -10,6 +10,7 @@ public sealed class BoundedReadStream : Stream
     private readonly long _start;
     private readonly long _length;
     private readonly bool _leaveOpen;
+    private readonly object? _syncRoot;
     private long _position;
     private bool _disposed;
 
@@ -20,8 +21,9 @@ public sealed class BoundedReadStream : Stream
     /// <param name="inner">可读且可定位的基础流。<para>The readable, seekable underlying stream.</para></param>
     /// <param name="length">范围长度（字节）。<para>The range length, in bytes.</para></param>
     /// <param name="leaveOpen">释放后是否保持基础流打开。<para>Whether to leave the underlying stream open after disposal.</para></param>
-    public BoundedReadStream(Stream inner, long length, bool leaveOpen = false)
-        : this(inner, inner?.Position ?? throw new ArgumentNullException(nameof(inner)), length, leaveOpen)
+    /// <param name="syncRoot">可选锁对象，提供时对每次定位读取加锁。<para>Optional lock object; when provided, locks every positioned read.</para></param>
+    public BoundedReadStream(Stream inner, long length, bool leaveOpen = false, object? syncRoot = null)
+        : this(inner, inner?.Position ?? throw new ArgumentNullException(nameof(inner)), length, leaveOpen, syncRoot)
     {
     }
 
@@ -33,7 +35,8 @@ public sealed class BoundedReadStream : Stream
     /// <param name="offset">基础流中的绝对起始偏移。<para>The absolute starting offset in the underlying stream.</para></param>
     /// <param name="length">范围长度（字节）。<para>The range length, in bytes.</para></param>
     /// <param name="leaveOpen">释放后是否保持基础流打开。<para>Whether to leave the underlying stream open after disposal.</para></param>
-    public BoundedReadStream(Stream inner, long offset, long length, bool leaveOpen = false)
+    /// <param name="syncRoot">可选锁对象，提供时对每次定位读取加锁。<para>Optional lock object; when provided, locks every positioned read.</para></param>
+    public BoundedReadStream(Stream inner, long offset, long length, bool leaveOpen = false, object? syncRoot = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
         if (!inner.CanRead || !inner.CanSeek) throw new ArgumentException("The stream must be readable and seekable.", nameof(inner));
@@ -45,6 +48,7 @@ public sealed class BoundedReadStream : Stream
         _start = offset;
         _length = length;
         _leaveOpen = leaveOpen;
+        _syncRoot = syncRoot;
         _inner.Position = offset;
     }
 
@@ -70,10 +74,20 @@ public sealed class BoundedReadStream : Stream
         ThrowIfDisposed();
         var requested = (int)Math.Min(count, _length - _position);
         if (requested == 0) return 0;
+        if (_syncRoot is not null)
+        {
+            lock (_syncRoot)
+            {
+                _inner.Position = checked(_start + _position);
+                var read = _inner.Read(buffer, offset, requested);
+                _position = checked(_position + read);
+                return read;
+            }
+        }
         _inner.Position = checked(_start + _position);
-        var read = _inner.Read(buffer, offset, requested);
-        _position = checked(_position + read);
-        return read;
+        var r = _inner.Read(buffer, offset, requested);
+        _position = checked(_position + r);
+        return r;
     }
 
     /// <inheritdoc />
@@ -82,10 +96,20 @@ public sealed class BoundedReadStream : Stream
         ThrowIfDisposed();
         var requested = (int)Math.Min(buffer.Length, _length - _position);
         if (requested == 0) return 0;
+        if (_syncRoot is not null)
+        {
+            lock (_syncRoot)
+            {
+                _inner.Position = checked(_start + _position);
+                var read = _inner.Read(buffer[..requested]);
+                _position = checked(_position + read);
+                return read;
+            }
+        }
         _inner.Position = checked(_start + _position);
-        var read = _inner.Read(buffer[..requested]);
-        _position = checked(_position + read);
-        return read;
+        var r = _inner.Read(buffer[..requested]);
+        _position = checked(_position + r);
+        return r;
     }
 
     /// <inheritdoc />
@@ -95,10 +119,24 @@ public sealed class BoundedReadStream : Stream
         cancellationToken.ThrowIfCancellationRequested();
         var requested = (int)Math.Min(buffer.Length, _length - _position);
         if (requested == 0) return 0;
+        if (_syncRoot is not null)
+        {
+            lock (_syncRoot)
+            {
+                _inner.Position = checked(_start + _position);
+            }
+            // async read outside lock to avoid holding lock across await
+            var read = await _inner.ReadAsync(buffer[..requested], cancellationToken).ConfigureAwait(false);
+            lock (_syncRoot)
+            {
+                _position = checked(_position + read);
+            }
+            return read;
+        }
         _inner.Position = checked(_start + _position);
-        var read = await _inner.ReadAsync(buffer[..requested], cancellationToken).ConfigureAwait(false);
-        _position = checked(_position + read);
-        return read;
+        var r = await _inner.ReadAsync(buffer[..requested], cancellationToken).ConfigureAwait(false);
+        _position = checked(_position + r);
+        return r;
     }
 
     /// <inheritdoc />
@@ -113,6 +151,15 @@ public sealed class BoundedReadStream : Stream
             _ => throw new ArgumentOutOfRangeException(nameof(origin))
         };
         if (target < 0 || target > _length) throw new IOException("Attempted to seek outside the bounded range.");
+        if (_syncRoot is not null)
+        {
+            lock (_syncRoot)
+            {
+                _position = target;
+                _inner.Position = checked(_start + target);
+            }
+            return target;
+        }
         _position = target;
         _inner.Position = checked(_start + target);
         return target;

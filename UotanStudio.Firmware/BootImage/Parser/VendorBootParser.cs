@@ -358,7 +358,7 @@ public class VendorBootParser : IDisposable
             };
             var source = _sourceStream!;
             ValidateRange(source, offset, size, name);
-            return new LockedBoundedStream(source, offset, size, _sourceLock);
+            return new Common.Streams.BoundedReadStream(source, offset, size, leaveOpen: true, syncRoot: _sourceLock);
         }
     }
 
@@ -420,7 +420,7 @@ public class VendorBootParser : IDisposable
             var size = (long)entry.RamdiskSize;
             var source = _sourceStream!;
             ValidateRange(source, offset, size, "vendor ramdisk 表条目");
-            return new LockedBoundedStream(source, offset, size, _sourceLock);
+            return new Common.Streams.BoundedReadStream(source, offset, size, leaveOpen: true, syncRoot: _sourceLock);
         }
     }
 
@@ -559,73 +559,8 @@ public class VendorBootParser : IDisposable
         }
     }
 
-    private sealed class LockedBoundedStream(Stream inner, long start, long length, object sync) : Stream
-    {
-        private long _position;
-        private bool _disposed;
-
-        public override bool CanRead => !_disposed;
-        public override bool CanSeek => !_disposed;
-        public override bool CanWrite => false;
-        public override long Length { get { ThrowIfDisposed(); return length; } }
-        public override long Position { get { ThrowIfDisposed(); return _position; } set => Seek(value, SeekOrigin.Begin); }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            ArgumentNullException.ThrowIfNull(buffer);
-            ArgumentOutOfRangeException.ThrowIfNegative(offset);
-            ArgumentOutOfRangeException.ThrowIfNegative(count);
-            if (offset > buffer.Length - count) throw new ArgumentException("The buffer range is invalid.");
-            lock (sync)
-            {
-                ThrowIfDisposed();
-                var requested = (int)Math.Min(count, length - _position);
-                if (requested == 0) return 0;
-                inner.Position = checked(start + _position);
-                var read = inner.Read(buffer, offset, requested);
-                _position += read;
-                return read;
-            }
-        }
-
-        public override int Read(Span<byte> buffer)
-        {
-            lock (sync)
-            {
-                ThrowIfDisposed();
-                var requested = (int)Math.Min(buffer.Length, length - _position);
-                if (requested == 0) return 0;
-                inner.Position = checked(start + _position);
-                var read = inner.Read(buffer[..requested]);
-                _position += read;
-                return read;
-            }
-        }
-
-        public override long Seek(long offset, SeekOrigin origin)
-        {
-            lock (sync)
-            {
-                ThrowIfDisposed();
-                var target = origin switch
-                {
-                    SeekOrigin.Begin => offset,
-                    SeekOrigin.Current => checked(_position + offset),
-                    SeekOrigin.End => checked(length + offset),
-                    _ => throw new ArgumentOutOfRangeException(nameof(origin))
-                };
-                if (target < 0 || target > length) throw new IOException("Attempted to seek outside the bounded range.");
-                _position = target;
-                return target;
-            }
-        }
-
-        public override void Flush() => ThrowIfDisposed();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        protected override void Dispose(bool disposing) { _disposed = true; base.Dispose(disposing); }
-        private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
-    }
+    // LockedBoundedStream 已迁移至 Common/Streams/BoundedReadStream（syncRoot 参数）。
+    // LockedBoundedStream has been migrated to Common/Streams/BoundedReadStream (syncRoot parameter).
 }
 
 /// <summary>
