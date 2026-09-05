@@ -305,32 +305,6 @@ internal static partial class DexWriter
         for (var i = 0; i < pad; i++) w.Write((byte)0);
     }
 
-    /// <summary>
-    /// <para>Adler-32 校验和（RFC 1950）。</para>
-    /// Adler-32 checksum (RFC 1950).
-    /// </summary>
     private static uint Adler32(ReadOnlySpan<byte> data)
-    {
-        // 每 NMAX 字节取模一次（zlib 标准做法）：5552 满足 255n(n+1)/2 + (n+1)(BASE-1) ≤ 2^32-1，
-        // 期间 a/b 不会溢出 32 位，同时省去逐字节取模。
-        // Modulo once per NMAX bytes (zlib's approach): 5552 satisfies
-        // 255n(n+1)/2 + (n+1)(BASE-1) ≤ 2^32-1, so a/b never overflow 32 bits and per-byte mod is avoided.
-        const uint mod = 65521;
-        const int nmax = 5552;
-        var a = 1u;
-        var b = 0u;
-        var i = 0;
-        while (i < data.Length)
-        {
-            var end = Math.Min(i + nmax, data.Length);
-            while (i < end)
-            {
-                a += data[i++];
-                b += a;
-            }
-            a %= mod;
-            b %= mod;
-        }
-        return (b << 16) | a;
-    }
+        => Common.Checksums.Adler32.Compute(data);
 }

@@ -463,18 +463,7 @@ public static class LzopCompressor
     }
 
     private static uint Adler32(byte[] data, int offset, int length)
-    {
-        const uint modAdler = 65521;
-        uint a = 1;
-        uint b = 0;
-        for (var i = 0; i < length; i++)
-        {
-            a = (a + data[offset + i]) % modAdler;
-            b = (b + a) % modAdler;
-        }
-
-        return (b << 16) | a;
-    }
+        => Common.Checksums.Adler32.Compute(data, offset, length);
 
     private static uint Crc32Hash(byte[] data, int offset, int length)
         => Crc32.HashToUInt32(data.AsSpan(offset, length));
