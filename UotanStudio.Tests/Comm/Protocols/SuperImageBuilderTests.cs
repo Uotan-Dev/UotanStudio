@@ -44,7 +44,7 @@ public class SuperImageBuilderTests
     {
         var image = BuildImage([new SuperBuildPartition("system", "default", 0x20000)]);
 
-        var geometry = LpGeometry.TryParse(image, 0);
+        var geometry = LpGeometry.TryParse(image, SuperImageBuilder.GeometryBlockSize);
         Assert.NotNull(geometry);
         Assert.Equal(52u, geometry.StructSize);
         Assert.Equal(MetadataMaxSize, geometry.MetadataMaxSize);
@@ -60,11 +60,10 @@ public class SuperImageBuilderTests
         // Corrupt one byte inside the 32-byte checksum field (struct layout: magic(4) +
         // struct_size(4) + checksum(32) ...), keeping struct_size == 52 so the checksum
         // is actually recomputed and found inconsistent.
-        // 破坏 32 字节校验和字段中的一字节（结构布局：magic(4) + struct_size(4) + checksum(32)…），
-        // 保持 struct_size == 52，使校验和确实被重算并判定不一致。
-        image[10] ^= 0xFF;
+        // Firmware 布局下 geometry 在 offset 4096，破坏该处的校验和字段。
+        image[SuperImageBuilder.GeometryBlockSize + 10] ^= 0xFF;
 
-        var geometry = LpGeometry.TryParse(image, 0);
+        var geometry = LpGeometry.TryParse(image, SuperImageBuilder.GeometryBlockSize);
         Assert.NotNull(geometry);
         Assert.False(geometry.IsChecksumValid);
     }
@@ -165,8 +164,9 @@ public class SuperImageBuilderTests
     {
         var image = BuildImage([new SuperBuildPartition("system", "default", 0x10000)]);
         // Zero the LP metadata header magic (0x414C5030) at the start of slot 0.
-        // 将槽位 0 起始处的 LP 元数据头魔数（0x414C5030）清零。
-        Array.Clear(image, 2 * SuperImageBuilder.GeometryBlockSize, 4);
+        // Firmware 布局下 metadata 区域起始偏移 = LP_PARTITION_RESERVED_BYTES + 2 * GeometryBlockSize = 12288。
+        var metadataOffset = 4096 + 2 * SuperImageBuilder.GeometryBlockSize;
+        Array.Clear(image, metadataOffset, 4);
 
         Assert.Null(Builder.ReadMetadata(image, 0));
     }
