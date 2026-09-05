@@ -164,6 +164,17 @@
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>
                             </Button>
+                            <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                    Command="{Binding FlashSelectedCommand}"
+                                    ToolTip.Tip="{DynamicResource ImageView_FlashSelectedHint}">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                    <avalonia:MaterialIcon Grid.Column="0" Kind="Flash" Width="14" Height="14" />
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_FlashSelected}"
+                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" MaxLines="2" />
+                                </Grid>
+                            </Button>
                         </controls:JustifiedWrapPanel>
 
                         <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
