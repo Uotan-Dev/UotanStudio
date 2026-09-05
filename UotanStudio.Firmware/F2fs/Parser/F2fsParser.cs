@@ -900,7 +900,9 @@ public sealed class F2fsParser : IDisposable
         {
             1 => CompressionAlgorithm.Lz4,
             2 => CompressionAlgorithm.Zstd,
-            0 or 3 => CompressionAlgorithm.Lzo, // LZO/LZO-RLE 均不支持。LZO/RLE unsupported.
+            // LZO(0) 与 LZO-RLE(3) 解压共用 LZO1X 实现（对齐内核 lzo1x_decompress_safe）。
+            // LZO(0) and LZO-RLE(3) share the LZO1X decompressor (kernel lzo1x_decompress_safe).
+            0 or 3 => CompressionAlgorithm.Lzo,
             _ => throw new InvalidDataException(
                 $"Unknown F2FS compression algorithm id {kernelAlgorithmId}."),
         };

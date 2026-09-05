@@ -21,20 +21,20 @@ public enum CompressionAlgorithm : byte
     Zstd = 1,
 
     /// <summary>
-    /// LZO 原始压缩（不支持，调用时抛出异常）。
-    /// <para>LZO legacy compression (unsupported; throws on use).</para>
+    /// LZO 压缩（含 LZO-RLE 变体；读侧两者共用 LZO1X 解压器）。
+    /// <para>LZO compression (including the LZO-RLE variant; both share the LZO1X decompressor
+    /// on the read side).</para>
     /// </summary>
     Lzo = 2,
 }
 
 /// <summary>
 /// f2fs 压缩/解压缩工具：以 16 页（64 KB）簇为单位压缩和解压文件数据。
-/// 支持 LZ4 和 ZSTD 算法；LZO 不可用（抛出 <see cref="NotSupportedException"/>）。
+/// 支持 LZ4、ZSTD 与 LZO（LZO-RLE 解压共用 LZO1X 实现）。
 /// 解压时强制上限校验以防止 zip-bomb 攻击。
 /// <para>F2FS compression/decompression utility: compresses and decompresses file data in
-/// 16-page (64 KB) clusters. Supports LZ4 and ZSTD; LZO is unavailable (throws
-/// <see cref="NotSupportedException"/>). Decompression enforces a bounded output limit to prevent
-/// zip-bomb attacks.</para>
+/// 16-page (64 KB) clusters. Supports LZ4, ZSTD and LZO (LZO-RLE decompression shares the LZO1X
+/// implementation). Decompression enforces a bounded output limit to prevent zip-bomb attacks.</para>
 /// </summary>
 internal static class F2fsCompression
 {
@@ -91,8 +91,7 @@ internal static class F2fsCompression
             {
                 CompressionAlgorithm.Lz4 => CompressLz4(data, level),
                 CompressionAlgorithm.Zstd => CompressZstd(data, level),
-                CompressionAlgorithm.Lzo => throw new NotSupportedException(
-                    "LZO compression is not supported. LZO 压缩不受支持。"),
+                CompressionAlgorithm.Lzo => Lzo1x.Compress(data),
                 _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
             };
         }
@@ -158,8 +157,10 @@ internal static class F2fsCompression
         {
             CompressionAlgorithm.Lz4 => DecompressLz4(compressedData, bound),
             CompressionAlgorithm.Zstd => DecompressZstd(compressedData, bound),
-            CompressionAlgorithm.Lzo => throw new NotSupportedException(
-                "LZO decompression is not supported. LZO 解压不受支持。"),
+            // 内核要求 LZO 簇解压输出恰好为整簇大小，否则报 EIO；此处同样严格校验。
+            // The kernel requires LZO clusters to decompress to exactly the full cluster size
+            // (EIO otherwise); the same strict check applies here.
+            CompressionAlgorithm.Lzo => Lzo1x.Decompress(compressedData, bound),
             _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
         };
     }
