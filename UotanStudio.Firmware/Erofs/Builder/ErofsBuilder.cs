@@ -858,6 +858,7 @@ public sealed partial class ErofsBuilder
             MetaBoxNid = metaboxNode?.Nid ?? 0,
             Uuid = Guid.NewGuid().ToByteArray(),
             VolumeName = options.VolumeName,
+            DirBlkBits = (byte)BitOperations.Log2((uint)blockSize),
         };
         // METABOX 需 144 字节超级块缓冲区（128 字节主槽 + 16 字节扩展槽）容纳 s_metabox_nid。
         // METABOX needs a 144-byte superblock buffer (128-byte main slot + one 16-byte extended slot)
@@ -866,10 +867,12 @@ public sealed partial class ErofsBuilder
             ? ErofsSuperblock.SuperblockSize + ErofsSuperblock.ExtSlotSize
             : ErofsSuperblock.SuperblockSize];
         superblock.WriteTo(superblockBuffer);
-        // 计算 CRC32 覆盖超级块缓冲区（checksum 字段为 0），存于 offset 4。
-        // Compute CRC32 over the superblock buffer (checksum field = 0), store at offset 4.
-        var crc = System.IO.Hashing.Crc32.Hash(superblockBuffer);
-        crc.CopyTo(superblockBuffer, 4); // Offset 4 = s_checksum field
+        // 先写 checksum=0 的占位超级块，最后再计算并回写校验和。
+        // erofs-utils erofs_superblock_csum_verify 从设备读取 [SuperblockOffset, blockSize) 的
+        // 全部字节计算 CRC32-C，此时该区域已包含 inode 元数据，必须在所有数据写完后才能计算。
+        // Write the superblock with checksum=0 as a placeholder; the actual checksum is computed and
+        // written back after all data is flushed, because erofs-utils erofs_superblock_csum_verify reads
+        // [SuperblockOffset, blockSize) which includes inode metadata already written by then.
         WriteAt(output, ErofsSuperblock.SuperblockOffset, superblockBuffer, superblockBuffer.Length);
 
         // 设备表（多设备）：写入 ExtraDeviceCount + 1 个 128 字节槽位。
@@ -979,6 +982,36 @@ public sealed partial class ErofsBuilder
                 // The file remainder (tail-packing) is inlined right after the inode.
                 WriteAt(output, cursor, node.InlineData, node.InlineData.Length);
             }
+        }
+
+        // ---- 所有数据/元数据已写完，回写超级块 CRC32-C 校验和。----
+        // 回读 [SuperblockOffset, blockSize) 的全部字节（已含 inode 元数据），
+        // 清零 checksum 字段后计算 CRC32-C，写回 offset 4。
+        // ---- All data/metadata written; compute and write back the superblock CRC32c. ----
+        // Read back [SuperblockOffset, blockSize) (now containing inode metadata),
+        // zero the checksum field, compute CRC32-C, and write it back at offset 4.
+        {
+            var crcLen = blockSize - ErofsSuperblock.SuperblockOffset;
+            var crcRegion = new byte[crcLen];
+            output.Position = ErofsSuperblock.SuperblockOffset;
+            var totalRead = 0;
+            while (totalRead < crcLen)
+            {
+                var n = output.Read(crcRegion, totalRead, crcLen - totalRead);
+                if (n <= 0) break;
+                totalRead += n;
+            }
+
+            // 清零 checksum 字段（offset 4 in superblock = offset 4 in crcRegion）
+            crcRegion[4] = 0;
+            crcRegion[5] = 0;
+            crcRegion[6] = 0;
+            crcRegion[7] = 0;
+            var finalCrc = ComputeCrc32C(crcRegion);
+            output.Position = ErofsSuperblock.SuperblockOffset + 4;
+            Span<byte> crcLe = stackalloc byte[4];
+            BinaryPrimitives.WriteUInt32LittleEndian(crcLe, finalCrc);
+            output.Write(crcLe);
         }
 
         output.Position = finalSize;
