@@ -145,7 +145,13 @@ internal static class OperationProcessor
                     case InstallOperation.Types.Type.Zucchini:
                     case InstallOperation.Types.Type.Lz4diffBsdiff:
                     case InstallOperation.Types.Type.Lz4diffPuffdiff:
-                        break;
+                        // Source-dependent ops must run on the sequential path (they read the output
+                        // file). Landing here means a misclassification; silently skipping would
+                        // produce a corrupted partition.
+                        // 源依赖操作必须走顺序路径（需读取输出文件）。落入这里说明分类错误，
+                        // 静默跳过会产生损坏的分区镜像。
+                        throw new PayloadUnsupportedOperationException(
+                            $"Source-dependent operation {op.Type} was scheduled on the parallel path", op.Type.ToString());
                     case InstallOperation.Types.Type.Puffdiff:
                         ProcessPuffdiff(op, data, bufferLength, outFile, blockSize);
                         break;
@@ -179,42 +185,45 @@ internal static class OperationProcessor
     /// </exception>
     internal static void ProcessSourceCopy(InstallOperation op, FileStream outFile, uint blockSize)
     {
-        foreach (var srcExt in op.SrcExtents)
+        // Upstream delta_performer semantics: source extents are concatenated in order into one
+        // data stream, verified against op.src_sha256_hash as a whole, then written sequentially
+        // across ALL destination extents. Writing each source extent at DstExtents[0] would
+        // overwrite earlier copies for multi-extent operations.
+        // 上游 delta_performer 语义：源区间按顺序拼接为一条数据流，整体校验 op.src_sha256_hash，
+        // 再按顺序写入全部目标区间。若把每个源区间都写到 DstExtents[0]，多区间操作会互相覆盖。
+        long srcLength = 0;
+        foreach (var ext in op.SrcExtents)
         {
-            var srcPos = (long)(srcExt.StartBlock * blockSize);
-            var length = CheckedInt32BlockLength(srcExt.NumBlocks, blockSize);
-            var buffer = ArrayPool<byte>.Shared.Rent(length);
-            try
-            {
-                outFile.Seek(srcPos, SeekOrigin.Begin);
-                var bytesRead = 0;
-                while (bytesRead < length)
-                {
-                    var read = outFile.Read(buffer, bytesRead, length - bytesRead);
-                    if (read == 0)
-                    {
-                        break;
-                    }
-                    bytesRead += read;
-                }
-                if (bytesRead != length)
-                {
-                    throw new PartitionExtractionException(
-                        $"Failed to read {length} bytes of source data for SOURCE_COPY at offset {srcPos}, only {bytesRead} bytes read",
-                        string.Empty);
-                }
-
-                HashVerificationHelper.VerifySourceHash(buffer, length, op);
-
-                var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-                outFile.Seek(dstPos, SeekOrigin.Begin);
-                outFile.Write(buffer, 0, bytesRead);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
+            srcLength += (long)ext.NumBlocks * blockSize;
         }
+
+        var buffer = ArrayPool<byte>.Shared.Rent(CheckedInt32BlockLengthCeil(srcLength));
+        try
+        {
+            ReadSourceExtents(op, buffer, (int)srcLength, outFile, blockSize);
+
+            HashVerificationHelper.VerifySourceHash(buffer, (int)srcLength, op);
+
+            using var output = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: true);
+            output.Write(buffer, 0, (int)srcLength);
+            output.Complete();
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static int CheckedInt32BlockLengthCeil(long length)
+    {
+        if (length > int.MaxValue)
+        {
+            throw new PartitionExtractionException(
+                $"Extent byte length {length} exceeds the supported byte-array limit {int.MaxValue}",
+                string.Empty);
+        }
+
+        return checked((int)length);
     }
 
     /// <summary>
@@ -326,9 +335,7 @@ internal static class OperationProcessor
             using var newData = new MemoryStream();
             BinaryPatch.Apply(oldDataStream, () => new MemoryStream(data), newData);
 
-            var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-            outFile.Seek(dstPos, SeekOrigin.Begin);
-            WriteStreamToFile(newData, outFile);
+            WriteExactlyToDstExtents(newData, op, outFile, blockSize);
         }
         finally
         {
@@ -378,9 +385,7 @@ internal static class OperationProcessor
 
             var newData = PuffDiffApplier.Apply(data.AsSpan(0, dataLength), oldData.AsSpan(0, (int)srcLength));
 
-            var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-            outFile.Seek(dstPos, SeekOrigin.Begin);
-            outFile.Write(newData, 0, newData.Length);
+            WriteExactlyToDstExtents(new MemoryStream(newData, writable: false), op, outFile, blockSize);
         }
         finally
         {
@@ -437,9 +442,7 @@ internal static class OperationProcessor
                 BinaryPatch.Apply(oldDataStream, () => new MemoryStream(decompressedStream.GetBuffer(), 0, (int)decompressedStream.Length), newData);
             }
 
-            var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-            outFile.Seek(dstPos, SeekOrigin.Begin);
-            WriteStreamToFile(newData, outFile);
+            WriteExactlyToDstExtents(newData, op, outFile, blockSize);
         }
         finally
         {
@@ -604,9 +607,7 @@ internal static class OperationProcessor
             using var newData = new MemoryStream();
             BinaryPatch.Apply(oldDataStream, () => new MemoryStream(patch, writable: false), newData);
 
-            var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-            outFile.Seek(dstPos, SeekOrigin.Begin);
-            WriteStreamToFile(newData, outFile);
+            WriteExactlyToDstExtents(newData, op, outFile, blockSize);
         }
         finally
         {
@@ -659,9 +660,7 @@ internal static class OperationProcessor
 
             var newData = PuffDiffApplier.Apply(patch, oldData.AsSpan(0, (int)srcLength));
 
-            var dstPos = (long)(op.DstExtents[0].StartBlock * blockSize);
-            outFile.Seek(dstPos, SeekOrigin.Begin);
-            outFile.Write(newData, 0, newData.Length);
+            WriteExactlyToDstExtents(new MemoryStream(newData, writable: false), op, outFile, blockSize);
         }
         finally
         {
@@ -856,15 +855,59 @@ internal static class OperationProcessor
         }
     }
 
-    private static void WriteStreamToFile(Stream stream, FileStream outFile)
+    /// <summary>
+    /// Writes a fully-produced data stream sequentially across ALL destination extents of an
+    /// operation, rejecting a length that does not exactly match the destination extent total.
+    /// This mirrors upstream delta_performer, whose ExtentWriter stack maps the output across
+    /// every destination extent rather than only the first one.
+    /// <para>把已生成的数据流按顺序写入操作的全部目标区间，长度与目标区间总长不一致时拒绝。
+    /// 与上游 delta_performer 的 ExtentWriter 栈一致：输出映射到每一个目标区间，
+    /// 而不是只写第一个。</para>
+    /// </summary>
+    /// <param name="stream">The data stream to write; must contain exactly the destination length.
+    /// <para>待写入的数据流；长度必须恰好等于目标区间总长。</para></param>
+    /// <param name="op">The install operation providing the destination extents.
+    /// <para>提供目标区间的安装操作。</para></param>
+    /// <param name="outFile">The output file stream. <para>输出文件流。</para></param>
+    /// <param name="blockSize">The block size used for extent calculations.
+    /// <para>用于区间计算的块大小。</para></param>
+    private static void WriteExactlyToDstExtents(Stream stream, InstallOperation op, FileStream outFile, uint blockSize)
     {
-        if (stream is MemoryStream ms && ms.TryGetBuffer(out var buffer))
+        long dstLength = 0;
+        foreach (var ext in op.DstExtents)
         {
-            outFile.Write(buffer.Array!, buffer.Offset, buffer.Count);
+            dstLength += (long)ext.NumBlocks * blockSize;
         }
-        else
+
+        using var output = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: true);
+        // BinaryPatch.Apply / 解压器可能把流位置留在末尾；写入前必须回到起点，
+        // 否则读到的长度为 0。
+        // BinaryPatch.Apply / decompressors may leave the stream position at the end; rewind
+        // before writing, otherwise the read length is 0.
+        if (stream.CanSeek)
         {
-            stream.CopyTo(outFile);
+            stream.Seek(0, SeekOrigin.Begin);
         }
+
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
+        {
+            while (true)
+            {
+                var read = stream.Read(buffer, 0, buffer.Length);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                output.Write(buffer, 0, read);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+
+        output.Complete();
     }
 }
