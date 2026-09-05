@@ -176,11 +176,21 @@ public sealed class Ext4Parser : IDisposable
             throw new InvalidDataException($"Unsupported ext4 block size {_blockSize}.");
         }
 
-        // 校验不兼容特性标志：对已知不支持的位抛出异常。
-        // Validate incompatible feature flags: throw on unsupported bits.
-        const uint supportedIncompat = 0x0001 /* EXTENTS */ | 0x0040 /* 64BIT */ | 0x0080 /* MMP */ | 0x0200 /* FLEX_BG */ | 0x0400 /* EA_INODE */;
-        _ = 0x0001 /* SPARSE_SUPER */ | 0x0002 /* LARGE_FILE */ | 0x0400 /* METADATA_CSUM */; // supported_ro_compat
-        _ = 0x0004 /* HAS_JOURNAL */ | 0x0020 /* DIR_INDEX */; // supported_compat
+        // 校验不兼容特性标志：对解析器无法安全读取的位抛出异常。
+        // 位定义与 e2fsprogs lib/ext2fs/ext2_fs.h 一致：
+        //   0x0001 COMPRESSION（无实际镜像使用）、0x0002 FILETYPE（目录项带 file_type 字节，
+        //   Ext4DirectoryEntry.Enumerate 按该布局解析并以 inode 兜底分类）、0x0004 RECOVER
+        //   （日志未回放，仅影响数据新鲜度不影响结构读取）、0x0040 EXTENTS、0x0080 64BIT、
+        //   0x0200 FLEX_BG、0x0400 EA_INODE、0x2000 CSUM_SEED（读取侧不校验校验和，种子不影响）、
+        //   0x4000 LARGEDIR（htree 读取已有线性扫描回退）、0x8000 INLINE_DATA（inode 读取已支持）、
+        //   0x10000 ENCRYPT（只影响加密密钥，不影响布局）。
+        // 仅 META_BG（0x0010，改变组描述符表布局）与 JOURNAL_DEV（0x0008，外部日志设备）
+        // 无法安全读取而拒绝。
+        // Validate incompatible feature flags: throw on bits the parser cannot safely read.
+        // Bit definitions match e2fsprogs lib/ext2fs/ext2_fs.h.
+        const uint supportedIncompat = 0x0001 /* COMPRESSION */ | 0x0002 /* FILETYPE */ | 0x0004 /* RECOVER */
+            | 0x0040 /* EXTENTS */ | 0x0080 /* 64BIT */ | 0x0200 /* FLEX_BG */ | 0x0400 /* EA_INODE */
+            | 0x2000 /* CSUM_SEED */ | 0x4000 /* LARGEDIR */ | 0x8000 /* INLINE_DATA */ | 0x10000 /* ENCRYPT */;
 
         var unsupportedIncompat = _superblock.FeatureIncompat & ~supportedIncompat;
         if (unsupportedIncompat != 0)
