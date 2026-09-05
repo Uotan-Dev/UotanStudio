@@ -526,4 +526,3 @@ internal static partial class DexWriter
         return bytes;
     }
 }
-
