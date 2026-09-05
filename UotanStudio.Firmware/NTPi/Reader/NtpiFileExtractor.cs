@@ -93,7 +93,7 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
         var blockIdx = 0;
 
         using var lengthBound = new CountingWriteStream(output, Math.Min(entry.OriginalLength, trustedOutputLimit), leaveOpen: true);
-        using var hashing = new NtpiHashingWriteStream(lengthBound, leaveOpen: true);
+        using var hashing = new Common.Streams.HashingWriteStream(lengthBound, leaveOpen: true);
 
         while (blockPos < entry.Length)
         {
