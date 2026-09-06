@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -19,7 +20,7 @@ namespace UotanStudio.ViewModels.Shell;
 /// <para>顶部菜单栏视图模型，提供文件、编辑、视图、工具与帮助菜单的所有命令实现。</para>
 /// Top menu bar view model, providing command implementations for File, Edit, View, Tools, and Help menus.
 /// </summary>
-public partial class MenuViewModel : ViewModelBase
+public partial class MenuViewModel : ViewModelBase, IDisposable
 {
     private static TopLevel? TopLevel => TopLevelExtensions.GetTopLevel();
 
@@ -36,6 +37,12 @@ public partial class MenuViewModel : ViewModelBase
     private readonly ProjectOperationsService _projectOps = ProjectOperationsService.Instance;
 
     /// <summary>
+    /// <para>缓存的集合变更事件处理器，用于在 <see cref="Dispose"/> 中取消订阅。</para>
+    /// Cached collection-changed handler so it can be unsubscribed in <see cref="Dispose"/>.
+    /// </summary>
+    private readonly NotifyCollectionChangedEventHandler _recentProjectsChangedHandler;
+
+    /// <summary>
     /// <para>创建菜单视图模型，订阅激活面板切换消息以维护 <see cref="_currentTab"/>，并加载最近打开项目列表。</para>
     /// Creates the menu view model, subscribing to active-tab-changed messages to maintain <see cref="_currentTab"/>
     /// and loading the recent projects list.
@@ -43,7 +50,8 @@ public partial class MenuViewModel : ViewModelBase
     public MenuViewModel()
     {
         WeakReferenceMessenger.Default.Register<ActiveTabChangedMessage>(this, OnActiveTabChanged);
-        RecentProjects.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentProjects));
+        _recentProjectsChangedHandler = (_, _) => OnPropertyChanged(nameof(HasRecentProjects));
+        RecentProjects.CollectionChanged += _recentProjectsChangedHandler;
         LoadRecentProjects();
     }
 
@@ -831,6 +839,17 @@ public partial class MenuViewModel : ViewModelBase
             });
             return files.Count > 0 ? files[0].Path.LocalPath : null;
         }
+    }
+
+    /// <summary>
+    /// <para>释放资源：取消订阅集合变更事件，注销消息处理器。</para>
+    /// Releases resources: unsubscribes from collection-changed events and unregisters message handlers.
+    /// </summary>
+    public void Dispose()
+    {
+        RecentProjects.CollectionChanged -= _recentProjectsChangedHandler;
+        WeakReferenceMessenger.Default.Unregister<ActiveTabChangedMessage>(this);
+        GC.SuppressFinalize(this);
     }
 }
 

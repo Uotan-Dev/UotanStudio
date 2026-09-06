@@ -1000,16 +1000,13 @@ public sealed class FirmwareService
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> UnpackSparseImageAsync(string sparsePath, string outputDirectory, CancellationToken cancellationToken = default)
     {
-        return await Task.Run(() =>
+        var result = await new SparseFormatHandler().UnpackAsync(sparsePath, outputDirectory, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return new FirmwareOpResult
         {
-            var result = new SparseFormatHandler().UnpackAsync(sparsePath, outputDirectory, cancellationToken: cancellationToken).GetAwaiter().GetResult();
-            return new FirmwareOpResult
-            {
-                Success = result.Success,
-                Summary = result.Summary,
-                Entries = result.Entries,
-            };
-        }, cancellationToken);
+            Success = result.Success,
+            Summary = result.Summary,
+            Entries = result.Entries,
+        };
     }
 
     /// <summary>

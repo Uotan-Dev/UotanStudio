@@ -18,7 +18,7 @@ namespace UotanStudio.ViewModels.Workspace;
 /// Workspace view model, hosting the dock layout and managing opening and focusing documents in the
 /// document area.
 /// </summary>
-public class WorkspaceViewModel : ViewModelBase
+public class WorkspaceViewModel : ViewModelBase, IDisposable
 {
     private readonly IFactory _factory;
     private IRootDock? _layout;
@@ -790,5 +790,20 @@ public class WorkspaceViewModel : ViewModelBase
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// <para>释放资源：取消订阅文档区属性变更事件。</para>
+    /// Releases resources: unsubscribes from document-dock property-changed events.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_documentDock is not null)
+        {
+            _documentDock.PropertyChanged -= OnDocumentDockPropertyChanged;
+        }
+
+        _subscribedDocumentDock = false;
+        GC.SuppressFinalize(this);
     }
 }

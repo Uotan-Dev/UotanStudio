@@ -30,21 +30,30 @@ public sealed class McpClientService
     /// <para>清空全部缓存连接（设置页修改服务器列表后调用）。</para>
     /// Clears all cached connections (call after the settings page edits the server list).
     /// </summary>
-    public void Reset()
+    public async Task ResetAsync()
     {
         foreach (var lazy in _clients.Values)
         {
             if (lazy.IsValueCreated && lazy.Value.IsCompletedSuccessfully)
             {
-                var client = lazy.Value.GetAwaiter().GetResult();
+                var client = await lazy.Value.ConfigureAwait(false);
                 if (client is not null)
                 {
-                    _ = client.DisposeAsync();
+                    await client.DisposeAsync().ConfigureAwait(false);
                 }
             }
         }
 
         _clients.Clear();
+    }
+
+    /// <summary>
+    /// <para>清空全部缓存连接（同步兼容包装，仅供无法 await 的调用方使用）。</para>
+    /// Clears all cached connections (sync-compatible wrapper for callers that cannot await).
+    /// </summary>
+    public void Reset()
+    {
+        ResetAsync().GetAwaiter().GetResult();
     }
 
     /// <summary>

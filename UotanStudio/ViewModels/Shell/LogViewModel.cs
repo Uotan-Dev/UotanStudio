@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services;
@@ -8,7 +9,7 @@ namespace UotanStudio.ViewModels.Shell;
 /// <para>全局日志面板视图模型，订阅 <see cref="LogService"/> 日志条目推送并维护可绑定集合，供 LogView 显示。</para>
 /// Global log panel view model, subscribing to <see cref="LogService"/> log entry pushes and maintaining a bindable collection for the LogView to display.
 /// </summary>
-public partial class LogViewModel : ViewModelBase
+public partial class LogViewModel : ViewModelBase, IDisposable
 {
     /// <summary>
     /// <para>日志条目视图模型，承载单条日志的时间戳、级别、来源与文本，并提供级别前景色。</para>
@@ -99,6 +100,12 @@ public partial class LogViewModel : ViewModelBase
     /// Unsubscribe delegate.
     /// </summary>
     private Action? _unsubscribe;
+
+    /// <summary>
+    /// <para>是否已释放资源。</para>
+    /// Whether resources have been disposed.
+    /// </summary>
+    private bool _disposed;
 
     /// <summary>
     /// <para>是否自动滚动至最新条目。</para>
@@ -279,16 +286,25 @@ public partial class LogViewModel : ViewModelBase
     }
 
     /// <summary>
+    /// <para>释放资源：取消订阅日志服务与语言变更事件。</para>
+    /// Releases resources: unsubscribes from the log service and language change events.
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _unsubscribe?.Invoke();
+        _unsubscribe = null;
+        LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
+        _disposed = true;
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
     /// <para>析构时取消订阅，防止内存泄漏。</para>
     /// Unsubscribes on finalization to prevent memory leaks.
     /// </summary>
     ~LogViewModel()
     {
-        try
-        {
-            _unsubscribe?.Invoke();
-            LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
-        }
-        catch { /* 忽略析构异常 */ }
+        Dispose();
     }
 }
