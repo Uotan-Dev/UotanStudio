@@ -709,10 +709,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 $"Failed to open filesystem image '{fullPath}': {ex.Message}");
         }
 
-        // 不发送 ActiveDocumentChangedMessage：属性面板没有文件管理器文档的展示路径，
-        // 文档切换时由 OnDocumentDockPropertyChanged 的默认分支清空面板。
-        // No ActiveDocumentChangedMessage is sent: the properties panel has no display path for
-        // file-manager documents; OnDocumentDockPropertyChanged clears the panel via its default branch.
+        WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
     }
 
     /// <summary>
@@ -769,6 +766,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             case FileViewModel file:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(file));
                 break;
+            case FileManagerEditorViewModel fileManager:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(fileManager));
+                break;
             default:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage((FileViewModel?)null));
                 break;
@@ -790,6 +790,58 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// <para>从持久化快照恢复一个已打开的文档标签。根据 <see cref="OpenDocumentDto.Kind"/> 分派到对应的打开方法。</para>
+    /// Restores a previously open document tab from a persisted snapshot. Dispatches by
+    /// <see cref="OpenDocumentDto.Kind"/> to the appropriate open method.
+    /// </summary>
+    /// <param name="dto"><para>文档描述符。</para>The document descriptor.</param>
+    /// <param name="rootDir"><para>工程根目录（用于拼接绝对路径）。</para>The project root directory.</param>
+    public async Task RestoreOpenDocumentAsync(Services.Projects.OpenDocumentDto dto, string rootDir)
+    {
+        var fullPath = Path.Combine(rootDir, dto.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(fullPath))
+        {
+            return;
+        }
+
+        try
+        {
+            switch (dto.Kind)
+            {
+                case "Text":
+                    await OpenDocumentAsync(fullPath);
+                    break;
+                case "Firmware":
+                    await OpenFirmwareAsync(fullPath);
+                    break;
+                case "FileManager":
+                    await OpenFileSystemAsync(fullPath);
+                    break;
+                case "Dtb":
+                    await OpenDtbAsync(fullPath);
+                    break;
+                case "Dex":
+                    await OpenDexAsync(fullPath);
+                    break;
+                case "Manifest":
+                    await OpenManifestAsync(fullPath);
+                    break;
+                case "Arsc":
+                    await OpenArscAsync(fullPath);
+                    break;
+                case "Hex":
+                    await OpenHexAsync(fullPath);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Workspace",
+                $"Failed to restore open document '{dto.RelativePath}' ({dto.Kind}): {ex.Message}");
+        }
     }
 
     /// <summary>

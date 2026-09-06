@@ -18,6 +18,8 @@ namespace UotanStudio.Services.Projects;
 [JsonSerializable(typeof(List<ConnectionDto>))]
 [JsonSerializable(typeof(SubProjectDto))]
 [JsonSerializable(typeof(List<SubProjectDto>))]
+[JsonSerializable(typeof(OpenDocumentDto))]
+[JsonSerializable(typeof(List<OpenDocumentDto>))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
@@ -227,6 +229,32 @@ public sealed class FirmwareProjectSnapshot
     /// <para>打包设置快照。</para>
     /// </summary>
     public ProjectSettingsDto? Settings { get; set; }
+
+    /// <summary>
+    /// Open document tabs (restored on project open). Paths are relative to the project root directory.
+    /// <para>已打开的文档标签（打开工程时恢复）。路径为相对工程根目录的路径。</para>
+    /// </summary>
+    public List<OpenDocumentDto>? OpenDocuments { get; set; }
+}
+
+/// <summary>
+/// Open document descriptor, capturing the document type and its file path so the tab can be
+/// restored on project reopen.
+/// <para>已打开文档描述符，记录文档类型与文件路径以便重新打开工程时恢复标签。</para>
+/// </summary>
+public sealed class OpenDocumentDto
+{
+    /// <summary>
+    /// Document kind identifier: "Text", "Firmware", "FileManager", "Dtb", "Dex", "Manifest", "Arsc", "Hex".
+    /// <para>文档类型标识符。</para>
+    /// </summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>
+    /// File path relative to the project root directory.
+    /// <para>相对工程根目录的文件路径。</para>
+    /// </summary>
+    public string RelativePath { get; set; } = string.Empty;
 }
 
 /// <summary>

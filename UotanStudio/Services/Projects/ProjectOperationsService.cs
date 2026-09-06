@@ -163,6 +163,17 @@ public sealed class ProjectOperationsService
             {
                 projectSettings.ApplyFromDto(firmware.Settings);
             }
+
+            // 恢复上次打开的文档标签（文本、固件信息、文件管理器等）。
+            // Restore previously open document tabs (text, firmware info, file manager, etc.).
+            if (firmware.OpenDocuments is { Count: > 0 } openDocs && WorkspaceVM is not null)
+            {
+                var rootDir = ProjectContextService.Instance.RootDirectory ?? Path.GetDirectoryName(path) ?? ".";
+                foreach (var docDto in openDocs)
+                {
+                    await WorkspaceVM.RestoreOpenDocumentAsync(docDto, rootDir);
+                }
+            }
         }
 
         if (NodeEditorVM != null)
@@ -423,6 +434,10 @@ public sealed class ProjectOperationsService
             Connections = WorkflowPersistenceService.BuildConnectionDtos(NodeEditorVM.Nodes, NodeEditorVM.Connections)
         };
 
+        // 收集当前已打开的文档标签，用于下次打开工程时恢复。
+        // Collect currently open document tabs so they can be restored on next project open.
+        var openDocs = CollectOpenDocuments(rootDir);
+
         var subProjectDtos = new List<SubProjectDto>();
         foreach (var sp in context.SubProjects)
         {
@@ -444,7 +459,8 @@ public sealed class ProjectOperationsService
                         Format = i.Format
                     })
                     .ToList(),
-                Settings = ProjectSettingViewModel.EnsureInstance().ToDto()
+                Settings = ProjectSettingViewModel.EnsureInstance().ToDto(),
+                OpenDocuments = openDocs.Count > 0 ? openDocs : null
             };
             await SolutionPersistenceService.SaveFirmwareProjectAsync(sp.FwProjectPath, firmware);
         }
@@ -466,5 +482,63 @@ public sealed class ProjectOperationsService
         await SolutionPersistenceService.SaveSolutionAsync(path, solution);
         await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));
         await SolutionSettingsService.SaveAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings());
+    }
+
+    /// <summary>
+    /// <para>从文档区收集当前已打开的文档标签列表。</para>
+    /// Collects the currently open document tabs from the document area.
+    /// </summary>
+    private List<OpenDocumentDto> CollectOpenDocuments(string rootDir)
+    {
+        var result = new List<OpenDocumentDto>();
+        var documentDock = WorkspaceVM?.FindDocumentsPanePublic();
+        if (documentDock?.VisibleDockables is null)
+        {
+            return result;
+        }
+
+        foreach (var dockable in documentDock.VisibleDockables)
+        {
+            var dto = dockable switch
+            {
+                FileViewModel file => CreateDto(rootDir, "Text", file.FilePath),
+                FirmwareInfoViewModel fw => CreateDto(rootDir, "Firmware", fw.FilePath),
+                FileManagerEditorViewModel fm => CreateDto(rootDir, "FileManager", fm.FilePath),
+                DtbEditorViewModel dtb => CreateDto(rootDir, "Dtb", dtb.FilePath),
+                DexEditorViewModel dex => CreateDto(rootDir, "Dex", dex.FilePath),
+                ManifestEditorViewModel manifest => CreateDto(rootDir, "Manifest", manifest.FilePath),
+                ArscEditorViewModel arsc => CreateDto(rootDir, "Arsc", arsc.FilePath),
+                HexEditorViewModel hex => CreateDto(rootDir, "Hex", hex.FilePath),
+                _ => null
+            };
+            if (dto is not null)
+            {
+                result.Add(dto);
+            }
+        }
+
+        return result;
+    }
+
+    private static OpenDocumentDto? CreateDto(string rootDir, string kind, string? filePath)
+    {
+        if (string.IsNullOrEmpty(filePath))
+        {
+            return null;
+        }
+
+        var fullPath = Path.GetFullPath(filePath);
+        if (!fullPath.StartsWith(rootDir, StringComparison.OrdinalIgnoreCase))
+        {
+            // 工程目录外的文件不持久化。
+            // Files outside the project directory are not persisted.
+            return null;
+        }
+
+        return new OpenDocumentDto
+        {
+            Kind = kind,
+            RelativePath = Path.GetRelativePath(rootDir, fullPath).Replace(Path.DirectorySeparatorChar, '/')
+        };
     }
 }
