@@ -6,8 +6,8 @@ using UotanStudio.Services;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
-/// <para>全局日志面板视图模型，订阅 <see cref="LogService"/> 日志条目推送并维护可绑定集合，供 LogView 显示。</para>
-/// Global log panel view model, subscribing to <see cref="LogService"/> log entry pushes and maintaining a bindable collection for the LogView to display.
+/// <para>全局日志窗口视图模型，订阅 <see cref="LogService"/> 日志条目推送并维护可绑定集合，供 LogWindow 显示。</para>
+/// Global log window view model, subscribing to <see cref="LogService"/> log entry pushes and maintaining a bindable collection for the LogWindow to display.
 /// </summary>
 public partial class LogViewModel : ViewModelBase, IDisposable
 {
@@ -114,8 +114,8 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool _autoScroll = true;
 
     /// <summary>
-    /// <para>级别筛选：仅显示不低于此级别的日志；<c>null</c> 表示全部级别（默认）。</para>
-    /// Level filter: only logs at or above this level are shown; <c>null</c> means all levels
+    /// <para>级别筛选：仅显示与所选级别相同的日志；<c>null</c> 表示全部级别（默认）。</para>
+    /// Level filter: only logs matching this exact level are shown; <c>null</c> means all levels
     /// (the default).
     /// </summary>
     [ObservableProperty] private LogLevel? _levelFilter;
@@ -241,7 +241,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// Determines whether the entry matches the current level, source and channel filters.
     /// </summary>
     private bool MatchesFilter(LogEntryViewModel vm) =>
-        (LevelFilter is null || vm.Level >= LevelFilter.Value)
+        (LevelFilter is null || vm.Level == LevelFilter.Value)
         && (string.IsNullOrEmpty(SourceFilter) || string.Equals(vm.Source, SourceFilter, StringComparison.Ordinal))
         && (SelectedChannel?.Value is null || LogService.ChannelOf(vm.Source) == SelectedChannel.Value.Value);
 

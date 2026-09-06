@@ -142,6 +142,16 @@ ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目
 ### 7. 日志
 统一走 `LogService.Instance.Write(LogLevel, "Source", "Message")`，UI 日志窗口通过 `LogEnqueued` 事件或 `Subscribe` 增量消费。`LogLevel` / `IUnifiedLog` 定义在 `UotanStudio/Services/Logging/IUnifiedLog.cs`（命名空间 `UotanStudio.Services`），`LogService` 实现 `IUnifiedLog`；`UotanStudio.Comm` 的 USB 诊断通过 `UsbLogBridge` 桥接到统一日志。**分通道日志**：`LogService.ChannelOf(source)` 按 Source 前缀把日志归入 `LogChannel`（`General`/`Device`/`Flash`/`Firmware`/`Build`，`LogEntry` record 不变），`LogViewModel` 提供通道 Tab（`Log_Channel_*` 键）与既有级别/来源筛选叠加。
 
+日志界面统一由 `Views/Shell/LogWindow.axaml(.cs)` 承载（原 `LogView` 已合并移除），标题栏使用 Semi `WindowDrawnDecorations`（32 高、左侧 25×25 应用图标、保留窗口按钮）。日志区域使用只读 AvaloniaEdit `TextEditor`（12 号等宽字体、紧凑行距），按集合增删增量同步文本并关闭撤销缓存；支持跨行拖选、Ctrl+C、Ctrl+A 及右键复制/全选，选中文字时暂停自动滚动。各等级整行文字使用明暗主题中的 `LogTraceBrush` / `LogDebugBrush` / `LogInfoBrush` / `LogWarnBrush` / `LogErrorBrush` / `LogFatalBrush`，多行消息保持同一等级颜色。窗口共用静态 `LogViewModel`，关闭时解除窗口的集合变更、滚动、选择及主题事件订阅，保留日志接收、缓存与筛选状态；再次打开继续显示已有日志。筛选、清空显示和导出行为保留，`LogService` 和 `LogViewModel` 的默认缓存上限仍为 5000 条。
+
+日志等级文字使用六种独立固定色值，不直接引用主题强调色或通用文字色，修改 `AccentColor` / `SecondaryTextForeground` 不改变日志等级颜色。浅色主题配色：Trace 灰色 `#666666`、Debug 使用参考截图的绿色 `#4CAF50`、Info 蓝色 `#0078D4`、Warn 橙色 `#FF9800`、Error 正红色 `#FF0000`、Fatal 紫色 `#9C27B0`。深色主题保留现有配色：Trace `#999999`、Debug `#69CEC7`、Info `#82B7FA`、Warn `#E8B85E`、Error `#FF8989`、Fatal `#ED8CD0`。
+
+级别下拉框按所选等级精确筛选（例如 Info 仅显示 Info）；“全部”对应 `LevelFilter=null`，显示全部等级。历史日志与新增日志共用 `MatchesFilter`，级别、组件、通道条件同时生效；筛选只影响展示，不丢弃缓存中的其他等级日志。
+
+日志编辑器显式设置 `AllowScrollBelowDocument=false`，避免自动滚动或重开窗口时将末尾空行推到视口顶部，显示整屏空白。
+
+日志行高在编辑器加载后按中英文混合文字的实际字体度量向上取整，通过 `LineHeightFactor` 统一设置（当前 Windows 12 号字体为 18 个设备无关像素）；文字运行片段使用 `BaselineAlignment.Center`，避免中文回退字体改变行高及纯英文文字的垂直位置。首行、多行消息与不同等级共用排版，深浅主题切换只更新颜色。
+
 ### 8. 工作区面板与工程文件
 工作区（`WorkspaceView` / `WorkspaceDockFactory`，`Views/Workspace/`）承载 Dock 布局：
 - **面板构成**：左侧（项目资源管理器 / 设备；**打包设置面板默认隐藏**，经「窗口」菜单唤出）、中部文档区（`DocumentDock`，Id=`DocumentsPane`）、右侧（镜像管理 / 属性）；底部 `BottomPane` 保留为**空槽位**（无面板）。输出 / ADB 日志面板已移除，工作区操作日志统一走全局 `LogService`。面板显隐/聚焦由 `WorkspacePanelService`（`Services/Workspace/WorkspacePanelService.cs`，单例）统一管理，`WorkspaceDockFactory.CreateLayout` 用 `Register(key, dockable, host, visible)` 登记各面板，`CloseDockable` 关闭面板后回调 `OnDockContentsChanged` 同步可见状态。

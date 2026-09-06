@@ -15,6 +15,12 @@
     <Color x:Key="HexSelectionBrush">#6659c2ff</Color>
     <Color x:Key="HexCaretBrush">#4cc2ff</Color>
     <Color x:Key="HexEditedBrush">#ff8a80</Color>
+    <SolidColorBrush x:Key="LogTraceBrush" Color="#999999" />
+    <SolidColorBrush x:Key="LogDebugBrush" Color="#69CEC7" />
+    <SolidColorBrush x:Key="LogInfoBrush" Color="#82B7FA" />
+    <SolidColorBrush x:Key="LogWarnBrush" Color="#E8B85E" />
+    <SolidColorBrush x:Key="LogErrorBrush" Color="#FF8989" />
+    <SolidColorBrush x:Key="LogFatalBrush" Color="#ED8CD0" />
     <!-- VS 风格编辑器分隔轨道：默认状态也与页面背景保持清晰对比。 -->
     <!-- VS-style editor splitter track with clear contrast in its resting state. -->
     <SolidColorBrush x:Key="EditorPaneSplitterBackgroundBrush" Color="#36363A" />
