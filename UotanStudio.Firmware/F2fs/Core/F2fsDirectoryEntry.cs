@@ -63,13 +63,14 @@ internal sealed record F2fsDirectoryEntry
     public int SlotCount => (NameLen + SlotLength - 1) / SlotLength;
 
     /// <summary>
-    /// 判断位图字节序中第 <paramref name="index"/> 位是否置位（f2fs 位图为每字节 MSB-first）。
-    /// <para>Tests whether bit <paramref name="index"/> is set in a f2fs bitmap (MSB-first within
-    /// each byte).</para>
+    /// 判断位图中第 <paramref name="index"/> 位是否置位（f2fs 位图为每字节 LSB-first，
+    /// 对齐内核 test_bit_le）。
+    /// <para>Tests whether bit <paramref name="index"/> is set in a f2fs bitmap (LSB-first within
+    /// each byte, matching the kernel's test_bit_le).</para>
     /// </summary>
     public static bool TestBit(ReadOnlySpan<byte> bitmap, int index)
         => index >= 0 && index < bitmap.Length * 8
-           && (bitmap[index >> 3] & (1 << (7 - (index & 7)))) != 0;
+           && (bitmap[index >> 3] & (1 << (index & 7))) != 0;
 
     /// <summary>
     /// 设置位图第 <paramref name="index"/> 位。
@@ -82,7 +83,7 @@ internal sealed record F2fsDirectoryEntry
             throw new ArgumentOutOfRangeException(nameof(index));
         }
 
-        bitmap[index >> 3] |= (byte)(1 << (7 - (index & 7)));
+        bitmap[index >> 3] |= (byte)(1 << (index & 7));
     }
 
     /// <summary>

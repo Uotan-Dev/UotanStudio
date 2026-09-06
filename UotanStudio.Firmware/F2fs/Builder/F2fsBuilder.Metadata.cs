@@ -5,7 +5,7 @@ namespace UotanStudio.Firmware.F2fs;
 
 public sealed partial class F2fsBuilder
 {
-    private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options)
+    private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles)
     {
         return new F2fsSuperblock
         {
@@ -44,7 +44,11 @@ public sealed partial class F2fsBuilder
             VolumeName = string.IsNullOrEmpty(options.VolumeName) ? "f2fs" : options.VolumeName,
             CpPayload = 0,
             Version = new byte[256],
-            Feature = 0,
+            // 仅声明镜像真实使用的特性：压缩文件存在时声明 F2FS_FEATURE_COMPRESSION（0x2000）。
+            // inline data / inline dentry 在现代内核为核心特性，无需特性位。
+            // Only declare features actually used: F2FS_FEATURE_COMPRESSION (0x2000) when compressed
+            // files exist. Inline data / inline dentry are core features on modern kernels.
+            Feature = hasCompressedFiles ? FeatureCompression : 0,
         };
     }
 
@@ -58,116 +62,208 @@ public sealed partial class F2fsBuilder
         WriteAt(output, baseOffset + blockSize, buffer.AsSpan(0, blockSize));
     }
 
-    private static void WriteCheckpoints(Stream output, long baseOffset, Layout layout, byte[] natBitmap, byte[] sitBitmap, uint validNodeCount, uint validInodeCount, long usedMainBlocks)
+    /// <summary>
+    /// 写出两个 checkpoint pack（mkfs.f2fs 布局）：pack 布局为
+    /// [cp][compact data 摘要：n_nats(507B)+n_sits(507B)+data 条目][hot/warm/cold node 摘要]
+    /// [cp 副本]，共 6 块（node 摘要按 sum_blk_addr(NR_CURSEG_NODE_TYPE, t) = start + total − 4 + t
+    /// 定位，cp 副本在 total − 1）。
+    /// <para>Writes both checkpoint packs (the mkfs.f2fs layout): each pack is
+    /// [cp][compact data summary: n_nats(507B)+n_sits(507B)+data entries][hot/warm/cold node
+    /// summaries][cp copy], 6 blocks total (node summaries at sum_blk_addr(NR_CURSEG_NODE_TYPE, t)
+    /// = start + total − 4 + t, the cp copy at total − 1).</para>
+    /// </summary>
+    private static void WriteCheckpoints(Stream output, long baseOffset, Layout layout, CursegPlan plan, uint validNodeCount, uint validInodeCount)
     {
-        var versionBitmap = new byte[checked(natBitmap.Length + sitBitmap.Length)];
+        var usedMainBlocks = layout.NodeBlocks + layout.DataBlocks;
+        // overprov 段数：对齐 mkfs.f2fs（overprovision 默认 5%）：(main − rsvd) * 5% + rsvd。
+        // Overprovision segments: mirrors mkfs.f2fs (default 5%): (main − rsvd) * 5% + rsvd.
+        var overprovSegments = (layout.MainSegments - RsvdSegments) * 5 / 100 + RsvdSegments;
+
+        var sitBitmapBytes = (uint)((layout.SitSegments / 2) * BlocksPerSeg / 8);
+        var natBitmapBytes = (uint)((layout.NatSegments / 2) * BlocksPerSeg / 8);
+        var versionBitmap = new byte[sitBitmapBytes + natBitmapBytes];
 
         F2fsCheckpoint CreateCheckpoint(ulong version)
             => new F2fsCheckpoint
             {
                 CheckpointVer = version,
-                UserBlockCount = (ulong)layout.MainSegments * BlocksPerSeg,
+                // user_block_count = (main − overprov) × 每段块数（mkfs 语义）。
+                // user_block_count = (main − overprov) × blocks-per-segment (mkfs semantics).
+                UserBlockCount = ((ulong)layout.MainSegments - overprovSegments) * BlocksPerSeg,
                 ValidBlockCount = (ulong)usedMainBlocks,
-                RsvdSegmentCount = 6,  // 内核默认 GC 保留段数 / kernel default GC reserved segments
-                // overprovision 段数：内核按 main/2+1 计算（最小值），为 GC 提供额外空闲段。
-                // Overprovision segments: kernel uses main/2+1 (minimum), providing extra free
-                // segments for garbage collection.
-                OverprovSegmentCount = (uint)Math.Max(1, (int)layout.MainSegments / 2 + 1),
-                // 空闲段数 = 总主区段 − 实际使用的段数。
-                // Free segments = total main segments − actually used segments.
-                FreeSegmentCount = layout.MainSegments - (uint)((usedMainBlocks + BlocksPerSeg - 1) / BlocksPerSeg),
-                // curseg 段号：主区前6个段分别分配给 hot_node/warm_node/cold_node/hot_data/warm_data/cold_data。
-                // mkfs.f2fs 同样将主区前6段分配给 curseg。uint.MaxValue 表示未使用。
-                // curseg segment numbers: the first 6 main-area segments are allocated to
-                // hot_node/warm_node/cold_node/hot_data/warm_data/cold_data respectively.
-                // uint.MaxValue means unused. mkfs.f2fs uses the same allocation.
-                CurNodeSegno = [layout.MainBlkaddr / BlocksPerSeg, layout.MainBlkaddr / BlocksPerSeg + 1, layout.MainBlkaddr / BlocksPerSeg + 2, uint.MaxValue, uint.MaxValue, uint.MaxValue, uint.MaxValue, uint.MaxValue],
-                CurDataSegno = [layout.MainBlkaddr / BlocksPerSeg + 3, layout.MainBlkaddr / BlocksPerSeg + 4, layout.MainBlkaddr / BlocksPerSeg + 5, uint.MaxValue, uint.MaxValue, uint.MaxValue, uint.MaxValue, uint.MaxValue],
+                RsvdSegmentCount = RsvdSegments,
+                OverprovSegmentCount = overprovSegments,
+                // 空闲段数与 SIT 严格一致（空 curseg 段按"有效"计入）。
+                // Free segment count exactly matches the SIT (empty curseg segments count as valid).
+                FreeSegmentCount = plan.FreeSegmentCount,
+                // curseg 段号/blkoff：node 区与 data 区前 3 段；不足时为指派的空闲段。
+                // Curseg segment numbers / blkoffs: the first 3 segments of each region, or the
+                // assigned free segments when a region is smaller.
+                CurNodeSegno = [plan.NodeSegno[0], plan.NodeSegno[1], plan.NodeSegno[2], uint.MaxValue, uint.MaxValue, uint.MaxValue, uint.MaxValue, uint.MaxValue],
+                CurNodeBlkoff = [plan.NodeBlkoff[0], plan.NodeBlkoff[1], plan.NodeBlkoff[2], 0, 0, 0, 0, 0],
+                CurDataSegno = [plan.DataSegno[0], plan.DataSegno[1], plan.DataSegno[2], uint.MaxValue, uint.MaxValue, uint.MaxValue, uint.MaxValue, uint.MaxValue],
+                CurDataBlkoff = [plan.DataBlkoff[0], plan.DataBlkoff[1], plan.DataBlkoff[2], 0, 0, 0, 0, 0],
+                // mkfs.f2fs 的干净布局：UMOUNT + COMPACT_SUM（compact data 摘要）。
+                // The mkfs.f2fs clean layout: UMOUNT + COMPACT_SUM (compact data summaries).
                 CkptFlags = F2fsCheckpoint.FlagUnmount | F2fsCheckpoint.FlagCompactSum,
-                CpPackTotalBlockCount = 6,
+                CpPackTotalBlockCount = CpPackTotalBlocks,
                 CpPackStartSum = 1,
                 ValidNodeCount = validNodeCount,
                 ValidInodeCount = validInodeCount,
                 NextFreeNid = layout.MaxNid + 1,
-                SitVerBitmapBytesize = (uint)((layout.SitSegments / 2) * BlocksPerSeg / 8),
-                NatVerBitmapBytesize = (uint)((layout.NatSegments / 2) * BlocksPerSeg / 8),
+                SitVerBitmapBytesize = sitBitmapBytes,
+                NatVerBitmapBytesize = natBitmapBytes,
                 ChecksumOffset = F2fsCheckpoint.DefaultChecksumOffset,
                 ElapsedTime = 0,
             };
 
-        // 写 checkpoint pack 1（cp_blkaddr，cp_ver 奇数）与 pack 2（+512 块，cp_ver=0）。
-        // Write checkpoint pack 1 (cp_blkaddr, odd cp_ver) and pack 2 (+512 blocks, cp_ver=0).
-        var pack1Block = checked(baseOffset + Segment0Blkaddr * F2fsNode.NodeSize);
-        var pack2Block = pack1Block + (long)BlocksPerSeg * F2fsNode.NodeSize;
-        WriteCheckpointPack(output, pack1Block, CreateCheckpoint(1), versionBitmap);
-        WriteCheckpointPack(output, pack2Block, CreateCheckpoint(0), versionBitmap);
+        // 写 checkpoint pack 1（cp_blkaddr，cp_ver=1，与 mkfs 一致两 pack 同版本）与
+        // pack 2（+512 块，同一 checkpoint 内容）。
+        // Write checkpoint pack 1 (cp_blkaddr, cp_ver=1; mkfs uses the same version for both packs)
+        // and pack 2 (+512 blocks, identical checkpoint content).
+        var pack1Offset = checked(baseOffset + Segment0Blkaddr * F2fsNode.NodeSize);
+        var pack2Offset = pack1Offset + (long)BlocksPerSeg * F2fsNode.NodeSize;
+        WriteCheckpointPack(output, pack1Offset, CreateCheckpoint(1), versionBitmap, plan);
+        WriteCheckpointPack(output, pack2Offset, CreateCheckpoint(1), versionBitmap, plan);
     }
 
-    private static void WriteCheckpointPack(Stream output, long packOffset, F2fsCheckpoint checkpoint, byte[] versionBitmap)
+    private static void WriteCheckpointPack(Stream output, long packOffset, F2fsCheckpoint checkpoint, byte[] versionBitmap, CursegPlan plan)
     {
         var block = new byte[F2fsNode.NodeSize];
         checkpoint.WriteTo(block, versionBitmap);
         var crc = Crc32(F2fsSuperblock.Magic, block.AsSpan(0, F2fsCheckpoint.DefaultChecksumOffset));
         BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(F2fsCheckpoint.DefaultChecksumOffset, 4), crc);
 
-        // block 0 / block 5：checkpoint 双副本。Blocks 0/5: the two checkpoint copies.
+        // block 0 与 block 5（cp_pack_total_block_count − 1）：checkpoint 双副本，
+        // fsck 的 validate_checkpoint 要求两副本 CRC 与版本一致。
+        // Blocks 0 and 5 (cp_pack_total_block_count − 1): the two cp copies; fsck's
+        // validate_checkpoint requires matching CRC and version across both.
         WriteAt(output, packOffset, block);
-        WriteAt(output, packOffset + 5 * F2fsNode.NodeSize, block);
+        WriteAt(output, packOffset + (CpPackTotalBlocks - 1) * F2fsNode.NodeSize, block);
 
-        // block 1：紧凑 data 摘要（footer SUM_TYPE_DATA）。Block 1: compact data summary.
-        var summary = new byte[F2fsNode.NodeSize];
-        summary[F2fsNode.NodeSize - 5] = 0; // SUM_TYPE_DATA
-        WriteAt(output, packOffset + F2fsNode.NodeSize, summary);
-
-        // blocks 2-4：node 摘要（footer SUM_TYPE_NODE）。Blocks 2-4: node summaries.
-        for (var i = 0; i < 3; i++)
+        // block 1：compact data 摘要（read_compacted_summaries 布局）：
+        //   [0, 507)      n_nats + nat journal（空：n_nats=0）
+        //   [507, 1014)   n_sits + sit journal（空：n_sits=0）
+        //   [1014, 4091)  hot/warm/cold data curseg 摘要条目（7 字节/条，Σ blkoff ≤ 439）
+        //   footer.entry_type @4091 = SUM_TYPE_DATA
+        // Block 1: compact data summary (read_compacted_summaries layout): empty nat/sit journals,
+        // then the hot/warm/cold data curseg entries, footer = SUM_TYPE_DATA.
+        var compact = new byte[F2fsNode.NodeSize];
+        var offset = 2 * SumJournalSize;
+        for (var t = 0; t < 3; t++)
         {
-            summary[F2fsNode.NodeSize - 5] = 1; // SUM_TYPE_NODE
-            WriteAt(output, packOffset + (2 + i) * F2fsNode.NodeSize, summary);
+            var count = Math.Min(plan.DataBlkoff[t], CompactDataEntryCap - (offset - 2 * SumJournalSize) / SummarySize);
+            for (var i = 0; i < count; i++)
+            {
+                var (nid, ofs) = plan.DataEntries[t][i];
+                BinaryPrimitives.WriteUInt32LittleEndian(compact.AsSpan(offset, 4), nid);
+                compact[offset + 4] = 0; // version
+                BinaryPrimitives.WriteUInt16LittleEndian(compact.AsSpan(offset + 5, 2), ofs);
+                offset += SummarySize;
+            }
+        }
+
+        compact[F2fsNode.NodeSize - SumFooterSize] = 0; // SUM_TYPE_DATA
+        WriteAt(output, packOffset + F2fsNode.NodeSize, compact);
+
+        // blocks 2..4：hot/warm/cold node 摘要块（struct f2fs_summary_block：entries[512]@0，
+        // 7 字节/条，条目 nid 为节点自身 NID；journal@3584 零；footer = SUM_TYPE_NODE）。
+        // Blocks 2..4: hot/warm/cold node summary blocks (struct f2fs_summary_block: entries@0,
+        // each entry's nid is the node block's own NID; journal zero; footer = SUM_TYPE_NODE).
+        for (var t = 0; t < 3; t++)
+        {
+            var summary = new byte[F2fsNode.NodeSize];
+            FillSummaryEntries(summary, plan.NodeEntries[t], plan.NodeBlkoff[t]);
+            summary[F2fsNode.NodeSize - SumFooterSize] = 1; // SUM_TYPE_NODE
+            WriteAt(output, packOffset + (2 + t) * F2fsNode.NodeSize, summary);
         }
     }
 
-    private static void WriteSit(Stream output, long baseOffset, Layout layout, long usedMainBlocks, int blockSize)
+    /// <summary>
+    /// 把 curseg 摘要条目写入 summary_block 的 entries 区（偏移 0 起，7 字节/条，
+    /// struct f2fs_summary：nid(4) + version(1) + ofs_in_node(2)，小端）。
+    /// <para>Writes curseg summary entries into the entries area of a summary_block (from offset 0,
+    /// 7 bytes each; struct f2fs_summary: nid(4) + version(1) + ofs_in_node(2), little-endian).</para>
+    /// </summary>
+    private static void FillSummaryEntries(byte[] summaryBlock, List<(uint Nid, ushort Ofs)> entries, int count)
     {
-        // 计算每个段的使用情况（仅主区内实际分配的块）。Compute usage per segment (only blocks
-        // actually allocated in the main area).
-        var usedBlocks = new Dictionary<uint, (uint Count, byte[] Map)>();
-        var usedSegnos = new HashSet<uint>();
-        for (var block = 0L; block < usedMainBlocks; block++)
+        for (var i = 0; i < count && i < EntriesInSum; i++)
         {
-            var segno = (uint)(block / BlocksPerSeg);
-            var offsetInSeg = (int)(block % BlocksPerSeg);
-            if (!usedBlocks.TryGetValue(segno, out var entry))
+            var (nid, ofs) = entries[i];
+            var offset = i * SummarySize;
+            BinaryPrimitives.WriteUInt32LittleEndian(summaryBlock.AsSpan(offset, 4), nid);
+            summaryBlock[offset + 4] = 0; // version
+            BinaryPrimitives.WriteUInt16LittleEndian(summaryBlock.AsSpan(offset + 5, 2), ofs);
+        }
+    }
+
+    /// <summary>
+    /// 写出 SIT 区：每主区段的 f2fs_sit_entry（74 字节：vblocks(2) + valid_map(64) + mtime(8)）。
+    /// vblocks[15:10] 为分配类型（GET_SIT_TYPE）、[9:0] 为有效块数；双副本寻址对齐内核
+    /// get_current_sit_page：主副本 sit_blkaddr + 块号，第二副本 +sit_blocks（sit_segs/2 × 512）。
+    /// <para>Writes the SIT area: one f2fs_sit_entry (74 bytes: vblocks(2) + valid_map(64) +
+    /// mtime(8)) per main-area segment. vblocks[15:10] holds the allocation type (GET_SIT_TYPE) and
+    /// [9:0] the valid block count; the dual-copy addressing follows the kernel's
+    /// get_current_sit_page: primary at sit_blkaddr + block index, second copy +sit_blocks
+    /// (sit_segs/2 × 512).</para>
+    /// </summary>
+    private static void WriteSit(Stream output, long baseOffset, Layout layout, CursegPlan plan, int blockSize)
+    {
+        var sitBlocks = (long)(layout.SitSegments / 2) * BlocksPerSeg;
+        var block = new byte[blockSize];
+        var currentBlockIndex = -1L;
+        foreach (var (segno, usage) in plan.Segments.OrderBy(static kvp => kvp.Key))
+        {
+            var (count, map, type) = usage;
+            var blockIndex = segno / F2fsNode.SitEntryPerBlock;
+            if (blockIndex != currentBlockIndex)
             {
-                entry = (0, new byte[F2fsNode.SitValidMapSize]);
-                usedBlocks[segno] = entry;
+                if (currentBlockIndex >= 0)
+                {
+                    FlushSitBlock(output, baseOffset, layout, sitBlocks, currentBlockIndex, block);
+                }
+
+                block.AsSpan().Clear();
+                currentBlockIndex = blockIndex;
             }
 
-            entry.Map[offsetInSeg >> 3] |= (byte)(1 << (7 - (offsetInSeg & 7)));
-            usedBlocks[segno] = (entry.Count + 1, entry.Map);
-            usedSegnos.Add(segno);
+            // vblocks = (type << 10) | count（SIT_VBLOCKS_SHIFT = 10）。
+            // vblocks = (type << 10) | count (SIT_VBLOCKS_SHIFT = 10).
+            var vblocks = (ushort)((type << 10) | count);
+            var entryIndex = segno % F2fsNode.SitEntryPerBlock;
+            var entryOffset = checked((int)entryIndex * 74);
+            BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(entryOffset, 2), vblocks);
+            map.CopyTo(block, entryOffset + 2);
+            // mtime @ entryOffset+66（__le64）保持 0：构建时镜像无段年龄信息。
+            // mtime @ entryOffset+66 (__le64) stays 0: no segment age for a freshly built image.
         }
 
-        var sitBlock = new byte[blockSize];
-        foreach (var segno in usedSegnos)
+        if (currentBlockIndex >= 0)
         {
-            var entry = usedBlocks[segno];
-            var blockIndex = segno / F2fsNode.SitEntryPerBlock;
-            var entryIndex = segno % F2fsNode.SitEntryPerBlock;
-            var baseSitBlock = (layout.SitBlkaddr + blockIndex * 2L) * blockSize;
-            sitBlock.AsSpan().Clear();
-            var entryOffset = checked((int)entryIndex * 74);
-            BinaryPrimitives.WriteUInt16LittleEndian(sitBlock.AsSpan(entryOffset, 2), (ushort)entry.Count);
-            entry.Map.CopyTo(sitBlock, entryOffset + 2);
-            WriteAt(output, baseOffset + baseSitBlock, sitBlock);
-            WriteAt(output, baseOffset + baseSitBlock + blockSize, sitBlock);
+            FlushSitBlock(output, baseOffset, layout, sitBlocks, currentBlockIndex, block);
         }
+    }
+
+    /// <summary>把累积好的 SIT 块写入主副本与第二副本（内核 get_current_sit_page 寻址）。
+    /// Flushes an accumulated SIT block to its primary and second copies (kernel
+    /// get_current_sit_page addressing).</summary>
+    private static void FlushSitBlock(Stream output, long baseOffset, Layout layout, long sitBlocks, long blockIndex, byte[] block)
+    {
+        // 上游寻址：主副本 sit_blkaddr + 块号，第二副本 +sit_blocks（sit_segs/2 × 512）。
+        // Upstream addressing: primary at sit_blkaddr + block index, second copy +sit_blocks
+        // (sit_segs/2 × 512).
+        var primary = (long)layout.SitBlkaddr + blockIndex;
+        WriteAt(output, baseOffset + primary * F2fsNode.NodeSize, block);
+        WriteAt(output, baseOffset + (primary + sitBlocks) * F2fsNode.NodeSize, block);
     }
 
     private static void WriteNat(Stream output, long baseOffset, Layout layout, Dictionary<uint, (uint Ino, uint Block)> nat)
     {
-        // NAT 块按 2 块间隔存放（内核 current_nat_addr 读取 nat_blkaddr + 2*block_off）。
-        // NAT blocks are stored 2 apart (the kernel reads nat_blkaddr + 2*block_off).
+        // NAT 寻址对齐内核 current_nat_addr：NAT 块按每 512 块分组，组 g 的主副本位于
+        // nat_blkaddr + g*1024 + 块组内序号，nat_bitmap 位清零时读主副本，第二副本 +512 块。
+        // NAT addressing follows the kernel's current_nat_addr: blocks are grouped per 512; group
+        // g's primary copy sits at nat_blkaddr + g*1024 + index, and with a zeroed nat_bitmap the
+        // primary copy is read while the second copy lives 512 blocks further.
         var grouped = new Dictionary<uint, Dictionary<uint, (uint Ino, uint Block)>>();
         foreach (var (nid, entry) in nat)
         {
@@ -192,22 +288,15 @@ public sealed partial class F2fsBuilder
                 BinaryPrimitives.WriteUInt32LittleEndian(natBlock.AsSpan(offset + F2fsNode.NatEntryBlockOffset, 4), entry.Block);
             }
 
-            // NAT 块恰好容纳 455 个 9 字节条目（字节 0..4094），仅剩 1 字节，无处再存放尾部
-            // 4 字节 CRC。若把 CRC 写到 4088..4091，会覆盖最后一条目（entryIndex=454）的
-            // ino/block_addr 字段，损坏该 NID 的 NAT 映射——该 bug 仅在 NID ≡ 454 (mod 455)
-            // 真正被分配时暴露（本仓库大文件测试的 C_447 即 NID 454）。与内核一致：满条目
-            // NAT 块不写块级校验和（读侧也只校验 superblock/checkpoint 的 CRC）。
-            // A NAT block holds exactly 455 9-byte entries (bytes 0..4094) plus a single spare
-            // byte, leaving no room for a trailing 4-byte CRC. Writing one at 4088..4091 would
-            // clobber the last entry's (entryIndex=454) ino/block_addr fields and corrupt that
-            // NID's NAT mapping — latent until NID ≡ 454 (mod 455) is actually allocated (here,
-            // the C_447 direct node of the large-file test). Consistent with the kernel: full NAT
-            // blocks carry no per-block checksum (the read side only verifies superblock and
-            // checkpoint CRCs).
-
-            var baseNatBlock = (layout.NatBlkaddr + blockIndex * 2L) * F2fsNode.NodeSize;
-            WriteAt(output, baseOffset + baseNatBlock, natBlock);
-            WriteAt(output, baseOffset + baseNatBlock + F2fsNode.NodeSize, natBlock);
+            // NAT 块恰好容纳 455 个 9 字节条目（字节 0..4094），尾部 4 字节不写校验和（与内核一致：
+            // 读侧只校验 superblock/checkpoint 的 CRC）。
+            // A NAT block holds exactly 455 9-byte entries (bytes 0..4094); no trailing checksum is
+            // written (the kernel's read side only verifies superblock/checkpoint CRCs).
+            var segOff = blockIndex / BlocksPerSeg;
+            var inSeg = blockIndex % BlocksPerSeg;
+            var primary = (long)layout.NatBlkaddr + segOff * 2 * BlocksPerSeg + inSeg;
+            WriteAt(output, baseOffset + primary * F2fsNode.NodeSize, natBlock);
+            WriteAt(output, baseOffset + (primary + BlocksPerSeg) * F2fsNode.NodeSize, natBlock);
         }
     }
 
@@ -236,146 +325,47 @@ public sealed partial class F2fsBuilder
     }
 
     /// <summary>
-    /// 写入 SSA（Segment Summary Area）摘要条目：为主区每个已分配块写入12字节摘要
-    /// （nid + ofs_in_node + alloc_type），供 fsck.f2fs 校验 NAT↔SSA↔SIT 一致性。
-    /// SSA 条目按段内偏移线性排列，每块340条（(4096-8)/12），尾部8字节为 summary_footer。
-    /// <para>Writes SSA (Segment Summary Area) summary entries: a 12-byte summary per allocated
-    /// main-area block (nid + ofs_in_node + alloc_type), enabling fsck.f2fs to verify NAT↔SSA↔SIT
-    /// consistency. Entries are linear within each segment's SSA area (340 per block, 8-byte footer).</para>
+    /// 写出 SSA（Segment Summary Area）：每个有有效块的主区段一块（ssa_blkaddr + segno），
+    /// summary_block 布局为 entries[512]@0（7 字节/条）+ journal@3584（零）+ summary_footer@4091
+    /// （entry_type：node 段=1、data 段=0）。curseg 段的摘要由 cp pack 承载，此处同时写出磁盘
+    /// SSA 供非 curseg 段（溢出段）查询与工具检查。
+    /// <para>Writes the SSA (Segment Summary Area): one block per main-area segment with valid
+    /// blocks (at ssa_blkaddr + segno), in the summary_block layout entries[512]@0 (7 bytes each) +
+    /// journal@3584 (zero) + summary_footer@4091 (entry_type: 1 for node segments, 0 for data).
+    /// Curseg segments carry their summaries in the cp pack; the on-disk SSA is still written for
+    /// overflow (non-curseg) segment lookups and tooling.</para>
     /// </summary>
-    private static void WriteSsa(Stream output, long baseOffset, Layout layout, List<BuildNode> ordered, int blockSize)
+    private static void WriteSsa(Stream output, long baseOffset, Layout layout, CursegPlan plan, int blockSize)
     {
-        // SSA 每块可容纳的摘要条目数（f2fs-tools: 4096 / 8 = 512，ENTRIES_IN_SUM = F2FS_SUM_BLKSIZE / 8）。
-        // f2fs-tools struct f2fs_summary = 7字节，但 ENTRES_IN_SUM 按8字节步长计算（含1字节对齐填充）。
-        // Summary entries per SSA block (f2fs-tools: 4096/8 = 512, ENTRIES_IN_SUM = F2FS_SUM_BLKSIZE/8).
-        const int EntriesPerSsaBlock = 512;
-
-        // 按段收集 SSA 条目，每段构建一个完整的 SSA 块后一次性写入。
-        // Collect SSA entries per segment, build a complete SSA block per segment and write once.
-        var segEntries = new Dictionary<int, Dictionary<int, (uint Nid, ushort Ofs, byte AllocType)>>();
-
-        void AddEntry(uint mainBlockAddr, uint nid, ushort ofsInNode, byte allocType)
-        {
-            if (mainBlockAddr < layout.MainBlkaddr) return;
-            var relative = (long)mainBlockAddr - layout.MainBlkaddr;
-            var segno = (int)(relative / BlocksPerSeg);
-            var blockInSeg = (int)(relative % BlocksPerSeg);
-            if (blockInSeg >= EntriesPerSsaBlock) return;
-            if (!segEntries.TryGetValue(segno, out var entries))
-            {
-                entries = new Dictionary<int, (uint, ushort, byte)>();
-                segEntries[segno] = entries;
-            }
-            entries[blockInSeg] = (nid, ofsInNode, allocType);
-        }
-
-        foreach (var node in ordered)
-        {
-            AddEntry(node.InodeBlockAddr, node.Ino, 0, 0);
-
-            if (!node.IsDirectory && !node.InlineData)
-            {
-                foreach (var dnode in node.Dnodes)
-                {
-                    AddEntry(dnode.BlockAddr, dnode.Nid, 0, 1);
-                }
-
-                for (var i = 0; i < node.DataBlockCount; i++)
-                {
-                    var addr = node.DataBlockAddrs[i];
-                    if (addr == 0) continue;
-                    uint ownerNid;
-                    if (i < F2fsNode.DefAddrsPerInode)
-                    {
-                        ownerNid = node.Ino;
-                    }
-                    else
-                    {
-                        ownerNid = node.Ino;
-                        foreach (var dnode in node.Dnodes)
-                        {
-                            if (!dnode.IsIndirect && !dnode.IsDoubleIndirect &&
-                                dnode.LogicalStart <= i && i < dnode.LogicalStart + F2fsNode.AddrsPerBlock)
-                            {
-                                ownerNid = dnode.Nid;
-                                break;
-                            }
-                        }
-                    }
-                    AddEntry(addr, ownerNid, (ushort)(i & 0xFFFF), 1);
-                }
-
-                for (var i = 0; i < node.DirBlocks.Count; i++)
-                {
-                    AddEntry(node.DirBlockAddrs[i], node.Ino, (ushort)i, 0);
-                }
-            }
-            else if (node.IsDirectory)
-            {
-                for (var i = 0; i < node.DirBlockAddrs.Count; i++)
-                {
-                    AddEntry(node.DirBlockAddrs[i], node.Ino, (ushort)i, 0);
-                }
-            }
-        }
-
-        // 构建并写入每个段的 SSA 块。
-        // Build and write the SSA block for each segment.
-        foreach (var (segno, entries) in segEntries)
+        // 主区段号为主区相对（segment 0 = 第一个主区段），与内核/工具约定一致。
+        // Segment numbers are main-area-relative (segment 0 = the first main-area segment),
+        // matching the kernel/tooling convention.
+        var mainBase = 0u;
+        foreach (var (segno, entries) in plan.SegmentEntries)
         {
             var block = new byte[blockSize];
-            foreach (var (blockInSeg, (nid, ofs, _)) in entries)
+            foreach (var (ofsInSeg, (nid, ofsInNode)) in entries)
             {
-                // f2fs-tools struct f2fs_summary 布局（7字节，__packed，小端）：
-                //   nid(4) @0, version(1) @4, ofs_in_node(2) @5
-                // alloc_type 在 f2fs-tools 中属于 reserved union，不单独序列化。
-                var off = blockInSeg * F2fsSummary.Size;
-                BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(off, 4), nid);
-                block[off + 4] = 0; // version
-                BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(off + 5, 2), ofs);
+                var offset = ofsInSeg * SummarySize;
+                BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(offset, 4), nid);
+                block[offset + 4] = 0; // version
+                BinaryPrimitives.WriteUInt16LittleEndian(block.AsSpan(offset + 5, 2), ofsInNode);
             }
+
+            block[F2fsNode.NodeSize - SumFooterSize] = IsNodeSegment(segno, mainBase, layout, plan)
+                ? (byte)1 // SUM_TYPE_NODE
+                : (byte)0; // SUM_TYPE_DATA
             var ssaBlockAddr = (long)layout.SsaBlkaddr + segno;
             WriteAt(output, baseOffset + ssaBlockAddr * blockSize, block);
         }
     }
 
-    /// <summary>
-    /// 写入单个 SSA 摘要条目（12字节）到正确位置。
-    /// </summary>
-    private static void WriteSsaEntry(Stream output, long baseOffset, long ssaBaseByte, Layout layout,
-        uint mainBlockAddr, uint nid, ushort ofsInNode, byte allocType, int entriesPerSsaBlock, int blockSize)
-    {
-        if (mainBlockAddr < layout.MainBlkaddr) return;
-        var relative = (long)mainBlockAddr - layout.MainBlkaddr;
-        var segno = relative / BlocksPerSeg;
-        var blockInSeg = (int)(relative % BlocksPerSeg);
-        // 内核 SSA 寻址：每主区段一个 SSA 块，位于 ssa_blkaddr + segno。
-        // 条目在块内按 blockInSeg 索引（每块最多 entriesPerSsaBlock 条）。
-        // Kernel SSA addressing: one SSA block per main segment at ssa_blkaddr + segno.
-        // Entries are indexed by blockInSeg within the block (max entriesPerSsaBlock per block).
-        if (blockInSeg >= entriesPerSsaBlock) return; // 超出单块容量（371），由 SIT 覆盖
-        var ssaAbsoluteBlock = (long)layout.SsaBlkaddr + segno;
-        var entryOffset = baseOffset + ssaAbsoluteBlock * blockSize + blockInSeg * F2fsSummary.Size;
-
-        // 内核 struct f2fs_summary 布局（小端）：
-        //   __u8   version;        // offset 0
-        //   __le16 ofs_in_node;    // offset 1
-        //   __le32 nid;            // offset 3
-        //   __u8   alloc_type;     // offset 7
-        //   __u8   reserved[3];    // offset 8
-        // Kernel struct f2fs_summary layout (little-endian):
-        //   __u8   version;        // offset 0
-        //   __le16 ofs_in_node;    // offset 1
-        //   __le32 nid;            // offset 3
-        //   __u8   alloc_type;     // offset 7
-        //   __u8   reserved[3];    // offset 8
-        var entry = new byte[F2fsSummary.Size];
-        entry[0] = 0; // version
-        BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(1, 2), ofsInNode);
-        BinaryPrimitives.WriteUInt32LittleEndian(entry.AsSpan(3, 4), nid);
-        entry[7] = allocType;
-        WriteAt(output, entryOffset, entry);
-    }
+    /// <summary>段是否为 node 段（node 区段或被指派为 node curseg 的空闲段）。
+    /// Whether a segment is a node segment (node-region segments or free segments assigned to a
+    /// node curseg).</summary>
+    private static bool IsNodeSegment(uint segno, uint mainBase, Layout layout, CursegPlan plan)
+        => segno - mainBase < layout.NodeSegments
+            || plan.NodeSegno.Contains(segno);
 
     private static void WriteInodeNode(Stream output, long baseOffset, BuildNode node, int blockSize)
     {
@@ -392,11 +382,15 @@ public sealed partial class F2fsBuilder
             Gid = node.Gid,
             Links = node.IsDirectory ? (uint)(2 + node.Children.Count(static c => c.IsDirectory)) : 1u,
             Size = node.IsDirectory ? (ulong)node.Size : (ulong)(node.IsSymlink ? Encoding.UTF8.GetByteCount(node.SymlinkTarget ?? string.Empty) : node.Size),
+            // i_blocks 以 4 KB 块为单位且含节点块自身（内核 i_blocks 语义；mkfs 根为 2 =
+            // 1 inode + 1 dentry 块）。inline 文件无额外数据块。
+            // i_blocks counts 4 KB blocks including the node block itself (kernel i_blocks
+            // semantics; mkfs root is 2 = 1 inode + 1 dentry block). Inline files add none.
             Blocks = node.IsDirectory
-                ? (ulong)node.DirBlocks.Count * (ulong)(blockSize / 512)
+                ? 1UL + (ulong)node.DirBlocks.Count
                 : node.InlineData
-                    ? 0
-                    : (ulong)(node.AllocatedDataBlockCount + node.Dnodes.Count) * (ulong)(blockSize / 512),
+                    ? 1UL
+                    : 1UL + (ulong)(node.AllocatedDataBlockCount + node.Dnodes.Count),
             XattrNid = 0,
             // 压缩文件：置 F2FS_COMPR 标志（读侧按 i_flags bit 27 路由），并写内核算法 ID 与
             // 簇大小对数（i_advise 低 4 位 = 算法，高 4 位 = log_cluster_size）。
@@ -411,7 +405,9 @@ public sealed partial class F2fsBuilder
                 ? LogClusterSizeFromBytes(F2fsCompression.ClusterBytes)
                 : (byte)0,
             Pino = node.Parent?.Ino ?? 0,
-            CurrentDepth = node.IsDirectory ? 1u : 0u,
+            // 目录 i_current_depth = 已用哈希桶层数（内核 dir.c 语义）。
+            // Directory i_current_depth = the number of hash-bucket levels in use (kernel dir.c).
+            CurrentDepth = node.IsDirectory ? node.DirDepth : 0u,
             Namelen = (uint)Encoding.UTF8.GetByteCount(node.Name),
             Name = Encoding.UTF8.GetBytes(node.Name),
             Extent = node.Extent,

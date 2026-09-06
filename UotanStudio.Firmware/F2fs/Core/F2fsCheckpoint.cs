@@ -19,7 +19,9 @@ internal sealed record F2fsCheckpoint
     /// <summary>默认 checksum 偏移（F2FS_BLKSIZE - 4）。Default checksum offset.</summary>
     public const int DefaultChecksumOffset = F2fsNode.NodeSize - 4;
 
-    // 字段偏移（相对 checkpoint 块起始）。Field offsets relative to the checkpoint block.
+    // 字段偏移（相对 checkpoint 块起始；MAX_ACTIVE_NODE_LOGS = MAX_ACTIVE_DATA_LOGS = 8，
+    // 对齐内核 fs/f2fs/f2fs_fs.h 的 struct f2fs_checkpoint）。Field offsets relative to the
+    // checkpoint block (kernel struct f2fs_checkpoint).
     private const int OffsetCheckpointVer = 0;
     private const int OffsetUserBlockCount = 8;
     private const int OffsetValidBlockCount = 16;
@@ -27,7 +29,9 @@ internal sealed record F2fsCheckpoint
     private const int OffsetOverprovSegmentCount = 28;
     private const int OffsetFreeSegmentCount = 32;
     private const int OffsetCurNodeSegno = 36;
+    private const int OffsetCurNodeBlkoff = 68;   // __le16[8] 紧随 cur_node_segno[8]
     private const int OffsetCurDataSegno = 84;
+    private const int OffsetCurDataBlkoff = 116;  // __le16[8] 紧随 cur_data_segno[8]
     private const int OffsetCkptFlags = 132;
     private const int OffsetCpPackTotalBlockCount = 136;
     private const int OffsetCpPackStartSum = 140;
@@ -62,8 +66,16 @@ internal sealed record F2fsCheckpoint
     /// <summary>当前 node 段号（cur_node_segno[0..7]）。Current node segment numbers.</summary>
     public uint[] CurNodeSegno { get; init; } = [];
 
+    /// <summary>当前 node 段内下一空闲块偏移（cur_node_blkoff[0..7]，__le16）。
+    /// Next free block offset inside each current node segment (__le16).</summary>
+    public ushort[] CurNodeBlkoff { get; init; } = [];
+
     /// <summary>当前 data 段号（cur_data_segno[0..7]）。Current data segment numbers.</summary>
     public uint[] CurDataSegno { get; init; } = [];
+
+    /// <summary>当前 data 段内下一空闲块偏移（cur_data_blkoff[0..7]，__le16）。
+    /// Next free block offset inside each current data segment (__le16).</summary>
+    public ushort[] CurDataBlkoff { get; init; } = [];
 
     /// <summary>checkpoint 标志。Checkpoint flags.</summary>
     public uint CkptFlags { get; init; }
@@ -115,7 +127,9 @@ internal sealed record F2fsCheckpoint
             OverprovSegmentCount = BinaryPrimitives.ReadUInt32LittleEndian(block[OffsetOverprovSegmentCount..]),
             FreeSegmentCount = BinaryPrimitives.ReadUInt32LittleEndian(block[OffsetFreeSegmentCount..]),
             CurNodeSegno = ReadUInt32Array(block, OffsetCurNodeSegno, 8),
+            CurNodeBlkoff = ReadUInt16Array(block, OffsetCurNodeBlkoff, 8),
             CurDataSegno = ReadUInt32Array(block, OffsetCurDataSegno, 8),
+            CurDataBlkoff = ReadUInt16Array(block, OffsetCurDataBlkoff, 8),
             CkptFlags = BinaryPrimitives.ReadUInt32LittleEndian(block[OffsetCkptFlags..]),
             CpPackTotalBlockCount = BinaryPrimitives.ReadUInt32LittleEndian(block[OffsetCpPackTotalBlockCount..]),
             CpPackStartSum = BinaryPrimitives.ReadUInt32LittleEndian(block[OffsetCpPackStartSum..]),
@@ -151,7 +165,9 @@ internal sealed record F2fsCheckpoint
         for (var i = 0; i < 8; i++)
         {
             BinaryPrimitives.WriteUInt32LittleEndian(block.Slice(OffsetCurNodeSegno + i * 4, 4), i < CurNodeSegno.Length ? CurNodeSegno[i] : uint.MaxValue);
+            BinaryPrimitives.WriteUInt16LittleEndian(block.Slice(OffsetCurNodeBlkoff + i * 2, 2), i < CurNodeBlkoff.Length ? CurNodeBlkoff[i] : (ushort)0);
             BinaryPrimitives.WriteUInt32LittleEndian(block.Slice(OffsetCurDataSegno + i * 4, 4), i < CurDataSegno.Length ? CurDataSegno[i] : uint.MaxValue);
+            BinaryPrimitives.WriteUInt16LittleEndian(block.Slice(OffsetCurDataBlkoff + i * 2, 2), i < CurDataBlkoff.Length ? CurDataBlkoff[i] : (ushort)0);
         }
 
         BinaryPrimitives.WriteUInt32LittleEndian(block[OffsetCkptFlags..], CkptFlags);
@@ -174,6 +190,17 @@ internal sealed record F2fsCheckpoint
         for (var i = 0; i < count; i++)
         {
             result[i] = BinaryPrimitives.ReadUInt32LittleEndian(block.Slice(offset + i * 4, 4));
+        }
+
+        return result;
+    }
+
+    private static ushort[] ReadUInt16Array(ReadOnlySpan<byte> block, int offset, int count)
+    {
+        var result = new ushort[count];
+        for (var i = 0; i < count; i++)
+        {
+            result[i] = BinaryPrimitives.ReadUInt16LittleEndian(block.Slice(offset + i * 2, 2));
         }
 
         return result;

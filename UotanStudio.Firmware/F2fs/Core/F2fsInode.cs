@@ -33,11 +33,13 @@ internal sealed record F2fsInode
     public const byte ExtraAttrFlag = 0x20;
 
     /// <summary>
-    /// inode 标志位：文件已压缩（F2FS_COMPR_FL = bit 27）。Inode flag: compressed file.
+    /// inode 标志位：文件已压缩（F2FS_COMPR_FL = 0x4，内核 fs/f2fs/f2fs.h）。
+    /// <para>Inode flag: compressed file (F2FS_COMPR_FL = 0x4, kernel fs/f2fs/f2fs.h).</para>
     /// </summary>
-    public const uint ComprFlag = 0x0800_0000;
+    public const uint ComprFlag = 0x0000_0004;
 
-    // inode 内字段偏移（相对节点页起始）。Field offsets within the node page.
+    // inode 内字段偏移（相对节点页起始，对齐内核 fs/f2fs/f2fs_fs.h 的 struct f2fs_inode）。
+    // Field offsets within the node page (matching the kernel struct f2fs_inode).
     private const int OffsetMode = 0;
     private const int OffsetAdvise = 2;
     private const int OffsetInline = 3;
@@ -46,12 +48,12 @@ internal sealed record F2fsInode
     private const int OffsetLinks = 12;
     private const int OffsetSize = 16;
     private const int OffsetBlocks = 24;
-    private const int OffsetAtimeNsec = 32;
-    private const int OffsetCtimeNsec = 36;
-    private const int OffsetMtimeNsec = 40;
-    private const int OffsetAtime = 44;
-    private const int OffsetCtime = 48;
-    private const int OffsetMtime = 52;
+    private const int OffsetAtime = 32;      // __le64 i_atime
+    private const int OffsetCtime = 40;      // __le64 i_ctime
+    private const int OffsetMtime = 48;      // __le64 i_mtime
+    private const int OffsetAtimeNsec = 56;  // __le32 i_atime_nsec
+    private const int OffsetCtimeNsec = 60;  // __le32 i_ctime_nsec
+    private const int OffsetMtimeNsec = 64;  // __le32 i_mtime_nsec
     private const int OffsetGeneration = 68;
     private const int OffsetCurrentDepth = 72;
     private const int OffsetXattrNid = 76;
@@ -83,7 +85,8 @@ internal sealed record F2fsInode
     /// <summary>文件大小（字节）。File size in bytes.</summary>
     public ulong Size { get; init; }
 
-    /// <summary>已分配块数（512 字节扇区单位）。Allocated block count (512-byte sector units).</summary>
+    /// <summary>已分配块数（4 KB 块数，含节点块自身；对齐内核 i_blocks 语义）。
+    /// Allocated block count (4 KB blocks, including the node block itself; matches the kernel i_blocks semantics).</summary>
     public ulong Blocks { get; init; }
 
     /// <summary>xattr nid。Xattr node id.</summary>
@@ -218,9 +221,9 @@ internal sealed record F2fsInode
             Links = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetLinks..]),
             Size = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetSize..]),
             Blocks = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetBlocks..]),
-            Mtime = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetMtime..]),
+            Mtime = (uint)BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetMtime..]),
             MtimeNsec = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetMtimeNsec..]),
-            Ctime = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetCtime..]),
+            Ctime = (uint)BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetCtime..]),
             CtimeNsec = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetCtimeNsec..]),
             XattrNid = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetXattrNid..]),
             Flags = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetFlags..]),
@@ -258,10 +261,14 @@ internal sealed record F2fsInode
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetLinks..], Links);
         BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetSize..], Size);
         BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetBlocks..], Blocks);
-        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetMtimeNsec..], MtimeNsec);
+        // 内核 i_atime/i_ctime/i_mtime 为 __le64 秒（@32/40/48），纳秒为 __le32（@56/60/64）。
+        // Kernel i_atime/i_ctime/i_mtime are __le64 seconds (@32/40/48); nanoseconds are __le32 (@56/60/64).
+        BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetAtime..], Mtime);
+        BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetCtime..], Ctime);
+        BinaryPrimitives.WriteUInt64LittleEndian(node[OffsetMtime..], Mtime);
+        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetAtimeNsec..], 0);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetCtimeNsec..], CtimeNsec);
-        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetMtime..], Mtime);
-        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetCtime..], Ctime);
+        BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetMtimeNsec..], MtimeNsec);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetGeneration..], 0);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetCurrentDepth..], CurrentDepth);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetXattrNid..], XattrNid);

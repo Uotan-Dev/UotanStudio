@@ -28,6 +28,51 @@ public sealed partial class F2fsBuilder
     private const uint CrcPolynomial = 0xEDB88320;
     private const int MaxNameBytes = 255;
 
+    // ---- 上游常量（内核 fs/f2fs/f2fs.h 与 f2fs-tools）。Upstream constants. ----
+
+    /// <summary>GC 保留段数（内核默认 6，计入 fsck sanity_check_ckpt 的 fsmeta）。
+    /// Reserved GC segments (kernel default 6; counted into fsck's fsmeta).</summary>
+    private const uint RsvdSegments = 6;
+
+    /// <summary>cp pack 块数：1 cp + 1 compact data 摘要 + 3 node summary + 1 cp 副本
+    /// （mkfs.f2fs 布局：set_cp(cp_pack_total_block_count, 6 + cp_payload)，cp_payload=0）。
+    /// Cp pack blocks: 1 cp + 1 compact data summary + 3 node summaries + 1 cp copy (the
+    /// mkfs.f2fs layout: cp_pack_total_block_count = 6 + cp_payload with cp_payload = 0).</summary>
+    private const int CpPackTotalBlocks = 6;
+
+    /// <summary>compact data 摘要单块容量（条）：journal 区（2×507 字节）之后、footer 之前可容纳
+    /// 的 7 字节条目数 = (4096 − 5 − 1014) / 7 = 439。data curseg 摘要总数不得超过该值。
+    /// Compact data summary capacity of one block: (4096 − 5 − 2×507) / 7 = 439 entries.</summary>
+    private const int CompactDataEntryCap = (F2fsNode.NodeSize - SumFooterSize - 2 * SumJournalSize) / SummarySize;
+
+    /// <summary>sum journal 大小（SUM_JOURNAL_SIZE = 4096 − 5 − 512×7 = 507）。
+    /// SUM_JOURNAL_SIZE from the kernel f2fs_fs.h.</summary>
+    private const int SumJournalSize = F2fsNode.NodeSize - SumFooterSize - EntriesInSum * SummarySize;
+
+    /// <summary>段的 SIT 分配类型（内核 enum CURSEG_TYPE：0=HOT_DATA … 5=COLD_NODE）。
+    /// SIT allocation types (kernel enum CURSEG_TYPE: 0=HOT_DATA … 5=COLD_NODE).</summary>
+    private const byte SegTypeHotData = 0;
+    private const byte SegTypeWarmData = 1;
+    private const byte SegTypeColdData = 2;
+    private const byte SegTypeHotNode = 3;
+    private const byte SegTypeWarmNode = 4;
+    private const byte SegTypeColdNode = 5;
+
+    /// <summary>结构 summary_block 布局常量（内核 f2fs_fs.h）：ENTRIES_IN_SUM=512、
+    /// SUMMARY_SIZE=7、SUM_FOOTER_SIZE=5、SUM_JOURNAL_SIZE=507。
+    /// Summary-block layout constants from the kernel f2fs_fs.h.</summary>
+    private const int EntriesInSum = 512;
+    private const int SummarySize = 7;
+    private const int SumFooterSize = 5;
+
+    /// <summary>F2FS_FEATURE_COMPRESSION（内核 f2fs.h）：声明压缩支持。
+    /// F2FS_FEATURE_COMPRESSION (kernel f2fs.h): declares compression support.</summary>
+    private const uint FeatureCompression = 0x0000_2000;
+
+    /// <summary>目录哈希树最大层数（内核 MAX_DIR_HASH_DEPTH）。
+    /// Maximum directory hash depth (kernel MAX_DIR_HASH_DEPTH).</summary>
+    private const uint MaxDirHashDepth = 63;
+
     /// <summary>
     /// 从 <paramref name="sourceDirectory"/> 构建 f2fs 镜像并以字节数组返回。
     /// <para>Builds an F2FS image from <paramref name="sourceDirectory"/> and returns it as a byte
@@ -175,9 +220,8 @@ public sealed partial class F2fsBuilder
             }
         }
 
-        var mainBlocks = CountMainBlocks(ordered);
-        var layout = ComputeLayout(ordered, mainBlocks, effective);
-        var usedMainBlocks = AllocateBlocks(ordered, layout);
+        var layout = ComputeLayout(ordered, effective);
+        var plan = AllocateBlocks(ordered, layout);
 
         // ---- 第二遍：流式写出镜像。Second pass: stream the image out. ----
         var imageBytes = checked(layout.ImageBlocks * blockSize);
@@ -190,23 +234,16 @@ public sealed partial class F2fsBuilder
 
         var nat = new Dictionary<uint, (uint Ino, uint Block)>();
         CollectNatEntries(ordered, nat);
-        var natBitmap = new byte[checked((int)layout.NatSegments * 64)];
-        var sitBitmap = new byte[checked((int)layout.SitSegments * 64)];
 
-        var superblock = CreateSuperblock(layout, effective);
+        var superblock = CreateSuperblock(layout, effective, hasCompressedFiles: ordered.Exists(static n => n.IsCompressedFile));
         WriteSuperblock(output, baseOffset, superblock, blockSize);
         var inodeCount = (uint)ordered.Count;
-        var nodeBlockCount = inodeCount;
-        foreach (var node in ordered)
-        {
-            nodeBlockCount += (uint)node.Dnodes.Count;
-        }
-
-        WriteCheckpoints(output, baseOffset, layout, natBitmap, sitBitmap, nodeBlockCount, inodeCount, usedMainBlocks);
-        WriteSit(output, baseOffset, layout, usedMainBlocks, blockSize);
+        var validNodeCount = (uint)layout.NodeBlocks;
+        WriteCheckpoints(output, baseOffset, layout, plan, validNodeCount, inodeCount);
+        WriteSit(output, baseOffset, layout, plan, blockSize);
         WriteNat(output, baseOffset, layout, nat);
         WriteMainArea(output, baseOffset, ordered, blockSize);
-        WriteSsa(output, baseOffset, layout, ordered, blockSize);
+        WriteSsa(output, baseOffset, layout, plan, blockSize);
     }
 
     private static BuildNode CollectNodes(string fullSourcePath, IReadOnlyCollection<string> excludedPaths)
@@ -704,11 +741,26 @@ public sealed partial class F2fsBuilder
             throw new InvalidOperationException($"File name too long (>{MaxNameBytes} bytes): '{node.Name}'.");
         }
 
-        var entries = new List<F2fsDirectoryEntry>
+        // 内核式哈希桶目录布局（fs/f2fs/dir.c）：每个名字必须落在其哈希桶对应的 dentry 块，
+        // 否则 fsck 的 f2fs_check_dirent_position 会拒绝。层级布局：
+        //   dir_buckets(level) = level < MAX_DIR_HASH_DEPTH/2 ? 2^level : 2^30
+        //   bucket_blocks(level) = level < MAX_DIR_HASH_DEPTH/2 ? 2 : 4
+        //   dir_block_index(level, bucket) = Σ_{i<level} dir_buckets(i)×bucket_blocks(i)
+        //                                    + bucket×bucket_blocks(level)
+        // 插入按内核 f2fs_add_link 语义：先在当前层该哈希桶的各块找空位，找不到则加深一层。
+        // Kernel-style hash-bucketed directory layout (fs/f2fs/dir.c): every name must live in the
+        // dentry block selected by its hash bucket, or fsck's f2fs_check_dirent_position rejects it.
+        // Insertion follows f2fs_add_link: try the current level's bucket blocks, deepen when full.
+        var blocks = new List<List<F2fsDirectoryEntry>>
         {
-            new() { HashCode = 0, Ino = node.Ino, NameLen = 1, FileType = F2fsDirectoryEntry.TypeDirectory, Name = "." },
-            new() { HashCode = 0, Ino = node.Parent?.Ino ?? node.Ino, NameLen = 2, FileType = F2fsDirectoryEntry.TypeDirectory, Name = ".." },
+            new()
+            {
+                new() { HashCode = 0, Ino = node.Ino, NameLen = 1, FileType = F2fsDirectoryEntry.TypeDirectory, Name = "." },
+                new() { HashCode = 0, Ino = node.Parent?.Ino ?? node.Ino, NameLen = 2, FileType = F2fsDirectoryEntry.TypeDirectory, Name = ".." },
+            },
         };
+
+        uint currentDepth = 0;
         foreach (var child in node.Children.OrderBy(static c => c.Name, StringComparer.Ordinal))
         {
             if (child.Name.Length == 0 || child.Name.Length > MaxNameBytes || !IsSafeName(child.Name))
@@ -719,36 +771,46 @@ public sealed partial class F2fsBuilder
             var type = child.IsDirectory ? F2fsDirectoryEntry.TypeDirectory
                 : child.IsSymlink ? F2fsDirectoryEntry.TypeSymlink
                 : F2fsDirectoryEntry.TypeRegularFile;
-            entries.Add(new F2fsDirectoryEntry
+            var entry = new F2fsDirectoryEntry
             {
                 HashCode = ComputeDentryHash(child.Name),
                 Ino = child.Ino,
                 NameLen = (ushort)Encoding.UTF8.GetByteCount(child.Name),
                 FileType = type,
                 Name = child.Name,
-            });
-        }
+            };
+            var slots = entry.SlotCount;
 
-        // 逐块打包（每块最多 214 槽）。Pack entries into blocks (max 214 slots per block).
-        var blocks = new List<byte[]>();
-        var current = new List<F2fsDirectoryEntry>();
-        var used = 0;
-        foreach (var entry in entries)
-        {
-            if (used + entry.SlotCount > F2fsDirectoryEntry.SlotsPerBlock)
+            var level = currentDepth;
+            while (true)
             {
-                blocks.Add(BuildBlock(current));
-                current = new List<F2fsDirectoryEntry>();
-                used = 0;
+                var bucketBlocksCount = BucketBlocks(level);
+                var baseIndex = DirBlockIndex(level, entry.HashCode % DirBuckets(level));
+                var placed = false;
+                for (var b = 0; b < bucketBlocksCount; b++)
+                {
+                    var index = (int)(baseIndex + b);
+                    while (blocks.Count <= index)
+                    {
+                        blocks.Add(new List<F2fsDirectoryEntry>());
+                    }
+
+                    if (blocks[index].Sum(static e => e.SlotCount) + slots <= F2fsDirectoryEntry.SlotsPerBlock)
+                    {
+                        blocks[index].Add(entry);
+                        placed = true;
+                        break;
+                    }
+                }
+
+                if (placed)
+                {
+                    break;
+                }
+
+                level++;
+                currentDepth = level;
             }
-
-            current.Add(entry);
-            used += entry.SlotCount;
-        }
-
-        if (current.Count > 0)
-        {
-            blocks.Add(BuildBlock(current));
         }
 
         if (blocks.Count > F2fsNode.DefAddrsPerInode)
@@ -757,26 +819,44 @@ public sealed partial class F2fsBuilder
                 $"Directory '{node.Name}' exceeds the supported size ({blocks.Count} dentry blocks, max {F2fsNode.DefAddrsPerInode}).");
         }
 
-        // 多 block 目录：通过 direct node 指针链接多个 dentry block。
-        // Multi-block directory: link multiple dentry blocks via direct node pointers.
-        node.DirBlocks = blocks;
-        node.Size = (long)blocks.Count * F2fsNode.NodeSize;
-
-        // Inline dentry：当单块目录且数据量适合 inline 区域时，使用 inline dentry。
-        // Inline dentry: when a single-block directory whose data fits the inline area, use inline dentry.
-        if (blocks.Count == 1 && blocks[0].Length <= F2fsNode.NodeSize - 202)
-        {
-            node.InlineDentry = true;
-            node.Inline = F2fsInode.InlineDentryFlag | F2fsInode.DataExistFlag;
-        }
+        node.DirBlocks = blocks.Select(static b => BuildDirBlock(b)).ToList();
+        node.Size = (long)node.DirBlocks.Count * F2fsNode.NodeSize;
+        // i_current_depth = 已用层数（内核语义：下一层号；单块目录为 1）。
+        // i_current_depth = the number of levels in use (kernel semantics; 1 for single-block dirs).
+        node.DirDepth = currentDepth + 1;
     }
 
-    private static byte[] BuildBlock(List<F2fsDirectoryEntry> entries)
+    /// <summary>dir_buckets(level, dir_level=0)（内核 fs/f2fs/f2fs.h）。dir_buckets(level, dir_level=0) from the kernel f2fs.h.</summary>
+    private static uint DirBuckets(uint level)
+        => level < MaxDirHashDepth / 2 ? 1u << (int)level : 1u << (int)(MaxDirHashDepth / 2 - 1);
+
+    /// <summary>bucket_blocks(level)（内核 fs/f2fs/f2fs.h）。bucket_blocks(level) from the kernel f2fs.h.</summary>
+    private static uint BucketBlocks(uint level)
+        => level < MaxDirHashDepth / 2 ? 2u : 4u;
+
+    /// <summary>dir_block_index(level, dir_level=0, idx)（内核 fs/f2fs/f2fs.h）。
+    /// dir_block_index(level, dir_level=0, idx) from the kernel f2fs.h.</summary>
+    private static uint DirBlockIndex(uint level, uint bucket)
     {
+        uint index = 0;
+        for (var i = 0u; i < level; i++)
+        {
+            index += DirBuckets(i) * BucketBlocks(i);
+        }
+
+        return index + bucket * BucketBlocks(level);
+    }
+
+    private static byte[] BuildDirBlock(List<F2fsDirectoryEntry> entries)
+    {
+        // f2fs_dentry_block 恰好占满 4096 字节（bitmap + reserved + dentry[214] +
+        // filename[214][8]），无块级校验和——内核与 fsck 均不校验，且末尾 4 字节属于
+        // 最后一个文件名槽位，写入 CRC 会破坏跨槽文件名（内核定义，无尾部 CRC）。
+        // struct f2fs_dentry_block fills the whole 4096-byte block (bitmap + reserved +
+        // dentry[214] + filename[214][8]) and carries no block checksum — the kernel and fsck
+        // never verify one, and the last 4 bytes belong to the final filename slot.
         var block = new byte[F2fsNode.NodeSize];
         F2fsDirectoryEntry.BuildBlock(block, entries, F2fsNode.NodeSize);
-        var crc = Crc32(0, block.AsSpan(0, F2fsNode.NodeSize - 4));
-        BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(F2fsNode.NodeSize - 4, 4), crc);
         return block;
     }
 
@@ -800,7 +880,16 @@ public sealed partial class F2fsBuilder
         return count;
     }
 
-    private static Layout ComputeLayout(List<BuildNode> ordered, long mainBlocks, F2fsOptions options)
+    /// <summary>
+    /// 计算镜像布局：节点块（inode + dnode）与数据块（文件数据 + 目录项块）分属不同段区，
+    /// 对齐 f2fs 的 node/data curseg 划分（fsck 的 fsck_chk_curseg_info 要求每个 curseg 段的
+    /// SIT 类型与 curseg 类型一致，节点块与数据块不得混入同一段）。
+    /// <para>Computes the image layout: node blocks (inodes + dnodes) and data blocks (file data +
+    /// directory dentry blocks) live in separate segment regions, matching the f2fs node/data curseg
+    /// split (fsck's fsck_chk_curseg_info requires each curseg segment's SIT type to match its curseg
+    /// type, so node and data blocks must never share a segment).</para>
+    /// </summary>
+    private static Layout ComputeLayout(List<BuildNode> ordered, F2fsOptions options)
     {
         uint maxNid = 0;
         var nextDnodeNid = RootIno + (uint)ordered.Count;
@@ -852,76 +941,219 @@ public sealed partial class F2fsBuilder
             }
         }
 
-        var layout = new Layout { MaxNid = maxNid };
-        var mainSegments = (uint)((mainBlocks + BlocksPerSeg - 1) / BlocksPerSeg) + OverprovSlackSegments;
+        long nodeBlocks = 0;
+        long dataBlocks = 0;
+        foreach (var node in ordered)
+        {
+            nodeBlocks++; // inode 块。The inode block itself.
+            if (node.IsDirectory)
+            {
+                dataBlocks += node.DirBlocks.Count;
+            }
+            else if (!node.InlineData)
+            {
+                nodeBlocks += node.Dnodes.Count;
+                dataBlocks += node.AllocatedDataBlockCount;
+            }
+        }
+
+        var nodeSegments = (uint)((nodeBlocks + BlocksPerSeg - 1) / BlocksPerSeg);
+        // data 区 = 3 个 curseg 段 + 溢出段；curseg 区总填充量受 compact data 摘要单块容量
+        // （CompactDataEntryCap 条）限制，超出的数据块进入溢出段。
+        // The data region = 3 curseg segments + overflow segments; the curseg zone's total fill is
+        // bounded by the compact data summary's single-block capacity, extra blocks overflow.
+        var dataSegments = 3u + (uint)((Math.Max(0, dataBlocks - CompactDataEntryCap) + BlocksPerSeg - 1) / BlocksPerSeg);
+        var mainSegments = nodeSegments + dataSegments + OverprovSlackSegments;
         if (mainSegments == 0)
         {
             mainSegments = 1;
         }
 
-        layout.MainSegments = mainSegments;
-        var blocksForSit = (mainSegments + F2fsNode.SitEntryPerBlock - 1) / F2fsNode.SitEntryPerBlock;
-        layout.SitSegments = 2 * ((blocksForSit + BlocksPerSeg - 1) / BlocksPerSeg);
-        if (layout.SitSegments == 0)
+        var layout = new Layout { MaxNid = maxNid, NodeBlocks = nodeBlocks, DataBlocks = dataBlocks };
+
+        // 迭代求解：SIT/NAT/SSA 段数随主区段数变化，且须满足 f2fs-tools sanity_check_ckpt 的
+        // 不变量 ckpt + sit + nat + rsvd + ssa < segment_count（rsvd 取 GC 保留段数 6）。
+        // Iterate: SIT/NAT/SSA segment counts follow the main area size, and the f2fs-tools
+        // sanity_check_ckpt invariant ckpt + sit + nat + rsvd + ssa < segment_count must hold
+        // (rsvd = 6 reserved GC segments, matching the kernel default).
+        uint sitSegments;
+        uint natSegments;
+        uint ssaSegments;
+        uint fixedSegments;
+        uint totalSegments;
+        while (true)
         {
-            layout.SitSegments = 2;
+            var blocksForSit = (mainSegments + F2fsNode.SitEntryPerBlock - 1) / F2fsNode.SitEntryPerBlock;
+            sitSegments = Math.Max(2, 2 * ((blocksForSit + BlocksPerSeg - 1) / BlocksPerSeg));
+            // NAT 块数按 NID 空间上限（maxNid+1）计算，避免 NID 恰好落在块边界时越界。
+            // NAT blocks sized for the full NID space (maxNid + 1) so a NID exactly on a block
+            // boundary never overruns.
+            var blocksForNat = (maxNid + 1 + F2fsNode.NatEntryPerBlock - 1) / F2fsNode.NatEntryPerBlock;
+            natSegments = Math.Max(2, 2 * ((blocksForNat + BlocksPerSeg - 1) / BlocksPerSeg));
+            ssaSegments = Math.Max(1u, (mainSegments + BlocksPerSeg - 1) / BlocksPerSeg);
+            fixedSegments = CkptSegments + sitSegments + natSegments + ssaSegments;
+            totalSegments = fixedSegments + mainSegments;
+            if (fixedSegments + RsvdSegments < totalSegments)
+            {
+                break;
+            }
+
+            mainSegments++;
         }
 
-        var blocksForNat = (maxNid + F2fsNode.NatEntryPerBlock - 1) / F2fsNode.NatEntryPerBlock;
-        layout.NatSegments = 2 * ((blocksForNat + BlocksPerSeg - 1) / BlocksPerSeg);
-        if (layout.NatSegments < 2)
+        if (options.SegmentCount > totalSegments)
         {
-            layout.NatSegments = 2;
-        }
-
-        // SSA 区每主区段需要一个 SSA 块（内核按 ssa_blkaddr + segno 寻址），512 块为一段。
-        // SSA area needs one block per main segment (kernel uses ssa_blkaddr + segno),
-        // 512 blocks per segment.
-        layout.SsaSegments = Math.Max(1u, (mainSegments + BlocksPerSeg - 1) / BlocksPerSeg);
-        layout.SitBlkaddr = Segment0Blkaddr + CkptSegments * BlocksPerSeg;
-        layout.NatBlkaddr = layout.SitBlkaddr + layout.SitSegments * BlocksPerSeg;
-        layout.SsaBlkaddr = layout.NatBlkaddr + layout.NatSegments * BlocksPerSeg;
-        layout.MainBlkaddr = layout.SsaBlkaddr + layout.SsaSegments * BlocksPerSeg;
-        layout.TotalSegments = CkptSegments + layout.SitSegments + layout.NatSegments + layout.SsaSegments + layout.MainSegments;
-
-        if (options.SegmentCount > layout.TotalSegments)
-        {
-            var fixedSegments = CkptSegments + layout.SitSegments + layout.NatSegments + layout.SsaSegments;
-            layout.MainSegments = (uint)(options.SegmentCount - fixedSegments);
-            layout.SsaSegments = Math.Max(1u, (layout.MainSegments + BlocksPerSeg - 1) / BlocksPerSeg);
-            layout.TotalSegments = fixedSegments + layout.MainSegments;
-            layout.MainBlkaddr = layout.SsaBlkaddr + layout.SsaSegments * BlocksPerSeg;
-            if ((long)layout.MainSegments * BlocksPerSeg < mainBlocks)
+            var newMainSegments = (uint)(options.SegmentCount - fixedSegments);
+            if ((long)newMainSegments * BlocksPerSeg < nodeBlocks + dataBlocks)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(options),
                     $"The requested segment count ({options.SegmentCount}) is too small for the source data.");
             }
+
+            mainSegments = newMainSegments;
+            ssaSegments = Math.Max(1u, (mainSegments + BlocksPerSeg - 1) / BlocksPerSeg);
+            fixedSegments = CkptSegments + sitSegments + natSegments + ssaSegments;
+            totalSegments = fixedSegments + mainSegments;
+            if (fixedSegments + RsvdSegments >= totalSegments)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(options),
+                    $"The requested segment count ({options.SegmentCount}) leaves no room for the reserved segments.");
+            }
         }
 
-        layout.ImageBlocks = Segment0Blkaddr + (long)layout.TotalSegments * BlocksPerSeg;
+        layout.SitSegments = sitSegments;
+        layout.NatSegments = natSegments;
+        layout.SsaSegments = ssaSegments;
+        layout.MainSegments = mainSegments;
+        layout.TotalSegments = totalSegments;
+        layout.NodeSegments = nodeSegments;
+        layout.DataSegments = dataSegments;
+        layout.SitBlkaddr = Segment0Blkaddr + CkptSegments * BlocksPerSeg;
+        layout.NatBlkaddr = layout.SitBlkaddr + sitSegments * BlocksPerSeg;
+        layout.SsaBlkaddr = layout.NatBlkaddr + natSegments * BlocksPerSeg;
+        layout.MainBlkaddr = layout.SsaBlkaddr + ssaSegments * BlocksPerSeg;
+        layout.NodeBlkaddr = layout.MainBlkaddr;
+        layout.DataBlkaddr = layout.NodeBlkaddr + nodeSegments * BlocksPerSeg;
+        layout.ImageBlocks = Segment0Blkaddr + (long)totalSegments * BlocksPerSeg;
         return layout;
     }
 
-    private static long AllocateBlocks(List<BuildNode> ordered, Layout layout)
+    /// <summary>
+    /// 分配主区块并构建 curseg 记账：node 区（inode + dnode）与 data 区（文件数据 + 目录项块）
+    /// 分别从各自区起点顺序分配；随后确定 6 个 curseg 段号（区段不足 3 个时取后续空闲段）、
+    /// 段内使用位图、SIT 类型与 SSA/cp-pack 摘要条目。
+    /// <para>Allocates main-area blocks and builds the curseg bookkeeping: node blocks (inodes +
+    /// dnodes) and data blocks (file data + directory dentry blocks) are assigned sequentially from
+    /// their own region starts; the 6 curseg segment numbers are then determined (falling back to
+    /// free segments when a region has fewer than 3), along with per-segment valid bitmaps, SIT
+    /// types and the SSA / cp-pack summary entries.</para>
+    /// </summary>
+    private static CursegPlan AllocateBlocks(List<BuildNode> ordered, Layout layout)
     {
-        var next = (long)layout.MainBlkaddr;
+        var plan = new CursegPlan();
+        // 主区段号：f2fs 全程使用主区相对段号（segment 0 = 第一个主区段；内核 START_BLOCK/
+        // GET_SUM_BLKADDR/SIT_BLOCK_OFFSET 均以主区相对段号为索引，checkpoint 的
+        // cur_*_segno 亦为主区相对，参照 mkfs.f2fs 生成的镜像）。
+        // Segment numbers are main-area-relative throughout f2fs (segment 0 = the first main-area
+        // segment; the kernel's START_BLOCK/GET_SUM_BLKADDR/SIT_BLOCK_OFFSET and the checkpoint's
+        // cur_*_segno are all main-relative, as produced by mkfs.f2fs).
+        var mainBase = 0u;
+        var freeSegmentCursor = mainBase + layout.NodeSegments + layout.DataSegments;
+        var maxFreeSegment = mainBase + layout.MainSegments;
+
+        uint FreeSegment()
+        {
+            if (freeSegmentCursor >= maxFreeSegment)
+            {
+                throw new InvalidOperationException("Not enough free segments for curseg bookkeeping.");
+            }
+
+            return freeSegmentCursor++;
+        }
+
+        // curseg 段号：node/data 区的前 3 个段；区段不足时取空闲段。
+        // Curseg segment numbers: the first 3 segments of the node/data regions; free segments
+        // fill in when a region has fewer than 3.
+        for (var t = 0; t < 3; t++)
+        {
+            plan.NodeSegno[t] = t < layout.NodeSegments ? (uint)(mainBase + t) : FreeSegment();
+            plan.DataSegno[t] = t < layout.DataSegments ? (uint)(mainBase + layout.NodeSegments + t) : FreeSegment();
+        }
+
+        long nodeCursor = layout.NodeBlkaddr;
+        long dataCursor = layout.DataBlkaddr;
+
+        /// <summary>分配一个 data 区块：curseg 区达到 compact 容量后跳到溢出段。</summary>
+        uint AllocateDataBlock(ref long cursor, Layout l)
+        {
+            var assigned = cursor - l.DataBlkaddr;
+            if (assigned / BlocksPerSeg < 3 && assigned >= CompactDataEntryCap)
+            {
+                cursor = l.DataBlkaddr + 3L * BlocksPerSeg;
+            }
+
+            return checked((uint)cursor++);
+        }
+
+        void AssignBlock(long address, uint nid, ushort ofsInNode)
+        {
+            var segno = mainBase + (uint)((address - layout.MainBlkaddr) / BlocksPerSeg);
+            var ofsInSeg = (int)((address - layout.MainBlkaddr) % BlocksPerSeg);
+            if (!plan.SegmentEntries.TryGetValue(segno, out var entries))
+            {
+                entries = new Dictionary<int, (uint Nid, ushort Ofs)>();
+                plan.SegmentEntries[segno] = entries;
+            }
+
+            entries[ofsInSeg] = (nid, ofsInNode);
+        }
+
+        // node 块：inode 与 dnode 顺序占用 node 区（文件内连续，inode.next_blkaddr 语义成立）。
+        // Node blocks: inodes and dnodes consume the node region sequentially (each file's node
+        // blocks stay adjacent, keeping the inode.next_blkaddr chain meaningful).
         foreach (var node in ordered)
         {
-            node.InodeBlockAddr = checked((uint)next++);
+            node.InodeBlockAddr = checked((uint)nodeCursor);
+            AssignBlock(nodeCursor++, node.Ino, 0);
             if (!node.IsDirectory && !node.InlineData)
             {
                 foreach (var dnode in node.Dnodes)
                 {
-                    dnode.BlockAddr = checked((uint)next++);
+                    dnode.BlockAddr = checked((uint)nodeCursor);
+                    AssignBlock(nodeCursor++, dnode.Nid, 0);
                 }
+            }
+        }
 
+        // data 块：文件数据与目录项块占用 data 区；curseg 区（前 3 段）总填充量达到
+        // compact 摘要单块容量后跳到溢出段（第 4 段起），保证 Σ data curseg blkoff ≤ 439。
+        // Data blocks: file data and directory dentry blocks consume the data region; once the
+        // curseg zone (first 3 segments) reaches the compact summary's single-block capacity the
+        // cursor jumps to overflow segment 4, keeping Σ data-curseg blkoff ≤ 439.
+        foreach (var node in ordered)
+        {
+            if (node.IsDirectory)
+            {
+                for (var i = 0; i < node.DirBlocks.Count; i++)
+                {
+                    var address = AllocateDataBlock(ref dataCursor, layout);
+                    node.DirBlockAddrs.Add(address);
+                    AssignBlock(address, node.Ino, (ushort)i);
+                }
+            }
+            else if (!node.InlineData)
+            {
                 for (var i = 0; i < node.DataBlockAddrs.Count; i++)
                 {
-                    if (node.DataBlockAddrs[i] == uint.MaxValue)
+                    if (node.DataBlockAddrs[i] != uint.MaxValue)
                     {
-                        node.DataBlockAddrs[i] = checked((uint)next++);
+                        continue; // 空洞/压缩簇空槽保持 0。Holes and spare compressed slots stay 0.
                     }
+
+                    node.DataBlockAddrs[i] = AllocateDataBlock(ref dataCursor, layout);
+                    AssignBlock(node.DataBlockAddrs[i], ResolveOwnerNid(node, i, out var ofsInNode), (ushort)ofsInNode);
                 }
 
                 // 为连续（无洞）且仅用 i_addr 直接指针的小文件写入 extent cache；大文件走 dnode
@@ -935,16 +1167,163 @@ public sealed partial class F2fsBuilder
                     node.Extent = new F2fsExtent { Fofs = 0, Blk = node.DataBlockAddrs[0], Len = (uint)node.DataBlockCount };
                 }
             }
-            else if (node.IsDirectory)
+        }
+
+        // curseg 段写满时须迁移到空闲段（fsck 的 check_curseg_offset 要求 next_blkoff < 512）。
+        // A full curseg segment must be replaced by a free one (fsck's check_curseg_offset
+        // requires next_blkoff < blocks-per-segment).
+        for (var t = 0; t < 3; t++)
+        {
+            if (plan.SegmentEntries.TryGetValue(plan.NodeSegno[t], out var nodeEntries) && nodeEntries.Count >= BlocksPerSeg)
             {
-                foreach (var _ in node.DirBlocks)
+                plan.NodeSegno[t] = FreeSegment();
+            }
+
+            if (plan.SegmentEntries.TryGetValue(plan.DataSegno[t], out var dataEntries) && dataEntries.Count >= BlocksPerSeg)
+            {
+                plan.DataSegno[t] = FreeSegment();
+            }
+        }
+
+        // 每段使用表：有效块数 + 位图 + SIT 类型（vblocks[15:10]，GET_SIT_TYPE 语义）。
+        // Per-segment usage: valid block count + bitmap + SIT type (vblocks[15:10], GET_SIT_TYPE).
+        var cursegSegnos = new HashSet<uint>(plan.NodeSegno.Concat(plan.DataSegno));
+        for (var s = 0; s < layout.MainSegments; s++)
+        {
+            var segno = mainBase + (uint)s;
+            var count = 0;
+            var map = new byte[F2fsNode.SitValidMapSize];
+            if (plan.SegmentEntries.TryGetValue(segno, out var entries))
+            {
+                count = entries.Count;
+                foreach (var ofs in entries.Keys)
                 {
-                    node.DirBlockAddrs.Add(checked((uint)next++));
+                    // SIT 有效位图使用内核 f2fs_test_bit 的 MSB-first 位序
+                    // （与 dentry 位图的 test_bit_le LSB-first 不同，f2fs 两种位序并存）。
+                    // The SIT valid map uses the kernel f2fs_test_bit MSB-first bit order
+                    // (unlike the dentry bitmap's LSB-first test_bit_le — f2fs mixes both).
+                    map[ofs >> 3] |= (byte)(1 << (7 - (ofs & 7)));
+                }
+            }
+
+            plan.Segments[segno] = (count, map, SegmentTypeOf(segno, mainBase, layout, plan));
+        }
+
+        // curseg 记账：blkoff = 段内已用块数；摘要条目按块偏移顺序排列。
+        // Curseg bookkeeping: blkoff = used block count in the segment; summary entries in
+        // block-offset order.
+        for (var t = 0; t < 3; t++)
+        {
+            plan.NodeBlkoff[t] = BlkoffOf(plan, plan.NodeSegno[t]);
+            plan.DataBlkoff[t] = BlkoffOf(plan, plan.DataSegno[t]);
+            if (plan.SegmentEntries.TryGetValue(plan.NodeSegno[t], out var nodeEntries))
+            {
+                for (var i = 0; i < plan.NodeBlkoff[t]; i++)
+                {
+                    plan.NodeEntries[t].Add(nodeEntries[i]);
+                }
+            }
+
+            if (plan.SegmentEntries.TryGetValue(plan.DataSegno[t], out var dataEntries))
+            {
+                for (var i = 0; i < plan.DataBlkoff[t]; i++)
+                {
+                    plan.DataEntries[t].Add(dataEntries[i]);
                 }
             }
         }
 
-        return next - layout.MainBlkaddr;
+        // 空闲段数：主区段数 −（非空段数 + 空 curseg 段数）；空 curseg 段按 fsck
+        // build_sit_area_bitmap 的语义计入"有效"。
+        // Free segments: main segments minus (non-empty segments + empty curseg segments); empty
+        // curseg segments count as valid per fsck's build_sit_area_bitmap.
+        var validSegments = plan.Segments.Count(kvp => kvp.Value.Count > 0 || cursegSegnos.Contains(kvp.Key));
+        plan.FreeSegmentCount = (uint)(plan.Segments.Count - validSegments);
+        return plan;
+    }
+
+    /// <summary>curseg 段内下一空闲块偏移。Next free block offset inside a curseg segment.</summary>
+    private static ushort BlkoffOf(CursegPlan plan, uint segno)
+        => (ushort)(plan.SegmentEntries.TryGetValue(segno, out var entries) ? entries.Count : 0);
+
+    /// <summary>
+    /// 数据块归属解析：直接区（i_addr）归 inode 自身，dnode 区归对应 direct 节点；
+    /// ofs_in_node 为该节点地址数组内的逻辑下标（fsck sanity_check_nid 依据）。
+    /// <para>Resolves a data block's owner: the inode itself for the direct (i_addr) range, or the
+    /// covering direct node beyond it; ofs_in_node is the logical index inside that node's address
+    /// array (as validated by fsck's sanity_check_nid).</para>
+    /// </summary>
+    private static uint ResolveOwnerNid(BuildNode node, int logical, out int ofsInNode)
+    {
+        if (logical < F2fsNode.DefAddrsPerInode)
+        {
+            ofsInNode = logical;
+            return node.Ino;
+        }
+
+        foreach (var dnode in node.Dnodes)
+        {
+            if (!dnode.IsIndirect && !dnode.IsDoubleIndirect
+                && dnode.LogicalStart <= logical && logical < dnode.LogicalStart + F2fsNode.AddrsPerBlock)
+            {
+                ofsInNode = (int)(logical - dnode.LogicalStart);
+                return dnode.Nid;
+            }
+        }
+
+        ofsInNode = 0;
+        return node.Ino;
+    }
+
+    /// <summary>
+    /// 段的 SIT 分配类型：node 区前 3 段为 hot/warm/cold node（3/4/5），data 区前 3 段为
+    /// hot/warm/cold data（0/1/2），溢出段延续 hot 类型，被指派为空 curseg 的空闲段取其 curseg 类型。
+    /// <para>SIT allocation type of a segment: the first 3 node-region segments are hot/warm/cold
+    /// node (3/4/5), the first 3 data-region segments hot/warm/cold data (0/1/2); overflow segments
+    /// keep the hot type, and free segments assigned to an empty curseg take that curseg's type.</para>
+    /// </summary>
+    private static byte SegmentTypeOf(uint segno, uint mainBase, Layout layout, CursegPlan plan)
+    {
+        var rel = segno - mainBase;
+        if (rel < layout.NodeSegments)
+        {
+            return rel switch
+            {
+                0 => SegTypeHotNode,
+                1 => SegTypeWarmNode,
+                2 => SegTypeColdNode,
+                _ => SegTypeHotNode,
+            };
+        }
+
+        if (rel < layout.NodeSegments + layout.DataSegments)
+        {
+            var dataRel = (int)(rel - layout.NodeSegments);
+            return dataRel switch
+            {
+                0 => SegTypeHotData,
+                1 => SegTypeWarmData,
+                2 => SegTypeColdData,
+                _ => SegTypeHotData,
+            };
+        }
+
+        // 空闲段：若被指派为 curseg 段则取其类型，否则为未分配（hot data=0）。
+        // Free segments: a curseg-assigned one takes its curseg type, others stay unassigned (0).
+        for (var t = 0; t < 3; t++)
+        {
+            if (segno == plan.NodeSegno[t])
+            {
+                return (byte)(SegTypeHotNode + t);
+            }
+
+            if (segno == plan.DataSegno[t])
+            {
+                return (byte)t;
+            }
+        }
+
+        return SegTypeHotData;
     }
 
     private static void CollectNatEntries(List<BuildNode> ordered, Dictionary<uint, (uint Ino, uint Block)> nat)
@@ -1002,6 +1381,7 @@ public sealed partial class F2fsBuilder
         public DnodePlan? DoubleIndirectNode;
         public List<byte[]> DirBlocks = [];
         public List<uint> DirBlockAddrs = [];
+        public uint DirDepth;
         public bool InlineDentry;
         public byte Inline;
         public uint InodeBlockAddr;
@@ -1034,6 +1414,10 @@ public sealed partial class F2fsBuilder
     private sealed class Layout
     {
         public uint MaxNid;
+        public long NodeBlocks;
+        public long DataBlocks;
+        public uint NodeSegments;
+        public uint DataSegments;
         public uint SitSegments;
         public uint NatSegments;
         public uint SsaSegments;
@@ -1043,6 +1427,32 @@ public sealed partial class F2fsBuilder
         public uint NatBlkaddr;
         public uint SsaBlkaddr;
         public uint MainBlkaddr;
+        public long NodeBlkaddr;
+        public long DataBlkaddr;
         public long ImageBlocks;
+    }
+
+    /// <summary>
+    /// curseg 记账：6 个 curseg 段号与 blkoff、每段 SSA 摘要条目、SIT 使用表。
+    /// <para>Curseg bookkeeping: the 6 curseg segment numbers with blkoffs, per-segment SSA
+    /// summary entries and the SIT usage table.</para>
+    /// </summary>
+    private sealed class CursegPlan
+    {
+        public uint[] NodeSegno = new uint[3];
+        public ushort[] NodeBlkoff = new ushort[3];
+        public uint[] DataSegno = new uint[3];
+        public ushort[] DataBlkoff = new ushort[3];
+        public List<(uint Nid, ushort Ofs)>[] NodeEntries = [new(), new(), new()];
+        public List<(uint Nid, ushort Ofs)>[] DataEntries = [new(), new(), new()];
+
+        /// <summary>segno →（段内块偏移 →（nid, ofs_in_node））。segno → (block offset in segment → (nid, ofs_in_node)).</summary>
+        public Dictionary<uint, Dictionary<int, (uint Nid, ushort Ofs)>> SegmentEntries = new();
+
+        /// <summary>segno →（有效块数, 有效位图, SIT 类型）。segno → (valid count, valid bitmap, SIT type).</summary>
+        public Dictionary<uint, (int Count, byte[] Map, byte Type)> Segments = new();
+
+        /// <summary>与 SIT 一致的空闲段数。Free segment count consistent with the SIT.</summary>
+        public uint FreeSegmentCount;
     }
 }

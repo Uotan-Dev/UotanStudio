@@ -136,7 +136,14 @@ public sealed partial class Ext4Builder
         {
             flags = FlagInlineData;
             // 内联数据：写入 i_block 区域（60字节，偏移40）+ 额外 inode 空间（偏移128起）。
-            var content = File.ReadAllBytes(node.FullPath);
+            var fi = new FileInfo(node.FullPath);
+            var maxLen = 60 + (inodeSize > 128 ? inodeSize - 128 : 0);
+            var readLen = (int)Math.Min(fi.Length, maxLen);
+            var content = new byte[readLen];
+            using (var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                fs.ReadExactly(content);
+            }
             var iBlockLen = Math.Min(content.Length, 60);
             if (iBlockLen > 0)
             {
@@ -262,8 +269,14 @@ public sealed partial class Ext4Builder
 
     /// <summary>
     /// 将内联 xattr 写入 inode 额外空间：ibody xattr 头 + 条目 + 值。
+    /// 完整属性名按 e2fsprogs ext2_xattr.h 的命名空间索引映射（security.selinux →
+    /// index 6 + 短名 "selinux"），e_hash 按内核 ext4_xattr_hash_entry 算法计算
+    /// （名字逐字节，值按 LE32 字续算，尾随字节逐字节）。
     /// <para>Writes inline extended attributes into the inode extra space: ibody xattr header,
-    /// entries, and values.</para>
+    /// entries, and values. Full attribute names are mapped to their e2fsprogs ext2_xattr.h
+    /// namespace index (security.selinux → index 6 + short name "selinux"), and e_hash follows the
+    /// kernel's ext4_xattr_hash_entry algorithm (name bytes, then the value in LE32 words, then
+    /// trailing bytes).</para>
     /// </summary>
     /// <param name="inode">inode 字节数组 / The inode byte array.</param>
     /// <param name="inodeSize">inode 大小（字节） / Inode size in bytes.</param>
@@ -280,21 +293,31 @@ public sealed partial class Ext4Builder
             return;
         }
 
-        // Compute total entry section size.
-        var entrySectionSize = 0;
+        // 映射并收集可写入的条目（无法映射命名空间的属性跳过）。
+        // Map and collect writable entries (unmappable namespaces are skipped).
+        var entries = new List<(string Name, byte NameIndex, byte[] Value)>();
         foreach (var kv in xattrs)
         {
-            var nameLen = Encoding.UTF8.GetByteCount(kv.Key);
-            entrySectionSize += (12 + nameLen + 3) & ~3;
+            if (TryMapXattrName(kv.Key, out var nameIndex, out var shortName))
+            {
+                entries.Add((shortName, nameIndex, kv.Value));
+            }
         }
 
-        entrySectionSize += 4; // null terminator (4 bytes: zero name_len + padding)
-
-        // Sum value sizes.
-        var totalValueSize = 0;
-        foreach (var kv in xattrs)
+        if (entries.Count == 0)
         {
-            totalValueSize += kv.Value.Length;
+            return;
+        }
+
+        // Compute total entry section size.
+        var entrySectionSize = 4; // null terminator (4 bytes: zero name_len + padding)
+        var totalValueSize = 0L;
+        foreach (var (name, _, value) in entries)
+        {
+            var nameLen = Encoding.UTF8.GetByteCount(name);
+            entrySectionSize += (16 + nameLen + 3) & ~3;
+            entrySectionSize += (value.Length + 3) & ~3;
+            totalValueSize += value.Length;
         }
 
         if (entrySectionSize + totalValueSize > available)
@@ -311,20 +334,20 @@ public sealed partial class Ext4Builder
 
         // Write entries and collect value data.
         var pos = xattrStart + 4;
-        var valueOff = entrySectionSize; // values start after entries (relative to pos)
-        foreach (var kv in xattrs)
+        var valueOff = entrySectionSize; // values start after entries (relative to entries start)
+        foreach (var (name, nameIndex, value) in entries)
         {
-            var nameBytes = Encoding.UTF8.GetBytes(kv.Key);
-            var value = kv.Value;
-            inode[pos] = (byte)nameBytes.Length;         // e_name_len
-            inode[pos + 1] = 1;                           // e_name_index: user namespace
+            var nameBytes = Encoding.UTF8.GetBytes(name);
+            var valuePadded = (value.Length + 3) & ~3;
+            inode[pos] = (byte)nameBytes.Length;          // e_name_len
+            inode[pos + 1] = nameIndex;                   // e_name_index（命名空间索引）
             WriteU16(inode, pos + 2, (ushort)valueOff);   // e_value_offs (relative to entries start)
-            WriteU32(inode, pos + 4, (uint)value.Length);  // e_value_size
-            WriteU32(inode, pos + 8, 0);                   // e_hash (unused)
+            WriteU32(inode, pos + 4, (uint)value.Length); // e_value_size
+            WriteU32(inode, pos + 8, XattrEntryHash(nameBytes, value)); // e_hash（内核算法）
             nameBytes.CopyTo(inode.AsSpan(pos + 12));
-            var entrySize = (12 + nameBytes.Length + 3) & ~3;
+            var entrySize = (16 + nameBytes.Length + 3) & ~3;
             pos += entrySize;
-            valueOff += value.Length;
+            valueOff += valuePadded;
         }
 
         // Null-terminator entry (e_name_len = 0).
@@ -332,10 +355,83 @@ public sealed partial class Ext4Builder
 
         // Write values after the entry section.
         var valuePos = xattrStart + 4 + entrySectionSize;
-        foreach (var kv in xattrs)
+        foreach (var (_, _, value) in entries)
         {
-            kv.Value.CopyTo(inode, valuePos);
-            valuePos += kv.Value.Length;
+            value.CopyTo(inode, valuePos);
+            valuePos += (value.Length + 3) & ~3;
         }
+    }
+
+    /// <summary>
+    /// 把完整 xattr 属性名映射为 (命名空间索引, 短名)，对照 e2fsprogs ext2_xattr.h：
+    /// user.→1、trusted.→4、security.→6、system.→7（system 仅限两个 ACL 名）。
+    /// <para>Maps a full xattr name to (namespace index, short name) per e2fsprogs ext2_xattr.h:
+    /// user.→1, trusted.→4, security.→6, system.→7 (system limited to the two ACL names).</para>
+    /// </summary>
+    private static bool TryMapXattrName(string fullName, out byte nameIndex, out string shortName)
+    {
+        (string Prefix, byte Index)[] namespaces =
+        [
+            ("user.", 1),
+            ("trusted.", 4),
+            ("security.", 6),
+            ("system.", 7),
+        ];
+        foreach (var (prefix, index) in namespaces)
+        {
+            if (fullName.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                var rest = fullName[prefix.Length..];
+                if (rest.Length == 0)
+                {
+                    continue;
+                }
+
+                // system 命名空间仅承载两个已知 ACL 名；system.data（inline data）由内核内部使用。
+                // The system namespace only carries the two known ACL names; system.data (inline
+                // data) is kernel-internal.
+                if (index == 7 && rest is not ("posix_acl_access" or "posix_acl_default"))
+                {
+                    continue;
+                }
+
+                nameIndex = index;
+                shortName = rest;
+                return true;
+            }
+        }
+
+        nameIndex = 0;
+        shortName = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// 计算单个 xattr 条目的 e_hash（内核 fs/ext4/xattr.c ext4_xattr_hash_entry）：
+    /// 名字按（有符号）字节续算，随后值按 LE32 字、尾随 <c>size % 4</c> 字节续算。
+    /// <para>Computes a single xattr entry's e_hash (kernel fs/ext4/xattr.c
+    /// ext4_xattr_hash_entry): the name is fed byte-wise (signed char), then the value in LE32
+    /// words followed by any trailing bytes.</para>
+    /// </summary>
+    private static uint XattrEntryHash(byte[] name, byte[] value)
+    {
+        uint hash = 0;
+        foreach (var b in name)
+        {
+            hash = (hash << 5) ^ (hash >> 27) ^ (uint)(sbyte)b;
+        }
+
+        var words = value.Length / 4;
+        for (var i = 0; i < words; i++)
+        {
+            hash = (hash << 5) ^ (hash >> 27) ^ System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(value.AsSpan(i * 4, 4));
+        }
+
+        for (var i = words * 4; i < value.Length; i++)
+        {
+            hash = (hash << 5) ^ (hash >> 27) ^ (uint)(sbyte)value[i];
+        }
+
+        return hash;
     }
 }

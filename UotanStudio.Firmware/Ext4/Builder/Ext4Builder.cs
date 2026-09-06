@@ -1086,9 +1086,15 @@ public sealed partial class Ext4Builder
         WriteU16(block, 0x3C, 1);
         WriteU16(block, 0x3E, 0);
         WriteU32(block, 0x40, FixedTimestamp);
-        WriteU32(block, 0x44, 0);                                          // s_creator_os = LINUX
-        WriteU32(block, 0x48, 1);                                          // s_rev_level = EXT2_DYNAMIC_REV
-        WriteU32(block, 0x4C, 1);                                          // s_def_resuid = root
+        // 超级块字段偏移（struct ext4_super_block）：0x44 s_checkinterval、
+        // 0x48 s_creator_os（0 = EXT4_OS_LINUX，内核在 creator_os == EXT4_OS_HURD(1) 且
+        // 64bit 特性置位时拒绝挂载）、0x4C s_rev_level。
+        // Superblock field offsets: 0x44 s_checkinterval, 0x48 s_creator_os (0 = EXT4_OS_LINUX —
+        // the kernel refuses to mount when creator_os == EXT4_OS_HURD(1) with the 64bit feature),
+        // 0x4C s_rev_level.
+        WriteU32(block, 0x44, 0);                                          // s_checkinterval
+        WriteU32(block, 0x48, 0);                                          // s_creator_os = EXT4_OS_LINUX
+        WriteU32(block, 0x4C, 1);                                          // s_rev_level = EXT2_DYNAMIC_REV
         WriteU16(block, 0x50, 0);
         WriteU16(block, 0x52, 0);
         WriteU32(block, 0x54, FirstUsableInode);

@@ -320,4 +320,203 @@ public class WslCrossValidationTests
             WslTestHelpers.DeleteRecursive(root);
         }
     }
+
+    [Fact]
+    public void Ext4_E2fsck_HtreeLargeDirectory_Passes()
+    {
+        if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
+        WslTestHelpers.EnsureAlpineConfigured();
+        if (!WslTestHelpers.IsToolAvailable("e2fsck")) { Assert.Skip("required tools missing"); }
+
+        var root = WslTestHelpers.CreateTempDirectory();
+        try
+        {
+            // 2000 项目录（触发 htree）+ 深层嵌套。
+            // A 2000-entry directory (htree) plus deep nesting.
+            var many = Path.Combine(root, "many");
+            Directory.CreateDirectory(many);
+            for (var i = 0; i < 2000; i++)
+            {
+                File.WriteAllText(Path.Combine(many, $"file_{i:D5}.dat"), $"content {i}\n");
+            }
+
+            var deep = Path.Combine(root, "deep");
+            for (var i = 0; i < 25; i++)
+            {
+                deep = Path.Combine(deep, $"level{i:D2}");
+            }
+
+            Directory.CreateDirectory(deep);
+            File.WriteAllText(Path.Combine(deep, "bottom.txt"), "deep");
+
+            var imagePath = Path.Combine(Path.GetTempPath(), $"wsl-ext4-htree-{Path.GetRandomFileName()}.img");
+            try
+            {
+                Ext4Builder.Build(root, imagePath);
+                var (output, exitCode) = WslTestHelpers.RunWsl($"e2fsck -fn {WslTestHelpers.ToWslPath(imagePath)}");
+                Assert.True(exitCode <= 1, $"e2fsck failed (exit={exitCode}):\n{output}");
+            }
+            finally
+            {
+                try { File.Delete(imagePath); } catch { }
+            }
+        }
+        finally
+        {
+            WslTestHelpers.DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void Ext4_E2fsck_MultiGroup_Passes()
+    {
+        if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
+        WslTestHelpers.EnsureAlpineConfigured();
+        if (!WslTestHelpers.IsToolAvailable("e2fsck")) { Assert.Skip("required tools missing"); }
+
+        var root = WslTestHelpers.CreateTempDirectory();
+        try
+        {
+            // 多块组（>128MB 数据 → ≥2 组），覆盖备份超级块/GDT 路径。
+            // Multiple block groups (>128 MB data → ≥2 groups), covering backup superblock/GDT.
+            for (var i = 0; i < 8; i++)
+            {
+                File.WriteAllBytes(Path.Combine(root, $"big{i:00}.bin"), new byte[24 * 1024 * 1024]);
+            }
+
+            File.WriteAllText(Path.Combine(root, "small.txt"), "multi group");
+            Directory.CreateDirectory(Path.Combine(root, "dir"));
+            File.WriteAllText(Path.Combine(root, "dir", "n.txt"), "nested");
+
+            var imagePath = Path.Combine(Path.GetTempPath(), $"wsl-ext4-multi-{Path.GetRandomFileName()}.img");
+            try
+            {
+                Ext4Builder.Build(root, imagePath, new Ext4Options { EnableSparse = true });
+                var (output, exitCode) = WslTestHelpers.RunWsl($"e2fsck -fn {WslTestHelpers.ToWslPath(imagePath)}");
+                Assert.True(exitCode <= 1, $"e2fsck failed (exit={exitCode}):\n{output}");
+            }
+            finally
+            {
+                try { File.Delete(imagePath); } catch { }
+            }
+        }
+        finally
+        {
+            WslTestHelpers.DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void F2fs_Fsck_Compression_Passes()
+    {
+        if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
+        WslTestHelpers.EnsureAlpineConfigured();
+        if (!WslTestHelpers.IsToolAvailable("fsck.f2fs")) { Assert.Skip("required tools missing"); }
+
+        var root = WslTestHelpers.CreateTempDirectory();
+        try
+        {
+            // 可压缩 + 不可压缩混合（跨簇压缩与逐块回退路径）。
+            // Mixed compressible / incompressible files (cluster compression and per-block fallback).
+            File.WriteAllBytes(Path.Combine(root, "compressible.bin"), new byte[200000]);
+            var random = new byte[200000];
+            new Random(5).NextBytes(random);
+            File.WriteAllBytes(Path.Combine(root, "incompressible.bin"), random);
+            File.WriteAllText(Path.Combine(root, "tiny.txt"), "tiny");
+
+            var imagePath = Path.Combine(Path.GetTempPath(), $"wsl-f2fs-comp-{Path.GetRandomFileName()}.img");
+            try
+            {
+                F2fsBuilder.Build(root, imagePath, new F2fsOptions { EnableCompression = true });
+                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
+                Assert.True(exitCode <= 1, $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+            }
+            finally
+            {
+                try { File.Delete(imagePath); } catch { }
+            }
+        }
+        finally
+        {
+            WslTestHelpers.DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void F2fs_Fsck_ManyInlineFiles_Passes()
+    {
+        if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
+        WslTestHelpers.EnsureAlpineConfigured();
+        if (!WslTestHelpers.IsToolAvailable("fsck.f2fs")) { Assert.Skip("required tools missing"); }
+
+        var root = WslTestHelpers.CreateTempDirectory();
+        try
+        {
+            // 1000 个 inline 小文件 + 多块目录（多段主区与多块 NAT）。
+            // 1000 inline files plus a multi-block directory (multi-segment main area, multi-block NAT).
+            Directory.CreateDirectory(Path.Combine(root, "many"));
+            for (var i = 0; i < 1000; i++)
+            {
+                File.WriteAllText(Path.Combine(root, "many", $"item_{i:D4}.txt"), $"payload {i}");
+            }
+
+            var imagePath = Path.Combine(Path.GetTempPath(), $"wsl-f2fs-many-{Path.GetRandomFileName()}.img");
+            try
+            {
+                F2fsBuilder.Build(root, imagePath);
+                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
+                Assert.True(exitCode <= 1, $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+            }
+            finally
+            {
+                try { File.Delete(imagePath); } catch { }
+            }
+        }
+        finally
+        {
+            WslTestHelpers.DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void F2fs_Fsck_LargeFileIndirect_Passes()
+    {
+        if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
+        WslTestHelpers.EnsureAlpineConfigured();
+        if (!WslTestHelpers.IsToolAvailable("fsck.f2fs")) { Assert.Skip("required tools missing"); }
+
+        var root = WslTestHelpers.CreateTempDirectory();
+        try
+        {
+            // 16MB 随机文件（跨越直接/间接寻址边界）+ 常规树。
+            // A 16 MB random file (crossing the direct/indirect addressing boundary) plus a tree.
+            var data = new byte[16 * 1024 * 1024];
+            new Random(11).NextBytes(data);
+            File.WriteAllBytes(Path.Combine(root, "large.bin"), data);
+            File.WriteAllText(Path.Combine(root, "hello.txt"), "hello f2fs");
+            Directory.CreateDirectory(Path.Combine(root, "sub"));
+            File.WriteAllText(Path.Combine(root, "sub", "inner.txt"), "inner");
+
+            var imagePath = Path.Combine(Path.GetTempPath(), $"wsl-f2fs-large-{Path.GetRandomFileName()}.img");
+            try
+            {
+                F2fsBuilder.Build(root, imagePath);
+                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
+                Assert.True(exitCode <= 1, $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+            }
+            finally
+            {
+                try { File.Delete(imagePath); } catch { }
+            }
+        }
+        finally
+        {
+            WslTestHelpers.DeleteRecursive(root);
+        }
+    }
 }

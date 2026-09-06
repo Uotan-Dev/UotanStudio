@@ -485,6 +485,13 @@ public sealed partial class ErofsBuilder
     {
         using var output = new OffsetStream(destination, baseOffset);
         var blockSize = options.BlockSize;
+        // 开启超级块校验和窗口捕获：erofs-utils erofs_superblock_csum_verify 从设备读取
+        // [SuperblockOffset, blockSize) 全部字节（含后续写入的 inode 元数据）计算 CRC32-C，
+        // 输出流可能不可读（仅写 Stream API），故全程捕获该窗口的写入内容。
+        // Enable the superblock checksum window capture: erofs-utils erofs_superblock_csum_verify
+        // reads [SuperblockOffset, blockSize) (including inode metadata written later); the output
+        // stream may be write-only (Stream API), so writes into the window are captured.
+        output.CaptureWindow(ErofsSuperblock.SuperblockOffset, blockSize - ErofsSuperblock.SuperblockOffset);
 
         // ---- Device-table layout (multi-device). ----
         // 多设备设备表布局：当 ExtraDeviceCount > 0 时在 superblock 之后预留一块对齐的
@@ -985,32 +992,21 @@ public sealed partial class ErofsBuilder
         }
 
         // ---- 所有数据/元数据已写完，回写超级块 CRC32-C 校验和。----
-        // 回读 [SuperblockOffset, blockSize) 的全部字节（已含 inode 元数据），
-        // 清零 checksum 字段后计算 CRC32-C，写回 offset 4。
+        // 从捕获窗口取 [SuperblockOffset, blockSize) 内容（未写过的字节为零），清零 checksum
+        // 字段后计算 CRC32-C，写回 offset 4。
         // ---- All data/metadata written; compute and write back the superblock CRC32c. ----
-        // Read back [SuperblockOffset, blockSize) (now containing inode metadata),
-        // zero the checksum field, compute CRC32-C, and write it back at offset 4.
+        // Take [SuperblockOffset, blockSize) from the capture window (unwritten bytes are zero),
+        // clear the checksum field, compute CRC32-C and write it back at offset 4.
         {
-            var crcLen = blockSize - ErofsSuperblock.SuperblockOffset;
-            var crcRegion = new byte[crcLen];
-            output.Position = ErofsSuperblock.SuperblockOffset;
-            var totalRead = 0;
-            while (totalRead < crcLen)
-            {
-                var n = output.Read(crcRegion, totalRead, crcLen - totalRead);
-                if (n <= 0) break;
-                totalRead += n;
-            }
-
-            // 清零 checksum 字段（offset 4 in superblock = offset 4 in crcRegion）
+            var crcRegion = output.CapturedWindow ?? throw new InvalidOperationException("Superblock checksum window was not captured.");
             crcRegion[4] = 0;
             crcRegion[5] = 0;
             crcRegion[6] = 0;
             crcRegion[7] = 0;
             var finalCrc = ComputeCrc32C(crcRegion);
-            output.Position = ErofsSuperblock.SuperblockOffset + 4;
             Span<byte> crcLe = stackalloc byte[4];
             BinaryPrimitives.WriteUInt32LittleEndian(crcLe, finalCrc);
+            output.Position = ErofsSuperblock.SuperblockOffset + 4;
             output.Write(crcLe);
         }
 
@@ -1018,12 +1014,27 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// 在底层可寻址流上叠加基偏移的写包装（使镜像可写到前缀数据之后）。
+    /// 在底层可寻址流上叠加基偏移的写包装（使镜像可写到前缀数据之后）。可选地捕获一段
+    /// 写入窗口（供超级块校验和在不支持读取的输出流上也能回算）。
     /// <para>A write wrapper adding a base offset over an underlying seekable stream (lets an image
-    /// be written after a prefix).</para>
+    /// be written after a prefix). It can optionally capture a write window so the superblock
+    /// checksum can be computed even over output streams that do not support reading.</para>
     /// </summary>
     private sealed class OffsetStream(Stream inner, long baseOffset) : Stream
     {
+        private byte[]? _capture;
+        private long _captureStart;
+
+        /// <summary>开始捕获镜像内 [start, start+length) 的写入字节。Starts capturing writes to [start, start+length) in image coordinates.</summary>
+        public void CaptureWindow(long start, int length)
+        {
+            _captureStart = start;
+            _capture = new byte[length];
+        }
+
+        /// <summary>窗口捕获内容（未写过的字节保持零）。Captured window bytes (unwritten bytes stay zero).</summary>
+        public byte[]? CapturedWindow => _capture;
+
         public override bool CanRead => inner.CanRead;
         public override bool CanSeek => inner.CanSeek;
         public override bool CanWrite => inner.CanWrite;
@@ -1045,6 +1056,20 @@ public sealed partial class ErofsBuilder
 
         public override void SetLength(long value) => inner.SetLength(checked(value + baseOffset));
 
-        public override void Write(byte[] buffer, int offset, int count) => inner.Write(buffer, offset, count);
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            if (_capture is not null)
+            {
+                var imagePos = inner.Position - baseOffset;
+                var from = Math.Max(imagePos, _captureStart);
+                var to = Math.Min(imagePos + count, _captureStart + _capture.Length);
+                if (to > from)
+                {
+                    Buffer.BlockCopy(buffer, offset + (int)(from - imagePos), _capture, (int)(from - _captureStart), (int)(to - from));
+                }
+            }
+
+            inner.Write(buffer, offset, count);
+        }
     }
 }

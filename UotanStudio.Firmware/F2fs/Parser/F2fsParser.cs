@@ -553,12 +553,17 @@ public sealed class F2fsParser : IDisposable
             throw new InvalidDataException($"Invalid reserved nid {nid}.");
         }
 
-        // 内核 current_nat_addr() 使用 nat_blkaddr + 2 * block_off（NAT 块按 2 块间隔存放，
-        // 配合 checkpoint 版本位图；全零位图即读取该首副本）。
-        // The kernel's current_nat_addr() reads nat_blkaddr + 2 * block_off (NAT blocks are
-        // spaced 2 apart with the checkpoint version bitmap; an all-zero bitmap selects this copy).
+        // 内核 current_nat_addr()：NAT 块按每 512 块分组，主副本位于
+        // nat_blkaddr + (block_off / 512) * 1024 + (block_off % 512)；nat_bitmap 对应位
+        // 置位时读取 +blocks_per_seg 的第二副本（本镜像构建器位图恒零，读主副本）。
+        // The kernel's current_nat_addr(): NAT blocks are grouped per 512; the primary copy sits
+        // at nat_blkaddr + (block_off / 512) * 1024 + (block_off % 512), and a set nat_bitmap bit
+        // selects the second copy at +blocks_per_seg (this builder always writes a zeroed bitmap,
+        // so the primary copy is read).
         var natBlockIndex = nid / F2fsNode.NatEntryPerBlock;
-        var natBlockAddress = checked(_superblock.NatBlkaddr + natBlockIndex * 2u);
+        var segOff = natBlockIndex / 512;
+        var inSeg = natBlockIndex % 512;
+        var natBlockAddress = checked(_superblock.NatBlkaddr + segOff * 1024u + inSeg);
         var natBlock = ReadBlockChecked(natBlockAddress, $"NAT block for nid {nid}");
         var entryOffset = checked((int)(nid % F2fsNode.NatEntryPerBlock) * F2fsNode.NatEntrySize);
         var blockAddress = BinaryPrimitives.ReadUInt32LittleEndian(natBlock.AsSpan(entryOffset + F2fsNode.NatEntryBlockOffset, 4));

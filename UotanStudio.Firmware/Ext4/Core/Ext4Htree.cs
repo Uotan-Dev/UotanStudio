@@ -45,6 +45,13 @@ internal static class Ext4Htree
     /// Appended at the end of dx_root and dx_node blocks when metadata_csum is enabled.</para></summary>
     public const int DxTailSize = 8;
 
+    /// <summary>ext2_dir_entry_tail 结构大小（12 字节：reserved_zero1(4) + rec_len(2) +
+    /// reserved_name_len(2) + checksum(4)）。metadata_csum 启用时每个目录叶块末尾需追加。
+    /// <para>ext2_dir_entry_tail structure size (12 bytes: reserved_zero1(4) + rec_len(2) +
+    /// reserved_name_len(2) + checksum(4)). Appended at the end of every directory leaf block
+    /// when metadata_csum is enabled.</para></summary>
+    public const int DirentTailSize = 12;
+
     /// <summary>哈希种子全零时使用的默认 MD4 初始化向量。<para>Default MD4 init vector used when the hash seed is all zeros.</para></summary>
     private static readonly uint[] DefaultHashInit = [0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476];
 
@@ -299,7 +306,7 @@ internal static class Ext4Htree
             return byHash != 0 ? byHash : string.CompareOrdinal(x.Name, y.Name);
         });
 
-        var (leafBlocks, leafFirstHashes, leafLastHashes) = PackLeafBlocks(hashed, blockSize);
+        var (leafBlocks, leafFirstHashes, leafLastHashes) = PackLeafBlocks(hashed, blockSize, enableMetadataCsum, directoryInode, uuid);
         if (leafBlocks.Count == 0)
         {
             // 空目录由 Builder 走线性单块路径，这里只作防御性返回一个空根。
@@ -367,16 +374,28 @@ internal static class Ext4Htree
 
     /// <summary>
     /// 按哈希顺序将目录项打包进叶块，返回叶块字节数组及各叶块首/末条目的哈希。
+    /// metadata_csum 启用时每个叶块尾部预留 12 字节 ext2_dir_entry_tail 并计算
+    /// dirent 校验和（对照 e2fsprogs ext2fs_dirent_csum，与线性目录块一致）。
     /// <para>Packs hash-ordered directory entries into leaf blocks, returning the leaf byte arrays and
-    /// the first/last-entry hash of every leaf.</para>
+    /// the first/last-entry hash of every leaf. When metadata_csum is enabled each leaf block reserves
+    /// a 12-byte ext2_dir_entry_tail at its end with the dirent checksum (matching e2fsprogs
+    /// ext2fs_dirent_csum, identical to linear directory blocks).</para>
     /// </summary>
     private static (List<byte[]> Blocks, List<uint> FirstHashes, List<uint> LastHashes) PackLeafBlocks(
         List<(uint Hash, string Name, uint Inode, byte FileType)> sorted,
-        int blockSize)
+        int blockSize,
+        bool enableMetadataCsum = false,
+        uint directoryInode = 0,
+        byte[]? uuid = null)
     {
         var blocks = new List<byte[]>();
         var firstHashes = new List<uint>();
         var lastHashes = new List<uint>();
+
+        // metadata_csum 启用时块尾部 12 字节为 dir_entry_tail，真实条目只能用到 endCap。
+        // With metadata_csum the last 12 bytes of the block hold a dir_entry_tail; real
+        // entries may only use up to endCap.
+        var endCap = blockSize - (enableMetadataCsum ? DirentTailSize : 0);
 
         var block = new byte[blockSize];
         var offset = 0;
@@ -392,9 +411,14 @@ internal static class Ext4Htree
                 return;
             }
 
-            // 块内最后一条目录项的 rec_len 延伸到块尾。
-            // The final entry's rec_len stretches to the end of the block.
-            WriteU16(block, lastEntryOffset + 4, (ushort)(blockSize - lastEntryOffset));
+            // 块内最后一条目录项的 rec_len 延伸到 dir_tail 前（无校验和时为块尾）。
+            // The final entry's rec_len stretches up to the dir_tail (or the block end without csum).
+            WriteU16(block, lastEntryOffset + 4, (ushort)(endCap - lastEntryOffset));
+            if (enableMetadataCsum)
+            {
+                WriteDirentTail(block, endCap, directoryInode, uuid);
+            }
+
             blocks.Add(block);
             firstHashes.Add(firstHashOfBlock);
             lastHashes.Add(lastHashOfBlock);
@@ -409,7 +433,7 @@ internal static class Ext4Htree
             var nameBytes = Encoding.UTF8.GetBytes(name);
             var nameLen = Math.Min(nameBytes.Length, 255);
             var naturalLength = (8 + nameLen + 3) & ~3;
-            if (entriesInBlock > 0 && offset + naturalLength > blockSize)
+            if (entriesInBlock > 0 && offset + naturalLength > endCap)
             {
                 Flush();
             }
@@ -569,6 +593,32 @@ internal static class Ext4Htree
             WriteU32(block, pos, children[i].Hash);
             WriteU32(block, pos + 4, children[i].Block);
         }
+    }
+
+    /// <summary>
+    /// 在目录叶块尾部写入 struct ext2_dir_entry_tail（12 字节）并计算 dirent 校验和。
+    /// 算法对照 e2fsprogs ext2fs_dirent_csum：seed = crc32c(~0, uuid)，续算 LE32 inode 号、
+    /// LE32 i_generation 与从块首到 dir_tail 之前的全部字节。
+    /// <para>Writes the 12-byte struct ext2_dir_entry_tail at the end of a directory leaf block
+    /// and computes the dirent checksum matching e2fsprogs ext2fs_dirent_csum:
+    /// seed = crc32c(~0, uuid), then the LE32 inode number, LE32 i_generation and the block bytes
+    /// from its start up to (excluding) the tail.</para>
+    /// </summary>
+    private static void WriteDirentTail(byte[] block, int endCap, uint directoryInode, byte[]? uuid)
+    {
+        WriteU32(block, endCap, 0);                 // det_reserved_zero1
+        WriteU16(block, endCap + 4, DirentTailSize); // det_rec_len = 12
+        block[endCap + 6] = 0x00;                   // name_len（0xDE00 低字节）
+        block[endCap + 7] = 0xDE;                   // file_type（0xDE00 高字节）
+
+        var crc = HtreeCrc32c(uuid ?? new byte[16], 0xFFFF_FFFF);
+        Span<byte> le = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32LittleEndian(le, directoryInode);
+        crc = HtreeCrc32c(le, crc);
+        BinaryPrimitives.WriteUInt32LittleEndian(le, 0); // i_generation（构建器恒为 0）
+        crc = HtreeCrc32c(le, crc);
+        crc = HtreeCrc32c(block.AsSpan(0, endCap), crc);
+        WriteU32(block, endCap + 8, crc);
     }
 
     private static void WriteU16(byte[] bytes, int offset, ushort value) => BinaryPrimitives.WriteUInt16LittleEndian(bytes.AsSpan(offset, 2), value);
