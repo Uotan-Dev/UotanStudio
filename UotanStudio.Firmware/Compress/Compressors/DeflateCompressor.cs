@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO.Compression;
 using UotanStudio.Firmware.Compress.Internal;
 using SCCompressionMode = SharpCompress.Compressors.CompressionMode;
@@ -198,5 +199,107 @@ public static class DeflateCompressor
         {
             throw new CompressionException("DEFLATE 解压失败", ex);
         }
+    }
+
+    /// <summary>
+    /// 流式 DEFLATE 解压，带输出上限（防解压炸弹）。
+    /// <para>Streaming DEFLATE decompression with output limit (decompression bomb protection).</para>
+    /// </summary>
+    /// <param name="source">待解压的压缩流。<para>The compressed input stream.</para></param>
+    /// <param name="destination">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
+    /// <param name="maxOutputBytes">最大允许的解压输出字节数，超出则抛出异常。<para>Maximum allowed decompressed output in bytes; throws if exceeded.</para></param>
+    /// <exception cref="CompressionException">解压输出超过 <paramref name="maxOutputBytes"/> 时抛出。
+    /// <para>Thrown when decompressed output exceeds <paramref name="maxOutputBytes"/>.</para></exception>
+    public static void Decompress(Stream source, Stream destination, long maxOutputBytes)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        if (destination == null)
+        {
+            throw new ArgumentNullException(nameof(destination));
+        }
+
+        if (maxOutputBytes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxOutputBytes));
+        }
+
+        try
+        {
+            long totalWritten = 0;
+            var buffer = ArrayPool<byte>.Shared.Rent(81920);
+            try
+            {
+                if (source.CanSeek)
+                {
+                    // 可定位流：逐成员解压，用 TotalIn 精确推进到下一成员起点。
+                    // Seekable input: decompress member by member, advancing by TotalIn.
+                    while (true)
+                    {
+                        var memberStart = source.Position;
+                        using var deflate = new SCDeflateStream(new NonDisposingStream(source), SCCompressionMode.Decompress);
+                        totalWritten = BoundedCopy(deflate, destination, buffer, totalWritten, maxOutputBytes);
+
+                        var consumed = deflate.TotalIn;
+                        if (consumed <= 0)
+                        {
+                            break;
+                        }
+
+                        var next = memberStart + consumed;
+                        if (next >= source.Length)
+                        {
+                            break;
+                        }
+
+                        source.Position = next;
+                    }
+                }
+                else
+                {
+                    // 不可定位流：无法确定成员边界，按单成员处理（与既有行为一致）。
+                    // Non-seekable input: member boundaries cannot be located; treat as single member.
+                    using var deflate = new SCDeflateStream(new NonDisposingStream(source), SCCompressionMode.Decompress);
+                    BoundedCopy(deflate, destination, buffer, totalWritten, maxOutputBytes);
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
+        catch (CompressionException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new CompressionException("DEFLATE 解压失败", ex);
+        }
+    }
+
+    /// <summary>
+    /// 从 <paramref name="source"/> 读取数据写入 <paramref name="destination"/>，超出 <paramref name="maxOutputBytes"/> 则抛异常。
+    /// <para>Reads from <paramref name="source"/> into <paramref name="destination"/>, throwing if <paramref name="maxOutputBytes"/> is exceeded.</para>
+    /// </summary>
+    private static long BoundedCopy(Stream source, Stream destination, byte[] buffer, long totalWritten, long maxOutputBytes)
+    {
+        int bytesRead;
+        while ((bytesRead = source.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            if (totalWritten + bytesRead > maxOutputBytes)
+            {
+                throw new CompressionException(
+                    $"DEFLATE 解压输出超过上限 ({maxOutputBytes} 字节) / Decompressed output exceeds limit ({maxOutputBytes} bytes)");
+            }
+
+            destination.Write(buffer, 0, bytesRead);
+            totalWritten += bytesRead;
+        }
+
+        return totalWritten;
     }
 }

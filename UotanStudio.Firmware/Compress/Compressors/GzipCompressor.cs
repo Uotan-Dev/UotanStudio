@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO.Compression;
 using UotanStudio.Firmware.Compress.Internal;
 
@@ -139,6 +140,67 @@ public static class GzipCompressor
         {
             using var gzip = new GZipStream(input, CompressionMode.Decompress, leaveOpen: true);
             gzip.CopyTo(output);
+        }
+        catch (Exception ex)
+        {
+            throw new CompressionException("GZIP 解压失败", ex);
+        }
+    }
+
+    /// <summary>
+    /// 流式 GZIP 解压，带输出上限（防解压炸弹）。
+    /// <para>Streaming GZIP decompression with output limit (decompression bomb protection).</para>
+    /// </summary>
+    /// <param name="source">待解压的压缩流。<para>The compressed input stream.</para></param>
+    /// <param name="destination">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
+    /// <param name="maxOutputBytes">最大允许的解压输出字节数，超出则抛出异常。<para>Maximum allowed decompressed output in bytes; throws if exceeded.</para></param>
+    /// <exception cref="CompressionException">解压输出超过 <paramref name="maxOutputBytes"/> 时抛出。
+    /// <para>Thrown when decompressed output exceeds <paramref name="maxOutputBytes"/>.</para></exception>
+    public static void Decompress(Stream source, Stream destination, long maxOutputBytes)
+    {
+        if (source == null)
+        {
+            throw new ArgumentNullException(nameof(source));
+        }
+
+        if (destination == null)
+        {
+            throw new ArgumentNullException(nameof(destination));
+        }
+
+        if (maxOutputBytes < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxOutputBytes));
+        }
+
+        try
+        {
+            using var gzip = new GZipStream(source, CompressionMode.Decompress, leaveOpen: true);
+            var buffer = ArrayPool<byte>.Shared.Rent(81920);
+            try
+            {
+                long totalWritten = 0;
+                int bytesRead;
+                while ((bytesRead = gzip.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    if (totalWritten + bytesRead > maxOutputBytes)
+                    {
+                        throw new CompressionException(
+                            $"GZIP 解压输出超过上限 ({maxOutputBytes} 字节) / Decompressed output exceeds limit ({maxOutputBytes} bytes)");
+                    }
+
+                    destination.Write(buffer, 0, bytesRead);
+                    totalWritten += bytesRead;
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
+        catch (CompressionException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
