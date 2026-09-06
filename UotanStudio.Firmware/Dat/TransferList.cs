@@ -24,7 +24,10 @@ public enum TransferListCommandKind
     Diff,
 
     /// <summary><para>暂存块区间供后续命令使用（增量 OTA）。</para>Stash block ranges for later commands (incremental OTA).</summary>
-    Stash
+    Stash,
+
+    /// <summary><para>把源镜像的源块区间按序拷贝到目标块区间（v4 新增，需源镜像）。</para>Copy source-image ranges in order to target ranges (new in v4; requires a source image).</summary>
+    Move
 }
 
 /// <summary>
@@ -55,11 +58,20 @@ public sealed class TransferListCommand
     /// <param name="kind">The command kind. <para>命令类型。</para></param>
     /// <param name="ranges">The block ranges. <para>块范围列表。</para></param>
     /// <param name="stashId">The stash id for <see cref="TransferListCommandKind.Stash"/> commands; otherwise <c>null</c>. <para>Stash 命令的暂存 id；其他命令为 <c>null</c>。</para></param>
-    public TransferListCommand(TransferListCommandKind kind, IReadOnlyList<BlockRange> ranges, string? stashId = null)
+    /// <param name="sourceRanges">
+    /// The source block ranges for v4 <see cref="TransferListCommandKind.Move"/>/<see cref="TransferListCommandKind.Diff"/>
+    /// commands; <c>null</c> leaves the default: for <see cref="TransferListCommandKind.Diff"/> (v3 single range-set
+    /// semantics) the source equals <paramref name="ranges"/>, and for all other kinds it is empty.
+    /// <para>v4 <see cref="TransferListCommandKind.Move"/>/<see cref="TransferListCommandKind.Diff"/> 命令的源块范围；
+    /// <c>null</c> 时使用默认值：<see cref="TransferListCommandKind.Diff"/>（v3 单范围集语义）的源等于
+    /// <paramref name="ranges"/>，其余命令为空。</para>
+    /// </param>
+    public TransferListCommand(TransferListCommandKind kind, IReadOnlyList<BlockRange> ranges, string? stashId = null, IReadOnlyList<BlockRange>? sourceRanges = null)
     {
         Kind = kind;
         Ranges = ranges;
         StashId = stashId;
+        SourceRanges = sourceRanges ?? (kind == TransferListCommandKind.Diff ? ranges : []);
     }
 
     /// <summary>
@@ -79,6 +91,16 @@ public sealed class TransferListCommand
     /// <para>Stash 命令的暂存 id；其他命令为 <c>null</c>。</para>
     /// </summary>
     public string? StashId { get; }
+
+    /// <summary>
+    /// The source block ranges for <see cref="TransferListCommandKind.Move"/>/<see cref="TransferListCommandKind.Diff"/>
+    /// commands; empty for all other kinds. For a v3 <see cref="TransferListCommandKind.Diff"/> (single range-set,
+    /// source equals target) this is the same as <see cref="Ranges"/>.
+    /// <para><see cref="TransferListCommandKind.Move"/>/<see cref="TransferListCommandKind.Diff"/> 命令的源块范围；
+    /// 其他命令为空。v3 的 <see cref="TransferListCommandKind.Diff"/>（单范围集，源等于目标）该值等于
+    /// <see cref="Ranges"/>。</para>
+    /// </summary>
+    public IReadOnlyList<BlockRange> SourceRanges { get; }
 }
 
 /// <summary>
@@ -118,7 +140,11 @@ public sealed class TransferList
             }
         }
 
-        TotalBlocks = total;
+        // 输出镜像覆盖声明的新块总数；增量命令（diff/move/stash）只覆盖部分块，
+        // 未覆盖块由解包器保持为零，因此以声明的总块数为下界。
+        // The output image covers the declared new-block count; incremental commands
+        // (diff/move/stash) only touch some blocks, so the declared count is the lower bound.
+        TotalBlocks = Math.Max(newBlocks, total);
         NewDataBlocks = newData;
     }
 
@@ -270,8 +296,33 @@ public static class TransferListParser
             "free" => TransferListCommandKind.Free,
             "diff" => TransferListCommandKind.Diff,
             "stash" => TransferListCommandKind.Stash,
+            "move" => TransferListCommandKind.Move,
             _ => throw new InvalidDataException($"Unknown command '{tokens[0]}' on line {lineNumber}.  第 {lineNumber} 行存在未知命令 '{tokens[0]}'。")
         };
+
+        if (kind is TransferListCommandKind.Move or TransferListCommandKind.Diff)
+        {
+            // v4：move/diff 携带「源范围集 目标范围集」两个 token。
+            // v4: move/diff carry a source range set and a target range set.
+            if (tokens.Length == 3)
+            {
+                return new TransferListCommand(
+                    kind,
+                    ParseRangeSet(tokens[2], lineNumber),
+                    null,
+                    ParseRangeSet(tokens[1], lineNumber));
+            }
+
+            // v3：diff 只带单范围集，源等于目标。
+            // v3: diff carries a single range set, source equals target.
+            if (kind == TransferListCommandKind.Diff && tokens.Length == 2)
+            {
+                var ranges = ParseRangeSet(tokens[1], lineNumber);
+                return new TransferListCommand(kind, ranges, null, ranges);
+            }
+
+            throw new InvalidDataException($"Invalid '{tokens[0]}' command on line {lineNumber}: '{line}'.  第 {lineNumber} 行 '{tokens[0]}' 命令非法：'{line}'。");
+        }
 
         var hasStashId = kind == TransferListCommandKind.Stash && tokens.Length == 3;
         var rangeSetToken = hasStashId ? tokens[2] : tokens[1];

@@ -7,9 +7,9 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// DAT reader tests: verify the write → unpack round trip is byte-exact for block-aligned images, zero-gap
-/// images and sparse <c>.new.dat</c> input, and that unsupported <c>diff</c>/<c>stash</c> commands are rejected.
+/// images and sparse <c>.new.dat</c> input, and that incremental commands without a source image are rejected.
 /// <para>DAT 读取器测试：校验块对齐镜像、含零块镜像与稀疏 <c>.new.dat</c> 输入的「写入→解包」往返逐字节一致，
-/// 且不支持的 <c>diff</c>/<c>stash</c> 命令被拒绝。</para>
+/// 且缺少源镜像的增量命令被拒绝。</para>
 /// </summary>
 public class DatReaderTests
 {
@@ -66,23 +66,23 @@ public class DatReaderTests
     }
 
     [Fact]
-    public void Unpack_DiffCommand_ThrowsNotSupported()
+    public void Unpack_DiffCommand_WithoutSource_ThrowsArgumentException()
     {
         using var temp = new TempDirectory();
         var listPath = temp.Write("x.transfer.list", "4\n4\n0\n0\ndiff 1,0,4\n");
         var datPath = temp.WriteBytes("x.new.dat", []);
 
-        Assert.Throws<NotSupportedException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img")));
+        Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img")));
     }
 
     [Fact]
-    public void Unpack_StashCommand_ThrowsNotSupported()
+    public void Unpack_StashCommand_WithoutSource_ThrowsArgumentException()
     {
         using var temp = new TempDirectory();
         var listPath = temp.Write("x.transfer.list", "4\n4\n1\n2\nstash abc123 1,0,2\nnew 1,2,4\n");
         var datPath = temp.WriteBytes("x.new.dat", []);
 
-        Assert.Throws<NotSupportedException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img")));
+        Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img")));
     }
 
     private static void RoundTrip(byte[] image)
