@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.NTPi.Compression;
+﻿using UotanStudio.Firmware.NTPi.Compression;
 using UotanStudio.Firmware.NTPi.Crypto;
 using UotanStudio.Firmware.NTPi.Exceptions;
 using UotanStudio.Firmware.NTPi.Helpers;
@@ -7,14 +7,6 @@ using UotanStudio.Firmware.NTPi.Writer;
 
 namespace UotanStudio.Firmware.NTPi;
 
-/// <summary>
-/// <para>NTPI 固件包写入器,提供将文件打包为 NTPI 固件包的功能。</para>
-/// NTPI firmware package writer that packs files into an NTPI firmware package.
-/// </summary>
-/// <remarks>
-/// <para>使用指定的加密提供者和压缩器初始化 NtpiWriter 的新实例。</para>
-/// Initializes a new instance of NtpiWriter with the specified crypto provider and compressor.
-/// </remarks>
 public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor compressor) : IDisposable
 {
     private const int NtpiHeaderSize = 48;
@@ -29,24 +21,16 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
     private volatile bool _disposed;
 
     /// <summary>
-    /// <para>使用默认的 AES-CBC 加密提供者和 LZMA 压缩器创建 NtpiWriter。</para>
     /// Creates an NtpiWriter with the default AES-CBC crypto provider and LZMA compressor.
+    /// <para>使用默认的 AES-CBC 加密提供者和 LZMA 压缩器创建 NtpiWriter。</para>
     /// </summary>
     public static NtpiWriter CreateDefault()
         => new(new AesCbcCryptoProvider(), new Lzma2Compressor());
 
     /// <summary>
-    /// <para>将指定目录中的文件打包为 NTPI 固件包文件。</para>
     /// Packs files from the specified directory into an NTPI firmware package file.
+    /// <para>将指定目录中的文件打包为 NTPI 固件包文件。</para>
     /// </summary>
-    /// <param name="inputDir">包含要打包文件的输入目录路径。</param>
-    /// <param name="outputFile">输出的 NTPI 固件包文件路径。</param>
-    /// <param name="major">主版本号,默认为 1。</param>
-    /// <param name="minor">次版本号,默认为 3。</param>
-    /// <param name="patch">修订版本号,默认为 0。</param>
-    /// <param name="progress">打包进度报告器(可选)。</param>
-    /// <param name="customRegionPayloads">自定义区域载荷字典(可选)。</param>
-    /// <exception cref="UnsupportedVersionException">指定的版本号没有对应的加密密钥。</exception>
     public void Pack(string inputDir, string outputFile, ulong major = 1, ulong minor = 3, ulong patch = 0,
         IProgress<NtpiPackProgress>? progress = null,
         Dictionary<RegionType, byte[]>? customRegionPayloads = null)
@@ -83,8 +67,8 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
     }
 
     /// <summary>
-    /// <para>使用预定义的文件条目和数据将文件打包为 NTPI 固件包文件。</para>
     /// Packs files into an NTPI firmware package file using pre-defined entries and data.
+    /// <para>使用预定义的文件条目和数据将文件打包为 NTPI 固件包文件。</para>
     /// </summary>
     public void PackFromEntries(
         IEnumerable<FileEntry> entries,
@@ -124,8 +108,8 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
     }
 
     /// <summary>
-    /// <para>两遍扫描的核心打包流程:第一遍统计/哈希/布局,第二遍逐文件编码写入。</para>
     /// Core two-pass packing: first pass computes stats/hash/layout, second pass encodes and writes files one by one.
+    /// <para>两遍扫描的核心打包流程:第一遍统计/哈希/布局,第二遍逐文件编码写入。</para>
     /// </summary>
     private void PackCore(
         IReadOnlyList<FileEntry> entryList,
@@ -155,7 +139,7 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
         var keyMapProvider = new KeyMapKeyProvider(keyMap);
         var zeroIv = KeyMapKeyProvider.GetZeroIv();
 
-        // ---- First pass: stats / hash / layout. ----
+
         var plans = new FilePlan[fileCount];
         var offset = 0L;
         for (var i = 0; i < fileCount; i++)
@@ -229,7 +213,7 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
                     outputStream.Write(encryptedRegion, 0, encryptedRegion.Length);
                 }
 
-                // ---- Second pass: encode and write each file into Region6. ----
+
                 progress?.Report(new NtpiPackProgress
                 {
                     TotalFiles = fileCount,
@@ -266,7 +250,7 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
             }
             catch
             {
-                // Preserve the original exception and the previous package.
+
             }
             throw;
         }
@@ -286,7 +270,10 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases resources owned by this instance.
+    /// <para>释放此实例持有的资源。</para>
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)

@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Common.Streams;
@@ -7,20 +7,12 @@ using UotanStudio.Firmware.Cpio.Writing;
 
 namespace UotanStudio.Firmware.Cpio.Formats.Cpio;
 
-/// <summary>
-/// Writes normalized archive entries to a CPIO stream.
-/// <para>将规范化的归档条目写入 CPIO 流。</para>
-/// </summary>
 public sealed class CpioArchiveWriter
 {
     /// <summary>
     /// Writes all provided entries to a CPIO stream in the selected format.
     /// <para>将提供的全部条目以所选格式写入 CPIO 流。</para>
     /// </summary>
-    /// <param name="stream">Destination archive stream.<para>目标归档流。</para></param>
-    /// <param name="entries">Entries to write.<para>待写入的条目。</para></param>
-    /// <param name="format">Target CPIO format.<para>目标 CPIO 格式。</para></param>
-    /// <param name="options">Optional write behavior options.<para>可选的写入行为选项。</para></param>
     public void WriteAll(Stream stream, IEnumerable<ArchiveEntry> entries, ArchiveFormat format, WriteOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -36,14 +28,14 @@ public sealed class CpioArchiveWriter
         Exception? primary = null;
         try
         {
-            // Consume exactly once. Direct streams may be shared by later, not-yet-observable
-            // entries, so retain each distinct instance until enumeration has completed.
+
+
             foreach (var yieldedEntry in entries)
             {
                 try
                 {
                     if (yieldedEntry.DataStream is { } direct) directStreams.Add(direct);
-                    // Normalization may inspect DataLength, so it belongs inside the disposal guard.
+
                     var entry = NormalizeHardlinkOnline(yieldedEntry, format, writtenHardlinks);
                     switch (format)
                     {
@@ -145,8 +137,8 @@ public sealed class CpioArchiveWriter
         }
 
         var key = (entry.Metadata.Inode, entry.Metadata.DeviceMajor, entry.Metadata.DeviceMinor);
-        // Empty link placeholders may precede the one data carrier in newc archives.
-        // Do not claim the group until a non-empty carrier has actually been written.
+
+
         if (!writtenHardlinks.Contains(key))
         {
             if (entry.DataLength > 0) writtenHardlinks.Add(key);
@@ -229,7 +221,7 @@ public sealed class CpioArchiveWriter
                 }
                 finally
                 {
-                    try { File.Delete(path); } catch { /* best-effort cleanup */ }
+                    try { File.Delete(path); } catch {  }
                 }
             }
         }
@@ -250,7 +242,7 @@ public sealed class CpioArchiveWriter
         {
             throw new InvalidDataException($"HP special-device entry '{entry.Name}' cannot contain payload data.");
         }
-        // HP odc encodes special-device major/minor in filesize while writing no payload.
+
         var fileSize = hpSpecial
             ? ((long)(entry.Metadata.RDeviceMajor & 0xFFFFU) << 16) | (entry.Metadata.RDeviceMinor & 0xFFFFU)
             : payloadLength;
@@ -273,7 +265,7 @@ public sealed class CpioArchiveWriter
         stream.Write(nameBytes);
         stream.WriteByte(0);
 
-        // odc uses no alignment padding.
+
         WritePayload(stream, entry, options, payloadLength);
     }
 
@@ -304,7 +296,7 @@ public sealed class CpioArchiveWriter
         {
             throw new InvalidDataException($"HP special-device entry '{entry.Name}' cannot contain payload data.");
         }
-        // HP binary encodes special-device major/minor in the two filesize words.
+
         var size = hpSpecial
             ? ((entry.Metadata.RDeviceMajor & 0xFFFFU) << 16) | (entry.Metadata.RDeviceMinor & 0xFFFFU)
             : (uint)payloadLength;
@@ -335,10 +327,8 @@ public sealed class CpioArchiveWriter
     }
 
     /// <summary>
-    /// Computes the CRC ASCII payload checksum (sum of all payload bytes) without
-    /// materializing the payload when a seekable streaming source is available.
-    /// <para>在不物化负载的情况下计算 CRC ASCII 负载校验和（所有负载字节之和）；
-    /// 存在可寻址流式源时直接读取计算。</para>
+    /// Computes the CRC ASCII payload checksum (sum of all payload bytes) without materializing the payload when a seekable streaming source is available.
+    /// <para>在不物化负载的情况下计算 CRC ASCII 负载校验和（所有负载字节之和）； 存在可寻址流式源时直接读取计算。</para>
     /// </summary>
     private static uint ComputePayloadChecksum(ArchiveEntry entry, WriteOptions options, long payloadLength)
     {
@@ -408,8 +398,7 @@ public sealed class CpioArchiveWriter
     }
 
     /// <summary>
-    /// Writes the entry payload, streaming from <see cref="ArchiveEntry.DataStream"/>
-    /// when present and falling back to <see cref="ArchiveEntry.Data"/> otherwise.
+    /// Writes the entry payload, streaming from ArchiveEntry.DataStream when present and falling back to ArchiveEntry.Data otherwise.
     /// <para>写入条目负载；存在 DataStream 时流式拷贝，否则回退到 Data。</para>
     /// </summary>
     private static void WritePayload(Stream stream, ArchiveEntry entry, WriteOptions options, long payloadLength)
@@ -486,7 +475,7 @@ public sealed class CpioArchiveWriter
         }
         catch (Exception ex)
         {
-            try { File.Delete(path); } catch { /* best-effort cleanup */ }
+            try { File.Delete(path); } catch {  }
             throw new InvalidDataException($"Unable to spool CRC payload for entry '{entryName}'.", ex);
         }
     }
@@ -577,8 +566,8 @@ public sealed class CpioArchiveWriter
     }
 
     /// <summary>
-    /// Writes a zero-padded octal representation of <paramref name="value"/> into <paramref name="dest"/>.
-    /// <para>将 <paramref name="value"/> 的零填充八进制表示写入 <paramref name="dest"/>。</para>
+    /// Writes a zero-padded octal representation of value into dest.
+    /// <para>将 value 的零填充八进制表示写入 dest。</para>
     /// </summary>
     private static void FormatOctal(Span<char> dest, ulong value, int width)
     {

@@ -4,23 +4,12 @@ using UotanStudio.Firmware.AXml;
 
 namespace UotanStudio.Firmware.Apk;
 
-/// <summary>
-/// <para>APK 元数据解析器：读取 APK（zip 容器）清单，经 AXML 解析 AndroidManifest.xml
-/// （包名/版本/SDK/权限/图标引用），经 ARSC 解析 resources.arsc 查表解析图标路径，
-/// 枚举 lib/ 原生库 ABI 并统计文件大小与条目数。纯托管实现，无反射。</para>
-/// APK metadata parser: reads the APK (zip container) manifest, parses AndroidManifest.xml via AXML
-/// (package name/version/SDK/permissions/icon reference), resolves the icon path via the ARSC
-/// resource table, enumerates lib/ native ABIs, and reports file size and entry counts. Fully
-/// managed, no reflection.
-/// </summary>
 public static class ApkParser
 {
     /// <summary>
-    /// <para>分析 APK 文件并提取元数据。</para>
     /// Analyzes an APK file and extracts its metadata.
+    /// <para>分析 APK 文件并提取元数据。</para>
     /// </summary>
-    /// <param name="apkPath">APK 文件路径。<para>APK file path.</para></param>
-    /// <returns>提取的元数据。<para>The extracted metadata.</para></returns>
     public static ApkInfo Analyze(string apkPath)
     {
         ArgumentNullException.ThrowIfNull(apkPath);
@@ -36,8 +25,7 @@ public static class ApkParser
         using var zip = ZipFile.OpenRead(apkPath);
         info.EntryCount = zip.Entries.Count;
 
-        // lib/<abi>/xxx.so → ABI 列表（按目录名去重）。
-        // lib/<abi>/xxx.so → ABI list (deduplicated by directory name).
+
         foreach (var entry in zip.Entries)
         {
             if (entry.FullName.StartsWith("lib/", StringComparison.OrdinalIgnoreCase))
@@ -51,8 +39,7 @@ public static class ApkParser
         }
         info.Abis.Sort(StringComparer.Ordinal);
 
-        // AndroidManifest.xml（AXML）→ 包名/版本/SDK/权限/图标引用。
-        // AndroidManifest.xml (AXML) → package/version/SDK/permissions/icon reference.
+
         var manifestEntry = zip.GetEntry("AndroidManifest.xml");
         if (manifestEntry is not null)
         {
@@ -65,8 +52,7 @@ public static class ApkParser
             ExtractManifest(doc, info);
         }
 
-        // resources.arsc → 图标路径查表（图标引用 + 兜底扫描）。
-        // resources.arsc → icon path resolution (icon reference + fallback scan).
+
         var arscEntry = zip.GetEntry("resources.arsc");
         if (arscEntry is not null)
         {
@@ -79,8 +65,7 @@ public static class ApkParser
             info.IconPath ??= ResolveIconPath(table, zip, info.IconReference);
         }
 
-        // 读取图标字节（PNG/WebP/JPG/XML 原样读出，UI 按扩展名渲染或占位）。
-        // Read the icon bytes verbatim (PNG/WebP/JPG/XML; the UI renders or falls back by extension).
+
         if (info.IconPath is not null && info.IconBytes is null)
         {
             var iconEntry = zip.GetEntry(info.IconPath);
@@ -93,16 +78,15 @@ public static class ApkParser
             }
         }
 
-        // 图标引用仅用于查表，不对外展示。
-        // The icon reference is only used for lookup, not exposed.
+
         info.IconReference = 0;
 
         return info;
     }
 
     /// <summary>
-    /// <para>解析 manifest 根元素与子元素：包名、版本、SDK、权限与图标引用。</para>
     /// Parses the manifest root and children: package name, version, SDK, permissions and icon reference.
+    /// <para>解析 manifest 根元素与子元素：包名、版本、SDK、权限与图标引用。</para>
     /// </summary>
     private static void ExtractManifest(AXmlDocument doc, ApkInfo info)
     {
@@ -113,10 +97,7 @@ public static class ApkParser
             return attr?.FormatValue(doc.StringPool, doc.ResourceMap);
         }
 
-        // minSdkVersion/targetSdkVersion 位于 <uses-sdk> 子元素而非根元素，需递归查找；
-        // compileSdkVersion 同样可能出现在 uses-sdk 上。
-        // minSdkVersion/targetSdkVersion live on the <uses-sdk> child element, not the root, so walk
-        // the tree for them; compileSdkVersion may appear there too.
+
         string? UsesSdkAttr(string name)
         {
             AXmlElement? FindUsesSdk(AXmlElement el)
@@ -144,14 +125,12 @@ public static class ApkParser
         info.VersionName = Attr("versionName") ?? string.Empty;
         info.VersionCode = ParseLong(Attr("versionCode"));
 
-        // 根元素未提供时回退到 <uses-sdk> 子元素。
-        // Fall back to the <uses-sdk> child when the root attribute is absent.
+
         info.MinSdkVersion = ParseLong(Attr("minSdkVersion") ?? UsesSdkAttr("minSdkVersion"));
         info.TargetSdkVersion = ParseLong(Attr("targetSdkVersion") ?? UsesSdkAttr("targetSdkVersion"));
         info.CompileSdkVersion = ParseLong(Attr("compileSdkVersion") ?? UsesSdkAttr("compileSdkVersion"));
 
-        // 权限与图标：递归遍历元素树。
-        // Permissions and icon: walk the element tree recursively.
+
         void Walk(AXmlElement el)
         {
             if (string.Equals(el.Name, "uses-permission", StringComparison.Ordinal))
@@ -188,10 +167,8 @@ public static class ApkParser
     }
 
     /// <summary>
-    /// <para>把图标的 AXML 属性解析为资源 ID：Reference 型属性值的 data 字段即资源 ID
-    /// （0xPPTTEEEE），无需经过 ResourceMap（该映射仅用于属性名识别）。</para>
-    /// Resolves the icon AXML attribute to a resource ID: for Reference-typed values the data field
-    /// already carries the resource ID (0xPPTTEEEE); the ResourceMap only maps attribute names.
+    /// Resolves the icon AXML attribute to a resource ID from the Reference-typed value data field.
+    /// <para>把图标的 AXML 属性的 Reference 型 data 字段解析为资源 ID。</para>
     /// </summary>
     private static uint ResolveIconReference(AXmlAttribute icon)
     {
@@ -204,33 +181,20 @@ public static class ApkParser
     }
 
     /// <summary>
-    /// <para>在 ARSC 中按资源 ID 查图标文件路径；失败时兜底扫描 drawable/mipmap 的图片条目。
-    /// 命中的路径若为自适应图标 XML（<c>mipmap-anydpi-v26/ic_launcher.xml</c> 等），
-    /// 递归解析其中引用的位图资源。</para>
-    /// Resolves the icon file path in ARSC by resource ID; falls back to scanning drawable/mipmap
-    /// image entries when the ID lookup fails. A resolved adaptive-icon XML (e.g.
-    /// <c>mipmap-anydpi-v26/ic_launcher.xml</c>) is recursively resolved to the bitmap it references.
+    /// Resolves the icon file path in ARSC by resource ID; falls back to scanning image entries.
+    /// <para>在 ARSC 中按资源 ID 查图标路径；失败时兜底扫描图片条目。</para>
     /// </summary>
     private static string? ResolveIconPath(ResourceTable table, ZipArchive zip, uint iconReference)
     {
-        // 1. 按引用查表；无引用时兜底扫描（仅此情况才用兜底，避免引用解析失败却
-        //    返回任意无关图片路径）。
-        // 1. Look up the icon by resource reference; the fallback scan is used only
-        //    when there is no reference at all, so a failed lookup never resolves to
-        //    an unrelated image path.
+
+
         var path = iconReference != 0 ? LookupEntryPath(table, iconReference) : null;
         if (path is null && iconReference == 0)
         {
             path = ScanForImagePath(table);
         }
 
-        // 2. XML 图标（layer-list/adaptive-icon/vector）：递归解析引用链找位图；
-        //    找不到位图时保留 XML 路径本身（UI 按魔数识别为不可渲染并显示占位），
-        //    而不是回退到兜底扫描的错误小图。
-        // 2. XML icons (layer-list/adaptive-icon/vector): recursively walk the
-        //    reference chain for a bitmap; when none exists, keep the XML path
-        //    itself (the UI detects the AXML magic and shows a placeholder)
-        //    instead of falling back to a wrong scan result.
+
         if (path is not null && path.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
         {
             path = ResolveXmlIconPath(table, zip, path) ?? path;
@@ -240,15 +204,8 @@ public static class ApkParser
     }
 
     /// <summary>
-    /// <para>解析自适应/图层图标 XML（AXML）：收集其中所有资源引用属性
-    /// （<c>background</c>/<c>foreground</c>/<c>drawable</c> 等），逐个查表返回首个位图路径。
-    /// 引用可能仍指向另一个 XML（layer-list → vector 等），故递归解析直至位图；
-    /// 用已访问集合防循环引用。</para>
-    /// Resolves an adaptive/layer-list icon XML (AXML): collects every resource-reference
-    /// attribute (<c>background</c>/<c>foreground</c>/<c>drawable</c> etc.) and returns the
-    /// first bitmap path found by lookup. References may point to further XML files
-    /// (layer-list → vector etc.), so the chain is walked recursively until a bitmap is
-    /// found; a visited set guards against circular references.
+    /// Recursively resolves an adaptive/layer-list icon XML to a bitmap path by following resource references.
+    /// <para>递归解析自适应/图层图标 XML，沿资源引用链找到位图路径。</para>
     /// </summary>
     private static string? ResolveXmlIconPath(ResourceTable table, ZipArchive zip, string xmlPath, HashSet<string>? visited = null)
     {
@@ -272,8 +229,7 @@ public static class ApkParser
             bytes = ms.ToArray();
         }
 
-        // AXML 魔数 03 00 08 00（ResXmlType）。
-        // AXML magic 03 00 08 00 (ResXmlType).
+
         if (bytes.Length < 4 || bytes[0] != 0x03)
         {
             return null;
@@ -289,10 +245,7 @@ public static class ApkParser
             return null;
         }
 
-        // Vector drawable 根：该 XML 本身可渲染，直接返回其路径（供 UI 解析为位图），
-        // 而不是继续找位图引用。
-        // A <vector> root is itself renderable: return its path directly (the UI parses it
-        // into a bitmap) instead of searching for bitmap references.
+
         if (string.Equals(doc.Root.Name, "vector", StringComparison.Ordinal))
         {
             return xmlPath;
@@ -313,9 +266,7 @@ public static class ApkParser
                 return resolved;
             }
 
-            // 引用仍指向 XML：递归解析（layer-list → vector / adaptive-icon 嵌套）。
-            // The reference points at another XML: recurse (layer-list → vector,
-            // adaptive-icon nesting).
+
             if (resolved.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
             {
                 var nested = ResolveXmlIconPath(table, zip, resolved, visited);
@@ -329,9 +280,8 @@ public static class ApkParser
     }
 
     /// <summary>
-    /// <para>递归收集元素树中所有资源引用属性值（Reference/DynamicReference 型）。</para>
-    /// Recursively collects the resource IDs of every Reference/DynamicReference attribute in the
-    /// element tree.
+    /// Recursively collects resource IDs of every Reference/DynamicReference attribute in the element tree.
+    /// <para>递归收集元素树中所有资源引用属性值。</para>
     /// </summary>
     private static void CollectReferences(AXmlElement el, List<uint> references)
     {
@@ -350,8 +300,8 @@ public static class ApkParser
     }
 
     /// <summary>
-    /// <para>判断路径是否为可渲染位图扩展名（PNG/WebP/JPG）。</para>
     /// Determines whether the path has a renderable bitmap extension (PNG/WebP/JPG).
+    /// <para>判断路径是否为可渲染位图扩展名（PNG/WebP/JPG）。</para>
     /// </summary>
     private static bool IsImagePath(string path) =>
         path.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
@@ -359,10 +309,8 @@ public static class ApkParser
         || path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// <para>按资源 ID（0xPPTTEEEE）在 ARSC 中定位条目并返回其字符串值（文件路径）；
-    /// 引用型条目递归解析一层。</para>
-    /// Locates the entry by resource ID (0xPPTTEEEE) in ARSC and returns its string value (file
-    /// path); Reference-typed entries are resolved one level recursively.
+    /// Locates an entry by resource ID (0xPPTTEEEE) in ARSC and returns its string value; references are resolved one level.
+    /// <para>按资源 ID 在 ARSC 中定位条目并返回其字符串值；引用型条目递归解析一层。</para>
     /// </summary>
     private static string? LookupEntryPath(ResourceTable table, uint resId)
     {
@@ -396,8 +344,7 @@ public static class ApkParser
                     return table.GlobalPool.GetString(checked((int)value.Data));
                 }
 
-                // 引用型：指向另一条目（如 tint/selector 场景），递归一层。
-                // Reference: points at another entry (tint/selector cases); resolve one level.
+
                 if (value.Type is ResValueType.Reference or ResValueType.DynamicReference
                     && value.Data != 0 && value.Data != resId)
                 {
@@ -409,15 +356,8 @@ public static class ApkParser
     }
 
     /// <summary>
-    /// <para>兜底：扫描所有资源类型的条目，优先返回资源名含 launcher/icon 的图片路径，
-    /// 其次返回任意图片扩展名路径。不限定 drawable/mipmap 类型编号——实际 APK 的图标
-    /// 资源类型编号不固定（Magisk 等位于 type 8），扩展名过滤已足够精确；按资源名
-    /// 排序可避免兜底命中与图标无关的首个图片（如渐变背景、占位小图）。</para>
-    /// Fallback: scans entries of every resource type, preferring image paths whose resource
-    /// name contains launcher/icon, then any image path. Not limited to drawable/mipmap type
-    /// IDs — real APKs place icon resources under varying type IDs (Magisk uses type 8), and
-    /// the extension filter is precise enough; ranking by resource name keeps the fallback
-    /// from returning an unrelated first image (gradient backgrounds, placeholder dots etc.).
+    /// Fallback: scans all resource types for image paths, preferring entries whose name contains "launcher" or "icon".
+    /// <para>兜底：扫描所有资源类型，优先返回资源名含 launcher/icon 的图片路径。</para>
     /// </summary>
     private static string? ScanForImagePath(ResourceTable table)
     {
@@ -444,8 +384,7 @@ public static class ApkParser
                         fallback = path;
                     }
 
-                    // 资源名含 launcher/icon 的条目优先（如 ic_launcher.png）。
-                    // Prefer entries whose resource name mentions launcher/icon.
+
                     var key = pkg.KeyStrings.GetString(entry.KeyIndex);
                     if (key.Contains("launcher", StringComparison.OrdinalIgnoreCase)
                         || key.Contains("icon", StringComparison.OrdinalIgnoreCase))

@@ -1,16 +1,12 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Firmware.Dt;
 
-/// <summary>
-/// <para>提供设备树二进制(DTB)格式的读取与写入。</para>
-/// Provides reading and writing of the Device Tree Blob (DTB) binary format.
-/// </summary>
 public static class DtbFormat
 {
     /// <summary>
-    /// <para>从 DTB 格式的字节数组解析设备树。</para>
     /// Parses a device tree from a byte array in DTB format.
+    /// <para>从 DTB 格式的字节数组解析设备树。</para>
     /// </summary>
     public static DeviceTree Read(byte[] data)
     {
@@ -19,8 +15,8 @@ public static class DtbFormat
     }
 
     /// <summary>
-    /// <para>从 DTB 格式的字节跨度解析设备树。</para>
     /// Parses a device tree from a span in DTB format.
+    /// <para>从 DTB 格式的字节跨度解析设备树。</para>
     /// </summary>
     public static DeviceTree Read(ReadOnlySpan<byte> data)
     {
@@ -40,7 +36,7 @@ public static class DtbFormat
             Version = header.Version
         };
 
-        // Memory reservations.
+
         if (header.OffsetMemRsvmap > 0 && header.OffsetMemRsvmap < data.Length)
         {
             var cursor = (int)header.OffsetMemRsvmap;
@@ -65,17 +61,17 @@ public static class DtbFormat
     }
 
     /// <summary>
-    /// <para>将设备树序列化为二进制 DTB 格式。</para>
     /// Serializes a device tree to binary DTB format.
+    /// <para>将设备树序列化为二进制 DTB 格式。</para>
     /// </summary>
     public static byte[] Write(DeviceTree tree)
     {
         ArgumentNullException.ThrowIfNull(tree);
 
-        // Build strings block (name table) and structure block.
+
         var strings = new List<string>();
         var stringOffsets = new Dictionary<string, int>(StringComparer.Ordinal);
-        var stringsBytes = new List<byte> { 0 }; // Offset 0 = empty string.
+        var stringsBytes = new List<byte> { 0 };
 
         int GetStringOffset(string name)
         {
@@ -139,7 +135,7 @@ public static class DtbFormat
             WriteU32(structBytes, FdtConstants.FdtEndNode);
         }
 
-        // Memory reservations block: must come after header.
+
         var rsvBytes = new List<byte>();
         foreach (var rsv in tree.MemoryReservations)
         {
@@ -150,7 +146,7 @@ public static class DtbFormat
             WriteU64BE(sizeBytes, 0, rsv.Size);
             rsvBytes.AddRange(sizeBytes);
         }
-        rsvBytes.AddRange(new byte[16]); // Terminator.
+        rsvBytes.AddRange(new byte[16]);
         Align(rsvBytes, 8);
 
         WriteNode(tree.Root);
@@ -187,13 +183,7 @@ public static class DtbFormat
     {
         var cursor = 0;
 
-        // 根节点：结构块首个 token 必须是 FDT_BEGIN_NODE（根节点自身）。将其名称
-        // 解析进 tree.Root 本身，而非作为 tree.Root 的子节点——否则真实根内容会
-        // 被多套一层空名节点，导致 DTS 输出出现多余的 "{ { } }" 且回编译损坏。
-        // The first token in the structure block is the root node's own FDT_BEGIN_NODE.
-        // Parse its name into tree.Root itself instead of creating a synthetic child,
-        // which would otherwise nest the real root content under an extra empty-named
-        // node and corrupt DTS output / DTB recompile.
+
         if (cursor + 4 > structBlock.Length)
         {
             throw new InvalidDataException("Empty structure block in DTB.");

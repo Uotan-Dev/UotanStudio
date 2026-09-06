@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.IO.Compression;
 using UotanStudio.Firmware.Compress.Internal;
 using SCCompressionMode = SharpCompress.Compressors.CompressionMode;
@@ -6,19 +6,12 @@ using SCDeflateStream = SharpCompress.Compressors.Deflate.DeflateStream;
 
 namespace UotanStudio.Firmware.Compress.Compressors;
 
-/// <summary>
-/// 原始 DEFLATE 压缩/解压（基于 .NET 内置 DeflateStream，RFC 1951，无 zlib/gzip 包装头）。
-/// <para>Raw DEFLATE compression/decompression (based on the .NET built-in DeflateStream, RFC 1951, without zlib/gzip wrapping).</para>
-/// </summary>
 public static class DeflateCompressor
 {
     /// <summary>
-    /// DEFLATE 压缩。
-    /// <para>DEFLATE compression.</para>
+    /// DEFLATE compression.
+    /// <para>DEFLATE 压缩。</para>
     /// </summary>
-    /// <param name="data">待压缩数据。<para>Data to compress.</para></param>
-    /// <param name="options">压缩选项（Level：0-9，null=Optimal）。<para>Compression options (Level: 0-9, null=Optimal).</para></param>
-    /// <returns>原始 deflate 流。<para>Raw deflate stream.</para></returns>
     public static byte[] Compress(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -28,7 +21,7 @@ public static class DeflateCompressor
 
         try
         {
-            // 并行分块：每块压缩为独立 deflate 流后按序拼接（多成员 deflate，由本库 TotalIn 循环解压）。
+
             var parallel = ParallelCompression.TryCompressChunks(data, options?.MaxDegreeOfParallelism,
                 (start, count) => CompressChunk(data, start, count, options));
             if (parallel != null)
@@ -50,8 +43,8 @@ public static class DeflateCompressor
     }
 
     /// <summary>
-    /// 把 [start, start+count) 压缩为独立的 raw deflate 流（并行分块用）。
-    /// <para>Compresses [start, start+count) into an independent raw deflate stream (for parallel chunking).</para>
+    /// Compresses [start, start+count) into an independent raw deflate stream (for parallel chunking).
+    /// <para>把 [start, start+count) 压缩为独立的 raw deflate 流（并行分块用）。</para>
     /// </summary>
     private static byte[] CompressChunk(byte[] data, int start, int count, CompressionOptions? options)
     {
@@ -64,11 +57,9 @@ public static class DeflateCompressor
     }
 
     /// <summary>
-    /// DEFLATE 解压。
-    /// <para>DEFLATE decompression.</para>
+    /// DEFLATE decompression.
+    /// <para>DEFLATE 解压。</para>
     /// </summary>
-    /// <param name="data">原始 deflate 流。<para>Raw deflate stream.</para></param>
-    /// <returns>解压后的原始数据。<para>The decompressed original data.</para></returns>
     public static byte[] Decompress(byte[] data)
     {
         if (data == null)
@@ -81,10 +72,7 @@ public static class DeflateCompressor
             using var output = new MemoryStream();
             var offset = 0;
 
-            // 逐成员解压：并行模式产出多成员 raw deflate 流，用 SharpCompress 解码器
-            // 的 TotalIn 精确定位成员边界（.NET DeflateStream 无法定位且只解首个成员）。
-            // Decompress member by member: parallel mode produces multi-member raw deflate
-            // streams; SharpCompress's TotalIn locates each member boundary exactly.
+
             while (offset < data.Length)
             {
                 using var sub = new MemoryStream(data, offset, data.Length - offset, writable: false);
@@ -113,12 +101,9 @@ public static class DeflateCompressor
     }
 
     /// <summary>
-    /// 流式 DEFLATE 压缩。
-    /// <para>Streaming DEFLATE compression.</para>
+    /// Streaming DEFLATE compression.
+    /// <para>流式 DEFLATE 压缩。</para>
     /// </summary>
-    /// <param name="input">待压缩的输入流。<para>The input stream to compress.</para></param>
-    /// <param name="output">写入压缩结果的输出流。<para>The output stream that receives the compressed data.</para></param>
-    /// <param name="options">压缩选项（Level：0-9，null=Optimal）。<para>Compression options (Level: 0-9, null=Optimal).</para></param>
     public static void Compress(Stream input, Stream output, CompressionOptions? options = null)
     {
         if (input == null)
@@ -143,11 +128,9 @@ public static class DeflateCompressor
     }
 
     /// <summary>
-    /// 流式 DEFLATE 解压。
-    /// <para>Streaming DEFLATE decompression.</para>
+    /// Streaming DEFLATE decompression.
+    /// <para>流式 DEFLATE 解压。</para>
     /// </summary>
-    /// <param name="input">待解压的输入流。<para>The input stream to decompress.</para></param>
-    /// <param name="output">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
     public static void Decompress(Stream input, Stream output)
     {
         if (input == null)
@@ -164,8 +147,8 @@ public static class DeflateCompressor
         {
             if (input.CanSeek)
             {
-                // 可定位流：逐成员解压，用 TotalIn 精确推进到下一成员起点。
-                // Seekable input: decompress member by member, advancing by TotalIn.
+
+
                 while (true)
                 {
                     var memberStart = input.Position;
@@ -189,8 +172,8 @@ public static class DeflateCompressor
             }
             else
             {
-                // 不可定位流：无法确定成员边界，按单成员处理（与既有行为一致）。
-                // Non-seekable input: member boundaries cannot be located; treat as single member.
+
+
                 using var deflate = new SCDeflateStream(new NonDisposingStream(input), SCCompressionMode.Decompress);
                 deflate.CopyTo(output);
             }
@@ -202,14 +185,9 @@ public static class DeflateCompressor
     }
 
     /// <summary>
-    /// 流式 DEFLATE 解压，带输出上限（防解压炸弹）。
-    /// <para>Streaming DEFLATE decompression with output limit (decompression bomb protection).</para>
+    /// Streaming DEFLATE decompression with output limit (decompression bomb protection).
+    /// <para>流式 DEFLATE 解压，带输出上限（防解压炸弹）。</para>
     /// </summary>
-    /// <param name="source">待解压的压缩流。<para>The compressed input stream.</para></param>
-    /// <param name="destination">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
-    /// <param name="maxOutputBytes">最大允许的解压输出字节数，超出则抛出异常。<para>Maximum allowed decompressed output in bytes; throws if exceeded.</para></param>
-    /// <exception cref="CompressionException">解压输出超过 <paramref name="maxOutputBytes"/> 时抛出。
-    /// <para>Thrown when decompressed output exceeds <paramref name="maxOutputBytes"/>.</para></exception>
     public static void Decompress(Stream source, Stream destination, long maxOutputBytes)
     {
         if (source == null)
@@ -235,8 +213,8 @@ public static class DeflateCompressor
             {
                 if (source.CanSeek)
                 {
-                    // 可定位流：逐成员解压，用 TotalIn 精确推进到下一成员起点。
-                    // Seekable input: decompress member by member, advancing by TotalIn.
+
+
                     while (true)
                     {
                         var memberStart = source.Position;
@@ -260,8 +238,8 @@ public static class DeflateCompressor
                 }
                 else
                 {
-                    // 不可定位流：无法确定成员边界，按单成员处理（与既有行为一致）。
-                    // Non-seekable input: member boundaries cannot be located; treat as single member.
+
+
                     using var deflate = new SCDeflateStream(new NonDisposingStream(source), SCCompressionMode.Decompress);
                     BoundedCopy(deflate, destination, buffer, totalWritten, maxOutputBytes);
                 }
@@ -282,8 +260,8 @@ public static class DeflateCompressor
     }
 
     /// <summary>
-    /// 从 <paramref name="source"/> 读取数据写入 <paramref name="destination"/>，超出 <paramref name="maxOutputBytes"/> 则抛异常。
-    /// <para>Reads from <paramref name="source"/> into <paramref name="destination"/>, throwing if <paramref name="maxOutputBytes"/> is exceeded.</para>
+    /// Reads from source into destination, throwing if maxOutputBytes is exceeded.
+    /// <para>从 source 读取数据写入 destination，超出 maxOutputBytes 则抛异常。</para>
     /// </summary>
     private static long BoundedCopy(Stream source, Stream destination, byte[] buffer, long totalWritten, long maxOutputBytes)
     {

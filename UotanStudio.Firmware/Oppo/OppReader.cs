@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using UotanStudio.Firmware.Common.Streams;
@@ -10,39 +10,19 @@ using UotanStudio.Firmware.Oppo.Parsers;
 
 namespace UotanStudio.Firmware.Oppo;
 
-/// <summary>
-/// <para>提供 Oppo 固件文件的无状态读取操作。</para>
-/// Provides stateless read operations for Oppo firmware files.
-/// </summary>
-/// <remarks>
-/// <para>此类型是线程安全的，可跨线程调用。</para>
-/// This type is thread-safe and can be called across threads.
-/// </remarks>
 public sealed partial class OppReader
 {
     private const int DefaultBufferSize = 81920;
 
-    /// <summary>
-    /// <para>ZIP 包裹的 OFP 文件的固定解压密码。</para>
-    /// The fixed password for extracting ZIP-wrapped OFP files.
-    /// </summary>
     internal const string ZipPassword = "flash@realme$50E7F7D847732396F1582CD62DD385ED7ABB0897";
 
     private readonly IOppCryptoProvider? _cryptoProvider;
     private readonly IOppLogger _logger;
 
     /// <summary>
-    /// <para>初始化 <see cref="OppReader"/> 类的新实例。</para>
-    /// Initializes a new instance of the <see cref="OppReader"/> class.
+    /// Initializes a new instance of the OppReader class.
+    /// <para>初始化 OppReader 类的新实例。</para>
     /// </summary>
-    /// <param name="cryptoProvider">
-    /// <para>可选的加密提供者实例，为 null 时使用默认实现。</para>
-    /// Optional crypto provider instance; uses default implementation when null.
-    /// </param>
-    /// <param name="logger">
-    /// <para>可选的日志记录器实例，为 null 时不记录日志。</para>
-    /// Optional logger instance; no logging when null.
-    /// </param>
     public OppReader(IOppCryptoProvider? cryptoProvider = null, IOppLogger? logger = null)
     {
         _cryptoProvider = cryptoProvider;
@@ -51,11 +31,9 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>从指定文件路径读取 Oppo 固件文件的元信息。</para>
     /// Reads metadata from an Oppo firmware file at the specified path.
+    /// <para>从指定文件路径读取 Oppo 固件文件的元信息。</para>
     /// </summary>
-    /// <param name="filePath"><para>固件文件路径。</para>The path to the firmware file.</param>
-    /// <returns><para>包含文件基本信息的对象。</para>An object containing basic file information.</returns>
     public OppMetadata ReadMetadata(string filePath)
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
@@ -72,12 +50,9 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>异步从指定文件路径读取 Oppo 固件文件的元信息。</para>
     /// Asynchronously reads metadata from an Oppo firmware file at the specified path.
+    /// <para>异步从指定文件路径读取 Oppo 固件文件的元信息。</para>
     /// </summary>
-    /// <param name="filePath"><para>固件文件路径。</para>The path to the firmware file.</param>
-    /// <param name="cancellationToken"><para>取消操作的令牌。</para>The token to cancel the operation.</param>
-    /// <returns><para>包含文件基本信息的对象。</para>An object containing basic file information.</returns>
     public async ValueTask<OppMetadata> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
@@ -94,11 +69,9 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>从流中读取 Oppo 固件文件的元信息。</para>
     /// Reads metadata from a stream containing an Oppo firmware file.
+    /// <para>从流中读取 Oppo 固件文件的元信息。</para>
     /// </summary>
-    /// <param name="stream"><para>可读取的流。调用方负责释放流。</para>A readable stream. The caller is responsible for disposing the stream.</param>
-    /// <returns><para>包含文件基本信息的对象。</para>An object containing basic file information.</returns>
     public OppMetadata ReadMetadataFromStream(Stream stream)
     {
         Guard.ThrowIfNull(stream);
@@ -106,37 +79,35 @@ public sealed partial class OppReader
         var format = FormatDetector.DetectFormatFromStream(stream);
         var fileSize = stream.Length;
 
-        // Handle ZIP-wrapped OFP: extract inner OFP and process it
+
         if (format == OppFormat.OfpQc && IsZipFile(stream))
         {
             return ReadMetadataFromZipWrappedOfp(stream, fileSize);
         }
 
-        // Use ParserRegistry to find the appropriate parser
+
         var parser = ParserRegistry.GetParser(format);
         return parser.ParseMetadata(stream, fileSize, _cryptoProvider);
     }
 
     /// <summary>
-    /// <para>异步从流中读取 Oppo 固件文件的元信息。</para>
     /// Asynchronously reads metadata from a stream containing an Oppo firmware file.
+    /// <para>异步从流中读取 Oppo 固件文件的元信息。</para>
     /// </summary>
     public ValueTask<OppMetadata> ReadMetadataFromStreamAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNull(stream);
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Metadata parsing is primarily synchronous I/O; wrap in ValueTask for API consistency
+
         var result = ReadMetadataFromStream(stream);
         return new ValueTask<OppMetadata>(result);
     }
 
     /// <summary>
-    /// <para>完整解析指定文件路径的 Oppo 固件归档。</para>
     /// Fully parses an Oppo firmware archive at the specified path.
+    /// <para>完整解析指定文件路径的 Oppo 固件归档。</para>
     /// </summary>
-    /// <param name="filePath"><para>固件文件路径。</para>The path to the firmware file.</param>
-    /// <returns><para>完全解析的固件归档对象。</para>A fully parsed firmware archive object.</returns>
     public OppArchive Parse(string filePath)
     {
         Guard.ThrowIfNullOrWhiteSpace(filePath);
@@ -153,8 +124,8 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>异步完整解析指定文件路径的 Oppo 固件归档。</para>
     /// Asynchronously fully parses an Oppo firmware archive at the specified path.
+    /// <para>异步完整解析指定文件路径的 Oppo 固件归档。</para>
     /// </summary>
     public async Task<OppArchive> ParseAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -172,8 +143,8 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>从流中完整解析 Oppo 固件归档。</para>
     /// Fully parses an Oppo firmware archive from a stream.
+    /// <para>从流中完整解析 Oppo 固件归档。</para>
     /// </summary>
     public OppArchive ParseFromStream(Stream stream)
     {
@@ -181,8 +152,7 @@ public sealed partial class OppReader
 
         var metadata = ReadMetadataFromStream(stream);
 
-        // For ZIP-wrapped OFP files, the inner OFP must be extracted
-        // and parsed separately since the outer stream is a ZIP, not OFP
+
         if (metadata.IsZipWrapped)
         {
             return ParseZipWrappedArchive(stream, metadata);
@@ -198,8 +168,8 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>异步从流中完整解析 Oppo 固件归档。</para>
     /// Asynchronously fully parses an Oppo firmware archive from a stream.
+    /// <para>异步从流中完整解析 Oppo 固件归档。</para>
     /// </summary>
     public Task<OppArchive> ParseFromStreamAsync(Stream stream, CancellationToken cancellationToken = default)
     {
@@ -211,14 +181,9 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>将指定文件路径的 Oppo 固件归档提取到输出目录。</para>
     /// Extracts an Oppo firmware archive at the specified path to an output directory.
+    /// <para>将指定文件路径的 Oppo 固件归档提取到输出目录。</para>
     /// </summary>
-    /// <param name="filePath"><para>固件文件路径。</para>The path to the firmware file.</param>
-    /// <param name="outputDir"><para>输出目录路径。</para>The output directory path.</param>
-    /// <param name="options"><para>提取选项，为 null 时使用默认选项。</para>Extraction options; uses default options when null.</param>
-    /// <param name="progress"><para>进度报告器，为 null 时不报告进度。</para>Progress reporter; no progress reporting when null.</param>
-    /// <returns><para>提取操作的结果。</para>The result of the extraction operation.</returns>
     public OppExtractResult Extract(
         string filePath,
         string outputDir,
@@ -240,8 +205,8 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>异步将指定文件路径的 Oppo 固件归档提取到输出目录。</para>
     /// Asynchronously extracts an Oppo firmware archive at the specified path to an output directory.
+    /// <para>异步将指定文件路径的 Oppo 固件归档提取到输出目录。</para>
     /// </summary>
     public async Task<OppExtractResult> ExtractAsync(
         string filePath,
@@ -265,8 +230,8 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>从流中提取 Oppo 固件归档到输出目录。</para>
     /// Extracts an Oppo firmware archive from a stream to an output directory.
+    /// <para>从流中提取 Oppo 固件归档到输出目录。</para>
     /// </summary>
     public OppExtractResult ExtractFromStream(
         Stream stream,
@@ -282,8 +247,8 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>异步从流中提取 Oppo 固件归档到输出目录。</para>
     /// Asynchronously extracts an Oppo firmware archive from a stream to an output directory.
+    /// <para>异步从流中提取 Oppo 固件归档到输出目录。</para>
     /// </summary>
     public Task<OppExtractResult> ExtractFromStreamAsync(
         Stream stream,
@@ -327,15 +292,13 @@ public sealed partial class OppReader
             Directory.CreateDirectory(outputDir);
         }
 
-        // OZip needs a dedicated extraction path: decrypt the whole file once,
-        // then copy each inner ZIP entry to the output directory.
+
         if (archive.Metadata.Format == OppFormat.Ozip)
         {
             return ExtractOzipCore(stream, archive, outputDir, overwrite, keyId, progress);
         }
 
-        // ZIP-wrapped OFP: the entries belong to the inner OFP file, so the inner
-        // file must be re-extracted before the generic entry loop can run.
+
         return archive.Metadata.IsZipWrapped
             ? ExtractZipWrappedCore(stream, archive, outputDir, overwrite, keyId, progress)
             : ExtractEntriesCore(stream, archive, outputDir, overwrite, keyId, progress);
@@ -385,7 +348,7 @@ public sealed partial class OppReader
             }
             catch
             {
-                // Best effort cleanup
+
             }
         }
     }
@@ -413,7 +376,7 @@ public sealed partial class OppReader
                 sanitized = $"entry_{completedEntries}";
             }
 
-            // Skip entries with zero or negative size to avoid creating empty output files
+
             if (entry.Size <= 0)
             {
                 _logger.Debug($"Skipping entry with zero size: {sanitized}");
@@ -437,7 +400,7 @@ public sealed partial class OppReader
                 Directory.CreateDirectory(outputDirForEntry);
             }
 
-            // Use the parser registry to extract entries
+
             var parser = ParserRegistry.GetParser(archive.Metadata.Format);
             using var outputStream = new FileStream(
                 outputPath,
@@ -463,12 +426,8 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>按本地文件头（LFH）偏移手动提取 zip 条目：定位 PK\x03\x04 头，读取文件名/extra
-    /// 长度与压缩方法，跳过头部后按 store/deflate 解压数据。供中央目录损坏时回退使用。</para>
-    /// Manually extracts a ZIP entry by its local file header (LFH) offset: locates the
-    /// PK\x03\x04 header, reads name/extra lengths and the compression method, skips the
-    /// header, then decompresses store/deflate data. Used as the fallback when the central
-    /// directory is corrupt.
+    /// Manually extracts a ZIP entry by its local file header (LFH) offset: locates the PK\x03\x04 header, reads name/extra lengths and the compression method, skips the header, then decompresses store/deflate data.
+    /// <para>按本地文件头（LFH）偏移手动提取 zip 条目：定位 PK\x03\x04 头，读取文件名/extra 长度与压缩方法，跳过头部后按 store/deflate 解压数据。</para>
     /// </summary>
     private static void ExtractZipEntryByLocalHeader(Stream zip, OppEntry entry, Stream output)
     {
@@ -476,8 +435,7 @@ public sealed partial class OppReader
         Span<byte> lfh = stackalloc byte[30];
         zip.ReadExactly(lfh);
 
-        // 本地文件头签名 PK\x03\x04。
-        // Local file header signature PK\x03\x04.
+
         if (lfh[0] != 0x50 || lfh[1] != 0x4B || lfh[2] != 0x03 || lfh[3] != 0x04)
         {
             throw new InvalidDataException($"Invalid local file header at offset {entry.Offset}.");
@@ -487,11 +445,7 @@ public sealed partial class OppReader
         var nameLen = BinaryPrimitives.ReadUInt16LittleEndian(lfh[26..]);
         var extraLen = BinaryPrimitives.ReadUInt16LittleEndian(lfh[28..]);
 
-        // data descriptor 条目（flag bit 3）在本地文件头中大小为 0，真实压缩大小
-        // 来自中央目录记录；store 条目压缩大小等于未压缩大小。
-        // Data-descriptor entries (flag bit 3) carry zero sizes in the local header; the
-        // real compressed size comes from the central-directory record. Stored entries
-        // have a compressed size equal to their uncompressed size.
+
         var compressedSize = entry.CompressedSize > 0
             ? entry.CompressedSize
             : BinaryPrimitives.ReadUInt32LittleEndian(lfh[18..]);
@@ -510,13 +464,13 @@ public sealed partial class OppReader
 
         switch (method)
         {
-            case 0: // store：直接复制压缩字节（等于未压缩字节）。
-                // store: copy the bytes verbatim (compressed size equals uncompressed size).
+            case 0:
+
                 StreamCopy.CopyExactly(bounded, output, compressedSize);
                 break;
 
-            case 8: // deflate：解压并限制输出上限，防解压炸弹。
-                // deflate: decompress with an output cap to guard against zip bombs.
+            case 8:
+
                 using (var counting = new CountingWriteStream(output, uncompressedSize, leaveOpen: true))
                 using (var deflate = new DeflateStream(bounded, CompressionMode.Decompress, leaveOpen: true))
                 {
@@ -534,8 +488,8 @@ public sealed partial class OppReader
     #region ZIP-wrapped OFP support
 
     /// <summary>
-    /// <para>检查流是否为 ZIP 文件。</para>
     /// Checks if the stream is a ZIP file.
+    /// <para>检查流是否为 ZIP 文件。</para>
     /// </summary>
     private static bool IsZipFile(Stream stream)
     {
@@ -559,14 +513,14 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>从 ZIP 包裹的 OFP 文件中读取元信息。</para>
     /// Reads metadata from a ZIP-wrapped OFP file.
+    /// <para>从 ZIP 包裹的 OFP 文件中读取元信息。</para>
     /// </summary>
     private OppMetadata ReadMetadataFromZipWrappedOfp(Stream stream, long fileSize)
     {
         _logger.Information("Detected ZIP-wrapped OFP file, extracting inner OFP...");
 
-        // Extract the inner OFP to a temporary file
+
         var tempDir = Path.Combine(Path.GetTempPath(), $"UotanStudio.Oppo.Ofp.{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
 
@@ -574,11 +528,11 @@ public sealed partial class OppReader
         {
             ExtractZipToDirectory(stream, tempDir);
 
-            // Find the inner OFP file
+
             var innerFiles = Directory.GetFiles(tempDir, "*.ofp", SearchOption.AllDirectories);
             if (innerFiles.Length == 0)
             {
-                // Try any file if no .ofp found
+
                 innerFiles = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories);
             }
 
@@ -587,7 +541,7 @@ public sealed partial class OppReader
                 throw new InvalidOppFormatException("ZIP-wrapped OFP contains no inner firmware file.");
             }
 
-            // Process the inner OFP file
+
             using var innerStream = new FileStream(
                 innerFiles[0],
                 FileMode.Open,
@@ -600,7 +554,7 @@ public sealed partial class OppReader
             var parser = ParserRegistry.GetParser(innerFormat);
             var metadata = parser.ParseMetadata(innerStream, innerStream.Length, _cryptoProvider);
 
-            // Mark as ZIP-wrapped
+
             return new OppMetadata
             {
                 FormatName = metadata.FormatName,
@@ -625,14 +579,14 @@ public sealed partial class OppReader
             }
             catch
             {
-                // Best effort cleanup
+
             }
         }
     }
 
     /// <summary>
-    /// <para>使用固定密码将 ZIP 流解压到指定目录。</para>
     /// Extracts a ZIP stream to the specified directory using the fixed password.
+    /// <para>使用固定密码将 ZIP 流解压到指定目录。</para>
     /// </summary>
     private static void ExtractZipToDirectory(Stream stream, string outputDir)
     {
@@ -646,7 +600,7 @@ public sealed partial class OppReader
             if (!outputPath.StartsWith(Path.GetFullPath(outputDir) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
                 !outputPath.Equals(Path.GetFullPath(outputDir), StringComparison.OrdinalIgnoreCase))
             {
-                continue; // Skip entries that attempt path traversal
+                continue;
             }
 
             var entryDir = Path.GetDirectoryName(outputPath);
@@ -678,8 +632,8 @@ public sealed partial class OppReader
     }
 
     /// <summary>
-    /// <para>从 ZIP 包裹的 OFP 文件中完整解析归档（元数据 + 条目）。</para>
     /// Fully parses an archive (metadata + entries) from a ZIP-wrapped OFP file.
+    /// <para>从 ZIP 包裹的 OFP 文件中完整解析归档（元数据 + 条目）。</para>
     /// </summary>
     private OppArchive ParseZipWrappedArchive(Stream stream, OppMetadata metadata)
     {
@@ -727,7 +681,7 @@ public sealed partial class OppReader
             }
             catch
             {
-                // Best effort cleanup
+
             }
         }
     }
@@ -750,8 +704,8 @@ public sealed partial class OppReader
     private static readonly HashSet<char> InvalidFileNameChars = [.. Path.GetInvalidFileNameChars()];
 
     /// <summary>
-    /// <para>清理文件名中的非法字符。</para>
     /// Sanitizes illegal characters from a file name.
+    /// <para>清理文件名中的非法字符。</para>
     /// </summary>
     private static string SanitizeFileName(string name)
     {

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.NTPi.Compression;
+﻿using UotanStudio.Firmware.NTPi.Compression;
 using UotanStudio.Firmware.NTPi.Crypto;
 using UotanStudio.Firmware.NTPi.Exceptions;
 using UotanStudio.Firmware.NTPi.Models;
@@ -6,10 +6,6 @@ using UotanStudio.Firmware.NTPi.Reader;
 
 namespace UotanStudio.Firmware.NTPi;
 
-/// <summary>
-/// <para>NTPI 固件包读取器,提供读取文件信息、解包和解析功能。</para>
-/// NTPI firmware package reader that provides functionality to read file information, unpack, and parse.
-/// </summary>
 public sealed class NtpiReader : IDisposable
 {
     private readonly NtpiRegionWalker _regionWalker;
@@ -19,8 +15,8 @@ public sealed class NtpiReader : IDisposable
     private const int DefaultBufferSize = 81920;
 
     /// <summary>
-    /// <para>使用指定的加密提供者和压缩器初始化 NtpiReader 的新实例。</para>
     /// Initializes a new instance of NtpiReader with the specified crypto provider and compressor.
+    /// <para>使用指定的加密提供者和压缩器初始化 NtpiReader 的新实例。</para>
     /// </summary>
     public NtpiReader(ICryptoProvider cryptoProvider, ILzma2Compressor compressor)
     {
@@ -32,15 +28,15 @@ public sealed class NtpiReader : IDisposable
     }
 
     /// <summary>
-    /// <para>使用默认的 AES-CBC 加密提供者和 LZMA 压缩器创建 NtpiReader。</para>
     /// Creates an NtpiReader with the default AES-CBC crypto provider and LZMA compressor.
+    /// <para>使用默认的 AES-CBC 加密提供者和 LZMA 压缩器创建 NtpiReader。</para>
     /// </summary>
     public static NtpiReader CreateDefault()
         => new(new AesCbcCryptoProvider(), new Lzma2Compressor());
 
     /// <summary>
-    /// <para>读取 NTPI 固件包的文件信息,包括版本号、区域列表和文件条目,不提取文件。</para>
     /// Reads the file information of an NTPI firmware package, without extracting files.
+    /// <para>读取 NTPI 固件包的文件信息,包括版本号、区域列表和文件条目,不提取文件。</para>
     /// </summary>
     public NtpiFileInfo ReadInfo(string filePath)
     {
@@ -57,15 +53,15 @@ public sealed class NtpiReader : IDisposable
     }
 
     /// <summary>
-    /// <para>将 NTPI 固件包解包到指定目录(逐文件流式提取)。</para>
     /// Unpacks the NTPI firmware package to the specified directory (streams extraction per file).
+    /// <para>将 NTPI 固件包解包到指定目录(逐文件流式提取)。</para>
     /// </summary>
     public void Unpack(string filePath, string outputDir, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null)
         => Unpack(filePath, outputDir, new NtpiUnpackOptions(), progress, fileFilter);
 
     /// <summary>
-    /// <para>使用可信输出限制将 NTPI 固件包解包到指定目录。</para>
     /// Unpacks an NTPI firmware package using trusted output limits.
+    /// <para>使用可信输出限制将 NTPI 固件包解包到指定目录。</para>
     /// </summary>
     public void Unpack(string filePath, string outputDir, NtpiUnpackOptions options, IProgress<NtpiExtractionProgress>? progress = null, Func<string, bool>? fileFilter = null)
     {
@@ -88,7 +84,7 @@ public sealed class NtpiReader : IDisposable
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.RandomAccess);
         var layout = WalkLayout(stream);
 
-        // Validate every declaration, including filtered entries, before creating or mutating output.
+
         long declaredTotal = 0;
         foreach (var entry in layout.FileEntries)
         {
@@ -162,7 +158,7 @@ public sealed class NtpiReader : IDisposable
                 }
                 catch
                 {
-                    // Preserve the original exception.
+
                 }
                 throw;
             }
@@ -173,13 +169,9 @@ public sealed class NtpiReader : IDisposable
     }
 
     /// <summary>
-    /// <para>将 NTPI 固件包解析到内存中,返回头部、区域数据与提取的文件。</para>
     /// Parses the NTPI firmware package into memory, returning header, region data, and extracted files.
+    /// <para>将 NTPI 固件包解析到内存中,返回头部、区域数据与提取的文件。</para>
     /// </summary>
-    /// <remarks>
-    /// <para>此 API 为内存便捷包装;大规模包请使用 <see cref="Unpack"/> 进行流式提取。</para>
-    /// This API is an in-memory convenience wrapper; for large packages use <see cref="Unpack"/> to stream extraction.
-    /// </remarks>
     public NtpiParsedFile Parse(string filePath)
     {
         ThrowIfDisposed();
@@ -231,8 +223,7 @@ public sealed class NtpiReader : IDisposable
         }
         result.FileEntries = layout.FileEntries;
 
-        // Materialize Region6 only for the in-memory model; streaming callers use Unpack.
-        // A zero-sized Region6 is still a present, valid region for packages containing only empty files.
+
         if (layout.HasRegion6)
         {
             stream.Position = layout.Region6Offset;
@@ -264,9 +255,8 @@ public sealed class NtpiReader : IDisposable
     }
 
     /// <summary>
+    /// The parse phase records only region/file offsets, lengths, and decryption/compression parameters without loading Region6 data.
     /// <para>解析阶段仅记录区域与文件的 offset、length 以及解密/压缩参数,不加载 Region6 数据。</para>
-    /// The parse phase records only region/file offsets, lengths, and decryption/compression
-    /// parameters without loading Region6 data.
     /// </summary>
     private ParsedLayout WalkLayout(Stream stream)
     {
@@ -312,7 +302,10 @@ public sealed class NtpiReader : IDisposable
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases resources owned by this instance.
+    /// <para>释放此实例持有的资源。</para>
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)

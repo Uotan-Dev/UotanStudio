@@ -1,12 +1,8 @@
-using UotanStudio.Firmware.Payload.Exceptions;
+﻿using UotanStudio.Firmware.Payload.Exceptions;
 using UotanStudio.Firmware.Payload.Proto;
 
 namespace UotanStudio.Firmware.Payload.Core;
 
-/// <summary>
-/// Handles extracting partitions from a payload stream.
-/// <para>处理从载荷流中提取分区。</para>
-/// </summary>
 internal class PayloadExtractor
 {
     private static readonly HashSet<InstallOperation.Types.Type> ParallelizableTypes =
@@ -14,7 +10,7 @@ internal class PayloadExtractor
         InstallOperation.Types.Type.Replace,
         InstallOperation.Types.Type.ReplaceBz,
         InstallOperation.Types.Type.ReplaceXz,
-        (InstallOperation.Types.Type)14, // REPLACE_ZSTD (not in proto but supported)
+        (InstallOperation.Types.Type)14,
         InstallOperation.Types.Type.Zero,
         InstallOperation.Types.Type.Discard,
         InstallOperation.Types.Type.Move
@@ -36,36 +32,6 @@ internal class PayloadExtractor
     /// Extracts a single partition from the payload stream to an output file.
     /// <para>从载荷流中提取单个分区到输出文件。</para>
     /// </summary>
-    /// <param name="partition">The partition update descriptor containing operations and extents.
-    /// <para>包含操作和区间的分区更新描述符。</para>
-    /// </param>
-    /// <param name="outFilename">The output file path for the extracted partition image.
-    /// <para>提取的分区镜像的输出文件路径。</para>
-    /// </param>
-    /// <param name="stream">The payload stream to read operation data from.
-    /// <para>用于读取操作数据的载荷流。</para>
-    /// </param>
-    /// <param name="baseOffset">The base offset in the stream where data blobs begin.
-    /// <para>流中数据块开始的基偏移量。</para>
-    /// </param>
-    /// <param name="blockSize">The block size used for extent calculations.
-    /// <para>用于区间计算的块大小。</para>
-    /// </param>
-    /// <param name="sourceImages">Optional per-partition base image file path mapping. When a partition
-    /// with source-dependent operations is extracted, its base (old) partition image is streamed into
-    /// the temporary output file first so source extents resolve to base data instead of zero-filled
-    /// bytes. A partition with source-dependent operations and no matching base image throws
-    /// <see cref="PartitionExtractionException"/>.
-    /// <para>可选的每分区基座镜像文件路径映射。提取含源依赖操作的分区时，会先将该分区的基座
-    /// （旧）镜像流式写入临时输出文件，使源区间解析到基座数据而非零填充字节。含源依赖操作但
-    /// 没有对应基座镜像的分区会抛出 <see cref="PartitionExtractionException"/>。</para>
-    /// </param>
-    /// <exception cref="PayloadUnsupportedOperationException">Thrown when an operation type is genuinely unsupported.
-    /// <para>当操作类型确实不受支持时抛出。</para>
-    /// </exception>
-    /// <exception cref="PartitionExtractionException">Thrown when the partition extraction fails.
-    /// <para>当分区提取失败时抛出。</para>
-    /// </exception>
     public void ExtractPartition(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, IReadOnlyDictionary<string, string>? sourceImages = null)
         => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize, CancellationToken.None, sourceImages);
 
@@ -111,13 +77,7 @@ internal class PayloadExtractor
                     outFile.SetLength(totalSize);
                 }
 
-                // Source-dependent operations (SOURCE_COPY/SOURCE_BSDIFF/BROTLI_BSDIFF/PUFFDIFF/
-                // BSDIFF/LZ4DIFF_*/ZUCCHINI) resolve their source extents against the base partition
-                // image. Without a base these would silently read zero-filled bytes and produce corrupt
-                // output, so a base is mandatory whenever such an operation is present.
-                // 源依赖操作（SOURCE_COPY/SOURCE_BSDIFF/BROTLI_BSDIFF/PUFFDIFF/BSDIFF/LZ4DIFF_*/ZUCCHINI）
-                // 从基座分区镜像解析其源区间。无基座时会静默读取零填充字节并产出损坏数据，
-                // 因此只要存在此类操作就必须提供基座。
+
                 var needsBase = partition.Operations.Any(op => IsSourceDependent(op.Type));
                 string? baseImagePath = null;
                 if (sourceImages != null && sourceImages.TryGetValue(partition.PartitionName, out var path) && !string.IsNullOrWhiteSpace(path))
@@ -144,13 +104,7 @@ internal class PayloadExtractor
                             partition.PartitionName);
                     }
 
-                    // Stream the base (old) partition image into the output file so source extents
-                    // resolve to base data. The file was already sized to the destination; a shorter
-                    // base leaves the tail zero-filled while a longer one extends the file so source
-                    // reads can reach beyond the destination size during processing.
-                    // 将基座（旧）分区镜像流式写入输出文件，使源区间解析到基座数据。文件此前已按
-                    // 目标大小设定长度：较短的基座在尾部留零，较长的基座会扩展文件，以便处理期间
-                    // 源读取可到达目标大小之外的区域。
+
                     using var baseStream = new FileStream(baseImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
                     baseStream.CopyTo(outFile);
                 }
@@ -286,38 +240,6 @@ internal class PayloadExtractor
     /// Asynchronously extracts a single partition from the payload stream to an output file.
     /// <para>异步从载荷流中提取单个分区到输出文件。</para>
     /// </summary>
-    /// <param name="partition">The partition update descriptor containing operations and extents.
-    /// <para>包含操作和区间的分区更新描述符。</para>
-    /// </param>
-    /// <param name="outFilename">The output file path for the extracted partition image.
-    /// <para>提取的分区镜像的输出文件路径。</para>
-    /// </param>
-    /// <param name="stream">The payload stream to read operation data from.
-    /// <para>用于读取操作数据的载荷流。</para>
-    /// </param>
-    /// <param name="baseOffset">The base offset in the stream where data blobs begin.
-    /// <para>流中数据块开始的基偏移量。</para>
-    /// </param>
-    /// <param name="blockSize">The block size used for extent calculations.
-    /// <para>用于区间计算的块大小。</para>
-    /// </param>
-    /// <param name="cancellationToken">The token to monitor for cancellation requests.
-    /// <para>用于监视取消请求的令牌。</para>
-    /// </param>
-    /// <param name="sourceImages">Optional per-partition base image file path mapping. See
-    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>.
-    /// <para>可选的每分区基座镜像文件路径映射。参见
-    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>。</para>
-    /// </param>
-    /// <returns>A task that represents the asynchronous extraction operation.
-    /// <para>表示异步提取操作的任务。</para>
-    /// </returns>
-    /// <exception cref="PayloadUnsupportedOperationException">Thrown when an operation type is genuinely unsupported.
-    /// <para>当操作类型确实不受支持时抛出。</para>
-    /// </exception>
-    /// <exception cref="PartitionExtractionException">Thrown when the partition extraction fails.
-    /// <para>当分区提取失败时抛出。</para>
-    /// </exception>
     public Task ExtractPartitionAsync(PartitionUpdate partition, string outFilename, Stream stream, ulong baseOffset, uint blockSize, CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? sourceImages = null)
         => Task.Run(() => ExtractPartition(partition, outFilename, stream, baseOffset, blockSize, cancellationToken, sourceImages), cancellationToken);
 
@@ -325,30 +247,6 @@ internal class PayloadExtractor
     /// Extracts all matching partitions from the manifest to the output directory.
     /// <para>从清单中提取所有匹配的分区到输出目录。</para>
     /// </summary>
-    /// <param name="manifest">The delta archive manifest containing partition definitions.
-    /// <para>包含分区定义的增量归档清单。</para>
-    /// </param>
-    /// <param name="stream">The payload stream to read operation data from.
-    /// <para>用于读取操作数据的载荷流。</para>
-    /// </param>
-    /// <param name="baseOffset">The base offset in the stream where data blobs begin.
-    /// <para>流中数据块开始的基偏移量。</para>
-    /// </param>
-    /// <param name="extractFiles">An array of partition names to extract. If empty, all partitions are extracted.
-    /// <para>要提取的分区名称数组。如果为空，则提取所有分区。</para>
-    /// </param>
-    /// <param name="outputDir">The output directory for extracted partition images.
-    /// <para>提取的分区镜像的输出目录。</para>
-    /// </param>
-    /// <param name="sourceImages">Optional per-partition base image file path mapping used as the base
-    /// (old) partition image for source-dependent operations. See
-    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>.
-    /// <para>可选的每分区基座镜像文件路径映射，作为源依赖操作的基座（旧）分区镜像。参见
-    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>。</para>
-    /// </param>
-    /// <exception cref="PartitionExtractionException">Thrown when any partition extraction fails.
-    /// <para>当任何分区提取失败时抛出。</para>
-    /// </exception>
     public void ExtractPartitions(DeltaArchiveManifest manifest, Stream stream, ulong baseOffset, string[] extractFiles, string outputDir, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
@@ -388,36 +286,6 @@ internal class PayloadExtractor
     /// Asynchronously extracts all matching partitions from the manifest to the output directory.
     /// <para>异步从清单中提取所有匹配的分区到输出目录。</para>
     /// </summary>
-    /// <param name="manifest">The delta archive manifest containing partition definitions.
-    /// <para>包含分区定义的增量归档清单。</para>
-    /// </param>
-    /// <param name="stream">The payload stream to read operation data from.
-    /// <para>用于读取操作数据的载荷流。</para>
-    /// </param>
-    /// <param name="baseOffset">The base offset in the stream where data blobs begin.
-    /// <para>流中数据块开始的基偏移量。</para>
-    /// </param>
-    /// <param name="extractFiles">An array of partition names to extract. If empty, all partitions are extracted.
-    /// <para>要提取的分区名称数组。如果为空，则提取所有分区。</para>
-    /// </param>
-    /// <param name="outputDir">The output directory for extracted partition images.
-    /// <para>提取的分区镜像的输出目录。</para>
-    /// </param>
-    /// <param name="cancellationToken">The token to monitor for cancellation requests.
-    /// <para>用于监视取消请求的令牌。</para>
-    /// </param>
-    /// <param name="sourceImages">Optional per-partition base image file path mapping used as the base
-    /// (old) partition image for source-dependent operations. See
-    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>.
-    /// <para>可选的每分区基座镜像文件路径映射，作为源依赖操作的基座（旧）分区镜像。参见
-    /// <see cref="ExtractPartition(PartitionUpdate, string, Stream, ulong, uint, IReadOnlyDictionary{string, string}?)"/>。</para>
-    /// </param>
-    /// <returns>A task that represents the asynchronous extraction operation.
-    /// <para>表示异步提取操作的任务。</para>
-    /// </returns>
-    /// <exception cref="PartitionExtractionException">Thrown when any partition extraction fails.
-    /// <para>当任何分区提取失败时抛出。</para>
-    /// </exception>
     public async Task ExtractPartitionsAsync(DeltaArchiveManifest manifest, Stream stream, ulong baseOffset, string[] extractFiles, string outputDir, CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);

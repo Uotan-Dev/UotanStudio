@@ -1,13 +1,8 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using SharpCompress.Compressors.LZMA;
 
 namespace UotanStudio.Firmware.Payload;
 
-/// <summary>
-/// Minimal XZ stream writer producing a single-block XZ stream with a LZMA2 filter
-/// and no integrity check, compatible with the xz-embedded reader used by Android.
-/// <para>生成单块 XZ 流（LZMA2 过滤器、无完整性校验）的最小 XZ 写入器，兼容 Android 使用的 xz-embedded 读取器。</para>
-/// </summary>
 internal class XzCompressor
 {
     private static readonly byte[] StreamHeaderMagic = [0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00];
@@ -19,12 +14,6 @@ internal class XzCompressor
     /// Compresses the given raw data into an XZ stream.
     /// <para>将给定原始数据压缩为 XZ 流。</para>
     /// </summary>
-    /// <param name="data">The raw data to compress.
-    /// <para>要压缩的原始数据。</para>
-    /// </param>
-    /// <returns>The compressed XZ stream bytes.
-    /// <para>压缩后的 XZ 流字节。</para>
-    /// </returns>
     public byte[] Compress(byte[] data)
     {
         if (data is null || data.Length == 0)
@@ -158,19 +147,7 @@ internal class XzCompressor
         var uncompSizeMinus1 = uncompressedSize - 1;
         var compSizeMinus1 = compressedSize - 1;
 
-        // A single LZMA2 compressed chunk (control 0xE0..0xFF) is only valid while
-        // the uncompressed size fits in 21 bits (max 2 MiB) and the compressed size
-        // fits in 16 bits (max 64 KiB). The chunk header is: control byte carrying the
-        // top 5 bits of (uncompressedSize - 1), 2 bytes uncompressedSize - 1, 2 bytes
-        // compressedSize - 1, the LZMA properties byte, then the raw LZMA1 data.
-        // Whenever the input cannot be stored in such a chunk (e.g. large or
-        // incompressible partitions), fall back to valid uncompressed LZMA2 chunks
-        // (0x01 with dictionary reset, then 0x02), each carrying up to 64 KiB.
-        // <para>单个 LZMA2 压缩块（控制字节 0xE0..0xFF）仅在未压缩大小可放入 21 位（最大 2 MiB）
-        // 且压缩大小可放入 16 位（最大 64 KiB）时才有效。块头为：携带 (uncompressedSize - 1) 高 5 位的
-        // 控制字节、2 字节 uncompressedSize - 1、2 字节 compressedSize - 1、LZMA 属性字节，随后是原始
-        // LZMA1 数据。当输入无法放入这样的块时（例如较大或不可压缩的分区），回退为有效的未压缩 LZMA2
-        // 块（0x01 字典重置，随后 0x02），每块最多携带 64 KiB。</para>
+
         var singleChunkFits = compressedSize >= 1 && compSizeMinus1 <= 0xFFFF && uncompSizeMinus1 <= 0x1FFFFF;
         if (singleChunkFits)
         {

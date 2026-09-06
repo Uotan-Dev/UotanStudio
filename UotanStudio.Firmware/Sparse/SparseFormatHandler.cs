@@ -1,23 +1,20 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using UotanStudio.Firmware.Erofs;
 using UotanStudio.Firmware.Ext4;
 using UotanStudio.Firmware.F2fs;
 
 namespace UotanStudio.Firmware.Sparse;
 
-/// <summary>
-/// IFormatHandler implementation for Android sparse images.
-/// <para>Android 稀疏镜像的 IFormatHandler 实现。</para>
-/// </summary>
 public sealed class SparseFormatHandler : Common.IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "Android Sparse Image (simg)";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["img", "simg", "sparse"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -41,7 +38,10 @@ public sealed class SparseFormatHandler : Common.IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<Common.FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -63,17 +63,17 @@ public sealed class SparseFormatHandler : Common.IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<Common.FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, Common.UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
         {
             Directory.CreateDirectory(outputDirectory);
 
-            // 先探测内部文件系统魔数（有界 1082 字节探测）；命中则级联解包内部文件系统，
-            // 未命中（或探测失败）时保留原行为：转 .raw。
-            // Probe the inner filesystem magic first (a bounded 1082-byte probe); when matched, cascade-unpack
-            // the inner filesystem, otherwise (miss or probe failure) keep the previous .raw conversion.
+
             var filesystemResult = TryUnpackFilesystem(filePath, outputDirectory, options?.Overwrite ?? true);
             if (filesystemResult != null)
             {
@@ -93,20 +93,14 @@ public sealed class SparseFormatHandler : Common.IFormatHandler
         }
     }
 
-    // 文件系统魔数（均为逻辑偏移，磁盘上小端存储）：ext4 0xEF53 @1080、erofs 0xE0F5E1E2 @1024、f2fs 0xF2F52010 @1024。
-    // Filesystem magic values (all at logical offsets, little-endian on disk): ext4 0xEF53 @1080, erofs 0xE0F5E1E2 @1024, f2fs 0xF2F52010 @1024.
+
     private const ushort Ext4Magic = 0xEF53;
     private const uint ErofsMagic = 0xE0F5E1E2;
     private const uint F2fsMagic = 0xF2F52010;
 
     /// <summary>
-    /// Probes the inner filesystem magic of a sparse image (logical offsets, bounded 1082-byte read) and,
-    /// when matched, cascade-unpacks the inner filesystem through the corresponding streaming parser
-    /// (<see cref="Ext4Parser"/>, <see cref="ErofsParser"/> or <see cref="F2fsParser"/>). Returns null when
-    /// no known filesystem magic is detected, letting the caller fall back to the .raw conversion.
-    /// <para>探测 sparse 镜像的内部文件系统魔数（逻辑偏移，有界 1082 字节读取），命中时通过对应的流式解析器
-    /// （<see cref="Ext4Parser"/>、<see cref="ErofsParser"/> 或 <see cref="F2fsParser"/>）级联解包内部文件系统。
-    /// 未命中任何已知文件系统魔数时返回 null，由调用方回退为转 .raw。</para>
+    /// Probes the inner filesystem magic of a sparse image (logical offsets, bounded 1082-byte read) and, when matched, cascade-unpacks the inner filesystem through the corresponding streaming parser (Ext4Parser, ErofsParser or F2fsParser).
+    /// <para>探测 sparse 镜像的内部文件系统魔数（逻辑偏移，有界 1082 字节读取），命中时通过对应的流式解析器 （Ext4Parser、ErofsParser 或 F2fsParser）级联解包内部文件系统。</para>
     /// </summary>
     private static Common.FirmwareOpResult? TryUnpackFilesystem(string filePath, string outputDirectory, bool overwrite)
     {
@@ -117,8 +111,8 @@ public sealed class SparseFormatHandler : Common.IFormatHandler
         }
         catch
         {
-            // 探测失败按未命中处理，保留转 .raw 回退。
-            // Treat a failed probe as a miss and keep the .raw fallback.
+
+
             return null;
         }
 
@@ -161,15 +155,18 @@ public sealed class SparseFormatHandler : Common.IFormatHandler
         return null;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<Common.FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try
         {
             if (Directory.Exists(inputPath))
             {
-                // Pack every file in the directory as a separate sparse image? Not meaningful;
-                // a single raw image is expected. Pack the directory's first raw file if any.
+
+
                 var rawFile = Directory.EnumerateFiles(inputPath).FirstOrDefault();
                 if (rawFile == null)
                 {

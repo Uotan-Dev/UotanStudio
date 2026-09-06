@@ -1,6 +1,5 @@
 namespace UotanStudio.Firmware.Sparse;
 
-/// <summary>Owns a temporary file containing a bounded sparse RAW payload.</summary>
 internal sealed class TemporaryFileDataProvider(string filePath, long length) : FileDataProvider(filePath, 0, length)
 {
     private readonly string _filePath = filePath;

@@ -1,21 +1,11 @@
 namespace UotanStudio.Firmware.Payload.Core;
 
-/// <summary>
-/// Parses a payload_properties.txt file into a <see cref="Models.PayloadProperties"/> instance.
-/// <para>将 payload_properties.txt 文件解析为 <see cref="Models.PayloadProperties"/> 实例。</para>
-/// </summary>
 internal static class PayloadPropertiesParser
 {
     /// <summary>
     /// Parses payload properties from raw text content.
     /// <para>从原始文本内容解析载荷属性。</para>
     /// </summary>
-    /// <param name="content">The properties file content.
-    /// <para>属性文件内容。</para>
-    /// </param>
-    /// <returns>A <see cref="Models.PayloadProperties"/> instance containing the parsed properties.
-    /// <para>包含解析属性的 <see cref="Models.PayloadProperties"/> 实例。</para>
-    /// </returns>
     internal static Models.PayloadProperties Parse(string content)
     {
         ArgumentNullException.ThrowIfNull(content);
@@ -58,12 +48,6 @@ internal static class PayloadPropertiesParser
     /// Parses a payload_properties.txt file from disk.
     /// <para>从磁盘解析 payload_properties.txt 文件。</para>
     /// </summary>
-    /// <param name="filepath">The path to the properties file.
-    /// <para>属性文件的路径。</para>
-    /// </param>
-    /// <returns>A <see cref="Models.PayloadProperties"/> instance containing the parsed properties.
-    /// <para>包含解析属性的 <see cref="Models.PayloadProperties"/> 实例。</para>
-    /// </returns>
     internal static Models.PayloadProperties ParseFile(string filepath)
     {
         return filepath is null
@@ -77,12 +61,6 @@ internal static class PayloadPropertiesParser
     /// Parses payload_properties.txt from a ZIP archive.
     /// <para>从 ZIP 归档中解析 payload_properties.txt。</para>
     /// </summary>
-    /// <param name="zipPath">The path to the ZIP archive containing payload_properties.txt.
-    /// <para>包含 payload_properties.txt 的 ZIP 归档路径。</para>
-    /// </param>
-    /// <returns>A <see cref="Models.PayloadProperties"/> instance containing the parsed properties.
-    /// <para>包含解析属性的 <see cref="Models.PayloadProperties"/> 实例。</para>
-    /// </returns>
     internal static Models.PayloadProperties ParseFromZip(string zipPath)
     {
         if (zipPath is null)

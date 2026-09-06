@@ -1,46 +1,34 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace UotanStudio.Firmware.Avb;
 
-/// <summary>
-/// Verification result of an AVB-signed image.
-/// <para>AVB 签名镜像的校验结果。</para>
-/// </summary>
 public sealed class AvbVerifyResult
 {
-    /// <summary>Gets or sets whether an AVB footer or structurally valid standalone VBMeta image was recognized. This does not imply a valid signature. <para>获取或设置是否识别到 AVB 尾部或结构有效的独立 VBMeta 镜像；不表示签名有效。</para></summary>
     public bool IsSigned { get; set; }
 
-    /// <summary>Gets or sets whether verification succeeded. <para>获取或设置验证是否成功。</para></summary>
     public bool IsValid { get; set; }
 
-    /// <summary>Gets or sets the error message when verification fails. <para>获取或设置验证失败时的错误信息。</para></summary>
     public string? ErrorMessage { get; set; }
 
-    /// <summary>Gets or sets the parsed AVB footer, if present. <para>获取或设置解析出的 AVB 尾部（若存在）。</para></summary>
     public AvbFooter? Footer { get; set; }
 
-    /// <summary>Gets or sets the parsed VBMeta image header, if present. <para>获取或设置解析出的 VBMeta 镜像头（若存在）。</para></summary>
     public AvbVBMetaImageHeader? VBMetaHeader { get; set; }
 }
 
-/// <summary>
-/// Verifies Android Verified Boot footer images and standalone VBMeta images.
-/// <para>验证 Android Verified Boot 尾部镜像和独立 VBMeta 镜像。</para>
-/// </summary>
 public static class AvbVerifier
 {
-    /// <summary>Checks whether the image carries an AVB footer. <para>检查镜像是否携带 AVB 尾部。</para></summary>
-    /// <param name="imageData">The image bytes. <para>镜像字节。</para></param>
-    /// <returns><c>true</c> if a standard footer is present. <para>存在标准尾部时返回 <c>true</c>。</para></returns>
+    /// <summary>
+    /// Checks whether the image carries an AVB footer.
+    /// <para>检查镜像是否携带 AVB 尾部。</para>
+    /// </summary>
     public static bool IsSigned(byte[] imageData) => imageData.Length >= AvbFooter.Size && AvbFooter.TryLoad(imageData) != null;
 
-    /// <summary>Verifies the complete VBMeta image referenced by an AVB footer. <para>验证 AVB 尾部所引用的完整 VBMeta 镜像。</para></summary>
-    /// <param name="imageData">The partition image bytes. <para>分区镜像字节。</para></param>
-    /// <param name="certificateData">Optional trusted X.509 certificate containing an RSA public key. <para>可选的受信任 X.509 证书，其中包含 RSA 公钥。</para></param>
-    /// <returns>The verification result. <para>验证结果。</para></returns>
+    /// <summary>
+    /// Verifies the complete VBMeta image referenced by an AVB footer.
+    /// <para>验证 AVB 尾部所引用的完整 VBMeta 镜像。</para>
+    /// </summary>
     public static AvbVerifyResult Verify(byte[] imageData, byte[]? certificateData = null)
     {
         var result = new AvbVerifyResult();
@@ -150,9 +138,10 @@ public static class AvbVerifier
         return result;
     }
 
-    /// <summary>Validates a standalone VBMeta image and returns its parsed header. <para>验证独立 VBMeta 镜像并返回解析出的头。</para></summary>
-    /// <param name="imageData">The VBMeta image bytes. <para>VBMeta 镜像字节。</para></param>
-    /// <returns>The verification result. <para>验证结果。</para></returns>
+    /// <summary>
+    /// Validates a standalone VBMeta image and returns its parsed header.
+    /// <para>验证独立 VBMeta 镜像并返回解析出的头。</para>
+    /// </summary>
     public static AvbVerifyResult VerifyVBMeta(byte[] imageData)
     {
         var result = new AvbVerifyResult();
@@ -210,10 +199,10 @@ public static class AvbVerifier
         return result;
     }
 
-    /// <summary>Verifies an AVB-signed image from a seekable stream, reading only the footer and the VBMeta region instead of loading the whole file. <para>从可定位流验证 AVB 签名镜像，仅读取尾部和 VBMeta 区域而非整文件。</para></summary>
-    /// <param name="stream">The seekable image stream. <para>可定位的镜像流。</para></param>
-    /// <param name="imageLength">The total image length in bytes. <para>镜像总字节数。</para></param>
-    /// <returns>The verification result. <para>验证结果。</para></returns>
+    /// <summary>
+    /// Verifies an AVB-signed image from a seekable stream, reading only the footer and the VBMeta region instead of loading the whole file.
+    /// <para>从可定位流验证 AVB 签名镜像，仅读取尾部和 VBMeta 区域而非整文件。</para>
+    /// </summary>
     public static AvbVerifyResult VerifyFromStream(Stream stream, long imageLength)
     {
         var result = new AvbVerifyResult();
@@ -223,8 +212,7 @@ public static class AvbVerifier
             return result;
         }
 
-        // 仅读取尾部 84 字节，不载入整文件。
-        // Read only the 84-byte tail; do not load the entire file.
+
         Span<byte> tail = stackalloc byte[AvbFooter.Size];
         stream.Position = imageLength - AvbFooter.Size;
         stream.ReadExactly(tail);
@@ -249,8 +237,7 @@ public static class AvbVerifier
             return result;
         }
 
-        // 仅读取 VBMeta 区域（头 + auth + aux），不载入整文件。
-        // Read only the VBMeta region (header + auth + aux); do not load the entire file.
+
         var readOffset = (long)footer.Value.VbmetaOffset;
         var readSize = (int)footer.Value.VbmetaSize;
         var vbmeta = new byte[readSize];
@@ -303,10 +290,10 @@ public static class AvbVerifier
         return result;
     }
 
-    /// <summary>Validates a standalone VBMeta image from a seekable stream, reading only the header and declared block sizes. <para>从可定位流验证独立 VBMeta 镜像，仅读取头部和声明的块大小。</para></summary>
-    /// <param name="stream">The seekable VBMeta stream. <para>可定位的 VBMeta 流。</para></param>
-    /// <param name="imageLength">The total image length in bytes. <para>镜像总字节数。</para></param>
-    /// <returns>The verification result. <para>验证结果。</para></returns>
+    /// <summary>
+    /// Validates a standalone VBMeta image from a seekable stream, reading only the header and declared block sizes.
+    /// <para>从可定位流验证独立 VBMeta 镜像，仅读取头部和声明的块大小。</para>
+    /// </summary>
     public static AvbVerifyResult VerifyVBMetaFromStream(Stream stream, long imageLength)
     {
         var result = new AvbVerifyResult();
@@ -316,8 +303,7 @@ public static class AvbVerifier
             return result;
         }
 
-        // 仅读取 256 字节头部，不载入整文件。
-        // Read only the 256-byte header; do not load the entire file.
+
         Span<byte> headerBytes = stackalloc byte[AvbVBMetaImageHeader.Size];
         stream.Position = 0;
         stream.ReadExactly(headerBytes);

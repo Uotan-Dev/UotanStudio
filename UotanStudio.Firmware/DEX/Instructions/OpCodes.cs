@@ -1,115 +1,64 @@
-namespace UotanStudio.Firmware.Dex.Instructions;
+﻿namespace UotanStudio.Firmware.Dex.Instructions;
 
-/// <summary>
-/// <para>指令格式（按 Google dalvik-bytecode 规范定义）。</para>
-/// Instruction format (per the Google dalvik-bytecode specification).
-/// </summary>
 public enum InstructionFormat
 {
-    /// <summary>10x：无操作数，1 个代码单元。<para>No operands, 1 code unit.</para></summary>
     Format10x,
-    /// <summary>12x：vA, vB（各 4 位）。<para>vA, vB (4 bits each).</para></summary>
     Format12x,
-    /// <summary>11n：vA, #+B（4 位字面量）。<para>vA, #+B (4-bit literal).</para></summary>
     Format11n,
-    /// <summary>11x：vAA。<para>vAA.</para></summary>
     Format11x,
-    /// <summary>10t：+AA 分支。</summary>
     Format10t,
-    /// <summary>20t：+AAAA 分支。</summary>
     Format20t,
-    /// <summary>22x：vAA, vBBBB。</summary>
     Format22x,
-    /// <summary>21t：vAA, +BBBB 分支。</summary>
     Format21t,
-    /// <summary>21s：vAA, #+BBBB。</summary>
     Format21s,
-    /// <summary>21h：vAA, #+BBBB0000。</summary>
     Format21h,
-    /// <summary>21c：vAA, ref@BBBB。</summary>
     Format21c,
-    /// <summary>23x：vAA, vBB, vCC。</summary>
     Format23x,
-    /// <summary>22b：vAA, vBB, #+CC。</summary>
     Format22b,
-    /// <summary>22t：vA, vB, +CCCC 分支。</summary>
     Format22t,
-    /// <summary>22s：vA, vB, #+CCCC。</summary>
     Format22s,
-    /// <summary>22c：vA, vB, ref@CCCC。</summary>
     Format22c,
-    /// <summary>30t：+AAAAAAAA 分支。</summary>
     Format30t,
-    /// <summary>32x：vAAAA, vBBBB。</summary>
     Format32x,
-    /// <summary>31i：vAA, #+BBBBBBBB。</summary>
     Format31i,
-    /// <summary>31t：vAA, +BBBBBBBB 分支。</summary>
     Format31t,
-    /// <summary>31c：vAA, ref@BBBBBBBB。</summary>
     Format31c,
-    /// <summary>35c：{vC..vG}, ref@BBBB。</summary>
     Format35c,
-    /// <summary>3rc：{vCCCC..}, ref@BBBB。</summary>
     Format3rc,
-    /// <summary>45cc：{vC..vG}, ref@BBBB, proto@HHHH。</summary>
     Format45cc,
-    /// <summary>4rcc：{vCCCC..}, ref@BBBB, proto@HHHH。</summary>
     Format4rcc,
-    /// <summary>51l：vAA, #+64 位字面量。</summary>
     Format51l,
-    /// <summary>伪指令 payload（switch / fill-array-data）。</summary>
     Payload
 }
 
-/// <summary>
-/// <para>引用型操作数种类（21c/22c/35c 等的索引目标）。</para>
-/// Kind of reference operand (index target of 21c/22c/35c etc.).
-/// </summary>
 public enum RefKind
 {
-    /// <summary>无引用。<para>No reference.</para></summary>
     None,
-    /// <summary>字符串索引。<para>String index.</para></summary>
     String,
-    /// <summary>类型索引。<para>Type index.</para></summary>
     Type,
-    /// <summary>字段索引。<para>Field index.</para></summary>
     Field,
-    /// <summary>方法索引。<para>Method index.</para></summary>
     Method,
-    /// <summary>方法原型索引（invoke-polymorphic）。<para>Prototype index (invoke-polymorphic).</para></summary>
     Proto,
-    /// <summary>调用点索引（invoke-custom）。<para>Call-site index (invoke-custom).</para></summary>
     CallSite,
-    /// <summary>方法句柄索引（const-method-handle）。<para>Method-handle index (const-method-handle).</para></summary>
     MethodHandle
 }
 
-/// <summary>
-/// <para>操作码元数据：助记符、格式与引用种类。</para>
-/// Opcode metadata: mnemonic, format and reference kind.
-/// </summary>
 public sealed record OpCodeInfo(string Mnemonic, InstructionFormat Format, RefKind RefKind);
 
-/// <summary>
-/// <para>完整 Dalvik 操作码表（0x00-0xFF），按 Google dalvik-bytecode 官方定义实现。</para>
-/// Complete Dalvik opcode table (0x00-0xFF), implemented per the Google dalvik-bytecode official definition.
-/// </summary>
 public static class OpCodes
 {
     private static readonly OpCodeInfo[] Table = BuildTable();
     private static readonly byte[] Sizes = BuildSizes();
 
     /// <summary>
-    /// <para>获取指定操作码的元数据；未知操作码返回 null。</para>
     /// Gets metadata for the given opcode; returns null for unknown opcodes.
+    /// <para>获取指定操作码的元数据；未知操作码返回 null。</para>
     /// </summary>
     public static OpCodeInfo? Get(byte opcode) => Table[opcode];
 
     /// <summary>
-    /// <para>获取指令大小（16 位代码单元数）。</para>
     /// Gets the instruction size in 16-bit code units.
+    /// <para>获取指令大小（16 位代码单元数）。</para>
     /// </summary>
     public static int GetSize(byte opcode) => Sizes[opcode];
 
@@ -141,8 +90,8 @@ public static class OpCodes
 
     private static OpCodeInfo[] BuildTable()
     {
-        // (opcode, mnemonic, format, refKind) —— 完整官方表
-        // (opcode, mnemonic, format, refKind) — the complete official table.
+
+
         (byte Op, string Name, InstructionFormat Fmt, RefKind Ref)[] raw =
         [
             (0x00, "nop", InstructionFormat.Format10x, RefKind.None),

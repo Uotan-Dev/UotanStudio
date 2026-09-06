@@ -1,13 +1,9 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Hashing;
 
 namespace UotanStudio.Firmware.Sparse;
 
-/// <summary>
-/// Reads and parses Android sparse image files.
-/// <para>读取并解析 Android 稀疏镜像文件。</para>
-/// </summary>
 public static class SparseReader
 {
     /// <summary>
@@ -23,8 +19,7 @@ public static class SparseReader
     }
 
     /// <summary>
-    /// Loads a <see cref="SparseFile"/> lazily from a stream. The caller retains ownership
-    /// and must keep the stream open until the returned SparseFile is disposed.
+    /// Loads a SparseFile lazily from a stream.
     /// <para>从流惰性加载 SparseFile；调用方保留所有权，并须保持流打开直到 SparseFile 被释放。</para>
     /// </summary>
     public static SparseFile FromStream(Stream stream, bool validateCrc = false, bool verbose = false)
@@ -79,11 +74,8 @@ public static class SparseReader
                         {
                             throw new InvalidDataException($"Total size ({chunkHeader.TotalSize}) for RAW chunk {i} does not match expected data size ({expectedRawSize})");
                         }
-                        // RAW 块不再整块物化：仅记录源流中的 [offset, length) 范围，
-                        // 由 StreamDataProvider 在需要时直接流式读取。CRC 校验用池化缓冲增量计算。
-                        // RAW chunks are no longer materialized in memory: we record the source range
-                        // and let StreamDataProvider stream it on demand. CRC is computed incrementally
-                        // through a pooled buffer.
+
+
                         if (stream.CanSeek)
                         {
                             var rawOffset = stream.Position;
@@ -99,8 +91,8 @@ public static class SparseReader
                         }
                         else
                         {
-                            // A forward-only source cannot back a lazy range. Spool exactly this bounded
-                            // RAW payload and let the provider own/delete the temporary file.
+
+
                             var tempPath = Path.Combine(Path.GetTempPath(), $"uotan-sparse-{Guid.NewGuid():N}.tmp");
                             try
                             {
@@ -179,14 +171,13 @@ public static class SparseReader
     }
 
     /// <summary>
-    /// Loads a <see cref="SparseFile"/> from a byte array.
+    /// Loads a SparseFile from a byte array.
     /// <para>从字节数组加载 SparseFile。</para>
     /// </summary>
     public static SparseFile FromBuffer(byte[] buffer, bool validateCrc = false, bool verbose = false)
     {
-        // 源流所有权随 SparseFile 转移：Dispose SparseFile 时一并关闭。
-        // The source stream's ownership transfers to the SparseFile: disposing the
-        // SparseFile closes it too.
+
+
         var ms = new MemoryStream(buffer, writable: false);
         try
         {
@@ -202,14 +193,13 @@ public static class SparseReader
     }
 
     /// <summary>
-    /// Loads a <see cref="SparseFile"/> from a file on disk.
+    /// Loads a SparseFile from a file on disk.
     /// <para>从磁盘文件加载 SparseFile。</para>
     /// </summary>
     public static SparseFile FromImageFile(string filePath, bool validateCrc = false, bool verbose = false)
     {
-        // RAW 块流式引用源文件范围，因此流必须保持打开并由 SparseFile 生命周期管理。
-        // RAW chunks reference the source file range lazily, so the stream must stay open
-        // and is managed by the SparseFile lifecycle (closed on Dispose).
+
+
         var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
         try
         {
@@ -246,9 +236,7 @@ public static class SparseReader
 
     /// <summary>
     /// Automatically imports image data from a stream, detecting whether it is sparse or raw.
-    /// The caller retains ownership and must keep the stream open while the returned SparseFile is used.
-    /// <para>自动从流导入镜像数据，检测其为稀疏格式还是原始格式。调用方保留所有权，
-    /// 并须在使用返回的 SparseFile 期间保持流打开。</para>
+    /// <para>自动从流导入镜像数据，检测其为稀疏格式还是原始格式。</para>
     /// </summary>
     public static SparseFile ImportAuto(Stream stream, bool validateCrc = false, bool verbose = false) =>
         ImportAuto(stream, validateCrc, verbose, leaveOpen: true);
@@ -265,9 +253,7 @@ public static class SparseReader
             return FromStream(stream, validateCrc, verbose);
         }
 
-        // Raw image: wrap the whole stream as a single lazy raw chunk. The caller-facing
-        // stream overload retains caller ownership; path overloads separately register ownership.
-        // 原始镜像包装为单个惰性 RAW 块；Stream 重载保留调用方所有权，路径重载另行注册所有权。
+
         var length = stream.Length - stream.Position;
         var blockSize = 4096u;
         var totalBlocks = (uint)((length + blockSize - 1) / blockSize);
@@ -339,8 +325,7 @@ public static class SparseReader
     }
 
     /// <summary>
-    /// Incrementally appends <paramref name="count"/> bytes read from <paramref name="stream"/>
-    /// to the CRC using a pooled buffer.
+    /// Incrementally appends count bytes read from stream to the CRC using a pooled buffer.
     /// <para>使用池化缓冲从流中读取指定字节数并增量追加到 CRC。</para>
     /// </summary>
     private static void CopyRawExactly(Stream source, Stream destination, Crc32? crc, long count)
@@ -402,7 +387,7 @@ public static class SparseReader
     }
 
     /// <summary>
-    /// Discards <paramref name="count"/> bytes from a non-seekable stream using a pooled buffer.
+    /// Discards count bytes from a non-seekable stream using a pooled buffer.
     /// <para>使用池化缓冲从不可寻址流中丢弃指定字节数。</para>
     /// </summary>
     private static void SkipExtendedHeader(Stream stream, long count)
@@ -439,22 +424,13 @@ public static class SparseReader
     }
 
     /// <summary>
-    /// Reads up to <paramref name="count"/> logical (unsparsified) bytes of a sparse image
-    /// starting at <paramref name="offset"/>, without expanding the whole image. Primarily
-    /// used for filesystem magic detection on sparse images.
-    /// <para>不展开整个镜像，从稀疏镜像的 offset 处读取最多 count 个逻辑（非稀疏）字节。
-    /// 主要用于稀疏镜像的文件系统魔数探测。</para>
+    /// Reads up to count logical (unsparsified) bytes of a sparse image starting at offset, without expanding the whole image.
+    /// <para>不展开整个镜像，从稀疏镜像的 offset 处读取最多 count 个逻辑（非稀疏）字节。</para>
     /// </summary>
-    /// <param name="filePath">Path to the sparse image file. <para>稀疏镜像文件路径。</para></param>
-    /// <param name="offset">Logical byte offset to start reading from. <para>起始读取的逻辑字节偏移。</para></param>
-    /// <param name="count">Maximum number of logical bytes to read. <para>要读取的最大逻辑字节数。</para></param>
-    /// <returns>The bytes actually read; fewer than <paramref name="count"/> when the end of
-    /// the image is reached. <para>实际读取到的字节数组；到达镜像末尾时可能少于 count。</para></returns>
     public static byte[] PeekLogicalRange(string filePath, long offset, int count)
     {
-        // 打开源文件流，并在作用域结束时随 SparseFile / SparseReadStream 一并释放。
-        // Open the source file stream; it is released together with the SparseFile and
-        // SparseReadStream when the scope exits.
+
+
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
         using var sparseFile = FromImageFile(filePath);
         using var logical = new SparseReadStream(sparseFile);

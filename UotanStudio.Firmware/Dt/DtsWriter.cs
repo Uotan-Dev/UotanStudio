@@ -1,16 +1,10 @@
-// =============================================================================
-// DTS writer — extracted from DtsFormat.cs.
-// =============================================================================
+﻿
 
 using System.Buffers.Binary;
 using System.Text;
 
 namespace UotanStudio.Firmware.Dt;
 
-/// <summary>
-/// <para>DTS 文本序列化器。</para>
-/// DTS text serializer.
-/// </summary>
 internal sealed class DtsWriter
 {
     private readonly StringBuilder _sb = new();
@@ -48,9 +42,8 @@ internal sealed class DtsWriter
         WriteIndent();
         if (node.Parent is null) _sb.Append("/");
         else _sb.Append(node.Name);
-        // 记录节点声明行的行号：在书写 " {" 之前当前行即节点声明的起始行。
-        // Record the node declaration line: before " {" is emitted, the current line is where the
-        // declaration (indent + name + brace) starts.
+
+
         _nodeStartLines[GetCleanPath(node)] = _currentLine;
         AppendLine(" {");
 

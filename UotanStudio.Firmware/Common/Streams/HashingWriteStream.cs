@@ -2,10 +2,6 @@ using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.Common.Streams;
 
-/// <summary>
-/// 在写入字节时增量计算 SHA-256 的写入流包装器。
-/// <para>A write stream wrapper that incrementally hashes SHA-256 as bytes are written.</para>
-/// </summary>
 public sealed class HashingWriteStream : Stream
 {
     private readonly Stream _inner;
@@ -15,11 +11,9 @@ public sealed class HashingWriteStream : Stream
     private bool _disposed;
 
     /// <summary>
-    /// 创建哈希写入流包装器。
-    /// <para>Creates a hashing write stream wrapper.</para>
+    /// Creates a hashing write stream wrapper.
+    /// <para>创建哈希写入流包装器。</para>
     /// </summary>
-    /// <param name="inner">可写基础流。<para>The writable underlying stream.</para></param>
-    /// <param name="leaveOpen">释放后是否保持基础流打开。<para>Whether to leave the underlying stream open after disposal.</para></param>
     public HashingWriteStream(Stream inner, bool leaveOpen = false)
     {
         ArgumentNullException.ThrowIfNull(inner);
@@ -28,33 +22,30 @@ public sealed class HashingWriteStream : Stream
         _leaveOpen = leaveOpen;
     }
 
-    /// <summary>已写入的字节数。<para>Gets the number of bytes written.</para></summary>
     public long BytesWritten => _bytesWritten;
 
     /// <summary>
-    /// 返回已写入数据的 SHA-256 十六进制摘要。
-    /// <para>Returns the SHA-256 hex digest of the data written so far.</para>
+    /// Returns the SHA-256 hex digest of the data written so far.
+    /// <para>返回已写入数据的 SHA-256 十六进制摘要。</para>
     /// </summary>
     public string GetHashHex() => Convert.ToHexString(_hash.GetHashAndReset()).ToLowerInvariant();
 
     /// <summary>
-    /// 返回已写入数据的 SHA-256 原始字节摘要。
-    /// <para>Returns the raw SHA-256 digest bytes of the data written so far.</para>
+    /// Returns the raw SHA-256 digest bytes of the data written so far.
+    /// <para>返回已写入数据的 SHA-256 原始字节摘要。</para>
     /// </summary>
     public byte[] GetHashAndReset() => _hash.GetHashAndReset();
 
-    /// <inheritdoc />
     public override bool CanRead => false;
-    /// <inheritdoc />
     public override bool CanSeek => false;
-    /// <inheritdoc />
     public override bool CanWrite => !_disposed;
-    /// <inheritdoc />
     public override long Length => throw new NotSupportedException();
-    /// <inheritdoc />
     public override long Position { get => _bytesWritten; set => throw new NotSupportedException(); }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes bytes to the stream.
+    /// <para>向流写入字节。</para>
+    /// </summary>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -64,7 +55,10 @@ public sealed class HashingWriteStream : Stream
         Write(buffer.AsSpan(offset, count));
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes bytes to the stream.
+    /// <para>向流写入字节。</para>
+    /// </summary>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         ThrowIfDisposed();
@@ -76,7 +70,10 @@ public sealed class HashingWriteStream : Stream
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes bytes to the stream asynchronously.
+    /// <para>异步向流写入字节。</para>
+    /// </summary>
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -88,16 +85,31 @@ public sealed class HashingWriteStream : Stream
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes buffered data to the underlying stream.
+    /// <para>将缓冲数据刷新到底层流。</para>
+    /// </summary>
     public override void Flush() { ThrowIfDisposed(); _inner.Flush(); }
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void SetLength(long value) => throw new NotSupportedException();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases resources owned by this instance.
+    /// <para>释放此实例持有的资源。</para>
+    /// </summary>
     protected override void Dispose(bool disposing)
     {
         if (!_disposed && disposing)

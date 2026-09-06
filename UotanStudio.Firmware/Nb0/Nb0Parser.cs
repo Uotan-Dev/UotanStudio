@@ -1,11 +1,7 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Firmware.Nb0;
 
-/// <summary>
-/// <para>提供 FIH Mobile NB0 固件文件的解析功能,包括条目头解析、魔数检测、固件信息推断及 MD5 校验记录解析。</para>
-/// Provides parsing functionality for FIH Mobile NB0 firmware files, including entry header parsing, magic number detection, firmware info inference, and MD5 verification record parsing.
-/// </summary>
 public static class Nb0Parser
 {
     private static readonly (byte[] Magic, string TypeName)[] KnownMagicSignatures =
@@ -22,8 +18,8 @@ public static class Nb0Parser
     ];
 
     /// <summary>
-    /// <para>解析指定路径的 NB0 固件文件,返回元数据信息。</para>
     /// Parses the NB0 firmware file at the specified path and returns metadata information.
+    /// <para>解析指定路径的 NB0 固件文件,返回元数据信息。</para>
     /// </summary>
     public static Nb0Metadata Parse(string filePath)
     {
@@ -33,8 +29,8 @@ public static class Nb0Parser
     }
 
     /// <summary>
-    /// <para>异步解析指定路径的 NB0 固件文件,返回元数据信息。</para>
     /// Asynchronously parses the NB0 firmware file at the specified path and returns metadata information.
+    /// <para>异步解析指定路径的 NB0 固件文件,返回元数据信息。</para>
     /// </summary>
     public static async Task<Nb0Metadata> ParseAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -44,8 +40,8 @@ public static class Nb0Parser
     }
 
     /// <summary>
-    /// <para>从流中解析 NB0 固件文件,返回元数据信息。</para>
     /// Parses an NB0 firmware file from a stream and returns metadata information.
+    /// <para>从流中解析 NB0 固件文件,返回元数据信息。</para>
     /// </summary>
     public static Nb0Metadata ParseFromStream(Stream stream)
     {
@@ -56,8 +52,8 @@ public static class Nb0Parser
     }
 
     /// <summary>
-    /// <para>异步从流中解析 NB0 固件文件,返回元数据信息。</para>
     /// Asynchronously parses an NB0 firmware file from a stream and returns metadata information.
+    /// <para>异步从流中解析 NB0 固件文件,返回元数据信息。</para>
     /// </summary>
     public static async Task<Nb0Metadata> ParseFromStreamAsync(Stream stream, CancellationToken cancellationToken = default)
     {
@@ -168,8 +164,8 @@ public static class Nb0Parser
     }
 
     /// <summary>
-    /// <para>从数据流中检测指定偏移量处的魔数签名,推断条目数据类型。</para>
     /// Detects magic number signatures at the specified offset in the data stream to infer the entry data type.
+    /// <para>从数据流中检测指定偏移量处的魔数签名,推断条目数据类型。</para>
     /// </summary>
     internal static string? DetectTypeFromMagic(Stream stream, long offset)
     {
@@ -228,15 +224,15 @@ public static class Nb0Parser
             }
             catch
             {
-                // Best effort restore.
+
             }
             return null;
         }
     }
 
     /// <summary>
-    /// <para>根据条目名称推断固件类型、设备型号和版本信息。</para>
     /// Infers firmware type, device model, and version information based on entry names.
+    /// <para>根据条目名称推断固件类型、设备型号和版本信息。</para>
     /// </summary>
     internal static void InferFirmwareInfo(Nb0Metadata metadata)
     {
@@ -267,8 +263,8 @@ public static class Nb0Parser
     }
 
     /// <summary>
-    /// <para>验证元数据的完整性,检查条目数量、名称唯一性和数据有效性,并将问题添加到警告列表。</para>
     /// Validates metadata integrity, checking entry count, name uniqueness, and data validity, adding issues to the warnings list.
+    /// <para>验证元数据的完整性,检查条目数量、名称唯一性和数据有效性,并将问题添加到警告列表。</para>
     /// </summary>
     internal static void ValidateMetadata(Nb0Metadata metadata, long streamLength = 0)
     {
@@ -379,8 +375,8 @@ public static class Nb0Parser
     }
 
     /// <summary>
-    /// <para>从数据流中解析指定 MD5 条目的校验记录,每条记录为 24 字节。</para>
     /// Parses MD5 verification records from the data stream for the specified MD5 entry, each record is 24 bytes.
+    /// <para>从数据流中解析指定 MD5 条目的校验记录,每条记录为 24 字节。</para>
     /// </summary>
     internal static List<Nb0Md5Record> ParseMd5Records(Stream stream, Nb0FileEntry md5Entry)
     {

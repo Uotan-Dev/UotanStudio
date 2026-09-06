@@ -1,51 +1,20 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.F2fs;
 
-/// <summary>
-/// f2fs 文件清单条目（路径 + 大小 + inode 号 + 类型）。
-/// <para>An F2FS file-list entry (path + size + inode + kind).</para>
-/// </summary>
 public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null);
 
-/// <summary>
-/// 全托管 f2fs 镜像解析器：打开镜像（或流），校验超级块，解析 checkpoint 定位 NAT，
-/// 从根 inode 遍历目录树，并经 inode 内 i_addr 直连/间接节点与 extent cache 读取文件内容，
-/// 稀疏洞补零，支持 inline data 与符号链接。所有外部长度/偏移/块号均经 checked 验证。
-/// <para>A fully managed F2FS image parser: opens an image (or stream), validates the superblock,
-/// locates the NAT via the checkpoint, walks the directory tree from the root inode, and reads file
-/// contents through the inode's direct/indirect nodes and extent cache with zero-filled sparse holes,
-/// inline data and symlink support. All external lengths, offsets and block numbers are verified.</para>
-/// </summary>
 public sealed class F2fsParser : IDisposable
 {
-    /// <summary>
-    /// Kind of a parsed filesystem entry.
-    /// <para>已解析文件系统条目的类型。</para>
-    /// </summary>
     public enum F2fsEntryKind
     {
-        /// <summary>
-        /// Regular file.
-        /// <para>普通文件。</para>
-        /// </summary>
         File,
 
-        /// <summary>
-        /// Directory.
-        /// <para>目录。</para>
-        /// </summary>
         Directory,
 
-        /// <summary>
-        /// Symbolic link.
-        /// <para>符号链接。</para>
-        /// </summary>
         Symlink,
     }
 
-    /// <summary>单次载入内存的目录数据大小上限，防止损坏镜像造成过量分配。
-    /// Upper bound for one in-memory directory component.</summary>
     private const long MaxDirectoryDataSize = 512L * 1024 * 1024;
 
     private readonly Stream _stream;
@@ -101,58 +70,22 @@ public sealed class F2fsParser : IDisposable
         }
     }
 
-    /// <summary>
-    /// Total image size in bytes.
-    /// <para>镜像总字节数。</para>
-    /// </summary>
     public long ImageSize => _imageSize;
 
-    /// <summary>
-    /// Block size in bytes.
-    /// <para>块大小（字节）。</para>
-    /// </summary>
     public long BlockSize => _blockSize;
 
-    /// <summary>
-    /// Segment size in bytes.
-    /// <para>段大小（字节）。</para>
-    /// </summary>
     public long SegmentSize => (long)_blockSize * _blocksPerSeg;
 
-    /// <summary>
-    /// Total user block count (s_block_count).
-    /// <para>用户块总数（s_block_count）。</para>
-    /// </summary>
     public ulong BlockCount => _superblock.BlockCount;
 
-    /// <summary>
-    /// Total inode count reported by the checkpoint (valid_inode_count).
-    /// <para>checkpoint 报告的 inode 总数（valid_inode_count）。</para>
-    /// </summary>
     public uint InodeCount => _checkpoint.ValidInodeCount;
 
-    /// <summary>
-    /// Volume name (s_volume_name).
-    /// <para>卷名（s_volume_name）。</para>
-    /// </summary>
     public string VolumeName => _superblock.VolumeName;
 
-    /// <summary>
-    /// Root inode number (s_root_ino).
-    /// <para>根 inode 号（s_root_ino）。</para>
-    /// </summary>
     public uint RootIno => _superblock.RootIno;
 
-    /// <summary>
-    /// Number of non-directory entries found during the tree walk.
-    /// <para>目录树遍历到的非目录条目数。</para>
-    /// </summary>
     public int FileCount => _entries.Values.Count(static e => e.Kind != F2fsEntryKind.Directory);
 
-    /// <summary>
-    /// Number of directory entries found during the tree walk.
-    /// <para>目录树遍历到的目录条目数。</para>
-    /// </summary>
     public int DirectoryCount => _entries.Values.Count(static e => e.Kind == F2fsEntryKind.Directory);
 
     private void Initialize()
@@ -177,7 +110,7 @@ public sealed class F2fsParser : IDisposable
             throw new InvalidDataException($"Invalid f2fs blocks-per-segment {_blocksPerSeg}.");
         }
 
-        // 校验各元数据区地址与段数自洽。Validate metadata area addresses and segment counts.
+
         if (_superblock.SegmentCount == 0
             || _superblock.Segment0Blkaddr == 0
             || _superblock.CpBlkaddr < _superblock.Segment0Blkaddr
@@ -190,10 +123,7 @@ public sealed class F2fsParser : IDisposable
             throw new InvalidDataException("F2FS superblock metadata-area layout is inconsistent.");
         }
 
-        // 按超级块声明的段数校验镜像总长：截断镜像（metadata/主区落在文件外）在构造期即拒绝，
-        // 避免后续随机读取时以 EndOfStreamException 泄漏。Validate the total image length against
-        // the declared segment counts so truncated images (metadata/main area beyond EOF) are
-        // rejected at construction instead of leaking an EndOfStreamException on later reads.
+
         var declaredImageBlocks = checked(_superblock.SegmentCount * _blocksPerSeg + _superblock.Segment0Blkaddr);
         var declaredImageSize = checked(declaredImageBlocks * _blockSize);
         if (_imageSize < declaredImageSize)
@@ -208,10 +138,7 @@ public sealed class F2fsParser : IDisposable
             throw new InvalidDataException("F2FS checkpoint reports an empty filesystem.");
         }
 
-        // 读端 checksum 校验：superblock 和 checkpoint 的 CRC32（多项式 0xEDB88320）。
-        // 校验失败时记警告而非抛异常（兼容无 checksum 的旧镜像）。
-        // Read-side checksum validation: CRC32 (poly 0xEDB88320) for superblock and checkpoint.
-        // Log warning on mismatch instead of throwing (backward compatible with old images).
+
         ValidateSuperblockChecksum();
         ValidateCheckpointChecksum();
     }
@@ -224,7 +151,7 @@ public sealed class F2fsParser : IDisposable
         var storedCrc = BinaryPrimitives.ReadUInt32LittleEndian(raw.AsSpan(F2fsSuperblock.SuperblockSize - 4, 4));
         if (storedCrc == 0)
         {
-            return; // 旧镜像无 checksum。Old image without checksum.
+            return;
         }
 
         var computed = ComputeCrc32(F2fsSuperblock.Magic, raw.AsSpan(0, F2fsSuperblock.SuperblockSize - 4));
@@ -272,8 +199,7 @@ public sealed class F2fsParser : IDisposable
     }
 
     /// <summary>
-    /// Walks the directory tree from the root inode and returns all entries
-    /// (files, directories and symlinks) with their relative paths.
+    /// Walks the directory tree from the root inode and returns all entries (files, directories and symlinks) with their relative paths.
     /// <para>从根 inode 遍历目录树，返回所有条目（文件、目录与符号链接）及其相对路径。</para>
     /// </summary>
     public IReadOnlyList<F2fsFileEntry> ListFiles()
@@ -289,10 +215,8 @@ public sealed class F2fsParser : IDisposable
     }
 
     /// <summary>
-    /// Writes the full content of the file at <paramref name="path"/> to <paramref name="output"/>,
-    /// zero-filling sparse holes. Symlinks yield their target bytes.
-    /// <para>将 <paramref name="path"/> 处文件的完整内容写入 <paramref name="output"/>，
-    /// 稀疏洞补零；符号链接输出其目标字节。</para>
+    /// Writes the full content of the file at path to output, zero-filling sparse holes.
+    /// <para>将 path 处文件的完整内容写入 output， 稀疏洞补零；符号链接输出其目标字节。</para>
     /// </summary>
     public void ReadFile(string path, Stream output)
     {
@@ -308,10 +232,8 @@ public sealed class F2fsParser : IDisposable
     }
 
     /// <summary>
-    /// Extracts the whole filesystem tree into <paramref name="outputDirectory"/>.
-    /// Symlinks are created as native symbolic links (falling back to a target-text file).
-    /// <para>将整个文件系统树提取到 <paramref name="outputDirectory"/>。
-    /// 符号链接以原生符号链接创建（失败时回退为目标文本文件）。</para>
+    /// Extracts the whole filesystem tree into outputDirectory.
+    /// <para>将整个文件系统树提取到 outputDirectory。</para>
     /// </summary>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
@@ -379,7 +301,10 @@ public sealed class F2fsParser : IDisposable
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases resources owned by this instance.
+    /// <para>释放此实例持有的资源。</para>
+    /// </summary>
     public void Dispose()
     {
         _stream.Dispose();
@@ -462,8 +387,8 @@ public sealed class F2fsParser : IDisposable
     {
         if (inode.HasInlineDentry)
         {
-            // 内联目录：inline 区域即为目录数据区（尺寸按内联参数计算）。
-            // Inline directory: the inline area is the directory data area (inline sizes).
+
+
             var inlineData = inode.MaxInlineData;
             var inlineSlots = inlineData * 8 / ((F2fsDirectoryEntry.DirectoryEntrySize + F2fsDirectoryEntry.SlotLength) * 8 + 1);
             var inlineBitmapSize = (inlineSlots + 7) / 8;
@@ -553,13 +478,7 @@ public sealed class F2fsParser : IDisposable
             throw new InvalidDataException($"Invalid reserved nid {nid}.");
         }
 
-        // 内核 current_nat_addr()：NAT 块按每 512 块分组，主副本位于
-        // nat_blkaddr + (block_off / 512) * 1024 + (block_off % 512)；nat_bitmap 对应位
-        // 置位时读取 +blocks_per_seg 的第二副本（本镜像构建器位图恒零，读主副本）。
-        // The kernel's current_nat_addr(): NAT blocks are grouped per 512; the primary copy sits
-        // at nat_blkaddr + (block_off / 512) * 1024 + (block_off % 512), and a set nat_bitmap bit
-        // selects the second copy at +blocks_per_seg (this builder always writes a zeroed bitmap,
-        // so the primary copy is read).
+
         var natBlockIndex = nid / F2fsNode.NatEntryPerBlock;
         var segOff = natBlockIndex / 512;
         var inSeg = natBlockIndex % 512;
@@ -609,9 +528,7 @@ public sealed class F2fsParser : IDisposable
             return ReadIndirectAddress(inode.Nid[2], level1, level2, logicalBlock);
         }
 
-        // Double indirect: i_nid[3] → single indirect nodes → direct nodes → data blocks.
-        // Each single indirect node covers perIndirect blocks; the double indirect node
-        // has AddrsPerBlock single-indirect entries.
+
         x -= perIndirect;
         var perDoubleIndirect = perIndirect * F2fsNode.AddrsPerBlock;
         if (x < perDoubleIndirect)
@@ -621,7 +538,7 @@ public sealed class F2fsParser : IDisposable
             return ReadDoubleIndirectAddress(inode.Nid[3], level1, level2, logicalBlock);
         }
 
-        // i_nid[4] — second double indirect node (same structure as i_nid[3]).
+
         x -= perDoubleIndirect;
         if (x < perDoubleIndirect)
         {
@@ -630,8 +547,7 @@ public sealed class F2fsParser : IDisposable
             return ReadDoubleIndirectAddress(inode.Nid[4], level1, level2, logicalBlock);
         }
 
-        // 超出实现支持的寻址深度。
-        // Beyond the supported mapping depth.
+
         return null;
     }
 
@@ -665,16 +581,9 @@ public sealed class F2fsParser : IDisposable
     }
 
     /// <summary>
-    /// 读 double indirect 节点 → single indirect 节点 → direct 节点 → 数据块。
-    /// <para>Reads a double-indirect node, then a single-indirect node, then a direct node
-    /// to resolve a data block address.</para>
+    /// Reads a double-indirect node, then a single-indirect node, then a direct node to resolve a data block address.
+    /// <para>读 double indirect 节点 → single indirect 节点 → direct 节点 → 数据块。</para>
     /// </summary>
-    /// <param name="doubleIndirectNid">double indirect 节点的 NID（来自 inode i_nid[3] 或 i_nid[4]）。</param>
-    /// <param name="level1">在 double indirect 节点 i_addr[] 中的索引，选择一个 single indirect 节点。</param>
-    /// <param name="level2">在该 single indirect 子树内的扁平偏移
-    /// （= direct_node_index * AddrsPerBlock + data_block_index）。</param>
-    /// <param name="logicalBlock">文件内逻辑块号（诊断用）。</param>
-    /// <returns>物理块地址，或 <c>null</c> 表示空洞/未分配。</returns>
     private long? ReadDoubleIndirectAddress(
         uint doubleIndirectNid,
         int level1,
@@ -690,21 +599,18 @@ public sealed class F2fsParser : IDisposable
             ReadNatBlockAddress(doubleIndirectNid),
             $"Double indirect node {doubleIndirectNid} (logical {logicalBlock})");
 
-        // i_addr[level1] is the NID of a single indirect node.
+
         var singleIndirectNid = BinaryPrimitives.ReadUInt32LittleEndian(doubleNode.AsSpan(level1 * 4, 4));
         if (singleIndirectNid == 0)
         {
             return null;
         }
 
-        // Decompose the flattened offset within the single-indirect subtree:
-        //   siLevel1 = which direct node (index into the single indirect node's i_addr[])
-        //   siLevel2 = which data block (index into the direct node's i_addr[])
+
         var siLevel1 = level2 / F2fsNode.AddrsPerBlock;
         var siLevel2 = level2 % F2fsNode.AddrsPerBlock;
 
-        // ReadIndirectAddress reads a single indirect node: i_addr[siLevel1] → directNid,
-        // then ReadDnodeAddress(directNid, siLevel2) → data block.
+
         return ReadIndirectAddress(singleIndirectNid, siLevel1, siLevel2, logicalBlock);
     }
 
@@ -729,7 +635,7 @@ public sealed class F2fsParser : IDisposable
             return;
         }
 
-        // Maximum: direct inode (923) + 2 direct nodes + single indirect + 2 double indirect nodes.
+
         var perIndirect = (long)F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock;
         var perDoubleIndirect = perIndirect * F2fsNode.AddrsPerBlock;
         var maxSupportedBlocks = checked(
@@ -759,17 +665,13 @@ public sealed class F2fsParser : IDisposable
     }
 
     /// <summary>
-    /// 压缩文件读路径：按压缩簇（1 &lt;&lt; (log_cluster_size + 12) 字节）逐簇读取。
-    /// 已压缩簇从首块读簇头并解压；未压缩簇按普通块读；簇内空洞补零。
-    /// <para>Compressed-file read path: reads cluster by cluster
-    /// (cluster = 1 &lt;&lt; (log_cluster_size + 12) bytes). Compressed clusters read a header from
-    /// the first block then decompress; uncompressed clusters read raw blocks; in-cluster holes are
-    /// zero-filled.</para>
+    /// Compressed-file read path: reads cluster by cluster (cluster = 1 &lt;&lt; (log_cluster_size + 12) bytes).
+    /// <para>压缩文件读路径：按压缩簇（1 &lt;&lt; (log_cluster_size + 12) 字节）逐簇读取。</para>
     /// </summary>
     private void WriteCompressedFileData(F2fsInode inode, Stream output)
     {
-        // 簇大小（字节）：1 << (log_cluster_size + 12)。默认 log=2 → 16KB（4 页）。
-        // Cluster size in bytes: 1 << (log_cluster_size + 12). Default log=2 → 16KB (4 pages).
+
+
         var logShift = inode.LogClusterSize + 12;
         if (logShift is < 12 or > 16)
         {
@@ -801,20 +703,20 @@ public sealed class F2fsParser : IDisposable
             var physical = MapBlock(inode, logical);
             if (physical is null || physical == 0)
             {
-                // 整簇空洞：补零。Entire cluster is a hole: zero-fill.
+
                 WriteZeros(output, writeLength);
                 remaining -= writeLength;
                 continue;
             }
 
-            // 读首块以探查簇头。Read the first block to inspect the cluster header.
+
             var firstBlock = ReadBlockChecked((ulong)physical, $"Compressed cluster first block (logical {logical})");
             var header = F2fsCompressedCluster.FromBytes(firstBlock);
 
             if (header.IsCompressed && header.UncompressedSize == clusterSize)
             {
-                // 已压缩簇：从首块之后读 compressedSize 字节并解压。
-                // Compressed cluster: read compressedSize bytes after the header and decompress.
+
+
                 var compressedBytes = header.CompressedSize;
                 var compressed = new byte[compressedBytes];
                 var copied = 0;
@@ -872,8 +774,8 @@ public sealed class F2fsParser : IDisposable
             }
             else
             {
-                // 未压缩簇：按普通块读，空洞补零。
-                // Uncompressed cluster: read raw blocks, zero-fill holes.
+
+
                 var clusterBuffer = new byte[clusterSize];
                 for (var b = 0; b < clusterBlocks; b++)
                 {
@@ -895,18 +797,16 @@ public sealed class F2fsParser : IDisposable
     }
 
     /// <summary>
-    /// 将 inode i_advise 内的内核算法 ID 映射为 <see cref="CompressionAlgorithm"/>。
     /// kernel: 0=LZO,1=LZ4,2=ZSTD,3=LZORLE。
-    /// <para>Maps the kernel algorithm id stored in i_advise to a <see cref="CompressionAlgorithm"/>
-    /// (kernel: 0=LZO,1=LZ4,2=ZSTD,3=LZORLE).</para>
+    /// <para>将 inode i_advise 内的内核算法 ID 映射为 CompressionAlgorithm。</para>
     /// </summary>
     private static CompressionAlgorithm MapCompressAlgorithm(byte kernelAlgorithmId)
         => kernelAlgorithmId switch
         {
             1 => CompressionAlgorithm.Lz4,
             2 => CompressionAlgorithm.Zstd,
-            // LZO(0) 与 LZO-RLE(3) 解压共用 LZO1X 实现（对齐内核 lzo1x_decompress_safe）。
-            // LZO(0) and LZO-RLE(3) share the LZO1X decompressor (kernel lzo1x_decompress_safe).
+
+
             0 or 3 => CompressionAlgorithm.Lzo,
             _ => throw new InvalidDataException(
                 $"Unknown F2FS compression algorithm id {kernelAlgorithmId}."),

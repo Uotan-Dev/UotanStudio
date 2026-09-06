@@ -253,8 +253,8 @@ public class PacFormatHandlerTests
             var result = await handler.UnpackAsync(path, outDir, null, TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.Summary);
 
-            Assert.Equal([0x01, 0x02], await File.ReadAllBytesAsync(Path.Combine(outDir, "nvram.bin")));
-            Assert.Equal(bootData, await File.ReadAllBytesAsync(Path.Combine(outDir, "boot.img")));
+            Assert.Equal([0x01, 0x02], await File.ReadAllBytesAsync(Path.Combine(outDir, "nvram.bin"), TestContext.Current.CancellationToken));
+            Assert.Equal(bootData, await File.ReadAllBytesAsync(Path.Combine(outDir, "boot.img"), TestContext.Current.CancellationToken));
         }
         finally
         {

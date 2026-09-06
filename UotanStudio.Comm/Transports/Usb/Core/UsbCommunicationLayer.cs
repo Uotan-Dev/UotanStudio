@@ -518,11 +518,11 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         // 比较，而无约束打开会绑定复合设备第一个 bulk 接口（FF|FF|00），永远不等于所请求的键。</para>
         var keyFilter = UsbDeviceIdentity.TryParseKeyFilter(deviceKey);
 
-        // Auto 下按 key 内嵌的后端名(首段,如 "native"/"libusb")解析,使此前多后端
-        // 枚举产生的 key 仍可重开,而不是被 Auto 的单一默认后端(WinUSB)拒绝匹配。
+        // Auto 下按 key 内嵌的后端名（首段，如 "native"/"libusb"）解析，使带后端限定的
+        // 键按其生成后端重开，而非被 Auto 的单一默认后端（WinUSB）拒绝匹配。
         // Under Auto, resolve by the backend name embedded in the key (first segment,
-        // e.g. "native"/"libusb") so keys produced by earlier multi-backend enumeration
-        // still reopen instead of being rejected by Auto's single default backend.
+        // e.g. "native"/"libusb") so backend-qualified keys reopen against their producing
+        // backend instead of being rejected by Auto's single default backend.
         var providers = ResolveProviders(apiKind);
         if (apiKind == UsbApiKind.Auto)
         {

@@ -1,20 +1,17 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Rockchip;
 
-/// <summary>
-/// <para>Rockchip RKAF/RKFW 固件镜像的 IFormatHandler 实现（只读解析）。</para>
-/// IFormatHandler implementation for Rockchip RKAF/RKFW firmware images (read-only parsing).
-/// </summary>
 public sealed class RockchipFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "Rockchip RKAF/RKFW Firmware";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["rkfw"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -38,7 +35,10 @@ public sealed class RockchipFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -55,7 +55,10 @@ public sealed class RockchipFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -69,9 +72,12 @@ public sealed class RockchipFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) =>
-        // RKAF/RKFW packing would require regenerating the afptool partition directory; not supported.
+
         Task.FromResult(FirmwareOpResult.Fail("Rockchip RKAF/RKFW packing is not supported by this handler."));
 
     private static IProgress<double>? ToProgress(IFirmwareProgress? progress)

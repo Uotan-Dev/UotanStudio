@@ -1,42 +1,25 @@
-using UotanStudio.Firmware.Dex.Instructions;
+﻿using UotanStudio.Firmware.Dex.Instructions;
 using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex.Decompile;
 
-/// <summary>
-/// <para>控制流图：基本块列表 + 入口块 + 按起始偏移索引。</para>
-/// Control-flow graph: the basic block list, the entry block and a start-offset index.
-/// </summary>
 public sealed class Cfg
 {
-    /// <summary>全部基本块（构建顺序）。<para>All basic blocks (build order).</para></summary>
     public List<BasicBlock> Blocks { get; } = [];
 
-    /// <summary>入口块；空方法为 <c>null</c>。<para>Entry block; <c>null</c> for empty methods.</para></summary>
     public BasicBlock? Entry { get; set; }
 
-    /// <summary>按起始字节偏移索引块。<para>Index of blocks by start byte offset.</para></summary>
     public Dictionary<int, BasicBlock> ByStartOffset { get; } = [];
 
-    /// <summary>是否存在指令（非空 CFG）。<para>Whether the CFG has instructions.</para></summary>
     public bool HasInstructions => Blocks.Count > 0;
 }
 
-/// <summary>
-/// <para>控制流图构建器：把方法指令流切分为基本块并连接控制流边，
-/// 分支目标与 switch case 目标均解析为块引用。</para>
-/// Control-flow graph builder: splits a method's instruction stream into basic blocks and wires
-/// control-flow edges, resolving branch targets and switch case targets into block references.
-/// </summary>
 public static class CfgBuilder
 {
     /// <summary>
-    /// <para>从代码项构建控制流图（未解码的指令按需解码）。</para>
     /// Builds a control-flow graph from a code item (decoding instructions on demand).
+    /// <para>从代码项构建控制流图（未解码的指令按需解码）。</para>
     /// </summary>
-    /// <param name="code">代码项。<para>The code item.</para></param>
-    /// <param name="dex">所属 DEX 文件（用于按需解码）。<para>The owning DEX file (for on-demand decoding).</para></param>
-    /// <returns>控制流图；空方法返回无块图。<para>The CFG; empty methods yield a block-less graph.</para></returns>
     public static Cfg Build(CodeItem code, DexFile dex)
     {
         ArgumentNullException.ThrowIfNull(code);
@@ -48,9 +31,7 @@ public static class CfgBuilder
         var cfg = new Cfg();
         if (instructions.Count == 0) return cfg;
 
-        // 第一遍：收集 leader 偏移——偏移 0、分支目标、终止指令后的下一条、switch case 目标。
-        // Pass 1: collect leader offsets — offset 0, branch targets, the instruction after a
-        // terminator, and switch case targets.
+
         var leaders = new SortedSet<int> { 0 };
         var offsetToIndex = new Dictionary<int, int>(instructions.Count);
         for (var i = 0; i < instructions.Count; i++)
@@ -70,9 +51,8 @@ public static class CfgBuilder
                         leaders.Add(target.Offset);
                         break;
                     case PayloadOperand payload when insn.Mnemonic is "packed-switch" or "sparse-switch":
-                        // 31t 的 payload 目标由 BranchTargetOperand 收集；此处收集 case 目标。
-                        // The 31t payload target is collected via BranchTargetOperand; here we
-                        // collect the case targets from the payload values.
+
+
                         CollectSwitchCaseTargets(leaders, instructions, insn, payload, offsetToIndex);
                         break;
                 }
@@ -89,8 +69,7 @@ public static class CfgBuilder
             }
         }
 
-        // 第二遍：按 leader 切块。
-        // Pass 2: slice blocks at leaders.
+
         var blockByStart = new Dictionary<int, BasicBlock>();
         var id = 0;
         BasicBlock? current = null;
@@ -108,8 +87,7 @@ public static class CfgBuilder
             current.Instructions.Add(insn);
         }
 
-        // 第三遍：确定块种类并连接控制流边。
-        // Pass 3: decide block kinds and wire control-flow edges.
+
         for (var i = 0; i < cfg.Blocks.Count; i++)
         {
             var block = cfg.Blocks[i];
@@ -158,8 +136,8 @@ public static class CfgBuilder
     }
 
     /// <summary>
-    /// <para>判断助记符是否为块终止指令。</para>
     /// Determines whether a mnemonic terminates a block.
+    /// <para>判断助记符是否为块终止指令。</para>
     /// </summary>
     private static bool IsTerminator(string mnemonic) => mnemonic.StartsWith("if-", System.StringComparison.Ordinal)
         || mnemonic.StartsWith("goto", System.StringComparison.Ordinal)
@@ -182,8 +160,8 @@ public static class CfgBuilder
 
     private static void CollectSwitchTargets(BasicBlock block, Instruction terminator, List<Instruction> instructions, Dictionary<int, BasicBlock> blockByStart)
     {
-        // 定位 switch 指令引用的 payload 伪指令，取其 case 目标。
-        // Locate the payload pseudo-instruction referenced by the switch and read its case targets.
+
+
         foreach (var operand in terminator.Operands)
         {
             if (operand is not BranchTargetOperand payloadRef) continue;
@@ -225,9 +203,8 @@ public static class CfgBuilder
 
     private static void CollectSwitchCaseTargets(SortedSet<int> leaders, List<Instruction> instructions, Instruction insn, PayloadOperand payload, Dictionary<int, int> offsetToIndex)
     {
-        // 该调用来自 switch 指令本身（携带 31t payload 引用），需先解析 payload 偏移。
-        // This call originates from the switch instruction itself (holding the 31t payload ref),
-        // so resolve the payload offset first.
+
+
         var payloadOffset = -1;
         foreach (var operand in insn.Operands)
         {

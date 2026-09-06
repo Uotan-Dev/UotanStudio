@@ -1,19 +1,15 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Text;
 
 namespace UotanStudio.Firmware.Nb0;
 
-/// <summary>
-/// <para>提供将条目列表打包为 FIH Mobile NB0 固件文件的功能。</para>
-/// Provides functionality to pack a list of entries into an FIH Mobile NB0 firmware file.
-/// </summary>
 public sealed class Nb0Packer
 {
     private const int DefaultBufferSize = 1024 * 1024;
 
     /// <summary>
-    /// <para>将指定条目列表打包为 NB0 固件文件。</para>
     /// Packs the specified entry list into an NB0 firmware file.
+    /// <para>将指定条目列表打包为 NB0 固件文件。</para>
     /// </summary>
     public void Pack(string outputFilePath, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null)
     {
@@ -25,8 +21,8 @@ public sealed class Nb0Packer
     }
 
     /// <summary>
-    /// <para>异步将指定条目列表打包为 NB0 固件文件。</para>
     /// Asynchronously packs the specified entry list into an NB0 firmware file.
+    /// <para>异步将指定条目列表打包为 NB0 固件文件。</para>
     /// </summary>
     public async Task PackAsync(string outputFilePath, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -38,8 +34,8 @@ public sealed class Nb0Packer
     }
 
     /// <summary>
-    /// <para>将指定条目列表打包为 NB0 格式并写入指定的流。</para>
     /// Packs the specified entry list into NB0 format and writes it to the specified stream.
+    /// <para>将指定条目列表打包为 NB0 格式并写入指定的流。</para>
     /// </summary>
     public void PackToStream(Stream stream, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null)
     {
@@ -50,8 +46,8 @@ public sealed class Nb0Packer
     }
 
     /// <summary>
-    /// <para>异步将指定条目列表打包为 NB0 格式并写入指定的流。</para>
     /// Asynchronously packs the specified entry list into NB0 format and writes it to the specified stream.
+    /// <para>异步将指定条目列表打包为 NB0 格式并写入指定的流。</para>
     /// </summary>
     public async Task PackToStreamAsync(Stream stream, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
     {
@@ -63,8 +59,8 @@ public sealed class Nb0Packer
     }
 
     /// <summary>
-    /// <para>将指定目录中的所有文件打包为 NB0 固件文件(条目名使用相对路径)。</para>
     /// Packs all files in the specified directory into an NB0 firmware file (entry names use relative paths).
+    /// <para>将指定目录中的所有文件打包为 NB0 固件文件(条目名使用相对路径)。</para>
     /// </summary>
     public static void PackFromDirectory(string sourceDirectory, string outputFilePath, IProgress<Nb0PackProgress>? progress = null)
     {
@@ -87,8 +83,8 @@ public sealed class Nb0Packer
     }
 
     /// <summary>
-    /// <para>创建一个新的打包器构建器。</para>
     /// Creates a new packer builder.
+    /// <para>创建一个新的打包器构建器。</para>
     /// </summary>
     public static Nb0PackerBuilder CreateBuilder() => new();
 
@@ -127,7 +123,7 @@ public sealed class Nb0Packer
                             $"Entry '{entry.Header.Name}' data size ({entry.Data.LongLength}) does not match the declared header size ({entry.Header.FileSize}).");
                     }
                     writer.Write(entry.Data);
-                    // NB0 entries are 4-byte aligned.
+
                     var dataPad = (4 - (entry.Data.Length % 4)) % 4;
                     for (var i = 0; i < dataPad; i++)
                     {
@@ -136,8 +132,8 @@ public sealed class Nb0Packer
                 }
                 else if (entry.FilePath is not null)
                 {
-                    // 从源文件分块流式复制，不再整文件读入内存。
-                    // Stream the source file in chunks instead of loading it into memory.
+
+
                     using var source = new FileStream(entry.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, DefaultBufferSize, FileOptions.SequentialScan);
                     if (source.Length != entry.Header.FileSize)
                     {
@@ -160,7 +156,7 @@ public sealed class Nb0Packer
                         remaining -= read;
                     }
 
-                    // NB0 entries are 4-byte aligned.
+
                     var pad = (4 - (entry.Header.FileSize % 4)) % 4;
                     for (var i = 0; i < pad; i++)
                     {
@@ -183,17 +179,13 @@ public sealed class Nb0Packer
     }
 }
 
-/// <summary>
-/// <para>提供构建 NB0 打包条目的流式构建器。</para>
-/// Provides a fluent builder for constructing NB0 pack entries.
-/// </summary>
 public sealed class Nb0PackerBuilder
 {
     private readonly List<Nb0Entry> _entries = [];
 
     /// <summary>
-    /// <para>添加一个内存数据条目。</para>
     /// Adds an in-memory data entry.
+    /// <para>添加一个内存数据条目。</para>
     /// </summary>
     public Nb0PackerBuilder AddEntry(string name, byte[] data)
     {
@@ -202,8 +194,8 @@ public sealed class Nb0PackerBuilder
     }
 
     /// <summary>
-    /// <para>添加一个磁盘文件条目。</para>
     /// Adds a disk file entry.
+    /// <para>添加一个磁盘文件条目。</para>
     /// </summary>
     public Nb0PackerBuilder AddFile(string filePath, string? entryName = null)
     {
@@ -213,8 +205,8 @@ public sealed class Nb0PackerBuilder
     }
 
     /// <summary>
-    /// <para>递归添加目录中的所有文件。</para>
     /// Recursively adds all files in a directory.
+    /// <para>递归添加目录中的所有文件。</para>
     /// </summary>
     public Nb0PackerBuilder AddDirectory(string directoryPath, string? prefix = null)
     {
@@ -228,8 +220,8 @@ public sealed class Nb0PackerBuilder
     }
 
     /// <summary>
-    /// <para>将构建的条目打包到输出文件。</para>
     /// Packs the built entries to the output file.
+    /// <para>将构建的条目打包到输出文件。</para>
     /// </summary>
     public void Build(string outputFilePath, IProgress<Nb0PackProgress>? progress = null)
     {

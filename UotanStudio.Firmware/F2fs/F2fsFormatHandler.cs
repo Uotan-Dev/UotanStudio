@@ -2,29 +2,15 @@ using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.F2fs;
 
-/// <summary>
-/// f2fs 镜像格式处理器（解包 / 打包 / 元数据读取）。
-/// <para>F2FS image format handler (unpack / pack / metadata read).</para>
-/// </summary>
 public sealed class F2fsFormatHandler : IFormatHandler
 {
-    /// <summary>
-    /// 获取人类可读的格式名称。
-    /// <para>Gets the human-readable format name.</para>
-    /// </summary>
     public string FormatName => "F2FS";
 
-    /// <summary>
-    /// 获取典型文件扩展名（不带点，小写）。
-    /// <para>Gets the typical file extensions (without dot, lowercase).</para>
-    /// </summary>
     public IReadOnlyList<string> FileExtensions { get; } = ["img", "f2fs"];
 
     /// <summary>
-    /// 判断该处理器能否处理指定文件：读取偏移 1024 处的 4 字节魔数（小端 0xF2F52010），
-    /// 或扩展名为 .f2fs。
-    /// <para>Determines whether this handler can process the given file by reading the 4-byte magic
-    /// at offset 1024 (little-endian 0xF2F52010), or by a .f2fs extension.</para>
+    /// Determines whether this handler can process the given file by reading the 4-byte magic at offset 1024 (little-endian 0xF2F52010), or by a .f2fs extension.
+    /// <para>判断该处理器能否处理指定文件：读取偏移 1024 处的 4 字节魔数（小端 0xF2F52010）， 或扩展名为 .f2fs。</para>
     /// </summary>
     public bool CanHandle(string filePath)
     {
@@ -58,8 +44,8 @@ public sealed class F2fsFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// 读取格式元数据而不解包。
-    /// <para>Reads format metadata without unpacking.</para>
+    /// Reads format metadata without unpacking.
+    /// <para>读取格式元数据而不解包。</para>
     /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -101,8 +87,8 @@ public sealed class F2fsFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// 将 f2fs 镜像解包到输出目录。
-    /// <para>Unpacks the f2fs image to the output directory.</para>
+    /// Unpacks the f2fs image to the output directory.
+    /// <para>将 f2fs 镜像解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -130,8 +116,8 @@ public sealed class F2fsFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// 将目录打包为 f2fs 镜像。
-    /// <para>Packs a directory into an f2fs image.</para>
+    /// Packs a directory into an f2fs image.
+    /// <para>将目录打包为 f2fs 镜像。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {

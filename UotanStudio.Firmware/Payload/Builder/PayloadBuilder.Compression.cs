@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Google.Protobuf;
 using SharpCompress.Compressors.BZip2;
@@ -19,12 +19,8 @@ public sealed partial class PayloadBuilder
                 break;
             case CompressionType.Brotli:
                 {
-                    // There is no Brotli full-partition REPLACE operation in the payload
-                    // proto (brotli only appears in BROTLI_BSDIFF delta operations), so a
-                    // brotli-compressed blob would be written as a raw REPLACE and come out
-                    // corrupted on extraction. Store the data uncompressed instead.
-                    // <para>payload 协议中没有 Brotli 整分区 REPLACE 操作（brotli 仅用于 BROTLI_BSDIFF
-                    // 增量操作），若按 REPLACE 写入 brotli 压缩数据会在提取时损坏。因此此处按未压缩存储。</para>
+
+
                     inputStream.CopyTo(outputStream, 81920);
                 }
                 break;

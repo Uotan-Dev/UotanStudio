@@ -1,20 +1,17 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Lp;
 
-/// <summary>
-/// IFormatHandler implementation for Android super images with logical partition (LP) metadata.
-/// <para>Android super 镜像(含逻辑分区 LP 元数据)的 IFormatHandler 实现。</para>
-/// </summary>
 public sealed class LpFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "Android Logical Partition (super)";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["img", "super"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -54,7 +51,10 @@ public sealed class LpFormatHandler : IFormatHandler
         return geometry.Magic == MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -70,7 +70,10 @@ public sealed class LpFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -78,7 +81,7 @@ public sealed class LpFormatHandler : IFormatHandler
             var metadata = MetadataReader.ReadFromImageFile(filePath);
             Directory.CreateDirectory(outputDirectory);
 
-            // For each partition with linear extents, slice the corresponding region out of the image.
+
             using var image = File.OpenRead(filePath);
             var written = 0;
             foreach (var partition in metadata.Partitions)
@@ -98,7 +101,7 @@ public sealed class LpFormatHandler : IFormatHandler
                 {
                     if (extent.TargetType != MetadataFormat.LP_TARGET_TYPE_LINEAR)
                     {
-                        // Zero extents: write zeros.
+
                         var zeroLen = (long)extent.NumSectors * MetadataFormat.LP_SECTOR_SIZE;
                         output.SetLength(output.Length + zeroLen);
                         output.Position = output.Length;
@@ -132,19 +135,22 @@ public sealed class LpFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try
         {
-            // inputPath is a directory of partition images; build a super image with LP metadata.
+
             var files = Directory.EnumerateFiles(inputPath, "*.img", SearchOption.TopDirectoryOnly).ToList();
             if (files.Count == 0)
             {
                 return Task.FromResult(FirmwareOpResult.Fail("Input directory contains no *.img files."));
             }
 
-            var deviceSize = 4096UL * 1024 * 1024; // 4 GiB default super device
+            var deviceSize = 4096UL * 1024 * 1024;
             var builder = MetadataBuilder.New(deviceSize, 64 * 1024, 2);
             builder.AddGroup("default", 0);
 
@@ -163,7 +169,7 @@ public sealed class LpFormatHandler : IFormatHandler
                 image.SetLength((long)deviceSize);
                 MetadataWriter.WriteToImageStream(image, metadata);
 
-                // Write partition contents at their linear extents.
+
                 using var src = File.OpenRead(outputPath);
                 foreach (var partition in metadata.Partitions)
                 {

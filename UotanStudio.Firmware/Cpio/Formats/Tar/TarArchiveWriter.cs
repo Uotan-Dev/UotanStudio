@@ -1,20 +1,21 @@
-using System.Formats.Tar;
+﻿using System.Formats.Tar;
 using System.Text;
 using UotanStudio.Firmware.Cpio.Model;
 
 namespace UotanStudio.Firmware.Cpio.Formats.Tar;
 
-/// <summary>Writes TAR-family archives from normalized archive entries.</summary>
 public sealed class TarArchiveWriter
 {
-    /// <summary>Writes all provided entries to a TAR stream.</summary>
+    /// <summary>
+    /// Writes all supplied entries to a TAR stream.
+    /// <para>将所有提供的条目写入 TAR 流。</para>
+    /// </summary>
     public void WriteAll(Stream stream, IEnumerable<ArchiveEntry> entries, ArchiveFormat format)
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(entries);
 
-        // Consume exactly once and retain distinct direct streams until enumeration completes:
-        // later entries may share an instance and cannot be predicted without a second pass.
+
         var directStreams = new HashSet<Stream>(ReferenceEqualityComparer.Instance);
         Exception? primary = null;
         try
@@ -27,13 +28,13 @@ public sealed class TarArchiveWriter
                 DeclaredLengthReadStream? bounded = null;
                 try
                 {
-                    // TAR payload access is valid only for regular entries.
+
                     var isRegular = entry.Metadata.FileType is CpioFileType.Regular or CpioFileType.Socket or CpioFileType.Unknown;
                     var payloadLength = 0L;
                     Stream? payload = null;
                     if (isRegular)
                     {
-                        // Register direct ownership before any property access (including length) can fail.
+
                         if (entry.DataStream is { } owned) directStreams.Add(owned);
                         payloadLength = entry.DataLength;
                         ValidateInMemoryLength(entry, payloadLength);

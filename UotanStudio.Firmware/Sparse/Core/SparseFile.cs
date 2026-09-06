@@ -1,9 +1,5 @@
-namespace UotanStudio.Firmware.Sparse;
+﻿namespace UotanStudio.Firmware.Sparse;
 
-/// <summary>
-/// Represents a sparse image file: header + ordered chunk list.
-/// <para>表示一个稀疏镜像文件:头部 + 有序数据块列表。</para>
-/// </summary>
 public sealed class SparseFile : IDisposable
 {
     private readonly List<SparseChunk> _chunks = [];
@@ -33,22 +29,10 @@ public sealed class SparseFile : IDisposable
         Header = SparseHeader.CreateDefault(blockSize, totalBlocks);
     }
 
-    /// <summary>
-    /// Gets or sets the sparse header.
-    /// <para>获取或设置稀疏文件头部。</para>
-    /// </summary>
     public SparseHeader Header { get; set; }
 
-    /// <summary>
-    /// Gets the ordered chunk list.
-    /// <para>获取有序数据块列表。</para>
-    /// </summary>
     public IReadOnlyList<SparseChunk> Chunks => _chunks;
 
-    /// <summary>
-    /// Gets the total number of logical blocks covered so far.
-    /// <para>获取当前累计覆盖的逻辑块数。</para>
-    /// </summary>
     public uint CurrentBlock
     {
         get
@@ -197,9 +181,8 @@ public sealed class SparseFile : IDisposable
                     break;
                 case ChunkType.DontCare:
                     {
-                        // DontCare 块在原始(非稀疏)输出中应零填充,以保持逻辑长度与后续块偏移一致。
-                        // A DontCare chunk must be zero-filled in the raw (unsparsified) output so the
-                        // logical length is preserved and following chunks stay at their correct offsets.
+
+
                         var total = (long)chunk.Header.ChunkSize * blockSize;
                         while (total > 0)
                         {
@@ -214,8 +197,8 @@ public sealed class SparseFile : IDisposable
                     break;
                 default:
                     {
-                        // 未知块类型：同样零填充,保证输出镜像长度完整。
-                        // Unknown chunk types: zero-fill so the output image keeps its full length.
+
+
                         var total = (long)chunk.Header.ChunkSize * blockSize;
                         while (total > 0)
                         {
@@ -229,10 +212,7 @@ public sealed class SparseFile : IDisposable
             }
         }
 
-        // 尾部补齐：未覆盖的块（如 SparseWriter 序列化时补入的 DontCare 尾块）一律零填充，
-        // 使原始输出恒等于 TotalBlocks*blockSize，与读回后的输出保持字节一致。
-        // Trailing padding: uncovered blocks (e.g. trailing DontCare chunks added at serialization) are
-        // zero-filled so the raw output is always TotalBlocks*blockSize and matches the read-back output.
+
         while (written < logicalLength)
         {
             var n = (int)Math.Min(blockSize, logicalLength - written);

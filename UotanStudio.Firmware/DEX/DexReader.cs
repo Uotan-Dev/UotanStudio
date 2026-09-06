@@ -1,23 +1,18 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using System.Text;
 using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex;
 
-/// <summary>
-/// <para>DEX 二进制解析器：按 Google dex-format 规范读取头部、各索引表、类数据与代码项，解码为对象模型。</para>
-/// DEX binary parser: reads the header, index tables, class data and code items per the Google dex-format
-/// specification, decoding them into the object model.
-/// </summary>
 internal static class DexReader
 {
     private const uint LittleEndianTag = 0x12345678;
     private const uint NoIndex = 0xFFFFFFFF;
 
     /// <summary>
-    /// <para>解析 DEX 字节数组为对象模型。</para>
     /// Parses a DEX byte array into the object model.
+    /// <para>解析 DEX 字节数组为对象模型。</para>
     /// </summary>
     public static DexFile Parse(byte[] data)
     {
@@ -105,7 +100,7 @@ internal static class DexReader
             while (p < data.Length && data[p] != 0) p++;
             if (p >= data.Length) throw new DexException($"String data {i} is not NUL-terminated");
             dex.Strings.Add(Mutf8.Decode(data, start, p - start));
-            _ = utf16Size; // 长度仅用于校验，解码以字节为准；长度以字节为准
+            _ = utf16Size;
         }
     }
 
@@ -151,8 +146,8 @@ internal static class DexReader
         var listSpan = data.AsSpan(offset + 4, checked((int)size * 2));
         if (BitConverter.IsLittleEndian)
         {
-            // 小端主机：整段 reinterpret 为 ushort，批量拷贝代替逐项 BinaryPrimitives 调用。
-            // Little-endian hosts: reinterpret the whole slice as ushort and copy in bulk.
+
+
             var units = MemoryMarshal.Cast<byte, ushort>(listSpan);
             for (var i = 0; i < size; i++) result[i] = units[i];
         }
@@ -315,8 +310,8 @@ internal static class DexReader
         ushort[] raw;
         if (BitConverter.IsLittleEndian)
         {
-            // 小端主机：整段 reinterpret 为 ushort 批量拷贝（memcpy 级），代替逐单元读取。
-            // Little-endian hosts: reinterpret the whole slice as ushort and copy in bulk (memcpy-level).
+
+
             raw = MemoryMarshal.Cast<byte, ushort>(insnsSpan).ToArray();
         }
         else
@@ -336,18 +331,11 @@ internal static class DexReader
             RawInsns = raw
         };
 
-        // 注意：此处不预解码指令。CodeItem.Instructions 保持为空，由 Disassembler 在
-        // 实际反汇编时按需解码（DisassembleMethod 已处理 Instructions 为空的路径）。
-        // 这样打开大 DEX 时不会为每个方法生成全套 Instruction 对象（内存大头）。
-        // Note: instructions are NOT pre-decoded here. CodeItem.Instructions stays empty and is
-        // decoded on demand by the Disassembler (DisassembleMethod already handles empty lists).
-        // This avoids materializing the full instruction object graph for every method when a
-        // large DEX is opened (the biggest memory hotspot).
 
         if (triesSize > 0)
         {
-            // insns 之后若为奇数代码单元需补齐 2 字节，使 try_item 数组 4 字节对齐。
-            // After the insns array, an odd code-unit count needs a 2-byte pad so the try_item array is 4-byte aligned.
+
+
             var triesOffset = insnsStart + checked((int)insnsSize * 2) + ((insnsSize & 1) != 0 ? 2 : 0);
             EnsureRange(data, triesOffset, checked(triesSize * 8), "code_item tries");
             ReadTriesAndHandlers(data, triesOffset, triesSize, code);
@@ -362,8 +350,8 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// <para>读取 try_item 数组与 encoded_catch_handler_list，建立 handler_off → Handlers 索引映射。</para>
     /// Reads the try_item array and encoded_catch_handler_list, mapping handler_off into Handlers indices.
+    /// <para>读取 try_item 数组与 encoded_catch_handler_list，建立 handler_off → Handlers 索引映射。</para>
     /// </summary>
     private static void ReadTriesAndHandlers(byte[] data, int triesOffset, int triesSize, CodeItem code)
     {
@@ -407,18 +395,18 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// <para>读取 debug_info_item 的原始字节（按状态机扫描至 END_SEQUENCE），供重建时原样回写。</para>
     /// Reads the raw debug_info_item bytes (walking the state machine to END_SEQUENCE) for verbatim rewrite.
+    /// <para>读取 debug_info_item 的原始字节（按状态机扫描至 END_SEQUENCE），供重建时原样回写。</para>
     /// </summary>
     private static byte[] ReadDebugInfoRaw(byte[] data, int offset)
     {
         var start = offset;
         var p = offset;
-        _ = Leb128.ReadUleb128(data, ref p);       // line_start
+        _ = Leb128.ReadUleb128(data, ref p);
         var parametersSize = Leb128.ReadUleb128(data, ref p);
         for (var i = 0; i < parametersSize; i++)
         {
-            _ = Leb128.ReadUleb128(data, ref p);   // 参数名索引（NO_INDEX 亦按 uleb128 读）
+            _ = Leb128.ReadUleb128(data, ref p);
         }
         while (true)
         {
@@ -426,37 +414,37 @@ internal static class DexReader
             var opcode = data[p++];
             switch (opcode)
             {
-                case 0x00: // DBG_END_SEQUENCE
+                case 0x00:
                     return data.AsSpan(start, p - start).ToArray();
-                case 0x01: _ = Leb128.ReadUleb128(data, ref p); break; // DBG_ADVANCE_PC
-                case 0x02: _ = Leb128.ReadSleb128(data, ref p); break; // DBG_ADVANCE_LINE
-                case 0x03: // DBG_START_LOCAL
+                case 0x01: _ = Leb128.ReadUleb128(data, ref p); break;
+                case 0x02: _ = Leb128.ReadSleb128(data, ref p); break;
+                case 0x03:
                     _ = Leb128.ReadUleb128(data, ref p);
                     _ = Leb128.ReadUleb128(data, ref p);
                     _ = Leb128.ReadUleb128(data, ref p);
                     break;
-                case 0x04: // DBG_START_LOCAL_EXTENDED
+                case 0x04:
                     _ = Leb128.ReadUleb128(data, ref p);
                     _ = Leb128.ReadUleb128(data, ref p);
                     _ = Leb128.ReadUleb128(data, ref p);
                     _ = Leb128.ReadUleb128(data, ref p);
                     break;
-                case 0x05: // DBG_END_LOCAL
-                case 0x06: // DBG_RESTART_LOCAL
+                case 0x05:
+                case 0x06:
                     _ = Leb128.ReadUleb128(data, ref p);
                     break;
-                case 0x07: // DBG_SET_PROLOGUE_END
-                case 0x08: // DBG_SET_EPILOGUE_BEGIN
+                case 0x07:
+                case 0x08:
                     break;
-                case 0x09: _ = Leb128.ReadUleb128(data, ref p); break; // DBG_SET_FILE
-                default: break; // 特殊操作码（0x0a..0xff）无操作数
+                case 0x09: _ = Leb128.ReadUleb128(data, ref p); break;
+                default: break;
             }
         }
     }
 
     /// <summary>
-    /// <para>读取注解目录（annotations_directory_item）。</para>
     /// Reads the annotations directory (annotations_directory_item).
+    /// <para>读取注解目录（annotations_directory_item）。</para>
     /// </summary>
     private static AnnotationsDirectory ReadAnnotationsDirectory(byte[] data, int offset, DexFile dex)
     {
@@ -509,8 +497,8 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// <para>读取注解集合（annotation_set_item）：各条目为 annotation_item 的偏移。</para>
     /// Reads an annotation set (annotation_set_item): entries are offsets to annotation items.
+    /// <para>读取注解集合（annotation_set_item）：各条目为 annotation_item 的偏移。</para>
     /// </summary>
     private static AnnotationSet ReadAnnotationSet(byte[] data, int offset, DexFile dex)
     {
@@ -518,9 +506,8 @@ internal static class DexReader
         var set = new AnnotationSet();
         for (var i = 0; i < size; i++)
         {
-            // 条目为 annotation_item 的纯文件偏移；visibility 存储于 annotation_item 首字节。
-            // Entries are plain file offsets of annotation_items; visibility lives in the item's
-            // leading byte (per Google dex-format / dexlib2: VISIBILITY_OFFSET=0, ANNOTATION_OFFSET=1).
+
+
             var itemOff = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4 + i * 4));
             var p = (int)itemOff;
             var visibility = data[p++];
@@ -532,8 +519,8 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// <para>读取参数注解引用列表（annotation_set_ref_list）。</para>
     /// Reads a parameter annotation ref list (annotation_set_ref_list).
+    /// <para>读取参数注解引用列表（annotation_set_ref_list）。</para>
     /// </summary>
     private static AnnotationSetRefList ReadAnnotationSetRefList(byte[] data, int offset, DexFile dex)
     {
@@ -548,8 +535,8 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// <para>读取编码注解（encoded_annotation）。</para>
     /// Reads an encoded annotation (encoded_annotation).
+    /// <para>读取编码注解（encoded_annotation）。</para>
     /// </summary>
     private static AnnotationItem ReadEncodedAnnotation(byte[] data, ref int offset, DexFile dex)
     {
@@ -566,14 +553,14 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// <para>读取编码值（encoded_value），按 value_arg/value_type 规则解码。</para>
     /// Reads an encoded value (encoded_value), decoded per the value_arg/value_type rules.
+    /// <para>读取编码值（encoded_value），按 value_arg/value_type 规则解码。</para>
     /// </summary>
     private static EncodedValue ReadEncodedValue(byte[] data, ref int offset, DexFile dex)
     {
         var header = data[offset++];
-        // 头字节 = value_arg[3] value_type[5]（与 Google dex-format / dexlib2 一致）。
-        // Header byte = value_arg[3] value_type[5] (per Google dex-format / dexlib2).
+
+
         var arg = header >> 5;
         var type = (EncodedValueType)(header & 0x1f);
 
@@ -635,8 +622,8 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// <para>读取无符号小端整数（最多 8 字节）。</para>
     /// Reads an unsigned little-endian integer (up to 8 bytes).
+    /// <para>读取无符号小端整数（最多 8 字节）。</para>
     /// </summary>
     private static ulong ReadUnsignedValue(byte[] data, ref int offset, int byteCount)
     {
@@ -650,8 +637,8 @@ internal static class DexReader
     }
 
     /// <summary>
-    /// <para>读取有符号小端整数（最多 8 字节，符号扩展至 64 位）。</para>
     /// Reads a signed little-endian integer (up to 8 bytes, sign-extended to 64 bits).
+    /// <para>读取有符号小端整数（最多 8 字节，符号扩展至 64 位）。</para>
     /// </summary>
     private static long ReadSignedValue(byte[] data, ref int offset, int byteCount)
     {

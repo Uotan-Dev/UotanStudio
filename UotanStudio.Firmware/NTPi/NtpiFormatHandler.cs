@@ -3,19 +3,16 @@ using UotanStudio.Firmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.NTPi;
 
-/// <summary>
-/// <para>NTPI 加密固件包(AES-CBC + LZMA2)的 IFormatHandler 实现。</para>
-/// IFormatHandler implementation for NTPI encrypted firmware packages (AES-CBC + LZMA2).
-/// </summary>
 public sealed class NtpiFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "NTPI Firmware Package";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["ntpi", "bin", "fw"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -39,7 +36,10 @@ public sealed class NtpiFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -65,7 +65,10 @@ public sealed class NtpiFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -83,7 +86,10 @@ public sealed class NtpiFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

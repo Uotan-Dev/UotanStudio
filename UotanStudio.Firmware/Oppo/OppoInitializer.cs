@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Oppo.Crypto;
+﻿using UotanStudio.Firmware.Oppo.Crypto;
 using UotanStudio.Firmware.Oppo.Crypto.Algorithms;
 using UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
 using UotanStudio.Firmware.Oppo.Diagnostics;
@@ -7,24 +7,16 @@ using UotanStudio.Firmware.Oppo.Parsers;
 
 namespace UotanStudio.Firmware.Oppo;
 
-/// <summary>
-/// <para>提供 Oppo 格式的初始化功能，负责注册各格式的解析器、加密提供者和增强格式检测器。</para>
-/// Provides initialization for the Oppo formats, registering parsers, crypto providers, and the enhanced format detector.
-/// </summary>
 public static class OppoInitializer
 {
     private static readonly Lock Lock = new();
     private static bool _initialized;
 
-    /// <summary>
-    /// <para>获取全局共享的加密提供者聚合器实例。</para>
-    /// Gets the globally shared crypto provider aggregator instance.
-    /// </summary>
     public static OppCryptoProvider CryptoProvider { get; } = new OppCryptoProvider(NullOppLogger.Instance);
 
     /// <summary>
-    /// <para>确保各 Oppo 格式的解析器、加密提供者和格式检测器均已注册。</para>
     /// Ensures parsers, crypto providers, and format detectors for all Oppo formats are registered.
+    /// <para>确保各 Oppo 格式的解析器、加密提供者和格式检测器均已注册。</para>
     /// </summary>
     public static void EnsureInitialized()
     {
@@ -35,7 +27,7 @@ public static class OppoInitializer
                 return;
             }
 
-            // Create and register format-specific crypto providers
+
             var qcProvider = new OfpQcCryptoProvider(NullOppLogger.Instance);
             var mtkProvider = new OfpMtkCryptoProvider(NullOppLogger.Instance);
             var opsProvider = new OpsFormatCryptoProvider();
@@ -46,13 +38,13 @@ public static class OppoInitializer
             CryptoProvider.RegisterProvider(opsProvider);
             CryptoProvider.RegisterProvider(ozipProvider);
 
-            // Register parsers with the core registry
+
             ParserRegistry.Register(new OfpQcFormatParser(qcProvider));
             ParserRegistry.Register(new OfpMtkFormatParser(mtkProvider));
             ParserRegistry.Register(new OpsFormatParser());
             ParserRegistry.Register(new OzipFormatParser());
 
-            // Register enhanced MTK format detector
+
             FormatDetector.RegisterDetector(TryDetectMtkFormat);
 
             _initialized = true;
@@ -60,11 +52,9 @@ public static class OppoInitializer
     }
 
     /// <summary>
-    /// <para>使用 MtkShuffle 密钥尝试检测 MTK 混淆头格式。</para>
     /// Attempts to detect MTK obfuscated header format using the MtkShuffle key.
+    /// <para>使用 MtkShuffle 密钥尝试检测 MTK 混淆头格式。</para>
     /// </summary>
-    /// <param name="stream"><para>可读取的文件流。</para>A readable file stream.</param>
-    /// <returns><para>若检测到 MTK 格式返回 <see cref="OppFormat.OfpMtk"/>；否则返回 null。</para><see cref="OppFormat.OfpMtk"/> if MTK format is detected; otherwise null.</returns>
     private static OppFormat? TryDetectMtkFormat(Stream stream)
     {
         try
@@ -78,11 +68,8 @@ public static class OppoInitializer
             var originalPosition = stream.Position;
             try
             {
-                // ELF 前置排除：裸 ELF kernel（无后缀或 .img）末尾反转字节可能恰好满足
-                // 可打印 ASCII 启发式，导致被误判为 OFP MTK。头部为 \x7FELF 时直接返回 null。
-                // ELF pre-exclusion: a bare ELF kernel's de-shuffled tail bytes can accidentally satisfy
-                // the printable-ASCII heuristic and be misidentified as OFP MTK. Bail out when the header
-                // starts with \x7FELF.
+
+
                 stream.Position = 0;
                 if (stream.Length >= 4)
                 {
@@ -101,25 +88,22 @@ public static class OppoInitializer
                     return null;
                 }
 
-                // 原始尾部全零（零填充）不可能是 MTK 头：解混淆后必为密钥重复串（如 "geyixue..."），
-                // 属裸内核/镜像的零填充尾部，而非真实 OFP MTK 头。
-                // A fully-zero raw tail is zero padding (bare kernels/images), never a real MTK header:
-                // de-obfuscating zeros yields the repeated shuffle key, which is printable ASCII.
+
                 if (FormatDetector.IsAllZeros(headerBuffer.AsSpan(0, 46)))
                 {
                     return null;
                 }
 
-                // Apply MtkShuffle deobfuscation
+
                 OppMtkKeyDerivation.MtkShuffle(MtkKeyDatabase.MtkHeaderShuffleKey, headerBuffer);
 
-                // Check if the first 46 bytes are printable ASCII after deobfuscation
+
                 if (FormatDetector.IsPrintableAscii(headerBuffer.AsSpan(0, 46)))
                 {
                     return OppFormat.OfpMtk;
                 }
 
-                // Also check if the deobfuscated header is all zeros.
+
                 return FormatDetector.IsAllZeros(headerBuffer.AsSpan(0, 46)) ? OppFormat.OfpMtk : null;
             }
             finally

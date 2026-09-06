@@ -1,14 +1,10 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using UotanStudio.Firmware.Cpio.Model;
 
 namespace UotanStudio.Firmware.Cpio.Formats.Cpio;
 
-/// <summary>
-/// Field-level parsing helpers for cpio headers.
-/// <para>cpio 头部字段级解析辅助方法。</para>
-/// </summary>
 internal static class CpioFieldParser
 {
     private const int FileTypeMask = 0xF000;
@@ -75,8 +71,8 @@ internal static class CpioFieldParser
             CpioFileType.BlockDevice => 0x6000U,
             CpioFileType.Fifo => 0x1000U,
             CpioFileType.Socket => 0xC000U,
-            // 硬链接在 CPIO 中 mode 位与普通文件相同（指向既有 inode）。
-            // Hard links share the same mode bits as regular files in CPIO (point to an existing inode).
+
+
             CpioFileType.HardLink => 0x8000U,
             CpioFileType.Unknown => throw new ArgumentException("Unknown CPIO file type.", nameof(fileType)),
             _ => 0x8000U,

@@ -97,10 +97,8 @@ public sealed partial class FirehoseProtocol
                             if (block.Response != null)
                             {
                                 // Keep the bytes AFTER the returned block in the carry-over
-                                // buffer for the next command (fixes the old bug that
-                                // discarded the post-block remainder).
-                                // 将返回块之后的字节保留到结转缓冲，供下一条命令使用
-                                // （修复旧实现丢弃块后剩余字节的缺陷）。
+                                // buffer for the next command.
+                                // 将返回块之后的字节保留到结转缓冲，供下一条命令使用。
                                 if (blockBytes < responseBufferPos)
                                 {
                                     var remaining = responseBufferPos - blockBytes;

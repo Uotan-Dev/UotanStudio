@@ -1,30 +1,19 @@
 namespace UotanStudio.Firmware.Dz;
 
-/// <summary>
-/// <para>表示 LG DZ 文件中的一个数据块。</para>
-/// Represents a data chunk within an LG DZ file.
-/// </summary>
 public sealed class DzChunk
 {
-    /// <summary>块头。</summary>
     public required DzChunkHeader Header { get; init; }
 
-    /// <summary>块数据在文件中的偏移量。</summary>
     public long DataOffset { get; init; }
 
-    /// <summary>块名称。</summary>
     public string Name => Header.GetChunkName();
 }
 
-/// <summary>
-/// <para>提供 LG DZ 固件文件的解析与提取功能。</para>
-/// Provides parsing and extraction functionality for LG DZ firmware files.
-/// </summary>
 public static class DzExtractor
 {
     /// <summary>
-    /// <para>解析 DZ 文件,返回文件头与块列表。</para>
     /// Parses a DZ file, returning the file header and chunk list.
+    /// <para>解析 DZ 文件,返回文件头与块列表。</para>
     /// </summary>
     public static (DzFileHeader Header, List<DzChunk> Chunks) Parse(string dzPath)
     {
@@ -75,8 +64,8 @@ public static class DzExtractor
     }
 
     /// <summary>
-    /// <para>将 DZ 文件中的所有块提取到输出目录。</para>
     /// Extracts all chunks from a DZ file to the output directory.
+    /// <para>将 DZ 文件中的所有块提取到输出目录。</para>
     /// </summary>
     public static int Extract(string dzPath, string outDir, Func<string, bool>? nameFilter = null)
     {

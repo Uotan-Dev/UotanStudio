@@ -1,40 +1,18 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.F2fs;
 
-/// <summary>
-/// f2fs 超级块，位于镜像偏移 1024 处，按 Linux 内核 include/linux/f2fs_fs.h 的
-/// struct f2fs_super_block（__packed，小端）布局解析。
-/// <para>F2FS superblock located at image offset 1024, parsed with the little-endian layout of
-/// struct f2fs_super_block (packed) defined in Linux kernel include/linux/f2fs_fs.h.</para>
-/// </summary>
 internal sealed class F2fsSuperblock
 {
-    /// <summary>
-    /// 超级块在镜像内的字节偏移。
-    /// <para>Byte offset of the superblock within the image.</para>
-    /// </summary>
     public const int SuperblockOffset = 1024;
 
-    /// <summary>
-    /// 超级块实际占用的字节数（sizeof(struct f2fs_super_block) = 3072）。
-    /// <para>Size in bytes occupied by the superblock (sizeof(struct f2fs_super_block) = 3072).</para>
-    /// </summary>
     public const int SuperblockSize = 3072;
 
-    /// <summary>
-    /// f2fs 魔数（0xF2F52010；磁盘上为小端字节 10 20 F5 F2）。
-    /// <para>F2FS magic value (0xF2F52010; little-endian bytes on disk: 10 20 F5 F2).</para>
-    /// </summary>
     public const uint Magic = 0xF2F52010u;
 
-    /// <summary>
-    /// 卷名字符数上限（MAX_VOLUME_NAME = 512，存储为 __le16 数组）。
-    /// <para>Maximum volume name length in characters (MAX_VOLUME_NAME = 512, stored as a __le16 array).</para>
-    /// </summary>
     public const int VolumeNameChars = 512;
 
-    // 字段偏移（相对超级块起始处）。Field offsets relative to the superblock start.
+
     private const int OffsetMagic = 0;
     private const int OffsetMajorVer = 4;
     private const int OffsetMinorVer = 6;
@@ -73,147 +51,103 @@ internal sealed class F2fsSuperblock
     private const int OffsetEncryptionLevel = 2184;
     private const int OffsetCrc = 3068;
 
-    /// <summary>魔数。Magic value.</summary>
     public uint MagicValue { get; init; }
 
-    /// <summary>主版本号。Major version.</summary>
     public ushort MajorVersion { get; init; }
 
-    /// <summary>次版本号。Minor version.</summary>
     public ushort MinorVersion { get; init; }
 
-    /// <summary>log2(扇区大小)。log2 sector size in bytes.</summary>
     public uint LogSectorsize { get; init; }
 
-    /// <summary>log2(每块扇区数)。log2 sectors per block.</summary>
     public uint LogSectorsPerBlock { get; init; }
 
-    /// <summary>log2(块大小)。log2 block size in bytes.</summary>
     public uint LogBlocksize { get; init; }
 
-    /// <summary>log2(每段块数)。log2 blocks per segment.</summary>
     public uint LogBlocksPerSeg { get; init; }
 
-    /// <summary>每 section 的段数。Segments per section.</summary>
     public uint SegsPerSec { get; init; }
 
-    /// <summary>每 zone 的 section 数。Sections per zone.</summary>
     public uint SecsPerZone { get; init; }
 
-    /// <summary>超级块内校验和偏移。Checksum offset inside the super block.</summary>
     public uint ChecksumOffset { get; init; }
 
-    /// <summary>文件系统总用户块数。Total user block count.</summary>
     public ulong BlockCount { get; init; }
 
-    /// <summary>总 section 数。Total section count.</summary>
     public uint SectionCount { get; init; }
 
-    /// <summary>总段数。Total segment count.</summary>
     public uint SegmentCount { get; init; }
 
-    /// <summary>checkpoint 区段数。Segment count of the checkpoint area.</summary>
     public uint SegmentCountCkpt { get; init; }
 
-    /// <summary>SIT 区段数。Segment count of the SIT area.</summary>
     public uint SegmentCountSit { get; init; }
 
-    /// <summary>NAT 区段数。Segment count of the NAT area.</summary>
     public uint SegmentCountNat { get; init; }
 
-    /// <summary>SSA 区段数。Segment count of the SSA area.</summary>
     public uint SegmentCountSsa { get; init; }
 
-    /// <summary>主区段数。Segment count of the main area.</summary>
     public uint SegmentCountMain { get; init; }
 
-    /// <summary>0 号段的起始块号。Start block address of segment 0.</summary>
     public uint Segment0Blkaddr { get; init; }
 
-    /// <summary>checkpoint 区起始块号。Start block address of the checkpoint area.</summary>
     public uint CpBlkaddr { get; init; }
 
-    /// <summary>SIT 区起始块号。Start block address of the SIT area.</summary>
     public uint SitBlkaddr { get; init; }
 
-    /// <summary>NAT 区起始块号。Start block address of the NAT area.</summary>
     public uint NatBlkaddr { get; init; }
 
-    /// <summary>节点区（NAT）起始块号，与 <see cref="NatBlkaddr"/> 同义。
-    /// Node-area (NAT) start block, an alias of <see cref="NatBlkaddr"/>.</summary>
     public uint NodeBlkaddr => NatBlkaddr;
 
-    /// <summary>SSA 区起始块号。Start block address of the SSA area.</summary>
     public uint SsaBlkaddr { get; init; }
 
-    /// <summary>主区起始块号。Start block address of the main area.</summary>
     public uint MainBlkaddr { get; init; }
 
-    /// <summary>根 inode 号。Root inode number.</summary>
     public uint RootIno { get; init; }
 
-    /// <summary>node inode 号（通常为 1）。Node inode number (usually 1).</summary>
     public uint NodeIno { get; init; }
 
-    /// <summary>meta inode 号（通常为 2）。Meta inode number (usually 2).</summary>
     public uint MetaIno { get; init; }
 
-    /// <summary>128 位 UUID（16 字节）。128-bit UUID (16 bytes).</summary>
     public byte[] Uuid { get; init; } = [];
 
-    /// <summary>卷名（512 个 __le16 字符，NUL 填充）。Volume name (512 __le16 chars, NUL padded).</summary>
     public string VolumeName { get; init; } = string.Empty;
 
-    /// <summary>cp_payload（checkpoint 载荷块数）。Checkpoint payload block count.</summary>
     public uint CpPayload { get; init; }
 
-    /// <summary>内核版本串（VERSION_LEN=256 字节）。Kernel version string (VERSION_LEN=256 bytes).</summary>
     public byte[] Version { get; init; } = [];
 
-    /// <summary>特性位。Feature flags.</summary>
     public uint Feature { get; init; }
 
-    /// <summary>
-    /// 超级块是否通过魔数校验。
-    /// <para>Whether the superblock passed the magic check.</para>
-    /// </summary>
     public bool IsValid => MagicValue == Magic;
 
-    /// <summary>块大小（字节）。Block size in bytes.</summary>
     public int BlockSize => 1 << (int)LogBlocksize;
 
-    /// <summary>扇区大小（字节）。Sector size in bytes.</summary>
     public int SectorSize => 1 << (int)LogSectorsize;
 
-    /// <summary>每块扇区数。Sectors per block.</summary>
     public int SectorsPerBlock => 1 << (int)LogSectorsPerBlock;
 
-    /// <summary>每段块数。Blocks per segment.</summary>
     public int BlocksPerSeg => 1 << (int)LogBlocksPerSeg;
 
-    /// <summary>段大小（字节）。Segment size in bytes.</summary>
     public long SegmentSize => (long)BlockSize * BlocksPerSeg;
 
     /// <summary>
-    /// 判断镜像头部是否包含 f2fs 魔数（偏移 1024 处 4 字节）。
-    /// <para>Checks whether the image head contains the F2FS magic (4 bytes at offset 1024).</para>
+    /// Checks whether the image head contains the F2FS magic (4 bytes at offset 1024).
+    /// <para>判断镜像头部是否包含 f2fs 魔数（偏移 1024 处 4 字节）。</para>
     /// </summary>
     public static bool HasMagic(ReadOnlySpan<byte> image)
         => image.Length >= SuperblockOffset + 4
            && BinaryPrimitives.ReadUInt32LittleEndian(image.Slice(SuperblockOffset, 4)) == Magic;
 
     /// <summary>
-    /// 判断 4 字节片段是否为魔数（小端 0xF2F52010）。
-    /// <para>Checks whether a 4-byte slice holds the magic value (little-endian 0xF2F52010).</para>
+    /// Checks whether a 4-byte slice holds the magic value (little-endian 0xF2F52010).
+    /// <para>判断 4 字节片段是否为魔数（小端 0xF2F52010）。</para>
     /// </summary>
     public static bool IsMagicBytes(ReadOnlySpan<byte> fourBytes)
         => fourBytes.Length >= 4
            && BinaryPrimitives.ReadUInt32LittleEndian(fourBytes) == Magic;
 
     /// <summary>
-    /// 从超级块区域（偏移 1024 起、长度至少 3072 字节）解析超级块；魔数不符时抛出 FormatException。
-    /// <para>Parses the superblock from the superblock region (at least 3072 bytes starting at offset
-    /// 1024); throws FormatException when the magic does not match.</para>
+    /// Parses the superblock from the superblock region (at least 3072 bytes starting at offset 1024); throws FormatException when the magic does not match.
+    /// <para>从超级块区域（偏移 1024 起、长度至少 3072 字节）解析超级块；魔数不符时抛出 FormatException。</para>
     /// </summary>
     public static F2fsSuperblock FromBytes(ReadOnlySpan<byte> data)
     {
@@ -265,8 +199,8 @@ internal sealed class F2fsSuperblock
     }
 
     /// <summary>
-    /// 从完整镜像解析超级块（自动定位到偏移 1024）。
-    /// <para>Parses the superblock from a full image (locating offset 1024 automatically).</para>
+    /// Parses the superblock from a full image (locating offset 1024 automatically).
+    /// <para>从完整镜像解析超级块（自动定位到偏移 1024）。</para>
     /// </summary>
     public static F2fsSuperblock FromImage(ReadOnlySpan<byte> image)
     {
@@ -279,9 +213,8 @@ internal sealed class F2fsSuperblock
     }
 
     /// <summary>
-    /// 将超级块序列化到缓冲区（长度至少 3072 字节；未实现的尾部字段保持为零）。
-    /// <para>Serializes the superblock into a buffer of at least 3072 bytes (unimplemented tail
-    /// fields stay zero).</para>
+    /// Serializes the superblock into a buffer of at least 3072 bytes (unimplemented tail fields stay zero).
+    /// <para>将超级块序列化到缓冲区（长度至少 3072 字节；未实现的尾部字段保持为零）。</para>
     /// </summary>
     public void WriteTo(Span<byte> destination)
     {

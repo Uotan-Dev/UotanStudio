@@ -1,23 +1,8 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.Sparse;
 
-/// <summary>
-/// Provides access to a byte range of a sparse file's logical (unsparsified) image
-/// as an <see cref="ISparseDataProvider"/>. Reads lazily from the owning
-/// <see cref="SparseFile"/>'s chunks, expanding FILL / DONT_CARE chunks on demand
-/// without ever materializing the whole image.
-/// <para>以 ISparseDataProvider 提供稀疏文件逻辑（非稀疏）镜像的字节范围访问。
-/// 惰性读取所属 SparseFile 的数据块，按需展开 FILL / DONT_CARE 块，无需物化整张镜像。</para>
-/// </summary>
-/// <remarks>
-/// Creates a new <see cref="SparseFileRangeProvider"/> over the logical byte range
-/// [<paramref name="start"/>, <paramref name="start"/> + <paramref name="length"/>).
-/// Disposing the provider does not dispose the owner; the owner manages its own source streams.
-/// <para>在逻辑字节范围 [start, start+length) 上创建新的 SparseFileRangeProvider。
-/// 释放该提供程序不会释放所有者；所有者自行管理其源流。</para>
-/// </remarks>
 public sealed class SparseFileRangeProvider : ISparseDataProvider
 {
     private readonly SparseFile _owner;
@@ -27,9 +12,6 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
     /// Initializes a new range provider over the owner's logical image.
     /// <para>初始化所有者逻辑镜像之上的新范围提供程序。</para>
     /// </summary>
-    /// <param name="owner">The sparse file whose logical image is exposed. <para>要暴露逻辑镜像的稀疏文件。</para></param>
-    /// <param name="start">Byte offset in the logical image where the range starts. <para>逻辑镜像中范围起始的字节偏移。</para></param>
-    /// <param name="length">Number of logical bytes exposed by this provider. <para>此提供程序暴露的逻辑字节数。</para></param>
     public SparseFileRangeProvider(SparseFile owner, long start, long length)
     {
         ArgumentNullException.ThrowIfNull(owner);
@@ -48,10 +30,12 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
         Length = length;
     }
 
-    /// <inheritdoc />
     public long Length { get; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the content to the destination stream.
+    /// <para>将内容写入目标流。</para>
+    /// </summary>
     public void WriteTo(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -82,7 +66,10 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the content to the destination stream asynchronously.
+    /// <para>异步将内容写入目标流。</para>
+    /// </summary>
     public Task WriteToAsync(Stream stream, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -115,10 +102,16 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream into the buffer.
+    /// <para>从流中读取字节到缓冲区。</para>
+    /// </summary>
     public int Read(long offset, byte[] buffer, int bufferOffset, int count) => Read(offset, buffer.AsSpan(bufferOffset, count));
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream into the buffer.
+    /// <para>从流中读取字节到缓冲区。</para>
+    /// </summary>
     public int Read(long offset, Span<byte> buffer)
     {
         if (offset < 0 || offset >= Length)
@@ -130,7 +123,10 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
         return ReadLogical(_start + offset, buffer[..toRead]);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a data provider for the specified range.
+    /// <para>创建指定范围的数据提供器。</para>
+    /// </summary>
     public ISparseDataProvider GetSubProvider(long offset, long length) => new SparseFileRangeProvider(_owner, _start + offset, length);
 
     /// <summary>
@@ -140,8 +136,7 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
     public void Dispose() { }
 
     /// <summary>
-    /// Fills <paramref name="buffer"/> with logical bytes starting at an absolute logical offset,
-    /// expanding chunks as needed. Any uncovered region (gaps / trailing padding) is zero-filled.
+    /// Fills buffer with logical bytes starting at an absolute logical offset, expanding chunks as needed.
     /// <para>从绝对逻辑偏移开始填充 buffer，按需展开数据块；未覆盖区域（空隙/尾部补齐）零填充。</para>
     /// </summary>
     private int ReadLogical(long absoluteOffset, Span<byte> buffer)
@@ -172,7 +167,7 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
             written += destination.Length;
         }
 
-        // Regions not covered by any chunk (e.g. logical tail beyond the last chunk) are zero.
+
         if (written < buffer.Length)
         {
             buffer[written..].Clear();
@@ -200,7 +195,7 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
                         filled += read;
                     }
 
-                    // The provider may be shorter than the chunk's logical span; zero-pad the rest.
+
                     destination[filled..].Clear();
                     break;
                 }

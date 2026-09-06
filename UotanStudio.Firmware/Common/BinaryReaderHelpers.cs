@@ -1,12 +1,8 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Text;
 
 namespace UotanStudio.Firmware.Common;
 
-/// <summary>
-/// Big-endian binary reading helpers used across firmware formats.
-/// <para>固件格式通用的二进制读取辅助方法(大端为主)。</para>
-/// </summary>
 public static class BinaryReaderHelpers
 {
     /// <summary>
@@ -78,7 +74,7 @@ public static class BinaryReaderHelpers
             count++;
             if (count >= endMarker.Length)
             {
-                // Check if the tail matches the end marker.
+
                 var pos = ms.Position;
                 ms.Position = pos - endMarker.Length;
                 var tail = new byte[endMarker.Length];
@@ -86,7 +82,7 @@ public static class BinaryReaderHelpers
                 ms.Position = pos;
                 if (n == endMarker.Length && tail.AsSpan().SequenceEqual(endMarker))
                 {
-                    // Strip the marker and any preceding NUL padding.
+
                     var bytes = ms.ToArray();
                     var end = bytes.Length - endMarker.Length;
                     while (end > 0 && bytes[end - 1] == 0)

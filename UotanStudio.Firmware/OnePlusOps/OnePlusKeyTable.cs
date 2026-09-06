@@ -1,11 +1,5 @@
 namespace UotanStudio.Firmware.OnePlusOps;
 
-/// <summary>
-/// Provides a static table of all known OPS decryption keys used by OnePlus firmware files.
-/// Keys are sourced from the OnePlus OPS decryption reference implementation.
-/// </summary>
-/// <para>提供OnePlus固件文件使用的所有已知OPS解密密钥的静态表。
-/// 密钥来源于OnePlus OPS解密参考实现。</para>
 public static class OnePlusKeyTable
 {
     private static readonly byte[][] Keys =
@@ -54,26 +48,18 @@ public static class OnePlusKeyTable
         "MBox4 (guacamolet_21_O.08_190502)"
     ];
 
-    /// <summary>
-    /// Gets the number of available decryption keys in the table
-    /// </summary>
-    /// <para>获取表中可用解密密钥的数量</para>
     public static int KeyCount => Keys.Length;
 
     /// <summary>
     /// Returns all known OPS decryption keys as a read-only list
-    /// </summary>
     /// <para>以只读列表形式返回所有已知的OPS解密密钥</para>
-    /// <returns>A read-only list containing all known decryption key byte arrays</returns>
+    /// </summary>
     public static IReadOnlyList<byte[]> GetAllKeys() => Array.AsReadOnly(Keys);
 
     /// <summary>
     /// Returns the decryption key at the specified index
-    /// </summary>
     /// <para>返回指定索引处的解密密钥</para>
-    /// <param name="index">The zero-based index of the key to retrieve</param>
-    /// <returns>A byte array containing the decryption key</returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when index is less than 0 or greater than or equal to KeyCount</exception>
+    /// </summary>
     public static byte[] GetKey(int index)
     {
         return index < 0 || index >= Keys.Length
@@ -83,11 +69,8 @@ public static class OnePlusKeyTable
 
     /// <summary>
     /// Gets the descriptive name of the key at the specified index
-    /// </summary>
     /// <para>获取指定索引处密钥的描述名称</para>
-    /// <param name="index">The index of the key</param>
-    /// <returns>A descriptive name for the key</returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when index is less than 0 or greater than or equal to KeyCount</exception>
+    /// </summary>
     public static string GetKeyName(int index)
     {
         return index < 0 || index >= KeyNames.Length

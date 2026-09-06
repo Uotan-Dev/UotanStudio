@@ -5,27 +5,14 @@ using UotanStudio.Firmware.Payload.Models;
 
 namespace UotanStudio.Firmware.Payload;
 
-/// <summary>
-/// Format handler for Android OTA payload.bin files.
-/// <para>Android OTA payload.bin 文件的格式处理器。</para>
-/// </summary>
 public sealed class PayloadFormatHandler : IFormatHandler
 {
-    /// <summary>
-    /// Gets the human-readable format name.
-    /// <para>获取人类可读的格式名称。</para>
-    /// </summary>
     public string FormatName => "Android OTA Payload (payload.bin)";
 
-    /// <summary>
-    /// Gets the typical file extensions (without dot, lowercase).
-    /// <para>获取典型文件扩展名（不带点，小写）。</para>
-    /// </summary>
     public IReadOnlyList<string> FileExtensions { get; } = ["bin", "payload"];
 
     /// <summary>
     /// Determines whether this handler can process the given file.
-    /// Detection is based on the .bin/.payload extension or the "CrAU" magic bytes.
     /// <para>判断该处理器能否处理指定文件；依据 .bin/.payload 扩展名或 "CrAU" 魔数进行判断。</para>
     /// </summary>
     public bool CanHandle(string filePath)
@@ -135,10 +122,7 @@ public sealed class PayloadFormatHandler : IFormatHandler
 
     /// <summary>
     /// Packs a directory of partition images into a payload.bin file.
-    /// Every "*.img" file in <paramref name="inputPath"/> becomes a partition named after its file name
-    /// (without extension), stored with uncompressed REPLACE operations.
-    /// <para>将分区镜像目录打包为 payload.bin 文件。
-    /// <paramref name="inputPath"/> 中每个 "*.img" 文件都成为一个以其文件名（不含扩展名）命名的分区，使用未压缩的 REPLACE 操作存储。</para>
+    /// <para>将分区镜像目录打包为 payload.bin 文件。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {

@@ -1,10 +1,5 @@
-namespace UotanStudio.Firmware.Compress;
+﻿namespace UotanStudio.Firmware.Compress;
 
-/// <summary>
-/// 压缩格式注册表与工具类：格式枚举、魔数检测、扩展名映射、名称解析。
-/// <para>Compression format registry and utilities: format enumeration, magic-byte detection,
-/// extension mapping and name parsing.</para>
-/// </summary>
 public static class CompressionFormats
 {
     private static readonly CompressionFormatInfo[] AllFormats =
@@ -41,7 +36,7 @@ public static class CompressionFormats
     private static readonly Dictionary<string, CompressionFormat> ByName =
         BuildNameIndex();
 
-    // Cached magic byte arrays to avoid per-call allocations on the detection hot path.
+
     private static readonly byte[] MagicGzip = [0x1F, 0x8B];
     private static readonly byte[] MagicZstd = [0x28, 0xB5, 0x2F, 0xFD];
     private static readonly byte[] MagicBzip2 = [0x42, 0x5A, 0x68];
@@ -62,30 +57,24 @@ public static class CompressionFormats
         return index;
     }
 
-    /// <summary>
-    /// 所有受支持格式的元数据列表（不含 <see cref="CompressionFormat.None"/>）。
-    /// <para>Metadata list of all supported formats (excluding <see cref="CompressionFormat.None"/>).</para>
-    /// </summary>
     public static IReadOnlyList<CompressionFormatInfo> All => AllFormats;
 
     /// <summary>
-    /// 获取指定格式的元数据；未知格式返回 null。
-    /// <para>Gets the metadata of the specified format; returns null for unknown formats.</para>
+    /// Gets the metadata of the specified format; returns null for unknown formats.
+    /// <para>获取指定格式的元数据；未知格式返回 null。</para>
     /// </summary>
     public static CompressionFormatInfo? GetInfo(CompressionFormat format) => ByFormat.TryGetValue(format, out var info) ? info : null;
 
     /// <summary>
-    /// 判断格式是否受支持。
-    /// <para>Determines whether the format is supported.</para>
+    /// Determines whether the format is supported.
+    /// <para>判断格式是否受支持。</para>
     /// </summary>
     public static bool IsSupported(CompressionFormat format) => ByFormat.ContainsKey(format);
 
     /// <summary>
-    /// 根据文件名扩展名获取压缩格式。
-    /// <para>Gets the compression format from the file name extension.</para>
+    /// Gets the compression format from the file name extension.
+    /// <para>根据文件名扩展名获取压缩格式。</para>
     /// </summary>
-    /// <param name="filename">文件名（含扩展名）。<para>The file name including extension.</para></param>
-    /// <returns>对应的压缩格式；无法识别时返回 <see cref="CompressionFormat.None"/>。<para>The matching format; <see cref="CompressionFormat.None"/> when unrecognized.</para></returns>
     public static CompressionFormat FromExtension(string filename)
     {
         if (string.IsNullOrEmpty(filename))
@@ -114,8 +103,8 @@ public static class CompressionFormats
     }
 
     /// <summary>
-    /// 获取压缩格式的首选扩展名（含点号）；无对应扩展名时返回空字符串。
-    /// <para>Gets the preferred extension (with leading dot) of the format; empty string when none.</para>
+    /// Gets the preferred extension (with leading dot) of the format; empty string when none.
+    /// <para>获取压缩格式的首选扩展名（含点号）；无对应扩展名时返回空字符串。</para>
     /// </summary>
     public static string ToExtension(CompressionFormat format)
     {
@@ -124,26 +113,21 @@ public static class CompressionFormats
     }
 
     /// <summary>
-    /// 获取压缩格式的显示名称。
-    /// <para>Gets the display name of the compression format.</para>
+    /// Gets the display name of the compression format.
+    /// <para>获取压缩格式的显示名称。</para>
     /// </summary>
     public static string GetDisplayName(CompressionFormat format) => GetInfo(format)?.Name ?? "none";
 
     /// <summary>
-    /// 按名称或别名解析压缩格式（不区分大小写）。
-    /// <para>Parses a compression format by name or alias (case-insensitive).</para>
+    /// Parses a compression format by name or alias (case-insensitive).
+    /// <para>按名称或别名解析压缩格式（不区分大小写）。</para>
     /// </summary>
-    /// <param name="name">格式名称或别名（如 "gz"、"lz4_legacy"）。<para>Format name or alias (e.g. "gz", "lz4_legacy").</para></param>
-    /// <returns>解析结果；失败时抛出 <see cref="ArgumentException"/>。<para>The parsed format; throws <see cref="ArgumentException"/> on failure.</para></returns>
     public static CompressionFormat Parse(string name) => !TryParse(name, out var format) ? throw new ArgumentException($"Unknown compression format: {name}", nameof(name)) : format;
 
     /// <summary>
-    /// 尝试按名称或别名解析压缩格式（不区分大小写）。
-    /// <para>Tries to parse a compression format by name or alias (case-insensitive).</para>
+    /// Tries to parse a compression format by name or alias (case-insensitive).
+    /// <para>尝试按名称或别名解析压缩格式（不区分大小写）。</para>
     /// </summary>
-    /// <param name="name">格式名称或别名。<para>Format name or alias.</para></param>
-    /// <param name="format">解析结果；失败时为 <see cref="CompressionFormat.None"/>。<para>The parsed format; <see cref="CompressionFormat.None"/> on failure.</para></param>
-    /// <returns>解析成功返回 true；否则返回 false。<para>true when parsed successfully; otherwise false.</para></returns>
     public static bool TryParse(string? name, out CompressionFormat format)
     {
         if (name is { Length: > 0 })
@@ -168,8 +152,7 @@ public static class CompressionFormats
             return CompressionFormat.None;
         }
 
-        // 固定魔数优先（最具体、最可靠）。
-        // Fixed magics first (most specific and reliable).
+
         if (StartsWith(data, MagicGzip))
         {
             return CompressionFormat.Gzip;
@@ -195,8 +178,7 @@ public static class CompressionFormats
             return CompressionFormat.Lzop;
         }
 
-        // LZ4 家族：标准帧 04 22 4D 18；传统 02 21 4C 18。
-        // LZ4 family: standard frame 04 22 4D 18; legacy 02 21 4C 18.
+
         if (data.Length >= 4)
         {
             if (data[0] == 0x04 && data[1] == 0x22 && data[2] == 0x4D && data[3] == 0x18)
@@ -210,17 +192,14 @@ public static class CompressionFormats
             }
         }
 
-        // 启发式检测（可能误判，置于固定魔数之后）。
-        // Heuristic detection (may produce false positives; placed after fixed magics).
+
         return IsLzmaFormat(data) ? CompressionFormat.Lzma : IsZlibFormat(data) ? CompressionFormat.Zlib : CompressionFormat.None;
     }
 
     /// <summary>
-    /// 读取流头部检测压缩格式；若流可定位则恢复原位置。
-    /// <para>Reads the stream head to detect the compression format; restores the position when the stream is seekable.</para>
+    /// Reads the stream head to detect the compression format; restores the position when the stream is seekable.
+    /// <para>读取流头部检测压缩格式；若流可定位则恢复原位置。</para>
     /// </summary>
-    /// <param name="input">待检测的流。<para>The stream to detect.</para></param>
-    /// <returns>检测到的格式；无法识别时返回 <see cref="CompressionFormat.None"/>。<para>The detected format; <see cref="CompressionFormat.None"/> when unrecognized.</para></returns>
     public static CompressionFormat Detect(Stream input)
     {
         if (input == null)
@@ -270,10 +249,8 @@ public static class CompressionFormats
     }
 
     /// <summary>
-    /// 检测数据是否符合 LZMA 格式（启发式）。
-    /// <para>Detects whether the data conforms to the LZMA format (heuristic).</para>
-    /// <para>LZMA 头结构：1 字节属性字节 + 4 字节字典大小（小端）+ 8 字节未压缩大小（小端）。</para>
-    /// <para>LZMA header: 1 property byte + 4-byte dictionary size (little-endian) + 8-byte uncompressed size (little-endian).</para>
+    /// Detects whether the data conforms to the LZMA format (heuristic).
+    /// <para>检测数据是否符合 LZMA 格式（启发式）。</para>
     /// </summary>
     private static bool IsLzmaFormat(ReadOnlySpan<byte> data)
     {
@@ -292,8 +269,8 @@ public static class CompressionFormats
     }
 
     /// <summary>
-    /// 验证 LZMA 属性字节是否有效（lc + 9 * (lp + 5 * pb)，lc≤8，lp≤4，pb≤4）。
-    /// <para>Validates the LZMA property byte (lc + 9 * (lp + 5 * pb), lc≤8, lp≤4, pb≤4).</para>
+    /// Validates the LZMA property byte (lc + 9 * (lp + 5 * pb), lc≤8, lp≤4, pb≤4).
+    /// <para>验证 LZMA 属性字节是否有效（lc + 9 * (lp + 5 * pb)，lc≤8，lp≤4，pb≤4）。</para>
     /// </summary>
     private static bool IsValidLzmaPropertyByte(byte propertyByte)
     {
@@ -311,8 +288,8 @@ public static class CompressionFormats
     }
 
     /// <summary>
-    /// 检测数据是否符合 ZLIB 格式（启发式：CM=8 且 CMF/FLG 可被 31 整除）。
-    /// <para>Detects whether the data conforms to the ZLIB format (heuristic: CM=8 and (CMF*256+FLG) % 31 == 0).</para>
+    /// Detects whether the data conforms to the ZLIB format (heuristic: CM=8 and (CMF*256+FLG) % 31 == 0).
+    /// <para>检测数据是否符合 ZLIB 格式（启发式：CM=8 且 CMF/FLG 可被 31 整除）。</para>
     /// </summary>
     private static bool IsZlibFormat(ReadOnlySpan<byte> data)
     {

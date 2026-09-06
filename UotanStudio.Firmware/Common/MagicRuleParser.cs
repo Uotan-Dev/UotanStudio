@@ -1,42 +1,23 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 
 namespace UotanStudio.Firmware.Common;
 
-/// <summary>
-/// <para>上游 file(1) 文本 magic 规则解析器。支持缩进父子关系（含任意深度递归子规则）、字符串
-/// （含 \xNN/\0/空白转义与 /c /W /T /f 等修饰符）、整数（byte/short/long/quad、u 无符号前缀、
-/// be/le 变体、date 日期）、比较运算符（=!&lt;&gt;x、&amp; 按位与、^ 按位异或）、掩码运算
-/// （type&amp;mask / type|mask / type^mask / type+mask / type-mask / type*mask / type/mask / type%mask）、
-/// '&amp;' 续接偏移（相对上一层规则匹配结束位置）、间接偏移 (offset.type[&amp;mask][+addend])、
-/// <c>use</c>/<c>name</c>/<c>default</c> 指令、<c>search</c> 范围搜索、<c>regex</c> 正则、
-/// <c>pstring</c> 长度前缀字符串、<c>\b</c> NOSPACE 描述连接等上游语法。</para>
-/// Parser for upstream file(1) text magic rules. Supports indented parent/child relations (with
-/// arbitrary-depth recursion), strings (with \xNN/\0/whitespace escapes and /c /W /T /f modifiers),
-/// integers (byte/short/long/quad, u unsigned prefix, be/le variants, date), comparison operators
-/// (=!&lt;&gt;x, &amp; bitwise-AND, ^ bitwise-XOR), mask operations (type&amp;mask / type|mask /
-/// type^mask / type+mask / type-mask / type*mask / type/mask / type%mask), '&amp;' continuation
-/// offsets (relative to the end of the previous level's match), indirect offsets
-/// (offset.type[&amp;mask][+addend]), use/name/default directives, search range search, regex,
-/// pstring length-prefixed strings, and \b NOSPACE description concatenation.
-/// </summary>
 public static class MagicRuleParser
 {
     /// <summary>
-    /// <para>解析文本 magic 规则，返回构造好的 <see cref="MagicRuleSet"/>。</para>
-    /// Parses text magic rules and returns a constructed <see cref="MagicRuleSet"/>.
+    /// Parses text magic rules and returns a constructed MagicRuleSet.
+    /// <para>解析文本 magic 规则，返回构造好的 MagicRuleSet。</para>
     /// </summary>
-    /// <param name="reader">规则文本读取器。</param>
-    /// <param name="source">规则集来源标识。</param>
     public static MagicRuleSet Parse(TextReader reader, string source)
     {
         var ruleSet = new MagicRuleSet(source);
-        // 父规则栈：缩进级别 → 最近一条该级别的规则
+
         var stack = new Stack<(int level, MagicRule rule)>();
         string? line;
         while ((line = reader.ReadLine()) is not null)
         {
-            // 跳过空行与注释（# 开头，但需注意 #! 等，这里按上游约定 # 在行首为注释）
+
             string trimmed = line.TrimStart();
             if (trimmed.Length == 0 || trimmed[0] == '#')
             {
@@ -49,7 +30,7 @@ public static class MagicRuleParser
                 continue;
             }
 
-            // 维护父子栈
+
             while (stack.Count > 0 && stack.Peek().level >= rule.Indent)
             {
                 stack.Pop();
@@ -63,8 +44,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>从字符串解析规则。</para>
     /// Parses rules from a string.
+    /// <para>从字符串解析规则。</para>
     /// </summary>
     public static MagicRuleSet Parse(string text, string source)
     {
@@ -73,8 +54,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>从文件解析规则。</para>
     /// Parses rules from a file path.
+    /// <para>从文件解析规则。</para>
     /// </summary>
     public static MagicRuleSet ParseFile(string path)
     {
@@ -84,22 +65,17 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>解析一行规则。</para>
     /// Parses a single rule line.
+    /// <para>解析一行规则。</para>
     /// </summary>
     private static MagicRule? ParseLine(string line, string source)
     {
-        // 上游 file(1) 子规则用前导 '>' 表示缩进级别（'>>' 为二级，依此类推）。
-        // 顶层规则无前导 '>'。空格缩进也被兼容，每 2 空格视作一级。
-        // Upstream file(1) uses leading '>' to mark sub-rule depth; top-level rules have none.
-        // Whitespace indentation is also accepted (2 spaces = 1 level).
+
+
         int level = 0;
         int i = 0;
 
-        // 上游 file(1) 的元指令行（!:strength、!:mime、!:ext 等）不参与匹配，直接跳过。
-        // 这些指令出现在行首，形如 "!:strength +65" 或 "!:mime application/gzip"。
-        // Upstream file(1) meta-directive lines (!:strength, !:mime, !:ext) are not used by the
-        // pure-managed engine; skip them. They appear at line start, e.g. "!:strength +65".
+
         int leadingNonSpace = 0;
         while (leadingNonSpace < line.Length && (line[leadingNonSpace] == ' ' || line[leadingNonSpace] == '\t'))
         {
@@ -118,13 +94,13 @@ public static class MagicRuleParser
             i++;
         }
 
-        // 消耗 '>' 后可能跟随的空格
+
         while (i < line.Length && (line[i] == ' ' || line[i] == '\t'))
         {
             i++;
         }
 
-        // 兼容纯空格缩进（无 '>' 前缀）的情况
+
         if (level == 0)
         {
             int indent = 0;
@@ -145,10 +121,10 @@ public static class MagicRuleParser
             return null;
         }
 
-        // token[0] = offset，token[1] = type，token[2] = test value，token[3..] = 描述（可选）
+
         if (tokens.Count < 3)
         {
-            // 特殊指令：use / default / skip / name 等，仅 2 个 token
+
             return ParseDirective(tokens, level);
         }
 
@@ -156,15 +132,14 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>解析特殊指令行（<c>use</c>/<c>default</c>/<c>skip</c>/<c>name</c> 等）。</para>
     /// Parses directive lines (use/default/skip/name).
+    /// <para>解析特殊指令行（use/default/skip/name 等）。</para>
     /// </summary>
     private static MagicRule? ParseDirective(List<string> tokens, int level)
     {
         string directive = tokens[0].ToLowerInvariant();
 
-        // default：无条件匹配子规则，描述来自 token[1..]（上游语义：仅当同层此前无规则命中时匹配）
-        // upstream semantics: match when all previous sub-rules fail; often carries the description.
+
         if (directive == "default")
         {
             string descriptionTemplate = string.Empty;
@@ -186,33 +161,23 @@ public static class MagicRuleParser
                 isDefault: true, noSpace: false);
         }
 
-        // 其他指令：use、skip、name、strength 等，纯托管引擎不实现，跳过
+
         if (directive is "use" or "skip" or "name" or "strength" or "clear"
             or "der" or "summary" or "ext" or "mime" or "apple" or "size")
         {
             return null;
         }
-        // 其他无法识别的 2-token 行也跳过
+
         return null;
     }
 
     /// <summary>
-    /// <para>解析正常规则行（offset + type + value + description）。
-    /// 支持上游 file(1) 全部常用语法变体：</para>
-    /// Parses a normal rule line (offset + type + value + description). Supports the common
-    /// upstream file(1) syntax variants:
-    /// <list type="bullet">
-    /// <item>type&amp;mask / type|mask / type^mask / type+mask / type-mask / type*mask / type/mask / type%mask —— 掩码运算</item>
-    /// <item>'&amp;' 续接偏移（&gt;&amp;8）与负偏移（从文件末尾）</item>
-    /// <item>间接偏移 (offset.type[&amp;mask][+addend])</item>
-    /// <item>u 无符号前缀（ubyte/ulong/ulelong 等）</item>
-    /// <item>字符串修饰符（string/c、search/N、pstring/B 等）</item>
-    /// <item>比较运算符 =、!=、&lt;、&gt;、&amp;（(v&amp;l)==l）、^（(v&amp;l)!=l）、x</item>
-    /// </list>
+    /// Parses a magic rule line containing an offset, type, value, and description.
+    /// <para>解析包含偏移、类型、值和描述的 magic 规则行。</para>
     /// </summary>
     private static MagicRule? ParseNormalRule(List<string> tokens, int level)
     {
-        // 解析 offset（支持 0xNN、十进制、(offset.type) 间接、&N 续接、-N 从末尾）
+
         int offset = 0;
         bool offsetFromEnd = false;
         bool isContinuation = false;
@@ -227,17 +192,15 @@ public static class MagicRuleParser
         string offsetTok = tokens[0];
         if (offsetTok.StartsWith("&", StringComparison.Ordinal))
         {
-            // 上游 '&' 续接偏移：相对上一层规则匹配结束位置（OFFADD）
+
             isContinuation = true;
             offsetTok = offsetTok.Substring(1);
             offset = ParseInt(offsetTok);
         }
         else if (offsetTok.StartsWith("(", StringComparison.Ordinal))
         {
-            // 间接偏移：(offset.type[&mask][+addend]) —— 上游顺序为“偏移在前、类型字母在后”，
-            // 如 (104.l+132)、(21.b+24)、(0x12.l+15)。
-            // Indirect offset: (offset.type[&mask][+addend]) — upstream puts the base offset first
-            // and the type letter second, e.g. (104.l+132), (21.b+24), (0x12.l+15).
+
+
             string inner = offsetTok.Trim('(', ')');
             int dot = inner.IndexOf('.');
             if (dot < 0)
@@ -247,7 +210,7 @@ public static class MagicRuleParser
             string offsetPart = inner.Substring(0, dot);
             string rest = inner.Substring(dot + 1);
 
-            // 类型字母后可带 '~' 反相（in_op INVERSE）
+
             bool tilde = rest.EndsWith("~", StringComparison.Ordinal);
             if (tilde)
             {
@@ -255,7 +218,7 @@ public static class MagicRuleParser
                 rest = rest[..^1];
             }
 
-            // 先分离加数（+addend，位于掩码之后），再分离掩码（&mask），避免 '&0xff+4' 中 '+4' 被掩码吞掉
+
             int plus = rest.IndexOf('+');
             string addendPart = "0";
             if (plus >= 0)
@@ -264,7 +227,7 @@ public static class MagicRuleParser
                 rest = rest.Substring(0, plus);
             }
 
-            // 掩码：(offset.type&mask[+addend])
+
             int amp = rest.IndexOf('&');
             if (amp >= 0)
             {
@@ -291,11 +254,7 @@ public static class MagicRuleParser
             }
         }
 
-        // 先分离字符串族类型修饰符（string/c、search/N、pstring/B、regex 标志），
-        // 避免 '/' 被误当作掩码运算符（上游 '/' 仅出现在字符串族类型中）。
-        // Split off string-family modifiers (string/c, search/N, pstring/B, regex flags) first,
-        // so that '/' is not mistaken for a mask operator (upstream '/' only appears in string
-        // family types).
+
         string typeTok = tokens[1];
         string baseType = typeTok;
         string modifiers = string.Empty;
@@ -306,8 +265,7 @@ public static class MagicRuleParser
             modifiers = typeTok.Substring(slashIdx + 1);
         }
 
-        // 整数类型掩码运算（type&mask / type|mask / type^mask / type+mask / type-mask /
-        // type*mask / type%mask）—— 字符串族类型无掩码。
+
         long mask = 0;
         bool hasMask = false;
         MagicMaskOp maskOp = MagicMaskOp.None;
@@ -331,7 +289,7 @@ public static class MagicRuleParser
                     '%' => MagicMaskOp.Modulo,
                     _ => MagicMaskOp.None
                 };
-                // 掩码可带 '~' 反相：byte&~0x80 → 读取值取反后再比较（上游 FILE_OPINVERSE）
+
                 if (maskStr.StartsWith("~", StringComparison.Ordinal))
                 {
                     maskInverse = true;
@@ -353,7 +311,7 @@ public static class MagicRuleParser
         int pstringLengthBytes = 0;
         bool pstringBigEndian = false;
 
-        // 指令性 type：name（命名规则）/ use（引用命名规则）/ default（同层兜底）
+
         if (typeTok == "name")
         {
             string name = tokens.Count > 2 ? tokens[2] : string.Empty;
@@ -376,7 +334,7 @@ public static class MagicRuleParser
         }
         if (typeTok == "default")
         {
-            // default 指令（offset default x desc 形式）：仅当同层此前无规则命中时匹配
+
             string desc = tokens.Count > 3 ? ExtractDescription(tokens) : string.Empty;
             return new MagicRule(
                 offset, offsetFromEnd, isContinuation,
@@ -385,7 +343,7 @@ public static class MagicRuleParser
                 desc, level, isDefault: true, noSpace: false);
         }
 
-        // 其余指令性 type（skip/strength/clear/der 等）跳过
+
         if (baseType is "skip" or "strength" or "clear"
             or "der" or "summary" or "ext" or "mime" or "apple" or "size")
         {
@@ -410,7 +368,7 @@ public static class MagicRuleParser
         else if (baseType == "regex")
         {
             valueType = MagicValueType.Regex;
-            // regex 修饰符：/c 忽略大小写、/s 匹配起点偏移
+
             if (modifiers.Contains('c') || modifiers.Contains('C'))
             {
                 stringFlags |= MagicStringFlags.IgnoreCase;
@@ -422,15 +380,15 @@ public static class MagicRuleParser
         }
         else
         {
-            // 未知类型，跳过
+
             return null;
         }
 
-        // 解析比较运算符 + 值
+
         MagicCompareOp compareOp = MagicCompareOp.Equal;
         string valueTok = tokens[2];
 
-        // 检查前缀运算符
+
         if (valueTok.Length > 0)
         {
             char first = valueTok[0];
@@ -456,25 +414,25 @@ public static class MagicRuleParser
             }
             else if (first == '&' && valueType == MagicValueType.Integer)
             {
-                // 按位与比较：匹配 (v & l) == l（上游 reln '&'）
+
                 compareOp = MagicCompareOp.BitAnd;
                 valueTok = valueTok.Substring(1);
             }
             else if (first == '^' && valueType == MagicValueType.Integer)
             {
-                // 按位异或比较：匹配 (v & l) != l（上游 reln '^'）
+
                 compareOp = MagicCompareOp.BitXor;
                 valueTok = valueTok.Substring(1);
             }
         }
 
-        // "x" 特殊值表示任意
+
         if (valueTok == "x")
         {
             compareOp = MagicCompareOp.Any;
         }
 
-        // 解析 pattern
+
         byte[] pattern;
         string? regexPattern = null;
         if (valueType is MagicValueType.String or MagicValueType.Search or MagicValueType.PString)
@@ -483,7 +441,7 @@ public static class MagicRuleParser
         }
         else if (valueType == MagicValueType.Integer)
         {
-            // "x" 表示任意值，pattern 留空（长度 0），仅检查存在性
+
             if (compareOp == MagicCompareOp.Any)
             {
                 pattern = Array.Empty<byte>();
@@ -491,25 +449,25 @@ public static class MagicRuleParser
             else
             {
                 long val = ParseLong(valueTok);
-                // pattern 始终按大端存储，匹配时 ReadInteger(Pattern, ..., bigEndian: true) 能读回原值
-                // pattern is always stored big-endian; ReadInteger(Pattern, ..., bigEndian: true) recovers it
+
+
                 pattern = IntegerToBytes(val, integerWidth, bigEndian: true);
             }
         }
         else
         {
-            // regex: 保留原始字符串作为 pattern，并保存正则文本
+
             pattern = Encoding.UTF8.GetBytes(valueTok);
             regexPattern = valueTok;
         }
 
-        // 解析描述模板（token[3..] 合并，空格分隔；前导 \b 表示 NOSPACE）
+
         string descriptionTemplate = string.Empty;
         bool noSpace = false;
         if (tokens.Count > 3)
         {
             descriptionTemplate = ExtractDescription(tokens);
-            // 描述以 \b 开头 → NOSPACE（上游：\b 抑制前导空格，且 \b 本身被剥离）
+
             if (descriptionTemplate.Length >= 2 && descriptionTemplate[0] == '\\' && descriptionTemplate[1] == 'b')
             {
                 noSpace = true;
@@ -533,8 +491,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>解析字符串类型修饰符（string/c、search/N 等）：字母为标志，数字为搜索范围。</para>
     /// Parses string-type modifiers (string/c, search/N): letters are flags, digits are the range.
+    /// <para>解析字符串类型修饰符（string/c、search/N 等）：字母为标志，数字为搜索范围。</para>
     /// </summary>
     private static (MagicStringFlags flags, int range) ParseStringModifiers(string modifiers)
     {
@@ -564,7 +522,7 @@ public static class MagicRuleParser
                 case 't':
                 case 'b':
                 case 's':
-                    // 文本/二进制测试与偏移起点标志：纯托管引擎忽略
+
                     break;
                 default:
                     if (char.IsAsciiDigit(c))
@@ -582,14 +540,14 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>解析 pstring 修饰符（B/H/h/L/l/J 长度前缀）。</para>
     /// Parses pstring modifiers (B/H/h/L/l/J length prefixes).
+    /// <para>解析 pstring 修饰符（B/H/h/L/l/J 长度前缀）。</para>
     /// </summary>
     private static (MagicStringFlags flags, int range, int lengthBytes, bool bigEndian) ParsePStringModifiers(string modifiers)
     {
         MagicStringFlags flags = MagicStringFlags.None;
         int range = 0;
-        int lengthBytes = 1;   // 默认 1 字节长度前缀（上游 PSTRING_1_LE）
+        int lengthBytes = 1;
         bool bigEndian = false;
         foreach (char c in modifiers)
         {
@@ -616,7 +574,7 @@ public static class MagicRuleParser
                     bigEndian = false;
                     break;
                 case 'J':
-                    // 长度包含前缀自身：匹配时按偏移处理
+
                     break;
                 case 'c':
                 case 'C':
@@ -646,8 +604,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>Token 化：按空格/Tab 分隔，转义字符（\xNN 等）保持完整。</para>
     /// Tokenization: splits on whitespace, keeps escape sequences intact.
+    /// <para>Token 化：按空格/Tab 分隔，转义字符（\xNN 等）保持完整。</para>
     /// </summary>
     private static List<string> Tokenize(string line)
     {
@@ -660,7 +618,7 @@ public static class MagicRuleParser
 
             if (c == '\\' && i + 1 < line.Length)
             {
-                // 转义字符：保留反斜杠 + 下一个字符，避免被空格分隔
+
                 sb.Append('\\');
                 sb.Append(line[++i]);
                 continue;
@@ -688,8 +646,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>解析字符串 pattern，支持 \xNN、\0、\a、\b、\f、\n、\r、\t、\v、\\、\ 空白转义。</para>
     /// Parses a string pattern with \xNN/\0/\a/\b/\f/\n/\r/\t/\v/\\/whitespace escapes.
+    /// <para>解析字符串 pattern，支持 \xNN、\0、\a、\b、\f、\n、\r、\t、\v、\\、\ 空白转义。</para>
     /// </summary>
     private static byte[] ParseStringPattern(string token)
     {
@@ -702,8 +660,7 @@ public static class MagicRuleParser
             {
                 char next = token[i + 1];
 
-                // 八进制转义 \d、\dd、\ddd（magic(5)：1 至 3 位八进制数）。\0 → 0x00，\037 → 0x1f。
-                // Octal escapes \d / \dd / \ddd (magic(5): 1 to 3 octal digits). \0 → 0x00, \037 → 0x1f.
+
                 if (next is >= '0' and <= '7')
                 {
                     int value = 0;
@@ -763,7 +720,7 @@ public static class MagicRuleParser
                         i += 2;
                         continue;
                     default:
-                        // 未知转义，保留反斜杠
+
                         bytes.Add((byte)'\\');
                         i++;
                         continue;
@@ -776,12 +733,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>解析间接偏移的类型字母（上游 in_type 单字母编码）：l=lelong、L=belong、
-    /// h/s=leshort、H/S=beshort、c/b/C/B=byte、m=melong、q=lequad、Q=bequad；
-    /// 同时兼容完整类型名（belong/lelong 等）。</para>
-    /// Parses the indirect-offset type letter (upstream in_type single-letter codes): l=lelong,
-    /// L=belong, h/s=leshort, H/S=beshort, c/b/C/B=byte, m=melong, q=lequad, Q=bequad;
-    /// full type names (belong/lelong ...) are also accepted.
+    /// Parses the indirect-offset type letter (upstream in_type single-letter codes): l=lelong, L=belong, h/s=leshort, H/S=beshort, c/b/C/B=byte, m=melong, q=lequad, Q=bequad; full type names (belong/lelong ...) are also accepted.
+    /// <para>解析间接偏移的类型字母（上游 in_type 单字母编码）：l=lelong、L=belong、 h/s=leshort、H/S=beshort、c/b/C/B=byte、m=melong、q=lequad、Q=bequad； 同时兼容完整类型名（belong/lelong 等）。</para>
     /// </summary>
     private static (int width, bool bigEndian, MagicValueType valueType) ParseIndirectType(string type)
     {
@@ -803,16 +756,15 @@ public static class MagicRuleParser
     }
 
     /// <summary>
+    /// Determines whether the type is a string-family type (string/search/pstring/regex, whose '/' introduces modifiers rather than a mask).
     /// <para>判断是否为字符串族类型（string/search/pstring/regex，其 '/' 后为修饰符而非掩码）。</para>
-    /// Determines whether the type is a string-family type (string/search/pstring/regex, whose '/'
-    /// introduces modifiers rather than a mask).
     /// </summary>
     private static bool IsStringFamily(string type) =>
         type == "string" || type == "search" || type == "pstring" || type == "regex";
 
     /// <summary>
-    /// <para>判断是否为整数类型（含 u 无符号前缀与 be/le 前缀变体）。</para>
     /// Determines whether the type is an integer type (including u/be/le prefix variants).
+    /// <para>判断是否为整数类型（含 u 无符号前缀与 be/le 前缀变体）。</para>
     /// </summary>
     private static bool IsIntegerType(string type)
     {
@@ -829,8 +781,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>解析整数类型：返回字节宽度、字节序、无符号标志、日期标志与值类型。</para>
     /// Parses an integer type: returns byte width, endianness, unsigned flag, date flag and value type.
+    /// <para>解析整数类型：返回字节宽度、字节序、无符号标志、日期标志与值类型。</para>
     /// </summary>
     private static (int width, bool bigEndian, bool isUnsigned, bool isDate, MagicValueType valueType) ParseIntegerType(string type)
     {
@@ -856,7 +808,7 @@ public static class MagicRuleParser
         }
         else if (baseType.StartsWith("id", StringComparison.Ordinal))
         {
-            // 间接偏移类型
+
             bigEndian = true;
             baseType = baseType.Substring(2);
         }
@@ -874,15 +826,13 @@ public static class MagicRuleParser
         {
             isDate = true;
         }
-        // 注意：ledate/bedate 前缀已被剥离为 date；qdate 等 8 字节日期暂按整数处理
+
         return (width, bigEndian, isUnsigned, isDate, MagicValueType.Integer);
     }
 
     /// <summary>
-    /// <para>解析整数：支持 0xNN、十进制、负号、八进制（0NN）。
-    /// 容错策略：无法解析的 token 返回 0，避免单条异常规则导致整个规则集解析崩溃。</para>
     /// Parses an integer: supports 0xNN, decimal, negative sign, octal (0NN).
-    /// Fault-tolerant: unparseable tokens return 0, preventing a single bad rule from crashing the whole parse.
+    /// <para>解析整数：支持 0xNN、十进制、负号、八进制（0NN）。</para>
     /// </summary>
     private static int ParseInt(string token)
     {
@@ -905,10 +855,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>解析长整数：支持 0xNN、十进制、负号、八进制。
-    /// 容错策略：无法解析的 token 返回 0。</para>
     /// Parses a long integer: supports 0xNN, decimal, negative sign, octal.
-    /// Fault-tolerant: unparseable tokens return 0.
+    /// <para>解析长整数：支持 0xNN、十进制、负号、八进制。</para>
     /// </summary>
     private static long ParseLong(string token)
     {
@@ -935,8 +883,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>将整数值转换为指定宽度和字节序的字节数组。</para>
     /// Converts an integer value to a byte array with the specified width and endianness.
+    /// <para>将整数值转换为指定宽度和字节序的字节数组。</para>
     /// </summary>
     private static byte[] IntegerToBytes(long value, int width, bool bigEndian)
     {
@@ -954,8 +902,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>从 token 列表提取描述模板（token[3..] 合并，空格分隔）。</para>
     /// Extracts the description template from the token list (token[3..] joined by spaces).
+    /// <para>从 token 列表提取描述模板（token[3..] 合并，空格分隔）。</para>
     /// </summary>
     private static string ExtractDescription(List<string> tokens)
     {
@@ -972,8 +920,8 @@ public static class MagicRuleParser
     }
 
     /// <summary>
-    /// <para>查找掩码运算符位置（&amp;|^+-*/% 中的首个；类型名中不含这些字符）。</para>
     /// Finds the first mask-operator character (&amp;|^+-*/%; type names contain none of these).
+    /// <para>查找掩码运算符位置（&amp;|^+-*/% 中的首个；类型名中不含这些字符）。</para>
     /// </summary>
     private static int IndexOfMaskOp(string type)
     {

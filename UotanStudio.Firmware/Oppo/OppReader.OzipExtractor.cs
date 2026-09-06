@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.Oppo.Crypto;
 using UotanStudio.Firmware.Oppo.Models;
@@ -126,11 +126,11 @@ public sealed partial class OppReader
             }
             catch (IOException)
             {
-                // Best-effort cleanup after a failed extraction.
+
             }
             catch (UnauthorizedAccessException)
             {
-                // Same as above.
+
             }
         }
     }

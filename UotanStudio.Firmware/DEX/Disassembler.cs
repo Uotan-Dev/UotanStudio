@@ -1,20 +1,14 @@
-using System.Text;
+﻿using System.Text;
 using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex;
 
-/// <summary>
-/// <para>DEX 反汇编器：把对象模型转换为 smali 风格的可读文本（类、字段、方法与指令流）。</para>
-/// DEX disassembler: converts the object model into smali-style readable text (classes, fields, methods and instruction streams).
-/// </summary>
 public static class Disassembler
 {
     /// <summary>
-    /// <para>反汇编整个 DEX 文件为文本。</para>
     /// Disassembles the entire DEX file into text.
+    /// <para>反汇编整个 DEX 文件为文本。</para>
     /// </summary>
-    /// <param name="dex">DEX 模型。<para>The DEX model.</para></param>
-    /// <returns>反汇编文本。<para>The disassembled text.</para></returns>
     public static string DisassembleAll(DexFile dex)
     {
         ArgumentNullException.ThrowIfNull(dex);
@@ -35,8 +29,8 @@ public static class Disassembler
     }
 
     /// <summary>
-    /// <para>反汇编单个类为 smali 风格文本。</para>
     /// Disassembles a single class into smali-style text.
+    /// <para>反汇编单个类为 smali 风格文本。</para>
     /// </summary>
     public static string DisassembleClass(DexFile dex, ClassDefinition cls)
     {
@@ -66,15 +60,13 @@ public static class Disassembler
             sb.Append(".source \"").Append(dex.GetString(cls.SourceFileIndex)).AppendLine("\"");
         }
 
-        // 类级注解
-        // Class-level annotations.
+
         if (cls.Annotations?.ClassAnnotations is { IsEmpty: false } classAnnotations)
         {
             sb.Append(FormatAnnotationSet(dex, classAnnotations, string.Empty));
         }
 
-        // 静态字段带初始值（static_values 与 StaticFields 按序对应）
-        // Static fields carry their initial values (static_values align with StaticFields in order).
+
         for (var i = 0; i < cls.StaticFields.Count; i++)
         {
             var f = cls.StaticFields[i];
@@ -117,8 +109,8 @@ public static class Disassembler
     }
 
     /// <summary>
-    /// <para>反汇编单个方法为 smali 风格文本（含指令与分支标签）。</para>
     /// Disassembles a single method into smali-style text (including instructions and branch labels).
+    /// <para>反汇编单个方法为 smali 风格文本（含指令与分支标签）。</para>
     /// </summary>
     public static string DisassembleMethod(DexFile dex, EncodedMethod encodedMethod, ClassDefinition? cls = null)
     {
@@ -161,8 +153,7 @@ public static class Disassembler
             return;
         }
 
-        // 程序化构造的 CodeItem 可能未解码指令；此处按需解码
-        // Programmatically-built CodeItems may not have decoded instructions; decode on demand.
+
         var instructions = code.Instructions.Count > 0
             ? code.Instructions
             : Instructions.InstructionDecoder.Decode(code.RawInsns, dex);
@@ -170,12 +161,10 @@ public static class Disassembler
         sb.Append("    .registers ").AppendLine(code.RegistersSize.ToString());
         sb.Append("    .locals ").AppendLine((code.RegistersSize - code.InsSize).ToString());
 
-        // 方法注解与参数注解
-        // Method and parameter annotations.
+
         AppendMethodAnnotations(sb, dex, cls, encodedMethod.MethodIndex, code);
 
-        // 分支标签与异常标签：为所有分支目标 / try 区间 / handler 入口生成 label
-        // Branch and exception labels: one label per branch target / try range / handler entry.
+
         var labels = new HashSet<int>();
         foreach (var insn in instructions)
         {
@@ -185,11 +174,10 @@ public static class Disassembler
             }
         }
 
-        // 异常保护：try_start / try_end / catch / catchall 标签 + .catch 指令行
-        // Exception ranges: try_start / try_end / catch / catchall labels and .catch directive lines.
-        var tryStarts = new Dictionary<int, List<string>>();   // 字节偏移 -> :try_start_N 标签
+
+        var tryStarts = new Dictionary<int, List<string>>();
         var tryEnds = new Dictionary<int, (List<string> Labels, List<string> CatchLines)>();
-        var catchLabels = new Dictionary<int, string>();       // handler 字节偏移 -> :catch_XXXX 标签
+        var catchLabels = new Dictionary<int, string>();
         for (var i = 0; i < code.Tries.Count; i++)
         {
             var t = code.Tries[i];
@@ -258,8 +246,8 @@ public static class Disassembler
     }
 
     /// <summary>
-    /// <para>输出方法级注解与参数注解（.annotation / .param）。</para>
     /// Emits method-level and parameter annotations (.annotation / .param).
+    /// <para>输出方法级注解与参数注解（.annotation / .param）。</para>
     /// </summary>
     private static void AppendMethodAnnotations(StringBuilder sb, DexFile dex, ClassDefinition? cls, int methodIndex, CodeItem? code)
     {
@@ -274,8 +262,7 @@ public static class Disassembler
         var paramAnns = cls.Annotations.ParameterAnnotations.FirstOrDefault(pa => pa.MethodIndex == methodIndex)?.Parameters;
         if (paramAnns == null || code == null) return;
 
-        // 参数寄存器编号：pN 从 registers - ins 开始
-        // Parameter register numbers start at registers - ins.
+
         var paramBase = code.RegistersSize - code.InsSize;
         for (var i = 0; i < paramAnns.Sets.Count; i++)
         {
@@ -297,8 +284,8 @@ public static class Disassembler
     }
 
     /// <summary>
-    /// <para>把注解集合格式化为 smali 风格 .annotation 块（含可见性）。</para>
     /// Formats an annotation set as smali-style .annotation blocks (with visibility).
+    /// <para>把注解集合格式化为 smali 风格 .annotation 块（含可见性）。</para>
     /// </summary>
     private static string FormatAnnotationSet(DexFile dex, AnnotationSet set, string indent)
     {
@@ -325,8 +312,8 @@ public static class Disassembler
     };
 
     /// <summary>
-    /// <para>把编码值格式化为 smali 风格字面量（注解元素值 / 字段初始值）。</para>
     /// Formats an encoded value as a smali-style literal (annotation element values / field initializers).
+    /// <para>把编码值格式化为 smali 风格字面量（注解元素值 / 字段初始值）。</para>
     /// </summary>
     private static string FormatEncodedValue(DexFile dex, EncodedValue value)
     {
@@ -426,8 +413,7 @@ public static class Disassembler
     {
         if (insn.Operands.Count == 0) return;
 
-        // 寄存器列表（invoke 的 {v0, v1}）作为首个操作数时单独格式化
-        // A register list (invoke's {v0, v1}) as the first operand is formatted separately.
+
         if (insn.Operands[0] is IReadOnlyList<int> regs)
         {
             sb.Append('{');

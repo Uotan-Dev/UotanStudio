@@ -8,16 +8,12 @@ using FirmwareAvbVerifier = UotanStudio.Firmware.Avb.AvbSignatureVerifier;
 namespace UotanStudio.Comm.Protocols.Fastboot.Utils;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AvbAlgorithmType 枚举已移除：算法类型直接使用 uint（值 0-6，与 libavb 一致），
-// 通过 FirmwareAvbVerifier.TryGetKeySizeAndHash 校验。
-// AvbAlgorithmType enum removed: algorithm type is now a plain uint (0-6, matching libavb),
-// validated via FirmwareAvbVerifier.TryGetKeySizeAndHash.
-//
-// AvbVbmetaHeader 类已移除：改用 Firmware 的 AvbVBMetaImageHeader（readonly struct）。
-// AvbVbmetaHeader class removed: replaced by Firmware's AvbVBMetaImageHeader (readonly struct).
-//
-// AvbFooter 类已移除：改用 Firmware 的 AvbFooter（readonly struct）。
-// AvbFooter class removed: replaced by Firmware's AvbFooter (readonly struct).
+// AVB 模型来源：算法类型为普通 uint（值 0-6，与 libavb 一致），经
+// FirmwareAvbVerifier.TryGetKeySizeAndHash 校验；vbmeta 头与 footer 分别复用
+// Firmware 的 AvbVBMetaImageHeader（readonly struct）与 AvbFooter（readonly struct）。
+// AVB model sources: the algorithm type is a plain uint (0-6, matching libavb), validated
+// via FirmwareAvbVerifier.TryGetKeySizeAndHash; the vbmeta header and footer reuse
+// Firmware's AvbVBMetaImageHeader (readonly struct) and AvbFooter (readonly struct).
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// <summary>

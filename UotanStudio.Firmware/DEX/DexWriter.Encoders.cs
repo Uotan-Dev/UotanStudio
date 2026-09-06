@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Dex.Model;
@@ -23,9 +23,9 @@ internal static partial class DexWriter
     private static void WriteStringData(BinaryWriter w, string value)
     {
         var mutf8 = Mutf8.Encode(value);
-        WriteUleb128(w, (uint)value.Length); // utf16_size（UTF-16 代码单元数）
+        WriteUleb128(w, (uint)value.Length);
         w.Write(mutf8);
-        w.Write((byte)0); // 终止 NUL
+        w.Write((byte)0);
     }
 
     private static void WriteTypeList(BinaryWriter w, IReadOnlyList<int> typeIndices)
@@ -38,9 +38,8 @@ internal static partial class DexWriter
     }
 
     /// <summary>
+    /// Writes a code_item (including tries and the catch handler list); returns the code_item start position so the caller can patch debug_info_off.
     /// <para>写出 code_item（含异常保护块与处理器列表）；返回 code_item 起始位置，供回填 debug_info_off。</para>
-    /// Writes a code_item (including tries and the catch handler list); returns the code_item start
-    /// position so the caller can patch debug_info_off.
     /// </summary>
     private static int WriteCodeItem(BinaryWriter w, CodeItem code)
     {
@@ -48,9 +47,9 @@ internal static partial class DexWriter
         w.Write(code.RegistersSize);
         w.Write(code.InsSize);
         w.Write(code.OutsSize);
-        w.Write((ushort)code.Tries.Count); // tries_size
-        w.Write(0u);                        // debug_info_off 占位（随后回填）
-        w.Write((uint)code.RawInsns.Length); // insns_size（16 位单元数）
+        w.Write((ushort)code.Tries.Count);
+        w.Write(0u);
+        w.Write((uint)code.RawInsns.Length);
         foreach (var unit in code.RawInsns)
         {
             w.Write(unit);
@@ -58,15 +57,11 @@ internal static partial class DexWriter
 
         if (code.Tries.Count > 0)
         {
-            // 对齐到 4 字节（insns 为奇数单元时补 2 字节），随后写 try_item 数组与处理器列表。
-            // Pad to 4-byte alignment (2 bytes when insns has an odd unit count), then write the
-            // try_item array and the catch handler list.
+
+
             Align(w, 4);
 
-            // 每个 handler 相对列表起始（size 字段）的偏移可预计算（编码长度已知），
-            // 无需临时流缓存编码结果，避免每个 code_item 一次 MemoryStream 分配。
-            // Each handler's offset relative to the list start (the size field) is computable
-            // up front from its encoded length, so no per-code_item temp stream is needed.
+
             var listHeaderSize = Leb128.Uleb128Size((uint)code.Handlers.Count);
             var handlerOffsets = new int[code.Handlers.Count];
             var running = listHeaderSize;
@@ -86,7 +81,7 @@ internal static partial class DexWriter
                 w.Write((ushort)off);
             }
 
-            // encoded_catch_handler_list：uleb128 数量 + 各 handler。
+
             WriteUleb128(w, (uint)code.Handlers.Count);
             foreach (var handler in code.Handlers)
             {
@@ -97,8 +92,8 @@ internal static partial class DexWriter
     }
 
     /// <summary>
-    /// <para>计算单个 encoded_catch_handler 的编码字节长度（与 <see cref="WriteCatchHandler"/> 一致）。</para>
-    /// Computes the encoded byte length of one encoded_catch_handler (consistent with <see cref="WriteCatchHandler"/>).
+    /// Computes the encoded byte length of one encoded_catch_handler (consistent with WriteCatchHandler).
+    /// <para>计算单个 encoded_catch_handler 的编码字节长度（与 WriteCatchHandler 一致）。</para>
     /// </summary>
     private static int CatchHandlerSize(CatchHandler handler)
     {
@@ -117,14 +112,14 @@ internal static partial class DexWriter
     }
 
     /// <summary>
-    /// <para>写出单个 encoded_catch_handler（sleb128 类型数 + 类型/地址对 + 可选 catch_all）。</para>
     /// Writes a single encoded_catch_handler (sleb128 type count + type/address pairs + optional catch-all).
+    /// <para>写出单个 encoded_catch_handler（sleb128 类型数 + 类型/地址对 + 可选 catch_all）。</para>
     /// </summary>
     private static void WriteCatchHandler(BinaryWriter w, CatchHandler handler)
     {
         var typedCount = handler.Entries.Count;
-        // size <= 0 表示类型化条目后跟 catch_all（0 表示纯 catch-all）。
-        // A non-positive size means typed entries are followed by a catch-all (0 = catch-all only).
+
+
         WriteSleb128(w, handler.HasCatchAll ? -typedCount : typedCount);
         foreach (var entry in handler.Entries)
         {
@@ -138,15 +133,15 @@ internal static partial class DexWriter
     }
 
     /// <summary>
-    /// <para>写出编码值（encoded_value），按 value_arg/value_type 极小编码。</para>
     /// Writes an encoded value (encoded_value), minimally encoded per value_arg/value_type.
+    /// <para>写出编码值（encoded_value），按 value_arg/value_type 极小编码。</para>
     /// </summary>
     private static void WriteEncodedValue(BinaryWriter w, EncodedValue value)
     {
         switch (value.Type)
         {
             case EncodedValueType.Byte:
-                w.Write((byte)EncodedValueType.Byte); // arg=0
+                w.Write((byte)EncodedValueType.Byte);
                 w.Write(value.AsInt());
                 break;
             case EncodedValueType.Short:
@@ -213,7 +208,7 @@ internal static partial class DexWriter
                 }
             case EncodedValueType.Array:
                 {
-                    w.Write((byte)EncodedValueType.Array); // arg=0
+                    w.Write((byte)EncodedValueType.Array);
                     var items = value.AsArray() ?? [];
                     WriteUleb128(w, (uint)items.Length);
                     foreach (var item in items) WriteEncodedValue(w, item);
@@ -221,7 +216,7 @@ internal static partial class DexWriter
                 }
             case EncodedValueType.Annotation:
                 {
-                    w.Write((byte)EncodedValueType.Annotation); // arg=0
+                    w.Write((byte)EncodedValueType.Annotation);
                     var item = value.Value as AnnotationItem;
                     WriteEncodedAnnotation(w, item ?? new AnnotationItem());
                     break;
@@ -238,8 +233,8 @@ internal static partial class DexWriter
     }
 
     /// <summary>
-    /// <para>写出编码注解（encoded_annotation）。</para>
     /// Writes an encoded annotation (encoded_annotation).
+    /// <para>写出编码注解（encoded_annotation）。</para>
     /// </summary>
     private static void WriteEncodedAnnotation(BinaryWriter w, AnnotationItem item)
     {
@@ -253,8 +248,8 @@ internal static partial class DexWriter
     }
 
     /// <summary>
-    /// <para>计算有符号值以符号扩展表示所需的最小字节数（≤ <paramref name="maxBytes"/>）。</para>
-    /// Computes the minimum byte count (≤ <paramref name="maxBytes"/>) to represent a signed value by sign extension.
+    /// Computes the minimum byte count (≤ maxBytes) to represent a signed value by sign extension.
+    /// <para>计算有符号值以符号扩展表示所需的最小字节数（≤ maxBytes）。</para>
     /// </summary>
     private static int SignedByteCount(long v, int maxBytes)
     {
@@ -267,8 +262,8 @@ internal static partial class DexWriter
     }
 
     /// <summary>
-    /// <para>计算无符号值右零扩展表示所需的最小字节数（≤ <paramref name="maxBytes"/>）。</para>
-    /// Computes the minimum byte count (≤ <paramref name="maxBytes"/>) to represent an unsigned value by right zero extension.
+    /// Computes the minimum byte count (≤ maxBytes) to represent an unsigned value by right zero extension.
+    /// <para>计算无符号值右零扩展表示所需的最小字节数（≤ maxBytes）。</para>
     /// </summary>
     private static int UnsignedByteCount(ulong v, int maxBytes)
     {

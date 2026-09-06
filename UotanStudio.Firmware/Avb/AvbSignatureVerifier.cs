@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -10,243 +10,85 @@ using Org.BouncyCastle.Math;
 
 namespace UotanStudio.Firmware.Avb;
 
-/// <summary>
-/// A single descriptor parsed from the vbmeta auxiliary data block.
-/// <para>从 vbmeta 辅助数据块中解析出的单个描述符。</para>
-/// </summary>
 public sealed class AvbDescriptorInfo
 {
-    /// <summary>
-    /// Gets the descriptor tag (0 = prop, 1 = hashtree, 2 = hash, 3 = kernel cmdline, 4 = chain).
-    /// <para>获取描述符标签（0 = 属性，1 = 哈希树，2 = 哈希，3 = 内核命令行，4 = 链式分区）。</para>
-    /// </summary>
     public ulong Tag { get; init; }
 
-    /// <summary>
-    /// Gets a human-readable descriptor type name.
-    /// <para>获取人类可读的描述符类型名称。</para>
-    /// </summary>
     public string TypeName { get; init; } = string.Empty;
 
-    /// <summary>
-    /// Gets the number of bytes following the descriptor header (tag + length).
-    /// <para>获取描述符头（标签 + 长度）之后紧随的字节数。</para>
-    /// </summary>
     public ulong Size { get; init; }
 
-    /// <summary>
-    /// Gets the target partition name (hash/hashtree/chain descriptors only).
-    /// <para>获取目标分区名称（仅哈希/哈希树/链式描述符）。</para>
-    /// </summary>
     public string? PartitionName { get; init; }
 
-    /// <summary>
-    /// Gets the hash algorithm name (hash/hashtree descriptors only, e.g. "sha256").
-    /// <para>获取哈希算法名称（仅哈希/哈希树描述符，如 "sha256"）。</para>
-    /// </summary>
     public string? HashAlgorithm { get; init; }
 
-    /// <summary>
-    /// Gets the salt used when computing the digest (hash/hashtree descriptors only).
-    /// <para>获取计算摘要时使用的盐值（仅哈希/哈希树描述符）。</para>
-    /// </summary>
     public byte[]? Salt { get; init; }
 
-    /// <summary>
-    /// Gets the expected digest stored in the descriptor (hash descriptors only).
-    /// <para>获取描述符中存储的期望摘要（仅哈希描述符）。</para>
-    /// </summary>
     public byte[]? Digest { get; init; }
 
-    /// <summary>
-    /// Gets the root digest stored in the descriptor (hashtree descriptors only).
-    /// <para>获取描述符中存储的根摘要（仅哈希树描述符）。</para>
-    /// </summary>
     public byte[]? RootDigest { get; init; }
 
-    /// <summary>
-    /// Gets the image size covered by the digest or hash tree (hash/hashtree descriptors only).
-    /// <para>获取摘要或哈希树覆盖的镜像大小（仅哈希/哈希树描述符）。</para>
-    /// </summary>
     public ulong ImageSize { get; init; }
 
-    /// <summary>
-    /// Gets the absolute byte offset of the hash tree (hashtree descriptors only).
-    /// <para>获取哈希树的绝对字节偏移（仅哈希树描述符）。</para>
-    /// </summary>
     public ulong TreeOffset { get; init; }
 
-    /// <summary>
-    /// Gets the hash tree size in bytes (hashtree descriptors only).
-    /// <para>获取哈希树大小（字节）（仅哈希树描述符）。</para>
-    /// </summary>
     public ulong TreeSize { get; init; }
 
-    /// <summary>
-    /// Gets the data block size in bytes (hashtree descriptors only).
-    /// <para>获取数据块大小（字节）（仅哈希树描述符）。</para>
-    /// </summary>
     public uint DataBlockSize { get; init; }
 
-    /// <summary>
-    /// Gets the hash block size in bytes (hashtree descriptors only).
-    /// <para>获取哈希块大小（字节）（仅哈希树描述符）。</para>
-    /// </summary>
     public uint HashBlockSize { get; init; }
 
-    /// <summary>
-    /// Gets the number of FEC roots (hashtree descriptors only).
-    /// <para>获取 FEC 根数（仅哈希树描述符）。</para>
-    /// </summary>
     public uint FecNumRoots { get; init; }
 
-    /// <summary>
-    /// Gets the byte offset of the FEC data (hashtree descriptors only).
-    /// <para>获取 FEC 数据的字节偏移（仅哈希树描述符）。</para>
-    /// </summary>
     public ulong FecOffset { get; init; }
 
-    /// <summary>
-    /// Gets the FEC data size in bytes (hashtree descriptors only).
-    /// <para>获取 FEC 数据大小（字节）（仅哈希树描述符）。</para>
-    /// </summary>
     public ulong FecSize { get; init; }
 
-    /// <summary>
-    /// Gets the dm-verity version (hashtree descriptors only).
-    /// <para>获取 dm-verity 版本（仅哈希树描述符）。</para>
-    /// </summary>
     public uint DmVerityVersion { get; init; }
 
-    /// <summary>
-    /// Gets the descriptor flags (hash/hashtree/kernel-cmdline descriptors only).
-    /// <para>获取描述符 flags（仅哈希/哈希树/内核命令行描述符）。</para>
-    /// </summary>
     public uint Flags { get; init; }
 
-    /// <summary>
-    /// Gets the kernel command-line string (kernel-cmdline descriptors only).
-    /// <para>获取内核命令行字符串（仅内核命令行描述符）。</para>
-    /// </summary>
     public string? KernelCmdline { get; init; }
 
-    /// <summary>
-    /// Gets the rollback index location (chain descriptors only).
-    /// <para>获取回滚索引位置（仅链式描述符）。</para>
-    /// </summary>
     public uint RollbackIndexLocation { get; init; }
 
-    /// <summary>
-    /// Gets the public key blob (chain descriptors only).
-    /// <para>获取公钥数据块（仅链式描述符）。</para>
-    /// </summary>
     public byte[]? PublicKey { get; init; }
 
-    /// <summary>
-    /// Gets the property key (prop descriptors only).
-    /// <para>获取属性键（仅属性描述符）。</para>
-    /// </summary>
     public string? Key { get; init; }
 
-    /// <summary>
-    /// Gets the property value bytes (prop descriptors only).
-    /// <para>获取属性值字节（仅属性描述符）。</para>
-    /// </summary>
     public byte[]? Value { get; init; }
 }
 
-/// <summary>
-/// Result of an AVB signature / hash verification attempt.
-/// <para>AVB 签名 / 哈希验证尝试的结果。</para>
-/// </summary>
 public sealed class AvbSignatureVerifyResult
 {
-    /// <summary>
-    /// Gets whether the image carries a signature (algorithm != NONE and signature bytes present).
-    /// <para>获取镜像是否携带签名（算法 != NONE 且存在签名字节）。</para>
-    /// </summary>
     public bool IsSigned { get; init; }
 
-    /// <summary>
-    /// Gets whether the AVB-specified RSASSA-PKCS1-v1_5 signature verified successfully.
-    /// <para>获取 AVB 规定的 RSASSA-PKCS1-v1_5 签名是否验证成功。</para>
-    /// </summary>
     public bool SignatureIsValid { get; init; }
 
-    /// <summary>
-    /// Gets whether the digest stored in the header matches a recomputed digest.
-    /// <para>获取头中存储的摘要是否与重新计算的摘要匹配。</para>
-    /// </summary>
     public bool HashIsValid { get; init; }
 
-    /// <summary>
-    /// Gets the error message when verification could not complete.
-    /// <para>获取验证无法完成时的错误信息。</para>
-    /// </summary>
     public string? ErrorMessage { get; init; }
 
-    /// <summary>
-    /// Gets the algorithm display name (e.g. "SHA256_RSA4096").
-    /// <para>获取算法显示名称（如 "SHA256_RSA4096"）。</para>
-    /// </summary>
     public string AlgorithmName { get; init; } = string.Empty;
 
-    /// <summary>
-    /// Gets the raw signature bytes extracted from the authentication data block.
-    /// <para>获取从认证数据块中提取的原始签名字节。</para>
-    /// </summary>
     public byte[]? StoredSignature { get; init; }
 
-    /// <summary>
-    /// Gets the digest stored in the header (when present).
-    /// <para>获取头中存储的摘要（若存在）。</para>
-    /// </summary>
     public byte[]? StoredHash { get; init; }
 
-    /// <summary>
-    /// Gets the digest recomputed from the image contents (when a match was found).
-    /// <para>获取根据镜像内容重新计算的摘要（若找到匹配项）。</para>
-    /// </summary>
     public byte[]? ComputedHash { get; init; }
 
-    /// <summary>
-    /// Gets the descriptors parsed from the auxiliary data block.
-    /// <para>获取从辅助数据块解析出的描述符。</para>
-    /// </summary>
     public IReadOnlyList<AvbDescriptorInfo> Descriptors { get; init; } = [];
 }
 
-/// <summary>
-/// Verifies the AVB-specified RSASSA-PKCS1-v1_5 signature of an Android Verified Boot (AVB) vbmeta image.
-/// <para>验证 Android Verified Boot（AVB）vbmeta 镜像的 AVB 规定 RSASSA-PKCS1-v1_5 签名。</para>
-/// </summary>
-/// <remarks>
-/// The signed data is exactly the serialized 256-byte vbmeta header followed by the auxiliary data block.
-/// Hash/signature offsets are relative to the authentication data block; public key, descriptors and metadata
-/// offsets are relative to the auxiliary data block.
-/// <para>签名数据严格为序列化的 256 字节 vbmeta 头及其后的辅助数据块。哈希/签名偏移相对于认证
-/// 数据块；公钥、描述符和元数据偏移相对于辅助数据块。</para>
-/// </remarks>
 public static class AvbSignatureVerifier
 {
-    /// <summary>
-    /// Size of the AVB vbmeta header in bytes.
-    /// <para>AVB vbmeta 头的字节大小。</para>
-    /// </summary>
     public const int HeaderSize = 256;
 
-    /// <summary>
-    /// Algorithm type value meaning "not signed".
-    /// <para>表示"未签名"的算法类型值。</para>
-    /// </summary>
     public const uint AlgorithmNone = 0;
 
     private static ReadOnlySpan<byte> MagicBytes => "AVB0"u8;
 
-    // 上游 libavb avb_descriptor.h 的 tag 常量：0=Property、1=Hashtree、2=Hash、
-    // 3=KernelCmdline、4=ChainPartition。
-    // Upstream libavb avb_descriptor.h tags: 0=Property, 1=Hashtree, 2=Hash,
-    // 3=KernelCmdline, 4=ChainPartition.
+
     private const int PropertyDescriptorTag = 0;
     private const int HashtreeDescriptorTag = 1;
     private const int HashDescriptorTag = 2;
@@ -258,10 +100,6 @@ public static class AvbSignatureVerifier
     /// Maps an algorithm type to its hash name and RSA key size.
     /// <para>将算法类型映射为哈希名称与 RSA 密钥大小。</para>
     /// </summary>
-    /// <param name="algorithmType">The libavb algorithm type value (0-6). <para>libavb 算法类型值（0-6）。</para></param>
-    /// <param name="keySizeBits">The RSA modulus size in bits (2048/4096/8192; 0 for NONE). <para>RSA 模数大小（位）（2048/4096/8192；NONE 为 0）。</para></param>
-    /// <param name="hashName">The hash algorithm name ("SHA256"/"SHA512"; empty for NONE). <para>哈希算法名称（"SHA256"/"SHA512"；NONE 为空）。</para></param>
-    /// <returns><c>true</c> when the algorithm type is known. <para>算法类型已知时返回 <c>true</c>。</para></returns>
     public static bool TryGetKeySizeAndHash(uint algorithmType, out int keySizeBits, out string hashName)
     {
         switch (algorithmType)
@@ -299,8 +137,6 @@ public static class AvbSignatureVerifier
     /// Gets the display name of an algorithm type (e.g. "SHA256_RSA4096").
     /// <para>获取算法类型的显示名称（如 "SHA256_RSA4096"）。</para>
     /// </summary>
-    /// <param name="algorithmType">The libavb algorithm type value. <para>libavb 算法类型值。</para></param>
-    /// <returns>The display name, or "NONE"/"UNKNOWN" when not mappable. <para>显示名称；无法映射时为 "NONE"/"UNKNOWN"。</para></returns>
     public static string GetAlgorithmName(uint algorithmType)
     {
         return algorithmType == AlgorithmNone
@@ -311,13 +147,9 @@ public static class AvbSignatureVerifier
     }
 
     /// <summary>
-    /// Imports an AVB-format RSA public key blob (<c>avbtool extract_public_key</c> output:
-    /// key_num_bits BE, n0inv BE, modulus BE, rr BE) into an <see cref="RSA"/> instance.
-    /// <para>将 AVB 格式 RSA 公钥数据块（<c>avbtool extract_public_key</c> 输出：key_num_bits BE、
-    /// n0inv BE、模数 BE、rr BE）导入 <see cref="RSA"/> 实例。</para>
+    /// Imports an AVB-format RSA public key blob into an RSA instance.
+    /// <para>将 AVB 格式 RSA 公钥数据块导入 RSA 实例。</para>
     /// </summary>
-    /// <param name="avbRsaPublicKeyBlob">The raw AVB public key blob. <para>原始 AVB 公钥数据块。</para></param>
-    /// <returns>The imported key, or <c>null</c> when the blob is malformed. <para>导入的密钥；数据块格式错误时返回 <c>null</c>。</para></returns>
     public static RSA? ImportAvbRsaPublicKey(byte[]? avbRsaPublicKeyBlob)
     {
         if (avbRsaPublicKeyBlob is not { Length: >= 8 })
@@ -338,7 +170,7 @@ public static class AvbSignatureVerifier
         }
 
         var modulus = avbRsaPublicKeyBlob.AsSpan(8, keyNumBytes).ToArray();
-        // The modulus must be odd; the high bit of the first byte is the sign guard for BigInteger.
+
         if ((modulus[^1] & 1) == 0)
         {
             return null;
@@ -361,12 +193,9 @@ public static class AvbSignatureVerifier
     }
 
     /// <summary>
-    /// Imports a PEM or DER public key / certificate into an <see cref="RSA"/> instance.
-    /// <para>将 PEM 或 DER 公钥 / 证书导入 <see cref="RSA"/> 实例。</para>
+    /// Imports a PEM or DER public key / certificate into an RSA instance.
+    /// <para>将 PEM 或 DER 公钥 / 证书导入 RSA 实例。</para>
     /// </summary>
-    /// <param name="pemOrDerData">PEM text or DER bytes of an RSA public key, subject public key info, or X.509 certificate.
-    /// <para>RSA 公钥、SubjectPublicKeyInfo 或 X.509 证书的 PEM 文本或 DER 字节。</para></param>
-    /// <returns>The imported key, or <c>null</c> when it cannot be parsed. <para>导入的密钥；无法解析时返回 <c>null</c>。</para></returns>
     public static RSA? ImportPublicKeyPem(byte[]? pemOrDerData)
     {
         if (pemOrDerData is not { Length: > 0 })
@@ -384,11 +213,11 @@ public static class AvbSignatureVerifier
             }
             catch (ArgumentException)
             {
-                // Not PEM text; fall through to DER handling.
+
             }
             catch (CryptographicException)
             {
-                // Not PEM text; fall through to DER handling.
+
             }
 
             try
@@ -398,7 +227,7 @@ public static class AvbSignatureVerifier
             }
             catch (CryptographicException)
             {
-                // Not a subject public key info blob; try a certificate.
+
             }
 
             try
@@ -413,7 +242,7 @@ public static class AvbSignatureVerifier
             }
             catch (CryptographicException)
             {
-                // Not a certificate either.
+
             }
 
             rsa.Dispose();
@@ -426,15 +255,9 @@ public static class AvbSignatureVerifier
     }
 
     /// <summary>
-    /// Verifies the embedded signature of a vbmeta image, using the public key embedded in its
-    /// auxiliary data block (self-signed verification). Pass a trusted key to verify authenticity.
-    /// <para>验证 vbmeta 镜像的内嵌签名，使用其辅助数据块中内嵌的公钥（自签名验证）。
-    /// 传入受信任的密钥可验证真实性。</para>
+    /// Verifies the embedded signature of a vbmeta image, using the public key embedded in its auxiliary data block (self-signed verification).
+    /// <para>验证 vbmeta 镜像的内嵌签名，使用其辅助数据块中内嵌的公钥（自签名验证）。</para>
     /// </summary>
-    /// <param name="vbmetaData">The raw vbmeta image bytes. <para>原始 vbmeta 镜像字节。</para></param>
-    /// <param name="trustedPublicKey">Optional trusted RSA public key; when null the embedded key is used.
-    /// <para>可选的受信任 RSA 公钥；为 null 时使用内嵌密钥。</para></param>
-    /// <returns>The verification result. <para>验证结果。</para></returns>
     public static AvbSignatureVerifyResult Verify(byte[] vbmetaData, RSA? trustedPublicKey = null)
     {
         if (vbmetaData is not { Length: >= HeaderSize })
@@ -487,7 +310,7 @@ public static class AvbSignatureVerifier
         var signature = vbmetaData.AsSpan(sigStart, (int)sigSize).ToArray();
         result = With(result, IsSigned: true, StoredSignature: signature);
 
-        // Verify the stored digest first (cheap and independent of the public key).
+
         var (hashOk, storedHash, computedHash) = VerifyStoredHash(vbmetaData, algorithmType, hashOffset, hashSize);
         result = With(result, HashIsValid: hashOk, StoredHash: storedHash, ComputedHash: computedHash);
 
@@ -523,11 +346,6 @@ public static class AvbSignatureVerifier
     /// Verifies an explicit signature over a vbmeta image with a raw AVB public key blob.
     /// <para>使用原始 AVB 公钥数据块验证 vbmeta 镜像上的显式签名。</para>
     /// </summary>
-    /// <param name="vbmetaData">The raw vbmeta image bytes (used to derive the signing input). <para>原始 vbmeta 镜像字节（用于推导签名输入）。</para></param>
-    /// <param name="signature">The raw RSA signature blob. <para>原始 RSA 签名数据块。</para></param>
-    /// <param name="avbRsaPublicKeyBlob">The AVB-format public key blob. <para>AVB 格式公钥数据块。</para></param>
-    /// <param name="algorithmType">The libavb algorithm type value. <para>libavb 算法类型值。</para></param>
-    /// <returns>The verification result. <para>验证结果。</para></returns>
     public static AvbSignatureVerifyResult VerifySignature(byte[] vbmetaData, byte[] signature, byte[] avbRsaPublicKeyBlob, uint algorithmType)
     {
         if (vbmetaData is not { Length: >= HeaderSize } ||
@@ -561,8 +379,6 @@ public static class AvbSignatureVerifier
     /// Extracts all descriptors from the vbmeta auxiliary data block.
     /// <para>从 vbmeta 辅助数据块中提取所有描述符。</para>
     /// </summary>
-    /// <param name="vbmetaData">The raw vbmeta image bytes. <para>原始 vbmeta 镜像字节。</para></param>
-    /// <returns>The parsed descriptors. <para>解析出的描述符。</para></returns>
     public static IReadOnlyList<AvbDescriptorInfo> ExtractDescriptors(byte[] vbmetaData)
     {
         var result = new List<AvbDescriptorInfo>();
@@ -613,10 +429,8 @@ public static class AvbSignatureVerifier
 
         switch (tag)
         {
-            // 上游 AvbPropertyDescriptor 正文（16 字节固定段 + key + NUL + value + NUL）：
-            // key_size u64@0、value_size u64@8、key@16、NUL、value、NUL。
-            // Upstream AvbPropertyDescriptor body (16-byte fixed section + key + NUL + value + NUL):
-            // key_size u64@0, value_size u64@8, key@16, NUL, value, NUL.
+
+
             case PropertyDescriptorTag:
                 if (numBytesFollowing >= 16 && bodyStart + 16 <= data.Length)
                 {
@@ -640,18 +454,7 @@ public static class AvbSignatureVerifier
 
                 break;
 
-            // 上游 AvbHashtreeDescriptor 正文（164 字节固定段 + 变长数据）：
-            // dm_verity_version u32@0、image_size u64@4、tree_offset u64@12、tree_size u64@20、
-            // data_block_size u32@28、hash_block_size u32@32、fec_num_roots u32@36、
-            // fec_offset u64@40、fec_size u64@48、32 字节算法名@56、u32 名称长度@88、
-            // u32 盐长度@92、u32 根摘要长度@96、u32 flags@100、60 字节保留@104、名称@164、
-            // 盐、根摘要。
-            // Upstream AvbHashtreeDescriptor body (164-byte fixed section + variable data):
-            // dm_verity_version u32@0, image_size u64@4, tree_offset u64@12, tree_size u64@20,
-            // data_block_size u32@28, hash_block_size u32@32, fec_num_roots u32@36,
-            // fec_offset u64@40, fec_size u64@48, 32-byte algorithm@56, u32 name length@88,
-            // u32 salt length@92, u32 root digest length@96, u32 flags@100, 60 reserved@104,
-            // name@164, salt, root digest.
+
             case HashtreeDescriptorTag:
                 if (numBytesFollowing >= 164 && bodyStart + 164 <= data.Length)
                 {
@@ -689,12 +492,7 @@ public static class AvbSignatureVerifier
 
                 break;
 
-            // 上游 AvbHashDescriptor 正文（116 字节固定段 + 变长数据）：
-            // image_size u64@0、32 字节算法名@8、u32 名称长度@40、u32 盐长度@44、
-            // u32 摘要长度@48、u32 flags@52、60 字节保留@56、名称@116、盐、摘要。
-            // Upstream AvbHashDescriptor body (116-byte fixed section + variable data):
-            // image_size u64@0, 32-byte algorithm@8, u32 name length@40, u32 salt length@44,
-            // u32 digest length@48, u32 flags@52, 60 reserved bytes@56, name@116, salt, digest.
+
             case HashDescriptorTag:
                 if (numBytesFollowing >= 116 && bodyStart + 116 <= data.Length)
                 {
@@ -725,10 +523,7 @@ public static class AvbSignatureVerifier
 
                 break;
 
-            // 上游 AvbKernelCmdlineDescriptor 正文（8 字节固定段 + 命令行）：
-            // flags u32@0、cmdline_len u32@4、命令行@8。
-            // Upstream AvbKernelCmdlineDescriptor body (8-byte fixed section + cmdline):
-            // flags u32@0, cmdline_len u32@4, cmdline@8.
+
             case KernelCmdlineDescriptorTag:
                 if (numBytesFollowing >= 8 && bodyStart + 8 <= data.Length)
                 {
@@ -749,12 +544,7 @@ public static class AvbSignatureVerifier
 
                 break;
 
-            // 上游 AvbChainPartitionDescriptor 正文（76 字节固定段 + 名称 + 公钥）：
-            // rollback_index_location u32@0、u32 名称长度@4、u32 公钥长度@8、64 字节保留@12、
-            // 名称@76、公钥。
-            // Upstream AvbChainPartitionDescriptor body (76-byte fixed section + name + key):
-            // rollback_index_location u32@0, u32 name length@4, u32 key length@8,
-            // 64 reserved bytes@12, name@76, public key.
+
             case ChainPartitionDescriptorTag:
                 if (numBytesFollowing >= 76 && bodyStart + 76 <= data.Length)
                 {

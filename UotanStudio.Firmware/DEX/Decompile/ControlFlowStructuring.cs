@@ -1,24 +1,13 @@
-using UotanStudio.Firmware.Dex.Model;
+﻿using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex.Decompile;
 
-/// <summary>
-/// <para>控制流结构化器：在 CFG 与线性分析之上恢复 while / do-while / if-else / switch 等结构化
-/// 控制流；无法恢复的分支以 goto 指导注释保留（方法指导模式）。</para>
-/// Control-flow structurer: recovers structured control flow (while / do-while / if-else / switch)
-/// on top of the CFG and linear analysis; branches that cannot be recovered are kept as goto
-/// guidance comments (method-guide mode).
-/// </summary>
 public static class ControlFlowStructuring
 {
     /// <summary>
-    /// <para>结构化方法的完整语句列表。</para>
     /// Structures the method into a complete statement list.
+    /// <para>结构化方法的完整语句列表。</para>
     /// </summary>
-    /// <param name="analysis">线性分析结果。<para>The linear analysis result.</para></param>
-    /// <param name="cfg">控制流图。<para>The control-flow graph.</para></param>
-    /// <param name="options">反编译选项。<para>Decompiler options.</para></param>
-    /// <returns>结构化语句列表。<para>The structured statement list.</para></returns>
     public static List<JavaStmt> Structure(LinearAnalysis analysis, Cfg cfg, DecompileOptions options)
     {
         ArgumentNullException.ThrowIfNull(analysis);
@@ -73,8 +62,7 @@ public static class ControlFlowStructuring
         {
             var emitted = new List<JavaStmt>();
 
-            // 循环出口或已访问（回边保护）。
-            // Loop exit or already visited (back-edge guard).
+
             if (block.Visited || (loop is not null && ReferenceEquals(block, loop.Exit)))
             {
                 return emitted;
@@ -86,9 +74,8 @@ public static class ControlFlowStructuring
             {
                 case BlockKind.Sequential:
                     emitted.AddRange(Stmts(block));
-                    // 顺序块沿 fallthrough 续走；循环出口与已访问由入口守卫拦截。
-                    // A sequential block continues along its fallthrough; the loop-exit and
-                    // visited guards at the entry handle the boundaries.
+
+
                     if (block.Fallthrough is not null)
                     {
                         emitted.AddRange(EmitBlock(block.Fallthrough, loop));
@@ -107,8 +94,7 @@ public static class ControlFlowStructuring
                         break;
                     }
 
-                    // 回退：条件以指导注释保留，两个目标都继续遍历。
-                    // Fallback: keep the condition as a guidance comment and walk both targets.
+
                     emitted.AddRange(Stmts(block));
                     if (GetCondition(block) is { } cond)
                     {
@@ -130,8 +116,8 @@ public static class ControlFlowStructuring
                 case BlockKind.UnconditionalGoto:
                     if (loop is not null && ReferenceEquals(block.GotoTarget, loop.Header))
                     {
-                        // 回边：循环延续（不产生语句）。
-                        // Back edge: loop continuation (no statement).
+
+
                         emitted.AddRange(Stmts(block));
                     }
                     else if (loop is not null && ReferenceEquals(block.GotoTarget, loop.Exit))
@@ -161,8 +147,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
-        /// <para>尝试 while 循环：条件块 + 体区域含回边 goto 到本块。</para>
         /// Tries a while loop: a conditional block whose body region contains a back-edge goto to itself.
+        /// <para>尝试 while 循环：条件块 + 体区域含回边 goto 到本块。</para>
         /// </summary>
         private bool TryEmitWhile(BasicBlock block, LoopContext? loop, List<JavaStmt> emitted)
         {
@@ -179,8 +165,7 @@ public static class ControlFlowStructuring
             whileStmt.Body.AddRange(body);
             emitted.Add(whileStmt);
 
-            // 循环后的出口继续结构化。
-            // Continue structuring after the loop exit.
+
             if (!exit.Visited)
             {
                 emitted.AddRange(EmitBlock(exit, loop));
@@ -190,9 +175,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
+        /// Tries a do-while loop: the conditional latch at the tail of a sequential chain branches back to the chain head.
         /// <para>尝试 do-while 循环：顺序体链尾的条件块回边到链首。</para>
-        /// Tries a do-while loop: the conditional latch at the tail of a sequential chain branches
-        /// back to the chain head.
         /// </summary>
         private bool TryEmitDoWhile(BasicBlock block, LoopContext? loop, List<JavaStmt> emitted)
         {
@@ -215,9 +199,7 @@ public static class ControlFlowStructuring
             var exit = latch.Fallthrough;
             var body = new List<JavaStmt>();
             EmitLoopBody(start, exit, loopHeader: start, body);
-            // latch 是条件回边块：其语句已由 EmitLoopBody 保留，条件构成 do-while 的尾条件。
-            // The latch is the conditional back-edge block: EmitLoopBody keeps its statements and
-            // its condition becomes the do-while tail condition.
+
 
             var doWhile = new DoWhileStmt(GetCondition(latch) ?? new UnknownExpr("?")) { Offset = block.StartOffset };
             doWhile.Body.AddRange(body);
@@ -232,8 +214,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
-        /// <para>尝试 if / if-else：条件块 + 前向目标（含显式 merge 模式）。</para>
         /// Tries if / if-else: a conditional block with forward targets (including the explicit-merge pattern).
+        /// <para>尝试 if / if-else：条件块 + 前向目标（含显式 merge 模式）。</para>
         /// </summary>
         private bool TryEmitIf(BasicBlock block, LoopContext? loop, List<JavaStmt> emitted)
         {
@@ -243,7 +225,7 @@ public static class ControlFlowStructuring
             if (ReferenceEquals(target, fallthrough)) return false;
             if (target.StartOffset < block.StartOffset && !IsLoopBackTarget(target, loop))
             {
-                return false;   // 向后分支留给循环检测。
+                return false;
             }
 
             var cond = GetCondition(block);
@@ -251,11 +233,7 @@ public static class ControlFlowStructuring
 
             var ifStmt = new IfStmt(cond) { Offset = block.StartOffset };
 
-            // Pattern A：沿 fallthrough 链（顺序块序列）寻找 goto-merge 或 return/throw 终结；
-            // 链首为 goto 时 else 为空，链为实体时构成 else 体。then 体为从 target 到 merge 的区域。
-            // Pattern A: walk the fallthrough chain (sequential blocks) for a goto-merge or a
-            // return/throw end; a leading goto means an empty else, real blocks form the else body.
-            // The then body is the region from the target to the merge.
+
             var chainBlocks = new List<BasicBlock>();
             var chainCur = fallthrough;
             var merge = (BasicBlock?)null;
@@ -265,8 +243,8 @@ public static class ControlFlowStructuring
             {
                 if (chainCur.Kind == BlockKind.UnconditionalGoto)
                 {
-                    // goto 块自身可能携带实体语句（else 体），计入链块。
-                    // The goto block itself may carry real statements (the else body); keep it.
+
+
                     chainBlocks.Add(chainCur);
                     merge = chainCur.GotoTarget;
                     chainEnds = true;
@@ -282,7 +260,7 @@ public static class ControlFlowStructuring
 
                 if (chainCur.Kind != BlockKind.Sequential)
                 {
-                    break;   // 链中出现条件/开关等复杂形态：放弃该模式。
+                    break;
                 }
 
                 chainBlocks.Add(chainCur);
@@ -309,8 +287,7 @@ public static class ControlFlowStructuring
                 return true;
             }
 
-            // Pattern B：then 目标跳回 fallthrough（if 无 else，then 汇入续体）。
-            // Pattern B: the then target joins the fallthrough (if without else).
+
             if (TargetJoins(target, fallthrough))
             {
                 var thenBody = new List<JavaStmt>();
@@ -325,14 +302,9 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
+        /// Emits a statement sequence inside a loop body: handles back edges (latches), breaks (goto/condition → exit) and inner ifs.
         /// <para>在循环体内发射语句序列：处理回边（latch）、break（goto/条件 → 出口）与内部 if。</para>
-        /// Emits a statement sequence inside a loop body: handles back edges (latches), breaks
-        /// (goto/condition → exit) and inner ifs.
         /// </summary>
-        /// <param name="start">体起始块。<para>Body start block.</para></param>
-        /// <param name="exit">循环出口块；<c>null</c> 表示无出口边界。<para>Loop exit block; <c>null</c> when there is no exit boundary.</para></param>
-        /// <param name="loopHeader">循环头块。<para>Loop header block.</para></param>
-        /// <param name="body">语句收集目标。<para>Statement sink.</para></param>
         private void EmitLoopBody(BasicBlock start, BasicBlock? exit, BasicBlock loopHeader, List<JavaStmt> body)
         {
             var cur = start;
@@ -342,7 +314,7 @@ public static class ControlFlowStructuring
                 if (ReferenceEquals(cur.GotoTarget, loopHeader))
                 {
                     body.AddRange(Stmts(cur));
-                    return;   // 回边 latch：循环继续。
+                    return;
                 }
 
                 if (ReferenceEquals(cur.GotoTarget, exit))
@@ -369,7 +341,7 @@ public static class ControlFlowStructuring
                 if (cur.Kind == BlockKind.Conditional && ReferenceEquals(cur.BranchTarget, loopHeader))
                 {
                     body.AddRange(Stmts(cur));
-                    return;   // 条件回边：由外部循环结构承接。
+                    return;
                 }
 
                 if (cur.Kind == BlockKind.Conditional)
@@ -405,8 +377,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
-        /// <para>发射 then 区域：从目标块走到 merge 块（或 return/throw/goto 结束）。</para>
         /// Emits a then region: walks from the target block until the merge block (or a return/throw/goto).
+        /// <para>发射 then 区域：从目标块走到 merge 块（或 return/throw/goto 结束）。</para>
         /// </summary>
         private void EmitThenRegion(BasicBlock target, BasicBlock? merge, List<JavaStmt> sink, LoopContext? loop)
         {
@@ -462,9 +434,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
+        /// Tries a switch: emits a switch statement when all cases converge on one exit, otherwise degrades to an if-else chain.
         /// <para>尝试 switch：全部 case 汇聚到同一出口时输出 switch 语句，否则退化为 if-else 链。</para>
-        /// Tries a switch: emits a switch statement when all cases converge on one exit, otherwise
-        /// degrades to an if-else chain.
         /// </summary>
         private bool TryEmitSwitch(BasicBlock block, LoopContext? loop, List<JavaStmt> emitted)
         {
@@ -476,8 +447,7 @@ public static class ControlFlowStructuring
             var targets = block.SwitchTargets;
             var caseTargetSet = new HashSet<BasicBlock>(targets);
 
-            // 先探测公共出口：各 case 是否都以 goto 汇到同一块。
-            // First probe a common exit: whether every case ends with a goto to the same block.
+
             var commonExit = (BasicBlock?)null;
             var structured = true;
             foreach (var target in targets)
@@ -506,8 +476,8 @@ public static class ControlFlowStructuring
 
             if (structured && commonExit is not null && block.Fallthrough is not null)
             {
-                // 公共出口即 switch 后的续体。
-                // The common exit is the continuation after the switch.
+
+
                 var switchStmt = new SwitchStmt(switchValue) { Offset = block.StartOffset };
                 for (var i = 0; i < keys.Count; i++)
                 {
@@ -525,9 +495,7 @@ public static class ControlFlowStructuring
                 return true;
             }
 
-            // if-else 链退化：从后往前构建，最内层（最后一个 key）先建，再逐层包进外层 else。
-            // if-else chain fallback: build from the tail — the innermost (last key) first, then
-            // wrap each level into the outer else branch.
+
             IfStmt? chainRoot = null;
             for (var i = keys.Count - 1; i >= 0; i--)
             {
@@ -557,9 +525,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
-        /// <para>探测单个 case 的出口块：case 体全部以 goto 汇到同一块时返回该块，否则 <c>null</c>。</para>
-        /// Probes a case's exit block: returns the block when the whole case body converges on one
-        /// goto target, otherwise <c>null</c>.
+        /// Probes a case's exit block: returns the block when the whole case body converges on one goto target, otherwise null.
+        /// <para>探测单个 case 的出口块：case 体全部以 goto 汇到同一块时返回该块，否则 null。</para>
         /// </summary>
         private BasicBlock? ProbeCaseExit(BasicBlock start, HashSet<BasicBlock> caseTargetSet)
         {
@@ -578,7 +545,7 @@ public static class ControlFlowStructuring
                         cur = cur.Fallthrough;
                         continue;
                     default:
-                        return null;   // 条件/嵌套等复杂形态不构成单一出口。
+                        return null;
                 }
             }
 
@@ -586,8 +553,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
-        /// <para>提取 switch 的键序列（packed 由 first_key 展开，sparse 直接取键表）。</para>
         /// Extracts the switch key sequence (packed expands first_key; sparse reads the key table).
+        /// <para>提取 switch 的键序列（packed 由 first_key 展开，sparse 直接取键表）。</para>
         /// </summary>
         private bool TryGetSwitchKeys(BasicBlock block, out List<long> keys)
         {
@@ -643,8 +610,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
-        /// <para>块内全部非空语句（按指令顺序）。</para>
         /// All non-null statements of a block (in instruction order).
+        /// <para>块内全部非空语句（按指令顺序）。</para>
         /// </summary>
         private List<JavaStmt> Stmts(BasicBlock block)
         {
@@ -661,8 +628,8 @@ public static class ControlFlowStructuring
         }
 
         /// <summary>
-        /// <para>检测 fallthrough 区域是否存在回边 goto 到 <paramref name="header"/>。</para>
-        /// Detects whether the fallthrough region contains a back-edge goto to <paramref name="header"/>.
+        /// Detects whether the fallthrough region contains a back-edge goto to header.
+        /// <para>检测 fallthrough 区域是否存在回边 goto 到 header。</para>
         /// </summary>
         private static bool RegionBackEdgesTo(BasicBlock start, BasicBlock header)
         {

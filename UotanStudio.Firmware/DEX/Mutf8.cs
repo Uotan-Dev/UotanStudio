@@ -1,17 +1,12 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Firmware.Dex;
 
-/// <summary>
-/// <para>Modified UTF-8 编解码（DEX 字符串表专用编码：U+0000 编码为 C0 80，增补字符以代理对形式各编码 3 字节）。</para>
-/// Modified UTF-8 codec (the encoding used by the DEX string table: U+0000 encodes as C0 80, supplementary characters
-/// are encoded as surrogate pairs, each 3 bytes).
-/// </summary>
 public static class Mutf8
 {
     /// <summary>
-    /// <para>把 .NET 字符串编码为 MUTF-8 字节序列（不含终止 NUL）。</para>
     /// Encodes a .NET string into a MUTF-8 byte sequence (without the terminating NUL).
+    /// <para>把 .NET 字符串编码为 MUTF-8 字节序列（不含终止 NUL）。</para>
     /// </summary>
     public static byte[] Encode(string value)
     {
@@ -36,8 +31,8 @@ public static class Mutf8
             }
             else
             {
-                // 代理对已由 .NET 迭代器展开为两个 char，各按 3 字节编码
-                // Surrogate halves are enumerated as two chars, each encoded in 3 bytes.
+
+
                 bytes[i++] = (byte)(0xe0 | (c >> 12));
                 bytes[i++] = (byte)(0x80 | ((c >> 6) & 0x3f));
                 bytes[i++] = (byte)(0x80 | (c & 0x3f));
@@ -47,8 +42,8 @@ public static class Mutf8
     }
 
     /// <summary>
-    /// <para>把 MUTF-8 字节序列解码为 .NET 字符串（字节数 <paramref name="byteCount"/>，不含终止 NUL）。</para>
-    /// Decodes a MUTF-8 byte sequence into a .NET string (<paramref name="byteCount"/> bytes, no trailing NUL).
+    /// Decodes a MUTF-8 byte sequence into a .NET string (byteCount bytes, no trailing NUL).
+    /// <para>把 MUTF-8 字节序列解码为 .NET 字符串（字节数 byteCount，不含终止 NUL）。</para>
     /// </summary>
     public static string Decode(ReadOnlySpan<byte> data, int byteCount)
     {
@@ -57,9 +52,8 @@ public static class Mutf8
     }
 
     /// <summary>
+    /// Decodes a MUTF-8 byte sequence from a byte[] slice into a .NET string (main parsing path; single allocation, no StringBuilder).
     /// <para>把 byte[] 切片中的 MUTF-8 字节序列解码为 .NET 字符串（解析主路径，一次分配，无 StringBuilder）。</para>
-    /// Decodes a MUTF-8 byte sequence from a byte[] slice into a .NET string (main parsing path;
-    /// single allocation, no StringBuilder).
     /// </summary>
     public static string Decode(byte[] data, int start, int byteCount)
     {
@@ -74,8 +68,8 @@ public static class Mutf8
     }
 
     /// <summary>
-    /// <para>统计 MUTF-8 字节序列解码后的 UTF-16 字符数。</para>
     /// Counts the UTF-16 code units a MUTF-8 byte sequence decodes to.
+    /// <para>统计 MUTF-8 字节序列解码后的 UTF-16 字符数。</para>
     /// </summary>
     private static int CountChars(ReadOnlySpan<byte> data, int byteCount)
     {
@@ -97,8 +91,8 @@ public static class Mutf8
             }
             else
             {
-                // 4 字节序列（非常规 MUTF-8，宽松容忍）
-                // 4-byte sequence (non-standard MUTF-8; tolerated leniently).
+
+
                 i += 3;
                 count++;
             }
@@ -107,8 +101,8 @@ public static class Mutf8
     }
 
     /// <summary>
-    /// <para>把 MUTF-8 字节序列填充进字符缓冲区。</para>
     /// Fills a char buffer from a MUTF-8 byte sequence.
+    /// <para>把 MUTF-8 字节序列填充进字符缓冲区。</para>
     /// </summary>
     private static void DecodeInto(ReadOnlySpan<byte> data, int byteCount, Span<char> output)
     {
@@ -134,8 +128,8 @@ public static class Mutf8
             }
             else
             {
-                // 4 字节序列（非常规 MUTF-8，宽松容忍）
-                // 4-byte sequence (non-standard MUTF-8; tolerated leniently).
+
+
                 i += 3;
                 output[pos++] = '\uFFFD';
             }
@@ -143,8 +137,8 @@ public static class Mutf8
     }
 
     /// <summary>
-    /// <para>StringBuilder 回退解码实现（与旧行为逐字节一致）。</para>
     /// StringBuilder fallback decoder (byte-for-byte identical to the previous behavior).
+    /// <para>StringBuilder 回退解码实现（与旧行为逐字节一致）。</para>
     /// </summary>
     private static string DecodeSlow(ReadOnlySpan<byte> data, int byteCount)
     {
@@ -176,8 +170,8 @@ public static class Mutf8
             }
             else
             {
-                // 4 字节序列（非常规 MUTF-8，宽松容忍）
-                // 4-byte sequence (non-standard MUTF-8; tolerated leniently).
+
+
                 i += 3;
                 sb.Append('\uFFFD');
             }
@@ -186,8 +180,8 @@ public static class Mutf8
     }
 
     /// <summary>
-    /// <para>计算字符串的 MUTF-8 编码字节长度（不含终止 NUL）。</para>
     /// Computes the MUTF-8 encoded byte length of a string (without the terminating NUL).
+    /// <para>计算字符串的 MUTF-8 编码字节长度（不含终止 NUL）。</para>
     /// </summary>
     public static int EncodedLength(string value)
     {

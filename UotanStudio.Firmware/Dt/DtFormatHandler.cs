@@ -1,20 +1,17 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Dt;
 
-/// <summary>
-/// <para>设备树 DTB/DTBO 格式的 IFormatHandler 实现。</para>
-/// IFormatHandler implementation for the device tree DTB/DTBO formats.
-/// </summary>
 public sealed class DtFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "Device Tree (DTB/DTBO)";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["dtb", "dtbo", "img"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -34,8 +31,8 @@ public sealed class DtFormatHandler : IFormatHandler
             {
                 return false;
             }
-            // DTB 与 DTBO 魔数均按大端存储（AOSP fdt/dt_table 头均为大端）。
-            // Both DTB and DTBO magics are stored big-endian (AOSP fdt/dt_table headers are big-endian).
+
+
             var magicValue = (uint)((magic[0] << 24) | (magic[1] << 16) | (magic[2] << 8) | magic[3]);
             return magicValue == FdtConstants.FdtMagic || magicValue == FdtConstants.DtboMagic;
         }
@@ -45,7 +42,10 @@ public sealed class DtFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -86,7 +86,10 @@ public sealed class DtFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -110,7 +113,7 @@ public sealed class DtFormatHandler : IFormatHandler
                 return Task.FromResult(FirmwareOpResult.Ok($"Extracted {dtbs.Count} overlays to {outputDirectory}", entries: written));
             }
 
-            // DTB: dump an FDT summary text and export the tree as DTS text.
+
             var tree = DtbFormat.Read(bytes);
             var dtsPath = Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(filePath) + ".dts");
             File.WriteAllText(dtsPath, SerializeDts(tree));
@@ -124,12 +127,15 @@ public sealed class DtFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try
         {
-            // inputPath may be a DTS text file (parsed minimally) or a raw DTB that gets rewritten.
+
             if (!File.Exists(inputPath))
             {
                 return Task.FromResult(FirmwareOpResult.Fail("Input file does not exist."));
@@ -221,7 +227,7 @@ public sealed class DtFormatHandler : IFormatHandler
 
     private static bool IsLikelyCells(byte[] bytes)
     {
-        // Cells are common; treat data as cells unless it looks like a string.
+
         for (var i = 0; i < bytes.Length; i++)
         {
             if (bytes[i] == 0)

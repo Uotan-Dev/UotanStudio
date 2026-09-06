@@ -1,30 +1,61 @@
+using System.IO.Compression;
 using UotanStudio.Firmware.Arsc;
+using UotanStudio.Tests.Infrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// ARSC round-trip tests: rebuild a parsed resource table via <see cref="ArscWriter"/> and verify
-/// the re-parsed model preserves packages, type tables and entry values; the real Magisk resources.arsc
-/// (when present locally) is used to validate value-level rebuild on a production file.
+/// the re-parsed model preserves packages, type tables and entry values; the real resources.arsc
+/// entry of Magisk-v30.6.apk from the firmware corpus is used to validate value-level rebuild on a
+/// production file when present, and the cases are skipped via <see cref="Assert.Skip"/> otherwise.
 /// <para>ARSC 往返测试：经 <see cref="ArscWriter"/> 重建解析后的资源表，验证重新解析的模型保留
-/// 包/类型表/条目值；本机存在真实 Magisk resources.arsc 时在生产文件上校验值级重建。</para>
+/// 包/类型表/条目值；语料库存在 Magisk-v30.6.apk 时，用其 resources.arsc 条目在生产文件上校验
+/// 值级重建；语料缺失时以 <see cref="Assert.Skip"/> 跳过。</para>
 /// </summary>
 public class ArscWriterRoundTripTests
 {
-    private const string RealArscPath =
-        @"C:\Users\28319\Desktop\新建文件夹\test\arsc_test\resources.arsc";
+    /// <summary>语料库中 Magisk-v30.6.apk 的路径（只定位一次）；不存在时为 null。
+    /// <para>The located Magisk-v30.6.apk path (resolved once); null when absent.</para></summary>
+    private static readonly string? ApkPath = FirmwareCorpus.FindFile("Magisk-v30.6.apk");
+
+    /// <summary>
+    /// 从语料库 Magisk-v30.6.apk 读取 resources.arsc 条目字节；apk 或条目缺失时返回 null。
+    /// <para>Reads the resources.arsc entry bytes from the corpus Magisk-v30.6.apk; returns null
+    /// when the apk or the entry is missing.</para>
+    /// </summary>
+    private static byte[]? ReadResourcesArsc()
+    {
+        var apkPath = ApkPath;
+        if (apkPath is null)
+        {
+            return null;
+        }
+
+        using var zip = ZipFile.OpenRead(apkPath);
+        var entry = zip.GetEntry("resources.arsc");
+        if (entry is null)
+        {
+            return null;
+        }
+
+        using var stream = entry.Open();
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
+    }
 
     [Fact]
     public void WriteThenParse_PreservesPackagesAndEntries()
     {
-        if (!File.Exists(RealArscPath))
+        var bytes = ReadResourcesArsc();
+        if (bytes is null)
         {
-            return; // 非本机环境：跳过真实文件测试。
-            // Non-local environment: skip the real-file test.
+            Assert.Skip("Magisk-v30.6.apk or its resources.arsc entry not found in firmware corpus");
         }
 
-        var table = ArscParser.Parse(File.ReadAllBytes(RealArscPath));
+        var table = ArscParser.Parse(bytes);
         var rebuilt = ArscWriter.Write(table);
 
         // 重建后重新解析：包数、全局池数、类型表数、条目总数应一致。
@@ -49,12 +80,13 @@ public class ArscWriterRoundTripTests
     [Fact]
     public void WriteThenParse_StringEntryValuesSurvive()
     {
-        if (!File.Exists(RealArscPath))
+        var bytes = ReadResourcesArsc();
+        if (bytes is null)
         {
-            return;
+            Assert.Skip("Magisk-v30.6.apk or its resources.arsc entry not found in firmware corpus");
         }
 
-        var table = ArscParser.Parse(File.ReadAllBytes(RealArscPath));
+        var table = ArscParser.Parse(bytes);
         var rebuilt = ArscWriter.Write(table);
         var doc2 = ArscParser.Parse(rebuilt);
 
@@ -89,12 +121,13 @@ public class ArscWriterRoundTripTests
     [Fact]
     public void WriteThenParse_EditStringValuePersists()
     {
-        if (!File.Exists(RealArscPath))
+        var bytes = ReadResourcesArsc();
+        if (bytes is null)
         {
-            return;
+            Assert.Skip("Magisk-v30.6.apk or its resources.arsc entry not found in firmware corpus");
         }
 
-        var table = ArscParser.Parse(File.ReadAllBytes(RealArscPath));
+        var table = ArscParser.Parse(bytes);
 
         // 定位第一个 String 型条目，Intern 新值并更新 ValueData（模拟编辑器值级编辑）。
         // Locate the first String-typed entry, intern a new value and update ValueData (simulating a
@@ -106,7 +139,7 @@ public class ArscWriterRoundTripTests
 
         if (entry is null)
         {
-            return;
+            Assert.Skip("no string-typed entry found to edit in the real resources.arsc");
         }
 
         var oldIndex = checked((int)entry.Value!.Data);

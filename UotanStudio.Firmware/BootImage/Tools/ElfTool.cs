@@ -1,14 +1,7 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Firmware.BootImage;
 
-/// <summary>
-/// ELF 文件解析与补丁工具。
-/// <para>
-/// 提供 ELF32 和 ELF64 格式文件的检测、解析和节剥离功能（MagiskBoot ElfTool 的精简移植）。</para>
-/// <para>
-/// Provides ELF32/ELF64 detection, parsing and section stripping (a simplified port of the MagiskBoot ElfTool).</para>
-/// </summary>
 public static class ElfTool
 {
     private const uint ShtNull = 0;
@@ -16,137 +9,57 @@ public static class ElfTool
     private const int Elf32SectionHeaderSize = 40;
     private const int Elf64SectionHeaderSize = 64;
 
-    /// <summary>
-    /// ELF 文件类型。
-    /// <para>ELF file types.</para>
-    /// </summary>
     public enum ElfType
     {
-        /// <summary>
-        /// 未知类型。
-        /// <para>Unknown.</para>
-        /// </summary>
         Unknown,
 
-        /// <summary>
-        /// ELF32 格式。
-        /// <para>ELF32 format.</para>
-        /// </summary>
         Elf32,
 
-        /// <summary>
-        /// ELF64 格式。
-        /// <para>ELF64 format.</para>
-        /// </summary>
         Elf64
     }
 
-    /// <summary>
-    /// ELF 解析结果。
-    /// <para>ELF parsing result.</para>
-    /// </summary>
     public class ElfResult
     {
-        /// <summary>
-        /// 是否为有效的 ELF 文件。
-        /// <para>Whether it's a valid ELF file.</para>
-        /// </summary>
         public bool IsValid { get; set; }
 
-        /// <summary>
-        /// ELF 文件类型。
-        /// <para>The ELF file type.</para>
-        /// </summary>
         public ElfType Type { get; set; }
 
-        /// <summary>
-        /// ELF 版本。
-        /// <para>The ELF version.</para>
-        /// </summary>
         public byte Version { get; set; }
 
-        /// <summary>
-        /// 机器架构。
-        /// <para>The machine architecture.</para>
-        /// </summary>
         public ushort Machine { get; set; }
 
-        /// <summary>
-        /// 入口地址。
-        /// <para>The entry address.</para>
-        /// </summary>
         public ulong EntryPoint { get; set; }
 
-        /// <summary>
-        /// 程序头部数量。
-        /// <para>The number of program headers.</para>
-        /// </summary>
         public ushort ProgramHeaderCount { get; set; }
 
-        /// <summary>
-        /// 节头部数量。
-        /// <para>The number of section headers.</para>
-        /// </summary>
         public ushort SectionHeaderCount { get; set; }
 
-        /// <summary>
-        /// 错误消息。
-        /// <para>Error message if parsing failed.</para>
-        /// </summary>
         public string? ErrorMessage { get; set; }
     }
 
-    /// <summary>
-    /// ELF 节信息。
-    /// <para>ELF section information.</para>
-    /// </summary>
     public class ElfSection
     {
-        /// <summary>
-        /// 节索引。
-        /// <para>The section index.</para>
-        /// </summary>
         public int Index { get; set; }
 
-        /// <summary>
-        /// 节名称。
-        /// <para>The section name.</para>
-        /// </summary>
         public string Name { get; set; } = string.Empty;
 
-        /// <summary>
-        /// 节类型。
-        /// <para>The section type.</para>
-        /// </summary>
         public uint Type { get; set; }
 
-        /// <summary>
-        /// 节在文件中的偏移量。
-        /// <para>The section file offset.</para>
-        /// </summary>
         public ulong Offset { get; set; }
 
-        /// <summary>
-        /// 节大小。
-        /// <para>The section size.</para>
-        /// </summary>
         public ulong Size { get; set; }
     }
 
     /// <summary>
-    /// 快速检测是否为 ELF 文件。
-    /// <para>Quick check if the data is an ELF file.</para>
+    /// Quick check if the data is an ELF file.
+    /// <para>快速检测是否为 ELF 文件。</para>
     /// </summary>
-    /// <param name="data">文件数据。<para>The file data.</para></param>
-    /// <returns>如果是 ELF 文件则为 true。<para>True if ELF file.</para></returns>
     public static bool IsElf(byte[] data) => data != null && data.Length >= 5 && DetectElfType(data) != ElfType.Unknown;
 
     /// <summary>
-    /// 检测 ELF 文件类型。
-    /// <para>Detects the ELF file type.</para>
+    /// Detects the ELF file type.
+    /// <para>检测 ELF 文件类型。</para>
     /// </summary>
-    /// <param name="data">文件数据。<para>The file data.</para></param>
-    /// <returns>ELF 类型。<para>The ELF type.</para></returns>
     public static ElfType DetectElfType(byte[] data)
     {
         return data == null || data.Length < 5
@@ -162,11 +75,9 @@ public static class ElfTool
     }
 
     /// <summary>
-    /// 解析 ELF 文件。
-    /// <para>Parses the ELF file.</para>
+    /// Parses the ELF file.
+    /// <para>解析 ELF 文件。</para>
     /// </summary>
-    /// <param name="data">ELF 文件数据。<para>The ELF file data.</para></param>
-    /// <returns>解析结果。<para>The parsing result.</para></returns>
     public static ElfResult Parse(byte[] data)
     {
         var result = new ElfResult { IsValid = false };
@@ -215,11 +126,9 @@ public static class ElfTool
     }
 
     /// <summary>
-    /// 提取 ELF 文件大小。
-    /// <para>Extracts the ELF file size from the header.</para>
+    /// Extracts the ELF file size from the header.
+    /// <para>提取 ELF 文件大小。</para>
     /// </summary>
-    /// <param name="data">ELF 文件数据。<para>The ELF file data.</para></param>
-    /// <returns>ELF 文件大小，如果无法解析则返回 0。<para>The ELF file size, or 0 if parsing failed.</para></returns>
     public static ulong GetElfSize(byte[] data)
     {
         var result = Parse(data);
@@ -243,11 +152,9 @@ public static class ElfTool
     }
 
     /// <summary>
-    /// 枚举 ELF 文件的全部节。
-    /// <para>Enumerates all sections of an ELF file.</para>
+    /// Enumerates all sections of an ELF file.
+    /// <para>枚举 ELF 文件的全部节。</para>
     /// </summary>
-    /// <param name="data">ELF 文件数据。<para>The ELF file data.</para></param>
-    /// <returns>节列表；数据无效时返回空列表。<para>The section list, or an empty list when the data is invalid.</para></returns>
     public static List<ElfSection> GetSections(byte[] data)
     {
         var sections = new List<ElfSection>();
@@ -312,16 +219,9 @@ public static class ElfTool
     }
 
     /// <summary>
-    /// 剥离 ELF 文件中指定名称的节。
-    /// <para>
-    /// 将指定节的数据清零，将节头部的 sh_size 设为 0，sh_type 设为 SHT_NULL。</para>
-    /// <para>
-    /// Strips a named section from the ELF binary by zeroing its data, setting sh_size to 0, and sh_type to SHT_NULL.</para>
+    /// Strips a named section from the ELF binary by zeroing its data, setting sh_size to 0, and sh_type to SHT_NULL.
+    /// <para>剥离 ELF 文件中指定名称的节。</para>
     /// </summary>
-    /// <param name="data">ELF 文件数据。<para>The ELF file data.</para></param>
-    /// <param name="sectionName">要剥离的节名称。<para>The name of the section to strip.</para></param>
-    /// <returns>修改后的 ELF 文件数据；如果未找到指定节，则返回原始数据的副本。
-    /// <para>The modified ELF data; if the section is not found, returns a copy of the original data.</para></returns>
     public static byte[] StripSection(byte[] data, string sectionName)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -340,12 +240,9 @@ public static class ElfTool
     }
 
     /// <summary>
-    /// 批量剥离 ELF 文件中匹配的节。
-    /// <para>Strips the matching sections from an ELF file.</para>
+    /// Strips the matching sections from an ELF file.
+    /// <para>批量剥离 ELF 文件中匹配的节。</para>
     /// </summary>
-    /// <param name="data">ELF 文件数据。<para>The ELF file data.</para></param>
-    /// <param name="names">要剥离的节名称集合（可包含通配模式如 .note.*）。<para>The section names to strip (wildcard patterns like .note.* are allowed).</para></param>
-    /// <returns>修改后的 ELF 文件数据。<para>The modified ELF data.</para></returns>
     public static byte[] StripSectionsByName(byte[] data, IEnumerable<string> names)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -372,7 +269,7 @@ public static class ElfTool
         var shoff = is64 ? ReadUInt64LE(result, 40) : ReadUInt32LE(result, 32);
         var shentsize = is64 ? ReadUInt16LE(result, 58) : ReadUInt16LE(result, 46);
 
-        // 先清零节数据区（避免覆盖节名字符串表后影响后续定位）
+
         foreach (var section in sections)
         {
             if (section.Offset > 0 && section.Offset + section.Size <= (ulong)result.Length)
@@ -381,7 +278,7 @@ public static class ElfTool
             }
         }
 
-        // 再修改节头：sh_type = SHT_NULL, sh_size = 0
+
         foreach (var section in sections)
         {
             var entryOff = shoff + ((ulong)section.Index * shentsize);
@@ -390,14 +287,14 @@ public static class ElfTool
                 continue;
             }
 
-            WriteUInt32LE(result, (int)entryOff + 4, ShtNull); // sh_type
+            WriteUInt32LE(result, (int)entryOff + 4, ShtNull);
             if (is64)
             {
-                WriteUInt64LE(result, (int)entryOff + 32, 0); // sh_size
+                WriteUInt64LE(result, (int)entryOff + 32, 0);
             }
             else
             {
-                WriteUInt32LE(result, (int)entryOff + 20, 0); // sh_size
+                WriteUInt32LE(result, (int)entryOff + 20, 0);
             }
         }
 

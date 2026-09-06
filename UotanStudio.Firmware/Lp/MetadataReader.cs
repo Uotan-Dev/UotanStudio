@@ -1,11 +1,7 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.Lp;
 
-/// <summary>
-/// Reads and parses Android Logical Partition (LP) metadata from a super image.
-/// <para>从 super 镜像读取并解析 Android 逻辑分区(LP)元数据。</para>
-/// </summary>
 public static class MetadataReader
 {
     /// <summary>
@@ -52,7 +48,7 @@ public static class MetadataReader
             throw new InvalidDataException("Invalid LP geometry magic.");
         }
 
-        // Verify geometry checksum (SHA256 of the struct with checksum zeroed).
+
         var structSize = (int)Math.Min(geometry.StructSize, MetadataFormat.Sizes.Geometry);
         var structData = buffer.AsSpan(0, structSize).ToArray();
         structData.AsSpan(8, 32).Clear();
@@ -89,7 +85,7 @@ public static class MetadataReader
             throw new InvalidDataException("Invalid LP metadata header magic.");
         }
 
-        // Verify header checksum: SHA256 of header with the checksum field zeroed.
+
         var headerHashData = headerBuffer.AsSpan(0, (int)Math.Min(header.HeaderSize, headerBuffer.Length)).ToArray();
         headerHashData.AsSpan(12, 32).Clear();
         var headerHash = SHA256.HashData(headerHashData);

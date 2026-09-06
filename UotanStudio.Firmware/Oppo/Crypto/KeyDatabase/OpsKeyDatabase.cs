@@ -1,15 +1,7 @@
-namespace UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
+﻿namespace UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
 
-/// <summary>
-/// <para>OPS（OnePlus）密钥数据库，提供 OnePlus 固件的自定义密码密钥。</para>
-/// OPS (OnePlus) key database providing custom cipher keys for OnePlus firmware.
-/// </summary>
 public static class OpsKeyDatabase
 {
-    /// <summary>
-    /// <para>标准 AES S-Box（256 字节），用于生成扩展 S-Box。</para>
-    /// Standard AES S-Box (256 bytes), used to generate the expanded S-Box.
-    /// </summary>
     private static readonly byte[] AesSBoxInner =
     [
         0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30, 0x01, 0x67, 0x2b, 0xfe, 0xd7, 0xab, 0x76,
@@ -30,16 +22,8 @@ public static class OpsKeyDatabase
         0x8c, 0xa1, 0x89, 0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f, 0xb0, 0x54, 0xbb, 0x16
     ];
 
-    /// <summary>
-    /// <para>扩展 S-Box（2048 字节），基于 AES T 表 Te0 构建，用于 OPS 自定义密码的密钥调度。</para>
-    /// Expanded S-Box (2048 bytes), built from the AES T-table Te0, used for the OPS custom cipher key schedule.
-    /// </summary>
     public static readonly byte[] ExpandedSBox = GenerateExpandedSBox();
 
-    /// <summary>
-    /// <para>OPS 核心密钥，用于初始化自定义密码的轮密钥（4 个 uint32 LE 值）。</para>
-    /// OPS core key, used to initialize the round keys for the custom cipher (4 uint32 LE values).
-    /// </summary>
     public static readonly byte[] OpsCoreKey =
     [
         0xD1, 0xB5, 0xE3, 0x9E, 0x5E, 0xEA, 0x04, 0x9D,
@@ -85,18 +69,12 @@ public static class OpsKeyDatabase
             Description: "guacamolet"),
     ];
 
-    /// <summary>
-    /// <para>获取所有 OPS 密钥条目。</para>
-    /// Gets all OPS key entries.
-    /// </summary>
     public static IReadOnlyList<OpsKeyEntry> Entries => KeyEntries;
 
     /// <summary>
-    /// <para>根据密钥标识符查找 OPS 密钥条目。</para>
     /// Finds an OPS key entry by its key identifier.
+    /// <para>根据密钥标识符查找 OPS 密钥条目。</para>
     /// </summary>
-    /// <param name="keyId"><para>要查找的密钥标识符。</para>The key identifier to find.</param>
-    /// <returns><para>匹配的密钥条目；若未找到则返回 null。</para>The matching key entry; or null if not found.</returns>
     public static OpsKeyEntry? FindByKeyId(string keyId)
     {
         foreach (var entry in KeyEntries)
@@ -118,7 +96,7 @@ public static class OpsKeyDatabase
             var s = AesSBoxInner[i];
             var te0 = ((uint)Mul2(s) << 24) | ((uint)s << 16) | ((uint)s << 8) | Mul3(s);
 
-            // Store as big-endian uint32, repeated twice (matching Python sbox byte order)
+
             result[(i * 8) + 0] = (byte)(te0 >> 24);
             result[(i * 8) + 1] = (byte)(te0 >> 16);
             result[(i * 8) + 2] = (byte)(te0 >> 8);

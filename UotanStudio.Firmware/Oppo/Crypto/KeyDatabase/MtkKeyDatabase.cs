@@ -1,15 +1,7 @@
 namespace UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
 
-/// <summary>
-/// <para>MTK（MediaTek）密钥数据库，提供 OPPO/Realme/OnePlus 联发科平台固件的解密密钥。</para>
-/// MTK (MediaTek) key database providing decryption keys for OPPO/Realme/OnePlus MediaTek-platform firmware.
-/// </summary>
 public static class MtkKeyDatabase
 {
-    /// <summary>
-    /// <para>MTK 头部混淆密钥，ASCII 值为 "geyixue"。</para>
-    /// MTK header shuffle key, ASCII value "geyixue".
-    /// </summary>
     public static readonly byte[] MtkHeaderShuffleKey = [0x67, 0x65, 0x79, 0x69, 0x78, 0x75, 0x65];
 
     private static readonly MtkKeyEntry[] KeyEntries =
@@ -96,18 +88,12 @@ public static class MtkKeyDatabase
             Description: "Direct AES Key/IV"),
     ];
 
-    /// <summary>
-    /// <para>获取所有 MTK 密钥条目。</para>
-    /// Gets all MTK key entries.
-    /// </summary>
     public static IReadOnlyList<MtkKeyEntry> Entries => KeyEntries;
 
     /// <summary>
-    /// <para>根据密钥标识符查找 MTK 密钥条目。</para>
     /// Finds an MTK key entry by its key identifier.
+    /// <para>根据密钥标识符查找 MTK 密钥条目。</para>
     /// </summary>
-    /// <param name="keyId"><para>要查找的密钥标识符。</para>The key identifier to find.</param>
-    /// <returns><para>匹配的密钥条目；若未找到则返回 null。</para>The matching key entry; or null if not found.</returns>
     public static MtkKeyEntry? FindByKeyId(string keyId)
     {
         foreach (var entry in KeyEntries)

@@ -3,103 +3,68 @@ using System.Text;
 
 namespace UotanStudio.Firmware.Dz;
 
-/// <summary>
-/// <para>LG DZ/KDZ 固件格式的常量定义。</para>
-/// Constants for the LG DZ/KDZ firmware formats.
-/// </summary>
 public static class DzConstants
 {
-    /// <summary>DZ 文件头魔数。</summary>
     public static readonly byte[] DzFileHeader = [0x32, 0x96, 0x18, 0x74];
 
-    /// <summary>DZ 块头魔数。</summary>
     public static readonly byte[] DzChunkHeader = [0x30, 0x12, 0x95, 0x78];
 
-    /// <summary>KDZ V0 头魔数。</summary>
     public static readonly byte[] KdzHeaderV0 = [0x28, 0x05, 0x00, 0x00, 0x34, 0x31, 0x25, 0x80];
 
-    /// <summary>KDZ V1 头魔数。</summary>
     public static readonly byte[] KdzHeaderV1 = [0x18, 0x05, 0x00, 0x00, 0x32, 0x79, 0x44, 0x50];
 
-    /// <summary>KDZ V2 头魔数(DZ 头)。</summary>
     public static readonly byte[] KdzHeaderV2 = [0x28, 0x05, 0x00, 0x00, 0x24, 0x38, 0x22, 0x25];
 }
 
-/// <summary>
-/// <para>LG DZ 文件头结构。</para>
-/// The LG DZ file header structure.
-/// </summary>
 public sealed class DzFileHeader
 {
-    /// <summary>文件头魔数。</summary>
     public byte[] Header = new byte[4];
 
-    /// <summary>格式主版本。</summary>
     public uint FormatMajor;
 
-    /// <summary>格式次版本。</summary>
     public uint FormatMinor;
 
-    /// <summary>保留字段 0。</summary>
     public uint Reserved0;
 
-    /// <summary>设备型号(32 字节)。</summary>
     public byte[] Device = new byte[32];
 
-    /// <summary>版本信息(144 字节)。</summary>
     public byte[] Version = new byte[144];
 
-    /// <summary>块数量。</summary>
     public uint ChunkCount;
 
-    /// <summary>MD5(16 字节)。</summary>
     public byte[] Md5 = new byte[16];
 
-    /// <summary>未知字段 0。</summary>
     public uint Unknown0;
 
-    /// <summary>保留字段 1。</summary>
     public uint Reserved1;
 
-    /// <summary>保留字段 4。</summary>
     public ushort Reserved4;
 
-    /// <summary>未知字段 1。</summary>
     public byte[] Unknown1 = new byte[16];
 
-    /// <summary>未知字段 2。</summary>
     public byte[] Unknown2 = new byte[50];
 
-    /// <summary>构建类型(20 字节)。</summary>
     public byte[] BuildType = new byte[20];
 
-    /// <summary>未知字段 3。</summary>
     public byte[] Unknown3 = new byte[4];
 
-    /// <summary>Android 版本(10 字节)。</summary>
     public byte[] AndroidVer = new byte[10];
 
-    /// <summary>旧日期代码(10 字节)。</summary>
     public byte[] OldDateCode = new byte[10];
 
-    /// <summary>保留字段 5。</summary>
     public uint Reserved5;
 
-    /// <summary>未知字段 4。</summary>
     public uint Unknown4;
 
-    /// <summary>未知字段 5。</summary>
     public ulong Unknown5;
 
-    /// <summary>填充(164 字节)。</summary>
     public byte[] Pad = new byte[164];
 
-    /// <summary>头部固定大小(字节)。</summary>
     public const int Size = 512;
 
     /// <summary>
-    /// <para>从字节数组解析 DZ 文件头。</para>
     /// Parses the DZ file header from a byte array.
+    /// <para>从字节数组解析 DZ 文件头。</para>
     /// </summary>
     public static DzFileHeader FromBytes(byte[] buffer)
     {
@@ -134,61 +99,54 @@ public sealed class DzFileHeader
         return header;
     }
 
-    /// <summary>获取设备型号字符串。</summary>
+    /// <summary>
+    /// Gets the device model string.
+    /// <para>获取设备型号字符串。</para>
+    /// </summary>
     public string GetDevice() => Encoding.UTF8.GetString(Device).TrimEnd('\0');
 
-    /// <summary>获取版本字符串。</summary>
+    /// <summary>
+    /// Gets the version string.
+    /// <para>获取版本字符串。</para>
+    /// </summary>
     public string GetVersion() => Encoding.UTF8.GetString(Version).TrimEnd('\0');
 
-    /// <summary>获取 Android 版本字符串。</summary>
+    /// <summary>
+    /// Gets the Android version string.
+    /// <para>获取 Android 版本字符串。</para>
+    /// </summary>
     public string GetAndroidVersion() => Encoding.UTF8.GetString(AndroidVer).TrimEnd('\0');
 }
 
-/// <summary>
-/// <para>LG DZ 块头结构。</para>
-/// The LG DZ chunk header structure.
-/// </summary>
 public sealed class DzChunkHeader
 {
-    /// <summary>块头魔数。</summary>
     public byte[] Header = new byte[4];
 
-    /// <summary>分区切片名称(32 字节)。</summary>
     public byte[] SliceName = new byte[32];
 
-    /// <summary>块名称(64 字节)。</summary>
     public byte[] ChunkName = new byte[64];
 
-    /// <summary>目标大小。</summary>
     public uint TargetSize;
 
-    /// <summary>数据大小(压缩后)。</summary>
     public uint DataSize;
 
-    /// <summary>MD5(16 字节)。</summary>
     public byte[] Md5 = new byte[16];
 
-    /// <summary>目标地址。</summary>
     public uint TargetAddr;
 
-    /// <summary>裁剪计数。</summary>
     public uint TrimCount;
 
-    /// <summary>设备。</summary>
     public uint Dev;
 
-    /// <summary>CRC32。</summary>
     public uint Crc32;
 
-    /// <summary>填充(372 字节)。</summary>
     public byte[] Pad = new byte[372];
 
-    /// <summary>块头固定大小(字节)。</summary>
     public const int Size = 512;
 
     /// <summary>
-    /// <para>从字节数组解析 DZ 块头。</para>
     /// Parses a DZ chunk header from a byte array.
+    /// <para>从字节数组解析 DZ 块头。</para>
     /// </summary>
     public static DzChunkHeader FromBytes(byte[] buffer)
     {
@@ -213,36 +171,34 @@ public sealed class DzChunkHeader
         return chunk;
     }
 
-    /// <summary>获取块名称字符串。</summary>
+    /// <summary>
+    /// Gets the block name string.
+    /// <para>获取块名称字符串。</para>
+    /// </summary>
     public string GetChunkName() => Encoding.UTF8.GetString(ChunkName).TrimEnd('\0');
 
-    /// <summary>获取切片名称字符串。</summary>
+    /// <summary>
+    /// Gets the slice name string.
+    /// <para>获取切片名称字符串。</para>
+    /// </summary>
     public string GetSliceName() => Encoding.UTF8.GetString(SliceName).TrimEnd('\0');
 }
 
-/// <summary>
-/// <para>LG KDZ 分区头结构。</para>
-/// The LG KDZ partition header structure.
-/// </summary>
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct KdzHeader
 {
-    /// <summary>分区名称(256 字节)。</summary>
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
     public byte[] Name;
 
-    /// <summary>数据长度。</summary>
     public ulong Length;
 
-    /// <summary>数据偏移量。</summary>
     public ulong Offset;
 
-    /// <summary>KDZ 分区头固定大小(字节)。</summary>
     public const int Size = 272;
 
     /// <summary>
-    /// <para>从字节数组解析 KDZ 分区头。</para>
     /// Parses a KDZ partition header from a byte array.
+    /// <para>从字节数组解析 KDZ 分区头。</para>
     /// </summary>
     public static KdzHeader FromBytes(byte[] buffer)
     {
@@ -256,6 +212,9 @@ public struct KdzHeader
             };
     }
 
-    /// <summary>获取分区名称字符串。</summary>
+    /// <summary>
+    /// Gets the partition name string.
+    /// <para>获取分区名称字符串。</para>
+    /// </summary>
     public readonly string GetName() => Encoding.UTF8.GetString(Name).TrimEnd('\0');
 }

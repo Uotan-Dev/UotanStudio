@@ -1,28 +1,21 @@
-using System.Text;
+﻿using System.Text;
 using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.BootImage;
 
-/// <summary>
-/// IFormatHandler 实现：Android Boot / Vendor Boot 镜像。
-/// <para>IFormatHandler implementation for Android Boot / Vendor Boot images.</para>
-/// </summary>
 public sealed class BootImageFormatHandler : IFormatHandler
 {
     private const string BootMagic = "ANDROID!";
     private const string VendorBootMagic = "VNDRBOOT";
 
-    /// <inheritdoc />
     public string FormatName => "Android Boot / Vendor Boot Image";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["img", "boot", "vendor_boot"];
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// 依据文件头部魔数（ANDROID! / VNDRBOOT）识别，不依赖扩展名。
-    /// <para>Detects by the leading magic bytes (ANDROID! / VNDRBOOT), independent of the extension.</para>
-    /// </remarks>
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -50,7 +43,10 @@ public sealed class BootImageFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -117,13 +113,10 @@ public sealed class BootImageFormatHandler : IFormatHandler
         }, cancellationToken);
     }
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// ANDROID!：解包出 kernel / ramdisk / second / dtb / dtbo / signature / header；
-    /// VNDRBOOT：解包出 vendor_ramdisk / dtb / bootconfig / header，以及 V4 的 ramdisk 表。
-    /// <para>ANDROID!: unpacks kernel / ramdisk / second / dtb / dtbo / signature / header;
-    /// VNDRBOOT: unpacks vendor_ramdisk / dtb / bootconfig / header plus the V4 ramdisk table.</para>
-    /// </remarks>
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -145,14 +138,10 @@ public sealed class BootImageFormatHandler : IFormatHandler
         }, cancellationToken);
     }
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// 输入可以是解包目录（含 header + kernel/ramdisk/second/dtb/dtbo/signature 等文件），
-    /// 也可以是现成的 boot 镜像文件（解析后按原头重打包）。仅支持 ANDROID! 镜像重打包。
-    /// <para>Input may be an unpacked directory (with header + kernel/ramdisk/second/dtb/dtbo/signature)
-    /// or an existing boot image file (reparsed and repacked with its original header). Only ANDROID!
-    /// images can be repacked.</para>
-    /// </remarks>
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -170,7 +159,7 @@ public sealed class BootImageFormatHandler : IFormatHandler
                     return PackFromDirectory(inputPath, outputPath);
                 }
 
-                // 输入是现成镜像：解析后原样重打包
+
                 using var parser = new BootImageParser();
                 parser.ParseFile(inputPath);
                 var packer = BootImagePacker.FromParser(parser);
@@ -222,7 +211,7 @@ public sealed class BootImageFormatHandler : IFormatHandler
         WriteIfNonEmpty(outputDirectory, "dtb", parser.Dtb, entries);
         WriteIfNonEmpty(outputDirectory, "bootconfig", parser.Bootconfig, entries);
 
-        // V4：按 ramdisk 表提取每个命名 ramdisk
+
         if (parser.RamdiskTable.Count > 0 && parser.VendorRamdisk.Length > 0)
         {
             var tableDir = Path.Combine(outputDirectory, "vendor_ramdisks");

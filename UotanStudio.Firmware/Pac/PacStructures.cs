@@ -2,57 +2,39 @@ using System.Text;
 
 namespace UotanStudio.Firmware.Pac;
 
-/// <summary>
-/// <para>SPRD PAC 固件包头部结构。</para>
-/// The header structure of an SPRD PAC firmware package.
-/// </summary>
 public sealed class SprdHead
 {
-    /// <summary>PAC 版本号(UTF-16 数组)。</summary>
     public ushort[] PacVersion = new ushort[24];
 
-    /// <summary>PAC 文件总大小。</summary>
     public uint PacSize;
 
-    /// <summary>固件名称(UTF-16 数组)。</summary>
     public ushort[] FwName = new ushort[256];
 
-    /// <summary>固件版本(UTF-16 数组)。</summary>
     public ushort[] FwVersion = new ushort[256];
 
-    /// <summary>文件条目数量。</summary>
     public uint FileCount;
 
-    /// <summary>目录表偏移量。</summary>
     public uint DirOffset;
 
-    /// <summary>保留字段 1。</summary>
     public uint[] Unknown1 = new uint[5];
 
-    /// <summary>固件别名(UTF-16 数组)。</summary>
     public ushort[] FwAlias = new ushort[100];
 
-    /// <summary>保留字段 2。</summary>
     public uint[] Unknown2 = new uint[3];
 
-    /// <summary>保留字段。</summary>
     public uint[] Unknown = new uint[200];
 
-    /// <summary>PAC 魔数(应为 0xFFFAFFFA)。</summary>
     public uint PacMagic;
 
-    /// <summary>头部 CRC16。</summary>
     public ushort HeadCrc;
 
-    /// <summary>数据区 CRC16。</summary>
     public ushort DataCrc;
 
-    /// <summary>头部结构固定大小(字节)。</summary>
     public const int Size = 2124;
 
     /// <summary>
-    /// <para>从二进制读取器中读取头部。</para>
     /// Reads the header from a binary reader.
+    /// <para>从二进制读取器中读取头部。</para>
     /// </summary>
     public static SprdHead Read(BinaryReader reader)
     {
@@ -102,8 +84,8 @@ public sealed class SprdHead
     }
 
     /// <summary>
-    /// <para>将头部序列化为字节数组。</para>
     /// Serializes the header to a byte array.
+    /// <para>将头部序列化为字节数组。</para>
     /// </summary>
     public byte[] ToBytes()
     {
@@ -153,16 +135,28 @@ public sealed class SprdHead
         return ms.ToArray();
     }
 
-    /// <summary>获取 PAC 版本字符串。</summary>
+    /// <summary>
+    /// Gets the PAC version string.
+    /// <para>获取 PAC 版本字符串。</para>
+    /// </summary>
     public string GetPacVersion() => ConvertU16ToString(PacVersion);
 
-    /// <summary>获取固件名称字符串。</summary>
+    /// <summary>
+    /// Gets the firmware name string.
+    /// <para>获取固件名称字符串。</para>
+    /// </summary>
     public string GetFwName() => ConvertU16ToString(FwName);
 
-    /// <summary>获取固件版本字符串。</summary>
+    /// <summary>
+    /// Gets the firmware version string.
+    /// <para>获取固件版本字符串。</para>
+    /// </summary>
     public string GetFwVersion() => ConvertU16ToString(FwVersion);
 
-    /// <summary>获取固件别名字符串。</summary>
+    /// <summary>
+    /// Gets the firmware alias string.
+    /// <para>获取固件别名字符串。</para>
+    /// </summary>
     public string GetFwAlias() => ConvertU16ToString(FwAlias);
 
     private static string ConvertU16ToString(ushort[] data)
@@ -173,54 +167,37 @@ public sealed class SprdHead
     }
 }
 
-/// <summary>
-/// <para>SPRD PAC 固件包中的单个文件条目。</para>
-/// A single file entry within an SPRD PAC firmware package.
-/// </summary>
 public sealed class SprdFile
 {
-    /// <summary>结构体大小(应为 2580)。</summary>
     public uint StructSize;
 
-    /// <summary>条目 ID(UTF-16 数组)。</summary>
     public ushort[] Id = new ushort[256];
 
-    /// <summary>条目名称(UTF-16 数组)。</summary>
     public ushort[] Name = new ushort[256];
 
-    /// <summary>保留字段 1。</summary>
     public ushort[] Unknown1 = new ushort[256];
 
-    /// <summary>文件大小。</summary>
     public uint Size;
 
-    /// <summary>文件类型。</summary>
     public uint Type;
 
-    /// <summary>Flash 用途。</summary>
     public uint FlashUse;
 
-    /// <summary>数据在 PAC 文件中的偏移量。</summary>
     public uint PacOffset;
 
-    /// <summary>省略标志。</summary>
     public uint OmitFlag;
 
-    /// <summary>地址数量。</summary>
     public uint AddrNum;
 
-    /// <summary>地址列表。</summary>
     public uint[] Addr = new uint[5];
 
-    /// <summary>保留字段 2。</summary>
     public uint[] Unknown2 = new uint[249];
 
-    /// <summary>条目结构固定大小(字节)。</summary>
     public const int StructFixedSize = 2580;
 
     /// <summary>
-    /// <para>从二进制读取器中读取文件条目。</para>
     /// Reads a file entry from a binary reader.
+    /// <para>从二进制读取器中读取文件条目。</para>
     /// </summary>
     public static SprdFile Read(BinaryReader reader)
     {
@@ -262,10 +239,16 @@ public sealed class SprdFile
         return file;
     }
 
-    /// <summary>获取条目 ID 字符串。</summary>
+    /// <summary>
+    /// Gets the entry ID string.
+    /// <para>获取条目 ID 字符串。</para>
+    /// </summary>
     public string GetId() => ConvertU16ToString(Id);
 
-    /// <summary>获取条目名称字符串。</summary>
+    /// <summary>
+    /// Gets the entry name string.
+    /// <para>获取条目名称字符串。</para>
+    /// </summary>
     public string GetName() => ConvertU16ToString(Name);
 
     private static string ConvertU16ToString(ushort[] data)
@@ -276,34 +259,22 @@ public sealed class SprdFile
     }
 }
 
-/// <summary>
-/// <para>SPRD PAC 固件包中的文件类型。</para>
-/// File types within an SPRD PAC firmware package.
-/// </summary>
 public enum PacFileType : uint
 {
-    /// <summary>未知类型。</summary>
     Unknown = 0,
 
-    /// <summary>分区镜像。</summary>
     Image = 1,
 
-    /// <summary>XML 描述文件。</summary>
     Xml = 2,
 
-    /// <summary>证书文件。</summary>
     Certificate = 3
 }
 
-/// <summary>
-/// <para>提供 CRC-16 校验和计算。</para>
-/// Provides CRC-16 checksum calculation.
-/// </summary>
 public static class Crc16
 {
     /// <summary>
-    /// <para>使用给定种子对数据计算 CRC-16 校验和。</para>
     /// Calculates the CRC-16 checksum of the data with the given seed.
+    /// <para>使用给定种子对数据计算 CRC-16 校验和。</para>
     /// </summary>
     public static ushort Calculate(ushort seed, byte[] data)
     {

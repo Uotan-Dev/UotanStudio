@@ -1,36 +1,13 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using UotanStudio.Firmware.Oppo.Helpers;
 
 namespace UotanStudio.Firmware.Oppo.Crypto;
 
-/// <summary>
-/// <para>提供对 OZip 加密数据的按需解密流。每个加密单元由 16 字节 AES-128-ECB 密文前缀和
-/// 随后的 0x4000 字节明文组成。可直接包装在加密文件的流上，
-/// 从任意偏移顺序读取，无需先解密整个文件。</para>
-/// Provides an on-demand decryption stream for OZip encrypted data. Each encryption unit consists
-/// of a 16-byte AES-128-ECB encrypted prefix followed by 0x4000 plaintext bytes, which pass
-/// through as-is. Wraps directly over the encrypted file stream so entries can be
-/// read sequentially from any offset without pre-decrypting the whole file.
-/// </summary>
-/// <remarks>
-/// <para>
-/// OZIP Mode 1 格式布局：
-/// <code>
-/// [0x00..0x104F]  头部（魔数 + 大小 + 哈希 + 元数据）
-/// [0x1050..EOF]   加密数据区域，以 0x4010 字节为一个加密单元：
-///                   前 16 字节 → AES-128-ECB 密文
-///                   后 0x4000 字节 → 明文原样
-/// </code>
-/// 本流从 <c>DataOffset</c>（0x1050）开始计算块边界并自行定位底层流；
-/// 本流的位置 0 对应 OZip 文件偏移 0x1050。
-/// </para>
-/// </remarks>
 public sealed class OzipBlockDecryptStream : Stream
 {
     private const int EncryptionUnitSize = OzipDecryptor.EncryptionUnitSize;
 
-    /// <summary><para>每块中加密部分的大小。</para>Encrypted portion per block.</summary>
-    private const int EncryptedSize = OzipDecryptor.EncryptedSize; // 16
+    private const int EncryptedSize = OzipDecryptor.EncryptedSize;
 
     private readonly Stream _inner;
     private readonly Aes _aes;
@@ -44,16 +21,9 @@ public sealed class OzipBlockDecryptStream : Stream
     private long _cachedUnitIndex = -1;
 
     /// <summary>
-    /// <para>初始化 <see cref="OzipBlockDecryptStream"/> 的新实例。</para>
-    /// Initializes a new instance of <see cref="OzipBlockDecryptStream"/>.
+    /// Initializes a new instance of OzipBlockDecryptStream.
+    /// <para>初始化 OzipBlockDecryptStream 的新实例。</para>
     /// </summary>
-    /// <param name="inner">
-    /// <para>底层原始文件流（未定位；本流自行管理定位）。</para>
-    /// The underlying raw file stream (no pre-positioning required; this stream manages seeks internally).
-    /// </param>
-    /// <param name="aesKey"><para>AES-128 密钥（16 字节）。</para>The AES-128 key (16 bytes).</param>
-    /// <param name="dataLength"><para>加密数据区域的总字节数。</para>Total byte count of the encrypted data region.</param>
-    /// <param name="leaveOpen"><para>释放本流时是否保留底层流不关闭。</para>Whether to leave the inner stream open when this stream is disposed.</param>
     public OzipBlockDecryptStream(Stream inner, byte[] aesKey, long dataLength, bool leaveOpen = false)
     {
         Guard.ThrowIfNull(inner);
@@ -135,8 +105,8 @@ public sealed class OzipBlockDecryptStream : Stream
     }
 
     /// <summary>
-    /// <para>读取并解密指定加密单元的 16 字节前缀。</para>
     /// Reads and decrypts the 16-byte prefix of the specified encryption unit.
+    /// <para>读取并解密指定加密单元的 16 字节前缀。</para>
     /// </summary>
     private void EnsurePrefixDecrypted(long unitIndex)
     {

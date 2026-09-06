@@ -1,27 +1,15 @@
-using System.Text;
+﻿using System.Text;
 using UotanStudio.Firmware.Dex.Instructions;
 using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex.Decompile;
 
-/// <summary>
-/// <para>伪 Java 代码生成器：渲染类头（修饰符/继承/接口）、字段声明与方法签名+结构化方法体；
-/// BytecodeGuide 模式下在顶层语句前标注源字节码偏移。</para>
-/// Pseudo-Java code generator: renders class headers (modifiers/extends/implements), field
-/// declarations and method signatures with structured bodies; in BytecodeGuide mode it prefixes
-/// top-level statements with their source bytecode offsets.
-/// </summary>
 public static class JavaCodegen
 {
     /// <summary>
-    /// <para>渲染整个类（头 + 字段 + 方法）。</para>
     /// Renders a whole class (header + fields + methods).
+    /// <para>渲染整个类（头 + 字段 + 方法）。</para>
     /// </summary>
-    /// <param name="dex">所属 DEX 文件。<para>The owning DEX file.</para></param>
-    /// <param name="cls">类定义。<para>The class definition.</para></param>
-    /// <param name="resolver">重载解析器；<c>null</c> 表示不解析。<para>Overload resolver; <c>null</c> to skip.</para></param>
-    /// <param name="options">反编译选项；<c>null</c> 用默认值。<para>Decompiler options; <c>null</c> for defaults.</para></param>
-    /// <returns>伪 Java 源码文本。<para>The pseudo-Java source text.</para></returns>
     public static string RenderClass(DexFile dex, ClassDefinition cls, MethodResolver? resolver, DecompileOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(dex);
@@ -31,8 +19,7 @@ public static class JavaCodegen
         var sb = new StringBuilder(1024);
         var isInterface = (cls.AccessFlags & AccessFlags.Interface) != 0;
 
-        // 类头。
-        // Class header.
+
         var mods = new List<string>(4);
         if ((cls.AccessFlags & AccessFlags.Public) != 0) mods.Add("public");
         if ((cls.AccessFlags & AccessFlags.Final) != 0) mods.Add("final");
@@ -65,8 +52,7 @@ public static class JavaCodegen
 
         sb.AppendLine(" {");
 
-        // 字段。
-        // Fields.
+
         foreach (var field in cls.StaticFields)
         {
             AppendField(sb, dex, field);
@@ -77,8 +63,7 @@ public static class JavaCodegen
             AppendField(sb, dex, field);
         }
 
-        // 方法。
-        // Methods.
+
         foreach (var method in cls.DirectMethods)
         {
             sb.AppendLine();
@@ -96,15 +81,9 @@ public static class JavaCodegen
     }
 
     /// <summary>
-    /// <para>渲染单个方法（签名 + 结构化方法体）。</para>
     /// Renders a single method (signature + structured body).
+    /// <para>渲染单个方法（签名 + 结构化方法体）。</para>
     /// </summary>
-    /// <param name="dex">所属 DEX 文件。<para>The owning DEX file.</para></param>
-    /// <param name="method">编码方法。<para>The encoded method.</para></param>
-    /// <param name="cls">所属类定义（可空）。<para>The owning class definition (optional).</para></param>
-    /// <param name="resolver">重载解析器；<c>null</c> 表示不解析。<para>Overload resolver; <c>null</c> to skip.</para></param>
-    /// <param name="options">反编译选项；<c>null</c> 用默认值。<para>Decompiler options; <c>null</c> for defaults.</para></param>
-    /// <returns>伪 Java 方法文本。<para>The pseudo-Java method text.</para></returns>
     public static string RenderMethod(DexFile dex, EncodedMethod method, ClassDefinition? cls, MethodResolver? resolver, DecompileOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(dex);
@@ -118,8 +97,8 @@ public static class JavaCodegen
 
         if (ctx.MethodName == "<clinit>")
         {
-            // 静态初始化块。
-            // Static initializer block.
+
+
             sb.Append("static");
         }
         else
@@ -129,8 +108,8 @@ public static class JavaCodegen
 
             if (ctx.IsConstructor)
             {
-                // 构造器：返回类型省略，名称用短类名。
-                // Constructor: no return type; the short class name is used.
+
+
                 var shortName = ctx.ClassName is null ? "<init>" : ShortName(ctx.ClassName);
                 sb.Append(shortName);
             }
@@ -152,8 +131,8 @@ public static class JavaCodegen
         var code = method.Code;
         if (code is null)
         {
-            // abstract / native：无方法体。
-            // abstract/native: no body.
+
+
             sb.Append(';');
             return sb.ToString();
         }

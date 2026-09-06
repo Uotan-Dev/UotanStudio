@@ -2,17 +2,13 @@ using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.NTPi.Writer;
 
-/// <summary>
-/// <para>提供 NTPI 打包过程中的数据填充和随机字节生成工具方法。</para>
-/// Provides utility methods for data padding and random byte generation during NTPI packing.
-/// </summary>
 internal static class NtpiPaddingHelper
 {
     internal const int AesBlockSize = 16;
 
     /// <summary>
-    /// <para>计算数据填充至 AES 块大小(16 字节)边界后的总大小。</para>
     /// Calculates the total size after padding data to the AES block size (16 bytes) boundary.
+    /// <para>计算数据填充至 AES 块大小(16 字节)边界后的总大小。</para>
     /// </summary>
     public static int CalculatePaddedSize(int dataSize)
     {
@@ -21,8 +17,8 @@ internal static class NtpiPaddingHelper
     }
 
     /// <summary>
-    /// <para>以 long 计算数据填充至 AES 块大小(16 字节)边界后的总大小。</para>
     /// Calculates the total size after padding data to the AES block size (16 bytes) boundary using long arithmetic.
+    /// <para>以 long 计算数据填充至 AES 块大小(16 字节)边界后的总大小。</para>
     /// </summary>
     public static long CalculatePaddedSize(long dataSize)
     {
@@ -31,8 +27,8 @@ internal static class NtpiPaddingHelper
     }
 
     /// <summary>
-    /// <para>使用零字节将数据填充至 AES 块大小(16 字节)边界,支持指定有效数据长度。</para>
     /// Pads data to the AES block size (16 bytes) boundary using zero bytes, supporting a specified valid data length.
+    /// <para>使用零字节将数据填充至 AES 块大小(16 字节)边界,支持指定有效数据长度。</para>
     /// </summary>
     public static byte[] PadToBlockSize(byte[] data, int validLength)
     {
@@ -67,8 +63,8 @@ internal static class NtpiPaddingHelper
     }
 
     /// <summary>
-    /// <para>生成指定长度的加密安全随机字节数组。</para>
     /// Generates a cryptographically secure random byte array of the specified length.
+    /// <para>生成指定长度的加密安全随机字节数组。</para>
     /// </summary>
     public static byte[] GenerateRandomBytes(int count)
     {

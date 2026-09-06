@@ -2,10 +2,6 @@ using UotanStudio.Firmware.Payload.Exceptions;
 
 namespace UotanStudio.Firmware.Payload.Core;
 
-/// <summary>
-/// Exposes a bounded logical view of a shared seekable stream and locks every positioned read.
-/// <para>公开共享可定位流的有界逻辑视图，并对每次定位读取加锁。</para>
-/// </summary>
 internal sealed class LockedBoundedReadStream : Stream
 {
     private readonly Stream _source;
@@ -18,10 +14,6 @@ internal sealed class LockedBoundedReadStream : Stream
     /// Initializes a bounded view without taking ownership of the shared stream.
     /// <para>初始化有界视图，但不取得共享流的所有权。</para>
     /// </summary>
-    /// <param name="source">Shared seekable source stream.<para>共享的可定位源流。</para></param>
-    /// <param name="syncRoot">Lock protecting source positioning and reads.<para>保护源流定位和读取的锁。</para></param>
-    /// <param name="start">Absolute start offset.<para>绝对起始偏移。</para></param>
-    /// <param name="length">Logical view length.<para>逻辑视图长度。</para></param>
     internal LockedBoundedReadStream(Stream source, object syncRoot, long start, long length)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -37,25 +29,26 @@ internal sealed class LockedBoundedReadStream : Stream
         _length = length;
     }
 
-    /// <inheritdoc />
     public override bool CanRead => true;
-    /// <inheritdoc />
     public override bool CanSeek => false;
-    /// <inheritdoc />
     public override bool CanWrite => false;
-    /// <inheritdoc />
     public override long Length => _length;
-    /// <inheritdoc />
     public override long Position { get => _position; set => throw new NotSupportedException(); }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream into the buffer.
+    /// <para>从流中读取字节到缓冲区。</para>
+    /// </summary>
     public override int Read(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
         return Read(buffer.AsSpan(offset, count));
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream into the buffer.
+    /// <para>从流中读取字节到缓冲区。</para>
+    /// </summary>
     public override int Read(Span<byte> buffer)
     {
         var count = (int)Math.Min(buffer.Length, _length - _position);
@@ -74,12 +67,24 @@ internal sealed class LockedBoundedReadStream : Stream
         return read;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Performs no operation.
+    /// <para>不执行任何操作。</para>
+    /// </summary>
     public override void Flush() { }
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void SetLength(long value) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 }

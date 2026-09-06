@@ -17,11 +17,11 @@ public class Ext4ExternalXattrTests
     [Fact]
     public void Inode_FromBytes_ParsesFileAcl_Low32()
     {
-        // Build a 256-byte inode with i_file_acl_lo = 5 at offset 140.
-        // 构造 256 字节 inode，偏移 140 处 i_file_acl_lo = 5。
+        // Build a 256-byte inode with i_file_acl_lo = 5 at offset 104.
+        // 构造 256 字节 inode，偏移 104 处 i_file_acl_lo = 5。
         var raw = new byte[256];
         BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(0, 2), 0x8000); // S_IFREG
-        BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(140, 4), 0x00000005);
+        BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(104, 4), 0x00000005);
 
         var inode = Ext4Inode.FromBytes(raw, 256);
         Assert.Equal(5UL, inode.FileAcl);
@@ -30,26 +30,26 @@ public class Ext4ExternalXattrTests
     [Fact]
     public void Inode_FromBytes_ParsesFileAcl_64bit()
     {
-        // Build a 256-byte inode with i_file_acl_lo = 5 at offset 140 and
-        // i_file_acl_hi = 1 at offset 172. Expect FileAcl == 0x0000000100000005.
-        // 构造 256 字节 inode，偏移 140 处 i_file_acl_lo = 5、偏移 172 处
-        // i_file_acl_hi = 1。预期 FileAcl == 0x0000000100000005。
+        // Build a 256-byte inode with i_file_acl_lo = 5 at offset 104 and the 16-bit
+        // l_i_file_acl_high = 1 at offset 118. Expect FileAcl == 0x0000000100000005.
+        // 构造 256 字节 inode，偏移 104 处 i_file_acl_lo = 5、偏移 118 处
+        // 16 位 l_i_file_acl_high = 1。预期 FileAcl == 0x0000000100000005。
         var raw = new byte[256];
         BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(0, 2), 0x8000); // S_IFREG
-        BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(140, 4), 0x00000005);
-        BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(172, 4), 0x00000001);
+        BinaryPrimitives.WriteUInt32LittleEndian(raw.AsSpan(104, 4), 0x00000005);
+        BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(118, 2), 0x0001);
 
         var inode = Ext4Inode.FromBytes(raw, 256);
         Assert.Equal(0x00000001_00000005UL, inode.FileAcl);
     }
 
     [Fact]
-    public void Inode_FromBytes_FileAclZero_WhenSmallInode()
+    public void Inode_FromBytes_FileAclZero_WhenNoExternalXattr()
     {
-        // With a 128-byte inode, i_file_acl (offset 140) lies outside the inode and is
-        // not read. FileAcl should default to 0.
-        // 128 字节 inode 时 i_file_acl（偏移 140）位于 inode 之外，不被读取。
-        // FileAcl 应默认为 0。
+        // A 128-byte inode carries the i_file_acl fields at offsets 104/118, but they are
+        // zero when no external xattr block is attached. FileAcl should default to 0.
+        // 128 字节 inode 在偏移 104/118 处承载 i_file_acl 字段；未挂外部 xattr 块时
+        // 字段为 0。FileAcl 应默认为 0。
         var raw = new byte[128];
         BinaryPrimitives.WriteUInt16LittleEndian(raw.AsSpan(0, 2), 0x8000); // S_IFREG
 

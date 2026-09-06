@@ -1,23 +1,11 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Compress;
 
-/// <summary>
-/// Format handler for single-file compressed data (gzip/zlib/deflate/brotli/lz4/lzma/xz/bzip2/zstd).
-/// <para>单文件压缩数据（gzip/zlib/deflate/brotli/lz4/lzma/xz/bzip2/zstd）的格式处理器。</para>
-/// </summary>
 public sealed class CompressFormatHandler : IFormatHandler
 {
-    /// <summary>
-    /// Gets the human-readable format name.
-    /// <para>获取人类可读的格式名称。</para>
-    /// </summary>
     public string FormatName => "Compressed File";
 
-    /// <summary>
-    /// Gets the typical file extensions (without dot, lowercase).
-    /// <para>获取典型文件扩展名（不带点，小写）。</para>
-    /// </summary>
     public IReadOnlyList<string> FileExtensions { get; } =
         ["gz", "gzip", "zlib", "deflate", "br", "lz4", "lzma", "xz", "bz2", "bzip2", "zst", "zstd"];
 
@@ -56,8 +44,8 @@ public sealed class CompressFormatHandler : IFormatHandler
                 var format = CompressionService.DetectFile(filePath);
                 if (format == CompressionFormat.None)
                 {
-                    // 无魔数的格式(Brotli 等)回退到扩展名推断。
-                    // Formats without magic bytes (Brotli etc.) fall back to extension inference.
+
+
                     format = CompressionFormats.FromExtension(filePath);
                 }
                 if (format == CompressionFormat.None)
@@ -105,8 +93,8 @@ public sealed class CompressFormatHandler : IFormatHandler
                 var format = CompressionService.DetectFile(filePath);
                 if (format == CompressionFormat.None)
                 {
-                    // 无魔数的格式(Brotli 等)回退到扩展名推断。
-                    // Formats without magic bytes (Brotli etc.) fall back to extension inference.
+
+
                     format = CompressionFormats.FromExtension(filePath);
                 }
                 if (format == CompressionFormat.None)
@@ -116,7 +104,7 @@ public sealed class CompressFormatHandler : IFormatHandler
 
                 Directory.CreateDirectory(outputDirectory);
 
-                // 去掉压缩扩展名得到输出文件名（如 boot.img.gz → boot.img）。
+
                 var outputName = Path.GetFileNameWithoutExtension(filePath);
                 if (string.IsNullOrEmpty(outputName))
                 {

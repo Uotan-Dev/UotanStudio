@@ -1,22 +1,17 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex;
 
-/// <summary>
-/// <para>DEX 序列化器：把对象模型重建为 DEX 字节（表顺序保持模型顺序，指令流原样复制，重算 map_list、校验和与签名）。</para>
-/// DEX serializer: rebuilds the object model into DEX bytes (table order follows the model, the instruction stream
-/// is copied verbatim, and the map list, checksum and signature are recomputed).
-/// </summary>
 internal static partial class DexWriter
 {
     private const uint NoIndex = 0xFFFFFFFF;
 
     /// <summary>
-    /// <para>把模型序列化为 DEX 字节数组。</para>
     /// Serializes the model into a DEX byte array.
+    /// <para>把模型序列化为 DEX 字节数组。</para>
     /// </summary>
     public static byte[] Write(DexFile dex)
     {
@@ -25,43 +20,41 @@ internal static partial class DexWriter
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
 
-        // ---- header（占位，随后回填）----
-        // ---- header (placeholder; patched later) ----
+
         var headerStart = (int)ms.Position;
-        w.Write(Encoding.ASCII.GetBytes("dex\n" + version + "\0")); // 8 bytes magic
-        w.Write(0u);   // checksum placeholder
-        w.Write(new byte[20]); // signature placeholder
-        w.Write(0u);   // file_size
-        w.Write(0x70u); // header_size
-        w.Write(0x12345678u); // endian_tag
-        w.Write(0u);   // link_size
-        w.Write(0u);   // link_off
-        w.Write(0u);   // map_off (placeholder)
-        w.Write((uint)dex.Strings.Count); // string_ids_size
-        WriteOffsetPlaceholder(w); // string_ids_off
-        w.Write((uint)dex.Types.Count); // type_ids_size
+        w.Write(Encoding.ASCII.GetBytes("dex\n" + version + "\0"));
+        w.Write(0u);
+        w.Write(new byte[20]);
+        w.Write(0u);
+        w.Write(0x70u);
+        w.Write(0x12345678u);
+        w.Write(0u);
+        w.Write(0u);
+        w.Write(0u);
+        w.Write((uint)dex.Strings.Count);
         WriteOffsetPlaceholder(w);
-        w.Write((uint)dex.Protos.Count); // proto_ids_size
+        w.Write((uint)dex.Types.Count);
         WriteOffsetPlaceholder(w);
-        w.Write((uint)dex.Fields.Count); // field_ids_size
+        w.Write((uint)dex.Protos.Count);
         WriteOffsetPlaceholder(w);
-        w.Write((uint)dex.Methods.Count); // method_ids_size
+        w.Write((uint)dex.Fields.Count);
         WriteOffsetPlaceholder(w);
-        w.Write((uint)dex.Classes.Count); // class_defs_size
+        w.Write((uint)dex.Methods.Count);
         WriteOffsetPlaceholder(w);
-        w.Write(0u); // data_size
-        WriteOffsetPlaceholder(w); // data_off
+        w.Write((uint)dex.Classes.Count);
+        WriteOffsetPlaceholder(w);
+        w.Write(0u);
+        WriteOffsetPlaceholder(w);
         Align(w, 4);
 
         var mapItems = new List<(ushort Type, uint Size, uint Offset)>();
 
-        // ---- string_ids（先写偏移数组占位，再写 string_data 并回填偏移）----
-        // ---- string_ids (write the offset array as placeholders, then string_data, then patch offsets) ----
+
         var stringIdsOffset = (int)ms.Position;
         var stringOffsets = new uint[dex.Strings.Count];
         for (var i = 0; i < dex.Strings.Count; i++)
         {
-            w.Write(0u); // 偏移占位
+            w.Write(0u);
         }
         Align(w, 4);
         var stringDataStart = (int)ms.Position;
@@ -81,15 +74,11 @@ internal static partial class DexWriter
         Align(w, 4);
         mapItems.Add((0x0001, (uint)dex.Strings.Count, (uint)stringIdsOffset));
 
-        // ---- type_ids（描述符字符串索引）----
-        // ---- type_ids (descriptor string indices) ----
-        // 一次性构建字符串 → 索引字典：类型表通常数万项，逐项线性扫描字符串表是 O(n²)。
-        // Build the string → index map once: the type table can have tens of thousands of entries,
-        // and linear-scanning the string table per entry would be O(n²).
+
         var stringIndex = new Dictionary<string, int>(dex.Strings.Count, StringComparer.Ordinal);
         for (var i = 0; i < dex.Strings.Count; i++)
         {
-            stringIndex.TryAdd(dex.Strings[i], i); // 与 IndexOf 一致：保留首个出现索引
+            stringIndex.TryAdd(dex.Strings[i], i);
         }
 
         var typeIdsOffset = (int)ms.Position;
@@ -104,14 +93,13 @@ internal static partial class DexWriter
         Align(w, 4);
         mapItems.Add((0x0002, (uint)dex.Types.Count, (uint)typeIdsOffset));
 
-        // ---- proto_ids（12 字节/项；参数 type_list 置于表后，再回填 parameters_off）----
-        // ---- proto_ids (12 bytes each; parameter type lists go after the table, then parameters_off is patched) ----
+
         var protoIdsOffset = (int)ms.Position;
         for (var i = 0; i < dex.Protos.Count; i++)
         {
             w.Write((uint)dex.Protos[i].ShortyIndex);
             w.Write((uint)dex.Protos[i].ReturnTypeIndex);
-            w.Write(0u); // parameters_off 占位
+            w.Write(0u);
         }
         Align(w, 4);
 
@@ -135,8 +123,7 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // 回填 parameters_off
-        // Patch back the parameters_off fields.
+
         var protoEnd = (int)ms.Position;
         ms.Position = protoIdsOffset;
         for (var i = 0; i < dex.Protos.Count; i++)
@@ -148,8 +135,7 @@ internal static partial class DexWriter
         ms.Position = protoEnd;
         mapItems.Add((0x0003, (uint)dex.Protos.Count, (uint)protoIdsOffset));
 
-        // ---- field_ids（class/type/name 索引）----
-        // ---- field_ids (class/type/name indices) ----
+
         var fieldIdsOffset = (int)ms.Position;
         foreach (var field in dex.Fields)
         {
@@ -160,8 +146,7 @@ internal static partial class DexWriter
         Align(w, 4);
         mapItems.Add((0x0004, (uint)dex.Fields.Count, (uint)fieldIdsOffset));
 
-        // ---- method_ids（class/proto/name 索引）----
-        // ---- method_ids (class/proto/name indices) ----
+
         var methodIdsOffset = (int)ms.Position;
         foreach (var method in dex.Methods)
         {
@@ -172,8 +157,7 @@ internal static partial class DexWriter
         Align(w, 4);
         mapItems.Add((0x0005, (uint)dex.Methods.Count, (uint)methodIdsOffset));
 
-        // ---- class_defs（32 字节/项；class_data 与 code 写入数据区后回填）----
-        // ---- class_defs (32 bytes each; class_data and code are written to the data section, then patched) ----
+
         var classDefsOffset = (int)ms.Position;
         var classDataOffsets = new uint[dex.Classes.Count];
         var classDefPositions = new int[dex.Classes.Count];
@@ -184,24 +168,21 @@ internal static partial class DexWriter
             w.Write((uint)cls.TypeIndex);
             w.Write(cls.AccessFlags);
             w.Write(cls.SuperclassIndex < 0 ? NoIndex : (uint)cls.SuperclassIndex);
-            // interfaces_off 占位：数据区写接口 type_list 后回填
-            // interfaces_off placeholder: patched after writing the interface type list.
+
+
             WriteOffsetPlaceholder(w);
             w.Write(cls.SourceFileIndex < 0 ? NoIndex : (uint)cls.SourceFileIndex);
-            w.Write(0u); // annotations_off
-            WriteOffsetPlaceholder(w); // class_data_off
-            w.Write(0u); // static_values_off
+            w.Write(0u);
+            WriteOffsetPlaceholder(w);
+            w.Write(0u);
         }
         Align(w, 4);
         mapItems.Add((0x0006, (uint)dex.Classes.Count, (uint)classDefsOffset));
 
-        // ---- 数据区 ----
-        // ---- data section ----
+
         var dataStart = (int)ms.Position;
 
-        // 接口 type_list（每个 4 字节对齐；记录数量与首个偏移供 map 0x1001 聚合条目）
-        // Interface type lists (each 4-byte aligned; count and first offset are tracked for the
-        // aggregated 0x1001 map entry).
+
         var interfaceTypeListCount = 0;
         var firstInterfaceTypeList = 0u;
         var interfaceOffsets = new uint[dex.Classes.Count];
@@ -223,16 +204,10 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // class_data + code：先写代码项（4 字节对齐，记录真实 code_off），再写 class_data 体。
-        // 不能先写 class_data 再用占位回填——code_off 是 uleb128，真实值长度不等（1~5 字节），
-        // 回填会把 class_data 后续字节挤坏。
-        // Class data and code: write code items first (4-byte aligned, recording the real code_off),
-        // then the class_data body. Do NOT write the body first with placeholder code_offs — code_off
-        // is a uleb128 whose real length varies (1..5 bytes), so back-patching would corrupt the rest
-        // of the class_data.
+
         var codeItemCount = 0;
         var firstCodeItem = 0u;
-        var debugPatches = new List<(int FieldPos, byte[] Bytes)>(); // (code_item 中 debug_info_off 字段位置, 原始字节)
+        var debugPatches = new List<(int FieldPos, byte[] Bytes)>();
         for (var i = 0; i < dex.Classes.Count; i++)
         {
             var cls = dex.Classes[i];
@@ -244,8 +219,7 @@ internal static partial class DexWriter
                 continue;
             }
 
-            // 1) 代码项先行：code_off 在写 class_data 之前即可确定。
-            // 1) Code items first, so every code_off is known before the body is written.
+
             Align(w, 4);
             var methodCodeOffsets = new Dictionary<EncodedMethod, uint>();
             foreach (var m in cls.AllMethods)
@@ -259,13 +233,12 @@ internal static partial class DexWriter
                     var codeStart = WriteCodeItem(w, m.Code);
                     if (m.Code.DebugInfo is { Length: > 0 } dbg)
                     {
-                        debugPatches.Add((codeStart + 8, dbg)); // debug_info_off 位于 code_item 偏移 8 处
+                        debugPatches.Add((codeStart + 8, dbg));
                     }
                 }
             }
 
-            // 2) class_data 体紧随其后，code_off 直接写真实值。
-            // 2) The class_data body follows, with real code_off values written directly.
+
             classDataOffsets[i] = (uint)ms.Position;
             WriteUleb128(w, (uint)cls.StaticFields.Count);
             WriteUleb128(w, (uint)cls.InstanceFields.Count);
@@ -287,8 +260,7 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // ---- debug_info 项（原样写出；回填各 code_item 的 debug_info_off）----
-        // ---- debug_info items (verbatim; each code_item's debug_info_off is patched) ----
+
         var debugInfoCount = 0;
         var firstDebugInfo = 0u;
         foreach (var (fieldPos, dbgBytes) in debugPatches)
@@ -305,11 +277,7 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // ---- 注解区：annotation_item → annotation_set_item → annotation_set_ref_list → annotations_directory_item ----
-        // 先收集全部引用的注解对象（按引用去重），再按依赖顺序写出。
-        // ---- Annotations: collect every referenced annotation object (reference-deduped), then write
-        // in dependency order: annotation_item → annotation_set_item → annotation_set_ref_list →
-        // annotations_directory_item. ----
+
         var allItems = new List<AnnotationItem>();
         var allSets = new List<AnnotationSet>();
         var allRefLists = new List<AnnotationSetRefList>();
@@ -338,8 +306,7 @@ internal static partial class DexWriter
             }
         }
 
-        // 1) annotation_item（encoded_annotation；无对齐要求；首字节为 visibility）
-        // 1) annotation_item (encoded_annotation; no alignment requirement; leading byte is visibility).
+
         var annotationItemOffsets = new Dictionary<AnnotationItem, uint>();
         foreach (var item in allItems)
         {
@@ -349,8 +316,7 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // 2) annotation_set_item（4 字节对齐；条目为纯偏移，不打包 visibility）
-        // 2) annotation_set_item (4-byte aligned; entries are plain offsets, no visibility packing).
+
         var annotationSetOffsets = new Dictionary<AnnotationSet, uint>();
         foreach (var set in allSets)
         {
@@ -364,8 +330,7 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // 3) annotation_set_ref_list（4 字节对齐；无注解的参数写 0）
-        // 3) annotation_set_ref_list (4-byte aligned; 0 for parameters without annotations).
+
         var refListOffsets = new Dictionary<AnnotationSetRefList, uint>();
         foreach (var rl in allRefLists)
         {
@@ -379,8 +344,7 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // 4) annotations_directory_item（4 字节对齐）
-        // 4) annotations_directory_item (4-byte aligned).
+
         var directoryOffsets = new Dictionary<AnnotationsDirectory, uint>();
         foreach (var dir in allDirs)
         {
@@ -408,8 +372,7 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // ---- 静态初始值（encoded_array；回填 class_defs 的 static_values_off）----
-        // ---- Static values (encoded_array; class_defs' static_values_off is patched) ----
+
         var staticValueOffsets = new uint[dex.Classes.Count];
         var encodedArrayCount = 0;
         var firstEncodedArray = 0u;
@@ -430,8 +393,7 @@ internal static partial class DexWriter
         }
         Align(w, 4);
 
-        // 回填 class_defs：interfaces_off / annotations_off / class_data_off / static_values_off
-        // Patch class_defs: interfaces_off / annotations_off / class_data_off / static_values_off.
+
         var classDefsEnd = (int)ms.Position;
         ms.Position = classDefsOffset;
         for (var i = 0; i < dex.Classes.Count; i++)
@@ -450,15 +412,13 @@ internal static partial class DexWriter
 
         var dataEnd = (int)ms.Position;
 
-        // ---- map_list（置于数据区末尾；按初始偏移升序，补全 code_item/type_list/debug_info/annotation 条目）----
-        // ---- map_list (at the end of the data section; ascending by initial offset; code_item,
-        // type_list, debug_info and annotation entries included) ----
+
         Align(w, 4);
         var mapOffset = (int)ms.Position;
-        mapItems.Add((0x0000, 1, 0)); // header_item
-        mapItems.Add((0x1000, 1, (uint)mapOffset)); // map_list
-        // 字符串数据与代码/类数据合并条目（类型代码 0x2002 / 0x2001 / 0x2000 按需）
-        // Aggregated entries for string data, code and class data.
+        mapItems.Add((0x0000, 1, 0));
+        mapItems.Add((0x1000, 1, (uint)mapOffset));
+
+
         if (stringOffsets.Length > 0) mapItems.Add((0x2002, (uint)stringOffsets.Length, stringOffsets[0]));
         var firstClassData = classDataOffsets.FirstOrDefault(o => o != 0);
         if (firstClassData != 0) mapItems.Add((0x2000, (uint)classDataOffsets.Count(o => o != 0), firstClassData));
@@ -476,24 +436,20 @@ internal static partial class DexWriter
         if (directoryOffsets.Count > 0) mapItems.Add((0x2006, (uint)directoryOffsets.Count, directoryOffsets.Values.Min()));
         if (encodedArrayCount > 0) mapItems.Add((0x2005, (uint)encodedArrayCount, firstEncodedArray));
 
-        // 按初始偏移升序写出（与真实 dx/d8 产物一致）
-        // Write in ascending initial-offset order (matching real dx/d8 output).
+
         var ordered = mapItems.OrderBy(m => m.Offset).ToList();
         w.Write((uint)ordered.Count);
         foreach (var (type, size, offset) in ordered)
         {
             w.Write(type);
-            w.Write((ushort)0); // unused
+            w.Write((ushort)0);
             w.Write(size);
             w.Write(offset);
         }
 
         var fileSize = (int)ms.Position;
 
-        // ---- 回填头部偏移（header 布局：magic@0 checksum@8 signature@12 file_size@32 header_size@36
-        // endian@40 link@44/48 map_off@52 各表 size@56/64/72/80/88/96 off@60/68/76/84/92/100 data@104/108）----
-        // ---- Patch header offsets (layout: magic@0 checksum@8 signature@12 file_size@32 header_size@36
-        // endian@40 link@44/48 map_off@52, table sizes@56/64/72/80/88/96, offsets@60/68/76/84/92/100, data@104/108) ----
+
         void Patch(int pos, uint value)
         {
             ms.Position = pos;
@@ -501,25 +457,23 @@ internal static partial class DexWriter
         }
 
         Patch(headerStart + 32, (uint)fileSize);
-        Patch(headerStart + 52, (uint)mapOffset);          // map_off
-        Patch(headerStart + 60, (uint)stringIdsOffset);    // string_ids_off
-        Patch(headerStart + 68, (uint)typeIdsOffset);      // type_ids_off
-        Patch(headerStart + 76, (uint)protoIdsOffset);     // proto_ids_off
-        Patch(headerStart + 84, (uint)fieldIdsOffset);     // field_ids_off
-        Patch(headerStart + 92, (uint)methodIdsOffset);    // method_ids_off
-        Patch(headerStart + 100, (uint)classDefsOffset);   // class_defs_off
-        Patch(headerStart + 104, (uint)(dataEnd - dataStart)); // data_size
-        Patch(headerStart + 108, (uint)dataStart);         // data_off
+        Patch(headerStart + 52, (uint)mapOffset);
+        Patch(headerStart + 60, (uint)stringIdsOffset);
+        Patch(headerStart + 68, (uint)typeIdsOffset);
+        Patch(headerStart + 76, (uint)protoIdsOffset);
+        Patch(headerStart + 84, (uint)fieldIdsOffset);
+        Patch(headerStart + 92, (uint)methodIdsOffset);
+        Patch(headerStart + 100, (uint)classDefsOffset);
+        Patch(headerStart + 104, (uint)(dataEnd - dataStart));
+        Patch(headerStart + 108, (uint)dataStart);
 
         var bytes = ms.ToArray();
 
-        // ---- 签名（字节 32..文件尾 的 SHA-1）----
-        // ---- Signature (SHA-1 of bytes 32..EOF) ----
+
         var signature = SHA1.HashData(bytes.AsSpan(32));
         signature.CopyTo(bytes, 12);
 
-        // ---- 校验和（字节 12..文件尾 的 Adler-32）----
-        // ---- Checksum (Adler-32 of bytes 12..EOF) ----
+
         var checksum = Adler32(bytes.AsSpan(12));
         BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(8), checksum);
 

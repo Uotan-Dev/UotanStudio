@@ -1,19 +1,9 @@
-using UotanStudio.Firmware.Oppo.Diagnostics;
+﻿using UotanStudio.Firmware.Oppo.Diagnostics;
 using UotanStudio.Firmware.Oppo.Helpers;
 using UotanStudio.Firmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.Oppo.Crypto;
 
-/// <summary>
-/// <para>提供 Oppo 固件文件的默认加解密实现，作为聚合器委托给各格式特定的提供者。</para>
-/// Provides the default encryption and decryption implementation for Oppo firmware files,
-/// acting as an aggregator that delegates to format-specific providers.
-/// </summary>
-/// <remarks>
-/// <para>初始化 <see cref="OppCryptoProvider"/> 类的新实例。</para>
-/// Initializes a new instance of the <see cref="OppCryptoProvider"/> class.
-/// </remarks>
-/// <param name="logger"><para>可选的日志记录器实例。</para>Optional logger instance.</param>
 public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoProvider, IDisposable
 {
     private readonly Dictionary<OppFormat, IOppFormatCryptoProvider> _providers = [];
@@ -21,10 +11,9 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     private bool _disposed;
 
     /// <summary>
-    /// <para>注册格式特定的加密提供者。</para>
     /// Registers a format-specific crypto provider.
+    /// <para>注册格式特定的加密提供者。</para>
     /// </summary>
-    /// <param name="provider"><para>格式特定的加密提供者实例。</para>The format-specific crypto provider instance.</param>
     public void RegisterProvider(IOppFormatCryptoProvider provider)
     {
         Guard.ThrowIfNull(provider);
@@ -33,8 +22,8 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>使用指定密钥解密数据。</para>
     /// Decrypts data using the specified key.
+    /// <para>使用指定密钥解密数据。</para>
     /// </summary>
     public byte[] Decrypt(byte[] data, string? keyId = null)
     {
@@ -50,8 +39,8 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>使用指定密钥加密数据。</para>
     /// Encrypts data using the specified key.
+    /// <para>使用指定密钥加密数据。</para>
     /// </summary>
     public byte[] Encrypt(byte[] data, string? keyId = null)
     {
@@ -68,8 +57,8 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>使用指定密钥解密流数据。</para>
     /// Decrypts stream data using the specified key.
+    /// <para>使用指定密钥解密流数据。</para>
     /// </summary>
     public void Decrypt(Stream input, Stream output, string? keyId = null, CancellationToken cancellationToken = default)
     {
@@ -87,8 +76,8 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>使用指定密钥加密流数据。</para>
     /// Encrypts stream data using the specified key.
+    /// <para>使用指定密钥加密流数据。</para>
     /// </summary>
     public void Encrypt(Stream input, Stream output, string? keyId = null, CancellationToken cancellationToken = default)
     {
@@ -106,8 +95,8 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>自动推断密钥并解密数据。</para>
     /// Automatically infers the key and decrypts data.
+    /// <para>自动推断密钥并解密数据。</para>
     /// </summary>
     public byte[] AutoDecrypt(byte[] data)
     {
@@ -131,15 +120,15 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>自动推断密钥并解密流数据。</para>
     /// Automatically infers the key and decrypts stream data.
+    /// <para>自动推断密钥并解密流数据。</para>
     /// </summary>
     public void AutoDecrypt(Stream input, Stream output, CancellationToken cancellationToken = default)
     {
         Guard.ThrowIfNull(input);
         Guard.ThrowIfNull(output);
 
-        // Read the stream into memory for auto-detection
+
         using var tempStream = new MemoryStream();
         input.CopyTo(tempStream);
         var data = tempStream.ToArray();
@@ -149,8 +138,8 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>查询是否支持指定的密钥标识符。</para>
     /// Queries whether the specified key identifier is supported.
+    /// <para>查询是否支持指定的密钥标识符。</para>
     /// </summary>
     public bool IsSupported(string keyId)
     {
@@ -166,8 +155,8 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>添加自定义密钥。</para>
     /// Adds a custom key.
+    /// <para>添加自定义密钥。</para>
     /// </summary>
     public void AddCustomKey(object keyEntry)
     {
@@ -183,7 +172,7 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
             }
             catch (ArgumentException)
             {
-                // This provider doesn't support this key type; try the next one
+
             }
         }
 
@@ -196,8 +185,8 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>将自动探测发现的密钥导出到文件。</para>
     /// Exports the key discovered by auto-detection to a file.
+    /// <para>将自动探测发现的密钥导出到文件。</para>
     /// </summary>
     public void ExportDiscoveredKey(string filePath)
     {
@@ -210,14 +199,14 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
     }
 
     /// <summary>
-    /// <para>获取指定格式的所有已知密钥标识符列表。</para>
     /// Gets the list of all known key identifiers for the specified format.
+    /// <para>获取指定格式的所有已知密钥标识符列表。</para>
     /// </summary>
     public IReadOnlyList<string> GetKnownKeys(OppFormat format) => _providers.TryGetValue(format, out var provider) ? provider.GetKnownKeys() : [];
 
     /// <summary>
-    /// <para>释放此实例使用的所有资源。</para>
     /// Releases all resources used by this instance.
+    /// <para>释放此实例使用的所有资源。</para>
     /// </summary>
     public void Dispose()
     {
@@ -237,7 +226,7 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
 
     private IOppFormatCryptoProvider FindProviderForKey(string keyId)
     {
-        // Determine format from keyId prefix
+
         if (keyId.StartsWith("MTK", StringComparison.OrdinalIgnoreCase))
         {
             return GetProvider(OppFormat.OfpMtk);
@@ -253,7 +242,7 @@ public sealed class OppCryptoProvider(IOppLogger? logger = null) : IOppCryptoPro
             return GetProvider(OppFormat.Ozip);
         }
 
-        // Default to QC for other key patterns
+
         return GetProvider(OppFormat.OfpQc);
     }
 

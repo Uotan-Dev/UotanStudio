@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using SharpCompress.Compressors.LZMA;
 using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.NTPi.Exceptions;
@@ -7,37 +7,27 @@ using UotanStudio.Firmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.NTPi.Compression;
 
-/// <summary>
-/// <para>LZMA2 压缩解压服务接口。</para>
-/// Interface for LZMA2 compression and decompression services.
-/// </summary>
 public interface ILzma2Compressor
 {
-    // Compatibility only: byte-array implementations are bounded solely by the CLR array limit.
+
     private const int NtDecompressHeaderSize = 112;
 
     /// <summary>
-    /// <para>解压包含 NtDecompressHeader 的压缩数据。</para>
     /// Decompresses data that includes the NtDecompressHeader.
+    /// <para>解压包含 NtDecompressHeader 的压缩数据。</para>
     /// </summary>
     byte[] Decompress(byte[] data);
 
     /// <summary>
-    /// <para>将数据压缩为包含 NtDecompressHeader 的格式。</para>
     /// Compresses data into a format that includes the NtDecompressHeader.
+    /// <para>将数据压缩为包含 NtDecompressHeader 的格式。</para>
     /// </summary>
     byte[] Compress(byte[] data, ulong originalSize);
 
     /// <summary>
+    /// Streams-decompresses a stream containing the NtDecompressHeader, bounding the number of output bytes by maximumOutputBytes.
     /// <para>流式解压包含 NtDecompressHeader 的压缩流,输出字节数受 maximumOutputBytes 限制。</para>
-    /// Streams-decompresses a stream containing the NtDecompressHeader, bounding the
-    /// number of output bytes by maximumOutputBytes.
     /// </summary>
-    /// <remarks>
-    /// <para>输出上限取调用方传入值与 NtDecompressHeader.OriginalSize 的较小值。</para>
-    /// The output limit is the smaller of the caller-provided value and
-    /// NtDecompressHeader.OriginalSize.
-    /// </remarks>
     void Decompress(Stream input, Stream output, long maximumOutputBytes)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -91,8 +81,8 @@ public interface ILzma2Compressor
     }
 
     /// <summary>
-    /// <para>流式压缩输入流为包含 NtDecompressHeader 的格式。</para>
     /// Streams-compresses the input stream into a format that includes the NtDecompressHeader.
+    /// <para>流式压缩输入流为包含 NtDecompressHeader 的格式。</para>
     /// </summary>
     void Compress(Stream input, Stream output, ulong originalSize)
     {
@@ -127,10 +117,6 @@ public interface ILzma2Compressor
     }
 }
 
-/// <summary>
-/// <para>LZMA2 压缩解压服务实现。</para>
-/// Implementation of LZMA2 compression and decompression services.
-/// </summary>
 public sealed class Lzma2Compressor : ILzma2Compressor
 {
     private const int HeaderSize = 112;
@@ -138,7 +124,10 @@ public sealed class Lzma2Compressor : ILzma2Compressor
     private static readonly byte[] ZeroPadding2 = new byte[72];
     private static readonly byte[] NtDecompMagic = Encoding.ASCII.GetBytes("NTDECOMP");
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Decompresses the input data.
+    /// <para>解压输入数据。</para>
+    /// </summary>
     public byte[] Decompress(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -152,8 +141,7 @@ public sealed class Lzma2Compressor : ILzma2Compressor
 
         var header = ReadAndValidateHeader(data);
 
-        // This overload must materialize the complete result in one byte array. Reject an
-        // impossible declaration before constructing a decoder or allocating output storage.
+
         if (header.OriginalSize > (ulong)Array.MaxLength)
         {
             throw new Lzma2CompressionException(
@@ -232,7 +220,10 @@ public sealed class Lzma2Compressor : ILzma2Compressor
         return result;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Decompresses the input data.
+    /// <para>解压输入数据。</para>
+    /// </summary>
     public void Decompress(Stream input, Stream output, long maximumOutputBytes)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -364,7 +355,10 @@ public sealed class Lzma2Compressor : ILzma2Compressor
         lzma.CopyTo(outputStream);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Compresses the input data.
+    /// <para>压缩输入数据。</para>
+    /// </summary>
     public byte[] Compress(byte[] data, ulong originalSize)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -424,7 +418,10 @@ public sealed class Lzma2Compressor : ILzma2Compressor
         return result;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Compresses the input data.
+    /// <para>压缩输入数据。</para>
+    /// </summary>
     public void Compress(Stream input, Stream output, ulong originalSize)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -502,7 +499,7 @@ public sealed class Lzma2Compressor : ILzma2Compressor
         }
         finally
         {
-            try { File.Delete(spoolPath); } catch { /* DeleteOnClose is best effort on some file systems. */ }
+            try { File.Delete(spoolPath); } catch {  }
         }
     }
 

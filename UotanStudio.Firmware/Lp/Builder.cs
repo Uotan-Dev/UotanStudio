@@ -1,11 +1,7 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Firmware.Lp;
 
-/// <summary>
-/// Builds Android Logical Partition (LP) metadata from partitions, groups, and extents.
-/// <para>从分区、组与 extent 构建 Android 逻辑分区(LP)元数据。</para>
-/// </summary>
 public sealed class MetadataBuilder
 {
     private readonly List<Partition> _partitions = [];
@@ -74,7 +70,7 @@ public sealed class MetadataBuilder
     /// </summary>
     public LpMetadata Build()
     {
-        // Ensure a default group exists.
+
         if (_groups.All(g => g.NameString != "default"))
         {
             _groups.Insert(0, new LpMetadataPartitionGroup
@@ -125,22 +121,14 @@ public sealed class MetadataBuilder
         return metadata;
     }
 
-    /// <summary>
-    /// A partition under construction.
-    /// <para>构建中的分区。</para>
-    /// </summary>
     public sealed class Partition
     {
-        /// <summary>Partition name. <para>分区名称。</para></summary>
         public string Name { get; }
 
-        /// <summary>Group name. <para>组名称。</para></summary>
         public string GroupName { get; }
 
-        /// <summary>Attributes. <para>属性。</para></summary>
         public uint Attributes { get; }
 
-        /// <summary>Extents. <para>extent 列表。</para></summary>
         public List<LpMetadataExtent> Extents { get; } = [];
 
         internal Partition(string name, string groupName, uint attributes, LpMetadataExtent extent)

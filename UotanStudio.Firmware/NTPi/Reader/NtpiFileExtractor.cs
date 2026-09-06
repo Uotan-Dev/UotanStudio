@@ -8,14 +8,6 @@ using UotanStudio.Firmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.NTPi.Reader;
 
-/// <summary>
-/// <para>负责从 NTPI 固件包的 Region6 中按块流式提取和解密单个文件。</para>
-/// Responsible for extracting and decrypting individual files from Region6 of NTPI firmware packages.
-/// </summary>
-/// <remarks>
-/// <para>使用指定的加密提供者和压缩器初始化 NtpiFileExtractor 的新实例。</para>
-/// Initializes a new instance of NtpiFileExtractor with the specified crypto provider and compressor.
-/// </remarks>
 internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compressor compressor)
 {
     private const int NtEncodeHeaderSize = 112;
@@ -23,8 +15,8 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     private readonly ILzma2Compressor _compressor = compressor ?? throw new ArgumentNullException(nameof(compressor));
 
     /// <summary>
-    /// <para>将指定文件条目的原始数据提取为内存字节数组。</para>
     /// Extracts the raw data for the specified file entry into an in-memory byte array.
+    /// <para>将指定文件条目的原始数据提取为内存字节数组。</para>
     /// </summary>
     public byte[] ExtractFileToMemory(Stream source, long region6Offset, long region6Length, KeyMapKeyProvider keyMapProvider, FileEntry entry)
     {
@@ -36,15 +28,9 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     }
 
     /// <summary>
-    /// <para>按块从 Region6 流式提取文件:FileStream→解密流→有界解码→输出流。</para>
     /// Streams a file from Region6 block by block: FileStream→decrypt stream→bounded decoder→output stream.
+    /// <para>按块从 Region6 流式提取文件:FileStream→解密流→有界解码→输出流。</para>
     /// </summary>
-    /// <param name="source">可定位的 NTPI 文件流。<para>The seekable NTPI file stream.</para></param>
-    /// <param name="region6Offset">Region6 在文件中的绝对偏移。<para>The absolute Region6 offset in the file.</para></param>
-    /// <param name="region6Length">Region6 的长度。<para>The Region6 length.</para></param>
-    /// <param name="keyMapProvider">Region6 块密钥提供者。<para>The Region6 block key provider.</para></param>
-    /// <param name="entry">文件索引条目。<para>The file index entry.</para></param>
-    /// <param name="output">解压结果输出流。<para>The output stream receiving the decompressed data.</para></param>
     public void ExtractFileToStream(Stream source, long region6Offset, long region6Length, KeyMapKeyProvider keyMapProvider, FileEntry entry, Stream output, long trustedOutputLimit = long.MaxValue)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -163,10 +149,9 @@ internal class NtpiFileExtractor(ICryptoProvider cryptoProvider, ILzma2Compresso
     }
 
     /// <summary>
-    /// <para>验证提取的文件数据的 SHA-256 哈希值。</para>
     /// Verifies the SHA-256 hash of extracted file data.
+    /// <para>验证提取的文件数据的 SHA-256 哈希值。</para>
     /// </summary>
-    /// <returns>哈希匹配时返回 true,否则抛出异常。</returns>
     public void VerifyHash(FileEntry entry, byte[] data)
     {
         ArgumentNullException.ThrowIfNull(entry);

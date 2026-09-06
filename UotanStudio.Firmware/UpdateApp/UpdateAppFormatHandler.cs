@@ -1,20 +1,17 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.UpdateApp;
 
-/// <summary>
-/// <para>华为 update.app 固件格式的 IFormatHandler 实现。</para>
-/// IFormatHandler implementation for the Huawei update.app firmware format.
-/// </summary>
 public sealed class UpdateAppFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "Huawei update.app";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["app", "bin"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -34,7 +31,7 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
             {
                 return false;
             }
-            // Magic 0x55AA5AA5 (LE bytes 55 AA 5A A5).
+
             return magic.SequenceEqual(UpdateAppProcessor.MagicBytes);
         }
         catch
@@ -43,7 +40,10 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -60,7 +60,10 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -75,6 +78,9 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(FirmwareOpResult.Fail("update.app packing is not supported by this handler."));
 }

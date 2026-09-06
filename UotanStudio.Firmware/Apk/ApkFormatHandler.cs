@@ -1,21 +1,17 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Apk;
 
-/// <summary>
-/// <para>Android Package (APK) 格式处理器：识别 .apk 文件、读取元数据（包名/版本/权限/ABI/图标）。</para>
-/// Android Package (APK) format handler: detects .apk files and reads metadata (package name,
-/// version, permissions, ABIs, icon).
-/// </summary>
 public sealed class ApkFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "Android Package (APK)";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions { get; } = ["apk"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -25,8 +21,8 @@ public sealed class ApkFormatHandler : IFormatHandler
 
         try
         {
-            // zip 魔数 PK\x03\x04。
-            // The zip magic PK\x03\x04.
+
+
             var header = FormatDetector.ReadHeader(filePath, 4);
             return header.Length >= 4 && header[0] == (byte)'P' && header[1] == (byte)'K'
                    && header[2] == 0x03 && header[3] == 0x04;
@@ -37,7 +33,10 @@ public sealed class ApkFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -56,7 +55,10 @@ public sealed class ApkFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -89,11 +91,14 @@ public sealed class ApkFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
-        // APK 重打包（资源重排/签名）不在本处理器范围内；原样拷贝输入文件。
-        // APK repackaging (resource reordering / signing) is out of scope; copy the input verbatim.
+
+
         try
         {
             cancellationToken.ThrowIfCancellationRequested();

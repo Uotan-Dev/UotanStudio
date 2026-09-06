@@ -13,25 +13,18 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.LibUsb;
 /// Homebrew/MacPorts 安装，或 Windows 上随附 dll）。</para>
 /// </summary>
 /// <remarks>
-/// <b>Why caller-provided path (no execve hack).</b> LibUsbDotNet 3.0.224
+/// <b>Why caller-provided path.</b> LibUsbDotNet 3.0.224
 /// registers its own <c>NativeLibrary.SetDllImportResolver</c> and probes
-/// for <c>libusb-1.0</c> by bare SONAME. An earlier attempt (the macos branch's
-/// <c>LibUsbNativeLoader</c>) worked around the missing search path by
-/// <c>execve</c>-relaunching the process with <c>DYLD_FALLBACK_LIBRARY_PATH</c>
-/// injected — an invasive trick that restarts the whole process image (breaking
-/// GUI apps, daemons, and embedded hosts) and never runs for netstandard2.0
-/// consumers. This loader instead takes the path explicitly from the caller and
-/// pre-loads the dylib by absolute path BEFORE any LibUsbDotNet type is JIT'd.
-/// dyld then resolves the later bare-SONAME <c>dlopen("libusb-1.0")</c> against
-/// the already-loaded image, so LibUsbDotNet's own resolver succeeds without a
-/// process restart.
-/// <para><b>为何采用调用者传入路径（无 execve hack）。</b>LibUsbDotNet 3.0.224
+/// for <c>libusb-1.0</c> by bare SONAME, which misses installs that are not
+/// on the loader's default search path. This loader takes the path explicitly
+/// from the caller and pre-loads the dylib by absolute path BEFORE any LibUsbDotNet
+/// type is JIT'd. dyld then resolves the later bare-SONAME <c>dlopen("libusb-1.0")</c>
+/// against the already-loaded image, so LibUsbDotNet's own resolver succeeds without
+/// a process restart.
+/// <para><b>为何采用调用者传入路径。</b>LibUsbDotNet 3.0.224
 /// 自注册 <c>NativeLibrary.SetDllImportResolver</c> 并以裸 SONAME
-/// <c>libusb-1.0</c> 探测。早期尝试（macos 分支的 <c>LibUsbNativeLoader</c>）
-/// 通过注入 <c>DYLD_FALLBACK_LIBRARY_PATH</c> 后 <c>execve</c> 重启进程来绕过
-/// 搜索路径缺失——该侵入性技巧会重启整个进程映像（破坏 GUI 应用、守护进程与
-/// 嵌入宿主），且对 netstandard2.0 消费方永不执行。本加载器改为由调用者显式传入
-/// 路径，并在任何 LibUsbDotNet 类型被 JIT 前按绝对路径预加载 dylib。dyld 随后
+/// <c>libusb-1.0</c> 探测，无法命中不在加载器默认搜索路径上的安装。本加载器由调用者显式
+/// 传入路径，并在任何 LibUsbDotNet 类型被 JIT 前按绝对路径预加载 dylib。dyld 随后
 /// 以已加载映像解析后续的裸 SONAME <c>dlopen("libusb-1.0")</c>，使 LibUsbDotNet
 /// 自身解析器无需重启进程即可成功。</para>
 ///

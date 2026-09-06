@@ -3,8 +3,8 @@ using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Devices;
 using UotanStudio.Views.Compare;
+using UotanStudio.Views.Devices;
 using UotanStudio.Views.Editors;
 using UotanStudio.Views.Workspace;
 

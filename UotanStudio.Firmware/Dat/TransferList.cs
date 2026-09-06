@@ -1,71 +1,35 @@
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace UotanStudio.Firmware.Dat;
 
-/// <summary>
-/// Command kinds in an Android OTA transfer list.
-/// <para>Android OTA transfer list 中的命令类型。</para>
-/// </summary>
 public enum TransferListCommandKind
 {
-    /// <summary><para>从 <c>.new.dat</c> 顺序读取数据块。</para>Read data blocks sequentially from the <c>.new.dat</c> file.</summary>
     New,
 
-    /// <summary><para>将目标块区间写为零。</para>Write zeros to the target block ranges.</summary>
     Zero,
 
-    /// <summary><para>擦除目标块区间（等效于写零）。</para>Erase the target block ranges (equivalent to writing zeros).</summary>
     Erase,
 
-    /// <summary><para>释放目标块区间（不写入数据）。</para>Free the target block ranges (no data written).</summary>
     Free,
 
-    /// <summary><para>用 <c>.patch.dat</c> 增量修补源镜像块区间（需源镜像）。</para>Patch source image ranges using <c>.patch.dat</c> (requires a source image).</summary>
     Diff,
 
-    /// <summary><para>暂存块区间供后续命令使用（增量 OTA）。</para>Stash block ranges for later commands (incremental OTA).</summary>
     Stash,
 
-    /// <summary><para>把源镜像的源块区间按序拷贝到目标块区间（v4 新增，需源镜像）。</para>Copy source-image ranges in order to target ranges (new in v4; requires a source image).</summary>
     Move
 }
 
-/// <summary>
-/// A half-open block range <c>[Start, End)</c>.
-/// <para>半开块区间 <c>[Start, End)</c>。</para>
-/// </summary>
-/// <param name="Start">Inclusive first block index. <para>包含的首块索引。</para></param>
-/// <param name="End">Exclusive last block index. <para>不包含的末块索引。</para></param>
 public readonly record struct BlockRange(long Start, long End)
 {
-    /// <summary>
-    /// Number of blocks in the range.
-    /// <para>区间内的块数。</para>
-    /// </summary>
     public long BlockCount => End - Start;
 }
 
-/// <summary>
-/// A single transfer-list command with its block ranges.
-/// <para>一条 transfer list 命令及其块范围。</para>
-/// </summary>
 public sealed class TransferListCommand
 {
     /// <summary>
     /// Creates a transfer-list command.
     /// <para>创建一条 transfer list 命令。</para>
     /// </summary>
-    /// <param name="kind">The command kind. <para>命令类型。</para></param>
-    /// <param name="ranges">The block ranges. <para>块范围列表。</para></param>
-    /// <param name="stashId">The stash id for <see cref="TransferListCommandKind.Stash"/> commands; otherwise <c>null</c>. <para>Stash 命令的暂存 id；其他命令为 <c>null</c>。</para></param>
-    /// <param name="sourceRanges">
-    /// The source block ranges for v4 <see cref="TransferListCommandKind.Move"/>/<see cref="TransferListCommandKind.Diff"/>
-    /// commands; <c>null</c> leaves the default: for <see cref="TransferListCommandKind.Diff"/> (v3 single range-set
-    /// semantics) the source equals <paramref name="ranges"/>, and for all other kinds it is empty.
-    /// <para>v4 <see cref="TransferListCommandKind.Move"/>/<see cref="TransferListCommandKind.Diff"/> 命令的源块范围；
-    /// <c>null</c> 时使用默认值：<see cref="TransferListCommandKind.Diff"/>（v3 单范围集语义）的源等于
-    /// <paramref name="ranges"/>，其余命令为空。</para>
-    /// </param>
     public TransferListCommand(TransferListCommandKind kind, IReadOnlyList<BlockRange> ranges, string? stashId = null, IReadOnlyList<BlockRange>? sourceRanges = null)
     {
         Kind = kind;
@@ -74,50 +38,21 @@ public sealed class TransferListCommand
         SourceRanges = sourceRanges ?? (kind == TransferListCommandKind.Diff ? ranges : []);
     }
 
-    /// <summary>
-    /// The command kind.
-    /// <para>命令类型。</para>
-    /// </summary>
     public TransferListCommandKind Kind { get; }
 
-    /// <summary>
-    /// The block ranges targeted by this command.
-    /// <para>该命令作用的块范围。</para>
-    /// </summary>
     public IReadOnlyList<BlockRange> Ranges { get; }
 
-    /// <summary>
-    /// The stash id for <see cref="TransferListCommandKind.Stash"/> commands; otherwise <c>null</c>.
-    /// <para>Stash 命令的暂存 id；其他命令为 <c>null</c>。</para>
-    /// </summary>
     public string? StashId { get; }
 
-    /// <summary>
-    /// The source block ranges for <see cref="TransferListCommandKind.Move"/>/<see cref="TransferListCommandKind.Diff"/>
-    /// commands; empty for all other kinds. For a v3 <see cref="TransferListCommandKind.Diff"/> (single range-set,
-    /// source equals target) this is the same as <see cref="Ranges"/>.
-    /// <para><see cref="TransferListCommandKind.Move"/>/<see cref="TransferListCommandKind.Diff"/> 命令的源块范围；
-    /// 其他命令为空。v3 的 <see cref="TransferListCommandKind.Diff"/>（单范围集，源等于目标）该值等于
-    /// <see cref="Ranges"/>。</para>
-    /// </summary>
     public IReadOnlyList<BlockRange> SourceRanges { get; }
 }
 
-/// <summary>
-/// A parsed Android OTA transfer list.
-/// <para>解析后的 Android OTA transfer list。</para>
-/// </summary>
 public sealed class TransferList
 {
     /// <summary>
     /// Creates a parsed transfer list, computing derived totals.
     /// <para>创建解析后的 transfer list，并计算派生总量。</para>
     /// </summary>
-    /// <param name="version">Format version. <para>格式版本。</para></param>
-    /// <param name="newBlocks">Total number of blocks to write. <para>待写入的总块数。</para></param>
-    /// <param name="stashEntries">Number of stash entries needed simultaneously. <para>同时需要的暂存条目数。</para></param>
-    /// <param name="maxStashedBlocks">Maximum number of simultaneously stashed blocks. <para>同时暂存的最大块数。</para></param>
-    /// <param name="commands">The parsed commands. <para>解析出的命令列表。</para></param>
     public TransferList(int version, long newBlocks, int stashEntries, long maxStashedBlocks, IReadOnlyList<TransferListCommand> commands)
     {
         Version = version;
@@ -140,70 +75,32 @@ public sealed class TransferList
             }
         }
 
-        // 输出镜像覆盖声明的新块总数；增量命令（diff/move/stash）只覆盖部分块，
-        // 未覆盖块由解包器保持为零，因此以声明的总块数为下界。
-        // The output image covers the declared new-block count; incremental commands
-        // (diff/move/stash) only touch some blocks, so the declared count is the lower bound.
+
         TotalBlocks = Math.Max(newBlocks, total);
         NewDataBlocks = newData;
     }
 
-    /// <summary>
-    /// Format version (4 for Android 8+).
-    /// <para>格式版本（Android 8+ 为 4）。</para>
-    /// </summary>
     public int Version { get; }
 
-    /// <summary>
-    /// Total number of blocks to write.
-    /// <para>待写入的总块数。</para>
-    /// </summary>
     public long NewBlocks { get; }
 
-    /// <summary>
-    /// Number of stash entries needed simultaneously.
-    /// <para>同时需要的暂存条目数。</para>
-    /// </summary>
     public int StashEntries { get; }
 
-    /// <summary>
-    /// Maximum number of simultaneously stashed blocks.
-    /// <para>同时暂存的最大块数。</para>
-    /// </summary>
     public long MaxStashedBlocks { get; }
 
-    /// <summary>
-    /// The parsed commands.
-    /// <para>解析出的命令列表。</para>
-    /// </summary>
     public IReadOnlyList<TransferListCommand> Commands { get; }
 
-    /// <summary>
-    /// Total logical blocks covered by all commands (the highest block index).
-    /// <para>全部命令覆盖的逻辑块总数（最大块索引）。</para>
-    /// </summary>
     public long TotalBlocks { get; }
 
-    /// <summary>
-    /// Total number of data blocks that must be read from the <c>.new.dat</c> file.
-    /// <para>必须从 <c>.new.dat</c> 读取的数据块总数。</para>
-    /// </summary>
     public long NewDataBlocks { get; }
 }
 
-/// <summary>
-/// Parser for Android OTA transfer list files (v4+).
-/// <para>Android OTA transfer list（v4+）解析器。</para>
-/// </summary>
 public static class TransferListParser
 {
     /// <summary>
     /// Parses a transfer list from a file path.
     /// <para>从文件路径解析 transfer list。</para>
     /// </summary>
-    /// <param name="path">The transfer list file path. <para>transfer list 文件路径。</para></param>
-    /// <returns>The parsed transfer list. <para>解析后的 transfer list。</para></returns>
-    /// <exception cref="InvalidDataException">Thrown when the file is malformed. <para>文件格式非法时抛出。</para></exception>
     public static TransferList Parse(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -215,9 +112,6 @@ public static class TransferListParser
     /// Parses a transfer list from a text reader.
     /// <para>从文本读取器解析 transfer list。</para>
     /// </summary>
-    /// <param name="reader">The text reader. <para>文本读取器。</para></param>
-    /// <returns>The parsed transfer list. <para>解析后的 transfer list。</para></returns>
-    /// <exception cref="InvalidDataException">Thrown when the input is malformed. <para>输入格式非法时抛出。</para></exception>
     public static TransferList Parse(TextReader reader)
     {
         ArgumentNullException.ThrowIfNull(reader);
@@ -302,8 +196,8 @@ public static class TransferListParser
 
         if (kind is TransferListCommandKind.Move or TransferListCommandKind.Diff)
         {
-            // v4：move/diff 携带「源范围集 目标范围集」两个 token。
-            // v4: move/diff carry a source range set and a target range set.
+
+
             if (tokens.Length == 3)
             {
                 return new TransferListCommand(
@@ -313,8 +207,7 @@ public static class TransferListParser
                     ParseRangeSet(tokens[1], lineNumber));
             }
 
-            // v3：diff 只带单范围集，源等于目标。
-            // v3: diff carries a single range set, source equals target.
+
             if (kind == TransferListCommandKind.Diff && tokens.Length == 2)
             {
                 var ranges = ParseRangeSet(tokens[1], lineNumber);

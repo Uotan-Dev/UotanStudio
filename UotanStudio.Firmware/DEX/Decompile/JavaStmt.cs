@@ -1,32 +1,20 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Firmware.Dex.Decompile;
 
-/// <summary>
-/// <para>伪 Java 语句基类：结构化控制流恢复后的语句树节点，负责按缩进渲染。</para>
-/// Base class of pseudo-Java statements: statement tree nodes produced after structured
-/// control-flow recovery, each rendering itself with indentation.
-/// </summary>
 public abstract class JavaStmt
 {
-    /// <summary>
-    /// <para>源字节码偏移（字节），用于 BytecodeGuide 模式的行首标注；无来源为 -1。</para>
-    /// Source bytecode offset (bytes), prefixed in BytecodeGuide mode; -1 when none.
-    /// </summary>
     public int Offset { get; set; } = -1;
 
     /// <summary>
-    /// <para>按指定缩进层级写入字符串构建器。</para>
     /// Writes the statement into the builder at the given indentation level.
+    /// <para>按指定缩进层级写入字符串构建器。</para>
     /// </summary>
-    /// <param name="sb">目标构建器。<para>Target builder.</para></param>
-    /// <param name="indent">缩进层级。<para>Indentation level.</para></param>
-    /// <param name="options">反编译选项。<para>Decompiler options.</para></param>
     public abstract void WriteTo(StringBuilder sb, int indent, DecompileOptions options);
 
     /// <summary>
-    /// <para>写入缩进空白。</para>
     /// Writes indentation whitespace.
+    /// <para>写入缩进空白。</para>
     /// </summary>
     protected static void WriteIndent(StringBuilder sb, int indent)
     {
@@ -34,12 +22,9 @@ public abstract class JavaStmt
     }
 
     /// <summary>
+    /// Writes a condition expression: binary expressions omit their outer parentheses (conditional contexts such as if/while provide the parentheses themselves).
     /// <para>写入条件表达式：二元表达式省略最外层括号（if/while 等条件上下文自带括号）。</para>
-    /// Writes a condition expression: binary expressions omit their outer parentheses (conditional
-    /// contexts such as if/while provide the parentheses themselves).
     /// </summary>
-    /// <param name="sb">目标构建器。<para>Target builder.</para></param>
-    /// <param name="cond">条件表达式。<para>Condition expression.</para></param>
     protected static void WriteCondition(StringBuilder sb, JavaExpr cond)
     {
         if (cond is BinaryExpr binary)
@@ -55,31 +40,26 @@ public abstract class JavaStmt
     }
 }
 
-/// <summary>
-/// <para>赋值语句（move / iget / sget / aget 系列）。</para>
-/// Assignment statement (move / iget / sget / aget family).
-/// </summary>
 public sealed class AssignStmt : JavaStmt
 {
-    /// <summary>赋值目标（局部寄存器 / 字段 / 数组元素）。<para>Assignment target (local / field / array element).</para></summary>
     public JavaExpr Target { get; }
 
-    /// <summary>被赋的值。<para>Assigned value.</para></summary>
     public JavaExpr Value { get; }
 
     /// <summary>
-    /// <para>创建赋值语句。</para>
     /// Creates an assignment statement.
+    /// <para>创建赋值语句。</para>
     /// </summary>
-    /// <param name="target">赋值目标。<para>Assignment target.</para></param>
-    /// <param name="value">被赋的值。<para>Assigned value.</para></param>
     public AssignStmt(JavaExpr target, JavaExpr value)
     {
         Target = target;
         Value = value;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -90,23 +70,20 @@ public sealed class AssignStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>表达式语句（方法调用、数组填充等副作用语句）。</para>
-/// Expression statement (method call, array fill and other side-effecting statements).
-/// </summary>
 public sealed class ExprStmt : JavaStmt
 {
-    /// <summary>表达式。<para>Expression.</para></summary>
     public JavaExpr Expr { get; }
 
     /// <summary>
-    /// <para>创建表达式语句。</para>
     /// Creates an expression statement.
+    /// <para>创建表达式语句。</para>
     /// </summary>
-    /// <param name="expr">表达式。<para>Expression.</para></param>
     public ExprStmt(JavaExpr expr) => Expr = expr;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -115,23 +92,20 @@ public sealed class ExprStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>返回语句。</para>
-/// Return statement.
-/// </summary>
 public sealed class ReturnStmt : JavaStmt
 {
-    /// <summary>返回值；<c>null</c> 表示 return-void。<para>Return value; <c>null</c> for return-void.</para></summary>
     public JavaExpr? Value { get; }
 
     /// <summary>
-    /// <para>创建返回语句。</para>
     /// Creates a return statement.
+    /// <para>创建返回语句。</para>
     /// </summary>
-    /// <param name="value">返回值；<c>null</c> 表示 return-void。<para>Return value; <c>null</c> for return-void.</para></param>
     public ReturnStmt(JavaExpr? value) => Value = value;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -145,23 +119,20 @@ public sealed class ReturnStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>抛出语句。</para>
-/// Throw statement.
-/// </summary>
 public sealed class ThrowStmt : JavaStmt
 {
-    /// <summary>被抛出的异常表达式。<para>Thrown exception expression.</para></summary>
     public JavaExpr Value { get; }
 
     /// <summary>
-    /// <para>创建抛出语句。</para>
     /// Creates a throw statement.
+    /// <para>创建抛出语句。</para>
     /// </summary>
-    /// <param name="value">被抛出的异常表达式。<para>Thrown exception expression.</para></param>
     public ThrowStmt(JavaExpr value) => Value = value;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -171,23 +142,20 @@ public sealed class ThrowStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>原始注释语句：无法结构化或无法恢复的指令以注释保留。</para>
-/// Raw comment statement: instructions that cannot be structured or recovered are kept as comments.
-/// </summary>
 public sealed class RawCommentStmt : JavaStmt
 {
-    /// <summary>注释文本（不含前缀）。<para>Comment text (without the prefix).</para></summary>
     public string Text { get; }
 
     /// <summary>
-    /// <para>创建注释语句。</para>
     /// Creates a comment statement.
+    /// <para>创建注释语句。</para>
     /// </summary>
-    /// <param name="text">注释文本。<para>Comment text.</para></param>
     public RawCommentStmt(string text) => Text = text;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -195,16 +163,14 @@ public sealed class RawCommentStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>语句块。</para>
-/// Statement block.
-/// </summary>
 public sealed class BlockStmt : JavaStmt
 {
-    /// <summary>块内语句。<para>Statements in the block.</para></summary>
     public List<JavaStmt> Statements { get; } = [];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -219,29 +185,24 @@ public sealed class BlockStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>if 语句（含 else 分支；else 仅含单个 if 时渲染为 else if）。</para>
-/// if statement (with an optional else branch; a lone if in the else renders as else if).
-/// </summary>
 public sealed class IfStmt : JavaStmt
 {
-    /// <summary>条件表达式。<para>Condition expression.</para></summary>
     public JavaExpr Cond { get; }
 
-    /// <summary>真分支语句。<para>Then-branch statements.</para></summary>
     public List<JavaStmt> Then { get; } = [];
 
-    /// <summary>假分支语句；为空表示无 else。<para>Else-branch statements; empty when there is no else.</para></summary>
     public List<JavaStmt> Else { get; } = [];
 
     /// <summary>
-    /// <para>创建 if 语句。</para>
     /// Creates an if statement.
+    /// <para>创建 if 语句。</para>
     /// </summary>
-    /// <param name="cond">条件表达式。<para>Condition expression.</para></param>
     public IfStmt(JavaExpr cond) => Cond = cond;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -261,8 +222,8 @@ public sealed class IfStmt : JavaStmt
         else if (Else.Count == 1 && Else[0] is IfStmt nestedIf)
         {
             sb.Append("} else ");
-            // 渲染为 else if (...) { ... }：手动展开嵌套 if 头与块。
-            // Render as "else if (...) { ... }": expand the nested if header and block manually.
+
+
             sb.Append("if (");
             WriteCondition(sb, nestedIf.Cond);
             sb.AppendLine(") {");
@@ -300,26 +261,22 @@ public sealed class IfStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>while 语句。</para>
-/// while statement.
-/// </summary>
 public sealed class WhileStmt : JavaStmt
 {
-    /// <summary>循环条件。<para>Loop condition.</para></summary>
     public JavaExpr Cond { get; }
 
-    /// <summary>循环体。<para>Loop body.</para></summary>
     public List<JavaStmt> Body { get; } = [];
 
     /// <summary>
-    /// <para>创建 while 语句。</para>
     /// Creates a while statement.
+    /// <para>创建 while 语句。</para>
     /// </summary>
-    /// <param name="cond">循环条件。<para>Loop condition.</para></param>
     public WhileStmt(JavaExpr cond) => Cond = cond;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -336,26 +293,22 @@ public sealed class WhileStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>do-while 语句。</para>
-/// do-while statement.
-/// </summary>
 public sealed class DoWhileStmt : JavaStmt
 {
-    /// <summary>循环条件。<para>Loop condition.</para></summary>
     public JavaExpr Cond { get; }
 
-    /// <summary>循环体。<para>Loop body.</para></summary>
     public List<JavaStmt> Body { get; } = [];
 
     /// <summary>
-    /// <para>创建 do-while 语句。</para>
     /// Creates a do-while statement.
+    /// <para>创建 do-while 语句。</para>
     /// </summary>
-    /// <param name="cond">循环条件。<para>Loop condition.</para></param>
     public DoWhileStmt(JavaExpr cond) => Cond = cond;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -372,16 +325,14 @@ public sealed class DoWhileStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>无限循环语句（while (true)）。</para>
-/// Infinite loop statement (while (true)).
-/// </summary>
 public sealed class InfiniteLoopStmt : JavaStmt
 {
-    /// <summary>循环体。<para>Loop body.</para></summary>
     public List<JavaStmt> Body { get; } = [];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -396,29 +347,24 @@ public sealed class InfiniteLoopStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>switch 语句（case 键为 long；default 分支可选）。</para>
-/// switch statement (case keys are long; the default branch is optional).
-/// </summary>
 public sealed class SwitchStmt : JavaStmt
 {
-    /// <summary>开关值表达式。<para>Switch value expression.</para></summary>
     public JavaExpr Value { get; }
 
-    /// <summary>各 case 分支（键升序）。<para>Case branches (keys ascending).</para></summary>
     public List<(long Key, List<JavaStmt> Body)> Cases { get; } = [];
 
-    /// <summary>default 分支；为空表示无。<para>Default branch; empty when absent.</para></summary>
     public List<JavaStmt> DefaultBody { get; } = [];
 
     /// <summary>
-    /// <para>创建 switch 语句。</para>
     /// Creates a switch statement.
+    /// <para>创建 switch 语句。</para>
     /// </summary>
-    /// <param name="value">开关值表达式。<para>Switch value expression.</para></param>
     public SwitchStmt(JavaExpr value) => Value = value;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -456,13 +402,12 @@ public sealed class SwitchStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>break 语句。</para>
-/// break statement.
-/// </summary>
 public sealed class BreakStmt : JavaStmt
 {
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);
@@ -470,23 +415,20 @@ public sealed class BreakStmt : JavaStmt
     }
 }
 
-/// <summary>
-/// <para>goto 指导注释：未结构化的控制流以字节码标签注释保留（方法指导模式）。</para>
-/// Goto guidance comment: unstructured control flow is kept as bytecode label comments (method-guide mode).
-/// </summary>
 public sealed class GotoCommentStmt : JavaStmt
 {
-    /// <summary>目标标签文本（如 "label_0010"）。<para>Target label text (e.g. "label_0010").</para></summary>
     public string Label { get; }
 
     /// <summary>
-    /// <para>创建 goto 指导注释。</para>
     /// Creates a goto guidance comment.
+    /// <para>创建 goto 指导注释。</para>
     /// </summary>
-    /// <param name="label">目标标签。<para>Target label.</para></param>
     public GotoCommentStmt(string label) => Label = label;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes the Java representation to the output.
+    /// <para>向输出写入 Java 表示。</para>
+    /// </summary>
     public override void WriteTo(StringBuilder sb, int indent, DecompileOptions options)
     {
         WriteIndent(sb, indent);

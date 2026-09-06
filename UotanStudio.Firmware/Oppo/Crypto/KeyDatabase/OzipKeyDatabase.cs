@@ -1,34 +1,19 @@
 namespace UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
 
-/// <summary>
-/// <para>提供 OZip 加密固件的内置 AES-128 密钥数据库。</para>
-/// Provides the built-in AES-128 key database for OZip encrypted firmware.
-/// </summary>
-/// <remarks>
-/// <para>
-/// 此数据库包含从 Python 参考实现 (bkerler/oppo_ozip_decrypt) 提取的已知密钥，
-/// 涵盖 Oppo、Realme、OnePlus 等品牌的多种设备型号。
-/// </para>
-/// This database contains known keys extracted from the Python reference implementation
-/// (bkerler/oppo_ozip_decrypt), covering various device models from Oppo, Realme, and OnePlus.
-/// </remarks>
 public static class OzipKeyDatabase
 {
     private static readonly List<OzipKeyEntry> Entries = BuildKeyDatabase();
 
     /// <summary>
-    /// <para>获取所有已知 OZip 密钥条目。</para>
     /// Gets all known OZip key entries.
+    /// <para>获取所有已知 OZip 密钥条目。</para>
     /// </summary>
-    /// <returns><para>所有密钥条目的只读列表。</para>A read-only list of all key entries.</returns>
     public static IReadOnlyList<OzipKeyEntry> GetAllKeys() => Entries;
 
     /// <summary>
-    /// <para>根据索引获取密钥条目。</para>
     /// Gets a key entry by its index.
+    /// <para>根据索引获取密钥条目。</para>
     /// </summary>
-    /// <param name="index"><para>密钥条目的索引（从 0 开始）。</para>The zero-based index of the key entry.</param>
-    /// <returns><para>指定索引处的密钥条目。</para>The key entry at the specified index.</returns>
     public static OzipKeyEntry FindByIndex(int index)
     {
         return index < 0 || index >= Entries.Count
@@ -37,10 +22,6 @@ public static class OzipKeyDatabase
             : Entries[index];
     }
 
-    /// <summary>
-    /// <para>获取密钥数据库中的密钥总数。</para>
-    /// Gets the total number of keys in the database.
-    /// </summary>
     public static int Count => Entries.Count;
 
     private static List<OzipKeyEntry> BuildKeyDatabase()

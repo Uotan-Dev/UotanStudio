@@ -1,108 +1,71 @@
 namespace UotanStudio.Firmware.Dt;
 
-/// <summary>
-/// <para>提供扁平设备树(FDT)二进制格式的常量。</para>
-/// Provides constants for the Flattened Device Tree (FDT) binary format.
-/// </summary>
 public static class FdtConstants
 {
-    /// <summary>标识有效扁平设备树的 FDT 魔数(0xD00DFEED)。</summary>
     public const uint FdtMagic = 0xD00DFEED;
 
-    /// <summary>版本 17 及更高版本的 FDT 头部大小(40 字节)。</summary>
     public const int HeaderSize = 40;
 
-    /// <summary>当前 FDT 格式版本(17)。</summary>
     public const uint FdtVersion = 17;
 
-    /// <summary>最后兼容的 FDT 格式版本(16)。</summary>
     public const uint FdtLastCompVersion = 16;
 
-    /// <summary>结构块数据的字节对齐(4 字节)。</summary>
     public const int Alignment = 4;
 
-    /// <summary>内存保留块对齐(8 字节)。</summary>
     public const int MemoryReservationAlignment = 8;
 
-    /// <summary>单个内存保留条目大小(16 字节)。</summary>
     public const int MemoryReservationEntrySize = 16;
 
-    /// <summary>结构块标记:节点开始(0x00000001)。</summary>
     public const uint FdtBeginNode = 0x00000001;
 
-    /// <summary>结构块标记:节点结束(0x00000002)。</summary>
     public const uint FdtEndNode = 0x00000002;
 
-    /// <summary>结构块标记:属性(0x00000003)。</summary>
     public const uint FdtProp = 0x00000003;
 
-    /// <summary>结构块标记:无操作(0x00000004)。</summary>
     public const uint FdtNop = 0x00000004;
 
-    /// <summary>结构块标记:结束(0x00000009)。</summary>
     public const uint FdtEnd = 0x00000009;
 
-    /// <summary>属性头大小(8 字节:4 长度 + 4 名称偏移)。</summary>
     public const int PropertyHeaderSize = 8;
 
-    /// <summary>FDT 标记字节大小(4 字节)。</summary>
     public const int TokenSize = 4;
 
-    /// <summary>DTBO 镜像魔数(0xD7B7AB1E，大端存储)。</summary>
     public const uint DtboMagic = 0xD7B7AB1E;
 
-    /// <summary>DTBO 表头固定大小(32 字节，AOSP dt_table_header)。</summary>
     public const int DtboHeaderSize = 32;
 
-    /// <summary>DTBO 条目描述符固定大小(32 字节，AOSP dt_table_entry)。</summary>
     public const int DtboEntrySize = 32;
 
-    /// <summary>DTBO 默认页大小(AOSP DT_TABLE_DEFAULT_PAGE_SIZE)。</summary>
     public const uint DtboDefaultPageSize = 2048;
 }
 
-/// <summary>
-/// <para>表示扁平设备树(FDT)头部结构。</para>
-/// Represents the Flattened Device Tree (FDT) header structure.
-/// </summary>
 public sealed class FdtHeader
 {
-    /// <summary>魔数。</summary>
     public uint Magic { get; set; }
 
-    /// <summary>设备树 blob 的总大小(字节)。</summary>
     public uint TotalSize { get; set; }
 
-    /// <summary>结构块偏移量。</summary>
     public uint OffsetDtStruct { get; set; }
 
-    /// <summary>字符串块偏移量。</summary>
     public uint OffsetDtStrings { get; set; }
 
-    /// <summary>内存保留映射偏移量。</summary>
     public uint OffsetMemRsvmap { get; set; }
 
-    /// <summary>设备树结构版本。</summary>
     public uint Version { get; set; }
 
-    /// <summary>最后兼容版本。</summary>
     public uint LastCompVersion { get; set; }
 
-    /// <summary>引导 CPU 物理 ID。</summary>
     public uint BootCpuidPhys { get; set; }
 
-    /// <summary>字符串块大小(字节)。</summary>
     public uint SizeDtStrings { get; set; }
 
-    /// <summary>结构块大小(字节)。</summary>
     public uint SizeDtStruct { get; set; }
 
-    /// <summary>魔数是否有效。</summary>
     public bool IsValidMagic => Magic == FdtConstants.FdtMagic;
 
     /// <summary>
-    /// <para>从字节跨度读取 FDT 头部(大端)。</para>
     /// Reads an FDT header from a byte span (big-endian).
+    /// <para>从字节跨度读取 FDT 头部(大端)。</para>
     /// </summary>
     public static FdtHeader ReadFrom(ReadOnlySpan<byte> data)
     {
@@ -139,8 +102,8 @@ public sealed class FdtHeader
     }
 
     /// <summary>
-    /// <para>将头部序列化为字节数组(大端)。</para>
     /// Serializes the header to a byte array (big-endian).
+    /// <para>将头部序列化为字节数组(大端)。</para>
     /// </summary>
     public byte[] ToBytes()
     {
@@ -170,15 +133,9 @@ public sealed class FdtHeader
     }
 }
 
-/// <summary>
-/// <para>表示设备树中的内存保留条目。</para>
-/// Represents a memory reservation entry in a device tree.
-/// </summary>
 public readonly struct MemoryReservation
 {
-    /// <summary>保留内存起始地址。</summary>
     public ulong Address { get; init; }
 
-    /// <summary>保留内存大小。</summary>
     public ulong Size { get; init; }
 }

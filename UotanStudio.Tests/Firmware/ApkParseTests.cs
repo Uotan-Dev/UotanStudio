@@ -1,29 +1,32 @@
 using UotanStudio.Firmware.Apk;
+using UotanStudio.Tests.Infrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// APK metadata parser tests: the parser analyzes a real APK when present on this developer machine
-/// (skipped otherwise), validating package/version/permission/ABI/icon extraction on a production file.
-/// <para>APK 元数据解析测试：本机存在真实 APK 时分析验证（否则跳过），在生产文件上校验
-/// 包名/版本/权限/ABI/图标提取。</para>
+/// APK metadata parser tests: the parser runs against the real Magisk-v30.6.apk from the firmware
+/// corpus when present, validating package/version/permission/ABI/icon extraction on a production
+/// file; cases are skipped via <see cref="Assert.Skip"/> when the corpus file is missing.
+/// <para>APK 元数据解析测试：语料库存在 Magisk-v30.6.apk 时在真实生产文件上校验
+/// 包名/版本/权限/ABI/图标提取；语料缺失时以 <see cref="Assert.Skip"/> 跳过。</para>
 /// </summary>
 public class ApkParseTests
 {
-    private const string RealApkPath =
-        @"C:\Users\28319\Desktop\新建文件夹\test\images\Magisk-v30.6.apk";
+    /// <summary>语料库中 Magisk-v30.6.apk 的路径（只定位一次）；不存在时为 null。
+    /// <para>The located Magisk-v30.6.apk path (resolved once); null when absent.</para></summary>
+    private static readonly string? ApkPath = FirmwareCorpus.FindFile("Magisk-v30.6.apk");
 
     [Fact]
     public void Analyze_RealMagiskApk_ExtractsMetadata()
     {
-        if (!File.Exists(RealApkPath))
+        var apkPath = ApkPath;
+        if (apkPath is null)
         {
-            return; // 非本机环境：跳过真实文件测试。
-            // Non-local environment: skip the real-file test.
+            Assert.Skip("Magisk-v30.6.apk not found in firmware corpus");
         }
 
-        var info = ApkParser.Analyze(RealApkPath);
+        var info = ApkParser.Analyze(apkPath);
 
         // 包名与版本。
         // Package name and version.
@@ -44,12 +47,13 @@ public class ApkParseTests
     [Fact]
     public void Analyze_RealMagiskApk_EnumeratesAbis()
     {
-        if (!File.Exists(RealApkPath))
+        var apkPath = ApkPath;
+        if (apkPath is null)
         {
-            return;
+            Assert.Skip("Magisk-v30.6.apk not found in firmware corpus");
         }
 
-        var info = ApkParser.Analyze(RealApkPath);
+        var info = ApkParser.Analyze(apkPath);
 
         // Magisk 内置 arm64-v8a 原生库。
         // Magisk ships arm64-v8a native libraries.
@@ -60,12 +64,13 @@ public class ApkParseTests
     [Fact]
     public void Analyze_RealMagiskApk_IconBytesOrPathPresent()
     {
-        if (!File.Exists(RealApkPath))
+        var apkPath = ApkPath;
+        if (apkPath is null)
         {
-            return;
+            Assert.Skip("Magisk-v30.6.apk not found in firmware corpus");
         }
 
-        var info = ApkParser.Analyze(RealApkPath);
+        var info = ApkParser.Analyze(apkPath);
 
         // 图标要么解析出 zip 内路径，要么至少解析出字节。
         // The icon is either resolved to a zip path or carries bytes.

@@ -4,15 +4,11 @@ using UotanStudio.Firmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.NTPi.Helpers;
 
-/// <summary>
-/// <para>提供 NTPI 各结构体与字节流之间手工序列化/反序列化的辅助类。</para>
-/// Provides manual serialization/deserialization helpers between NTPI structs and byte streams.
-/// </summary>
 internal static class StructHelper
 {
     /// <summary>
-    /// <para>从字节跨度读取 NtpiHeader(48 字节)。</para>
     /// Reads an NtpiHeader (48 bytes) from a byte span.
+    /// <para>从字节跨度读取 NtpiHeader(48 字节)。</para>
     /// </summary>
     public static NtpiHeader ReadNtpiHeader(ReadOnlySpan<byte> data)
     {
@@ -28,8 +24,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>从字节跨度读取 RegionHeader(16 字节)。</para>
     /// Reads a RegionHeader (16 bytes) from a byte span.
+    /// <para>从字节跨度读取 RegionHeader(16 字节)。</para>
     /// </summary>
     public static RegionHeader ReadRegionHeader(ReadOnlySpan<byte> data)
     {
@@ -41,8 +37,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>从字节跨度读取 RegionBlockHeader(40 字节)。</para>
     /// Reads a RegionBlockHeader (40 bytes) from a byte span.
+    /// <para>从字节跨度读取 RegionBlockHeader(40 字节)。</para>
     /// </summary>
     public static RegionBlockHeader ReadRegionBlockHeader(ReadOnlySpan<byte> data)
     {
@@ -55,8 +51,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>从字节跨度读取 NtEncodeHeader(112 字节)。</para>
     /// Reads an NtEncodeHeader (112 bytes) from a byte span.
+    /// <para>从字节跨度读取 NtEncodeHeader(112 字节)。</para>
     /// </summary>
     public static NtEncodeHeader ReadNtEncodeHeader(ReadOnlySpan<byte> data)
     {
@@ -77,8 +73,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>验证字节跨度开头的 8 字节是否为 "NTENCODE"。</para>
     /// Validates whether the first 8 bytes are "NTENCODE".
+    /// <para>验证字节跨度开头的 8 字节是否为 "NTENCODE"。</para>
     /// </summary>
     public static bool IsNtEncodeMagic(ReadOnlySpan<byte> data)
     {
@@ -88,26 +84,26 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>验证字节数组从指定偏移开始是否为 "NTENCODE"。</para>
     /// Validates whether the byte array at the given offset starts with "NTENCODE".
+    /// <para>验证字节数组从指定偏移开始是否为 "NTENCODE"。</para>
     /// </summary>
     public static bool IsNtEncodeMagic(byte[] data, int offset = 0) => data is not null && offset >= 0 && offset + 8 <= data.Length && IsNtEncodeMagic(data.AsSpan(offset, 8));
 
     /// <summary>
-    /// <para>从字节跨度读取 NtEncodeHeader 的 OriginalSize 字段(偏移 32)。</para>
     /// Reads the OriginalSize field of NtEncodeHeader (offset 32).
+    /// <para>从字节跨度读取 NtEncodeHeader 的 OriginalSize 字段(偏移 32)。</para>
     /// </summary>
     public static ulong ReadNtEncodeOriginalSize(ReadOnlySpan<byte> data) => BinaryPrimitives.ReadUInt64LittleEndian(data[32..]);
 
     /// <summary>
-    /// <para>从字节数组指定偏移读取 NtEncodeHeader 的 OriginalSize 字段。</para>
     /// Reads the OriginalSize field of NtEncodeHeader from a byte array at the given offset.
+    /// <para>从字节数组指定偏移读取 NtEncodeHeader 的 OriginalSize 字段。</para>
     /// </summary>
     public static ulong ReadNtEncodeOriginalSize(byte[] data, int offset = 0) => BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(offset + 32));
 
     /// <summary>
-    /// <para>从字节跨度读取 NtDecompressHeader(112 字节)。</para>
     /// Reads an NtDecompressHeader (112 bytes) from a byte span.
+    /// <para>从字节跨度读取 NtDecompressHeader(112 字节)。</para>
     /// </summary>
     public static NtDecompressHeader ReadNtDecompressHeader(ReadOnlySpan<byte> data)
     {
@@ -124,8 +120,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>将 NtpiHeader 写入字节跨度。</para>
     /// Writes an NtpiHeader to a byte span.
+    /// <para>将 NtpiHeader 写入字节跨度。</para>
     /// </summary>
     public static void WriteNtpiHeader(NtpiHeader header, Span<byte> destination)
     {
@@ -138,8 +134,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>将 RegionHeader 写入字节跨度。</para>
     /// Writes a RegionHeader to a byte span.
+    /// <para>将 RegionHeader 写入字节跨度。</para>
     /// </summary>
     public static void WriteRegionHeader(RegionHeader header, Span<byte> destination)
     {
@@ -148,8 +144,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>将 RegionBlockHeader 写入字节跨度。</para>
     /// Writes a RegionBlockHeader to a byte span.
+    /// <para>将 RegionBlockHeader 写入字节跨度。</para>
     /// </summary>
     public static void WriteRegionBlockHeader(RegionBlockHeader header, Span<byte> destination)
     {
@@ -159,8 +155,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>将 NtEncodeHeader 写入字节跨度。</para>
     /// Writes an NtEncodeHeader to a byte span.
+    /// <para>将 NtEncodeHeader 写入字节跨度。</para>
     /// </summary>
     public static void WriteNtEncodeHeader(NtEncodeHeader header, Span<byte> destination)
     {
@@ -178,8 +174,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>将 NtDecompressHeader 写入字节跨度。</para>
     /// Writes an NtDecompressHeader to a byte span.
+    /// <para>将 NtDecompressHeader 写入字节跨度。</para>
     /// </summary>
     public static void WriteNtDecompressHeader(NtDecompressHeader header, Span<byte> destination)
     {
@@ -193,8 +189,8 @@ internal static class StructHelper
     }
 
     /// <summary>
-    /// <para>计算数据的 SHA-256 十六进制字符串。</para>
     /// Computes the SHA-256 hex string of the data.
+    /// <para>计算数据的 SHA-256 十六进制字符串。</para>
     /// </summary>
     public static string ComputeSha256Hex(ReadOnlySpan<byte> data) => Convert.ToHexString(SHA256.HashData(data)).ToLowerInvariant();
 }

@@ -4,64 +4,38 @@ using Google.Protobuf.Reflection;
 
 namespace UotanStudio.Firmware.Payload.Proto;
 
-/// <summary>
-/// A single install operation applied while building the target partition image.
-/// <para>在构建目标分区镜像时应用的单个安装操作。</para>
-/// </summary>
 public sealed class InstallOperation : IMessage<InstallOperation>
 {
-    /// <summary>
-    /// Container for nested types of <see cref="InstallOperation"/>.
-    /// <para><see cref="InstallOperation"/> 嵌套类型的容器。</para>
-    /// </summary>
     public static class Types
     {
-        /// <summary>
-        /// The type of an install operation.
-        /// <para>安装操作的类型。</para>
-        /// </summary>
         public enum Type
         {
-            /// <summary>Replace destination extents with attached data.</summary>
             Replace = 0,
 
-            /// <summary>Replace destination extents with attached bzipped data.</summary>
             ReplaceBz = 1,
 
-            /// <summary>Move source extents to target extents (deprecated).</summary>
             Move = 2,
 
-            /// <summary>The data is a bsdiff binary diff (deprecated).</summary>
             Bsdiff = 3,
 
-            /// <summary>Copy from source to target partition (minor version 2+).</summary>
             SourceCopy = 4,
 
-            /// <summary>Like BSDIFF, but read from source partition (minor version 2+).</summary>
             SourceBsdiff = 5,
 
-            /// <summary>Write zeros in the destination (minor version 4+).</summary>
             Zero = 6,
 
-            /// <summary>Discard the destination blocks, reading as undefined (minor version 4+).</summary>
             Discard = 7,
 
-            /// <summary>Replace destination extents with attached xz data (minor version 3+).</summary>
             ReplaceXz = 8,
 
-            /// <summary>The data is in puffdiff format (minor version 5+).</summary>
             Puffdiff = 9,
 
-            /// <summary>Like SOURCE_BSDIFF, but compressed with brotli (minor version 4+).</summary>
             BrotliBsdiff = 10,
 
-            /// <summary>Zucchini patch format (minor version 8+).</summary>
             Zucchini = 11,
 
-            /// <summary>LZ4 diff + bsdiff (minor version 9+).</summary>
             Lz4diffBsdiff = 12,
 
-            /// <summary>LZ4 diff + puffdiff (minor version 9+).</summary>
             Lz4diffPuffdiff = 13
         }
     }
@@ -73,16 +47,8 @@ public sealed class InstallOperation : IMessage<InstallOperation>
     private ByteString _dataSha256Hash = ByteString.Empty;
     private ByteString _srcSha256Hash = ByteString.Empty;
 
-    /// <summary>
-    /// Gets the parser for this message type.
-    /// <para>获取此消息类型的解析器。</para>
-    /// </summary>
     public static MessageParser<InstallOperation> Parser { get; } = new(() => new InstallOperation());
 
-    /// <summary>
-    /// Gets the message descriptor.
-    /// <para>获取消息描述符。</para>
-    /// </summary>
     public static MessageDescriptor Descriptor => null!;
 
     MessageDescriptor IMessage.Descriptor => Descriptor;
@@ -107,42 +73,34 @@ public sealed class InstallOperation : IMessage<InstallOperation>
 
     public InstallOperation Clone() => new(this);
 
-    /// <summary>Field number for the "type" field.</summary>
     public const int TypeFieldNumber = 1;
 
     public Types.Type Type { get; set; }
 
-    /// <summary>Field number for the "data_offset" field.</summary>
     public const int DataOffsetFieldNumber = 2;
 
     public ulong DataOffset { get; set; }
 
-    /// <summary>Field number for the "data_length" field.</summary>
     public const int DataLengthFieldNumber = 3;
 
     public ulong DataLength { get; set; }
 
-    /// <summary>Field number for the "src_extents" field.</summary>
     public const int SrcExtentsFieldNumber = 4;
 
     public RepeatedField<Extent> SrcExtents { get; } = [];
 
-    /// <summary>Field number for the "src_length" field.</summary>
     public const int SrcLengthFieldNumber = 5;
 
     public ulong SrcLength { get; set; }
 
-    /// <summary>Field number for the "dst_extents" field.</summary>
     public const int DstExtentsFieldNumber = 6;
 
     public RepeatedField<Extent> DstExtents { get; } = [];
 
-    /// <summary>Field number for the "dst_length" field.</summary>
     public const int DstLengthFieldNumber = 7;
 
     public ulong DstLength { get; set; }
 
-    /// <summary>Field number for the "data_sha256_hash" field.</summary>
     public const int DataSha256HashFieldNumber = 8;
 
     public ByteString DataSha256Hash
@@ -151,7 +109,6 @@ public sealed class InstallOperation : IMessage<InstallOperation>
         set => _dataSha256Hash = value ?? ByteString.Empty;
     }
 
-    /// <summary>Field number for the "src_sha256_hash" field.</summary>
     public const int SrcSha256HashFieldNumber = 9;
 
     public ByteString SrcSha256Hash

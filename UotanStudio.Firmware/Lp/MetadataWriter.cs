@@ -1,13 +1,9 @@
 namespace UotanStudio.Firmware.Lp;
 
-/// <summary>
-/// Serializes and exports Android Logical Partition (LP) metadata to binary formats.
-/// <para>将 Android 逻辑分区(LP)元数据序列化并导出为二进制格式。</para>
-/// </summary>
 public static class MetadataWriter
 {
     /// <summary>
-    /// Serializes an <see cref="LpMetadataGeometry"/> into a padded 4KB byte array.
+    /// Serializes an LpMetadataGeometry into a padded 4KB byte array.
     /// <para>将 LpMetadataGeometry 序列化为填充的 4KB 字节数组。</para>
     /// </summary>
     public static byte[] SerializeGeometry(LpMetadataGeometry geometry)
@@ -31,7 +27,7 @@ public static class MetadataWriter
     }
 
     /// <summary>
-    /// Serializes <see cref="LpMetadata"/> (header + all tables) into a binary byte array.
+    /// Serializes LpMetadata (header + all tables) into a binary byte array.
     /// <para>将 LpMetadata(头部 + 所有表)序列化为二进制字节数组。</para>
     /// </summary>
     public static byte[] SerializeMetadata(LpMetadata metadata)

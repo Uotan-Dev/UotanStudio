@@ -1,27 +1,13 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.Zucchini;
 
-/// <summary>
-/// Parses and validates the fixed header and the element list of a Zucchini patch. The applier is
-/// the public entry point; this reader performs all defensive bounds checks so malformed input fails
-/// fast with a <see cref="ZucchiniFormatException"/> (or <see cref="ZucchiniUnsupportedExecutableTypeException"/>
-/// for non-RAW elements).
-/// <para>解析并校验 Zucchini 补丁的定长头部与元素列表。应用器是公开入口；本读取器执行全部
-/// 防御性边界校验，使畸形输入快速失败并抛出 <see cref="ZucchiniFormatException"/>
-/// （非 RAW 元素则抛出 <see cref="ZucchiniUnsupportedExecutableTypeException"/>）。</para>
-/// </summary>
 internal static class ZucchiniPatchReader
 {
     /// <summary>
     /// Reads and validates the fixed patch header.
     /// <para>读取并校验定长补丁头部。</para>
     /// </summary>
-    /// <param name="patch">The patch buffer. <para>补丁缓冲区。</para></param>
-    /// <returns>The validated header. <para>校验通过的头部。</para></returns>
-    /// <exception cref="ZucchiniFormatException">The patch is shorter than the header, the magic does
-    /// not match, or the version is unsupported.
-    /// <para>补丁短于头部、魔数不匹配或版本不受支持时抛出。</para></exception>
     public static ZucchiniPatchHeader ReadHeader(ReadOnlySpan<byte> patch)
     {
         if (patch.Length < ZucchiniConstants.HeaderByteSize)
@@ -58,21 +44,9 @@ internal static class ZucchiniPatchReader
     }
 
     /// <summary>
-    /// Reads and validates the element list. Non-RAW elements are rejected with
-    /// <see cref="ZucchiniUnsupportedExecutableTypeException"/> as soon as their fixed header is read,
-    /// because the reference-bytes region that follows is only meaningful for disassembly-aware types
-    /// and cannot be located reliably without full reference support.
-    /// <para>读取并校验元素列表。非 RAW 元素在读取其定长头部后立即以
-    /// <see cref="ZucchiniUnsupportedExecutableTypeException"/> 拒绝，因为其后的引用字节区仅对
-    /// 反汇编感知类型有意义，在缺乏完整引用支持时无法可靠定位。</para>
+    /// Reads and validates the element list.
+    /// <para>读取并校验元素列表。</para>
     /// </summary>
-    /// <param name="patch">The patch buffer. <para>补丁缓冲区。</para></param>
-    /// <param name="header">The validated header. <para>已校验的头部。</para></param>
-    /// <returns>The parsed elements. <para>解析出的元素列表。</para></returns>
-    /// <exception cref="ZucchiniFormatException">An element is truncated or has out-of-bounds ranges.
-    /// <para>元素被截断或范围越界时抛出。</para></exception>
-    /// <exception cref="ZucchiniUnsupportedExecutableTypeException">An element is not RAW.
-    /// <para>元素不是 RAW 时抛出。</para></exception>
     public static ZucchiniPatchElement[] ReadElements(ReadOnlySpan<byte> patch, in ZucchiniPatchHeader header)
     {
         if (header.NumElements == 0)
@@ -150,8 +124,7 @@ internal static class ZucchiniPatchReader
                 $"位于新偏移 {newOffset} 的 RAW Zucchini 元素声明了 {referenceDeltaLength} 字节引用增量流；RAW 元素不得携带引用数据。");
         }
 
-        // The reference-bytes region is always empty for RAW elements (no disassembly, no references),
-        // so the four data streams begin immediately after the fixed element header.
+
         ulong total;
         try
         {

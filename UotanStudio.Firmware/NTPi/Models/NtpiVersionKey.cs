@@ -1,15 +1,11 @@
 namespace UotanStudio.Firmware.NTPi.Models;
 
-/// <summary>
-/// <para>表示特定版本 NTPI 固件包的加密密钥和初始化向量的不可变记录类。</para>
-/// Represents the immutable encryption key and initialization vector for a specific version of the NTPI firmware package.
-/// </summary>
 public record NtpiVersionKey
 {
 
     /// <summary>
-    /// <para>使用指定的密钥和初始化向量初始化 NtpiVersionKey 的新实例。</para>
     /// Initializes a new instance of NtpiVersionKey with the specified key and initialization vector.
+    /// <para>使用指定的密钥和初始化向量初始化 NtpiVersionKey 的新实例。</para>
     /// </summary>
     public NtpiVersionKey(byte[] key, byte[] iv)
     {
@@ -17,23 +13,11 @@ public record NtpiVersionKey
         Iv = (byte[])(iv ?? throw new ArgumentNullException(nameof(iv))).Clone();
     }
 
-    /// <summary>
-    /// <para>获取 AES 加密密钥的副本。</para>
-    /// Gets a copy of the AES encryption key.
-    /// </summary>
     public byte[] Key => (byte[])field.Clone();
 
-    /// <summary>
-    /// <para>获取 AES 初始化向量(IV)的副本。</para>
-    /// Gets a copy of the AES initialization vector (IV).
-    /// </summary>
     public byte[] Iv => (byte[])field.Clone();
 }
 
-/// <summary>
-/// <para>提供 NTPI 固件包版本密钥注册和查询功能的静态类。</para>
-/// Provides static methods for registering and querying NTPI firmware package version keys.
-/// </summary>
 public static class NtpiVersionRegistry
 {
     private static readonly Dictionary<(ulong Major, ulong Minor, ulong Patch), Dictionary<int, NtpiVersionKey>> VersionKeyMap = new()
@@ -63,10 +47,9 @@ public static class NtpiVersionRegistry
     }
 
     /// <summary>
-    /// <para>根据版本号获取对应的加密密钥字典。</para>
     /// Retrieves the encryption key dictionary for the specified version.
+    /// <para>根据版本号获取对应的加密密钥字典。</para>
     /// </summary>
-    /// <returns>密钥字典,未找到时返回 null。</returns>
     public static Dictionary<int, NtpiVersionKey>? GetKeysForVersion(ulong major, ulong minor, ulong patch)
     {
         return VersionKeyMap.TryGetValue((major, minor, patch), out var exact)
@@ -75,8 +58,8 @@ public static class NtpiVersionRegistry
     }
 
     /// <summary>
-    /// <para>注册或覆盖指定版本的密钥字典。</para>
     /// Registers or overrides the key dictionary for the specified version.
+    /// <para>注册或覆盖指定版本的密钥字典。</para>
     /// </summary>
     public static void RegisterVersion(ulong major, ulong minor, ulong patch, Dictionary<int, NtpiVersionKey> keys)
     {

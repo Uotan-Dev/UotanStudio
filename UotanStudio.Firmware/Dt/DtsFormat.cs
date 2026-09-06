@@ -1,38 +1,9 @@
-// =============================================================================
-// DTS (Device Tree Source) text parsing and serialization for UotanStudio.Firmware.
-//
-// NOTICE:
-// This file is a port/adaptation of the DTS parser+writer from the open-source
-// project "FirmwareKit.DT" (FirmwareKit, https://github.com/Uotan-Dev/FirmwareKit),
-// Copyright (c) Uotan-Dev, licensed under the MIT license.
-//
-// The parsing and writing logic is derived from:
-//   FirmwareKit.DT/src/FirmwareKit.DT/Formatting/DtsFormat.cs
-// (namespace FirmwareKit.DT.Formatting).
-//
-// It has been rewritten to build against the EXISTING UotanStudio.Firmware
-// device-tree model (DeviceTree / DeviceTreeNode / DeviceTreeProperty /
-// MemoryReservation) instead of the FirmwareKit.DT.Models implementations.
-//
-// --- MIT License ---
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction. Subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND.
-// =============================================================================
+﻿
 
 using System.Text;
 
 namespace UotanStudio.Firmware.Dt;
 
-/// <summary>
-/// <para>表示DTS解析过程中遇到的解析错误，包含位置信息。</para>
-/// Represents a parse error encountered during DTS parsing with position info.
-/// </summary>
 public class DtsParseError
 {
     public string Message { get; }
@@ -73,10 +44,6 @@ public class DtsParseResult
     }
 }
 
-/// <summary>
-/// <para>控制DTS输出格式的选项。</para>
-/// Options controlling DTS output formatting.
-/// </summary>
 public sealed class DtsWriteOptions
 {
     public bool UsePhandleReferences { get; set; } = true;
@@ -87,10 +54,6 @@ public sealed class DtsWriteOptions
     public static DtsWriteOptions Default { get; } = new();
 }
 
-/// <summary>
-/// <para>提供解析与写入DTS文本格式的方法。</para>
-/// Provides DTS (de)serialization. Ported from FirmwareKit.DT (MIT).
-/// </summary>
 public static class DtsFormat
 {
     public static DtsParseResult Parse(string text)
@@ -138,8 +101,8 @@ public static class DtsFormat
     }
 
     /// <summary>
-    /// <para>序列化DTS并返回 节点路径-&gt;开括号行号 映射。</para>
     /// Writes DTS and returns a map of node path to the 1-based line of its '{'.
+    /// <para>序列化DTS并返回 节点路径-&gt;开括号行号 映射。</para>
     /// </summary>
     public static Dictionary<string, int> GetNodeLineMap(DeviceTree tree)
     {
@@ -151,14 +114,8 @@ public static class DtsFormat
     }
 
     /// <summary>
-    /// <para>将 overlay 树合并到基树并返回合并后的基树。overlay 根节点下的子节点按名称递归合并到基树
-    /// 同名节点:overlay 属性覆盖基树同名属性,基树中不存在的节点/属性直接添加;同名字节点递归合并其属性
-    /// 与子节点。被合并的子节点会从 overlay 树移入基树。</para>
-    /// Merges the overlay tree into the base tree and returns the merged base tree. Children under
-    /// the overlay root are recursively merged into the base node of the same name: overlay
-    /// properties override base properties of the same name, nodes/properties that do not exist in
-    /// the base are added, and children with matching names are merged recursively (properties and
-    /// children). Merged children are moved from the overlay tree into the base tree.
+    /// Merges the overlay tree into the base tree and returns the merged base tree.
+    /// <para>将 overlay 树合并到基树并返回合并后的基树。</para>
     /// </summary>
     public static DeviceTree MergeOverlay(DeviceTree baseTree, DeviceTree overlayTree)
     {
@@ -180,13 +137,8 @@ public static class DtsFormat
     }
 
     /// <summary>
-    /// <para>将 source 节点的属性与子节点递归合并到 target 节点。overlay 删除记录
-    /// (deletedProperties/deletedChildren,键为 source 子树节点)会先于属性/子节点合并应用,
-    /// 与 &lt;c&gt;&amp;label&lt;/c&gt; overlay 片段的合并语义一致。</para>
     /// Recursively merges the properties and children of the source node into the target node.
-    /// Overlay deletion records (deletedProperties/deletedChildren, keyed by source subtree nodes)
-    /// are applied before property/child merging, matching the &lt;c&gt;&amp;label&lt;/c&gt; overlay
-    /// fragment merge semantics.
+    /// <para>将 source 节点的属性与子节点递归合并到 target 节点。</para>
     /// </summary>
     internal static void MergeNode(
         DeviceTreeNode target,
@@ -224,14 +176,7 @@ public static class DtsFormat
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Minimal DTS preprocessor: #define / #undef / #include / #if..., macro
-    // substitution. Adapted from FirmwareKit.DT.DtsPreprocessor (MIT).
-    // -------------------------------------------------------------------------
 
-    /// <summary>
-    /// Maximum recursion depth for #include directives to guard against infinite loops.
-    /// </summary>
     private const int MaxIncludeDepth = 16;
 
     private static string Preprocess(string text, IEnumerable<string>? includePaths, Dictionary<string, string>? defines, int depth = 0)

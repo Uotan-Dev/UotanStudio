@@ -3,10 +3,6 @@ using UotanStudio.Firmware.Payload.Proto;
 
 namespace UotanStudio.Firmware.Payload.Core;
 
-/// <summary>
-/// Maps a contiguous logical write stream onto the physical ranges described by destination extents.
-/// <para>将连续的逻辑写入流映射到目标区间描述的多个物理范围。</para>
-/// </summary>
 internal sealed class ExtentWriteStream : Stream
 {
     private readonly Stream _output;
@@ -22,12 +18,6 @@ internal sealed class ExtentWriteStream : Stream
     /// Initializes an extent-mapped, strictly bounded write stream.
     /// <para>初始化按区间映射且严格有界的写入流。</para>
     /// </summary>
-    /// <param name="output">The seekable physical output stream.<para>可定位的物理输出流。</para></param>
-    /// <param name="extents">Destination extents in logical order.<para>按逻辑顺序排列的目标区间。</para></param>
-    /// <param name="blockSize">Size of one block in bytes.<para>单个块的字节大小。</para></param>
-    /// <param name="requireExactLength">Whether <see cref="Complete"/> requires every destination byte to have been written.<para><see cref="Complete"/> 是否要求写满所有目标字节。</para></param>
-    /// <param name="syncRoot">Lock used to make physical seek and write atomic.<para>用于保证物理定位与写入原子性的锁。</para></param>
-    /// <exception cref="PartitionExtractionException">Extent arithmetic overflows or the output cannot be positioned.<para>区间算术溢出或输出无法定位时抛出。</para></exception>
     internal ExtentWriteStream(Stream output, IEnumerable<Extent> extents, uint blockSize, bool requireExactLength = false, object? syncRoot = null)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -66,19 +56,14 @@ internal sealed class ExtentWriteStream : Stream
         }
     }
 
-    /// <inheritdoc />
     public override bool CanRead => false;
 
-    /// <inheritdoc />
     public override bool CanSeek => false;
 
-    /// <inheritdoc />
     public override bool CanWrite => true;
 
-    /// <inheritdoc />
     public override long Length => _length;
 
-    /// <inheritdoc />
     public override long Position
     {
         get => _position;
@@ -89,7 +74,6 @@ internal sealed class ExtentWriteStream : Stream
     /// Verifies that the required logical output length was written.
     /// <para>验证是否已写入所需的逻辑输出长度。</para>
     /// </summary>
-    /// <exception cref="PartitionExtractionException">Exact length was required but the output is short.<para>要求精确长度但输出不足时抛出。</para></exception>
     internal void Complete()
     {
         if (_requireExactLength && _position != _length)
@@ -100,7 +84,10 @@ internal sealed class ExtentWriteStream : Stream
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes bytes to the stream.
+    /// <para>向流写入字节。</para>
+    /// </summary>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -114,7 +101,10 @@ internal sealed class ExtentWriteStream : Stream
         Write(buffer.AsSpan(offset, count));
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes bytes to the stream.
+    /// <para>向流写入字节。</para>
+    /// </summary>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         if (buffer.Length > _length - _position)
@@ -149,15 +139,27 @@ internal sealed class ExtentWriteStream : Stream
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes buffered data to the underlying stream.
+    /// <para>将缓冲数据刷新到底层流。</para>
+    /// </summary>
     public override void Flush() => _output.Flush();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void SetLength(long value) => throw new NotSupportedException();
 }

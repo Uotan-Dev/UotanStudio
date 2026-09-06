@@ -2,35 +2,25 @@ using System.Text;
 
 namespace UotanStudio.Firmware.Dt;
 
-/// <summary>
-/// <para>表示设备树节点中的属性,包含名称和二进制值。</para>
-/// Represents a property within a device tree node, containing a name and a binary value.
-/// </summary>
 public sealed class DeviceTreeProperty
 {
     private byte[] _value = [];
 
-    /// <summary>属性名称。</summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>属性的原始二进制值。</summary>
     public ReadOnlySpan<byte> Value => _value;
 
-    /// <summary>属性值的字节长度。</summary>
     public int Length => _value.Length;
 
-    /// <summary>属性值(字节数组副本)。</summary>
     public byte[] ValueBytes => (byte[])_value.Clone();
 
-    /// <summary>属性是否没有值(零长度)。</summary>
     public bool IsEmpty => _value.Length == 0;
 
-    /// <summary>是否在 DTB 中标记为 NOP(写入 FDT_NOP 而非 FDT_PROP)。</summary>
     public bool IsNop { get; set; }
 
     /// <summary>
-    /// <para>替换属性值(仅供 DTS 解析器回填 label/phandle 引用)。</para>
     /// Replaces the property value (for the DTS parser to backfill label/phandle references).
+    /// <para>替换属性值(仅供 DTS 解析器回填 label/phandle 引用)。</para>
     /// </summary>
     internal void ReplaceValue(ReadOnlySpan<byte> value)
     {
@@ -38,8 +28,8 @@ public sealed class DeviceTreeProperty
     }
 
     /// <summary>
-    /// <para>使用指定名称和值初始化属性。</para>
     /// Initializes a property with the specified name and value.
+    /// <para>使用指定名称和值初始化属性。</para>
     /// </summary>
     public DeviceTreeProperty(string name, ReadOnlySpan<byte> value)
     {
@@ -48,8 +38,8 @@ public sealed class DeviceTreeProperty
     }
 
     /// <summary>
-    /// <para>使用指定名称和字符串值初始化属性(UTF-8 编码,不含结尾 NUL)。</para>
     /// Initializes a property with the specified name and string value.
+    /// <para>使用指定名称和字符串值初始化属性(UTF-8 编码,不含结尾 NUL)。</para>
     /// </summary>
     public DeviceTreeProperty(string name, string value)
         : this(name, Encoding.UTF8.GetBytes(value))
@@ -57,8 +47,8 @@ public sealed class DeviceTreeProperty
     }
 
     /// <summary>
-    /// <para>以字符串形式获取属性值(UTF-8,去除结尾 NUL)。</para>
     /// Gets the property value as a string (UTF-8, trailing NUL trimmed).
+    /// <para>以字符串形式获取属性值(UTF-8,去除结尾 NUL)。</para>
     /// </summary>
     public string GetString()
     {
@@ -68,8 +58,8 @@ public sealed class DeviceTreeProperty
     }
 
     /// <summary>
-    /// <para>将属性值解析为 32 位大端单元数组。</para>
     /// Parses the property value as an array of 32-bit big-endian cells.
+    /// <para>将属性值解析为 32 位大端单元数组。</para>
     /// </summary>
     public uint[] GetCells()
     {
@@ -82,37 +72,31 @@ public sealed class DeviceTreeProperty
         return cells;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Returns a string representation of this value.
+    /// <para>返回此值的字符串表示。</para>
+    /// </summary>
     public override string ToString() => $"{Name} = {_value.Length} bytes";
 }
 
-/// <summary>
-/// <para>表示设备树中的一个节点,包含属性和子节点。</para>
-/// Represents a node in a device tree, containing properties and child nodes.
-/// </summary>
 public sealed class DeviceTreeNode
 {
     private readonly List<DeviceTreeProperty> _properties = [];
     private readonly List<DeviceTreeNode> _children = [];
 
-    /// <summary>节点名称。</summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>节点单元地址(名称中 '@' 之后的部分)。</summary>
     public string? UnitAddress { get; set; }
 
-    /// <summary>父节点(根节点为 null)。</summary>
     public DeviceTreeNode? Parent { get; set; }
 
-    /// <summary>节点属性列表。</summary>
     public IReadOnlyList<DeviceTreeProperty> Properties => _properties;
 
-    /// <summary>子节点列表。</summary>
     public IReadOnlyList<DeviceTreeNode> Children => _children;
 
     /// <summary>
-    /// <para>使用指定名称初始化节点。</para>
     /// Initializes a node with the specified name.
+    /// <para>使用指定名称初始化节点。</para>
     /// </summary>
     public DeviceTreeNode(string name)
     {
@@ -125,8 +109,8 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
-    /// <para>添加一个属性。</para>
     /// Adds a property.
+    /// <para>添加一个属性。</para>
     /// </summary>
     public DeviceTreeProperty AddProperty(string name, ReadOnlySpan<byte> value)
     {
@@ -136,8 +120,8 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
-    /// <para>添加一个字符串属性。</para>
     /// Adds a string property.
+    /// <para>添加一个字符串属性。</para>
     /// </summary>
     public DeviceTreeProperty AddPropertyString(string name, string value)
     {
@@ -147,8 +131,8 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
-    /// <para>添加一个 32 位单元数组属性(大端)。</para>
     /// Adds a property with 32-bit big-endian cells.
+    /// <para>添加一个 32 位单元数组属性(大端)。</para>
     /// </summary>
     public DeviceTreeProperty AddPropertyCells(string name, params uint[] cells)
     {
@@ -164,8 +148,8 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
-    /// <para>添加一个子节点。</para>
     /// Adds a child node.
+    /// <para>添加一个子节点。</para>
     /// </summary>
     public DeviceTreeNode AddChild(string name)
     {
@@ -175,8 +159,8 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
-    /// <para>将已存在的节点作为子节点挂接到当前节点(供 overlay 合并等场景使用)。</para>
     /// Attaches an existing node as a child of this node (used by overlay merging).
+    /// <para>将已存在的节点作为子节点挂接到当前节点(供 overlay 合并等场景使用)。</para>
     /// </summary>
     internal void AddChildNode(DeviceTreeNode node)
     {
@@ -186,29 +170,29 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
-    /// <para>按名称查找属性,未找到返回 null。</para>
     /// Finds a property by name, or null if not found.
+    /// <para>按名称查找属性,未找到返回 null。</para>
     /// </summary>
     public DeviceTreeProperty? FindProperty(string name)
         => _properties.FirstOrDefault(p => p.Name == name);
 
     /// <summary>
-    /// <para>按名称查找子节点,未找到返回 null。</para>
     /// Finds a child node by name, or null if not found.
+    /// <para>按名称查找子节点,未找到返回 null。</para>
     /// </summary>
     public DeviceTreeNode? FindChild(string name)
         => _children.FirstOrDefault(c => c.Name == name);
 
     /// <summary>
-    /// <para>按名称移除属性,找到并移除返回 true,否则返回 false。</para>
     /// Removes the property with the specified name; returns true if it was found and removed, otherwise false.
+    /// <para>按名称移除属性,找到并移除返回 true,否则返回 false。</para>
     /// </summary>
     public bool RemoveProperty(string name)
         => _properties.RemoveAll(p => p.Name == name) > 0;
 
     /// <summary>
-    /// <para>按名称移除子节点,找到并移除返回 true,否则返回 false。</para>
     /// Removes the child node with the specified name; returns true if it was found and removed, otherwise false.
+    /// <para>按名称移除子节点,找到并移除返回 true,否则返回 false。</para>
     /// </summary>
     public bool RemoveChild(string name)
     {
@@ -217,8 +201,8 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
-    /// <para>按引用移除子节点,找到并移除返回 true,否则返回 false。</para>
     /// Removes the specified child node; returns true if it was found and removed, otherwise false.
+    /// <para>按引用移除子节点,找到并移除返回 true,否则返回 false。</para>
     /// </summary>
     public bool RemoveChild(DeviceTreeNode node)
     {
@@ -228,11 +212,8 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
-    /// <para>获取节点在树中的完整路径(如 /soc/i2c@0)。根节点返回 /，其余节点跳过空名称的根段，
-    /// 与 DTS 写入器生成的行号映射键保持一致(避免 //soc 双斜杠)。</para>
-    /// Gets the full path of the node in the tree (e.g. /soc/i2c@0). The root returns / and empty-name root
-    /// segments are skipped, consistent with the line-map keys produced by the DTS writer (avoiding a
-    /// leading // such as //soc).
+    /// Gets the full path of the node in the tree (e.g. /soc/i2c@0).
+    /// <para>获取节点在树中的完整路径(如 /soc/i2c@0)。</para>
     /// </summary>
     public string GetPath()
     {
@@ -252,31 +233,26 @@ public sealed class DeviceTreeNode
         return "/" + string.Join("/", parts);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Returns a string representation of this value.
+    /// <para>返回此值的字符串表示。</para>
+    /// </summary>
     public override string ToString() => GetPath();
 }
 
-/// <summary>
-/// <para>表示完整的设备树,提供解析、序列化和导航能力。</para>
-/// Represents a complete device tree, providing parsing, serialization, and navigation capabilities.
-/// </summary>
 public sealed class DeviceTree
 {
-    /// <summary>根节点。</summary>
     public DeviceTreeNode Root { get; } = new("/") { Name = "" };
 
-    /// <summary>内存保留条目列表。</summary>
     public List<MemoryReservation> MemoryReservations { get; } = [];
 
-    /// <summary>引导 CPU 物理 ID。</summary>
     public uint BootCpuId { get; set; }
 
-    /// <summary>FDT 格式版本。</summary>
     public uint Version { get; set; } = FdtConstants.FdtVersion;
 
     /// <summary>
-    /// <para>按路径查找节点,未找到返回 null。</para>
     /// Finds a node by path, or null if not found.
+    /// <para>按路径查找节点,未找到返回 null。</para>
     /// </summary>
     public DeviceTreeNode? FindNode(string path)
     {

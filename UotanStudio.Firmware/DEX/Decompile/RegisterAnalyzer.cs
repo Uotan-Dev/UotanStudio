@@ -1,62 +1,40 @@
-using System.Text;
+﻿using System.Text;
 using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex.Decompile;
 
-/// <summary>
-/// <para>方法上下文：反编译单个方法所需的模型信息（签名、寄存器布局、所属类），由工厂从模型构造。</para>
-/// Method context: the model information needed to decompile a single method (signature, register
-/// layout, owning class), built by a factory from the model.
-/// </summary>
 public sealed class MethodContext
 {
-    /// <summary>所属 DEX 文件。<para>The owning DEX file.</para></summary>
     public required DexFile Dex { get; init; }
 
-    /// <summary>编码方法（含访问标志与代码项）。<para>The encoded method (access flags + code item).</para></summary>
     public required EncodedMethod Method { get; init; }
 
-    /// <summary>所属类定义；孤立方法为 <c>null</c>。<para>The owning class definition; <c>null</c> for detached methods.</para></summary>
     public ClassDefinition? Class { get; init; }
 
-    /// <summary>方法引用。<para>The method reference.</para></summary>
     public required MethodId MethodId { get; init; }
 
-    /// <summary>方法原型。<para>The method prototype.</para></summary>
     public ProtoDefinition? Proto { get; init; }
 
-    /// <summary>方法名（可读，如 "foo"、"&lt;init&gt;"）。<para>Method name (readable, e.g. "foo", "&lt;init&gt;").</para></summary>
     public required string MethodName { get; init; }
 
-    /// <summary>返回类型（可读形式）。<para>Return type (readable form).</para></summary>
     public required string ReturnType { get; init; }
 
-    /// <summary>参数类型（可读形式）。<para>Parameter types (readable form).</para></summary>
     public required string[] ParameterTypes { get; init; }
 
-    /// <summary>寄存器总数。<para>Total register count.</para></summary>
     public int RegistersSize { get; init; }
 
-    /// <summary>输入参数寄存器数。<para>Input argument register count.</para></summary>
     public int InsSize { get; init; }
 
-    /// <summary>是否静态方法。<para>Whether the method is static.</para></summary>
     public bool IsStatic { get; init; }
 
-    /// <summary>是否为构造器（&lt;init&gt;）。<para>Whether the method is a constructor (&lt;init&gt;).</para></summary>
     public bool IsConstructor { get; init; }
 
-    /// <summary>所属类名（可读形式）；无所属类为 <c>null</c>。<para>Owning class name (readable form); <c>null</c> when detached.</para></summary>
     public string? ClassName { get; init; }
 
     /// <summary>
-    /// <para>从模型构造方法上下文。</para>
     /// Builds a method context from the model.
+    /// <para>从模型构造方法上下文。</para>
     /// </summary>
-    /// <param name="dex">所属 DEX 文件。<para>The owning DEX file.</para></param>
-    /// <param name="method">编码方法。<para>The encoded method.</para></param>
-    /// <param name="cls">所属类定义（可空）。<para>The owning class definition (optional).</para></param>
-    /// <returns>方法上下文。<para>The method context.</para></returns>
     public static MethodContext Create(DexFile dex, EncodedMethod method, ClassDefinition? cls)
     {
         ArgumentNullException.ThrowIfNull(dex);
@@ -101,73 +79,42 @@ public sealed class MethodContext
     }
 }
 
-/// <summary>
-/// <para>线性分析条目：与一条指令对应，携带其产出的语句、条件分支表达式或开关值表达式。</para>
-/// Linear analysis item: one per instruction, carrying the produced statement, the conditional
-/// branch expression or the switch value expression.
-/// </summary>
 public sealed class LinearItem
 {
-    /// <summary>源指令。<para>Source instruction.</para></summary>
     public Instruction Insn { get; }
 
-    /// <summary>该指令产出的语句；为 <c>null</c> 表示被折叠进表达式（const/iget 等）。<para>Statement produced by the instruction; <c>null</c> when folded into expressions.</para></summary>
     public JavaStmt? Stmt { get; set; }
 
-    /// <summary>条件分支（if-*）的条件表达式。<para>Condition expression of a conditional branch (if-*).</para></summary>
     public JavaExpr? IfCondition { get; set; }
 
-    /// <summary>开关（switch）的值表达式。<para>Value expression of a switch.</para></summary>
     public JavaExpr? SwitchValue { get; set; }
 
     /// <summary>
-    /// <para>创建线性分析条目。</para>
     /// Creates a linear analysis item.
+    /// <para>创建线性分析条目。</para>
     /// </summary>
-    /// <param name="insn">源指令。<para>Source instruction.</para></param>
     public LinearItem(Instruction insn) => Insn = insn;
 }
 
-/// <summary>
-/// <para>线性分析结果：与指令流一一对应的条目列表 + 方法上下文。</para>
-/// Linear analysis result: an item list aligned with the instruction stream plus the method context.
-/// </summary>
 public sealed class LinearAnalysis
 {
-    /// <summary>条目列表（与指令流顺序一致）。<para>Item list (aligned with the instruction stream).</para></summary>
     public List<LinearItem> Items { get; } = [];
 
-    /// <summary>方法上下文。<para>Method context.</para></summary>
     public MethodContext Context { get; }
 
     /// <summary>
-    /// <para>创建线性分析结果。</para>
     /// Creates a linear analysis result.
+    /// <para>创建线性分析结果。</para>
     /// </summary>
-    /// <param name="context">方法上下文。<para>Method context.</para></param>
     public LinearAnalysis(MethodContext context) => Context = context;
 }
 
-/// <summary>
-/// <para>寄存器分析器：对方法指令流做单遍线性扫描，把寄存器值还原为表达式树
-/// （const→字面量、iget/sget→字段访问、invoke→调用表达式、new-instance→对象构造等），
-/// 并产出每条指令对应的语句、if 条件与 switch 值。重载解析经 <see cref="MethodResolver"/> 可选接入。</para>
-/// Register analyzer: performs a single linear pass over a method's instruction stream, recovering
-/// register values as expression trees (const→literals, iget/sget→field access, invoke→calls,
-/// new-instance→object construction, etc.), producing the statement / if-condition / switch-value
-/// of each instruction. Overload resolution is optionally wired in via <see cref="MethodResolver"/>.
-/// </summary>
 public static class RegisterAnalyzer
 {
     /// <summary>
-    /// <para>分析方法的指令流。</para>
     /// Analyzes a method's instruction stream.
+    /// <para>分析方法的指令流。</para>
     /// </summary>
-    /// <param name="ctx">方法上下文。<para>Method context.</para></param>
-    /// <param name="instructions">指令流。<para>The instruction stream.</para></param>
-    /// <param name="resolver">重载解析器；<c>null</c> 表示不解析。<para>Overload resolver; <c>null</c> to skip resolution.</para></param>
-    /// <param name="options">反编译选项；<c>null</c> 用默认值。<para>Decompiler options; <c>null</c> for defaults.</para></param>
-    /// <returns>线性分析结果。<para>The linear analysis result.</para></returns>
     public static LinearAnalysis Analyze(MethodContext ctx, List<Instruction> instructions, MethodResolver? resolver = null, DecompileOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(ctx);
@@ -185,12 +132,9 @@ public static class RegisterAnalyzer
     }
 
     /// <summary>
-    /// <para>按寄存器编号生成可读名称（参数 p0..pn / this，其余 v0..vn）。</para>
     /// Produces a readable name for a register (arguments p0..pn / this, others v0..vn).
+    /// <para>按寄存器编号生成可读名称（参数 p0..pn / this，其余 v0..vn）。</para>
     /// </summary>
-    /// <param name="ctx">方法上下文。<para>Method context.</para></param>
-    /// <param name="reg">寄存器编号。<para>Register number.</para></param>
-    /// <returns>寄存器名称。<para>Register name.</para></returns>
     public static string RegisterName(MethodContext ctx, int reg)
     {
         var argStart = ctx.RegistersSize - ctx.InsSize;
@@ -205,11 +149,9 @@ public static class RegisterAnalyzer
     }
 
     /// <summary>
-    /// <para>推断表达式的静态类型提示（可读形式）；无法推断为 <c>null</c>。</para>
-    /// Infers a static type hint (readable form) for an expression; <c>null</c> when unknown.
+    /// Infers a static type hint (readable form) for an expression; null when unknown.
+    /// <para>推断表达式的静态类型提示（可读形式）；无法推断为 null。</para>
     /// </summary>
-    /// <param name="expr">表达式。<para>The expression.</para></param>
-    /// <returns>类型提示。<para>Type hint.</para></returns>
     public static string? InferType(JavaExpr? expr) => expr switch
     {
         null => null,
@@ -244,8 +186,7 @@ public static class RegisterAnalyzer
         var m = insn.Mnemonic;
         var ops = insn.Operands;
 
-        // const 系列：直接绑定寄存器，无副作用。
-        // const family: binds a register directly; no side effects.
+
         if (m is "const/4" or "const/16" or "const" or "const/high16"
             or "const-wide/16" or "const-wide/32" or "const-wide" or "const-wide/high16")
         {
@@ -286,8 +227,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // move-result 系列：把前一条 invoke/new-array 的结果折叠到寄存器。
-        // move-result family: folds the pending result of the preceding invoke/new-array into the register.
+
         if (m is "move-result" or "move-result-wide" or "move-result-object")
         {
             var a = IntAt(ops, 0);
@@ -313,8 +253,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // move 系列：寄存器别名（保留语句）。
-        // move family: register aliasing (statement kept).
+
         if (m == "move" || m == "move/from16" || m == "move/16"
             || m == "move-wide" || m == "move-wide/from16" || m == "move-wide/16"
             || m == "move-object" || m == "move-object/from16" || m == "move-object/16")
@@ -332,8 +271,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 字段读取（iget/sget 系列，含 volatile；quick 变体按未知处理）。
-        // Field reads (iget/sget family incl. volatile; quick variants fall back to raw).
+
         if (m.StartsWith("iget", System.StringComparison.Ordinal) || m.StartsWith("sget", System.StringComparison.Ordinal))
         {
             var isStatic = m.StartsWith("sget", System.StringComparison.Ordinal);
@@ -356,8 +294,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 字段写入（iput/sput 系列）。
-        // Field writes (iput/sput family).
+
         if (m.StartsWith("iput", System.StringComparison.Ordinal) || m.StartsWith("sput", System.StringComparison.Ordinal))
         {
             var isStatic = m.StartsWith("sput", System.StringComparison.Ordinal);
@@ -379,8 +316,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 数组读取/写入与长度。
-        // Array reads/writes and length.
+
         if (m.StartsWith("aget", System.StringComparison.Ordinal))
         {
             var a = IntAt(ops, 0);
@@ -424,8 +360,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 对象构造与数组构造。
-        // Object and array construction.
+
         if (m == "new-instance")
         {
             var a = IntAt(ops, 0);
@@ -481,8 +416,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // invoke 系列（排除 polymorphic/custom/object-init 特殊变体）。
-        // invoke family (excluding the polymorphic/custom/object-init variants).
+
         if (m.StartsWith("invoke-", System.StringComparison.Ordinal)
             && !m.Contains("polymorphic", System.StringComparison.Ordinal)
             && !m.Contains("custom", System.StringComparison.Ordinal)
@@ -506,8 +440,8 @@ public static class RegisterAnalyzer
             {
                 if (receiver is NewInstanceExpr pending && ReferenceEquals(state.PendingNew, pending))
                 {
-                    // new-instance + invoke-direct <init> 折叠为 new Type(args)。
-                    // new-instance + invoke-direct <init> folds into "new Type(args)".
+
+
                     pending.Args = ResolveArgs(regs, argStart, methodRef, state, ctx, resolver);
                     state.PendingNew = null;
                 }
@@ -540,8 +474,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 返回与抛出。
-        // Return and throw.
+
         if (m == "return-void")
         {
             item.Stmt = new ReturnStmt(null) { Offset = insn.Offset };
@@ -562,8 +495,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 条件分支与开关。
-        // Conditional branches and switches.
+
         if (m.StartsWith("if-", System.StringComparison.Ordinal))
         {
             if (m.EndsWith("z", System.StringComparison.Ordinal))
@@ -598,8 +530,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 算术与位运算。
-        // Arithmetic and bitwise operations.
+
         var op = ArithOp(m);
         if (op is not null)
         {
@@ -648,8 +579,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 一元运算（neg/not）。
-        // Unary operations (neg/not).
+
         if (m is "neg-int" or "neg-long" or "neg-float" or "neg-double" or "not-int" or "not-long")
         {
             var a = IntAt(ops, 0);
@@ -663,8 +593,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 数值转换（int-to-long 等）。
-        // Numeric conversions (int-to-long etc.).
+
         if (m.Contains("-to-", System.StringComparison.Ordinal))
         {
             var a = IntAt(ops, 0);
@@ -679,8 +608,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 比较指令（cmp-long / cmpl-float / cmpg-float / cmpl-double / cmpg-double）。
-        // Comparison instructions.
+
         if (m is "cmp-long" or "cmpl-float" or "cmpg-float" or "cmpl-double" or "cmpg-double")
         {
             var a = IntAt(ops, 0);
@@ -700,8 +628,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // check-cast 与 instance-of。
-        // check-cast and instance-of.
+
         if (m == "check-cast")
         {
             var a = IntAt(ops, 0);
@@ -729,9 +656,7 @@ public static class RegisterAnalyzer
             return item;
         }
 
-        // 其余指令（nop / monitor / goto / 特殊变体 / 未知）：goto 无语句由结构化器处理。
-        // Remaining instructions (nop / monitor / goto / special variants / unknown): goto has no
-        // statement and is handled by the structurer.
+
         if (m == "goto" || m == "goto/16" || m == "goto/32" || m == "nop")
         {
             return item;
@@ -742,8 +667,8 @@ public static class RegisterAnalyzer
     }
 
     /// <summary>
-    /// <para>解析调用实参：按重载解析结果对实参施加显式转型。</para>
     /// Resolves call arguments, applying explicit casts per the overload resolution result.
+    /// <para>解析调用实参：按重载解析结果对实参施加显式转型。</para>
     /// </summary>
     private static List<JavaExpr> ResolveArgs(int[] regs, int argStart, MethodRefOperand methodRef, State state, MethodContext ctx, MethodResolver? resolver)
     {
@@ -875,8 +800,8 @@ public static class RegisterAnalyzer
             : null;
 
     /// <summary>
-    /// <para>把指令渲染为 Smali 风格文本（用于注释）。</para>
     /// Renders an instruction as Smali-style text (for comments).
+    /// <para>把指令渲染为 Smali 风格文本（用于注释）。</para>
     /// </summary>
     private static string FormatRaw(Instruction insn)
     {

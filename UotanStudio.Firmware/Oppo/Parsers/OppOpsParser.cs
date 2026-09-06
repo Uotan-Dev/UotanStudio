@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using UotanStudio.Firmware.Oppo.Crypto;
@@ -7,21 +7,13 @@ using UotanStudio.Firmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.Oppo.Parsers;
 
-/// <summary>
-/// <para>OPS 固件文件解析器，提供 OPS 格式的元信息解析、尾部页读取、XML 解密和条目解析功能。</para>
-/// OPS firmware file parser providing metadata parsing, tail page reading, XML decryption, and entry parsing for OPS format.
-/// </summary>
 internal static class OppOpsParser
 {
-    /// <summary>
-    /// <para>OPS 扇区大小（字节），固定为 512 字节。</para>
-    /// OPS sector size in bytes, fixed at 512 bytes.
-    /// </summary>
     private const int OpsSectorSize = 0x200;
 
     /// <summary>
-    /// <para>从指定流中解析 OPS 格式固件文件的元信息。</para>
     /// Parses metadata from a stream containing an OPS format firmware file.
+    /// <para>从指定流中解析 OPS 格式固件文件的元信息。</para>
     /// </summary>
     internal static OppMetadata ParseMetadata(Stream stream, long fileSize)
     {
@@ -32,7 +24,7 @@ internal static class OppOpsParser
         {
             var tailPage = ReadTailPage(stream, fileSize);
 
-            // Try to decrypt XML to get detailed metadata
+
             var decryptResult = TryDecryptXml(stream, tailPage);
 
             if (decryptResult != null)
@@ -52,7 +44,7 @@ internal static class OppOpsParser
                 };
             }
 
-            // Fallback: return basic metadata without decrypted XML
+
             return new OppMetadata
             {
                 FormatName = "OPS",
@@ -72,8 +64,8 @@ internal static class OppOpsParser
     }
 
     /// <summary>
-    /// <para>从文件流中读取 OPS 尾部配置页。</para>
     /// Reads the OPS tail configuration page from the file stream.
+    /// <para>从文件流中读取 OPS 尾部配置页。</para>
     /// </summary>
     internal static OpsTailPage ReadTailPage(Stream stream, long fileSize)
     {
@@ -93,8 +85,8 @@ internal static class OppOpsParser
     }
 
     /// <summary>
-    /// <para>尝试使用自动密钥检测解密 OPS 固件中的 XML 配置数据。</para>
     /// Tries to decrypt the XML configuration data in the OPS firmware using auto key detection.
+    /// <para>尝试使用自动密钥检测解密 OPS 固件中的 XML 配置数据。</para>
     /// </summary>
     internal static (string Xml, string KeyId)? TryDecryptXml(
         Stream stream,
@@ -113,12 +105,11 @@ internal static class OppOpsParser
 
             var xmlLength = (int)tailPage.XmlLength;
 
-            // Round up to the next 16-byte block boundary to ensure the OPS cipher
-            // processes all data as full blocks.
+
             const int opsBlockSize = 16;
             var alignedLength = (xmlLength + opsBlockSize - 1) / opsBlockSize * opsBlockSize;
 
-            // Cap at the available data before the tail page
+
             var maxAvailable = (int)(stream.Length - xmlOffset);
             if (alignedLength > maxAvailable)
             {
@@ -138,14 +129,14 @@ internal static class OppOpsParser
                 return null;
             }
 
-            // Check if the data is already plaintext XML
+
             var header = new ReadOnlySpan<byte>(xmlData, 0, Math.Min(5, xmlData.Length));
             if (header.Length >= 5 && header[0] == '<' && header[1] == '?' && header[2] == 'x' && header[3] == 'm' && header[4] == 'l')
             {
                 return (Encoding.UTF8.GetString(xmlData), "plaintext");
             }
 
-            // Try OPS cipher decryption using auto key detection
+
             var opsProvider = new OpsFormatCryptoProvider();
             return opsProvider.AutoDecryptOpsXml(xmlData);
         }
@@ -156,8 +147,8 @@ internal static class OppOpsParser
     }
 
     /// <summary>
-    /// <para>从解密的 XML 内容中解析 OPS 条目列表。</para>
     /// Parses OPS entry list from decrypted XML content.
+    /// <para>从解密的 XML 内容中解析 OPS 条目列表。</para>
     /// </summary>
     internal static IReadOnlyList<OppEntry> ParseEntries(string xml)
     {
@@ -268,7 +259,7 @@ internal static class OppOpsParser
             }
             else
             {
-                // The parent <program> element has a "label" attribute identifying the partition.
+
                 var parentLabel = item.Attribute("label")?.Value;
                 foreach (var subitem in item.Elements())
                 {

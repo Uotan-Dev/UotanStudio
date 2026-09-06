@@ -1,16 +1,12 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 
 namespace UotanStudio.Firmware.Compress.Internal;
 
-/// <summary>
-/// 压缩级别映射助手：把统一的整数级别（0-9）映射到各库的级别枚举。
-/// <para>Compression level mapping helper: maps the unified integer level (0-9) to each library's level enum.</para>
-/// </summary>
 internal static class CompressionLevelMapper
 {
     /// <summary>
-    /// 映射到 .NET 内置 <see cref="CompressionLevel"/>（gzip / deflate / brotli）。
-    /// <para>Maps to the built-in <see cref="CompressionLevel"/> (gzip / deflate / brotli).</para>
+    /// Maps to the built-in CompressionLevel (gzip / deflate / brotli).
+    /// <para>映射到 .NET 内置 CompressionLevel（gzip / deflate / brotli）。</para>
     /// </summary>
     public static CompressionLevel ToBclCompressionLevel(int? level, CompressionLevel @default = CompressionLevel.Optimal)
     {
@@ -26,28 +22,28 @@ internal static class CompressionLevelMapper
     }
 
     /// <summary>
-    /// 映射到 BrotliSharpLib 的质量值（0-11）。
-    /// <para>Maps the unified integer level (0-9) to a Brotli quality value (0-11).</para>
+    /// Maps the unified integer level (0-9) to a Brotli quality value (0-11).
+    /// <para>映射到 BrotliSharpLib 的质量值（0-11）。</para>
     /// </summary>
     public static int ToBrotliQuality(int? level)
     {
         if (!level.HasValue)
         {
-            return 4; // Optimal
+            return 4;
         }
 
         return level.Value switch
         {
-            <= 0 => 0,  // NoCompression
-            <= 3 => 1,  // Fastest
-            >= 9 => 11, // SmallestSize
-            _ => 5      // Optimal
+            <= 0 => 0,
+            <= 3 => 1,
+            >= 9 => 11,
+            _ => 5
         };
     }
 
     /// <summary>
-    /// 映射到 SharpCompress 的 <see cref="SharpCompress.Compressors.Deflate.CompressionLevel"/>（zlib）。
-    /// <para>Maps to SharpCompress's <see cref="SharpCompress.Compressors.Deflate.CompressionLevel"/> (zlib).</para>
+    /// Maps to SharpCompress's SharpCompress.Compressors.Deflate.CompressionLevel (zlib).
+    /// <para>映射到 SharpCompress 的 SharpCompress.Compressors.Deflate.CompressionLevel（zlib）。</para>
     /// </summary>
     public static SharpCompress.Compressors.Deflate.CompressionLevel ToSharpCompressDeflate(int? level)
     {

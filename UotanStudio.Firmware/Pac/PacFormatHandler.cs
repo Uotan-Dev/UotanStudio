@@ -1,20 +1,17 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Pac;
 
-/// <summary>
-/// <para>SPRD PAC 固件格式的 IFormatHandler 实现。</para>
-/// IFormatHandler implementation for the SPRD PAC firmware format.
-/// </summary>
 public sealed class PacFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "SPRD/UNISOC PAC Firmware";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["pac", "bin"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -34,8 +31,8 @@ public sealed class PacFormatHandler : IFormatHandler
                 return false;
             }
             using var reader = new BinaryReader(fs);
-            // pac_magic 紧跟 800 字节保留区，位于 Size-8；Size-4 是 wCRC1/wCRC2。
-            // pac_magic sits right after the 800-byte reserved block at Size-8; Size-4 holds wCRC1/wCRC2.
+
+
             fs.Seek(SprdHead.Size - 8, SeekOrigin.Begin);
             return reader.ReadUInt32() == 0xFFFAFFFA;
         }
@@ -45,7 +42,10 @@ public sealed class PacFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -62,7 +62,10 @@ public sealed class PacFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -76,8 +79,11 @@ public sealed class PacFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) =>
-        // PAC packing requires re-generating the full SPRD directory table + CRC; not supported.
+
         Task.FromResult(FirmwareOpResult.Fail("PAC packing is not supported by this handler."));
 }

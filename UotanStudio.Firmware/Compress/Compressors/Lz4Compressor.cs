@@ -1,28 +1,19 @@
-using System.Buffers;
+﻿using System.Buffers;
 using K4os.Compression.LZ4;
 using K4os.Compression.LZ4.Streams;
 using UotanStudio.Firmware.Compress.Internal;
 
 namespace UotanStudio.Firmware.Compress.Compressors;
 
-/// <summary>
-/// LZ4 压缩/解压：标准帧（LZ4Stream）与传统块帧（magiskboot 风格）。
-/// <para>LZ4 compression/decompression: standard frame (LZ4Stream) and legacy block
-/// framing (magiskboot style).</para>
-/// </summary>
 public static class Lz4Compressor
 {
     private const int BlockChunkSize = 0x10000;
 
-    // Standard frame / 标准帧
 
     /// <summary>
-    /// 标准 LZ4 帧压缩。
-    /// <para>Standard LZ4 frame compression.</para>
+    /// Standard LZ4 frame compression.
+    /// <para>标准 LZ4 帧压缩。</para>
     /// </summary>
-    /// <param name="data">待压缩数据。<para>Data to compress.</para></param>
-    /// <param name="options">压缩选项（Level：0-12，null=L00_FAST）。<para>Compression options (Level: 0-12, null=L00_FAST).</para></param>
-    /// <returns>标准 LZ4 帧数据。<para>Standard LZ4 frame data.</para></returns>
     public static byte[] Compress(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -32,11 +23,8 @@ public static class Lz4Compressor
 
         try
         {
-            // 注：LZ4 不做分块并行。K4os LZ4Stream 解码器对 ≥512 KB 的串联帧不可靠
-            // （只解首个帧），故保持单帧串行输出。
-            // Note: LZ4 is not chunked in parallel. The K4os LZ4Stream decoder does not
-            // reliably decode concatenated frames ≥512 KB (only the first frame is read),
-            // so single-frame sequential output is kept.
+
+
             using var output = new MemoryStream();
             using (var encoder = LZ4Stream.Encode(output, ToLz4Level(options?.Level), leaveOpen: true))
             {
@@ -51,11 +39,9 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 标准 LZ4 帧解压。
-    /// <para>Standard LZ4 frame decompression.</para>
+    /// Standard LZ4 frame decompression.
+    /// <para>标准 LZ4 帧解压。</para>
     /// </summary>
-    /// <param name="data">标准 LZ4 帧数据。<para>Standard LZ4 frame data.</para></param>
-    /// <returns>解压后的原始数据。<para>The decompressed original data.</para></returns>
     public static byte[] Decompress(byte[] data)
     {
         if (data == null)
@@ -78,12 +64,9 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 流式标准 LZ4 帧压缩。
-    /// <para>Streaming standard LZ4 frame compression.</para>
+    /// Streaming standard LZ4 frame compression.
+    /// <para>流式标准 LZ4 帧压缩。</para>
     /// </summary>
-    /// <param name="input">待压缩的输入流。<para>The input stream to compress.</para></param>
-    /// <param name="output">写入压缩结果的输出流。<para>The output stream that receives the compressed data.</para></param>
-    /// <param name="options">压缩选项（Level：0-12，null=L00_FAST）。<para>Compression options (Level: 0-12, null=L00_FAST).</para></param>
     public static void Compress(Stream input, Stream output, CompressionOptions? options = null)
     {
         if (input == null)
@@ -108,11 +91,9 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 流式标准 LZ4 帧解压。
-    /// <para>Streaming standard LZ4 frame decompression.</para>
+    /// Streaming standard LZ4 frame decompression.
+    /// <para>流式标准 LZ4 帧解压。</para>
     /// </summary>
-    /// <param name="input">待解压的输入流。<para>The input stream to decompress.</para></param>
-    /// <param name="output">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
     public static void Decompress(Stream input, Stream output)
     {
         if (input == null)
@@ -137,14 +118,9 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 流式标准 LZ4 帧解压，带输出上限（防解压炸弹）。
-    /// <para>Streaming standard LZ4 frame decompression with output limit (decompression bomb protection).</para>
+    /// Streaming standard LZ4 frame decompression with output limit (decompression bomb protection).
+    /// <para>流式标准 LZ4 帧解压，带输出上限（防解压炸弹）。</para>
     /// </summary>
-    /// <param name="source">待解压的压缩流。<para>The compressed input stream.</para></param>
-    /// <param name="destination">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
-    /// <param name="maxOutputBytes">最大允许的解压输出字节数，超出则抛出异常。<para>Maximum allowed decompressed output in bytes; throws if exceeded.</para></param>
-    /// <exception cref="CompressionException">解压输出超过 <paramref name="maxOutputBytes"/> 时抛出。
-    /// <para>Thrown when decompressed output exceeds <paramref name="maxOutputBytes"/>.</para></exception>
     public static void Decompress(Stream source, Stream destination, long maxOutputBytes)
     {
         if (source == null)
@@ -197,11 +173,10 @@ public static class Lz4Compressor
         }
     }
 
-    // Legacy block framing (magiskboot style) / 传统块帧
 
     /// <summary>
-    /// LZ4 传统格式压缩（0x02 0x21 0x4C 0x18 魔数 + 4 字节块长前缀）。
-    /// <para>LZ4 legacy compression (0x02 0x21 0x4C 0x18 magic + 4-byte block length prefixes).</para>
+    /// LZ4 legacy compression (0x02 0x21 0x4C 0x18 magic + 4-byte block length prefixes).
+    /// <para>LZ4 传统格式压缩（0x02 0x21 0x4C 0x18 魔数 + 4 字节块长前缀）。</para>
     /// </summary>
     public static byte[] CompressLegacy(byte[] data, CompressionOptions? options = null)
     {
@@ -227,9 +202,8 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 流式 LZ4 传统格式压缩：按 64 KiB 块边读边压（有界内存），直接写入输出流。
-    /// <para>Streaming LZ4 legacy compression: reads 64 KiB chunks, compresses and writes
-    /// them in a bounded-memory pipeline directly to the output stream.</para>
+    /// Streaming LZ4 legacy compression: reads 64 KiB chunks, compresses and writes them in a bounded-memory pipeline directly to the output stream.
+    /// <para>流式 LZ4 传统格式压缩：按 64 KiB 块边读边压（有界内存），直接写入输出流。</para>
     /// </summary>
     public static void CompressLegacy(Stream input, Stream output, CompressionOptions? options = null)
     {
@@ -258,8 +232,8 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// LZ4 传统格式解压。
-    /// <para>LZ4 legacy decompression.</para>
+    /// LZ4 legacy decompression.
+    /// <para>LZ4 传统格式解压。</para>
     /// </summary>
     public static byte[] DecompressLegacy(byte[] data)
     {
@@ -285,9 +259,8 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 流式 LZ4 传统格式解压：按块读取并解码（有界内存），直接写入输出流。
-    /// <para>Streaming LZ4 legacy decompression: reads and decodes block by block
-    /// (bounded memory), writing directly to the output stream.</para>
+    /// Streaming LZ4 legacy decompression: reads and decodes block by block (bounded memory), writing directly to the output stream.
+    /// <para>流式 LZ4 传统格式解压：按块读取并解码（有界内存），直接写入输出流。</para>
     /// </summary>
     public static void DecompressLegacy(Stream input, Stream output)
     {
@@ -303,7 +276,7 @@ public static class Lz4Compressor
 
         try
         {
-            // 可选魔数（0x02 0x21 0x4C 0x18）；无魔数时前 4 字节按块长前缀处理。
+
             var magic = new byte[4];
             var magicRead = ReadUpTo(input, magic);
             if (magicRead < 4)
@@ -326,7 +299,7 @@ public static class Lz4Compressor
                     var lenRead = ReadUpTo(input, lengthBuf);
                     if (lenRead == 0)
                     {
-                        break; // 正常结束（无更多块）
+                        break;
                     }
                     if (lenRead < 4)
                     {
@@ -345,7 +318,7 @@ public static class Lz4Compressor
                         throw new CompressionException($"LZ4_LEGACY 数据格式无效：块长度超过安全上限 {maximumBlockLength}");
                     }
 
-                    // 输入块缓冲也跨块复用 ArrayPool；池化数组可能大于块长，须精确读取。
+
                     if (block == null || block.Length < blockLength)
                     {
                         if (block != null)
@@ -361,8 +334,7 @@ public static class Lz4Compressor
                         throw new CompressionException("LZ4_LEGACY 数据格式无效：块数据截断");
                     }
 
-                    // Legacy readers must accept the standard legacy frame block size (8 MiB),
-                    // while the writer remains free to emit smaller 64 KiB blocks.
+
                     if (pooled == null || pooled.Length < maxDecompressed)
                     {
                         if (pooled != null)
@@ -404,11 +376,10 @@ public static class Lz4Compressor
         }
     }
 
-    // Detection / 格式检测
 
     /// <summary>
-    /// 检测数据是否为标准 LZ4 帧（魔数 04 22 4D 18）。
-    /// <para>Detects whether the data is a standard LZ4 frame (magic 04 22 4D 18).</para>
+    /// Detects whether the data is a standard LZ4 frame (magic 04 22 4D 18).
+    /// <para>检测数据是否为标准 LZ4 帧（魔数 04 22 4D 18）。</para>
     /// </summary>
     public static bool IsLz4Format(byte[] data)
     {
@@ -417,8 +388,8 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 检测数据是否为 LZ4 传统格式（魔数 02 21 4C 18）。
-    /// <para>Detects whether the data is in LZ4 legacy format (magic 02 21 4C 18).</para>
+    /// Detects whether the data is in LZ4 legacy format (magic 02 21 4C 18).
+    /// <para>检测数据是否为 LZ4 传统格式（魔数 02 21 4C 18）。</para>
     /// </summary>
     public static bool IsLz4LegacyFormat(byte[] data)
     {
@@ -438,12 +409,8 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 共享的 LZ4 块帧流式压缩：写魔数后按 64 KiB 块边读边压（有界内存），
-    /// 每块独立压缩（无跨块依赖），支持有界窗口并行；按块序拼接，输出与串行逐字节一致。
-    /// <para>Shared LZ4 block-frame streaming compression: writes the magic then reads and
-    /// compresses 64 KiB chunks in a bounded-memory pipeline. Each chunk is compressed
-    /// independently (no cross-chunk dependency), enabling bounded-window parallelism;
-    /// results are appended in chunk order, byte-identical to sequential output.</para>
+    /// Shared LZ4 block-frame streaming compression: writes the magic then reads and compresses 64 KiB chunks in a bounded-memory pipeline.
+    /// <para>共享的 LZ4 块帧流式压缩：写魔数后按 64 KiB 块边读边压（有界内存）， 每块独立压缩（无跨块依赖），支持有界窗口并行；按块序拼接，输出与串行逐字节一致。</para>
     /// </summary>
     private static void CompressBlockFrame(Stream input, Stream output, byte[] magic, LZ4Level level, int? maxDegreeOfParallelism)
     {
@@ -454,7 +421,7 @@ public static class Lz4Compressor
 
         while (true)
         {
-            // 批量读取至多 dop 个 64 KiB 块（内存有界）。
+
             chunks.Clear();
             while (chunks.Count < dop)
             {
@@ -462,7 +429,7 @@ public static class Lz4Compressor
                 var read = ReadUpTo(input, chunk);
                 if (read == 0)
                 {
-                    break; // EOF
+                    break;
                 }
 
                 if (read < chunk.Length)
@@ -477,7 +444,7 @@ public static class Lz4Compressor
                 break;
             }
 
-            // 各块独立压缩（LZ4 块编码无跨块状态，线程安全）。
+
             var compressed = new byte[chunks.Count][];
             var sizes = new int[chunks.Count];
             if (chunks.Count > 1 && dop > 1)
@@ -499,7 +466,7 @@ public static class Lz4Compressor
                 }
             }
 
-            // 按块序拼接输出（与串行一致）。
+
             for (var i = 0; i < chunks.Count; i++)
             {
                 var size = sizes[i];
@@ -513,8 +480,8 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 尽力读满 buffer（遇到 EOF 时返回实际读取字节数）。
-    /// <para>Reads up to buffer.Length bytes; returns the actual count read (may be short at EOF).</para>
+    /// Reads up to buffer.Length bytes; returns the actual count read (may be short at EOF).
+    /// <para>尽力读满 buffer（遇到 EOF 时返回实际读取字节数）。</para>
     /// </summary>
     private static int ReadUpTo(Stream input, byte[] buffer)
     {
@@ -533,10 +500,8 @@ public static class Lz4Compressor
     }
 
     /// <summary>
-    /// 精确读取至多 count 字节（遇到 EOF 时返回实际读取字节数）。
-    /// 用于池化缓冲：数组实际长度可能大于块长，必须按块长精确读取。
-    /// <para>Reads exactly up to count bytes; returns the actual count read (may be short at EOF).
-    /// Used with pooled buffers whose actual length may exceed the block length.</para>
+    /// Reads exactly up to count bytes; returns the actual count read (may be short at EOF).
+    /// <para>精确读取至多 count 字节（遇到 EOF 时返回实际读取字节数）。</para>
     /// </summary>
     private static int ReadExactly(Stream input, byte[] buffer, int count)
     {

@@ -1,11 +1,13 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.Erofs;
 
 public sealed partial class ErofsParser
 {
-    /// <c>z_erofs_load_full_lcluster</c>.</para>
+    /// <summary>
+    /// Loads a logical cluster entry from compact or full indexes.
+    /// <para>从紧凑或完整索引加载逻辑簇条目。</para>
     /// </summary>
     private LclusterEntry LoadLcluster(
         ulong nid,
@@ -19,7 +21,7 @@ public sealed partial class ErofsParser
         out int compacted4bInitial,
         out int compacted2b)
     {
-        // ebase：紧凑索引表起始（map header 之后）。ebase: start of the compact index table.
+
         ebase = headerOffset + ZErofsMapHeader.Size;
         if (inode.DataLayout == ErofsInode.DataLayoutCompactIndexes)
         {
@@ -39,11 +41,8 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>
-    /// 解码紧凑索引中的单个逻辑簇条目（位级），移植自内核
-    /// <c>z_erofs_load_compact_lcluster</c> + <c>decode_compactedbits</c>，含 big-pcluster 回看分支。
-    /// <para>Decodes a single logical-cluster entry from the compact index (bit-level), ported from the
-    /// kernel <c>z_erofs_load_compact_lcluster</c> + <c>decode_compactedbits</c>, including the
-    /// big-pcluster lookback branch.</para>
+    /// Decodes a single logical-cluster entry from the compact index (bit-level), ported from the kernel z_erofs_load_compact_lcluster + decode_compactedbits, including the big-pcluster lookback branch.
+    /// <para>解码紧凑索引中的单个逻辑簇条目（位级），移植自内核 z_erofs_load_compact_lcluster + decode_compactedbits，含 big-pcluster 回看分支。</para>
     /// </summary>
     private LclusterEntry LoadCompactLcluster(
         ulong nid,
@@ -57,7 +56,7 @@ public sealed partial class ErofsParser
         long lcn)
     {
         var bigPcluster = (advise & (ZErofsMapHeader.AdviseBigPcluster1 | ZErofsMapHeader.AdviseBigPcluster2)) != 0;
-        var amortizedShift = 2; // compact_4b：每簇 4 字节
+        var amortizedShift = 2;
         var pos = headerOffset + ZErofsMapHeader.Size;
         var l = lcn;
         if (l >= compacted4bInitial)
@@ -66,7 +65,7 @@ public sealed partial class ErofsParser
             l -= compacted4bInitial;
             if (l < compacted2b)
             {
-                amortizedShift = 1; // compact_2b：每簇 2 字节
+                amortizedShift = 1;
             }
             else
             {
@@ -115,25 +114,25 @@ public sealed partial class ErofsParser
             throw new InvalidDataException("Compact index pack exceeds the image bounds.");
         }
 
-        var lobits = Math.Max(lclusterBits, 12); // ilog2(Z_EROFS_LI_D0_CBLKCNT) + 1 = 11 + 1
+        var lobits = Math.Max(lclusterBits, 12);
         var encodebits = ((packSize - 4) * 8) / vcnt;
         var (lo, type) = DecodeCompactedBits(index, packStartRel, lobits, encodebits * i);
         if (type == LclusterTypeNonHead)
         {
-            // NONHEAD：clusterofs = 1<<lclusterbits 哨兵；delta[0] 指向 HEAD 的距离。
-            // NONHEAD: clusterofs = 1<<lclusterbits sentinel; delta[0] = distance to the HEAD.
+
+
             var clusterOfs = 1 << lclusterBits;
             if ((lo & (1u << 11)) != 0)
             {
-                // D0_CBLKCNT 标志（big pcluster 首个 NONHEAD 存储压缩块数）。
-                // D0_CBLKCNT flag: the first NONHEAD of a big pcluster stores the compressed block count.
+
+
                 return new LclusterEntry(type, clusterOfs, delta0: 1, delta1: 0, pblk: 0, compressedBlocks: (int)(lo & ~(1u << 11)));
             }
 
             if (i + 1 == vcnt)
             {
-                // pack 内最后一个条目存的是 delta[1]；delta[0] 由前一条目间接推出。
-                // The last entry of the pack stores delta[1] instead; derive delta[0] from the previous one.
+
+
                 var (prevLo, prevType) = DecodeCompactedBits(index, packStartRel, lobits, encodebits * (i - 1));
                 if (prevType != LclusterTypeNonHead)
                 {
@@ -150,8 +149,7 @@ public sealed partial class ErofsParser
             return new LclusterEntry(type, clusterOfs, delta0: lo, delta1: 0, pblk: 0, compressedBlocks: 0);
         }
 
-        // HEAD / PLAIN：clusterofs = lo；pblk = pack 尾部 blkaddr + 本 pack 内回看累计的物理块数。
-        // HEAD / PLAIN: clusterofs = lo; pblk = trailing blkaddr of the pack + lookback block count.
+
         var clusterOfsH = (int)lo;
         long nblk;
         var j = i;
@@ -175,9 +173,8 @@ public sealed partial class ErofsParser
         }
         else
         {
-            // big-pcluster 回看：NONHEAD 带 CBLKCNT 时直接累加压缩块数，否则按 delta 回跳。
-            // Big-pcluster lookback: NONHEAD with CBLKCNT accumulates compressed blocks; otherwise
-            // jump back by delta.
+
+
             nblk = 0;
             while (j > 0)
             {
@@ -192,8 +189,7 @@ public sealed partial class ErofsParser
                         continue;
                     }
 
-                    // big-pcluster 不允许普通 d0 == 1；按 d0 - 2 回跳。
-                    // Big pclusters must not have plain d0 == 1; jump back by d0 - 2.
+
                     if (prevLo3 <= 1)
                     {
                         throw new InvalidDataException($"Corrupt big-pcluster delta for nid {nid}.");
@@ -213,11 +209,8 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>
-    /// 解码完整（8 字节）压缩索引条目，移植自内核 <c>z_erofs_load_full_lcluster</c>。
-    /// 完整索引起始于 <c>Z_EROFS_FULL_INDEX_START = Z_EROFS_MAP_HEADER_END + 8</c>。
-    /// <para>Decodes a full (8-byte) compressed index entry, ported from the kernel
-    /// <c>z_erofs_load_full_lcluster</c>. The full index starts at
-    /// <c>Z_EROFS_FULL_INDEX_START = Z_EROFS_MAP_HEADER_END + 8</c>.</para>
+    /// Decodes a full (8-byte) compressed index entry, ported from the kernel z_erofs_load_full_lcluster.
+    /// <para>解码完整（8 字节）压缩索引条目，移植自内核 z_erofs_load_full_lcluster。</para>
     /// </summary>
     private LclusterEntry LoadFullLcluster(ErofsInode inode, long headerOffset, int lclusterBits, long lcn)
     {
@@ -230,8 +223,8 @@ public sealed partial class ErofsParser
         var entry = ZErofsLclusterIndex.FromBytes(ReadBytes(indexOffset, ZErofsLclusterIndex.Size, "full index entry"));
         if (entry.IsNonHead)
         {
-            // D0_CBLKCNT 判定针对 delta[0] 值（内核 z_erofs_load_full_lcluster）。
-            // The D0_CBLKCNT check applies to the delta[0] value (kernel z_erofs_load_full_lcluster).
+
+
             if ((entry.Delta0 & ZErofsLclusterIndex.LiD0CblkCnt) != 0)
             {
                 return new LclusterEntry(LclusterTypeNonHead, 1 << lclusterBits, delta0: 1, delta1: 0, pblk: 0, compressedBlocks: entry.Delta0 & ~ZErofsLclusterIndex.LiD0CblkCnt);
@@ -250,11 +243,8 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>
-    /// 位级解码紧凑索引条目：<c>v = le32(in + pos/8) &gt;&gt; (pos &amp; 7)</c>；
-    /// 低 <paramref name="lobits"/> 位为 lo（clusterofs / delta），随后 2 位为簇类型。
-    /// <para>Bit-level compact index decode: <c>v = le32(in + pos/8) &gt;&gt; (pos &amp; 7)</c>;
-    /// the low <paramref name="lobits"/> bits are lo (clusterofs / delta) and the following 2 bits
-    /// are the cluster type.</para>
+    /// Bit-level compact index decode: v = le32(in + pos/8) &gt;&gt; (pos &amp; 7); the low lobits bits are lo (clusterofs / delta) and the following 2 bits are the cluster type.
+    /// <para>位级解码紧凑索引条目：v = le32(in + pos/8) &gt;&gt; (pos &amp; 7)； 低 lobits 位为 lo（clusterofs / delta），随后 2 位为簇类型。</para>
     /// </summary>
     private static (uint Lo, byte Type) DecodeCompactedBits(byte[] index, int packStartRel, int lobits, int bitPos)
     {
@@ -272,9 +262,6 @@ public sealed partial class ErofsParser
 
     private static long AlignUp(long value, int alignment) => (value + alignment - 1) / alignment * alignment;
 
-    /// <summary>
-    /// 解码后的逻辑簇条目。Decoded logical-cluster entry.
-    /// </summary>
     private readonly struct LclusterEntry
     {
         public byte Type { get; }

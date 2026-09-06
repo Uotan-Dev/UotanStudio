@@ -1,62 +1,29 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Firmware.BootImage;
 
-/// <summary>
-/// Samsung PXA Boot 镜像解析器。
-/// <para>
-/// 负责解析三星（Samsung）设备的 PXA 专用 boot 镜像格式。</para>
-/// <para>
-/// Parses Samsung PXA-specific boot image formats.</para>
-/// </summary>
 public class SamsungBootParser : IDisposable
 {
     private const string BootMagic = "ANDROID!";
     private const int SamsungHeaderSize = 1664;
     private bool _disposed;
 
-    /// <summary>
-    /// Samsung PXA 镜像头部信息。
-    /// <para>The Samsung PXA image header information.</para>
-    /// </summary>
     public SamsungHeader Header { get; private set; } = new SamsungHeader();
 
-    /// <summary>
-    /// 获取内核数据。
-    /// <para>Gets the kernel data.</para>
-    /// </summary>
     public byte[] Kernel { get; private set; } = [];
 
-    /// <summary>
-    /// 获取 RAMDisk 数据。
-    /// <para>Gets the ramdisk data.</para>
-    /// </summary>
     public byte[] Ramdisk { get; private set; } = [];
 
-    /// <summary>
-    /// 获取第二阶段引导程序数据。
-    /// <para>Gets the second stage loader data.</para>
-    /// </summary>
     public byte[] Second { get; private set; } = [];
 
-    /// <summary>
-    /// 获取 DTB 数据。
-    /// <para>Gets the DTB data.</para>
-    /// </summary>
     public byte[] Dtb { get; private set; } = [];
 
-    /// <summary>
-    /// 获取额外数据。
-    /// <para>Gets the extra data.</para>
-    /// </summary>
     public byte[] Extra { get; private set; } = [];
 
     /// <summary>
-    /// 检查数据是否为 Samsung PXA 格式。
-    /// <para>Checks if the data is in Samsung PXA format.</para>
+    /// Checks if the data is in Samsung PXA format.
+    /// <para>检查数据是否为 Samsung PXA 格式。</para>
     /// </summary>
-    /// <param name="data">待检测的数据。<para>The data to check.</para></param>
-    /// <returns>如果是 Samsung PXA 格式则为 true。<para>True if Samsung PXA format.</para></returns>
     public static bool IsSamsungFormat(byte[] data)
     {
         if (data == null || data.Length < 44)
@@ -70,17 +37,15 @@ public class SamsungBootParser : IDisposable
             return false;
         }
 
-        // Samsung PXA 在头部偏移 40 存放 extra 段大小（通常大于 4），而非 header version
+
         var headerOrExtra = BitConverter.ToUInt32(data, 40);
         return headerOrExtra > 4;
     }
 
     /// <summary>
-    /// 从文件解析 Samsung PXA Boot 镜像。
-    /// <para>Parses a Samsung PXA boot image from a file.</para>
+    /// Parses a Samsung PXA boot image from a file.
+    /// <para>从文件解析 Samsung PXA Boot 镜像。</para>
     /// </summary>
-    /// <param name="filePath">镜像文件路径。<para>The image file path.</para></param>
-    /// <exception cref="ImageParseException">镜像格式无效时抛出。<para>Thrown when the image format is invalid.</para></exception>
     public void ParseFile(string filePath)
     {
         using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -92,11 +57,9 @@ public class SamsungBootParser : IDisposable
     }
 
     /// <summary>
-    /// 从字节数组解析 Samsung PXA Boot 镜像。
-    /// <para>Parses a Samsung PXA boot image from a byte array.</para>
+    /// Parses a Samsung PXA boot image from a byte array.
+    /// <para>从字节数组解析 Samsung PXA Boot 镜像。</para>
     /// </summary>
-    /// <param name="data">镜像数据。<para>The image data.</para></param>
-    /// <exception cref="ImageParseException">镜像格式无效时抛出。<para>Thrown when the image format is invalid.</para></exception>
     public void Parse(byte[] data)
     {
         ParseHeader(data);
@@ -170,11 +133,9 @@ public class SamsungBootParser : IDisposable
     }
 
     /// <summary>
-    /// 解析 Samsung boot 镜像的 extra 数据块。
-    /// <para>Parses the extra data block in Samsung boot images.</para>
+    /// Parses the extra data block in Samsung boot images.
+    /// <para>解析 Samsung boot 镜像的 extra 数据块。</para>
     /// </summary>
-    /// <param name="data">镜像数据。<para>The image data.</para></param>
-    /// <returns>Extra 数据块。<para>The extra data block.</para></returns>
     public byte[] ParseExtra(byte[] data)
     {
         if (!Header.HasExtra || Header.ExtraSize == 0)
@@ -294,8 +255,8 @@ public class SamsungBootParser : IDisposable
     private static uint AlignToPage(uint offset, uint pageSize) => (offset + pageSize - 1) & ~(pageSize - 1);
 
     /// <summary>
-    /// 释放资源。
-    /// <para>Releases all resources used by the parser.</para>
+    /// Releases all resources used by the parser.
+    /// <para>释放资源。</para>
     /// </summary>
     public void Dispose()
     {
@@ -304,10 +265,9 @@ public class SamsungBootParser : IDisposable
     }
 
     /// <summary>
-    /// 释放资源的核心方法。
-    /// <para>Core method for releasing resources.</para>
+    /// Core method for releasing resources.
+    /// <para>释放资源的核心方法。</para>
     /// </summary>
-    /// <param name="disposing">是否释放托管资源。<para>Whether to release managed resources.</para></param>
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)
@@ -327,129 +287,45 @@ public class SamsungBootParser : IDisposable
     }
 }
 
-/// <summary>
-/// Samsung PXA 镜像头部信息。
-/// <para>Samsung PXA image header information.</para>
-/// </summary>
 public class SamsungHeader
 {
-    /// <summary>
-    /// 内核大小。
-    /// <para>The kernel size.</para>
-    /// </summary>
     public uint KernelSize { get; set; }
 
-    /// <summary>
-    /// 内核地址。
-    /// <para>The kernel address.</para>
-    /// </summary>
     public uint KernelAddr { get; set; }
 
-    /// <summary>
-    /// RAMDisk 大小。
-    /// <para>The ramdisk size.</para>
-    /// </summary>
     public uint RamdiskSize { get; set; }
 
-    /// <summary>
-    /// RAMDisk 地址。
-    /// <para>The ramdisk address.</para>
-    /// </summary>
     public uint RamdiskAddr { get; set; }
 
-    /// <summary>
-    /// 第二阶段大小。
-    /// <para>The second stage size.</para>
-    /// </summary>
     public uint SecondSize { get; set; }
 
-    /// <summary>
-    /// 第二阶段地址。
-    /// <para>The second stage address.</para>
-    /// </summary>
     public uint SecondAddr { get; set; }
 
-    /// <summary>
-    /// 标签地址。
-    /// <para>The tags address.</para>
-    /// </summary>
     public uint TagsAddr { get; set; }
 
-    /// <summary>
-    /// 页大小。
-    /// <para>The page size.</para>
-    /// </summary>
     public uint PageSize { get; set; }
 
-    /// <summary>
-    /// 头部版本。
-    /// <para>The header version.</para>
-    /// </summary>
     public uint HeaderVersion { get; set; }
 
-    /// <summary>
-    /// 是否有额外数据。
-    /// <para>Whether there is extra data.</para>
-    /// </summary>
     public bool HasExtra { get; set; }
 
-    /// <summary>
-    /// 额外数据大小。
-    /// <para>The extra data size.</para>
-    /// </summary>
     public uint ExtraSize { get; set; }
 
-    /// <summary>
-    /// 额外数据偏移量。
-    /// <para>The extra data offset.</para>
-    /// </summary>
     public uint ExtraOffset { get; set; }
 
-    /// <summary>
-    /// 操作系统版本。
-    /// <para>The OS version.</para>
-    /// </summary>
     public uint OsVersion { get; set; }
 
-    /// <summary>
-    /// 产品名称。
-    /// <para>The product name.</para>
-    /// </summary>
     public string ProductName { get; set; } = string.Empty;
 
-    /// <summary>
-    /// 命令行参数。
-    /// <para>The command line.</para>
-    /// </summary>
     public string CommandLine { get; set; } = string.Empty;
 
-    /// <summary>
-    /// 额外命令行参数。
-    /// <para>The extra command line.</para>
-    /// </summary>
     public string ExtraCmdLine { get; set; } = string.Empty;
 
-    /// <summary>
-    /// ID 数组。
-    /// <para>The ID array.</para>
-    /// </summary>
     public uint[] Ids { get; set; } = new uint[8];
 
-    /// <summary>
-    /// Recovery DTBO 大小。
-    /// <para>The recovery DTBO size.</para>
-    /// </summary>
     public uint RecoveryDtboSize { get; set; }
 
-    /// <summary>
-    /// Recovery DTBO 偏移量。
-    /// <para>The recovery DTBO offset.</para>
-    /// </summary>
     public ulong RecoveryDtboOffset { get; set; }
 
-    /// <summary>
-    /// 内核加载地址。
-    /// <para>The kernel load address.</para>
-    /// </summary>
     public ulong KernelLoadAddr { get; set; }
 }

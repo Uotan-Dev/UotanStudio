@@ -1,9 +1,5 @@
 namespace UotanStudio.Firmware.Cpio.Formats.Tar;
 
-/// <summary>
-/// Exposes exactly a declared number of bytes from a readable stream, reports that length,
-/// prevents reads from crossing the boundary, and fails on premature EOF.
-/// </summary>
 internal sealed class DeclaredLengthReadStream(Stream inner, long length, bool leaveOpen) : Stream
 {
     private long _position;

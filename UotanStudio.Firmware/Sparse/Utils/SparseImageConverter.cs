@@ -1,9 +1,5 @@
 namespace UotanStudio.Firmware.Sparse;
 
-/// <summary>
-/// Utility class for sparse image format conversion operations.
-/// <para>稀疏镜像格式转换操作的实用工具类。</para>
-/// </summary>
 public static class SparseImageConverter
 {
     /// <summary>
@@ -65,13 +61,8 @@ public static class SparseImageConverter
 
     /// <summary>
     /// Splits a large sparse image into multiple sparse images of a specified maximum size.
-    /// Streams each split directly from the source without materializing the whole raw image.
-    /// <para>将大型稀疏镜像拆分为指定最大大小的多个稀疏镜像。
-    /// 直接流式输出每个分片，不再物化整张 raw 镜像。</para>
+    /// <para>将大型稀疏镜像拆分为指定最大大小的多个稀疏镜像。</para>
     /// </summary>
-    /// <param name="inputFile">The path to the input sparse image file. <para>输入稀疏镜像文件路径。</para></param>
-    /// <param name="outputPattern">Output path pattern; may include {0} for the index. <para>输出文件路径模式;可包含 {0} 作为索引占位符。</para></param>
-    /// <param name="maxFileSize">Maximum size in bytes for each split file. <para>每个拆分文件的最大字节数。</para></param>
     public static void ResparseImage(string inputFile, string outputPattern, long maxFileSize)
     {
         ArgumentException.ThrowIfNullOrEmpty(inputFile);

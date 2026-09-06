@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Ext4.Core;
 
@@ -7,9 +7,8 @@ namespace UotanStudio.Firmware.Ext4;
 public sealed partial class Ext4Builder
 {
     /// <summary>
-    /// 逐块读取文件，返回所有全零块的索引集合；若无空洞则返回 null。
-    /// <para>Reads the file block-by-block and returns the set of indices whose blocks are
-    /// entirely zero (holes); returns <c>null</c> if no holes are found.</para>
+    /// Reads the file block-by-block and returns the set of indices whose blocks are entirely zero (holes); returns null if no holes are found.
+    /// <para>逐块读取文件，返回所有全零块的索引集合；若无空洞则返回 null。</para>
     /// </summary>
     private static HashSet<int>? DetectHoles(string fullPath, long size, int blockSize)
     {
@@ -61,9 +60,8 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// 将空洞集合转换为连续的非空洞块运行列表。
-    /// <para>Converts a set of hole block indices into a list of contiguous non-hole
-    /// runs (each expressed as a logical-start block and a block count).</para>
+    /// Converts a set of hole block indices into a list of contiguous non-hole runs (each expressed as a logical-start block and a block count).
+    /// <para>将空洞集合转换为连续的非空洞块运行列表。</para>
     /// </summary>
     private static List<(long LogicalStart, long Count)> BuildRuns(long totalBlocks, HashSet<int>? holes)
     {
@@ -103,10 +101,8 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// 将 extent 树写入 inode i_block 区域（60 字节），支持深度 0/1/2，返回需要额外写出的元数据块列表。
-    /// <para>Writes an extent tree into the inode i_block area (60 bytes).  Supports tree
-    /// depth 0, 1 and 2.  Returns a list of metadata blocks (leaf / index blocks) that
-    /// the caller must flush to disk at the indicated addresses.</para>
+    /// Writes an extent tree into the inode i_block area (60 bytes).
+    /// <para>将 extent 树写入 inode i_block 区域（60 字节），支持深度 0/1/2，返回需要额外写出的元数据块列表。</para>
     /// </summary>
     private static List<(long BlockAddress, byte[] Data)> WriteExtentTree(
         Span<byte> dest, List<(long LogicalStart, long Count)> runs, long dataStart,
@@ -133,8 +129,8 @@ public sealed partial class Ext4Builder
 
         if (extents.Count <= 4)
         {
-            // depth 0：全部 extent 直接存于 inode i_block，容量恒为 4。
-            // depth 0: all extents live in the inode i_block, whose capacity is always 4.
+
+
             WriteExtentHeader(dest, (ushort)extents.Count, 0, 4);
             var offset = 12;
             foreach (var extent in extents)
@@ -146,7 +142,7 @@ public sealed partial class Ext4Builder
             return blocksToWrite;
         }
 
-        // 按 epb 分组成叶块。
+
         var leafGroups = new List<(uint Logical, ulong Start, ushort Len)[]>();
         for (var i = 0; i < extents.Count; i += epb)
         {
@@ -158,7 +154,7 @@ public sealed partial class Ext4Builder
             throw new InvalidOperationException("Extent index tree under-allocated leaf blocks.");
         }
 
-        // 写叶块。
+
         for (var g = 0; g < leafGroups.Count; g++)
         {
             var leaf = new byte[blockSize];
@@ -172,7 +168,7 @@ public sealed partial class Ext4Builder
             blocksToWrite.Add((leafBlocks[g], leaf));
         }
 
-        // 构建索引项列表：每项指向一个叶块。
+
         var indexEntries = new List<(uint LogicalStart, long BlockAddress)>();
         for (var g = 0; g < leafGroups.Count; g++)
         {
@@ -181,7 +177,7 @@ public sealed partial class Ext4Builder
 
         if (indexEntries.Count <= 4)
         {
-            // depth 1：索引项直接存于 inode i_block。
+
             WriteExtentHeader(dest, (ushort)indexEntries.Count, 1, 4);
             for (var i = 0; i < indexEntries.Count; i++)
             {
@@ -191,8 +187,7 @@ public sealed partial class Ext4Builder
             return blocksToWrite;
         }
 
-        // depth 2：索引项过多，需要二级索引块。
-        // 按 epb 分组成二级索引块。
+
         var indexGroups = new List<(uint LogicalStart, long BlockAddress)[]>();
         for (var i = 0; i < indexEntries.Count; i += epb)
         {
@@ -204,7 +199,7 @@ public sealed partial class Ext4Builder
             throw new InvalidOperationException("Extent index tree under-allocated index blocks.");
         }
 
-        // 写二级索引块。
+
         for (var g = 0; g < indexGroups.Count; g++)
         {
             var block = new byte[blockSize];
@@ -218,7 +213,7 @@ public sealed partial class Ext4Builder
             blocksToWrite.Add((indexBlocks[g], block));
         }
 
-        // inode i_block 存 depth=2 的根索引项，指向二级索引块。
+
         if (indexGroups.Count > 4)
         {
             throw new InvalidOperationException(
@@ -240,7 +235,7 @@ public sealed partial class Ext4Builder
         WriteU16(dest, 2, entries);
         WriteU16(dest, 4, (ushort)maxEntries);
         WriteU16(dest, 6, depth);
-        WriteU32(dest, 8, 0); // generation
+        WriteU32(dest, 8, 0);
     }
 
     private static void WriteExtentEntry(Span<byte> dest, int offset, (uint Logical, ulong Start, ushort Len) extent)
@@ -252,23 +247,20 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// 写入一个 extent 索引项（ei_block + ei_leaf_lo + ei_leaf_hi + ei_unused）。
-    /// <para>Writes an extent index entry (ei_block + ei_leaf_lo + ei_leaf_hi + ei_unused).</para>
+    /// Writes an extent index entry (ei_block + ei_leaf_lo + ei_leaf_hi + ei_unused).
+    /// <para>写入一个 extent 索引项（ei_block + ei_leaf_lo + ei_leaf_hi + ei_unused）。</para>
     /// </summary>
     private static void WriteExtentIndex(Span<byte> dest, int offset, uint logicalBlock, long leafBlock)
     {
-        WriteU32(dest, offset, logicalBlock);                              // ei_block
-        WriteU32(dest, offset + 4, (uint)(leafBlock & 0xFFFFFFFF));       // ei_leaf_lo
-        WriteU16(dest, offset + 8, (ushort)((ulong)leafBlock >> 32));     // ei_leaf_hi
-        WriteU16(dest, offset + 10, 0);                                   // ei_unused
+        WriteU32(dest, offset, logicalBlock);
+        WriteU32(dest, offset + 4, (uint)(leafBlock & 0xFFFFFFFF));
+        WriteU16(dest, offset + 8, (ushort)((ulong)leafBlock >> 32));
+        WriteU16(dest, offset + 10, 0);
     }
 
     /// <summary>
-    /// 将文件数据块写入输出流：目录块按序写出，符号链接写入目标路径字节，常规文件按逻辑块跳过空洞后从磁盘读取写出。
-    /// <para>Writes file data blocks to the output stream: directory blocks are written
-    /// sequentially, symlinks store the encoded target path, and regular files are read
-    /// from disk block-by-block (skipping sparse holes) and written to their allocated
-    /// on-disk locations.</para>
+    /// Writes file data blocks to the output stream: directory blocks are written sequentially, symlinks store the encoded target path, and regular files are read from disk block-by-block (skipping sparse holes) and written to their allocated on-disk locations.
+    /// <para>将文件数据块写入输出流：目录块按序写出，符号链接写入目标路径字节，常规文件按逻辑块跳过空洞后从磁盘读取写出。</para>
     /// </summary>
     private static void WriteNodeData(Stream output, long baseOffset, Node node, int blockSize)
     {
@@ -307,8 +299,7 @@ public sealed partial class Ext4Builder
                     continue;
                 }
 
-                // 稀疏文件跳过洞块后顺序流会错位，须按逻辑块偏移重新定位。
-                // Skipping hole blocks desyncs the sequential stream; seek to the logical offset.
+
                 fs.Position = logical * blockSize;
 
                 buffer.AsSpan().Clear();

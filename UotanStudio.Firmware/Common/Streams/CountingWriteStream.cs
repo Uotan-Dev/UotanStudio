@@ -1,9 +1,5 @@
 namespace UotanStudio.Firmware.Common.Streams;
 
-/// <summary>
-/// 统计写入字节并拒绝超过指定上限的写入流包装器。
-/// <para>Wraps a writable stream, counts bytes, and rejects writes exceeding a specified limit.</para>
-/// </summary>
 public sealed class CountingWriteStream : Stream
 {
     private readonly Stream _inner;
@@ -13,13 +9,9 @@ public sealed class CountingWriteStream : Stream
     private bool _disposed;
 
     /// <summary>
-    /// 创建受限计数写入流。
-    /// <para>Creates a limited counting write stream.</para>
+    /// Creates a limited counting write stream.
+    /// <para>创建受限计数写入流。</para>
     /// </summary>
-    /// <param name="inner">可写基础流。<para>The writable underlying stream.</para></param>
-    /// <param name="maximumBytes">允许写入的最大字节数。<para>The maximum number of bytes that may be written.</para></param>
-    /// <param name="leaveOpen">释放后是否保持基础流打开。<para>Whether to leave the underlying stream open after disposal.</para></param>
-    /// <param name="cancellationToken">每次写入前检查的取消令牌。<para>The cancellation token checked before each write.</para></param>
     public CountingWriteStream(Stream inner, long maximumBytes, bool leaveOpen = false, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(inner);
@@ -31,22 +23,18 @@ public sealed class CountingWriteStream : Stream
         _cancellationToken = cancellationToken;
     }
 
-    /// <summary>已写入的字节数。<para>Gets the number of bytes written.</para></summary>
     public long BytesWritten { get; private set; }
-    /// <summary>允许写入的最大字节数。<para>Gets the maximum number of bytes allowed.</para></summary>
     public long MaximumBytes => _maximumBytes;
-    /// <inheritdoc />
     public override bool CanRead => false;
-    /// <inheritdoc />
     public override bool CanSeek => false;
-    /// <inheritdoc />
     public override bool CanWrite => !_disposed;
-    /// <inheritdoc />
     public override long Length => throw new NotSupportedException();
-    /// <inheritdoc />
     public override long Position { get => BytesWritten; set => throw new NotSupportedException(); }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes bytes to the stream.
+    /// <para>向流写入字节。</para>
+    /// </summary>
     public override void Write(byte[] buffer, int offset, int count)
     {
         ArgumentNullException.ThrowIfNull(buffer);
@@ -56,7 +44,10 @@ public sealed class CountingWriteStream : Stream
         Write(buffer.AsSpan(offset, count));
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes bytes to the stream.
+    /// <para>向流写入字节。</para>
+    /// </summary>
     public override void Write(ReadOnlySpan<byte> buffer)
     {
         ThrowIfDisposed();
@@ -66,7 +57,10 @@ public sealed class CountingWriteStream : Stream
         BytesWritten = checked(BytesWritten + buffer.Length);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Writes bytes to the stream asynchronously.
+    /// <para>异步向流写入字节。</para>
+    /// </summary>
     public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -76,18 +70,36 @@ public sealed class CountingWriteStream : Stream
         BytesWritten = checked(BytesWritten + buffer.Length);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes buffered data to the underlying stream.
+    /// <para>将缓冲数据刷新到底层流。</para>
+    /// </summary>
     public override void Flush() { ThrowIfDisposed(); _inner.Flush(); }
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes buffered data asynchronously.
+    /// <para>异步刷新缓冲数据。</para>
+    /// </summary>
     public override Task FlushAsync(CancellationToken cancellationToken) { ThrowIfDisposed(); return _inner.FlushAsync(cancellationToken); }
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void SetLength(long value) => throw new NotSupportedException();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases resources owned by this instance.
+    /// <para>释放此实例持有的资源。</para>
+    /// </summary>
     protected override void Dispose(bool disposing)
     {
         if (!_disposed && disposing && !_leaveOpen) _inner.Dispose();

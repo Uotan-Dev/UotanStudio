@@ -2,43 +2,28 @@ using System.Text;
 
 namespace UotanStudio.Firmware.UpdateApp;
 
-/// <summary>
-/// <para>表示华为 update.app 文件中的一个条目。</para>
-/// Represents an entry within a Huawei update.app file.
-/// </summary>
 public sealed class UpdateAppEntry
 {
-    /// <summary>条目名称(如 system、boot)。</summary>
     public string Name { get; set; } = string.Empty;
 
-    /// <summary>条目头部在文件中的偏移量。</summary>
     public long HeaderOffset { get; set; }
 
-    /// <summary>条目头部大小。</summary>
     public uint HeaderSize { get; set; }
 
-    /// <summary>文件数据大小。</summary>
     public uint FileSize { get; set; }
 
-    /// <summary>数据在文件中的偏移量。</summary>
     public long DataOffset { get; set; }
 }
 
-/// <summary>
-/// <para>提供华为 update.app 固件包的条目枚举与提取功能。</para>
-/// Provides entry enumeration and extraction functionality for Huawei update.app firmware packages.
-/// </summary>
 public static class UpdateAppProcessor
 {
-    /// <summary>条目魔数 0x55AA5AA5。</summary>
     public static readonly byte[] Magic = [0x55, 0xAA, 0x5A, 0xA5];
 
-    /// <summary>条目魔数(供格式检测使用)。</summary>
     public static ReadOnlySpan<byte> MagicBytes => Magic;
 
     /// <summary>
-    /// <para>枚举 update.app 中的所有条目。</para>
     /// Enumerates all entries within an update.app file.
+    /// <para>枚举 update.app 中的所有条目。</para>
     /// </summary>
     public static IEnumerable<UpdateAppEntry> GetEntries(string source)
     {
@@ -104,10 +89,9 @@ public static class UpdateAppProcessor
     }
 
     /// <summary>
-    /// <para>将 update.app 中的条目提取到输出目录。</para>
     /// Extracts entries from an update.app to the output directory.
+    /// <para>将 update.app 中的条目提取到输出目录。</para>
     /// </summary>
-    /// <returns>成功提取的条目数。</returns>
     public static int Extract(string source, string outDir, List<string>? fileList = null)
     {
         if (!File.Exists(source))

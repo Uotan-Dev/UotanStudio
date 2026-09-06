@@ -1,9 +1,5 @@
-namespace UotanStudio.Firmware.Common.Streams;
+﻿namespace UotanStudio.Firmware.Common.Streams;
 
-/// <summary>
-/// 将可定位流的指定范围公开为只读子流。
-/// <para>Exposes a specified range of a seekable stream as a read-only substream.</para>
-/// </summary>
 public sealed class BoundedReadStream : Stream
 {
     private readonly Stream _inner;
@@ -15,27 +11,18 @@ public sealed class BoundedReadStream : Stream
     private bool _disposed;
 
     /// <summary>
-    /// 创建从当前流位置开始的有界只读流。
-    /// <para>Creates a bounded read stream beginning at the current stream position.</para>
+    /// Creates a bounded read stream beginning at the current stream position.
+    /// <para>创建从当前流位置开始的有界只读流。</para>
     /// </summary>
-    /// <param name="inner">可读且可定位的基础流。<para>The readable, seekable underlying stream.</para></param>
-    /// <param name="length">范围长度（字节）。<para>The range length, in bytes.</para></param>
-    /// <param name="leaveOpen">释放后是否保持基础流打开。<para>Whether to leave the underlying stream open after disposal.</para></param>
-    /// <param name="syncRoot">可选锁对象，提供时对每次定位读取加锁。<para>Optional lock object; when provided, locks every positioned read.</para></param>
     public BoundedReadStream(Stream inner, long length, bool leaveOpen = false, object? syncRoot = null)
         : this(inner, inner?.Position ?? throw new ArgumentNullException(nameof(inner)), length, leaveOpen, syncRoot)
     {
     }
 
     /// <summary>
-    /// 创建指定绝对偏移和长度的有界只读流。
-    /// <para>Creates a bounded read stream at the specified absolute offset and length.</para>
+    /// Creates a bounded read stream at the specified absolute offset and length.
+    /// <para>创建指定绝对偏移和长度的有界只读流。</para>
     /// </summary>
-    /// <param name="inner">可读且可定位的基础流。<para>The readable, seekable underlying stream.</para></param>
-    /// <param name="offset">基础流中的绝对起始偏移。<para>The absolute starting offset in the underlying stream.</para></param>
-    /// <param name="length">范围长度（字节）。<para>The range length, in bytes.</para></param>
-    /// <param name="leaveOpen">释放后是否保持基础流打开。<para>Whether to leave the underlying stream open after disposal.</para></param>
-    /// <param name="syncRoot">可选锁对象，提供时对每次定位读取加锁。<para>Optional lock object; when provided, locks every positioned read.</para></param>
     public BoundedReadStream(Stream inner, long offset, long length, bool leaveOpen = false, object? syncRoot = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
@@ -52,22 +39,20 @@ public sealed class BoundedReadStream : Stream
         _inner.Position = offset;
     }
 
-    /// <inheritdoc />
     public override bool CanRead => !_disposed;
-    /// <inheritdoc />
     public override bool CanSeek => !_disposed;
-    /// <inheritdoc />
     public override bool CanWrite => false;
-    /// <inheritdoc />
     public override long Length { get { ThrowIfDisposed(); return _length; } }
-    /// <inheritdoc />
     public override long Position
     {
         get { ThrowIfDisposed(); return _position; }
         set { Seek(value, SeekOrigin.Begin); }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream into the buffer.
+    /// <para>从流中读取字节到缓冲区。</para>
+    /// </summary>
     public override int Read(byte[] buffer, int offset, int count)
     {
         ValidateBuffer(buffer, offset, count);
@@ -90,7 +75,10 @@ public sealed class BoundedReadStream : Stream
         return r;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream into the buffer.
+    /// <para>从流中读取字节到缓冲区。</para>
+    /// </summary>
     public override int Read(Span<byte> buffer)
     {
         ThrowIfDisposed();
@@ -112,7 +100,10 @@ public sealed class BoundedReadStream : Stream
         return r;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream asynchronously.
+    /// <para>异步从流中读取字节。</para>
+    /// </summary>
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -125,7 +116,7 @@ public sealed class BoundedReadStream : Stream
             {
                 _inner.Position = checked(_start + _position);
             }
-            // async read outside lock to avoid holding lock across await
+
             var read = await _inner.ReadAsync(buffer[..requested], cancellationToken).ConfigureAwait(false);
             lock (_syncRoot)
             {
@@ -139,7 +130,10 @@ public sealed class BoundedReadStream : Stream
         return r;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Sets the stream position relative to the specified origin.
+    /// <para>相对于指定起点设置流位置。</para>
+    /// </summary>
     public override long Seek(long offset, SeekOrigin origin)
     {
         ThrowIfDisposed();
@@ -165,14 +159,26 @@ public sealed class BoundedReadStream : Stream
         return target;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Flushes buffered data to the underlying stream.
+    /// <para>将缓冲数据刷新到底层流。</para>
+    /// </summary>
     public override void Flush() => ThrowIfDisposed();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void SetLength(long value) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases resources owned by this instance.
+    /// <para>释放此实例持有的资源。</para>
+    /// </summary>
     protected override void Dispose(bool disposing)
     {
         if (!_disposed && disposing && !_leaveOpen) _inner.Dispose();

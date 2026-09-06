@@ -4,10 +4,6 @@ using Google.Protobuf.Reflection;
 
 namespace UotanStudio.Firmware.Payload.Proto;
 
-/// <summary>
-/// The top-level manifest of an Android OTA payload, describing all partition updates.
-/// <para>Android OTA 载荷的顶层清单，描述所有分区更新。</para>
-/// </summary>
 public sealed class DeltaArchiveManifest : IMessage<DeltaArchiveManifest>
 {
     private static readonly FieldCodec<PartitionUpdate> RepeatedPartitionsCodec = FieldCodec.ForMessage(106, PartitionUpdate.Parser);
@@ -16,16 +12,8 @@ public sealed class DeltaArchiveManifest : IMessage<DeltaArchiveManifest>
     private uint _blockSize;
     private string _securityPatchLevel = string.Empty;
 
-    /// <summary>
-    /// Gets the parser for this message type.
-    /// <para>获取此消息类型的解析器。</para>
-    /// </summary>
     public static MessageParser<DeltaArchiveManifest> Parser { get; } = new(() => new DeltaArchiveManifest());
 
-    /// <summary>
-    /// Gets the message descriptor.
-    /// <para>获取消息描述符。</para>
-    /// </summary>
     public static MessageDescriptor Descriptor => null!;
 
     MessageDescriptor IMessage.Descriptor => Descriptor;
@@ -51,15 +39,10 @@ public sealed class DeltaArchiveManifest : IMessage<DeltaArchiveManifest>
 
     public DeltaArchiveManifest Clone() => new(this);
 
-    /// <summary>Field number for the "block_size" field.</summary>
     public const int BlockSizeFieldNumber = 3;
 
     private const uint BlockSizeDefaultValue = 4096;
 
-    /// <summary>
-    /// Gets or sets the block size in bytes (usually 4096).
-    /// <para>获取或设置块大小（字节，通常为 4096）。</para>
-    /// </summary>
     public uint BlockSize
     {
         get => HasBlockSize ? _blockSize : BlockSizeDefaultValue;
@@ -70,48 +53,42 @@ public sealed class DeltaArchiveManifest : IMessage<DeltaArchiveManifest>
         }
     }
 
-    /// <summary>Gets whether the "block_size" field is set.</summary>
     public bool HasBlockSize { get; private set; }
 
-    /// <summary>Clears the value of the "block_size" field.</summary>
+    /// <summary>
+    /// Clears the block_size field.
+    /// <para>清除 block_size 字段。</para>
+    /// </summary>
     public void ClearBlockSize() => HasBlockSize = false;
 
-    /// <summary>Field number for the "signatures_offset" field.</summary>
     public const int SignaturesOffsetFieldNumber = 4;
 
     public ulong SignaturesOffset { get; set; }
 
-    /// <summary>Field number for the "signatures_size" field.</summary>
     public const int SignaturesSizeFieldNumber = 5;
 
     public ulong SignaturesSize { get; set; }
 
-    /// <summary>Field number for the "minor_version" field.</summary>
     public const int MinorVersionFieldNumber = 12;
 
     public uint MinorVersion { get; set; }
 
-    /// <summary>Field number for the "partitions" field.</summary>
     public const int PartitionsFieldNumber = 13;
 
     public RepeatedField<PartitionUpdate> Partitions { get; } = [];
 
-    /// <summary>Field number for the "max_timestamp" field.</summary>
     public const int MaxTimestampFieldNumber = 14;
 
     public long MaxTimestamp { get; set; }
 
-    /// <summary>Field number for the "dynamic_partition_metadata" field.</summary>
     public const int DynamicPartitionMetadataFieldNumber = 15;
 
     public DynamicPartitionMetadata? DynamicPartitionMetadata { get; set; }
 
-    /// <summary>Field number for the "partial_update" field.</summary>
     public const int PartialUpdateFieldNumber = 16;
 
     public bool PartialUpdate { get; set; }
 
-    /// <summary>Field number for the "security_patch_level" field.</summary>
     public const int SecurityPatchLevelFieldNumber = 18;
 
     public string SecurityPatchLevel

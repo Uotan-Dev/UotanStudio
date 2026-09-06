@@ -2,14 +2,6 @@ using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.NTPi.Crypto;
 
-/// <summary>
-/// <para>使用 AES-256-CBC 模式提供加密解密服务的实现。</para>
-/// Implementation of encryption and decryption services using AES-256-CBC mode.
-/// </summary>
-/// <remarks>
-/// <para>此实现使用 PaddingMode.None,要求解密数据必须是块对齐的(16 字节的倍数)。加密时若数据未对齐,将使用零填充至块大小。</para>
-/// This implementation uses PaddingMode.None, requiring decrypted data to be block-aligned (multiple of 16 bytes). If data is not aligned during encryption, it is zero-padded to the block size.
-/// </remarks>
 public sealed class AesCbcCryptoProvider : ICryptoProvider
 {
     private const int BlockSize = 16;
@@ -23,7 +15,10 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         return aes;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Decrypts the input data.
+    /// <para>解密输入数据。</para>
+    /// </summary>
     public byte[] Decrypt(byte[] data, byte[] key, byte[] iv)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -44,7 +39,10 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         return decryptor.TransformFinalBlock(data, 0, data.Length);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Encrypts the input data.
+    /// <para>加密输入数据。</para>
+    /// </summary>
     public byte[] Encrypt(byte[] data, byte[] key, byte[] iv)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -59,7 +57,10 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         return encryptor.TransformFinalBlock(paddedData, 0, paddedData.Length);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a stream that decrypts the input.
+    /// <para>创建用于解密输入的流。</para>
+    /// </summary>
     public Stream CreateDecryptStream(Stream input, byte[] key, byte[] iv, bool leaveOpen = true)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -89,7 +90,10 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a stream that encrypts the output.
+    /// <para>创建用于加密输出的流。</para>
+    /// </summary>
     public Stream CreateEncryptStream(Stream output, byte[] key, byte[] iv, bool leaveOpen = true)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -120,8 +124,8 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
     }
 
     /// <summary>
-    /// <para>计算数据填充至 AES 块大小边界后的总大小。</para>
     /// Calculates the total size after padding data to the AES block size boundary.
+    /// <para>计算数据填充至 AES 块大小边界后的总大小。</para>
     /// </summary>
     public static int CalculatePaddedLength(int dataLength)
     {
@@ -226,21 +230,13 @@ public sealed class AesCbcCryptoProvider : ICryptoProvider
     }
 }
 
-/// <summary>
-/// <para>Region6 文件级加密的密钥映射提供者。</para>
-/// Key map provider for Region6 file-level encryption.
-/// </summary>
-/// <remarks>
-/// <para>此类根据密钥索引和块索引从 KeyMap 数据中提取 32 字节的 AES 密钥,用于 Region6 数据块的逐块加密解密。</para>
-/// This class extracts 32-byte AES keys from KeyMap data based on key index and block index, used for per-block encryption/decryption of Region6 data.
-/// </remarks>
 public sealed class KeyMapKeyProvider
 {
     private readonly byte[] _keyMap;
 
     /// <summary>
-    /// <para>使用指定的 KeyMap 数据初始化 KeyMapKeyProvider 的新实例。</para>
     /// Initializes a new instance of KeyMapKeyProvider with the specified KeyMap data.
+    /// <para>使用指定的 KeyMap 数据初始化 KeyMapKeyProvider 的新实例。</para>
     /// </summary>
     public KeyMapKeyProvider(byte[] keyMap)
     {
@@ -253,13 +249,9 @@ public sealed class KeyMapKeyProvider
     }
 
     /// <summary>
-    /// <para>根据密钥索引和块索引获取对应的 AES-256 密钥。</para>
     /// Gets the AES-256 key for the specified key index and block index.
+    /// <para>根据密钥索引和块索引获取对应的 AES-256 密钥。</para>
     /// </summary>
-    /// <remarks>
-    /// <para>密钥偏移量计算公式为 (keyIndex + blockIdx) * 32 % keyMap.Length。</para>
-    /// The key offset is calculated as (keyIndex + blockIdx) * 32 % keyMap.Length.
-    /// </remarks>
     public byte[] GetKey(int keyIndex, int blockIdx)
     {
         var key = new byte[32];
@@ -268,8 +260,8 @@ public sealed class KeyMapKeyProvider
     }
 
     /// <summary>
-    /// <para>根据密钥索引和块索引将 AES-256 密钥写入调用方提供的缓冲区,避免堆分配。</para>
     /// Writes the AES-256 key into the caller-provided buffer, avoiding heap allocation.
+    /// <para>根据密钥索引和块索引将 AES-256 密钥写入调用方提供的缓冲区,避免堆分配。</para>
     /// </summary>
     public void GetKey(int keyIndex, int blockIdx, byte[] destination)
     {
@@ -293,8 +285,8 @@ public sealed class KeyMapKeyProvider
     }
 
     /// <summary>
-    /// <para>获取 Region6 块加密使用的标准零初始化向量。</para>
     /// Gets the standard zero initialization vector used for Region6 block encryption.
+    /// <para>获取 Region6 块加密使用的标准零初始化向量。</para>
     /// </summary>
     public static byte[] GetZeroIv() => new byte[16];
 }

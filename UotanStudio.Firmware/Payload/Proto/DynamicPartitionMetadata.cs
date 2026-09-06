@@ -4,10 +4,6 @@ using Google.Protobuf.Reflection;
 
 namespace UotanStudio.Firmware.Payload.Proto;
 
-/// <summary>
-/// A group of dynamic partitions with a shared maximum size.
-/// <para>一组共享最大尺寸的动态分区。</para>
-/// </summary>
 public sealed class DynamicPartitionGroup : IMessage<DynamicPartitionGroup>
 {
     private static readonly FieldCodec<string> RepeatedPartitionNamesCodec = FieldCodec.ForString(26);
@@ -15,16 +11,8 @@ public sealed class DynamicPartitionGroup : IMessage<DynamicPartitionGroup>
     private UnknownFieldSet? _unknownFields;
     private string _name = string.Empty;
 
-    /// <summary>
-    /// Gets the parser for this message type.
-    /// <para>获取此消息类型的解析器。</para>
-    /// </summary>
     public static MessageParser<DynamicPartitionGroup> Parser { get; } = new(() => new DynamicPartitionGroup());
 
-    /// <summary>
-    /// Gets the message descriptor.
-    /// <para>获取消息描述符。</para>
-    /// </summary>
     public static MessageDescriptor Descriptor => null!;
 
     MessageDescriptor IMessage.Descriptor => Descriptor;
@@ -43,7 +31,6 @@ public sealed class DynamicPartitionGroup : IMessage<DynamicPartitionGroup>
 
     public DynamicPartitionGroup Clone() => new(this);
 
-    /// <summary>Field number for the "name" field.</summary>
     public const int NameFieldNumber = 1;
 
     public string Name
@@ -52,12 +39,10 @@ public sealed class DynamicPartitionGroup : IMessage<DynamicPartitionGroup>
         set => _name = value ?? string.Empty;
     }
 
-    /// <summary>Field number for the "size" field.</summary>
     public const int SizeFieldNumber = 2;
 
     public ulong Size { get; set; }
 
-    /// <summary>Field number for the "partition_names" field.</summary>
     public const int PartitionNamesFieldNumber = 3;
 
     public RepeatedField<string> PartitionNames { get; } = [];
@@ -176,10 +161,6 @@ public sealed class DynamicPartitionGroup : IMessage<DynamicPartitionGroup>
     }
 }
 
-/// <summary>
-/// Metadata related to all dynamic partitions in the payload.
-/// <para>与载荷中所有动态分区相关的元数据。</para>
-/// </summary>
 public sealed class DynamicPartitionMetadata : IMessage<DynamicPartitionMetadata>
 {
     private static readonly FieldCodec<DynamicPartitionGroup> RepeatedGroupsCodec = FieldCodec.ForMessage(10, DynamicPartitionGroup.Parser);
@@ -187,16 +168,8 @@ public sealed class DynamicPartitionMetadata : IMessage<DynamicPartitionMetadata
     private UnknownFieldSet? _unknownFields;
     private string _vabcCompressionParam = string.Empty;
 
-    /// <summary>
-    /// Gets the parser for this message type.
-    /// <para>获取此消息类型的解析器。</para>
-    /// </summary>
     public static MessageParser<DynamicPartitionMetadata> Parser { get; } = new(() => new DynamicPartitionMetadata());
 
-    /// <summary>
-    /// Gets the message descriptor.
-    /// <para>获取消息描述符。</para>
-    /// </summary>
     public static MessageDescriptor Descriptor => null!;
 
     MessageDescriptor IMessage.Descriptor => Descriptor;
@@ -218,22 +191,18 @@ public sealed class DynamicPartitionMetadata : IMessage<DynamicPartitionMetadata
 
     public DynamicPartitionMetadata Clone() => new(this);
 
-    /// <summary>Field number for the "groups" field.</summary>
     public const int GroupsFieldNumber = 1;
 
     public RepeatedField<DynamicPartitionGroup> Groups { get; } = [];
 
-    /// <summary>Field number for the "snapshot_enabled" field.</summary>
     public const int SnapshotEnabledFieldNumber = 2;
 
     public bool SnapshotEnabled { get; set; }
 
-    /// <summary>Field number for the "vabc_enabled" field.</summary>
     public const int VabcEnabledFieldNumber = 3;
 
     public bool VabcEnabled { get; set; }
 
-    /// <summary>Field number for the "vabc_compression_param" field.</summary>
     public const int VabcCompressionParamFieldNumber = 4;
 
     public string VabcCompressionParam
@@ -242,12 +211,10 @@ public sealed class DynamicPartitionMetadata : IMessage<DynamicPartitionMetadata
         set => _vabcCompressionParam = value ?? string.Empty;
     }
 
-    /// <summary>Field number for the "cow_version" field.</summary>
     public const int CowVersionFieldNumber = 5;
 
     public uint CowVersion { get; set; }
 
-    /// <summary>Field number for the "compression_factor" field.</summary>
     public const int CompressionFactorFieldNumber = 7;
 
     public ulong CompressionFactor { get; set; }

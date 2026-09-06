@@ -7,22 +7,14 @@ using UotanStudio.Firmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.NTPi.Reader;
 
-/// <summary>
-/// <para>遍历 NTPI 固件包的区域链,对每个区域解密并调用回调。</para>
-/// Walks the region chain of an NTPI firmware package, decrypting each region and invoking callbacks.
-/// </summary>
-/// <remarks>
-/// <para>使用指定的加密提供者初始化 NtpiRegionWalker 的新实例。</para>
-/// Initializes a new instance of NtpiRegionWalker with the specified crypto provider.
-/// </remarks>
 internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
 {
     private const long MaximumStreamingRegionSize = 512L * 1024 * 1024;
     private readonly ICryptoProvider _cryptoProvider = cryptoProvider ?? throw new ArgumentNullException(nameof(cryptoProvider));
 
     /// <summary>
-    /// <para>遍历区域链,对每个区域解密并调用回调(内存模式)。</para>
     /// Walks the region chain, decrypting each region and invoking callbacks (in-memory mode).
+    /// <para>遍历区域链,对每个区域解密并调用回调(内存模式)。</para>
     /// </summary>
     public void WalkRegionChain(byte[] fileData, int fileLength, NtpiHeader header, IKeyProvider keyProvider,
         Action<RegionType, long, byte[], int> onRegion)
@@ -101,8 +93,8 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
     }
 
     /// <summary>
-    /// <para>从流中遍历区域链(流式读取,避免全量加载)。</para>
     /// Walks the region chain from a stream (streaming, avoids full load).
+    /// <para>从流中遍历区域链(流式读取,避免全量加载)。</para>
     /// </summary>
     public void WalkRegionChainStreaming(Stream stream, NtpiHeader header, IKeyProvider keyProvider,
         Action<RegionType, long, byte[]> onRegion, Action<long, long> onRegion6Offset)
@@ -188,8 +180,8 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
     }
 
     /// <summary>
-    /// <para>验证并从字节数据中读取 NTPI 头部。</para>
     /// Validates and reads the NTPI header from byte data.
+    /// <para>验证并从字节数据中读取 NTPI 头部。</para>
     /// </summary>
     public static NtpiHeader ValidateAndReadHeader(byte[] fileData)
     {
@@ -205,8 +197,8 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
     }
 
     /// <summary>
-    /// <para>从流中读取并验证 NTPI 头部。</para>
     /// Reads and validates the NTPI header from a stream.
+    /// <para>从流中读取并验证 NTPI 头部。</para>
     /// </summary>
     public static NtpiHeader ReadHeaderFromStream(Stream stream)
     {
@@ -223,8 +215,8 @@ internal class NtpiRegionWalker(ICryptoProvider cryptoProvider)
     }
 
     /// <summary>
-    /// <para>从文件索引 XML 数据中解析文件条目列表。</para>
     /// Parses the file entry list from FileIndex XML data.
+    /// <para>从文件索引 XML 数据中解析文件条目列表。</para>
     /// </summary>
     public static List<FileEntry> ParseFileEntries(byte[] fileIndexData)
     {

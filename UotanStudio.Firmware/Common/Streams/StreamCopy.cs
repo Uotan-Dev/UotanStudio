@@ -1,19 +1,11 @@
 namespace UotanStudio.Firmware.Common.Streams;
 
-/// <summary>
-/// 提供精确字节数的流复制工具。
-/// <para>Provides stream-copy helpers for an exact byte count.</para>
-/// </summary>
 public static class StreamCopy
 {
     /// <summary>
-    /// 精确复制指定字节数，输入提前结束时抛出异常。
-    /// <para>Copies exactly the specified byte count and throws if the input ends early.</para>
+    /// Copies exactly the specified byte count and throws if the input ends early.
+    /// <para>精确复制指定字节数，输入提前结束时抛出异常。</para>
     /// </summary>
-    /// <param name="source">源流。<para>The source stream.</para></param>
-    /// <param name="destination">目标流。<para>The destination stream.</para></param>
-    /// <param name="count">要复制的字节数。<para>The number of bytes to copy.</para></param>
-    /// <param name="bufferSize">复制缓冲区大小。<para>The copy buffer size.</para></param>
     public static void CopyExactly(Stream source, Stream destination, long count, int bufferSize = 81920)
     {
         Validate(source, destination, count, bufferSize);
@@ -28,14 +20,9 @@ public static class StreamCopy
     }
 
     /// <summary>
-    /// 异步精确复制指定字节数，支持取消，输入提前结束时抛出异常。
-    /// <para>Asynchronously copies exactly the specified byte count with cancellation support and throws if the input ends early.</para>
+    /// Asynchronously copies exactly the specified byte count with cancellation support and throws if the input ends early.
+    /// <para>异步精确复制指定字节数，支持取消，输入提前结束时抛出异常。</para>
     /// </summary>
-    /// <param name="source">源流。<para>The source stream.</para></param>
-    /// <param name="destination">目标流。<para>The destination stream.</para></param>
-    /// <param name="count">要复制的字节数。<para>The number of bytes to copy.</para></param>
-    /// <param name="cancellationToken">取消令牌。<para>The cancellation token.</para></param>
-    /// <param name="bufferSize">复制缓冲区大小。<para>The copy buffer size.</para></param>
     public static async Task CopyExactlyAsync(Stream source, Stream destination, long count, CancellationToken cancellationToken = default, int bufferSize = 81920)
     {
         Validate(source, destination, count, bufferSize);

@@ -1,20 +1,17 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Nb0;
 
-/// <summary>
-/// <para>FIH Mobile NB0 固件格式的 IFormatHandler 实现。</para>
-/// IFormatHandler implementation for the FIH Mobile NB0 firmware format.
-/// </summary>
 public sealed class Nb0FormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "FIH Mobile NB0 Firmware";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["nb0", "bin"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -28,7 +25,7 @@ public sealed class Nb0FormatHandler : IFormatHandler
         }
         try
         {
-            // NB0 has no global magic; probe the declared entry count vs file size.
+
             using var stream = File.OpenRead(filePath);
             Span<byte> countBytes = stackalloc byte[4];
             if (stream.Read(countBytes) != 4)
@@ -49,7 +46,10 @@ public sealed class Nb0FormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -74,7 +74,10 @@ public sealed class Nb0FormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -96,7 +99,10 @@ public sealed class Nb0FormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

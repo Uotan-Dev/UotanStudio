@@ -1,30 +1,20 @@
-using System.Text;
+﻿using System.Text;
 using UotanStudio.Firmware.Cpio.Model;
 
 namespace UotanStudio.Firmware.Cpio.Formats.Cpio;
 
-/// <summary>
-/// Reads CPIO-family archive streams into normalized archive entries.
-/// <para>将 CPIO 系归档流读取为规范化的归档条目。</para>
-/// </summary>
 public sealed class CpioArchiveReader
 {
     /// <summary>
     /// Reads all archive entries from a stream into memory.
     /// <para>从流中读取全部归档条目到内存。</para>
     /// </summary>
-    /// <param name="stream">Source archive stream.<para>源归档流。</para></param>
-    /// <param name="formatHint">Optional format hint used to skip format detection.<para>可选的格式提示，用于跳过格式检测。</para></param>
-    /// <returns>A list containing all archive entries.<para>包含全部归档条目的列表。</para></returns>
     public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream, ArchiveFormat? formatHint = null) => [.. ReadEntries(stream, formatHint)];
 
     /// <summary>
     /// Reads archive entries from a stream as a lazy sequence.
     /// <para>以惰性序列从流中读取归档条目。</para>
     /// </summary>
-    /// <param name="stream">Source archive stream.<para>源归档流。</para></param>
-    /// <param name="formatHint">Optional format hint used to skip format detection.<para>可选的格式提示，用于跳过格式检测。</para></param>
-    /// <returns>An enumerable that yields archive entries as they are parsed.<para>解析时逐个产出归档条目的可枚举序列。</para></returns>
     public IEnumerable<ArchiveEntry> ReadEntries(Stream stream, ArchiveFormat? formatHint = null)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -42,8 +32,8 @@ public sealed class CpioArchiveReader
                 ArchiveFormat.NewAscii or ArchiveFormat.CrcAscii => ReadNewAsciiLike(stream, detected),
                 ArchiveFormat.OldAscii or ArchiveFormat.HpOldAscii => ReadOldAsciiLike(stream, detected),
                 ArchiveFormat.Binary or ArchiveFormat.HpBinary => ReadBinaryLike(stream, detected),
-                // Unknown 无法读取；Tar/Ustar 不是 CPIO 格式，应使用 TarArchiveReader。
-                // Unknown cannot be read; Tar/Ustar are not CPIO formats and should use TarArchiveReader.
+
+
                 ArchiveFormat.Unknown => throw new NotSupportedException("Unknown CPIO archive format."),
                 ArchiveFormat.Tar or ArchiveFormat.Ustar => throw new NotSupportedException("TAR/Ustar is not a CPIO format; use TarArchiveReader instead."),
                 _ => throw new NotSupportedException($"Unsupported CPIO format: {detected}"),
@@ -75,8 +65,6 @@ public sealed class CpioArchiveReader
     /// Detects the CPIO format by probing stream header bytes.
     /// <para>通过探测流头部字节检测 CPIO 格式。</para>
     /// </summary>
-    /// <param name="stream">Source archive stream.<para>源归档流。</para></param>
-    /// <returns>The detected archive format.<para>检测到的归档格式。</para></returns>
     public ArchiveFormat DetectFormat(Stream stream)
     {
         if (!stream.CanSeek)
@@ -219,7 +207,7 @@ public sealed class CpioArchiveReader
         var hpSpecial = format == ArchiveFormat.HpOldAscii
             && fileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
         var payloadSize = hpSpecial ? 0L : fileSize;
-        // HP odc stores the special-device major/minor in the filesize field, but no payload follows.
+
         var data = ReadExact(stream, checked((int)payloadSize));
         var hpDeviceMajor = hpSpecial ? (uint)(fileSize >> 16) : rdev;
         var hpDeviceMinor = hpSpecial ? (uint)(fileSize & 0xFFFF) : 0U;
@@ -326,7 +314,7 @@ public sealed class CpioArchiveReader
             return;
         }
 
-        // GNU cpio does not apply crc checks to links.
+
         if (fileType is CpioFileType.SymbolicLink or CpioFileType.HardLink)
         {
             return;

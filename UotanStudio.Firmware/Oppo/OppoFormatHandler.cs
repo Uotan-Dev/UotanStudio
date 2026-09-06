@@ -1,33 +1,19 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 using UotanStudio.Firmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.Oppo;
 
-/// <summary>
-/// <para>Oppo 固件格式（OFP QC/OFP MTK/OPS/OZip）的统一格式处理器。</para>
-/// Unified format handler for Oppo firmware formats (OFP QC/OFP MTK/OPS/OZip).
-/// </summary>
 public sealed class OppoFormatHandler : IFormatHandler
 {
     private readonly OppReader _reader = new();
 
-    /// <summary>
-    /// <para>获取人类可读的格式名称。</para>
-    /// Gets the human-readable format name.
-    /// </summary>
     public string FormatName => "Oppo Firmware (OFP/OPS/OZIP)";
 
-    /// <summary>
-    /// <para>获取典型文件扩展名（不带点，小写）。</para>
-    /// Gets the typical file extensions (without dot, lowercase).
-    /// </summary>
     public IReadOnlyList<string> FileExtensions { get; } = ["ofp", "ops", "ozip", "bin"];
 
     /// <summary>
-    /// <para>判断该处理器能否处理指定文件。</para>
     /// Determines whether this handler can process the given file.
-    /// Detection is based on the extension (.ofp/.ops/.ozip/.bin) or the magic numbers.
-    /// <para>依据扩展名（.ofp/.ops/.ozip/.bin）或魔数进行判断。</para>
+    /// <para>判断该处理器能否处理指定文件。</para>
     /// </summary>
     public bool CanHandle(string filePath)
     {
@@ -42,19 +28,13 @@ public sealed class OppoFormatHandler : IFormatHandler
             || extension.Equals(".ozip", StringComparison.OrdinalIgnoreCase);
         var genericBin = extension.Equals(".bin", StringComparison.OrdinalIgnoreCase);
 
-        // 仅识别带 Oppo 特定后缀（.ofp/.ops/.ozip/.bin）的文件：无后缀或其它后缀
-        // 一律不做内容嗅探，避免裸内核/镜像被误判为 OFP。
-        // Only recognize files with an Oppo-specific extension (.ofp/.ops/.ozip/.bin):
-        // files without such a suffix are never content-sniffed, preventing bare kernels/images
-        // from being misidentified as OFP.
+
         if (!strongExtension && !genericBin)
         {
             return false;
         }
 
-        // 检查头部是否 ELF（裸内核等）或 ARM64 内核镜像（魔数 "ARM\x64" 位于偏移 0x38），
-        // 这类裸内核一律不归入 OFP。
-        // Bail out when the file is a bare kernel (ELF magic, or ARM64 Image magic "ARM\x64" at offset 0x38).
+
         try
         {
             using var fs = File.OpenRead(filePath);
@@ -73,7 +53,7 @@ public sealed class OppoFormatHandler : IFormatHandler
         }
         catch
         {
-            // 读取头部失败时按既有扩展名规则继续，避免抛出。
+
         }
 
         try
@@ -90,14 +70,13 @@ public sealed class OppoFormatHandler : IFormatHandler
             return strongExtension;
         }
 
-        // 强扩展名（.ofp/.ops/.ozip）可裸放行；泛 .bin 仅在内容嗅探命中时返回 true。
-        // Strong extensions (.ofp/.ops/.ozip) pass by extension; generic .bin requires content confirmation.
+
         return strongExtension;
     }
 
     /// <summary>
-    /// <para>读取格式元数据（不解包）。</para>
     /// Reads format metadata without unpacking.
+    /// <para>读取格式元数据（不解包）。</para>
     /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -106,11 +85,8 @@ public sealed class OppoFormatHandler : IFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                // ParseAsync 全程流式（OPS/OfpQc 仅读尾部页 XML；OZip 解密到临时文件），
-                // 不把整文件驻留内存；放后台线程执行因此不阻塞 UI。
-                // ParseAsync is fully streamed (OPS/OfpQc read only the tail-page XML; OZip decrypts
-                // into a temp file), so nothing resides in memory; running on a background thread
-                // keeps the UI responsive.
+
+
                 var archive = await _reader.ParseAsync(filePath, cancellationToken).ConfigureAwait(false);
                 var metadata = archive.Metadata;
                 cancellationToken.ThrowIfCancellationRequested();
@@ -153,10 +129,7 @@ public sealed class OppoFormatHandler : IFormatHandler
                     meta["KeyId"] = metadata.KeyId;
                 }
 
-                // 组件列表：条目名 + 大小（供固件信息面板展示内部组成结构）。
-                // 过滤掉 OTA 配置/签名等非固件目录，只展示真正的固件组件。
-                // Component list: entry names and sizes (for the firmware info panel structure view).
-                // Filter out OTA config/signing directories, showing only real firmware components.
+
                 var components = archive.Entries
                     .Where(e => IsFirmwareComponent(e.Name))
                     .Select(e => FirmwareComponent.Of(e.Name, e.Size))
@@ -179,8 +152,8 @@ public sealed class OppoFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// <para>将固件文件解包到输出目录。</para>
     /// Unpacks the firmware file to the output directory.
+    /// <para>将固件文件解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -236,30 +209,29 @@ public sealed class OppoFormatHandler : IFormatHandler
     }
 
     /// <summary>
+    /// Determines whether an entry is a real firmware component (excludes OTA config, signing metadata, and other non-firmware directories).
     /// <para>判断条目是否为真正的固件组件（排除 OTA 配置、签名等非固件目录）。</para>
-    /// Determines whether an entry is a real firmware component (excludes OTA config,
-    /// signing metadata, and other non-firmware directories).
     /// </summary>
     private static bool IsFirmwareComponent(string name)
     {
-        // firmware-update/ 下的分区镜像
+
         if (name.StartsWith("firmware-update/", StringComparison.Ordinal))
             return true;
 
-        // OTA 数据与分区映射表
+
         if (name.EndsWith(".dat.br", StringComparison.Ordinal)
             || name.EndsWith(".new.dat.br", StringComparison.Ordinal)
             || name.EndsWith(".transfer.list", StringComparison.Ordinal)
             || name.EndsWith(".patch.dat", StringComparison.Ordinal))
             return true;
 
-        // 顶层脚本与兼容性包
+
         if (name.StartsWith("compatibility.zip", StringComparison.Ordinal)
             || name.StartsWith("oppo_update_script", StringComparison.Ordinal)
             || name.StartsWith("oppo_operate_data", StringComparison.Ordinal))
             return true;
 
-        // 排除 OTA 配置目录与签名元数据
+
         if (name.StartsWith("data_update_patch/", StringComparison.Ordinal))
             return false;
         if (name.StartsWith("META-INF/", StringComparison.Ordinal))
@@ -267,13 +239,13 @@ public sealed class OppoFormatHandler : IFormatHandler
         if (name.Equals("oppo_metadata", StringComparison.Ordinal))
             return false;
 
-        // 其他顶层条目默认保留
+
         return !name.Contains('/');
     }
 
     /// <summary>
-    /// <para>打包操作。Oppo 固件格式打包目前不支持。</para>
-    /// Pack operation. Packing to Oppo firmware formats is not currently supported.
+    /// Pack operation.
+    /// <para>打包操作。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {

@@ -1,9 +1,5 @@
 namespace UotanStudio.Firmware.Cpio.Internal;
 
-/// <summary>
-/// Normalizes archive paths and performs wildcard matching.
-/// <para>规范化归档路径并执行通配符匹配。</para>
-/// </summary>
 internal static class PathPatternMatcher
 {
     public static string NormalizeArchivePath(string path)

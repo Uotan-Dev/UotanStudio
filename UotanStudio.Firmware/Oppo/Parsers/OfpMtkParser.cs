@@ -1,24 +1,16 @@
-using UotanStudio.Firmware.Oppo.Crypto.Algorithms;
+﻿using UotanStudio.Firmware.Oppo.Crypto.Algorithms;
 using UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
 using UotanStudio.Firmware.Oppo.Helpers;
 using UotanStudio.Firmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.Oppo.Parsers;
 
-/// <summary>
-/// <para>OFP MTK 文件解析器，提供纯解析功能（不包含加密操作）。</para>
-/// OFP MTK file parser providing pure parsing functionality (no crypto operations).
-/// </summary>
 internal static class OfpMtkParser
 {
     /// <summary>
-    /// <para>解析 OFP MTK 文件表条目。</para>
     /// Parses OFP MTK file table entries.
+    /// <para>解析 OFP MTK 文件表条目。</para>
     /// </summary>
-    /// <param name="stream"><para>可读取的文件流。</para>A readable file stream.</param>
-    /// <param name="fileSize"><para>文件大小（字节）。</para>File size in bytes.</param>
-    /// <param name="entryCount"><para>文件表条目数量，由 ParseMetadata 提供。</para>The file table entry count, provided by ParseMetadata.</param>
-    /// <returns><para>解析后的条目列表。</para>The parsed entry list.</returns>
     internal static IReadOnlyList<OppEntry> ParseEntries(Stream stream, long fileSize, int entryCount)
     {
         Guard.ThrowIfNull(stream);
@@ -41,9 +33,7 @@ internal static class OfpMtkParser
 
             stream.Position = fileTableOffset;
 
-            // Read the entire file table as one block, then apply MtkShuffle to the whole block.
-            // This is critical because MtkShuffle uses key cycling (key[i % keyLength]),
-            // and the key position must be continuous across all entries.
+
             var fileTableBuffer = new byte[fileTableSize];
             var totalRead = 0;
             while (totalRead < fileTableSize)
@@ -90,12 +80,9 @@ internal static class OfpMtkParser
     }
 
     /// <summary>
-    /// <para>从文件流中读取 OFP MTK 主头结构。</para>
     /// Reads the OFP MTK main header structure from the file stream.
+    /// <para>从文件流中读取 OFP MTK 主头结构。</para>
     /// </summary>
-    /// <param name="stream"><para>可读取的文件流。</para>A readable file stream.</param>
-    /// <param name="fileSize"><para>文件大小（字节）。</para>File size in bytes.</param>
-    /// <returns><para>解析后的主头结构。</para>The parsed main header structure.</returns>
     internal static OfpMtkHeader ReadMainHeader(Stream stream, long fileSize)
     {
         if (fileSize < OfpMtkHeader.Size)
@@ -111,7 +98,7 @@ internal static class OfpMtkParser
             throw new InvalidOppFormatException("Failed to read MTK header.");
         }
 
-        // Apply MTK Shuffle with key "geyixue" to deobfuscate
+
         OppMtkKeyDerivation.MtkShuffle(MtkKeyDatabase.MtkHeaderShuffleKey, headerBuffer);
         var headerData = new ReadOnlySpan<byte>(headerBuffer);
         return OfpMtkHeader.Parse(headerData);

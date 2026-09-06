@@ -1,35 +1,22 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Firmware.OnePlusOps.Logging;
 
 namespace UotanStudio.Firmware.OnePlusOps;
 
-/// <summary>
-/// IFormatHandler implementation for OnePlus OPS firmware files.
-/// <para>OnePlus OPS 固件文件的 IFormatHandler 实现。</para>
-/// </summary>
-/// <remarks>
-/// Initializes a new instance of the OnePlusOpsFormatHandler.
-/// <para>初始化 OnePlusOpsFormatHandler 的新实例。</para>
-/// </remarks>
-/// <param name="logger">Optional logger; defaults to <see cref="NullLogger"/>.
-/// <para>可选日志记录器，默认为 <see cref="NullLogger"/>。</para></param>
 public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFormatHandler
 {
     private readonly IOnePlusLogger _logger = logger ?? NullLogger.Instance;
 
-    /// <inheritdoc />
     public string FormatName => "OnePlus OPS Firmware";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["ops"];
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// OPS 用扩展名 + 头部魔数双重校验。
-    /// <para>OPS is validated by both the extension and the header magic.</para>
-    /// </remarks>
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -55,7 +42,10 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -88,16 +78,10 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         }, cancellationToken);
     }
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// 解包 OPS：解析头部与条目表，将每个分区导出为独立文件；
-    /// 对可能加密的分区（长度 16 对齐）尝试 OnePlusKeyTable 的 AES-ECB / SBox 解密，
-    /// 解密结果若命中已知分区魔数则额外写出 "<name>.decrypted"。
-    /// <para>Unpacks the OPS: parses the header and entry table, exports each partition as a
-    /// separate file; for possibly-encrypted partitions (16-byte aligned) tries AES-ECB / SBox
-    /// decryption with the OnePlusKeyTable keys and writes "&lt;name&gt;.decrypted" when the
-    /// decrypted data matches a known partition magic.</para>
-    /// </remarks>
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -160,13 +144,10 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         }, cancellationToken);
     }
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// 打包 OPS：输入可以是解包目录（每个文件为一个分区条目），
-    /// 也可以是现有的 .ops 文件（重新解析后重建容器）。
-    /// <para>Packs an OPS container. Input may be an unpacked directory (each file becomes a
-    /// partition entry) or an existing .ops file (reparsed and rebuilt).</para>
-    /// </remarks>
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
@@ -185,7 +166,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
                     return FirmwareOpResult.Ok($"Packed OPS firmware from directory {inputPath} to {outputPath}");
                 }
 
-                // 输入是现有 OPS：重打包
+
                 var entries = new List<OpsEntry>();
                 using (var fs = File.OpenRead(inputPath))
                 {
@@ -209,12 +190,9 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
     }
 
     /// <summary>
-    /// 尝试使用 OnePlusKeyTable 的全部密钥解密分区数据。
-    /// <para>Tries to decrypt partition data with every key in the OnePlusKeyTable.</para>
+    /// Tries to decrypt partition data with every key in the OnePlusKeyTable.
+    /// <para>尝试使用 OnePlusKeyTable 的全部密钥解密分区数据。</para>
     /// </summary>
-    /// <param name="data">原始分区数据。<para>The raw partition data.</para></param>
-    /// <returns>解密后的数据；无匹配密钥或结果不可信时返回 null。
-    /// <para>The decrypted data, or null when no key matches or the result is implausible.</para></returns>
     public static byte[]? TryDecrypt(byte[] data)
     {
         if (data == null || data.Length < 16 || data.Length % OpsConstants.AES_BLOCK_SIZE != 0)
@@ -227,7 +205,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             return null;
         }
 
-        // 尝试 AES-ECB（KeyTable 各密钥）
+
         foreach (var key in OnePlusKeyTable.GetAllKeys())
         {
             try
@@ -250,11 +228,11 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             }
             catch
             {
-                // 跳过无效密钥
+
             }
         }
 
-        // 尝试 SBox 流密码（默认密钥 variant 0）
+
         try
         {
             var sboxDecrypted = SBoxDecryptStatic(data);
@@ -265,7 +243,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         }
         catch
         {
-            // 忽略
+
         }
 
         return null;
@@ -279,7 +257,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             return [];
         }
 
-        // 条目表紧随头部之后，条目的 Offset 为数据区的绝对文件偏移
+
         return decryptor.ParseEntries(count);
     }
 
@@ -310,19 +288,19 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
         using var writer = new BinaryWriter(fs, Encoding.ASCII, leaveOpen: false);
 
-        // 头部（52 字节）
+
         writer.Write(Encoding.ASCII.GetBytes(OpsConstants.OPS_MAGIC));
-        writer.Write(1u);                     // version
+        writer.Write(1u);
         writer.Write((uint)OpsConstants.HEADER_SIZE);
-        writer.Write(0u);                     // file size（稍后回填）
+        writer.Write(0u);
         writer.Write((uint)entries.Count);
-        writer.Write(0u);                     // flags
+        writer.Write(0u);
         for (var i = OpsConstants.HEADER_SIZE - 24; i > 0; i--)
         {
             writer.Write((byte)0);
         }
 
-        // 条目表（32 字节/条）
+
         var entryTableOffset = writer.BaseStream.Position;
         var dataOffsets = new long[entries.Count];
         for (var i = 0; i < entries.Count; i++)
@@ -330,7 +308,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             var entry = entries[i];
             dataOffsets[i] = -1;
             writer.Write(entry.Id);
-            writer.Write(0u);   // offset（稍后回填）
+            writer.Write(0u);
             writer.Write(entry.Data?.Length ?? 0);
             var nameBytes = new byte[OpsConstants.ENTRY_NAME_SIZE];
             var nameSrc = Encoding.ASCII.GetBytes(entry.Name ?? string.Empty);
@@ -338,7 +316,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             writer.Write(nameBytes);
         }
 
-        // 数据区（扇区对齐）
+
         for (var i = 0; i < entries.Count; i++)
         {
             Align(writer, OpsConstants.SECTOR_SIZE);
@@ -348,7 +326,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
 
         Align(writer, OpsConstants.SECTOR_SIZE);
 
-        // 回填偏移
+
         writer.BaseStream.Seek(entryTableOffset, SeekOrigin.Begin);
         for (var i = 0; i < entries.Count; i++)
         {
@@ -356,7 +334,7 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             writer.Write((uint)dataOffsets[i]);
         }
 
-        // 回填文件大小
+
         writer.BaseStream.Seek(12, SeekOrigin.Begin);
         writer.Write((uint)writer.BaseStream.Length);
 
@@ -421,8 +399,8 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
     }
 
     /// <summary>
-    /// 检查数据是否命中已知分区镜像魔数。
-    /// <para>Checks whether the data matches a known partition image magic.</para>
+    /// Checks whether the data matches a known partition image magic.
+    /// <para>检查数据是否命中已知分区镜像魔数。</para>
     /// </summary>
     internal static bool LooksLikeDecrypted(byte[] data)
     {
@@ -472,29 +450,29 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         }
 
         var magic32 = BinaryPrimitives.ReadUInt32LittleEndian(data);
-        // Android sparse
+
         if (magic32 == 0xED26FF3A)
         {
             return true;
         }
-        // MTK boot
+
         if (magic32 == 0x58881688)
         {
             return true;
         }
-        // DHTB boot
+
         if (magic32 == 0x42484444)
         {
             return true;
         }
 
-        // ext4 魔数（偏移 0x438, 小端 0xEF53）
+
         if (data.Length >= 0x43A && BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(0x438, 2)) == 0xEF53)
         {
             return true;
         }
 
-        // f2fs 魔数（偏移 0x400, 小端 0xF2F52010）
+
         return data.Length >= 0x404 && BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(0x400, 4)) == 0xF2F52010;
     }
 

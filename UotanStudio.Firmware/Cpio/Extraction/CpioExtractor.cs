@@ -1,22 +1,15 @@
-using System.Text;
+﻿using System.Text;
 using UotanStudio.Firmware.Cpio.Internal;
 using UotanStudio.Firmware.Cpio.Model;
 
 namespace UotanStudio.Firmware.Cpio.Extraction;
 
-/// <summary>
-/// Extracts normalized archive entries to the file system.
-/// <para>将规范化的归档条目解包到文件系统。</para>
-/// </summary>
 public sealed class CpioExtractor
 {
     /// <summary>
     /// Extracts archive entries to a destination directory.
     /// <para>将归档条目解包到目标目录。</para>
     /// </summary>
-    /// <param name="entries">Archive entries to extract.<para>待解包的归档条目。</para></param>
-    /// <param name="destinationDirectory">Target directory path.<para>目标目录路径。</para></param>
-    /// <param name="options">Optional extraction behavior options.<para>可选的解包行为选项。</para></param>
     public void ExtractToDirectory(IEnumerable<ArchiveEntry> entries, string destinationDirectory, ExtractOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(entries);
@@ -26,7 +19,7 @@ public sealed class CpioExtractor
         var destinationRoot = Path.GetFullPath(destinationDirectory);
         var volumeRoot = Path.GetPathRoot(destinationRoot)
             ?? throw new InvalidDataException($"Destination '{destinationDirectory}' has no filesystem root.");
-        // Validate before the first mutation, including when the destination itself is a dangling link.
+
         EnsureNoLinkAncestors(volumeRoot, destinationRoot);
         Directory.CreateDirectory(destinationRoot);
         EnsureNoLinkAncestors(volumeRoot, destinationRoot);
@@ -74,7 +67,7 @@ public sealed class CpioExtractor
 
             if (opts.RestoreModificationTime && transformedEntry.Metadata.FileType != CpioFileType.SymbolicLink)
             {
-                // Timestamp APIs may follow a link and mutate outside the extraction root.
+
                 TryRestoreMtime(targetPath, transformedEntry.Metadata.ModificationTimeUnixSeconds);
             }
 
@@ -94,8 +87,7 @@ public sealed class CpioExtractor
             File.Delete(targetPath);
         }
 
-        // 优先从 DataStream 流式写入；没有流式源时回退到内存字节。
-        // Prefer streaming from DataStream; fall back to the in-memory bytes.
+
         if (entry.DataStream is not null || entry.DataStreamFactory is not null)
         {
             using var output = new FileStream(targetPath, FileMode.Create, FileAccess.Write);
@@ -117,8 +109,8 @@ public sealed class CpioExtractor
 
     private static void ExtractSymbolicLink(ArchiveEntry entry, string targetPath, ExtractOptions options)
     {
-        // CPIO links carry their target in the payload. Always consume a streamed payload even
-        // when LinkName was decoded already, both to validate it and to keep single-pass readers aligned.
+
+
         string? payloadTarget = null;
         if (entry.Data.Length > 0 || entry.DataStream is not null || entry.DataStreamFactory is not null)
         {
@@ -145,7 +137,7 @@ public sealed class CpioExtractor
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
         {
-            // Best effort: fall back to a regular file holding the link target text.
+
             File.WriteAllBytes(targetPath, Encoding.UTF8.GetBytes(linkTarget));
         }
     }
@@ -173,7 +165,7 @@ public sealed class CpioExtractor
             EnsureNoLinkAncestors(destinationRoot, linkTargetPath);
             if (File.Exists(linkTargetPath) || Directory.Exists(linkTargetPath))
             {
-                // Managed .NET has no portable hard-link API; fall back to a content copy.
+
                 File.Copy(linkTargetPath, targetPath, overwrite: true);
                 return;
             }
@@ -182,12 +174,12 @@ public sealed class CpioExtractor
         var key = GetInodeKey(entry, options.DeviceIndependentHardlinks);
         if (inodeMap.TryGetValue(key, out var existingPath))
         {
-            // Managed .NET has no portable hard-link API; fall back to a content copy.
+
             File.Copy(existingPath, targetPath, overwrite: true);
             return;
         }
 
-        // No link source available: fall back to a regular file copy.
+
         ExtractRegularLikeFile(entry, targetPath, options);
         RegisterInodeMapping(entry, targetPath, inodeMap, options.DeviceIndependentHardlinks);
     }
@@ -204,7 +196,7 @@ public sealed class CpioExtractor
             TryDeleteFileSystemNode(targetPath);
         }
 
-        // Special files cannot be created portably; fall back to an empty regular file.
+
         File.WriteAllBytes(targetPath, []);
     }
 
@@ -217,8 +209,8 @@ public sealed class CpioExtractor
 
         if (options.RestoreOwnership && !OperatingSystem.IsWindows())
         {
-            // Best-effort ownership restoration is intentionally skipped; it usually
-            // requires elevated privileges and has no portable managed API.
+
+
         }
     }
 
@@ -226,7 +218,7 @@ public sealed class CpioExtractor
     {
         if (OperatingSystem.IsWindows())
         {
-            // Unix file modes are not supported on Windows.
+
             return;
         }
 
@@ -244,7 +236,7 @@ public sealed class CpioExtractor
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
         {
-            // Best effort only.
+
         }
     }
 
@@ -329,8 +321,8 @@ public sealed class CpioExtractor
 
     private static bool NodeLooksLikeLink(string path)
     {
-        // File.Exists and Directory.Exists both return false for dangling links. FileSystemInfo
-        // exposes LinkTarget without following the target on supported Windows and Unix runtimes.
+
+
         foreach (FileSystemInfo info in new FileSystemInfo[] { new FileInfo(path), new DirectoryInfo(path) })
         {
             try
@@ -341,11 +333,8 @@ public sealed class CpioExtractor
 
             try
             {
-                // .NET 7+ returns (FileAttributes)(-1) for a non-existent path instead of throwing;
-                // a missing node is not a link, so treat it as "not a link" rather than matching
-                // ReparsePoint on an all-ones mask.
-                // .NET 7+ 对不存在的路径返回 (FileAttributes)(-1) 而非抛异常；不存在的节点
-                // 不是链接，不能因全 1 掩码命中 ReparsePoint 而被误判为链接。
+
+
                 var attributes = info.Attributes;
                 if (attributes == (FileAttributes)(-1)) continue;
                 if ((attributes & FileAttributes.ReparsePoint) != 0) return true;
@@ -467,8 +456,7 @@ public sealed class CpioExtractor
     }
 
     /// <summary>
-    /// Resolves the symlink target text from <see cref="ArchiveEntry.Data"/> or, when the
-    /// payload is streamed, from <see cref="ArchiveEntry.DataStream"/>.
+    /// Resolves the symlink target text from ArchiveEntry.Data or, when the payload is streamed, from ArchiveEntry.DataStream.
     /// <para>从 ArchiveEntry.Data 或（负载为流式时）从 ArchiveEntry.DataStream 解析链接目标文本。</para>
     /// </summary>
     private static string GetLinkText(ArchiveEntry entry)

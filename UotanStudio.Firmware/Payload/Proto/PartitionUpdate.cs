@@ -4,10 +4,6 @@ using Google.Protobuf.Reflection;
 
 namespace UotanStudio.Firmware.Payload.Proto;
 
-/// <summary>
-/// Describes the update to apply to a single partition.
-/// <para>描述应用于单个分区的更新。</para>
-/// </summary>
 public sealed class PartitionUpdate : IMessage<PartitionUpdate>
 {
     private static readonly FieldCodec<InstallOperation> RepeatedOperationsCodec = FieldCodec.ForMessage(66, InstallOperation.Parser);
@@ -15,16 +11,8 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     private UnknownFieldSet? _unknownFields;
     private string _partitionName = string.Empty;
 
-    /// <summary>
-    /// Gets the parser for this message type.
-    /// <para>获取此消息类型的解析器。</para>
-    /// </summary>
     public static MessageParser<PartitionUpdate> Parser { get; } = new(() => new PartitionUpdate());
 
-    /// <summary>
-    /// Gets the message descriptor.
-    /// <para>获取消息描述符。</para>
-    /// </summary>
     public static MessageDescriptor Descriptor => null!;
 
     MessageDescriptor IMessage.Descriptor => Descriptor;
@@ -43,7 +31,6 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
 
     public PartitionUpdate Clone() => new(this);
 
-    /// <summary>Field number for the "partition_name" field.</summary>
     public const int PartitionNameFieldNumber = 1;
 
     public string PartitionName
@@ -52,12 +39,10 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
         set => _partitionName = value ?? string.Empty;
     }
 
-    /// <summary>Field number for the "new_partition_info" field.</summary>
     public const int NewPartitionInfoFieldNumber = 7;
 
     public PartitionInfo? NewPartitionInfo { get; set; }
 
-    /// <summary>Field number for the "operations" field.</summary>
     public const int OperationsFieldNumber = 8;
 
     public RepeatedField<InstallOperation> Operations { get; } = [];

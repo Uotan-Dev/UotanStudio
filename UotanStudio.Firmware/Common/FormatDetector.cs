@@ -1,9 +1,5 @@
-namespace UotanStudio.Firmware.Common;
+﻿namespace UotanStudio.Firmware.Common;
 
-/// <summary>
-/// Detects firmware file formats by magic bytes/headers and registered handlers.
-/// <para>通过魔数/头部与已注册处理器识别固件文件格式。</para>
-/// </summary>
 public static class FormatDetector
 {
     private static readonly List<IFormatHandler> Handlers = [];
@@ -24,10 +20,6 @@ public static class FormatDetector
         }
     }
 
-    /// <summary>
-    /// Gets all registered handlers.
-    /// <para>获取全部已注册处理器。</para>
-    /// </summary>
     public static IReadOnlyList<IFormatHandler> RegisteredHandlers
     {
         get { lock (Handlers) { return [.. Handlers]; } }
@@ -44,10 +36,7 @@ public static class FormatDetector
             return null;
         }
 
-        // 阶段一：扩展名优先。先按已注册处理器的 FileExtensions 与文件扩展名匹配，
-        // 仅对匹配到的处理器做内容确认，避免泛扩展名（如 .bin）被贪心匹配。
-        // Phase 1: extension-first. Match the file extension against registered FileExtensions,
-        // then content-confirm only that handler, so generic extensions (.bin) are not greedily matched.
+
         var fileExt = System.IO.Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
         if (!string.IsNullOrEmpty(fileExt))
         {
@@ -67,14 +56,13 @@ public static class FormatDetector
                     }
                     catch
                     {
-                        // A broken handler must not break detection of others.
+
                     }
                 }
             }
         }
 
-        // 阶段二：无扩展名或扩展名未命中时，回落到按内容嗅探。
-        // Phase 2: fall back to content sniffing when there is no extension or none matched.
+
         List<IFormatHandler> sniffSnapshot;
         lock (Handlers) { sniffSnapshot = [.. Handlers]; }
 
@@ -89,7 +77,7 @@ public static class FormatDetector
             }
             catch
             {
-                // A broken handler must not break detection of others.
+
             }
         }
         return null;

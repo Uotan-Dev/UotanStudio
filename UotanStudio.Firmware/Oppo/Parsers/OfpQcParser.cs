@@ -1,23 +1,16 @@
-using System.Xml;
+﻿using System.Xml;
 using System.Xml.Linq;
 using UotanStudio.Firmware.Oppo.Helpers;
 using UotanStudio.Firmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.Oppo.Parsers;
 
-/// <summary>
-/// <para>OFP QC 文件解析器，提供纯解析功能（不包含加密操作）。</para>
-/// OFP QC file parser providing pure parsing functionality (no crypto operations).
-/// </summary>
 internal static class OfpQcParser
 {
     /// <summary>
-    /// <para>从解密的 XML 内容中解析 OFP QC 条目。</para>
     /// Parses OFP QC entries from decrypted XML content.
+    /// <para>从解密的 XML 内容中解析 OFP QC 条目。</para>
     /// </summary>
-    /// <param name="xmlContent"><para>解密后的 XML 字符串。</para>Decrypted XML string.</param>
-    /// <param name="pageSize"><para>页面大小。</para>Page size.</param>
-    /// <returns><para>解析后的条目列表。</para>The parsed entry list.</returns>
     internal static IReadOnlyList<OppEntry> ParseEntries(string xmlContent, int pageSize)
     {
         Guard.ThrowIfNullOrWhiteSpace(xmlContent);
@@ -71,12 +64,9 @@ internal static class OfpQcParser
     }
 
     /// <summary>
-    /// <para>在文件流中查找有效的 OFP QC 尾部页。</para>
     /// Finds a valid OFP QC tail page in the file stream.
+    /// <para>在文件流中查找有效的 OFP QC 尾部页。</para>
     /// </summary>
-    /// <param name="stream"><para>可读取的文件流。</para>A readable file stream.</param>
-    /// <param name="fileSize"><para>文件大小（字节）。</para>File size in bytes.</param>
-    /// <returns><para>尾部页结构，若未找到返回 null。</para>The tail page structure, or null if not found.</returns>
     internal static OfpQcTailPage? FindTailPage(Stream stream, long fileSize)
     {
         var pageSizes = new[] { 0x200, 0x1000 };
@@ -107,14 +97,9 @@ internal static class OfpQcParser
     }
 
     /// <summary>
-    /// <para>从文件流中读取加密的 XML 数据。</para>
     /// Reads encrypted XML data from the file stream.
+    /// <para>从文件流中读取加密的 XML 数据。</para>
     /// </summary>
-    /// <param name="stream"><para>可读取的文件流。</para>A readable file stream.</param>
-    /// <param name="tailPage"><para>尾部页结构。</para>The tail page structure.</param>
-    /// <param name="pageSize"><para>页面大小。</para>Page size.</param>
-    /// <param name="fileSize"><para>文件大小（字节），用于 A57 hack 长度修正。</para>File size in bytes, used for A57 hack length correction.</param>
-    /// <returns><para>加密的 XML 字节数据，若无法读取则返回 null。</para>The encrypted XML byte data, or null if unable to read.</returns>
     internal static byte[]? ReadEncryptedXml(Stream stream, OfpQcTailPage tailPage, int pageSize, long fileSize)
     {
         var xmlOffset = tailPage.XmlSectorOffset * pageSize;
@@ -125,7 +110,7 @@ internal static class OfpQcParser
 
         var xmlLength = (int)tailPage.XmlLength;
 
-        // A57 hack: when xmlLength < 200, recalculate the actual XML length
+
         if (xmlLength < 200)
         {
             var tailPageOffset = fileSize - tailPage.PageSize;
@@ -145,22 +130,20 @@ internal static class OfpQcParser
             return null;
         }
 
-        // Check if the data is already plaintext XML
+
         var header = new ReadOnlySpan<byte>(xmlData, 0, Math.Min(5, xmlData.Length));
         if (header.Length >= 5 && header[0] == '<' && header[1] == '?' && header[2] == 'x' && header[3] == 'm' && header[4] == 'l')
         {
-            return null; // Already plaintext, caller should handle this
+            return null;
         }
 
         return xmlData;
     }
 
     /// <summary>
-    /// <para>检查数据是否为明文 XML。</para>
     /// Checks whether the data is plaintext XML.
+    /// <para>检查数据是否为明文 XML。</para>
     /// </summary>
-    /// <param name="data"><para>要检查的数据。</para>The data to check.</param>
-    /// <returns><para>如果是明文 XML 返回 true；否则返回 false。</para>True if the data is plaintext XML; otherwise, false.</returns>
     internal static bool IsPlaintextXml(byte[] data) => data.Length >= 5 && data[0] == '<' && data[1] == '?' && data[2] == 'x' && data[3] == 'm' && data[4] == 'l';
 
     private static OppEntry? ParseItemElement(XElement element, int pageSize, string parentTag)

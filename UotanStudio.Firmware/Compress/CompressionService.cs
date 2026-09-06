@@ -1,31 +1,15 @@
-using UotanStudio.Firmware.Common.Streams;
+﻿using UotanStudio.Firmware.Common.Streams;
 using UotanStudio.Firmware.Compress.Compressors;
 using UotanStudio.Firmware.Compress.Internal.Xz;
 
 namespace UotanStudio.Firmware.Compress;
 
-/// <summary>
-/// 压缩/解压统一门面：按 <see cref="CompressionFormat"/> 调度到各格式实现，
-/// 提供 byte[]、Stream 与文件级 API，以及自动格式检测。
-/// <para>Unified compression/decompression facade: dispatches to per-format implementations
-/// by <see cref="CompressionFormat"/>, providing byte[]/Stream/file-level APIs and automatic
-/// format detection.</para>
-/// <para><see cref="CompressionFormat.None"/> 被视为恒等操作（原样返回数据）。</para>
-/// <para><see cref="CompressionFormat.None"/> is treated as an identity operation (data passed through unchanged).</para>
-/// </summary>
 public static class CompressionService
 {
     /// <summary>
-    /// 压缩数据。
-    /// <para>Compresses data.</para>
+    /// Compresses data.
+    /// <para>压缩数据。</para>
     /// </summary>
-    /// <param name="data">待压缩数据。<para>Data to compress.</para></param>
-    /// <param name="format">压缩格式。<para>The compression format.</para></param>
-    /// <param name="options">压缩选项；null 表示各格式默认。<para>Compression options; null means each format's defaults.</para></param>
-    /// <returns>压缩后的数据。<para>The compressed data.</para></returns>
-    /// <exception cref="ArgumentNullException">data 为 null 时抛出。<para>Thrown when data is null.</para></exception>
-    /// <exception cref="ArgumentException">格式不受支持时抛出。<para>Thrown when the format is unsupported.</para></exception>
-    /// <exception cref="CompressionException">压缩失败时抛出。<para>Thrown when compression fails.</para></exception>
     public static byte[] Compress(byte[] data, CompressionFormat format, CompressionOptions? options = null)
     {
         if (data == null)
@@ -38,15 +22,9 @@ public static class CompressionService
     }
 
     /// <summary>
-    /// 解压数据。
-    /// <para>Decompresses data.</para>
+    /// Decompresses data.
+    /// <para>解压数据。</para>
     /// </summary>
-    /// <param name="data">待解压数据。<para>Data to decompress.</para></param>
-    /// <param name="format">压缩格式。<para>The compression format.</para></param>
-    /// <returns>解压后的原始数据。<para>The decompressed original data.</para></returns>
-    /// <exception cref="ArgumentNullException">data 为 null 时抛出。<para>Thrown when data is null.</para></exception>
-    /// <exception cref="ArgumentException">格式不受支持时抛出。<para>Thrown when the format is unsupported.</para></exception>
-    /// <exception cref="CompressionException">解压失败时抛出。<para>Thrown when decompression fails.</para></exception>
     public static byte[] Decompress(byte[] data, CompressionFormat format)
     {
         if (data == null)
@@ -58,22 +36,11 @@ public static class CompressionService
         return DecompressCore(data, format);
     }
 
-    // Stream API / 流式 API
 
     /// <summary>
-    /// 流式压缩。流式格式（gzip/zlib/deflate/brotli/bzip2/lz4）直接以管道处理；
-    /// 块格式（xz/lzma/lz4_legacy/zstd）的底层编码器本身接受流，同样直接管道。
-    /// <para>Streaming compression. Streaming formats (gzip/zlib/deflate/brotli/bzip2/lz4)
-    /// are piped directly; block formats (xz/lzma/lz4_legacy/zstd) whose encoders accept
-    /// streams are also piped directly.</para>
+    /// Streaming compression.
+    /// <para>流式压缩。</para>
     /// </summary>
-    /// <param name="input">待压缩的输入流。<para>The input stream to compress.</para></param>
-    /// <param name="output">写入压缩结果的输出流。<para>The output stream that receives the compressed data.</para></param>
-    /// <param name="format">压缩格式。<para>The compression format.</para></param>
-    /// <param name="options">压缩选项；null 表示各格式默认。<para>Compression options; null means each format's defaults.</para></param>
-    /// <exception cref="ArgumentNullException">input 或 output 为 null 时抛出。<para>Thrown when input or output is null.</para></exception>
-    /// <exception cref="ArgumentException">格式不受支持时抛出。<para>Thrown when the format is unsupported.</para></exception>
-    /// <exception cref="CompressionException">压缩失败时抛出。<para>Thrown when compression fails.</para></exception>
     public static void Compress(Stream input, Stream output, CompressionFormat format, CompressionOptions? options = null)
     {
         if (input == null)
@@ -142,30 +109,16 @@ public static class CompressionService
     }
 
     /// <summary>
-    /// 流式解压。流式格式直接以管道处理；xz/lzma/zstd/lz4_legacy 的底层解码器本身
-    /// 支持流式，同样直接管道，避免大输入整块缓冲。
-    /// <para>Streaming decompression. Streaming formats are piped directly; the underlying
-    /// decoders of xz/lzma/zstd/lz4_legacy are inherently streaming and are also piped
-    /// directly, avoiding full buffering of large inputs.</para>
+    /// Streaming decompression.
+    /// <para>流式解压。</para>
     /// </summary>
-    /// <param name="input">待解压的输入流。<para>The input stream to decompress.</para></param>
-    /// <param name="output">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
-    /// <param name="format">压缩格式。<para>The compression format.</para></param>
-    /// <exception cref="ArgumentNullException">input 或 output 为 null 时抛出。<para>Thrown when input or output is null.</para></exception>
-    /// <exception cref="ArgumentException">格式不受支持时抛出。<para>Thrown when the format is unsupported.</para></exception>
-    /// <exception cref="CompressionException">解压失败时抛出。<para>Thrown when decompression fails.</para></exception>
     public static void Decompress(Stream input, Stream output, CompressionFormat format)
         => Decompress(input, output, format, long.MaxValue, CancellationToken.None);
 
     /// <summary>
-    /// 使用统一输出上限和取消支持进行流式解压。
-    /// <para>Decompresses a stream with a unified output limit and cancellation support.</para>
+    /// Decompresses a stream with a unified output limit and cancellation support.
+    /// <para>使用统一输出上限和取消支持进行流式解压。</para>
     /// </summary>
-    /// <param name="input">待解压输入流。<para>The compressed input stream.</para></param>
-    /// <param name="output">结果输出流。<para>The output stream receiving decompressed data.</para></param>
-    /// <param name="format">压缩格式。<para>The compression format.</para></param>
-    /// <param name="maximumOutputBytes">允许输出的最大字节数。<para>The maximum number of output bytes allowed.</para></param>
-    /// <param name="cancellationToken">取消令牌。<para>The cancellation token.</para></param>
     public static void Decompress(Stream input, Stream output, CompressionFormat format, long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -183,8 +136,7 @@ public static class CompressionService
             return;
         }
 
-        // 底层解码器支持流式的块格式：直接管道，避免整块缓冲。
-        // Block formats whose decoders are inherently streaming: pipe directly.
+
         switch (format)
         {
             case CompressionFormat.Xz:
@@ -243,18 +195,11 @@ public static class CompressionService
         throw new CompressionException($"Streaming decompression is not supported for format: {format}");
     }
 
-    // File API / 文件 API
 
     /// <summary>
-    /// 压缩文件。
-    /// <para>Compresses a file.</para>
+    /// Compresses a file.
+    /// <para>压缩文件。</para>
     /// </summary>
-    /// <param name="inputPath">输入文件路径。<para>Path to the input file.</para></param>
-    /// <param name="outputPath">输出文件路径。<para>Path to the output file.</para></param>
-    /// <param name="format">压缩格式。<para>The compression format.</para></param>
-    /// <param name="options">压缩选项；null 表示各格式默认。<para>Compression options; null means each format's defaults.</para></param>
-    /// <exception cref="ArgumentNullException">路径为 null 或空时抛出。<para>Thrown when a path is null or empty.</para></exception>
-    /// <exception cref="CompressionException">压缩失败时抛出。<para>Thrown when compression fails.</para></exception>
     public static void CompressFile(string inputPath, string outputPath, CompressionFormat format, CompressionOptions? options = null)
     {
         if (string.IsNullOrEmpty(inputPath))
@@ -267,9 +212,7 @@ public static class CompressionService
             throw new ArgumentNullException(nameof(outputPath));
         }
 
-        // 输出先写临时文件再原子替换：失败时不留下残缺的目标文件。
-        // Output is written to a temporary file and atomically replaced: a failed compression
-        // leaves no partial destination file behind.
+
         WriteFileAtomically(outputPath, tempPath =>
         {
             using var input = File.OpenRead(inputPath);
@@ -279,26 +222,16 @@ public static class CompressionService
     }
 
     /// <summary>
-    /// 按指定格式解压文件。
-    /// <para>Decompresses a file with the specified format.</para>
+    /// Decompresses a file with the specified format.
+    /// <para>按指定格式解压文件。</para>
     /// </summary>
-    /// <param name="inputPath">输入文件路径。<para>Path to the input file.</para></param>
-    /// <param name="outputPath">输出文件路径。<para>Path to the output file.</para></param>
-    /// <param name="format">压缩格式。<para>The compression format.</para></param>
-    /// <exception cref="ArgumentNullException">路径为 null 或空时抛出。<para>Thrown when a path is null or empty.</para></exception>
-    /// <exception cref="CompressionException">解压失败时抛出。<para>Thrown when decompression fails.</para></exception>
     public static void DecompressFile(string inputPath, string outputPath, CompressionFormat format)
         => DecompressFile(inputPath, outputPath, format, long.MaxValue, CancellationToken.None);
 
     /// <summary>
-    /// 按指定格式有界解压文件；成功后原子替换目标，失败时清理临时文件。
-    /// <para>Decompresses a file with a limit, atomically replacing the destination on success and cleaning the temporary file on failure.</para>
+    /// Decompresses a file with a limit, atomically replacing the destination on success and cleaning the temporary file on failure.
+    /// <para>按指定格式有界解压文件；成功后原子替换目标，失败时清理临时文件。</para>
     /// </summary>
-    /// <param name="inputPath">输入文件路径。<para>Path to the input file.</para></param>
-    /// <param name="outputPath">输出文件路径。<para>Path to the output file.</para></param>
-    /// <param name="format">压缩格式。<para>The compression format.</para></param>
-    /// <param name="maximumOutputBytes">最大输出字节数。<para>The maximum output byte count.</para></param>
-    /// <param name="cancellationToken">取消令牌。<para>The cancellation token.</para></param>
     public static void DecompressFile(string inputPath, string outputPath, CompressionFormat format, long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(inputPath)) throw new ArgumentNullException(nameof(inputPath));
@@ -314,17 +247,16 @@ public static class CompressionService
     }
 
     /// <summary>
-    /// 自动检测格式并解压文件（检测失败时视为原始数据原样输出）。
-    /// <para>Automatically detects the format and decompresses a file (raw passthrough when detection fails).</para>
+    /// Automatically detects the format and decompresses a file (raw passthrough when detection fails).
+    /// <para>自动检测格式并解压文件（检测失败时视为原始数据原样输出）。</para>
     /// </summary>
-    /// <param name="inputPath">输入文件路径。<para>Path to the input file.</para></param>
-    /// <param name="outputPath">输出文件路径。<para>Path to the output file.</para></param>
-    /// <exception cref="ArgumentNullException">路径为 null 或空时抛出。<para>Thrown when a path is null or empty.</para></exception>
-    /// <exception cref="CompressionException">解压失败时抛出。<para>Thrown when decompression fails.</para></exception>
     public static void DecompressFileAuto(string inputPath, string outputPath)
         => DecompressFileAuto(inputPath, outputPath, long.MaxValue, CancellationToken.None);
 
-    /// <summary>Automatically detects and decompresses a file with an output limit.</summary>
+    /// <summary>
+    /// Detects and decompresses a file with an output limit.
+    /// <para>自动检测并解压文件，同时限制输出大小。</para>
+    /// </summary>
     public static void DecompressFileAuto(string inputPath, string outputPath, long maximumOutputBytes, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(inputPath))
@@ -345,8 +277,8 @@ public static class CompressionService
             var format = CompressionFormats.Detect(input);
             if (format == CompressionFormat.None)
             {
-                // 无魔数的格式(Brotli 等)回退到扩展名推断。
-                // Formats without magic bytes (Brotli etc.) fall back to extension inference.
+
+
                 format = CompressionFormats.FromExtension(inputPath);
             }
             using var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
@@ -354,33 +286,23 @@ public static class CompressionService
         });
     }
 
-    // Detection / 格式检测
 
     /// <summary>
-    /// 通过魔数检测数据的压缩格式。
-    /// <para>Detects the compression format of the data by magic bytes.</para>
+    /// Detects the compression format of the data by magic bytes.
+    /// <para>通过魔数检测数据的压缩格式。</para>
     /// </summary>
-    /// <param name="data">待检测的数据。<para>The data to detect.</para></param>
-    /// <returns>检测到的格式；无法识别时返回 <see cref="CompressionFormat.None"/>。<para>The detected format; <see cref="CompressionFormat.None"/> when unrecognized.</para></returns>
-    /// <exception cref="ArgumentNullException">data 为 null 时抛出。<para>Thrown when data is null.</para></exception>
     public static CompressionFormat Detect(byte[] data) => CompressionFormats.Detect(data);
 
     /// <summary>
-    /// 通过流头部检测压缩格式；若流可定位则恢复原位置。
-    /// <para>Detects the compression format from the stream head; restores the position when the stream is seekable.</para>
+    /// Detects the compression format from the stream head; restores the position when the stream is seekable.
+    /// <para>通过流头部检测压缩格式；若流可定位则恢复原位置。</para>
     /// </summary>
-    /// <param name="input">待检测的流。<para>The stream to detect.</para></param>
-    /// <returns>检测到的格式；无法识别时返回 <see cref="CompressionFormat.None"/>。<para>The detected format; <see cref="CompressionFormat.None"/> when unrecognized.</para></returns>
-    /// <exception cref="ArgumentNullException">input 为 null 时抛出。<para>Thrown when input is null.</para></exception>
     public static CompressionFormat Detect(Stream input) => CompressionFormats.Detect(input);
 
     /// <summary>
-    /// 检测文件的压缩格式。
-    /// <para>Detects the compression format of a file.</para>
+    /// Detects the compression format of a file.
+    /// <para>检测文件的压缩格式。</para>
     /// </summary>
-    /// <param name="inputPath">待检测文件的路径。<para>Path to the file to detect.</para></param>
-    /// <returns>检测到的格式；无法识别时返回 <see cref="CompressionFormat.None"/>。<para>The detected format; <see cref="CompressionFormat.None"/> when unrecognized.</para></returns>
-    /// <exception cref="ArgumentNullException">inputPath 为 null 或空时抛出。<para>Thrown when inputPath is null or empty.</para></exception>
     public static CompressionFormat DetectFile(string inputPath)
     {
         if (string.IsNullOrEmpty(inputPath))
@@ -392,7 +314,6 @@ public static class CompressionService
         return CompressionFormats.Detect(input);
     }
 
-    // Internals / 内部实现
 
     private static void WriteFileAtomically(string outputPath, Action<string> write)
     {
@@ -454,9 +375,8 @@ public static class CompressionService
             CompressionFormat.Bzip2 => Bzip2Compressor.Compress(data, options),
             CompressionFormat.Zstd => ZstdCompressor.Compress(data, options),
             CompressionFormat.None => data,
-            // LZOP 由本库内嵌 LZO1X 编码器压缩；仅 Zopfli 压缩不支持（Zopfli 为 gzip 兼容输出，压缩端不提供）。
-            // LZOP is compressed by the embedded LZO1X encoder; only Zopfli compression is not
-            // supported (Zopfli is gzip-compatible output and is not produced here).
+
+
             CompressionFormat.Lzop => LzopCompressor.Compress(data),
             CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli compression is not supported. Zopfli 压缩不受支持。"),
             _ => throw new ArgumentException($"Unsupported compression format: {format}", nameof(format))
@@ -478,11 +398,11 @@ public static class CompressionService
             CompressionFormat.Bzip2 => Bzip2Compressor.Decompress(data),
             CompressionFormat.Zstd => ZstdCompressor.Decompress(data),
             CompressionFormat.None => data,
-            // LZOP 仅支持解压（SharpZipLib 无 LZO 支持，由本库内嵌 LZO1X 解码器实现）。
-            // LZOP decompression is supported via the embedded LZO1X decoder; compression is not.
+
+
             CompressionFormat.Lzop => LzopCompressor.Decompress(data),
-            // Zopfli 产物是标准 gzip 流，解压直接复用 gzip 解码器；压缩端不支持。
-            // Zopfli output is a standard gzip stream, so the gzip decoder is reused; compression is not supported.
+
+
             CompressionFormat.Zopfli => GzipCompressor.Decompress(data),
             _ => throw new ArgumentException($"Unsupported compression format: {format}", nameof(format))
         };

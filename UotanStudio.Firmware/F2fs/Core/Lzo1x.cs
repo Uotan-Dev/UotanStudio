@@ -1,46 +1,22 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.F2fs;
 
-/// <summary>
-/// LZO1X 解压结果状态。
-/// <para>LZO1X decompression result status.</para>
-/// </summary>
 public enum LzoStatus : byte
 {
-    /// <summary>成功。<para>Success.</para></summary>
     Ok,
 
-    /// <summary>输入流未被完整消费（EOF 标记后仍有数据）。<para>The input was not fully consumed (data remains after the EOF marker).</para></summary>
     InputNotConsumed,
 
-    /// <summary>输入越界。<para>The input was overrun.</para></summary>
     InputOverrun,
 
-    /// <summary>输出越界。<para>The output was overrun.</para></summary>
     OutputOverrun,
 
-    /// <summary>回溯越界（匹配偏移指向输出起点之前）。<para>A match points before the start of the output.</para></summary>
     LookbehindOverrun,
 
-    /// <summary>数据非法。<para>The data is invalid.</para></summary>
     Error,
 }
 
-/// <summary>
-/// LZO1X 纯托管实现（解压对齐 Linux 内核 <c>lzo1x_decompress_safe</c>，压缩对齐
-/// <c>lzo1x_1_compress</c>，位流版本 0）。f2fs 的 LZO（算法 2）与 LZO-RLE（算法 3）
-/// 压缩簇都经 <c>lzo1x_decompress_safe</c> 解压，因此本实现的解压侧同时覆盖两种算法；
-/// 压缩侧输出标准 LZO1X 位流（无 bitstream 版本前缀），可被内核与 f2fs-tools 直接读取。
-/// 全部实现无反射与 P/Invoke，AOT 兼容。
-/// <para>
-/// Fully managed LZO1X implementation: decompression mirrors the Linux kernel
-/// <c>lzo1x_decompress_safe</c> and compression mirrors <c>lzo1x_1_compress</c> (bitstream
-/// version 0). f2fs decompresses both LZO (algorithm 2) and LZO-RLE (algorithm 3) clusters
-/// through <c>lzo1x_decompress_safe</c>, so the decompressor covers both; the compressor emits
-/// a standard LZO1X bitstream (no bitstream-version prefix) that the kernel and f2fs-tools read
-/// directly. No reflection or P/Invoke; AOT compatible.</para>
-/// </summary>
 internal static class Lzo1x
 {
     private const int M2MaxOffset = 0x0800;
@@ -57,22 +33,14 @@ internal static class Lzo1x
     private const long Max255Count = (long.MaxValue / 255) - 2;
 
     /// <summary>
-    /// 解压 LZO1X 位流到 <paramref name="output"/>，带完整边界检查（对齐内核 safe 变体）。
-    /// <para>Decompresses an LZO1X bitstream into <paramref name="output"/> with full bounds
-    /// checking (mirroring the kernel's safe variant).</para>
+    /// Decompresses an LZO1X bitstream into output with full bounds checking (mirroring the kernel's safe variant).
+    /// <para>解压 LZO1X 位流到 output，带完整边界检查（对齐内核 safe 变体）。</para>
     /// </summary>
-    /// <param name="input">压缩位流。<para>The compressed bitstream.</para></param>
-    /// <param name="output">输出缓冲区。<para>The output buffer.</para></param>
-    /// <param name="bytesWritten">实际写出的字节数。<para>The number of bytes actually written.</para></param>
-    /// <returns>解压状态。<para>The decompression status.</para></returns>
     public static LzoStatus TryDecompress(ReadOnlySpan<byte> input, Span<byte> output, out int bytesWritten)
     {
         bytesWritten = 0;
 
-        // 局部函数不能捕获 ref struct（CS9108）：核心逻辑改用数组承载输入输出，
-        // 成功时再一次性拷回输出 span。位流与簇数据均为 ≤ 64 KB 的小缓冲。
-        // Local functions cannot capture ref structs (CS9108): the core runs on arrays and
-        // copies back once on success. Both the bitstream and clusters are ≤ 64 KB buffers.
+
         var inArr = input.ToArray();
         var outArr = new byte[output.Length];
         var (status, written) = TryDecompressCore(inArr, outArr);
@@ -101,17 +69,14 @@ internal static class Lzo1x
         uint next = 0;
         var bitstreamVersion = 0;
 
-        // 内核位流版本前缀：首字节 17 标记带零游程编码的位流（LZO-RLE 写入器使用）。
-        // Kernel bitstream-version prefix: a leading 17 marks a zero-run-encoded bitstream
-        // (produced by the LZO-RLE writer).
+
         if (inLen >= 5 && input[0] == 17)
         {
             bitstreamVersion = input[1];
             ip = 2;
         }
 
-        // 字面量拷贝：拷贝 t 字节后 state 置 4（对齐内核 copy_literal_run）。
-        // Literal copy: copies t bytes then sets state to 4 (kernel copy_literal_run).
+
         LzoStatus CopyLiteralRun(uint t)
         {
             if (t > (uint)(opEnd - op))
@@ -131,9 +96,7 @@ internal static class Lzo1x
             return LzoStatus.Ok;
         }
 
-        // match_next：把 state 个随后字节拷入输出（对齐内核 match_next；之后主循环继续）。
-        // match_next: copies the following state bytes into the output (kernel match_next;
-        // the main loop continues afterwards).
+
         LzoStatus MatchNext()
         {
             var t = state;
@@ -153,8 +116,7 @@ internal static class Lzo1x
             return LzoStatus.Ok;
         }
 
-        // 匹配拷贝：t ≥ 2（所有匹配分支的最小长度都是 2）。
-        // Match copy: t ≥ 2 (every match branch has a minimum length of 2).
+
         LzoStatus CopyMatch(int mPos, uint t)
         {
             if (mPos < 0)
@@ -179,10 +141,7 @@ internal static class Lzo1x
             return LzoStatus.Ok;
         }
 
-        // 入口分支（*ip > 17）与主循环共用：内核入口 goto 到 copy_literal_run / match_next
-        // 后同样回到 for(;;) 主循环。
-        // The entry branch (*ip > 17) flows back into the main loop, like the kernel's goto
-        // copy_literal_run / match_next from the entry.
+
         var entryHandled = false;
         while (true)
         {
@@ -378,8 +337,8 @@ internal static class Lzo1x
                 next = BinaryPrimitives.ReadUInt16LittleEndian(input.AsSpan(ip, 2));
                 if ((next & 0xfffc) == 0xfffc && (t & 0xf8) == 0x18 && bitstreamVersion != 0)
                 {
-                    // LZO-RLE 零游程：原样置零一段输出。
-                    // LZO-RLE zero run: clears a stretch of the output with zeros.
+
+
                     if (ip + 3 > ipEnd)
                     {
                         return (LzoStatus.InputOverrun, op);
@@ -443,8 +402,8 @@ internal static class Lzo1x
                 next &= 3;
                 if (mPosM4 == op)
                 {
-                    // EOF 标记：t 必须为 3 且输入恰好耗尽。
-                    // EOF marker: t must be 3 and the input must be fully consumed.
+
+
                     if (t != 3)
                     {
                         return (LzoStatus.Error, op);
@@ -470,9 +429,7 @@ internal static class Lzo1x
                 continue;
             }
 
-            // state==4 且 t<16 的 M2 分支：t 已置 3，落入共享匹配拷贝。
-            // The state==4 M2 branch with t<16: t is 3 here, falling through to the shared
-            // match copy.
+
             var m2Match = CopyMatch(mPosShared, t);
             if (m2Match != LzoStatus.Ok)
             {
@@ -489,13 +446,9 @@ internal static class Lzo1x
     }
 
     /// <summary>
-    /// 解压并要求精确的输出大小；任何失败（含长度不符）抛出 <see cref="InvalidDataException"/>。
-    /// <para>Decompresses requiring an exact output size; any failure (including a size mismatch)
-    /// throws <see cref="InvalidDataException"/>.</para>
+    /// Decompresses requiring an exact output size; any failure (including a size mismatch) throws InvalidDataException.
+    /// <para>解压并要求精确的输出大小；任何失败（含长度不符）抛出 InvalidDataException。</para>
     /// </summary>
-    /// <param name="input">压缩位流。<para>The compressed bitstream.</para></param>
-    /// <param name="expectedSize">期望输出字节数。<para>The expected output size in bytes.</para></param>
-    /// <returns>解压后的数据。<para>The decompressed data.</para></returns>
     public static byte[] Decompress(ReadOnlySpan<byte> input, int expectedSize)
     {
         var result = new byte[expectedSize];
@@ -516,13 +469,9 @@ internal static class Lzo1x
     }
 
     /// <summary>
-    /// 以 lzo1x_1（位流版本 0）压缩输入。输出保证可被 <see cref="TryDecompress"/> 与
-    /// 内核/f2fs-tools 的 LZO1X 解压器读取。
-    /// <para>Compresses the input with lzo1x_1 (bitstream version 0). The output is guaranteed
-    /// readable by <see cref="TryDecompress"/> and by the kernel/f2fs-tools LZO1X decompressors.</para>
+    /// Compresses the input with lzo1x_1 (bitstream version 0).
+    /// <para>以 lzo1x_1（位流版本 0）压缩输入。</para>
     /// </summary>
-    /// <param name="input">原始数据。<para>The raw data.</para></param>
-    /// <returns>压缩位流。<para>The compressed bitstream.</para></returns>
     public static byte[] Compress(ReadOnlySpan<byte> input)
     {
         var worst = input.Length + (input.Length / 16) + 64 + 3;
@@ -544,24 +493,22 @@ internal static class Lzo1x
         var op = 0;
         var opEnd = output.Length;
         var dataStart = op;
-        const int m4MaxOffset = 0xbfff; // M4_MAX_OFFSET_V0（位流版本 0）。(M4_MAX_OFFSET_V0 for bitstream version 0.)
+        const int m4MaxOffset = 0xbfff;
 
-        // stateOffset = -2：上一条匹配指令的操作码字节位于 op-2。
-        // stateOffset = -2: the previous match opcode byte sits at op-2.
+
         const int stateOffset = -2;
         var hasOpcode = false;
 
         var ip = 0;
         var l = inLen;
-        var ti = 0; // 上一块遗留的待发字面量字节数。Pending literal bytes carried from the previous block.
-        var litStart = 0; // 待发字面量的绝对起点。Absolute start of the pending literal.
+        var ti = 0;
+        var litStart = 0;
 
         while (l > 20)
         {
             var ll = Math.Min(l, m4MaxOffset + 1);
-            // 内核在每个外层块处理前清空哈希表：字典条目按块起始相对存储，跨块复用会指向错误位置。
-            // The kernel clears the hash table before each outer block: entries are block-relative,
-            // so reusing them across blocks would produce wrong matches.
+
+
             var status = CompressBlock(ip, ll, new ushort[DSize], ref ti, ref litStart);
             if (status != LzoStatus.Ok)
             {
@@ -656,17 +603,16 @@ internal static class Lzo1x
         {
             var inEnd = blockStart + blockLen;
             var ipEnd = inEnd - 20;
-            // 与内核一致：ii 起始于块首，首次命中时执行 ii -= ti 重定基到跨块字面量的绝对起点。
-            // As in the kernel: ii starts at the block head; the first match applies the
-            // ii -= ti rebase to the absolute start of the cross-block pending literal.
+
+
             var ii = blockStart;
             var ti = pendingTi;
             var blockIp = blockStart + (ti < 4 ? 4 - ti : 0);
 
             while (true)
             {
-                // literal 步进：随字面量长度指数加速。
-                // literal step: accelerate with the pending literal length.
+
+
                 blockIp += 1 + ((blockIp - ii) >> 5);
                 if (blockIp >= ipEnd)
                 {
@@ -682,8 +628,7 @@ internal static class Lzo1x
                     continue;
                 }
 
-                // 命中：先发字面量（含上一块遗留的 ti 字节）。
-                // Match hit: emit the literal first (including the previous block's ti bytes).
+
                 ii -= ti;
                 ti = 0;
                 var litLen = blockIp - ii;
@@ -693,10 +638,8 @@ internal static class Lzo1x
                     {
                         if (!hasOpcode)
                         {
-                            // 首个操作码之前不可能出现 t≤3 的字面量（入口步进保证 ≥4）；
-                            // 保险起见按首字面量编码。
-                            // A literal of ≤3 cannot precede the first opcode (the entry step
-                            // guarantees ≥4); encode as a leading literal for safety.
+
+
                             if (op + 1 > opEnd)
                             {
                                 return LzoStatus.OutputOverrun;
@@ -755,8 +698,7 @@ internal static class Lzo1x
                     op += litLen;
                 }
 
-                // 计算匹配长度（上限 ipEnd，与内核一致）。
-                // Compute the match length (capped at ipEnd, as in the kernel).
+
                 var mLen = 4;
                 while (blockIp + mLen < ipEnd && input[blockIp + mLen] == input[mPos + mLen])
                 {

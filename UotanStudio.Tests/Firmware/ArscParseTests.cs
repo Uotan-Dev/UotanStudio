@@ -1,29 +1,58 @@
+using System.IO.Compression;
 using UotanStudio.Firmware.Arsc;
+using UotanStudio.Tests.Infrastructure;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// ARSC parser tests: the parser reads a real resources.arsc when present on this developer machine
-/// (skipped otherwise), validating package/type/entry extraction on a 1.9 MB production file.
-/// <para>ARSC 解析测试：本机存在真实 resources.arsc 时解析验证（否则跳过），在 1.9 MB 生产文件上
-/// 校验包/类型/条目提取。</para>
+/// ARSC parser tests: the parser runs against the real resources.arsc entry of Magisk-v30.6.apk
+/// from the firmware corpus when present, validating package/type/entry extraction on a production
+/// file; cases are skipped via <see cref="Assert.Skip"/> when the corpus file is missing.
+/// <para>ARSC 解析测试：语料库存在 Magisk-v30.6.apk 时解析其 resources.arsc 条目，在生产文件上
+/// 校验包/类型/条目提取；语料缺失时以 <see cref="Assert.Skip"/> 跳过。</para>
 /// </summary>
 public class ArscParseTests
 {
-    private const string RealArscPath =
-        @"C:\Users\28319\Desktop\新建文件夹\test\arsc_test\resources.arsc";
+    /// <summary>语料库中 Magisk-v30.6.apk 的路径（只定位一次）；不存在时为 null。
+    /// <para>The located Magisk-v30.6.apk path (resolved once); null when absent.</para></summary>
+    private static readonly string? ApkPath = FirmwareCorpus.FindFile("Magisk-v30.6.apk");
+
+    /// <summary>
+    /// 从语料库 Magisk-v30.6.apk 读取 resources.arsc 条目字节；apk 或条目缺失时返回 null。
+    /// <para>Reads the resources.arsc entry bytes from the corpus Magisk-v30.6.apk; returns null
+    /// when the apk or the entry is missing.</para>
+    /// </summary>
+    private static byte[]? ReadResourcesArsc()
+    {
+        var apkPath = ApkPath;
+        if (apkPath is null)
+        {
+            return null;
+        }
+
+        using var zip = ZipFile.OpenRead(apkPath);
+        var entry = zip.GetEntry("resources.arsc");
+        if (entry is null)
+        {
+            return null;
+        }
+
+        using var stream = entry.Open();
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return ms.ToArray();
+    }
 
     [Fact]
     public void Parse_RealMagiskArsc_ExtractsPackagesAndEntries()
     {
-        if (!File.Exists(RealArscPath))
+        var bytes = ReadResourcesArsc();
+        if (bytes is null)
         {
-            return; // 非本机环境：跳过真实文件测试。
-            // Non-local environment: skip the real-file test.
+            Assert.Skip("Magisk-v30.6.apk or its resources.arsc entry not found in firmware corpus");
         }
 
-        var bytes = File.ReadAllBytes(RealArscPath);
         Assert.True(ArscParser.IsArsc(bytes));
 
         var table = ArscParser.Parse(bytes);
@@ -50,12 +79,13 @@ public class ArscParseTests
     [Fact]
     public void Parse_RealMagiskArsc_ContainsStringResources()
     {
-        if (!File.Exists(RealArscPath))
+        var bytes = ReadResourcesArsc();
+        if (bytes is null)
         {
-            return;
+            Assert.Skip("Magisk-v30.6.apk or its resources.arsc entry not found in firmware corpus");
         }
 
-        var table = ArscParser.Parse(File.ReadAllBytes(RealArscPath));
+        var table = ArscParser.Parse(bytes);
 
         // 全表至少存在 string 类型（type id 2）的条目。
         // The table must contain at least one string-type (type id 2) entry somewhere.

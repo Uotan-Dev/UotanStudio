@@ -1,39 +1,13 @@
-using System.IO.Hashing;
+﻿using System.IO.Hashing;
 
 namespace UotanStudio.Firmware.Zucchini;
 
-/// <summary>
-/// Applies a Zucchini binary delta patch (RAW element subset) to an old image, producing the new
-/// image. The implementation is fully managed, AOT-compatible and free of reflection and P/Invoke.
-/// <para>将 Zucchini 二进制差分补丁（RAW 元素子集）应用到旧镜像并生成新镜像。实现为全托管、
-/// AOT 兼容，无反射与 P/Invoke。</para>
-/// <para>Patch application for each RAW element performs, in order: equivalence copies
-/// (source ranges copied into the destination), extra-byte insertion into the destination gaps,
-/// and per-byte XOR corrections from the raw-delta stream. Reference handling and disassembly are
-/// intentionally out of scope; any element whose executable type is not <see cref="ZucchiniExecutableType.Raw"/>
-/// raises <see cref="ZucchiniUnsupportedExecutableTypeException"/>.</para>
-/// <para>对每个 RAW 元素依次执行：等价拷贝（把源区间复制进目标位置）、向目标空隙插入附加字节、
-/// 以及按原始差分流逐字节异或修正。引用处理与反汇编不在范围内；任何可执行类型不是
-/// <see cref="ZucchiniExecutableType.Raw"/> 的元素都会抛出 <see cref="ZucchiniUnsupportedExecutableTypeException"/>。</para>
-/// </summary>
 public static class ZucchiniPatchApplier
 {
     /// <summary>
-    /// Applies <paramref name="patch"/> to <paramref name="oldData"/> and returns a new byte array of
-    /// exactly <paramref name="newSize"/> bytes. Convenience wrapper over the span overload.
-    /// <para>将 <paramref name="patch"/> 应用到 <paramref name="oldData"/>，返回恰好
-    /// <paramref name="newSize"/> 字节的新字节数组。作为 span 重载的便利包装。</para>
+    /// Applies patch to oldData and returns a new byte array of exactly newSize bytes.
+    /// <para>将 patch 应用到 oldData，返回恰好 newSize 字节的新字节数组。</para>
     /// </summary>
-    /// <param name="oldData">The old (source) image. <para>旧（源）镜像。</para></param>
-    /// <param name="patch">The Zucchini patch. <para>Zucchini 补丁。</para></param>
-    /// <param name="newSize">The exact size in bytes of the new (destination) image.
-    /// <para>新（目标）镜像的精确字节数。</para></param>
-    /// <returns>The new image. <para>新镜像。</para></returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="newSize"/> is negative.
-    /// <para><paramref name="newSize"/> 为负时抛出。</para></exception>
-    /// <exception cref="ZucchiniException">The patch is invalid, the images do not match the patch
-    /// header, or a CRC-32 verification fails.
-    /// <para>补丁非法、镜像与补丁头部不一致或 CRC-32 校验失败时抛出。</para></exception>
     public static byte[] Apply(ReadOnlySpan<byte> oldData, ReadOnlySpan<byte> patch, int newSize)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(newSize);
@@ -43,21 +17,9 @@ public static class ZucchiniPatchApplier
     }
 
     /// <summary>
-    /// Applies <paramref name="patch"/> to <paramref name="oldData"/>, writing the new image into
-    /// <paramref name="newData"/>. The destination span must be exactly <c>new_size</c> bytes as
-    /// declared in the patch header; the caller controls the buffer (for example from an array pool),
-    /// keeping the output strictly bounded.
-    /// <para>将 <paramref name="patch"/> 应用到 <paramref name="oldData"/>，把新镜像写入
-    /// <paramref name="newData"/>。目标 span 必须恰好等于补丁头部声明的 <c>new_size</c> 字节；
-    /// 调用方控制缓冲区（例如来自数组池），使输出严格有界。</para>
+    /// Applies patch to oldData, writing the new image into newData.
+    /// <para>将 patch 应用到 oldData，把新镜像写入 newData。</para>
     /// </summary>
-    /// <param name="oldData">The old (source) image. <para>旧（源）镜像。</para></param>
-    /// <param name="patch">The Zucchini patch. <para>Zucchini 补丁。</para></param>
-    /// <param name="newData">The destination buffer of exactly <c>new_size</c> bytes.
-    /// <para>恰好为 <c>new_size</c> 字节的目标缓冲区。</para></param>
-    /// <exception cref="ZucchiniException">The patch is invalid, the images do not match the patch
-    /// header, or a CRC-32 verification fails.
-    /// <para>补丁非法、镜像与补丁头部不一致或 CRC-32 校验失败时抛出。</para></exception>
     public static void Apply(ReadOnlySpan<byte> oldData, ReadOnlySpan<byte> patch, Span<byte> newData)
     {
         var header = ZucchiniPatchReader.ReadHeader(patch);
@@ -128,9 +90,7 @@ public static class ZucchiniPatchApplier
                 $"位于新偏移 {element.NewOffset} 的 Zucchini 元素超出所提供的镜像缓冲区。");
         }
 
-        // Equivalence commands are (skip, copy) varint pairs. skip advances both the source and the
-        // destination position by the same amount (consecutive equivalences are aligned), then copy
-        // bytes are copied from the source to the destination.
+
         long srcPos = element.OldOffset;
         long newPos = element.NewOffset;
         int extraPos = 0;
@@ -194,11 +154,8 @@ public static class ZucchiniPatchApplier
             }
 
             oldData.Slice((int)srcPos, (int)copy).CopyTo(newData.Slice((int)dstPos, (int)copy));
-            // 源位置同样推进本次拷贝长度：skip 是"上一段拷贝结束到当前段开始"的间隔，
-            // 下一轮的源起点必须是本段末尾（与目标侧 newPos = dstPos + copy 对称）。
-            // The source position advances by this copy too: skip is the gap from the END of the
-            // previous copy to the start of the current one, so the next source start must be the
-            // end of this segment (symmetric with the destination side newPos = dstPos + copy).
+
+
             srcPos += copy;
             newPos = dstPos + copy;
         }
@@ -240,9 +197,7 @@ public static class ZucchiniPatchApplier
     {
         var rawStream = patch.Slice(element.RawDeltaOffset, checked((int)element.RawDeltaLength));
 
-        // The raw-delta stream is a sequence of (offset-difference varint, byte) pairs. Offsets are
-        // absolute within the new image; the difference is measured from one past the previously
-        // corrected byte. Each byte is XORed into the destination.
+
         long current = 0;
         int pos = 0;
         while (pos < rawStream.Length)

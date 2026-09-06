@@ -4,19 +4,12 @@ using BrotliStream = BrotliSharpLib.BrotliStream;
 
 namespace UotanStudio.Firmware.Compress.Compressors;
 
-/// <summary>
-/// Brotli 压缩/解压（基于 BrotliSharpLib 的纯托管 BrotliStream，RFC 7932）。
-/// <para>Brotli compression/decompression (based on BrotliSharpLib's fully-managed BrotliStream, RFC 7932).</para>
-/// </summary>
 public static class BrotliCompressor
 {
     /// <summary>
-    /// Brotli 压缩。
-    /// <para>Brotli compression.</para>
+    /// Brotli compression.
+    /// <para>Brotli 压缩。</para>
     /// </summary>
-    /// <param name="data">待压缩数据。<para>Data to compress.</para></param>
-    /// <param name="options">压缩选项（Level：0-9，null=Optimal）。<para>Compression options (Level: 0-9, null=Optimal).</para></param>
-    /// <returns>Brotli 格式的压缩数据。<para>Compressed data in Brotli format.</para></returns>
     public static byte[] Compress(byte[] data, CompressionOptions? options = null)
     {
         if (data == null)
@@ -41,11 +34,9 @@ public static class BrotliCompressor
     }
 
     /// <summary>
-    /// Brotli 解压。
-    /// <para>Brotli decompression.</para>
+    /// Brotli decompression.
+    /// <para>Brotli 解压。</para>
     /// </summary>
-    /// <param name="data">Brotli 格式的压缩数据。<para>Compressed data in Brotli format.</para></param>
-    /// <returns>解压后的原始数据。<para>The decompressed original data.</para></returns>
     public static byte[] Decompress(byte[] data)
     {
         if (data == null)
@@ -68,12 +59,9 @@ public static class BrotliCompressor
     }
 
     /// <summary>
-    /// 流式 Brotli 压缩。
-    /// <para>Streaming Brotli compression.</para>
+    /// Streaming Brotli compression.
+    /// <para>流式 Brotli 压缩。</para>
     /// </summary>
-    /// <param name="input">待压缩的输入流。<para>The input stream to compress.</para></param>
-    /// <param name="output">写入压缩结果的输出流。<para>The output stream that receives the compressed data.</para></param>
-    /// <param name="options">压缩选项（Level：0-9，null=Optimal）。<para>Compression options (Level: 0-9, null=Optimal).</para></param>
     public static void Compress(Stream input, Stream output, CompressionOptions? options = null)
     {
         if (input == null)
@@ -99,11 +87,9 @@ public static class BrotliCompressor
     }
 
     /// <summary>
-    /// 流式 Brotli 解压。
-    /// <para>Streaming Brotli decompression.</para>
+    /// Streaming Brotli decompression.
+    /// <para>流式 Brotli 解压。</para>
     /// </summary>
-    /// <param name="input">待解压的输入流。<para>The input stream to decompress.</para></param>
-    /// <param name="output">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
     public static void Decompress(Stream input, Stream output)
     {
         if (input == null)
@@ -128,14 +114,9 @@ public static class BrotliCompressor
     }
 
     /// <summary>
-    /// 流式 Brotli 解压，带输出上限（防解压炸弹）。
-    /// <para>Streaming Brotli decompression with output limit (decompression bomb protection).</para>
+    /// Streaming Brotli decompression with output limit (decompression bomb protection).
+    /// <para>流式 Brotli 解压，带输出上限（防解压炸弹）。</para>
     /// </summary>
-    /// <param name="source">待解压的压缩流。<para>The compressed input stream.</para></param>
-    /// <param name="destination">写入解压结果的输出流。<para>The output stream that receives the decompressed data.</para></param>
-    /// <param name="maxOutputBytes">最大允许的解压输出字节数，超出则抛出异常。<para>Maximum allowed decompressed output in bytes; throws if exceeded.</para></param>
-    /// <exception cref="CompressionException">解压输出超过 <paramref name="maxOutputBytes"/> 时抛出。
-    /// <para>Thrown when decompressed output exceeds <paramref name="maxOutputBytes"/>.</para></exception>
     public static void Decompress(Stream source, Stream destination, long maxOutputBytes)
     {
         if (source == null)

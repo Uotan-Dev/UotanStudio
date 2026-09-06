@@ -2,29 +2,15 @@ using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Erofs;
 
-/// <summary>
-/// EROFS 镜像格式处理器（解包 / 打包 / 元数据读取）。
-/// <para>EROFS image format handler (unpack / pack / metadata read).</para>
-/// </summary>
 public sealed class ErofsFormatHandler : IFormatHandler
 {
-    /// <summary>
-    /// 获取人类可读的格式名称。
-    /// <para>Gets the human-readable format name.</para>
-    /// </summary>
     public string FormatName => "EROFS";
 
-    /// <summary>
-    /// 获取典型文件扩展名（不带点，小写）。
-    /// <para>Gets the typical file extensions (without dot, lowercase).</para>
-    /// </summary>
     public IReadOnlyList<string> FileExtensions { get; } = ["img", "erofs"];
 
     /// <summary>
-    /// 判断该处理器能否处理指定文件：读取偏移 1024 处的 4 字节魔数（小端 0xE0F5E1E2），
-    /// 或扩展名为 .erofs。
-    /// <para>Determines whether this handler can process the given file by reading the 4-byte magic
-    /// at offset 1024 (little-endian 0xE0F5E1E2), or by a .erofs extension.</para>
+    /// Determines whether this handler can process the given file by reading the 4-byte magic at offset 1024 (little-endian 0xE0F5E1E2), or by a .erofs extension.
+    /// <para>判断该处理器能否处理指定文件：读取偏移 1024 处的 4 字节魔数（小端 0xE0F5E1E2）， 或扩展名为 .erofs。</para>
     /// </summary>
     public bool CanHandle(string filePath)
     {
@@ -58,8 +44,8 @@ public sealed class ErofsFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// 读取格式元数据而不解包。
-    /// <para>Reads format metadata without unpacking.</para>
+    /// Reads format metadata without unpacking.
+    /// <para>读取格式元数据而不解包。</para>
     /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -100,8 +86,8 @@ public sealed class ErofsFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// 将 erofs 镜像解包到输出目录。
-    /// <para>Unpacks the erofs image to the output directory.</para>
+    /// Unpacks the erofs image to the output directory.
+    /// <para>将 erofs 镜像解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -129,8 +115,8 @@ public sealed class ErofsFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// 将目录打包为 erofs 镜像。
-    /// <para>Packs a directory into an erofs image.</para>
+    /// Packs a directory into an erofs image.
+    /// <para>将目录打包为 erofs 镜像。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {

@@ -1,35 +1,19 @@
-using UotanStudio.Firmware.Dex.Model;
+﻿using UotanStudio.Firmware.Dex.Model;
 
 namespace UotanStudio.Firmware.Dex.Instructions;
 
-/// <summary>
-/// <para>指令流解码器：把原始 16 位代码单元解码为指令列表（含 switch/fill-array-data 伪指令 payload）。</para>
-/// Instruction stream decoder: decodes raw 16-bit code units into an instruction list (including switch /
-/// fill-array-data pseudo-instruction payloads).
-/// </summary>
 public static class InstructionDecoder
 {
     /// <summary>
-    /// <para>解码原始指令流为指令列表。</para>
     /// Decodes a raw instruction stream into an instruction list.
+    /// <para>解码原始指令流为指令列表。</para>
     /// </summary>
-    /// <param name="raw">原始 16 位代码单元。<para>Raw 16-bit code units.</para></param>
-    /// <param name="dex">所属 DEX 文件（用于解析字符串/类型/字段/方法引用）。<para>The owning DEX file (for resolving refs).</para></param>
-    /// <returns>解码后的指令列表。<para>The decoded instruction list.</para></returns>
     public static List<Instruction> Decode(ushort[] raw, DexFile dex)
     {
         ArgumentNullException.ThrowIfNull(raw);
         ArgumentNullException.ThrowIfNull(dex);
 
-        // 第一遍：收集 31t 指令（packed-switch 0x2b / sparse-switch 0x2c / fill-array-data 0x26）
-        // 引用的 payload 目标偏移（代码单元索引）。0x0100/0x0200/0x0300 本身也可能是合法指令
-        // （move v0,v0 等），因此只有被 31t 明确引用的偏移才按 payload 解析。
-        // 同时统计指令条数：raw.Length 是多单元指令的高估上界，直接用其预容量会浪费内存。
-        // Pass 1: collect payload target offsets (in code units) referenced by 31t instructions
-        // (packed-switch 0x2b / sparse-switch 0x2c / fill-array-data 0x26). Since 0x0100/0x0200/0x0300
-        // can also be ordinary instructions (e.g. move v0,v0), only offsets referenced by a 31t
-        // instruction are decoded as payloads. The pass also counts instructions so the result list
-        // is pre-sized accurately instead of over-allocating for raw.Length.
+
         List<int>? payloadTargets = null;
         var instructionCount = 0;
         var scan = 0;
@@ -46,8 +30,7 @@ public static class InstructionDecoder
             instructionCount++;
         }
 
-        // 第二遍：实际解码。
-        // Pass 2: actual decode.
+
         var instructions = new List<Instruction>(instructionCount);
         var index = 0;
         while (index < raw.Length)
@@ -55,8 +38,7 @@ public static class InstructionDecoder
             var unit = raw[index];
             var opcode = (byte)(unit >> 8);
 
-            // 仅在 31t 引用的 payload 目标偏移处，才把标识字当作伪指令 payload 解析。
-            // Only treat the ident word as a pseudo-instruction payload at 31t-referenced offsets.
+
             if (payloadTargets is { Count: > 0 } targets && targets.Contains(index)
                 && (unit == 0x0100 || unit == 0x0200 || unit == 0x0300))
             {
@@ -112,7 +94,7 @@ public static class InstructionDecoder
     {
         switch (ident)
         {
-            case 0x0100: // packed-switch-payload: ident, size, first_key(s32), targets[size]
+            case 0x0100:
                 {
                     var size = raw[index + 1];
                     var firstKey = (int)((uint)(raw[index + 2] | (raw[index + 3] << 16)));
@@ -131,7 +113,7 @@ public static class InstructionDecoder
                     });
                     return 4 + size * 2;
                 }
-            case 0x0200: // sparse-switch-payload: ident, size, keys[size], targets[size]
+            case 0x0200:
                 {
                     var size = raw[index + 1];
                     var keys = new int[size];
@@ -151,7 +133,7 @@ public static class InstructionDecoder
                     });
                     return 2 + size * 4;
                 }
-            default: // 0x0300 fill-array-data-payload: ident, element_width(u16), size(u32), data
+            default:
                 {
                     var width = raw[index + 1];
                     var size = raw[index + 2] | (raw[index + 3] << 16);
@@ -177,9 +159,9 @@ public static class InstructionDecoder
     private static IReadOnlyList<object?> DecodeOperands(ushort[] raw, int index, OpCodeInfo info, DexFile dex)
     {
         var unit0 = raw[index];
-        var aNibble = unit0 & 0x0f;                 // vA / 低 4 位
-        var bNibble = (unit0 >> 4) & 0x0f;          // vB / 高 4 位
-        var aa = (byte)(unit0 & 0xff);              // vAA / 分支偏移
+        var aNibble = unit0 & 0x0f;
+        var bNibble = (unit0 >> 4) & 0x0f;
+        var aa = (byte)(unit0 & 0xff);
 
         switch (info.Format)
         {
@@ -257,16 +239,16 @@ public static class InstructionDecoder
                 }
             case InstructionFormat.Format35c:
                 {
-                    var count = (byte)((unit0 >> 12) & 0x0f); // A 位于字节 1 高 4 位
+                    var count = (byte)((unit0 >> 12) & 0x0f);
                     var g = (byte)(unit0 & 0x0f);
-                    // C..F 位于 unit2（字节 4-5），引用索引位于 unit1（字节 2-3）
-                    // C..F reside in unit2 (bytes 4-5), the reference index in unit1 (bytes 2-3).
+
+
                     var c = (byte)(raw[index + 2] & 0x0f);
                     var d = (byte)((raw[index + 2] >> 4) & 0x0f);
                     var e = (byte)((raw[index + 2] >> 8) & 0x0f);
                     var f = (byte)((raw[index + 2] >> 12) & 0x0f);
-                    // 仅取后 count 个寄存器（C..G 中从 G 往回数 count 个），顺序 C 先 G 后
-                    // Only the last 'count' registers of {C,D,E,F,G} are arguments, in C-first order.
+
+
                     var regs = new int[count];
                     var pos = count;
                     if (count > 0) regs[--pos] = g;
@@ -290,8 +272,8 @@ public static class InstructionDecoder
                 {
                     var count = (byte)((unit0 >> 12) & 0x0f);
                     var g = (byte)(unit0 & 0x0f);
-                    // C..F 位于 unit2，method 引用位于 unit1，proto 引用位于 unit3
-                    // C..F reside in unit2, the method reference in unit1, the proto reference in unit3.
+
+
                     var c = (byte)(raw[index + 2] & 0x0f);
                     var d = (byte)((raw[index + 2] >> 4) & 0x0f);
                     var e = (byte)((raw[index + 2] >> 8) & 0x0f);
@@ -355,9 +337,8 @@ public static class InstructionDecoder
                     }
                     else
                     {
-                        // 手写循环代替 LINQ：invoke 指令热路径，避免 Select/ToArray 的迭代器与委托分配。
-                        // Hand-rolled loop instead of LINQ: this is the invoke hot path, and it avoids
-                        // iterator/delegate allocations from Select/ToArray.
+
+
                         var indices = proto.ParameterTypeIndices;
                         parameters = new string[indices.Length];
                         for (var i = 0; i < indices.Length; i++)

@@ -2,31 +2,20 @@ using System.Text;
 
 namespace UotanStudio.Firmware.Dz;
 
-/// <summary>
-/// <para>表示 LG KDZ 文件中的一个分区。</para>
-/// Represents a partition within an LG KDZ file.
-/// </summary>
 public sealed class KdzPartition
 {
-    /// <summary>分区名称。</summary>
     public string Name { get; init; } = string.Empty;
 
-    /// <summary>数据长度。</summary>
     public ulong Length { get; init; }
 
-    /// <summary>数据偏移量。</summary>
     public ulong Offset { get; init; }
 }
 
-/// <summary>
-/// <para>提供 LG KDZ 固件文件的解析与提取功能。</para>
-/// Provides parsing and extraction functionality for LG KDZ firmware files.
-/// </summary>
 public static class KdzExtractor
 {
     /// <summary>
-    /// <para>解析 KDZ 文件,返回头部类型与分区列表。</para>
     /// Parses a KDZ file, returning the header type and partition list.
+    /// <para>解析 KDZ 文件,返回头部类型与分区列表。</para>
     /// </summary>
     public static (int HeaderType, List<KdzPartition> Partitions) Parse(string kdzPath)
     {
@@ -72,8 +61,8 @@ public static class KdzExtractor
     }
 
     /// <summary>
-    /// <para>将 KDZ 文件中的所有分区提取到输出目录。</para>
     /// Extracts all partitions from a KDZ file to the output directory.
+    /// <para>将 KDZ 文件中的所有分区提取到输出目录。</para>
     /// </summary>
     public static int Extract(string kdzPath, string outDir, Func<string, bool>? nameFilter = null)
     {
@@ -116,8 +105,8 @@ public static class KdzExtractor
     }
 
     /// <summary>
-    /// <para>获取 KDZ 分区头的分区名称。</para>
     /// Gets the partition name of a KDZ partition header.
+    /// <para>获取 KDZ 分区头的分区名称。</para>
     /// </summary>
     public static string GetName(byte[] nameBytes)
         => Encoding.UTF8.GetString(nameBytes).TrimEnd('\0');

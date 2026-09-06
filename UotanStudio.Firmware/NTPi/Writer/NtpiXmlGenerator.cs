@@ -3,15 +3,11 @@ using UotanStudio.Firmware.NTPi.Models;
 
 namespace UotanStudio.Firmware.NTPi.Writer;
 
-/// <summary>
-/// <para>提供 NTPI 打包过程中的 XML 数据生成功能,包括 FileIndex XML 和最小化 XML。</para>
-/// Provides XML data generation functionality during NTPI packing, including FileIndex XML and minimal XML.
-/// </summary>
 internal static class NtpiXmlGenerator
 {
     /// <summary>
-    /// <para>从文件条目列表生成 FileIndex XML 数据。</para>
     /// Generates FileIndex XML data from the file entry list.
+    /// <para>从文件条目列表生成 FileIndex XML 数据。</para>
     /// </summary>
     public static byte[] GenerateFileIndexXml(IEnumerable<FileEntry> entries)
     {
@@ -45,8 +41,8 @@ internal static class NtpiXmlGenerator
     }
 
     /// <summary>
-    /// <para>生成最小化的 XML 数据。</para>
     /// Generates minimal XML data.
+    /// <para>生成最小化的 XML 数据。</para>
     /// </summary>
     public static byte[] GenerateMinimalXml(string rootElement)
     {

@@ -1,21 +1,9 @@
 namespace UotanStudio.Firmware.Common;
 
-/// <summary>
-/// Unified handler contract for a firmware file format.
-/// <para>固件文件格式的统一处理器契约。</para>
-/// </summary>
 public interface IFormatHandler
 {
-    /// <summary>
-    /// Gets the human-readable format name.
-    /// <para>获取人类可读的格式名称。</para>
-    /// </summary>
     string FormatName { get; }
 
-    /// <summary>
-    /// Gets the typical file extensions (without dot, lowercase).
-    /// <para>获取典型文件扩展名(不带点,小写)。</para>
-    /// </summary>
     IReadOnlyList<string> FileExtensions { get; }
 
     /// <summary>

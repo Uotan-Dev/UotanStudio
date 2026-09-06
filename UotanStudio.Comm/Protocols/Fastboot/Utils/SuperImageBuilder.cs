@@ -299,11 +299,11 @@ public sealed class SuperImageMetadata(
 }
 
 /// <summary>
-/// Reads and builds super partition images. Internal parsing and construction delegate to
+/// Reads and builds super partition images. Parsing and construction delegate to
 /// <see cref="MetadataReader"/> and <see cref="MetadataBuilder"/> in <c>UotanStudio.Firmware.Lp</c>,
-/// eliminating the duplicate LP binary layout code that previously lived in Comm.
-/// <para>读取与构建 super 分区镜像。内部解析与构建委托给 <c>UotanStudio.Firmware.Lp</c> 的
-/// <see cref="MetadataReader"/> 和 <see cref="MetadataBuilder"/>，消除此前 Comm 中的重复 LP 二进制布局代码。</para>
+/// keeping the LP binary layout implementation in a single place.
+/// <para>读取与构建 super 分区镜像。解析与构建委托给 <c>UotanStudio.Firmware.Lp</c> 的
+/// <see cref="MetadataReader"/> 与 <see cref="MetadataBuilder"/>，LP 二进制布局实现保持单一来源。</para>
 /// </summary>
 public sealed class SuperImageBuilder
 {

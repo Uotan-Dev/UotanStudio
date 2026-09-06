@@ -1,20 +1,17 @@
-using UotanStudio.Firmware.Common;
+﻿using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Avb;
 
-/// <summary>
-/// IFormatHandler implementation for Android Verified Boot images (VBMeta / AVB footer).
-/// <para>Android Verified Boot 镜像(VBMeta / AVB 尾部)的 IFormatHandler 实现。</para>
-/// </summary>
 public sealed class AvbFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "Android Verified Boot (AVB)";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions => ["img", "vbmeta"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -28,10 +25,8 @@ public sealed class AvbFormatHandler : IFormatHandler
         }
         try
         {
-            // 只流式读取头部（VBMeta 头 256 字节）与尾部（Footer 84 字节），避免整文件驻留内存
-            // （大型 .img 可达数百 MB，整读会造成 GB 级峰值）。
-            // Stream only the head (256-byte VBMeta header) and the tail (84-byte footer) instead of
-            // loading the whole file (large .img images can be hundreds of MB).
+
+
             using var fs = File.OpenRead(filePath);
 
             if (fs.Length >= AvbVBMetaImageHeader.Size)
@@ -51,11 +46,8 @@ public sealed class AvbFormatHandler : IFormatHandler
                 fs.Position = fs.Length - AvbFooter.Size;
                 if (fs.Read(tail) == AvbFooter.Size && AvbFooter.TryLoad(tail) is not null)
                 {
-                    // AVB footer 是附加签名层：带 AVB 签名的文件系统/boot 镜像（Android 常见）
-                    // 应先按内容格式识别，避免 ext4/erofs/f2fs/boot 镜像被误判为 AVB。
-                    // An AVB footer is an appended signature layer: images signed with AVB (common
-                    // on Android) should be recognized by their content format first, so that
-                    // ext4/erofs/f2fs/boot images are not misdetected as AVB.
+
+
                     if (HasKnownContentMagic(fs))
                     {
                         return false;
@@ -73,11 +65,8 @@ public sealed class AvbFormatHandler : IFormatHandler
     }
 
     /// <summary>
-    /// 检查镜像头部是否命中已知内容格式魔数（ext4 0xEF53@1080 / erofs 0xE0F5E1E2@1024 /
-    /// f2fs 0xF2F52010@1024 / boot "ANDROID!"、"VNDRBOOT"@0）。流式读取，不驻留整文件。
-    /// <para>Checks whether the image head matches known content-format magic (ext4 0xEF53@1080 /
-    /// erofs 0xE0F5E1E2@1024 / f2fs 0xF2F52010@1024 / boot "ANDROID!", "VNDRBOOT"@0). Streams the
-    /// head without loading the whole file.</para>
+    /// Checks whether the image head matches known content-format magic (ext4, erofs, f2fs, boot).
+    /// <para>检查镜像头部是否命中已知内容格式魔数（ext4、erofs、f2fs、boot）。</para>
     /// </summary>
     private static bool HasKnownContentMagic(FileStream fs)
     {
@@ -98,8 +87,7 @@ public sealed class AvbFormatHandler : IFormatHandler
             return false;
         }
 
-        // boot 镜像头部魔数 "ANDROID!" / "VNDRBOOT"。
-        // Boot image head magic "ANDROID!" / "VNDRBOOT".
+
         if (read >= 8)
         {
             var bootMagic = System.Text.Encoding.ASCII.GetString(head[..8]);
@@ -110,8 +98,7 @@ public sealed class AvbFormatHandler : IFormatHandler
             }
         }
 
-        // erofs / f2fs 魔数位于偏移 1024。
-        // erofs / f2fs magic at offset 1024.
+
         if (read >= 1028)
         {
             var fsMagic = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(head[1024..1028]);
@@ -121,8 +108,7 @@ public sealed class AvbFormatHandler : IFormatHandler
             }
         }
 
-        // ext4 魔数 0xEF53 位于偏移 1080。
-        // ext4 magic 0xEF53 at offset 1080.
+
         if (read >= 1082
             && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(head[1080..1082]) == 0xEF53)
         {
@@ -132,12 +118,14 @@ public sealed class AvbFormatHandler : IFormatHandler
         return false;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        // 同步解析放在后台线程，避免大型镜像的头部/尾部读取阻塞 UI。
-        // Run the synchronous parsing on a background thread so the head/tail reads of large images
-        // never block the UI.
+
+
         return Task.Run(() =>
         {
             try
@@ -150,7 +138,7 @@ public sealed class AvbFormatHandler : IFormatHandler
                     bufferSize: 4096,
                     FileOptions.SequentialScan);
 
-                // Prefer a standalone VBMeta image (magic AVB0 at the head); fall back to AVB footer.
+
                 if (fs.Length >= AvbVBMetaImageHeader.Size)
                 {
                     Span<byte> head = stackalloc byte[AvbVBMetaImageHeader.Size];
@@ -201,7 +189,10 @@ public sealed class AvbFormatHandler : IFormatHandler
         }, cancellationToken);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -209,8 +200,7 @@ public sealed class AvbFormatHandler : IFormatHandler
             using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, FileOptions.SequentialScan);
             var imageLength = fs.Length;
 
-            // 路径一：独立 VBMeta 镜像（头部含 AVB0 魔数）。仅读取头 + auth + aux 块，不载入整文件。
-            // Path 1: standalone VBMeta image (AVB0 magic at head). Read only header + auth + aux blocks.
+
             if (imageLength >= AvbVBMetaImageHeader.Size)
             {
                 var vmResult = AvbVerifier.VerifyVBMetaFromStream(fs, imageLength);
@@ -240,8 +230,7 @@ public sealed class AvbFormatHandler : IFormatHandler
                 }
             }
 
-            // 路径二：带 AVB 尾部的镜像（boot/vendor_boot 等）。仅读取尾部 + VBMeta 区域。
-            // Path 2: image with AVB footer (boot/vendor_boot etc.). Read only tail + VBMeta region.
+
             if (imageLength >= AvbFooter.Size)
             {
                 var footerResult = AvbVerifier.VerifyFromStream(fs, imageLength);
@@ -277,8 +266,11 @@ public sealed class AvbFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) =>
-        // AVB packing (signing) requires a private key; not supported in this handler.
+
         Task.FromResult(FirmwareOpResult.Fail("AVB packing/signing requires a private key and is not supported by this handler."));
 }

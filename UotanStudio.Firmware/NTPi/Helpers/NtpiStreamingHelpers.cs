@@ -1,16 +1,7 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.NTPi.Helpers;
 
-/// <summary>
-/// <para>限制读取字节数的非可定位只读流。</para>
-/// A non-seekable read-only stream that limits reads to a fixed byte count.
-/// </summary>
-/// <remarks>
-/// <para>用于在未知总长度的流(例如 CryptoStream)上限定解码器可读取的确切字节数。</para>
-/// Used to bound the exact number of bytes a decoder may consume from a stream whose
-/// total length is unknown (for example a CryptoStream).
-/// </remarks>
 internal sealed class ReadLimitedStream : Stream
 {
     private readonly Stream _inner;
@@ -19,8 +10,8 @@ internal sealed class ReadLimitedStream : Stream
     private bool _disposed;
 
     /// <summary>
-    /// <para>使用指定上限包装一个可读流(不拥有底层流)。</para>
     /// Wraps a readable stream with a byte limit without taking ownership of the underlying stream.
+    /// <para>使用指定上限包装一个可读流(不拥有底层流)。</para>
     /// </summary>
     public ReadLimitedStream(Stream inner, long length)
     {
@@ -34,18 +25,16 @@ internal sealed class ReadLimitedStream : Stream
         _length = length;
     }
 
-    /// <inheritdoc />
     public override bool CanRead => !_disposed;
-    /// <inheritdoc />
     public override bool CanSeek => false;
-    /// <inheritdoc />
     public override bool CanWrite => false;
-    /// <inheritdoc />
     public override long Length => _length;
-    /// <inheritdoc />
     public override long Position { get => _position; set => throw new NotSupportedException(); }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream into the buffer.
+    /// <para>从流中读取字节到缓冲区。</para>
+    /// </summary>
     public override int Read(byte[] buffer, int offset, int count)
     {
         ValidateBuffer(buffer, offset, count);
@@ -60,7 +49,10 @@ internal sealed class ReadLimitedStream : Stream
         return read;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads bytes from the stream into the buffer.
+    /// <para>从流中读取字节到缓冲区。</para>
+    /// </summary>
     public override int Read(Span<byte> buffer)
     {
         ThrowIfDisposed();
@@ -74,16 +66,31 @@ internal sealed class ReadLimitedStream : Stream
         return read;
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void SetLength(long value) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Throws because this operation is not supported.
+    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// </summary>
     public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-    /// <inheritdoc />
+    /// <summary>
+    /// Performs no operation.
+    /// <para>不执行任何操作。</para>
+    /// </summary>
     public override void Flush() { }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Releases resources owned by this instance.
+    /// <para>释放此实例持有的资源。</para>
+    /// </summary>
     protected override void Dispose(bool disposing)
     {
         if (!_disposed && disposing)
@@ -106,6 +113,3 @@ internal sealed class ReadLimitedStream : Stream
         }
     }
 }
-
-// NtpiHashingReadStream 和 NtpiHashingWriteStream 已迁移至 Common/Streams/HashingReadStream.cs 和 Common/Streams/HashingWriteStream.cs。
-// NtpiHashingReadStream and NtpiHashingWriteStream have been migrated to Common/Streams/HashingReadStream.cs and Common/Streams/HashingWriteStream.cs.

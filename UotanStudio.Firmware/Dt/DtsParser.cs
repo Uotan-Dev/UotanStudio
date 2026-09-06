@@ -1,16 +1,10 @@
-// =============================================================================
-// DTS parser — extracted from DtsFormat.cs.
-// =============================================================================
+﻿
 
 using System.Buffers.Binary;
 using System.Text;
 
 namespace UotanStudio.Firmware.Dt;
 
-/// <summary>
-/// <para>DTS 文本解析器。</para>
-/// DTS text parser.
-/// </summary>
 internal sealed class DtsParser
 {
     private readonly string _text;

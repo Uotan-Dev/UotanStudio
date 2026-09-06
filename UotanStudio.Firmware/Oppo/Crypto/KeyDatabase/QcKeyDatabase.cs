@@ -1,9 +1,5 @@
 namespace UotanStudio.Firmware.Oppo.Crypto.KeyDatabase;
 
-/// <summary>
-/// <para>QC（Qualcomm）密钥数据库，提供 OPPO/Realme/OnePlus 高通平台固件的解密密钥。</para>
-/// QC (Qualcomm) key database providing decryption keys for OPPO/Realme/OnePlus Qualcomm-platform firmware.
-/// </summary>
 public static class QcKeyDatabase
 {
     private static readonly QcKeyEntry[] KeyEntries =
@@ -51,18 +47,12 @@ public static class QcKeyDatabase
             Description: "OW19W8AP"),
     ];
 
-    /// <summary>
-    /// <para>获取所有 QC 密钥条目。</para>
-    /// Gets all QC key entries.
-    /// </summary>
     public static IReadOnlyList<QcKeyEntry> Entries => KeyEntries;
 
     /// <summary>
-    /// <para>根据密钥标识符查找 QC 密钥条目。</para>
     /// Finds a QC key entry by its key identifier.
+    /// <para>根据密钥标识符查找 QC 密钥条目。</para>
     /// </summary>
-    /// <param name="keyId"><para>要查找的密钥标识符。</para>The key identifier to find.</param>
-    /// <returns><para>匹配的密钥条目；若未找到则返回 null。</para>The matching key entry; or null if not found.</returns>
     public static QcKeyEntry? FindByKeyId(string keyId)
     {
         foreach (var entry in KeyEntries)

@@ -1,77 +1,30 @@
-using K4os.Compression.LZ4;
+﻿using K4os.Compression.LZ4;
 
 namespace UotanStudio.Firmware.F2fs;
 
-/// <summary>
-/// f2fs 压缩算法枚举。
-/// <para>F2FS compression algorithm identifiers.</para>
-/// </summary>
 public enum CompressionAlgorithm : byte
 {
-    /// <summary>
-    /// LZ4 压缩（快速，推荐）。
-    /// <para>LZ4 compression (fast, recommended).</para>
-    /// </summary>
     Lz4 = 0,
 
-    /// <summary>
-    /// Zstandard 压缩（高压缩比）。
-    /// <para>Zstandard compression (high ratio).</para>
-    /// </summary>
     Zstd = 1,
 
-    /// <summary>
-    /// LZO 压缩（含 LZO-RLE 变体；读侧两者共用 LZO1X 解压器）。
-    /// <para>LZO compression (including the LZO-RLE variant; both share the LZO1X decompressor
-    /// on the read side).</para>
-    /// </summary>
     Lzo = 2,
 }
 
-/// <summary>
-/// f2fs 压缩/解压缩工具：以 16 页（64 KB）簇为单位压缩和解压文件数据。
-/// 支持 LZ4、ZSTD 与 LZO（LZO-RLE 解压共用 LZO1X 实现）。
-/// 解压时强制上限校验以防止 zip-bomb 攻击。
-/// <para>F2FS compression/decompression utility: compresses and decompresses file data in
-/// 16-page (64 KB) clusters. Supports LZ4, ZSTD and LZO (LZO-RLE decompression shares the LZO1X
-/// implementation). Decompression enforces a bounded output limit to prevent zip-bomb attacks.</para>
-/// </summary>
 internal static class F2fsCompression
 {
-    /// <summary>
-    /// 压缩簇磁盘头大小（字节）。
-    /// <para>On-disk cluster header size in bytes.</para>
-    /// </summary>
     public const int ClusterHeaderSize = F2fsCompressedCluster.HeaderSize;
 
-    /// <summary>
-    /// 每簇页数（CLUSTER_BLOCK_SIZE）。
-    /// <para>Pages per cluster (CLUSTER_BLOCK_SIZE).</para>
-    /// </summary>
     public const int ClusterPages = F2fsCompressedCluster.ClusterSizePages;
 
-    /// <summary>
-    /// 每簇字节数。
-    /// <para>Bytes per cluster.</para>
-    /// </summary>
     public const int ClusterBytes = F2fsCompressedCluster.ClusterSizeBytes;
 
-    /// <summary>
-    /// inode 标志位：文件已压缩（F2FS_COMPRESSED_FILE）。
-    /// <para>Inode flag: compressed file (F2FS_COMPRESSED_FILE).</para>
-    /// </summary>
     public const uint CompressedFileFlag = 0x0000_0008;
 
     /// <summary>
-    /// 压缩一个数据簇。返回压缩后的字节数组（含12 字节头部 + 压缩数据），
-    /// 若压缩后不小于原始数据则返回 null（表示不值得压缩）。
-    /// <para>Compresses a data cluster. Returns the compressed byte array (12-byte header + data)
-    /// or null if the result is not smaller than the input.</para>
+    /// Compresses a data cluster.
+    /// <para>压缩一个数据簇。</para>
     /// </summary>
-    /// <param name="data">原始数据（≤ 65536 字节）。Input data (≤ 65536 bytes).</param>
-    /// <param name="algorithm">压缩算法。Compression algorithm.</param>
-    /// <param name="level">压缩级别（0 = 默认）。Compression level (0 = default).</param>
-    /// <returns>含头部的压缩字节数组，或 null。Compressed bytes with header, or null.</returns>
     public static byte[]? CompressCluster(ReadOnlySpan<byte> data, CompressionAlgorithm algorithm, int level = 0)
     {
         if (data.Length > ClusterBytes)
@@ -101,7 +54,7 @@ internal static class F2fsCompression
         }
         catch (Exception ex)
         {
-            // 压缩失败：视为不可压缩。Compression failure: treat as incompressible.
+
             System.Diagnostics.Trace.TraceWarning(
                 $"F2FS compression failed ({algorithm}): {ex.Message}  压缩失败");
             return null;
@@ -109,10 +62,10 @@ internal static class F2fsCompression
 
         if (compressed.Length >= data.Length)
         {
-            return null; // 不值得压缩。Not worth compressing.
+            return null;
         }
 
-        // 构建含头部的输出。Build output with header.
+
         var cluster = new F2fsCompressedCluster
         {
             Algorithm = algorithm,
@@ -127,15 +80,9 @@ internal static class F2fsCompression
     }
 
     /// <summary>
-    /// 解压缩一个数据簇。返回解压后的字节数组，长度不超过 <paramref name="maxOutputSize"/>。
-    /// <para>Decompresses a data cluster. Returns the decompressed byte array, bounded by
-    /// <paramref name="maxOutputSize"/>.</para>
+    /// Decompresses a data cluster.
+    /// <para>解压缩一个数据簇。</para>
     /// </summary>
-    /// <param name="compressedData">含头部的压缩数据。Compressed data with header.</param>
-    /// <param name="algorithm">压缩算法（覆盖头部内算法字段）。Compression algorithm.</param>
-    /// <param name="expectedSize">期望输出大小（字节）。Expected output size in bytes.</param>
-    /// <param name="maxOutputSize">最大输出大小上限。Maximum output size cap.</param>
-    /// <returns>解压后的字节数组。Decompressed byte array.</returns>
     public static byte[] DecompressCluster(
         ReadOnlySpan<byte> compressedData,
         CompressionAlgorithm algorithm,
@@ -157,17 +104,16 @@ internal static class F2fsCompression
         {
             CompressionAlgorithm.Lz4 => DecompressLz4(compressedData, bound),
             CompressionAlgorithm.Zstd => DecompressZstd(compressedData, bound),
-            // 内核要求 LZO 簇解压输出恰好为整簇大小，否则报 EIO；此处同样严格校验。
-            // The kernel requires LZO clusters to decompress to exactly the full cluster size
-            // (EIO otherwise); the same strict check applies here.
+
+
             CompressionAlgorithm.Lzo => Lzo1x.Decompress(compressedData, bound),
             _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
         };
     }
 
     /// <summary>
-    /// 从压缩簇头部解析元数据。
-    /// <para>Parses metadata from a compressed cluster header.</para>
+    /// Parses metadata from a compressed cluster header.
+    /// <para>从压缩簇头部解析元数据。</para>
     /// </summary>
     public static F2fsCompressedCluster ParseHeader(ReadOnlySpan<byte> data)
         => F2fsCompressedCluster.FromBytes(data);

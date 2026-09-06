@@ -129,8 +129,8 @@ public class RockchipTests
             var result = await handler.UnpackAsync(path, outDir, null, TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.Summary);
 
-            Assert.Equal(fdt, await File.ReadAllBytesAsync(Path.Combine(outDir, "fdt.dtb")));
-            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(outDir, "image.bin")));
+            Assert.Equal(fdt, await File.ReadAllBytesAsync(Path.Combine(outDir, "fdt.dtb"), TestContext.Current.CancellationToken));
+            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(outDir, "image.bin"), TestContext.Current.CancellationToken));
         }
         finally
         {

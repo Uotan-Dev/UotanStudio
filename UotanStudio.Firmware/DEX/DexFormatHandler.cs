@@ -1,21 +1,18 @@
-using System.Text;
+﻿using System.Text;
 using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Dex;
 
-/// <summary>
-/// <para>Dalvik Executable (DEX) 格式处理器：识别 .dex 文件、读取元数据、反汇编解包与重建打包。</para>
-/// Dalvik Executable (DEX) format handler: detects .dex files, reads metadata, disassembles on unpack and rebuilds on pack.
-/// </summary>
 public sealed class DexFormatHandler : IFormatHandler
 {
-    /// <inheritdoc />
     public string FormatName => "Dalvik Executable (DEX)";
 
-    /// <inheritdoc />
     public IReadOnlyList<string> FileExtensions { get; } = ["dex"];
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Determines whether the file matches this format.
+    /// <para>判断文件是否匹配此格式。</para>
+    /// </summary>
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
@@ -26,8 +23,8 @@ public sealed class DexFormatHandler : IFormatHandler
         try
         {
             var header = FormatDetector.ReadHeader(filePath, 8);
-            // 校验魔数：dex\n0xx\0
-            // Validate the magic: dex\n0xx\0.
+
+
             if (header.Length < 8 || header[0] != (byte)'d' || header[1] != (byte)'e' || header[2] != (byte)'x' || header[3] != (byte)'\n')
             {
                 return false;
@@ -47,7 +44,10 @@ public sealed class DexFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Reads the firmware metadata asynchronously.
+    /// <para>异步读取固件元数据。</para>
+    /// </summary>
     public Task<FirmwareOpResult> ReadMetadataAsync(string filePath, CancellationToken cancellationToken = default)
     {
         try
@@ -66,7 +66,10 @@ public sealed class DexFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Extracts the firmware contents asynchronously.
+    /// <para>异步提取固件内容。</para>
+    /// </summary>
     public async Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
@@ -104,7 +107,10 @@ public sealed class DexFormatHandler : IFormatHandler
         }
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Packs the input into firmware asynchronously.
+    /// <para>异步将输入打包为固件。</para>
+    /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
     {
         try

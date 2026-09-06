@@ -2,194 +2,75 @@ using System.Text;
 
 namespace UotanStudio.Firmware.BootImage;
 
-/// <summary>
-/// DHTB (Debut) Boot 镜像解析器。
-/// <para>
-/// 负责解析使用 DHTB 格式的 boot 镜像。</para>
-/// <para>
-/// Parses boot images using the DHTB (Debut) format.</para>
-/// <para>
-/// DHTB 是某些设备使用的专有格式，通常基于标准 boot 头加上额外的头部标记。</para>
-/// <para>
-/// DHTB is a proprietary format used by some devices, usually based on standard boot header with additional header markers.</para>
-/// </summary>
 public static class DhtbTool
 {
     private const uint DhtbMagic = 0x42484444;
     private const int DhtbHeaderSize = 512;
 
-    /// <summary>
-    /// DHTB 头部信息。
-    /// <para>DHTB header information.</para>
-    /// </summary>
     public class DhtbHeader
     {
-        /// <summary>
-        /// Magic 值。
-        /// <para>The magic value.</para>
-        /// </summary>
         public uint Magic { get; set; }
 
-        /// <summary>
-        /// 头部版本。
-        /// <para>The header version.</para>
-        /// </summary>
         public uint HeaderVersion { get; set; }
 
-        /// <summary>
-        /// 头部大小。
-        /// <para>The header size.</para>
-        /// </summary>
         public uint HeaderSize { get; set; }
 
-        /// <summary>
-        /// 内核大小。
-        /// <para>The kernel size.</para>
-        /// </summary>
         public uint KernelSize { get; set; }
 
-        /// <summary>
-        /// 内核偏移量。
-        /// <para>The kernel offset.</para>
-        /// </summary>
         public uint KernelOffset { get; set; }
 
-        /// <summary>
-        /// 内核加载地址。
-        /// <para>The kernel load address.</para>
-        /// </summary>
         public uint KernelAddr { get; set; }
 
-        /// <summary>
-        /// Ramdisk 大小。
-        /// <para>The ramdisk size.</para>
-        /// </summary>
         public uint RamdiskSize { get; set; }
 
-        /// <summary>
-        /// Ramdisk 偏移量。
-        /// <para>The ramdisk offset.</para>
-        /// </summary>
         public uint RamdiskOffset { get; set; }
 
-        /// <summary>
-        /// Ramdisk 加载地址。
-        /// <para>The ramdisk load address.</para>
-        /// </summary>
         public uint RamdiskAddr { get; set; }
 
-        /// <summary>
-        /// 第二阶段大小。
-        /// <para>The second stage size.</para>
-        /// </summary>
         public uint SecondSize { get; set; }
 
-        /// <summary>
-        /// 第二阶段偏移量。
-        /// <para>The second stage offset.</para>
-        /// </summary>
         public uint SecondOffset { get; set; }
 
-        /// <summary>
-        /// 第二阶段加载地址。
-        /// <para>The second stage load address.</para>
-        /// </summary>
         public uint SecondAddr { get; set; }
 
-        /// <summary>
-        /// 标签地址。
-        /// <para>The tags address.</para>
-        /// </summary>
         public uint TagsAddr { get; set; }
 
-        /// <summary>
-        /// 页大小。
-        /// <para>The page size.</para>
-        /// </summary>
         public uint PageSize { get; set; }
 
-        /// <summary>
-        /// 产品名称。
-        /// <para>The product name.</para>
-        /// </summary>
         public string ProductName { get; set; } = string.Empty;
 
-        /// <summary>
-        /// 命令行。
-        /// <para>The command line.</para>
-        /// </summary>
         public string CommandLine { get; set; } = string.Empty;
 
-        /// <summary>
-        /// 压缩类型。
-        /// <para>The compression type.</para>
-        /// </summary>
         public CompressionType KernelCompression { get; set; }
 
-        /// <summary>
-        /// ID 数组。
-        /// <para>The ID array.</para>
-        /// </summary>
         public uint[] Ids { get; set; } = new uint[8];
     }
 
-    /// <summary>
-    /// DHTB 解析结果。
-    /// <para>DHTB parsing result.</para>
-    /// </summary>
     public class DhtbResult
     {
-        /// <summary>
-        /// 是否成功。
-        /// <para>Whether successful.</para>
-        /// </summary>
         public bool IsValid { get; set; }
 
-        /// <summary>
-        /// 头部信息。
-        /// <para>The header information.</para>
-        /// </summary>
         public DhtbHeader Header { get; set; } = new DhtbHeader();
 
-        /// <summary>
-        /// 内核数据。
-        /// <para>The kernel data.</para>
-        /// </summary>
         public byte[] Kernel { get; set; } = [];
 
-        /// <summary>
-        /// Ramdisk 数据。
-        /// <para>The ramdisk data.</para>
-        /// </summary>
         public byte[] Ramdisk { get; set; } = [];
 
-        /// <summary>
-        /// 第二阶段数据。
-        /// <para>The second stage data.</para>
-        /// </summary>
         public byte[] Second { get; set; } = [];
 
-        /// <summary>
-        /// 错误消息。
-        /// <para>Error message.</para>
-        /// </summary>
         public string? ErrorMessage { get; set; }
     }
 
     /// <summary>
-    /// 检查数据是否为 DHTB 格式。
-    /// <para>Checks if the data is in DHTB format.</para>
+    /// Checks if the data is in DHTB format.
+    /// <para>检查数据是否为 DHTB 格式。</para>
     /// </summary>
-    /// <param name="data">待检测的数据。<para>The data to check.</para></param>
-    /// <returns>如果是 DHTB 格式则为 true。<para>True if DHTB format.</para></returns>
     public static bool IsDhtbFormat(byte[] data) => data != null && data.Length >= 8 && ReadUInt32LE(data, 0) == DhtbMagic;
 
     /// <summary>
-    /// 解析 DHTB 数据。
-    /// <para>Parses DHTB data.</para>
+    /// Parses DHTB data.
+    /// <para>解析 DHTB 数据。</para>
     /// </summary>
-    /// <param name="data">DHTB 数据。<para>The DHTB data.</para></param>
-    /// <returns>解析结果。<para>The parsing result.</para></returns>
     public static DhtbResult Parse(byte[] data)
     {
         var result = new DhtbResult { IsValid = false };
@@ -260,11 +141,9 @@ public static class DhtbTool
     }
 
     /// <summary>
-    /// 从文件解析 DHTB。
-    /// <para>Parses DHTB from a file.</para>
+    /// Parses DHTB from a file.
+    /// <para>从文件解析 DHTB。</para>
     /// </summary>
-    /// <param name="filePath">文件路径。<para>The file path.</para></param>
-    /// <returns>解析结果。<para>The parsing result.</para></returns>
     public static DhtbResult ParseFile(string filePath)
     {
         var data = File.ReadAllBytes(filePath);
@@ -272,11 +151,9 @@ public static class DhtbTool
     }
 
     /// <summary>
-    /// 解压缩 DHTB 中的内核数据。
-    /// <para>Decompresses kernel data from DHTB.</para>
+    /// Decompresses kernel data from DHTB.
+    /// <para>解压缩 DHTB 中的内核数据。</para>
     /// </summary>
-    /// <param name="data">DHTB 数据。<para>The DHTB data.</para></param>
-    /// <returns>解压后的内核数据。<para>The decompressed kernel data.</para></returns>
     public static byte[] DecompressKernel(byte[] data)
     {
         var result = Parse(data);
@@ -295,11 +172,9 @@ public static class DhtbTool
     }
 
     /// <summary>
-    /// 解压缩 DHTB 中的 ramdisk 数据。
-    /// <para>Decompresses ramdisk data from DHTB.</para>
+    /// Decompresses ramdisk data from DHTB.
+    /// <para>解压缩 DHTB 中的 ramdisk 数据。</para>
     /// </summary>
-    /// <param name="data">DHTB 数据。<para>The DHTB data.</para></param>
-    /// <returns>ramdisk 数据。<para>The ramdisk data.</para></returns>
     public static byte[] DecompressRamdisk(byte[] data)
     {
         var result = Parse(data);
@@ -318,12 +193,9 @@ public static class DhtbTool
     }
 
     /// <summary>
-    /// 提取内核数据。
-    /// <para>Extracts kernel data.</para>
+    /// Extracts kernel data.
+    /// <para>提取内核数据。</para>
     /// </summary>
-    /// <param name="data">DHTB 数据。<para>The DHTB data.</para></param>
-    /// <param name="decompress">是否自动解压缩。<para>Whether to auto decompress.</para></param>
-    /// <returns>内核数据。<para>The kernel data.</para></returns>
     public static byte[] ExtractKernel(byte[] data, bool decompress = true)
     {
         var result = Parse(data);
@@ -331,12 +203,9 @@ public static class DhtbTool
     }
 
     /// <summary>
-    /// 提取 ramdisk 数据。
-    /// <para>Extracts ramdisk data.</para>
+    /// Extracts ramdisk data.
+    /// <para>提取 ramdisk 数据。</para>
     /// </summary>
-    /// <param name="data">DHTB 数据。<para>The DHTB data.</para></param>
-    /// <param name="decompress">是否自动解压缩。<para>Whether to auto decompress.</para></param>
-    /// <returns>ramdisk 数据。<para>The ramdisk data.</para></returns>
     public static byte[] ExtractRamdisk(byte[] data, bool decompress = true)
     {
         var result = Parse(data);

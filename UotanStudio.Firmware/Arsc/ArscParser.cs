@@ -4,40 +4,24 @@ using System.Text;
 
 namespace UotanStudio.Firmware.Arsc;
 
-/// <summary>
-/// <para>Resources.arsc 解析器：按 AOSP <c>ResourceTypes.h</c> 定义遍历 chunk 链，
-/// 构建资源表模型（全局字符串池、包、类型表、条目与配置）。纯托管实现，无反射。</para>
-/// Resources.arsc parser: walks the chunk chain per AOSP <c>ResourceTypes.h</c>, building the
-/// resource-table model (global string pool, packages, type tables, entries and configurations).
-/// Fully managed, no reflection.
-/// </summary>
 public static class ArscParser
 {
-    // ResChunk_header.type 值（AOSP ResourceTypes.h）
-    // ResChunk_header.type values (AOSP ResourceTypes.h).
-    private const ushort ResTableType = 0x0002;       // 根：资源表
-    private const ushort ResStringPoolType = 0x0001;  // 字符串池
-    private const ushort ResTablePackageType = 0x0200; // 包
-    private const ushort ResTableTypeSpecType = 0x0202; // 类型规范
-    private const ushort ResTableTypeType = 0x0201;    // 类型表
+
+
+    private const ushort ResTableType = 0x0002;
+    private const ushort ResStringPoolType = 0x0001;
+    private const ushort ResTablePackageType = 0x0200;
+    private const ushort ResTableTypeSpecType = 0x0202;
+    private const ushort ResTableTypeType = 0x0201;
 
     private const uint NoEntry = 0xFFFFFFFF;
     private const uint NoIndex = 0xFFFFFFFF;
     private const ushort EntryFlagComplex = 0x0001;
 
     /// <summary>
-    /// <para>解析 ARSC 字节为资源表模型。</para>
-    /// Parses ARSC bytes into a resource-table model.
+    /// Reads ARSC data from a stream and parses it into a resource-table model.
+    /// <para>从流读取 ARSC 数据并解析为资源表模型。</para>
     /// </summary>
-    /// <param name="data">ARSC 字节。<para>ARSC bytes.</para></param>
-    /// <returns>解析后的资源表。<para>The parsed resource table.</para></returns>
-    /// <summary>
-    /// 从流读取 ARSC 数据并解析为资源表模型。单次分配，避免 <see cref="File.ReadAllBytes(string)"/> 的双倍分配。
-    /// <para>Reads ARSC data from a stream and parses it into a resource-table model. Single allocation,
-    /// avoids the double allocation of <see cref="File.ReadAllBytes(string)"/>.</para>
-    /// </summary>
-    /// <param name="stream">可读流。<para>A readable stream.</para></param>
-    /// <returns>解析后的资源表。<para>The parsed resource table.</para></returns>
     public static ResourceTable Parse(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -53,13 +37,16 @@ public static class ArscParser
             return Parse(data);
         }
 
-        // 不可定位流：读入 MemoryStream 后转数组（与旧行为一致，但仅限非 seek 场景）。
-        // Non-seekable stream: read into a MemoryStream then convert (same as before, only for non-seek).
+
         using var ms = new MemoryStream();
         stream.CopyTo(ms);
         return Parse(ms.ToArray());
     }
 
+    /// <summary>
+    /// Parses ARSC bytes into a resource-table model.
+    /// <para>解析 ARSC 字节为资源表模型。</para>
+    /// </summary>
     public static ResourceTable Parse(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
@@ -104,8 +91,9 @@ public static class ArscParser
                     break;
 
                 default:
-                    // 未知 chunk：跳过（向前兼容）。
-                    // Unknown chunk: skip (forward compatibility).
+
+
+
                     break;
             }
 
@@ -116,8 +104,8 @@ public static class ArscParser
     }
 
     /// <summary>
-    /// <para>判断头部是否为 ARSC 魔数（用于内容探测）。</para>
     /// Checks whether the header looks like ARSC magic (for content sniffing).
+    /// <para>判断头部是否为 ARSC 魔数（用于内容探测）。</para>
     /// </summary>
     public static bool IsArsc(byte[] data)
     {
@@ -128,8 +116,8 @@ public static class ArscParser
 
     private static void ParsePackage(byte[] data, int offset, int chunkSize, ResourceTable table)
     {
-        // ResTable_package: header(8) + id(4) + name[128*2] + typeStrings(4) + lastPublicType(4)
-        //                   + keyStrings(4) + lastPublicKey(4) + typeIdOffset(4)
+
+
         var id = data[offset + 8];
         var name = Encoding.UTF8.GetString(data, offset + 12, 128 * 2).TrimEnd('\0');
         var pkg = new ResPackage
@@ -141,8 +129,7 @@ public static class ArscParser
         var pos = offset + headerSizeOf(data, offset);
         var end = offset + chunkSize;
 
-        // 包内子 chunk：typeStrings、keyStrings、ResTableTypeSpec、ResTableType 交替出现。
-        // Sub-chunks inside the package: typeStrings, keyStrings, ResTableTypeSpec, ResTableType.
+
         var typeSpecIds = new HashSet<byte>();
         while (pos + 8 <= end)
         {
@@ -157,8 +144,8 @@ public static class ArscParser
             {
                 case ResStringPoolType:
                     {
-                        // 包内首个字符串池为 typeStrings，第二个为 keyStrings。
-                        // The first string pool is typeStrings; the second is keyStrings.
+
+
                         if (pkg.TypeStrings.Count == 0 && pkg.KeyStrings.Count == 0)
                         {
                             pkg.TypeStrings.Parse(data, pos, subSize);
@@ -172,8 +159,9 @@ public static class ArscParser
 
                 case ResTableTypeSpecType:
                     {
-                        // ResTable_typeSpec: header(8) + id(1) + res0(1) + res1(2)
-                        //                    + entryCount(4) + flags[entryCount]
+
+
+
                         var specId = data[pos + 8];
                         var specEntryCount = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 12)));
                         var flags = new uint[specEntryCount];
@@ -198,29 +186,27 @@ public static class ArscParser
 
     private static void ParseTypeTable(byte[] data, int offset, int chunkSize, ResPackage pkg)
     {
-        // ResTable_type: header(8) + id(1) + res0(1) + res1(2) + entryCount(4)
-        //                + entriesStart(4) + config(ResTable_config, 首字段 size)
+
+
         var id = data[offset + 8];
         var entryCount = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 12));
         var entriesStart = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 16)));
 
-        // config 大小取自其首个 uint32（size 字段）；异常值按标准 0x40 兜底。
-        // The config size comes from its first uint32 (the size field); invalid values fall back to 0x40.
+
         var configSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 20));
         var configActualSize = configSize is >= 0x40 and <= 0x80 ? checked((int)configSize) : 0x40;
 
         var type = new ResType
         {
             Id = id,
-            // AOSP 约定：typeStrings 池索引 = typeId - 1。
-            // AOSP convention: the typeStrings pool index equals typeId - 1.
+
+
             TypeNameIndex = Math.Max(0, id - 1),
             ConfigDescription = ParseConfig(data, offset + 20),
             ConfigHex = Convert.ToHexString(data.AsSpan(offset + 20, configActualSize))
         };
 
-        // 条目偏移表紧跟在 config 之后：header + 20 + config 大小。
-        // The entry offset table immediately follows the config: header + 20 + config size.
+
         var offsetsBase = offset + 20 + configActualSize;
         for (var i = 0; i < entryCount; i++)
         {
@@ -240,7 +226,7 @@ public static class ArscParser
 
     private static ResEntry? ParseEntry(byte[] data, int offset, ResPackage pkg)
     {
-        // ResTable_entry: size(2) + flags(2) + key(4)
+
         var size = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset));
         var flags = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 2));
         var keyIndex = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4)));
@@ -249,7 +235,7 @@ public static class ArscParser
 
         if ((flags & EntryFlagComplex) != 0)
         {
-            // ResTable_map_entry: parent(4) + count(4) + maps...
+
             var parent = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 8));
             var mapCount = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 12));
             var value = new ResValue { IsComplex = true, Parent = parent };
@@ -273,7 +259,7 @@ public static class ArscParser
 
     private static ResValue ParseResValue(byte[] data, int offset, ResPackage pkg)
     {
-        // Res_value: size(2) + res0(1) + dataType(1) + data(4)
+
         var valueType = data[offset + 3];
         var valueData = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4));
         return new ResValue
@@ -287,17 +273,13 @@ public static class ArscParser
         => BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 2));
 
     /// <summary>
-    /// <para>解析 ResTable_config 为可读描述：mcc/mnc、locale、orientation 等关键字段。</para>
-    /// Parses a ResTable_config into a readable description: mcc/mnc, locale, orientation and other key fields.
+    /// Parses a ResTable_config into a readable description (mcc/mnc, locale, orientation, density).
+    /// <para>解析 ResTable_config 为可读描述（mcc/mnc、locale、orientation、density）。</para>
     /// </summary>
-    /// <param name="data">文件字节。<para>File bytes.</para></param>
-    /// <param name="offset">config 起始偏移（首字段为 uint32 size）。<para>Config start offset (first field is the uint32 size).</para></param>
     private static string ParseConfig(byte[] data, int offset)
     {
-        // ResTable_config 布局：size(4) + mcc(2) + mnc(2) + language[2](2) + country[2](2)
-        //                    + orientation(1) + touchscreen(1) + density(2) + ...
-        // ResTable_config layout: size(4) + mcc(2) + mnc(2) + language[2](2) + country[2](2)
-        //                         + orientation(1) + touchscreen(1) + density(2) + ...
+
+
         var mcc = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 4));
         var mnc = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 6));
         var language = data[offset + 8];
@@ -333,12 +315,11 @@ public static class ArscParser
     }
 }
 
-/// <summary>
-/// <para>ARSC 解析异常。</para>
-/// ARSC parse exception.
-/// </summary>
 public sealed class ArscException : Exception
 {
-    /// <summary>创建 ARSC 异常。<para>Creates an ARSC exception.</para></summary>
+    /// <summary>
+    /// Creates an ARSC exception.
+    /// <para>创建 ARSC 异常。</para>
+    /// </summary>
     public ArscException(string message) : base(message) { }
 }

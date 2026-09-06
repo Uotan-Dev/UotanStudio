@@ -1,21 +1,15 @@
-using System.Formats.Tar;
+﻿using System.Formats.Tar;
 using System.Text;
 using UotanStudio.Firmware.Cpio.Model;
 
 namespace UotanStudio.Firmware.Cpio.Formats.Tar;
 
-/// <summary>
-/// Reads TAR-family archives into normalized archive entries.
-/// <para>将 TAR 系归档读取为规范化的归档条目。</para>
-/// </summary>
 public sealed class TarArchiveReader
 {
     /// <summary>
     /// Reads all TAR entries from a stream into memory.
     /// <para>从流中读取全部 TAR 条目到内存。</para>
     /// </summary>
-    /// <param name="stream">Source archive stream.<para>源归档流。</para></param>
-    /// <returns>A list containing all archive entries.<para>包含全部归档条目的列表。</para></returns>
     public IReadOnlyList<ArchiveEntry> ReadAll(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
@@ -28,7 +22,8 @@ public sealed class TarArchiveReader
     }
 
     /// <summary>
-    /// Reads TAR entries with independently usable, materialized payload data.
+    /// Reads TAR entries with independently usable payload data.
+    /// <para>读取 TAR 条目，每个条目的数据可独立使用。</para>
     /// </summary>
     public IEnumerable<ArchiveEntry> ReadEntries(Stream stream)
     {
@@ -40,8 +35,8 @@ public sealed class TarArchiveReader
     }
 
     /// <summary>
-    /// Lazily reads TAR entries. A payload stream is ephemeral and must be consumed before
-    /// requesting the next entry.
+    /// Reads TAR entries lazily; consume each payload stream before requesting the next entry.
+    /// <para>延迟读取 TAR 条目；获取下一条目前须读完当前数据流。</para>
     /// </summary>
     public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream)
     {
@@ -58,8 +53,8 @@ public sealed class TarArchiveReader
                 TarEntryType.BlockDevice => CpioFileType.BlockDevice,
                 TarEntryType.CharacterDevice => CpioFileType.CharacterDevice,
                 TarEntryType.Fifo => CpioFileType.Fifo,
-                // 普通文件变体（V7/Contiguous/Sparse）映射为 Regular。
-                // Regular file variants (V7/Contiguous/Sparse) map to Regular.
+
+
                 TarEntryType.V7RegularFile => CpioFileType.Regular,
                 TarEntryType.RegularFile => CpioFileType.Regular,
                 TarEntryType.ContiguousFile => CpioFileType.Regular,
@@ -67,9 +62,8 @@ public sealed class TarArchiveReader
                 TarEntryType.MultiVolume => CpioFileType.Regular,
                 TarEntryType.RenamedOrSymlinked => CpioFileType.Regular,
                 TarEntryType.DirectoryList => CpioFileType.Directory,
-                // 元数据条目（长名/PAX 扩展/磁带卷）不对应实际文件，映射为 Unknown。
-                // Metadata entries (long names / PAX extensions / tape volume) do not represent
-                // actual files; map to Unknown.
+
+
                 TarEntryType.LongLink => CpioFileType.Unknown,
                 TarEntryType.LongPath => CpioFileType.Unknown,
                 TarEntryType.TapeVolume => CpioFileType.Unknown,
@@ -88,8 +82,8 @@ public sealed class TarArchiveReader
             {
                 Name = tarEntry.Name,
                 LinkName = tarEntry.LinkName,
-                // Only regular entries own TAR payloads. Do not touch Length/DataStream for
-                // metadata, directory, device, or link entries.
+
+
                 Data = [],
                 DataStream = isRegular ? tarEntry.DataStream : null,
                 DeclaredDataLength = isRegular ? tarEntry.Length : 0,
@@ -108,7 +102,7 @@ public sealed class TarArchiveReader
     }
 
     /// <summary>
-    /// Materializes a streaming entry's payload into <see cref="ArchiveEntry.Data"/>.
+    /// Materializes a streaming entry's payload into ArchiveEntry.Data.
     /// <para>将流式条目的负载物化到 ArchiveEntry.Data。</para>
     /// </summary>
     private static ArchiveEntry Materialize(ArchiveEntry entry)

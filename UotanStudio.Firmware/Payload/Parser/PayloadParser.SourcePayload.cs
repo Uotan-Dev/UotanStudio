@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using UotanStudio.Firmware.Payload.Core;
 using UotanStudio.Firmware.Payload.Exceptions;
 using UotanStudio.Firmware.Payload.Models;
@@ -35,9 +35,7 @@ public static partial class PayloadParser
                 continue;
             }
 
-            // Only partitions with source-dependent operations need a base image; skipping the rest
-            // avoids spurious errors when the source payload does not contain every partition.
-            // 只有含源依赖操作的分区才需要基座镜像；跳过其余分区可避免源载荷不包含某分区时报错。
+
             if (!partition.Operations.Any(op => PayloadExtractor.IsSourceDependent(op.Type)))
             {
                 continue;

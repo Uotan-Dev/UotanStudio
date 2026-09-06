@@ -3,24 +3,12 @@ using Google.Protobuf.Reflection;
 
 namespace UotanStudio.Firmware.Payload.Proto;
 
-/// <summary>
-/// An ordered list of blocks on disk, encoded as a run of blocks.
-/// <para>磁盘上有序的块列表，以块区间形式编码。</para>
-/// </summary>
 public sealed class Extent : IMessage<Extent>
 {
     private UnknownFieldSet? _unknownFields;
 
-    /// <summary>
-    /// Gets the parser for this message type.
-    /// <para>获取此消息类型的解析器。</para>
-    /// </summary>
     public static MessageParser<Extent> Parser { get; } = new(() => new Extent());
 
-    /// <summary>
-    /// Gets the message descriptor.
-    /// <para>获取消息描述符。</para>
-    /// </summary>
     public static MessageDescriptor Descriptor => null!;
 
     MessageDescriptor IMessage.Descriptor => Descriptor;
@@ -38,12 +26,10 @@ public sealed class Extent : IMessage<Extent>
 
     public Extent Clone() => new(this);
 
-    /// <summary>Field number for the "start_block" field.</summary>
     public const int StartBlockFieldNumber = 1;
 
     public ulong StartBlock { get; set; }
 
-    /// <summary>Field number for the "num_blocks" field.</summary>
     public const int NumBlocksFieldNumber = 2;
 
     public ulong NumBlocks { get; set; }
@@ -155,25 +141,13 @@ public sealed class Extent : IMessage<Extent>
     }
 }
 
-/// <summary>
-/// Describes the size and hash of a partition image (old or new).
-/// <para>描述分区镜像（旧或新）的大小与哈希。</para>
-/// </summary>
 public sealed class PartitionInfo : IMessage<PartitionInfo>
 {
     private UnknownFieldSet? _unknownFields;
     private ByteString _hash = ByteString.Empty;
 
-    /// <summary>
-    /// Gets the parser for this message type.
-    /// <para>获取此消息类型的解析器。</para>
-    /// </summary>
     public static MessageParser<PartitionInfo> Parser { get; } = new(() => new PartitionInfo());
 
-    /// <summary>
-    /// Gets the message descriptor.
-    /// <para>获取消息描述符。</para>
-    /// </summary>
     public static MessageDescriptor Descriptor => null!;
 
     MessageDescriptor IMessage.Descriptor => Descriptor;
@@ -191,12 +165,10 @@ public sealed class PartitionInfo : IMessage<PartitionInfo>
 
     public PartitionInfo Clone() => new(this);
 
-    /// <summary>Field number for the "size" field.</summary>
     public const int SizeFieldNumber = 1;
 
     public ulong Size { get; set; }
 
-    /// <summary>Field number for the "hash" field.</summary>
     public const int HashFieldNumber = 2;
 
     public ByteString Hash

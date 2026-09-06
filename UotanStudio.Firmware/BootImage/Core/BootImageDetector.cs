@@ -1,187 +1,70 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Firmware.BootImage;
 
-/// <summary>
-/// Boot 镜像格式检测和统一解析工具。
-/// <para>
-/// 提供自动检测 boot 镜像格式并统一解析的接口。</para>
-/// <para>
-/// Provides automatic detection and unified parsing of boot image formats.</para>
-/// </summary>
 public static class BootImageDetector
 {
-    /// <summary>
-    /// Boot 镜像格式类型。
-    /// <para>Boot image format type.</para>
-    /// </summary>
     public enum ImageFormat
     {
-        /// <summary>
-        /// 未知格式。
-        /// <para>Unknown format.</para>
-        /// </summary>
         Unknown = 0,
 
-        /// <summary>
-        /// 标准 AOSP Boot 镜像。
-        /// <para>Standard AOSP Boot Image.</para>
-        /// </summary>
         AospBoot = 1,
 
-        /// <summary>
-        /// Android Vendor Boot 镜像。
-        /// <para>Android Vendor Boot Image.</para>
-        /// </summary>
         VendorBoot = 2,
 
-        /// <summary>
-        /// MTK Boot 镜像。
-        /// <para>MTK Boot Image.</para>
-        /// </summary>
         MtkBoot = 3,
 
-        /// <summary>
-        /// Samsung PXA Boot 镜像。
-        /// <para>Samsung PXA Boot Image.</para>
-        /// </summary>
         SamsungPxa = 4,
 
-        /// <summary>
-        /// DHTB Boot 镜像。
-        /// <para>DHTB Boot Image.</para>
-        /// </summary>
         DhtbBoot = 5,
 
-        /// <summary>
-        /// ChromeOS 镜像。
-        /// <para>ChromeOS Image.</para>
-        /// </summary>
         ChromeOs = 6,
 
-        /// <summary>
-        /// TEGRA Blob。
-        /// <para>TEGRA Blob.</para>
-        /// </summary>
         TegraBlob = 7,
 
-        /// <summary>
-        /// Payload 分区镜像。
-        /// <para>Payload Partition Image.</para>
-        /// </summary>
         Payload = 8
     }
 
-    /// <summary>
-    /// 格式检测结果。
-    /// <para>Format detection result.</para>
-    /// </summary>
     public class DetectionResult
     {
-        /// <summary>
-        /// 检测到的格式。
-        /// <para>The detected format.</para>
-        /// </summary>
         public ImageFormat Format { get; set; }
 
-        /// <summary>
-        /// 文件路径（如果适用）。
-        /// <para>The file path (if applicable).</para>
-        /// </summary>
         public string? FilePath { get; set; }
 
-        /// <summary>
-        /// 格式描述。
-        /// <para>The format description.</para>
-        /// </summary>
         public string Description { get; set; } = string.Empty;
 
-        /// <summary>
-        /// 置信度（0-100）。
-        /// <para>Confidence (0-100).</para>
-        /// </summary>
         public int Confidence { get; set; }
 
-        /// <summary>
-        /// 额外信息。
-        /// <para>Additional information.</para>
-        /// </summary>
         public Dictionary<string, string> Metadata { get; set; } = [];
     }
 
-    /// <summary>
-    /// 统一解析结果。
-    /// <para>Unified parsing result.</para>
-    /// </summary>
     public class UnifiedResult
     {
-        /// <summary>
-        /// 是否成功。
-        /// <para>Whether successful.</para>
-        /// </summary>
         public bool Success { get; set; }
 
-        /// <summary>
-        /// 检测到的格式。
-        /// <para>The detected format.</para>
-        /// </summary>
         public ImageFormat Format { get; set; }
 
-        /// <summary>
-        /// 内核数据。
-        /// <para>The kernel data.</para>
-        /// </summary>
         public byte[] Kernel { get; set; } = [];
 
-        /// <summary>
-        /// Ramdisk 数据。
-        /// <para>The ramdisk data.</para>
-        /// </summary>
         public byte[] Ramdisk { get; set; } = [];
 
-        /// <summary>
-        /// 第二阶段数据。
-        /// <para>The second stage data.</para>
-        /// </summary>
         public byte[] Second { get; set; } = [];
 
-        /// <summary>
-        /// DTB 数据。
-        /// <para>The DTB data.</para>
-        /// </summary>
         public byte[] Dtb { get; set; } = [];
 
-        /// <summary>
-        /// 头部信息。
-        /// <para>The header information.</para>
-        /// </summary>
         public BootImageHeader? Header { get; set; }
 
-        /// <summary>
-        /// 命令行。
-        /// <para>The command line.</para>
-        /// </summary>
         public string CommandLine { get; set; } = string.Empty;
 
-        /// <summary>
-        /// 内核压缩类型。
-        /// <para>The kernel compression type.</para>
-        /// </summary>
         public CompressionType KernelCompression { get; set; }
 
-        /// <summary>
-        /// 错误消息。
-        /// <para>Error message.</para>
-        /// </summary>
         public string? ErrorMessage { get; set; }
     }
 
     /// <summary>
-    /// 检测数据格式。
-    /// <para>Detects the data format.</para>
+    /// Detects the data format.
+    /// <para>检测数据格式。</para>
     /// </summary>
-    /// <param name="data">待检测的数据。<para>The data to check.</para></param>
-    /// <returns>检测结果。<para>The detection result.</para></returns>
     public static DetectionResult Detect(byte[] data)
     {
         var result = new DetectionResult
@@ -283,25 +166,23 @@ public static class BootImageDetector
     }
 
     /// <summary>
-    /// 检测文件格式。
-    /// <para>Detects the file format.</para>
+    /// Detects the file format.
+    /// <para>检测文件格式。</para>
     /// </summary>
-    /// <param name="filePath">文件路径。<para>The file path.</para></param>
-    /// <returns>检测结果。<para>The detection result.</para></returns>
     public static DetectionResult DetectFile(string filePath)
     {
-        var data = File.ReadAllBytes(filePath);
+
+
+        var data = ReadDetectionPrefix(filePath);
         var result = Detect(data);
         result.FilePath = filePath;
         return result;
     }
 
     /// <summary>
-    /// 统一解析 boot 镜像。
-    /// <para>Unified parsing of boot image.</para>
+    /// Unified parsing of boot image.
+    /// <para>统一解析 boot 镜像。</para>
     /// </summary>
-    /// <param name="data">镜像数据。<para>The image data.</para></param>
-    /// <returns>解析结果。<para>The parsing result.</para></returns>
     public static UnifiedResult Parse(byte[] data)
     {
         var result = new UnifiedResult { Success = false };
@@ -356,22 +237,21 @@ public static class BootImageDetector
     }
 
     /// <summary>
-    /// 统一解析 boot 镜像文件。
-    /// <para>Unified parsing of boot image file.</para>
+    /// Unified parsing of boot image file.
+    /// <para>统一解析 boot 镜像文件。</para>
     /// </summary>
-    /// <param name="filePath">文件路径。<para>The file path.</para></param>
-    /// <returns>解析结果。<para>The parsing result.</para></returns>
     public static UnifiedResult ParseFile(string filePath)
     {
+
+
         var data = File.ReadAllBytes(filePath);
         return Parse(data);
     }
 
     /// <summary>
-    /// 获取所有支持的格式。
-    /// <para>Gets all supported formats.</para>
+    /// Gets all supported formats.
+    /// <para>获取所有支持的格式。</para>
     /// </summary>
-    /// <returns>格式列表。<para>The format list.</para></returns>
     public static List<string> GetSupportedFormats()
     {
         return
@@ -417,9 +297,8 @@ public static class BootImageDetector
     private static bool IsPayload(byte[] data) => data.Length >= 4 && BitConverter.ToUInt32(data, 0) == 0x5041594C;
 
     /// <summary>
-    /// Samsung PXA 使用标准 ANDROID! 魔数，但头部偏移 40 处存放 extra 段大小（通常大于 4）。
-    /// <para>Samsung PXA uses the standard ANDROID! magic, but offset 40 holds the extra
-    /// section size (typically &gt; 4) instead of a header version.</para>
+    /// Samsung PXA uses the standard ANDROID! magic, but offset 40 holds the extra section size (typically &gt; 4) instead of a header version.
+    /// <para>Samsung PXA 使用标准 ANDROID! 魔数，但头部偏移 40 处存放 extra 段大小（通常大于 4）。</para>
     /// </summary>
     private static bool IsSamsungPxa(byte[] data)
     {
@@ -507,5 +386,21 @@ public static class BootImageDetector
         result.Kernel = parseResult.Kernel;
         result.Ramdisk = parseResult.Ramdisk;
         result.Second = parseResult.Second;
+    }
+
+    private const int DetectionPrefixBytes = 4096;
+
+    /// <summary>
+    /// Bounded read of the file head prefix, truncated to the actual length for smaller files, so detection semantics stay identical to a full read.
+    /// <para>有界读取文件头部前缀；文件不足前缀长度时按实际长度截断，与整读检测语义一致。</para>
+    /// </summary>
+    private static byte[] ReadDetectionPrefix(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            bufferSize: 4096, FileOptions.SequentialScan);
+        var length = (int)Math.Min(fs.Length, DetectionPrefixBytes);
+        var buffer = new byte[length];
+        fs.ReadExactly(buffer);
+        return buffer;
     }
 }

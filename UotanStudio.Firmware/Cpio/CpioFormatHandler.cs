@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Firmware.Cpio.Extraction;
 using UotanStudio.Firmware.Cpio.Formats.Cpio;
@@ -6,30 +6,16 @@ using UotanStudio.Firmware.Cpio.Model;
 
 namespace UotanStudio.Firmware.Cpio;
 
-/// <summary>
-/// Format handler for CPIO and TAR archives.
-/// <para>CPIO 与 TAR 归档的格式处理器。</para>
-/// </summary>
 public sealed class CpioFormatHandler : IFormatHandler
 {
     private readonly CpioArchive _archive = new();
 
-    /// <summary>
-    /// Gets the human-readable format name.
-    /// <para>获取人类可读的格式名称。</para>
-    /// </summary>
     public string FormatName => "CPIO/TAR Archive";
 
-    /// <summary>
-    /// Gets the typical file extensions (without dot, lowercase).
-    /// <para>获取典型文件扩展名（不带点，小写）。</para>
-    /// </summary>
     public IReadOnlyList<string> FileExtensions { get; } = ["cpio", "tar"];
 
     /// <summary>
     /// Determines whether this handler can process the given file.
-    /// Detection is based on the .cpio/.tar extension or magic bytes:
-    /// '070701' (newc), '070702' (crc), '070707' (odc/binary) and 'ustar' at offset 257.
     /// <para>判断该处理器能否处理指定文件；依据 .cpio/.tar 扩展名或魔数（'070701' newc、'070702' crc、'070707' odc/二进制，以及偏移 257 处的 'ustar'）进行判断。</para>
     /// </summary>
     public bool CanHandle(string filePath)
@@ -72,7 +58,7 @@ public sealed class CpioFormatHandler : IFormatHandler
                 }
             }
 
-            // POSIX ustar marker at offset 257.
+
             if (read >= 262)
             {
                 var marker = Encoding.ASCII.GetString(header[257..262]);
@@ -288,9 +274,8 @@ public sealed class CpioFormatHandler : IFormatHandler
         var expectedLength = info.Length;
         var expectedWriteTime = info.LastWriteTimeUtc;
         var expectedCreationTime = info.CreationTimeUtc;
-        // Best-effort TOCTOU mitigation only: reject links and revalidate observable attributes
-        // before/after opening. These attributes are not a stable cross-platform file identity,
-        // so callers must not treat this as a strong replacement-detection guarantee.
+
+
         Stream OpenValidatedSource()
         {
             var before = new FileInfo(fullPath);

@@ -1,12 +1,8 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.IO.Hashing;
 
 namespace UotanStudio.Firmware.Sparse;
 
-/// <summary>
-/// Serializes a <see cref="SparseFile"/> back to the sparse on-disk format.
-/// <para>将 SparseFile 序列化回稀疏磁盘格式。</para>
-/// </summary>
 public static class SparseWriter
 {
     private const int BufferSize = 1024 * 1024;
@@ -99,8 +95,8 @@ public static class SparseWriter
             {
                 case ChunkType.Raw when chunk.DataProvider != null:
                     {
-                        // Raw 块数据必须按 chunkSize * blockSize 写入(不足部分以零补齐),与头部声明一致。
-                        // Raw chunk data must be written as chunkSize * blockSize (zero-padded), matching the header claim.
+
+
                         var expectedDataSize = (long)chunk.Header.ChunkSize * outHeader.BlockSize;
                         long written = 0;
                         while (written < expectedDataSize)
@@ -109,8 +105,8 @@ public static class SparseWriter
                             var n = chunk.DataProvider.Read(written, buffer.AsSpan(0, toRead));
                             if (n <= 0)
                             {
-                                // 数据源耗尽:以零补齐剩余块。
-                                // Data source exhausted: zero-pad the remaining block.
+
+
                                 buffer.AsSpan(n, toRead - n).Clear();
                                 n = toRead;
                             }
@@ -122,10 +118,8 @@ public static class SparseWriter
                     }
                 case ChunkType.Fill:
                     {
-                        // Per the Android sparse spec a FILL chunk stores only the 4-byte pattern;
-                        // readers expand it to chunkSize * blockSize logically.
-                        // <para>按 Android 稀疏格式规范，FILL 数据块只存储 4 字节模式值；
-                        // 读取方将其逻辑展开为 chunkSize * blockSize。</para>
+
+
                         BinaryPrimitives.WriteUInt32LittleEndian(fillValData, chunk.FillValue);
                         stream.Write(fillValData, 0, 4);
                         AppendRepeated(crc, chunk.FillValue, (long)chunk.Header.ChunkSize * outHeader.BlockSize);

@@ -1,26 +1,18 @@
-using UotanStudio.Firmware.Oppo.Crypto;
+﻿using UotanStudio.Firmware.Oppo.Crypto;
 using UotanStudio.Firmware.Oppo.Helpers;
 using UotanStudio.Firmware.Oppo.Models;
 
 namespace UotanStudio.Firmware.Oppo.Parsers;
 
-/// <summary>
-/// <para>OPS 格式固件解析器，实现 IOppFormatParser 接口，提供元数据解析、条目解析和条目提取功能。</para>
-/// OPS format firmware parser implementing IOppFormatParser, providing metadata parsing, entry parsing, and entry extraction.
-/// </summary>
 internal sealed class OpsFormatParser : IOppFormatParser
 {
     private const int DefaultBufferSize = 81920;
 
-    /// <summary>
-    /// <para>获取此解析器支持的固件格式。</para>
-    /// Gets the firmware format supported by this parser.
-    /// </summary>
     public OppFormat SupportedFormat => OppFormat.Ops;
 
     /// <summary>
-    /// <para>从流中解析 OPS 格式固件文件的元数据。</para>
     /// Parses metadata from a stream containing an OPS format firmware file.
+    /// <para>从流中解析 OPS 格式固件文件的元数据。</para>
     /// </summary>
     public OppMetadata ParseMetadata(Stream stream, long fileSize, IOppCryptoProvider? cryptoProvider)
     {
@@ -29,8 +21,8 @@ internal sealed class OpsFormatParser : IOppFormatParser
     }
 
     /// <summary>
-    /// <para>从流中解析 OPS 格式固件文件的条目列表。</para>
     /// Parses the entry list from a stream containing an OPS format firmware file.
+    /// <para>从流中解析 OPS 格式固件文件的条目列表。</para>
     /// </summary>
     public IReadOnlyList<OppEntry> ParseEntries(Stream stream, long fileSize, OppMetadata metadata, IOppCryptoProvider? cryptoProvider)
     {
@@ -42,8 +34,8 @@ internal sealed class OpsFormatParser : IOppFormatParser
     }
 
     /// <summary>
-    /// <para>提取单个 OPS 格式条目到输出流。</para>
     /// Extracts a single OPS format entry to an output stream.
+    /// <para>提取单个 OPS 格式条目到输出流。</para>
     /// </summary>
     public void ExtractEntry(Stream stream, Stream output, OppEntry entry, OppMetadata metadata, string? keyId, IOppCryptoProvider? cryptoProvider)
     {
@@ -61,7 +53,7 @@ internal sealed class OpsFormatParser : IOppFormatParser
 
         if (string.Equals(partitionType, "sahara", StringComparison.OrdinalIgnoreCase))
         {
-            // OPS SAHARA: use OpsCipher decrypt
+
             DecryptAndCopy(stream, output, entry.Size, keyId ?? metadata.KeyId, cryptoProvider);
             return;
         }
@@ -69,12 +61,12 @@ internal sealed class OpsFormatParser : IOppFormatParser
         if (string.Equals(partitionType, "ufs_provision", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(partitionType, "program", StringComparison.OrdinalIgnoreCase))
         {
-            // UFS_PROVISION/Program: direct copy
+
             CopyStream(stream, output, entry.Size);
             return;
         }
 
-        // Default: direct copy
+
         CopyStream(stream, output, entry.Size);
     }
 
@@ -82,7 +74,7 @@ internal sealed class OpsFormatParser : IOppFormatParser
     {
         try
         {
-            // A "plaintext" key means the data was not encrypted in the first place.
+
             if (string.IsNullOrEmpty(keyId) || string.Equals(keyId, "plaintext", StringComparison.OrdinalIgnoreCase))
             {
                 CopyStream(input, output, encryptedSize);
@@ -91,13 +83,13 @@ internal sealed class OpsFormatParser : IOppFormatParser
 
             if (cryptoProvider != null)
             {
-                // Use the provided aggregator crypto provider
+
                 var subStream = new SubStream(input, encryptedSize);
                 cryptoProvider.Decrypt(subStream, output, keyId);
             }
             else
             {
-                // Fallback: use OpsFormatCryptoProvider directly
+
                 var opsProvider = new OpsFormatCryptoProvider();
                 var subStream = new SubStream(input, encryptedSize);
                 opsProvider.Decrypt(subStream, output, keyId, CancellationToken.None);
@@ -128,10 +120,6 @@ internal sealed class OpsFormatParser : IOppFormatParser
         }
     }
 
-    /// <summary>
-    /// <para>限制从基础流中读取的字节数的流包装器。</para>
-    /// A stream wrapper that limits the number of bytes read from the underlying stream.
-    /// </summary>
     private sealed class SubStream(Stream baseStream, long length) : Stream
     {
         private readonly Stream _baseStream = baseStream;

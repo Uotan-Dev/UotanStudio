@@ -1,4 +1,4 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
@@ -13,19 +13,12 @@ namespace UotanStudio.Firmware.Avb;
 
 public static class AvbSigner
 {
-    /// <summary>
-    /// Size of the AVB VBMeta header in bytes.
-    /// <para>AVB VBMeta 头的字节大小。</para>
-    /// </summary>
     public const int HeaderSize = AvbVBMetaImageHeader.Size;
 
     private const int Sha256Size = 32;
     private const int BlockSize = 4096;
 
-    // 上游 libavb avb_descriptor.h 的 tag 常量：0=Property、1=Hashtree、2=Hash、
-    // 3=KernelCmdline、4=ChainPartition。
-    // Upstream libavb avb_descriptor.h tags: 0=Property, 1=Hashtree, 2=Hash,
-    // 3=KernelCmdline, 4=ChainPartition.
+
     private const int PropertyDescriptorTag = 0;
     private const int HashtreeDescriptorTag = 1;
     private const int HashDescriptorTag = 2;
@@ -34,38 +27,14 @@ public static class AvbSigner
     private static ReadOnlySpan<byte> MagicBytes => "AVB0"u8;
     private static readonly byte[] ZeroBlock = new byte[BlockSize];
 
-    /// <summary>
-    /// AVB vbmeta flag: disable hashtree verification (dm-verity).
-    /// <para>AVB vbmeta 标志：禁用哈希树校验（dm-verity）。</para>
-    /// </summary>
     public const uint VbmetaFlagHashtreeDisabled = 0x1;
 
-    /// <summary>
-    /// AVB vbmeta flag: disable vbmeta verification entirely (libavb short-circuits on this flag
-    /// right after reading the header, so the signature does not need to remain valid).
-    /// <para>AVB vbmeta 标志：完全禁用 vbmeta 校验（libavb 读完头部即短路返回，签名无需保持有效）。</para>
-    /// </summary>
     public const uint VbmetaFlagVerificationDisabled = 0x2;
 
     /// <summary>
-    /// Disables AVB verification on a VBMeta image: reads the bounded 256-byte header, validates the
-    /// "AVB0" magic, ORs the flags field (offset 120, big-endian) with
-    /// <see cref="VbmetaFlagHashtreeDisabled"/> | <see cref="VbmetaFlagVerificationDisabled"/>, zeroes
-    /// the authentication block, then streams the patched image to the output path (atomic temp-file
-    /// commit). libavb honors <c>VERIFICATION_DISABLED</c> before validating the signature, so no
-    /// private key is required.
-    /// <para>禁用 VBMeta 镜像的 AVB 校验：有界读取 256 字节头、校验 "AVB0" 魔数，将标志字段（偏移 120，
-    /// 大端）按位或 <see cref="VbmetaFlagHashtreeDisabled"/> | <see cref="VbmetaFlagVerificationDisabled"/>，
-    /// 清零认证块，随后流式写出到输出路径（临时文件原子提交）。libavb 在验证签名之前即识别
-    /// <c>VERIFICATION_DISABLED</c> 标志，因此无需私钥。</para>
+    /// Disables AVB verification on a VBMeta image by setting the verification-disabled flags and zeroing the authentication block.
+    /// <para>通过设置禁用校验标志并清零认证块来禁用 VBMeta 镜像的 AVB 校验。</para>
     /// </summary>
-    /// <param name="vbmetaPath">The source VBMeta image (must carry "AVB0" magic).
-    /// <para>源 VBMeta 镜像（必须携带 "AVB0" 魔数）。</para></param>
-    /// <param name="outputPath">The patched VBMeta image path (must differ from the source).
-    /// <para>补丁后的 VBMeta 镜像路径（必须与源不同）。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The patch result (reuses <see cref="AvbSignResult"/>).
-    /// <para>补丁结果（复用 <see cref="AvbSignResult"/>）。</para></returns>
     public static async Task<AvbSignResult> DisableVbmetaVerificationAsync(
         string vbmetaPath,
         string outputPath,
@@ -96,8 +65,7 @@ public static class AvbSigner
             await using var source = new FileStream(
                 vbmetaPath, FileMode.Open, FileAccess.Read, FileShare.Read, BlockSize, FileOptions.SequentialScan);
 
-            // 有界读取 256 字节头并校验魔数与块大小。
-            // Bounded 256-byte header read with magic and block-size validation.
+
             var header = new byte[HeaderSize];
             await source.ReadExactlyAsync(header.AsMemory(0, HeaderSize), cancellationToken).ConfigureAwait(false);
             if (!header.AsSpan(0, 4).SequenceEqual(MagicBytes))
@@ -111,15 +79,12 @@ public static class AvbSigner
                 return Fail($"'{vbmetaPath}' carries an invalid authentication block size. '{vbmetaPath}' 认证块大小非法。");
             }
 
-            // 置位禁校验标志（保留既有标志位）。
-            // Set the disable-verification flags (existing flags are preserved).
+
             var flags = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(120));
             flags |= VbmetaFlagHashtreeDisabled | VbmetaFlagVerificationDisabled;
             BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(120), flags);
 
-            // 输出经同目录临时文件原子提交：补丁后的头 + 清零的认证块 + 其余字节原样复制。
-            // Output is committed atomically via a sibling temp file: patched header + zeroed
-            // authentication block + the remaining bytes copied verbatim.
+
             var tempPath = outputPath + ".tmp";
             try
             {
@@ -137,8 +102,7 @@ public static class AvbSigner
                         remaining -= toWrite;
                     }
 
-                    // 跳过原认证块（已以零覆盖），其余字节原样复制。
-                    // Skip the original authentication block (replaced by zeros); copy the rest verbatim.
+
                     source.Seek(HeaderSize + authBlockSize, SeekOrigin.Begin);
                     await source.CopyToAsync(output, cancellationToken).ConfigureAwait(false);
                 }
@@ -147,7 +111,7 @@ public static class AvbSigner
             }
             catch
             {
-                try { File.Delete(tempPath); } catch { /* 临时文件清理失败不覆盖原始异常 */ }
+                try { File.Delete(tempPath); } catch {  }
                 throw;
             }
 
@@ -170,25 +134,9 @@ public static class AvbSigner
     }
 
     /// <summary>
-    /// Rebuilds a VBMeta image: parses the source vbmeta header for metadata (libavb version,
-    /// rollback index, flags, release string), writes the given hash descriptors and the AVB-format
-    /// public key into the auxiliary data block, signs the 256-byte header + auxiliary block with the
-    /// private key, and streams the signed image (header + authentication block + auxiliary block) to
-    /// the output path. The output is a self-contained, self-signed VBMeta image that
-    /// <see cref="AvbVerifier.VerifyVBMeta"/> accepts.
-    /// <para>重建 VBMeta 镜像：解析源 vbmeta 头以获取元数据（libavb 版本、回滚索引、标志、发布
-    /// 字符串），将给定哈希描述符与 AVB 格式公钥写入辅助数据块，用私钥对 256 字节头 + 辅助数据块
-    /// 签名，并将签名镜像（头 + 认证块 + 辅助块）流式写出到输出路径。输出为可被
-    /// <see cref="AvbVerifier.VerifyVBMeta"/> 接受的自包含自签名 VBMeta 镜像。</para>
+    /// Rebuilds and signs a VBMeta image with hash descriptors from a source VBMeta.
+    /// <para>从源 VBMeta 重建并签名带有哈希描述符的 VBMeta 镜像。</para>
     /// </summary>
-    /// <param name="vbmetaPath">The source VBMeta image (must carry "AVB0" magic); its header metadata is preserved.
-    /// <para>源 VBMeta 镜像（必须携带 "AVB0" 魔数）；其头部元数据将被保留。</para></param>
-    /// <param name="key">The RSA private key used for signing (2048/4096/8192 bits).
-    /// <para>用于签名的 RSA 私钥（2048/4096/8192 位）。</para></param>
-    /// <param name="outputPath">The output signed VBMeta image path. <para>输出的已签名 VBMeta 镜像路径。</para></param>
-    /// <param name="descriptors">The hash descriptors to embed. <para>要嵌入的哈希描述符。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The signing result. <para>签名结果。</para></returns>
     public static async Task<AvbSignResult> SignVbmetaAsync(
         string vbmetaPath,
         RsaKeyParameters key,
@@ -225,7 +173,7 @@ public static class AvbSigner
             var keyBits = key.Modulus.BitLength;
             var algorithmType = GetAlgorithmType(keyBits);
 
-            // Preserve metadata from the source header (bounded 256-byte streaming read).
+
             var headerBytes = await ReadHeaderBytesAsync(vbmetaPath, cancellationToken);
             if (headerBytes == null || !headerBytes.AsSpan(0, 4).SequenceEqual(MagicBytes))
             {
@@ -272,33 +220,9 @@ public static class AvbSigner
     }
 
     /// <summary>
-    /// Rebuilds a VBMeta image with an arbitrary mix of descriptors (hash, hashtree, chain
-    /// partition, kernel cmdline and property descriptors are all supported): parses the source
-    /// vbmeta header for metadata, serializes the descriptors in the upstream libavb layouts, signs
-    /// the 256-byte header + auxiliary block with the private key, and streams the signed image to
-    /// the output path. Serialization is byte-for-byte aligned with vendored avbtool 1.2.0.
-    /// <para>以任意混合描述符（哈希、哈希树、链式分区、内核命令行与属性描述符均支持）重建
-    /// VBMeta 镜像：解析源 vbmeta 头以获取元数据，按上游 libavb 布局序列化描述符，用私钥对
-    /// 256 字节头 + 辅助数据块签名，并将签名镜像流式写出到输出路径。序列化与仓库内置的
-    /// avbtool 1.2.0 逐字节对齐。</para>
+    /// Rebuilds and signs a VBMeta image with a mixed set of descriptor types from a source VBMeta.
+    /// <para>从源 VBMeta 重建并签名带有混合描述符类型的 VBMeta 镜像。</para>
     /// </summary>
-    /// <typeparam name="TDescriptor">The common element type of the descriptor list (typically
-    /// <see cref="object"/> for a mixed list). <para>描述符列表的公共元素类型（混合列表通常为
-    /// <see cref="object"/>）。</para></typeparam>
-    /// <param name="vbmetaPath">The source VBMeta image (must carry "AVB0" magic); its header metadata is preserved.
-    /// <para>源 VBMeta 镜像（必须携带 "AVB0" 魔数）；其头部元数据将被保留。</para></param>
-    /// <param name="key">The RSA private key used for signing (2048/4096/8192 bits).
-    /// <para>用于签名的 RSA 私钥（2048/4096/8192 位）。</para></param>
-    /// <param name="outputPath">The output signed VBMeta image path. <para>输出的已签名 VBMeta 镜像路径。</para></param>
-    /// <param name="descriptors">The mixed descriptors to embed
-    /// (<see cref="AvbHashDescriptor"/>, <see cref="AvbHashtreeDescriptor"/>,
-    /// <see cref="AvbChainPartitionDescriptor"/>, <see cref="AvbKernelCmdlineDescriptor"/> or
-    /// <see cref="AvbPropertyDescriptor"/>). <para>要嵌入的混合描述符
-    /// （<see cref="AvbHashDescriptor"/>、<see cref="AvbHashtreeDescriptor"/>、
-    /// <see cref="AvbChainPartitionDescriptor"/>、<see cref="AvbKernelCmdlineDescriptor"/> 或
-    /// <see cref="AvbPropertyDescriptor"/>）。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The signing result. <para>签名结果。</para></returns>
     public static async Task<AvbSignResult> SignVbmetaAsync<TDescriptor>(
         string vbmetaPath,
         RsaKeyParameters key,
@@ -382,29 +306,9 @@ public static class AvbSigner
     }
 
     /// <summary>
-    /// Adds an AVB dm-verity hashtree footer to a partition image, byte-for-byte aligned with
-    /// <c>avbtool add_hashtree_footer</c> (avbtool 1.2.0): builds the Merkle hash tree over the
-    /// image rounded up to 4096 bytes (via <see cref="AvbHashtreeBuilder"/>), streams the image out,
-    /// pads it to the 4K boundary, appends the hash tree, appends a freshly signed self-contained
-    /// VBMeta image carrying one hashtree descriptor, pads the VBMeta to a 4K boundary and finishes
-    /// with the standard 64-byte footer ("AVBf"). The result verifies round-trip with
-    /// <see cref="AvbVerifier.Verify"/> and is accepted by <c>avbtool verify_image</c>.
-    /// <para>为分区镜像追加 AVB dm-verity 哈希树尾部，与 <c>avbtool add_hashtree_footer</c>
-    /// （avbtool 1.2.0）逐字节对齐：对向上取整到 4096 字节的镜像构建 Merkle 哈希树
-    /// （经 <see cref="AvbHashtreeBuilder"/>），流式写出镜像、补齐到 4K 边界、追加哈希树、
-    /// 追加一个携带单个哈希树描述符的、全新签名的自包含 VBMeta 镜像、把 VBMeta 补齐到 4K 边界，
-    /// 最后写入标准 64 字节尾部（"AVBf"）。结果可被 <see cref="AvbVerifier.Verify"/> 往返验证
-    /// 通过，且被 <c>avbtool verify_image</c> 接受。</para>
+    /// Adds an AVB dm-verity hashtree footer to a partition image: builds the Merkle hash tree, appends a signed VBMeta with a hashtree descriptor, and writes the standard footer.
+    /// <para>为分区镜像追加 AVB dm-verity 哈希树尾部：构建 Merkle 哈希树，追加带有哈希树描述符的 已签名 VBMeta，并写入标准尾部。</para>
     /// </summary>
-    /// <param name="imagePath">The partition image to sign. <para>要签名的分区镜像。</para></param>
-    /// <param name="partitionName">The target partition name. <para>目标分区名称。</para></param>
-    /// <param name="key">The RSA private key used for signing (2048/4096/8192 bits).
-    /// <para>用于签名的 RSA 私钥（2048/4096/8192 位）。</para></param>
-    /// <param name="outputPath">The output signed image path. <para>输出的已签名镜像路径。</para></param>
-    /// <param name="salt">The hash tree salt; when <c>null</c> a random 32-byte salt is generated.
-    /// <para>哈希树盐值；为 <c>null</c> 时生成随机 32 字节盐值。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The signing result. <para>签名结果。</para></returns>
     public static async Task<AvbSignResult> AddHashtreeFooterAsync(
         string imagePath,
         string partitionName,
@@ -452,9 +356,7 @@ public static class AvbSigner
                 RandomNumberGenerator.Fill(effectiveSalt);
             }
 
-            // 构建哈希树（流式，64KiB 有界缓冲），并预生成携带哈希树描述符的已签名 vbmeta。
-            // Build the hash tree (streamed with a bounded 64 KiB buffer) and pre-generate the
-            // signed vbmeta carrying the hashtree descriptor.
+
             var tree = AvbHashtreeBuilder.Build(imagePath, effectiveSalt, BlockSize, BlockSize);
             var treeOffset = checked((ulong)tree.ImageSize);
             var vbmeta = BuildSignedVbmetaCore(
@@ -479,9 +381,7 @@ public static class AvbSigner
                 requiredMajor: 1, requiredMinor: 0);
             var vbmetaPadding = (BlockSize - (vbmeta.Length % BlockSize)) % BlockSize;
 
-            // 流式复制镜像 + 4K 对齐 + 哈希树 + vbmeta（4K 对齐）+ footer 块，经同目录临时文件原子提交。
-            // Stream the image, then append 4K alignment, the hash tree, the vbmeta (4K-aligned)
-            // and the footer block, committing atomically via a sibling temp file.
+
             var tempPath = outputPath + ".tmp";
             try
             {
@@ -504,9 +404,7 @@ public static class AvbSigner
                     var vbmetaOffset = checked(treeOffset + (ulong)tree.TreeSize);
                     await output.WriteAsync(vbmeta, cancellationToken).ConfigureAwait(false);
 
-                    // 把 vbmeta 补齐到 4K 边界，再写一个整 4K 块、64 字节 footer 置于其末尾。
-                    // Pad the vbmeta to a 4K boundary, then write a full 4K block with the 64-byte
-                    // footer at its end (avbtool layout).
+
                     if (vbmetaPadding > 0)
                     {
                         await output.WriteAsync(ZeroBlock.AsMemory(0, vbmetaPadding), cancellationToken).ConfigureAwait(false);
@@ -522,7 +420,7 @@ public static class AvbSigner
             }
             catch
             {
-                try { File.Delete(tempPath); } catch { /* 临时文件清理失败不覆盖原始异常 */ }
+                try { File.Delete(tempPath); } catch {  }
                 throw;
             }
 
@@ -548,23 +446,9 @@ public static class AvbSigner
     }
 
     /// <summary>
-    /// Adds an AVB v2 hash footer to a partition image: computes <c>SHA256(salt || image)</c> in a
-    /// single bounded streaming pass while copying the image out, pads the image to a 4096-byte
-    /// boundary, appends a freshly signed self-contained VBMeta image carrying one hash descriptor,
-    /// and finishes with the standard 64-byte footer ("AVBf"). The result verifies round-trip with
-    /// <see cref="AvbVerifier.Verify"/>.
-    /// <para>为分区镜像追加 AVB v2 哈希尾部：在单次有界流式复制镜像的过程中计算
-    /// <c>SHA256(salt || image)</c>，将镜像补齐到 4096 字节边界，追加一个携带单个哈希描述符的、
-    /// 全新签名的自包含 VBMeta 镜像，最后写入标准 64 字节尾部（"AVBf"）。结果可被
-    /// <see cref="AvbVerifier.Verify"/> 往返验证通过。</para>
+    /// Adds an AVB hash footer to a partition image: computes the salted SHA-256 digest while streaming, appends a signed VBMeta with a hash descriptor, and writes the standard footer.
+    /// <para>为分区镜像追加 AVB 哈希尾部：流式计算加盐 SHA-256 摘要，追加带有哈希描述符的 已签名 VBMeta，并写入标准尾部。</para>
     /// </summary>
-    /// <param name="imagePath">The partition image to sign. <para>要签名的分区镜像。</para></param>
-    /// <param name="partitionName">The target partition name. <para>目标分区名称。</para></param>
-    /// <param name="key">The RSA private key used for signing (2048/4096/8192 bits).
-    /// <para>用于签名的 RSA 私钥（2048/4096/8192 位）。</para></param>
-    /// <param name="outputPath">The output signed image path. <para>输出的已签名镜像路径。</para></param>
-    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
-    /// <returns>The signing result. <para>签名结果。</para></returns>
     public static async Task<AvbSignResult> AddHashFooterAsync(
         string imagePath,
         string partitionName,
@@ -605,11 +489,11 @@ public static class AvbSigner
             var keyBits = key.Modulus.BitLength;
             var algorithmType = GetAlgorithmType(keyBits);
 
-            // Random per-image salt.
+
             var salt = new byte[Sha256Size];
             RandomNumberGenerator.Fill(salt);
 
-            // One bounded pass: compute SHA256(salt || image) while copying the image out.
+
             await using var input = new FileStream(
                 imagePath, FileMode.Open, FileAccess.Read, FileShare.Read, BlockSize, FileOptions.SequentialScan);
             var originalImageSize = input.Length;
@@ -631,7 +515,7 @@ public static class AvbSigner
 
             var digest = hasher.GetHashAndReset();
 
-            // 4K-align the VBMeta blob that is appended at the image tail.
+
             var padding = (int)((((copied + BlockSize - 1) / BlockSize) * BlockSize) - copied);
             if (padding > 0)
             {
@@ -670,14 +554,9 @@ public static class AvbSigner
     }
 
     /// <summary>
-    /// Loads an RSA private key (PEM: PKCS#1 "RSA PRIVATE KEY" or PKCS#8 "PRIVATE KEY"; DER:
-    /// PKCS#8 PrivateKeyInfo) into an <see cref="RsaKeyParameters"/> instance.
-    /// <para>将 RSA 私钥（PEM：PKCS#1 "RSA PRIVATE KEY" 或 PKCS#8 "PRIVATE KEY"；DER：PKCS#8
-    /// PrivateKeyInfo）加载为 <see cref="RsaKeyParameters"/> 实例。</para>
+    /// Loads an RSA private key from a PEM or DER file.
+    /// <para>从 PEM 或 DER 文件加载 RSA 私钥。</para>
     /// </summary>
-    /// <param name="path">The private key file path. <para>私钥文件路径。</para></param>
-    /// <returns>The imported key, or <c>null</c> when the file cannot be read as an RSA private key.
-    /// <para>导入的密钥；无法将文件解析为 RSA 私钥时返回 <c>null</c>。</para></returns>
     public static RsaKeyParameters? LoadRsaPrivateKey(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
@@ -685,7 +564,7 @@ public static class AvbSigner
             return null;
         }
 
-        // PEM (PKCS#1 or PKCS#8), streamed so only the small key text is read.
+
         try
         {
             using var reader = new StreamReader(path);
@@ -703,10 +582,10 @@ public static class AvbSigner
         }
         catch (Exception)
         {
-            // Not PEM; fall through to DER handling.
+
         }
 
-        // DER (PKCS#8 PrivateKeyInfo). Private keys are tiny, so a single bounded read is fine.
+
         try
         {
             using var fs = File.OpenRead(path);
@@ -781,7 +660,7 @@ public static class AvbSigner
         publicKeyBlob.CopyTo(aux, 0);
         descriptorBytes.CopyTo(aux, publicKeyBlob.Length);
 
-        // The signing input is exactly the serialized header followed by the auxiliary block.
+
         var signingInput = new byte[checked(HeaderSize + (int)auxSize)];
         header.CopyTo(signingInput, 0);
         aux.CopyTo(signingInput, HeaderSize);
@@ -816,16 +695,16 @@ public static class AvbSigner
         WriteUInt64BE(header, 12, authSize);
         WriteUInt64BE(header, 20, auxSize);
         WriteUInt32BE(header, 28, algorithmType);
-        WriteUInt64BE(header, 32, 0);                        // hash_offset
-        WriteUInt64BE(header, 40, Sha256Size);               // hash_size
-        WriteUInt64BE(header, 48, Sha256Size);               // signature_offset
-        WriteUInt64BE(header, 56, authSize - Sha256Size); // signature_size
-        WriteUInt64BE(header, 64, 0);                        // public_key_offset
-        WriteUInt64BE(header, 72, (ulong)publicKeySize);     // public_key_size
-        WriteUInt64BE(header, 80, 0);                        // public_key_metadata_offset
-        WriteUInt64BE(header, 88, 0);                        // public_key_metadata_size
-        WriteUInt64BE(header, 96, (ulong)publicKeySize);     // descriptors_offset
-        WriteUInt64BE(header, 104, (ulong)descriptorSize);   // descriptors_size
+        WriteUInt64BE(header, 32, 0);
+        WriteUInt64BE(header, 40, Sha256Size);
+        WriteUInt64BE(header, 48, Sha256Size);
+        WriteUInt64BE(header, 56, authSize - Sha256Size);
+        WriteUInt64BE(header, 64, 0);
+        WriteUInt64BE(header, 72, (ulong)publicKeySize);
+        WriteUInt64BE(header, 80, 0);
+        WriteUInt64BE(header, 88, 0);
+        WriteUInt64BE(header, 96, (ulong)publicKeySize);
+        WriteUInt64BE(header, 104, (ulong)descriptorSize);
         WriteUInt64BE(header, 112, rollbackIndex);
         WriteUInt32BE(header, 120, flags);
         WriteUInt32BE(header, 124, rollbackIndexLocation);
@@ -875,12 +754,8 @@ public static class AvbSigner
     }
 
     /// <summary>
-    /// Serializes hash descriptors in the upstream libavb <c>AvbHashDescriptor</c> layout
-    /// (tag 2; 116-byte body: image_size u64, 32-byte algorithm name, u32 name/salt/digest
-    /// lengths, u32 flags, 60 reserved bytes; then partition name / salt / digest, padded to 8).
-    /// <para>按上游 libavb <c>AvbHashDescriptor</c> 布局序列化哈希描述符（tag 2；116 字节正文：
-    /// image_size u64、32 字节算法名、u32 名称/盐/摘要长度、u32 flags、60 字节保留；随后为
-    /// 分区名 / 盐 / 摘要，8 字节对齐）。</para>
+    /// Serializes hash descriptors in the upstream libavb hash descriptor layout.
+    /// <para>按上游 libavb 哈希描述符布局序列化哈希描述符。</para>
     /// </summary>
     private static byte[] SerializeHashDescriptors(IReadOnlyList<AvbHashDescriptor> descriptors)
     {
@@ -919,8 +794,8 @@ public static class AvbSigner
             WriteUInt32BE(buffer, body + 44, (uint)salt.Length);
             WriteUInt32BE(buffer, body + 48, (uint)digest.Length);
             WriteUInt32BE(buffer, body + 52, descriptor.Flags);
-            // body+56..116 为保留区，保持全零。
-            // body+56..116 is the reserved area, left zeroed.
+
+
             nameBytes.CopyTo(buffer, body + 116);
             salt.CopyTo(buffer, body + 116 + nameBytes.Length);
             digest.CopyTo(buffer, body + 116 + nameBytes.Length + salt.Length);
@@ -941,11 +816,8 @@ public static class AvbSigner
     }
 
     /// <summary>
-    /// Serializes a heterogeneous descriptor list in the upstream libavb layouts, byte-for-byte
-    /// aligned with vendored avbtool 1.2.0. Each descriptor is followed by its variable-length
-    /// payload with <c>num_bytes_following</c> padded to an 8-byte boundary.
-    /// <para>按上游 libavb 布局序列化异构描述符列表，与仓库内置 avbtool 1.2.0 逐字节对齐。
-    /// 每个描述符之后为变长负载，<c>num_bytes_following</c> 补齐到 8 字节边界。</para>
+    /// Serializes a heterogeneous descriptor list in the upstream libavb layouts.
+    /// <para>按上游 libavb 布局序列化异构描述符列表。</para>
     /// </summary>
     private static byte[] SerializeDescriptors(IReadOnlyList<object> descriptors)
     {
@@ -1021,8 +893,8 @@ public static class AvbSigner
         WriteUInt32BE(buffer, body + 44, (uint)salt.Length);
         WriteUInt32BE(buffer, body + 48, (uint)digest.Length);
         WriteUInt32BE(buffer, body + 52, descriptor.Flags);
-        // body+56..116 为保留区，保持全零。
-        // body+56..116 is the reserved area, left zeroed.
+
+
         nameBytes.CopyTo(buffer, body + 116);
         salt.CopyTo(buffer, body + 116 + nameBytes.Length);
         digest.CopyTo(buffer, body + 116 + nameBytes.Length + salt.Length);
@@ -1040,8 +912,7 @@ public static class AvbSigner
             throw new ArgumentException("Hash algorithm name must be 32 bytes or fewer. 哈希算法名至多 32 字节。", nameof(descriptor));
         }
 
-        // 上游 AvbHashtreeDescriptor：164 字节正文 + 名称 + 盐 + 根摘要，8 字节对齐。
-        // Upstream AvbHashtreeDescriptor: 164-byte body + name + salt + root digest, 8-aligned.
+
         const int bodySize = 164;
         var numBytesFollowing = checked((ulong)((bodySize + nameBytes.Length + salt.Length + rootDigest.Length + 7) & ~7));
         var buffer = new byte[16 + (int)numBytesFollowing];
@@ -1063,8 +934,8 @@ public static class AvbSigner
         WriteUInt32BE(buffer, body + 92, (uint)salt.Length);
         WriteUInt32BE(buffer, body + 96, (uint)rootDigest.Length);
         WriteUInt32BE(buffer, body + 100, descriptor.Flags);
-        // body+104..163 为保留区（60 字节），保持全零。
-        // body+104..163 is the reserved area (60 bytes), left zeroed.
+
+
         nameBytes.CopyTo(buffer, body + 164);
         salt.CopyTo(buffer, body + 164 + nameBytes.Length);
         rootDigest.CopyTo(buffer, body + 164 + nameBytes.Length + salt.Length);
@@ -1075,8 +946,7 @@ public static class AvbSigner
     {
         var cmdlineBytes = Encoding.UTF8.GetBytes(descriptor.KernelCmdline ?? string.Empty);
 
-        // 上游 AvbKernelCmdlineDescriptor：8 字节正文（flags + cmdline_len）+ 命令行，8 字节对齐。
-        // Upstream AvbKernelCmdlineDescriptor: 8-byte body (flags + cmdline_len) + cmdline, 8-aligned.
+
         const int bodySize = 8;
         var numBytesFollowing = checked((ulong)((bodySize + cmdlineBytes.Length + 7) & ~7));
         var buffer = new byte[16 + (int)numBytesFollowing];
@@ -1095,10 +965,7 @@ public static class AvbSigner
         var nameBytes = Encoding.ASCII.GetBytes(ValidatePartitionName(descriptor.PartitionName));
         var publicKey = descriptor.PublicKey ?? [];
 
-        // 上游 AvbChainPartitionDescriptor：76 字节正文（rollback_index_location + name_len +
-        // key_len + 64 字节保留）+ 名称 + 公钥，8 字节对齐。
-        // Upstream AvbChainPartitionDescriptor: 76-byte body (rollback_index_location + name_len +
-        // key_len + 64 reserved bytes) + name + public key, 8-aligned.
+
         const int bodySize = 76;
         var numBytesFollowing = checked((ulong)((bodySize + nameBytes.Length + publicKey.Length + 7) & ~7));
         var buffer = new byte[16 + (int)numBytesFollowing];
@@ -1109,8 +976,8 @@ public static class AvbSigner
         WriteUInt32BE(buffer, body, descriptor.RollbackIndexLocation);
         WriteUInt32BE(buffer, body + 4, (uint)nameBytes.Length);
         WriteUInt32BE(buffer, body + 8, (uint)publicKey.Length);
-        // body+12..75 为保留区（64 字节），保持全零。
-        // body+12..75 is the reserved area (64 bytes), left zeroed.
+
+
         nameBytes.CopyTo(buffer, body + 76);
         publicKey.CopyTo(buffer, body + 76 + nameBytes.Length);
         return buffer;
@@ -1121,10 +988,7 @@ public static class AvbSigner
         var keyBytes = Encoding.UTF8.GetBytes(descriptor.Key ?? string.Empty);
         var value = descriptor.Value ?? [];
 
-        // 上游 AvbPropertyDescriptor：16 字节正文（key_size + value_size）+ key + NUL + value +
-        // NUL，8 字节对齐。
-        // Upstream AvbPropertyDescriptor: 16-byte body (key_size + value_size) + key + NUL +
-        // value + NUL, 8-aligned.
+
         const int bodySize = 16;
         var numBytesFollowing = checked((ulong)((bodySize + keyBytes.Length + 1 + value.Length + 1 + 7) & ~7));
         var buffer = new byte[16 + (int)numBytesFollowing];
@@ -1240,7 +1104,7 @@ public static class AvbSigner
 
     private static uint ComputeN0Inv(byte[] modulusBigEndian)
     {
-        // Low 32 bits of the modulus, read from the least-significant bytes (big-endian stream order).
+
         var count = Math.Min(4, modulusBigEndian.Length);
         var low = 0U;
         for (var i = 0; i < count; i++)
@@ -1248,7 +1112,7 @@ public static class AvbSigner
             low = (low << 8) | modulusBigEndian[modulusBigEndian.Length - count + i];
         }
 
-        // Newton iteration: each round doubles the number of correct low bits (5 rounds -> 2^32).
+
         var inverse = 1U;
         for (var i = 0; i < 5; i++)
         {
