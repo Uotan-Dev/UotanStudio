@@ -13,6 +13,7 @@ namespace UotanStudio.ViewModels.NodeViewModels;
 public class ProjectImageNodeViewModel : FlowNodeViewModel
 {
     private string _selectedImage = string.Empty;
+    private IReadOnlyList<string>? _cachedAvailableImages;
 
     /// <summary>
     /// <para>创建具有指定标题的工程镜像节点。</para>
@@ -24,6 +25,10 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     /// </param>
     public ProjectImageNodeViewModel(string title) : base(title, NodeCategory.Data)
     {
+        if (ImageViewModel.Instance?.Images is { } images)
+        {
+            images.CollectionChanged += (_, _) => _cachedAvailableImages = null;
+        }
     }
 
     /// <summary>
@@ -63,7 +68,7 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
     /// <see cref="ImageEntryViewModel.RelativePath"/>).
     /// </summary>
     public override IReadOnlyList<string> AvailableImages
-        => ImageViewModel.Instance?.Images.Select(image => image.RelativePath).ToList() ?? [];
+        => _cachedAvailableImages ??= ComputeAvailableImages();
 
     /// <summary>
     /// <para>按节点类型键（TypeKey）分发执行逻辑：Data.ProjectImage 输出选中镜像的绝对路径。</para>
@@ -92,6 +97,9 @@ public class ProjectImageNodeViewModel : FlowNodeViewModel
         context.CancellationToken.ThrowIfCancellationRequested();
         return Task.CompletedTask;
     }
+
+    private IReadOnlyList<string> ComputeAvailableImages()
+        => ImageViewModel.Instance?.Images.Select(image => image.RelativePath).ToList() ?? [];
 
     private void ExecuteProjectImage(INodeExecutionContext context)
     {

@@ -330,7 +330,9 @@ public partial class PartitionEditorViewModel : Document
             var partition = metadata.Partitions[i];
             var extentStart = (int)partition.FirstExtentIndex;
             var extentCount = (int)partition.NumExtents;
-            var extents = metadata.Extents.Skip(extentStart).Take(extentCount).ToList();
+            var extents = new List<LpMetadataExtent>(extentCount);
+            for (int j = 0; j < extentCount && extentStart + j < metadata.Extents.Count; j++)
+                extents.Add(metadata.Extents[extentStart + j]);
 
             ulong start = 0;
             ulong size = 0;

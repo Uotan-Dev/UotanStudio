@@ -121,7 +121,7 @@
                            FontWeight="SemiBold" FontSize="13"
                            Margin="8,8,8,4" />
                 <ScrollViewer>
-                    <ItemsControl ItemsSource="{Binding ToolboxCategories}" Margin="4">
+                    <ItemsControl ItemsSource="{Binding VisibleToolboxCategories}" Margin="4">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:NodeToolboxCategory}">
                                 <Expander Header="{Binding Name}" IsExpanded="True" Margin="0,2">

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
@@ -55,6 +57,12 @@ public partial class NodeEditorViewModel : ViewModelBase
     private CancellationTokenSource? _runCts;
 
     /// <summary>
+    /// <para>工具箱搜索防抖取消令牌源。</para>
+    /// Cancellation token source for toolbox search debounce.
+    /// </summary>
+    private CancellationTokenSource? _searchDebounceCts;
+
+    /// <summary>
     /// <para>获取或设置画布上的节点集合。</para>
     /// Gets or sets the collection of nodes on the canvas.
     /// </summary>
@@ -101,7 +109,28 @@ public partial class NodeEditorViewModel : ViewModelBase
     public string SearchText
     {
         get => _searchText;
-        set => SetProperty(ref _searchText, value);
+        set
+        {
+            if (SetProperty(ref _searchText, value))
+            {
+                // 取消上一次搜索防抖任务
+                // Cancel the previous search debounce task
+                _searchDebounceCts?.Cancel();
+                _searchDebounceCts?.Dispose();
+
+                var cts = new CancellationTokenSource();
+                _searchDebounceCts = cts;
+
+                _ = Task.Delay(200, cts.Token)
+                    .ContinueWith(t =>
+                    {
+                        if (!t.IsCanceled)
+                        {
+                            RefreshVisibleToolbox();
+                        }
+                    }, TaskScheduler.Default);
+            }
+        }
     }
 
     /// <summary>
@@ -789,13 +818,18 @@ public partial class NodeEditorViewModel : ViewModelBase
     private void RefreshVisibleToolbox()
     {
         var keyword = (SearchText ?? string.Empty).Trim();
+
+        VisibleToolboxCategories.Clear();
+
         if (string.IsNullOrEmpty(keyword))
         {
-            VisibleToolboxCategories = new ObservableCollection<NodeToolboxCategory>(ToolboxCategories);
+            foreach (var cat in ToolboxCategories)
+            {
+                VisibleToolboxCategories.Add(cat);
+            }
             return;
         }
 
-        var filtered = new ObservableCollection<NodeToolboxCategory>();
         foreach (var cat in ToolboxCategories)
         {
             var matchedItems = cat.Items
@@ -803,10 +837,9 @@ public partial class NodeEditorViewModel : ViewModelBase
                 .ToList();
             if (matchedItems.Count > 0)
             {
-                filtered.Add(new NodeToolboxCategory(cat.Name, cat.Category, new ObservableCollection<NodeToolboxItem>(matchedItems)));
+                VisibleToolboxCategories.Add(new NodeToolboxCategory(cat.Name, cat.Category, new ObservableCollection<NodeToolboxItem>(matchedItems)));
             }
         }
-        VisibleToolboxCategories = filtered;
     }
 
     /// <summary>
