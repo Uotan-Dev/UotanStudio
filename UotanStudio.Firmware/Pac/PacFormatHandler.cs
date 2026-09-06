@@ -34,7 +34,9 @@ public sealed class PacFormatHandler : IFormatHandler
                 return false;
             }
             using var reader = new BinaryReader(fs);
-            fs.Seek(SprdHead.Size - 4, SeekOrigin.Begin);
+            // pac_magic 紧跟 800 字节保留区，位于 Size-8；Size-4 是 wCRC1/wCRC2。
+            // pac_magic sits right after the 800-byte reserved block at Size-8; Size-4 holds wCRC1/wCRC2.
+            fs.Seek(SprdHead.Size - 8, SeekOrigin.Begin);
             return reader.ReadUInt32() == 0xFFFAFFFA;
         }
         catch
