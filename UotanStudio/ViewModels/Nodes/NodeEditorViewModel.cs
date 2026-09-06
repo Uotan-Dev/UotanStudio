@@ -877,7 +877,7 @@ public partial class NodeEditorViewModel : ViewModelBase
     /// <para>表示异步操作的任务。</para>
     /// A task representing the async operation.
     /// </returns>
-    public async Task LoadFromAsync(Services.Projects.WorkflowSnapshot snapshot)
+    public Task LoadFromAsync(Services.Projects.WorkflowSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Clear();
@@ -965,9 +965,9 @@ public partial class NodeEditorViewModel : ViewModelBase
             }
         }
 
-        await Task.CompletedTask.ConfigureAwait(false);
         _log.Write(LogLevel.Info, "NodeEditor",
             $"Loaded {Nodes.Count} node(s), {Connections.Count} connection(s) from snapshot");
+        return Task.CompletedTask;
     }
 }
 
