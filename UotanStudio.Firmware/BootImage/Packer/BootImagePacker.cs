@@ -108,11 +108,13 @@ public class BootImagePacker
     /// <para>Packs the boot image to a byte array.</para>
     /// </summary>
     /// <returns>打包后的镜像数据。<para>The packed image data.</para></returns>
+    [Obsolete("Use PackToStream(Stream) or PackToFile(string) for better memory efficiency. " +
+              "This method allocates an intermediate byte array that duplicates the stream contents.")]
     public byte[] Pack()
     {
         using var ms = new MemoryStream();
         PackToStream(ms);
-        return ms.ToArray();
+        return ms.ToArray(); // unavoidable allocation for byte[] return type
     }
 
     private void PackV0V2(Stream output)

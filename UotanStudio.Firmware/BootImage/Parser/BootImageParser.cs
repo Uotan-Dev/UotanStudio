@@ -143,21 +143,22 @@ public class BootImageParser : IDisposable
         }
 
         var headerVersionField = ReadUInt32LE(data, 40);
+        using var ms = new MemoryStream(data, writable: false);
         if (headerVersionField <= 2)
         {
-            ParseV0V2(data, headerVersionField);
+            ParseV0V2(data, headerVersionField, ms);
         }
         else if (headerVersionField == 3)
         {
-            ParseV3(data);
+            ParseV3(data, ms);
         }
         else if (headerVersionField == 4)
         {
-            ParseV4(data);
+            ParseV4(data, ms);
         }
         else
         {
-            ParseV0V2(data, 0);
+            ParseV0V2(data, 0, ms);
         }
 
         DetectCompression();
@@ -224,16 +225,12 @@ public class BootImageParser : IDisposable
             2 => 1664,
             _ => 1632
         };
-
-        ExtractComponentsV0V2(data);
     }
 
-    private void ParseV0V2(byte[] headerBuf, uint headerVersion, FileStream fs)
+    private void ParseV0V2(byte[] headerBuf, uint headerVersion, Stream stream)
     {
-        // 复用 byte[] 重载解析 header 字段（headerBuf 长 2048，足解各版本 header）
         ParseV0V2(headerBuf, headerVersion);
-        // 组件从 fs 分段读取
-        ExtractComponentsV0V2Stream(fs);
+        ExtractComponentsV0V2Stream(stream);
     }
 
     private void ParseV3(byte[] data)
@@ -248,14 +245,12 @@ public class BootImageParser : IDisposable
         Header.SecondSize = 0;
         Header.DtbSize = 0;
         Header.RecoveryDtboSize = 0;
-
-        ExtractComponentsV3(data);
     }
 
-    private void ParseV3(byte[] headerBuf, FileStream fs)
+    private void ParseV3(byte[] headerBuf, Stream stream)
     {
         ParseV3(headerBuf);
-        ExtractComponentsV3Stream(fs);
+        ExtractComponentsV3Stream(stream);
     }
 
     private void ParseV4(byte[] data)
@@ -275,32 +270,12 @@ public class BootImageParser : IDisposable
         {
             Header.SignatureSize = ReadUInt32LE(data, 1580);
         }
-
-        ExtractComponentsV3(data);
-
-        if (Header.SignatureSize > 0)
-        {
-            var pageSize = Header.PageSize;
-            var kernelOffset = AlignToPage(Header.HeaderSize, pageSize);
-            var ramdiskOffset = AlignToPage(kernelOffset + Header.KernelSize, pageSize);
-            var signatureOffset = AlignToPage(ramdiskOffset + Header.RamdiskSize, pageSize);
-
-            if (signatureOffset + Header.SignatureSize <= data.Length)
-            {
-                Signature = new byte[Header.SignatureSize];
-                Array.Copy(data, signatureOffset, Signature, 0, Header.SignatureSize);
-            }
-        }
     }
 
-    private void ParseV4(byte[] headerBuf, FileStream fs)
+    private void ParseV4(byte[] headerBuf, Stream stream)
     {
         ParseV4(headerBuf);
-        // ParseV4(byte[]) 已用 headerBuf 解析 header，组件需从 fs 分段读取以支持大镜像
-        Kernel = [];
-        Ramdisk = [];
-        Signature = [];
-        ExtractComponentsV3Stream(fs);
+        ExtractComponentsV3Stream(stream);
 
         if (Header.SignatureSize > 0)
         {
@@ -309,94 +284,29 @@ public class BootImageParser : IDisposable
             var ramdiskOffset = AlignToPage(kernelOffset + Header.KernelSize, pageSize);
             var signatureOffset = AlignToPage(ramdiskOffset + Header.RamdiskSize, pageSize);
 
-            Signature = ReadSegment(fs, signatureOffset, Header.SignatureSize);
-        }
-    }
-
-    private void ExtractComponentsV0V2(byte[] data)
-    {
-        var pageSize = Header.PageSize;
-        var kernelOffset = AlignToPage(Header.HeaderSize, pageSize);
-        var ramdiskOffset = AlignToPage(kernelOffset + Header.KernelSize, pageSize);
-        var secondOffset = AlignToPage(ramdiskOffset + Header.RamdiskSize, pageSize);
-
-        if (kernelOffset + Header.KernelSize <= data.Length)
-        {
-            Kernel = new byte[Header.KernelSize];
-            Array.Copy(data, kernelOffset, Kernel, 0, Header.KernelSize);
-        }
-
-        if (Header.RamdiskSize > 0 && ramdiskOffset + Header.RamdiskSize <= data.Length)
-        {
-            Ramdisk = new byte[Header.RamdiskSize];
-            Array.Copy(data, ramdiskOffset, Ramdisk, 0, Header.RamdiskSize);
-        }
-
-        if (Header.SecondSize > 0 && secondOffset + Header.SecondSize <= data.Length)
-        {
-            Second = new byte[Header.SecondSize];
-            Array.Copy(data, secondOffset, Second, 0, Header.SecondSize);
-        }
-
-        if (Header.DtbSize > 0)
-        {
-            var dtbOffset = AlignToPage(secondOffset + Header.SecondSize, pageSize);
-            if (dtbOffset + Header.DtbSize <= data.Length)
-            {
-                Dtb = new byte[Header.DtbSize];
-                Array.Copy(data, dtbOffset, Dtb, 0, Header.DtbSize);
-            }
-        }
-
-        if (Header.RecoveryDtboSize > 0)
-        {
-            var dtboOffset = (uint)Header.RecoveryDtboOffset;
-            if (dtboOffset > 0 && dtboOffset + Header.RecoveryDtboSize <= data.Length)
-            {
-                RecoveryDtbo = new byte[Header.RecoveryDtboSize];
-                Array.Copy(data, dtboOffset, RecoveryDtbo, 0, Header.RecoveryDtboSize);
-            }
-        }
-    }
-
-    private void ExtractComponentsV3(byte[] data)
-    {
-        var pageSize = Header.PageSize;
-        var kernelOffset = AlignToPage(Header.HeaderSize, pageSize);
-        var ramdiskOffset = AlignToPage(kernelOffset + Header.KernelSize, pageSize);
-
-        if (kernelOffset + Header.KernelSize <= data.Length)
-        {
-            Kernel = new byte[Header.KernelSize];
-            Array.Copy(data, kernelOffset, Kernel, 0, Header.KernelSize);
-        }
-
-        if (Header.RamdiskSize > 0 && ramdiskOffset + Header.RamdiskSize <= data.Length)
-        {
-            Ramdisk = new byte[Header.RamdiskSize];
-            Array.Copy(data, ramdiskOffset, Ramdisk, 0, Header.RamdiskSize);
+            Signature = ReadSegment(stream, signatureOffset, Header.SignatureSize);
         }
     }
 
     /// <summary>
-    /// 流式提取 V0/V2 组件：从 fs 按偏移分段读取 kernel/ramdisk/second/dtb/dtbo。
-    /// <para>Streaming V0/V2 component extraction by offset from fs.</para>
+    /// 流式提取 V0/V2 组件：从 stream 按偏移分段读取 kernel/ramdisk/second/dtb/dtbo。
+    /// <para>Streaming V0/V2 component extraction by offset from stream.</para>
     /// </summary>
-    private void ExtractComponentsV0V2Stream(FileStream fs)
+    private void ExtractComponentsV0V2Stream(Stream stream)
     {
         var pageSize = Header.PageSize;
         var kernelOffset = AlignToPage(Header.HeaderSize, pageSize);
         var ramdiskOffset = AlignToPage(kernelOffset + Header.KernelSize, pageSize);
         var secondOffset = AlignToPage(ramdiskOffset + Header.RamdiskSize, pageSize);
 
-        Kernel = ReadSegment(fs, kernelOffset, Header.KernelSize);
-        Ramdisk = Header.RamdiskSize > 0 ? ReadSegment(fs, ramdiskOffset, Header.RamdiskSize) : [];
-        Second = Header.SecondSize > 0 ? ReadSegment(fs, secondOffset, Header.SecondSize) : [];
+        Kernel = ReadSegment(stream, kernelOffset, Header.KernelSize);
+        Ramdisk = Header.RamdiskSize > 0 ? ReadSegment(stream, ramdiskOffset, Header.RamdiskSize) : [];
+        Second = Header.SecondSize > 0 ? ReadSegment(stream, secondOffset, Header.SecondSize) : [];
 
         if (Header.DtbSize > 0)
         {
             var dtbOffset = AlignToPage(secondOffset + Header.SecondSize, pageSize);
-            Dtb = ReadSegment(fs, dtbOffset, Header.DtbSize);
+            Dtb = ReadSegment(stream, dtbOffset, Header.DtbSize);
         }
 
         if (Header.RecoveryDtboSize > 0)
@@ -404,40 +314,40 @@ public class BootImageParser : IDisposable
             var dtboOffset = (uint)Header.RecoveryDtboOffset;
             if (dtboOffset > 0)
             {
-                RecoveryDtbo = ReadSegment(fs, dtboOffset, Header.RecoveryDtboSize);
+                RecoveryDtbo = ReadSegment(stream, dtboOffset, Header.RecoveryDtboSize);
             }
         }
     }
 
     /// <summary>
-    /// 流式提取 V3/V4 组件：kernel/ramdisk 从 fs 分段读。
-    /// <para>Streaming V3/V4 component extraction by offset from fs.</para>
+    /// 流式提取 V3/V4 组件：kernel/ramdisk 从 stream 分段读。
+    /// <para>Streaming V3/V4 component extraction by offset from stream.</para>
     /// </summary>
-    private void ExtractComponentsV3Stream(FileStream fs)
+    private void ExtractComponentsV3Stream(Stream stream)
     {
         var pageSize = Header.PageSize;
         var kernelOffset = AlignToPage(Header.HeaderSize, pageSize);
         var ramdiskOffset = AlignToPage(kernelOffset + Header.KernelSize, pageSize);
 
-        Kernel = ReadSegment(fs, kernelOffset, Header.KernelSize);
-        Ramdisk = Header.RamdiskSize > 0 ? ReadSegment(fs, ramdiskOffset, Header.RamdiskSize) : [];
+        Kernel = ReadSegment(stream, kernelOffset, Header.KernelSize);
+        Ramdisk = Header.RamdiskSize > 0 ? ReadSegment(stream, ramdiskOffset, Header.RamdiskSize) : [];
     }
 
     /// <summary>
-    /// 从 FileStream 指定偏移读取指定长度区段（Seek + 单次 Read，不留全量驻留）。
-    /// <para>Reads a length-bounded segment from fs at the given offset without retaining the full image.</para>
+    /// 从 Stream 指定偏移读取指定长度区段（Seek + ReadExactly，不留全量驻留）。
+    /// <para>Reads a length-bounded segment from stream at the given offset without retaining the full image.</para>
     /// </summary>
-    private static byte[] ReadSegment(FileStream fs, uint offset, uint size)
+    private static byte[] ReadSegment(Stream stream, uint offset, uint size)
     {
-        if (size == 0 || offset + size > fs.Length)
+        if (size == 0 || offset + size > stream.Length)
         {
             return [];
         }
 
-        fs.Seek(offset, SeekOrigin.Begin);
+        stream.Seek(offset, SeekOrigin.Begin);
         var buf = new byte[size];
-        var read = fs.Read(buf, 0, (int)size);
-        return read == size ? buf : buf[..read];
+        stream.ReadExactly(buf);
+        return buf;
     }
 
     /// <summary>

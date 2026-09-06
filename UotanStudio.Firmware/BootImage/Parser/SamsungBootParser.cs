@@ -83,8 +83,12 @@ public class SamsungBootParser : IDisposable
     /// <exception cref="ImageParseException">镜像格式无效时抛出。<para>Thrown when the image format is invalid.</para></exception>
     public void ParseFile(string filePath)
     {
-        var data = File.ReadAllBytes(filePath);
-        Parse(data);
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var headerBufSize = (int)Math.Min(stream.Length, 1680);
+        var headerBuf = new byte[headerBufSize];
+        stream.ReadExactly(headerBuf);
+        ParseHeader(headerBuf);
+        ExtractComponentsFromStream(stream);
     }
 
     /// <summary>
@@ -94,6 +98,12 @@ public class SamsungBootParser : IDisposable
     /// <param name="data">镜像数据。<para>The image data.</para></param>
     /// <exception cref="ImageParseException">镜像格式无效时抛出。<para>Thrown when the image format is invalid.</para></exception>
     public void Parse(byte[] data)
+    {
+        ParseHeader(data);
+        ExtractComponents(data);
+    }
+
+    private void ParseHeader(byte[] data)
     {
         if (data.Length < 8)
         {
@@ -157,8 +167,6 @@ public class SamsungBootParser : IDisposable
         {
             Header.KernelLoadAddr = ReadUInt64LE(data, 1652);
         }
-
-        ExtractComponents(data);
     }
 
     /// <summary>
@@ -218,6 +226,50 @@ public class SamsungBootParser : IDisposable
             {
                 Extra = new byte[Header.ExtraSize];
                 Array.Copy(data, extraOffset, Extra, 0, Header.ExtraSize);
+            }
+        }
+    }
+
+    private void ExtractComponentsFromStream(Stream stream)
+    {
+        var pageSize = Header.PageSize > 0 ? Header.PageSize : 2048;
+        var headerSize = Header.HasExtra ? Header.ExtraSize : SamsungHeaderSize;
+
+        var kernelOffset = AlignToPage(headerSize, pageSize);
+        var ramdiskOffset = AlignToPage(kernelOffset + Header.KernelSize, pageSize);
+        var secondOffset = AlignToPage(ramdiskOffset + Header.RamdiskSize, pageSize);
+
+        var fileLength = stream.Length;
+
+        if (Header.KernelSize > 0 && kernelOffset + Header.KernelSize <= fileLength)
+        {
+            stream.Seek(kernelOffset, SeekOrigin.Begin);
+            Kernel = new byte[Header.KernelSize];
+            stream.ReadExactly(Kernel);
+        }
+
+        if (Header.RamdiskSize > 0 && ramdiskOffset + Header.RamdiskSize <= fileLength)
+        {
+            stream.Seek(ramdiskOffset, SeekOrigin.Begin);
+            Ramdisk = new byte[Header.RamdiskSize];
+            stream.ReadExactly(Ramdisk);
+        }
+
+        if (Header.SecondSize > 0 && secondOffset + Header.SecondSize <= fileLength)
+        {
+            stream.Seek(secondOffset, SeekOrigin.Begin);
+            Second = new byte[Header.SecondSize];
+            stream.ReadExactly(Second);
+        }
+
+        if (Header.ExtraSize > 0)
+        {
+            var extraOffset = AlignToPage(secondOffset + Header.SecondSize, pageSize);
+            if (extraOffset + Header.ExtraSize <= fileLength)
+            {
+                stream.Seek(extraOffset, SeekOrigin.Begin);
+                Extra = new byte[Header.ExtraSize];
+                stream.ReadExactly(Extra);
             }
         }
     }

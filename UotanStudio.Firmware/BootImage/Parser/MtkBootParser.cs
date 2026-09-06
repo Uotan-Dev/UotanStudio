@@ -70,8 +70,53 @@ public class MtkBootParser : IDisposable
     /// <exception cref="ImageParseException">镜像格式无效时抛出。<para>Thrown when the image format is invalid.</para></exception>
     public void ParseFile(string filePath)
     {
-        var data = File.ReadAllBytes(filePath);
-        Parse(data);
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        Parse(stream);
+    }
+
+    /// <summary>
+    /// 从流解析 MTK Boot 镜像（流式读取，避免一次性加载整个文件）。
+    /// <para>Parses an MTK boot image from a stream using streaming reads.</para>
+    /// </summary>
+    /// <param name="stream">可读且可寻址的流。<para>A readable, seekable stream.</para></param>
+    /// <exception cref="ImageParseException">镜像格式无效时抛出。<para>Thrown when the image format is invalid.</para></exception>
+    public void Parse(Stream stream)
+    {
+        if (stream.Length < MtkHeaderSize)
+        {
+            throw new ImageParseException($"文件太小，不是有效的 MTK Boot 镜像: {stream.Length} 字节");
+        }
+
+        using var reader = new BinaryReader(stream, Encoding.ASCII, leaveOpen: true);
+
+        var magic = reader.ReadUInt32();
+        if (magic != MtkMagic)
+        {
+            throw new ImageParseException($"无效的 MTK Boot 镜像 magic: 0x{magic:X8}");
+        }
+
+        Header = new MtkHeader
+        {
+            Name = ReadStringFromStream(reader, MtkNameSize).TrimEnd('\0')
+        };
+        Header.HeaderName = Header.Name;
+        Header.Size = reader.ReadUInt32();
+        Header.KernelSize = reader.ReadUInt32();
+        Header.KernelOffset = reader.ReadUInt32();
+        Header.RamdiskSize = reader.ReadUInt32();
+        Header.RamdiskOffset = reader.ReadUInt32();
+        Header.SecondSize = reader.ReadUInt32();
+        Header.SecondOffset = reader.ReadUInt32();
+        Header.TagsAddr = reader.ReadUInt32();
+        Header.PageSize = reader.ReadUInt32();
+        Header.HeaderVersion = reader.ReadUInt32();
+        Header.KernelAddr = reader.ReadUInt32();
+        Header.RamdiskAddr = reader.ReadUInt32();
+        Header.SecondAddr = reader.ReadUInt32();
+        Header.DtbSize = reader.ReadUInt32();
+        Header.DtbOffset = reader.ReadUInt32();
+
+        ExtractComponentsFromStream(stream);
     }
 
     /// <summary>
@@ -188,6 +233,56 @@ public class MtkBootParser : IDisposable
         }
     }
 
+    private void ExtractComponentsFromStream(Stream stream)
+    {
+        var pageSize = Header.PageSize > 0 ? Header.PageSize : 2048;
+        var fileLength = (uint)stream.Length;
+
+        if (Header.KernelSize > 0 && Header.KernelOffset > 0)
+        {
+            var kernelOffset = AlignToPage(MtkHeaderSize + Header.KernelOffset, pageSize);
+            if (kernelOffset + Header.KernelSize <= fileLength)
+            {
+                Kernel = new byte[Header.KernelSize];
+                stream.Seek(kernelOffset, SeekOrigin.Begin);
+                stream.ReadExactly(Kernel);
+            }
+        }
+
+        if (Header.RamdiskSize > 0 && Header.RamdiskOffset > 0)
+        {
+            var ramdiskOffset = AlignToPage(MtkHeaderSize + Header.RamdiskOffset, pageSize);
+            if (ramdiskOffset + Header.RamdiskSize <= fileLength)
+            {
+                Ramdisk = new byte[Header.RamdiskSize];
+                stream.Seek(ramdiskOffset, SeekOrigin.Begin);
+                stream.ReadExactly(Ramdisk);
+            }
+        }
+
+        if (Header.SecondSize > 0 && Header.SecondOffset > 0)
+        {
+            var secondOffset = AlignToPage(MtkHeaderSize + Header.SecondOffset, pageSize);
+            if (secondOffset + Header.SecondSize <= fileLength)
+            {
+                Second = new byte[Header.SecondSize];
+                stream.Seek(secondOffset, SeekOrigin.Begin);
+                stream.ReadExactly(Second);
+            }
+        }
+
+        if (Header.DtbSize > 0 && Header.DtbOffset > 0)
+        {
+            var dtbOffset = AlignToPage(MtkHeaderSize + Header.DtbOffset, pageSize);
+            if (dtbOffset + Header.DtbSize <= fileLength)
+            {
+                Dtb = new byte[Header.DtbSize];
+                stream.Seek(dtbOffset, SeekOrigin.Begin);
+                stream.ReadExactly(Dtb);
+            }
+        }
+    }
+
     private static uint ReadUInt32LE(byte[] data, int offset) => offset + 4 > data.Length ? 0 : BitConverter.ToUInt32(data, offset);
 
     private static string ReadString(byte[] data, int offset, int length)
@@ -200,6 +295,12 @@ public class MtkBootParser : IDisposable
 
         var bytes = new byte[actualLength];
         Array.Copy(data, offset, bytes, 0, actualLength);
+        return Encoding.ASCII.GetString(bytes);
+    }
+
+    private static string ReadStringFromStream(BinaryReader reader, int length)
+    {
+        var bytes = reader.ReadBytes(length);
         return Encoding.ASCII.GetString(bytes);
     }
 
