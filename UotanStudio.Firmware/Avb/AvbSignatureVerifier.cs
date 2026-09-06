@@ -17,8 +17,8 @@ namespace UotanStudio.Firmware.Avb;
 public sealed class AvbDescriptorInfo
 {
     /// <summary>
-    /// Gets the descriptor tag (0 = hash descriptor, 1 = hashtree, 2 = prop, 3 = kernel cmdline, 4 = chain).
-    /// <para>获取描述符标签（0 = 哈希描述符，1 = 哈希树，2 = 属性，3 = 内核命令行，4 = 链）。</para>
+    /// Gets the descriptor tag (0 = prop, 1 = hashtree, 2 = hash, 3 = kernel cmdline, 4 = chain).
+    /// <para>获取描述符标签（0 = 属性，1 = 哈希树，2 = 哈希，3 = 内核命令行，4 = 链式分区）。</para>
     /// </summary>
     public ulong Tag { get; init; }
 
@@ -35,20 +35,20 @@ public sealed class AvbDescriptorInfo
     public ulong Size { get; init; }
 
     /// <summary>
-    /// Gets the target partition name (hash/hashtree descriptors only).
-    /// <para>获取目标分区名称（仅哈希/哈希树描述符）。</para>
+    /// Gets the target partition name (hash/hashtree/chain descriptors only).
+    /// <para>获取目标分区名称（仅哈希/哈希树/链式描述符）。</para>
     /// </summary>
     public string? PartitionName { get; init; }
 
     /// <summary>
-    /// Gets the hash algorithm name (hash descriptors only, e.g. "sha256").
-    /// <para>获取哈希算法名称（仅哈希描述符，如 "sha256"）。</para>
+    /// Gets the hash algorithm name (hash/hashtree descriptors only, e.g. "sha256").
+    /// <para>获取哈希算法名称（仅哈希/哈希树描述符，如 "sha256"）。</para>
     /// </summary>
     public string? HashAlgorithm { get; init; }
 
     /// <summary>
-    /// Gets the salt used when computing the digest (hash descriptors only).
-    /// <para>获取计算摘要时使用的盐值（仅哈希描述符）。</para>
+    /// Gets the salt used when computing the digest (hash/hashtree descriptors only).
+    /// <para>获取计算摘要时使用的盐值（仅哈希/哈希树描述符）。</para>
     /// </summary>
     public byte[]? Salt { get; init; }
 
@@ -57,6 +57,102 @@ public sealed class AvbDescriptorInfo
     /// <para>获取描述符中存储的期望摘要（仅哈希描述符）。</para>
     /// </summary>
     public byte[]? Digest { get; init; }
+
+    /// <summary>
+    /// Gets the root digest stored in the descriptor (hashtree descriptors only).
+    /// <para>获取描述符中存储的根摘要（仅哈希树描述符）。</para>
+    /// </summary>
+    public byte[]? RootDigest { get; init; }
+
+    /// <summary>
+    /// Gets the image size covered by the digest or hash tree (hash/hashtree descriptors only).
+    /// <para>获取摘要或哈希树覆盖的镜像大小（仅哈希/哈希树描述符）。</para>
+    /// </summary>
+    public ulong ImageSize { get; init; }
+
+    /// <summary>
+    /// Gets the absolute byte offset of the hash tree (hashtree descriptors only).
+    /// <para>获取哈希树的绝对字节偏移（仅哈希树描述符）。</para>
+    /// </summary>
+    public ulong TreeOffset { get; init; }
+
+    /// <summary>
+    /// Gets the hash tree size in bytes (hashtree descriptors only).
+    /// <para>获取哈希树大小（字节）（仅哈希树描述符）。</para>
+    /// </summary>
+    public ulong TreeSize { get; init; }
+
+    /// <summary>
+    /// Gets the data block size in bytes (hashtree descriptors only).
+    /// <para>获取数据块大小（字节）（仅哈希树描述符）。</para>
+    /// </summary>
+    public uint DataBlockSize { get; init; }
+
+    /// <summary>
+    /// Gets the hash block size in bytes (hashtree descriptors only).
+    /// <para>获取哈希块大小（字节）（仅哈希树描述符）。</para>
+    /// </summary>
+    public uint HashBlockSize { get; init; }
+
+    /// <summary>
+    /// Gets the number of FEC roots (hashtree descriptors only).
+    /// <para>获取 FEC 根数（仅哈希树描述符）。</para>
+    /// </summary>
+    public uint FecNumRoots { get; init; }
+
+    /// <summary>
+    /// Gets the byte offset of the FEC data (hashtree descriptors only).
+    /// <para>获取 FEC 数据的字节偏移（仅哈希树描述符）。</para>
+    /// </summary>
+    public ulong FecOffset { get; init; }
+
+    /// <summary>
+    /// Gets the FEC data size in bytes (hashtree descriptors only).
+    /// <para>获取 FEC 数据大小（字节）（仅哈希树描述符）。</para>
+    /// </summary>
+    public ulong FecSize { get; init; }
+
+    /// <summary>
+    /// Gets the dm-verity version (hashtree descriptors only).
+    /// <para>获取 dm-verity 版本（仅哈希树描述符）。</para>
+    /// </summary>
+    public uint DmVerityVersion { get; init; }
+
+    /// <summary>
+    /// Gets the descriptor flags (hash/hashtree/kernel-cmdline descriptors only).
+    /// <para>获取描述符 flags（仅哈希/哈希树/内核命令行描述符）。</para>
+    /// </summary>
+    public uint Flags { get; init; }
+
+    /// <summary>
+    /// Gets the kernel command-line string (kernel-cmdline descriptors only).
+    /// <para>获取内核命令行字符串（仅内核命令行描述符）。</para>
+    /// </summary>
+    public string? KernelCmdline { get; init; }
+
+    /// <summary>
+    /// Gets the rollback index location (chain descriptors only).
+    /// <para>获取回滚索引位置（仅链式描述符）。</para>
+    /// </summary>
+    public uint RollbackIndexLocation { get; init; }
+
+    /// <summary>
+    /// Gets the public key blob (chain descriptors only).
+    /// <para>获取公钥数据块（仅链式描述符）。</para>
+    /// </summary>
+    public byte[]? PublicKey { get; init; }
+
+    /// <summary>
+    /// Gets the property key (prop descriptors only).
+    /// <para>获取属性键（仅属性描述符）。</para>
+    /// </summary>
+    public string? Key { get; init; }
+
+    /// <summary>
+    /// Gets the property value bytes (prop descriptors only).
+    /// <para>获取属性值字节（仅属性描述符）。</para>
+    /// </summary>
+    public byte[]? Value { get; init; }
 }
 
 /// <summary>
@@ -146,7 +242,16 @@ public static class AvbSignatureVerifier
     public const uint AlgorithmNone = 0;
 
     private static ReadOnlySpan<byte> MagicBytes => "AVB0"u8;
-    private const int HashDescriptorTag = 0;
+
+    // 上游 libavb avb_descriptor.h 的 tag 常量：0=Property、1=Hashtree、2=Hash、
+    // 3=KernelCmdline、4=ChainPartition。
+    // Upstream libavb avb_descriptor.h tags: 0=Property, 1=Hashtree, 2=Hash,
+    // 3=KernelCmdline, 4=ChainPartition.
+    private const int PropertyDescriptorTag = 0;
+    private const int HashtreeDescriptorTag = 1;
+    private const int HashDescriptorTag = 2;
+    private const int KernelCmdlineDescriptorTag = 3;
+    private const int ChainPartitionDescriptorTag = 4;
     private const int Exponent = 65537;
 
     /// <summary>
@@ -506,29 +611,172 @@ public static class AvbSignatureVerifier
             Size = (ulong)numBytesFollowing
         };
 
-        if (tag == HashDescriptorTag && numBytesFollowing >= 55 && bodyStart + 55 <= data.Length)
+        switch (tag)
         {
-            var hashAlgorithm = ReadAscii(data.AsSpan(bodyStart + 20, 32));
-            var partitionNameLen = data[bodyStart + 52];
-            var saltLen = data[bodyStart + 53];
-            var digestLen = data[bodyStart + 54];
-
-            if (bodyStart + 56 + partitionNameLen + saltLen + digestLen <= data.Length)
-            {
-                var partitionName = Encoding.UTF8.GetString(data, bodyStart + 56, partitionNameLen).TrimEnd('\0');
-                var salt = data.AsSpan(bodyStart + 56 + partitionNameLen, saltLen).ToArray();
-                var digest = data.AsSpan(bodyStart + 56 + partitionNameLen + saltLen, digestLen).ToArray();
-                return new AvbDescriptorInfo
+            // 上游 AvbPropertyDescriptor 正文（16 字节固定段 + key + NUL + value + NUL）：
+            // key_size u64@0、value_size u64@8、key@16、NUL、value、NUL。
+            // Upstream AvbPropertyDescriptor body (16-byte fixed section + key + NUL + value + NUL):
+            // key_size u64@0, value_size u64@8, key@16, NUL, value, NUL.
+            case PropertyDescriptorTag:
+                if (numBytesFollowing >= 16 && bodyStart + 16 <= data.Length)
                 {
-                    Tag = tag,
-                    TypeName = GetDescriptorTypeName(tag),
-                    Size = (ulong)numBytesFollowing,
-                    PartitionName = partitionName,
-                    HashAlgorithm = hashAlgorithm,
-                    Salt = salt,
-                    Digest = digest
-                };
-            }
+                    var keySize = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(bodyStart, 8));
+                    var valueSize = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(bodyStart + 8, 8));
+                    if (keySize <= int.MaxValue && valueSize <= int.MaxValue &&
+                        bodyStart + 16 + (long)keySize + 1 + (long)valueSize + 1 <= data.Length)
+                    {
+                        var key = Encoding.UTF8.GetString(data, bodyStart + 16, (int)keySize);
+                        var value = data.AsSpan(bodyStart + 16 + (int)keySize + 1, (int)valueSize).ToArray();
+                        return new AvbDescriptorInfo
+                        {
+                            Tag = tag,
+                            TypeName = GetDescriptorTypeName(tag),
+                            Size = (ulong)numBytesFollowing,
+                            Key = key,
+                            Value = value
+                        };
+                    }
+                }
+
+                break;
+
+            // 上游 AvbHashtreeDescriptor 正文（164 字节固定段 + 变长数据）：
+            // dm_verity_version u32@0、image_size u64@4、tree_offset u64@12、tree_size u64@20、
+            // data_block_size u32@28、hash_block_size u32@32、fec_num_roots u32@36、
+            // fec_offset u64@40、fec_size u64@48、32 字节算法名@56、u32 名称长度@88、
+            // u32 盐长度@92、u32 根摘要长度@96、u32 flags@100、60 字节保留@104、名称@164、
+            // 盐、根摘要。
+            // Upstream AvbHashtreeDescriptor body (164-byte fixed section + variable data):
+            // dm_verity_version u32@0, image_size u64@4, tree_offset u64@12, tree_size u64@20,
+            // data_block_size u32@28, hash_block_size u32@32, fec_num_roots u32@36,
+            // fec_offset u64@40, fec_size u64@48, 32-byte algorithm@56, u32 name length@88,
+            // u32 salt length@92, u32 root digest length@96, u32 flags@100, 60 reserved@104,
+            // name@164, salt, root digest.
+            case HashtreeDescriptorTag:
+                if (numBytesFollowing >= 164 && bodyStart + 164 <= data.Length)
+                {
+                    var hashAlgorithm = ReadAscii(data.AsSpan(bodyStart + 56, 32));
+                    var nameLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 88, 4));
+                    var saltLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 92, 4));
+                    var rootDigestLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 96, 4));
+                    if (bodyStart + 164 + (long)nameLen + (long)saltLen + (long)rootDigestLen <= data.Length)
+                    {
+                        var partitionName = Encoding.UTF8.GetString(data, bodyStart + 164, (int)nameLen).TrimEnd('\0');
+                        var salt = data.AsSpan(bodyStart + 164 + (int)nameLen, (int)saltLen).ToArray();
+                        var rootDigest = data.AsSpan(bodyStart + 164 + (int)nameLen + (int)saltLen, (int)rootDigestLen).ToArray();
+                        return new AvbDescriptorInfo
+                        {
+                            Tag = tag,
+                            TypeName = GetDescriptorTypeName(tag),
+                            Size = (ulong)numBytesFollowing,
+                            PartitionName = partitionName,
+                            HashAlgorithm = hashAlgorithm,
+                            Salt = salt,
+                            RootDigest = rootDigest,
+                            ImageSize = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(bodyStart + 4, 8)),
+                            TreeOffset = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(bodyStart + 12, 8)),
+                            TreeSize = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(bodyStart + 20, 8)),
+                            DataBlockSize = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 28, 4)),
+                            HashBlockSize = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 32, 4)),
+                            FecNumRoots = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 36, 4)),
+                            FecOffset = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(bodyStart + 40, 8)),
+                            FecSize = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(bodyStart + 48, 8)),
+                            DmVerityVersion = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart, 4)),
+                            Flags = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 100, 4))
+                        };
+                    }
+                }
+
+                break;
+
+            // 上游 AvbHashDescriptor 正文（116 字节固定段 + 变长数据）：
+            // image_size u64@0、32 字节算法名@8、u32 名称长度@40、u32 盐长度@44、
+            // u32 摘要长度@48、u32 flags@52、60 字节保留@56、名称@116、盐、摘要。
+            // Upstream AvbHashDescriptor body (116-byte fixed section + variable data):
+            // image_size u64@0, 32-byte algorithm@8, u32 name length@40, u32 salt length@44,
+            // u32 digest length@48, u32 flags@52, 60 reserved bytes@56, name@116, salt, digest.
+            case HashDescriptorTag:
+                if (numBytesFollowing >= 116 && bodyStart + 116 <= data.Length)
+                {
+                    var hashAlgorithm = ReadAscii(data.AsSpan(bodyStart + 8, 32));
+                    var partitionNameLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 40, 4));
+                    var saltLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 44, 4));
+                    var digestLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 48, 4));
+
+                    if (bodyStart + 116 + (long)partitionNameLen + (long)saltLen + (long)digestLen <= data.Length)
+                    {
+                        var partitionName = Encoding.UTF8.GetString(data, bodyStart + 116, (int)partitionNameLen).TrimEnd('\0');
+                        var salt = data.AsSpan(bodyStart + 116 + (int)partitionNameLen, (int)saltLen).ToArray();
+                        var digest = data.AsSpan(bodyStart + 116 + (int)partitionNameLen + (int)saltLen, (int)digestLen).ToArray();
+                        return new AvbDescriptorInfo
+                        {
+                            Tag = tag,
+                            TypeName = GetDescriptorTypeName(tag),
+                            Size = (ulong)numBytesFollowing,
+                            PartitionName = partitionName,
+                            HashAlgorithm = hashAlgorithm,
+                            Salt = salt,
+                            Digest = digest,
+                            ImageSize = BinaryPrimitives.ReadUInt64BigEndian(data.AsSpan(bodyStart, 8)),
+                            Flags = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 52, 4))
+                        };
+                    }
+                }
+
+                break;
+
+            // 上游 AvbKernelCmdlineDescriptor 正文（8 字节固定段 + 命令行）：
+            // flags u32@0、cmdline_len u32@4、命令行@8。
+            // Upstream AvbKernelCmdlineDescriptor body (8-byte fixed section + cmdline):
+            // flags u32@0, cmdline_len u32@4, cmdline@8.
+            case KernelCmdlineDescriptorTag:
+                if (numBytesFollowing >= 8 && bodyStart + 8 <= data.Length)
+                {
+                    var cmdlineLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 4, 4));
+                    if (cmdlineLen <= int.MaxValue && bodyStart + 8 + (long)cmdlineLen <= data.Length)
+                    {
+                        var cmdline = Encoding.UTF8.GetString(data, bodyStart + 8, (int)cmdlineLen).TrimEnd('\0');
+                        return new AvbDescriptorInfo
+                        {
+                            Tag = tag,
+                            TypeName = GetDescriptorTypeName(tag),
+                            Size = (ulong)numBytesFollowing,
+                            KernelCmdline = cmdline,
+                            Flags = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart, 4))
+                        };
+                    }
+                }
+
+                break;
+
+            // 上游 AvbChainPartitionDescriptor 正文（76 字节固定段 + 名称 + 公钥）：
+            // rollback_index_location u32@0、u32 名称长度@4、u32 公钥长度@8、64 字节保留@12、
+            // 名称@76、公钥。
+            // Upstream AvbChainPartitionDescriptor body (76-byte fixed section + name + key):
+            // rollback_index_location u32@0, u32 name length@4, u32 key length@8,
+            // 64 reserved bytes@12, name@76, public key.
+            case ChainPartitionDescriptorTag:
+                if (numBytesFollowing >= 76 && bodyStart + 76 <= data.Length)
+                {
+                    var nameLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 4, 4));
+                    var keyLen = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart + 8, 4));
+                    if (bodyStart + 76 + (long)nameLen + (long)keyLen <= data.Length)
+                    {
+                        var partitionName = Encoding.UTF8.GetString(data, bodyStart + 76, (int)nameLen).TrimEnd('\0');
+                        var publicKey = data.AsSpan(bodyStart + 76 + (int)nameLen, (int)keyLen).ToArray();
+                        return new AvbDescriptorInfo
+                        {
+                            Tag = tag,
+                            TypeName = GetDescriptorTypeName(tag),
+                            Size = (ulong)numBytesFollowing,
+                            PartitionName = partitionName,
+                            RollbackIndexLocation = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(bodyStart, 4)),
+                            PublicKey = publicKey
+                        };
+                    }
+                }
+
+                break;
         }
 
         return info;
@@ -536,9 +784,9 @@ public static class AvbSignatureVerifier
 
     private static string GetDescriptorTypeName(ulong tag) => tag switch
     {
-        0 => "hash",
+        0 => "prop",
         1 => "hashtree",
-        2 => "prop",
+        2 => "hash",
         3 => "kernel_cmdline",
         4 => "chain",
         _ => "unknown"

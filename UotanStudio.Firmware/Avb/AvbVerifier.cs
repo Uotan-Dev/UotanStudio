@@ -58,7 +58,7 @@ public static class AvbVerifier
             {
                 var major = BinaryPrimitives.ReadUInt32BigEndian(footerBytes.Slice(4, 4));
                 var minor = BinaryPrimitives.ReadUInt32BigEndian(footerBytes.Slice(8, 4));
-                result.ErrorMessage = $"Unsupported AVB footer version {major}.{minor}; supported version is {AvbFooter.SupportedVersionMajor}.{AvbFooter.SupportedVersionMinor}.";
+                result.ErrorMessage = $"Unsupported AVB footer version {major}.{minor}; supported major version is {AvbFooter.SupportedVersionMajor}.";
             }
             else
             {

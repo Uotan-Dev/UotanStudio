@@ -15,10 +15,10 @@ public readonly struct AvbFooter
     /// <summary>Gets the expected footer magic. <para>获取预期的尾部魔数。</para></summary>
     public const string ExpectedMagic = "AVBf";
 
-    /// <summary>Gets the supported standard footer major version. <para>获取支持的标准尾部主版本号。</para></summary>
+    /// <summary>Gets the supported standard footer major version; any minor version is accepted when the major version matches. <para>获取支持的标准尾部主版本号；主版本匹配时接受任意次版本号。</para></summary>
     public const uint SupportedVersionMajor = 1;
 
-    /// <summary>Gets the highest supported footer minor version. <para>获取支持的最高尾部次版本号。</para></summary>
+    /// <summary>Gets the footer minor version written by current tooling (avbtool 1.x writes 0). This is informational only: footers with the supported major version are accepted regardless of minor. <para>获取当前工具写出的尾部次版本号（avbtool 1.x 写 0）。该常量仅作信息用途：主版本匹配的尾部不分次版本一律接受。</para></summary>
     public const uint SupportedVersionMinor = 0;
 
     /// <summary>Gets the parsed footer magic. <para>获取解析出的尾部魔数。</para></summary>
@@ -56,8 +56,9 @@ public readonly struct AvbFooter
         }
 
         var versionMajor = BinaryPrimitives.ReadUInt32BigEndian(footer.Slice(4, 4));
-        var versionMinor = BinaryPrimitives.ReadUInt32BigEndian(footer.Slice(8, 4));
-        if (versionMajor != SupportedVersionMajor || versionMinor > SupportedVersionMinor)
+        // 主版本 1.x 即接受（忽略 minor），与上游 libavb avb_footer.h 对 1.x 的兼容约定一致。
+        // Any 1.x minor is accepted (minor is ignored), matching upstream libavb's avb_footer.h.
+        if (versionMajor != SupportedVersionMajor)
         {
             return null;
         }
@@ -66,7 +67,7 @@ public readonly struct AvbFooter
         {
             Magic = Encoding.ASCII.GetString(footer[..4]),
             VersionMajor = versionMajor,
-            VersionMinor = versionMinor,
+            VersionMinor = BinaryPrimitives.ReadUInt32BigEndian(footer.Slice(8, 4)),
             OriginalImageSize = BinaryPrimitives.ReadUInt64BigEndian(footer.Slice(12, 8)),
             VbmetaOffset = BinaryPrimitives.ReadUInt64BigEndian(footer.Slice(20, 8)),
             VbmetaSize = BinaryPrimitives.ReadUInt64BigEndian(footer.Slice(28, 8))

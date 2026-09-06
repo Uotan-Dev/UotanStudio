@@ -1,10 +1,12 @@
 namespace UotanStudio.Firmware.Avb;
 
 /// <summary>
-/// Describes one AVB hash descriptor to embed into a signed VBMeta image: the target partition
-/// name, the salt and the expected digest (computed over <c>salt || partition_data</c> with SHA-256).
-/// <para>描述要嵌入已签名 VBMeta 镜像的单个 AVB 哈希描述符：目标分区名、盐值与期望摘要
-/// （对 <c>salt || partition_data</c> 计算 SHA-256）。</para>
+/// Describes one AVB hash descriptor to embed into a signed VBMeta image, following the
+/// upstream libavb <c>AvbHashDescriptor</c> struct: the target partition name, the image size,
+/// the hash algorithm, the salt and the expected digest (computed over <c>salt || partition_data</c>).
+/// <para>描述要嵌入已签名 VBMeta 镜像的单个 AVB 哈希描述符，遵循上游 libavb
+/// <c>AvbHashDescriptor</c> 结构：目标分区名、镜像大小、哈希算法、盐值与期望摘要
+/// （对 <c>salt || partition_data</c> 计算）。</para>
 /// </summary>
 public sealed class AvbHashDescriptor
 {
@@ -13,6 +15,29 @@ public sealed class AvbHashDescriptor
     /// <para>获取或设置目标分区名称（ASCII，1-255 字节）。</para>
     /// </summary>
     public string PartitionName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the size in bytes of the image data covered by the digest. Required for
+    /// third-party tools (e.g. avbtool verify_image) to re-verify the digest; 0 means unspecified.
+    /// <para>获取或设置摘要覆盖的镜像数据大小（字节）。第三方工具（如 avbtool verify_image）
+    /// 依赖该值复验摘要；0 表示未指定。</para>
+    /// </summary>
+    public ulong ImageSize { get; init; }
+
+    /// <summary>
+    /// Gets or sets the hash algorithm name (ASCII, up to 32 bytes; "sha256" or "sha512").
+    /// Must match the digest length per the AVB specification.
+    /// <para>获取或设置哈希算法名（ASCII，至多 32 字节；"sha256" 或 "sha512"）。
+    /// 按 AVB 规范必须与摘要长度匹配。</para>
+    /// </summary>
+    public string HashAlgorithm { get; init; } = "sha256";
+
+    /// <summary>
+    /// Gets or sets the descriptor flags (e.g. <see cref="AvbSigner.VbmetaFlagHashtreeDisabled"/>-style
+    /// per-descriptor flags; upstream uses bits 0/1). Keep 0 unless required.
+    /// <para>获取或设置描述符 flags（上游位 0/1 表示禁用 hashtree/校验）。非必需时保持 0。</para>
+    /// </summary>
+    public uint Flags { get; init; }
 
     /// <summary>
     /// Gets or sets the salt prefixed to the partition data before hashing.
