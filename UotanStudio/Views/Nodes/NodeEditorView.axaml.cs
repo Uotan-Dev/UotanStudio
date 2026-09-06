@@ -70,7 +70,7 @@ public partial class NodeEditorView : UserControl
 
         var files = await storage.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
         {
-            Title = "Select file",
+            Title = UotanStudio.Services.LanguageService.Instance.GetString("Dialog_SelectFile"),
             AllowMultiple = false
         });
         if (files is { Count: > 0 } && files[0].TryGetLocalPath() is { Length: > 0 } localPath)

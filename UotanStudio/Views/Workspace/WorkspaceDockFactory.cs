@@ -1,8 +1,12 @@
+using Avalonia.Controls;
+using Avalonia.Media;
 using Dock.Avalonia.Controls;
 using Dock.Model.Controls;
 using Dock.Model.Core;
 using Dock.Model.Mvvm;
 using Dock.Model.Mvvm.Controls;
+using Material.Icons;
+using Material.Icons.Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Devices;
@@ -43,8 +47,8 @@ public class WorkspaceDockFactory : Factory
             Title = LanguageService.Instance.GetString("Dock_Properties"),
             CanClose = true
         };
-        var output = new Tool { Id = "Output", Title = "Output" };
-        var adbLog = new Tool { Id = "AdbLog", Title = "ADB Log" };
+        var output = new Tool { Id = "Output", Title = svc.GetString("Dock_Output") };
+        var adbLog = new Tool { Id = "AdbLog", Title = svc.GetString("Dock_AdbLog") };
         var device = new WorkspaceDeviceTool { Id = "Device", Title = LanguageService.Instance.GetString("Dock_Device"), CanClose = true };
 
         var documentDock = new DocumentDock
@@ -54,7 +58,32 @@ public class WorkspaceDockFactory : Factory
             IsCollapsable = false,
             Proportion = double.NaN,
             ActiveDockable = null,
-            VisibleDockables = CreateList<IDockable>()
+            VisibleDockables = CreateList<IDockable>(),
+            EmptyContent = new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Vertical,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Spacing = 8,
+                Children =
+                {
+                    new MaterialIcon { Kind = MaterialIconKind.FileDocumentOutline, Width = 48, Height = 48, Opacity = 0.4 },
+                    new TextBlock
+                    {
+                        Text = svc.GetString("Dock_NoDocumentOpen"),
+                        FontSize = 16,
+                        Opacity = 0.6,
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
+                    },
+                    new TextBlock
+                    {
+                        Text = svc.GetString("Dock_NoDocumentOpenHint"),
+                        FontSize = 12,
+                        Opacity = 0.4,
+                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center
+                    }
+                }
+            }
         };
 
         var rightToolsTop = new ToolDock
@@ -95,14 +124,14 @@ public class WorkspaceDockFactory : Factory
 
         var mainLayout = new ProportionalDock
         {
-            Orientation = Orientation.Horizontal,
+            Orientation = Dock.Model.Core.Orientation.Horizontal,
             Proportion = double.NaN,
             VisibleDockables = CreateList<IDockable>(
                 leftTools,
                 new ProportionalDockSplitter(),
                 new ProportionalDock
                 {
-                    Orientation = Orientation.Vertical,
+                    Orientation = Dock.Model.Core.Orientation.Vertical,
                     Proportion = 0.7,
                     VisibleDockables = CreateList<IDockable>(
                         documentDock,
@@ -113,7 +142,7 @@ public class WorkspaceDockFactory : Factory
                 new ProportionalDockSplitter(),
                 new ProportionalDock
                 {
-                    Orientation = Orientation.Vertical,
+                    Orientation = Dock.Model.Core.Orientation.Vertical,
                     Proportion = 0.15,
                     VisibleDockables = CreateList<IDockable>(
                         rightToolsTop,

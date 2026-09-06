@@ -34,6 +34,19 @@
     <x:String x:Key="Dock_UTCTime">UTC Time</x:String>
     <x:String x:Key="Dock_DATSegments">DAT Segments</x:String>
     <x:String x:Key="Dock_Device">Device</x:String>
+    <x:String x:Key="Dock_NoDocumentOpen">No documents open</x:String>
+    <x:String x:Key="Dock_NoDocumentOpenHint">Open or create a project file to get started</x:String>
+    <x:String x:Key="Dock_Output">Output</x:String>
+    <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
+    <x:String x:Key="Dock_NodeLeftPane">Node Toolbox</x:String>
+    <x:String x:Key="Dock_NodeRightPane">Node Properties</x:String>
+    <x:String x:Key="Dock_NodeBottomPane">Execution Log</x:String>
+    <x:String x:Key="Dialog_Rename">Rename</x:String>
+    <x:String x:Key="Dialog_ConfirmDelete">Confirm Delete</x:String>
+    <x:String x:Key="Dialog_ConfirmDeleteMessage">Delete '{0}'?</x:String>
+    <x:String x:Key="Dialog_NewFile">New File</x:String>
+    <x:String x:Key="Dialog_NewFolder">New Folder</x:String>
+    <x:String x:Key="Dialog_SelectFile">Select file</x:String>
 
     <!-- File view -->
     <x:String x:Key="Dock_File_Hex">Hex</x:String>

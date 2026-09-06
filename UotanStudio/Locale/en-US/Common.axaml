@@ -95,6 +95,15 @@
     <x:String x:Key="Explorer_CopyFullPath">Copy Full Path</x:String>
     <x:String x:Key="Explorer_OpenInFileExplorer">Open in File Explorer</x:String>
     <x:String x:Key="Explorer_OpenInTerminal">Open in Terminal</x:String>
+    <x:String x:Key="Explorer_NodeProject">Node Project</x:String>
+    <x:String x:Key="Explorer_ConfirmDeleteTitle">Confirm Delete</x:String>
+    <x:String x:Key="Explorer_ConfirmDeleteMessage">Delete '{0}'?</x:String>
+    <x:String x:Key="Explorer_RenameTitle">Rename</x:String>
+    <x:String x:Key="Explorer_NewFileTitle">New File</x:String>
+    <x:String x:Key="Explorer_NewFolderTitle">New Folder</x:String>
+    <x:String x:Key="Explorer_Yes">Yes</x:String>
+    <x:String x:Key="Explorer_No">No</x:String>
+    <x:String x:Key="Explorer_Ok">OK</x:String>
     <x:String x:Key="Dock_Dtb_Save">Save</x:String>
     <x:String x:Key="Dock_Dtb_Tree">Device Tree</x:String>
     <x:String x:Key="Dock_Dtb_Source">Device Tree Source</x:String>

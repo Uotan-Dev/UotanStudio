@@ -61,7 +61,7 @@ public class NodeDockFactory : Factory
         var leftTools = new ToolDock
         {
             Id = "NodeLeftPane",
-            Title = "NodeLeftPane",
+            Title = LanguageService.Instance.GetString("Dock_NodeLeftPane"),
             Proportion = 0.2,
             ActiveDockable = nodeToolbox,
             VisibleDockables = CreateList<IDockable>(nodeToolbox)
@@ -70,7 +70,7 @@ public class NodeDockFactory : Factory
         var rightTools = new ToolDock
         {
             Id = "NodeRightPane",
-            Title = "NodeRightPane",
+            Title = LanguageService.Instance.GetString("Dock_NodeRightPane"),
             Proportion = 0.2,
             ActiveDockable = nodeProperties,
             VisibleDockables = CreateList<IDockable>(nodeProperties)
@@ -79,7 +79,7 @@ public class NodeDockFactory : Factory
         var bottomTools = new ToolDock
         {
             Id = "NodeBottomPane",
-            Title = "NodeBottomPane",
+            Title = LanguageService.Instance.GetString("Dock_NodeBottomPane"),
             Proportion = 0.25,
             ActiveDockable = executionLog,
             VisibleDockables = CreateList<IDockable>(executionLog)

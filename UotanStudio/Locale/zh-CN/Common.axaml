@@ -95,6 +95,15 @@
     <x:String x:Key="Explorer_CopyFullPath">复制完整路径</x:String>
     <x:String x:Key="Explorer_OpenInFileExplorer">在文件资源管理器中打开</x:String>
     <x:String x:Key="Explorer_OpenInTerminal">在终端打开</x:String>
+    <x:String x:Key="Explorer_NodeProject">节点项目</x:String>
+    <x:String x:Key="Explorer_ConfirmDeleteTitle">确认删除</x:String>
+    <x:String x:Key="Explorer_ConfirmDeleteMessage">确定删除 '{0}' 吗？</x:String>
+    <x:String x:Key="Explorer_RenameTitle">重命名</x:String>
+    <x:String x:Key="Explorer_NewFileTitle">新建文件</x:String>
+    <x:String x:Key="Explorer_NewFolderTitle">新建文件夹</x:String>
+    <x:String x:Key="Explorer_Yes">是</x:String>
+    <x:String x:Key="Explorer_No">否</x:String>
+    <x:String x:Key="Explorer_Ok">确定</x:String>
     <x:String x:Key="Dock_Dtb_Save">保存</x:String>
     <x:String x:Key="Dock_Dtb_Tree">设备树</x:String>
     <x:String x:Key="Dock_Dtb_Source">设备树源</x:String>
