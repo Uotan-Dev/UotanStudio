@@ -34,10 +34,10 @@ public sealed class DtFormatHandler : IFormatHandler
             {
                 return false;
             }
-            // DTB: big-endian 0xD00DFEED; DTBO: little-endian 0xD7B7AB1E.
-            var dtbMagic = (uint)((magic[0] << 24) | (magic[1] << 16) | (magic[2] << 8) | magic[3]);
-            var dtboMagic = (uint)(magic[0] | (magic[1] << 8) | (magic[2] << 16) | (magic[3] << 24));
-            return dtbMagic == FdtConstants.FdtMagic || dtboMagic == FdtConstants.DtboMagic;
+            // DTB 与 DTBO 魔数均按大端存储（AOSP fdt/dt_table 头均为大端）。
+            // Both DTB and DTBO magics are stored big-endian (AOSP fdt/dt_table headers are big-endian).
+            var magicValue = (uint)((magic[0] << 24) | (magic[1] << 16) | (magic[2] << 8) | magic[3]);
+            return magicValue == FdtConstants.FdtMagic || magicValue == FdtConstants.DtboMagic;
         }
         catch
         {
@@ -52,11 +52,11 @@ public sealed class DtFormatHandler : IFormatHandler
         {
             var bytes = File.ReadAllBytes(filePath);
             var isDtbo = bytes.Length >= 4
-                && (uint)(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) == FdtConstants.DtboMagic;
+                && (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) == FdtConstants.DtboMagic;
 
             if (isDtbo)
             {
-                var (header, dtbs) = DtboFormat.Read(bytes);
+                var (header, _, _) = DtboFormat.Read(bytes);
                 var summary = $"DTBO image: {header.EntryCount} entries, page size {header.PageSize}";
                 return Task.FromResult(FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
                 {
@@ -95,11 +95,11 @@ public sealed class DtFormatHandler : IFormatHandler
             Directory.CreateDirectory(outputDirectory);
 
             var isDtbo = bytes.Length >= 4
-                && (uint)(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24)) == FdtConstants.DtboMagic;
+                && (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) == FdtConstants.DtboMagic;
 
             if (isDtbo)
             {
-                var (header, dtbs) = DtboFormat.Read(bytes);
+                var (header, _, dtbs) = DtboFormat.Read(bytes);
                 var written = new List<string>();
                 for (var i = 0; i < dtbs.Count; i++)
                 {

@@ -21,6 +21,12 @@ internal sealed class DtsParser
     private readonly Dictionary<string, DeviceTreeNode> _labelToNode = new(StringComparer.Ordinal);
     private readonly List<(DeviceTreeNode Node, string PropertyName, int Offset, string Label)> _pendingCellReferences = new();
     private readonly List<(DeviceTreeNode Node, string PropertyName, string Label)> _pendingLabelValueReferences = new();
+    private readonly List<(string Label, DeviceTreeNode Patch)> _overlayFragments = new();
+    private readonly List<string> _pendingRootDeletes = new();
+    private readonly List<string> _pendingRootDeleteProperties = new();
+    private readonly Dictionary<DeviceTreeNode, List<string>> _overlayDeletedChildren = new();
+    private readonly Dictionary<DeviceTreeNode, List<string>> _overlayDeletedProperties = new();
+    private bool _inOverlayBody;
 
     private int _line = 1;
     private int _column = 1;
@@ -95,6 +101,8 @@ internal sealed class DtsParser
     {
         SkipWhitespaceAndComments();
 
+        DeviceTree? tree = null;
+
         while (_pos < _text.Length)
         {
             SkipWhitespaceAndComments();
@@ -103,26 +111,19 @@ internal sealed class DtsParser
             if (Match("/dts-v1/")) { Expect(";"); SkipWhitespaceAndComments(); }
             else if (Match("/plugin/")) { Expect(";"); SkipWhitespaceAndComments(); }
             else if (Match("/memreserve/")) { ParseMemReserve(); SkipWhitespaceAndComments(); }
-            else if (Match("/delete-node/")) { SkipUntilSemicolon(); SkipWhitespaceAndComments(); }
-            else if (Match("/delete-property/")) { SkipUntilSemicolon(); SkipWhitespaceAndComments(); }
+            else if (Match("/delete-node/")) { ParseTopLevelDeleteNode(); SkipWhitespaceAndComments(); }
+            else if (Match("/delete-property/")) { ParseTopLevelDeleteProperty(); SkipWhitespaceAndComments(); }
             else if (Match("/include/")) { SkipUntilSemicolon(); AddParseWarning("/include/ directives should be resolved by preprocessing before parsing"); SkipWhitespaceAndComments(); }
             else if (CurrentChar() == '/')
             {
-                var tree = ParseRootNode();
+                if (tree is not null) break;
+                tree = ParseRootNode();
                 tree.Version = FdtConstants.FdtVersion;
-                foreach (var mr in _memReserves)
-                    tree.MemoryReservations.Add(mr);
-                ResolveLabelReferences(tree);
-                return tree;
+                SkipWhitespaceAndComments();
             }
             else if (CurrentChar() == '&')
             {
-                // Overlay-style merge sections are not supported by the simple model; skip body.
-                Advance();
-                try { ParseIdentifier(); } catch { }
-                SkipWhitespaceAndComments();
-                if (CurrentChar() == '{') SkipBalanced('{', '}');
-                else if (CurrentChar() == ';') Advance();
+                ParseOverlayFragment();
                 SkipWhitespaceAndComments();
             }
             else
@@ -137,20 +138,18 @@ internal sealed class DtsParser
             }
         }
 
-        ThrowParseError("No root node found in DTS source");
-        return null!;
-    }
-
-    private void SkipBalanced(char open, char close)
-    {
-        int depth = 0;
-        while (_pos < _text.Length)
+        if (tree is null)
         {
-            char ch = _text[_pos];
-            if (ch == open) depth++;
-            else if (ch == close) { depth--; Advance(); if (depth == 0) return; continue; }
-            Advance();
+            ThrowParseError("No root node found in DTS source");
+            return null!;
         }
+
+        foreach (var mr in _memReserves)
+            tree.MemoryReservations.Add(mr);
+        ApplyPendingRootDeletes(tree.Root);
+        ResolveLabelReferences(tree);
+        MergeOverlayFragments();
+        return tree;
     }
 
     private void ParseMemReserve()
@@ -198,8 +197,8 @@ internal sealed class DtsParser
 
             if (ch == '/' && Peek(1) == '*') { SkipComment(); continue; }
 
-            if (Match("/delete-property/")) { SkipUntilSemicolon(); AddParseWarning($"/delete-property/ inside node '{node.GetPath()}' is not supported by the DeviceTree model; skipped"); continue; }
-            if (Match("/delete-node/")) { SkipUntilSemicolon(); AddParseWarning($"/delete-node/ inside node '{node.GetPath()}' is not supported by the DeviceTree model; skipped"); continue; }
+            if (Match("/delete-property/")) { ParseDeleteProperty(node); continue; }
+            if (Match("/delete-node/")) { ParseDeleteNode(node); continue; }
 
             var identifier = PeekIdentifier();
             if (identifier is null) break;
@@ -273,6 +272,122 @@ internal sealed class DtsParser
                 }
                 catch (DtsRecoveryException) { TryRecoverToNextStatement(); }
             }
+        }
+    }
+
+    private void ParseOverlayFragment()
+    {
+        Advance();
+        SkipWhitespaceAndComments();
+        var label = ParseIdentifier();
+        SkipWhitespaceAndComments();
+        if (CurrentChar() == '{')
+        {
+            var patch = new DeviceTreeNode("");
+            Advance();
+            var previousOverlayFlag = _inOverlayBody;
+            _inOverlayBody = true;
+            try
+            {
+                ParseNodeBody(patch);
+                _overlayFragments.Add((label, patch));
+            }
+            catch (DtsRecoveryException) { TryRecoverToNextStatement(); }
+            _inOverlayBody = previousOverlayFlag;
+        }
+        else if (CurrentChar() == ';') Advance();
+    }
+
+    private void ParseTopLevelDeleteNode()
+    {
+        SkipWhitespaceAndComments();
+        if (CurrentChar() == '&')
+        {
+            SkipUntilSemicolon();
+            AddParseWarning("/delete-node/ by label reference is not supported by the DeviceTree model; skipped");
+            return;
+        }
+        var name = ParseIdentifier();
+        SkipWhitespaceAndComments();
+        Expect(";");
+        _pendingRootDeletes.Add(name);
+    }
+
+    private void ParseTopLevelDeleteProperty()
+    {
+        SkipWhitespaceAndComments();
+        if (CurrentChar() == '&')
+        {
+            SkipUntilSemicolon();
+            AddParseWarning("/delete-property/ by label reference is not supported by the DeviceTree model; skipped");
+            return;
+        }
+        var name = ParseIdentifier();
+        SkipWhitespaceAndComments();
+        Expect(";");
+        _pendingRootDeleteProperties.Add(name);
+    }
+
+    private void ApplyPendingRootDeletes(DeviceTreeNode root)
+    {
+        foreach (var name in _pendingRootDeletes)
+            root.RemoveChild(name);
+        foreach (var name in _pendingRootDeleteProperties)
+            root.RemoveProperty(name);
+    }
+
+    private void ParseDeleteNode(DeviceTreeNode node)
+    {
+        SkipWhitespaceAndComments();
+        if (CurrentChar() == '&')
+        {
+            SkipUntilSemicolon();
+            AddParseWarning($"/delete-node/ by label reference in '{node.GetPath()}' is not supported by the DeviceTree model; skipped");
+            return;
+        }
+        var name = ParseIdentifier();
+        SkipWhitespaceAndComments();
+        Expect(";");
+        node.RemoveChild(name);
+        if (_inOverlayBody) RecordOverlayDelete(_overlayDeletedChildren, node, name);
+    }
+
+    private void ParseDeleteProperty(DeviceTreeNode node)
+    {
+        SkipWhitespaceAndComments();
+        if (CurrentChar() == '&')
+        {
+            SkipUntilSemicolon();
+            AddParseWarning($"/delete-property/ by label reference in '{node.GetPath()}' is not supported by the DeviceTree model; skipped");
+            return;
+        }
+        var name = ParseIdentifier();
+        SkipWhitespaceAndComments();
+        Expect(";");
+        node.RemoveProperty(name);
+        if (_inOverlayBody) RecordOverlayDelete(_overlayDeletedProperties, node, name);
+    }
+
+    private static void RecordOverlayDelete(Dictionary<DeviceTreeNode, List<string>> map, DeviceTreeNode node, string name)
+    {
+        if (!map.TryGetValue(node, out var list))
+        {
+            list = [];
+            map[node] = list;
+        }
+        if (!list.Contains(name)) list.Add(name);
+    }
+
+    private void MergeOverlayFragments()
+    {
+        foreach (var (label, patch) in _overlayFragments)
+        {
+            if (!_labelToNode.TryGetValue(label, out var target))
+            {
+                AddParseWarning($"Cannot resolve overlay target label '&{label}'; overlay fragment skipped");
+                continue;
+            }
+            DtsFormat.MergeNode(target, patch, _overlayDeletedProperties, _overlayDeletedChildren);
         }
     }
 
@@ -577,8 +692,8 @@ internal sealed class DtsParser
 
     private static void PatchValue(DeviceTreeNode node, string propName, byte[] newValue)
     {
-        // The model exposes a read-only property list; values cannot be replaced in place.
-        _ = node; _ = propName; _ = newValue;
+        var existing = node.FindProperty(propName);
+        existing?.ReplaceValue(newValue);
     }
 
     private string ParseStringContent()

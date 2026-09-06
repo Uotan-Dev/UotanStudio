@@ -150,6 +150,80 @@ public static class DtsFormat
         return new Dictionary<string, int>(writer.NodeStartLines);
     }
 
+    /// <summary>
+    /// <para>将 overlay 树合并到基树并返回合并后的基树。overlay 根节点下的子节点按名称递归合并到基树
+    /// 同名节点:overlay 属性覆盖基树同名属性,基树中不存在的节点/属性直接添加;同名字节点递归合并其属性
+    /// 与子节点。被合并的子节点会从 overlay 树移入基树。</para>
+    /// Merges the overlay tree into the base tree and returns the merged base tree. Children under
+    /// the overlay root are recursively merged into the base node of the same name: overlay
+    /// properties override base properties of the same name, nodes/properties that do not exist in
+    /// the base are added, and children with matching names are merged recursively (properties and
+    /// children). Merged children are moved from the overlay tree into the base tree.
+    /// </summary>
+    public static DeviceTree MergeOverlay(DeviceTree baseTree, DeviceTree overlayTree)
+    {
+        if (baseTree is null)
+            throw new ArgumentNullException(nameof(baseTree));
+        if (overlayTree is null)
+            throw new ArgumentNullException(nameof(overlayTree));
+        foreach (var child in overlayTree.Root.Children.ToList())
+        {
+            var existing = baseTree.Root.FindChild(child.Name);
+            if (existing is null)
+            {
+                overlayTree.Root.RemoveChild(child);
+                baseTree.Root.AddChildNode(child);
+            }
+            else MergeNode(existing, child);
+        }
+        return baseTree;
+    }
+
+    /// <summary>
+    /// <para>将 source 节点的属性与子节点递归合并到 target 节点。overlay 删除记录
+    /// (deletedProperties/deletedChildren,键为 source 子树节点)会先于属性/子节点合并应用,
+    /// 与 &lt;c&gt;&amp;label&lt;/c&gt; overlay 片段的合并语义一致。</para>
+    /// Recursively merges the properties and children of the source node into the target node.
+    /// Overlay deletion records (deletedProperties/deletedChildren, keyed by source subtree nodes)
+    /// are applied before property/child merging, matching the &lt;c&gt;&amp;label&lt;/c&gt; overlay
+    /// fragment merge semantics.
+    /// </summary>
+    internal static void MergeNode(
+        DeviceTreeNode target,
+        DeviceTreeNode source,
+        IReadOnlyDictionary<DeviceTreeNode, List<string>>? deletedProperties = null,
+        IReadOnlyDictionary<DeviceTreeNode, List<string>>? deletedChildren = null)
+    {
+        if (deletedProperties is not null && deletedProperties.TryGetValue(source, out var deletedPropNames))
+        {
+            foreach (var name in deletedPropNames)
+                target.RemoveProperty(name);
+        }
+        if (deletedChildren is not null && deletedChildren.TryGetValue(source, out var deletedChildNames))
+        {
+            foreach (var name in deletedChildNames)
+                target.RemoveChild(name);
+        }
+
+        foreach (var prop in source.Properties)
+        {
+            var existing = target.FindProperty(prop.Name);
+            if (existing is null) target.AddProperty(prop.Name, prop.Value);
+            else existing.ReplaceValue(prop.Value);
+        }
+
+        foreach (var child in source.Children.ToList())
+        {
+            var existing = target.FindChild(child.Name);
+            if (existing is null)
+            {
+                source.RemoveChild(child);
+                target.AddChildNode(child);
+            }
+            else MergeNode(existing, child, deletedProperties, deletedChildren);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Minimal DTS preprocessor: #define / #undef / #include / #if..., macro
     // substitution. Adapted from FirmwareKit.DT.DtsPreprocessor (MIT).

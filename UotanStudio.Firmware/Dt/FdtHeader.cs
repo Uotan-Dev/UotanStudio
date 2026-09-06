@@ -48,11 +48,17 @@ public static class FdtConstants
     /// <summary>FDT 标记字节大小(4 字节)。</summary>
     public const int TokenSize = 4;
 
-    /// <summary>DTBO 镜像魔数(0xD7B7AB1E)。</summary>
+    /// <summary>DTBO 镜像魔数(0xD7B7AB1E，大端存储)。</summary>
     public const uint DtboMagic = 0xD7B7AB1E;
 
-    /// <summary>DTBO 头部固定大小(40 字节)。</summary>
-    public const int DtboHeaderSize = 40;
+    /// <summary>DTBO 表头固定大小(32 字节，AOSP dt_table_header)。</summary>
+    public const int DtboHeaderSize = 32;
+
+    /// <summary>DTBO 条目描述符固定大小(32 字节，AOSP dt_table_entry)。</summary>
+    public const int DtboEntrySize = 32;
+
+    /// <summary>DTBO 默认页大小(AOSP DT_TABLE_DEFAULT_PAGE_SIZE)。</summary>
+    public const uint DtboDefaultPageSize = 2048;
 }
 
 /// <summary>

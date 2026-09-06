@@ -8,7 +8,7 @@ namespace UotanStudio.Firmware.Dt;
 /// </summary>
 public sealed class DeviceTreeProperty
 {
-    private readonly byte[] _value = [];
+    private byte[] _value = [];
 
     /// <summary>属性名称。</summary>
     public string Name { get; set; } = string.Empty;
@@ -27,6 +27,15 @@ public sealed class DeviceTreeProperty
 
     /// <summary>是否在 DTB 中标记为 NOP(写入 FDT_NOP 而非 FDT_PROP)。</summary>
     public bool IsNop { get; set; }
+
+    /// <summary>
+    /// <para>替换属性值(仅供 DTS 解析器回填 label/phandle 引用)。</para>
+    /// Replaces the property value (for the DTS parser to backfill label/phandle references).
+    /// </summary>
+    internal void ReplaceValue(ReadOnlySpan<byte> value)
+    {
+        _value = value.ToArray();
+    }
 
     /// <summary>
     /// <para>使用指定名称和值初始化属性。</para>
@@ -166,6 +175,17 @@ public sealed class DeviceTreeNode
     }
 
     /// <summary>
+    /// <para>将已存在的节点作为子节点挂接到当前节点(供 overlay 合并等场景使用)。</para>
+    /// Attaches an existing node as a child of this node (used by overlay merging).
+    /// </summary>
+    internal void AddChildNode(DeviceTreeNode node)
+    {
+        if (node is null) throw new ArgumentNullException(nameof(node));
+        node.Parent = this;
+        _children.Add(node);
+    }
+
+    /// <summary>
     /// <para>按名称查找属性,未找到返回 null。</para>
     /// Finds a property by name, or null if not found.
     /// </summary>
@@ -178,6 +198,34 @@ public sealed class DeviceTreeNode
     /// </summary>
     public DeviceTreeNode? FindChild(string name)
         => _children.FirstOrDefault(c => c.Name == name);
+
+    /// <summary>
+    /// <para>按名称移除属性,找到并移除返回 true,否则返回 false。</para>
+    /// Removes the property with the specified name; returns true if it was found and removed, otherwise false.
+    /// </summary>
+    public bool RemoveProperty(string name)
+        => _properties.RemoveAll(p => p.Name == name) > 0;
+
+    /// <summary>
+    /// <para>按名称移除子节点,找到并移除返回 true,否则返回 false。</para>
+    /// Removes the child node with the specified name; returns true if it was found and removed, otherwise false.
+    /// </summary>
+    public bool RemoveChild(string name)
+    {
+        var child = FindChild(name);
+        return child is not null && RemoveChild(child);
+    }
+
+    /// <summary>
+    /// <para>按引用移除子节点,找到并移除返回 true,否则返回 false。</para>
+    /// Removes the specified child node; returns true if it was found and removed, otherwise false.
+    /// </summary>
+    public bool RemoveChild(DeviceTreeNode node)
+    {
+        if (!_children.Remove(node)) return false;
+        node.Parent = null;
+        return true;
+    }
 
     /// <summary>
     /// <para>获取节点在树中的完整路径(如 /soc/i2c@0)。根节点返回 /，其余节点跳过空名称的根段，
