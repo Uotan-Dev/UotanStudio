@@ -53,6 +53,7 @@ public static class FirmwareFormatRegistry
             Register(new AXml.AXmlFormatHandler());
             Register(new Arsc.ArscFormatHandler());
             Register(new Apk.ApkFormatHandler());
+            Register(new Rockchip.RockchipFormatHandler());
 
             IsRegistered = true;
         }
