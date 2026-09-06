@@ -154,8 +154,11 @@ public sealed class OppoFormatHandler : IFormatHandler
                 }
 
                 // 组件列表：条目名 + 大小（供固件信息面板展示内部组成结构）。
+                // 过滤掉 OTA 配置/签名等非固件目录，只展示真正的固件组件。
                 // Component list: entry names and sizes (for the firmware info panel structure view).
+                // Filter out OTA config/signing directories, showing only real firmware components.
                 var components = archive.Entries
+                    .Where(e => IsFirmwareComponent(e.Name))
                     .Select(e => FirmwareComponent.Of(e.Name, e.Size))
                     .ToList();
 
@@ -230,6 +233,42 @@ public sealed class OppoFormatHandler : IFormatHandler
                 return FirmwareOpResult.Fail($"Failed to unpack Oppo firmware '{filePath}': {ex.Message}");
             }
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// <para>判断条目是否为真正的固件组件（排除 OTA 配置、签名等非固件目录）。</para>
+    /// Determines whether an entry is a real firmware component (excludes OTA config,
+    /// signing metadata, and other non-firmware directories).
+    /// </summary>
+    private static bool IsFirmwareComponent(string name)
+    {
+        // firmware-update/ 下的分区镜像
+        if (name.StartsWith("firmware-update/", StringComparison.Ordinal))
+            return true;
+
+        // OTA 数据与分区映射表
+        if (name.EndsWith(".dat.br", StringComparison.Ordinal)
+            || name.EndsWith(".new.dat.br", StringComparison.Ordinal)
+            || name.EndsWith(".transfer.list", StringComparison.Ordinal)
+            || name.EndsWith(".patch.dat", StringComparison.Ordinal))
+            return true;
+
+        // 顶层脚本与兼容性包
+        if (name.StartsWith("compatibility.zip", StringComparison.Ordinal)
+            || name.StartsWith("oppo_update_script", StringComparison.Ordinal)
+            || name.StartsWith("oppo_operate_data", StringComparison.Ordinal))
+            return true;
+
+        // 排除 OTA 配置目录与签名元数据
+        if (name.StartsWith("data_update_patch/", StringComparison.Ordinal))
+            return false;
+        if (name.StartsWith("META-INF/", StringComparison.Ordinal))
+            return false;
+        if (name.Equals("oppo_metadata", StringComparison.Ordinal))
+            return false;
+
+        // 其他顶层条目默认保留
+        return !name.Contains('/');
     }
 
     /// <summary>
