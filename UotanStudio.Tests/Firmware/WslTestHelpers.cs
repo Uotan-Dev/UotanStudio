@@ -239,7 +239,7 @@ internal static class WslTestHelpers
     /// </summary>
     private static readonly string[] s_probedTools =
     [
-        "mke2fs", "tune2fs", "dumpe2fs", "debugfs", "e2fsck",
+        "mke2fs", "tune2fs", "dumpe2fs", "debugfs", "e2fsck", "resize2fs",
         "mkfs.erofs", "fsck.erofs", "dump.erofs",
         "mkfs.f2fs", "fsck.f2fs", "dump.f2fs"
     ];
@@ -273,6 +273,42 @@ internal static class WslTestHelpers
     {
         EnsureToolsProbed();
         return s_toolCache.TryGetValue(tool, out var present) && present;
+    }
+
+    private static bool s_avbToolProvisioned;
+
+    /// <summary>
+    /// 把仓库内固定的 avbtool.py（TestInfrastructure/avbtool.py，AOSP avbtool 1.2.0 副本）
+    /// 安装进 WSL Alpine（/usr/local/bin/avbtool），确保 python3 存在。失败时返回 false，
+    /// 由调用方以 Assert.Skip 跳过。工具缺失的 Alpine 仓库不提供 avbtool 包。
+    /// <para>Installs the repo-pinned avbtool.py (TestInfrastructure/avbtool.py, a copy of
+    /// AOSP avbtool 1.2.0) into WSL Alpine (/usr/local/bin/avbtool), ensuring python3 exists.
+    /// Returns false on failure so callers can Assert.Skip; Alpine repos do not package avbtool.</para>
+    /// </summary>
+    public static bool EnsureAvbTool()
+    {
+        if (s_avbToolProvisioned) return true;
+
+        RunWsl("command -v python3 >/dev/null || sudo apk add --no-cache --quiet python3", 180000);
+        // avbtool 1.2 经 openssl 命令行执行 RSA 运算。
+        // avbtool 1.2 shells out to the openssl CLI for RSA operations.
+        RunWsl("command -v openssl >/dev/null || sudo apk add --no-cache --quiet openssl", 180000);
+        RunWsl("sudo mkdir -p /usr/local/bin", 10000);
+        var sourcePath = Path.Combine(AppContext.BaseDirectory, "TestInfrastructure", "avbtool.py");
+        if (!File.Exists(sourcePath))
+        {
+            return false;
+        }
+        // shebang 统一指向 python3（上游为 python3，防御性重写以兼容 PATH 差异）。
+        // Normalize the shebang to python3 defensively (upstream already uses python3).
+        RunWsl($"sudo sh -c \"sed '1s|.*|#!/usr/bin/env python3|' '{ToWslPath(sourcePath)}' > /usr/local/bin/avbtool && chmod +x /usr/local/bin/avbtool\"", 30000);
+        var (output, exitCode) = RunWsl("avbtool version", 30000);
+        s_avbToolProvisioned = exitCode == 0 && output.Contains("avbtool", StringComparison.Ordinal);
+        if (s_avbToolProvisioned)
+        {
+            s_toolCache["avbtool"] = true;
+        }
+        return s_avbToolProvisioned;
     }
 
     /// <summary>

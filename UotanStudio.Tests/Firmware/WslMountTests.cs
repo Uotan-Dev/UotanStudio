@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using UotanStudio.Firmware.Erofs;
 using UotanStudio.Firmware.Ext4;
 using UotanStudio.Firmware.F2fs;
@@ -93,6 +94,53 @@ public class WslMountTests
                 Assert.True(ok, $"erofs mount read-back failed:\n{output}");
                 Assert.Contains("alpha erofs", output);
                 Assert.Contains("beta erofs", output);
+            }
+            finally
+            {
+                try { File.Delete(imagePath); } catch { }
+            }
+        }
+        finally
+        {
+            WslTestHelpers.DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void Erofs_CompressedMountLoop_ReadBackFiles()
+    {
+        if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
+        WslTestHelpers.EnsureAlpineConfigured();
+        if (!WslTestHelpers.EnsureKernelModules()) { Assert.Skip("erofs kernel module could not be loaded"); }
+        if (!WslTestHelpers.CanLoopMount()) { Assert.Skip("loop mount unavailable"); }
+
+        var root = WslTestHelpers.CreateTempDirectory();
+        try
+        {
+            // 高可压数据 → 多 pcluster，验证 LZ4 压缩 + compact 4B 索引镜像的内核挂载读回。
+            // Highly compressible data → multiple pclusters; verifies kernel mount and read-back
+            // of an LZ4-compressed image with compact 4B indexes.
+            var pattern = new string('B', 64) + "The quick brown fox jumps over the lazy dog.";
+            File.WriteAllText(Path.Combine(root, "big.txt"), string.Concat(Enumerable.Repeat(pattern, 500)));
+            File.WriteAllBytes(Path.Combine(root, "blob.bin"), RandomNumberGenerator.GetBytes(48 * 1024));
+
+            var imagePath = Path.Combine(Path.GetTempPath(), $"wsl-mount-erofs-lz4-{Path.GetRandomFileName()}.img");
+            try
+            {
+                var builder = new ErofsBuilder();
+                builder.Build(root, imagePath, new ErofsOptions { Compress = true });
+                var (ok, kind, output) = WslTestHelpers.MountVerifyAndUnmount(
+                    WslTestHelpers.ToWslPath(imagePath),
+                    "erofs",
+                    ["big.txt", "blob.bin"]);
+                if (kind == WslTestHelpers.MountFailureKind.VersionMismatch)
+                {
+                    Assert.Skip($"erofs kernel module version mismatch with erofs-utils: {output.Trim().Split('\n').LastOrDefault()}");
+                }
+
+                Assert.True(ok, $"erofs compressed mount read-back failed:\n{output}");
+                Assert.Contains("The quick brown fox", output);
             }
             finally
             {

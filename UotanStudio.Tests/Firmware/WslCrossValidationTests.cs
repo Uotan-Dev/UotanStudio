@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using UotanStudio.Firmware.Erofs;
 using UotanStudio.Firmware.Ext4;
 using UotanStudio.Firmware.F2fs;
@@ -60,6 +61,11 @@ public class WslCrossValidationTests
 
                 var (output, exitCode) = WslTestHelpers.RunWsl($"e2fsck -n -f {wslPath}");
                 Assert.True(exitCode <= 1, $"e2fsck failed (exit={exitCode}):\n{output}");
+                // e2fsck -n 对可修复问题返回 0，需显式断言关键错误不存在。
+                // e2fsck -n exits 0 for fixable problems, so the key errors must be asserted absent.
+                Assert.DoesNotContain("not valid", output);
+                Assert.DoesNotContain("Free blocks count wrong", output);
+                Assert.DoesNotContain("Free inodes count wrong", output);
 
                 var (lsOutput, lsExit) = WslTestHelpers.RunWsl($"debugfs -R 'ls /' {wslPath}");
                 Assert.True(lsExit == 0, $"debugfs ls failed:\n{lsOutput}");
@@ -101,6 +107,69 @@ public class WslCrossValidationTests
                 Assert.True(exitCode == 0, $"dumpe2fs failed:\n{output}");
                 Assert.Contains("0xEF53", output);
                 Assert.Contains("Filesystem features:", output);
+                // 特性集须与 mke2fs -t ext4 默认一致（兼容/不兼容/ro 兼容三组）。
+                // The feature set must match the mke2fs -t ext4 defaults (all three flag groups).
+                Assert.Contains("has_journal", output);
+                Assert.Contains("ext_attr", output);
+                Assert.Contains("resize_inode", output);
+                Assert.Contains("dir_index", output);
+                Assert.Contains("filetype", output);
+                Assert.Contains("extent", output);
+                Assert.Contains("64bit", output);
+                Assert.Contains("flex_bg", output);
+                Assert.Contains("sparse_super", output);
+                Assert.Contains("large_file", output);
+                Assert.Contains("huge_file", output);
+                Assert.Contains("dir_nlink", output);
+                Assert.Contains("extra_isize", output);
+                Assert.Contains("metadata_csum", output);
+                // 不允许误置位（此前曾把 BIGALLOC/READONLY 位错写入 ro_compat）。
+                // Must not misdeclare (BIGALLOC/READONLY were once wrongly set in ro_compat).
+                Assert.DoesNotContain("bigalloc", output);
+                Assert.Contains("Reserved GDT blocks", output);
+                Assert.DoesNotContain("Reserved GDT blocks:      0", output);
+            }
+            finally
+            {
+                try { File.Delete(imagePath); } catch { }
+            }
+        }
+        finally
+        {
+            WslTestHelpers.DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void Ext4_Resize2fsOnlineGrow_Passes()
+    {
+        if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
+        WslTestHelpers.EnsureAlpineConfigured();
+        if (!WslTestHelpers.IsToolAvailable("resize2fs")) { Assert.Skip("required tools missing"); }
+
+        var root = WslTestHelpers.CreateTempDirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "hello.txt"), "resize me");
+
+            var imagePath = Path.Combine(Path.GetTempPath(), $"wsl-ext4-resize-{Path.GetRandomFileName()}.img");
+            try
+            {
+                Ext4Builder.Build(root, imagePath);
+                var wslPath = WslTestHelpers.ToWslPath(imagePath);
+
+                // 真实在线扩容（128M → 256M）后重新 e2fsck：彻底校验 resize_inode / 保留 GDT
+                // 布局可支撑在线扩容。
+                // A real online resize (128M → 256M) followed by e2fsck: fully validates that the
+                // resize inode / reserved GDT layout supports online growth.
+                var (output, exitCode) = WslTestHelpers.RunWsl($"resize2fs {wslPath} 256M");
+                Assert.True(exitCode == 0, $"resize2fs failed (exit={exitCode}):\n{output}");
+
+                var (fsckOutput, fsckExit) = WslTestHelpers.RunWsl($"e2fsck -n -f {wslPath}");
+                Assert.True(fsckExit <= 1, $"post-resize e2fsck failed (exit={fsckExit}):\n{fsckOutput}");
+                Assert.DoesNotContain("not valid", fsckOutput);
+                Assert.DoesNotContain("Free blocks count wrong", fsckOutput);
             }
             finally
             {
@@ -139,6 +208,48 @@ public class WslCrossValidationTests
 
                 var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.erofs {wslPath}");
                 Assert.True(exitCode <= 1, $"fsck.erofs failed (exit={exitCode}):\n{output}");
+            }
+            finally
+            {
+                try { File.Delete(imagePath); } catch { }
+            }
+        }
+        finally
+        {
+            WslTestHelpers.DeleteRecursive(root);
+        }
+    }
+
+    [Fact]
+    public void Erofs_FsckErofs_LzmaBigPclusterCompressed_Passes()
+    {
+        if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
+        if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
+        WslTestHelpers.EnsureAlpineConfigured();
+        WslTestHelpers.EnsureKernelModules();
+        if (!WslTestHelpers.IsToolAvailable("fsck.erofs")) { Assert.Skip("required tools missing"); }
+
+        var root = WslTestHelpers.CreateTempDirectory();
+        try
+        {
+            // 高可压数据 → 多 pcluster（每 pcluster 覆盖多个逻辑簇），走 LZMA big-pcluster
+            // 索引路径（h_advise BIG_PCLUSTER_1|2 + 首个 NONHEAD CBLKCNT + compact 4B 索引）。
+            // Highly compressible data → multiple pclusters (each covering several logical
+            // clusters), exercising the LZMA big-pcluster index path (h_advise BIG_PCLUSTER_1|2 +
+            // first-NONHEAD CBLKCNT + compact 4B indexes).
+            var pattern = new string('A', 64) + "abcdefghijklmnopqrstuvwxyz0123456789";
+            File.WriteAllText(Path.Combine(root, "compressible.txt"), string.Concat(Enumerable.Repeat(pattern, 600)));
+            File.WriteAllBytes(Path.Combine(root, "random.bin"), RandomNumberGenerator.GetBytes(96 * 1024));
+
+            var builder = new ErofsBuilder();
+            var imagePath = Path.Combine(Path.GetTempPath(), $"wsl-erofs-lzma-{Path.GetRandomFileName()}.img");
+            try
+            {
+                builder.Build(root, imagePath, new ErofsOptions { Algorithm = ErofsCompressionAlgorithm.Lzma });
+                var wslPath = WslTestHelpers.ToWslPath(imagePath);
+
+                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.erofs {wslPath}");
+                Assert.True(exitCode <= 1, $"fsck.erofs (lzma big-pcluster) failed (exit={exitCode}):\n{output}");
             }
             finally
             {
