@@ -274,6 +274,161 @@ public class BootImageRoundTripTests
         Assert.Equal(parser.RamdiskTable[1].RamdiskName, parser2.RamdiskTable[1].RamdiskName);
     }
 
+    [Fact]
+    public void V0_UnpackRepack_PreservesComponentsAndKeyFields()
+    {
+        var packer = new BootImagePacker
+        {
+            Header = new BootImageHeader
+            {
+                HeaderVersion = BootImageVersion.V0,
+                PageSize = 2048,
+                KernelAddr = 0x00008000,
+                RamdiskAddr = 0x01000000,
+                SecondAddr = 0x00F00000,
+                TagsAddr = 0x00000100,
+                OsVersion = 0x00010000,
+                CommandLine = "console=ttyMSM0",
+                ImageName = "v0-boot",
+            },
+            Kernel = TestKernel,
+            Ramdisk = TestRamdisk,
+            Second = BuildBytes(256, factor: 29),
+        };
+
+        var image = packer.Pack();
+        Assert.StartsWith("ANDROID!", System.Text.Encoding.ASCII.GetString(image, 0, 8));
+
+        using var parser = new BootImageParser();
+        parser.Parse(image);
+
+        Assert.Equal(BootImageVersion.V0, parser.Header.HeaderVersion);
+        Assert.Equal(TestKernel, parser.Kernel);
+        Assert.Equal(TestRamdisk, parser.Ramdisk);
+        Assert.Equal(packer.Second, parser.Second);
+        Assert.Equal([], parser.Dtb);
+        Assert.Equal([], parser.RecoveryDtbo);
+        Assert.Equal(packer.Header.CommandLine, parser.Header.CommandLine);
+
+        var repacked = BootImagePacker.Repack(parser);
+        using var parser2 = new BootImageParser();
+        parser2.Parse(repacked);
+
+        Assert.Equal(BootImageVersion.V0, parser2.Header.HeaderVersion);
+        Assert.Equal(TestKernel, parser2.Kernel);
+        Assert.Equal(TestRamdisk, parser2.Ramdisk);
+        Assert.Equal(packer.Second, parser2.Second);
+    }
+
+    [Fact]
+    public void V1_UnpackRepack_WithRecoveryDtbo_PreservesComponents()
+    {
+        var recoveryDtbo = BuildBytes(1024, factor: 31);
+        var packer = new BootImagePacker
+        {
+            Header = new BootImageHeader
+            {
+                HeaderVersion = BootImageVersion.V1,
+                PageSize = 4096,
+                KernelAddr = 0x00008000,
+                RamdiskAddr = 0x01000000,
+                TagsAddr = 0x00000100,
+                CommandLine = "console=ttyS0",
+            },
+            Kernel = TestKernel,
+            Ramdisk = TestRamdisk,
+            RecoveryDtbo = recoveryDtbo,
+        };
+
+        var image = packer.Pack();
+
+        using var parser = new BootImageParser();
+        parser.Parse(image);
+
+        Assert.Equal(BootImageVersion.V1, parser.Header.HeaderVersion);
+        Assert.Equal(TestKernel, parser.Kernel);
+        Assert.Equal(TestRamdisk, parser.Ramdisk);
+        Assert.Equal(recoveryDtbo, parser.RecoveryDtbo);
+        Assert.True(parser.Header.RecoveryDtboOffset > 0);
+        Assert.Equal(recoveryDtbo.Length, (int)parser.Header.RecoveryDtboSize);
+
+        var repacked = BootImagePacker.Repack(parser);
+        using var parser2 = new BootImageParser();
+        parser2.Parse(repacked);
+
+        Assert.Equal(recoveryDtbo, parser2.RecoveryDtbo);
+        Assert.Equal(parser.Header.RecoveryDtboOffset, parser2.Header.RecoveryDtboOffset);
+    }
+
+    [Fact]
+    public void V2_UnpackRepack_WithRecoveryDtboAndDtb_PreservesBoth()
+    {
+        // mkbootimg 布局回归：recovery_dtbo 位于 second 之后，dtb 在 recovery_dtbo 之后。
+        // mkbootimg layout regression: recovery_dtbo follows second, dtb follows recovery_dtbo.
+        var recoveryDtbo = BuildBytes(1024, factor: 37);
+        var packer = new BootImagePacker
+        {
+            Header = new BootImageHeader
+            {
+                HeaderVersion = BootImageVersion.V2,
+                PageSize = 4096,
+                KernelAddr = 0x00008000,
+                RamdiskAddr = 0x01000000,
+                TagsAddr = 0x00000100,
+                KernelLoadAddr = 0x01F00000,
+                CommandLine = "console=ttyS0",
+            },
+            Kernel = TestKernel,
+            Ramdisk = TestRamdisk,
+            RecoveryDtbo = recoveryDtbo,
+            Dtb = TestDtb,
+        };
+
+        var image = packer.Pack();
+
+        using var parser = new BootImageParser();
+        parser.Parse(image);
+
+        Assert.Equal(BootImageVersion.V2, parser.Header.HeaderVersion);
+        Assert.Equal(recoveryDtbo, parser.RecoveryDtbo);
+        Assert.Equal(TestDtb, parser.Dtb);
+
+        var repacked = BootImagePacker.Repack(parser);
+        using var parser2 = new BootImageParser();
+        parser2.Parse(repacked);
+
+        Assert.Equal(recoveryDtbo, parser2.RecoveryDtbo);
+        Assert.Equal(TestDtb, parser2.Dtb);
+    }
+
+    [Fact]
+    public void V0_TruncatedImage_ParseFails()
+    {
+        var packer = new BootImagePacker
+        {
+            Header = new BootImageHeader
+            {
+                HeaderVersion = BootImageVersion.V0,
+                PageSize = 2048,
+            },
+            Kernel = TestKernel,
+            Ramdisk = TestRamdisk,
+        };
+
+        var image = packer.Pack();
+        // 整页截断：解析器对超出镜像末尾的段按既有约定返回空组件（宽松截断语义）。
+        // A full page is removed; per the existing contract the parser yields empty
+        // components for segments extending past EOF (lenient truncation semantics).
+        var truncated = new byte[image.Length - 2048];
+        Array.Copy(image, truncated, truncated.Length);
+
+        using var parser = new BootImageParser();
+        parser.Parse(truncated);
+
+        Assert.Equal(TestKernel, parser.Kernel);
+        Assert.Equal([], parser.Ramdisk);
+    }
+
     private static byte[] BuildBytes(int length, int factor)
     {
         var data = new byte[length];

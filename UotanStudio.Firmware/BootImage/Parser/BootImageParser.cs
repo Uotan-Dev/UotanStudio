@@ -305,7 +305,17 @@ public class BootImageParser : IDisposable
 
         if (Header.DtbSize > 0)
         {
-            var dtbOffset = AlignToPage(secondOffset + Header.SecondSize, pageSize);
+            // mkbootimg 布局：recovery_dtbo 位于 second 之后（页对齐），dtb 在 recovery_dtbo 之后；
+            // 无 recovery_dtbo 时 dtb 紧跟 second。旧镜像（无 recovery_dtbo）行为不变。
+            // mkbootimg layout: recovery_dtbo follows second (page-aligned) and dtb follows
+            // recovery_dtbo; without recovery_dtbo, dtb directly follows second. Legacy images
+            // without recovery_dtbo keep the previous behavior.
+            var afterSecond = secondOffset + Header.SecondSize;
+            if (Header.RecoveryDtboSize > 0 && Header.RecoveryDtboOffset > 0)
+            {
+                afterSecond = checked((uint)Header.RecoveryDtboOffset + Header.RecoveryDtboSize);
+            }
+            var dtbOffset = AlignToPage(afterSecond, pageSize);
             Dtb = ReadSegment(stream, dtbOffset, Header.DtbSize);
         }
 

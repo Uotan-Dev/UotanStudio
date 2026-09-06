@@ -123,6 +123,7 @@ public class BootImagePacker
         Header.KernelSize = (uint)Kernel.Length;
         Header.RamdiskSize = (uint)Ramdisk.Length;
         Header.SecondSize = (uint)Second.Length;
+        Header.RecoveryDtboSize = Header.HeaderVersion >= BootImageVersion.V1 ? (uint)RecoveryDtbo.Length : 0;
         Header.DtbSize = Header.HeaderVersion >= BootImageVersion.V2 ? (uint)Dtb.Length : 0;
 
         var writer = new BinaryWriter(output);
@@ -183,6 +184,16 @@ public class BootImagePacker
 
         if (Header.HeaderVersion >= BootImageVersion.V1)
         {
+            // recovery_dtbo 紧跟 second（页对齐），dtb（v2）在其后——与 mkbootimg 布局一致；
+            // 头部写入真实偏移，解析器按该偏移读取。
+            // recovery_dtbo follows second (page-aligned) with dtb (v2) after it — matching mkbootimg;
+            // the real offset is stored in the header and used by the parser.
+            Header.RecoveryDtboOffset = Header.RecoveryDtboSize > 0
+                ? AlignToPage(headerSize, pageSize)
+                    + AlignToPage(Header.KernelSize, pageSize)
+                    + AlignToPage(Header.RamdiskSize, pageSize)
+                    + AlignToPage(Header.SecondSize, pageSize)
+                : 0;
             writer.Write(Header.RecoveryDtboSize);
             writer.Write(Header.RecoveryDtboOffset);
             writer.Write(headerSize); // v1/v2：header_size 字段（偏移 1644）
@@ -216,6 +227,12 @@ public class BootImagePacker
         if (Second.Length > 0)
         {
             writer.Write(Second);
+            WritePadding(writer, pageSize);
+        }
+
+        if (Header.HeaderVersion >= BootImageVersion.V1 && RecoveryDtbo.Length > 0)
+        {
+            writer.Write(RecoveryDtbo);
             WritePadding(writer, pageSize);
         }
 
@@ -356,4 +373,6 @@ public class BootImagePacker
             writer.Write((byte)0);
         }
     }
+
+    private static uint AlignToPage(uint value, uint pageSize) => checked((value + pageSize - 1) / pageSize * pageSize);
 }
