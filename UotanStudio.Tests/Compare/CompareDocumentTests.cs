@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
 using Dock.Model.Core;
+using UotanStudio.Tests.Infrastructure;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
@@ -105,6 +106,10 @@ public sealed class CompareDocumentTests : IDisposable
     [Fact]
     public async Task Workspace_ReusesCompareDocument_AndReopensEmptyAfterClose()
     {
+        // EmptyContent 的 MaterialIcon 构造时同步解析几何图形，需要平台渲染接口。
+        // The EmptyContent MaterialIcon parses geometry in its constructor, which needs the
+        // platform render interface.
+        HeadlessAvalonia.EnsureInitialized();
         var workspace = new WorkspaceViewModel();
         var navigation = new List<NavigationTarget>();
         var recipient = new object();

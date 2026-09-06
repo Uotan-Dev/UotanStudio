@@ -16,8 +16,17 @@
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
     <!-- Application layer under test (FlashService / BackupService / DeviceInfo 等刷写与备份路径)。
-         Avalonia UI 依赖随引用带入，但测试只触碰非 UI 类型，无需 Avalonia.Headless。 -->
+         Avalonia UI 依赖随引用带入；需要构造 Avalonia 控件树的测试经 Avalonia.Headless 获得平台服务。 -->
     <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 测试中的轻量 Avalonia 平台初始化（SkiaPlatform.Initialize）：为构造 Avalonia 控件树
+         （如 WorkspaceDockFactory 的 EmptyContent MaterialIcon）的测试提供渲染接口等服务。
+         Lightweight Avalonia platform init for tests (SkiaPlatform.Initialize): provides the
+         render interface for tests that construct Avalonia control trees (e.g. the
+         WorkspaceDockFactory EmptyContent MaterialIcon). -->
+    <PackageReference Include="Avalonia.Skia" />
   </ItemGroup>
 
   <ItemGroup>
@@ -30,6 +39,8 @@
   <ItemGroup>
     <!-- 测试夹具：真实世界 DEX 文件随构建复制到输出目录 -->
     <None Include="Firmware\Files\**\*.dex" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 测试基础设施：仓库固定的 AOSP avbtool.py 副本（WSL 交叉验证安装用） -->
+    <None Include="TestInfrastructure\avbtool.py*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
