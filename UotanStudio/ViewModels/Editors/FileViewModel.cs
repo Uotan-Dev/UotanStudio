@@ -15,7 +15,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// Document view model, holding the document editor's text content, syntax language, file path and
 /// dirty state, with support for hex viewing and firmware structure analysis of binary files.
 /// </summary>
-public partial class FileViewModel : Document
+public partial class FileViewModel : Document, IEditable
 {
     private bool _isLoading;
 
@@ -431,6 +431,31 @@ public partial class FileViewModel : Document
     /// Marks the document as modified; invoked by the hex viewer's byte-edit event.
     /// </summary>
     public void MarkModifiedByHexEdit() => IsDirty = true;
+
+    /// <summary>
+    /// <para>由 FileView 在加载时设置的 TextEditor 引用，用于支持剪贴板操作。</para>
+    /// TextEditor reference set by FileView on load, used to support clipboard operations.
+    /// </summary>
+    internal AvaloniaEdit.TextEditor? Editor { get; set; }
+
+    /// <inheritdoc/>
+    public void Cut() => Editor?.Cut();
+
+    /// <inheritdoc/>
+    public void Copy() => Editor?.Copy();
+
+    /// <inheritdoc/>
+    public void Paste() => Editor?.Paste();
+
+    /// <inheritdoc/>
+    public void Delete()
+    {
+        if (Editor is { } ed && ed.SelectionLength > 0)
+            ed.SelectedText = "";
+    }
+
+    /// <inheritdoc/>
+    public void SelectAll() => Editor?.SelectAll();
 
     partial void OnTextChanged(string value)
     {

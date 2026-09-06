@@ -554,40 +554,51 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Redo));
     }
 
-    /// <summary><para>剪切选中内容，转发到当前活动视图模型。</para>Cut selection, forwarded to the currently active view model.</summary>
+    /// <summary><para>剪切选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Cut selection: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
     private void Cut()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Cut));
+        if (TryGetEditable() is { } e) e.Cut();
+        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Cut));
     }
 
-    /// <summary><para>复制选中内容，转发到当前活动视图模型。</para>Copy selection, forwarded to the currently active view model.</summary>
+    /// <summary><para>复制选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Copy selection: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
     private void Copy()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy));
+        if (TryGetEditable() is { } e) e.Copy();
+        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy));
     }
 
-    /// <summary><para>粘贴剪贴板内容，转发到当前活动视图模型。</para>Paste clipboard contents, forwarded to the currently active view model.</summary>
+    /// <summary><para>粘贴剪贴板内容：优先委托给活动文档，否则转发到节点编辑器。</para>Paste clipboard contents: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
     private void Paste()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste));
+        if (TryGetEditable() is { } e) e.Paste();
+        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste));
     }
 
-    /// <summary><para>删除选中内容，转发到当前活动视图模型。</para>Delete selection, forwarded to the currently active view model.</summary>
+    /// <summary><para>删除选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Delete selection: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
     private void Delete()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Delete));
+        if (TryGetEditable() is { } e) e.Delete();
+        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Delete));
     }
 
-    /// <summary><para>全选，转发到当前活动视图模型。</para>Select all, forwarded to the currently active view model.</summary>
+    /// <summary><para>全选：优先委托给活动文档，否则转发到节点编辑器。</para>Select all: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
     private void SelectAll()
     {
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.SelectAll));
+        if (TryGetEditable() is { } e) e.SelectAll();
+        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.SelectAll));
     }
+
+    /// <summary>
+    /// <para>尝试获取当前活动文档的可编辑视图模型。</para>
+    /// Attempts to get the editable view model of the currently active document.
+    /// </summary>
+    private IEditable? TryGetEditable() => WorkspaceVM?.FindDocumentsPanePublic()?.ActiveDockable as IEditable;
 
     // ===== 视图 / View =====
 
@@ -755,7 +766,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// <para>使用宿主系统浏览器打开指定 URL，失败时写入统一日志。</para>
     /// Opens the specified URL using the host system browser, logging on failure.
     /// </summary>
-    private static async Task OpenUrlAsync(string url)
+    private static Task OpenUrlAsync(string url)
     {
         try
         {
@@ -765,12 +776,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 UseShellExecute = true
             };
             System.Diagnostics.Process.Start(psi);
-            await Task.CompletedTask.ConfigureAwait(false);
         }
         catch (System.Exception ex)
         {
             Services.LogService.Instance.Write(LogLevel.Error, "Menu", $"Failed to open URL '{url}': {ex.Message}");
         }
+        return Task.CompletedTask;
     }
 
     /// <summary>

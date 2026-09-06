@@ -1,12 +1,14 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Firmware.Erofs;
 using UotanStudio.Firmware.Ext4;
 using UotanStudio.Firmware.F2fs;
 using UotanStudio.Firmware.Sparse;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Views.Controls;
 
@@ -220,7 +222,11 @@ public partial class FileManagerEditorViewModel : Document
 
     private FileManagerEntryViewModel? ExtractionEntry => SelectedEntry ?? (CurrentDirectory?.Parent is not null ? CurrentDirectory : null);
 
-    partial void OnSelectedEntryChanged(FileManagerEntryViewModel? value) => ExtractSelectedCommand.NotifyCanExecuteChanged();
+    partial void OnSelectedEntryChanged(FileManagerEntryViewModel? value)
+    {
+        ExtractSelectedCommand.NotifyCanExecuteChanged();
+        WeakReferenceMessenger.Default.Send(new FileManagerSelectionChangedMessage(value, this));
+    }
 
     partial void OnCurrentDirectoryChanged(FileManagerEntryViewModel? value)
     {

@@ -24,6 +24,15 @@ public partial class FileView : UserControl
         {
             hex.BytesEdited += OnHexBytesEdited;
         }
+
+        // Wire the text editor reference for IEditable clipboard operations.
+        Loaded += (_, _) =>
+        {
+            if (this.FindControl<AvaloniaEdit.TextEditor>("Editor") is { } editor && DataContext is FileViewModel vm)
+            {
+                vm.Editor = editor;
+            }
+        };
     }
 
     private void OnHexBytesEdited(object? sender, System.EventArgs e)

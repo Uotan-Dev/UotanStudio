@@ -35,21 +35,21 @@
                         <MenuItem Header="{DynamicResource Explorer_Add}" IsVisible="{Binding IsDirectory}">
                             <MenuItem Header="{DynamicResource Explorer_NewEmptySubProject}" Click="OnNewEmptySubProject" />
                             <MenuItem Header="{DynamicResource Explorer_ImportExistingSubProject}" Click="OnImportExistingSubProject" />
-                            <MenuItem Header="{DynamicResource Explorer_NewFile}" />
-                            <MenuItem Header="{DynamicResource Explorer_NewFolder}" />
+                            <MenuItem Header="{DynamicResource Explorer_NewFile}" Click="OnNewFile" />
+                            <MenuItem Header="{DynamicResource Explorer_NewFolder}" Click="OnNewFolder" />
                         </MenuItem>
                         <Separator />
-                        <MenuItem Header="{DynamicResource ImageView_PackRom}" IsVisible="{Binding IsDirectory}" />
-                        <MenuItem Header="{DynamicResource Explorer_Unpack}" IsVisible="{Binding !IsDirectory}" />
+                        <MenuItem Header="{DynamicResource ImageView_PackRom}" IsVisible="{Binding IsDirectory}" Click="OnPackRom" />
+                        <MenuItem Header="{DynamicResource Explorer_Unpack}" IsVisible="{Binding !IsDirectory}" Click="OnUnpack" />
                         <MenuItem Header="{DynamicResource Explorer_StartCompare}" Click="OnStartCompare" />
                         <Separator />
-                        <MenuItem Header="{DynamicResource Menu_Cut}" />
-                        <MenuItem Header="{DynamicResource Menu_Copy}" />
-                        <MenuItem Header="{DynamicResource Menu_Delete}" />
-                        <MenuItem Header="{DynamicResource Explorer_Rename}" />
-                        <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" />
-                        <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" />
-                        <MenuItem Header="{DynamicResource Explorer_OpenInTerminal}" IsVisible="{Binding IsDirectory}" />
+                        <MenuItem Header="{DynamicResource Menu_Cut}" Click="OnCut" />
+                        <MenuItem Header="{DynamicResource Menu_Copy}" Click="OnCopy" />
+                        <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDelete" />
+                        <MenuItem Header="{DynamicResource Explorer_Rename}" Click="OnRename" />
+                        <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" Click="OnCopyFullPath" />
+                        <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" Click="OnOpenInFileExplorer" />
+                        <MenuItem Header="{DynamicResource Explorer_OpenInTerminal}" IsVisible="{Binding IsDirectory}" Click="OnOpenInTerminal" />
                     </ContextMenu>
                 </Setter>
             </ControlTheme>

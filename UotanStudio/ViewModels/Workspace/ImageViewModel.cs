@@ -385,7 +385,12 @@ internal partial class ImageViewModel : Tool
                 }, () => { }
                 );
             default:
-                return (() => { }, () => { });
+                LogService.Instance.Write(LogLevel.Warn, "History",
+                    $"Unknown history operation kind: {operation.Kind}");
+                return (
+                    () => LogService.Instance.Write(LogLevel.Warn, "History", $"Undo: unknown operation '{operation.Kind}'"),
+                    () => LogService.Instance.Write(LogLevel.Warn, "History", $"Redo: unknown operation '{operation.Kind}'")
+                );
         }
     }
 
