@@ -7,7 +7,6 @@ using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.ViewModels.NodeViewModels;
 using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Workspace;
@@ -145,7 +144,6 @@ internal partial class PropertiesViewModel : Tool
         {
             var typeName = ContentType switch
             {
-                PropertiesContentType.Node => LanguageService.Instance.GetString("Dock_Properties_Type_Node"),
                 PropertiesContentType.Image => LanguageService.Instance.GetString("Dock_Properties_Type_Image"),
                 PropertiesContentType.FileAnalysis => LanguageService.Instance.GetString("Dock_Properties_Type_FileAnalysis"),
                 PropertiesContentType.TextDocument => LanguageService.Instance.GetString("Dock_Properties_Type_TextDocument"),
@@ -170,40 +168,26 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public PropertiesViewModel()
     {
-        RefreshForNode(null);
-        WeakReferenceMessenger.Default.Register<NodeSelectionChangedMessage>(this, OnNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<ImageSelectionChangedMessage>(this, OnImageSelectionChanged);
         WeakReferenceMessenger.Default.Register<FileAnalysisCompletedMessage>(this, OnFileAnalysisCompleted);
         WeakReferenceMessenger.Default.Register<ActiveDocumentChangedMessage>(this, OnActiveDocumentChanged);
         WeakReferenceMessenger.Default.Register<DtbNodeSelectionChangedMessage>(this, OnDtbNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<ManifestNodeSelectionChangedMessage>(this, OnManifestNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<ArscNodeSelectionChangedMessage>(this, OnArscNodeSelectionChanged);
+        WeakReferenceMessenger.Default.Register<FileManagerSelectionChangedMessage>(this, OnFileManagerSelectionChanged);
     }
-
-    private void ClearProperties()
-    {
-        ClearLanguageSelector();
-        Properties.Clear();
-    }
-
-    private void ShowProperties(PropertiesContentType contentType)
-    {
-        ContentType = contentType;
-        HasSelection = true;
-        Properties.Add(new PropertyRow(LanguageService.Instance.GetString("Dock_Properties_Type"), ContentTypeDisplay));
-    }
-
-    /// <summary>
-    /// <para>响应节点选中变更消息，刷新属性行。</para>
-    /// Responds to node-selection-changed messages by refreshing the property rows.
-    /// </summary>
-    private void OnNodeSelectionChanged(object recipient, NodeSelectionChangedMessage message) => RefreshForNode(message.Node);
 
     /// <summary>
     /// <para>响应镜像选中变更消息，刷新属性行。</para>
     /// Responds to image-selection-changed messages by refreshing the property rows.
     /// </summary>
     private void OnImageSelectionChanged(object recipient, ImageSelectionChangedMessage message) => RefreshForImage(message.Image);
+
+    /// <summary>
+    /// <para>响应文件管理器条目选中变更消息，刷新属性行。</para>
+    /// Responds to file-manager entry selection changed messages by refreshing the property rows.
+    /// </summary>
+    private void OnFileManagerSelectionChanged(object recipient, FileManagerSelectionChangedMessage message) => RefreshForFileManagerEntry(message.Entry, message.Document);
 
     /// <summary>
     /// <para>响应文件分析完成消息，刷新属性行展示分析结果。</para>
@@ -283,6 +267,14 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
+        // 文件管理器文档：走文件管理器展示路径。
+        // File-manager editor document: route through the file-manager display path.
+        if (message.FileManagerDocument is { } fileManager)
+        {
+            RefreshForFileManagerDocument(fileManager);
+            return;
+        }
+
         var doc = message.Document;
         if (doc is null)
         {
@@ -294,7 +286,9 @@ internal partial class PropertiesViewModel : Tool
                 || ContentType == PropertiesContentType.ArscDocument
                 || ContentType == PropertiesContentType.ApkDocument
                 || ContentType == PropertiesContentType.FirmwareDocument
-                || ContentType == PropertiesContentType.HexDocument)
+                || ContentType == PropertiesContentType.HexDocument
+                || ContentType == PropertiesContentType.FileManagerDocument
+                || ContentType == PropertiesContentType.FileManagerEntry)
             {
                 ClearProperties();
                 SelectedNodeTitle = string.Empty;
@@ -339,40 +333,6 @@ internal partial class PropertiesViewModel : Tool
         }
 
         RefreshForDtbNode(message.Editor, message.Node);
-    }
-
-    /// <summary>
-    /// <para>刷新指定节点的属性行。节点为 <c>null</c> 时显示占位。</para>
-    /// Refreshes property rows for the specified node. Shows a placeholder when the node is <c>null</c>.
-    /// </summary>
-    public void RefreshForNode(FlowNodeViewModel? node)
-    {
-        if (node is null && ContentType != PropertiesContentType.Node)
-        {
-            return;
-        }
-
-        ClearProperties();
-        if (node == null)
-        {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
-            return;
-        }
-
-        ShowProperties(PropertiesContentType.Node);
-        SelectedNodeTitle = node.Title;
-
-        var svc = LanguageService.Instance;
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_ImageName"), node.Title));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_ImageType"), node.Category.ToString()));
-        Properties.Add(new PropertyRow("Status", node.ExecutionStatus.ToString()));
-        Properties.Add(new PropertyRow("Location", $"{node.Location.X}, {node.Location.Y}"));
-        Properties.Add(new PropertyRow("Inputs", node.Input.Count.ToString()));
-        Properties.Add(new PropertyRow("Outputs", node.Output.Count.ToString()));
-
-        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for node '{node.Title}'");
     }
 
     /// <summary>
@@ -504,6 +464,27 @@ internal partial class PropertiesViewModel : Tool
         {
             _suppressLanguageChange = false;
         }
+    }
+
+    /// <summary>
+    /// <para>清空全部属性行并复位语言选择器。</para>
+    /// Clears all property rows and resets the language selector.
+    /// </summary>
+    private void ClearProperties()
+    {
+        ClearLanguageSelector();
+        Properties.Clear();
+    }
+
+    /// <summary>
+    /// <para>设置当前属性内容类型并添加类型行。</para>
+    /// Sets the current properties content type and adds the type row.
+    /// </summary>
+    private void ShowProperties(PropertiesContentType contentType)
+    {
+        ContentType = contentType;
+        HasSelection = true;
+        Properties.Add(new PropertyRow(LanguageService.Instance.GetString("Dock_Properties_Type"), ContentTypeDisplay));
     }
 
     /// <summary>
@@ -884,6 +865,56 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
+    /// <para>刷新文件管理器文档的属性行（镜像路径、格式、大小、文件/目录数）。</para>
+    /// Refreshes property rows for a file-manager document (image path, format, size, file/dir counts).
+    /// </summary>
+    public void RefreshForFileManagerDocument(FileManagerEditorViewModel doc)
+    {
+        Properties.Clear();
+        ContentType = PropertiesContentType.FileManagerDocument;
+        HasSelection = true;
+        SelectedNodeTitle = doc.Title;
+
+        var svc = LanguageService.Instance;
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_FileName"), doc.Title));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Path"), doc.FilePath ?? string.Empty));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Format"), doc.FormatName));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Size"), doc.ImageSizeText));
+        Properties.Add(new PropertyRow(svc.GetString("FileManager_FileCount"), doc.FileCountText));
+        Properties.Add(new PropertyRow(svc.GetString("FileManager_DirectoryCount"), doc.DirectoryCountText));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file-manager document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>刷新文件管理器选中条目的属性行（名称、路径、大小、类型）。</para>
+    /// Refreshes property rows for the selected file-manager entry (name, path, size, kind).
+    /// </summary>
+    public void RefreshForFileManagerEntry(FileManagerEntryViewModel? entry, FileManagerEditorViewModel doc)
+    {
+        Properties.Clear();
+        if (entry is null)
+        {
+            // 条目清空时回退到文档级属性。
+            // When entry is cleared, fall back to document-level properties.
+            RefreshForFileManagerDocument(doc);
+            return;
+        }
+
+        ContentType = PropertiesContentType.FileManagerEntry;
+        HasSelection = true;
+        SelectedNodeTitle = entry.Name;
+
+        var svc = LanguageService.Instance;
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_FileName"), entry.Name));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Path"), entry.Path));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Size"), entry.SizeText));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_ImageType"), entry.KindText));
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file-manager entry '{entry.Path}'");
+    }
+
+    /// <summary>
     /// <para>刷新指定文件分析结果的属性行。分析为 <c>null</c> 时显示占位。</para>
     /// Refreshes property rows for the specified file analysis results. Shows a placeholder when analysis is <c>null</c>.
     /// </summary>
@@ -967,12 +998,6 @@ public enum PropertiesContentType
     None,
 
     /// <summary>
-    /// <para>节点属性。</para>
-    /// Node properties.
-    /// </summary>
-    Node,
-
-    /// <summary>
     /// <para>镜像参数。</para>
     /// Image parameters.
     /// </summary>
@@ -1030,5 +1055,17 @@ public enum PropertiesContentType
     /// <para>Hex 十六进制文档信息。</para>
     /// Hex document information.
     /// </summary>
-    HexDocument
+    HexDocument,
+
+    /// <summary>
+    /// <para>文件管理器文档信息。</para>
+    /// File-manager document information.
+    /// </summary>
+    FileManagerDocument,
+
+    /// <summary>
+    /// <para>文件管理器内部条目信息。</para>
+    /// File-manager entry information.
+    /// </summary>
+    FileManagerEntry
 }
