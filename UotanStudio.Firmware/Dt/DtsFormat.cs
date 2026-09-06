@@ -154,8 +154,17 @@ public static class DtsFormat
     // Minimal DTS preprocessor: #define / #undef / #include / #if..., macro
     // substitution. Adapted from FirmwareKit.DT.DtsPreprocessor (MIT).
     // -------------------------------------------------------------------------
-    private static string Preprocess(string text, IEnumerable<string>? includePaths, Dictionary<string, string>? defines)
+
+    /// <summary>
+    /// Maximum recursion depth for #include directives to guard against infinite loops.
+    /// </summary>
+    private const int MaxIncludeDepth = 16;
+
+    private static string Preprocess(string text, IEnumerable<string>? includePaths, Dictionary<string, string>? defines, int depth = 0)
     {
+        if (depth > MaxIncludeDepth)
+            throw new InvalidOperationException($"#include recursion depth exceeded {MaxIncludeDepth}");
+
         var macros = new Dictionary<string, string>(defines ?? new Dictionary<string, string>(), StringComparer.Ordinal);
         var includeDirs = includePaths?.ToList() ?? new List<string>();
         var result = new StringBuilder(text.Length);
@@ -191,7 +200,7 @@ public static class DtsFormat
                         if (resolved != null && File.Exists(resolved))
                         {
                             var included = File.ReadAllText(resolved);
-                            result.Append(Preprocess(included, includeDirs, new Dictionary<string, string>(macros)));
+                            result.Append(Preprocess(included, includeDirs, new Dictionary<string, string>(macros), depth + 1));
                             result.Append('\n');
                         }
                         break;

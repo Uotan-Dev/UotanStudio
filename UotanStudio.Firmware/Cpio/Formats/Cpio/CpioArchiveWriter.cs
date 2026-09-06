@@ -193,21 +193,21 @@ public sealed class CpioArchiveWriter
                 ? ComputePayloadChecksum(entry, options, payloadLength)
                 : 0U;
 
-            var header = string.Concat(
-            format == ArchiveFormat.CrcAscii ? CpioConstants.CrcAsciiMagic : CpioConstants.NewAsciiMagic,
-            Hex8(entry.Metadata.Inode),
-            Hex8(entry.Metadata.Mode),
-            Hex8(entry.Metadata.UserId),
-            Hex8(entry.Metadata.GroupId),
-            Hex8(entry.Metadata.LinkCount == 0 ? 1UL : entry.Metadata.LinkCount),
-            Hex8((ulong)Math.Max(0, entry.Metadata.ModificationTimeUnixSeconds)),
-            Hex8((ulong)payloadLength),
-            Hex8(entry.Metadata.DeviceMajor),
-            Hex8(entry.Metadata.DeviceMinor),
-            Hex8(entry.Metadata.RDeviceMajor),
-            Hex8(entry.Metadata.RDeviceMinor),
-            Hex8((ulong)nameBytes.Length + 1UL),
-            Hex8(checksum));
+            var header = FormatNewcHeader(
+                format == ArchiveFormat.CrcAscii ? CpioConstants.CrcAsciiMagic : CpioConstants.NewAsciiMagic,
+                entry.Metadata.Inode,
+                entry.Metadata.Mode,
+                entry.Metadata.UserId,
+                entry.Metadata.GroupId,
+                entry.Metadata.LinkCount == 0 ? 1UL : entry.Metadata.LinkCount,
+                (ulong)Math.Max(0, entry.Metadata.ModificationTimeUnixSeconds),
+                (ulong)payloadLength,
+                entry.Metadata.DeviceMajor,
+                entry.Metadata.DeviceMinor,
+                entry.Metadata.RDeviceMajor,
+                entry.Metadata.RDeviceMinor,
+                (ulong)nameBytes.Length + 1UL,
+                checksum);
 
             var headerBytes = Encoding.ASCII.GetBytes(header);
             stream.Write(headerBytes);
@@ -256,18 +256,17 @@ public sealed class CpioArchiveWriter
             : payloadLength;
         if (hpSpecial) rdev = 0;
 
-        var header = string.Concat(
-            CpioConstants.OldAsciiMagic,
-            Oct6(device),
-            Oct6(entry.Metadata.Inode & 0x3FFFFUL),
-            Oct6(entry.Metadata.Mode & 0x3FFFFU),
-            Oct6(entry.Metadata.UserId & 0x3FFFFU),
-            Oct6(entry.Metadata.GroupId & 0x3FFFFU),
-            Oct6((entry.Metadata.LinkCount == 0 ? 1UL : entry.Metadata.LinkCount) & 0x3FFFFUL),
-            Oct6(rdev),
-            Oct11((ulong)mtime),
-            Oct6((ulong)nameBytes.Length + 1UL),
-            Oct11((ulong)Math.Max(fileSize, 0)));
+        var header = FormatOldcHeader(
+            device,
+            entry.Metadata.Inode & 0x3FFFFUL,
+            entry.Metadata.Mode & 0x3FFFFU,
+            entry.Metadata.UserId & 0x3FFFFU,
+            entry.Metadata.GroupId & 0x3FFFFU,
+            (entry.Metadata.LinkCount == 0 ? 1UL : entry.Metadata.LinkCount) & 0x3FFFFUL,
+            rdev,
+            (ulong)mtime,
+            (ulong)nameBytes.Length + 1UL,
+            (ulong)Math.Max(fileSize, 0));
 
         var headerBytes = Encoding.ASCII.GetBytes(header);
         stream.Write(headerBytes);
@@ -519,13 +518,74 @@ public sealed class CpioArchiveWriter
 
     private static void WriteUInt16BigEndian(Span<byte> target, ushort value) => BinaryPrimitives.WriteUInt16BigEndian(target, value);
 
-    private static string Hex8(ulong value) => value.ToString("X8");
+    /// <summary>
+    /// Formats a newc/crc CPIO header (110 ASCII hex chars) with a single string allocation.
+    /// <para>使用单次字符串分配格式化 newc/crc CPIO 头（110 个 ASCII 十六进制字符）。</para>
+    /// </summary>
+    private static string FormatNewcHeader(
+        string magic, ulong inode, uint mode, uint uid, uint gid,
+        ulong nlink, ulong mtime, ulong filesize,
+        uint devmajor, uint devminor, uint rdevmajor, uint rdevminor,
+        ulong namesize, uint checksum)
+    {
+        return string.Create(CpioConstants.NewAsciiHeaderSize,
+            (magic, inode, mode, uid, gid, nlink, mtime, filesize,
+             devmajor, devminor, rdevmajor, rdevminor, namesize, checksum),
+            static (dest, s) =>
+            {
+                s.magic.AsSpan().CopyTo(dest);
+                s.inode.TryFormat(dest[6..], out _, "X8");
+                s.mode.TryFormat(dest[14..], out _, "X8");
+                s.uid.TryFormat(dest[22..], out _, "X8");
+                s.gid.TryFormat(dest[30..], out _, "X8");
+                ((uint)s.nlink).TryFormat(dest[38..], out _, "X8");
+                ((uint)s.mtime).TryFormat(dest[46..], out _, "X8");
+                ((uint)s.filesize).TryFormat(dest[54..], out _, "X8");
+                s.devmajor.TryFormat(dest[62..], out _, "X8");
+                s.devminor.TryFormat(dest[70..], out _, "X8");
+                s.rdevmajor.TryFormat(dest[78..], out _, "X8");
+                s.rdevminor.TryFormat(dest[86..], out _, "X8");
+                ((uint)s.namesize).TryFormat(dest[94..], out _, "X8");
+                s.checksum.TryFormat(dest[102..], out _, "X8");
+            });
+    }
 
-    private static string Hex8(uint value) => value.ToString("X8");
+    /// <summary>
+    /// Formats an oldc CPIO header (76 ASCII octal chars) with a single string allocation.
+    /// <para>使用单次字符串分配格式化 oldc CPIO 头（76 个 ASCII 八进制字符）。</para>
+    /// </summary>
+    private static string FormatOldcHeader(
+        ulong device, ulong inode, ulong mode, ulong uid, ulong gid,
+        ulong nlink, ulong rdev, ulong mtime, ulong namesize, ulong filesize)
+    {
+        return string.Create(CpioConstants.OldAsciiHeaderSize,
+            (device, inode, mode, uid, gid, nlink, rdev, mtime, namesize, filesize),
+            static (dest, s) =>
+            {
+                "070707".AsSpan().CopyTo(dest);
+                FormatOctal(dest[6..], s.device, 6);
+                FormatOctal(dest[12..], s.inode, 6);
+                FormatOctal(dest[18..], s.mode, 6);
+                FormatOctal(dest[24..], s.uid, 6);
+                FormatOctal(dest[30..], s.gid, 6);
+                FormatOctal(dest[36..], s.nlink, 6);
+                FormatOctal(dest[42..], s.rdev, 6);
+                FormatOctal(dest[48..], s.mtime, 11);
+                FormatOctal(dest[59..], s.namesize, 6);
+                FormatOctal(dest[65..], s.filesize, 11);
+            });
+    }
 
-    private static string Oct6(ulong value) => Convert.ToString((long)value, 8).PadLeft(6, '0')[^6..];
-
-    private static string Oct6(uint value) => Oct6((ulong)value);
-
-    private static string Oct11(ulong value) => Convert.ToString((long)value, 8).PadLeft(11, '0')[^11..];
+    /// <summary>
+    /// Writes a zero-padded octal representation of <paramref name="value"/> into <paramref name="dest"/>.
+    /// <para>将 <paramref name="value"/> 的零填充八进制表示写入 <paramref name="dest"/>。</para>
+    /// </summary>
+    private static void FormatOctal(Span<char> dest, ulong value, int width)
+    {
+        for (int i = width - 1; i >= 0; i--)
+        {
+            dest[i] = (char)('0' + (value & 7));
+            value >>= 3;
+        }
+    }
 }
