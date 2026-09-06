@@ -1,16 +1,17 @@
 using System.Buffers.Binary;
 using System.IO.Hashing;
+using UotanStudio.Firmware.F2fs;
 
 namespace UotanStudio.Firmware.Compress.Compressors;
 
 /// <summary>
-/// LZOP (lzop) file decompression: parses the lzop container header and inflates each block
-/// with the LZO1X-1 decompressor (a faithful, bounds-checked port of minilzo's
-/// <c>lzo1x_decompress_safe</c>). SharpZipLib provides no LZO support, so the LZO1X decoder is
-/// implemented here in pure managed code.
-/// <para>LZOP（lzop）文件解压：解析 lzop 容器头，并用 LZO1X-1 解压器（minilzo
-/// <c>lzo1x_decompress_safe</c> 的带边界检查的忠实移植）逐块解压。SharpZipLib 不提供 LZO
-/// 支持，因此 LZO1X 解码器在此以纯托管代码实现。</para>
+/// LZOP (lzop) file compression and decompression: writes/parses the lzop container header and
+/// compresses/inflates each 256 KiB block with the LZO1X-1 codec (a faithful, bounds-checked
+/// port of minilzo's <c>lzo1x_1_compress</c> / <c>lzo1x_decompress_safe</c>). SharpZipLib
+/// provides no LZO support, so the LZO1X codec is implemented here in pure managed code.
+/// <para>LZOP（lzop）文件压缩/解压：写/解析 lzop 容器头，并用 LZO1X-1 编解码器（minilzo
+/// <c>lzo1x_1_compress</c> / <c>lzo1x_decompress_safe</c> 的带边界检查的忠实移植）按 256 KiB
+/// 块压缩/解压。SharpZipLib 不提供 LZO 支持，因此 LZO1X 编解码器在此以纯托管代码实现。</para>
 /// </summary>
 public static class LzopCompressor
 {
@@ -21,6 +22,16 @@ public static class LzopCompressor
     // Supported interoperability ceiling; lzop's common 256 KiB block size is not a format limit.
     private const uint MaximumBlockSize = 64 * 1024 * 1024;
     private const int M2MaxOffset = 0x0800;
+
+    // 压缩端约定：lzop 版本 0x0940（引入 extra 字段与 mtime_high），块大小 256 KiB。
+    // Compressor conventions: lzop version 0x0940 (introducing the extra fields and mtime_high)
+    // with lzop's conventional 256 KiB block size.
+    private const ushort LzopVersion = 0x0940;
+    private const int CompressBlockSize = 256 * 1024;
+    // 头部内容长度：magic 之后、头校验和之前的所有字段（version 到 name_length，含 name 字节）。
+    // Header content length: every field after the magic and before the header checksum
+    // (from version through name_length, including any name bytes).
+    private const int HeaderContentLength = 25;
 
     // lzop header flag bits.
     private const uint FAdler32U = 0x00000001;
@@ -165,6 +176,150 @@ public static class LzopCompressor
         {
             throw new CompressionException($"LZOP decompression failed: {ex.Message} LZOP 解压失败。", ex);
         }
+    }
+
+    // Compression / 压缩端
+
+    /// <summary>
+    /// 将数据压缩为 LZOP（lzop）格式的字节数组。
+    /// <para>Compresses data into an LZOP (lzop) byte array.</para>
+    /// </summary>
+    /// <param name="data">待压缩的数据。<para>The data to compress.</para></param>
+    /// <returns>lzop 容器字节流。<para>The lzop container byte stream.</para></returns>
+    /// <exception cref="ArgumentNullException">data 为 null 时抛出。<para>Thrown when data is null.</para></exception>
+    /// <exception cref="CompressionException">压缩失败时抛出。<para>Thrown when compression fails.</para></exception>
+    public static byte[] Compress(byte[] data)
+    {
+        ArgumentNullException.ThrowIfNull(data);
+        using var input = new MemoryStream(data, writable: false);
+        using var output = new MemoryStream();
+        Compress(input, output);
+        return output.ToArray();
+    }
+
+    /// <summary>
+    /// 将输入流按 256 KiB 块压缩为 LZOP（lzop）格式并写入输出流。大输入按块流式处理，
+    /// 内存占用与块大小成正比，不将整个文件读入内存。
+    /// <para>Compresses the input stream into the LZOP (lzop) format in 256 KiB blocks. Large
+    /// inputs stream block by block with memory proportional to the block size; the whole file is
+    /// never buffered in memory.</para>
+    /// </summary>
+    /// <param name="input">待压缩的输入流。<para>The input stream to compress.</para></param>
+    /// <param name="output">写入 lzop 数据的输出流。<para>The output stream receiving lzop data.</para></param>
+    /// <exception cref="ArgumentNullException">input 或 output 为 null 时抛出。<para>Thrown when input or output is null.</para></exception>
+    /// <exception cref="CompressionException">压缩失败时抛出。<para>Thrown when compression fails.</para></exception>
+    public static void Compress(Stream input, Stream output)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(output);
+
+        try
+        {
+            WriteHeader(output);
+            var buffer = new byte[CompressBlockSize];
+            while (true)
+            {
+                var blockLength = ReadChunk(input, buffer);
+                if (blockLength == 0)
+                {
+                    break;
+                }
+
+                WriteBlock(output, buffer, blockLength);
+            }
+
+            // 文件末尾：uncompressed_size=0 的结束标记。
+            // End-of-file marker: an uncompressed size of zero.
+            WriteUInt32BigEndian(output, 0);
+        }
+        catch (CompressionException) { throw; }
+        catch (Exception ex) when (ex is IOException or OverflowException)
+        {
+            throw new CompressionException($"LZOP compression failed: {ex.Message} LZOP 压缩失败。", ex);
+        }
+    }
+
+    private static void WriteHeader(Stream output)
+    {
+        output.Write(Magic);
+
+        // 头内容（magic 之后、校验和之前）：与解压端 ReadHeaderUInt16/ReadHeaderUInt32/
+        // ReadHeaderByte 收集的字节一致。Header content (between the magic and the checksum)
+        // matches the bytes the decompressor collects via ReadHeaderUInt16/ReadHeaderUInt32/
+        // ReadHeaderByte.
+        Span<byte> header = stackalloc byte[HeaderContentLength];
+        var position = 0;
+        BinaryPrimitives.WriteUInt16BigEndian(header[position..], LzopVersion); position += 2;  // version
+        BinaryPrimitives.WriteUInt16BigEndian(header[position..], LzopVersion); position += 2;  // library version
+        BinaryPrimitives.WriteUInt16BigEndian(header[position..], 0); position += 2;            // extra u16（version >= 0x0940）
+        header[position++] = 1;                                                                  // method：LZO1X_1
+        header[position++] = 0;                                                                  // extra byte（version >= 0x0940）
+        BinaryPrimitives.WriteUInt32BigEndian(header[position..], FAdler32U | FAdler32C); position += 4; // flags
+        BinaryPrimitives.WriteUInt32BigEndian(header[position..], 0); position += 4;            // mode
+        BinaryPrimitives.WriteUInt32BigEndian(header[position..], 0); position += 4;            // mtime_low
+        BinaryPrimitives.WriteUInt32BigEndian(header[position..], 0); position += 4;            // mtime_high（version >= 0x0940）
+        header[position++] = 0;                                                                  // name_length
+
+        output.Write(header);
+        WriteUInt32BigEndian(output, Common.Checksums.Adler32.Compute(header));
+    }
+
+    private static void WriteBlock(Stream output, byte[] uncompressed, int uncompressedLength)
+    {
+        // 先尝试 LZO1X-1；输出不小于原块或压缩失败时，按 lzop 规范存原始块
+        // （compressed_size == uncompressed_size，数据原样）。
+        // Try LZO1X-1 first; store the raw block (compressed_size == uncompressed_size) when the
+        // result is not smaller or compression fails, per the lzop specification.
+        var block = uncompressed;
+        var blockLength = uncompressedLength;
+        try
+        {
+            var candidate = Lzo1x.Compress(uncompressed.AsSpan(0, uncompressedLength));
+            if (candidate.Length < uncompressedLength)
+            {
+                block = candidate;
+                blockLength = candidate.Length;
+            }
+        }
+        catch (Exception)
+        {
+            // 压缩失败 → 回退存储原始块。 Compression failure → fall back to a stored block.
+        }
+
+        // 块布局（全部 u32 BE）：uncompressed_size；compressed_size；uncompressed_adler32；
+        // compressed_adler32；块数据。顺序与解压端一致：先 uncompressed 校验和后 compressed 校验和。
+        // Block layout (all u32 BE): uncompressed_size; compressed_size; uncompressed_adler32;
+        // compressed_adler32; block data. Order matches the decompressor: the uncompressed
+        // checksum first, then the compressed checksum.
+        WriteUInt32BigEndian(output, (uint)uncompressedLength);
+        WriteUInt32BigEndian(output, (uint)blockLength);
+        WriteUInt32BigEndian(output, Adler32(uncompressed, 0, uncompressedLength));
+        WriteUInt32BigEndian(output, Adler32(block, 0, blockLength));
+        output.Write(block, 0, blockLength);
+    }
+
+    private static int ReadChunk(Stream input, byte[] buffer)
+    {
+        var total = 0;
+        while (total < buffer.Length)
+        {
+            var read = input.Read(buffer, total, buffer.Length - total);
+            if (read == 0)
+            {
+                break;
+            }
+
+            total += read;
+        }
+
+        return total;
+    }
+
+    private static void WriteUInt32BigEndian(Stream output, uint value)
+    {
+        Span<byte> bytes = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(bytes, value);
+        output.Write(bytes);
     }
 
     private static byte[] ReadBytes(Stream input, int count, string field)

@@ -30,7 +30,7 @@ public static class CompressionFormats
         new(CompressionFormat.Zstd, "zstd", ["zstd", "zst"], [".zst", ".zstd"],
             [0x28, 0xB5, 0x2F, 0xFD], canCompress: true, canDecompress: true, isStreaming: false),
         new(CompressionFormat.Lzop, "lzop", ["lzop", "lzo"], [".lzop", ".lzo"],
-            [0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A], canCompress: false, canDecompress: true, isStreaming: false),
+            [0x89, 0x4C, 0x5A, 0x4F, 0x00, 0x0D, 0x0A, 0x1A, 0x0A], canCompress: true, canDecompress: true, isStreaming: false),
         new(CompressionFormat.Zopfli, "zopfli", ["zopfli"], [".gz"],
             null, canCompress: false, canDecompress: true, isStreaming: false),
     ];

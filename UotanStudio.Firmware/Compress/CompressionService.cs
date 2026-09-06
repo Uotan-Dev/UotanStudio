@@ -117,6 +117,9 @@ public static class CompressionService
             case CompressionFormat.Lz4Legacy:
                 Lz4Compressor.CompressLegacy(input, output, options);
                 return;
+            case CompressionFormat.Lzop:
+                LzopCompressor.Compress(input, output);
+                return;
             case CompressionFormat.None:
                 break;
             case CompressionFormat.Gzip:
@@ -130,8 +133,6 @@ public static class CompressionService
             case CompressionFormat.Lz4:
                 break;
             case CompressionFormat.Bzip2:
-                break;
-            case CompressionFormat.Lzop:
                 break;
             case CompressionFormat.Zopfli:
                 break;
@@ -266,9 +267,15 @@ public static class CompressionService
             throw new ArgumentNullException(nameof(outputPath));
         }
 
-        using var input = File.OpenRead(inputPath);
-        using var output = File.Create(outputPath);
-        Compress(input, output, format, options);
+        // 输出先写临时文件再原子替换：失败时不留下残缺的目标文件。
+        // Output is written to a temporary file and atomically replaced: a failed compression
+        // leaves no partial destination file behind.
+        WriteFileAtomically(outputPath, tempPath =>
+        {
+            using var input = File.OpenRead(inputPath);
+            using var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            Compress(input, output, format, options);
+        });
     }
 
     /// <summary>
@@ -447,9 +454,10 @@ public static class CompressionService
             CompressionFormat.Bzip2 => Bzip2Compressor.Compress(data, options),
             CompressionFormat.Zstd => ZstdCompressor.Compress(data, options),
             CompressionFormat.None => data,
-            // LZOP / Zopfli 压缩均不支持（LZOP 无托管编码器；Zopfli 为 gzip 兼容输出，压缩端不提供）。
-            // LZOP / Zopfli compression is not supported (no managed LZO encoder; Zopfli is gzip-compatible output and is not produced here).
-            CompressionFormat.Lzop => throw new NotSupportedException("LZOP compression is not supported. LZOP 压缩不受支持。"),
+            // LZOP 由本库内嵌 LZO1X 编码器压缩；仅 Zopfli 压缩不支持（Zopfli 为 gzip 兼容输出，压缩端不提供）。
+            // LZOP is compressed by the embedded LZO1X encoder; only Zopfli compression is not
+            // supported (Zopfli is gzip-compatible output and is not produced here).
+            CompressionFormat.Lzop => LzopCompressor.Compress(data),
             CompressionFormat.Zopfli => throw new NotSupportedException("Zopfli compression is not supported. Zopfli 压缩不受支持。"),
             _ => throw new ArgumentException($"Unsupported compression format: {format}", nameof(format))
         };
