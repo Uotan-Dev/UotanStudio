@@ -114,13 +114,22 @@ public sealed partial class ErofsBuilder
     {
         // z_erofs_map_header（8B，位于 inode 记录内联区起点）：h_advise、h_algorithmtype、
         // h_clusterbits。h_algorithmtype 低 4 位为 HEAD1 算法（与内核 Z_EROFS_COMPRESSION_*
-        // 一致；默认 LZ4=0）。
+        // 一致；默认 LZ4=0）。big-pcluster 文件置 h_advise 的 BIG_PCLUSTER_1，compact 布局
+        // 再加 _2（与 erofs-utils z_erofs_write_indexes 的 advise 逻辑一致）。
         // The 8-byte z_erofs_map_header at the start of the inode's inline area: h_advise,
         // h_algorithmtype and h_clusterbits. The low nibble of h_algorithmtype is the HEAD1
-        // algorithm (matching the kernel Z_EROFS_COMPRESSION_*; LZ4 = 0 by default).
+        // algorithm (matching the kernel Z_EROFS_COMPRESSION_*; LZ4 = 0 by default). Big-pcluster
+        // files set BIG_PCLUSTER_1 in h_advise (+ _2 for the compact layout, matching the
+        // erofs-utils z_erofs_write_indexes advise logic).
+        var bigPcluster = node.BigPcluster;
+        var advise = bigPcluster ? ZErofsMapHeader.AdviseBigPcluster1 : (ushort)0;
+        if (bigPcluster && node.CompactedIndexes)
+        {
+            advise |= ZErofsMapHeader.AdviseBigPcluster2;
+        }
+
         var header = new byte[ZErofsMapHeader.Size];
-        header[4] = 0; // h_advise low
-        header[5] = 0;
+        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(4), advise);
         header[6] = (byte)options.Algorithm; // h_algorithmtype = HEAD1 算法
         header[7] = 0; // h_clusterbits = 0
         WriteAt(output, indexOffset, header, header.Length);
@@ -135,12 +144,19 @@ public sealed partial class ErofsBuilder
         }
 
         // legacy full：map header 后 8B 保留（内核 Z_EROFS_FULL_INDEX_START 约定），之后每逻辑簇
-        // 一条 8B 索引：pcluster 首簇为 HEAD（clusterofs = 0，blkaddr = 物理块号），该 pcluster
-        // 覆盖的其余逻辑簇为 NONHEAD（delta[0] = 距 HEAD 的簇数）。
+        // 一条 8B 索引。pcluster 首簇为 HEAD（clusterofs = 0，blkaddr = 物理块号）；其余为
+        // NONHEAD——big-pcluster 时首个 NONHEAD 的 delta[0] = 压缩块数 | D0_CBLKCNT（内核
+        // z_erofs_get_extent_compressedlen 要求：非 CBLKCNT 的 d0=1 会判 EFSCORRUPTED），
+        // delta[1] = 距下一 HEAD 的前向簇数（erofs-utils d1）；后续 NONHEAD 的 delta[0] = 距
+        // HEAD 的簇数（≥ Z_EROFS_LI_D0_CBLKCNT 时按 erofs-utils 截断防 CBLKCNT 误判）。
         // Legacy full: an 8-byte pad after the map header (kernel Z_EROFS_FULL_INDEX_START), then
-        // one 8-byte index per logical cluster: the first cluster of a pcluster is a HEAD
-        // (clusterofs = 0, blkaddr = physical block); the covered clusters are NONHEAD entries
-        // (delta[0] = distance from the HEAD cluster).
+        // one 8-byte index per logical cluster. The first cluster of a pcluster is a HEAD
+        // (clusterofs = 0, blkaddr = physical block); the covered clusters are NONHEAD entries.
+        // Under big pcluster the first NONHEAD carries delta[0] = compressed block count |
+        // D0_CBLKCNT (required by the kernel's z_erofs_get_extent_compressedlen: a plain d0=1 is
+        // rejected as EFSCORRUPTED), and delta[1] = forward distance to the next HEAD (the
+        // erofs-utils d1); later NONHEADs store the distance to the HEAD (capped below
+        // Z_EROFS_LI_D0_CBLKCNT as erofs-utils does, to avoid aliasing the CBLKCNT flag).
         var entryOffset = indexOffset + ZErofsMapHeader.Size + 8;
         var clusters = node.ClusterCount;
         var pclusters = node.Pclusters!;
@@ -154,19 +170,43 @@ public sealed partial class ErofsBuilder
             if (c == headCluster)
             {
                 // 该 pcluster 的首簇：HEAD（blkaddr 指向物理块，clusterofs = 0）。
+                // The pcluster's first cluster: HEAD (blkaddr points at the physical block,
+                // clusterofs = 0).
                 BinaryPrimitives.WriteUInt16LittleEndian(entry, ZErofsLclusterIndex.LclusterTypeHead1);
                 BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), 0); // clusterofs
                 BinaryPrimitives.WriteUInt32LittleEndian(entry.AsSpan(4), plan.BlockAddress);
             }
             else
             {
-                // 同 pcluster 的其余簇：NONHEAD，di_u.delta[0]（offset 4）= 距 HEAD 的簇数。
-                // Remaining clusters of the pcluster are NONHEAD entries whose di_u.delta[0]
-                // (offset 4) holds the distance to the HEAD cluster.
+                var d0 = c - headCluster;
+                // delta[1] = headCluster + coveredClusters - c，即到下一 HEAD 的前向簇数
+                // （erofs-utils 循环中 d1 = N - i，数学等价）。
+                // delta[1] = headCluster + coveredClusters - c, the forward cluster distance to
+                // the next HEAD (equivalent to the erofs-utils loop's d1 = N - i).
+                var d1 = (ushort)Math.Min(headCluster + coveredClusters - c, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1));
                 BinaryPrimitives.WriteUInt16LittleEndian(entry, ZErofsLclusterIndex.LclusterTypeNonHead);
                 BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), 0); // clusterofs 未用
-                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(4), (ushort)(c - headCluster));
-                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(6), 0); // delta[1] 未用
+                if (bigPcluster && d0 == 1)
+                {
+                    // 首个 NONHEAD：CBLKCNT 条目（压缩块数置入 delta[0] 高位）。
+                    // First NONHEAD: the CBLKCNT entry (compressed block count OR-ed into delta[0]).
+                    var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
+                    if (compressedBlocks >= ZErofsLclusterIndex.LiD0CblkCnt)
+                    {
+                        throw new InvalidDataException(
+                            $"Pcluster block count {compressedBlocks} exceeds the CBLKCNT limit for '{node.FullPath}'.");
+                    }
+
+                    BinaryPrimitives.WriteUInt16LittleEndian(
+                        entry.AsSpan(4), (ushort)((uint)compressedBlocks | ZErofsLclusterIndex.LiD0CblkCnt));
+                }
+                else
+                {
+                    BinaryPrimitives.WriteUInt16LittleEndian(
+                        entry.AsSpan(4), (ushort)Math.Min(d0, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1)));
+                }
+
+                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(6), d1);
             }
 
             WriteAt(output, entryOffset, entry, entry.Length);
@@ -183,15 +223,19 @@ public sealed partial class ErofsBuilder
     /// 写出 compacted 4B amortized 位打包索引表（datalayout = COMPRESSED_COMPACT，仅 4B 区、
     /// 不启用 2B 区）。严格对照 erofs-utils <c>write_compacted_indexes</c> 的位打包：
     /// 每条目 v = (clustertype &lt;&lt; lobits) | offset 按 encodebits 位连续写入，每 2 簇一个
-    /// 8B pack，pack 尾部 4B 存该 pack 起点块号（blkaddr 随 HEAD 递增，非 big-pcluster 从
-    /// 首块号 - 1 起并 dummy_head 置位）。表起点由调用方传入（map header 之后）。
+    /// 8B pack，pack 尾部 4B 存该 pack 起点块号快照。NONHEAD 的 pack 末槽存 delta[1]（读端
+    /// delta[0] = 前条 + 1 间接还原）；big-pcluster 时首个 NONHEAD 为 CBLKCNT 条目
+    ///（offset = 压缩块数 | D0_CBLKCNT，运行块号前移压缩块数），pack 末槽的 CBLKCNT 条目仍存
+    /// delta[0]（读端先查 CBLKCNT 标志，不受末槽 delta[1] 规则影响）。
     /// <para>Writes a compacted 4B-amortized bit-packed index table (datalayout =
     /// COMPRESSED_COMPACT; 4B-only section, no 2B section), mirroring erofs-utils
     /// <c>write_compacted_indexes</c> bit packing: each entry v = (clustertype &lt;&lt; lobits) |
     /// offset is written at encodebits bits; two clusters form one 8-byte pack whose trailing 4
-    /// bytes hold the pack-start block address (blkaddr increments per HEAD; without
-    /// big-pcluster it starts at first-block-minus-one with dummy_head set). The table starts at
-    /// the caller-provided offset (right after the map header).</para>
+    /// bytes hold the pack-start block-address snapshot. A NONHEAD in the pack's last slot stores
+    /// delta[1] (readers derive delta[0] as previous-lo + 1); under big pcluster the first NONHEAD
+    /// of each pcluster is a CBLKCNT entry (offset = compressed block count | D0_CBLKCNT, advancing
+    /// the running block address), and a CBLKCNT entry in the last slot still stores delta[0]
+    /// (readers check the CBLKCNT flag before the last-slot rule).</para>
     /// </summary>
     private static void WriteCompactedIndexes4B(Stream output, long tableOffset, BuildNode node, int blockSize)
     {
@@ -201,6 +245,7 @@ public sealed partial class ErofsBuilder
         var lobits = Math.Max(lclusterBits, 12); // ilog2(Z_EROFS_LI_D0_CBLKCNT) + 1 = 11 + 1
         var encodebits = (vcnt * destsize * 8 - 32) / vcnt; // (2*4*8-32)/2 = 16
         var packSize = vcnt * destsize; // 8 字节每 pack。8 bytes per pack.
+        var bigPcluster = node.BigPcluster;
 
         var clusters = node.ClusterCount;
         var pclusters = node.Pclusters!;
@@ -208,21 +253,29 @@ public sealed partial class ErofsBuilder
         var packOffset = tableOffset;
         var entryIndex = 0L;          // 逻辑簇序号。Logical cluster index.
         var pclusterIndex = 0;
-        long blkaddr = (long)pclusters[0].BlockAddress - 1; // 非 big-pcluster 先减一。Non-big: minus one first.
+        // 运行块号：big-pcluster 从首个 HEAD 真实块号起（读端回看 nblk 从 0 起算）；
+        // 非 big-pcluster 先减一（读端 nblk 从 1 起算）。
+        // Running block address: big-pcluster starts at the first HEAD's real block (reader's
+        // lookback nblk starts at 0); non-big starts one below (reader's nblk starts at 1).
+        var blkaddr = (long)pclusters[0].BlockAddress - (bigPcluster ? 0 : 1);
+        // dummy_head（erofs-utils 语义）：置位表示“上一 pcluster 尚未记账其物理块数”，下一个
+        // HEAD 需自增块号。非 big-pcluster 恒置位（每 pcluster 恒占 1 块，由 HEAD 自增记账）；
+        // big-pcluster 由 CBLKCNT 条目记账并清除。
+        // dummy_head (erofs-utils semantics): set means the previous pcluster has not yet accounted
+        // for its physical blocks, so the next HEAD must bump the running block address. Non-big
+        // keeps it set forever (every pcluster holds exactly one block, accounted by the HEAD bump);
+        // big-pcluster clears it via the CBLKCNT entry.
+        var dummyHead = !bigPcluster;
 
         while (entryIndex < clusters)
         {
             // 每个 pack 处理 vcnt 条（不足时余下条目以全零占位，读端不会访问超出 totalIdx 的簇）。
+            // pack 尾部 4B 存“进入本 pack 时的当前块号”快照（读端经 pblk = packBlkaddr + 回看
+            // 累计块数还原，与 erofs-utils 写端一致）。
             // Each pack handles vcnt entries (short packs are zero-padded; readers never access
-            // clusters beyond totalIdx).
-            // pack 尾部 4B 存“进入本 pack 时的当前块号”快照（即 pack 内首个 HEAD 的物理块号
-            // 减一；读端经 pblk = packBlkaddr + 回看累计块数还原，与 erofs-utils 写端一致：
-            // 非 big-pcluster 场景 mkfs 从首块号 - 1 起步、每遇 HEAD 递增，pack 尾写入进入值）。
-            // The pack's trailing 4 bytes hold the block-address snapshot taken when entering this
-            // pack (the first HEAD's physical block minus one; readers reconstruct
-            // pblk = packBlkaddr + lookback count, matching the erofs-utils writer: without
-            // big-pcluster mkfs starts at first-block-minus-one, increments per HEAD, and stores
-            // the entry value in the pack tail).
+            // clusters beyond totalIdx). The pack's trailing 4 bytes hold the block-address
+            // snapshot taken when entering this pack (readers reconstruct
+            // pblk = packBlkaddr + lookback count, matching the erofs-utils writer).
             var packStartBlkaddr = blkaddr;
             var bits = 0;
             for (var i = 0; i < vcnt; i++)
@@ -236,27 +289,64 @@ public sealed partial class ErofsBuilder
                     var coveredClusters = CeilDiv(plan.SourceLength, blockSize);
                     if (entryIndex == headCluster)
                     {
-                        // HEAD：clusterofs = 0，物理块号 = 递增后的 blkaddr（校验与规划一致）。
-                        // HEAD: clusterofs = 0; the physical block is the incremented blkaddr
-                        // (verified against the plan).
+                        // HEAD：clusterofs = 0；dummy_head 置位时自增运行块号并校验与规划一致。
+                        // HEAD: clusterofs = 0; bump the running block address when dummy_head is
+                        // set and verify against the plan.
                         type = 1; // Z_EROFS_LCLUSTER_TYPE_HEAD1
                         offset = 0;
-                        blkaddr++;
-                        if (blkaddr != plan.BlockAddress)
+                        if (dummyHead)
                         {
-                            throw new InvalidDataException(
-                                $"Compacted index blkaddr {blkaddr} != planned block {plan.BlockAddress} for '{node.FullPath}'.");
+                            blkaddr++;
+                            if (blkaddr != plan.BlockAddress)
+                            {
+                                throw new InvalidDataException(
+                                    $"Compacted index blkaddr {blkaddr} != planned block {plan.BlockAddress} for '{node.FullPath}'.");
+                            }
                         }
+
+                        dummyHead = true;
                     }
                     else
                     {
-                        // NONHEAD：offset = 距 HEAD 的簇数（pack 末条存 delta[1] 的规则只影响
-                        // 2B 区与部分解码，纯 4B 区按 delta[0] 存即可；读端按前条回推 delta[0]）。
-                        // NONHEAD: offset = cluster distance to the HEAD. The "last slot stores
-                        // delta[1]" rule concerns the 2B section; in the 4B section we store
-                        // delta[0] and the reader derives delta[0] from the previous entry anyway.
                         type = 2; // Z_EROFS_LCLUSTER_TYPE_NONHEAD
-                        offset = (uint)(entryIndex - headCluster);
+                        var d0 = entryIndex - headCluster;
+                        if (bigPcluster && d0 == 1)
+                        {
+                            // 首个 NONHEAD：CBLKCNT 条目，运行块号前移压缩块数（pcluster 的
+                            // 物理块连续分配，读端回看据此还原下一 HEAD 的块号）。
+                            // First NONHEAD: the CBLKCNT entry; the running block address advances
+                            // by the compressed block count (pcluster blocks are allocated
+                            // contiguously, so the reader's lookback reconstructs the next HEAD).
+                            var compressedBlocks = CeilDiv(plan.CompressedLength, blockSize);
+                            if (compressedBlocks >= ZErofsLclusterIndex.LiD0CblkCnt)
+                            {
+                                throw new InvalidDataException(
+                                    $"Pcluster block count {compressedBlocks} exceeds the CBLKCNT limit for '{node.FullPath}'.");
+                            }
+
+                            offset = (uint)compressedBlocks | ZErofsLclusterIndex.LiD0CblkCnt;
+                            blkaddr += compressedBlocks;
+                            dummyHead = false;
+                            if (pclusterIndex + 1 < pclusters.Length && blkaddr != pclusters[pclusterIndex + 1].BlockAddress)
+                            {
+                                throw new InvalidDataException(
+                                    $"Compacted index running blkaddr {blkaddr} != planned block {pclusters[pclusterIndex + 1].BlockAddress} for '{node.FullPath}'.");
+                            }
+                        }
+                        else if (i + 1 == vcnt)
+                        {
+                            // pack 末槽存 delta[1]（erofs-utils：NONHEAD 末槽 delta[0] 不可达，
+                            // 读端 delta[0] = 前条 + 1 间接还原；按 CBLKCNT-1 截断防误判）。
+                            // The pack's last slot stores delta[1] (erofs-utils: delta[0] is
+                            // unreachable there; readers derive delta[0] = previous-lo + 1;
+                            // capped below CBLKCNT to avoid aliasing the flag).
+                            var d1 = coveredClusters - d0;
+                            offset = (uint)Math.Min(d1, ZErofsLclusterIndex.LiD0CblkCnt - 1);
+                        }
+                        else
+                        {
+                            offset = (uint)Math.Min(d0, (long)(ZErofsLclusterIndex.LiD0CblkCnt - 1));
+                        }
                     }
 
                     if (entryIndex == headCluster + coveredClusters - 1 && pclusterIndex + 1 < pclusters.Length)

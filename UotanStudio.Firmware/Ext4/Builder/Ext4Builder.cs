@@ -75,6 +75,11 @@ public sealed partial class Ext4Builder
         public int UsedDirectories { get; set; }
         public long UsedBlocks { get; set; }
         public List<Node> Nodes { get; } = [];
+
+        /// <summary>数据区中不属于节点/日志的额外占用块（如 resize inode 双间接块）。
+        /// <para>Extra used data blocks outside node/journal runs (e.g. the resize inode's
+        /// double-indirect block).</para></summary>
+        public List<long> ExtraUsedBlocks { get; } = [];
     }
 
     private sealed class Node
@@ -297,23 +302,39 @@ public sealed partial class Ext4Builder
         // 修正 GDT 大小（每组描述符 64 字节，s_desc_size=64）。
         gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
 
+        // 保留 GDT 块数（对照 e2fsprogs initialize.c calc_reserved_gdt_blocks：支持 1024 倍
+        // 增长或 2^32 块上限，封顶于单个间接块可容纳的指针数 apb——与上游一致，保证 dind
+        // 单块恰好装下全部主保留 GDT 块指针）。
+        // Reserved GDT blocks (mirroring e2fsprogs initialize.c calc_reserved_gdt_blocks: enough
+        // for a 1024x growth or the 2^32 block limit, capped at the pointers-per-indirect-block
+        // apb — matching upstream so the single dindir block exactly holds all pointers).
+        var descsPerGdtBlock = blockSize / 64;
+        var fsBlocks = (long)groupCount * blocksPerGroup;
+        var maxGrowthBlocks = fsBlocks < ((1L << 32) / 1024) ? fsBlocks * 1024 : 0xFFFF_FFFFL;
+        var reservedGroups = (maxGrowthBlocks + blocksPerGroup - 1) / blocksPerGroup;
+        var reservedGdtBlocks = (int)Math.Min(blockSize / 4, (reservedGroups + descsPerGdtBlock - 1) / descsPerGdtBlock);
+
         // 重新计算精确的总块数。
-        // 备份组（1, 3, 5, 7…）各有 1+gdtBlocks 的超级块+GDT 额外元数据。
-        // Recompute exact total blocks. Backup groups (1, 3, 5, 7…) each carry 1+gdtBlocks
-        // extra metadata for backup superblock+GDT.
+        // 备份组（1, 3, 5, 7…）各有 1+gdtBlocks+reservedGdt 的超级块+GDT+保留 GDT 元数据。
+        // Recompute exact total blocks. Backup groups (1, 3, 5, 7…) each carry 1+gdtBlocks+reservedGdt
+        // extra metadata for backup superblock + GDT + reserved GDT.
         var backupGroupCount = BackupSuperblockGroups(groupCount).Count();
-        var group0Metadata = 1L + gdtBlocks + metaPerGroup; // 超级块 + GDT + 组 0 元数据
+        var group0Metadata = 1L + gdtBlocks + reservedGdtBlocks + metaPerGroup; // 超级块 + GDT + 保留 GDT + 组 0 元数据
         var totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks
-            + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks);
+            + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks + reservedGdtBlocks);
         // 确保组数足够。
         if (totalBlocksNeeded > (long)groupCount * blocksPerGroup)
         {
             groupCount = (int)((totalBlocksNeeded + blocksPerGroup - 1) / blocksPerGroup);
             gdtBlocks = Math.Max(1, (long)Math.Ceiling(groupCount * 64.0 / blockSize));
+            fsBlocks = (long)groupCount * blocksPerGroup;
+            maxGrowthBlocks = fsBlocks < ((1L << 32) / 1024) ? fsBlocks * 1024 : 0xFFFF_FFFFL;
+            reservedGroups = (maxGrowthBlocks + blocksPerGroup - 1) / blocksPerGroup;
+            reservedGdtBlocks = (int)Math.Min(blockSize / 4, (reservedGroups + descsPerGdtBlock - 1) / descsPerGdtBlock);
             backupGroupCount = BackupSuperblockGroups(groupCount).Count();
-            group0Metadata = 1L + gdtBlocks + metaPerGroup;
+            group0Metadata = 1L + gdtBlocks + reservedGdtBlocks + metaPerGroup;
             totalBlocksNeeded = group0Metadata + totalDataBlocks + journalBlocks
-                + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks);
+                + (groupCount - 1) * metaPerGroup + backupGroupCount * (1 + gdtBlocks + reservedGdtBlocks);
         }
 
         var totalBlocks = (long)groupCount * blocksPerGroup;
@@ -330,18 +351,21 @@ public sealed partial class Ext4Builder
 
             if (g == 0)
             {
-                // 组 0：超级块(偏移1024) + GDT(块1) + 块位图(块1+gdtBlocks) + inode位图 + inode表。
-                group.BlockBitmapBlock = groupStart + 1 + gdtBlocks;
+                // 组 0：超级块(偏移1024) + GDT(块1) + 保留GDT + 块位图 + inode位图 + inode表。
+                // Group 0: superblock (offset 1024) + GDT (block 1) + reserved GDT + block bitmap
+                // + inode bitmap + inode table.
+                group.BlockBitmapBlock = groupStart + 1 + gdtBlocks + reservedGdtBlocks;
                 group.InodeBitmapBlock = group.BlockBitmapBlock + 1;
                 group.InodeTableBlock = group.InodeBitmapBlock + 1;
                 group.FirstDataBlock = group.InodeTableBlock + inodeTableBlocks;
             }
             else if (backupGroups.Contains(g))
             {
-                // 备份组（1, 3, 5, 7…）：备份超级块(1块) + 备份GDT(gdtBlocks) + 块位图 + inode位图 + inode表。
+                // 备份组（1, 3, 5, 7…）：备份超级块(1块) + 备份GDT(gdtBlocks) + 保留GDT + 块位图
+                // + inode位图 + inode表。
                 // Backup groups (1, 3, 5, 7…): backup superblock (1 block) + backup GDT (gdtBlocks)
-                // + block bitmap + inode bitmap + inode table.
-                group.BlockBitmapBlock = groupStart + 1 + gdtBlocks;
+                // + reserved GDT + block bitmap + inode bitmap + inode table.
+                group.BlockBitmapBlock = groupStart + 1 + gdtBlocks + reservedGdtBlocks;
                 group.InodeBitmapBlock = group.BlockBitmapBlock + 1;
                 group.InodeTableBlock = group.InodeBitmapBlock + 1;
                 group.FirstDataBlock = group.InodeTableBlock + inodeTableBlocks;
@@ -363,6 +387,23 @@ public sealed partial class Ext4Builder
 
         // 分配数据块到各组，并将日志区域紧跟在所有文件数据之后预留。
         // Allocate node data across groups, then reserve the journal region right after all file data.
+        // resize inode（7 号）的双间接块占用组 0 数据区第一个块（e2fsprogs res_gdt.c 将其分配在
+        // 保留 GDT 区之后；此处分配在位图/itable 之后的数据区起点，语义一致）。
+        // The resize inode (#7) double-indirect block takes the first data block of group 0
+        // (e2fsprogs res_gdt.c allocates it right after the reserved GDT area; placing it at the
+        // start of the data area after the bitmaps/itable is semantically equivalent).
+        long resizeDindirBlock = -1;
+        if (reservedGdtBlocks > 0)
+        {
+            resizeDindirBlock = groups[0].FirstDataBlock;
+            groups[0].ExtraUsedBlocks.Add(resizeDindirBlock);
+            groups[0].FirstDataBlock++;
+            // 空闲块总数需把双间接块计入（与位图/组描述符一致）。
+            // The free-block totals must account for the dindir block (consistent with the
+            // bitmaps and group descriptors).
+            usedBlocks++;
+        }
+
         AllocateDataBlocksMultiGroup(nodes, groups, blocksPerGroup, journalBlocks, out var journalStart);
         if (includeJournal)
         {
@@ -401,22 +442,36 @@ public sealed partial class Ext4Builder
         {
             var group = groups[g];
             var blockBitmap = new byte[blockSize];
-            WriteBlockBitmapForGroup(blockBitmap, group, blocksPerGroup, groupCount, gdtBlocks, inodeTableBlocks, backupGroups);
+            WriteBlockBitmapForGroup(blockBitmap, group, blocksPerGroup, groupCount, gdtBlocks, reservedGdtBlocks, inodeTableBlocks, backupGroups);
             var inodeBitmap = new byte[blockSize];
             WriteInodeBitmapForGroup(inodeBitmap, group, blockSize, inodeSize, includeJournal ? JournalInodeNumber : 0u);
             bitmaps.Add((blockBitmap, inodeBitmap));
             totalFreeInodes += CountFreeInodes(inodeBitmap, group.InodesInGroup);
 
             var desc = gdtBuffer.AsSpan(g * 64, 64);
-            WriteGroupDescriptor(desc, group, g, uuid, blockBitmap, inodeBitmap, enableMetadataCsum, gdtBlocks, inodeTableBlocks, backupGroups);
+            WriteGroupDescriptor(desc, group, g, uuid, blockBitmap, inodeBitmap, enableMetadataCsum, gdtBlocks, reservedGdtBlocks, inodeTableBlocks, backupGroups);
         }
 
         // 写超级块（组 0 + 备份组 1, 3, 5, 7…）。
         var totalInodes = (long)inodesPerGroup * groupCount;
         var superblock = new byte[1024];
+        // 日志 inode 的 i_block[15] 快照写入 s_jnl_blocks[0..14]（e2fsprogs mkjournal 约定，
+        // 供 e2fsck 在日志 inode 损坏时恢复；[15]=i_size_hi、[16]=i_size_lo）。
+        // The journal inode's i_block[15] snapshot goes into s_jnl_blocks[0..14] (the e2fsprogs
+        // mkjournal convention, used by e2fsck to recover a damaged journal inode; [15]=i_size_hi,
+        // [16]=i_size_lo).
+        Span<byte> journalIBlock = stackalloc byte[60];
+        long journalSize = 0;
+        if (includeJournal)
+        {
+            journalSize = (long)journalBlocks * blockSize;
+            WriteExtentHeader(journalIBlock, 1, 0, 4);
+            WriteExtentEntry(journalIBlock, 12, (0u, (ulong)journalStart, (ushort)journalBlocks));
+        }
+
         WriteSuperblock(superblock, blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, usedBlocks,
             (int)Math.Max(0, totalInodes - totalFreeInodes), uuid, blocksPerGroup, options.EnableMetadataCsum,
-            includeJournal ? JournalInodeNumber : 0u, includeJournal);
+            includeJournal ? JournalInodeNumber : 0u, includeJournal, reservedGdtBlocks, journalIBlock, journalSize);
         WriteAt(output, baseOffset, 1024, superblock, superblock.Length);
         // 备份超级块：组 1, 3, 5, 7（3 的幂、5 的幂、7 的幂且 < groupCount）。
         foreach (var bg in BackupSuperblockGroups(groupCount))
@@ -430,6 +485,16 @@ public sealed partial class Ext4Builder
         foreach (var bg in BackupSuperblockGroups(groupCount))
         {
             WriteAt(output, baseOffset, bg * blocksPerGroup * blockSize + blockSize, gdtBuffer, gdtBuffer.Length);
+        }
+
+        // resize inode（7 号）：双间接块 + 主保留 GDT 块（含各备份组的 GDT 副本指针）+ inode 本体。
+        // Resize inode (#7): double-indirect block + primary reserved GDT blocks (holding each
+        // backup group's GDT copy pointers) + the inode itself.
+        if (reservedGdtBlocks > 0)
+        {
+            WriteResizeInodeMetadata(output, baseOffset, groups, blocksPerGroup, groupCount,
+                gdtBlocks, reservedGdtBlocks, blockSize, inodeSize, inodesPerGroup, uuid,
+                enableMetadataCsum, resizeDindirBlock);
         }
 
         // 写各组的块位图、inode 位图、inode 表。
@@ -826,9 +891,9 @@ public sealed partial class Ext4Builder
             var children = new List<(string Name, uint Inode, byte FileType)>(node.Children.Count);
             foreach (var child in node.Children)
             {
-                // FILETYPE 特性未启用，所有条目 file_type = 0。
-                // FILETYPE feature not enabled, all entries get file_type = 0.
-                children.Add((child.Name, child.Inode, (byte)0));
+                // FILETYPE 特性已启用：叶块目录项携带真实文件类型。
+                // With the FILETYPE feature enabled, leaf entries carry the real file type.
+                children.Add((child.Name, child.Inode, FileTypeOf(child)));
             }
 
             var plan = Ext4Htree.BuildHtree(
@@ -981,7 +1046,7 @@ public sealed partial class Ext4Builder
         var lastEntryOffset = -1;
         for (var i = 0; i < entries.Count; i++)
         {
-            var (name, _, inode) = entries[i];
+            var (name, fileType, inode) = entries[i];
             var nameBytes = Encoding.UTF8.GetBytes(name);
             var naturalLength = (8 + nameBytes.Length + 3) & ~3;
             if (lastEntryOffset >= 0 && offset + naturalLength > endCap)
@@ -993,11 +1058,13 @@ public sealed partial class Ext4Builder
 
             WriteU32(block, offset, inode);
             WriteU16(block, offset + 4, (ushort)naturalLength);
-            // 未启用 FILETYPE 特性，按传统 ext2 目录项写入 __u16 name_len（高字节为 0，即无 filetype），
-            // e2fsck 与内部解析器均可正确读取。
-            // Without the FILETYPE feature, entries use the classic ext2 layout: a __u16 name_len whose
-            // high byte is 0 (i.e. no file type), which both e2fsck and the in-house parser read correctly.
-            WriteU16(block, offset + 6, (ushort)nameBytes.Length);
+            // FILETYPE 特性已启用：目录项按 name_len(u8)@+6 + file_type(u8)@+7 布局（与
+            // Ext4Htree 叶块一致），file_type 由 inode 类型映射（Ext4DirectoryEntry.Type*）。
+            // With the FILETYPE feature enabled, entries use the name_len(u8)@+6 +
+            // file_type(u8)@+7 layout (matching the Ext4Htree leaf blocks); the file type comes
+            // from the inode kind (Ext4DirectoryEntry.Type*).
+            block[offset + 6] = (byte)nameBytes.Length;
+            block[offset + 7] = fileType;
             nameBytes.CopyTo(block.AsSpan(offset + 8));
             lastEntryOffset = offset;
             offset += naturalLength;
@@ -1062,13 +1129,17 @@ public sealed partial class Ext4Builder
         => node.IsDirectory ? Ext4DirectoryEntry.TypeDirectory : node.IsSymlink ? Ext4DirectoryEntry.TypeSymlink : Ext4DirectoryEntry.TypeRegular;
 
     private static void WriteSuperblock(
-        Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal)
+        Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal,
+        int reservedGdtBlocks, ReadOnlySpan<byte> journalIBlock, long journalSize)
     {
         block.Clear();
         var totalInodes = inodesPerGroup * ((totalBlocks + blocksPerGroup - 1) / blocksPerGroup);
         WriteU32(block, 0x00, (uint)Math.Min(totalInodes, uint.MaxValue)); // s_inodes_count
         WriteU32(block, 0x04, (uint)totalBlocks);                         // s_blocks_count_lo
-        WriteU32(block, 0x08, 0);                                          // s_r_blocks_count_lo
+        // s_r_blocks_count：5% 根保留块（mke2fs 默认保留比例）。
+        // s_r_blocks_count: 5% root-reserved blocks (the mke2fs default ratio).
+        var reservedBlocks = totalBlocks / 20;
+        WriteU32(block, 0x08, (uint)reservedBlocks);                       // s_r_blocks_count_lo
         WriteU32(block, 0x0C, (uint)(totalBlocks - usedBlocks));           // s_free_blocks_count_lo
         WriteU32(block, 0x10, (uint)Math.Max(0, totalInodes - usedInodes)); // s_free_inodes_count
         WriteU32(block, 0x14, 0);                                          // s_first_data_block
@@ -1100,26 +1171,47 @@ public sealed partial class Ext4Builder
         WriteU32(block, 0x54, FirstUsableInode);
         WriteU16(block, 0x58, (ushort)inodeSize);
         WriteU16(block, 0x5A, 0);
-        WriteU32(block, 0x5C, 0x0020 | (hasJournal ? FeatureCompatHasJournal : 0u)); // EXT4_FEATURE_COMPAT_DIR_INDEX [+ HAS_JOURNAL]
-        WriteU32(block, 0x60, 0x00C0);                                    // EXT4_FEATURE_INCOMPAT_EXTENTS(0x40) | EXT4_FEATURE_INCOMPAT_64BIT(0x80)
-        WriteU32(block, 0x64, enableMetadataCsum ? 0x0400u : 0u);         // EXT4_FEATURE_RO_COMPAT_METADATA_CSUM
+        // 特性位对齐 mke2fs -t ext4 默认集：
+        //   compat:     RESIZE_INODE(0x10) | EXT_ATTR(0x8) | DIR_INDEX(0x20) [+ HAS_JOURNAL(0x4)]
+        //   incompat:   FILETYPE(0x2) | EXTENTS(0x40) | 64BIT(0x80) | FLEX_BG(0x200)
+        //   ro_compat:  SPARSE_SUPER(0x1) | LARGE_FILE(0x2) | HUGE_FILE(0x8) | DIR_NLINK(0x20)
+        //               | EXTRA_ISIZE(0x40) | METADATA_CSUM(0x400)
+        // Feature flags aligned with the mke2fs -t ext4 default set (see table above).
+        WriteU32(block, 0x5C, 0x0038u | (hasJournal ? FeatureCompatHasJournal : 0u)); // RESIZE_INODE|EXT_ATTR|DIR_INDEX
+        WriteU32(block, 0x60, 0x02C2);                                    // FILETYPE|EXTENTS|64BIT|FLEX_BG
+        WriteU32(block, 0x64, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u)); // SPARSE_SUPER|LARGE_FILE|HUGE_FILE|DIR_NLINK|EXTRA_ISIZE[|METADATA_CSUM]
         Encoding.ASCII.GetBytes("UOTANSTUDIO", block[0x78..0x88]);
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
+        // s_reserved_gdt_blocks（0xCE）：在线扩容预留 GDT 块数（resize_inode 特性必需）。
+        // s_reserved_gdt_blocks (0xCE): reserved GDT blocks for online resizing (required by
+        // the resize_inode feature).
+        WriteU16(block, 0xCE, (ushort)reservedGdtBlocks);
         if (hasJournal)
         {
             // s_journal_inum（0xE0，小端）：内部日志 inode 号（EXT4_JOURNAL_INO = 8）。
             // s_journal_inum (0xE0, little-endian): internal journal inode number (EXT4_JOURNAL_INO = 8).
             WriteU32(block, 0xE0, journalInum);
+            // s_jnl_blocks[17]（0x10C..0x150）：日志 inode 的 i_block[0..14] 与大小快照
+            // （e2fsprogs mkjournal：[15]=i_size_hi、[16]=i_size_lo）。
+            // s_jnl_blocks[17] (0x10C..0x150): the journal inode's i_block[0..14] and size
+            // snapshot (e2fsprogs mkjournal: [15]=i_size_hi, [16]=i_size_lo).
+            journalIBlock.CopyTo(block[0x10C..]);
+            WriteU32(block, 0x148, (uint)((ulong)journalSize >> 32));      // s_jnl_blocks[15]
+            WriteU32(block, 0x14C, (uint)(journalSize & 0xFFFFFFFF));      // s_jnl_blocks[16]
         }
 
         block[0xFC] = Ext4Htree.HashVersionHalfMd4;   // s_def_hash_version = HALF_MD4 (hash seed stays all-zero)
-        block[0xFD] = 0;                              // s_jnl_backup_type
+        block[0xFD] = hasJournal ? (byte)1 : (byte)0; // s_jnl_backup_type = EXT3_JNL_BACKUP_BLOCKS（含日志时）
         WriteU16(block, 0xFE, 64);                    // s_desc_size (64-byte descriptors)
         WriteU32(block, 0x100, 0);
         WriteU32(block, 0x104, 0);
+        WriteU32(block, 0x108, FixedTimestamp);       // s_mkfs_time
         WriteU32(block, 0x150, (uint)(totalBlocks >> 32)); // s_blocks_count_hi
-        WriteU32(block, 0x154, 0); // s_r_blocks_count_hi
+        WriteU32(block, 0x154, (uint)(reservedBlocks >> 32)); // s_r_blocks_count_hi
         WriteU32(block, 0x158, (uint)((totalBlocks - usedBlocks) >> 32)); // s_free_blocks_count_hi
+        WriteU16(block, 0x15C, Ext4ExtraIsize);       // s_min_extra_isize
+        WriteU16(block, 0x15E, Ext4ExtraIsize);       // s_want_extra_isize
+        WriteU32(block, 0x160, 0);                    // s_flags
         if (enableMetadataCsum)
         {
             block[0x175] = 1; // s_checksum_type = EXT2_CHECKSUM_CRC32C
@@ -1132,27 +1224,156 @@ public sealed partial class Ext4Builder
         WriteU32(block, 0x3FC, crc);
     }
 
-    private static void WriteGroupDescriptor(
-        Span<byte> desc, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, int usedDirectories)
+    /// <summary>
+    /// 生成 e2fsprogs <c>ext2fs_list_backups</c> 的备份组序列（sparse_super：1,3,5,7,9,25,27,49,…），
+    /// 小于 <paramref name="groupCount"/> 时依次产出（与组号升序遍历 + bg_has_super 的校验顺序一致）。
+    /// <para>Yields the e2fsprogs <c>ext2fs_list_backups</c> backup-group sequence for sparse_super
+    /// (1,3,5,7,9,25,27,49,…) below <paramref name="groupCount"/> — identical to the ascending
+    /// group-number walk with bg_has_super used by the fsck resize-inode check.</para>
+    /// </summary>
+    private static IEnumerable<int> ListBackupGroups(int groupCount)
     {
-        desc.Clear();
-        WriteU32(desc, 0, 2); // block bitmap (block 2)
-        WriteU32(desc, 4, 3); // inode bitmap (block 3)
-        WriteU32(desc, 8, 4); // inode table (block 4)
-        WriteU16(desc, 12, (ushort)(totalBlocks - usedBlocks));
-        WriteU16(desc, 14, (ushort)(inodesPerGroup - (uint)usedInodes));
-        WriteU16(desc, 16, (ushort)usedDirectories);
-        WriteU16(desc, 18, 0);
-        WriteU32(desc, 20, 0);
-        WriteU16(desc, 24, 0);
-        WriteU16(desc, 26, 0);
-        WriteU16(desc, 28, 0);
-        WriteU16(desc, 30, 0);
+        long three = 1, five = 5, seven = 7;
+        while (true)
+        {
+            var min = three;
+            if (five < min)
+            {
+                min = five;
+            }
+
+            if (seven < min)
+            {
+                min = seven;
+            }
+
+            if (min >= groupCount)
+            {
+                yield break;
+            }
+
+            yield return (int)min;
+            if (min == three)
+            {
+                three = min * 3;
+            }
+            else if (min == five)
+            {
+                five = min * 5;
+            }
+            else
+            {
+                seven = min * 7;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 写出 resize inode（7 号）及其元数据块，对照 e2fsprogs <c>lib/ext2fs/res_gdt.c</c> 的
+    /// <c>ext2fs_create_resize_inode</c>：i_block[EXT2_DIND_BLOCK=13]（双间接块）从索引
+    /// desc_blocks 起的第 i 项指向第 i 个主保留 GDT 块（块号 sb_blk + 1 + desc_blocks + i）；
+    /// 每个主保留 GDT 块按 <c>ext2fs_list_backups</c> 序列（1,3,5,7,9,25,27,49,…）顺序存放
+    /// 备份 GDT 副本指针（buf[last++] = 自身块号 + grp × blocksPerGroup，非按组号索引）。
+    /// i_size = blockSize × (apb² + apb + 12)（上游公式），i_blocks 按 1（双间接块）+
+    /// reservedGdt（主保留块）+ reservedGdt × 备份组数（备份条目）计，单位 512B 扇区。
+    /// <para>Writes the resize inode (#7) and its metadata blocks, mirroring e2fsprogs
+    /// <c>lib/ext2fs/res_gdt.c</c> <c>ext2fs_create_resize_inode</c>: i_block[EXT2_DIND_BLOCK=13]
+    /// (the double-indirect block) holds, starting at index desc_blocks, entry i pointing at
+    /// primary reserved GDT block i (block sb_blk + 1 + desc_blocks + i); each primary reserved
+    /// GDT block stores the backup GDT copy pointers sequentially in the
+    /// <c>ext2fs_list_backups</c> order (1,3,5,7,9,25,27,49,…), buf[last++] = own block +
+    /// grp × blocksPerGroup (NOT indexed by group number). i_size = blockSize × (apb² + apb + 12)
+    /// (the upstream formula); i_blocks counts 1 (the dindir) + reservedGdt (primary blocks) +
+    /// reservedGdt × backup-group-count (backup entries), in 512-byte sectors.</para>
+    /// </summary>
+    private static void WriteResizeInodeMetadata(
+        Stream output, long baseOffset, List<GroupInfo> groups, int blocksPerGroup, int groupCount,
+        long gdtBlocks, int reservedGdtBlocks, int blockSize, int inodeSize, int inodesPerGroup, byte[] uuid,
+        bool enableMetadataCsum, long dindirBlock)
+    {
+        var apb = blockSize / 4;
+
+        // 双间接块：槽位 (desc_blocks + i) % apb = 第 i 个主保留 GDT 块。
+        // Double-indirect block: slot (desc_blocks + i) % apb = primary reserved GDT block i.
+        var dindir = new byte[blockSize];
+        for (var i = 0; i < reservedGdtBlocks; i++)
+        {
+            var slot = (int)((gdtBlocks + i) % apb);
+            BinaryPrimitives.WriteUInt32LittleEndian(dindir.AsSpan(slot * 4, 4), (uint)(1 + gdtBlocks + i));
+        }
+
+        WriteAt(output, baseOffset, dindirBlock * blockSize, dindir, blockSize);
+
+        // 主保留 GDT 块 j：备份 GDT 副本指针按 list_backups 序列顺序填入。
+        // Primary reserved GDT block j: backup GDT copy pointers filled sequentially in the
+        // list_backups order.
+        var primary = new byte[blockSize];
+        for (var j = 0; j < reservedGdtBlocks; j++)
+        {
+            Array.Clear(primary);
+            var primaryBlock = 1 + gdtBlocks + j;
+            var slot = 0;
+            foreach (var grp in ListBackupGroups(groupCount))
+            {
+                if (slot >= apb)
+                {
+                    break;
+                }
+
+                BinaryPrimitives.WriteUInt32LittleEndian(
+                    primary.AsSpan(slot * 4, 4), (uint)(primaryBlock + (long)grp * blocksPerGroup));
+                slot++;
+            }
+
+            WriteAt(output, baseOffset, primaryBlock * blockSize, primary, blockSize);
+        }
+
+        // resize inode 本体（组 0 inode 表槽位 6）：regular 0600，间接块树（无 EXTENTS 标志），
+        // 与 e2fsprogs 一致地按双间接树记账 i_blocks。
+        // The resize inode itself (group 0 inode table slot 6): regular 0600 with an indirect-block
+        // tree (no EXTENTS flag); i_blocks accounts the double-indirect tree like e2fsprogs.
+        var inode = new byte[inodeSize];
+        var size = checked((long)blockSize * ((long)apb * apb + apb + 12));
+        // i_blocks 记账（e2fsprogs：双间接块 1 + 每个主保留 GDT 块 1 + 每个备份条目 1）。
+        // i_blocks accounting (e2fsprogs: 1 dindir + 1 per primary reserved block + 1 per backup entry).
+        var backupEntryCount = 0;
+        foreach (var _ in ListBackupGroups(groupCount))
+        {
+            backupEntryCount++;
+        }
+
+        var blockCount = 1L + reservedGdtBlocks + (long)reservedGdtBlocks * backupEntryCount;
+        WriteU16(inode, 0, ModeJournalFile);                     // S_IFREG | 0600
+        WriteU32(inode, 4, (uint)(size & 0xFFFFFFFF));           // i_size_lo
+        WriteU32(inode, 8, FixedTimestamp);                      // atime
+        WriteU32(inode, 12, FixedTimestamp);                     // ctime
+        WriteU32(inode, 16, FixedTimestamp);                     // mtime
+        WriteU16(inode, 26, 1);                                  // links_count
+        WriteU32(inode, 28, (uint)(blockCount * (blockSize / 512))); // i_blocks_lo（512B 扇区）
+        WriteU32(inode, 92, (uint)dindirBlock);                  // i_block[EXT2_DIND_BLOCK]
+        if (inodeSize >= 256)
+        {
+            WriteU32(inode, 108, (uint)((ulong)size >> 32));     // i_size_hi
+        }
+
+        if (inodeSize > 128)
+        {
+            WriteU16(inode, 128, Ext4ExtraIsize);                // i_extra_isize
+        }
+
+        if (enableMetadataCsum)
+        {
+            WriteInodeChecksum(inode, 7, uuid);
+        }
+
+        var group = groups[(6 / inodesPerGroup)];
+        var inodeOffset = checked(group.InodeTableBlock * blockSize + (long)(6 % inodesPerGroup) * inodeSize);
+        WriteAt(output, baseOffset, inodeOffset, inode, inodeSize);
     }
 
     private static void WriteGroupDescriptor(
         Span<byte> desc, GroupInfo group, int groupIndex, byte[] uuid,
-        byte[] blockBitmap, byte[] inodeBitmap, bool enableMetadataCsum, long gdtBlocks, int inodeTableBlocks,
+        byte[] blockBitmap, byte[] inodeBitmap, bool enableMetadataCsum, long gdtBlocks, int reservedGdtBlocks, int inodeTableBlocks,
         HashSet<int>? backupGroups = null)
     {
         // 64 字节组描述符布局（ext4_group_desc，s_desc_size=64）。
@@ -1161,14 +1382,16 @@ public sealed partial class Ext4Builder
         WriteU32(desc, 4, (uint)group.InodeBitmapBlock);          // bg_inode_bitmap_lo
         WriteU32(desc, 8, (uint)group.InodeTableBlock);           // bg_inode_table_lo
 
-        // 空闲块数必须与块位图一致：位图标记了组内元数据块（超级块/GDT/块位图/inode 位图/inode 表）
-        // 与数据块，故空闲块 = 组内块数 − 元数据 − 数据。
-        // 组 0 和备份组额外有 1+gdtBlocks 的超级块+GDT 元数据。
+        // 空闲块数必须与块位图一致：位图标记了组内元数据块（超级块/GDT/保留GDT/块位图/
+        // inode 位图/inode 表）与数据块，故空闲块 = 组内块数 − 元数据 − 数据。
+        // 组 0 和备份组额外有 1+gdtBlocks+reservedGdt 的超级块+GDT+保留 GDT 元数据。
         // Free-block count must match the block bitmap: the bitmap marks the group's metadata blocks
-        // (superblock/GDT/bitmaps/inode table) plus data, so free = group size − metadata − data.
-        // Group 0 and backup groups have extra 1+gdtBlocks metadata for superblock+GDT.
+        // (superblock/GDT/reserved GDT/bitmaps/inode table) plus data, so free = group size −
+        // metadata − data. Group 0 and backup groups have extra 1+gdtBlocks+reservedGdt metadata.
         var hasBackupMeta = group.GroupIndex == 0 || backupGroups is not null && backupGroups.Contains(group.GroupIndex);
-        var freeBlocks = group.BlocksInGroup - ((hasBackupMeta ? 1 + gdtBlocks : 0) + 2L + inodeTableBlocks) - group.UsedBlocks;
+        var freeBlocks = group.BlocksInGroup
+            - ((hasBackupMeta ? 1 + gdtBlocks + reservedGdtBlocks : 0) + 2L + inodeTableBlocks)
+            - group.UsedBlocks - group.ExtraUsedBlocks.Count;
         // 空闲 inode 数以 inode 位图为准（含保留 inode 1..10），与 e2fsck 统计一致。
         // Free-inode count follows the inode bitmap (including reserved inodes 1..10), matching e2fsck.
         var freeInodes = CountFreeInodes(inodeBitmap, group.InodesInGroup);
@@ -1234,16 +1457,17 @@ public sealed partial class Ext4Builder
         }
     }
 
-    private static void WriteBlockBitmapForGroup(byte[] bitmap, GroupInfo group, int blocksPerGroup, int groupCount, long gdtBlocks, int inodeTableBlocks, HashSet<int>? backupGroups = null)
+    private static void WriteBlockBitmapForGroup(byte[] bitmap, GroupInfo group, int blocksPerGroup, int groupCount, long gdtBlocks, int reservedGdtBlocks, int inodeTableBlocks, HashSet<int>? backupGroups = null)
     {
         var groupStart = (long)group.GroupIndex * blocksPerGroup;
 
-        // 组 0 和备份组：标记超级块(块0)、GDT(块1..gdtBlocks)。
-        // Group 0 and backup groups: mark superblock (block 0) and GDT (blocks 1..gdtBlocks).
+        // 组 0 和备份组：标记超级块(块0)、GDT(块1..gdtBlocks) 与保留 GDT(其后 reservedGdt 块)。
+        // Group 0 and backup groups: mark the superblock (block 0), the GDT (blocks 1..gdtBlocks)
+        // and the reserved GDT (the reservedGdt blocks right after it).
         if (group.GroupIndex == 0 || (backupGroups is not null && backupGroups.Contains(group.GroupIndex)))
         {
             MarkBlockUsed(bitmap, 0);
-            for (var b = 1L; b <= gdtBlocks; b++)
+            for (var b = 1L; b <= gdtBlocks + reservedGdtBlocks; b++)
             {
                 MarkBlockUsed(bitmap, b);
             }
@@ -1255,6 +1479,13 @@ public sealed partial class Ext4Builder
         for (var b = 0; b < inodeTableBlocks; b++)
         {
             MarkBlockUsed(bitmap, group.InodeTableBlock - groupStart + b);
+        }
+
+        // 标记数据区中的额外占用块（resize inode 双间接块等）。
+        // Mark extra used data-area blocks (the resize inode's double-indirect block, etc.).
+        foreach (var extra in group.ExtraUsedBlocks)
+        {
+            MarkBlockUsed(bitmap, extra - groupStart);
         }
 
         // 标记已用数据块。

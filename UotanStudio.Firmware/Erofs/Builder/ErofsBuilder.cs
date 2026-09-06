@@ -435,6 +435,8 @@ public sealed partial class ErofsBuilder
         public uint CompressedBlocks;
         public uint ClusterCount;
         public bool CompactedIndexes;   // 压缩索引布局：false = legacy full 8B；true = compacted 4B amortized
+        public bool BigPcluster;        // big-pcluster 编码：首个 NONHEAD 写 CBLKCNT 并置 h_advise 位
+                                        // Big-pcluster encoding: first NONHEAD carries CBLKCNT + h_advise bits
         public byte[] XattrIbody = [];  // 编码后的 inline xattr ibody（空 = 无 xattr）。Encoded inline xattr ibody (empty = none).
 
         // ---- 新增：符号链接 / 设备 / 权限元数据。Symlink / device / permission metadata. ----
@@ -595,6 +597,14 @@ public sealed partial class ErofsBuilder
                     node.CompressedBlocks = (uint)node.Pclusters.Sum(p => CeilDiv(p.CompressedLength, blockSize));
                     node.ClusterCount = (uint)CeilDiv(node.Size, blockSize);
                     node.CompactedIndexes = options.UseCompactedIndexes;
+                    // BIG_PCLUSTER 语义（erofs-utils）：超级块置 IncompatBigPcluster 的算法
+                    //（LZMA/DEFLATE/ZSTD）文件级 h_advise 也必须置 BIG_PCLUSTER_1/2，且每个
+                    // pcluster 的首个 NONHEAD 携带 CBLKCNT；LZ4（LZ4_0PADDING）保持非 big 编码。
+                    // BIG_PCLUSTER semantics (erofs-utils): algorithms declaring the superblock
+                    // IncompatBigPcluster bit (LZMA/DEFLATE/ZSTD) must also set the per-inode
+                    // BIG_PCLUSTER_1/2 advise bits and mark each pcluster's first NONHEAD with
+                    // CBLKCNT; LZ4 (LZ4_0PADDING) keeps the non-big encoding.
+                    node.BigPcluster = options.Algorithm != ErofsCompressionAlgorithm.Lz4;
                     continue;
                 }
             }
@@ -865,7 +875,12 @@ public sealed partial class ErofsBuilder
             MetaBoxNid = metaboxNode?.Nid ?? 0,
             Uuid = Guid.NewGuid().ToByteArray(),
             VolumeName = options.VolumeName,
-            DirBlkBits = (byte)BitOperations.Log2((uint)blockSize),
+            // dirblkbits 必须为 0（语义即目录块大小 = 文件系统块大小）。上游 mkfs.erofs 从不写非零值；
+            // Linux 内核自 6.3 起（fs/erofs/super.c）对 dirblkbits != 0 直接报 -EINVAL 拒绝挂载。
+            // dirblkbits must be 0 (semantics: directory block size == filesystem block size).
+            // Upstream mkfs.erofs never writes a non-zero value; the kernel (>= 6.3,
+            // fs/erofs/super.c) rejects mount with -EINVAL when dirblkbits != 0.
+            DirBlkBits = 0,
         };
         // METABOX 需 144 字节超级块缓冲区（128 字节主槽 + 16 字节扩展槽）容纳 s_metabox_nid。
         // METABOX needs a 144-byte superblock buffer (128-byte main slot + one 16-byte extended slot)

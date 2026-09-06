@@ -37,14 +37,16 @@ public sealed class ErofsOptions
 
     /// <summary>
     /// 是否对压缩文件使用紧凑（amortized）索引写端而非 legacy full 8B 索引。
-    /// 默认 false（legacy full，与 mkfs 旧布局一致且已被广泛验证）；开启后压缩文件
-    /// 使用 COMPRESSED_COMPACT datalayout 与 4B amortized 位打包索引。
+    /// 默认 true（与 erofs-utils 默认一致：除非显式关闭，mkfs 一律输出 COMPRESSED_COMPACT
+    /// datalayout 的 4B amortized 位打包索引）；置 false 时压缩文件使用 legacy full 8B 索引
+    /// （EROFS_INODE_COMPRESSED_FULL，mkfs 旧布局）。
     /// <para>Whether compressed files use the compacted (amortized) index writer instead of the
-    /// legacy full 8-byte index. Defaults to false (legacy full, the well-validated mkfs-era
-    /// layout); when enabled, compressed files use the COMPRESSED_COMPACT datalayout with 4-byte
-    /// amortized bit-packed indexes.</para>
+    /// legacy full 8-byte index. Defaults to true (matching the erofs-utils default: mkfs always
+    /// emits the COMPRESSED_COMPACT datalayout with 4-byte amortized bit-packed indexes unless
+    /// explicitly disabled); when disabled, compressed files use legacy full 8-byte indexes
+    /// (EROFS_INODE_COMPRESSED_FULL, the legacy mkfs layout).</para>
     /// </summary>
-    public bool UseCompactedIndexes { get; set; }
+    public bool UseCompactedIndexes { get; set; } = true;
 
     /// <summary>
     /// 卷名（写入超级块 s_volume_name，截断或 NUL 填充至 16 字节）。

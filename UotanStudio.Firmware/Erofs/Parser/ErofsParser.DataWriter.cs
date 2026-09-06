@@ -268,13 +268,12 @@ public sealed partial class ErofsParser
         // in-block offset (kernel z_erofs_map_blocks_fo: PLAIN + this advise →
         // m_algorithmformat = INTERLACED; z_erofs_decompress handles it with a rotated copy).
         var interlaced = (advise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0;
-        if (bigPcluster1 != bigPcluster2)
-        {
-            // 内核要求 HEAD1/HEAD2 big-pcluster 标志一致；不一致视为损坏。
-            // The kernel requires the HEAD1/HEAD2 big-pcluster advises to be consistent.
-            throw new InvalidDataException($"Inconsistent big-pcluster advises 0x{advise:X4} for nid {nid}.");
-        }
-
+        // big-pcluster advise 按 HEAD 类型分别生效（内核 z_erofs_get_extent_compressedlen）：
+        // BIG_PCLUSTER_1 作用于 HEAD1，BIG_PCLUSTER_2 作用于 PLAIN/HEAD2。erofs-utils 的
+        // full 布局只置 _1、compact 布局置 _1|_2，二者均合法，不做一致性强校验。
+        // Big-pcluster advises take effect per HEAD type (kernel z_erofs_get_extent_compressedlen):
+        // BIG_PCLUSTER_1 for HEAD1, BIG_PCLUSTER_2 for PLAIN/HEAD2. erofs-utils sets only _1 for
+        // the full layout and _1|_2 for compact — both are valid, so no strict consistency check.
         var compressed = ArrayPool<byte>.Shared.Rent(_blockSize * 2);
         var decoded = ArrayPool<byte>.Shared.Rent(Math.Max(lclusterSize, _blockSize));
         try

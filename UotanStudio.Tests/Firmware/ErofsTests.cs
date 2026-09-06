@@ -272,12 +272,14 @@ public class ErofsTests
         var inodeOffset = superblock.GetInodeOffset(entry.Nid);
         var iFormat = BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan((int)inodeOffset, 2));
         // Kernel erofs_fs.h encoding: bit 0 = version (0 = compact), bits 1..3 = data layout
-        // (1 = EROFS_INODE_COMPRESSED_FULL), i.e. i_format == 0b0010 for a compact compressed file.
+        // (3 = EROFS_INODE_COMPRESSED_COMPACT), i.e. i_format == 0b0110 for a compact compressed
+        // file. Compacted 4B indexes are the erofs-utils default, so the builder emits COMPACT.
         // 内核 erofs_fs.h 编码：位 0 = 版本（0 = compact），位 1..3 = 数据布局
-        //（1 = EROFS_INODE_COMPRESSED_FULL），即 compact 压缩文件 i_format == 0b0010。
+        //（3 = EROFS_INODE_COMPRESSED_COMPACT），即 compact 压缩文件 i_format == 0b0110。
+        // compacted 4B 索引是 erofs-utils 默认布局，构建器默认输出 COMPACT。
         Assert.Equal(0, iFormat & 0x1);
-        Assert.Equal(1, (iFormat >> 1) & 0x7);
-        Assert.Equal(ErofsInode.DataLayoutCompressed, (ushort)(iFormat & ErofsInode.DataLayoutMask));
+        Assert.Equal(3, (iFormat >> 1) & 0x7);
+        Assert.Equal(ErofsInode.DataLayoutCompactIndexes, (ushort)(iFormat & ErofsInode.DataLayoutMask));
     }
 
     [Fact]

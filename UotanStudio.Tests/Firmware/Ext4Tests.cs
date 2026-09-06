@@ -167,12 +167,16 @@ public class Ext4Tests
             Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(1024 + 24, 4))); // s_log_block_size
 
             // The primary GDT lives in the block right after the superblock block
-            // ((s_first_data_block + 1) * block_size = block 1 = byte offset 4096).
+            // ((s_first_data_block + 1) * block_size = block 1 = byte offset 4096). With the
+            // reserved GDT (16 blocks for a small fs, matching mke2fs's 1024x-growth reservation)
+            // the block bitmap moves to block 1 + 1 + 16 = 18.
             // 主组描述符表位于超级块块之后的块（(s_first_data_block + 1) * 块大小 = 块 1 = 偏移 4096）。
+            // 启用保留 GDT 后（小文件系统为 16 块，对齐 mke2fs 的 1024 倍增长预留），
+            // 块位图移至块 1 + 1 + 16 = 18。
             var gdtOffset = BlockSize;
-            Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset, 4)));        // bg_block_bitmap_lo
-            Assert.Equal(3u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset + 4, 4)));    // bg_inode_bitmap_lo
-            Assert.Equal(4u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset + 8, 4)));    // bg_inode_table_lo
+            Assert.Equal(18u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset, 4)));        // bg_block_bitmap_lo
+            Assert.Equal(19u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset + 4, 4)));    // bg_inode_bitmap_lo
+            Assert.Equal(20u, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(gdtOffset + 8, 4)));    // bg_inode_table_lo
 
             // Offset 2048 is the tail of block 0 (boot + superblock) and must not hold the GDT.
             // 偏移 2048 位于块 0 尾部（引导 + 超级块），不应是 GDT。
