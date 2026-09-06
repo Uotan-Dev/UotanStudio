@@ -69,6 +69,13 @@ public class ActiveDocumentChangedMessage
     public HexEditorViewModel? HexDocument { get; }
 
     /// <summary>
+    /// <para>获取新激活的 <see cref="FileManagerEditorViewModel"/> 文档；非文件管理器文档时为 <c>null</c>。</para>
+    /// Gets the newly activated <see cref="FileManagerEditorViewModel"/> document; <c>null</c> for
+    /// non-file-manager documents.
+    /// </summary>
+    public FileManagerEditorViewModel? FileManagerDocument { get; }
+
+    /// <summary>
     /// <para>获取新激活文档的通用 <see cref="Document"/> 句柄；便于订阅方做类型分支。</para>
     /// Gets the generic <see cref="Document"/> handle of the newly activated document, for
     /// type-dispatching by subscribers.
@@ -185,5 +192,19 @@ public class ActiveDocumentChangedMessage
     {
         HexDocument = hexDocument;
         ActiveDocument = hexDocument;
+    }
+
+    /// <summary>
+    /// <para>创建活动文档变更消息（FileManagerEditorViewModel 路径）。</para>
+    /// Creates an active document changed message (FileManagerEditorViewModel path).
+    /// </summary>
+    /// <param name="fileManagerDocument">
+    /// <para>新激活的文件管理器编辑器视图模型；可为 <c>null</c>。</para>
+    /// The newly activated file-manager editor view model; may be <c>null</c>.
+    /// </param>
+    public ActiveDocumentChangedMessage(FileManagerEditorViewModel? fileManagerDocument)
+    {
+        FileManagerDocument = fileManagerDocument;
+        ActiveDocument = fileManagerDocument;
     }
 }
