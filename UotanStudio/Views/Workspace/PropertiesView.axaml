@@ -7,27 +7,9 @@
     mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
     x:Class="UotanStudio.Views.Workspace.PropertiesView"
     x:DataType="viewmodels:PropertiesViewModel">
-  <Grid RowDefinitions="Auto,*">
-    <!-- 标题栏 -->
-    <Border Grid.Row="0" Padding="8,6"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <avalonia:MaterialIcon DockPanel.Dock="Left" Kind="InformationOutline" Width="14" Height="14"
-                               Margin="0,0,6,0" VerticalAlignment="Center"
-                               Foreground="{DynamicResource AccentColor}" />
-        <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Dock_Properties_Title}"
-                   FontSize="12" FontWeight="SemiBold"
-                   VerticalAlignment="Center" />
-        <TextBlock Text="{Binding SelectedNodeTitle}"
-                   FontSize="12" Foreground="{DynamicResource SecondaryTextBrush}"
-                   VerticalAlignment="Center" Margin="8,0,0,0"
-                   TextTrimming="CharacterEllipsis"
-                   IsVisible="{Binding HasSelection}" />
-      </DockPanel>
-    </Border>
-
+  <Grid>
     <!-- 无选择占位 -->
-    <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
                 IsVisible="{Binding !HasSelection}">
       <avalonia:MaterialIcon Kind="CursorDefaultClickOutline" Width="32" Height="32" Opacity="0.3"
                              HorizontalAlignment="Center" />
@@ -35,55 +17,77 @@
                  FontSize="12" Opacity="0.5" HorizontalAlignment="Center" />
     </StackPanel>
 
-    <ScrollViewer Grid.Row="1" IsVisible="{Binding HasSelection}"
-                  HorizontalScrollBarVisibility="Disabled"
-                  VerticalScrollBarVisibility="Auto">
-      <StackPanel Margin="8,6,8,6" Spacing="2">
-        <!-- 内容类型标签 -->
-        <Border Padding="6,3" Background="{DynamicResource ControlFillColorDefaultBrush}"
-                CornerRadius="4" HorizontalAlignment="Left" Margin="0,0,0,6">
-          <TextBlock FontSize="10" Opacity="0.7" FontWeight="SemiBold"
-                     Text="{Binding ContentTypeDisplay}" />
-        </Border>
-        <ItemsControl ItemsSource="{Binding Properties}">
-          <ItemsControl.ItemTemplate>
-            <DataTemplate DataType="viewmodels:PropertiesViewModel+PropertyRow">
-              <Grid ColumnDefinitions="130,*" Margin="0,2" HorizontalAlignment="Stretch">
-                <Border Grid.Column="0" Padding="6,3" CornerRadius="3" Margin="0,0,4,0"
-                        Background="{DynamicResource ControlFillColorDefaultBrush}">
-                  <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
-                             Opacity="0.75" VerticalAlignment="Center"
-                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1">
-                    <ToolTip.Tip>
-                      <TextBlock Text="{Binding Name}" TextWrapping="Wrap" MaxWidth="480" />
-                    </ToolTip.Tip>
-                  </TextBlock>
-                </Border>
-                <TextBlock Grid.Column="1" Text="{Binding Value}" FontSize="13"
-                           VerticalAlignment="Center" HorizontalAlignment="Stretch"
-                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1">
+    <DataGrid Name="PropertiesGrid" IsVisible="{Binding HasSelection}"
+              ItemsSource="{Binding Properties}"
+              AutoGenerateColumns="False" IsReadOnly="True"
+              HeadersVisibility="None" GridLinesVisibility="Horizontal"
+              CanUserResizeColumns="False" CanUserReorderColumns="False" CanUserSortColumns="False"
+              MinColumnWidth="0" RowHeight="28"
+              HorizontalAlignment="Stretch" HorizontalScrollBarVisibility="Disabled"
+              VerticalScrollBarVisibility="Auto"
+              Background="Transparent" BorderThickness="0" Margin="0" Padding="0"
+              SizeChanged="OnPropertiesGridSizeChanged">
+      <DataGrid.Styles>
+        <Style Selector="DataGridCell">
+          <Setter Property="Padding" Value="0" />
+          <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+          <Setter Property="VerticalContentAlignment" Value="Stretch" />
+        </Style>
+      </DataGrid.Styles>
+      <DataGrid.Columns>
+        <!-- DataGrid requires a finite initial maximum before it can be resized. -->
+        <DataGridTemplateColumn Width="Auto" MaxWidth="10000">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="viewmodels:PropertiesViewModel+PropertyRow">
+              <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                         Margin="6,3" Opacity="0.75" VerticalAlignment="Center"
+                         TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1">
+                <ToolTip.Tip>
+                  <TextBlock Text="{Binding Name}" TextWrapping="Wrap" MaxWidth="480" />
+                </ToolTip.Tip>
+              </TextBlock>
+            </DataTemplate>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+        <DataGridTemplateColumn Width="*">
+          <DataGridTemplateColumn.CellTemplate>
+            <DataTemplate x:DataType="viewmodels:PropertiesViewModel+PropertyRow">
+              <Grid>
+                <Border Padding="6,3" Background="Transparent" IsVisible="{Binding !IsLanguageSelector}">
                   <ToolTip.Tip>
-                    <TextBlock Text="{Binding Value}" TextWrapping="Wrap" MaxWidth="640" />
+                    <ToolTip MaxWidth="680">
+                      <ScrollViewer MaxWidth="640" MaxHeight="480"
+                                    HorizontalScrollBarVisibility="Disabled"
+                                    VerticalScrollBarVisibility="Auto">
+                        <TextBlock Text="{Binding Value}" FontSize="13"
+                                   TextWrapping="Wrap" TextTrimming="None" MaxLines="0" />
+                      </ScrollViewer>
+                    </ToolTip>
                   </ToolTip.Tip>
-                </TextBlock>
+                  <TextBlock Text="{Binding Value}" FontSize="13"
+                             VerticalAlignment="Center" HorizontalAlignment="Stretch"
+                             TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                </Border>
+                <ComboBox IsVisible="{Binding IsLanguageSelector}"
+                          ItemsSource="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).AvailableLanguages}"
+                          SelectedItem="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedLanguage, Mode=TwoWay}"
+                          ToolTip.Tip="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedLanguage}"
+                          Classes="Small" FontSize="13"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          MinWidth="0" MinHeight="0" Padding="6,0"
+                          BorderThickness="0" CornerRadius="0" Background="Transparent">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Text="{Binding}" FontSize="13"
+                                 TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
               </Grid>
             </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-        <!-- 语法语言选择器（仅文本文档显示） -->
-        <StackPanel Spacing="4" Margin="0,8,0,0" IsVisible="{Binding HasLanguageSelector}">
-          <Border Padding="6,3" CornerRadius="3"
-                  Background="{DynamicResource ControlFillColorDefaultBrush}">
-            <TextBlock Text="{DynamicResource Dock_Properties_Text_Language}"
-                       FontSize="12" FontWeight="SemiBold" Opacity="0.75"
-                       VerticalAlignment="Center" />
-          </Border>
-          <ComboBox ItemsSource="{Binding AvailableLanguages}"
-                    SelectedItem="{Binding SelectedLanguage}"
-                    HorizontalAlignment="Stretch"
-                    FontSize="13" />
-        </StackPanel>
-      </StackPanel>
-    </ScrollViewer>
+          </DataGridTemplateColumn.CellTemplate>
+        </DataGridTemplateColumn>
+      </DataGrid.Columns>
+    </DataGrid>
   </Grid>
 </UserControl>

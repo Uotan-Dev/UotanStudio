@@ -44,6 +44,7 @@
     <x:String x:Key="Dock_File_FormatFormat">Format: {0}</x:String>
 
     <!-- Properties panel content types -->
+    <x:String x:Key="Dock_Properties_Type">Type</x:String>
     <x:String x:Key="Dock_Properties_TypeFormat">Type: {0}</x:String>
     <x:String x:Key="Dock_Properties_Type_Node">Node</x:String>
     <x:String x:Key="Dock_Properties_Type_Image">Image</x:String>

@@ -39,6 +39,12 @@ internal partial class PropertiesViewModel : Tool
         [ObservableProperty] private string _value = string.Empty;
 
         /// <summary>
+        /// <para>此行是否使用语法语言下拉选择器。</para>
+        /// Whether this row uses the syntax-language dropdown.
+        /// </summary>
+        public bool IsLanguageSelector { get; init; }
+
+        /// <summary>
         /// <para>创建属性行。</para>
         /// Creates a property row.
         /// </summary>
@@ -115,7 +121,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        if (string.IsNullOrEmpty(value))
+        if (string.IsNullOrEmpty(value) || (AvailableLanguages.Count > 0 && value == AvailableLanguages[0]))
         {
             // 「自动检测」选项：按扩展名重新计算。
             // "Auto Detect" option: re-resolve by file extension.
@@ -130,8 +136,8 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
-    /// <para>本地化后的内容类型标签（属性面板头部徽章）。</para>
-    /// Localized content type label (badge in the properties panel header).
+    /// <para>本地化后的内容类型属性值。</para>
+    /// Localized content-type property value.
     /// </summary>
     public string ContentTypeDisplay
     {
@@ -153,7 +159,7 @@ internal partial class PropertiesViewModel : Tool
                 _ => string.Empty,
             };
 
-            return string.Format(LanguageService.Instance.GetString("Dock_Properties_TypeFormat"), typeName);
+            return typeName;
         }
     }
 
@@ -172,6 +178,19 @@ internal partial class PropertiesViewModel : Tool
         WeakReferenceMessenger.Default.Register<DtbNodeSelectionChangedMessage>(this, OnDtbNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<ManifestNodeSelectionChangedMessage>(this, OnManifestNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<ArscNodeSelectionChangedMessage>(this, OnArscNodeSelectionChanged);
+    }
+
+    private void ClearProperties()
+    {
+        ClearLanguageSelector();
+        Properties.Clear();
+    }
+
+    private void ShowProperties(PropertiesContentType contentType)
+    {
+        ContentType = contentType;
+        HasSelection = true;
+        Properties.Add(new PropertyRow(LanguageService.Instance.GetString("Dock_Properties_Type"), ContentTypeDisplay));
     }
 
     /// <summary>
@@ -277,11 +296,10 @@ internal partial class PropertiesViewModel : Tool
                 || ContentType == PropertiesContentType.FirmwareDocument
                 || ContentType == PropertiesContentType.HexDocument)
             {
-                Properties.Clear();
+                ClearProperties();
                 SelectedNodeTitle = string.Empty;
                 HasSelection = false;
                 ContentType = PropertiesContentType.None;
-                ClearLanguageSelector();
             }
             return;
         }
@@ -334,7 +352,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        Properties.Clear();
+        ClearProperties();
         if (node == null)
         {
             SelectedNodeTitle = string.Empty;
@@ -343,8 +361,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.Node;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.Node);
         SelectedNodeTitle = node.Title;
 
         var svc = LanguageService.Instance;
@@ -364,7 +381,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForImage(ImageEntryViewModel? image)
     {
-        Properties.Clear();
+        ClearProperties();
         if (image is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -373,8 +390,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.Image;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.Image);
         SelectedNodeTitle = image.DisplayName;
 
         var svc = LanguageService.Instance;
@@ -396,18 +412,16 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForTextDocument(FileViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         if (doc is null)
         {
             SelectedNodeTitle = string.Empty;
             HasSelection = false;
             ContentType = PropertiesContentType.None;
-            ClearLanguageSelector();
             return;
         }
 
-        ContentType = PropertiesContentType.TextDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.TextDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var svc = LanguageService.Instance;
@@ -423,6 +437,10 @@ internal partial class PropertiesViewModel : Tool
         // Language selector: populate available languages and select the one matching the current Language.
         _currentTextDocument = doc;
         PopulateLanguageSelector(doc.Language);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Language"), string.Empty)
+        {
+            IsLanguageSelector = true
+        });
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for text document '{doc.FilePath}'");
     }
@@ -496,7 +514,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForDtbDocument(DtbEditorViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         if (doc is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -505,8 +523,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.DtbDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.DtbDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var svc = LanguageService.Instance;
@@ -530,7 +547,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForManifestDocument(ManifestEditorViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         if (doc is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -539,8 +556,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.ManifestDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.ManifestDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var svc = LanguageService.Instance;
@@ -561,7 +577,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForManifestNode(ManifestEditorViewModel editor, ManifestTreeNodeViewModel? node)
     {
-        Properties.Clear();
+        ClearProperties();
         if (node is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -570,8 +586,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.ManifestDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.ManifestDocument);
         SelectedNodeTitle = node.Name;
 
         var svc = LanguageService.Instance;
@@ -598,7 +613,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForApkDocument(ApkEditorViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         if (doc is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -607,8 +622,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.ApkDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.ApkDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var svc = LanguageService.Instance;
@@ -633,7 +647,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForFirmwareDocument(FirmwareInfoViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         if (doc is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -642,8 +656,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.FirmwareDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.FirmwareDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var svc = LanguageService.Instance;
@@ -672,7 +685,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForHexDocument(HexEditorViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         if (doc is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -681,8 +694,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.HexDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.HexDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var svc = LanguageService.Instance;
@@ -701,7 +713,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForArscDocument(ArscEditorViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         if (doc is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -710,8 +722,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.ArscDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.ArscDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var svc = LanguageService.Instance;
@@ -731,7 +742,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForArscNode(ArscEditorViewModel editor, ArscTreeNodeViewModel? node)
     {
-        Properties.Clear();
+        ClearProperties();
         if (node is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -740,8 +751,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.ArscDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.ArscDocument);
         SelectedNodeTitle = node.Name;
 
         var svc = LanguageService.Instance;
@@ -818,7 +828,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForDtbNode(DtbEditorViewModel editor, DtbNodeViewModel? node)
     {
-        Properties.Clear();
+        ClearProperties();
         if (node is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -827,8 +837,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.DtbDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.DtbDocument);
         SelectedNodeTitle = node.FullPath;
 
         var svc = LanguageService.Instance;
@@ -847,7 +856,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForDexDocument(DexEditorViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         if (doc is null)
         {
             SelectedNodeTitle = string.Empty;
@@ -856,8 +865,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.DexDocument;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.DexDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
         var svc = LanguageService.Instance;
@@ -881,7 +889,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForFileAnalysis(FileAnalysisCompletedMessage? analysis)
     {
-        Properties.Clear();
+        ClearProperties();
         if (analysis is null || analysis.Analysis.Count == 0)
         {
             SelectedNodeTitle = string.Empty;
@@ -890,8 +898,7 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
-        ContentType = PropertiesContentType.FileAnalysis;
-        HasSelection = true;
+        ShowProperties(PropertiesContentType.FileAnalysis);
         SelectedNodeTitle = analysis.FilePath ?? analysis.DetectedFormat ?? "Analysis";
 
         // Analysis 已包含 "Format" 行（由 FileViewModel 写入），此处不再单独追加，避免重复。

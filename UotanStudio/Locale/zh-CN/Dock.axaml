@@ -44,6 +44,7 @@
     <x:String x:Key="Dock_File_FormatFormat">格式：{0}</x:String>
 
     <!-- 属性面板内容类型 -->
+    <x:String x:Key="Dock_Properties_Type">类型</x:String>
     <x:String x:Key="Dock_Properties_TypeFormat">类型：{0}</x:String>
     <x:String x:Key="Dock_Properties_Type_Node">节点</x:String>
     <x:String x:Key="Dock_Properties_Type_Image">镜像</x:String>
