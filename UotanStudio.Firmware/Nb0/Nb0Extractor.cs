@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Security.Cryptography;
 
+using UotanStudio.Firmware.Common;
+
 namespace UotanStudio.Firmware.Nb0;
 
 public sealed class ExtractionOptions
@@ -196,10 +198,16 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
     public byte[] ExtractEntryToFile(Stream stream, Nb0FileEntry entry, string outputPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
+        byte[]? hash = null;
+        FileExtraction.WriteAtomic(outputPath, output => hash = ExtractEntryCore(stream, entry, output));
+        return hash!;
+    }
+
+    private byte[] ExtractEntryCore(Stream stream, Nb0FileEntry entry, Stream output)
+    {
         var start = ValidateEntryRange(stream, entry);
 
         stream.Position = start;
-        using var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, _bufferSize);
         using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
         var buffer = ArrayPool<byte>.Shared.Rent(_bufferSize);
         try
@@ -235,10 +243,19 @@ public sealed class Nb0Extractor(int bufferSize = Nb0Extractor.DefaultBufferSize
     public async Task<byte[]> ExtractEntryToFileAsync(Stream stream, Nb0FileEntry entry, string outputPath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
+        byte[]? hash = null;
+        await FileExtraction.WriteAtomicAsync(outputPath, async output =>
+            hash = await ExtractEntryCoreAsync(stream, entry, output, cancellationToken).ConfigureAwait(false),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        return hash!;
+    }
+
+    private async Task<byte[]> ExtractEntryCoreAsync(Stream stream, Nb0FileEntry entry, Stream output,
+        CancellationToken cancellationToken)
+    {
         var start = ValidateEntryRange(stream, entry);
 
         stream.Position = start;
-        await using var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous);
         using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
         var buffer = ArrayPool<byte>.Shared.Rent(_bufferSize);
         try

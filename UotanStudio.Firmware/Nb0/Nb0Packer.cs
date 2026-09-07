@@ -99,7 +99,7 @@ public sealed class Nb0Packer
         {
             cancellationToken.ThrowIfCancellationRequested();
             entry.Header.DataOffset = dataOffset;
-            dataOffset = checked(dataOffset + entry.Header.FileSize);
+            dataOffset = checked(dataOffset + entry.Header.FileSize + (4 - entry.Header.FileSize % 4) % 4);
         }
 
         foreach (var entry in entryList)
