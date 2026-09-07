@@ -17,6 +17,8 @@ internal static partial class DexWriter
     {
         ArgumentNullException.ThrowIfNull(dex);
         var version = NormalizeVersion(dex.Header.Version);
+        if ((dex.MethodHandles.Count > 0 || dex.CallSites.Count > 0) && string.CompareOrdinal(version, "038") < 0)
+            throw new DexException("Method handles and call sites require DEX 038 or newer.");
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true);
 
@@ -50,19 +52,25 @@ internal static partial class DexWriter
         var mapItems = new List<(ushort Type, uint Size, uint Offset)>();
 
 
+        // Reserve every fixed-size ID table before emitting variable-size data.
         var stringIdsOffset = (int)ms.Position;
+        var typeIdsOffset = checked(stringIdsOffset + dex.Strings.Count * 4);
+        var protoIdsOffset = checked(typeIdsOffset + dex.Types.Count * 4);
+        var fieldIdsOffset = checked(protoIdsOffset + dex.Protos.Count * 12);
+        var methodIdsOffset = checked(fieldIdsOffset + dex.Fields.Count * 8);
+        var classDefsOffset = checked(methodIdsOffset + dex.Methods.Count * 8);
+        var callSiteIdsOffset = checked(classDefsOffset + dex.Classes.Count * 32);
+        var methodHandlesOffset = checked(callSiteIdsOffset + dex.CallSites.Count * 4);
+        var dataStart = checked(methodHandlesOffset + dex.MethodHandles.Count * 8);
+        ms.SetLength(dataStart);
+        ms.Position = dataStart;
         var stringOffsets = new uint[dex.Strings.Count];
-        for (var i = 0; i < dex.Strings.Count; i++)
-        {
-            w.Write(0u);
-        }
         Align(w, 4);
         var stringDataStart = (int)ms.Position;
         for (var i = 0; i < dex.Strings.Count; i++)
         {
             stringOffsets[i] = (uint)ms.Position;
             WriteStringData(w, dex.Strings[i]);
-            Align(w, 4);
         }
         var stringDataEnd = (int)ms.Position;
         ms.Position = stringIdsOffset;
@@ -81,7 +89,8 @@ internal static partial class DexWriter
             stringIndex.TryAdd(dex.Strings[i], i);
         }
 
-        var typeIdsOffset = (int)ms.Position;
+        var afterStrings = ms.Position;
+        ms.Position = typeIdsOffset;
         foreach (var descriptor in dex.Types)
         {
             if (!stringIndex.TryGetValue(descriptor, out var idx))
@@ -92,9 +101,10 @@ internal static partial class DexWriter
         }
         Align(w, 4);
         mapItems.Add((0x0002, (uint)dex.Types.Count, (uint)typeIdsOffset));
+        ms.Position = afterStrings;
 
 
-        var protoIdsOffset = (int)ms.Position;
+        ms.Position = protoIdsOffset;
         for (var i = 0; i < dex.Protos.Count; i++)
         {
             w.Write((uint)dex.Protos[i].ShortyIndex);
@@ -106,6 +116,7 @@ internal static partial class DexWriter
         var protoTypeListCount = 0;
         var firstProtoTypeList = 0u;
         var protoParamOffsets = new uint[dex.Protos.Count];
+        ms.Position = afterStrings;
         for (var i = 0; i < dex.Protos.Count; i++)
         {
             if (dex.Protos[i].ParameterTypeIndices.Length > 0)
@@ -136,7 +147,8 @@ internal static partial class DexWriter
         mapItems.Add((0x0003, (uint)dex.Protos.Count, (uint)protoIdsOffset));
 
 
-        var fieldIdsOffset = (int)ms.Position;
+        var afterProtoLists = ms.Position;
+        ms.Position = fieldIdsOffset;
         foreach (var field in dex.Fields)
         {
             w.Write((ushort)field.ClassIndex);
@@ -147,7 +159,7 @@ internal static partial class DexWriter
         mapItems.Add((0x0004, (uint)dex.Fields.Count, (uint)fieldIdsOffset));
 
 
-        var methodIdsOffset = (int)ms.Position;
+        ms.Position = methodIdsOffset;
         foreach (var method in dex.Methods)
         {
             w.Write((ushort)method.ClassIndex);
@@ -158,7 +170,7 @@ internal static partial class DexWriter
         mapItems.Add((0x0005, (uint)dex.Methods.Count, (uint)methodIdsOffset));
 
 
-        var classDefsOffset = (int)ms.Position;
+        ms.Position = classDefsOffset;
         var classDataOffsets = new uint[dex.Classes.Count];
         var classDefPositions = new int[dex.Classes.Count];
         for (var i = 0; i < dex.Classes.Count; i++)
@@ -180,7 +192,19 @@ internal static partial class DexWriter
         mapItems.Add((0x0006, (uint)dex.Classes.Count, (uint)classDefsOffset));
 
 
-        var dataStart = (int)ms.Position;
+        ms.Position = methodHandlesOffset;
+        foreach (var handle in dex.MethodHandles)
+        {
+            if (handle.Kind > 8 || handle.MemberIndex >= (handle.Kind <= 3 ? dex.Fields.Count : dex.Methods.Count))
+                throw new DexException("Invalid method handle member index.");
+            w.Write(handle.Kind);
+            w.Write((ushort)0);
+            w.Write(handle.MemberIndex);
+            w.Write((ushort)0);
+        }
+        if (dex.MethodHandles.Count > 0) mapItems.Add((8, (uint)dex.MethodHandles.Count, (uint)methodHandlesOffset));
+        if (dex.CallSites.Count > 0) mapItems.Add((7, (uint)dex.CallSites.Count, (uint)callSiteIdsOffset));
+        ms.Position = afterProtoLists;
 
 
         var interfaceTypeListCount = 0;
@@ -208,6 +232,16 @@ internal static partial class DexWriter
         var codeItemCount = 0;
         var firstCodeItem = 0u;
         var debugPatches = new List<(int FieldPos, byte[] Bytes)>();
+        var methodCodeOffsets = new Dictionary<EncodedMethod, uint>();
+        foreach (var method in dex.Classes.SelectMany(c => c.AllMethods))
+        {
+            if (method.Code is null) continue;
+            Align(w, 4);
+            if (codeItemCount++ == 0) firstCodeItem = (uint)ms.Position;
+            methodCodeOffsets[method] = (uint)ms.Position;
+            var codeStart = WriteCodeItem(w, method.Code);
+            if (method.Code.DebugInfo is { Length: > 0 } debug) debugPatches.Add((codeStart + 8, debug));
+        }
         for (var i = 0; i < dex.Classes.Count; i++)
         {
             var cls = dex.Classes[i];
@@ -220,23 +254,6 @@ internal static partial class DexWriter
             }
 
 
-            Align(w, 4);
-            var methodCodeOffsets = new Dictionary<EncodedMethod, uint>();
-            foreach (var m in cls.AllMethods)
-            {
-                if (m.Code != null)
-                {
-                    Align(w, 4);
-                    if (codeItemCount == 0) firstCodeItem = (uint)ms.Position;
-                    codeItemCount++;
-                    methodCodeOffsets[m] = (uint)ms.Position;
-                    var codeStart = WriteCodeItem(w, m.Code);
-                    if (m.Code.DebugInfo is { Length: > 0 } dbg)
-                    {
-                        debugPatches.Add((codeStart + 8, dbg));
-                    }
-                }
-            }
 
 
             classDataOffsets[i] = (uint)ms.Position;
@@ -244,18 +261,24 @@ internal static partial class DexWriter
             WriteUleb128(w, (uint)cls.InstanceFields.Count);
             WriteUleb128(w, (uint)cls.DirectMethods.Count);
             WriteUleb128(w, (uint)cls.VirtualMethods.Count);
-            var prev = 0;
-            foreach (var f in cls.StaticFields.Concat(cls.InstanceFields))
+            foreach (var fields in new[] { cls.StaticFields, cls.InstanceFields })
             {
-                WriteDiff(w, f.FieldIndex, ref prev);
-                WriteUleb128(w, f.AccessFlags);
+                var previous = 0;
+                foreach (var field in fields)
+                {
+                    WriteDiff(w, field.FieldIndex, ref previous);
+                    WriteUleb128(w, field.AccessFlags);
+                }
             }
-            prev = 0;
-            foreach (var m in cls.DirectMethods.Concat(cls.VirtualMethods))
+            foreach (var methods in new[] { cls.DirectMethods, cls.VirtualMethods })
             {
-                WriteDiff(w, m.MethodIndex, ref prev);
-                WriteUleb128(w, m.AccessFlags);
-                WriteUleb128(w, methodCodeOffsets.TryGetValue(m, out var off) ? off : 0);
+                var previous = 0;
+                foreach (var method in methods)
+                {
+                    WriteDiff(w, method.MethodIndex, ref previous);
+                    WriteUleb128(w, method.AccessFlags);
+                    WriteUleb128(w, methodCodeOffsets.TryGetValue(method, out var off) ? off : 0);
+                }
             }
         }
         Align(w, 4);
@@ -265,7 +288,6 @@ internal static partial class DexWriter
         var firstDebugInfo = 0u;
         foreach (var (fieldPos, dbgBytes) in debugPatches)
         {
-            Align(w, 4);
             if (debugInfoCount == 0) firstDebugInfo = (uint)ms.Position;
             debugInfoCount++;
             var debugOff = (uint)ms.Position;
@@ -384,17 +406,31 @@ internal static partial class DexWriter
                 staticValueOffsets[i] = 0;
                 continue;
             }
-            Align(w, 4);
             staticValueOffsets[i] = (uint)ms.Position;
             if (encodedArrayCount == 0) firstEncodedArray = staticValueOffsets[i];
             encodedArrayCount++;
             WriteUleb128(w, (uint)sv.Count);
             foreach (var v in sv) WriteEncodedValue(w, v);
         }
+        var callSiteOffsets = new uint[dex.CallSites.Count];
+        for (var i = 0; i < dex.CallSites.Count; i++)
+        {
+            var values = dex.CallSites[i];
+            if (values.Count < 3 || values[0].Type != EncodedValueType.MethodHandle
+                || values[1].Type != EncodedValueType.String || values[2].Type != EncodedValueType.MethodType
+                || Convert.ToUInt32(values[0].Value) >= dex.MethodHandles.Count
+                || Convert.ToUInt32(values[1].Value) >= dex.Strings.Count
+                || Convert.ToUInt32(values[2].Value) >= dex.Protos.Count)
+                throw new DexException("Invalid call-site bootstrap arguments.");
+            callSiteOffsets[i] = (uint)ms.Position;
+            if (encodedArrayCount++ == 0) firstEncodedArray = (uint)ms.Position;
+            WriteUleb128(w, (uint)values.Count);
+            foreach (var value in values) WriteEncodedValue(w, value);
+        }
         Align(w, 4);
-
-
         var classDefsEnd = (int)ms.Position;
+        ms.Position = callSiteIdsOffset;
+        foreach (var offset in callSiteOffsets) w.Write(offset);
         ms.Position = classDefsOffset;
         for (var i = 0; i < dex.Classes.Count; i++)
         {
@@ -437,7 +473,7 @@ internal static partial class DexWriter
         if (encodedArrayCount > 0) mapItems.Add((0x2005, (uint)encodedArrayCount, firstEncodedArray));
 
 
-        var ordered = mapItems.OrderBy(m => m.Offset).ToList();
+        var ordered = mapItems.Where(m => m.Size > 0).OrderBy(m => m.Offset).ToList();
         w.Write((uint)ordered.Count);
         foreach (var (type, size, offset) in ordered)
         {
@@ -458,13 +494,13 @@ internal static partial class DexWriter
 
         Patch(headerStart + 32, (uint)fileSize);
         Patch(headerStart + 52, (uint)mapOffset);
-        Patch(headerStart + 60, (uint)stringIdsOffset);
-        Patch(headerStart + 68, (uint)typeIdsOffset);
-        Patch(headerStart + 76, (uint)protoIdsOffset);
-        Patch(headerStart + 84, (uint)fieldIdsOffset);
-        Patch(headerStart + 92, (uint)methodIdsOffset);
-        Patch(headerStart + 100, (uint)classDefsOffset);
-        Patch(headerStart + 104, (uint)(dataEnd - dataStart));
+        Patch(headerStart + 60, dex.Strings.Count == 0 ? 0 : (uint)stringIdsOffset);
+        Patch(headerStart + 68, dex.Types.Count == 0 ? 0 : (uint)typeIdsOffset);
+        Patch(headerStart + 76, dex.Protos.Count == 0 ? 0 : (uint)protoIdsOffset);
+        Patch(headerStart + 84, dex.Fields.Count == 0 ? 0 : (uint)fieldIdsOffset);
+        Patch(headerStart + 92, dex.Methods.Count == 0 ? 0 : (uint)methodIdsOffset);
+        Patch(headerStart + 100, dex.Classes.Count == 0 ? 0 : (uint)classDefsOffset);
+        Patch(headerStart + 104, (uint)(fileSize - dataStart));
         Patch(headerStart + 108, (uint)dataStart);
 
         var bytes = ms.ToArray();

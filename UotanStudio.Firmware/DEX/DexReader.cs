@@ -1,5 +1,6 @@
 ﻿using System.Buffers.Binary;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.Dex.Model;
 
@@ -26,6 +27,8 @@ internal static class DexReader
         }
 
         var version = Encoding.ASCII.GetString(data, 4, 3);
+        if (version is not ("035" or "037" or "038" or "039" or "040"))
+            throw new DexException($"Unsupported DEX version '{version}'; supported versions are 035, 037, 038, 039 and 040.");
         var endianTag = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(40));
         if (endianTag != LittleEndianTag)
         {
@@ -33,6 +36,24 @@ internal static class DexReader
         }
 
         var header = ReadHeader(data);
+        if (header.HeaderSize != 0x70 || header.FileSize != data.Length)
+            throw new DexException("DEX header size or file size does not match the input.");
+        if (!CryptographicOperations.FixedTimeEquals(SHA1.HashData(data.AsSpan(32)), header.Signature))
+            throw new DexException("DEX SHA-1 signature does not match the input.");
+        uint checksumA = 1, checksumB = 0;
+        foreach (var value in data.AsSpan(12))
+        {
+            checksumA = (checksumA + value) % 65521;
+            checksumB = (checksumB + checksumA) % 65521;
+        }
+        if ((checksumB << 16 | checksumA) != header.Checksum) throw new DexException("DEX Adler-32 checksum does not match the input.");
+        ValidateTable(data, header.StringIdsOffset, header.StringIdsSize, 4, "string_ids");
+        ValidateTable(data, header.TypeIdsOffset, header.TypeIdsSize, 4, "type_ids");
+        ValidateTable(data, header.ProtoIdsOffset, header.ProtoIdsSize, 12, "proto_ids");
+        ValidateTable(data, header.FieldIdsOffset, header.FieldIdsSize, 8, "field_ids");
+        ValidateTable(data, header.MethodIdsOffset, header.MethodIdsSize, 8, "method_ids");
+        ValidateTable(data, header.ClassDefsOffset, header.ClassDefsSize, 32, "class_defs");
+        ValidateTable(data, header.DataOffset, header.DataSize, 1, "data");
         var dex = new DexFile(header);
 
         ReadStringIds(data, dex);
@@ -40,9 +61,71 @@ internal static class DexReader
         ReadProtoIds(data, dex);
         ReadFieldIds(data, dex);
         ReadMethodIds(data, dex);
+        ReadModernIds(data, dex);
         ReadClassDefs(data, dex);
 
         return dex;
+    }
+
+    private static void ValidateTable(byte[] data, uint offset, uint count, int width, string name)
+    {
+        if (offset > data.Length || count > ((ulong)data.Length - offset) / (uint)width
+            || (count != 0 && offset < 0x70)) throw new DexException($"Invalid {name} range.");
+    }
+
+    private static void ReadModernIds(byte[] data, DexFile dex)
+    {
+        if (dex.Header.MapOffset == 0) return;
+        var map = checked((int)dex.Header.MapOffset);
+        EnsureRange(data, map, 4, "map_list");
+        var count = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(map));
+        if (count > (data.Length - map - 4) / 12) throw new DexException("Truncated map_list.");
+        var seen = new HashSet<ushort>();
+        for (var i = 0; i < count; i++)
+        {
+            var item = map + 4 + i * 12;
+            var kind = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(item));
+            if (!seen.Add(kind)) throw new DexException("Duplicate map_list item.");
+            if (kind is not (7 or 8)) continue;
+            if (string.CompareOrdinal(dex.Header.Version, "038") < 0)
+                throw new DexException("Method handles and call sites require DEX 038 or newer.");
+            var entries = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(item + 4));
+            var offset = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(item + 8));
+            ValidateTable(data, offset, entries, kind == 7 ? 4 : 8, "modern_ids");
+            for (var j = 0; j < entries; j++)
+            {
+                var pos = checked((int)offset + j * (kind == 7 ? 4 : 8));
+                if (kind == 8)
+                {
+                    var handleKind = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos));
+                    var index = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos + 4));
+                    if (handleKind > 8 || index >= (handleKind <= 3 ? dex.Fields.Count : dex.Methods.Count)
+                        || BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos + 2)) != 0
+                        || BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos + 6)) != 0)
+                        throw new DexException("Invalid method_handle_item.");
+                    dex.MethodHandles.Add(new MethodHandleDefinition { Kind = handleKind, MemberIndex = index });
+                }
+                else
+                {
+                    var p = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos)));
+                    EnsureRange(data, p, 1, "call_site_item");
+                    var size = Leb128.ReadUleb128(data, ref p);
+                    if (size > data.Length - p) throw new DexException("Truncated call-site array.");
+                    var values = new List<EncodedValue>();
+                    for (var k = 0; k < size; k++) values.Add(ReadEncodedValue(data, ref p, dex));
+                    dex.CallSites.Add(values);
+                }
+            }
+        }
+        foreach (var site in dex.CallSites)
+        {
+            if (site.Count < 3 || site[0].Type != EncodedValueType.MethodHandle
+                || site[1].Type != EncodedValueType.String || site[2].Type != EncodedValueType.MethodType
+                || Convert.ToUInt32(site[0].Value) >= dex.MethodHandles.Count
+                || Convert.ToUInt32(site[1].Value) >= dex.Strings.Count
+                || Convert.ToUInt32(site[2].Value) >= dex.Protos.Count)
+                throw new DexException("Invalid call-site bootstrap arguments.");
+        }
     }
 
     private static bool IsValidMagic(ReadOnlySpan<byte> magic)
@@ -142,6 +225,7 @@ internal static class DexReader
     {
         EnsureRange(data, offset, 4, "type_list");
         var size = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset));
+        EnsureRange(data, offset + 4, checked((int)size * 2), "type_list entries");
         var result = new int[size];
         var listSpan = data.AsSpan(offset + 4, checked((int)size * 2));
         if (BitConverter.IsLittleEndian)

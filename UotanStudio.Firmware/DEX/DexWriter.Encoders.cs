@@ -9,9 +9,9 @@ internal static partial class DexWriter
 {
     private static string NormalizeVersion(string version)
     {
-        if (string.IsNullOrEmpty(version) || version.Length != 3)
+        if (version is not ("035" or "037" or "038" or "039" or "040"))
         {
-            throw new DexException($"Invalid DEX version '{version}' (expected 3 digits, e.g. 035)");
+            throw new DexException($"Unsupported DEX version '{version}'; supported versions are 035, 037, 038, 039 and 040.");
         }
         foreach (var c in version)
         {

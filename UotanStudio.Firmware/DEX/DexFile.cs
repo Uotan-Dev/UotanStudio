@@ -37,6 +37,12 @@ public sealed class DexFile
 
     public List<ClassDefinition> Classes { get; } = [];
 
+    /// <summary>Gets the DEX 038+ method handles. <para>获取 DEX 038 及以上版本的方法句柄。</para></summary>
+    public List<MethodHandleDefinition> MethodHandles { get; } = [];
+
+    /// <summary>Gets the DEX 038+ call-site argument arrays. <para>获取 DEX 038 及以上版本的调用点参数数组。</para></summary>
+    public List<List<EncodedValue>> CallSites { get; } = [];
+
     /// <summary>
     /// Loads a DEX from a file.
     /// <para>从文件加载 DEX。</para>
@@ -45,7 +51,8 @@ public sealed class DexFile
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if (!File.Exists(path)) throw new DexException($"DEX file not found: {path}");
-        return Load(File.ReadAllBytes(path));
+        using var stream = File.OpenRead(path);
+        return Load(AXml.AndroidMetadataReader.Read(stream));
     }
 
     /// <summary>
@@ -71,7 +78,8 @@ public sealed class DexFile
     public void Write(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        File.WriteAllBytes(path, ToArray());
+        var bytes = ToArray();
+        Common.FileExtraction.WriteAtomic(path, stream => stream.Write(bytes));
     }
 
     /// <summary>

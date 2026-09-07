@@ -49,6 +49,16 @@ public sealed class MethodId
     public int NameIndex { get; set; }
 }
 
+/// <summary>Describes a DEX method handle. <para>描述 DEX 方法句柄。</para></summary>
+public sealed class MethodHandleDefinition
+{
+    /// <summary>Gets or sets the handle kind (0 through 8). <para>获取或设置句柄种类（0 至 8）。</para></summary>
+    public ushort Kind { get; set; }
+
+    /// <summary>Gets or sets the referenced field or method index. <para>获取或设置引用的字段或方法索引。</para></summary>
+    public ushort MemberIndex { get; set; }
+}
+
 public sealed class EncodedField
 {
     public int FieldIndex { get; set; }
