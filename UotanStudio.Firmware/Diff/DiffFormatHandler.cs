@@ -13,9 +13,13 @@ public sealed class DiffFormatHandler : IFormatHandler
 
     public IReadOnlyList<string> FileExtensions { get; } = ["bsdiff"];
 
+    private static bool HasSupportedMagic(ReadOnlySpan<byte> header) => header.Length >= 8 &&
+        (header[..8].SequenceEqual("BSDIFF40"u8) ||
+         (header[..5].SequenceEqual("BSDF2"u8) && header[5] is 1 or 2 && header[6] is 1 or 2 && header[7] is 1 or 2));
+
     /// <summary>
-    /// Determines whether this handler can process the given file: the leading bytes must be the ASCII magic 'BSDIFF40'.
-    /// <para>判断该处理器能否处理指定文件：文件开头字节须为 ASCII 魔数 'BSDIFF40'。</para>
+    /// Recognizes BSDIFF40 and Android BSDF2 patch headers.
+    /// <para>识别 BSDIFF40 和 Android BSDF2 补丁头。</para>
     /// </summary>
     public bool CanHandle(string filePath)
     {
@@ -27,7 +31,7 @@ public sealed class DiffFormatHandler : IFormatHandler
         try
         {
             var header = FormatDetector.ReadHeader(filePath, 8);
-            return FormatDetector.HasMagic(header, BsdiffMagic);
+            return HasSupportedMagic(header);
         }
         catch
         {
@@ -47,23 +51,25 @@ public sealed class DiffFormatHandler : IFormatHandler
             try
             {
                 var header = FormatDetector.ReadHeader(filePath, BsdiffHeaderSize);
-                if (header.Length < BsdiffHeaderSize || !FormatDetector.HasMagic(header, BsdiffMagic))
+                if (header.Length < BsdiffHeaderSize || !HasSupportedMagic(header))
                 {
                     return FirmwareOpResult.Fail($"Not a bsdiff (BSDIFF40) patch: '{filePath}'.  不是 bsdiff (BSDIFF40) 补丁。");
                 }
 
-                var controlLength = BinaryPrimitives.ReadInt64LittleEndian(header.AsSpan(8, 8));
-                var diffLength = BinaryPrimitives.ReadInt64LittleEndian(header.AsSpan(16, 8));
-                var newSize = BinaryPrimitives.ReadInt64LittleEndian(header.AsSpan(24, 8));
+                var controlLength = BinaryDeltaPatch.ReadNumber(header.AsSpan(8, 8));
+                var diffLength = BinaryDeltaPatch.ReadNumber(header.AsSpan(16, 8));
+                var newSize = BinaryDeltaPatch.ReadNumber(header.AsSpan(24, 8));
                 if (controlLength < 0 || diffLength < 0 || newSize < 0)
                 {
                     return FirmwareOpResult.Fail("Invalid negative length in bsdiff header.  bsdiff 头部存在非法负长度。");
                 }
 
                 var fileLength = new FileInfo(filePath).Length;
+                if (controlLength > fileLength - BsdiffHeaderSize || diffLength > fileLength - BsdiffHeaderSize - controlLength)
+                    return FirmwareOpResult.Fail("Binary patch streams exceed the file length.");
                 var metadata = new Dictionary<string, string>
                 {
-                    ["PatchType"] = "bsdiff (BSDIFF40)",
+                    ["PatchType"] = header.AsSpan(0, 5).SequenceEqual("BSDF2"u8) ? "bsdiff (BSDF2)" : "bsdiff (BSDIFF40)",
                     ["ControlBlockLength"] = controlLength.ToString(CultureInfo.InvariantCulture),
                     ["DiffBlockLength"] = diffLength.ToString(CultureInfo.InvariantCulture),
                     ["NewFileSize"] = newSize.ToString(CultureInfo.InvariantCulture),
