@@ -78,6 +78,7 @@
     <x:String x:Key="ProjectExplorer_Inner">内部</x:String>
     <x:String x:Key="ProjectExplorer_Innermost">最内层</x:String>
     <x:String x:Key="Explorer_OpenAsText">以文本打开</x:String>
+    <x:String x:Key="Explorer_OpenAsLog">以日志打开</x:String>
     <x:String x:Key="Explorer_OpenAsHex">以十六进制打开</x:String>
     <x:String x:Key="Explorer_OpenAsDtb">以设备树打开</x:String>
     <x:String x:Key="Explorer_OpenAsDex">以 DEX 打开</x:String>

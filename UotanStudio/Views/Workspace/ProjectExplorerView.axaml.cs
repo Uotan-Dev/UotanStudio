@@ -136,6 +136,8 @@ public partial class ProjectExplorerView : UserControl
         }
     }
 
+    private void OnOpenAsLog(object? sender, RoutedEventArgs e) => OpenWith(EditorOpenMode.Log);
+
     private void OnOpenAsHex(object? sender, RoutedEventArgs e)
     {
         OpenWith(EditorOpenMode.Hex);

@@ -151,6 +151,7 @@ public class AppSettings
 [JsonSerializable(typeof(ThemeMode))]
 [JsonSerializable(typeof(McpServerConfig))]
 [JsonSerializable(typeof(McpTransportKind))]
+[JsonSerializable(typeof(UotanStudio.Services.Logging.LogFileRecord))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

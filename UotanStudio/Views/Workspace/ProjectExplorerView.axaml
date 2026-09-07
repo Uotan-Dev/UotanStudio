@@ -17,6 +17,7 @@
                                   IsVisible="{Binding !IsDirectory}">
                             <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsTextHeader}"
                                       Click="OnOpenAsText" />
+                            <MenuItem Header="{DynamicResource Explorer_OpenAsLog}" Click="OnOpenAsLog" />
                             <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsHexHeader}"
                                       Click="OnOpenAsHex" />
                             <MenuItem Header="{x:Static viewmodels:ExplorerNode.OpenAsDtbHeader}"

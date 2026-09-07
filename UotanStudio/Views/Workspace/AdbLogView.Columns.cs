@@ -8,9 +8,29 @@ namespace UotanStudio.Views.Workspace;
 
 public partial class AdbLogView
 {
+    private sealed class LogPriorityBackgroundRenderer : IBackgroundRenderer
+    {
+        public KnownLayer Layer => KnownLayer.Background;
+
+        public void Draw(TextView textView, DrawingContext drawingContext)
+        {
+            if (!textView.VisualLinesValid) return;
+            using (drawingContext.PushClip(new Rect(textView.Bounds.Size)))
+                foreach (var line in textView.VisualLines)
+                    foreach (var element in line.Elements)
+                    {
+                        if (element is not LogColumnElement { IsPriority: true }
+                            || element.TextRunProperties.BackgroundBrush is not { } brush) continue;
+                        var start = line.GetVisualPosition(element.VisualColumn, VisualYPosition.LineTop);
+                        var end = line.GetVisualPosition(element.VisualColumn + element.VisualLength, VisualYPosition.LineBottom);
+                        drawingContext.FillRectangle(brush, new Rect(start - textView.ScrollOffset, end - textView.ScrollOffset));
+                    }
+        }
+    }
+
     private sealed class LogColumnGenerator(AdbLogView view) : VisualLineElementGenerator
     {
-        private readonly List<(int Offset, int Length, string Text, double Width, bool IsPriority)> _columns = [];
+        private readonly List<(int Offset, int Length, string Text, double Width, bool IsPriority, bool TrimMiddle)> _columns = [];
 
         public override void StartGeneration(ITextRunConstructionContext context)
         {
@@ -21,22 +41,17 @@ public partial class AdbLogView
                 return;
 
             // Keep the original document spans so selecting across elided fields copies their complete text.
-            string[] fields = [entry.Timestamp, entry.ProcessId + "-" + entry.ThreadId,
-                entry.Tag, entry.ProcessName, entry.Priority.ToString()];
-            int[] minimumLengths = [23, 13, 24, 32, 1];
-            int[] columnWidths = [24, 14, 25, 33, 3];
             var offset = line.Offset;
-            for (var i = 0; i < fields.Length; i++)
+            foreach (var column in entry.Columns)
             {
-                var isPriority = i == fields.Length - 1;
-                var length = Math.Max(fields[i].Length, minimumLengths[i]) + (isPriority ? 0 : 1);
+                var length = column.DocumentLength;
                 if (length > line.EndOffset - offset)
                 {
                     _columns.Clear();
                     return;
                 }
-                _columns.Add((offset, length, fields[i],
-                    Math.Ceiling(context.TextView.WideSpaceWidth * columnWidths[i]), isPriority));
+                _columns.Add((offset, length, column.Text,
+                    Math.Ceiling(context.TextView.WideSpaceWidth * column.Width), column.IsPriority, column.TrimMiddle));
                 offset += length;
             }
         }
@@ -52,19 +67,19 @@ public partial class AdbLogView
         {
             foreach (var column in _columns)
                 if (column.Offset == offset)
-                    return new LogColumnElement(column.Text, column.Length, column.Width, column.IsPriority);
+                    return new LogColumnElement(column.Text, column.Length, column.Width, column.IsPriority, column.TrimMiddle);
             throw new InvalidOperationException("No log column at the requested offset.");
         }
     }
 
-    private sealed class LogColumnElement(string text, int length, double width, bool isPriority)
+    private sealed class LogColumnElement(string text, int length, double width, bool isPriority, bool trimMiddle)
         : VisualLineElement(1, length)
     {
         public bool IsPriority { get; } = isPriority;
 
         public override TextRun CreateTextRun(int startVisualColumn, ITextRunConstructionContext context) =>
             new LogColumnRun(text, width, context.TextView.DefaultLineHeight,
-                IsPriority ? 0 : context.TextView.WideSpaceWidth, IsPriority, TextRunProperties);
+                IsPriority ? 0 : context.TextView.WideSpaceWidth, IsPriority, trimMiddle, TextRunProperties);
     }
 
     private sealed class LogColumnRun : DrawableTextRun
@@ -73,7 +88,7 @@ public partial class AdbLogView
         private readonly Point _textOffset;
         private readonly Rect _clipBounds;
 
-        public LogColumnRun(string text, double width, double lineHeight, double padding, bool centered,
+        public LogColumnRun(string text, double width, double lineHeight, double padding, bool centered, bool trimMiddle,
             TextRunProperties properties)
         {
             Properties = properties;
@@ -89,7 +104,7 @@ public partial class AdbLogView
             {
                 MaxTextWidth = Math.Max(1, width - padding),
                 MaxLineCount = 1,
-                Trimming = TextTrimming.CharacterEllipsis
+                Trimming = trimMiddle ? TextTrimming.PrefixCharacterEllipsis : TextTrimming.CharacterEllipsis
             };
             _textOffset = new Point(centered ? (width - _text.WidthIncludingTrailingWhitespace) / 2 : 0,
                 (height - _text.Height) / 2);

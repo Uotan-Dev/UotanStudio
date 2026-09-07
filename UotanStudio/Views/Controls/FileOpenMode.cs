@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using UotanStudio.Firmware;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Views.Controls;
 
@@ -79,7 +80,10 @@ public enum EditorOpenMode
     /// Open in the partition-table editor (Android LP super metadata or Rockchip parameter partition
     /// tables, showing name/start/size/type with edit-and-save support).
     /// </summary>
-    Partition
+    Partition,
+
+    /// <summary>Open as a read-only log document. 以只读日志文档打开。</summary>
+    Log
 }
 
 /// <summary>
@@ -116,6 +120,10 @@ public static class FileOpenMode
         }
 
         var ext = Path.GetExtension(path);
+
+        if (ext.Equals(".log", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".logcat", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".adblog", StringComparison.OrdinalIgnoreCase)) return EditorOpenMode.Log;
 
         // 设备树双栏编辑器优先于纯二进制。
         // Device tree dual-pane editor takes precedence over plain binary.
@@ -284,10 +292,14 @@ public static class FileOpenMode
         }
 
         var mode = ResolveMode(path);
-        if (mode == EditorOpenMode.Text && header is not null && IsBinaryContent(header))
+        if (mode is EditorOpenMode.Text or EditorOpenMode.Log && header is not null && IsBinaryContent(header))
         {
             return EditorOpenMode.Hex;
         }
+
+        if (mode is EditorOpenMode.Auto or EditorOpenMode.Text && header is not null
+            && (string.IsNullOrEmpty(Path.GetExtension(path)) || Path.GetExtension(path).Equals(".txt", StringComparison.OrdinalIgnoreCase))
+            && LogFileService.LooksLikeLog(header)) return EditorOpenMode.Log;
 
         if (mode != EditorOpenMode.Auto)
         {

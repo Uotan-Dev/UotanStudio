@@ -291,7 +291,11 @@ public class WorkspaceDockFactory : Factory
 
         // 文档关闭后立即释放大对象（解析模型/原始字节/树节点），避免内存占用保持不降。
         // Release large objects as soon as a document is closed so the memory footprint drops.
-        if (dockable is UotanStudio.ViewModels.Compare.CompareViewModel compare)
+        if (dockable is UotanStudio.ViewModels.Editors.LogEditorViewModel logEditor)
+        {
+            logEditor.Cleanup();
+        }
+        else if (dockable is UotanStudio.ViewModels.Compare.CompareViewModel compare)
         {
             compare.Cleanup();
         }

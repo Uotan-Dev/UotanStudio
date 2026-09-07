@@ -37,6 +37,7 @@ internal static class ViewModelViewRegistry
         [typeof(PartitionEditorViewModel)] = () => new PartitionEditorView(),
         [typeof(ArscEditorViewModel)] = () => new ArscEditorView(),
         [typeof(HexEditorViewModel)] = () => new HexEditorView(),
+        [typeof(LogEditorViewModel)] = () => new LogEditorView(),
         [typeof(ApkEditorViewModel)] = () => new ApkEditorView(),
         [typeof(FirmwareInfoViewModel)] = () => new FirmwareInfoView(),
         [typeof(FileManagerEditorViewModel)] = () => new FileManagerEditorView(),

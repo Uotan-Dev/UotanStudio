@@ -62,7 +62,7 @@
     <!-- 日志编辑器 -->
     <edit:TextEditor Grid.Row="1" Name="LogEditor"
                      IsReadOnly="True" ShowLineNumbers="False" WordWrap="False"
-                     FontFamily="Consolas,monospace" FontSize="12"
+                     FontFamily="Consolas,monospace" FontSize="13"
                      Padding="8,4" Background="Transparent"
                      Foreground="{DynamicResource TextForeground}"
                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
