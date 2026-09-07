@@ -47,8 +47,8 @@ public sealed class DzFormatHandler : IFormatHandler
     {
         try
         {
-            var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-            if (ext == "kdz")
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsKdz(filePath))
             {
                 var (headerType, partitions) = KdzExtractor.Parse(filePath);
                 var kdzSummary = $"LG KDZ (header v{headerType}): {partitions.Count} partitions";
@@ -71,6 +71,7 @@ public sealed class DzFormatHandler : IFormatHandler
                     ["ChunkCount"] = chunks.Count.ToString()
                 }));
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
@@ -85,13 +86,15 @@ public sealed class DzFormatHandler : IFormatHandler
     {
         try
         {
-            Directory.CreateDirectory(outputDirectory);
-            var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-            var count = ext == "kdz"
-                ? KdzExtractor.Extract(filePath, outputDirectory)
-                : DzExtractor.Extract(filePath, outputDirectory);
-            return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} partitions to {outputDirectory}"));
+            cancellationToken.ThrowIfCancellationRequested();
+            var kdz = IsKdz(filePath);
+            var count = kdz
+                ? KdzExtractor.Extract(filePath, outputDirectory, overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken)
+                : DzExtractor.Extract(filePath, outputDirectory, overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken);
+            var kind = kdz ? "embedded files" : "decompressed chunks";
+            return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} {kind} to {outputDirectory}"));
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
@@ -103,4 +106,13 @@ public sealed class DzFormatHandler : IFormatHandler
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default) => Task.FromResult(FirmwareOpResult.Fail("DZ/KDZ packing is not supported by this handler."));
+
+    private static bool IsKdz(string path)
+    {
+        using var stream = File.OpenRead(path);
+        Span<byte> magic = stackalloc byte[8];
+        stream.ReadExactly(magic);
+        return magic.SequenceEqual(DzConstants.KdzHeaderV0) || magic.SequenceEqual(DzConstants.KdzHeaderV1)
+            || magic.SequenceEqual(DzConstants.KdzHeaderV2);
+    }
 }

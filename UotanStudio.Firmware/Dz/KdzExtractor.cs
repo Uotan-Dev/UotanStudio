@@ -1,4 +1,6 @@
 using System.Text;
+using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.Common.Streams;
 
 namespace UotanStudio.Firmware.Dz;
 
@@ -37,10 +39,12 @@ public static class KdzExtractor
             var buf = br.ReadBytes(KdzHeader.Size);
             if (buf.Length < KdzHeader.Size)
             {
-                break;
+                throw new InvalidDataException("The KDZ partition table is truncated.");
             }
 
             var header = KdzHeader.FromBytes(buf);
+            if (header.Offset > (ulong)fs.Length || header.Length > (ulong)fs.Length - header.Offset)
+                throw new InvalidDataException("A KDZ partition exceeds the input bounds.");
             partitions.Add(new KdzPartition
             {
                 Name = header.GetName(),
@@ -64,12 +68,18 @@ public static class KdzExtractor
     /// Extracts all partitions from a KDZ file to the output directory.
     /// <para>将 KDZ 文件中的所有分区提取到输出目录。</para>
     /// </summary>
-    public static int Extract(string kdzPath, string outDir, Func<string, bool>? nameFilter = null)
+    /// <param name="kdzPath">The KDZ source path. <para>KDZ 源路径。</para></param>
+    /// <param name="outDir">The output directory. <para>输出目录。</para></param>
+    /// <param name="nameFilter">The optional entry filter. <para>可选的条目名筛选器。</para></param>
+    /// <param name="overwrite">Whether to replace existing files. <para>是否替换已有文件。</para></param>
+    /// <param name="cancellationToken">The cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The committed entry count. <para>已提交的条目数。</para></returns>
+    public static int Extract(string kdzPath, string outDir, Func<string, bool>? nameFilter = null,
+        bool overwrite = true, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(kdzPath);
         ArgumentException.ThrowIfNullOrEmpty(outDir);
-
-        Directory.CreateDirectory(outDir);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var (_, partitions) = Parse(kdzPath);
         var count = 0;
@@ -77,27 +87,16 @@ public static class KdzExtractor
         using var fs = new FileStream(kdzPath, FileMode.Open, FileAccess.Read);
         foreach (var part in partitions)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (nameFilter is not null && !nameFilter(part.Name))
             {
                 continue;
             }
 
-            var outPath = Path.Combine(outDir, part.Name);
+            var outPath = FileExtraction.ResolvePath(outDir, part.Name);
             fs.Position = (long)part.Offset;
-            using var outFs = new FileStream(outPath, FileMode.Create, FileAccess.Write);
-            var remaining = (long)part.Length;
-            var buffer = new byte[1024 * 1024];
-            while (remaining > 0)
-            {
-                var toRead = (int)Math.Min(buffer.Length, remaining);
-                var read = fs.Read(buffer, 0, toRead);
-                if (read == 0)
-                {
-                    break;
-                }
-                outFs.Write(buffer, 0, read);
-                remaining -= read;
-            }
+            FileExtraction.WriteAtomic(outPath, output => StreamCopy.CopyExactly(fs, output, checked((long)part.Length),
+                cancellationToken: cancellationToken), overwrite);
             count++;
         }
 
