@@ -134,6 +134,7 @@ public class WorkspaceDockFactory : Factory
 
         var mainLayout = new ProportionalDock
         {
+            Id = "WorkspaceMainLayout",
             Orientation = Dock.Model.Core.Orientation.Horizontal,
             Proportion = double.NaN,
             VisibleDockables = CreateList<IDockable>(
@@ -141,6 +142,7 @@ public class WorkspaceDockFactory : Factory
                 new ProportionalDockSplitter(),
                 new ProportionalDock
                 {
+                    Id = "WorkspaceCenterColumn",
                     Orientation = Dock.Model.Core.Orientation.Vertical,
                     Proportion = 0.7,
                     VisibleDockables = CreateList<IDockable>(
@@ -152,6 +154,7 @@ public class WorkspaceDockFactory : Factory
                 new ProportionalDockSplitter(),
                 new ProportionalDock
                 {
+                    Id = "WorkspaceRightColumn",
                     Orientation = Dock.Model.Core.Orientation.Vertical,
                     Proportion = 0.15,
                     VisibleDockables = CreateList<IDockable>(

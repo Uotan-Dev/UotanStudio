@@ -40,9 +40,11 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>构造工作区视图模型：创建 Dock 工厂与布局，并完成布局初始化。</para>
     /// Constructs the workspace view model: creates the dock factory and layout, then initializes the layout.
     /// </summary>
-    public WorkspaceViewModel()
+    public WorkspaceViewModel() : this(new WorkspaceDockFactory()) { }
+
+    internal WorkspaceViewModel(IFactory factory)
     {
-        _factory = new WorkspaceDockFactory();
+        _factory = factory;
         Layout = _factory.CreateLayout();
         if (Layout != null)
         {
@@ -801,6 +803,15 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <param name="rootDir"><para>工程根目录（用于拼接绝对路径）。</para>The project root directory.</param>
     public async Task RestoreOpenDocumentAsync(Services.Projects.OpenDocumentDto dto, string rootDir)
     {
+        if (dto.Kind == "Compare")
+        {
+            var compare = OpenCompareDocument();
+            if (compare is not null)
+                foreach (var path in new[] { dto.CompareLeftPath, dto.CompareRightPath })
+                    if (!string.IsNullOrEmpty(path) && (File.Exists(path) || Directory.Exists(path)))
+                        await compare.AddComparisonPathAsync(path);
+            return;
+        }
         var fullPath = Path.Combine(rootDir, dto.RelativePath.Replace('/', Path.DirectorySeparatorChar));
         if (!File.Exists(fullPath))
         {
@@ -812,7 +823,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             switch (dto.Kind)
             {
                 case "Text":
-                    await OpenDocumentAsync(fullPath);
+                    await OpenDocumentAsync(fullPath, Enum.IsDefined((EditorOpenMode)dto.OpenMode)
+                        ? (EditorOpenMode)dto.OpenMode : EditorOpenMode.Auto);
                     break;
                 case "Firmware":
                     await OpenFirmwareAsync(fullPath);
@@ -835,6 +847,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 case "Hex":
                     await OpenHexAsync(fullPath);
                     break;
+                case "Apk":
+                    await OpenApkAsync(fullPath);
+                    break;
+                case "Partition":
+                    await OpenPartitionAsync(fullPath);
+                    break;
             }
         }
         catch (Exception ex)
@@ -842,6 +860,29 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             LogService.Instance.Write(LogLevel.Error, "Workspace",
                 $"Failed to restore open document '{dto.RelativePath}' ({dto.Kind}): {ex.Message}");
         }
+    }
+
+    internal async Task RestoreDocumentsAsync(IEnumerable<Services.Projects.OpenDocumentDto> documents, string rootDir)
+    {
+        var snapshot = documents.ToList();
+        foreach (var document in snapshot) await RestoreOpenDocumentAsync(document, rootDir);
+        if (snapshot.LastOrDefault(d => d.IsActive) is { } active)
+            await RestoreOpenDocumentAsync(active, rootDir);
+    }
+
+    private async Task OpenPartitionAsync(string path)
+    {
+        var dock = FindDocumentsPanePublic();
+        if (dock is null) return;
+        EnsureDocumentDockSubscribed(dock);
+        var document = dock.VisibleDockables?.OfType<PartitionEditorViewModel>().FirstOrDefault(d => d.FilePath == path);
+        if (document is null)
+        {
+            document = new PartitionEditorViewModel { Title = Path.GetFileName(path) };
+            _factory.AddDockable(dock, document);
+            await document.LoadAsync(path);
+        }
+        dock.ActiveDockable = document;
     }
 
     /// <summary>

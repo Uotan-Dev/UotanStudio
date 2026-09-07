@@ -613,6 +613,13 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         ShowToast(LanguageService.Instance.GetString("Settings_SettingsSaved"));
     }
 
+    internal void FlushPendingSave()
+    {
+        if (_saveCts is null) return;
+        _saveCts.Cancel();
+        SaveSettings();
+    }
+
     /// <summary>
     /// <para>显示 Toast 通知，2 秒后在 UI 线程上自动隐藏。</para>
     /// Shows a toast notification that automatically hides after 2 seconds on the UI thread.

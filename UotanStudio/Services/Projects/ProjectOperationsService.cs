@@ -17,12 +17,61 @@ namespace UotanStudio.Services.Projects;
 /// </summary>
 public sealed class ProjectOperationsService
 {
+    private readonly SemaphoreSlim _operationGate = new(1, 1);
+    internal bool IsBusy => _operationGate.CurrentCount == 0;
+    internal Func<Task>? BeforeProjectChangeAsync { get; set; }
+
+    internal async Task WaitForIdleAsync()
+    {
+        await _operationGate.WaitAsync();
+        _operationGate.Release();
+    }
+
+    private async Task RunOperationAsync(Func<Task> operation, bool changingProject = false)
+    {
+        if (changingProject && BeforeProjectChangeAsync is { } flush) await flush();
+        await _operationGate.WaitAsync();
+        try { await operation(); }
+        finally { _operationGate.Release(); }
+    }
+
+    internal async Task AutoSaveAsync()
+    {
+        if (!await _operationGate.WaitAsync(0)) return;
+        try
+        {
+            foreach (var document in Services.Workspace.WorkspaceSessionCapture.Enumerate(WorkspaceVM?.Layout).ToList())
+            {
+                try
+                {
+                    switch (document)
+                    {
+                        case FileViewModel { IsDirty: true, IsBinary: false } text:
+                            await text.SaveAsync();
+                            break;
+                        case DtbEditorViewModel { IsDirty: true } dtb when !dtb.SaveCommand.IsRunning:
+                            await dtb.SaveCommand.ExecuteAsync(null);
+                            break;
+                        case ManifestEditorViewModel { IsDirty: true, IsBusy: false } manifest when !manifest.SaveCommand.IsRunning:
+                            await manifest.SaveCommand.ExecuteAsync(null);
+                            break;
+                        case PartitionEditorViewModel { IsDirty: true, IsBusy: false } partition when !partition.SaveCommand.IsRunning:
+                            await partition.SaveCommand.ExecuteAsync(null);
+                            break;
+                    }
+                }
+                catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", ex.Message); }
+            }
+            if (CurrentProjectPath is { Length: > 0 } path) await PersistCoreAsync(path);
+        }
+        finally { _operationGate.Release(); }
+    }
     private static readonly Lazy<ProjectOperationsService> LazyInstance = new(() => new ProjectOperationsService());
 
     /// <summary><para>单例实例。</para>Singleton instance.</summary>
     public static ProjectOperationsService Instance => LazyInstance.Value;
 
-    private ProjectOperationsService() { }
+    internal ProjectOperationsService() { }
 
     /// <summary>
     /// <para>当前工程文件路径，由保存/打开操作填充。</para>
@@ -47,7 +96,9 @@ public sealed class ProjectOperationsService
     /// Creates and persists an empty solution (firmware project + node project + state directory) at the
     /// specified path.
     /// </summary>
-    public async Task CreateNewSolutionAsync(string path)
+    public Task CreateNewSolutionAsync(string path) => RunOperationAsync(() => CreateNewSolutionCoreAsync(path), true);
+
+    private async Task CreateNewSolutionCoreAsync(string path)
     {
         ProjectContextService.Instance.OpenSolution(path);
         CurrentProjectPath = path;
@@ -117,6 +168,13 @@ public sealed class ProjectOperationsService
     /// </summary>
     public async Task<bool> OpenProjectFromPathAsync(string path)
     {
+        var opened = false;
+        await RunOperationAsync(async () => opened = await OpenProjectFromPathCoreAsync(path), true);
+        return opened;
+    }
+
+    private async Task<bool> OpenProjectFromPathCoreAsync(string path)
+    {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
         {
             LogService.Instance.Write(LogLevel.Warn, "Menu", $"Open aborted: missing file '{path}'");
@@ -169,7 +227,7 @@ public sealed class ProjectOperationsService
             if (firmware.OpenDocuments is { Count: > 0 } openDocs && WorkspaceVM is not null)
             {
                 var rootDir = ProjectContextService.Instance.RootDirectory ?? Path.GetDirectoryName(path) ?? ".";
-                await Task.WhenAll(openDocs.Select(docDto => WorkspaceVM.RestoreOpenDocumentAsync(docDto, rootDir)));
+                await WorkspaceVM.RestoreDocumentsAsync(openDocs, rootDir);
             }
         }
 
@@ -223,7 +281,9 @@ public sealed class ProjectOperationsService
     /// <para>另存为：复制镜像目录到新根目录后持久化。</para>
     /// Saves the solution under a new path, copying the image directory to the new root, then persisting.
     /// </summary>
-    public async Task SaveAsAsync(string path)
+    public Task SaveAsAsync(string path) => RunOperationAsync(() => SaveAsCoreAsync(path), true);
+
+    private async Task SaveAsCoreAsync(string path)
     {
         var oldImages = ProjectContextService.Instance.ActiveSubProject?.ImagesDir;
         var oldRoot = ProjectContextService.Instance.RootDirectory;
@@ -244,7 +304,7 @@ public sealed class ProjectOperationsService
             });
         }
 
-        await PersistToAsync(path);
+        await PersistCoreAsync(path);
         WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
     }
 
@@ -382,6 +442,12 @@ public sealed class ProjectOperationsService
             return;
         }
 
+        if (active is FileViewModel { IsDirty: true, IsBinary: false } text)
+        {
+            await text.SaveAsync();
+            return;
+        }
+
         CommunityToolkit.Mvvm.Input.IAsyncRelayCommand? saveCmd = active switch
         {
             ManifestEditorViewModel m => m.SaveCommand,
@@ -400,7 +466,9 @@ public sealed class ProjectOperationsService
     /// <para>将当前工程完整快照写入指定路径。</para>
     /// Writes the complete project snapshot to the specified path.
     /// </summary>
-    public async Task PersistToAsync(string path)
+    public Task PersistToAsync(string path) => RunOperationAsync(() => PersistCoreAsync(path));
+
+    private async Task PersistCoreAsync(string path)
     {
         if (NodeEditorVM == null)
         {
@@ -417,17 +485,7 @@ public sealed class ProjectOperationsService
         {
             FormatVersion = 1,
             ProjectName = solutionName,
-            Nodes = NodeEditorVM.Nodes
-                .Select(n => new NodeDto
-                {
-                    InstanceId = n.InstanceId,
-                    Title = n.Title,
-                    Category = n.Category.ToString(),
-                    X = n.Location.X,
-                    Y = n.Location.Y,
-                    TypeKey = n.TypeKey
-                })
-                .ToList(),
+            Nodes = WorkflowPersistenceService.BuildNodeDtos(NodeEditorVM.Nodes),
             Connections = WorkflowPersistenceService.BuildConnectionDtos(NodeEditorVM.Nodes, NodeEditorVM.Connections)
         };
 
@@ -443,6 +501,8 @@ public sealed class ProjectOperationsService
                 Name = sp.Name,
                 RelativePath = Path.GetRelativePath(rootDir, sp.FwProjectPath).Replace(Path.DirectorySeparatorChar, '/')
             });
+
+            if (sp != context.ActiveSubProject) continue;
 
             var firmware = new FirmwareProjectSnapshot
             {
@@ -478,7 +538,10 @@ public sealed class ProjectOperationsService
         await SolutionPersistenceService.SaveNodeProjectAsync(nodePath, node);
         await SolutionPersistenceService.SaveSolutionAsync(path, solution);
         await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));
-        await SolutionSettingsService.SaveAsync(Path.Combine(stateDir, "settings.json"), new SolutionSettings());
+        var settingsPath = Path.Combine(stateDir, "settings.json");
+        var solutionSettings = await SolutionSettingsService.LoadAsync(settingsPath) ?? new SolutionSettings();
+        solutionSettings.RecentDocuments = openDocs.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
+        await SolutionSettingsService.SaveAsync(settingsPath, solutionSettings);
     }
 
     /// <summary>
@@ -486,56 +549,5 @@ public sealed class ProjectOperationsService
     /// Collects the currently open document tabs from the document area.
     /// </summary>
     private List<OpenDocumentDto> CollectOpenDocuments(string rootDir)
-    {
-        var result = new List<OpenDocumentDto>();
-        var documentDock = WorkspaceVM?.FindDocumentsPanePublic();
-        if (documentDock?.VisibleDockables is null)
-        {
-            return result;
-        }
-
-        foreach (var dockable in documentDock.VisibleDockables)
-        {
-            var dto = dockable switch
-            {
-                FileViewModel file => CreateDto(rootDir, "Text", file.FilePath),
-                FirmwareInfoViewModel fw => CreateDto(rootDir, "Firmware", fw.FilePath),
-                FileManagerEditorViewModel fm => CreateDto(rootDir, "FileManager", fm.FilePath),
-                DtbEditorViewModel dtb => CreateDto(rootDir, "Dtb", dtb.FilePath),
-                DexEditorViewModel dex => CreateDto(rootDir, "Dex", dex.FilePath),
-                ManifestEditorViewModel manifest => CreateDto(rootDir, "Manifest", manifest.FilePath),
-                ArscEditorViewModel arsc => CreateDto(rootDir, "Arsc", arsc.FilePath),
-                HexEditorViewModel hex => CreateDto(rootDir, "Hex", hex.FilePath),
-                _ => null
-            };
-            if (dto is not null)
-            {
-                result.Add(dto);
-            }
-        }
-
-        return result;
-    }
-
-    private static OpenDocumentDto? CreateDto(string rootDir, string kind, string? filePath)
-    {
-        if (string.IsNullOrEmpty(filePath))
-        {
-            return null;
-        }
-
-        var fullPath = Path.GetFullPath(filePath);
-        if (!fullPath.StartsWith(rootDir, StringComparison.OrdinalIgnoreCase))
-        {
-            // 工程目录外的文件不持久化。
-            // Files outside the project directory are not persisted.
-            return null;
-        }
-
-        return new OpenDocumentDto
-        {
-            Kind = kind,
-            RelativePath = Path.GetRelativePath(rootDir, fullPath).Replace(Path.DirectorySeparatorChar, '/')
-        };
-    }
+        => UotanStudio.Services.Workspace.WorkspaceSessionCapture.Documents(WorkspaceVM?.Layout, rootDir);
 }

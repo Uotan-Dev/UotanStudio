@@ -91,7 +91,7 @@ public static class WorkflowPersistenceService
         }
     }
 
-    private static List<NodeDto> BuildNodeDtos(IReadOnlyList<FlowNodeViewModel> nodes)
+    internal static List<NodeDto> BuildNodeDtos(IReadOnlyList<FlowNodeViewModel> nodes)
     {
         var result = new List<NodeDto>(nodes.Count);
         foreach (var n in nodes)
@@ -115,7 +115,9 @@ public static class WorkflowPersistenceService
         Dictionary<string, string>? map = null;
         foreach (var connector in node.Input)
         {
-            if (connector is not { HasPersistableInitialValue: true } || connector.InitialValue is null)
+            // Membership in Input is authoritative even before the node view initializes IsInput.
+            if (connector.InitialValue is null
+                || connector.PortType is not (NodePortType.Path or NodePortType.Text or NodePortType.Number or NodePortType.Boolean))
             {
                 continue;
             }

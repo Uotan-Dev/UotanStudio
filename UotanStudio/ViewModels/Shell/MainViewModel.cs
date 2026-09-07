@@ -7,8 +7,15 @@ using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.ViewModels.Shell;
 
-public partial class MainViewModel : ViewModelBase
+public partial class MainViewModel : ViewModelBase, IDisposable
 {
+    private readonly Services.Workspace.WorkspaceAutoSaveService _autoSave;
+    internal Task InitializeAutoSaveAsync() => _autoSave.InitializeAsync();
+    internal async Task FlushAutoSaveAsync()
+    {
+        SettingsVM.FlushPendingSave();
+        await _autoSave.FlushAsync();
+    }
     public MenuViewModel MenuVM { get; } = new();
     public WorkspaceViewModel WorkspaceVM { get; } = new();
     public NodeEditorViewModel NodeEditorVM { get; } = new();
@@ -30,6 +37,7 @@ public partial class MainViewModel : ViewModelBase
     {
         MenuVM.NodeEditorVM = NodeEditorVM;
         MenuVM.WorkspaceVM = WorkspaceVM;
+        _autoSave = new(WorkspaceVM, SettingsVM, ProjectOperationsService.Instance);
         WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
         UpdateWindowTitle();
     }
@@ -42,5 +50,14 @@ public partial class MainViewModel : ViewModelBase
         WindowTitle = context.IsProjectOpen && context.SolutionName is { Length: > 0 } name
             ? $"{name} - UotanStudio"
             : "UotanStudio";
+    }
+
+    /// <summary>Stops workspace persistence and releases subscriptions.<para>停止工作区持久化并释放订阅。</para></summary>
+    public void Dispose()
+    {
+        _autoSave.Dispose();
+        SettingsVM.Dispose();
+        WorkspaceVM.Dispose();
+        WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

@@ -76,10 +76,12 @@ public partial class App : Application
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
+            var viewModel = new MainViewModel();
             singleViewPlatform.MainView = new MainView
             {
-                DataContext = new MainViewModel()
+                DataContext = viewModel
             };
+            _ = viewModel.InitializeAutoSaveAsync();
         }
 
         base.OnFrameworkInitializationCompleted();
@@ -309,6 +311,11 @@ public partial class App : Application
     /// </summary>
     private void OnExitApplication(object recipient, ExitApplicationMessage message)
     {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: { } window })
+        {
+            window.Close();
+            return;
+        }
         if (ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IControlledApplicationLifetime controlled)
         {
             controlled.Shutdown();

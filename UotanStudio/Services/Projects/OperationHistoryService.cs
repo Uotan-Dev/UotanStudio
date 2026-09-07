@@ -266,8 +266,7 @@ public sealed class OperationHistoryService
 
         try
         {
-            await using var stream = File.Create(path);
-            await JsonSerializer.SerializeAsync(stream, operations, HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken).ConfigureAwait(false);
+            await AtomicJsonFile.WriteIfChangedAsync(path, operations, HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

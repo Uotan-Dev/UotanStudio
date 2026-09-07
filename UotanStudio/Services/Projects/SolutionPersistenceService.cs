@@ -104,9 +104,8 @@ public static class SolutionPersistenceService
         var log = LogService.Instance;
         try
         {
-            await using var stream = File.Create(path);
-            await JsonSerializer.SerializeAsync(stream, snapshot, typeInfo, cancellationToken).ConfigureAwait(false);
-            log.Write(LogLevel.Info, "Persistence", $"Saved {label}: {path}");
+            if (await AtomicJsonFile.WriteIfChangedAsync(path, snapshot, typeInfo, cancellationToken).ConfigureAwait(false))
+                log.Write(LogLevel.Info, "Persistence", $"Saved {label}: {path}");
             return true;
         }
         catch (Exception ex)
@@ -244,6 +243,14 @@ public sealed class FirmwareProjectSnapshot
 /// </summary>
 public sealed class OpenDocumentDto
 {
+    /// <summary>Gets the explicit editor mode.<para>获取明确指定的编辑器模式。</para></summary>
+    public int OpenMode { get; set; }
+    /// <summary>Indicates the selected document.<para>标识选中的文档。</para></summary>
+    public bool IsActive { get; set; }
+    /// <summary>Gets the left comparison path.<para>获取左侧比对路径。</para></summary>
+    public string? CompareLeftPath { get; set; }
+    /// <summary>Gets the right comparison path.<para>获取右侧比对路径。</para></summary>
+    public string? CompareRightPath { get; set; }
     /// <summary>
     /// Document kind identifier: "Text", "Firmware", "FileManager", "Dtb", "Dex", "Manifest", "Arsc", "Hex".
     /// <para>文档类型标识符。</para>

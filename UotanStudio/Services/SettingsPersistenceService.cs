@@ -147,6 +147,7 @@ public class AppSettings
 /// JSON serialization context for <see cref="AppSettings"/>, providing source generation support for AOT compatibility.
 /// </summary>
 [JsonSerializable(typeof(AppSettings))]
+[JsonSerializable(typeof(Workspace.WorkspaceSessionSnapshot))]
 [JsonSerializable(typeof(ThemeMode))]
 [JsonSerializable(typeof(McpServerConfig))]
 [JsonSerializable(typeof(McpTransportKind))]

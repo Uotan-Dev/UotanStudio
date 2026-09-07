@@ -52,8 +52,7 @@ public static class SolutionSettingsService
 
         try
         {
-            await using var stream = File.Create(path);
-            await JsonSerializer.SerializeAsync(stream, settings, SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken).ConfigureAwait(false);
+            await AtomicJsonFile.WriteIfChangedAsync(path, settings, SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)

@@ -8,6 +8,9 @@ namespace UotanStudio.Views.Shell;
 
 public partial class MainWindow : Window
 {
+    private bool _closeAfterSave;
+    private bool _closing;
+    private Task _sessionInitialization = Task.CompletedTask;
 #if DEBUG
     private IDisposable? _dockDebugOverlay;
 #endif
@@ -19,6 +22,10 @@ public partial class MainWindow : Window
         DataContext = new MainViewModel();
         InitializeComponent();
         Closing += MainWindow_Closing;
+        Opened += (_, _) =>
+        {
+            if (DataContext is MainViewModel viewModel) _sessionInitialization = viewModel.InitializeAutoSaveAsync();
+        };
 #if DEBUG
         Opened += MainWindow_Opened;
 #endif
@@ -32,8 +39,29 @@ public partial class MainWindow : Window
     }
 #endif
 
-    private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    private async void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (!_closeAfterSave && DataContext is MainViewModel viewModel)
+        {
+            e.Cancel = true;
+            if (_closing) return;
+            _closing = true;
+            try
+            {
+                await _sessionInitialization;
+                await viewModel.FlushAutoSaveAsync();
+            }
+            catch (Exception ex)
+            {
+                Services.LogService.Instance.Write(Services.LogLevel.Error, "AutoSave", ex.Message);
+            }
+            finally
+            {
+                _closeAfterSave = true;
+                Avalonia.Threading.Dispatcher.UIThread.Post(Close);
+            }
+            return;
+        }
         try
         {
             if (DataContext is IDisposable disposable)

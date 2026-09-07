@@ -49,7 +49,18 @@ public sealed partial class WorkspacePanelService : ObservableObject
         public IDock? Host { get; set; }
     }
 
-    private WorkspacePanelService() { }
+    internal WorkspacePanelService() { }
+
+    internal Dictionary<string, bool> CaptureVisibility() => _panels.Keys.ToDictionary(key => key, IsPanelVisible);
+
+    internal void RestoreVisibility(IReadOnlyDictionary<string, bool> panels)
+    {
+        foreach (var (key, visible) in panels)
+        {
+            if (visible) Show(key);
+            else Hide(key);
+        }
+    }
 
     /// <summary>
     /// <para>项目资源管理器面板当前是否可见。</para>
@@ -144,6 +155,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
     {
         if (key == AdbLog && !AdbLogAvailable) return;
         var entry = GetEntry(key);
+        UpdateHost(entry);
         if (entry is null || entry.Host is not { } host)
         {
             return;
@@ -171,6 +183,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
     public void Hide(string key)
     {
         var entry = GetEntry(key);
+        UpdateHost(entry);
         if (entry is null || entry.Host is not { } host)
         {
             return;
@@ -212,7 +225,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <param name="key"><para>面板键。</para>The panel key.</param>
     public bool IsPanelVisible(string key)
     {
-        if (_panels.TryGetValue(key, out var entry) && entry.Host is { } host)
+        var entry = GetEntry(key);
+        UpdateHost(entry);
+        if (entry?.Host is { } host)
         {
             return host.VisibleDockables?.Contains(entry.Dockable) == true;
         }
@@ -240,6 +255,12 @@ public sealed partial class WorkspacePanelService : ObservableObject
     }
 
     private PanelEntry? GetEntry(string key) => _panels.TryGetValue(key, out var entry) ? entry : null;
+
+    private static void UpdateHost(PanelEntry? entry)
+    {
+        if (entry?.Dockable.Owner is IDock actual && actual.VisibleDockables?.Contains(entry.Dockable) == true)
+            entry.Host = actual;
+    }
 
     private void SetVisibleState(string key, bool value)
     {

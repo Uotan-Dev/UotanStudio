@@ -18,6 +18,9 @@ namespace UotanStudio.ViewModels.Editors;
 public partial class FileViewModel : Document, IEditable
 {
     private bool _isLoading;
+    private System.Text.Encoding _textEncoding = new System.Text.UTF8Encoding(false);
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
+    private DateTime _loadedWriteTime;
 
     /// <summary>
     /// <para>魔数嗅探缓冲区（libmagic 风格兜底，避免每文件分配）。</para>
@@ -153,17 +156,47 @@ public partial class FileViewModel : Document, IEditable
             }
             else
             {
-                Text = await File.ReadAllTextAsync(path).ConfigureAwait(true);
+                using var reader = new StreamReader(path, new System.Text.UTF8Encoding(false), detectEncodingFromByteOrderMarks: true);
+                Text = await reader.ReadToEndAsync().ConfigureAwait(true);
+                _textEncoding = reader.CurrentEncoding;
                 DetectedEncoding = DetectEncoding(RawBytes);
                 ClearAnalysis();
             }
 
+            _loadedWriteTime = File.GetLastWriteTimeUtc(path);
             IsDirty = false;
         }
         finally
         {
             _isLoading = false;
             IsDirty = false;
+        }
+    }
+
+    /// <summary>Saves modified text atomically, retaining edits made during saving.<para>原子保存文本，保留保存期间发生的新修改。</para></summary>
+    public async Task SaveAsync()
+    {
+        await _saveGate.WaitAsync();
+        string? temporary = null;
+        try
+        {
+            if (_isLoading || !IsDirty || IsBinary || string.IsNullOrWhiteSpace(FilePath)) return;
+            var path = FilePath;
+            if (!File.Exists(path) || File.GetLastWriteTimeUtc(path) != _loadedWriteTime)
+                throw new IOException($"The file changed outside the editor: {path}");
+            var text = Text;
+            temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            await File.WriteAllTextAsync(temporary, text, _textEncoding);
+            if (File.GetLastWriteTimeUtc(path) != _loadedWriteTime)
+                throw new IOException($"The file changed outside the editor: {path}");
+            File.Move(temporary, path, overwrite: true);
+            _loadedWriteTime = File.GetLastWriteTimeUtc(path);
+            if (FilePath == path && Text == text) IsDirty = false;
+        }
+        finally
+        {
+            try { if (temporary is not null) File.Delete(temporary); }
+            finally { _saveGate.Release(); }
         }
     }
 
