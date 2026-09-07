@@ -1200,8 +1200,6 @@ public sealed partial class F2fsBuilder
         public List<byte[]> DirBlocks = [];
         public List<uint> DirBlockAddrs = [];
         public uint DirDepth;
-        public bool InlineDentry;
-        public byte Inline;
         public uint InodeBlockAddr;
         public F2fsExtent Extent = new F2fsExtent();
         public ushort Mode;

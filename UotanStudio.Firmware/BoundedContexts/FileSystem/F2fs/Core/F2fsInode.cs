@@ -80,11 +80,11 @@ internal sealed record F2fsInode
 
     public uint[] Nid { get; init; } = [];
 
-    public uint Mtime { get; init; }
+    public ulong Mtime { get; init; }
 
     public uint MtimeNsec { get; init; }
 
-    public uint Ctime { get; init; }
+    public ulong Ctime { get; init; }
 
     public uint CtimeNsec { get; init; }
 
@@ -174,9 +174,9 @@ internal sealed record F2fsInode
             Links = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetLinks..]),
             Size = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetSize..]),
             Blocks = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetBlocks..]),
-            Mtime = (uint)BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetMtime..]),
+            Mtime = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetMtime..]),
             MtimeNsec = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetMtimeNsec..]),
-            Ctime = (uint)BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetCtime..]),
+            Ctime = BinaryPrimitives.ReadUInt64LittleEndian(node[OffsetCtime..]),
             CtimeNsec = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetCtimeNsec..]),
             XattrNid = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetXattrNid..]),
             Flags = BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetFlags..]),
