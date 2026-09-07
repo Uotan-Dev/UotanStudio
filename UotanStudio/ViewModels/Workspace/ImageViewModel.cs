@@ -231,7 +231,7 @@ internal partial class ImageViewModel : Tool
             foreach (var file in Directory.EnumerateFiles(imagesDir))
             {
                 var format = DetectFormat(file);
-                if (format == "unknown")
+                if (format is "unknown" or "raw")
                 {
                     continue;
                 }
@@ -517,12 +517,19 @@ internal partial class ImageViewModel : Tool
                     continue;
                 }
 
+                var format = DetectFormat(destination);
+                if (format is "raw")
+                {
+                    File.Delete(destination);
+                    continue;
+                }
+
                 imported.Add(new ImageEntryViewModel
                 {
                     DisplayName = Path.GetFileName(destination),
                     RelativePath = relative,
                     SizeBytes = new FileInfo(destination).Length,
-                    Format = DetectFormat(destination)
+                    Format = format
                 });
             }
 
@@ -534,6 +541,14 @@ internal partial class ImageViewModel : Tool
             foreach (var entry in imported)
             {
                 Images.Add(entry);
+            }
+
+            // 自动推断打包类型：首个 ext4/erofs 镜像的格式继承到打包设置面板。
+            // Auto-infer packing type: inherit the format of the first ext4/erofs image.
+            var firstFs = imported.FirstOrDefault(e => e.Format is "ext4" or "erofs");
+            if (firstFs is not null)
+            {
+                ProjectSettingViewModel.Instance?.ApplySourceFormat(firstFs.Format);
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", $"Imported {imported.Count} image(s)  已导入 {imported.Count} 个镜像");

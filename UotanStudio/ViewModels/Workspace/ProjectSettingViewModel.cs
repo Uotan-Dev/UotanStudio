@@ -135,4 +135,46 @@ internal partial class ProjectSettingViewModel : Tool
         UTCTime = dto.UtcTime;
         DATSeg = dto.DatSegments;
     }
+
+    /// <summary>
+    /// <para>根据源镜像格式自动推断打包类型：ext4 → EXT4，erofs → EROFS，其余不变。
+    /// 仅在用户未手动覆盖时生效（面板当前值为默认值时才自动切换）。</para>
+    /// Infers the packing type from the source image format: ext4 → EXT4, erofs → EROFS;
+    /// other formats leave the current setting unchanged. Only takes effect when the panel is
+    /// still at its default values (i.e. not manually overridden).
+    /// </summary>
+    /// <param name="format"><para>DetectFormat 返回的格式字符串。</para>Format string from DetectFormat.</param>
+    public void ApplySourceFormat(string format)
+    {
+        if (string.IsNullOrEmpty(format))
+        {
+            return;
+        }
+
+        // 仅当面板处于默认状态（EROFS + RAW）时才自动切换，避免覆盖用户手动选择。
+        // Only auto-switch when the panel is at its default state (EROFS + RAW) to avoid
+        // overriding a manual selection.
+        bool isDefaultState = TypeEROFS && !TypeEXT4 && FormatRAW && !FormatSPARSE;
+
+        if (!isDefaultState)
+        {
+            return;
+        }
+
+        switch (format)
+        {
+            case "ext4":
+                TypeEXT4 = true;
+                TypeEROFS = false;
+                break;
+            case "erofs":
+                TypeEROFS = true;
+                TypeEXT4 = false;
+                break;
+            case "f2fs":
+                // F2FS 无打包支持，保持当前设置。
+                // F2FS has no pack support; leave settings unchanged.
+                break;
+        }
+    }
 }
