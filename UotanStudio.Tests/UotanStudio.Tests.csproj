@@ -39,8 +39,13 @@
   <ItemGroup>
     <!-- 测试夹具：真实世界 DEX 文件随构建复制到输出目录 -->
     <None Include="Firmware\Files\**\*.dex" CopyToOutputDirectory="PreserveNewest" />
-    <!-- 测试基础设施：仓库固定的 AOSP avbtool.py 副本（WSL 交叉验证安装用） -->
-    <None Include="TestInfrastructure\avbtool.py*" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Firmware\Files\review-native-rkfw.img" CopyToOutputDirectory="PreserveNewest" />
+    <!-- 固定 avbtool 随测试复制并直接运行；明确文件名使缺失夹具导致构建失败。 -->
+    <None Include="TestInfrastructure\avbtool.py" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\avbtool.py.md" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\FirmwareMountCheck\run-qemu.sh" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\FirmwareMountCheck\guest-init.sh" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\FirmwareMountCheck\run-native-deflate.sh" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

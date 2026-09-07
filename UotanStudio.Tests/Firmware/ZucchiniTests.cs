@@ -10,21 +10,18 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
-/// <summary>
-/// Zucchini binary delta patch (RAW element subset) tests. There is no real zucchini sample to
-/// verify against, so the tests build patches with a minimal RAW patch writer that shares the exact
-/// encoding conventions with <see cref="ZucchiniPatchApplier"/> (magic/version constants, LEB128
-/// varints, element layout, equivalence/extra/raw-delta stream semantics). The tests are therefore a
-/// self-consistent round-trip validation of those shared conventions; interoperability with upstream
-/// zucchini patches is not exercised here.
-/// <para>Zucchini 二进制差分补丁（RAW 元素子集）测试。由于没有真实 zucchini 样本可供核对，
-/// 测试用一个最小 RAW 补丁写入器构造补丁，该写入器与 <see cref="ZucchiniPatchApplier"/> 共用
-/// 完全相同的编码约定（魔数/版本常量、LEB128 varint、元素布局、等价/附加/原始差分流语义）。
-/// 因此这些测试是对共享约定的自洽回环验证；与上游 zucchini 补丁的互通性不在此测试。</para>
-/// </summary>
+/// <summary>Checks Chromium NoOp wire semantics and Brotli-wrapped Payload integration.</summary>
 public class ZucchiniTests
 {
     private const uint BlockSize = 4;
+
+    [Fact]
+    public void Apply_BackwardSourceSkipAndDeltaAfterGap_UsesCopiedByteOffsets()
+    {
+        var oldData = "0123456789"u8.ToArray(); var newData = "56XY02"u8.ToArray();
+        var patch = BuildPatch(oldData, newData, [(Src: 5, Dst: 0, Len: 2), (Src: 0, Dst: 4, Len: 2)]);
+        Assert.Equal(newData, ZucchiniPatchApplier.Apply(oldData, patch, newData.Length));
+    }
 
     [Fact]
     public void Crc32_MatchesStandardCheckValue()
@@ -88,7 +85,7 @@ public class ZucchiniTests
 
         var ex = Assert.Throws<ZucchiniChecksumException>(() =>
             ZucchiniPatchApplier.Apply(oldData, patch, newData.Length));
-        Assert.Contains("CRC-32", ex.Message);
+        Assert.Contains("CRC", ex.Message);
     }
 
     [Fact]
@@ -141,10 +138,7 @@ public class ZucchiniTests
             baseData[i] = (byte)(0x10 + i);
         }
 
-        // First 8 bytes are copied from the base by an equivalence; the last 8 bytes are inserted via
-        // the extra-data stream. The patch is the same RAW-subset format as the unit tests above.
-        // 前 8 字节由等价从基座拷贝；后 8 字节经附加数据流插入。补丁与上方单元测试为同一
-        // RAW 子集格式。
+        // First 8 bytes are copied by an equivalence; the last 8 bytes are inserted.
         var newData = new byte[16];
         Array.Copy(baseData, newData, 8);
         for (var i = 8; i < 16; i++)
@@ -169,7 +163,9 @@ public class ZucchiniTests
         partition.Operations.Add(op);
         manifest.Partitions.Add(partition);
 
-        var payload = BuildPayload(manifest, new Dictionary<InstallOperation, byte[]> { [op] = patch });
+        using var compressed = new MemoryStream();
+        using (var brotli = new System.IO.Compression.BrotliStream(compressed, System.IO.Compression.CompressionLevel.Optimal, true)) brotli.Write(patch);
+        var payload = BuildPayload(manifest, new Dictionary<InstallOperation, byte[]> { [op] = compressed.ToArray() });
         var payloadPath = WriteTempFile(payload);
         var basePath = WriteTempFile(baseData);
         var outputDir = CreateTempDir();
@@ -234,125 +230,41 @@ public class ZucchiniTests
         }
     }
 
-    /// <summary>
-    /// Minimal RAW patch writer sharing the applier's encoding conventions:
-    /// <list type="bullet">
-    /// <item>header: magic/version/old_size/old_crc/new_size/new_crc/num_elems as little-endian uint32;</item>
-    /// <item>one element covering the whole image: old offset 0, new offset 0, both exe types as given;</item>
-    /// <item>equivalence stream: (skip, copy) LEB128 pairs; skip advances source and destination by the
-    /// same amount, so consecutive equivalences must satisfy dst gap == src gap;</item>
-    /// <item>extra-data stream: the destination bytes in the gaps not covered by equivalences;</item>
-    /// <item>raw-delta stream: (offset-difference LEB128, correction byte) pairs, offsets absolute in the
-    /// new image, difference measured from one past the previously corrected byte.</item>
-    /// </list>
-    /// <para>与应用器共用编码约定的最小 RAW 补丁写入器：
-    /// 头部为 magic/version/old_size/old_crc/new_size/new_crc/num_elems（little-endian uint32）；
-    /// 单个元素覆盖整个镜像（旧偏移 0、新偏移 0，新旧可执行类型均为给定值）；等价流为
-    /// (skip, copy) LEB128 对，skip 同时推进源与目标位置，因此相邻等价须满足目标空隙等于源空隙；
-    /// 附加数据流为等价未覆盖目标空隙处的目标字节；原始差分流为 (偏移差 LEB128, 修正字节) 对，
-    /// 偏移为新镜像中的绝对偏移，差值相对上一个被修正字节之后测量。</para>
-    /// </summary>
-    private static byte[] BuildPatch(
-        byte[] oldData,
-        byte[] newData,
+    // Wire layout and additive raw deltas follow Chromium patch_writer.cc (major version 2).
+    private static byte[] BuildPatch(byte[] oldData, byte[] newData,
         IReadOnlyList<(uint Src, uint Dst, uint Len)> equivalences,
         ZucchiniExecutableType exeType = ZucchiniExecutableType.Raw)
     {
-        if (oldData.Length == 0)
+        var sourceSkips = new List<byte>(); var targetSkips = new List<byte>(); var lengths = new List<byte>();
+        var extra = new List<byte>(); var deltaSkips = new List<byte>(); var differences = new List<byte>();
+        int sourceEnd = 0; uint targetEnd = 0; uint copied = 0; uint previousDelta = 0;
+        foreach (var (source, target, length) in equivalences)
         {
-            throw new ArgumentException("Old data must not be empty.", nameof(oldData));
-        }
-        if (newData.Length == 0)
-        {
-            throw new ArgumentException("New data must not be empty.", nameof(newData));
-        }
-
-        // Validate alignment: the shared encoding advances both positions by skip.
-        uint lastSrc = 0;
-        uint lastDst = 0;
-        foreach (var (src, dst, len) in equivalences)
-        {
-            if (src < lastSrc || dst < lastDst)
+            var delta = checked((int)source - sourceEnd);
+            ZucchiniLeb128.Write(unchecked((uint)((delta << 1) ^ (delta >> 31))), sourceSkips);
+            ZucchiniLeb128.Write(target - targetEnd, targetSkips);
+            ZucchiniLeb128.Write(length, lengths);
+            for (var i = targetEnd; i < target; i++) extra.Add(newData[i]);
+            for (uint i = 0; i < length; i++)
             {
-                throw new ArgumentException("Equivalences must be sorted by source offset.", nameof(equivalences));
+                var difference = unchecked((byte)(newData[target + i] - oldData[source + i]));
+                if (difference == 0) continue;
+                ZucchiniLeb128.Write(copied + i - previousDelta, deltaSkips);
+                differences.Add(difference); previousDelta = copied + i + 1;
             }
-            if ((src - lastSrc) != (dst - lastDst))
-            {
-                throw new ArgumentException("Equivalence destination gaps must equal source gaps for the shared encoding.", nameof(equivalences));
-            }
-            lastSrc = src + len;
-            lastDst = dst + len;
+            copied += length; targetEnd = target + length; sourceEnd = checked((int)(source + length));
         }
-
-        // Equivalence stream.
-        var equivalenceStream = new List<byte>();
-        lastSrc = 0;
-        foreach (var (src, _, len) in equivalences)
-        {
-            ZucchiniLeb128.Write(src - lastSrc, equivalenceStream);
-            ZucchiniLeb128.Write(len, equivalenceStream);
-            lastSrc = src + len;
-        }
-
-        // Extra-data stream: destination bytes in the gaps, and the intermediate image produced by
-        // phase one (equivalences + extra, mirroring the applier) so raw deltas can be derived.
-        var extra = new List<byte>();
-        var intermediate = new byte[newData.Length];
-        uint nextDst = 0;
-        foreach (var (src, dst, len) in equivalences)
-        {
-            for (uint i = nextDst; i < dst; i++)
-            {
-                extra.Add(newData[i]);
-                intermediate[i] = newData[i];
-            }
-            Array.Copy(oldData, (int)src, intermediate, (int)dst, (int)len);
-            nextDst = dst + len;
-        }
-        for (uint i = nextDst; i < newData.Length; i++)
-        {
-            extra.Add(newData[i]);
-            intermediate[i] = newData[i];
-        }
-
-        // Raw-delta stream: corrections turning the intermediate image into the target.
-        var rawDelta = new List<byte>();
-        uint lastCorrection = 0;
-        for (int i = 0; i < newData.Length; i++)
-        {
-            if (intermediate[i] != newData[i])
-            {
-                ZucchiniLeb128.Write((uint)i - lastCorrection, rawDelta);
-                rawDelta.Add((byte)(newData[i] ^ intermediate[i]));
-                lastCorrection = (uint)i + 1;
-            }
-        }
-
+        for (var i = targetEnd; i < newData.Length; i++) extra.Add(newData[i]);
         var patch = new List<byte>();
-        WriteUInt32(ZucchiniConstants.Magic, patch);
-        WriteUInt32(ZucchiniConstants.Version, patch);
-        WriteUInt32((uint)oldData.Length, patch);
-        WriteUInt32(Crc32(oldData), patch);
-        WriteUInt32((uint)newData.Length, patch);
-        WriteUInt32(Crc32(newData), patch);
-        WriteUInt32(1, patch); // num elements
-
-        // One element covering the whole image (old offset 0, new offset 0).
-        WriteUInt32(0, patch);                  // old offset
-        WriteUInt32((uint)oldData.Length, patch); // old size
-        WriteUInt32((uint)exeType, patch);      // old exe type
-        WriteUInt32(0, patch);                  // new offset
-        WriteUInt32((uint)newData.Length, patch); // new size
-        WriteUInt32((uint)exeType, patch);      // new exe type
-        WriteUInt32((uint)equivalenceStream.Count, patch);
-        WriteUInt32((uint)extra.Count, patch);
-        WriteUInt32((uint)rawDelta.Count, patch);
-        WriteUInt32(0, patch);                  // reference delta length
-
-        // Reference bytes region is empty for RAW; then the four data streams follow.
-        patch.AddRange(equivalenceStream);
-        patch.AddRange(extra);
-        patch.AddRange(rawDelta);
+        WriteUInt32(0x6363755A, patch); WriteUInt32(2, patch);
+        WriteUInt32((uint)oldData.Length, patch); WriteUInt32(Crc32(oldData), patch);
+        WriteUInt32((uint)newData.Length, patch); WriteUInt32(Crc32(newData), patch); WriteUInt32(1, patch);
+        WriteUInt32(0, patch); WriteUInt32((uint)oldData.Length, patch);
+        WriteUInt32(0, patch); WriteUInt32((uint)newData.Length, patch); WriteUInt32((uint)exeType, patch);
+        patch.Add(1); patch.Add(0);
+        foreach (var stream in new[] { sourceSkips, targetSkips, lengths, extra, deltaSkips, differences, new List<byte>() })
+        { WriteUInt32((uint)stream.Count, patch); patch.AddRange(stream); }
+        WriteUInt32(0, patch);
         return patch.ToArray();
     }
 

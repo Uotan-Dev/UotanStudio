@@ -1,4 +1,7 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
 using UotanStudio.Comm.Protocols.Fastboot.Utils;
+using UotanStudio.Firmware.Lp;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -34,6 +37,7 @@ public class SuperImageBuilderTests
         Assert.Null(LpGeometry.TryParse(new byte[10], 0));
         Assert.Null(LpGeometry.TryParse(null!, 0));
         Assert.Null(LpGeometry.TryParse(new byte[64], -1));
+        Assert.Null(LpGeometry.TryParse(new byte[64], int.MaxValue));
 
         var garbage = new byte[128];
         Assert.Null(LpGeometry.TryParse(garbage, 0));
@@ -160,7 +164,7 @@ public class SuperImageBuilderTests
     }
 
     [Fact]
-    public void ReadMetadata_CorruptedPrimaryMetadata_ReturnsNull()
+    public void ReadMetadata_CorruptedPrimaryMetadata_UsesBackup()
     {
         var image = BuildImage([new SuperBuildPartition("system", "default", 0x10000)]);
         // Zero the LP metadata header magic (0x414C5030) at the start of slot 0.
@@ -168,6 +172,8 @@ public class SuperImageBuilderTests
         var metadataOffset = 4096 + 2 * SuperImageBuilder.GeometryBlockSize;
         Array.Clear(image, metadataOffset, 4);
 
+        Assert.Equal("system", Assert.Single(Assert.IsType<SuperImageMetadata>(Builder.ReadMetadata(image, 0)).Partitions).Name);
+        Array.Clear(image, metadataOffset + (int)(MetadataMaxSize * MetadataSlotCount), 4);
         Assert.Null(Builder.ReadMetadata(image, 0));
     }
 
@@ -220,7 +226,8 @@ public class SuperImageBuilderTests
         var partition = Assert.Single(metadata.Partitions);
         Assert.Equal("scratch", partition.Name);
         Assert.Equal(0L, partition.SizeInBytes);
-        Assert.Equal(0ul, metadata.Extents[0].NumSectors);
+        Assert.Equal(0u, partition.NumExtents);
+        Assert.Empty(metadata.Extents);
     }
 
     // ============== IsSuperImage / GetLogicalPartitions ==============
@@ -237,9 +244,8 @@ public class SuperImageBuilderTests
     public void IsSuperImage_RecognizesBackupGeometryOnly()
     {
         var image = BuildImage([new SuperBuildPartition("system", "default", 0x10000)]);
-        // Wipe the primary geometry block; the backup at offset 4096 must still qualify.
-        // 清除主 geometry 块；偏移 4096 处的备份副本必须仍然识别为 super 镜像。
-        Array.Clear(image, 0, SuperImageBuilder.GeometryBlockSize);
+        // Primary geometry is at 4096; the backup is at 8192 after the reserved block.
+        Array.Clear(image, 4096, SuperImageBuilder.GeometryBlockSize);
 
         Assert.True(Builder.IsSuperImage(image));
 
@@ -291,5 +297,77 @@ public class SuperImageBuilderTests
 
         Assert.Equal("system", fromBytes[0].Name);
         Assert.Equal(0x2u, fromBytes[0].Attributes);
+    }
+
+    [Theory]
+    [InlineData(512u, 512u, 1u)]
+    [InlineData(1024u, 4096u, 3u)]
+    [InlineData(4096u, 65536u, 2u)]
+    [InlineData(8192u, 8192u, 3u)]
+    public void Build_UsesStandardAbsoluteLayoutAndRequestedGeometry(uint blockSize, uint metadataSize, uint slots)
+    {
+        var image = BuildImage([new SuperBuildPartition("system", "default", blockSize)], metadataMaxSize: metadataSize,
+            metadataSlotCount: slots, blockSize: blockSize);
+        Assert.Equal(8 * 1024 * 1024, image.Length);
+        Assert.All(image[..4096], value => Assert.Equal(0, value));
+        Assert.Equal(image[4096..8192], image[8192..12288]);
+        Assert.Equal(metadataSize, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(4096 + 40)));
+        Assert.Equal(slots, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(4096 + 44)));
+        Assert.Equal(blockSize, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(4096 + 48)));
+
+        var dataStart = ((12288UL + 2UL * metadataSize * slots + blockSize - 1) / blockSize) * blockSize;
+        for (var slot = 0; slot < slots; slot++)
+        {
+            var metadata = Assert.IsType<SuperImageMetadata>(Builder.ReadMetadata(image, slot));
+            Assert.Equal(dataStart / 512, Assert.Single(metadata.BlockDevices).FirstLogicalSector);
+            Assert.Equal(dataStart / 512, Assert.Single(metadata.Extents).TargetData);
+            var primary = checked(12288 + slot * (int)metadataSize);
+            var backup = checked(primary + (int)(metadataSize * slots));
+            Assert.Equal(image.AsSpan(primary, (int)metadata.MetadataSize).ToArray(), image.AsSpan(backup, (int)metadata.MetadataSize).ToArray());
+            var headerSize = BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(primary + 8));
+            Assert.Equal(128u, headerSize);
+            var header = image.AsSpan(primary, (int)headerSize).ToArray();
+            header.AsSpan(12, 32).Clear();
+            Assert.Equal(SHA256.HashData(header), image.AsSpan(primary + 12, 32).ToArray());
+        }
+    }
+
+    [Fact]
+    public void Build_ExactCapacityFitsAndOneMoreBlockFailsBeforeOutputChanges()
+    {
+        const uint firstDataByte = 12288 + 4 * 65536;
+        using var output = new MemoryStream();
+        Builder.Build(output, [new SuperBuildPartition("system", "default", 4096)], firstDataByte + 4096, 65536, 2);
+        var original = output.ToArray();
+        Assert.Equal(firstDataByte + 4096, output.Length);
+        Assert.ThrowsAny<ArgumentException>(() => Builder.Build(output,
+            [new SuperBuildPartition("system", "default", 8192)], firstDataByte + 4096, 65536, 2));
+        Assert.Equal(original, output.ToArray());
+    }
+
+    [Fact]
+    public void Build_StreamSupportsLargeDeviceWithoutBufferingImage()
+    {
+        using var dir = new TempDirectory();
+        var path = Path.Combine(dir.Path, "large-super.img");
+        using (var output = File.Create(path))
+        {
+            Builder.Build(output, [new SuperBuildPartition("system", "default", 4096)], 8UL * 1024 * 1024 * 1024, 65536, 2);
+            Assert.Equal(8L * 1024 * 1024 * 1024, output.Length);
+        }
+        Assert.True(Builder.IsSuperImage(path));
+        Assert.Equal("system", Assert.Single(Builder.GetLogicalPartitions(path)).Name);
+        Assert.Throws<ArgumentOutOfRangeException>(() => BuildImage([], deviceSize: 512 * 1024 * 1024));
+    }
+
+    [Fact]
+    public void ReadMetadata_RejectsInvalidGeometryChecksumsInBothCopies()
+    {
+        var image = BuildImage([]);
+        image[4096 + 8] ^= 1;
+        Assert.NotNull(Builder.ReadMetadata(image));
+        image[8192 + 8] ^= 1;
+        Assert.Null(Builder.ReadMetadata(image));
+        Assert.False(Builder.IsSuperImage(image));
     }
 }

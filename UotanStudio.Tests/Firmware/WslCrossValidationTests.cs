@@ -15,14 +15,18 @@ namespace UotanStudio.Tests.Firmware;
 /// and contents with debugfs/dump.erofs/dump.f2fs inside Alpine WSL2.</para>
 /// </summary>
 /// <remarks>
-/// 使用 Alpine WSL2 发行版（已自动配置 edge 仓库 + e2fsprogs-extra/erofs-utils/f2fs-tools）。
-/// 内核模块（erofs/f2fs）通过 insmod 加载。工具不可用时以 <see cref="Assert.Skip"/> 跳过。
-/// <para>Uses the Alpine WSL2 distribution (auto-configured with edge repos + e2fsprogs-extra/
-/// erofs-utils/f2fs-tools). Kernel modules (erofs/f2fs) are loaded via insmod. Cases skip
-/// via <see cref="Assert.Skip"/> when tools are unavailable.</para>
+/// Uses existing tools in the selected WSL distribution; missing tools skip the affected cases.
+/// <para>使用所选 WSL 发行版中已有的工具；缺少依赖时跳过，不安装软件或加载宿主内核模块。</para>
 /// </remarks>
 public class WslCrossValidationTests
 {
+    private static void AssertF2fsClean(string output, int exitCode)
+    {
+        Assert.True(exitCode == 0 && !output.Contains("[ASSERT]", StringComparison.OrdinalIgnoreCase)
+            && !output.Contains("[Fail]", StringComparison.OrdinalIgnoreCase),
+            $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+    }
+
     private static bool TryCreateSymlink(string linkPath, string target)
     {
         try
@@ -41,7 +45,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
         if (!WslTestHelpers.IsToolAvailable("e2fsck") || !WslTestHelpers.IsToolAvailable("debugfs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -89,7 +92,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
         if (!WslTestHelpers.IsToolAvailable("dumpe2fs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -145,8 +147,7 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
-        if (!WslTestHelpers.IsToolAvailable("resize2fs")) { Assert.Skip("required tools missing"); }
+        if (!WslTestHelpers.IsToolAvailable("resize2fs") || !WslTestHelpers.IsToolAvailable("e2fsck")) { Assert.Skip("resize2fs or e2fsck is unavailable"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
         try
@@ -187,8 +188,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
-        WslTestHelpers.EnsureKernelModules();
         if (!WslTestHelpers.IsToolAvailable("fsck.erofs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -225,8 +224,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
-        WslTestHelpers.EnsureKernelModules();
         if (!WslTestHelpers.IsToolAvailable("fsck.erofs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -267,8 +264,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
-        WslTestHelpers.EnsureKernelModules();
         if (!WslTestHelpers.IsToolAvailable("dump.erofs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -320,8 +315,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
-        WslTestHelpers.EnsureKernelModules();
         if (!WslTestHelpers.IsToolAvailable("fsck.f2fs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -338,8 +331,8 @@ public class WslCrossValidationTests
                 F2fsBuilder.Build(root, imagePath);
                 var wslPath = WslTestHelpers.ToWslPath(imagePath);
 
-                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs -n {wslPath}");
-                Assert.True(exitCode <= 1, $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs --dry-run {wslPath}");
+                AssertF2fsClean(output, exitCode);
             }
             finally
             {
@@ -357,8 +350,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
-        WslTestHelpers.EnsureKernelModules();
         if (!WslTestHelpers.IsToolAvailable("dump.f2fs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -393,7 +384,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
         if (!WslTestHelpers.IsToolAvailable("debugfs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -437,7 +427,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
         if (!WslTestHelpers.IsToolAvailable("e2fsck")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -484,7 +473,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
         if (!WslTestHelpers.IsToolAvailable("e2fsck")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -524,7 +512,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
         if (!WslTestHelpers.IsToolAvailable("fsck.f2fs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -542,8 +529,8 @@ public class WslCrossValidationTests
             try
             {
                 F2fsBuilder.Build(root, imagePath, new F2fsOptions { EnableCompression = true });
-                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
-                Assert.True(exitCode <= 1, $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs --dry-run {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
+                AssertF2fsClean(output, exitCode);
             }
             finally
             {
@@ -561,7 +548,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
         if (!WslTestHelpers.IsToolAvailable("fsck.f2fs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -579,8 +565,8 @@ public class WslCrossValidationTests
             try
             {
                 F2fsBuilder.Build(root, imagePath);
-                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
-                Assert.True(exitCode <= 1, $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs --dry-run {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
+                AssertF2fsClean(output, exitCode);
             }
             finally
             {
@@ -598,7 +584,6 @@ public class WslCrossValidationTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
         if (!WslTestHelpers.IsToolAvailable("fsck.f2fs")) { Assert.Skip("required tools missing"); }
 
         var root = WslTestHelpers.CreateTempDirectory();
@@ -617,8 +602,8 @@ public class WslCrossValidationTests
             try
             {
                 F2fsBuilder.Build(root, imagePath);
-                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
-                Assert.True(exitCode <= 1, $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+                var (output, exitCode) = WslTestHelpers.RunWsl($"fsck.f2fs --dry-run {WslTestHelpers.ToWslPath(imagePath)} 2>&1");
+                AssertF2fsClean(output, exitCode);
             }
             finally
             {

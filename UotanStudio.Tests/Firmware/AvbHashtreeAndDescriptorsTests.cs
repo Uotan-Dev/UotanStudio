@@ -207,15 +207,14 @@ public class AvbHashtreeAndDescriptorsTests
     {
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
-        if (!WslTestHelpers.EnsureAvbTool()) { Assert.Skip("avbtool could not be provisioned"); }
+        if (!WslTestHelpers.EnsureAvbTool(out var reason)) { Assert.Skip(reason); }
 
         var root = WslTestHelpers.CreateTempDirectory();
         try
         {
             using var rsa = RSA.Create(2048);
             var privateKey = (RsaKeyParameters)DotNetUtilities.GetRsaKeyPair(rsa).Private;
-            var keyPem = Path.Combine(root, "testkey.pem");
+            var keyPem = Path.Combine(root, "test key.pem");
             await File.WriteAllTextAsync(keyPem, rsa.ExportPkcs8PrivateKeyPem(), TestContext.Current.CancellationToken);
             var image = Path.Combine(root, "source.img");
             await File.WriteAllBytesAsync(image, BuildPatternedImage(512 * 1024), TestContext.Current.CancellationToken);
@@ -228,8 +227,8 @@ public class AvbHashtreeAndDescriptorsTests
                 image, "test", privateKey, signed, cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.ErrorMessage ?? "AddHashtreeFooterAsync failed");
 
-            var (output, exitCode) = WslTestHelpers.RunWsl(
-                $"avbtool verify_image --image {WslTestHelpers.ToWslPath(signed)}", 120000);
+            var (output, exitCode) = WslTestHelpers.RunAvbTool(
+                ["verify_image", "--image", WslTestHelpers.ToWslPath(signed), "--key", WslTestHelpers.ToWslPath(keyPem)]);
             Assert.True(exitCode == 0, $"avbtool verify_image rejected the managed hashtree image: {output}");
         }
         finally

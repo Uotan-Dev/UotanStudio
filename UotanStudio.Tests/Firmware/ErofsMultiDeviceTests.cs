@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Text;
 using UotanStudio.Firmware.Erofs;
@@ -17,6 +18,108 @@ namespace UotanStudio.Tests.Firmware;
 /// </summary>
 public class ErofsMultiDeviceTests
 {
+    [Fact]
+    public void ChunkIndexAlignsAfterXattrsAndMasksDeviceBits()
+    {
+        var image = CreateChunkDeviceImage(0x8001);
+        image.AsSpan(2112, 8).CopyTo(image.AsSpan(2128));
+        image.AsSpan(2112, 16).Clear();
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(2082), 1);
+        using var primary = new MemoryStream(image);
+        using var extra = new MemoryStream(Enumerable.Repeat((byte)0xAB, 4096).ToArray());
+        using var parser = new ErofsParser(new Stream[] { primary, extra });
+        using var output = new MemoryStream();
+        parser.ReadFile("file.bin", output);
+        Assert.Equal(Enumerable.Repeat((byte)0xAB, 4096), output.ToArray());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ChunkHolesUseTheDeclaredAddressWidth(bool wideAddress)
+    {
+        var image = CreateChunkDeviceImage(0);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(2080 + 16), wideAddress ? 0x60u : 0x20u);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(2112 + 4), uint.MaxValue);
+        if (wideAddress) BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(2112), ushort.MaxValue);
+        using var parser = new ErofsParser(image);
+        using var output = new MemoryStream();
+        parser.ReadFile("file.bin", output);
+        Assert.Equal(new byte[4096], output.ToArray());
+    }
+
+    [Fact]
+    public void LargeChunkDoesNotWrapItsLengthOrAllocateTheWholeChunk()
+    {
+        var image = CreateChunkDeviceImage(1);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(2080 + 16), 0x3Fu);
+        using var primary = new MemoryStream(image);
+        using var extra = new MemoryStream(Enumerable.Repeat((byte)0xAB, 4096).ToArray());
+        using var parser = new ErofsParser(new Stream[] { primary, extra });
+        using var output = new MemoryStream();
+        parser.ReadFile("file.bin", output);
+        Assert.Equal(Enumerable.Repeat((byte)0xAB, 4096), output.ToArray());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ParserReadsSeparateAndMappedFlatDevices(bool flatDevice)
+    {
+        var image = CreateChunkDeviceImage(1);
+        using var primary = new MemoryStream(image);
+        using var extra = new MemoryStream(Enumerable.Repeat((byte)0xAB, 4096).ToArray());
+        using var parser = flatDevice ? ErofsParser.OpenFlatDevice(primary) : new ErofsParser(new Stream[] { primary, extra });
+        using var output = new MemoryStream();
+        parser.ReadFile("file.bin", output);
+        Assert.Equal(Enumerable.Repeat((byte)0xAB, 4096), output.ToArray());
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public void ParserRejectsMissingAndInvalidDevice(ushort deviceId)
+    {
+        using var parser = new ErofsParser(CreateChunkDeviceImage(deviceId));
+        using var output = new MemoryStream();
+        Assert.Throws<InvalidDataException>(() => parser.ReadFile("file.bin", output));
+    }
+
+    private static byte[] CreateChunkDeviceImage(ushort deviceId)
+    {
+        // Disk fields follow erofs_fs.h: 128-byte slots, compact inodes and 8-byte chunk indexes.
+        var image = new byte[4 * 4096];
+        var sb = image.AsSpan(1024, 128);
+        BinaryPrimitives.WriteUInt32LittleEndian(sb, 0xE0F5E1E2);
+        sb[12] = 12;
+        BinaryPrimitives.WriteUInt16LittleEndian(sb[14..], 64);
+        BinaryPrimitives.WriteUInt64LittleEndian(sb[16..], 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(sb[36..], 3);
+        BinaryPrimitives.WriteUInt32LittleEndian(sb[80..], 12);
+        BinaryPrimitives.WriteUInt16LittleEndian(sb[86..], 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(sb[88..], 12);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1536 + 64), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(1536 + 68), 3);
+        var root = image.AsSpan(2048, 32);
+        BinaryPrimitives.WriteUInt16LittleEndian(root[4..], 0x41ED);
+        BinaryPrimitives.WriteUInt16LittleEndian(root[6..], 2);
+        BinaryPrimitives.WriteUInt32LittleEndian(root[8..], 20);
+        BinaryPrimitives.WriteUInt32LittleEndian(root[16..], 2);
+        var file = image.AsSpan(2080, 32);
+        BinaryPrimitives.WriteUInt16LittleEndian(file, 8);
+        BinaryPrimitives.WriteUInt16LittleEndian(file[4..], 0x81A4);
+        BinaryPrimitives.WriteUInt16LittleEndian(file[6..], 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(file[8..], 4096);
+        BinaryPrimitives.WriteUInt32LittleEndian(file[16..], 0x20);
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(2112 + 2), deviceId);
+        BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(8192), 65);
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(8200), 12);
+        image[8202] = 1;
+        "file.bin"u8.CopyTo(image.AsSpan(8204));
+        image.AsSpan(12288, 4096).Fill(0xAB);
+        return image;
+    }
+
     /// <summary>
     /// 写入不带 UTF-8 BOM 的文本文件（TempDirectory.Write 使用的 Encoding.UTF8 会带 BOM，
     /// 破坏逐字节一致的往返断言）。
@@ -52,23 +155,16 @@ public class ErofsMultiDeviceTests
         Assert.Equal((ushort)1, sb.ExtraDevices);
         Assert.True(sb.DevtSlotoff > 0, $"s_devt_slotoff should be > 0, got {sb.DevtSlotoff}");
 
-        // 设备表起始字节偏移 = s_devt_slotoff * blockSize（与解析侧一致）。
-        var blockSize = parser.BlockSize;
-        var devtOffset = (long)sb.DevtSlotoff * blockSize;
+        // Linux super.c defines devt_slotoff in 128-byte slots.
+        var devtOffset = (long)sb.DevtSlotoff * 128;
         var imageBytes = System.IO.File.ReadAllBytes(imagePath);
 
-        // 设备表含 ExtraDeviceCount + 1 = 2 个槽位。
-        // 槽 0（主设备）：blocks == 镜像总块数，mapped_blkaddr == 0。
+        // The disk table contains extra devices only; primary storage is implicit.
         var slot0 = ErofsDeviceSlot.FromBytes(
             imageBytes.AsSpan((int)devtOffset, ErofsDeviceSlot.Size));
-        Assert.Equal((uint)parser.BlockCount, slot0.Blocks);
+        Assert.Equal(0u, slot0.Blocks);
         Assert.Equal(0u, slot0.MappedBlkAddr);
 
-        // 槽 1（额外设备占位）：blocks == 0，mapped_blkaddr == 0。
-        var slot1 = ErofsDeviceSlot.FromBytes(
-            imageBytes.AsSpan((int)devtOffset + ErofsDeviceSlot.Size, ErofsDeviceSlot.Size));
-        Assert.Equal(0u, slot1.Blocks);
-        Assert.Equal(0u, slot1.MappedBlkAddr);
     }
 
     [Fact]
@@ -120,9 +216,7 @@ public class ErofsMultiDeviceTests
         var wslPath = ToWslPath(imagePath);
         var (output, exitCode) = RunWsl($"fsck.erofs {wslPath}");
 
-        // fsck.erofs 退出码：0=OK，1=需要修复，2=错误。
-        // fsck.erofs exit codes: 0=OK, 1=needs repair, 2=error.
-        Assert.True(exitCode <= 1, $"fsck.erofs failed (exit={exitCode}):\n{output}");
+        Assert.True(exitCode == 0, $"fsck.erofs failed (exit={exitCode}):\n{output}");
     }
 
     // ---- WSL helpers (mirroring WslCrossValidationTests). ----
@@ -180,8 +274,8 @@ public class ErofsMultiDeviceTests
 
     private static bool IsToolAvailable(string tool)
     {
-        var (output, _) = RunWsl($"command -v {tool}", 15000);
+        var (output, exitCode) = RunWsl($"command -v {tool}", 15000);
         var line = output.Trim();
-        return line.Length > 0 && !line.Contains("not found", StringComparison.OrdinalIgnoreCase);
+        return exitCode == 0 && line.Length > 0 && !line.Contains("not found", StringComparison.OrdinalIgnoreCase);
     }
 }

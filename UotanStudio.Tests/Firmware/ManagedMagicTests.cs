@@ -47,7 +47,7 @@ public class ManagedMagicTests
     private static byte[] CpioNewc1 => Encoding.ASCII.GetBytes("070701");
     private static byte[] CpioNewc2 => Encoding.ASCII.GetBytes("070702");
     private static byte[] RockchipBoot => Encoding.ASCII.GetBytes("BOOT");
-    private static byte[] RockchipRkfw => Encoding.ASCII.GetBytes("Rkfw");
+    private static byte[] RockchipRkfw => Encoding.ASCII.GetBytes("RKFW");
     private static byte[] RockchipRkaf => Encoding.ASCII.GetBytes("RKAF");
 
     // Linux kernel ARM64 boot Image：偏移 0x38 处魔数 "ARM\x64"（41 52 4d 64）
@@ -692,7 +692,7 @@ public class UpstreamMagicIntegrationTests
         byte[] dtbo = Encoding.ASCII.GetBytes("DTBO");
         byte[] otaPayload = Encoding.ASCII.GetBytes("CrAU");
         byte[] avb = Encoding.ASCII.GetBytes("AVBf");
-        byte[] rkfw = Encoding.ASCII.GetBytes("Rkfw");
+        byte[] rkfw = Encoding.ASCII.GetBytes("RKFW");
         byte[] rkaf = Encoding.ASCII.GetBytes("RKAF");
         byte[] lz4Frame = [0x04, 0x22, 0x4D, 0x18];
         byte[] lz4Legacy = [0x02, 0x21, 0x4C, 0x18];

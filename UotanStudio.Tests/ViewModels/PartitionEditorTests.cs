@@ -19,6 +19,7 @@ public sealed class PartitionEditorTests
         // 构造 64 MiB 设备的 LP super 镜像：system 32 MiB + vendor 8 MiB（均为线性单 extent）。
         // Build a 64 MiB LP super image: system 32 MiB + vendor 8 MiB (single linear extents each).
         var deviceSize = 64UL * 1024 * 1024;
+        const ulong firstLogicalSector = (12288 + 4 * 65536) / 512;
         var builder = MetadataBuilder.New(deviceSize, 64 * 1024, 2);
         builder.AddGroup("default", 0);
         builder.AddGroup("vendor", 0);
@@ -43,14 +44,12 @@ public sealed class PartitionEditorTests
                 Assert.Equal("default", vm.Partitions[0].Group);
                 Assert.Equal("linear", vm.Partitions[0].Type);
                 Assert.Equal(32UL * 1024 * 1024 / 512, vm.Partitions[0].SizeSectors);
-                // 本构建器（MetadataBuilder）的 extent 从扇区 0 开始，不叠加块设备的首逻辑扇区。
-                // This builder (MetadataBuilder) starts extents at sector 0, without adding the block
-                // device's first logical sector.
-                Assert.Equal(0UL, vm.Partitions[0].StartSector);
+                // LP linear extents use absolute device sectors after both metadata copies.
+                Assert.Equal(firstLogicalSector, vm.Partitions[0].StartSector);
 
                 Assert.Equal("vendor", vm.Partitions[1].Name);
                 Assert.Equal("vendor", vm.Partitions[1].Group);
-                Assert.Equal(32UL * 1024 * 1024 / 512, vm.Partitions[1].StartSector);
+                Assert.Equal(firstLogicalSector + 32UL * 1024 * 1024 / 512, vm.Partitions[1].StartSector);
 
                 // 编辑：system 改名/缩到 16 MiB/类型改 zero；vendor 起始后移。
                 // Edit: rename system, shrink it to 16 MiB, switch its type to zero, and move vendor's start.
@@ -78,7 +77,7 @@ public sealed class PartitionEditorTests
                 Assert.Equal("system_new", vm2.Partitions[0].Name);
                 Assert.Equal("zero", vm2.Partitions[0].Type);
                 Assert.Equal(16UL * 1024 * 1024 / 512, vm2.Partitions[0].SizeSectors);
-                Assert.Equal(0UL, vm2.Partitions[0].StartSector);
+                Assert.Equal(firstLogicalSector, vm2.Partitions[0].StartSector);
 
                 Assert.Equal("vendor", vm2.Partitions[1].Name);
                 Assert.Equal(80_000UL, vm2.Partitions[1].StartSector);

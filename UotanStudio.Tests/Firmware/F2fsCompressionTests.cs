@@ -23,7 +23,7 @@ public class F2fsCompressionTests
         Assert.True(compressed.Length < original.Length + F2fsCompression.ClusterHeaderSize);
 
         var header = F2fsCompression.ParseHeader(compressed);
-        Assert.Equal(CompressionAlgorithm.Lz4, header.Algorithm);
+        Assert.Equal(compressed.Length - 24, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(compressed));
         Assert.Equal(original.Length, header.UncompressedSize);
 
         var decompressed = F2fsCompression.DecompressCluster(
@@ -49,7 +49,7 @@ public class F2fsCompressionTests
         Assert.NotNull(compressed);
 
         var header = F2fsCompression.ParseHeader(compressed);
-        Assert.Equal(CompressionAlgorithm.Zstd, header.Algorithm);
+        Assert.Equal(compressed.Length - 24, header.CompressedSize);
 
         var decompressed = F2fsCompression.DecompressCluster(
             compressed.AsSpan(F2fsCompression.ClusterHeaderSize),
@@ -77,7 +77,7 @@ public class F2fsCompressionTests
         Assert.True(compressed.Length < original.Length + F2fsCompression.ClusterHeaderSize);
 
         var header = F2fsCompression.ParseHeader(compressed);
-        Assert.Equal(CompressionAlgorithm.Lzo, header.Algorithm);
+        Assert.Equal(compressed.Length - 24, header.CompressedSize);
         Assert.Equal(original.Length, header.UncompressedSize);
 
         var decompressed = F2fsCompression.DecompressCluster(

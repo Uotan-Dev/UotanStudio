@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Fastboot.Utils;
@@ -33,6 +34,11 @@ public class SuperFlashHelperTests
         MetadataSlotCount);
 
         var metadata = builder.ReadMetadata(image) ?? throw new InvalidOperationException("fixture must be readable");
+        for (var i = 0; i < metadata.Extents.Count; i++)
+        {
+            var extent = metadata.Extents[i];
+            image.AsSpan(checked((int)extent.TargetData * 512), checked((int)extent.NumSectors * 512)).Fill((byte)(0x31 + i));
+        }
         return (image, metadata);
     }
 
@@ -130,8 +136,7 @@ public class SuperFlashHelperTests
         var superPath = dir.WriteBytes("super.img", image);
         var transport = new ScriptedCommTransport();
 
-        var firstLogicalSector = metadata.BlockDevices[0].FirstLogicalSector;
-        var metadataImageLength = (int)(firstLogicalSector * SuperImageBuilder.LpSectorSize);
+        var metadataImageLength = checked(4096 + (int)metadata.MetadataSize);
         var systemExtent = metadata.Extents[0];
         var vendorExtent = metadata.Extents[1];
 
@@ -156,13 +161,16 @@ public class SuperFlashHelperTests
         Assert.Equal(10, transport.Writes.Count);
         Assert.Equal("getvar:max-download-size", Text(transport.Writes[0]));
         Assert.Equal($"download:{metadataImageLength:x8}", Text(transport.Writes[1]));
-        // The update-super payload is everything before the first logical sector.
-        // update-super 负载是首个逻辑扇区之前的全部内容。
-        Assert.Equal(image[..metadataImageLength], transport.Writes[2]);
+        // fastbootd ReadFromImageBlob expects one geometry at 0 and one metadata at 4096.
+        var metadataPayload = transport.Writes[2];
+        Assert.Equal(image[4096..8192], metadataPayload[..4096]);
+        Assert.Equal(image.AsSpan(12288, (int)metadata.MetadataSize).ToArray(), metadataPayload[4096..]);
+        Assert.Equal(0x616c4467u, BinaryPrimitives.ReadUInt32LittleEndian(metadataPayload));
+        Assert.Equal(0x414c5030u, BinaryPrimitives.ReadUInt32LittleEndian(metadataPayload.AsSpan(4096)));
         Assert.Equal("update-super:super", Text(transport.Writes[3]));
 
-        var systemPayload = Slice(image, (long)((firstLogicalSector + systemExtent.TargetData) * SuperImageBuilder.LpSectorSize), (int)(systemExtent.NumSectors * SuperImageBuilder.LpSectorSize));
-        var vendorPayload = Slice(image, (long)((firstLogicalSector + vendorExtent.TargetData) * SuperImageBuilder.LpSectorSize), (int)(vendorExtent.NumSectors * SuperImageBuilder.LpSectorSize));
+        var systemPayload = Slice(image, (long)(systemExtent.TargetData * SuperImageBuilder.LpSectorSize), (int)(systemExtent.NumSectors * SuperImageBuilder.LpSectorSize));
+        var vendorPayload = Slice(image, (long)(vendorExtent.TargetData * SuperImageBuilder.LpSectorSize), (int)(vendorExtent.NumSectors * SuperImageBuilder.LpSectorSize));
 
         Assert.Equal($"download:{systemPayload.Length:x8}", Text(transport.Writes[4]));
         Assert.Equal(systemPayload, transport.Writes[5]);
@@ -180,8 +188,7 @@ public class SuperFlashHelperTests
         var superPath = dir.WriteBytes("super.img", image);
         var transport = new ScriptedCommTransport();
 
-        var firstLogicalSector = metadata.BlockDevices[0].FirstLogicalSector;
-        var metadataImageLength = (int)(firstLogicalSector * SuperImageBuilder.LpSectorSize);
+        var metadataImageLength = checked(4096 + (int)metadata.MetadataSize);
         var systemSize = (int)(metadata.Extents[0].NumSectors * SuperImageBuilder.LpSectorSize);
         var vendorSize = (int)(metadata.Extents[1].NumSectors * SuperImageBuilder.LpSectorSize);
 
@@ -227,6 +234,20 @@ public class SuperFlashHelperTests
         var helper = new SuperFlashHelper(session);
 
         Assert.Throws<InvalidDataException>(() => helper.FlashSuper(notSuper, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(transport.Writes);
+    }
+
+    [Fact]
+    public void FlashSuper_TruncatedDataRejectsBeforeChangingDeviceMetadata()
+    {
+        var (image, metadata) = BuildFixture();
+        using var dir = new TempDirectory();
+        var end = checked((int)((metadata.Extents[1].TargetData + metadata.Extents[1].NumSectors) * 512));
+        var path = dir.WriteBytes("truncated.img", image[..(end - 1)]);
+        var transport = new ScriptedCommTransport();
+        using var session = NewSession(transport);
+        Assert.Throws<InvalidDataException>(() => new SuperFlashHelper(session).FlashSuper(path,
+            cancellationToken: TestContext.Current.CancellationToken));
         Assert.Empty(transport.Writes);
     }
 

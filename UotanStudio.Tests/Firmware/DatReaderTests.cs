@@ -69,7 +69,7 @@ public class DatReaderTests
     public void Unpack_DiffCommand_WithoutSource_ThrowsArgumentException()
     {
         using var temp = new TempDirectory();
-        var listPath = temp.Write("x.transfer.list", "4\n4\n0\n0\ndiff 1,0,4\n");
+        var listPath = temp.Write("x.transfer.list", "2\n4\n0\n0\nbsdiff 0 32 2,0,4 4 2,0,4\n");
         var datPath = temp.WriteBytes("x.new.dat", []);
 
         Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img")));
@@ -79,7 +79,7 @@ public class DatReaderTests
     public void Unpack_StashCommand_WithoutSource_ThrowsArgumentException()
     {
         using var temp = new TempDirectory();
-        var listPath = temp.Write("x.transfer.list", "4\n4\n1\n2\nstash abc123 1,0,2\nnew 1,2,4\n");
+        var listPath = temp.Write("x.transfer.list", "2\n4\n1\n2\nstash abc123 2,0,2\nnew 2,2,4\n");
         var datPath = temp.WriteBytes("x.new.dat", []);
 
         Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, datPath, Path.Combine(temp.Path, "out.img")));

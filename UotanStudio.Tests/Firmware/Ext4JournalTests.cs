@@ -362,9 +362,9 @@ public class Ext4JournalTests
 
     private static bool IsToolAvailable(string tool)
     {
-        var (output, _) = RunWsl($"command -v {tool}", 15000);
+        var (output, exitCode) = RunWsl($"command -v {tool}", 15000);
         var line = output.Trim();
-        return line.Length > 0 && !line.Contains("not found", StringComparison.OrdinalIgnoreCase);
+        return exitCode == 0 && line.Length > 0 && !line.Contains("not found", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ToWslPath(string windowsPath)

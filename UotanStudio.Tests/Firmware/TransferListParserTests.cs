@@ -13,7 +13,7 @@ public class TransferListParserTests
     [Fact]
     public void Parse_ValidV4List_ParsesCommandsAndRanges()
     {
-        using var reader = new StringReader("4\n5\n0\n0\nnew 2,0,2,3,5\nzero 1,2,3\n");
+        using var reader = new StringReader("4\n5\n0\n0\nnew 4,0,2,3,5\nzero 2,2,3\n");
         var list = TransferListParser.Parse(reader);
 
         Assert.Equal(4, list.Version);
@@ -37,7 +37,7 @@ public class TransferListParserTests
     [Fact]
     public void Parse_StashCommand_WithId_Parses()
     {
-        using var reader = new StringReader("4\n10\n1\n2\nstash abc123 1,0,2\ndiff 1,2,4\n");
+        using var reader = new StringReader("2\n2\n1\n2\nstash abc123 2,0,2\nmove 2,2,4 2 - abc123:2,0,2\n");
         var list = TransferListParser.Parse(reader);
 
         Assert.Equal(1, list.StashEntries);
@@ -50,7 +50,7 @@ public class TransferListParserTests
         Assert.Equal(new[] { new BlockRange(0, 2) }, stash.Ranges);
 
         var diff = list.Commands[1];
-        Assert.Equal(TransferListCommandKind.Diff, diff.Kind);
+        Assert.Equal(TransferListCommandKind.Move, diff.Kind);
         Assert.Equal(new[] { new BlockRange(2, 4) }, diff.Ranges);
     }
 

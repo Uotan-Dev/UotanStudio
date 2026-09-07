@@ -138,7 +138,7 @@ public class PayloadDeltaTests
 
         var bsdiffPatch = CreateBsdiffPatch(baseData, newData);
         Assert.NotEmpty(bsdiffPatch);
-        var lz4Patch = CompressionService.Compress(bsdiffPatch, CompressionFormat.Lz4);
+        var lz4Patch = PayloadLz4DiffTests.BuildStoredPatch(baseData.Length, bsdiffPatch);
         Assert.NotEmpty(lz4Patch);
 
         var op = new InstallOperation
@@ -289,7 +289,7 @@ public class PayloadDeltaTests
         }
     }
 
-    private static byte[] BuildPayload(DeltaArchiveManifest manifest, IReadOnlyDictionary<InstallOperation, byte[]> opData)
+    internal static byte[] BuildPayload(DeltaArchiveManifest manifest, IReadOnlyDictionary<InstallOperation, byte[]> opData)
     {
         // Capture the (operation, data) pairs BEFORE mutating any op field: InstallOperation is a
         // protobuf message whose GetHashCode depends on field values, so using the dictionary after

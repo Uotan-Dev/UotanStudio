@@ -9,10 +9,10 @@ namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
 /// F2FS 构建侧压缩写路径接入测试：压缩镜像构建 → F2fsParser 读回 SHA-256 逐文件对比，
-/// 并直接校验 inode 压缩标志位（i_flags COMPR 位 + i_advise 内核算法 ID/log_cluster_size）。
+/// 并直接校验 inode 压缩标志位及 extra attr 的算法 ID/log_cluster_size。
 /// <para>F2FS builder-side compressed write-path integration tests: builds compressed images,
 /// reads them back with the parser and compares SHA-256 per file, and directly inspects the inode
-/// compression markers (i_flags COMPR bit plus the i_advise kernel algorithm id / log cluster
+/// compression markers (i_flags COMPR bit plus the extra attr algorithm id / log cluster
 /// size).</para>
 /// </summary>
 public class F2fsCompressionWriteTests
@@ -195,7 +195,10 @@ public class F2fsCompressionWriteTests
             });
             var plainImage = F2fsBuilder.Build(root, new F2fsOptions { EnableCompression = false, Uuid = FixedUuid });
 
-            var compressedUsed = UsedMainBlocks(compressedImage);
+            using var parser = new F2fsParser(new MemoryStream(compressedImage, writable: false));
+            var inode = ReadInode(compressedImage, FindIno(parser, "text.bin"));
+            // Checkpoint counts include reservation for later decompression; SIT allocation does not.
+            var compressedUsed = UsedMainBlocks(compressedImage) - inode.CompressedBlocks;
             var plainUsed = UsedMainBlocks(plainImage);
             Assert.True(
                 compressedUsed < plainUsed,
@@ -282,17 +285,14 @@ public class F2fsCompressionWriteTests
     }
 
     /// <summary>
-    /// WSL fsck.f2fs 交叉校验（尽力而为）：压缩镜像本身不是内核 f2fs 的压缩磁盘格式
-    /// （本仓库用自定义簇头 + i_advise 存储算法/簇大小），若 WSL 或 fsck.f2fs 不可用、或
-    /// fsck 无法识别该自定义压缩布局（退出码 &gt; 1），则 Skip 并说明；识别通过则断言校验成功。
-    /// <para>Best-effort WSL fsck.f2fs cross-validation. The compressed image uses this repo's own
-    /// on-disk compression format (custom cluster header plus i_advise-encoded algorithm/cluster
-    /// size), not the kernel F2FS compressed layout. The test is skipped with an explanation when
-    /// WSL or fsck.f2fs is unavailable, or when fsck cannot recognize the custom compressed layout
-    /// (exit code &gt; 1); when fsck does validate it, the exit code is asserted to be clean.</para>
+    /// Checks compressed images with the native checker, treating structural diagnostics as failures.
+    /// <para>使用原生检查器核验压缩镜像，将结构错误诊断视为失败。</para>
     /// </summary>
-    [Fact]
-    public void Builder_CompressedImage_WslFsck_BestEffort()
+    [Theory]
+    [InlineData(CompressionAlgorithm.Lz4)]
+    [InlineData(CompressionAlgorithm.Zstd)]
+    [InlineData(CompressionAlgorithm.Lzo)]
+    public void Builder_CompressedImage_WslFsck(CompressionAlgorithm algorithm)
     {
         if (!IsWslAvailable()) { Assert.Skip("WSL not available.  WSL 不可用。"); }
         if (!IsFsckF2fsAvailable()) { Assert.Skip("fsck.f2fs not available in WSL.  WSL 中无 fsck.f2fs。"); }
@@ -307,22 +307,13 @@ public class F2fsCompressionWriteTests
                 F2fsBuilder.Build(root, imagePath, new F2fsOptions
                 {
                     EnableCompression = true,
-                    CompressionAlgorithm = CompressionAlgorithm.Lz4,
+                    CompressionAlgorithm = algorithm,
                     Uuid = FixedUuid,
                 });
 
-                var (output, exitCode) = RunWsl($"fsck.f2fs -n {ToWslPath(imagePath)}");
-                // fsck.f2fs 退出码：0=OK，1=已修正，2=错误。
-                // Exit codes: 0 = OK, 1 = fixed, 2 = errors.
-                if (exitCode > 1)
-                {
-                    Assert.Skip(
-                        "fsck.f2fs does not recognize the custom F2FS compressed-cluster layout "
-                        + $"(exit={exitCode}); skipping kernel-side validation.  fsck.f2fs 无法识别本仓库自定义的"
-                        + $"F2FS 压缩簇磁盘布局（退出码 {exitCode}），跳过内核侧校验。\n{Truncate(output, 2000)}");
-                }
-
-                Assert.True(exitCode <= 1, $"fsck.f2fs failed (exit={exitCode}):\n{output}");
+                var (output, exitCode) = RunWsl($"fsck.f2fs --dry-run {ToWslPath(imagePath)}");
+                Assert.True(exitCode == 0 && !output.Contains("[Fail]", StringComparison.OrdinalIgnoreCase)
+                    && !output.Contains("[ASSERT]", StringComparison.OrdinalIgnoreCase), $"fsck.f2fs failed (exit={exitCode}):\n{output}");
             }
             finally
             {
@@ -358,6 +349,40 @@ public class F2fsCompressionWriteTests
         catch
         {
             return false;
+        }
+    }
+
+    [Theory]
+    [InlineData("lz4", false)]
+    [InlineData("lz4", true)]
+    [InlineData("lzo", false)]
+    [InlineData("lzo", true)]
+    public void Parser_ReadsNativeSloadCompressedImage(string algorithm, bool releaseReservedBlocks)
+    {
+        if (!IsWslAvailable()) Assert.Skip("WSL is unavailable.");
+        var sload = Environment.GetEnvironmentVariable("UOTAN_SLOAD_F2FS") ?? "sload.f2fs";
+        if (RunWsl($"command -v {sload}").ExitCode != 0) Assert.Skip("sload.f2fs is unavailable.");
+        if (RunWsl("command -v mkfs.f2fs").ExitCode != 0) Assert.Skip("mkfs.f2fs is unavailable.");
+        var root = CreateTempDirectory();
+        var image = Path.Combine(Path.GetTempPath(), $"uotan-f2fs-native-{Guid.NewGuid():N}.img");
+        try
+        {
+            var expected = CreateCompressibleBytes(5 * 1024 * 1024 + 123);
+            File.WriteAllBytes(Path.Combine(root, "native.bin"), expected);
+            using (var output = File.Create(image)) output.SetLength(128 * 1024 * 1024);
+            var mkfs = RunWsl($"mkfs.f2fs -f -O extra_attr,compression {ToWslPath(image)}");
+            Assert.True(mkfs.ExitCode == 0, mkfs.Output);
+            var load = RunWsl($"{sload} -c -a {algorithm} -L 4 {(releaseReservedBlocks ? "-r" : "")} -f {ToWslPath(root)} {ToWslPath(image)}");
+            if (load.Output.Contains("selected compression algorithm is not supported")) Assert.Skip("sload.f2fs was built without the requested compression library.");
+            Assert.True(load.ExitCode == 0 && !load.Output.Contains("[ASSERT]"), load.Output);
+            using var parser = new F2fsParser(image);
+            Assert.True(parser.ListFiles().Any(e => e.Path == "native.bin"), load.Output + "\nEntries: " + string.Join(", ", parser.ListFiles().Select(e => e.Path)));
+            Assert.Equal(expected, ReadFile(parser, "native.bin"));
+        }
+        finally
+        {
+            File.Delete(image);
+            DeleteRecursive(root);
         }
     }
 

@@ -24,7 +24,7 @@ public class DatWriterTests
         DatWriter.Write(imagePath, datPath, listPath);
 
         var lines = File.ReadAllLines(listPath);
-        Assert.Equal(new[] { "4", "2", "0", "0", "new 1,0,2" }, lines);
+        Assert.Equal(new[] { "4", "2", "0", "0", "new 2,0,2" }, lines);
         Assert.Equal(image, File.ReadAllBytes(datPath));
     }
 
@@ -47,7 +47,7 @@ public class DatWriterTests
         var lines = File.ReadAllLines(listPath);
         Assert.Equal("4", lines[0]);
         Assert.Equal("5", lines[1]);
-        Assert.Equal(new[] { "new 2,0,2,3,5", "zero 1,2,3" }, lines.Skip(4));
+        Assert.Equal(new[] { "new 4,0,2,3,5", "zero 2,2,3" }, lines.Skip(4));
 
         // .new.dat 只含 4 个数据块。
         // The .new.dat holds only the 4 data blocks.
@@ -69,7 +69,7 @@ public class DatWriterTests
         DatWriter.Write(imagePath, datPath, listPath);
 
         var lines = File.ReadAllLines(listPath);
-        Assert.Equal(new[] { "4", "3", "0", "0", "zero 1,0,3" }, lines);
+        Assert.Equal(new[] { "4", "3", "0", "0", "zero 2,0,3" }, lines);
         Assert.Equal(0L, new FileInfo(datPath).Length);
     }
 
@@ -87,7 +87,7 @@ public class DatWriterTests
         var lines = File.ReadAllLines(listPath);
         Assert.Equal("4", lines[0]);
         Assert.Equal("3", lines[1]);
-        Assert.Equal("new 1,0,3", lines[4]);
+        Assert.Equal("new 2,0,3", lines[4]);
 
         // 末块不足 4096 时以零填充。
         // The final partial block is zero-padded to 4096.

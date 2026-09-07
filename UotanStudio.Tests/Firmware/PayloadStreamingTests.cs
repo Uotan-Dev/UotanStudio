@@ -71,20 +71,24 @@ public class PayloadStreamingTests
             new Extent { StartBlock = 0, NumBlocks = 32 });
         var writeLock = new object();
         using var output = CreateTemporaryFile(payload.Length, out var path);
+        var replaceTask = Task.CompletedTask;
+        var competingOperation = Task.CompletedTask;
         try
         {
-            var replaceTask = Task.Run(() => OperationProcessor.ProcessOperation(
-                operation, output, payloadStream, 0, 4096, writeLock, new object(), TestContext.Current.CancellationToken), TestContext.Current.CancellationToken);
+            // Both workers intentionally block; use dedicated threads to avoid thread-pool starvation.
+            replaceTask = Task.Factory.StartNew(() => OperationProcessor.ProcessOperation(
+                operation, output, payloadStream, 0, 4096, writeLock, new object(), TestContext.Current.CancellationToken),
+                TestContext.Current.CancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             Assert.True(secondReadReached.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-            var competingOperation = Task.Run(() =>
+            competingOperation = Task.Factory.StartNew(() =>
             {
                 lockAttempted.Set();
                 lock (writeLock)
                 {
                     lockAcquired.Set();
                 }
-            }, TestContext.Current.CancellationToken);
+            }, TestContext.Current.CancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             Assert.True(lockAttempted.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             Assert.False(lockAcquired.Wait(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken));
@@ -97,8 +101,12 @@ public class PayloadStreamingTests
         finally
         {
             allowSecondRead.Set();
-            output.Dispose();
-            File.Delete(path);
+            try { await Task.WhenAll(replaceTask, competingOperation); }
+            finally
+            {
+                output.Dispose();
+                File.Delete(path);
+            }
         }
     }
 
@@ -156,7 +164,7 @@ public class PayloadStreamingTests
     }
 
     [Fact]
-    public void NonReplace_RejectsDataLengthBeyondByteArrayLimit()
+    public void SourceDependentOperation_RejectsParallelPathBeforeReadingData()
     {
         var operation = new InstallOperation
         {
@@ -168,7 +176,7 @@ public class PayloadStreamingTests
         using var output = CreateTemporaryFile(0, out var path);
         try
         {
-            Assert.Throws<PartitionExtractionException>(() =>
+            Assert.Throws<PayloadUnsupportedOperationException>(() =>
                 OperationProcessor.ProcessOperation(operation, output, payloadStream, 0, 4096, new object(), new object(), TestContext.Current.CancellationToken));
         }
         finally

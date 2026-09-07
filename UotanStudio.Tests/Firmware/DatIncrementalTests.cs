@@ -1,276 +1,142 @@
 using BsDiff;
+using System.Security.Cryptography;
 using UotanStudio.Firmware.Dat;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
-/// <summary>
-/// DAT incremental OTA tests: verify the v4 incremental command path (stash/move/diff) of
-/// <see cref="DatReader"/>, including stash-referencing moves, multi-pair diff range sets, v3 diff
-/// compatibility, and the missing-input error cases. Patches are produced with the project's BsDiff
-/// generator (<see cref="BinaryPatch"/>).
-/// <para>DAT 增量 OTA 测试：校验 <see cref="DatReader"/> 的 v4 增量命令路径（stash/move/diff），包括引用暂存的
-/// move、diff 双范围集、v3 diff 兼容以及缺少输入的错误情形。补丁用项目自带的 BsDiff 生成器
-/// （<see cref="BinaryPatch"/>）生成。</para>
-/// </summary>
+// Command strings follow recovery/updater/blockimg.cpp. An independent BsDiff
+// implementation generates patch data for the parser/application tests.
 public class DatIncrementalTests
 {
     private const int BlockSize = DatReader.BlockSize;
 
     [Fact]
-    public void Parse_MoveAndDiffCommands_PopulateSourceRanges()
+    public void Parse_V4Patch_SeparatesTargetAndSourceMapping()
     {
-        using var reader = new StringReader("""
-            4
-            8
-            0
-            0
-            move 2,0,1,2,3 2,4,5,6,7
-            diff 1,1,2 1,3,4
-            """);
-        var list = TransferListParser.Parse(reader);
-
-        var move = list.Commands[0];
-        Assert.Equal(TransferListCommandKind.Move, move.Kind);
-        Assert.Equal(new[] { new BlockRange(0, 1), new BlockRange(2, 3) }, move.SourceRanges);
-        Assert.Equal(new[] { new BlockRange(4, 5), new BlockRange(6, 7) }, move.Ranges);
-
-        var diff = list.Commands[1];
-        Assert.Equal(TransferListCommandKind.Diff, diff.Kind);
-        Assert.Equal(new[] { new BlockRange(1, 2) }, diff.SourceRanges);
-        Assert.Equal(new[] { new BlockRange(3, 4) }, diff.Ranges);
+        var hash = new string('0', 40);
+        using var input = new StringReader($"4\n2\n0\n0\nbsdiff 37 100 {hash} {hash} 4,4,5,6,7 2 4,0,1,2,3\n");
+        var list = TransferListParser.Parse(input);
+        var command = Assert.Single(list.Commands);
+        Assert.Equal(37, command.PatchOffset);
+        Assert.Equal(100, command.PatchLength);
+        Assert.Equal(2, command.SourceBlockCount);
+        Assert.Equal(new[] { new BlockRange(0, 1), new BlockRange(2, 3) }, command.SourceRanges);
+        Assert.Equal(new[] { new BlockRange(4, 5), new BlockRange(6, 7) }, command.Ranges);
+        Assert.Equal(7, list.TotalBlocks);
+        Assert.Equal(2, list.NewBlocks);
     }
 
-    [Fact]
-    public void Parse_V3DiffSingleRangeSet_SourceEqualsTarget()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void Move_AllRecoveryVersions_PreserveUntouchedBlocks(int version)
     {
-        using var reader = new StringReader("3\n4\n0\n0\ndiff 1,2,4\n");
-        var list = TransferListParser.Parse(reader);
-
-        var diff = list.Commands[0];
-        Assert.Equal(TransferListCommandKind.Diff, diff.Kind);
-        Assert.Equal(new[] { new BlockRange(2, 4) }, diff.SourceRanges);
-        Assert.Equal(new[] { new BlockRange(2, 4) }, diff.Ranges);
-    }
-
-    [Fact]
-    public void Unpack_IncrementalList_AllCommands_IsByteExact()
-    {
-        const int blockCount = 8;
-        var sourceImage = BuildRandomImage(blockCount, 42);
-        var newBlockA = BuildPatternBlock(0x5A);
-        var newBlockB = BuildPatternBlock(0xC3);
-        var patchedBlock = BuildPatternBlock(0x9E);
-
-        var targetImage = new byte[blockCount * BlockSize];
-        WriteBlock(targetImage, 0, newBlockA);
-        WriteBlock(targetImage, 1, GetBlock(sourceImage, 2));
-        WriteBlock(targetImage, 3, patchedBlock);
-        WriteBlock(targetImage, 4, GetBlock(sourceImage, 0));
-        WriteBlock(targetImage, 5, newBlockB);
-        // 块 2、6、7 保持为零（free/zero/erase）。
-        // Blocks 2, 6, 7 stay zero (free/zero/erase).
-
-        using var temp = new TempDirectory();
-        var listPath = temp.Write("incremental.transfer.list", """
-            4
-            8
-            1
-            1
-            new 1,0,1
-            move 1,2,3 1,1,2
-            diff 1,1,2 1,3,4
-            stash 1,0,1 1,0,1
-            move 1,0,1 1,4,5
-            new 1,5,6
-            zero 1,6,7
-            erase 1,7,8
-            free 1,2,3
-            """);
-        var newDataPath = temp.WriteBytes("incremental.new.dat", Concat(newBlockA, newBlockB));
-        var patchDataPath = temp.WriteBytes("incremental.patch.dat", CreateBsdiffPatch(GetBlock(sourceImage, 1), patchedBlock));
-        var sourcePath = temp.WriteBytes("incremental.source.img", sourceImage);
-        var outputPath = Path.Combine(temp.Path, "incremental.img");
-
-        DatReader.Unpack(listPath, newDataPath, patchDataPath, sourcePath, outputPath);
-
-        Assert.Equal(targetImage, File.ReadAllBytes(outputPath));
-    }
-
-    [Fact]
-    public void Unpack_MoveAfterStash_ReferencesStashedSource()
-    {
-        var sourceImage = BuildRandomImage(4, 7);
-        using var temp = new TempDirectory();
-
-        // stash 以「源范围集字符串」作为暂存 id；后续 move 的源 token 与之相同即引用该暂存。
-        // The stash id is the source range-set string; the following move's source token matches it.
-        var listPath = temp.Write("stash-move.transfer.list", """
-            4
-            2
-            1
-            1
-            stash 1,0,1 1,0,1
-            move 1,0,1 1,1,2
-            """);
-        var newDataPath = temp.WriteBytes("stash-move.new.dat", []);
-        var sourcePath = temp.WriteBytes("stash-move.source.img", sourceImage);
-        var outputPath = Path.Combine(temp.Path, "stash-move.img");
-
-        DatReader.Unpack(listPath, newDataPath, null, sourcePath, outputPath);
-
-        var expected = new byte[2 * BlockSize];
-        WriteBlock(expected, 1, GetBlock(sourceImage, 0));
-        Assert.Equal(expected, File.ReadAllBytes(outputPath));
-    }
-
-    [Fact]
-    public void Unpack_Diff_DoubleRangeSet_AppliesPatchPerPair()
-    {
-        const int blockCount = 8;
-        var sourceImage = BuildRandomImage(blockCount, 11);
-        var patchedA = BuildPatternBlock(0x11);
-        var patchedB = BuildPatternBlock(0x22);
-
-        var targetImage = new byte[blockCount * BlockSize];
-        WriteBlock(targetImage, 4, patchedA);
-        WriteBlock(targetImage, 6, patchedB);
-
-        // 每对 (src, dst) 区间在补丁流中按序对应一个补丁条目。
-        // Each (src, dst) range pair maps to one patch entry, in order.
-        var patch = Concat(
-            CreateBsdiffPatch(GetBlock(sourceImage, 0), patchedA),
-            CreateBsdiffPatch(GetBlock(sourceImage, 2), patchedB));
-
-        using var temp = new TempDirectory();
-        var listPath = temp.Write("diff-pairs.transfer.list", """
-            4
-            8
-            0
-            0
-            diff 2,0,1,2,3 2,4,5,6,7
-            """);
-        var newDataPath = temp.WriteBytes("diff-pairs.new.dat", []);
-        var patchDataPath = temp.WriteBytes("diff-pairs.patch.dat", patch);
-        var sourcePath = temp.WriteBytes("diff-pairs.source.img", sourceImage);
-        var outputPath = Path.Combine(temp.Path, "diff-pairs.img");
-
-        DatReader.Unpack(listPath, newDataPath, patchDataPath, sourcePath, outputPath);
-
-        Assert.Equal(targetImage, File.ReadAllBytes(outputPath));
-    }
-
-    [Fact]
-    public void Unpack_V3Diff_SingleRangeSet_SourceEqualsTarget()
-    {
-        const int blockCount = 2;
-        var sourceImage = BuildRandomImage(blockCount, 3);
-        var patchedBlock = BuildPatternBlock(0x77);
-
-        var targetImage = new byte[blockCount * BlockSize];
-        WriteBlock(targetImage, 1, patchedBlock);
-
-        using var temp = new TempDirectory();
-        var listPath = temp.Write("v3.transfer.list", """
-            3
-            2
-            0
-            0
-            diff 1,1,2
-            """);
-        var newDataPath = temp.WriteBytes("v3.new.dat", []);
-        var patchDataPath = temp.WriteBytes("v3.patch.dat", CreateBsdiffPatch(GetBlock(sourceImage, 1), patchedBlock));
-        var sourcePath = temp.WriteBytes("v3.source.img", sourceImage);
-        var outputPath = Path.Combine(temp.Path, "v3.img");
-
-        DatReader.Unpack(listPath, newDataPath, patchDataPath, sourcePath, outputPath);
-
-        Assert.Equal(targetImage, File.ReadAllBytes(outputPath));
-    }
-
-    [Fact]
-    public void Unpack_DiffCommand_WithoutPatchData_Throws()
-    {
-        using var temp = new TempDirectory();
-        var listPath = temp.Write("x.transfer.list", "4\n3\n0\n0\ndiff 1,0,1 1,2,3\n");
-        var newDataPath = temp.WriteBytes("x.new.dat", []);
-        var sourcePath = temp.WriteBytes("x.source.img", new byte[4 * BlockSize]);
-
-        Assert.Throws<ArgumentException>(() => DatReader.Unpack(listPath, newDataPath, null, sourcePath, Path.Combine(temp.Path, "out.img")));
-    }
-
-    [Fact]
-    public void Unpack_MoveCommand_WithMissingSourceFile_ThrowsFileNotFound()
-    {
-        using var temp = new TempDirectory();
-        var listPath = temp.Write("x.transfer.list", "4\n3\n0\n0\nmove 1,0,1 1,2,3\n");
-        var newDataPath = temp.WriteBytes("x.new.dat", []);
-        var missingSource = Path.Combine(temp.Path, "missing.img");
-
-        Assert.Throws<FileNotFoundException>(() => DatReader.Unpack(listPath, newDataPath, null, missingSource, Path.Combine(temp.Path, "out.img")));
-    }
-
-    [Fact]
-    public void Unpack_Diff_ImgdiffMagic_ThrowsInvalidData()
-    {
-        using var temp = new TempDirectory();
-        var listPath = temp.Write("x.transfer.list", "4\n3\n0\n0\ndiff 1,0,1 1,2,3\n");
-        var newDataPath = temp.WriteBytes("x.new.dat", []);
-        var sourcePath = temp.WriteBytes("x.source.img", new byte[4 * BlockSize]);
-        var patchDataPath = temp.WriteBytes("x.patch.dat", "IMGDIFF2"u8.ToArray());
-
-        Assert.Throws<InvalidDataException>(() => DatReader.Unpack(listPath, newDataPath, patchDataPath, sourcePath, Path.Combine(temp.Path, "out.img")));
-    }
-
-    private static byte[] BuildRandomImage(int blockCount, int seed)
-    {
-        var random = new Random(seed);
-        var data = new byte[blockCount * BlockSize];
-        random.NextBytes(data);
-        return data;
-    }
-
-    private static byte[] BuildPatternBlock(byte seed)
-    {
-        var data = new byte[BlockSize];
-        for (var i = 0; i < data.Length; i++)
+        var original = Pattern(3, 7);
+        var moved = original.AsSpan(0, BlockSize).ToArray();
+        var command = version switch
         {
-            data[i] = (byte)((i * 7 + seed) & 0xFF);
-        }
-
-        return data;
+            1 => "move 2,0,1 2,2,3",
+            2 => "move 2,2,3 1 2,0,1",
+            _ => $"move {Hash(moved)} 2,2,3 1 2,0,1"
+        };
+        var header = version == 1 ? "1\n1\n" : $"{version}\n1\n0\n0\n";
+        var expected = original.ToArray(); moved.CopyTo(expected, 2 * BlockSize);
+        Assert.Equal(expected, Run(header + command, original));
     }
 
-    private static byte[] GetBlock(byte[] image, int block)
+    [Fact]
+    public void Move_SourceAndDestinationMayBeTheSameFile()
     {
-        var data = new byte[BlockSize];
-        Array.Copy(image, block * BlockSize, data, 0, BlockSize);
-        return data;
+        using var temp = new TempDirectory(); var original = Pattern(2, 9);
+        var image = temp.WriteBytes("image.img", original);
+        var list = temp.Write("list", "1\n1\nmove 2,0,1 2,1,2\n");
+        DatReader.Unpack(list, temp.WriteBytes("new.dat", []), null, image, image);
+        Assert.Equal(original.AsSpan(0, BlockSize).ToArray().Concat(original.AsSpan(0, BlockSize).ToArray()), File.ReadAllBytes(image));
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp-*"));
     }
 
-    private static void WriteBlock(byte[] image, int block, byte[] data)
+    [Fact]
+    public void Stash_OverwrittenSource_FreeDoesNotEraseImageBlocks()
     {
-        Array.Copy(data, 0, image, block * BlockSize, BlockSize);
+        var original = Pattern(4, 9); var saved = original.AsSpan(0, BlockSize).ToArray();
+        var replacement = Pattern(1, 3); var id = Hash(saved);
+        var list = $"4\n2\n1\n1\nstash {id} 2,0,1\nnew 2,0,1\nmove {id} 2,2,3 1 - {id}:2,0,1\nfree {id}\n";
+        var expected = original.ToArray(); replacement.CopyTo(expected, 0); saved.CopyTo(expected, 2 * BlockSize);
+        Assert.Equal(expected, Run(list, original, replacement));
     }
 
-    private static byte[] Concat(params byte[][] arrays)
+    [Fact]
+    public void Move_CombinesDiskRangesWithStashedBufferLocations()
     {
-        var result = new byte[arrays.Sum(a => a.Length)];
-        var offset = 0;
-        foreach (var array in arrays)
-        {
-            Array.Copy(array, 0, result, offset, array.Length);
-            offset += array.Length;
-        }
-
-        return result;
+        var original = Pattern(5, 13); var saved = original.AsSpan(BlockSize, BlockSize).ToArray();
+        var id = Hash(saved); var assembled = original.AsSpan(0, 2 * BlockSize).ToArray();
+        var list = $"4\n3\n1\n1\nstash {id} 2,1,2\nzero 2,1,2\nmove {Hash(assembled)} 2,3,5 2 2,0,1 2,0,1 {id}:2,1,2\nfree {id}\n";
+        var expected = original.ToArray(); Array.Clear(expected, BlockSize, BlockSize); assembled.CopyTo(expected, 3 * BlockSize);
+        Assert.Equal(expected, Run(list, original));
     }
 
-    private static byte[] CreateBsdiffPatch(byte[] oldData, byte[] newData)
+    [Theory]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void Bsdiff_ExplicitOffset_MapsOnePatchAcrossAllRanges(int version)
     {
-        using var patchStream = new MemoryStream();
-        BinaryPatch.Create(oldData, newData, patchStream);
-        return patchStream.ToArray();
+        var original = Pattern(8, 11); var replacement = Pattern(2, 17);
+        var oldData = original.AsSpan(0, BlockSize).ToArray().Concat(original.AsSpan(2 * BlockSize, BlockSize).ToArray()).ToArray();
+        var patch = Patch(oldData, replacement); var patchFile = new byte[37].Concat(patch).Concat(new byte[19]).ToArray();
+        var list = $"{version}\n2\n0\n0\nbsdiff 37 {patch.Length} {Hash(oldData)} {Hash(replacement)} 4,4,5,6,7 2 4,0,1,2,3\n";
+        var expected = original.ToArray(); replacement.AsSpan(0, BlockSize).CopyTo(expected.AsSpan(4 * BlockSize)); replacement.AsSpan(BlockSize).CopyTo(expected.AsSpan(6 * BlockSize));
+        Assert.Equal(expected, Run(list, original, patch: patchFile));
     }
+
+    [Fact]
+    public void BadTargetHash_PreservesExistingDestination()
+    {
+        var original = Pattern(1, 1); var changed = Pattern(1, 2); var patch = Patch(original, changed);
+        var list = $"4\n1\n0\n0\nbsdiff 0 {patch.Length} {Hash(original)} {Hash(original)} 2,0,1 1 2,0,1\n";
+        using var temp = new TempDirectory();
+        var output = temp.WriteBytes("out.img", "existing"u8.ToArray());
+        Assert.Throws<InvalidDataException>(() => DatReader.Unpack(temp.Write("list", list), temp.WriteBytes("new.dat", []), temp.WriteBytes("patch.dat", patch), temp.WriteBytes("source.img", original), output));
+        Assert.Equal("existing"u8.ToArray(), File.ReadAllBytes(output));
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp-*"));
+    }
+
+    [Fact]
+    public void TruncatedNewData_PreservesExistingDestination()
+    {
+        using var temp = new TempDirectory(); var output = temp.WriteBytes("out.img", "existing"u8.ToArray());
+        Assert.Throws<EndOfStreamException>(() => DatReader.Unpack(temp.Write("list", "4\n1\n0\n0\nnew 2,0,1\n"), temp.WriteBytes("new.dat", new byte[BlockSize - 1]), output));
+        Assert.Equal("existing"u8.ToArray(), File.ReadAllBytes(output));
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp-*"));
+    }
+
+    [Fact]
+    public void StashLimit_IsEnforced()
+    {
+        var original = Pattern(1, 7);
+        Assert.Throws<InvalidDataException>(() => Run($"4\n1\n1\n0\nstash {Hash(original)} 2,0,1\n", original));
+    }
+
+    [Theory]
+    [InlineData("diff 2,0,1")]
+    [InlineData("new 1,0,1")]
+    [InlineData("move 0000000000000000000000000000000000000000 2,0,1 2 2,0,1")]
+    public void NonstandardOrIncompleteCommands_AreRejected(string command)
+    {
+        using var input = new StringReader("4\n1\n0\n0\n" + command);
+        Assert.Throws<InvalidDataException>(() => TransferListParser.Parse(input));
+    }
+
+    private static byte[] Run(string list, byte[] original, byte[]? added = null, byte[]? patch = null)
+    {
+        using var temp = new TempDirectory(); var output = Path.Combine(temp.Path, "out.img");
+        DatReader.Unpack(temp.Write("list", list), temp.WriteBytes("new.dat", added ?? []), patch is null ? null : temp.WriteBytes("patch.dat", patch), temp.WriteBytes("source.img", original), output);
+        return File.ReadAllBytes(output);
+    }
+    private static string Hash(byte[] bytes) => Convert.ToHexString(SHA1.HashData(bytes)).ToLowerInvariant();
+    private static byte[] Pattern(int blocks, int seed) { var bytes = new byte[blocks * BlockSize]; new Random(seed).NextBytes(bytes); return bytes; }
+    private static byte[] Patch(byte[] original, byte[] target) { using var stream = new MemoryStream(); BinaryPatch.Create(original, target, stream); return stream.ToArray(); }
 }

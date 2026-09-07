@@ -1,243 +1,147 @@
+using System.Buffers.Binary;
+using System.Text;
 using UotanStudio.Firmware.Common;
 using UotanStudio.Firmware.Rockchip;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
-/// <summary>
-/// Format-level tests for the Rockchip RKAF/RKFW handler, built around minimal synthetic images
-/// (header + fake FDT data + fake image data) with consistent magic/length/offset fields.
-/// <para>Rockchip RKAF/RKFW 处理器的格式级测试，基于测试内合成的最小镜像（头部 + 假 FDT 数据 +
-/// 假镜像数据，魔数/长度/偏移一致）。</para>
-/// </summary>
-public class RockchipTests
+public sealed class RockchipTests : IDisposable
 {
-    private const string RkfwFormatName = "Rockchip RKAF/RKFW Firmware";
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-rk-" + Guid.NewGuid().ToString("N"));
+    public RockchipTests() => Directory.CreateDirectory(_root);
 
-    /// <summary>
-    /// Builds a minimal Rockchip RKAF/RKFW image: 540-byte header (magic tag + consistent
-    /// fdt/image offset/size fields) followed by the FDT payload and the image payload.
-    /// <para>合成最小 Rockchip RKAF/RKFW 镜像：540 字节头部（魔数 + 一致的 fdt/image 偏移/大小字段）
-    /// 后接 FDT 数据与镜像数据。</para>
-    /// </summary>
-    internal static byte[] BuildRkImage(uint tag, byte[] fdt, byte[] image)
+    // Independent offsets from RKImage.h and rkflashtool/rkunpack.c.
+    internal static byte[] BuildRkaf(string path, byte[] payload)
     {
-        var fdtOffset = RkFwHeader.DefaultHeaderSize;
-        var head = new RkFwHeader
-        {
-            Tag = tag,
-            Version = 1,
-            HeaderSize = RkFwHeader.DefaultHeaderSize,
-            FdtOffset = fdtOffset,
-            FdtSize = (uint)fdt.Length,
-            ImageOffset = fdtOffset + (uint)fdt.Length,
-            ImageSize = (uint)image.Length,
-        };
-
-        using var ms = new MemoryStream();
-        var headBytes = head.ToBytes();
-        Assert.Equal(RkFwHeader.DefaultHeaderSize, (uint)headBytes.Length);
-        ms.Write(headBytes);
-        ms.Write(fdt);
-        ms.Write(image);
-        return ms.ToArray();
+        var image = new byte[512 + payload.Length];
+        "RKAF"u8.CopyTo(image);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(4), (uint)image.Length - 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(136), 1);
+        Encoding.UTF8.GetBytes("boot").CopyTo(image, 140);
+        Encoding.UTF8.GetBytes(path).CopyTo(image, 172);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(236), 512);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(244), (uint)payload.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(248), (uint)payload.Length);
+        payload.CopyTo(image, 512);
+        return image;
     }
 
-    private static string CreateTempDir()
+    internal static byte[] BuildRkfw(byte[] loader, byte[] image)
     {
-        var root = Path.Combine(Path.GetTempPath(), "uotan-rockchip-tests-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(root);
-        return root;
+        var data = new byte[102 + loader.Length + image.Length];
+        "RKFW"u8.CopyTo(data);
+        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(4), 102);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(6), 0x08010000);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(21), 0x70);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(25), 102);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(29), (uint)loader.Length);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(33), (uint)(102 + loader.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(37), (uint)image.Length);
+        loader.CopyTo(data, 102);
+        image.CopyTo(data, 102 + loader.Length);
+        return data;
     }
 
     [Fact]
-    public void Detect_RkfwExtension_IsRockchip()
+    public void NativeAfptoolImage_ExtractsBothContainerLayers()
     {
+        var path = Path.Combine(AppContext.BaseDirectory, "Firmware", "Files", "review-native-rkfw.img");
+        var output = Path.Combine(_root, "native");
+        RockchipExtractor.Extract(path, output, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.StartsWith("BOOTIndependent loader fixture", File.ReadAllText(Path.Combine(output, "BOOT")));
+        var embedded = Path.Combine(output, "embedded-update.img");
+        RockchipExtractor.Extract(embedded, Path.Combine(output, "rkaf"), cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal("Independent Rockchip native fixture payload\n", File.ReadAllText(Path.Combine(output, "rkaf", "Image", "boot.img")));
+    }
+
+    [Fact]
+    public async Task Rkfw_UnpacksStandardLoaderAndEmbeddedRkaf()
+    {
+        var loader = "BOOTloader"u8.ToArray();
+        var rkaf = BuildRkaf("Image/boot.img", [1, 2, 3, 4, 5]);
+        var path = Write(BuildRkfw(loader, rkaf));
         FirmwareFormatRegistry.RegisterAll();
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware.rkfw");
-        try
-        {
-            File.WriteAllBytes(path, BuildRkImage(RkFwHeader.MagicRkfw, [0x01, 0x02, 0x03], [0xAA, 0xBB]));
-            var handler = FormatDetector.Detect(path);
-            Assert.Equal(RkfwFormatName, handler?.FormatName);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var handler = FormatDetector.Detect(path);
+        Assert.IsType<RockchipFormatHandler>(handler);
+        var result = await handler.UnpackAsync(path, Path.Combine(_root, "out"), null, TestContext.Current.CancellationToken);
+        Assert.True(result.Success, result.Summary);
+        Assert.Equal(loader, File.ReadAllBytes(Path.Combine(_root, "out", "BOOT")));
+        Assert.Equal(rkaf, File.ReadAllBytes(Path.Combine(_root, "out", "embedded-update.img")));
     }
 
     [Fact]
-    public void Detect_NoExtension_ContentMagic_IsRockchip()
+    public void Rkaf_UsesEntryTableAndExactActualSize()
     {
-        FirmwareFormatRegistry.RegisterAll();
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware");
-        try
-        {
-            File.WriteAllBytes(path, BuildRkImage(RkFwHeader.MagicRkaf, [0x0A], [0x11, 0x22, 0x33]));
-            var handler = FormatDetector.Detect(path);
-            Assert.Equal(RkfwFormatName, handler?.FormatName);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var payload = "partition payload"u8.ToArray();
+        var path = Write(BuildRkaf("Image/boot.img", payload));
+        Assert.Equal("Image/boot.img", Assert.Single(RockchipExtractor.List(path)).Name);
+        Assert.Equal(1, RockchipExtractor.Extract(path, Path.Combine(_root, "out"), cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(payload, File.ReadAllBytes(Path.Combine(_root, "out", "Image", "boot.img")));
+    }
+
+    [Theory]
+    [InlineData("../escape")]
+    [InlineData("Image/../../escape")]
+    [InlineData("C:/escape")]
+    public void Rkaf_RejectsEscapingPaths(string name)
+    {
+        var path = Write(BuildRkaf(name, [1]));
+        Assert.Throws<InvalidDataException>(() => RockchipExtractor.Extract(path, Path.Combine(_root, "out"), cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task Metadata_ReportsFdtAndImageEntries()
+    public void TruncatedRkfw_DoesNotReplaceExistingOutput()
     {
-        FirmwareFormatRegistry.RegisterAll();
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware.rkfw");
-        try
-        {
-            File.WriteAllBytes(path, BuildRkImage(RkFwHeader.MagicRkfw, [0x0A, 0x0B], [0x11, 0x22]));
-
-            var handler = FormatDetector.Detect(path);
-            Assert.NotNull(handler);
-            var result = await handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken);
-            Assert.True(result.Success);
-            Assert.Contains("2 entries", result.Summary, StringComparison.Ordinal);
-            Assert.Equal("2", result.Metadata?["FileCount"]);
-            Assert.Contains("fdt.dtb", result.Entries);
-            Assert.Contains("image.bin", result.Entries);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var image = BuildRkfw("BOOTdata"u8.ToArray(), BuildRkaf("boot.img", [1, 2]));
+        var path = Write(image[..^1]);
+        var output = Path.Combine(_root, "out");
+        Directory.CreateDirectory(output);
+        File.WriteAllText(Path.Combine(output, "BOOT"), "preserved");
+        Assert.Throws<InvalidDataException>(() => RockchipExtractor.Extract(path, output, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal("preserved", File.ReadAllText(Path.Combine(output, "BOOT")));
     }
 
     [Fact]
-    public async Task Unpack_ExtractsFdtAndImageByteExact()
+    public void Rkaf_RejectsTruncatedTable()
     {
-        FirmwareFormatRegistry.RegisterAll();
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware.rkfw");
-        var outDir = Path.Combine(root, "out");
-        try
-        {
-            var fdt = Enumerable.Range(0, 4096).Select(i => (byte)(i & 0xFF)).ToArray();
-            var image = Enumerable.Range(0, 8192).Select(i => (byte)(i * 7)).ToArray();
-            File.WriteAllBytes(path, BuildRkImage(RkFwHeader.MagicRkfw, fdt, image));
-
-            var handler = FormatDetector.Detect(path);
-            Assert.NotNull(handler);
-            var result = await handler.UnpackAsync(path, outDir, null, TestContext.Current.CancellationToken);
-            Assert.True(result.Success, result.Summary);
-
-            Assert.Equal(fdt, await File.ReadAllBytesAsync(Path.Combine(outDir, "fdt.dtb"), TestContext.Current.CancellationToken));
-            Assert.Equal(image, await File.ReadAllBytesAsync(Path.Combine(outDir, "image.bin"), TestContext.Current.CancellationToken));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var image = BuildRkaf("boot.img", [1]);
+        BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(136), uint.MaxValue);
+        var path = Write(image);
+        Assert.Throws<InvalidDataException>(() => RockchipExtractor.List(path));
     }
 
     [Fact]
-    public void Detect_BadMagic_IsNotRockchip()
+    public void OldPrivateMagic_IsRejected()
     {
-        FirmwareFormatRegistry.RegisterAll();
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware");
-        try
-        {
-            var bytes = BuildRkImage(RkFwHeader.MagicRkfw, [0x01], [0x02]);
-            bytes[0] = 0x00; // 破坏魔数 "Rkfw"。 Corrupt the "Rkfw" magic.
-            File.WriteAllBytes(path, bytes);
-            var handler = FormatDetector.Detect(path);
-            Assert.NotEqual(RkfwFormatName, handler?.FormatName);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var image = BuildRkfw("BOOTdata"u8.ToArray(), BuildRkaf("boot.img", [1]));
+        "Rkfw"u8.CopyTo(image);
+        var path = Write(image);
+        Assert.False(new RockchipFormatHandler().CanHandle(path));
+        Assert.Throws<InvalidDataException>(() => RockchipExtractor.List(path));
     }
 
     [Fact]
-    public void Detect_TruncatedFile_IsNotRockchip()
+    public void Rkaf_ParameterWrapperIsRemoved()
     {
-        FirmwareFormatRegistry.RegisterAll();
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware");
-        try
-        {
-            // 仅含 4 字节魔数、长度不足头部结构大小。
-            // Only the 4-byte magic; too short for the header struct.
-            File.WriteAllBytes(path, [0x52, 0x6B, 0x66, 0x77]);
-            var handler = FormatDetector.Detect(path);
-            Assert.NotEqual(RkfwFormatName, handler?.FormatName);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var wrapped = new byte[16];
+        "PARM"u8.CopyTo(wrapped);
+        BinaryPrimitives.WriteUInt32LittleEndian(wrapped.AsSpan(4), 4);
+        "test"u8.CopyTo(wrapped.AsSpan(8));
+        var image = BuildRkaf("parameter.txt", wrapped);
+        image.AsSpan(140, 32).Clear();
+        "parameter"u8.CopyTo(image.AsSpan(140));
+        var path = Write(image);
+        RockchipExtractor.Extract(path, Path.Combine(_root, "out"), cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal("test", File.ReadAllText(Path.Combine(_root, "out", "parameter.txt")));
     }
 
-    [Fact]
-    public void Extract_BadMagic_ThrowsInvalidData()
+    private string Write(byte[] image)
     {
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware");
-        var outDir = Path.Combine(root, "out");
-        try
-        {
-            var bytes = BuildRkImage(RkFwHeader.MagicRkaf, [0x01], [0x02]);
-            bytes[0] = 0xFF;
-            File.WriteAllBytes(path, bytes);
-            Assert.Throws<InvalidDataException>(() => RockchipExtractor.Extract(path, outDir));
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
+        var path = Path.Combine(_root, "firmware.img");
+        File.WriteAllBytes(path, image);
+        return path;
     }
 
-    [Fact]
-    public async Task Unpack_TruncatedImage_FailsCleanly()
-    {
-        FirmwareFormatRegistry.RegisterAll();
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware.rkfw");
-        var outDir = Path.Combine(root, "out");
-        try
-        {
-            var bytes = BuildRkImage(RkFwHeader.MagicRkfw, [0x01, 0x02, 0x03], [0x11, 0x22, 0x33]);
-            File.WriteAllBytes(path, bytes[..(bytes.Length - 1)]);
-
-            var handler = FormatDetector.Detect(path);
-            Assert.NotNull(handler);
-            var result = await handler.UnpackAsync(path, outDir, null, TestContext.Current.CancellationToken);
-            Assert.False(result.Success);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task Pack_ReturnsFail()
-    {
-        FirmwareFormatRegistry.RegisterAll();
-        var root = CreateTempDir();
-        var path = Path.Combine(root, "firmware.rkfw");
-        var outPath = Path.Combine(root, "packed.rkfw");
-        try
-        {
-            File.WriteAllBytes(path, BuildRkImage(RkFwHeader.MagicRkfw, [0x01], [0x02]));
-            var handler = FormatDetector.Detect(path);
-            Assert.NotNull(handler);
-            var result = await handler.PackAsync(path, outPath, TestContext.Current.CancellationToken);
-            Assert.False(result.Success);
-        }
-        finally
-        {
-            Directory.Delete(root, recursive: true);
-        }
-    }
+    public void Dispose() => Directory.Delete(_root, true);
 }

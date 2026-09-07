@@ -106,11 +106,10 @@ public class Lzo1xTests
     }
 
     [Fact]
-    public void F2fsCluster_LzoAlgorithm_RoundTripsThroughClusterHeader()
+    public void F2fsCluster_LzoAlgorithm_UsesKernelHeaderAndInodeAlgorithm()
     {
-        // 经 F2fsCompression 的簇级 API 回环：压缩（含 12 字节簇头）→ 解析头 → 解压。
-        // Round-trips through the F2fsCompression cluster API: compress (with the 12-byte cluster
-        // header) → parse header → decompress.
+        // The kernel header stores length/checksum/reserved fields; the inode supplies LZO.
+        // 内核簇头只存长度、校验和及保留字段，LZO 算法由 inode 指定。
         var data = new byte[F2fsCompression.ClusterBytes];
         for (var i = 0; i < data.Length; i++)
         {
@@ -121,11 +120,13 @@ public class Lzo1xTests
         Assert.NotNull(cluster);
 
         var header = F2fsCompression.ParseHeader(cluster);
-        Assert.Equal(CompressionAlgorithm.Lzo, header.Algorithm);
+        Assert.Equal(24, F2fsCompression.ClusterHeaderSize);
+        Assert.Equal(cluster.Length - 24, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(cluster));
+        Assert.Equal(cluster.Length - 24, header.CompressedSize);
+        Assert.Equal(0U, header.Checksum);
+        Assert.True(cluster.AsSpan(8, 16).IndexOfAnyExcept((byte)0) < 0);
         Assert.Equal(data.Length, header.UncompressedSize);
 
-        // DecompressCluster 接收不含 12 字节簇头的压缩负载。
-        // DecompressCluster receives the compressed payload WITHOUT the 12-byte cluster header.
         var decompressed = F2fsCompression.DecompressCluster(
             cluster.AsSpan(F2fsCompression.ClusterHeaderSize),
             CompressionAlgorithm.Lzo,

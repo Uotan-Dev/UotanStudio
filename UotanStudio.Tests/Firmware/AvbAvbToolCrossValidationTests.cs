@@ -26,15 +26,15 @@ public class AvbAvbToolCrossValidationTests
         SkipUnlessWslAvbToolAvailable(out var root);
         try
         {
-            var keyPem = Path.Combine(root, "testkey.pem");
+            var keyPem = Path.Combine(root, "test key.pem");
             await File.WriteAllTextAsync(keyPem, ExportPkcs8Pem(2048), TestContext.Current.CancellationToken);
             var image = Path.Combine(root, "system.img");
             await File.WriteAllBytesAsync(image, BuildPatternedImage(512 * 1024), TestContext.Current.CancellationToken);
 
-            var (output, exitCode) = WslTestHelpers.RunWsl(
-                $"avbtool add_hash_footer --image {WslTestHelpers.ToWslPath(image)} " +
-                $"--partition_name test --partition_size {PartitionSize} " +
-                $"--algorithm SHA256_RSA2048 --key {WslTestHelpers.ToWslPath(keyPem)}", 120000);
+            var (output, exitCode) = WslTestHelpers.RunAvbTool(
+                ["add_hash_footer", "--image", WslTestHelpers.ToWslPath(image),
+                 "--partition_name", "test", "--partition_size", PartitionSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                 "--algorithm", "SHA256_RSA2048", "--key", WslTestHelpers.ToWslPath(keyPem)]);
             Assert.True(exitCode == 0, $"avbtool add_hash_footer failed: {output}");
 
             var result = AvbVerifier.Verify(await File.ReadAllBytesAsync(image, TestContext.Current.CancellationToken));
@@ -56,7 +56,7 @@ public class AvbAvbToolCrossValidationTests
             using var rsa = RSA.Create(2048);
             var privateKey = (Org.BouncyCastle.Crypto.Parameters.RsaKeyParameters)
                 DotNetUtilities.GetRsaKeyPair(rsa).Private;
-            var keyPem = Path.Combine(root, "testkey.pem");
+            var keyPem = Path.Combine(root, "test key.pem");
             await File.WriteAllTextAsync(keyPem, rsa.ExportPkcs8PrivateKeyPem(), TestContext.Current.CancellationToken);
 
             var image = Path.Combine(root, "source.img");
@@ -69,8 +69,8 @@ public class AvbAvbToolCrossValidationTests
             var result = await AvbSigner.AddHashFooterAsync(image, "test", privateKey, signed, TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.ErrorMessage ?? "AvbSigner.AddHashFooterAsync failed");
 
-            var (output, exitCode) = WslTestHelpers.RunWsl(
-                $"avbtool verify_image --image {WslTestHelpers.ToWslPath(signed)}", 120000);
+            var (output, exitCode) = WslTestHelpers.RunAvbTool(
+                ["verify_image", "--image", WslTestHelpers.ToWslPath(signed), "--key", WslTestHelpers.ToWslPath(keyPem)]);
             Assert.True(exitCode == 0, $"avbtool verify_image rejected the managed-signed image: {output}");
         }
         finally
@@ -81,11 +81,10 @@ public class AvbAvbToolCrossValidationTests
 
     private static void SkipUnlessWslAvbToolAvailable(out string root)
     {
-        root = WslTestHelpers.CreateTempDirectory();
         if (!WslTestHelpers.IsWslAvailable()) { Assert.Skip("WSL not available"); }
         if (!WslTestHelpers.IsAlpineAvailable()) { Assert.Skip("Alpine not available"); }
-        WslTestHelpers.EnsureAlpineConfigured();
-        if (!WslTestHelpers.EnsureAvbTool()) { Assert.Skip("avbtool could not be provisioned"); }
+        if (!WslTestHelpers.EnsureAvbTool(out var reason)) { Assert.Skip(reason); }
+        root = WslTestHelpers.CreateTempDirectory();
     }
 
     private static string ExportPkcs8Pem(int keySize)
