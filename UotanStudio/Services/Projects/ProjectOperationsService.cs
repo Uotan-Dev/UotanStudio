@@ -169,10 +169,7 @@ public sealed class ProjectOperationsService
             if (firmware.OpenDocuments is { Count: > 0 } openDocs && WorkspaceVM is not null)
             {
                 var rootDir = ProjectContextService.Instance.RootDirectory ?? Path.GetDirectoryName(path) ?? ".";
-                foreach (var docDto in openDocs)
-                {
-                    await WorkspaceVM.RestoreOpenDocumentAsync(docDto, rootDir);
-                }
+                await Task.WhenAll(openDocs.Select(docDto => WorkspaceVM.RestoreOpenDocumentAsync(docDto, rootDir)));
             }
         }
 
