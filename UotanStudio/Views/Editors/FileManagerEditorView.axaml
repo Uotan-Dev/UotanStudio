@@ -211,9 +211,9 @@
         <ListBox x:Name="FileList" Grid.Row="1" Classes="file-list" Classes.grid-view="{Binding IsGridView}"
                  Margin="4" BorderThickness="0" Background="Transparent"
                  ItemsSource="{Binding CurrentEntries}" SelectedItem="{Binding SelectedEntry, Mode=TwoWay}"
-                 IsEnabled="{Binding !IsLoading}" SelectionMode="Single"
+                 IsEnabled="{Binding !IsLoading}" SelectionMode="Multiple"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                 DoubleTapped="OnFileListDoubleTapped" KeyDown="OnFileListKeyDown" />
+                 DoubleTapped="OnFileListDoubleTapped" KeyDown="OnFileListKeyDown" SelectionChanged="OnFileListSelectionChanged" />
 
         <TextBlock Grid.Row="1" Text="{DynamicResource FileManager_EmptyDirectory}" IsVisible="{Binding IsDirectoryEmpty}"
                    HorizontalAlignment="Center" VerticalAlignment="Center" Margin="12" TextWrapping="Wrap"

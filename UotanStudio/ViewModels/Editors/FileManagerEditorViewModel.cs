@@ -8,6 +8,8 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Formats.Cpio;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Views.Controls;
@@ -99,6 +101,12 @@ public partial class FileManagerEditorViewModel : Document
     /// The selected file-list entry, used for path display and extraction.
     /// </summary>
     [ObservableProperty] private FileManagerEntryViewModel? _selectedEntry;
+
+    /// <summary>
+    /// <para>多选条目集合，由 View 的 SelectionChanged 事件同步。</para>
+    /// Multi-select entry collection, synced by the View's SelectionChanged event.
+    /// </summary>
+    public ObservableCollection<FileManagerEntryViewModel> SelectedEntries { get; } = [];
 
     /// <summary>
     /// <para>当前浏览目录，同时绑定左侧目录树选中项。</para>
@@ -397,6 +405,12 @@ public partial class FileManagerEditorViewModel : Document
         /// F2FS.
         /// </summary>
         F2fs,
+
+        /// <summary>
+        /// <para>CPIO/TAR 归档。</para>
+        /// CPIO/TAR archive.
+        /// </summary>
+        Cpio,
     }
 
     /// <summary>
@@ -471,8 +485,13 @@ public partial class FileManagerEditorViewModel : Document
     /// </summary>
     private async Task ExtractSelectedAsync()
     {
-        var entry = ExtractionEntry;
-        if (entry is null || _parser is null || string.IsNullOrWhiteSpace(FilePath))
+        // 优先使用多选集合；若为空则回退到单选条目。
+        // Prefer the multi-select collection; fall back to the single selected entry.
+        var entries = SelectedEntries.Count > 0
+            ? SelectedEntries.ToList()
+            : SelectedEntry is not null ? [SelectedEntry] : [];
+
+        if (entries.Count == 0 || _parser is null || string.IsNullOrWhiteSpace(FilePath))
         {
             return;
         }
@@ -503,18 +522,26 @@ public partial class FileManagerEditorViewModel : Document
         ErrorMessage = string.Empty;
         try
         {
-            // 提取为流式 IO（逐块复制），后台执行避免阻塞 UI。
-            // Extraction is streaming I/O (copied block by block); run it in the background.
-            await Task.Run(() => ExtractEntry(entry.Path, target)).ConfigureAwait(true);
-            LogService.Instance.Write(LogLevel.Info, "FileManager",
-                $"Extracted '{entry.Path}' from '{FilePath}' to '{target}'.");
+            var paths = entries.Select(e => e.Path).ToList();
+            await Task.Run(() =>
+            {
+                foreach (var path in paths)
+                {
+                    ExtractEntry(path, target);
+                }
+            }).ConfigureAwait(true);
+
+            var summary = entries.Count == 1
+                ? $"Extracted '{paths[0]}' from '{FilePath}' to '{target}'."
+                : $"Extracted {entries.Count} entries from '{FilePath}' to '{target}'.";
+            LogService.Instance.Write(LogLevel.Info, "FileManager", summary);
         }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
             HasError = true;
             LogService.Instance.Write(LogLevel.Error, "FileManager",
-                $"Failed to extract '{entry.Path}' from '{FilePath}': {ex.Message}");
+                $"Failed to extract from '{FilePath}': {ex.Message}");
         }
         finally
         {
@@ -595,6 +622,17 @@ public partial class FileManagerEditorViewModel : Document
             return FilesystemKind.F2fs;
         }
 
+        // CPIO newc 魔数 "070701" 或 "070702"，CPIO bin 魔数 0x71C7（大端）。
+        // CPIO newc magic "070701" or "070702", CPIO bin magic 0x71C7 (big-endian).
+        if (header.Length >= 6)
+        {
+            var magic = System.Text.Encoding.ASCII.GetString(header, 0, 6);
+            if (magic is "070701" or "070702" or "070707")
+            {
+                return FilesystemKind.Cpio;
+            }
+        }
+
         return FilesystemKind.Unknown;
     }
 
@@ -643,6 +681,8 @@ public partial class FileManagerEditorViewModel : Document
                 }
 
                 return LoadF2fs(path, ct);
+            case FilesystemKind.Cpio:
+                return LoadCpio(path, ct);
             default:
                 throw new InvalidDataException(
                     LanguageService.Instance.GetString("FileManager_Unrecognized"));
@@ -798,6 +838,44 @@ public partial class FileManagerEditorViewModel : Document
         return new LoadResult("F2FS", imageSize, parser, flat, tree, ownedSource);
     }
 
+    private static LoadResult LoadCpio(string path, CancellationToken ct)
+    {
+        var reader = new CpioArchiveReader();
+        var entries = new List<FlatEntry>();
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
+
+        foreach (var entry in reader.ReadEntriesStreaming(stream, null, 64L * 1024 * 1024 * 1024, ct))
+        {
+            ct.ThrowIfCancellationRequested();
+            var name = entry.Name?.TrimStart('/') ?? string.Empty;
+            if (string.IsNullOrEmpty(name) || name == "." || name == "TRAILER!!!")
+            {
+                continue;
+            }
+
+            var kind = entry.Metadata.FileType switch
+            {
+                CpioFileType.Directory => FileEntryKind.Directory,
+                CpioFileType.SymbolicLink => FileEntryKind.Symlink,
+                _ => FileEntryKind.File,
+            };
+
+            entries.Add(new FlatEntry("/" + name, entry.Data?.LongLength ?? entry.DataLength, kind));
+        }
+
+        var size = new FileInfo(path).Length;
+        var tree = FileManagerTreeBuilder.Build(entries);
+        // CPIO 不使用 IDisposable 解析器持有；传 null 占位。
+        // CPIO does not hold an IDisposable parser; pass null as placeholder.
+        return new LoadResult("CPIO", size, new DummyDisposable(), entries, tree, null);
+    }
+
+    /// <summary>
+    /// <para>CPIO 归档无需持有的空释放器。</para>
+    /// No-op disposable for CPIO archives that do not hold a persistent parser.
+    /// </summary>
+    private sealed class DummyDisposable : IDisposable { public void Dispose() { } }
+
     /// <summary>
     /// <para>应用后台加载结果到 UI 线程可见属性。</para>
     /// Applies the background load result to the UI-visible properties.
@@ -918,6 +996,7 @@ public partial class FileManagerEditorViewModel : Document
         DirectoryRoots.Clear();
         Entries.Clear();
         SelectedEntry = null;
+        SelectedEntries.Clear();
         FileCount = 0;
         DirectoryCount = 0;
         ImageSize = 0;

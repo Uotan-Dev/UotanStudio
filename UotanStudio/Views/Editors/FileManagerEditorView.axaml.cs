@@ -134,4 +134,25 @@ public partial class FileManagerEditorView : UserControl
             e.Handled = true;
         }
     }
+
+    private void OnFileListSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is not FileManagerEditorViewModel vm)
+        {
+            return;
+        }
+
+        foreach (var item in e.AddedItems.OfType<FileManagerEntryViewModel>())
+        {
+            if (!vm.SelectedEntries.Contains(item))
+            {
+                vm.SelectedEntries.Add(item);
+            }
+        }
+
+        foreach (var item in e.RemovedItems.OfType<FileManagerEntryViewModel>())
+        {
+            vm.SelectedEntries.Remove(item);
+        }
+    }
 }

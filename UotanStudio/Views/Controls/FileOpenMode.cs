@@ -164,6 +164,13 @@ public static class FileOpenMode
             return EditorOpenMode.FileSystem;
         }
 
+        // CPIO/TAR 归档：直接路由到文件管理器编辑器（目录树浏览）。
+        // CPIO/TAR archives: route directly to the file-manager editor (directory-tree browsing).
+        if (IsCpioArchiveExtension(ext))
+        {
+            return EditorOpenMode.FileSystem;
+        }
+
         // 分区表内容探测（LP super 元数据）：仅当文件名/扩展名可能为 super 镜像时才读取内容，
         // 避免对普通文件做多余 I/O；LP 几何魔数（0x616c4467 @4096）优先于固件面板接管 .img/.super。
         // Partition-table content sniffing (LP super metadata): only reads content when the name or
@@ -408,6 +415,21 @@ public static class FileOpenMode
             || ext.Equals(".ext4", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".erofs", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".f2fs", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// <para>是否为 CPIO/TAR 归档扩展名（.cpio/.tar）。</para>
+    /// Whether the extension is a CPIO/TAR archive one (.cpio/.tar).
+    /// </summary>
+    public static bool IsCpioArchiveExtension(string? ext)
+    {
+        if (ext is null)
+        {
+            return false;
+        }
+
+        return ext.Equals(".cpio", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".tar", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
