@@ -1,5 +1,10 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.VisualTree;
+using UotanStudio.Services;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Views.Workspace;
@@ -18,6 +23,77 @@ public partial class ImageView : UserControl
     public ImageView()
     {
         InitializeComponent();
+        DataContextChanged += OnDataContextChanged;
+    }
+
+    private void OnDataContextChanged(object? sender, System.EventArgs e)
+    {
+        if (DataContext is ImageViewModel vm)
+        {
+            vm.ExtractOverwriteRequested -= OnExtractOverwriteRequested;
+            vm.ExtractOverwriteRequested += OnExtractOverwriteRequested;
+        }
+    }
+
+    private async void OnExtractOverwriteRequested(object? sender, (string DirectoryName, TaskCompletionSource<bool> Confirmation) e)
+    {
+        var owner = this.FindAncestorOfType<Window>();
+        if (owner is null)
+        {
+            e.Confirmation.TrySetResult(false);
+            return;
+        }
+
+        var title = LanguageService.Instance.GetString("Image_ExtractOverwriteTitle");
+        var message = string.Format(LanguageService.Instance.GetString("Image_ExtractOverwriteMessage"), e.DirectoryName);
+        var overwrite = LanguageService.Instance.GetString("Image_ExtractOverwrite");
+        var skip = LanguageService.Instance.GetString("Image_ExtractSkip");
+
+        var dialog = new Window
+        {
+            Title = title,
+            Width = 400,
+            Height = 160,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            Content = new StackPanel
+            {
+                Margin = new Thickness(20),
+                Spacing = 16,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Spacing = 8,
+                        Children =
+                        {
+                            new Button { Content = overwrite, Tag = true },
+                            new Button { Content = skip, Tag = false }
+                        }
+                    }
+                }
+            }
+        };
+
+        var result = false;
+        foreach (var btn in ((StackPanel)((StackPanel)dialog.Content!).Children[1]).Children)
+        {
+            if (btn is Button b)
+            {
+                b.Click += (_, _) =>
+                {
+                    result = (bool)(b.Tag ?? false);
+                    dialog.Close();
+                };
+            }
+        }
+
+        await dialog.ShowDialog(owner);
+        e.Confirmation.TrySetResult(result);
     }
 
     /// <summary>

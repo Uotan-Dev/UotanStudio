@@ -45,6 +45,21 @@ internal partial class ImageViewModel : Tool
     private readonly FirmwareService _firmware = FirmwareService.Instance;
 
     /// <summary>
+    /// <para>解包时目标目录已存在，请求用户确认是否覆盖；视图层订阅此事件并弹出对话框，
+    /// 将结果写入 <c>TaskCompletionSource&lt;bool&gt;</c>。</para>
+    /// Raised when the extract target directory already exists; the view subscribes and shows a
+    /// confirmation dialog, writing the result to the <c>TaskCompletionSource&lt;bool&gt;</c>.
+    /// </summary>
+    internal event EventHandler<(string DirectoryName, TaskCompletionSource<bool> Confirmation)>? ExtractOverwriteRequested;
+
+    private async Task<bool> RequestExtractOverwriteAsync(string directoryName)
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        ExtractOverwriteRequested?.Invoke(this, (directoryName, tcs));
+        return await tcs.Task;
+    }
+
+    /// <summary>
     /// <para>获取项目内镜像条目集合，条目路径为相对工程根目录。</para>
     /// Gets the collection of image entries in the project; entry paths are relative to the project root.
     /// </summary>
@@ -640,7 +655,7 @@ internal partial class ImageViewModel : Tool
         {
             var image = selectedImages[i];
             StatusText = $"[{i + 1}/{selectedImages.Count}] Extracting {image.DisplayName}  正在分解 {image.DisplayName}";
-            await ExtractImageAsync(image);
+            await ExtractImageAsync(image, i, selectedImages.Count);
             ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
         }
 
@@ -648,7 +663,7 @@ internal partial class ImageViewModel : Tool
         ProgressPercent = 100;
     }
 
-    private async Task ExtractImageAsync(ImageEntryViewModel image)
+    private async Task ExtractImageAsync(ImageEntryViewModel image, int fileIndex = 0, int fileCount = 1)
     {
         var source = GetSelectedSourcePath(image, "Extract");
         if (source is null)
@@ -671,13 +686,18 @@ internal partial class ImageViewModel : Tool
 
             var outputDir = Path.Combine(subProjectRoot, name);
 
-            // 重名拒绝：目标目录已存在时拒绝操作并记录全局日志。
-            // Duplicate rejection: refuse and log when the target directory already exists.
+            // 目标目录已存在时弹出确认对话框，用户选择覆盖则删除后重建，选择跳过则中止。
+            // When the target directory exists, prompt the user: overwrite deletes and recreates, skip aborts.
             if (Directory.Exists(outputDir))
             {
-                LogService.Instance.Write(LogLevel.Error, "Images", $"Extract aborted: directory \"{name}\" already exists at {outputDir}  解包失败：目录 \"{name}\" 已存在于 {outputDir}");
-                StatusText = $"Extract aborted: directory \"{name}\" already exists  解包失败：目录 \"{name}\" 已存在";
-                return;
+                var overwrite = await RequestExtractOverwriteAsync(name);
+                if (!overwrite)
+                {
+                    LogService.Instance.Write(LogLevel.Info, "Images", $"Extract skipped: directory \"{name}\" already exists  分解跳过：目录 \"{name}\" 已存在");
+                    return;
+                }
+
+                DeleteDirectorySafe(outputDir);
             }
 
             Directory.CreateDirectory(outputDir);
@@ -699,7 +719,9 @@ internal partial class ImageViewModel : Tool
                     {
                         if (p.total > 0)
                         {
-                            ProgressPercent = (double)p.processed / p.total * 100;
+                            // 加权进度：当前文件内部进度按文件在总列表中的占比缩放。
+                            // Weighted progress: per-file internal progress scaled by file's share of the total.
+                            ProgressPercent = ((double)fileIndex + (double)p.processed / p.total) / fileCount * 100;
                         }
                     })),
                 _ => FirmwareOpResult.Fail($"Unsupported image format: {image.Format}  不支持的镜像格式：{image.Format}")
@@ -737,8 +759,8 @@ internal partial class ImageViewModel : Tool
     [RelayCommand]
     private async Task SynthesizeImgAsync()
     {
-        var image = SelectedImage;
-        if (image is null)
+        var selectedImages = GetSelectedImages();
+        if (selectedImages.Count == 0)
         {
             return;
         }
@@ -749,9 +771,22 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
+        ProgressPercent = 0;
+        for (var i = 0; i < selectedImages.Count; i++)
+        {
+            var image = selectedImages[i];
+            StatusText = $"[{i + 1}/{selectedImages.Count}] Synthesizing img: {image.DisplayName}  正在合成 img：{image.DisplayName}";
+            await SynthesizeSingleImgAsync(image);
+            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
+        }
+
+        StatusText = $"Synthesized img: {selectedImages.Count} image(s)  已合成 img：{selectedImages.Count} 个镜像";
+        ProgressPercent = 100;
+    }
+
+    private async Task SynthesizeSingleImgAsync(ImageEntryViewModel image)
+    {
         var name = GetEntryBaseName(image);
-        StatusText = $"Synthesizing boot image: {image.DisplayName}  正在合成 boot 镜像：{image.DisplayName}";
-        ProgressPercent = -1;
         try
         {
             var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
@@ -775,8 +810,6 @@ internal partial class ImageViewModel : Tool
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
-            StatusText = $"Synthesized boot image: {image.DisplayName}  已合成 boot 镜像：{image.DisplayName}";
-            ProgressPercent = 100;
             OperationHistoryService.Instance.Record(
                 $"Synthesize img {image.DisplayName}",
                 new HistoryOperationDto
@@ -804,8 +837,8 @@ internal partial class ImageViewModel : Tool
     [RelayCommand]
     private async Task SynthesizeBrAsync()
     {
-        var image = SelectedImage;
-        if (image is null)
+        var selectedImages = GetSelectedImages();
+        if (selectedImages.Count == 0)
         {
             return;
         }
@@ -816,9 +849,22 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
+        ProgressPercent = 0;
+        for (var i = 0; i < selectedImages.Count; i++)
+        {
+            var image = selectedImages[i];
+            StatusText = $"[{i + 1}/{selectedImages.Count}] Synthesizing CPIO: {image.DisplayName}  正在打包 CPIO：{image.DisplayName}";
+            await SynthesizeSingleBrAsync(image);
+            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
+        }
+
+        StatusText = $"Synthesized CPIO: {selectedImages.Count} image(s)  已打包 CPIO：{selectedImages.Count} 个镜像";
+        ProgressPercent = 100;
+    }
+
+    private async Task SynthesizeSingleBrAsync(ImageEntryViewModel image)
+    {
         var name = GetEntryBaseName(image);
-        StatusText = $"Synthesizing CPIO: {image.DisplayName}  正在打包 CPIO：{image.DisplayName}";
-        ProgressPercent = -1;
         try
         {
             var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
@@ -846,8 +892,6 @@ internal partial class ImageViewModel : Tool
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
-            StatusText = $"Synthesized CPIO: {image.DisplayName}  已打包 CPIO：{image.DisplayName}";
-            ProgressPercent = 100;
             OperationHistoryService.Instance.Record(
                 $"Synthesize br {image.DisplayName}",
                 new HistoryOperationDto
@@ -1117,8 +1161,8 @@ internal partial class ImageViewModel : Tool
     [RelayCommand]
     private async Task SynthesizeDatAsync()
     {
-        var image = SelectedImage;
-        if (image is null)
+        var selectedImages = GetSelectedImages();
+        if (selectedImages.Count == 0)
         {
             return;
         }
@@ -1129,6 +1173,21 @@ internal partial class ImageViewModel : Tool
             return;
         }
 
+        ProgressPercent = 0;
+        for (var i = 0; i < selectedImages.Count; i++)
+        {
+            var image = selectedImages[i];
+            StatusText = $"[{i + 1}/{selectedImages.Count}] Synthesizing DAT: {image.DisplayName}  正在生成 DAT：{image.DisplayName}";
+            await SynthesizeSingleDatAsync(image);
+            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
+        }
+
+        StatusText = $"Synthesized DAT: {selectedImages.Count} image(s)  已生成 DAT：{selectedImages.Count} 个镜像";
+        ProgressPercent = 100;
+    }
+
+    private async Task SynthesizeSingleDatAsync(ImageEntryViewModel image)
+    {
         var source = GetSelectedSourcePath(image, "Synthesize dat");
         if (source is null)
         {
@@ -1136,8 +1195,6 @@ internal partial class ImageViewModel : Tool
         }
 
         var name = GetEntryBaseName(image);
-        StatusText = $"Synthesizing DAT: {image.DisplayName}  正在生成 DAT：{image.DisplayName}";
-        ProgressPercent = -1;
         try
         {
             var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
@@ -1162,8 +1219,6 @@ internal partial class ImageViewModel : Tool
 
             await Task.Run(() => DatWriter.Write(rawSource, datPath, listPath));
             LogService.Instance.Write(LogLevel.Info, "Images", $"Generated {datPath} + {listPath}  已生成 DAT 输出");
-            StatusText = $"Synthesized DAT: {image.DisplayName}  已生成 DAT：{image.DisplayName}";
-            ProgressPercent = 100;
             OperationHistoryService.Instance.Record(
                 $"Synthesize dat {image.DisplayName}",
                 new HistoryOperationDto

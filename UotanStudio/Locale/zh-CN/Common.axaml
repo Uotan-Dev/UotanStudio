@@ -35,6 +35,10 @@
     <x:String x:Key="ImageView_OperationDone">操作完成</x:String>
     <x:String x:Key="ImageView_SelectHint">将此镜像加入批量操作</x:String>
     <x:String x:Key="ImageView_SelectProject">项目</x:String>
+    <x:String x:Key="Image_ExtractOverwriteTitle">目录已存在</x:String>
+    <x:String x:Key="Image_ExtractOverwriteMessage">目录 '{0}' 已存在，是否覆盖？</x:String>
+    <x:String x:Key="Image_ExtractOverwrite">覆盖</x:String>
+    <x:String x:Key="Image_ExtractSkip">跳过</x:String>
 
     <!-- FirmwareInfo actions -->
     <x:String x:Key="FirmwareInfo_Verify">校验</x:String>

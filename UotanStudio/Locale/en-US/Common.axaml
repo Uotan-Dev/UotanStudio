@@ -35,6 +35,10 @@
     <x:String x:Key="ImageView_OperationDone">Operation complete</x:String>
     <x:String x:Key="ImageView_SelectHint">Include this image in batch operations</x:String>
     <x:String x:Key="ImageView_SelectProject">Project</x:String>
+    <x:String x:Key="Image_ExtractOverwriteTitle">Directory Already Exists</x:String>
+    <x:String x:Key="Image_ExtractOverwriteMessage">Directory '{0}' already exists. Overwrite?</x:String>
+    <x:String x:Key="Image_ExtractOverwrite">Overwrite</x:String>
+    <x:String x:Key="Image_ExtractSkip">Skip</x:String>
 
     <!-- FirmwareInfo actions -->
     <x:String x:Key="FirmwareInfo_Verify">Verify</x:String>
