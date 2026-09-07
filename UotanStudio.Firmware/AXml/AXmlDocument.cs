@@ -1,5 +1,7 @@
 ﻿using System.Globalization;
 
+using System.Xml.Linq;
+
 namespace UotanStudio.Firmware.AXml;
 
 public enum AXmlValueType : byte
@@ -24,6 +26,7 @@ public enum AXmlValueType : byte
 
 public sealed class AXmlAttribute
 {
+    internal int? OriginalNameIndex { get; init; }
     public string? Namespace { get; init; }
 
     public string Name { get; init; } = string.Empty;
@@ -91,27 +94,11 @@ public sealed class AXmlAttribute
     private string FormatReference(uint data, IReadOnlyList<uint>? resourceMap)
     {
         if (data == 0) return "@null";
-        if (resourceMap is not null)
-        {
-            var idx = checked((int)data);
-            if (idx >= 0 && idx < resourceMap.Count && resourceMap[idx] != 0)
-            {
-                return $"@0x{resourceMap[idx]:x8}";
-            }
-        }
         return $"@0x{data:x8}";
     }
 
     private string FormatAttribute(uint data, IReadOnlyList<uint>? resourceMap)
     {
-        if (resourceMap is not null)
-        {
-            var idx = checked((int)data);
-            if (idx >= 0 && idx < resourceMap.Count && resourceMap[idx] != 0)
-            {
-                return $"?0x{resourceMap[idx]:x8}";
-            }
-        }
         return $"?0x{data:x8}";
     }
 
@@ -124,22 +111,20 @@ public sealed class AXmlAttribute
 
     private string FormatDimension()
     {
-        var value = (float)unchecked((int)ValueData);
+        var value = AndroidComplexValue.ToFloat(ValueData);
         var unit = DimensionUnit(ValueData & 0x0f);
-        value /= DimensionFactor(ValueData & 0x0f);
         return value.ToString("0.###", CultureInfo.InvariantCulture) + unit;
     }
 
     private string FormatFraction()
     {
-        var value = (float)unchecked((int)ValueData);
+        var value = AndroidComplexValue.ToFloat(ValueData) * 100f;
         var unit = (ValueData & 0x0f) switch
         {
             0 => "%",
             1 => "%p",
             _ => string.Empty
         };
-        value /= 65536f;
         return value.ToString("0.###", CultureInfo.InvariantCulture) + unit;
     }
 
@@ -165,6 +150,21 @@ public sealed class AXmlAttribute
         6 => 65536f,
         _ => 1f
     };
+}
+
+internal static class AndroidComplexValue
+{
+    internal static float ToFloat(uint data)
+    {
+        var mantissa = unchecked((int)(data & 0xffffff00));
+        return mantissa * (((data >> 4) & 3) switch
+        {
+            0 => 1f / 256,
+            1 => 1f / 32768,
+            2 => 1f / 8388608,
+            _ => 1f / 2147483648
+        });
+    }
 }
 
 public sealed class AXmlElement
@@ -209,14 +209,24 @@ public sealed class AXmlDocument
     /// </summary>
     public string ToXml()
     {
-        var sb = new System.Text.StringBuilder();
-        sb.Append("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
-        foreach (var ns in Namespaces)
+        var root = BuildElement(Root);
+        foreach (var ns in Namespaces.GroupBy(n => n.Prefix).Select(g => g.First()))
         {
-            sb.Append("xmlns:").Append(ns.Prefix).Append("=\"").Append(Escape(ns.Uri)).Append("\"\n");
+            if (ns.Prefix == "xml" || ns.Prefix == "xmlns") continue;
+            root.SetAttributeValue(ns.Prefix.Length == 0 ? "xmlns" : XNamespace.Xmlns + ns.Prefix, ns.Uri);
         }
-        AppendElement(sb, this, Root, 0);
-        return sb.ToString();
+        return "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" + root;
+
+        XElement BuildElement(AXmlElement element)
+        {
+            var result = new XElement(XName.Get(element.Name, element.Namespace ?? string.Empty));
+            foreach (var attr in element.Attributes)
+                result.Add(new XAttribute(XName.Get(attr.Name, attr.Namespace ?? string.Empty),
+                    attr.FormatValue(StringPool, ResourceMap)));
+            if (element.Text is not null) result.Add(new XText(element.Text));
+            foreach (var child in element.Children) result.Add(BuildElement(child));
+            return result;
+        }
     }
 
     private static void AppendElement(System.Text.StringBuilder sb, AXmlDocument doc, AXmlElement element, int depth)

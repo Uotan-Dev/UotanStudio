@@ -205,6 +205,7 @@ public static class AXmlParser
             {
                 Namespace = aNs >= 0 ? doc.StringPool.GetString(aNs) : null,
                 Name = aName >= 0 ? doc.StringPool.GetString(aName) : string.Empty,
+                OriginalNameIndex = aName,
                 RawValue = rawIdx >= 0 ? doc.StringPool.GetString(rawIdx) : null,
                 ValueType = (AXmlValueType)valueType,
                 ValueData = valueData

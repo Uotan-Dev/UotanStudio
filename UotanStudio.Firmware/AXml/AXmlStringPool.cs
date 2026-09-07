@@ -11,6 +11,8 @@ public sealed class AXmlStringPool
 
     private readonly List<string> _strings = [];
     private bool _isUtf8 = true;
+    internal uint[] StyleOffsets { get; private set; } = [];
+    internal byte[] StyleData { get; private set; } = [];
 
     public int Count => _strings.Count;
 
@@ -24,31 +26,47 @@ public sealed class AXmlStringPool
     /// </summary>
     public void Parse(byte[] data, int offset, int chunkSize)
     {
+        if (offset < 0 || chunkSize < 28 || offset > data.Length || chunkSize > data.Length - offset)
+            throw new AXmlException("Invalid string pool range.");
         var span = data.AsSpan(offset, chunkSize);
+        var headerSize = BinaryPrimitives.ReadUInt16LittleEndian(span[2..]);
         var stringCount = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[8..]));
         var styleCount = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[12..]));
         var flags = BinaryPrimitives.ReadUInt32LittleEndian(span[16..]);
         var stringsStart = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[20..]));
+        var stylesStart = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[24..]));
+        if (headerSize < 28 || headerSize > chunkSize || stringCount > (chunkSize - headerSize) / 4
+            || styleCount > stringCount || styleCount > (chunkSize - headerSize - stringCount * 4) / 4
+            || stringsStart < headerSize + (stringCount + styleCount) * 4 || stringsStart > chunkSize
+            || (styleCount > 0 && (stylesStart < stringsStart || stylesStart > chunkSize)))
+            throw new AXmlException("Invalid string pool layout.");
         _isUtf8 = (flags & Utf8Flag) != 0;
 
         _strings.Clear();
         _strings.Capacity = stringCount;
 
 
-        var offsetsStart = offset + 28;
+        var offsetsStart = offset + headerSize;
+        var stringsEnd = offset + (styleCount > 0 ? stylesStart : chunkSize);
         for (var i = 0; i < stringCount; i++)
         {
             var strOffset = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offsetsStart + i * 4)));
+            if (strOffset < 0 || strOffset >= stringsEnd - offset - stringsStart)
+                throw new AXmlException("String is outside its pool.");
             var strPos = offset + stringsStart + strOffset;
-            var s = _isUtf8 ? ReadUtf8String(data, strPos) : ReadUtf16String(data, strPos);
+            var s = _isUtf8 ? ReadUtf8String(data, strPos, stringsEnd) : ReadUtf16String(data, strPos, stringsEnd);
             _strings.Add(s);
         }
 
 
-        if (styleCount > 0)
+        StyleOffsets = new uint[styleCount];
+        StyleData = styleCount > 0 ? span[stylesStart..].ToArray() : [];
+        for (var i = 0; i < styleCount; i++)
         {
-            var stylesStart = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[24..]));
-            _ = stylesStart;
+            var styleOffset = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offsetsStart + (stringCount + i) * 4));
+            if (styleOffset != uint.MaxValue && styleOffset >= StyleData.Length)
+                throw new AXmlException("Style is outside its pool.");
+            StyleOffsets[i] = styleOffset;
         }
     }
 
@@ -75,54 +93,55 @@ public sealed class AXmlStringPool
         return _strings.Count - 1;
     }
 
-    private static string ReadUtf8String(byte[] data, int pos)
+    private static string ReadUtf8String(byte[] data, int pos, int end)
     {
 
 
-        var charLen = DecodeLength8(data, ref pos);
-        var byteLen = DecodeLength8(data, ref pos);
-        _ = charLen;
-        var strLen = Math.Min(byteLen, data.Length - pos);
-        var strBytes = data.AsSpan(pos, strLen);
-
-        var nul = strBytes.IndexOf((byte)0);
-        if (nul >= 0) strBytes = strBytes[..nul];
-        return Encoding.UTF8.GetString(strBytes);
+        var charLen = DecodeLength8(data, ref pos, end);
+        var byteLen = DecodeLength8(data, ref pos, end);
+        if (byteLen >= end - pos || data[pos + byteLen] != 0) throw new AXmlException("Truncated UTF-8 string.");
+        var value = Encoding.UTF8.GetString(data, pos, byteLen);
+        if (value.Length != charLen) throw new AXmlException("UTF-8 string length mismatch.");
+        return value;
     }
 
-    private static string ReadUtf16String(byte[] data, int pos)
+    private static string ReadUtf16String(byte[] data, int pos, int end)
     {
 
 
-        var len = DecodeLength16(data, ref pos);
-        var maxUnits = (data.Length - pos) / 2;
-        var unitCount = Math.Min(len, maxUnits);
+        var len = DecodeLength16(data, ref pos, end);
+        if (len < 0 || len >= (end - pos) / 2 || BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos + len * 2)) != 0)
+            throw new AXmlException("Truncated UTF-16 string.");
+        var unitCount = len;
         var sb = new StringBuilder(unitCount);
         for (var i = 0; i < unitCount; i++)
         {
             var unit = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos + i * 2));
-            if (unit == 0) break;
             sb.Append((char)unit);
         }
         return sb.ToString();
     }
 
-    private static int DecodeLength8(byte[] data, ref int pos)
+    private static int DecodeLength8(byte[] data, ref int pos, int end)
     {
+        if (pos >= end) throw new AXmlException("Truncated string length.");
         var b0 = data[pos++];
-        if ((b0 & 0x80) != 0 && pos < data.Length)
+        if ((b0 & 0x80) != 0)
         {
+            if (pos >= end) throw new AXmlException("Truncated string length.");
             return ((b0 & 0x7f) << 8) | data[pos++];
         }
         return b0;
     }
 
-    private static int DecodeLength16(byte[] data, ref int pos)
+    private static int DecodeLength16(byte[] data, ref int pos, int end)
     {
+        if (end - pos < 2) throw new AXmlException("Truncated string length.");
         var b0 = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos));
         pos += 2;
-        if ((b0 & 0x8000) != 0 && pos + 2 <= data.Length)
+        if ((b0 & 0x8000) != 0)
         {
+            if (end - pos < 2) throw new AXmlException("Truncated string length.");
             var lo = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos));
             pos += 2;
             return ((b0 & 0x7fff) << 16) | lo;

@@ -116,7 +116,7 @@ public sealed class AXmlFormatHandler : IFormatHandler
                 Directory.CreateDirectory(directory);
             }
 
-            File.WriteAllBytes(outputPath, bytes);
+            FileExtraction.WriteAtomic(outputPath, stream => stream.Write(bytes));
             return Task.FromResult(FirmwareOpResult.Ok($"Rebuilt AXML written to {outputPath}", [outputPath]));
         }
         catch (OperationCanceledException)
@@ -129,7 +129,11 @@ public sealed class AXmlFormatHandler : IFormatHandler
         }
     }
 
-    private static AXmlDocument Load(string filePath) => AXmlParser.Parse(File.ReadAllBytes(filePath));
+    private static AXmlDocument Load(string filePath)
+    {
+        using var stream = File.OpenRead(filePath);
+        return AXmlParser.Parse(AndroidMetadataReader.Read(stream));
+    }
 
     private static string Describe(AXmlDocument doc)
     {

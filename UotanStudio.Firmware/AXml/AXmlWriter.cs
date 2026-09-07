@@ -25,7 +25,9 @@ public static class AXmlWriter
         if (doc.Root is null) throw new AXmlException("AXML document has no root element");
 
 
-        var pool = new List<string>();
+        // Existing indices also address typed string values and the resource map.
+        var pool = Enumerable.Range(0, doc.StringPool.Count)
+            .Select(doc.StringPool.GetString).ToList();
         int Intern(string s)
         {
             for (var i = 0; i < pool.Count; i++)
@@ -71,7 +73,7 @@ public static class AXmlWriter
 
         var poolHeaderSize = 28;
         var stringOffsetsStart = poolHeaderSize;
-        var stringsStart = stringOffsetsStart + pool.Count * 4;
+        var stringsStart = stringOffsetsStart + (pool.Count + doc.StringPool.StyleOffsets.Length) * 4;
         var stringOffsets = new int[pool.Count];
         var stringBytes = new byte[pool.Count][];
         var poolDataSize = stringsStart;
@@ -90,12 +92,9 @@ public static class AXmlWriter
         var namespaceCloseSize = doc.Namespaces.Count > 0 ? doc.Namespaces.Count * 24 : 0;
 
 
-        var treeSize = 0;
-        foreach (var el in doc.Root.Children) treeSize += ElementTreeSize(el);
-        treeSize += 16 + 20 + doc.Root.Attributes.Count * 20;
-        treeSize += 24;
+        var treeSize = ElementTreeSize(doc.Root);
 
-        var poolSize = poolHeaderSize + pool.Count * 4 + (poolDataSize - stringsStart);
+        var poolSize = poolDataSize + doc.StringPool.StyleData.Length;
         var totalSize = 8 + poolSize + resourceMapSize + namespaceOpenSize + treeSize + namespaceCloseSize;
 
 
@@ -108,10 +107,10 @@ public static class AXmlWriter
 
         WriteChunkHeader(buffer, ref pos, ResStringPoolType, (ushort)poolHeaderSize, poolSize);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)pool.Count);
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), 0u);
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), (uint)doc.StringPool.StyleOffsets.Length);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), 0x100u);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)stringsStart);
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), 0u);
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), doc.StringPool.StyleOffsets.Length == 0 ? 0 : (uint)poolDataSize);
 
 
         pos += 20;
@@ -120,11 +119,18 @@ public static class AXmlWriter
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)stringOffsets[i]);
             pos += 4;
         }
+        foreach (var styleOffset in doc.StringPool.StyleOffsets)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), styleOffset);
+            pos += 4;
+        }
         for (var i = 0; i < pool.Count; i++)
         {
             stringBytes[i].CopyTo(buffer, pos);
             pos += stringBytes[i].Length;
         }
+        doc.StringPool.StyleData.CopyTo(buffer, pos);
+        pos += doc.StringPool.StyleData.Length;
 
 
         if (hasResourceMap)
@@ -149,12 +155,7 @@ public static class AXmlWriter
         }
 
 
-        WriteStartElement(buffer, ref pos, doc.Root, pool, 1);
-        foreach (var child in doc.Root.Children)
-        {
-            WriteElementTree(buffer, ref pos, child, pool, 1);
-        }
-        WriteEndElement(buffer, ref pos, doc.Root, pool, 1);
+        WriteElementTree(buffer, ref pos, doc.Root, pool, 0);
 
 
         foreach (var ns in doc.Namespaces)
@@ -192,7 +193,9 @@ public static class AXmlWriter
         foreach (var attr in el.Attributes)
         {
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)PoolIndex(pool, attr.Namespace));
-            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), (uint)PoolIndex(pool, attr.Name));
+            var nameIndex = attr.OriginalNameIndex is int original && original >= 0
+                && original < pool.Count && pool[original] == attr.Name ? original : PoolIndex(pool, attr.Name);
+            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), (uint)nameIndex);
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8),
                 attr.RawValue is null ? NoIndex : (uint)PoolIndex(pool, attr.RawValue));
             BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 12), 8);
