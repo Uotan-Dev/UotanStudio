@@ -43,12 +43,7 @@ public static class ApkParser
         var manifestEntry = zip.GetEntry("AndroidManifest.xml");
         if (manifestEntry is not null)
         {
-            using var ms = new MemoryStream();
-            using (var entryStream = manifestEntry.Open())
-            {
-                entryStream.CopyTo(ms);
-            }
-            var doc = AXmlParser.Parse(ms.ToArray());
+            var doc = AXmlParser.Parse(ReadMetadata(manifestEntry, 16 * 1024 * 1024));
             ExtractManifest(doc, info);
         }
 
@@ -56,12 +51,7 @@ public static class ApkParser
         var arscEntry = zip.GetEntry("resources.arsc");
         if (arscEntry is not null)
         {
-            using var ms = new MemoryStream();
-            using (var entryStream = arscEntry.Open())
-            {
-                entryStream.CopyTo(ms);
-            }
-            var table = ArscParser.Parse(ms.ToArray());
+            var table = ArscParser.Parse(ReadMetadata(arscEntry, AndroidMetadataReader.MaximumBytes));
             info.IconPath ??= ResolveIconPath(table, zip, info.IconReference);
         }
 
@@ -71,10 +61,7 @@ public static class ApkParser
             var iconEntry = zip.GetEntry(info.IconPath);
             if (iconEntry is not null)
             {
-                using var iconStream = iconEntry.Open();
-                using var iconMs = new MemoryStream();
-                iconStream.CopyTo(iconMs);
-                info.IconBytes = iconMs.ToArray();
+                info.IconBytes = ReadMetadata(iconEntry, 16 * 1024 * 1024);
             }
         }
 
@@ -210,7 +197,7 @@ public static class ApkParser
     private static string? ResolveXmlIconPath(ResourceTable table, ZipArchive zip, string xmlPath, HashSet<string>? visited = null)
     {
         visited ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (!visited.Add(xmlPath))
+        if (visited.Count >= 64 || !visited.Add(xmlPath))
         {
             return null;
         }
@@ -221,13 +208,7 @@ public static class ApkParser
             return null;
         }
 
-        byte[] bytes;
-        using (var ms = new MemoryStream())
-        {
-            using var entryStream = entry.Open();
-            entryStream.CopyTo(ms);
-            bytes = ms.ToArray();
-        }
+        var bytes = ReadMetadata(entry, 16 * 1024 * 1024);
 
 
         if (bytes.Length < 4 || bytes[0] != 0x03)
@@ -312,8 +293,10 @@ public static class ApkParser
     /// Locates an entry by resource ID (0xPPTTEEEE) in ARSC and returns its string value; references are resolved one level.
     /// <para>按资源 ID 在 ARSC 中定位条目并返回其字符串值；引用型条目递归解析一层。</para>
     /// </summary>
-    private static string? LookupEntryPath(ResourceTable table, uint resId)
+    private static string? LookupEntryPath(ResourceTable table, uint resId, HashSet<uint>? visited = null)
     {
+        visited ??= [];
+        if (visited.Count >= 64 || !visited.Add(resId)) return null;
         var pkgId = (byte)(resId >> 24);
         var typeId = (byte)((resId >> 16) & 0xff);
         var entryIndex = (int)(resId & 0xffff);
@@ -327,7 +310,7 @@ public static class ApkParser
 
             foreach (var type in pkg.Types)
             {
-                if (type.Id != typeId)
+                if (type.Id + pkg.TypeIdOffset != typeId)
                 {
                     continue;
                 }
@@ -348,7 +331,7 @@ public static class ApkParser
                 if (value.Type is ResValueType.Reference or ResValueType.DynamicReference
                     && value.Data != 0 && value.Data != resId)
                 {
-                    return LookupEntryPath(table, value.Data);
+                    return LookupEntryPath(table, value.Data, visited);
                 }
             }
         }
@@ -395,6 +378,14 @@ public static class ApkParser
             }
         }
         return fallback;
+    }
+
+    private static byte[] ReadMetadata(ZipArchiveEntry entry, int maximumBytes)
+    {
+        if (entry.Length < 0 || entry.Length > maximumBytes)
+            throw new InvalidDataException($"APK entry '{entry.FullName}' exceeds the {maximumBytes}-byte metadata limit.");
+        using var stream = entry.Open();
+        return AndroidMetadataReader.Read(stream, maximumBytes, entry.Length);
     }
 
     private static long ParseLong(string? text)
