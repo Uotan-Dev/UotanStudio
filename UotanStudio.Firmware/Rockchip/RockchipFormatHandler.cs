@@ -6,7 +6,7 @@ public sealed class RockchipFormatHandler : IFormatHandler
 {
     public string FormatName => "Rockchip RKAF/RKFW Firmware";
 
-    public IReadOnlyList<string> FileExtensions => ["rkfw"];
+    public IReadOnlyList<string> FileExtensions => ["rkfw", "rkaf"];
 
     /// <summary>
     /// Determines whether the file matches this format.
@@ -49,6 +49,7 @@ public sealed class RockchipFormatHandler : IFormatHandler
                 entries: [.. entries.Select(static e => e.Name)],
                 metadata: new Dictionary<string, string> { ["FileCount"] = entries.Count.ToString() }));
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
@@ -63,9 +64,11 @@ public sealed class RockchipFormatHandler : IFormatHandler
     {
         try
         {
-            var count = RockchipExtractor.Extract(filePath, outputDirectory, ToProgress(options?.Progress));
+            var count = RockchipExtractor.Extract(filePath, outputDirectory, ToProgress(options?.Progress),
+                options?.Overwrite ?? true, cancellationToken);
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} entries to {outputDirectory}"));
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
