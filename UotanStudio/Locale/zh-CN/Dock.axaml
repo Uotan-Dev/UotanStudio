@@ -7,6 +7,7 @@
     <x:String x:Key="Dock_Documents">文档</x:String>
     <x:String x:Key="Dock_Properties_Name">属性名称</x:String>
     <x:String x:Key="Dock_Properties_Value">值</x:String>
+    <x:String x:Key="Dock_Properties_FileName">文件名</x:String>
     <x:String x:Key="Dock_Properties_ImageName">镜像名称</x:String>
     <x:String x:Key="Dock_Properties_ImageSize">镜像大小</x:String>
     <x:String x:Key="Dock_Properties_ImageType">镜像类型</x:String>
