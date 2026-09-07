@@ -44,10 +44,10 @@ internal sealed record Ext4Inode
     public bool HasInlineData => (Flags & FlagInlineData) != 0;
 
     /// <summary>
-    /// Returns the inline data capacity for this inode: i_block (60 bytes) + extra inode space after offset128 (only for regular files with EXT4_INLINE_DATA_FL).
-    /// <para>返回此 inode 的内联数据容量：i_block（60字节）+ 偏移128之后的额外 inode 空间。</para>
+    /// Returns the inline payload capacity including the system.data value.
+    /// <para>返回包含 system.data 属性值的内联载荷容量。</para>
     /// </summary>
-    public int InlineDataCapacity(int inodeSize) => 60 + Math.Max(0, inodeSize - 128);
+    public int InlineDataCapacity(int inodeSize) => InlineData.Length;
 
     public byte[] InlineData { get; init; } = [];
 
@@ -79,13 +79,14 @@ internal sealed record Ext4Inode
         if (hasInline)
         {
 
-            var extraSize = Math.Max(0, inodeSize - 128);
-            inlineData = new byte[60 + extraSize];
+            var value = FindInlineDataValue(data[..inodeSize]);
+            inlineData = new byte[60 + value.Length];
             data[40..100].CopyTo(inlineData);
-            if (extraSize > 0)
-            {
-                data[128..inodeSize].CopyTo(inlineData.AsSpan(60));
-            }
+            value.CopyTo(inlineData.AsSpan(60));
+            var mode = BinaryPrimitives.ReadUInt16LittleEndian(data);
+            var fileSize = ((ulong)BinaryPrimitives.ReadUInt32LittleEndian(data[108..]) << 32) | BinaryPrimitives.ReadUInt32LittleEndian(data[4..]);
+            if ((mode & ModeFormatMask) != ModeDirectory && fileSize > (ulong)inlineData.Length)
+                throw new InvalidDataException("EXT4 inline file size exceeds i_block and system.data.");
         }
 
         return new Ext4Inode
@@ -104,6 +105,34 @@ internal sealed record Ext4Inode
             InlineData = inlineData,
             FileAcl = ReadFileAcl(data, inodeSize),
         };
+    }
+
+    private static ReadOnlySpan<byte> FindInlineDataValue(ReadOnlySpan<byte> inode)
+    {
+        if (inode.Length < 132) throw new InvalidDataException("EXT4 inline data requires inode xattrs.");
+        var extra = BinaryPrimitives.ReadUInt16LittleEndian(inode[128..]);
+        var header = 128 + extra;
+        if (header > inode.Length - 4 || BinaryPrimitives.ReadUInt32LittleEndian(inode[header..]) != 0xEA020000)
+            throw new InvalidDataException("EXT4 inline data has no inode xattr header.");
+        var first = header + 4;
+        for (var pos = first; pos <= inode.Length - 16;)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(inode[pos..]) == 0) break;
+            var nameLength = inode[pos];
+            var entrySize = (16 + nameLength + 3) & ~3;
+            if (entrySize > inode.Length - pos) throw new InvalidDataException("Truncated EXT4 inline xattr entry.");
+            if (inode[pos + 1] == 7 && inode.Slice(pos + 16, nameLength).SequenceEqual("data"u8))
+            {
+                var valueOffset = first + BinaryPrimitives.ReadUInt16LittleEndian(inode[(pos + 2)..]);
+                var valueInode = BinaryPrimitives.ReadUInt32LittleEndian(inode[(pos + 4)..]);
+                var valueSize = BinaryPrimitives.ReadUInt32LittleEndian(inode[(pos + 8)..]);
+                if (valueInode != 0 || valueOffset > inode.Length || valueSize > inode.Length - valueOffset)
+                    throw new InvalidDataException("EXT4 system.data exceeds the inode bounds.");
+                return inode.Slice(valueOffset, (int)valueSize);
+            }
+            pos += entrySize;
+        }
+        throw new InvalidDataException("EXT4 inline data has no system.data xattr.");
     }
 
     /// <summary>

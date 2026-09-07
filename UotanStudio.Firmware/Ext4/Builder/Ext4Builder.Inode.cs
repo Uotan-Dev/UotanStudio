@@ -102,8 +102,11 @@ public sealed partial class Ext4Builder
             flags = FlagInlineData;
 
             var fi = new FileInfo(node.FullPath);
-            var maxLen = 60 + (inodeSize > 128 ? inodeSize - 128 : 0);
-            var readLen = (int)Math.Min(fi.Length, maxLen);
+            const int xattrEntry = 128 + Ext4ExtraIsize + 4;
+            var maxLen = 60 + Math.Max(0, inodeSize - xattrEntry - 24);
+            if (fi.Length > maxLen || inodeSize < xattrEntry + 24)
+                throw new InvalidDataException("EXT4 inline data does not fit its system.data xattr.");
+            var readLen = checked((int)fi.Length);
             var content = new byte[readLen];
             using (var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
@@ -114,11 +117,16 @@ public sealed partial class Ext4Builder
             {
                 content.AsSpan(0, iBlockLen).CopyTo(inode.AsSpan(40));
             }
-            if (content.Length > 60 && inodeSize > 128)
-            {
-                var extraLen = Math.Min(content.Length - 60, inodeSize - 128);
-                content.AsSpan(60, extraLen).CopyTo(inode.AsSpan(128));
-            }
+            WriteU16(inode, 128, Ext4ExtraIsize);
+            WriteU32(inode, xattrEntry - 4, 0xEA020000);
+            inode[xattrEntry] = 4;
+            inode[xattrEntry + 1] = 7;
+            "data"u8.CopyTo(inode.AsSpan(xattrEntry + 16));
+            var extraLen = Math.Max(0, content.Length - 60);
+            var valueOffset = (inodeSize - extraLen) & ~3;
+            WriteU16(inode, xattrEntry + 2, checked((ushort)(valueOffset - xattrEntry)));
+            WriteU32(inode, xattrEntry + 8, (uint)extraLen);
+            if (extraLen > 0) content.AsSpan(60).CopyTo(inode.AsSpan(valueOffset));
         }
         else
         {
@@ -218,7 +226,7 @@ public sealed partial class Ext4Builder
     /// Writes inline extended attributes into the inode extra space: ibody xattr header, entries, and values.
     /// <para>将内联 xattr 写入 inode 额外空间：ibody xattr 头 + 条目 + 值。</para>
     /// </summary>
-    private static void WriteInodeXattrs(byte[] inode, int inodeSize, Dictionary<string, byte[]> xattrs)
+    internal static void WriteInodeXattrs(byte[] inode, int inodeSize, Dictionary<string, byte[]> xattrs)
     {
 
 
@@ -252,8 +260,7 @@ public sealed partial class Ext4Builder
         {
             var nameLen = Encoding.UTF8.GetByteCount(name);
             entrySectionSize += (16 + nameLen + 3) & ~3;
-            entrySectionSize += (value.Length + 3) & ~3;
-            totalValueSize += value.Length;
+            totalValueSize += (value.Length + 3L) & ~3L;
         }
 
         if (entrySectionSize + totalValueSize > available)
@@ -278,9 +285,11 @@ public sealed partial class Ext4Builder
             inode[pos] = (byte)nameBytes.Length;
             inode[pos + 1] = nameIndex;
             WriteU16(inode, pos + 2, (ushort)valueOff);
-            WriteU32(inode, pos + 4, (uint)value.Length);
-            WriteU32(inode, pos + 8, XattrEntryHash(nameBytes, value));
-            nameBytes.CopyTo(inode.AsSpan(pos + 12));
+            WriteU32(inode, pos + 4, 0);
+            WriteU32(inode, pos + 8, (uint)value.Length);
+            // Kernel ibody attributes keep e_hash zero unless the value uses an EA inode.
+            WriteU32(inode, pos + 12, 0);
+            nameBytes.CopyTo(inode.AsSpan(pos + 16));
             var entrySize = (16 + nameBytes.Length + 3) & ~3;
             pos += entrySize;
             valueOff += valuePadded;
@@ -299,11 +308,17 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// Maps a full xattr name to (namespace index, short name) per e2fsprogs ext2_xattr.h: user.→1, trusted.→4, security.→6, system.→7 (system limited to the two ACL names).
-    /// <para>把完整 xattr 属性名映射为 (命名空间索引, 短名)，对照 e2fsprogs ext2_xattr.h： user.→1、trusted.→4、security.→6、system.→7（system 仅限两个 ACL 名）。</para>
+    /// Maps user, trusted, security and POSIX ACL xattrs to their disk namespaces.
+    /// <para>将 user、trusted、security 及 POSIX ACL 属性映射到磁盘命名空间。</para>
     /// </summary>
     private static bool TryMapXattrName(string fullName, out byte nameIndex, out string shortName)
     {
+        if (fullName is "system.posix_acl_access" or "system.posix_acl_default")
+        {
+            nameIndex = fullName == "system.posix_acl_access" ? (byte)2 : (byte)3;
+            shortName = string.Empty;
+            return true;
+        }
         (string Prefix, byte Index)[] namespaces =
         [
             ("user.", 1),
@@ -322,7 +337,7 @@ public sealed partial class Ext4Builder
                 }
 
 
-                if (index == 7 && rest is not ("posix_acl_access" or "posix_acl_default"))
+                if (index == 7)
                 {
                     continue;
                 }
@@ -338,29 +353,4 @@ public sealed partial class Ext4Builder
         return false;
     }
 
-    /// <summary>
-    /// Computes a single xattr entry's e_hash (kernel fs/ext4/xattr.c ext4_xattr_hash_entry): the name is fed byte-wise (signed char), then the value in LE32 words followed by any trailing bytes.
-    /// <para>计算单个 xattr 条目的 e_hash（内核 fs/ext4/xattr.c ext4_xattr_hash_entry）： 名字按（有符号）字节续算，随后值按 LE32 字、尾随 size % 4 字节续算。</para>
-    /// </summary>
-    private static uint XattrEntryHash(byte[] name, byte[] value)
-    {
-        uint hash = 0;
-        foreach (var b in name)
-        {
-            hash = (hash << 5) ^ (hash >> 27) ^ (uint)(sbyte)b;
-        }
-
-        var words = value.Length / 4;
-        for (var i = 0; i < words; i++)
-        {
-            hash = (hash << 5) ^ (hash >> 27) ^ System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(value.AsSpan(i * 4, 4));
-        }
-
-        for (var i = words * 4; i < value.Length; i++)
-        {
-            hash = (hash << 5) ^ (hash >> 27) ^ (uint)(sbyte)value[i];
-        }
-
-        return hash;
-    }
 }

@@ -39,8 +39,8 @@ public sealed class Ext4Parser : IDisposable
         "trusted.",
         "",
         "security.",
-        "",
         "system.",
+        "system.richacl",
     ];
 
     private readonly Stream _stream;
@@ -106,9 +106,9 @@ public sealed class Ext4Parser : IDisposable
         }
 
 
-        const uint supportedIncompat = 0x0001  | 0x0002  | 0x0004
-            | 0x0040  | 0x0080  | 0x0200  | 0x0400
-            | 0x2000  | 0x4000  | 0x8000  | 0x10000 ;
+        const uint supportedIncompat = 0x0001 | 0x0002 | 0x0004
+            | 0x0040 | 0x0080 | 0x0200 | 0x0400
+            | 0x2000 | 0x4000 | 0x8000 | 0x10000;
 
         var unsupportedIncompat = _superblock.FeatureIncompat & ~supportedIncompat;
         if (unsupportedIncompat != 0)
@@ -250,7 +250,7 @@ public sealed class Ext4Parser : IDisposable
         var processedCount = 0;
         foreach (var entry in entries)
         {
-            var targetPath = Path.Combine(outputDirectory, entry.Path);
+            var targetPath = Common.FileExtraction.ResolvePath(outputDirectory, entry.Path);
             if (entry.Kind == Ext4EntryKind.Directory)
             {
                 Directory.CreateDirectory(targetPath);
@@ -280,7 +280,7 @@ public sealed class Ext4Parser : IDisposable
                     }
                     catch
                     {
-                        System.IO.File.WriteAllText(targetPath, entry.SymlinkTarget ?? string.Empty);
+                        Common.FileExtraction.WriteAtomic(targetPath, output => output.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)), overwrite);
                     }
                 }
 
@@ -296,10 +296,7 @@ public sealed class Ext4Parser : IDisposable
                 continue;
             }
 
-            using (var output = File.Create(targetPath))
-            {
-                ReadFile(entry.Path, output);
-            }
+            Common.FileExtraction.WriteAtomic(targetPath, output => ReadFile(entry.Path, output), overwrite);
 
             processedCount++;
             progress?.Report((processedCount, totalCount));
@@ -344,16 +341,21 @@ public sealed class Ext4Parser : IDisposable
         }
 
         var inode = ReadInode(dirInode);
-        var blockCount = (uint)((inode.Size + _blockSize - 1) / _blockSize);
+        var blockCount = inode.HasInlineData ? 2u : (uint)((inode.Size + _blockSize - 1) / _blockSize);
         for (var logical = 0u; logical < blockCount; logical++)
         {
-            var physical = MapBlock(inode, logical);
-            if (physical is null)
+            byte[] block;
+            if (inode.HasInlineData)
             {
-                continue;
+                // Inline directories have a parent inode followed by two independent dirent regions.
+                block = logical == 0 ? inode.InlineData.AsSpan(4, 56).ToArray() : inode.InlineData.AsSpan(60).ToArray();
             }
-
-            var block = ReadBlock((ulong)physical);
+            else
+            {
+                var physical = MapBlock(inode, logical);
+                if (physical is null) continue;
+                block = ReadBlock((ulong)physical);
+            }
             foreach (var entry in Ext4DirectoryEntry.Enumerate(block))
             {
                 if (entry.Inode == 0 || entry.Name.Length == 0)
@@ -430,32 +432,33 @@ public sealed class Ext4Parser : IDisposable
 
 
         var pos = xattrStart + 4;
-        while (pos + 12 <= inodeSize)
+        while (pos + 16 <= inodeSize)
         {
             var nameLen = inodeRaw[pos];
-            if (nameLen == 0)
+            if (BinaryPrimitives.ReadUInt32LittleEndian(inodeRaw.AsSpan(pos)) == 0)
             {
                 break;
             }
 
             var valueOffs = BinaryPrimitives.ReadUInt16LittleEndian(inodeRaw.AsSpan(pos + 2, 2));
-            var valueSize = BinaryPrimitives.ReadUInt32LittleEndian(inodeRaw.AsSpan(pos + 4, 4));
-            var nameStart = pos + 12;
+            var valueInode = BinaryPrimitives.ReadUInt32LittleEndian(inodeRaw.AsSpan(pos + 4, 4));
+            var valueSize = BinaryPrimitives.ReadUInt32LittleEndian(inodeRaw.AsSpan(pos + 8, 4));
+            var nameStart = pos + 16;
             var nameEnd = nameStart + nameLen;
             if (nameEnd > inodeSize)
             {
                 break;
             }
 
-            var name = Encoding.UTF8.GetString(inodeRaw, nameStart, nameLen);
-            var absValueOffset = xattrStart + valueOffs;
-            if (absValueOffset >= xattrStart && absValueOffset + (int)valueSize <= inodeSize)
+            var name = ResolveXattrName(inodeRaw[pos + 1], Encoding.UTF8.GetString(inodeRaw, nameStart, nameLen));
+            var absValueOffset = xattrStart + 4 + valueOffs;
+            if (valueInode == 0 && absValueOffset <= inodeSize && valueSize <= inodeSize - absValueOffset)
             {
                 result[name] = inodeRaw.AsSpan(absValueOffset, (int)valueSize).ToArray();
             }
 
 
-            pos += (12 + nameLen + 3) & ~3;
+            pos += (16 + nameLen + 3) & ~3;
         }
 
         return result.Count > 0 ? result : null;
