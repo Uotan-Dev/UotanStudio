@@ -241,6 +241,21 @@ public sealed partial class ErofsParser
 
         var interlaced = (advise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0;
 
+        // 预读紧凑索引表：同一 inode 的所有 LoadLcluster 调用复用缓存，避免 O(N×H) 次重复磁盘 I/O。
+        // Pre-read compact index table: all LoadLcluster calls for the same inode reuse the cache,
+        // avoiding O(N×H) repeated disk I/O.
+        byte[]? cachedIndex = null;
+        if (inode.DataLayout == ErofsInode.DataLayoutCompactIndexes)
+        {
+            var ebase = headerOffset + ZErofsMapHeader.Size;
+            var indexLength = checked((long)totalIdx * 4 + 64);
+            if (indexLength <= MaxMetadataComponentSize)
+                cachedIndex = ReadBytes(ebase, checked((int)Math.Min(indexLength, _imageSize - ebase)), "compact index table");
+        }
+
+        // 一次性预扫描全部 lcluster，建立 head → nextHead 映射，消除内层 while(true) 线性搜索。
+        // Pre-scan all lclusters once to build head → nextHead mapping, eliminating the inner while(true) linear search.
+        var headMap = PreScanLclusterHeads(nid, inode, headerOffset, advise, lclusterBits, totalIdx, cachedIndex);
 
         var compressed = ArrayPool<byte>.Shared.Rent(_blockSize * 2);
         var decoded = ArrayPool<byte>.Shared.Rent(Math.Max(lclusterSize, _blockSize));
@@ -249,7 +264,7 @@ public sealed partial class ErofsParser
             long lcn = 0;
             while (lcn < totalIdx)
             {
-                var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out var ebase, out var compacted4bInitial, out var compacted2b);
+                var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out var ebase, out var compacted4bInitial, out var compacted2b, cachedIndex);
                 if (lc.Type == LclusterTypeNonHead)
                 {
 
@@ -267,24 +282,21 @@ public sealed partial class ErofsParser
                 }
 
 
-                var nextLcn = lcn + 1;
+                var nextLcn = headMap[lcn];
                 long nextMLa;
-                while (true)
+                if (nextLcn < 0)
                 {
-                    if (nextLcn >= totalIdx)
-                    {
-                        nextMLa = (long)inode.Size;
-                        break;
-                    }
-
-                    var t2 = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, nextLcn, out _, out _, out _);
-                    if (t2.Type != LclusterTypeNonHead)
-                    {
-                        nextMLa = nextLcn * lclusterSize + t2.ClusterOfs;
-                        break;
-                    }
-
-                    nextLcn++;
+                    nextMLa = (long)inode.Size;
+                }
+                else if (nextLcn >= totalIdx)
+                {
+                    nextMLa = (long)inode.Size;
+                    nextLcn = totalIdx;
+                }
+                else
+                {
+                    var t2 = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, nextLcn, out _, out _, out _, cachedIndex);
+                    nextMLa = nextLcn * lclusterSize + t2.ClusterOfs;
                 }
 
                 var llen = Math.Min(nextMLa, (long)inode.Size) - mLa;
@@ -375,7 +387,7 @@ public sealed partial class ErofsParser
                 {
 
 
-                    var next = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn + 1, out _, out _, out _);
+                    var next = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn + 1, out _, out _, out _, cachedIndex);
                     if (next.Type != LclusterTypeNonHead)
                     {
 
@@ -463,6 +475,41 @@ public sealed partial class ErofsParser
             ArrayPool<byte>.Shared.Return(compressed);
             ArrayPool<byte>.Shared.Return(decoded);
         }
+    }
+
+    /// <summary>
+    /// One-pass pre-scan of all lcluster entries for a compressed inode: builds a head → nextHead
+    /// index array so the main decompression loop can jump directly instead of linearly scanning.
+    /// <para>一次性预扫描压缩 inode 的全部 lcluster 条目，建立 head → nextHead 索引数组，
+    /// 使主解压循环可直接跳转而无需线性搜索。</para>
+    /// </summary>
+    private long[] PreScanLclusterHeads(
+        ulong nid,
+        ErofsInode inode,
+        long headerOffset,
+        ushort advise,
+        int lclusterBits,
+        int totalIdx,
+        byte[]? cachedIndex)
+    {
+        var heads = new long[totalIdx];
+        Array.Fill(heads, -1L);
+        long lastHead = -1;
+        for (long i = 0; i < totalIdx; i++)
+        {
+            var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, i,
+                out _, out _, out _, cachedIndex);
+            if (lc.Type != LclusterTypeNonHead)
+            {
+                if (lastHead >= 0)
+                    heads[lastHead] = i;
+                lastHead = i;
+            }
+        }
+
+        if (lastHead >= 0)
+            heads[lastHead] = totalIdx;
+        return heads;
     }
 
     private static void WriteZeroes(Stream output, long count)

@@ -20,6 +20,25 @@ public sealed partial class ErofsParser
         out long ebase,
         out int compacted4bInitial,
         out int compacted2b)
+        => LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out ebase, out compacted4bInitial, out compacted2b, cachedIndex: null);
+
+    /// <summary>
+    /// Loads a logical cluster entry from compact or full indexes, with an optional pre-read
+    /// compact index cache to avoid repeated disk I/O for the same inode.
+    /// <para>从紧凑或完整索引加载逻辑簇条目，支持传入预读的紧凑索引缓存以避免同一 inode 的重复磁盘 I/O。</para>
+    /// </summary>
+    private LclusterEntry LoadLcluster(
+        ulong nid,
+        ErofsInode inode,
+        long headerOffset,
+        ushort advise,
+        int lclusterBits,
+        int totalIdx,
+        long lcn,
+        out long ebase,
+        out int compacted4bInitial,
+        out int compacted2b,
+        byte[]? cachedIndex)
     {
 
         ebase = headerOffset + ZErofsMapHeader.Size;
@@ -32,7 +51,7 @@ public sealed partial class ErofsParser
                 compacted2b = (totalIdx - compacted4bInitial) / 16 * 16;
             }
 
-            return LoadCompactLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, compacted4bInitial, compacted2b, lcn);
+            return LoadCompactLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, compacted4bInitial, compacted2b, lcn, cachedIndex);
         }
 
         compacted4bInitial = 0;
@@ -53,7 +72,8 @@ public sealed partial class ErofsParser
         int totalIdx,
         int compacted4bInitial,
         int compacted2b,
-        long lcn)
+        long lcn,
+        byte[]? cachedIndex = null)
     {
         var bigPcluster = (advise & (ZErofsMapHeader.AdviseBigPcluster1 | ZErofsMapHeader.AdviseBigPcluster2)) != 0;
         var amortizedShift = 2;
@@ -101,14 +121,23 @@ public sealed partial class ErofsParser
         }
 
         var ebase = headerOffset + ZErofsMapHeader.Size;
-        var indexLength = checked((long)totalIdx * 4 + 64);
-        if (indexLength > MaxMetadataComponentSize)
+        byte[] index;
+        if (cachedIndex is not null)
         {
-            throw new InvalidDataException(
-                $"Compact index table size {indexLength} exceeds the limit of {MaxMetadataComponentSize} bytes.");
+            index = cachedIndex;
+        }
+        else
+        {
+            var indexLength = checked((long)totalIdx * 4 + 64);
+            if (indexLength > MaxMetadataComponentSize)
+            {
+                throw new InvalidDataException(
+                    $"Compact index table size {indexLength} exceeds the limit of {MaxMetadataComponentSize} bytes.");
+            }
+
+            index = ReadBytes(ebase, checked((int)Math.Min(indexLength, _imageSize - ebase)), "compact index table");
         }
 
-        var index = ReadBytes(ebase, checked((int)Math.Min(indexLength, _imageSize - ebase)), "compact index table");
         if (packStartRel + packSize > index.Length)
         {
             throw new InvalidDataException("Compact index pack exceeds the image bounds.");
