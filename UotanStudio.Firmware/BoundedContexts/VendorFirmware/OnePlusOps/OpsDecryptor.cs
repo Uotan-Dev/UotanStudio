@@ -126,12 +126,41 @@ public class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
     }
 
     /// <summary>
-    /// Decrypts data using AES-ECB mode with a key from the OnePlusKeyTable
-    /// <para>使用OnePlusKeyTable中的密钥以AES-ECB模式解密数据</para>
+    /// Decrypts data using AES-ECB mode with a key from the OnePlusKeyTable.
+    /// Only the AES-suitable entry (index 0) is accepted; MBox data entries
+    /// (indices 1–3) are rejected with <see cref="NotSupportedException"/> because
+    /// they belong to a different decryption path and must not be fed to AES.
+    /// <para>使用 OnePlusKeyTable 中的密钥以 AES-ECB 模式解密数据。
+    /// 仅接受适合 AES 的条目（索引 0）；MBox 数据条目（索引 1–3）以
+    /// <see cref="NotSupportedException"/> 拒绝，因为它们属于另一解密路径，
+    /// 不得传入 AES。</para>
     /// </summary>
+    /// <param name="encryptedData">The ciphertext to decrypt. 待解密的密文。</param>
+    /// <param name="keyIndex">Index into <see cref="OnePlusKeyTable"/>; must be
+    /// <see cref="OnePlusKeyTable.AesKeyIndex"/> (0) for the AES path.</param>
+    /// <returns>The decrypted plaintext. 解密后的明文。</returns>
+    /// <exception cref="NotSupportedException"><paramref name="keyIndex"/> refers to
+    /// an MBox data entry that cannot be used with the AES-ECB interface.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="keyIndex"/> is
+    /// outside the table bounds.</exception>
     public byte[] DecryptAesEcb(byte[] encryptedData, int keyIndex)
     {
-        var key = OnePlusKeyTable.GetKey(keyIndex);
+        // Reject MBox data entries before any AES allocation, with a clear
+        // contract error rather than a misleading "key length" ArgumentException.
+        if (keyIndex < 0 || keyIndex >= OnePlusKeyTable.KeyCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(keyIndex),
+                $"Key index must be between 0 and {OnePlusKeyTable.KeyCount - 1}.");
+        }
+
+        if (keyIndex != OnePlusKeyTable.AesKeyIndex)
+        {
+            throw new NotSupportedException(
+                $"Table entry {keyIndex} ('{OnePlusKeyTable.GetKeyName(keyIndex)}') is MBox data, not an AES key. " +
+                "MBox data cannot be used with the AES-ECB interface; use the SBox stream-cipher path instead.");
+        }
+
+        var key = OnePlusKeyTable.GetAesKey(keyIndex);
         return DecryptAesEcb(encryptedData, key);
     }
 
