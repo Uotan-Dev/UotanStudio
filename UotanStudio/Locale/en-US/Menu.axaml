@@ -46,7 +46,7 @@
     <x:String x:Key="Menu_WindowDevice">Device</x:String>
     <x:String x:Key="Menu_WindowImages">Images</x:String>
     <x:String x:Key="Menu_WindowProperties">Properties</x:String>
-    <x:String x:Key="Menu_WindowWorkspaceLog">Log</x:String>
+    <x:String x:Key="Menu_WindowWorkspaceLog">Output</x:String>
     <x:String x:Key="Menu_WindowAdbLog">ADB Log</x:String>
 
     <!-- Tools menu -->
