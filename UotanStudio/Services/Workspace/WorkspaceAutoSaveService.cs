@@ -25,7 +25,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         _settings = settings;
         _projects = projects;
         _sessionPath = Path.Combine(Path.GetDirectoryName(SettingsPersistenceService.Instance.SettingsFilePath)!, "workspace-session.json");
-        _coordinator = new AutoSaveCoordinator(SaveAsync) { Enabled = settings.AutoSave };
+        _coordinator = new AutoSaveCoordinator(SaveEditedDocumentsAsync) { Enabled = settings.AutoSave };
         _settings.PropertyChanged += OnSettingsChanged;
         _timer.Tick += OnTick;
         _projects.BeforeProjectChangeAsync = FlushAsync;
@@ -45,9 +45,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 if (snapshot is { Version: 1, Documents: not null, Panels: not null, Docks: not null })
                 {
                     var hasStartupDocuments = WorkspaceSessionCapture.Documents(_workspace.Layout, Environment.CurrentDirectory).Count > 0;
-                    if (_projects.CurrentProjectPath is null && !hasStartupDocuments && File.Exists(snapshot.ProjectPath))
-                        await _projects.OpenProjectFromPathAsync(snapshot.ProjectPath!);
-                    if (!hasStartupDocuments && string.Equals(_projects.CurrentProjectPath, snapshot.ProjectPath,
+                    if (_projects.CurrentProjectPath is not null && !hasStartupDocuments && string.Equals(_projects.CurrentProjectPath, snapshot.ProjectPath,
                         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                         await _workspace.RestoreDocumentsAsync(snapshot.Documents, string.Empty);
                     WorkspacePanelService.Instance.RestoreVisibility(snapshot.Panels);
@@ -55,10 +53,10 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                     {
                         if (double.IsFinite(snapshot.NodeZoom)) nodes.Zoom = Math.Clamp(snapshot.NodeZoom, 0.2, 3);
                         nodes.ShowMinimap = snapshot.NodeMinimap;
-                        if (_projects.CurrentProjectPath is null && nodes.Nodes.Count == 0 && snapshot.DraftWorkflow is { } draft)
+                        if (_projects.CurrentProjectPath is null && snapshot.ProjectPath is null && nodes.Nodes.Count == 0 && snapshot.DraftWorkflow is { } draft)
                             await nodes.LoadFromAsync(draft);
                     }
-                    if (_projects.CurrentProjectPath is null && snapshot.DraftPackingSettings is { } packing)
+                    if (_projects.CurrentProjectPath is null && snapshot.ProjectPath is null && snapshot.DraftPackingSettings is { } packing)
                         ProjectSettingViewModel.EnsureInstance().ApplyFromDto(packing);
                     var docks = WorkspaceSessionCapture.Enumerate(_workspace.Layout).OfType<IDock>().ToList();
                     foreach (var state in snapshot.Docks)
@@ -92,7 +90,14 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         if (_initialized && !_projects.IsBusy) await _coordinator.TickAsync();
     }
 
-    private async Task SaveAsync()
+    private async Task SaveEditedDocumentsAsync()
+    {
+        if (!_initialized || _projects.IsBusy) return;
+        try { await _projects.AutoSaveAsync(persistProject: false); }
+        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", ex.Message); }
+    }
+
+    private async Task SaveSessionAsync()
     {
         if (!_initialized || _projects.IsBusy) return;
         try
@@ -122,7 +127,6 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 }
             }
             await AtomicJsonFile.WriteIfChangedAsync(_sessionPath, snapshot, AppSettingsJsonContext.Default.WorkspaceSessionSnapshot);
-            await _projects.AutoSaveAsync();
         }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", $"Save workspace failed: {ex.Message}"); }
     }
@@ -132,6 +136,20 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         if (!_initialized) return;
         await _projects.WaitForIdleAsync();
         await _coordinator.FlushAsync();
+        if (_coordinator.Enabled) await _projects.AutoSaveAsync(persistPageState: false);
+    }
+
+    internal async Task SaveOnCloseAsync()
+    {
+        _timer.Stop();
+        if (!_initialized) return;
+        await _projects.WaitForIdleAsync();
+        await _coordinator.FlushAsync();
+        if (_coordinator.Enabled)
+        {
+            await _projects.AutoSaveAsync();
+            await SaveSessionAsync();
+        }
     }
 
     public void Dispose()

@@ -35,7 +35,7 @@ public sealed class ProjectOperationsService
         finally { _operationGate.Release(); }
     }
 
-    internal async Task AutoSaveAsync()
+    internal async Task AutoSaveAsync(bool persistProject = true, bool persistPageState = true)
     {
         if (!await _operationGate.WaitAsync(0)) return;
         try
@@ -62,7 +62,7 @@ public sealed class ProjectOperationsService
                 }
                 catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", ex.Message); }
             }
-            if (CurrentProjectPath is { Length: > 0 } path) await PersistCoreAsync(path);
+            if (persistProject && CurrentProjectPath is { Length: > 0 } path) await PersistCoreAsync(path, persistPageState);
         }
         finally { _operationGate.Release(); }
     }
@@ -468,7 +468,7 @@ public sealed class ProjectOperationsService
     /// </summary>
     public Task PersistToAsync(string path) => RunOperationAsync(() => PersistCoreAsync(path));
 
-    private async Task PersistCoreAsync(string path)
+    private async Task PersistCoreAsync(string path, bool persistPageState = true)
     {
         if (NodeEditorVM == null)
         {
@@ -491,7 +491,7 @@ public sealed class ProjectOperationsService
 
         // 收集当前已打开的文档标签，用于下次打开工程时恢复。
         // Collect currently open document tabs so they can be restored on next project open.
-        var openDocs = CollectOpenDocuments(rootDir);
+        var openDocs = persistPageState ? CollectOpenDocuments(rootDir) : [];
 
         var subProjectDtos = new List<SubProjectDto>();
         foreach (var sp in context.SubProjects)
@@ -517,7 +517,8 @@ public sealed class ProjectOperationsService
                     })
                     .ToList(),
                 Settings = ProjectSettingViewModel.EnsureInstance().ToDto(),
-                OpenDocuments = openDocs.Count > 0 ? openDocs : null
+                OpenDocuments = persistPageState ? (openDocs.Count > 0 ? openDocs : null)
+                    : (await SolutionPersistenceService.LoadFirmwareProjectAsync(sp.FwProjectPath))?.OpenDocuments
             };
             await SolutionPersistenceService.SaveFirmwareProjectAsync(sp.FwProjectPath, firmware);
         }
@@ -540,7 +541,8 @@ public sealed class ProjectOperationsService
         await OperationHistoryService.Instance.SaveAsync(Path.Combine(stateDir, "history.json"));
         var settingsPath = Path.Combine(stateDir, "settings.json");
         var solutionSettings = await SolutionSettingsService.LoadAsync(settingsPath) ?? new SolutionSettings();
-        solutionSettings.RecentDocuments = openDocs.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
+        if (persistPageState)
+            solutionSettings.RecentDocuments = openDocs.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
         await SolutionSettingsService.SaveAsync(settingsPath, solutionSettings);
     }
 

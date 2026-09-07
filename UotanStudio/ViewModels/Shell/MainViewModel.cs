@@ -14,7 +14,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     internal async Task FlushAutoSaveAsync()
     {
         SettingsVM.FlushPendingSave();
-        await _autoSave.FlushAsync();
+        await _autoSave.SaveOnCloseAsync();
     }
     public MenuViewModel MenuVM { get; } = new();
     public WorkspaceViewModel WorkspaceVM { get; } = new();
