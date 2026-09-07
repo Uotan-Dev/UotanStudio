@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Sparse;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Views.Controls;
 using Xunit;
 

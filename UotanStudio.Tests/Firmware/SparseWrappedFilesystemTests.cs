@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.Erofs;
-using UotanStudio.Firmware.Ext4;
-using UotanStudio.Firmware.Sparse;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Views.Controls;
 using Xunit;
 

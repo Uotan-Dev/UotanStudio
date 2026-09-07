@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
-using UotanStudio.Firmware.Avb;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

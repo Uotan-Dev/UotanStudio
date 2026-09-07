@@ -1,4 +1,5 @@
-using UotanStudio.Firmware.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.CrossCutting.Lzo;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

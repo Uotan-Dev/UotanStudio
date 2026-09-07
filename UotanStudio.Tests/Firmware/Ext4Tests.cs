@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

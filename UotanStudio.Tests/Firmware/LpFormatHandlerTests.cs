@@ -1,6 +1,6 @@
 using System.Text;
-using UotanStudio.Firmware.Common;
-using UotanStudio.Firmware.Lp;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

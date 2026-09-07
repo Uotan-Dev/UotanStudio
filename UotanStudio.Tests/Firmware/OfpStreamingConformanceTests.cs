@@ -1,7 +1,7 @@
-using UotanStudio.Firmware.Oppo.Crypto;
-using UotanStudio.Firmware.Oppo.Models;
-using UotanStudio.Firmware.Oppo;
-using UotanStudio.Firmware.Oppo.Parsers;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Parsers;
 using System.Buffers.Binary;
 using System.Text;
 using Xunit;

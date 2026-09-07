@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Dat;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

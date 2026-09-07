@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Sparse;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

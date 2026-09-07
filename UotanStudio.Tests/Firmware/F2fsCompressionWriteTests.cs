@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

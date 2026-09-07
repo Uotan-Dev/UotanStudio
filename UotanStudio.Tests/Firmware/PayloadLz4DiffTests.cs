@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using BsDiff;
 using Google.Protobuf;
-using UotanStudio.Firmware.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

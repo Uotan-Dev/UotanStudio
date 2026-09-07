@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Apk;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
 using UotanStudio.Tests.Infrastructure;
 using Xunit;
 

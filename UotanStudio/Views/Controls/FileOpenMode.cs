@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using UotanStudio.Firmware;
-using UotanStudio.Firmware.Common;
-using UotanStudio.Firmware.Sparse;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 
 namespace UotanStudio.Views.Controls;
 
@@ -236,7 +236,7 @@ public static class FileOpenMode
         // AXML content sniffing first: binary XML files such as AndroidManifest.xml carry a .xml
         // extension (which the text route would claim), so the AXML magic must win to avoid opening
         // them as mangled UTF-8 text.
-        if (header is not null && UotanStudio.Firmware.AXml.AXmlParser.IsAxml(header))
+        if (header is not null && UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.AXmlParser.IsAxml(header))
         {
             return EditorOpenMode.Axml;
         }
@@ -289,7 +289,7 @@ public static class FileOpenMode
 
         // ARSC 内容探测：resources.arsc 为 0x0002 表头。
         // ARSC content sniffing: resources.arsc carries the 0x0002 table header.
-        if (header is not null && UotanStudio.Firmware.Arsc.ArscParser.IsArsc(header))
+        if (header is not null && UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ArscParser.IsArsc(header))
         {
             return EditorOpenMode.Arsc;
         }
@@ -545,7 +545,7 @@ public static class FileOpenMode
     public static bool IsLpMetadataMagic(ReadOnlySpan<byte> header) =>
         header.Length >= LpMetadataHeaderLength
         && BinaryPrimitives.ReadUInt32LittleEndian(header.Slice(4096, 4))
-            == UotanStudio.Firmware.Lp.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
+            == UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp.MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
 
     /// <summary>
     /// <para>判断头部字节是否为 Rockchip parameter 文本：内容须为可打印 ASCII/文本控制字符

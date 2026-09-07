@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Lp;
+using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Models;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.Views.Controls;

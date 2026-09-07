@@ -4,7 +4,7 @@ using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.Lp;
+using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Flash;

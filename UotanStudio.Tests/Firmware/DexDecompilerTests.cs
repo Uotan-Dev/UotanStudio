@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.Dex;
-using UotanStudio.Firmware.Dex.Decompile;
-using UotanStudio.Firmware.Dex.Model;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Decompile;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex.Model;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

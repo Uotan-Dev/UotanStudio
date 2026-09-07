@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.IO.Hashing;
-using UotanStudio.Firmware.Common.Streams;
-using UotanStudio.Firmware.Compress;
-using UotanStudio.Firmware.Compress.Compressors;
+using UotanStudio.Firmware.SharedKernel.Streams;
+using UotanStudio.Firmware.CrossCutting.Compress;
+using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

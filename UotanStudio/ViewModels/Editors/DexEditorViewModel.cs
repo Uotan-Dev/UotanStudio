@@ -1,7 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.Dex;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Editors;

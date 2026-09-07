@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Lp;
+using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

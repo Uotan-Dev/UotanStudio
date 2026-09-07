@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.AXml;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Editors;

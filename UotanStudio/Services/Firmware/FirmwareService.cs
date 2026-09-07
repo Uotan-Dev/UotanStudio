@@ -1,21 +1,21 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
-using UotanStudio.Firmware.Avb;
-using UotanStudio.Firmware.BootImage;
-using UotanStudio.Firmware.Common;
-using UotanStudio.Firmware.Cpio;
-using UotanStudio.Firmware.Cpio.Extraction;
-using UotanStudio.Firmware.Cpio.Model;
-using UotanStudio.Firmware.Dat;
-using UotanStudio.Firmware.Erofs;
-using UotanStudio.Firmware.Ext4;
-using UotanStudio.Firmware.F2fs;
-using UotanStudio.Firmware.Lp;
-using UotanStudio.Firmware.Oppo;
-using UotanStudio.Firmware.Oppo.Models;
-using UotanStudio.Firmware.Payload;
-using UotanStudio.Firmware.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -551,9 +551,9 @@ public sealed class FirmwareService
         }
     }
 
-    private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BootImage.CompressionType compression)
+    private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.CompressionType compression)
     {
-        return compression == UotanStudio.Firmware.BootImage.CompressionType.None || raw.Length == 0
+        return compression == UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.CompressionType.None || raw.Length == 0
             ? raw
             : BootCompressor.TryDecompress(raw, compression) ?? raw;
     }

@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Diff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

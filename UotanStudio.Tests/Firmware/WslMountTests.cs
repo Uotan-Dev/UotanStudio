@@ -1,6 +1,6 @@
-using UotanStudio.Firmware.Erofs;
-using UotanStudio.Firmware.Ext4;
-using UotanStudio.Firmware.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

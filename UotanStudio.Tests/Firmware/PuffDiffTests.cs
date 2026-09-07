@@ -1,5 +1,5 @@
 using System.Text;
-using UotanStudio.Firmware.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

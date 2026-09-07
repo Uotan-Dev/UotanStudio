@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.Common;
-using UotanStudio.Firmware.Ext4;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Tests.Infrastructure;
 using Xunit;
 

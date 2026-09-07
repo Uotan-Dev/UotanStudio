@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Common;
-using UotanStudio.Firmware.Rockchip;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

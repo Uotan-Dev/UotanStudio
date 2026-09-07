@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Nb0;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

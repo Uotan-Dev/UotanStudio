@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Dat;
-using UotanStudio.Firmware.Diff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

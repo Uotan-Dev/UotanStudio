@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Arsc;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

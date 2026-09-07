@@ -2,9 +2,9 @@ using System.Buffers.Binary;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.Avb;
-using UotanStudio.Firmware.BootImage;
-using UotanStudio.Firmware.Sparse;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

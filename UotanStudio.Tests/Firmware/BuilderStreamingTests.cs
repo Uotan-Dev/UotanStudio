@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.Erofs;
-using UotanStudio.Firmware.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

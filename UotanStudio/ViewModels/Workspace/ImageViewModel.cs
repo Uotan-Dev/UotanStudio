@@ -4,18 +4,18 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.Dat;
-using UotanStudio.Firmware.Erofs;
-using UotanStudio.Firmware.Ext4;
-using UotanStudio.Firmware.F2fs;
-using UotanStudio.Firmware.Sparse;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Devices;
-using FormatDetector = UotanStudio.Firmware.Common.FormatDetector;
+using FormatDetector = UotanStudio.Firmware.SharedKernel.FormatDetector;
 
 namespace UotanStudio.ViewModels.Workspace;
 

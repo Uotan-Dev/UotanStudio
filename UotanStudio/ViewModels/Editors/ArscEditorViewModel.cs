@@ -3,7 +3,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.Arsc;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Editors;
@@ -464,7 +464,7 @@ public sealed class ResEntryEntry
     public byte PackageId { get; init; }
 
     /// <summary>全局字符串池（String 型值编辑 Intern 用）。<para>The global string pool (for String-typed value editing).</para></summary>
-    public UotanStudio.Firmware.AXml.AXmlStringPool GlobalPool { get; init; } = new();
+    public UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml.AXmlStringPool GlobalPool { get; init; } = new();
 
     /// <summary>格式化值文本（树节点可展示）。<para>Formatted value text (for tree display).</para></summary>
     public string ValueText { get; init; } = string.Empty;

@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
@@ -738,13 +738,13 @@ internal partial class PropertiesViewModel : Tool
         var svc = LanguageService.Instance;
         switch (node.Payload)
         {
-            case UotanStudio.Firmware.Arsc.ResPackage pkg:
+            case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ResPackage pkg:
                 Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNode"), pkg.Name));
                 Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeKind"), $"0x{pkg.Id:x2}"));
                 Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeChildren"), pkg.Types.Count.ToString("N0")));
                 break;
 
-            case UotanStudio.Firmware.Arsc.ResType type:
+            case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ResType type:
                 Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNode"), $"0x{type.Id:x2}"));
                 Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeKind"), "type"));
                 Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeDetail"), type.ConfigDescription));

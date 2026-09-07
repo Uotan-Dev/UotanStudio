@@ -1,6 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware;
-using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services.Cli;
 using Xunit;
 
@@ -109,7 +109,7 @@ public class FirmwareCliE2eTests
             var archive = Path.Combine(AppContext.BaseDirectory, $"cpio_arch_{Guid.NewGuid():N}.cpio");
             try
             {
-                var packResult = await handler!.PackAsync(src, archive, CancellationToken.None);
+                var packResult = await ((IWritableFormatHandler)handler!).PackAsync(src, archive, CancellationToken.None);
                 Assert.True(packResult.Success, packResult.Summary);
                 Assert.True(File.Exists(archive));
                 Assert.True(new FileInfo(archive).Length > 0);

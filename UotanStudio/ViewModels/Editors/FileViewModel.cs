@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Views.Controls;

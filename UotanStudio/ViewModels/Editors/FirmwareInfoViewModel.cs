@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware;
-using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;

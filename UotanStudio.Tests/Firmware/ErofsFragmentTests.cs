@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

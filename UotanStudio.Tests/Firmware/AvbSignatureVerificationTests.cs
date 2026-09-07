@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
-using UotanStudio.Firmware.Avb;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,5 +1,5 @@
 using System.Text;
-using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -359,7 +359,7 @@ public class ManagedMagicTests
         // 此处验证：加载上游 android.magic 后能识别 ANDROID!。
         // ANDROID! was deduped from firmware.magic (upstream android.magic has it).
         // Verify upstream android.magic recognizes ANDROID!.
-        string? text = ReadEmbeddedResource("UotanStudio.Firmware.Common.Magic.android.magic");
+        string? text = ReadEmbeddedResource("UotanStudio.Firmware.SharedKernel.Magic.android.magic");
         Assert.False(string.IsNullOrEmpty(text), "上游 android.magic 嵌入式资源缺失");
 
         MagicRuleSet androidRules = MagicRuleParser.Parse(text!, "upstream:android.magic");
@@ -590,13 +590,13 @@ public class UpstreamMagicIntegrationTests
     // 上游 magic 文本规则资源名（UotanStudio.Firmware 程序集内嵌入式资源）
     private static readonly string[] UpstreamMagicResources =
     [
-        "UotanStudio.Firmware.Common.Magic.android.magic",
-        "UotanStudio.Firmware.Common.Magic.archive.magic",
-        "UotanStudio.Firmware.Common.Magic.compress.magic",
-        "UotanStudio.Firmware.Common.Magic.elf.magic",
-        "UotanStudio.Firmware.Common.Magic.filesystems.magic",
-        "UotanStudio.Firmware.Common.Magic.linux.magic",
-        "UotanStudio.Firmware.Common.Magic.sun.magic",
+        "UotanStudio.Firmware.SharedKernel.Magic.android.magic",
+        "UotanStudio.Firmware.SharedKernel.Magic.archive.magic",
+        "UotanStudio.Firmware.SharedKernel.Magic.compress.magic",
+        "UotanStudio.Firmware.SharedKernel.Magic.elf.magic",
+        "UotanStudio.Firmware.SharedKernel.Magic.filesystems.magic",
+        "UotanStudio.Firmware.SharedKernel.Magic.linux.magic",
+        "UotanStudio.Firmware.SharedKernel.Magic.sun.magic",
     ];
 
     /// <summary>
@@ -624,7 +624,7 @@ public class UpstreamMagicIntegrationTests
     [Fact]
     public void UpstreamElfMagic_RecognizesAarch64Elf()
     {
-        MagicRuleSet elfRules = LoadUpstreamResource("UotanStudio.Firmware.Common.Magic.elf.magic");
+        MagicRuleSet elfRules = LoadUpstreamResource("UotanStudio.Firmware.SharedKernel.Magic.elf.magic");
         // AArch64 可执行文件 ELF 头
         byte[] elf = BuildElfHeader(elf64: true, bigEndian: false, machine: 0xB7, type: 2);
 
@@ -638,7 +638,7 @@ public class UpstreamMagicIntegrationTests
     [Fact]
     public void UpstreamCompressMagic_RecognizesGzip()
     {
-        MagicRuleSet compressRules = LoadUpstreamResource("UotanStudio.Firmware.Common.Magic.compress.magic");
+        MagicRuleSet compressRules = LoadUpstreamResource("UotanStudio.Firmware.SharedKernel.Magic.compress.magic");
         byte[] gzip = [0x1F, 0x8B, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00];
 
         MagicMatch match = compressRules.Match(gzip, gzip.Length);
@@ -651,7 +651,7 @@ public class UpstreamMagicIntegrationTests
     [Fact]
     public void UpstreamAndroidMagic_RecognizesAndroidBoot()
     {
-        MagicRuleSet androidRules = LoadUpstreamResource("UotanStudio.Firmware.Common.Magic.android.magic");
+        MagicRuleSet androidRules = LoadUpstreamResource("UotanStudio.Firmware.SharedKernel.Magic.android.magic");
         byte[] androidBoot = Encoding.ASCII.GetBytes("ANDROID!");
 
         MagicMatch match = androidRules.Match(androidBoot, androidBoot.Length);
@@ -719,16 +719,16 @@ public class UpstreamMagicIntegrationTests
     {
         // 查重剔除的规则应在上游 7 个文件中至少命中一个
         // ELF（上游 elf.magic 有完整规则集）
-        MagicRuleSet elfRules = LoadUpstreamResource("UotanStudio.Firmware.Common.Magic.elf.magic");
+        MagicRuleSet elfRules = LoadUpstreamResource("UotanStudio.Firmware.SharedKernel.Magic.elf.magic");
         Assert.True(elfRules.Count > 0, "上游 elf.magic 应有规则");
 
         // bzip2（上游 compress.magic 或 archive.magic）
-        MagicRuleSet compressRules = LoadUpstreamResource("UotanStudio.Firmware.Common.Magic.compress.magic");
+        MagicRuleSet compressRules = LoadUpstreamResource("UotanStudio.Firmware.SharedKernel.Magic.compress.magic");
         byte[] bzip2 = [0x42, 0x5A, 0x68, 0x31];
         Assert.True(compressRules.Match(bzip2, bzip2.Length).IsMatch, "上游 compress.magic 应识别 bzip2");
 
         // ZIP（上游 archive.magic）
-        MagicRuleSet archiveRules = LoadUpstreamResource("UotanStudio.Firmware.Common.Magic.archive.magic");
+        MagicRuleSet archiveRules = LoadUpstreamResource("UotanStudio.Firmware.SharedKernel.Magic.archive.magic");
         byte[] zip = [(byte)'P', (byte)'K', 0x03, 0x04];
         Assert.True(archiveRules.Match(zip, zip.Length).IsMatch, "上游 archive.magic 应识别 ZIP");
     }

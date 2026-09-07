@@ -3,7 +3,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.Apk;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Editors;

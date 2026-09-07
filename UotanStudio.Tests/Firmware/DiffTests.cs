@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Diff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -1,6 +1,6 @@
 using System.Text;
 using UotanStudio.Firmware;
-using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services.Firmware;
 
 namespace UotanStudio.Services.Cli;
@@ -340,7 +340,7 @@ public static class FirmwareCli
             Directory.CreateDirectory(dir);
         }
 
-        IFormatHandler? handler = null;
+        IReadonlyFormatHandler? handler = null;
         if (cmd.FormatName is not null)
         {
             handler = ResolveByFormatName(cmd.FormatName);
@@ -364,7 +364,7 @@ public static class FirmwareCli
             return FirmwareCliExitCodes.Failure;
         }
 
-        var result = handler.PackAsync(input, output, CancellationToken.None)
+        var result = ((IWritableFormatHandler)handler).PackAsync(input, output, CancellationToken.None)
             .GetAwaiter().GetResult();
 
         if (!result.Success)
@@ -761,7 +761,7 @@ public static class FirmwareCli
         }
     }
 
-    private static IFormatHandler? ResolveByFormatName(string formatName)
+    private static IReadonlyFormatHandler? ResolveByFormatName(string formatName)
     {
         var name = formatName.Trim();
         foreach (var h in FormatDetector.RegisteredHandlers)
@@ -780,7 +780,7 @@ public static class FirmwareCli
     /// (case-insensitive). Exposed for tests that need to exercise a specific handler.
     /// </summary>
     /// <para>按 <see cref="IFormatHandler.FormatName"/>（不区分大小写）解析已注册的格式处理器；供测试使用。</para>
-    public static IFormatHandler? ResolveByFormatNameForTest(string formatName)
+    public static IReadonlyFormatHandler? ResolveByFormatNameForTest(string formatName)
         => ResolveByFormatName(formatName);
 
     private static string Pad(string s, int width)

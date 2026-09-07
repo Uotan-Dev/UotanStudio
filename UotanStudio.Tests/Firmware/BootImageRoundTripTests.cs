@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.BootImage;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

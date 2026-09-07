@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Server;
-using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.Mcp;
 

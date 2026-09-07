@@ -3,9 +3,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using ModelContextProtocol.Server;
 using UotanStudio.Firmware;
-using UotanStudio.Firmware.Common;
-using UotanStudio.Firmware.Erofs;
-using UotanStudio.Firmware.Ext4;
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Flash;
@@ -13,9 +13,9 @@ using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Services.Mcp;
 
-// 消除 UotanStudio.Firmware.Common 与 UotanStudio.Services.Firmware 中同名 FirmwareOpResult 的歧义：
+// 消除 UotanStudio.Firmware.SharedKernel 与 UotanStudio.Services.Firmware 中同名 FirmwareOpResult 的歧义：
 // 本文件的工具统一使用 Services 层的结果类型（FirmwareService 各方法的返回值）。
-// Disambiguate the same-named FirmwareOpResult in UotanStudio.Firmware.Common and
+// Disambiguate the same-named FirmwareOpResult in UotanStudio.Firmware.SharedKernel and
 // UotanStudio.Services.Firmware: this file consistently uses the Services-layer result type
 // (the return type of the FirmwareService methods).
 using FirmwareOpResult = UotanStudio.Services.Firmware.FirmwareOpResult;
@@ -761,7 +761,7 @@ public sealed partial class UotanStudioMcpTools
     /// <para>按格式提示（名称/扩展名/别名）或自动探测解析格式处理器。</para>
     /// Resolves the format handler from a format hint (name/extension/alias) or auto-detection.
     /// </summary>
-    private static IFormatHandler? ResolveFormatHandler(string? format, string filePath)
+    private static IReadonlyFormatHandler? ResolveFormatHandler(string? format, string filePath)
     {
         FirmwareFormatRegistry.RegisterAll();
         if (string.IsNullOrWhiteSpace(format))
@@ -818,7 +818,7 @@ public sealed partial class UotanStudioMcpTools
     /// name, mirroring FirmwareInfoViewModel.DispatchUnpackAsync.
     /// </summary>
     private static Task<FirmwareOpResult> DispatchUnpackAsync(
-        IFormatHandler handler, string filePath, string outputDirectory, string[]? extractFiles, CancellationToken ct)
+        IReadonlyFormatHandler handler, string filePath, string outputDirectory, string[]? extractFiles, CancellationToken ct)
     {
         var service = FirmwareService.Instance;
         return handler.FormatName switch

@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware.Dt;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 
 namespace UotanStudio.ViewModels.Editors;
 

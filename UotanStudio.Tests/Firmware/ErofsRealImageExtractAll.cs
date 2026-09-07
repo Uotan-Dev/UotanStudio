@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Tests.Infrastructure;
 using Xunit;
 

@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.Avb;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

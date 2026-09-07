@@ -1,9 +1,9 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Firmware.Oppo;
-using UotanStudio.Firmware.Oppo.Crypto;
-using UotanStudio.Firmware.Oppo.Models;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

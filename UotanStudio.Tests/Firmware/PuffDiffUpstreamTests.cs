@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Payload.Core;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -32,7 +32,7 @@ public class PuffDiffUpstreamTests
         // PUF1 version 1, source puff_length 268435457, empty target.
         var patch = Convert.FromHexString("505546310000000C080112061881808080011A00");
         var before = GC.GetAllocatedBytesForCurrentThread();
-        Assert.Throws<UotanStudio.Firmware.Payload.Exceptions.PayloadException>(() => PuffDiffApplier.Apply(patch, Array.Empty<byte>()));
+        Assert.Throws<UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions.PayloadException>(() => PuffDiffApplier.Apply(patch, Array.Empty<byte>()));
         Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0, 1024 * 1024);
     }
     // Puffin 35a231b2e5c0fa098f8fffbf264bbfcb837ba0a7 src/unittest_common.h.

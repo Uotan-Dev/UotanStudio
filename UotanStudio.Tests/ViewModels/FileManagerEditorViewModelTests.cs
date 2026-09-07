@@ -1,4 +1,4 @@
-using UotanStudio.Firmware.Ext4;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.ViewModels.Editors;
 using Xunit;
 
