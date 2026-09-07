@@ -1,5 +1,7 @@
 ﻿using System.Text;
 using UotanStudio.Firmware.Cpio.Model;
+using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.Common.Streams;
 
 namespace UotanStudio.Firmware.Cpio.Formats.Cpio;
 
@@ -17,15 +19,76 @@ public sealed class CpioArchiveReader
     /// </summary>
     public IEnumerable<ArchiveEntry> ReadEntries(Stream stream, ArchiveFormat? formatHint = null)
     {
+        foreach (var entry in ReadEntriesStreaming(stream, formatHint))
+        {
+            if (entry.DataStreamFactory is null) { yield return entry; continue; }
+            if (entry.DataLength > 256 * 1024 * 1024)
+                throw new InvalidDataException("CPIO entry exceeds the 256 MiB materialization limit; use streaming access.");
+            using var data = entry.DataStreamFactory();
+            yield return new ArchiveEntry
+            {
+                Name = entry.Name,
+                Metadata = entry.Metadata,
+                LinkName = entry.LinkName,
+                Data = ReadExact(data, checked((int)entry.DataLength))
+            };
+        }
+    }
+
+    /// <summary>
+    /// Reads bounded payload views whose source remains valid during enumeration.
+    /// <para>读取有界负载视图，源流须在枚举期间保持有效。</para>
+    /// Non-seekable input is spooled to disk with a 64 GiB limit.
+    /// <para>不可定位输入暂存到磁盘，上限为 64 GiB。</para>
+    /// </summary>
+    public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream, ArchiveFormat? formatHint = null)
+        => ReadEntriesStreaming(stream, formatHint, 64L * 1024 * 1024 * 1024);
+
+    /// <summary>
+    /// Reads bounded payload views with a disk-spooling limit and cancellation.
+    /// <para>读取有界负载视图，限制磁盘暂存量并支持取消。</para>
+    /// </summary>
+    /// <param name="stream">The archive source. <para>归档输入流。</para></param>
+    /// <param name="formatHint">The optional format. <para>可选的格式提示。</para></param>
+    /// <param name="maximumSpoolBytes">The non-seekable input limit in bytes. <para>不可定位输入的字节上限。</para></param>
+    /// <param name="cancellationToken">The cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Entries valid during enumeration. <para>枚举期间有效的条目。</para></returns>
+    public IEnumerable<ArchiveEntry> ReadEntriesStreaming(Stream stream, ArchiveFormat? formatHint,
+        long maximumSpoolBytes, CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(stream);
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumSpoolBytes);
+        cancellationToken.ThrowIfCancellationRequested();
         if (!stream.CanRead)
         {
             throw new ArgumentException("Input stream must be readable.", nameof(stream));
+        }
+        if (!stream.CanSeek)
+        {
+            var temporaryPath = Path.Combine(Path.GetTempPath(), "uotan-cpio-" + Guid.NewGuid().ToString("N"));
+            using var temporary = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite,
+                FileShare.None, 65536, FileOptions.DeleteOnClose);
+            using (var bounded = new CountingWriteStream(temporary, maximumSpoolBytes,
+                leaveOpen: true, cancellationToken: cancellationToken))
+            {
+                var buffer = new byte[65536];
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var count = stream.Read(buffer);
+                    if (count == 0) break;
+                    bounded.Write(buffer, 0, count);
+                }
+            }
+            temporary.Position = 0;
+            foreach (var entry in ReadEntriesStreaming(temporary, formatHint, maximumSpoolBytes, cancellationToken)) yield return entry;
+            yield break;
         }
 
         var hardlinkState = new Dictionary<(ulong Inode, uint DevMaj, uint DevMin), HardlinkGroupState>();
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var detected = formatHint ?? DetectFormat(stream);
             var entry = detected switch
             {
@@ -49,10 +112,12 @@ public sealed class CpioArchiveReader
                 break;
             }
 
+            var nextPosition = stream.Position;
             foreach (var transformed in TransformHardlinkEntry(entry, hardlinkState))
             {
                 yield return transformed;
             }
+            stream.Position = nextPosition;
         }
 
         foreach (var pending in FlushPendingHardlinks(hardlinkState))
@@ -74,7 +139,7 @@ public sealed class CpioArchiveReader
 
         var origin = stream.Position;
         Span<byte> probe = stackalloc byte[6];
-        var read = stream.Read(probe);
+        var read = stream.ReadAtLeast(probe, probe.Length, throwOnEndOfStream: false);
         stream.Position = origin;
         if (read < 6)
         {
@@ -128,7 +193,7 @@ public sealed class CpioArchiveReader
         var gid = CpioFieldParser.ParseHex(header.Slice(30, 8));
         var nlink = CpioFieldParser.ParseHex64(header.Slice(38, 8));
         var mtime = CpioFieldParser.ParseHex64(header.Slice(46, 8));
-        var fileSize = CpioFieldParser.ParseHex64(header.Slice(54, 8));
+        var fileSize = checked((long)CpioFieldParser.ParseHex64(header.Slice(54, 8)));
         var devMaj = CpioFieldParser.ParseHex(header.Slice(62, 8));
         var devMin = CpioFieldParser.ParseHex(header.Slice(70, 8));
         var rdevMaj = CpioFieldParser.ParseHex(header.Slice(78, 8));
@@ -136,21 +201,20 @@ public sealed class CpioArchiveReader
         var nameSize = CpioFieldParser.ParseHex(header.Slice(94, 8));
         var checksum = CpioFieldParser.ParseHex(header.Slice(102, 8));
 
-        var nameRaw = ReadExact(stream, checked((int)nameSize));
-        var name = Encoding.UTF8.GetString(nameRaw.AsSpan(0, checked((int)nameSize - 1)));
+        var name = ReadName(stream, nameSize);
 
         SkipPadding(stream, CpioConstants.NewAsciiHeaderSize + (int)nameSize, 4);
 
-        var data = ReadExact(stream, checked((int)fileSize));
-        SkipPadding(stream, (int)fileSize, 4);
-
         var fileType = CpioFieldParser.ToFileType(mode);
-        ValidateCrc(format, checksum, data, name, fileType);
+        var (data, factory) = ReadPayload(stream, fileSize, fileType, format, checksum, name);
+        SkipPadding(stream, fileSize, 4);
 
         return new ArchiveEntry
         {
             Name = name,
             Data = data,
+            DataStreamFactory = factory,
+            DeclaredDataLength = fileSize,
             LinkName = fileType == CpioFileType.SymbolicLink ? Encoding.UTF8.GetString(data) : null,
             Metadata = new ArchiveEntryMetadata
             {
@@ -200,15 +264,14 @@ public sealed class CpioArchiveReader
         var nameSize = CpioFieldParser.ParseOctal(header.Slice(59, 6));
         var fileSize = CpioFieldParser.ParseOctal64(header.Slice(65, 11));
 
-        var nameRaw = ReadExact(stream, checked((int)nameSize));
-        var name = Encoding.UTF8.GetString(nameRaw.AsSpan(0, checked((int)nameSize - 1)));
+        var name = ReadName(stream, nameSize);
 
         var fileType = CpioFieldParser.ToFileType(mode);
         var hpSpecial = format == ArchiveFormat.HpOldAscii
             && fileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
         var payloadSize = hpSpecial ? 0L : fileSize;
 
-        var data = ReadExact(stream, checked((int)payloadSize));
+        var (data, factory) = ReadPayload(stream, payloadSize, fileType, format, 0, name);
         var hpDeviceMajor = hpSpecial ? (uint)(fileSize >> 16) : rdev;
         var hpDeviceMinor = hpSpecial ? (uint)(fileSize & 0xFFFF) : 0U;
 
@@ -216,6 +279,8 @@ public sealed class CpioArchiveReader
         {
             Name = name,
             Data = data,
+            DataStreamFactory = factory,
+            DeclaredDataLength = payloadSize,
             LinkName = fileType == CpioFileType.SymbolicLink ? Encoding.UTF8.GetString(data) : null,
             Metadata = new ArchiveEntryMetadata
             {
@@ -268,8 +333,7 @@ public sealed class CpioArchiveReader
         var fileSizeHigh = CpioFieldParser.ReadUInt16(header.Slice(22, 2), byteSwap);
         var fileSizeLow = CpioFieldParser.ReadUInt16(header.Slice(24, 2), byteSwap);
 
-        var nameRaw = ReadExact(stream, nameSize);
-        var name = Encoding.UTF8.GetString(nameRaw.AsSpan(0, nameSize - 1));
+        var name = ReadName(stream, nameSize);
 
         SkipPadding(stream, CpioConstants.OldBinaryHeaderSize + nameSize, 2);
 
@@ -279,8 +343,8 @@ public sealed class CpioArchiveReader
         var hpSpecial = format == ArchiveFormat.HpBinary
             && fileType is CpioFileType.CharacterDevice or CpioFileType.BlockDevice;
         var payloadSize = hpSpecial ? 0U : fileSize;
-        var data = ReadExact(stream, checked((int)payloadSize));
-        SkipPadding(stream, checked((int)payloadSize), 2);
+        var (data, factory) = ReadPayload(stream, payloadSize, fileType, format, 0, name);
+        SkipPadding(stream, payloadSize, 2);
 
         var hpDeviceMajor = hpSpecial ? fileSizeHigh : (uint)rdev;
         var hpDeviceMinor = hpSpecial ? fileSizeLow : 0U;
@@ -288,6 +352,8 @@ public sealed class CpioArchiveReader
         {
             Name = name,
             Data = data,
+            DataStreamFactory = factory,
+            DeclaredDataLength = payloadSize,
             LinkName = fileType == CpioFileType.SymbolicLink ? Encoding.UTF8.GetString(data) : null,
             Metadata = new ArchiveEntryMetadata
             {
@@ -307,39 +373,55 @@ public sealed class CpioArchiveReader
         };
     }
 
-    private static void ValidateCrc(ArchiveFormat format, uint expected, byte[] data, string name, CpioFileType fileType)
+    private static (byte[] Data, Func<Stream>? Factory) ReadPayload(Stream stream, long length,
+        CpioFileType fileType, ArchiveFormat format, uint expected, string name)
     {
-        if (format != ArchiveFormat.CrcAscii)
+        var start = stream.Position;
+        FileExtraction.ValidateRange(start, length, stream.Length, "CPIO payload");
+        if (fileType == CpioFileType.SymbolicLink)
         {
-            return;
+            if (length > 65536) throw new InvalidDataException("CPIO symlink target is too large.");
+            return (ReadExact(stream, checked((int)length)), null);
         }
-
-
-        if (fileType is CpioFileType.SymbolicLink or CpioFileType.HardLink)
+        if (format == ArchiveFormat.CrcAscii)
         {
-            return;
+            uint actual = 0;
+            Span<byte> buffer = stackalloc byte[65536];
+            var remaining = length;
+            while (remaining > 0)
+            {
+                var size = (int)Math.Min(remaining, buffer.Length);
+                stream.ReadExactly(buffer[..size]);
+                foreach (var b in buffer[..size]) actual = unchecked(actual + b);
+                remaining -= size;
+            }
+            if (actual != expected)
+                throw new InvalidDataException($"CRC ASCII checksum mismatch for '{name}': 0x{actual:X8} != 0x{expected:X8}");
         }
-
-        uint actual = 0;
-        foreach (var b in data)
-        {
-            actual += b;
-        }
-
-        if (actual != expected)
-        {
-            throw new InvalidDataException($"CRC ASCII checksum mismatch for '{name}': 0x{actual:X8} != 0x{expected:X8}");
-        }
+        stream.Position = checked(start + length);
+        return ([], () => new BoundedReadStream(stream, start, length, leaveOpen: true));
     }
 
     private static byte[] ReadExact(Stream stream, int length)
     {
+        if (length < 0 || length > 256 * 1024 * 1024)
+            throw new InvalidDataException("CPIO metadata or materialized payload exceeds its limit.");
         var buffer = new byte[length];
         stream.ReadExactly(buffer);
         return buffer;
     }
 
-    private static void SkipPadding(Stream stream, int offset, int align)
+    private static string ReadName(Stream stream, uint length)
+    {
+        if (length is 0 or > 65536)
+            throw new InvalidDataException("CPIO entry name exceeds the 64 KiB limit or has no terminator.");
+        var data = ReadExact(stream, (int)length);
+        if (data[^1] != 0 || data.AsSpan(0, data.Length - 1).Contains((byte)0))
+            throw new InvalidDataException("CPIO entry name has invalid NUL termination.");
+        return Encoding.UTF8.GetString(data, 0, data.Length - 1);
+    }
+
+    private static void SkipPadding(Stream stream, long offset, int align)
     {
         var pad = (align - (offset % align)) % align;
         if (pad == 0)
@@ -350,7 +432,7 @@ public sealed class CpioArchiveReader
         Span<byte> scratch = stackalloc byte[8];
         while (pad > 0)
         {
-            var step = Math.Min(pad, scratch.Length);
+            var step = (int)Math.Min(pad, scratch.Length);
             stream.ReadExactly(scratch[..step]);
             pad -= step;
         }
@@ -373,27 +455,28 @@ public sealed class CpioArchiveReader
             state[groupKey] = groupState;
         }
 
-        if (entry.Data.Length > 0)
+        if (entry.DataLength > 0)
         {
             groupState.DataCarrierName = entry.Name;
+            groupState.DataCarrier = entry;
+            yield return entry;
 
             if (groupState.PendingEntries.Count > 0)
             {
                 foreach (var pending in groupState.PendingEntries)
                 {
-                    yield return ToHardlinkEntry(pending, entry.Name);
+                    yield return ToHardlinkEntry(pending, entry.Name, entry);
                 }
 
                 groupState.PendingEntries.Clear();
             }
 
-            yield return entry;
             yield break;
         }
 
         if (groupState.DataCarrierName is { Length: > 0 } carrierName)
         {
-            yield return ToHardlinkEntry(entry, carrierName);
+            yield return ToHardlinkEntry(entry, carrierName, groupState.DataCarrier!);
             yield break;
         }
 
@@ -412,13 +495,16 @@ public sealed class CpioArchiveReader
         }
     }
 
-    private static ArchiveEntry ToHardlinkEntry(ArchiveEntry source, string carrierName)
+    private static ArchiveEntry ToHardlinkEntry(ArchiveEntry source, string carrierName, ArchiveEntry carrier)
     {
         return new ArchiveEntry
         {
             Name = source.Name,
             LinkName = carrierName,
-            Data = [],
+            Data = carrier.Data,
+            DataStreamFactory = carrier.DataStreamFactory,
+            DataStream = carrier.DataStream,
+            DeclaredDataLength = carrier.DataLength,
             Metadata = new ArchiveEntryMetadata
             {
                 Inode = source.Metadata.Inode,
@@ -442,6 +528,8 @@ public sealed class CpioArchiveReader
     private sealed class HardlinkGroupState
     {
         public string? DataCarrierName { get; set; }
+
+        public ArchiveEntry? DataCarrier { get; set; }
 
         public List<ArchiveEntry> PendingEntries { get; } = [];
     }

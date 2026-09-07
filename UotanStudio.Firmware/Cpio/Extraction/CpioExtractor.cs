@@ -1,6 +1,7 @@
 ﻿using System.Text;
 using UotanStudio.Firmware.Cpio.Internal;
 using UotanStudio.Firmware.Cpio.Model;
+using UotanStudio.Firmware.Common;
 
 namespace UotanStudio.Firmware.Cpio.Extraction;
 
@@ -77,34 +78,22 @@ public sealed class CpioExtractor
 
     private static void ExtractRegularLikeFile(ArchiveEntry entry, string targetPath, ExtractOptions options)
     {
-        if (File.Exists(targetPath))
+        if (File.Exists(targetPath) && !options.Overwrite) return;
+        FileExtraction.WriteAtomic(targetPath, output =>
         {
-            if (!options.Overwrite)
+            if (entry.DataStream is not null || entry.DataStreamFactory is not null)
             {
+                using var opened = entry.DataStream is null
+                    ? entry.DataStreamFactory?.Invoke() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.")
+                    : null;
+                var source = entry.DataStream ?? opened!;
+                if (source.CanSeek) source.Position = 0;
+                CopyExactly(source, output, entry.DataLength, entry.Name);
                 return;
             }
-
-            File.Delete(targetPath);
-        }
-
-
-        if (entry.DataStream is not null || entry.DataStreamFactory is not null)
-        {
-            using var output = new FileStream(targetPath, FileMode.Create, FileAccess.Write);
-            using var opened = entry.DataStream is null
-                ? entry.DataStreamFactory?.Invoke() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.")
-                : null;
-            var source = entry.DataStream ?? opened!;
-            if (source.CanSeek)
-            {
-                source.Position = 0;
-            }
-            CopyExactly(source, output, entry.DataLength, entry.Name);
-            return;
-        }
-
-        ValidateInMemoryLength(entry);
-        File.WriteAllBytes(targetPath, entry.Data);
+            ValidateInMemoryLength(entry);
+            output.Write(entry.Data);
+        }, options.Overwrite);
     }
 
     private static void ExtractSymbolicLink(ArchiveEntry entry, string targetPath, ExtractOptions options)

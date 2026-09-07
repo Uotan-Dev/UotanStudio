@@ -59,7 +59,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         {
             ArchiveFormat.Tar or ArchiveFormat.Ustar => _tarReader.ReadEntriesStreaming(stream),
 
-            _ => _cpioReader.ReadEntries(stream, format),
+            _ => _cpioReader.ReadEntriesStreaming(stream, format),
         };
     }
 
@@ -67,7 +67,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
     /// Returns lightweight archive entries suitable for listing and inspection.
     /// <para>返回适合列表与检查的轻量级归档条目；这是 GNU cpio 的 -t / --list 模式在库层面的最近等价物。</para>
     /// </summary>
-    public IReadOnlyList<ArchiveEntrySummary> ListEntries(Stream stream, ArchiveFormat? formatHint = null) => [.. ReadEntries(stream, formatHint).Select(ToSummary)];
+    public IReadOnlyList<ArchiveEntrySummary> ListEntries(Stream stream, ArchiveFormat? formatHint = null) => [.. ReadEntriesStreaming(stream, formatHint).Select(ToSummary)];
 
     /// <summary>
     /// Extracts archive entries to a destination directory.
@@ -128,7 +128,7 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         try
         {
             Span<byte> probe = stackalloc byte[512];
-            var read = stream.Read(probe);
+            var read = stream.ReadAtLeast(probe, probe.Length, throwOnEndOfStream: false);
             if (read < 6)
             {
                 throw new EndOfStreamException("Unexpected end of stream while detecting format.");
@@ -323,7 +323,9 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
             return entry;
         }
 
-        using var ms = new MemoryStream();
+        if (entry.DataLength > 256 * 1024 * 1024)
+            throw new InvalidDataException("Archive entry exceeds the 256 MiB materialization limit; use streaming access.");
+        var data = new byte[checked((int)entry.DataLength)];
         using var opened = entry.DataStream is null
             ? entry.DataStreamFactory?.Invoke() ?? throw new InvalidOperationException($"Entry '{entry.Name}' stream factory returned null.")
             : null;
@@ -332,12 +334,12 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         {
             source.Position = 0;
         }
-        source.CopyTo(ms);
+        source.ReadExactly(data);
         return new ArchiveEntry
         {
             Name = entry.Name,
             LinkName = entry.LinkName,
-            Data = ms.ToArray(),
+            Data = data,
             DataStream = null,
             DataStreamFactory = null,
             DeclaredDataLength = null,
