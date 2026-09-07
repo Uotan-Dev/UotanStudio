@@ -624,49 +624,50 @@ public sealed class DeviceMonitorService : IDisposable
     }
 
     /// <summary>
-    /// <para>基于 UotanStudio.Comm 的 AdbSession 启动 logcat 流式捕获；网络设备通过
-    /// AdbTcpTransport 直连设备 adbd。返回一个任务，其在流结束或取消时完成。</para>
-    /// Starts a streaming logcat capture using a UotanStudio.Comm AdbSession; network
-    /// devices connect straight to the device adbd via AdbTcpTransport. The returned task
-    /// completes when the stream ends or is cancelled.
+    /// Streams logcat through adb server when available, otherwise through direct USB.
+    /// <para>优先通过 adb server 读取 logcat，否则使用 USB 直连；流结束或取消时完成。</para>
     /// </summary>
     public async Task StartLogcatStreamingAsync(DetectedDevice device, Action<string> onLine, CancellationToken cancellationToken)
     {
-        AdbSession? session;
-        if (device.Transport == DeviceTransportKind.Tcp)
+        if (device.Protocol != DeviceProtocolKind.Adb)
+            throw new ArgumentException("Logcat requires an ADB device.", nameof(device));
+        cancellationToken.ThrowIfCancellationRequested();
+        var client = AdbServerClient;
+        var serverDevice = client?.GetDevices().FirstOrDefault(d => d.Serial == device.Serial);
+        if (client is not null && serverDevice is not null)
         {
-            // 序列号形如 "192.168.1.10:5555"。
-            var parts = device.Serial.Split(':');
-            if (parts.Length != 2 || !int.TryParse(parts[1], out var port))
+            var receiver = new AdvancedSharpAdbClient.Receivers.FunctionOutputReceiver(line =>
             {
-                throw new InvalidOperationException($"Invalid network ADB serial: {device.Serial}");
-            }
-
-            var transport = _comm.CreateAdbTcpTransport(parts[0], port);
-            transport.Connect();
-            session = new AdbSession(transport);
-        }
-        else
-        {
-            session = OpenAdbSession(device)
-                ?? throw new InvalidOperationException("Unable to open an ADB session for the device.");
+                if (cancellationToken.IsCancellationRequested) return false;
+                onLine(line);
+                return true;
+            });
+            await client.ExecuteRemoteCommandAsync("logcat -v threadtime", serverDevice, receiver,
+                System.Text.Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+            return;
         }
 
+        using var session = OpenAdbSession(device)
+            ?? throw new InvalidOperationException("Unable to open an ADB session for the device.");
+        var stdout = new AdbLogcatLineDecoder(onLine);
+        var stderr = new AdbLogcatLineDecoder(onLine);
         try
         {
             await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-            var shell = session.CreateShellClient("logcat");
-            await Task.Run(() => shell.ExecuteStreaming(buffer =>
-            {
-                foreach (var line in System.Text.Encoding.UTF8.GetString(buffer).Split('\n'))
-                {
-                    onLine(line.TrimEnd('\r'));
-                }
-            }, null, cancellationToken), cancellationToken).ConfigureAwait(false);
+            var shell = session.CreateShellClient("logcat -v threadtime");
+            var exitCode = await Task.Run(() => shell.ExecuteStreaming(
+                buffer => stdout.Feed(buffer), buffer => stderr.Feed(buffer), cancellationToken),
+                cancellationToken).ConfigureAwait(false);
+            if (exitCode != 0 && !cancellationToken.IsCancellationRequested)
+                throw new InvalidOperationException($"Logcat exited with code {exitCode}.");
         }
         finally
         {
-            session.Dispose();
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                stdout.Feed([], flush: true);
+                stderr.Feed([], flush: true);
+            }
         }
     }
 

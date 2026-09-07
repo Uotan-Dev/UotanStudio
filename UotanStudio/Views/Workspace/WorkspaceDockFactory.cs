@@ -129,7 +129,7 @@ public class WorkspaceDockFactory : Factory
             Title = "BottomPane",
             Proportion = 0.25,
             ActiveDockable = null,
-            VisibleDockables = CreateList<IDockable>(output, adbLog)
+            VisibleDockables = CreateList<IDockable>(output)
         };
 
         var mainLayout = new ProportionalDock
@@ -178,7 +178,9 @@ public class WorkspaceDockFactory : Factory
         panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
         panels.Register(WorkspacePanelService.Properties, properties, rightTools, visible: true);
         panels.Register(WorkspacePanelService.WorkspaceLog, output, bottomTools, visible: true);
-        panels.Register(WorkspacePanelService.AdbLog, adbLog, bottomTools, visible: true);
+        panels.SetAdbLogAvailable(false);
+        panels.Register(WorkspacePanelService.AdbLog, adbLog, bottomTools, visible: false);
+        adbLog.Initialize();
 
         return rootDock;
     }

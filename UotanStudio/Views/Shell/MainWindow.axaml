@@ -132,6 +132,7 @@
 					     IsChecked="{Binding MenuVM.WorkspacePanels.WorkspaceLogVisible, Mode=OneWay}"
 					     Command="{Binding MenuVM.ToggleWorkspaceLogCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowAdbLog}"
+					     IsVisible="{Binding MenuVM.WorkspacePanels.AdbLogAvailable}"
 					     ToggleType="CheckBox"
 					     IsChecked="{Binding MenuVM.WorkspacePanels.AdbLogVisible, Mode=OneWay}"
 					     Command="{Binding MenuVM.ToggleAdbLogCommand}" />

@@ -38,6 +38,7 @@
     <x:String x:Key="Dock_NoDocumentOpenHint">Open or create a project file to get started</x:String>
     <x:String x:Key="Dock_Output">Output</x:String>
     <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
+    <x:String x:Key="AdbLog_Follow">Follow</x:String>
     <x:String x:Key="Dock_NodeLeftPane">Node Toolbox</x:String>
     <x:String x:Key="Dock_NodeRightPane">Node Properties</x:String>
     <x:String x:Key="Dock_NodeBottomPane">Execution Log</x:String>

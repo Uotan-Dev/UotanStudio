@@ -1,144 +1,178 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Services;
+using UotanStudio.Services.Devices;
+using UotanStudio.Services.Workspace;
+using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Workspace;
 
-/// <summary>
-/// <para>ADB 日志面板视图模型，订阅统一日志服务并过滤显示设备（Device）与烧录（Flash）通道的日志条目。
-/// 专用于 ADB/Fastboot/EDL/RKDL 等设备通信协议日志的实时展示。</para>
-/// ADB log panel view model, subscribing to the unified log service and filtering for
-/// Device and Flash channel log entries. Dedicated to real-time display of ADB/Fastboot/EDL/RKDL
-/// device communication protocol logs.
-/// </summary>
 internal partial class AdbLogViewModel : Tool, IDisposable
 {
-    /// <summary>
-    /// <para>日志条目视图模型。</para>
-    /// Log entry view model.
-    /// </summary>
-    public sealed partial class LogEntryViewModel : ObservableObject
-    {
-        /// <summary><para>本地时间戳文本（HH:mm:ss）。Local timestamp text (HH:mm:ss).</para></summary>
-        [ObservableProperty] private string _timestamp = string.Empty;
-
-        /// <summary><para>日志级别。Log level.</para></summary>
-        [ObservableProperty] private LogLevel _level = LogLevel.Info;
-
-        /// <summary><para>日志来源。Log source.</para></summary>
-        [ObservableProperty] private string _source = string.Empty;
-
-        /// <summary><para>日志文本。Log text.</para></summary>
-        [ObservableProperty] private string _message = string.Empty;
-
-        public LogEntryViewModel(string timestamp, LogLevel level, string source, string message)
-        {
-            _timestamp = timestamp;
-            _level = level;
-            _source = source;
-            _message = message;
-        }
-    }
-
-    /// <summary><para>当前展示的日志条目集合（已按级别与来源筛选）。Collection of displayed log entries (filtered).</para></summary>
-    public ObservableCollection<LogEntryViewModel> Entries { get; } = [];
-
-    private readonly List<LogEntryViewModel> _allEntries = [];
-    private const int MaxEntries = 5000;
-    private Action? _unsubscribe;
+    private const int MaxLines = 5000;
+    private readonly Lock _sync = new();
+    private readonly Queue<string> _pending = new();
+    private readonly Func<DetectedDevice, Action<string>, CancellationToken, Task> _stream;
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private DeviceViewModel? _devices;
+    private DeviceInfo? _selected;
+    private CancellationTokenSource? _capture;
+    private Task? _captureTask;
+    private string? _deviceKey;
     private bool _disposed;
 
-    /// <summary><para>是否自动滚动至最新条目。Whether to auto-scroll to the latest entry.</para></summary>
+    public ObservableCollection<string> Lines { get; } = [];
     [ObservableProperty] private bool _autoScroll = true;
+    [ObservableProperty] private bool _isRunning;
+    [ObservableProperty] private string? _connectedSerial;
+    [ObservableProperty] private string? _errorMessage;
+    [ObservableProperty] private bool _isAvailable;
 
-    /// <summary><para>级别筛选。<c>null</c> 表示全部级别。Level filter; <c>null</c> means all levels.</para></summary>
-    [ObservableProperty] private LogLevel? _levelFilter;
+    public AdbLogViewModel() : this(DeviceMonitorService.Instance.StartLogcatStreamingAsync) { }
 
-    /// <summary><para>来源筛选。空字符串表示全部。Source filter; empty means all.</para></summary>
-    [ObservableProperty] private string _sourceFilter = string.Empty;
-
-    /// <summary><para>全部级别选项。All level options.</para></summary>
-    public IReadOnlyList<LogLevel?> Levels { get; } = [null, LogLevel.Trace, LogLevel.Debug, LogLevel.Info, LogLevel.Warn, LogLevel.Error, LogLevel.Fatal];
-
-    /// <summary><para>全部来源名称（去重）。All source names (deduplicated).</para></summary>
-    public ObservableCollection<string> Sources { get; } = [string.Empty];
-
-    partial void OnLevelFilterChanged(LogLevel? value) => ReapplyFilter();
-    partial void OnSourceFilterChanged(string value) => ReapplyFilter();
-
-    public AdbLogViewModel()
+    internal AdbLogViewModel(Func<DetectedDevice, Action<string>, CancellationToken, Task> stream)
     {
-        _unsubscribe = LogService.Instance.Subscribe(OnLogEnqueued);
-        foreach (var e in LogService.Instance.Entries)
+        _stream = stream;
+        _timer.Tick += OnTick;
+    }
+
+    // Initialize after panel registration so an existing selection can show the dock.
+    internal void Initialize()
+    {
+        if (_devices is not null || _disposed) return;
+        _devices = DeviceViewModel.EnsureInstance();
+        _devices.PropertyChanged += OnDevicePropertyChanged;
+        _timer.Start();
+        UpdateSelection();
+    }
+
+    private void OnDevicePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DeviceViewModel.SelectedDevice) or nameof(DeviceInfo.State))
+            UpdateSelection();
+    }
+
+    private void UpdateSelection()
+    {
+        if (_disposed) return;
+        if (_selected is not null) _selected.PropertyChanged -= OnDevicePropertyChanged;
+        _selected = _devices?.SelectedDevice;
+        if (_selected is not null) _selected.PropertyChanged += OnDevicePropertyChanged;
+        SetDevice(_selected?.Device);
+    }
+
+    internal static bool SupportsLogcat(DetectedDevice? device) =>
+        device is { Protocol: DeviceProtocolKind.Adb } &&
+        device.State.ToLowerInvariant() is not ("offline" or "unauthorized" or "sideload" or "disconnected");
+
+    internal void SetDevice(DetectedDevice? device)
+    {
+        if (_disposed) return;
+        var available = SupportsLogcat(device);
+        IsAvailable = available;
+        WorkspacePanelService.Instance.SetAdbLogAvailable(available);
+        if (available && device!.Key == _deviceKey && _captureTask is { IsCompleted: false }) return;
+
+        var previous = _captureTask;
+        StopCapture();
+        Clear();
+        ErrorMessage = null;
+        if (!available) return;
+
+        _deviceKey = device!.Key;
+        ConnectedSerial = device.Serial;
+        IsRunning = true;
+        var capture = new CancellationTokenSource();
+        lock (_sync) _capture = capture;
+        _captureTask = Task.Run(async () =>
         {
-            OnLogEnqueued(this, e);
+            string? error = null;
+            try
+            {
+                if (previous is not null) await previous.ConfigureAwait(false);
+                capture.Token.ThrowIfCancellationRequested();
+                await _stream(device, line => Enqueue(capture, line), capture.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (capture.IsCancellationRequested) { }
+            catch (Exception ex)
+            {
+                if (!capture.IsCancellationRequested) error = ex.Message;
+            }
+            finally
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (_disposed || !ReferenceEquals(_capture, capture)) return;
+                    IsRunning = false;
+                    ErrorMessage = error;
+                });
+                capture.Dispose();
+            }
+        });
+    }
+
+    private void Enqueue(CancellationTokenSource capture, string line)
+    {
+        lock (_sync)
+        {
+            if (!ReferenceEquals(_capture, capture)) return;
+            if (_pending.Count == MaxLines) _pending.Dequeue();
+            _pending.Enqueue(line.Length > AdbLogcatLineDecoder.MaximumLineLength
+                ? line[..AdbLogcatLineDecoder.MaximumLineLength] : line);
         }
     }
 
-    private void OnLogEnqueued(object? sender, LogEntry entry)
+    private void OnTick(object? sender, EventArgs e) => FlushPending();
+
+    internal void FlushPending()
     {
-        var channel = LogService.ChannelOf(entry.Source);
-        if (channel != LogChannel.Device && channel != LogChannel.Flash)
+        string[] batch;
+        lock (_sync)
         {
-            return;
+            var count = Math.Min(250, _pending.Count);
+            batch = new string[count];
+            for (var i = 0; i < count; i++) batch[i] = _pending.Dequeue();
         }
-
-        var vm = new LogEntryViewModel(
-            entry.Timestamp.ToString("HH:mm:ss"),
-            entry.Level,
-            entry.Source,
-            entry.Message);
-
-        _allEntries.Add(vm);
-
-        while (_allEntries.Count > MaxEntries)
+        foreach (var line in batch)
         {
-            _allEntries.RemoveAt(0);
-        }
-
-        if (!Sources.Contains(entry.Source))
-        {
-            Sources.Add(entry.Source);
-        }
-
-        if (MatchesFilter(vm))
-        {
-            Entries.Add(vm);
+            if (Lines.Count == MaxLines) Lines.RemoveAt(0);
+            Lines.Add(line);
         }
     }
 
-    private bool MatchesFilter(LogEntryViewModel vm)
+    private void StopCapture()
     {
-        if (LevelFilter.HasValue && vm.Level != LevelFilter.Value) return false;
-        if (!string.IsNullOrEmpty(SourceFilter) && !string.Equals(vm.Source, SourceFilter, StringComparison.Ordinal)) return false;
-        return true;
-    }
-
-    private void ReapplyFilter()
-    {
-        Entries.Clear();
-        foreach (var e in _allEntries)
+        lock (_sync)
         {
-            if (MatchesFilter(e)) Entries.Add(e);
+            var capture = _capture;
+            _capture = null;
+            // The worker owns disposal; it may have already completed.
+            try { capture?.Cancel(); }
+            catch (ObjectDisposedException) { }
         }
+        _deviceKey = null;
+        ConnectedSerial = null;
+        IsRunning = false;
     }
 
-    /// <summary><para>清空全部日志条目。Clears all log entries.</para></summary>
     public void Clear()
     {
-        _allEntries.Clear();
-        Entries.Clear();
-        Sources.Clear();
-        Sources.Add(string.Empty);
+        lock (_sync) _pending.Clear();
+        Lines.Clear();
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        _unsubscribe?.Invoke();
-        _unsubscribe = null;
+        _timer.Stop();
+        _timer.Tick -= OnTick;
+        if (_devices is not null) _devices.PropertyChanged -= OnDevicePropertyChanged;
+        if (_selected is not null) _selected.PropertyChanged -= OnDevicePropertyChanged;
+        StopCapture();
+        Clear();
         GC.SuppressFinalize(this);
     }
 }

@@ -5,8 +5,8 @@
              xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              x:Class="UotanStudio.Views.Workspace.AdbLogView"
              x:DataType="vm:AdbLogViewModel">
-  <Grid RowDefinitions="Auto,*">
-    <!-- 顶栏：筛选与操作按钮 -->
+  <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsAvailable}">
+    <!-- 顶栏：设备与操作按钮 -->
     <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>
         <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Classes="Small"
@@ -14,32 +14,13 @@
           <icons:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
         </Button>
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11"
-                     VerticalAlignment="Center" />
-          <ComboBox Width="110" ItemsSource="{Binding Levels}"
-                    SelectedItem="{Binding LevelFilter}"
-                    HorizontalAlignment="Left">
-            <ComboBox.ItemTemplate>
-              <DataTemplate>
-                <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}"
-                           FontSize="11" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
-          <TextBlock Text="{DynamicResource Log_SourceFilter}" FontSize="11" Margin="12,0,0,0"
-                     VerticalAlignment="Center" />
-          <ComboBox Width="140" ItemsSource="{Binding Sources}"
-                    SelectedItem="{Binding SourceFilter}"
-                    HorizontalAlignment="Left">
-            <ComboBox.ItemTemplate>
-              <DataTemplate>
-                <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}"
-                           FontSize="11" />
-              </DataTemplate>
-            </ComboBox.ItemTemplate>
-          </ComboBox>
+          <TextBlock Text="{Binding ConnectedSerial}" FontSize="11" MaxWidth="220"
+                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+          <CheckBox IsChecked="{Binding AutoScroll}" Content="{DynamicResource AdbLog_Follow}"
+                    FontSize="11" VerticalAlignment="Center" />
         </StackPanel>
-        <TextBlock VerticalAlignment="Center" />
+        <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource LogErrorBrush}"
+                   Margin="8,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
       </DockPanel>
     </Border>
     <!-- 日志编辑器 -->
