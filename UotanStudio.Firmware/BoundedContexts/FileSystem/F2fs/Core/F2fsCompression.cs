@@ -20,8 +20,6 @@ internal static class F2fsCompression
 
     public const int ClusterBytes = F2fsCompressedCluster.ClusterSizeBytes;
 
-    public const uint CompressedFileFlag = 0x0000_0008;
-
     /// <summary>
     /// Compresses a data cluster.
     /// <para>压缩一个数据簇。</para>

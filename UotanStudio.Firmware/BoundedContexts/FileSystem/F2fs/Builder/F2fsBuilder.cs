@@ -323,8 +323,24 @@ public sealed partial class F2fsBuilder
 
         try
         {
-            node.Mtime = (long)(File.GetLastWriteTimeUtc(fullPath) - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
-            node.Ctime = (long)(File.GetCreationTimeUtc(fullPath) - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalSeconds;
+            // F2FS stores inode timestamps as a 64-bit Unix-epoch second plus a
+            // 32-bit nanosecond field.  Compute both from UTC ticks using integer
+            // arithmetic to preserve sub-second precision and avoid the lossy
+            // (long)TotalSeconds cast.  One tick = 100 ns = 1e-7 s, so
+            // nanoseconds = (ticks % 10_000_000) * 100.
+            const long TicksPerSecond = TimeSpan.TicksPerSecond; // 10,000,000
+            const long NanosPerTick = 100;                       // 100 ns per tick
+
+            var writeUtc = File.GetLastWriteTimeUtc(fullPath);
+            var createUtc = File.GetCreationTimeUtc(fullPath);
+
+            var writeEpochTicks = writeUtc.Ticks - DateTime.UnixEpoch.Ticks;
+            node.Mtime = Math.Max(0, writeEpochTicks / TicksPerSecond);
+            node.MtimeNsec = (uint)(Math.Max(0, writeEpochTicks % TicksPerSecond) * NanosPerTick);
+
+            var createEpochTicks = createUtc.Ticks - DateTime.UnixEpoch.Ticks;
+            node.Ctime = Math.Max(0, createEpochTicks / TicksPerSecond);
+            node.CtimeNsec = (uint)(Math.Max(0, createEpochTicks % TicksPerSecond) * NanosPerTick);
         }
         catch
         {
@@ -1208,6 +1224,8 @@ public sealed partial class F2fsBuilder
         public uint Gid;
         public long Mtime;
         public long Ctime;
+        public uint MtimeNsec;
+        public uint CtimeNsec;
     }
 
     private sealed class DnodePlan

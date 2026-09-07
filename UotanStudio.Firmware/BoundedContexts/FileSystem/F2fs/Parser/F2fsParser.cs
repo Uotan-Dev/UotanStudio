@@ -4,7 +4,7 @@ using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 
-public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null);
+public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0);
 
 public sealed class F2fsParser : IDisposable
 {
@@ -332,7 +332,7 @@ public sealed class F2fsParser : IDisposable
             var childPath = prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
             var kind = ClassifyKind(entry.FileType, childInode);
             var symlinkTarget = kind == F2fsEntryKind.Symlink ? ReadSymlinkTarget(entry.Ino, childInode) : null;
-            _entries[childPath] = new F2fsFileEntry(childPath, (long)childInode.Size, entry.Ino, kind, symlinkTarget);
+            _entries[childPath] = new F2fsFileEntry(childPath, (long)childInode.Size, entry.Ino, kind, symlinkTarget, childInode.Uid, childInode.Gid, childInode.Mode);
             if (kind == F2fsEntryKind.Directory)
             {
                 WalkDirectory(entry.Ino, childPath, visited);

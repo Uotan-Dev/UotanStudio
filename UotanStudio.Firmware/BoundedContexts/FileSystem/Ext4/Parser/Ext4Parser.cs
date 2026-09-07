@@ -15,7 +15,7 @@ public sealed class Ext4Parser : IDisposable
         Symlink,
     }
 
-    public sealed record Ext4FileEntry(string Path, long Size, uint Inode, Ext4EntryKind Kind, string? SymlinkTarget = null, IReadOnlyDictionary<string, byte[]>? Xattrs = null);
+    public sealed record Ext4FileEntry(string Path, long Size, uint Inode, Ext4EntryKind Kind, string? SymlinkTarget = null, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0);
 
     private const int SuperblockReadLength = 1024 + 1024;
     private const uint RootInodeNumber = 2;
@@ -381,7 +381,7 @@ public sealed class Ext4Parser : IDisposable
                 var kind = ClassifyKind(entry.FileType, child);
                 var symlinkTarget = kind == Ext4EntryKind.Symlink ? ReadSymlinkTarget(child) : null;
 
-                _entries[childPath] = new Ext4FileEntry(childPath, child.Size, entry.Inode, kind, symlinkTarget, childXattrs);
+                _entries[childPath] = new Ext4FileEntry(childPath, child.Size, entry.Inode, kind, symlinkTarget, childXattrs, (uint)child.UidLo, (uint)child.GidLo, child.Mode);
                 if (kind == Ext4EntryKind.Directory)
                 {
                     WalkDirectory(entry.Inode, childPath, visitedDirectories, depth + 1);
