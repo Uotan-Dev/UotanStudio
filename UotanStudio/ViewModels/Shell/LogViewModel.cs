@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Shell;
@@ -28,6 +29,9 @@ public partial class LogViewModel : ViewModelBase, IDisposable
 
         /// <summary><para>日志文本。</para>Log text.</summary>
         [ObservableProperty] private string _message = string.Empty;
+
+        /// <summary>Complete displayed and searchable text. 用于显示和搜索的完整日志行。</summary>
+        public string Text => $"{Timestamp} [{Level,-5}] {Source} - {Message}".ReplaceLineEndings("\n");
 
         /// <summary>
         /// <para>创建日志条目视图模型。</para>
@@ -77,8 +81,8 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>当前日志面板的展示条目集合（已按级别、组件与通道筛选），UI 绑定此项。</para>
-    /// Collection of entries currently displayed in the log panel (filtered by level, source and channel),
+    /// <para>当前日志面板的展示条目集合（已按级别、组件、通道与内容筛选），UI 绑定此项。</para>
+    /// Collection of entries currently displayed in the log panel (filtered by level, source, channel and message),
     /// bound by the UI.
     /// </summary>
     public ObservableCollection<LogEntryViewModel> Entries { get; } = [];
@@ -125,6 +129,17 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// Source filter: only logs from the selected source are shown; empty means all sources (the default).
     /// </summary>
     [ObservableProperty] private string _sourceFilter = string.Empty;
+
+    /// <summary>
+    /// <para>完整日志行搜索文本，忽略大小写；空字符串表示不限制内容。</para>
+    /// Case-insensitive full-line search; empty text matches all entries.
+    /// </summary>
+    [ObservableProperty] private string _searchText = string.Empty;
+
+    partial void OnSearchTextChanged(string value) => ReapplyFilter();
+
+    [RelayCommand]
+    private void ClearSearch() => SearchText = string.Empty;
 
     /// <summary>
     /// <para>当前日志中出现的全部组件名（去重），首项为空字符串表示"全部组件"，
@@ -237,12 +252,13 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>判断条目是否命中当前级别、组件与通道筛选。</para>
-    /// Determines whether the entry matches the current level, source and channel filters.
+    /// <para>判断条目是否命中当前级别、组件、通道与内容筛选。</para>
+    /// Determines whether the entry matches the current level, source, channel and message filters.
     /// </summary>
     private bool MatchesFilter(LogEntryViewModel vm) =>
         (LevelFilter is null || vm.Level == LevelFilter.Value)
         && (string.IsNullOrEmpty(SourceFilter) || string.Equals(vm.Source, SourceFilter, StringComparison.Ordinal))
+        && (string.IsNullOrEmpty(SearchText) || vm.Text.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
         && (SelectedChannel?.Value is null || LogService.ChannelOf(vm.Source) == SelectedChannel.Value.Value);
 
     /// <summary>

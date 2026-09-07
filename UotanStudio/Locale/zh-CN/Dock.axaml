@@ -38,7 +38,6 @@
     <x:String x:Key="Dock_NoDocumentOpenHint">打开或创建一个工程文件以开始</x:String>
     <x:String x:Key="Dock_Output">输出</x:String>
     <x:String x:Key="Dock_AdbLog">ADB 日志</x:String>
-    <x:String x:Key="AdbLog_Follow">跟随日志</x:String>
     <x:String x:Key="Dock_NodeLeftPane">节点工具箱</x:String>
     <x:String x:Key="Dock_NodeRightPane">节点属性</x:String>
     <x:String x:Key="Dock_NodeBottomPane">执行日志</x:String>
@@ -201,6 +200,18 @@
     <x:String x:Key="Log_CopyDone">日志条目已复制到剪贴板</x:String>
     <x:String x:Key="Log_LevelFilter">级别</x:String>
     <x:String x:Key="Log_SourceFilter">组件</x:String>
+    <x:String x:Key="Log_Search">搜索日志</x:String>
+    <x:String x:Key="Log_ClearSearch">清除搜索</x:String>
+    <x:String x:Key="Log_AutoScroll">自动滚动</x:String>
+    <x:String x:Key="Log_UseRegex">正则表达式</x:String>
+    <x:String x:Key="Log_MatchCase">区分大小写</x:String>
+    <x:String x:Key="Log_Pause">暂停</x:String>
+    <x:String x:Key="Log_Resume">继续</x:String>
+    <x:String x:Key="AdbLog_Reset">重置：仅清除本地日志</x:String>
+    <x:String x:Key="AdbLog_ClearAll">清空：清除本地日志及设备 logcat 缓冲区</x:String>
+    <x:String x:Key="AdbLog_ClearFailed">清空设备 logcat 缓冲区失败：{0}</x:String>
+    <x:String x:Key="Log_RegexInvalid">正则表达式无效：{0}</x:String>
+    <x:String x:Key="Log_RegexTimeout">正则匹配超时，请简化表达式</x:String>
     <x:String x:Key="Log_FilterAll">全部</x:String>
 
 </ResourceDictionary>

@@ -51,7 +51,7 @@
     <x:String x:Key="Log_Channel_Device">设备</x:String>
     <x:String x:Key="Log_Channel_Flash">烧录</x:String>
     <x:String x:Key="Log_Channel_Firmware">固件</x:String>
-    <x:String x:Key="Log_Channel_Build">构建</x:String>
+    <x:String x:Key="Log_Channel_Build">节点</x:String>
 
     <!-- Workspace drag-drop -->
     <x:String x:Key="Workspace_DropNoFiles">拖入内容不含可打开的文件，已忽略</x:String>

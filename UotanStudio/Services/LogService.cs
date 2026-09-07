@@ -35,7 +35,7 @@ public enum LogChannel
     /// <summary><para>固件通道：固件解包/打包、签名与镜像处理日志。</para>Firmware channel: firmware unpack/pack, signing and image processing logs.</summary>
     Firmware,
 
-    /// <summary><para>构建通道：工作流、节点执行、打包与命令行工具日志。</para>Build channel: workflow, node execution, packing and CLI tool logs.</summary>
+    /// <summary><para>节点通道：工作流、节点执行、打包与命令行工具日志。</para>Node channel: workflow, node execution, packing and CLI tool logs.</summary>
     Build
 }
 
@@ -195,11 +195,13 @@ public sealed class LogService : IUnifiedLog
     /// <para>按关键字归类（不区分大小写，顺序优先）：包含 Flash/Fastboot/EDL/Firehose/Sideload → <see cref="LogChannel.Flash"/>；
     /// ADB/Device/USB/Usb/RKDL → <see cref="LogChannel.Device"/>；
     /// Firmware/Payload/AVB/Ext4/Erofs/F2fs/DEX/Format → <see cref="LogChannel.Firmware"/>；
+    /// 组件名 Images（完整匹配）也归入 <see cref="LogChannel.Firmware"/>；
     /// Build/Pack/Node/Workflow/Cli → <see cref="LogChannel.Build"/>；其余归 <see cref="LogChannel.General"/>。
     /// 此方法不改动任何写入调用点，仅作展示层分类。</para>
     /// Classified by keyword (case-insensitive, first match wins): Flash/Fastboot/EDL/Firehose/Sideload → <see cref="LogChannel.Flash"/>;
     /// ADB/Device/USB/Usb/RKDL → <see cref="LogChannel.Device"/>;
     /// Firmware/Payload/AVB/Ext4/Erofs/F2fs/DEX/Format → <see cref="LogChannel.Firmware"/>;
+    /// the exact source name Images also maps to <see cref="LogChannel.Firmware"/>;
     /// Build/Pack/Node/Workflow/Cli → <see cref="LogChannel.Build"/>; otherwise <see cref="LogChannel.General"/>.
     /// This method does not modify any write call sites; it only classifies at the presentation layer.
     /// </remarks>
@@ -222,7 +224,8 @@ public sealed class LogService : IUnifiedLog
             return LogChannel.Device;
         }
 
-        if (ContainsAny(source, "Firmware", "Payload", "AVB", "Ext4", "Erofs", "F2fs", "DEX", "Format"))
+        if (string.Equals(source, "Images", StringComparison.OrdinalIgnoreCase)
+            || ContainsAny(source, "Firmware", "Payload", "AVB", "Ext4", "Erofs", "F2fs", "DEX", "Format"))
         {
             return LogChannel.Firmware;
         }
