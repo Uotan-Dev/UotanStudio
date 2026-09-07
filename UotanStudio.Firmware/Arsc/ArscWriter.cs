@@ -20,7 +20,6 @@ public static class ArscWriter
 
     private const int PackageHeaderSize = 288;
     private const int TypeSpecHeaderSize = 16;
-    private const int TypeHeaderSize = 84;
     private const int ConfigSize = 64;
 
     /// <summary>
@@ -44,6 +43,7 @@ public static class ArscWriter
         var totalSize = 12;
         totalSize += global.Size;
         foreach (var size in packageSizes) totalSize += size;
+        foreach (var chunk in table.ExtraChunks) totalSize += chunk.Length;
 
 
         var buffer = new byte[totalSize];
@@ -60,6 +60,11 @@ public static class ArscWriter
             WritePackage(buffer, ref pos, pkg);
         }
 
+        foreach (var chunk in table.ExtraChunks)
+        {
+            chunk.CopyTo(buffer, pos);
+            pos += chunk.Length;
+        }
         return buffer;
     }
 
@@ -76,11 +81,9 @@ public static class ArscWriter
         pos += 4;
 
 
-        var nameBytes = Encoding.UTF8.GetBytes(pkg.Name);
-        if (nameBytes.Length > 256)
-        {
-            nameBytes = nameBytes[..256];
-        }
+        if (pkg.Name.Length > 127 || pkg.Name.Contains('\0'))
+            throw new ArscException("Package name must fit 127 UTF-16 code units without NUL.");
+        var nameBytes = Encoding.Unicode.GetBytes(pkg.Name);
         nameBytes.CopyTo(buffer, pos);
         pos += 256;
 
@@ -88,7 +91,7 @@ public static class ArscWriter
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), (uint)pkg.TypeStrings.Count);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), (uint)keyStringsOffset);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)pkg.KeyStrings.Count);
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), 0u);
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), pkg.TypeIdOffset);
         pos += 20;
 
         WriteStringPool(buffer, ref pos, BuildPool(pkg.TypeStrings));
@@ -103,18 +106,25 @@ public static class ArscWriter
                 WriteTypeTable(buffer, ref pos, type, pkg);
             }
         }
+        foreach (var typeId in pkg.TypeSpecFlags.Keys.Except(pkg.Types.Select(t => t.Id)).Order())
+            WriteTypeSpec(buffer, ref pos, typeId, [], pkg);
 
 
+        foreach (var chunk in pkg.ExtraChunks)
+        {
+            chunk.CopyTo(buffer, pos);
+            pos += chunk.Length;
+        }
         var packageSize = pos - packageStart;
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(packageStart + 4), (uint)packageSize);
     }
 
-    private static void WriteTypeSpec(byte[] buffer, ref int pos, byte typeId, IGrouping<byte, ResType> group, ResPackage pkg)
+    private static void WriteTypeSpec(byte[] buffer, ref int pos, byte typeId, IEnumerable<ResType> group, ResPackage pkg)
     {
 
 
-        var entryCount = group.Max(t => t.Entries.Count);
         pkg.TypeSpecFlags.TryGetValue(typeId, out var originalFlags);
+        var entryCount = Math.Max(group.Select(t => t.Entries.Count).DefaultIfEmpty().Max(), originalFlags?.Length ?? 0);
 
         var size = TypeSpecHeaderSize + entryCount * 4;
         WriteChunkHeader(buffer, ref pos, ResTableTypeSpecType, TypeSpecHeaderSize, size);
@@ -136,9 +146,11 @@ public static class ArscWriter
     {
         var chunkStart = pos;
         var entryCount = type.Entries.Count;
-        var entriesStart = TypeHeaderSize + entryCount * 4;
+        var configBytes = GetConfig(type);
+        var typeHeaderSize = checked((ushort)(20 + configBytes.Length));
+        var entriesStart = typeHeaderSize + entryCount * 4;
         var size = entriesStart + ComputeEntriesSize(type);
-        WriteChunkHeader(buffer, ref pos, ResTableTypeType, TypeHeaderSize, size);
+        WriteChunkHeader(buffer, ref pos, ResTableTypeType, typeHeaderSize, size);
 
         buffer[pos] = type.Id;
         buffer[pos + 1] = 0;
@@ -147,9 +159,8 @@ public static class ArscWriter
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), (uint)entriesStart);
 
 
-        var configBytes = Convert.FromHexString(type.ConfigHex);
         configBytes.CopyTo(buffer, pos + 12);
-        pos += TypeHeaderSize - 8;
+        pos += typeHeaderSize - 8;
 
 
         var offsetsBase = pos;
@@ -180,7 +191,7 @@ public static class ArscWriter
 
 
             BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos), 8);
-            BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 2), 0);
+            BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 2), (ushort)(entry.Flags & 6));
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), (uint)entry.KeyIndex);
             WriteResValue(buffer, pos + 8, value ?? new ResValue());
             pos += 16;
@@ -189,7 +200,7 @@ public static class ArscWriter
 
 
         BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos), 16);
-        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 2), EntryFlagComplex);
+        BinaryPrimitives.WriteUInt16LittleEndian(buffer.AsSpan(pos + 2), (ushort)(EntryFlagComplex | (entry.Flags & 6)));
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), (uint)entry.KeyIndex);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), value.Parent);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)value.Maps.Count);
@@ -217,14 +228,27 @@ public static class ArscWriter
         size += ComputePoolSize(pkg.KeyStrings);
         foreach (var group in pkg.Types.GroupBy(t => t.Id))
         {
-            var entryCount = group.Max(t => t.Entries.Count);
+            var entryCount = Math.Max(group.Max(t => t.Entries.Count),
+                pkg.TypeSpecFlags.TryGetValue(group.Key, out var flags) ? flags.Length : 0);
             size += TypeSpecHeaderSize + entryCount * 4;
             foreach (var type in group)
             {
-                size += TypeHeaderSize + type.Entries.Count * 4 + ComputeEntriesSize(type);
+                size += 20 + GetConfig(type).Length + type.Entries.Count * 4 + ComputeEntriesSize(type);
             }
         }
+        foreach (var typeId in pkg.TypeSpecFlags.Keys.Except(pkg.Types.Select(t => t.Id)))
+            size += TypeSpecHeaderSize + pkg.TypeSpecFlags[typeId].Length * 4;
+        foreach (var chunk in pkg.ExtraChunks) size += chunk.Length;
         return size;
+    }
+
+    private static byte[] GetConfig(ResType type)
+    {
+        var bytes = string.IsNullOrEmpty(type.ConfigHex) ? new byte[ConfigSize] : Convert.FromHexString(type.ConfigHex);
+        if (bytes.Length < 4 || bytes.Length > ushort.MaxValue - 20 || (bytes.Length & 3) != 0)
+            throw new ArscException("Invalid resource config length.");
+        BinaryPrimitives.WriteUInt32LittleEndian(bytes, (uint)bytes.Length);
+        return bytes;
     }
 
     private static int ComputeEntriesSize(ResType type)
@@ -257,10 +281,10 @@ public static class ArscWriter
     {
         WriteChunkHeader(buffer, ref pos, ResStringPoolType, 28, pool.Size);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)pool.Offsets.Length);
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), 0u);
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 4), (uint)pool.StyleOffsets.Length);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 8), 0x100u);
         BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 12), (uint)pool.StringsStart);
-        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), 0u);
+        BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos + 16), pool.StyleOffsets.Length == 0 ? 0 : (uint)(pool.Size - pool.StyleData.Length));
         pos += 20;
 
         foreach (var offset in pool.Offsets)
@@ -268,18 +292,25 @@ public static class ArscWriter
             BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), (uint)offset);
             pos += 4;
         }
+        foreach (var offset in pool.StyleOffsets)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(buffer.AsSpan(pos), offset);
+            pos += 4;
+        }
         foreach (var payload in pool.Payloads)
         {
             payload.CopyTo(buffer, pos);
             pos += payload.Length;
         }
+        pool.StyleData.CopyTo(buffer, pos);
+        pos += pool.StyleData.Length;
     }
 
     private static PoolLayout BuildPool(AXmlStringPool pool)
     {
         var offsets = new int[pool.Count];
         var payloads = new byte[pool.Count][];
-        var stringsStart = 28 + pool.Count * 4;
+        var stringsStart = 28 + (pool.Count + pool.StyleOffsets.Length) * 4;
         var dataSize = stringsStart;
         for (var i = 0; i < pool.Count; i++)
         {
@@ -287,12 +318,12 @@ public static class ArscWriter
             payloads[i] = EncodeUtf8String(pool.GetString(i));
             dataSize += payloads[i].Length;
         }
-        return new PoolLayout(offsets, payloads, stringsStart, dataSize);
+        return new PoolLayout(offsets, payloads, stringsStart, dataSize + pool.StyleData.Length, pool.StyleOffsets, pool.StyleData);
     }
 
     private static int ComputePoolSize(AXmlStringPool pool)
     {
-        var size = 28 + pool.Count * 4;
+        var size = 28 + (pool.Count + pool.StyleOffsets.Length) * 4 + pool.StyleData.Length;
         for (var i = 0; i < pool.Count; i++)
         {
             size += EncodeUtf8String(pool.GetString(i)).Length;
@@ -328,5 +359,5 @@ public static class ArscWriter
         return [(byte)(0x80 | (length >> 8)), (byte)(length & 0xFF)];
     }
 
-    private sealed record PoolLayout(int[] Offsets, byte[][] Payloads, int StringsStart, int Size);
+    private sealed record PoolLayout(int[] Offsets, byte[][] Payloads, int StringsStart, int Size, uint[] StyleOffsets, byte[] StyleData);
 }

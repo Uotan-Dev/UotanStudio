@@ -6,320 +6,218 @@ namespace UotanStudio.Firmware.Arsc;
 
 public static class ArscParser
 {
-
-
-    private const ushort ResTableType = 0x0002;
-    private const ushort ResStringPoolType = 0x0001;
-    private const ushort ResTablePackageType = 0x0200;
-    private const ushort ResTableTypeSpecType = 0x0202;
-    private const ushort ResTableTypeType = 0x0201;
-
-    private const uint NoEntry = 0xFFFFFFFF;
-    private const uint NoIndex = 0xFFFFFFFF;
-    private const ushort EntryFlagComplex = 0x0001;
-
-    /// <summary>
-    /// Reads ARSC data from a stream and parses it into a resource-table model.
-    /// <para>从流读取 ARSC 数据并解析为资源表模型。</para>
-    /// </summary>
+    /// <summary>Parses a bounded resource table stream. <para>解析有界资源表流。</para></summary>
     public static ResourceTable Parse(Stream stream)
     {
         ArgumentNullException.ThrowIfNull(stream);
-        if (stream.CanSeek)
-        {
-            var length = stream.Length;
-            if (length > Array.MaxLength)
-            {
-                throw new ArscException($"ARSC stream length {length} exceeds maximum array length.");
-            }
-            var data = new byte[(int)length];
-            stream.ReadExactly(data);
-            return Parse(data);
-        }
-
-
-        using var ms = new MemoryStream();
-        stream.CopyTo(ms);
-        return Parse(ms.ToArray());
+        return Parse(AXml.AndroidMetadataReader.Read(stream));
     }
 
-    /// <summary>
-    /// Parses ARSC bytes into a resource-table model.
-    /// <para>解析 ARSC 字节为资源表模型。</para>
-    /// </summary>
+    /// <summary>Parses an Android resource table. <para>解析 Android 资源表。</para></summary>
     public static ResourceTable Parse(byte[] data)
     {
         ArgumentNullException.ThrowIfNull(data);
-        if (data.Length < 12)
-        {
-            throw new ArscException("File too small to be ARSC (header is 12 bytes)");
-        }
-
-        var span = data.AsSpan(0, 12);
-        var type = BinaryPrimitives.ReadUInt16LittleEndian(span);
-        if (type != ResTableType)
-        {
-            throw new ArscException($"Invalid ARSC root chunk type 0x{type:X4} (expected 0x0002)");
-        }
-        var headerSize = BinaryPrimitives.ReadUInt16LittleEndian(span[2..]);
-        var fileSize = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(span[4..]));
-        if (fileSize > data.Length)
-        {
-            throw new ArscException($"ARSC header claims {fileSize} bytes but only {data.Length} are available");
-        }
-
+        Require(data, 0, 12, data.Length);
+        if (U16(data, 0) != 2) throw new ArscException("Invalid resource table magic.");
+        var end = checked((int)U32(data, 4));
+        Require(data, 0, end, data.Length);
+        var header = U16(data, 2);
+        if (header < 12 || header > end) throw new ArscException("Invalid resource table header.");
         var table = new ResourceTable();
-
-        var pos = (int)headerSize;
-        while (pos + 8 <= fileSize)
+        for (var pos = (int)header; pos < end;)
         {
-            var chunkType = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos));
-            var chunkSize = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 4)));
-            if (chunkSize < 8 || pos + chunkSize > fileSize)
+            var size = ChunkSize(data, pos, end);
+            switch (U16(data, pos))
             {
-                throw new ArscException($"Invalid chunk at 0x{pos:X} (type 0x{chunkType:X4}, size {chunkSize})");
+                case 1: table.GlobalPool.Parse(data, pos, size); break;
+                case 0x200: table.Packages.Add(ParsePackage(data, pos, size)); break;
+                default: table.ExtraChunks.Add(data.AsSpan(pos, size).ToArray()); break;
             }
-
-            switch (chunkType)
-            {
-                case ResStringPoolType:
-                    table.GlobalPool.Parse(data, pos, chunkSize);
-                    break;
-
-                case ResTablePackageType:
-                    ParsePackage(data, pos, chunkSize, table);
-                    break;
-
-                default:
-
-
-
-                    break;
-            }
-
-            pos += chunkSize;
+            pos += size;
         }
-
+        if (table.Packages.Count != U32(data, 8)) throw new ArscException("Package count mismatch.");
         return table;
     }
 
-    /// <summary>
-    /// Checks whether the header looks like ARSC magic (for content sniffing).
-    /// <para>判断头部是否为 ARSC 魔数（用于内容探测）。</para>
-    /// </summary>
-    public static bool IsArsc(byte[] data)
+    /// <summary>Checks the resource table magic. <para>检查资源表魔数。</para></summary>
+    public static bool IsArsc(byte[] data) => data is { Length: >= 12 } && U16(data, 0) == 2;
+
+    private static ResPackage ParsePackage(byte[] data, int offset, int size)
     {
-        if (data is null || data.Length < 12) return false;
-        var type = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(0, 2));
-        return type == ResTableType;
-    }
-
-    private static void ParsePackage(byte[] data, int offset, int chunkSize, ResourceTable table)
-    {
-
-
-        var id = data[offset + 8];
-        var name = Encoding.UTF8.GetString(data, offset + 12, 128 * 2).TrimEnd('\0');
+        var header = U16(data, offset + 2);
+        if (header < 284) throw new ArscException("Truncated package header.");
         var pkg = new ResPackage
         {
-            Id = id,
-            Name = name
+            Id = checked((byte)U32(data, offset + 8)),
+            Name = Encoding.Unicode.GetString(data, offset + 12, 256).Split('\0')[0],
+            TypeIdOffset = header >= 288 ? U32(data, offset + 284) : 0
         };
-
-        var pos = offset + headerSizeOf(data, offset);
-        var end = offset + chunkSize;
-
-
-        var typeSpecIds = new HashSet<byte>();
-        while (pos + 8 <= end)
+        var typeStrings = U32(data, offset + 268);
+        var keyStrings = U32(data, offset + 276);
+        var end = offset + size;
+        for (var pos = offset + header; pos < end;)
         {
-            var chunkType = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos));
-            var subSize = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 4)));
-            if (subSize < 8 || pos + subSize > end)
+            var subSize = ChunkSize(data, pos, end);
+            switch (U16(data, pos))
             {
-                break;
-            }
-
-            switch (chunkType)
-            {
-                case ResStringPoolType:
-                    {
-
-
-                        if (pkg.TypeStrings.Count == 0 && pkg.KeyStrings.Count == 0)
-                        {
-                            pkg.TypeStrings.Parse(data, pos, subSize);
-                        }
-                        else if (pkg.KeyStrings.Count == 0)
-                        {
-                            pkg.KeyStrings.Parse(data, pos, subSize);
-                        }
-                        break;
-                    }
-
-                case ResTableTypeSpecType:
-                    {
-
-
-
-                        var specId = data[pos + 8];
-                        var specEntryCount = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 12)));
-                        var flags = new uint[specEntryCount];
-                        for (var f = 0; f < specEntryCount; f++)
-                        {
-                            flags[f] = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos + 16 + f * 4));
-                        }
-                        pkg.TypeSpecFlags[specId] = flags;
-                        break;
-                    }
-
-                case ResTableTypeType:
-                    ParseTypeTable(data, pos, subSize, pkg);
+                case 1 when pos - offset == typeStrings: pkg.TypeStrings.Parse(data, pos, subSize); break;
+                case 1 when pos - offset == keyStrings: pkg.KeyStrings.Parse(data, pos, subSize); break;
+                case 0x202:
+                    Require(data, pos, 16, pos + subSize);
+                    var count = checked((int)U32(data, pos + 12));
+                    if (count > (subSize - 16) / 4) throw new ArscException("Truncated type specification.");
+                    var flags = new uint[count];
+                    for (var i = 0; i < count; i++) flags[i] = U32(data, pos + 16 + i * 4);
+                    pkg.TypeSpecFlags[data[pos + 8]] = flags;
                     break;
+                case 0x201: ParseType(data, pos, subSize, pkg); break;
+                default: pkg.ExtraChunks.Add(data.AsSpan(pos, subSize).ToArray()); break;
             }
-
             pos += subSize;
         }
-
-        table.Packages.Add(pkg);
+        return pkg;
     }
 
-    private static void ParseTypeTable(byte[] data, int offset, int chunkSize, ResPackage pkg)
+    private static void ParseType(byte[] data, int offset, int size, ResPackage pkg)
     {
-
-
-        var id = data[offset + 8];
-        var entryCount = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 12));
-        var entriesStart = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 16)));
-
-
-        var configSize = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 20));
-        var configActualSize = configSize is >= 0x40 and <= 0x80 ? checked((int)configSize) : 0x40;
-
+        Require(data, offset, 24, offset + size);
+        var header = U16(data, offset + 2);
+        var encoding = data[offset + 9];
+        var count = checked((int)U32(data, offset + 12));
+        var entriesStart = checked((int)U32(data, offset + 16));
+        var configSize = checked((int)U32(data, offset + 20));
+        var width = encoding == 2 ? 2 : 4;
+        if (encoding > 2 || header < 24 || configSize < 4 || configSize > header - 20
+            || entriesStart < header || entriesStart > size || count > (entriesStart - header) / width)
+            throw new ArscException("Invalid type configuration or offsets.");
         var type = new ResType
         {
-            Id = id,
-
-
-            TypeNameIndex = Math.Max(0, id - 1),
-            ConfigDescription = ParseConfig(data, offset + 20),
-            ConfigHex = Convert.ToHexString(data.AsSpan(offset + 20, configActualSize))
+            Id = data[offset + 8],
+            TypeNameIndex = Math.Max(0, data[offset + 8] - 1),
+            ConfigHex = Convert.ToHexString(data.AsSpan(offset + 20, configSize)),
+            ConfigDescription = DescribeConfig(data.AsSpan(offset + 20, configSize))
         };
-
-
-        var offsetsBase = offset + 20 + configActualSize;
-        for (var i = 0; i < entryCount; i++)
+        var previousIndex = -1;
+        for (var i = 0; i < count; i++)
         {
-            var entryOff = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offsetsBase + i * 4));
-            if (entryOff == NoEntry)
+            var index = i;
+            uint relative;
+            var position = offset + header + i * width;
+            if (encoding == 1)
             {
-                type.Entries.Add(null);
-                continue;
+                index = U16(data, position);
+                if (index <= previousIndex) throw new ArscException("Sparse entry indices are not increasing.");
+                previousIndex = index;
+                relative = (uint)U16(data, position + 2) * 4;
             }
-
-            var entryPos = offset + entriesStart + checked((int)entryOff);
-            type.Entries.Add(ParseEntry(data, entryPos, pkg));
+            else if (encoding == 2)
+            {
+                var shortOffset = U16(data, position);
+                relative = shortOffset == ushort.MaxValue ? uint.MaxValue : (uint)shortOffset * 4;
+            }
+            else relative = U32(data, position);
+            if (index > ushort.MaxValue) throw new ArscException("Resource entry index exceeds 16 bits.");
+            while (type.Entries.Count <= index) type.Entries.Add(null);
+            if (relative == uint.MaxValue) continue;
+            if (relative > (uint)(size - entriesStart)) throw new ArscException("Entry is outside its type chunk.");
+            type.Entries[index] = ParseEntry(data, offset + entriesStart + (int)relative, offset + size);
         }
-
         pkg.Types.Add(type);
     }
 
-    private static ResEntry? ParseEntry(byte[] data, int offset, ResPackage pkg)
+    private static ResEntry ParseEntry(byte[] data, int pos, int end)
     {
-
-        var size = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset));
-        var flags = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 2));
-        var keyIndex = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4)));
-
-        var entry = new ResEntry { KeyIndex = keyIndex };
-
-        if ((flags & EntryFlagComplex) != 0)
+        Require(data, pos, 8, end);
+        var size = U16(data, pos);
+        var flags = U16(data, pos + 2);
+        if ((flags & 8) != 0)
         {
-
-            var parent = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 8));
-            var mapCount = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 12));
-            var value = new ResValue { IsComplex = true, Parent = parent };
-            var mapPos = offset + 16;
-            for (var m = 0; m < mapCount; m++)
+            if ((flags & 1) != 0) throw new ArscException("Compact entries cannot be complex.");
+            return new ResEntry
             {
-                var name = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(mapPos));
-                var val = ParseResValue(data, mapPos + 4, pkg);
-                value.Maps.Add(new ResMap { Name = name, Value = val });
-                mapPos += 12;
-            }
-            entry.Value = value;
+                KeyIndex = size,
+                Flags = (ushort)(flags & 6),
+                Value = new ResValue { Type = (ResValueType)(flags >> 8), Data = U32(data, pos + 4) }
+            };
         }
-        else
+        if (size < 8) throw new ArscException("Invalid resource entry size.");
+        Require(data, pos, size, end);
+        var entry = new ResEntry { KeyIndex = checked((int)U32(data, pos + 4)), Flags = flags };
+        if ((flags & 1) == 0)
         {
-            entry.Value = ParseResValue(data, offset + 8, pkg);
+            entry.Value = ParseValue(data, pos + size, end);
+            return entry;
         }
-
+        if (size < 16) throw new ArscException("Invalid complex resource entry size.");
+        var count = U32(data, pos + 12);
+        if (count > (uint)((end - pos - size) / 12)) throw new ArscException("Truncated resource map.");
+        var value = new ResValue { IsComplex = true, Parent = U32(data, pos + 8) };
+        for (var i = 0; i < count; i++)
+        {
+            var mapPos = pos + size + i * 12;
+            value.Maps.Add(new ResMap { Name = U32(data, mapPos), Value = ParseValue(data, mapPos + 4, end) });
+        }
+        entry.Value = value;
         return entry;
     }
 
-    private static ResValue ParseResValue(byte[] data, int offset, ResPackage pkg)
+    private static ResValue ParseValue(byte[] data, int pos, int end)
     {
-
-        var valueType = data[offset + 3];
-        var valueData = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(offset + 4));
-        return new ResValue
-        {
-            Type = (ResValueType)valueType,
-            Data = valueData
-        };
+        Require(data, pos, 8, end);
+        if (U16(data, pos) != 8) throw new ArscException("Invalid typed resource value size.");
+        return new ResValue { Type = (ResValueType)data[pos + 3], Data = U32(data, pos + 4) };
     }
 
-    private static int headerSizeOf(byte[] data, int offset)
-        => BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 2));
-
-    /// <summary>
-    /// Parses a ResTable_config into a readable description (mcc/mnc, locale, orientation, density).
-    /// <para>解析 ResTable_config 为可读描述（mcc/mnc、locale、orientation、density）。</para>
-    /// </summary>
-    private static string ParseConfig(byte[] data, int offset)
+    private static string DescribeConfig(ReadOnlySpan<byte> config)
     {
-
-
-        var mcc = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 4));
-        var mnc = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 6));
-        var language = data[offset + 8];
-        var country = data[offset + 9];
-        var orientation = data[offset + 12];
-        var density = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(offset + 14));
-
-        var sb = new StringBuilder();
-        if (mcc != 0) sb.Append("mcc").Append(mcc.ToString("D3", CultureInfo.InvariantCulture)).Append('-');
-        if (mnc != 0) sb.Append("mnc").Append(mnc.ToString("D3", CultureInfo.InvariantCulture)).Append('-');
-        if (language != 0 && language != 0xff)
-        {
-            sb.Append((char)language);
-            if (country != 0 && country != 0xff) sb.Append((char)country);
-            sb.Append('-');
-        }
-        if (orientation != 0 && orientation != 0xff)
-        {
-            sb.Append(orientation switch
-            {
-                1 => "port",
-                2 => "land",
-                _ => "orient" + orientation
-            }).Append('-');
-        }
-        if (density != 0 && density != 0xffff)
-        {
-            sb.Append("d").Append(density == 0xfffe ? "anydpi" : density.ToString(CultureInfo.InvariantCulture));
-            sb.Append('-');
-        }
-        var result = sb.ToString().TrimEnd('-');
-        return result.Length > 0 ? result : "default";
+        if (config.Length < 16) return "default";
+        var parts = new List<string>();
+        var mcc = BinaryPrimitives.ReadUInt16LittleEndian(config[4..]);
+        var mnc = BinaryPrimitives.ReadUInt16LittleEndian(config[6..]);
+        if (mcc != 0) parts.Add("mcc" + mcc.ToString("D3", CultureInfo.InvariantCulture));
+        if (mnc != 0) parts.Add("mnc" + mnc.ToString("D3", CultureInfo.InvariantCulture));
+        var language = DecodeLocale(config[8], config[9], 'a');
+        var region = DecodeLocale(config[10], config[11], '0');
+        if (language.Length > 0) parts.Add(language);
+        if (region.Length > 0) parts.Add("r" + region);
+        if (config[12] == 1) parts.Add("port");
+        else if (config[12] == 2) parts.Add("land");
+        var density = BinaryPrimitives.ReadUInt16LittleEndian(config[14..]);
+        if (density != 0) parts.Add(density switch { 0xfffe => "anydpi", 0xffff => "nodpi", _ => "d" + density });
+        return parts.Count > 0 ? string.Join('-', parts) : "default";
     }
+
+    private static string DecodeLocale(byte first, byte second, char basis)
+    {
+        if (first == 0) return string.Empty;
+        if ((first & 0x80) == 0) return new string([(char)first, (char)second]).TrimEnd('\0');
+        return new string([(char)(basis + (second & 31)),
+            (char)(basis + ((second & 224) >> 5) + ((first & 3) << 3)),
+            (char)(basis + ((first & 124) >> 2))]);
+    }
+
+    private static int ChunkSize(byte[] data, int pos, int end)
+    {
+        Require(data, pos, 8, end);
+        var size = checked((int)U32(data, pos + 4));
+        var header = U16(data, pos + 2);
+        if (header < 8 || size < header) throw new ArscException("Invalid resource chunk header.");
+        Require(data, pos, size, end);
+        return size;
+    }
+
+    private static void Require(byte[] data, int pos, int length, int end)
+    {
+        if (pos < 0 || length < 0 || end > data.Length || pos > end || length > end - pos)
+            throw new ArscException("Truncated resource table.");
+    }
+
+    private static ushort U16(byte[] data, int pos) => BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(pos));
+    private static uint U32(byte[] data, int pos) => BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(pos));
 }
 
 public sealed class ArscException : Exception
 {
-    /// <summary>
-    /// Creates an ARSC exception.
-    /// <para>创建 ARSC 异常。</para>
-    /// </summary>
+    /// <summary>Initializes a resource table exception. <para>初始化资源表异常。</para></summary>
     public ArscException(string message) : base(message) { }
 }

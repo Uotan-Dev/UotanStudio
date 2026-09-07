@@ -103,9 +103,8 @@ public sealed class ResValue
 
     private string FormatDimension()
     {
-        var raw = unchecked((int)Data);
         var low4 = Data & 0x0f;
-        var value = raw / (float)0x10000;
+        var value = AndroidComplexValue.ToFloat(Data);
         var unit = low4 switch
         {
             0 => "px",
@@ -121,7 +120,7 @@ public sealed class ResValue
 
     private string FormatFraction()
     {
-        var value = unchecked((int)Data) / 65536f;
+        var value = AndroidComplexValue.ToFloat(Data) * 100f;
         var unit = (Data & 0x0f) switch { 0 => "%", 1 => "%p", _ => string.Empty };
         return value.ToString("0.###", CultureInfo.InvariantCulture) + unit;
     }
@@ -136,6 +135,8 @@ public sealed class ResMap
 
 public sealed class ResEntry
 {
+    /// <summary>Gets or sets the entry flags. <para>获取或设置条目标志。</para></summary>
+    public ushort Flags { get; set; }
     public int KeyIndex { get; set; }
 
     public ResValue? Value { get; set; }
@@ -156,6 +157,9 @@ public sealed class ResType
 
 public sealed class ResPackage
 {
+    internal List<byte[]> ExtraChunks { get; } = [];
+    /// <summary>Gets or sets the resource type ID offset. <para>获取或设置资源类型 ID 偏移。</para></summary>
+    public uint TypeIdOffset { get; set; }
     public byte Id { get; set; }
 
     public string Name { get; set; } = string.Empty;
@@ -173,6 +177,7 @@ public sealed class ResPackage
 
 public sealed class ResourceTable
 {
+    internal List<byte[]> ExtraChunks { get; } = [];
     public AXmlStringPool GlobalPool { get; } = new();
 
     public List<ResPackage> Packages { get; } = [];
