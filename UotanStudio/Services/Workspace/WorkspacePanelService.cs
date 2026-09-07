@@ -28,6 +28,12 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <summary>属性面板键。 Properties panel key.</summary>
     public const string Properties = "Properties";
 
+    /// <summary>工作区日志面板键。 Workspace log panel key.</summary>
+    public const string WorkspaceLog = "WorkspaceLog";
+
+    /// <summary>ADB 日志面板键。 ADB log panel key.</summary>
+    public const string AdbLog = "AdbLog";
+
     /// <summary>
     /// <para>单例实例。</para>
     /// Singleton instance.
@@ -79,6 +85,20 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _propertiesVisible = true;
+
+    /// <summary>
+    /// <para>工作区日志面板当前是否可见。</para>
+    /// Whether the workspace log panel is currently visible.
+    /// </summary>
+    [ObservableProperty]
+    private bool _workspaceLogVisible = true;
+
+    /// <summary>
+    /// <para>ADB 日志面板当前是否可见。</para>
+    /// Whether the ADB log panel is currently visible.
+    /// </summary>
+    [ObservableProperty]
+    private bool _adbLogVisible = true;
 
     /// <summary>
     /// <para>注册一个工作区面板及其宿主停靠区，并同步初始可见状态。
@@ -220,6 +240,12 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 break;
             case Properties:
                 PropertiesVisible = value;
+                break;
+            case WorkspaceLog:
+                WorkspaceLogVisible = value;
+                break;
+            case AdbLog:
+                AdbLogVisible = value;
                 break;
         }
     }

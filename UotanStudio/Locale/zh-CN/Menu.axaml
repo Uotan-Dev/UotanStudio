@@ -46,6 +46,8 @@
     <x:String x:Key="Menu_WindowDevice">设备</x:String>
     <x:String x:Key="Menu_WindowImages">镜像管理</x:String>
     <x:String x:Key="Menu_WindowProperties">属性</x:String>
+    <x:String x:Key="Menu_WindowWorkspaceLog">日志</x:String>
+    <x:String x:Key="Menu_WindowAdbLog">ADB 日志</x:String>
 
     <!-- 工具菜单 -->
     <x:String x:Key="Menu_FlashTools">烧录工具</x:String>

@@ -659,6 +659,14 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ToggleProperties() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Properties);
 
+    /// <summary><para>显示或隐藏工作区日志面板。</para>Show or hide the workspace log panel.</summary>
+    [RelayCommand]
+    private void ToggleWorkspaceLog() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.WorkspaceLog);
+
+    /// <summary><para>显示或隐藏 ADB 日志面板。</para>Show or hide the ADB log panel.</summary>
+    [RelayCommand]
+    private void ToggleAdbLog() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.AdbLog);
+
     // ===== 工具 / Tools =====
 
     /// <summary>

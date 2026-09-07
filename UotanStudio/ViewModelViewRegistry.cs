@@ -45,6 +45,8 @@ internal static class ViewModelViewRegistry
         [typeof(ProjectSettingViewModel)] = () => new ProjectSettingView(),
         [typeof(PropertiesViewModel)] = () => new PropertiesView(),
         [typeof(DeviceViewModel)] = () => new DeviceView(),
+        [typeof(WorkspaceLogViewModel)] = () => new WorkspaceLogView(),
+        [typeof(AdbLogViewModel)] = () => new AdbLogView(),
     };
 
     /// <summary>

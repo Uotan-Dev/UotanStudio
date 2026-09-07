@@ -124,9 +124,17 @@
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ImagesViewVisible, Mode=OneWay}"
 							  Command="{Binding MenuVM.ToggleImagesViewCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowProperties}"
-							  ToggleType="CheckBox"
-							  IsChecked="{Binding MenuVM.WorkspacePanels.PropertiesVisible, Mode=OneWay}"
-							  Command="{Binding MenuVM.TogglePropertiesCommand}" />
+					     ToggleType="CheckBox"
+					     IsChecked="{Binding MenuVM.WorkspacePanels.PropertiesVisible, Mode=OneWay}"
+					     Command="{Binding MenuVM.TogglePropertiesCommand}" />
+					<MenuItem Header="{DynamicResource Menu_WindowWorkspaceLog}"
+					     ToggleType="CheckBox"
+					     IsChecked="{Binding MenuVM.WorkspacePanels.WorkspaceLogVisible, Mode=OneWay}"
+					     Command="{Binding MenuVM.ToggleWorkspaceLogCommand}" />
+					<MenuItem Header="{DynamicResource Menu_WindowAdbLog}"
+					     ToggleType="CheckBox"
+					     IsChecked="{Binding MenuVM.WorkspacePanels.AdbLogVisible, Mode=OneWay}"
+					     Command="{Binding MenuVM.ToggleAdbLogCommand}" />
 				</MenuItem>
 
 				<!-- 工具 / Tools -->
