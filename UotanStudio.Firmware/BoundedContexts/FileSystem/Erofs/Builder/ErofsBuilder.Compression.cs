@@ -11,43 +11,26 @@ public sealed partial class ErofsBuilder
     {
         if (!options.Compress || options.Algorithm == ErofsCompressionAlgorithm.Lz4) return [];
 
-        // erofs_fs.h: struct erofs_compr_cfgs { __le16 format; __le16 reserved; } follows the LE16 length prefix.
-        // Algorithm-specific data begins after the 4-byte header (kernel: (void*)(ccfg + 1)).
-        var headerSize = 4; // format(u16) + reserved(u16)
-        int algorithmSpecificDataSize;
-        switch (options.Algorithm)
+        // Linux fs/erofs/erofs_fs.h: each algorithm has its own length-prefixed record.
+        var length = options.Algorithm switch
         {
-            case ErofsCompressionAlgorithm.Lzma:
-                algorithmSpecificDataSize = 4; // dict_size LE32
-                break;
-            case ErofsCompressionAlgorithm.Deflate:
-                algorithmSpecificDataSize = 1; // window_bits u8
-                break;
-            case ErofsCompressionAlgorithm.Zstd:
-                algorithmSpecificDataSize = 2; // window_size LE16
-                break;
-            default:
-                return [];
-        }
-
-        var length = headerSize + algorithmSpecificDataSize;
+            ErofsCompressionAlgorithm.Lzma => 14,
+            ErofsCompressionAlgorithm.Deflate or ErofsCompressionAlgorithm.Zstd => 6,
+            _ => throw new ArgumentOutOfRangeException(nameof(options.Algorithm))
+        };
         var configuration = new byte[length + 2];
         BinaryPrimitives.WriteUInt16LittleEndian(configuration, (ushort)length);
 
-        var format = (ushort)((int)options.Algorithm << 1);
-        BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(2), format);
-        // reserved at [4..6] already zero
-
         switch (options.Algorithm)
         {
             case ErofsCompressionAlgorithm.Lzma:
-                BinaryPrimitives.WriteUInt32LittleEndian(configuration.AsSpan(6), 8 << 20);
+                BinaryPrimitives.WriteUInt32LittleEndian(configuration.AsSpan(2), 8 << 20);
                 break;
             case ErofsCompressionAlgorithm.Deflate:
-                configuration[6] = 15;
+                configuration[2] = 15;
                 break;
             case ErofsCompressionAlgorithm.Zstd:
-                BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(6), 1 << 12);
+                configuration[3] = 20 - 10; // windowLog minus ZSTD_WINDOWLOG_ABSOLUTEMIN.
                 break;
         }
         return configuration;

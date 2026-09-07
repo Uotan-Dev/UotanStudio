@@ -56,6 +56,7 @@ public sealed partial class ErofsParser : IDisposable
     private readonly ErofsDeviceSlot[]? _deviceSlots;
     private bool _flatDevice;
     private List<ErofsFileEntry>? _fileTable;
+    private List<string> _directoryPaths = [];
     private ErofsInode? _packedInode;
 
     /// <summary>
@@ -306,11 +307,13 @@ public sealed partial class ErofsParser : IDisposable
         ArgumentNullException.ThrowIfNull(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
         var entries = EnumerateFiles().ToList();
+        foreach (var directory in _directoryPaths)
+            Directory.CreateDirectory(SharedKernel.FileExtraction.ResolvePath(outputDirectory, directory));
         var totalCount = entries.Count;
         var processedCount = 0;
         foreach (var entry in entries)
         {
-            var target = Path.Combine(outputDirectory, entry.Path.Replace('/', Path.DirectorySeparatorChar));
+            var target = SharedKernel.FileExtraction.ResolvePath(outputDirectory, entry.Path);
             var parent = Path.GetDirectoryName(target);
             if (!string.IsNullOrEmpty(parent))
             {
@@ -566,11 +569,13 @@ public sealed partial class ErofsParser : IDisposable
     {
         var result = new List<ErofsFileEntry>();
         var visitedDirectories = new HashSet<ulong>();
-        WalkDirectory(_superblock.RootNid64, string.Empty, visitedDirectories, result);
+        var directories = new List<string>();
+        WalkDirectory(_superblock.RootNid64, string.Empty, visitedDirectories, result, directories);
+        _directoryPaths = directories;
         return result;
     }
 
-    private void WalkDirectory(ulong nid, string prefix, HashSet<ulong> visitedDirectories, List<ErofsFileEntry> result)
+    private void WalkDirectory(ulong nid, string prefix, HashSet<ulong> visitedDirectories, List<ErofsFileEntry> result, List<string> directories)
     {
         if (!visitedDirectories.Add(nid))
         {
@@ -587,6 +592,7 @@ public sealed partial class ErofsParser : IDisposable
 
         foreach (var entry in ReadDirectory(nid, inode))
         {
+            if (entry.Name is "." or "..") continue;
             if (entry.FileType == ErofsInode.FileTypeDirectory)
             {
 
@@ -597,7 +603,8 @@ public sealed partial class ErofsParser : IDisposable
                 }
 
                 var directoryPath = JoinPath(prefix, entry.Name);
-                WalkDirectory(entry.Nid, directoryPath, visitedDirectories, result);
+                directories.Add(directoryPath);
+                WalkDirectory(entry.Nid, directoryPath, visitedDirectories, result, directories);
                 continue;
             }
 
@@ -796,18 +803,7 @@ public sealed partial class ErofsParser : IDisposable
     private List<ErofsDirectoryEntry> ReadDirectory(ulong nid, ErofsInode inode)
     {
         var dirBlockSize = DirectoryBlockSize;
-        if (inode.DataLayout == ErofsInode.DataLayoutInline)
-        {
-
-
-            var start = _superblock.GetInodeOffset(nid) + inode.InlineDataOffset;
-            var length = (long)inode.Size;
-            CheckRange(start, length, "Inline directory data");
-            var data = ReadBytes(start, checked((int)Math.Min(length, MaxMetadataComponentSize)), "Inline directory data");
-            return ParseDirectoryData(data, dirBlockSize, length);
-        }
-
-        if (inode.DataLayout != ErofsInode.DataLayoutFlat)
+        if (inode.DataLayout is not (ErofsInode.DataLayoutFlat or ErofsInode.DataLayoutInline))
         {
 
 
@@ -816,20 +812,25 @@ public sealed partial class ErofsParser : IDisposable
 
 
         var flatStart = checked(inode.RawBlockAddress * _blockSize);
-        var flatLength = (long)inode.Size;
-        CheckRange(flatStart, flatLength, "Directory data");
-        if (flatLength > MaxMetadataComponentSize)
+        var length = checked((long)inode.Size);
+        var flatLength = inode.DataLayout == ErofsInode.DataLayoutInline
+            ? length / _blockSize * _blockSize : length;
+        if (flatLength > 0) CheckRange(flatStart, flatLength, "Directory data");
+        if (length > MaxMetadataComponentSize)
         {
             throw new InvalidDataException(
-                $"Directory data size {flatLength} exceeds the limit of {MaxMetadataComponentSize} bytes.");
+                $"Directory data size {length} exceeds the limit of {MaxMetadataComponentSize} bytes.");
         }
 
 
         var result = new List<ErofsDirectoryEntry>();
-        for (var done = 0L; done < flatLength; done += dirBlockSize)
+        // Linux erofs_map_blocks: only the final partial block resides beside the inode.
+        for (var done = 0L; done < length; done += dirBlockSize)
         {
-            var blockLength = (int)Math.Min(dirBlockSize, flatLength - done);
-            var block = ReadBytes(flatStart + done, blockLength, "Directory data");
+            var blockLength = (int)Math.Min(dirBlockSize, length - done);
+            var offset = done < flatLength ? checked(flatStart + done)
+                : checked(_superblock.GetInodeOffset(nid) + inode.InlineDataOffset + done - flatLength);
+            var block = ReadBytes(offset, blockLength, "Directory data");
             result.AddRange(ParseDirectoryData(block, dirBlockSize, blockLength));
         }
 

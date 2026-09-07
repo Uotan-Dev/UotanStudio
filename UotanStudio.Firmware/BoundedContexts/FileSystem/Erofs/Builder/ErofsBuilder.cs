@@ -647,7 +647,7 @@ public sealed partial class ErofsBuilder
                 var resident = metaboxResident[i];
                 resident.MetaboxSlot = i;
                 resident.MetaOffset = -1;
-                resident.Nid = NidMetaboxFlag | (ulong)i;
+                resident.Nid = NidMetaboxFlag | (ulong)(uint)i;
             }
         }
 
