@@ -270,6 +270,13 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
             edited.Text = "edited";
             await workspace.OpenDocumentAsync(otherPath, EditorOpenMode.Text);
             var operations = new ProjectOperationsService { CurrentProjectPath = solutionPath, WorkspaceVM = workspace, NodeEditorVM = nodes };
+            var originalProject = File.ReadAllBytes(firstProject);
+            await operations.AutoSaveAsync(persistProject: false);
+            Assert.False(edited.IsDirty);
+            Assert.Equal(originalProject, File.ReadAllBytes(firstProject));
+            Assert.False(File.Exists(solutionPath));
+            await operations.AutoSaveAsync(persistPageState: false);
+            Assert.Null((await SolutionPersistenceService.LoadFirmwareProjectAsync(firstProject, Cancellation))!.OpenDocuments);
             await operations.AutoSaveAsync();
             Assert.False(edited.IsDirty);
             Assert.Equal("edited", File.ReadAllText(textPath));
@@ -280,6 +287,9 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
             Assert.Equal(2, firmware!.OpenDocuments!.Count);
             Assert.Equal("first/images/boot.img", Assert.Single(firmware.Images).RelativePath);
             Assert.True(firmware.OpenDocuments[1].IsActive);
+            workspace.FindDocumentsPanePublic()!.VisibleDockables!.Clear();
+            await operations.AutoSaveAsync(persistPageState: false);
+            Assert.Equal(2, (await SolutionPersistenceService.LoadFirmwareProjectAsync(firstProject, Cancellation))!.OpenDocuments!.Count);
         }
         finally
         {
