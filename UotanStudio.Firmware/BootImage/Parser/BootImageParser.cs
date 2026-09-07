@@ -152,7 +152,16 @@ public class BootImageParser : IDisposable
         Header.PageSize = ReadUInt32LE(data, 36);
         Header.OsVersion = ReadUInt32LE(data, 44);
         Header.ImageName = ReadString(data, 48, 16).TrimEnd('\0');
-        Header.CommandLine = (ReadString(data, 64, 512) + ReadString(data, 608, 1024)).TrimEnd('\0');
+        var commandLine = new byte[1536];
+        var first = data.AsSpan(64, 512);
+        var extra = data.AsSpan(608, 1024);
+        var firstLength = first.IndexOf((byte)0);
+        var extraLength = extra.IndexOf((byte)0);
+        if (firstLength < 0) firstLength = first.Length;
+        if (extraLength < 0) extraLength = extra.Length;
+        first[..firstLength].CopyTo(commandLine);
+        extra[..extraLength].CopyTo(commandLine.AsSpan(firstLength));
+        Header.CommandLine = Encoding.UTF8.GetString(commandLine, 0, firstLength + extraLength);
         Header.ProductName = Header.ImageName;
 
         for (var i = 0; i < 8; i++)
@@ -336,7 +345,7 @@ public class BootImageParser : IDisposable
 
         var bytes = new byte[actualLength];
         Array.Copy(data, offset, bytes, 0, actualLength);
-        return Encoding.ASCII.GetString(bytes);
+        return Encoding.UTF8.GetString(bytes);
     }
 
     private static uint AlignToPage(uint offset, uint pageSize) => (offset + pageSize - 1) & ~(pageSize - 1);

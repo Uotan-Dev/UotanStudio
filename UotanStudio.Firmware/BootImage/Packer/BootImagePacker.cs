@@ -1,5 +1,9 @@
 ﻿using System.Text;
 
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using UotanStudio.Firmware.Common;
+
 namespace UotanStudio.Firmware.BootImage;
 
 public class BootImagePacker
@@ -44,10 +48,7 @@ public class BootImagePacker
     /// </summary>
     public void PackToFile(string outputPath)
     {
-
-        using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None,
-            bufferSize: 65536, FileOptions.SequentialScan);
-        PackToStream(fs);
+        FileExtraction.WriteAtomic(outputPath, PackToStream);
     }
 
     /// <summary>
@@ -56,6 +57,8 @@ public class BootImagePacker
     /// </summary>
     public void PackToStream(Stream output)
     {
+        if (Header.HeaderVersion is < BootImageVersion.V0 or > BootImageVersion.V4)
+            throw new ArgumentException("Unknown boot image version.", nameof(Header.HeaderVersion));
         if (Header.HeaderVersion >= BootImageVersion.V3)
         {
             PackV3OrV4(output);
@@ -82,6 +85,9 @@ public class BootImagePacker
     private void PackV0V2(Stream output)
     {
         var pageSize = Header.PageSize > 0 ? Header.PageSize : 2048;
+        if (pageSize < 2048 || (pageSize & (pageSize - 1)) != 0 || pageSize > 65536)
+            throw new ArgumentException("Boot page size must be a power of two from 2048 to 65536.");
+        var commandLine = EncodeCommandLine(1534);
         Header.KernelSize = (uint)Kernel.Length;
         Header.RamdiskSize = (uint)Ramdisk.Length;
         Header.SecondSize = (uint)Second.Length;
@@ -119,23 +125,27 @@ public class BootImagePacker
         writer.Write(nameBytes);
 
         var cmdLine = new byte[512];
-        var cmdSrc = Encoding.ASCII.GetBytes(Header.CommandLine ?? string.Empty);
-        Array.Copy(cmdSrc, cmdLine, Math.Min(cmdSrc.Length, 512));
+        commandLine.AsSpan(0, Math.Min(commandLine.Length, 511)).CopyTo(cmdLine);
         writer.Write(cmdLine);
 
+        var imageId = ComputeImageId();
+        Header.Ids = new uint[8];
         for (var i = 0; i < 8; i++)
         {
-            writer.Write(Header.Ids?[i] ?? 0u);
+            Header.Ids[i] = BinaryPrimitives.ReadUInt32LittleEndian(imageId.AsSpan(i * 4, 4));
         }
+        writer.Write(imageId);
 
         var extraCmdLine = new byte[1024];
+        if (commandLine.Length > 511)
+            commandLine.AsSpan(511).CopyTo(extraCmdLine);
         writer.Write(extraCmdLine);
 
         uint headerSize = Header.HeaderVersion switch
         {
             BootImageVersion.V0 => 1632,
             BootImageVersion.V1 => 1648,
-            BootImageVersion.V2 => 1664,
+            BootImageVersion.V2 => 1660,
 
 
             BootImageVersion.V3 => throw new NotSupportedException("Boot image V3 packing is not supported by this packer."),
@@ -144,6 +154,7 @@ public class BootImagePacker
             _ => 1632
         };
 
+        Header.HeaderSize = headerSize;
         if (Header.HeaderVersion >= BootImageVersion.V1)
         {
 
@@ -205,6 +216,7 @@ public class BootImagePacker
 
     private void PackV3OrV4(Stream output)
     {
+        var commandLine = EncodeCommandLine(1535);
         var isV4 = Header.HeaderVersion == BootImageVersion.V4;
         uint pageSize = 4096;
         Header.KernelSize = checked((uint)Kernel.Length);
@@ -233,8 +245,7 @@ public class BootImagePacker
         writer.Write(isV4 ? 4u : 3u);
 
         var cmdLine = new byte[1536];
-        var cmdSrc = Encoding.ASCII.GetBytes(Header.CommandLine ?? string.Empty);
-        Array.Copy(cmdSrc, cmdLine, Math.Min(cmdSrc.Length, 1536));
+        commandLine.CopyTo(cmdLine, 0);
         writer.Write(cmdLine);
 
         if (isV4)
@@ -321,6 +332,36 @@ public class BootImagePacker
         for (var i = 0; i < padding; i++)
         {
             writer.Write((byte)0);
+        }
+    }
+
+    private byte[] EncodeCommandLine(int maximumBytes)
+    {
+        var value = Header.CommandLine ?? string.Empty;
+        var bytes = new UTF8Encoding(false, true).GetBytes(value);
+        if (value.Contains('\0') || bytes.Length > maximumBytes)
+            throw new ArgumentException($"Boot command line must contain at most {maximumBytes} UTF-8 bytes and no NUL.");
+        return bytes;
+    }
+
+    private byte[] ComputeImageId()
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        Append(Kernel);
+        Append(Ramdisk);
+        Append(Second);
+        if (Header.HeaderVersion >= BootImageVersion.V1) Append(RecoveryDtbo);
+        if (Header.HeaderVersion >= BootImageVersion.V2) Append(Dtb);
+        var id = new byte[32];
+        hash.GetHashAndReset().CopyTo(id, 0);
+        return id;
+
+        void Append(byte[] component)
+        {
+            hash.AppendData(component);
+            Span<byte> size = stackalloc byte[4];
+            BinaryPrimitives.WriteUInt32LittleEndian(size, checked((uint)component.Length));
+            hash.AppendData(size);
         }
     }
 
