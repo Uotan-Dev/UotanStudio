@@ -174,7 +174,7 @@ public static class DatWriter
     private static string FormatRanges(List<BlockRange> ranges)
     {
         var builder = new StringBuilder();
-        builder.Append(ranges.Count);
+        builder.Append(checked(ranges.Count * 2));
         foreach (var range in ranges)
         {
             builder.Append(',');
