@@ -1,16 +1,17 @@
 using System.Collections.ObjectModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
-/// <para>工作区日志面板视图模型，订阅统一日志服务并过滤显示固件（Firmware）与构建（Build）通道的日志条目。
-/// 专用于解包/打包、固件操作、工作流执行等日志的实时展示。</para>
+/// <para>工作区输出面板视图模型，仅订阅显示固件（Firmware）与烧录（Flash）通道的日志条目。
+/// 专用于固件处理与设备烧录日志的实时展示。</para>
 /// Workspace log panel view model, subscribing to the unified log service and filtering for
-/// Firmware and Build channel log entries. Dedicated to real-time display of unpack/pack,
-/// firmware operations, and workflow execution logs.
+/// Firmware and Flash channel log entries for firmware processing and device flashing.
 /// </summary>
 internal partial class WorkspaceLogViewModel : Tool, IDisposable
 {
@@ -31,6 +32,9 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
 
         /// <summary><para>日志文本。Log text.</para></summary>
         [ObservableProperty] private string _message = string.Empty;
+
+        /// <summary>Complete displayed and searchable text. 用于显示和搜索的完整日志行。</summary>
+        public string Text => $"{Timestamp} [{Level,-5}] {Source} - {Message}".ReplaceLineEndings("\n");
 
         public LogEntryViewModel(string timestamp, LogLevel level, string source, string message)
         {
@@ -58,6 +62,14 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     /// <summary><para>来源筛选。空字符串表示全部。Source filter; empty means all.</para></summary>
     [ObservableProperty] private string _sourceFilter = string.Empty;
 
+    /// <summary><para>忽略大小写的完整日志行搜索，空字符串表示全部。</para>Case-insensitive full-line search; empty means all.</summary>
+    [ObservableProperty] private string _searchText = string.Empty;
+
+    partial void OnSearchTextChanged(string value) => ReapplyFilter();
+
+    [RelayCommand]
+    private void ClearSearch() => SearchText = string.Empty;
+
     /// <summary><para>全部级别选项。All level options.</para></summary>
     public IReadOnlyList<LogLevel?> Levels { get; } = [null, LogLevel.Trace, LogLevel.Debug, LogLevel.Info, LogLevel.Warn, LogLevel.Error, LogLevel.Fatal];
 
@@ -79,10 +91,20 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     private void OnLogEnqueued(object? sender, LogEntry entry)
     {
         var channel = LogService.ChannelOf(entry.Source);
-        if (channel != LogChannel.Firmware && channel != LogChannel.Build)
+        if (channel != LogChannel.Firmware && channel != LogChannel.Flash)
         {
             return;
         }
+
+        if (Dispatcher.UIThread.CheckAccess())
+            AppendEntry(entry);
+        else
+            Dispatcher.UIThread.Post(() => AppendEntry(entry));
+    }
+
+    private void AppendEntry(LogEntry entry)
+    {
+        if (_disposed) return;
 
         var vm = new LogEntryViewModel(
             entry.Timestamp.ToString("HH:mm:ss"),
@@ -94,7 +116,9 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
 
         while (_allEntries.Count > MaxEntries)
         {
+            var removed = _allEntries[0];
             _allEntries.RemoveAt(0);
+            Entries.Remove(removed);
         }
 
         if (!Sources.Contains(entry.Source))
@@ -112,6 +136,7 @@ internal partial class WorkspaceLogViewModel : Tool, IDisposable
     {
         if (LevelFilter.HasValue && vm.Level != LevelFilter.Value) return false;
         if (!string.IsNullOrEmpty(SourceFilter) && !string.Equals(vm.Source, SourceFilter, StringComparison.Ordinal)) return false;
+        if (!string.IsNullOrEmpty(SearchText) && !vm.Text.Contains(SearchText, StringComparison.OrdinalIgnoreCase)) return false;
         return true;
     }
 

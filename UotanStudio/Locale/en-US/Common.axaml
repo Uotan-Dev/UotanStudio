@@ -51,7 +51,7 @@
     <x:String x:Key="Log_Channel_Device">Device</x:String>
     <x:String x:Key="Log_Channel_Flash">Flash</x:String>
     <x:String x:Key="Log_Channel_Firmware">Firmware</x:String>
-    <x:String x:Key="Log_Channel_Build">Build</x:String>
+    <x:String x:Key="Log_Channel_Build">Nodes</x:String>
 
     <!-- Workspace drag-drop -->
     <x:String x:Key="Workspace_DropNoFiles">Dropped content contains no openable files; ignored.</x:String>

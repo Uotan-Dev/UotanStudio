@@ -5,23 +5,86 @@
              xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              x:Class="UotanStudio.Views.Workspace.AdbLogView"
              x:DataType="vm:AdbLogViewModel">
-  <Grid RowDefinitions="Auto,*" IsVisible="{Binding IsAvailable}">
-    <!-- 顶栏：设备与操作按钮 -->
+  <UserControl.Styles>
+    <Style Selector="ToggleButton#PauseLogsButton">
+      <Setter Property="ToolTip.Tip" Value="{DynamicResource Log_Pause}" />
+      <Setter Property="AutomationProperties.Name" Value="{DynamicResource Log_Pause}" />
+    </Style>
+    <Style Selector="ToggleButton#PauseLogsButton:checked">
+      <Setter Property="ToolTip.Tip" Value="{DynamicResource Log_Resume}" />
+      <Setter Property="AutomationProperties.Name" Value="{DynamicResource Log_Resume}" />
+    </Style>
+  </UserControl.Styles>
+  <Grid RowDefinitions="Auto,*">
+    <!-- 顶栏：筛选与操作按钮 -->
     <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Classes="Small"
-                Width="26" Height="26" Padding="4" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
-          <icons:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
-        </Button>
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-          <TextBlock Text="{Binding ConnectedSerial}" FontSize="11" MaxWidth="220"
-                     TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-          <CheckBox IsChecked="{Binding AutoScroll}" Content="{DynamicResource AdbLog_Follow}"
-                    FontSize="11" VerticalAlignment="Center" />
+      <WrapPanel ItemSpacing="8" LineSpacing="4">
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11" VerticalAlignment="Center" />
+          <ComboBox Name="LevelFilterBox" Classes="Small" Width="86" Height="22" MinHeight="0" Padding="6,0"
+                    ItemsSource="{Binding Levels}" SelectedIndex="{Binding SelectedLevelIndex, Mode=TwoWay}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}" FontSize="11" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
         </StackPanel>
+        <TextBox Name="LogSearchBox" Classes="Small" Width="180"
+                 Height="22" MinHeight="0" FontSize="11" Padding="4,0"
+                 VerticalContentAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}"
+                 PlaceholderText="{DynamicResource Log_Search}" AutomationProperties.Name="{DynamicResource Log_Search}">
+          <TextBox.InnerLeftContent>
+            <icons:MaterialIcon Kind="Magnify" Width="12" Height="12" Margin="4,0,0,0" />
+          </TextBox.InnerLeftContent>
+          <TextBox.InnerRightContent>
+            <Button Classes="Small" Width="18" Height="18" MinHeight="0" Padding="2"
+                    Command="{Binding ClearSearchCommand}" ToolTip.Tip="{DynamicResource Log_ClearSearch}">
+              <icons:MaterialIcon Kind="Close" Width="10" Height="10" />
+            </Button>
+          </TextBox.InnerRightContent>
+        </TextBox>
+        <ToggleButton Name="RegexSearchButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                      VerticalAlignment="Center" IsChecked="{Binding UseRegex, Mode=TwoWay}"
+                      ToolTip.Tip="{DynamicResource Log_UseRegex}" AutomationProperties.Name="{DynamicResource Log_UseRegex}">
+          <icons:MaterialIcon Kind="Regex" Width="12" Height="12" />
+        </ToggleButton>
+        <ToggleButton Name="MatchCaseButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                      VerticalAlignment="Center" IsChecked="{Binding MatchCase, Mode=TwoWay}"
+                      ToolTip.Tip="{DynamicResource Log_MatchCase}" AutomationProperties.Name="{DynamicResource Log_MatchCase}">
+          <icons:MaterialIcon Kind="FormatLetterCase" Width="12" Height="12" />
+        </ToggleButton>
+        <ToggleButton Name="AutoScrollButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                      VerticalAlignment="Center" IsChecked="{Binding AutoScroll, Mode=TwoWay}"
+                      ToolTip.Tip="{DynamicResource Log_AutoScroll}" AutomationProperties.Name="{DynamicResource Log_AutoScroll}">
+          <icons:MaterialIcon Kind="ArrowCollapseDown" Width="12" Height="12" />
+        </ToggleButton>
+        <ToggleButton Name="PauseLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                      VerticalAlignment="Center" IsChecked="{Binding IsPaused, Mode=TwoWay}">
+          <Grid Width="12" Height="12">
+            <icons:MaterialIcon Kind="Pause" IsVisible="{Binding !IsPaused}" />
+            <icons:MaterialIcon Kind="Play" IsVisible="{Binding IsPaused}" />
+          </Grid>
+        </ToggleButton>
+        <Button Name="ResetLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                VerticalAlignment="Center" Command="{Binding ResetLogsCommand}"
+                ToolTip.Tip="{DynamicResource AdbLog_Reset}" AutomationProperties.Name="{DynamicResource AdbLog_Reset}">
+          <icons:MaterialIcon Kind="Restore" Width="12" Height="12" />
+        </Button>
+        <Button Name="ClearLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                VerticalAlignment="Center" Command="{Binding ClearLogsCommand}"
+                ToolTip.Tip="{DynamicResource AdbLog_ClearAll}" AutomationProperties.Name="{DynamicResource AdbLog_ClearAll}">
+          <icons:MaterialIcon Kind="DeleteOutline" Width="12" Height="12" />
+        </Button>
+        <TextBlock Name="SearchErrorText" Text="{Binding SearchError}" IsVisible="{Binding HasSearchError}"
+                   Foreground="{DynamicResource LogErrorBrush}" FontSize="11" MaxWidth="180"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding SearchError}" />
+        <TextBlock Text="{Binding ConnectedSerial}" FontSize="11" MaxWidth="180"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
         <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource LogErrorBrush}"
-                   Margin="8,0" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
-      </DockPanel>
+                   FontSize="11" MaxWidth="180" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
+                   ToolTip.Tip="{Binding ErrorMessage}" />
+      </WrapPanel>
     </Border>
     <!-- 日志编辑器 -->
     <edit:TextEditor Grid.Row="1" Name="LogEditor"

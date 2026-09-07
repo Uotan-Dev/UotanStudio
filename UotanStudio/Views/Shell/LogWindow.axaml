@@ -27,21 +27,14 @@
   <Grid RowDefinitions="Auto,*" Margin="0,32,0,0">
     <!-- 顶栏：标题、筛选与操作按钮 -->
     <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Left" Text="{DynamicResource Log_Panel_Title}"
-                   FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
-        <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Classes="Small"
-                Width="26" Height="26" Padding="4" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
-          <icons:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
-        </Button>
-        <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Margin="0,0,6,0" Classes="Small"
-                Width="26" Height="26" Padding="4" Click="OnExportClick" ToolTip.Tip="{DynamicResource Log_Export}">
-          <icons:MaterialIcon Kind="Export" Width="14" Height="14" />
-        </Button>
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
+        <TextBlock Text="{DynamicResource Log_Panel_Title}"
+                   FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11"
                      VerticalAlignment="Center" />
-          <ComboBox Width="110" ItemsSource="{Binding Levels}"
+          <ComboBox Classes="Small" Width="86" Height="22" MinHeight="0" Padding="6,0"
+                    ItemsSource="{Binding Levels}"
                     SelectedItem="{Binding LevelFilter}"
                     HorizontalAlignment="Left">
             <ComboBox.ItemTemplate>
@@ -51,25 +44,49 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <TextBlock Text="{DynamicResource Log_SourceFilter}" FontSize="11" Margin="12,0,0,0"
+          <TextBlock Text="{DynamicResource Log_SourceFilter}" FontSize="11" Margin="8,0,0,0"
                      VerticalAlignment="Center" />
-          <ComboBox Width="140" ItemsSource="{Binding Sources}"
+          <ComboBox Classes="Small" Width="120" Height="22" MinHeight="0" Padding="6,0"
+                    ItemsSource="{Binding Sources}" ToolTip.Tip="{Binding SourceFilter}"
                     SelectedItem="{Binding SourceFilter}"
                     HorizontalAlignment="Left">
             <ComboBox.ItemTemplate>
               <DataTemplate>
                 <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}"
-                           FontSize="11" />
+                           FontSize="11" TextTrimming="CharacterEllipsis" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
         </StackPanel>
-        <TextBlock VerticalAlignment="Center" />
-      </DockPanel>
+        <TextBox Grid.Column="2" Name="LogSearchBox" Classes="Small"
+                 Height="22" MinHeight="0" MinWidth="120" FontSize="11" Padding="4,0"
+                 VerticalContentAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}"
+                 PlaceholderText="{DynamicResource Log_Search}" AutomationProperties.Name="{DynamicResource Log_Search}">
+          <TextBox.InnerLeftContent>
+            <icons:MaterialIcon Kind="Magnify" Width="12" Height="12" Margin="4,0,0,0" />
+          </TextBox.InnerLeftContent>
+          <TextBox.InnerRightContent>
+            <Button Classes="Small" Width="18" Height="18" MinHeight="0" Padding="2"
+                    Command="{Binding ClearSearchCommand}" ToolTip.Tip="{DynamicResource Log_ClearSearch}">
+              <icons:MaterialIcon Kind="Close" Width="10" Height="10" />
+            </Button>
+          </TextBox.InnerRightContent>
+        </TextBox>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <Button Name="ExportLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                  Click="OnExportClick" ToolTip.Tip="{DynamicResource Log_Export}">
+            <icons:MaterialIcon Kind="Export" Width="12" Height="12" />
+          </Button>
+          <Button Name="ClearLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                  Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
+            <icons:MaterialIcon Kind="DeleteOutline" Width="12" Height="12" />
+          </Button>
+        </StackPanel>
+      </Grid>
     </Border>
     <!-- 通道 Tab 与日志列表：通道筛选与级别/组件筛选叠加生效 -->
     <Grid Grid.Row="1" RowDefinitions="Auto,*">
-      <!-- 通道 Tab：全部 / 通用 / 设备 / 烧录 / 固件 / 构建 -->
+      <!-- 通道 Tab：全部 / 通用 / 设备 / 烧录 / 固件 / 节点 -->
       <TabControl Grid.Row="0" Padding="8,2,8,0"
                   ItemsSource="{Binding Channels}"
                   SelectedItem="{Binding SelectedChannel}">

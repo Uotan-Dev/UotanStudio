@@ -14,8 +14,8 @@ using UotanStudio.ViewModels.Workspace;
 namespace UotanStudio.Views.Workspace;
 
 /// <summary>
-/// <para>工作区日志面板视图，实时展示固件与构建通道的日志条目。</para>
-/// Workspace log panel view, displaying Firmware and Build channel log entries in real time.
+/// <para>工作区输出面板视图，实时展示固件与烧录通道的日志条目。</para>
+/// Workspace output panel view, displaying Firmware and Flash channel log entries in real time.
 /// </summary>
 public partial class WorkspaceLogView : UserControl
 {
@@ -66,23 +66,21 @@ public partial class WorkspaceLogView : UserControl
 
     private void OnEntriesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        Dispatcher.UIThread.Post(() =>
+        // View-model changes arrive on the UI thread; preserve Reset/Add order while filtering.
+        using (LogEditor.Document.RunUpdate())
         {
-            using (LogEditor.Document.RunUpdate())
+            switch (e.Action)
             {
-                switch (e.Action)
-                {
-                    case NotifyCollectionChangedAction.Add:
-                        if (e.NewItems is not null)
-                            InsertEntries(e.NewStartingIndex, e.NewItems.Cast<WorkspaceLogViewModel.LogEntryViewModel>());
-                        break;
-                    default:
-                        RebuildDocument();
-                        break;
-                }
+                case NotifyCollectionChangedAction.Add:
+                    if (e.NewItems is not null)
+                        InsertEntries(e.NewStartingIndex, e.NewItems.Cast<WorkspaceLogViewModel.LogEntryViewModel>());
+                    break;
+                default:
+                    RebuildDocument();
+                    break;
             }
-            FollowAutoScroll();
-        });
+        }
+        FollowAutoScroll();
     }
 
     private void RebuildDocument()
@@ -105,7 +103,7 @@ public partial class WorkspaceLogView : UserControl
         var text = new StringBuilder();
         foreach (var entry in entries)
         {
-            var line = $"{entry.Timestamp} [{entry.Level,-5}] {entry.Source} - {entry.Message}".ReplaceLineEndings("\n") + "\n";
+            var line = entry.Text + "\n";
             var lineCount = line.Count(c => c == '\n');
             _renderedEntries.Insert(index++, (line.Length, lineCount));
             _lineLevels.InsertRange(lineIndex, Enumerable.Repeat(entry.Level, lineCount));

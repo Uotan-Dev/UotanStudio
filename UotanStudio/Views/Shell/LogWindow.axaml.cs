@@ -113,7 +113,7 @@ public partial class LogWindow : Window
         var text = new StringBuilder();
         foreach (var entry in entries)
         {
-            var line = $"{entry.Timestamp} [{entry.Level,-5}] {entry.Source} - {entry.Message}".ReplaceLineEndings("\n") + "\n";
+            var line = entry.Text + "\n";
             var lineCount = line.Count(character => character == '\n');
             _renderedEntries.Insert(index++, (line.Length, lineCount));
             _lineLevels.InsertRange(lineIndex, Enumerable.Repeat(entry.Level, lineCount));

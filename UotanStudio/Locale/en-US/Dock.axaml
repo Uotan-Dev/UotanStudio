@@ -38,7 +38,6 @@
     <x:String x:Key="Dock_NoDocumentOpenHint">Open or create a project file to get started</x:String>
     <x:String x:Key="Dock_Output">Output</x:String>
     <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
-    <x:String x:Key="AdbLog_Follow">Follow</x:String>
     <x:String x:Key="Dock_NodeLeftPane">Node Toolbox</x:String>
     <x:String x:Key="Dock_NodeRightPane">Node Properties</x:String>
     <x:String x:Key="Dock_NodeBottomPane">Execution Log</x:String>
@@ -201,6 +200,18 @@
     <x:String x:Key="Log_CopyDone">Log entry copied to clipboard</x:String>
     <x:String x:Key="Log_LevelFilter">Level</x:String>
     <x:String x:Key="Log_SourceFilter">Source</x:String>
+    <x:String x:Key="Log_Search">Search logs</x:String>
+    <x:String x:Key="Log_ClearSearch">Clear search</x:String>
+    <x:String x:Key="Log_AutoScroll">Auto-scroll</x:String>
+    <x:String x:Key="Log_UseRegex">Regular expression</x:String>
+    <x:String x:Key="Log_MatchCase">Match case</x:String>
+    <x:String x:Key="Log_Pause">Pause</x:String>
+    <x:String x:Key="Log_Resume">Resume</x:String>
+    <x:String x:Key="AdbLog_Reset">Reset: clear local logs only</x:String>
+    <x:String x:Key="AdbLog_ClearAll">Clear: clear local logs and device logcat buffers</x:String>
+    <x:String x:Key="AdbLog_ClearFailed">Failed to clear device logcat buffers: {0}</x:String>
+    <x:String x:Key="Log_RegexInvalid">Invalid regular expression: {0}</x:String>
+    <x:String x:Key="Log_RegexTimeout">Regular expression timed out; simplify the pattern</x:String>
     <x:String x:Key="Log_FilterAll">All</x:String>
 
 </ResourceDictionary>

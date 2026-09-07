@@ -8,15 +8,12 @@
   <Grid RowDefinitions="Auto,*">
     <!-- 顶栏：筛选与操作按钮 -->
     <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Classes="Small"
-                Width="26" Height="26" Padding="4" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
-          <icons:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
-        </Button>
-        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+      <WrapPanel ItemSpacing="8" LineSpacing="4">
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
           <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11"
                      VerticalAlignment="Center" />
-          <ComboBox Width="110" ItemsSource="{Binding Levels}"
+          <ComboBox Classes="Small" Width="86" Height="22" MinHeight="0" Padding="6,0"
+                    ItemsSource="{Binding Levels}"
                     SelectedItem="{Binding LevelFilter}"
                     HorizontalAlignment="Left">
             <ComboBox.ItemTemplate>
@@ -26,21 +23,41 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <TextBlock Text="{DynamicResource Log_SourceFilter}" FontSize="11" Margin="12,0,0,0"
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+          <TextBlock Text="{DynamicResource Log_SourceFilter}" FontSize="11"
                      VerticalAlignment="Center" />
-          <ComboBox Width="140" ItemsSource="{Binding Sources}"
+          <ComboBox Classes="Small" Width="120" Height="22" MinHeight="0" Padding="6,0"
+                    ItemsSource="{Binding Sources}" ToolTip.Tip="{Binding SourceFilter}"
                     SelectedItem="{Binding SourceFilter}"
                     HorizontalAlignment="Left">
             <ComboBox.ItemTemplate>
               <DataTemplate>
                 <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}"
-                           FontSize="11" />
+                           FontSize="11" TextTrimming="CharacterEllipsis" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
         </StackPanel>
-        <TextBlock VerticalAlignment="Center" />
-      </DockPanel>
+        <TextBox Name="LogSearchBox" Classes="Small" Width="180"
+                 Height="22" MinHeight="0" FontSize="11" Padding="4,0"
+                 VerticalContentAlignment="Center" Text="{Binding SearchText, Mode=TwoWay}"
+                 PlaceholderText="{DynamicResource Log_Search}" AutomationProperties.Name="{DynamicResource Log_Search}">
+          <TextBox.InnerLeftContent>
+            <icons:MaterialIcon Kind="Magnify" Width="12" Height="12" Margin="4,0,0,0" />
+          </TextBox.InnerLeftContent>
+          <TextBox.InnerRightContent>
+            <Button Classes="Small" Width="18" Height="18" MinHeight="0" Padding="2"
+                    Command="{Binding ClearSearchCommand}" ToolTip.Tip="{DynamicResource Log_ClearSearch}">
+              <icons:MaterialIcon Kind="Close" Width="10" Height="10" />
+            </Button>
+          </TextBox.InnerRightContent>
+        </TextBox>
+        <Button Name="ClearLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                VerticalAlignment="Center" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
+          <icons:MaterialIcon Kind="DeleteOutline" Width="12" Height="12" />
+        </Button>
+      </WrapPanel>
     </Border>
     <!-- 日志编辑器 -->
     <edit:TextEditor Grid.Row="1" Name="LogEditor"

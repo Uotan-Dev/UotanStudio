@@ -98,22 +98,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// Whether the ADB log panel is currently visible.
     /// </summary>
     [ObservableProperty]
-    private bool _adbLogVisible;
-
-    /// <summary>
-    /// Whether the selected device can provide logcat output.
-    /// <para>当前设备是否支持读取 logcat。</para>
-    /// </summary>
-    [ObservableProperty]
-    private bool _adbLogAvailable;
-
-    internal void SetAdbLogAvailable(bool available)
-    {
-        var changed = AdbLogAvailable != available;
-        AdbLogAvailable = available;
-        if (!available) Hide(AdbLog);
-        else if (changed) Show(AdbLog);
-    }
+    private bool _adbLogVisible = true;
 
     /// <summary>
     /// <para>注册一个工作区面板及其宿主停靠区，并同步初始可见状态。
@@ -142,7 +127,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <param name="key"><para>面板键。</para>The panel key.</param>
     public void Show(string key)
     {
-        if (key == AdbLog && !AdbLogAvailable) return;
         var entry = GetEntry(key);
         if (entry is null || entry.Host is not { } host)
         {
