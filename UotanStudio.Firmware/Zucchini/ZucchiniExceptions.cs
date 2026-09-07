@@ -75,8 +75,8 @@ public class ZucchiniUnsupportedExecutableTypeException : ZucchiniException
     /// </summary>
     public ZucchiniUnsupportedExecutableTypeException(uint exeType, uint offset)
         : base(
-            $"Zucchini patch element at new offset {offset} uses executable type {exeType}; only RAW (0) elements are supported. " +
-            $"位于新镜像偏移 {offset} 的 Zucchini 补丁元素使用可执行类型 {exeType}；仅支持 RAW (0) 元素。")
+            $"Zucchini patch element at new offset {offset} uses executable type {exeType}; only NoOp elements are supported. " +
+            $"位于新镜像偏移 {offset} 的 Zucchini 补丁元素使用可执行类型 {exeType}；仅支持 NoOp 元素。")
     {
         ExeType = exeType;
         Offset = offset;

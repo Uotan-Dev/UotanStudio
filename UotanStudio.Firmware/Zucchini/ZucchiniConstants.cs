@@ -1,12 +1,17 @@
 namespace UotanStudio.Firmware.Zucchini;
 
+/// <summary>Defines Chromium Zucchini wire constants. <para>定义 Chromium Zucchini 线格式常量。</para></summary>
 public static class ZucchiniConstants
 {
-    public const uint Magic = 0x0350635A;
+    /// <summary>Gets the little-endian Zucc signature. <para>获取小端 Zucc 签名。</para></summary>
+    public const uint Magic = 0x6363755A;
 
-    public const uint Version = 1;
+    /// <summary>Gets the supported major version. <para>获取支持的主版本。</para></summary>
+    public const uint Version = 2;
 
-    public const int HeaderByteSize = 7 * sizeof(uint);
+    /// <summary>Gets the header size excluding the element count. <para>获取不含元素计数的头部大小。</para></summary>
+    public const int HeaderByteSize = 24;
 
-    public const int ElementHeaderByteSize = 10 * sizeof(uint);
+    /// <summary>Gets the packed element header size. <para>获取紧凑元素头大小。</para></summary>
+    public const int ElementHeaderByteSize = 22;
 }
