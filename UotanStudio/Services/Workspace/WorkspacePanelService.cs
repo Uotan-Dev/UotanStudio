@@ -34,6 +34,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <summary>ADB 日志面板键。 ADB log panel key.</summary>
     public const string AdbLog = "AdbLog";
 
+    /// <summary>终端面板键。 Terminal panel key.</summary>
+    public const string Terminal = "Terminal";
+
     /// <summary>
     /// <para>单例实例。</para>
     /// Singleton instance.
@@ -41,6 +44,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
     public static WorkspacePanelService Instance { get; } = new();
 
     private readonly Dictionary<string, PanelEntry> _panels = new(StringComparer.Ordinal);
+    private TerminalDockService? _terminals;
 
     private sealed class PanelEntry
     {
@@ -51,7 +55,21 @@ public sealed partial class WorkspacePanelService : ObservableObject
 
     internal WorkspacePanelService() { }
 
-    internal Dictionary<string, bool> CaptureVisibility() => _panels.Keys.ToDictionary(key => key, IsPanelVisible);
+    internal Dictionary<string, bool> CaptureVisibility()
+    {
+        var visibility = _panels.Keys.ToDictionary(key => key, IsPanelVisible);
+        visibility[Terminal] = IsPanelVisible(Terminal);
+        return visibility;
+    }
+
+    internal void RegisterTerminals(TerminalDockService terminals)
+    {
+        if (!ReferenceEquals(_terminals, terminals)) _terminals?.Dispose();
+        _terminals = terminals;
+        RefreshTerminalVisibility();
+    }
+
+    internal void RefreshTerminalVisibility() => TerminalVisible = _terminals?.IsVisible == true;
 
     internal void RestoreVisibility(IReadOnlyDictionary<string, bool> panels)
     {
@@ -111,6 +129,10 @@ public sealed partial class WorkspacePanelService : ObservableObject
     [ObservableProperty]
     private bool _adbLogVisible = true;
 
+    /// <summary>终端面板当前是否可见。 Whether the terminal panel is visible.</summary>
+    [ObservableProperty]
+    private bool _terminalVisible = true;
+
     /// <summary>
     /// <para>注册一个工作区面板及其宿主停靠区，并同步初始可见状态。
     /// 相同键重复注册时覆盖旧条目（幂等，工厂重建布局时安全）。</para>
@@ -138,6 +160,12 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <param name="key"><para>面板键。</para>The panel key.</param>
     public void Show(string key)
     {
+        if (key == Terminal)
+        {
+            _terminals?.Show();
+            RefreshTerminalVisibility();
+            return;
+        }
         var entry = GetEntry(key);
         UpdateHost(entry);
         if (entry is null || entry.Host is not { } host)
@@ -166,6 +194,12 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <param name="key"><para>面板键。</para>The panel key.</param>
     public void Hide(string key)
     {
+        if (key == Terminal)
+        {
+            _terminals?.Hide();
+            RefreshTerminalVisibility();
+            return;
+        }
         var entry = GetEntry(key);
         UpdateHost(entry);
         if (entry is null || entry.Host is not { } host)
@@ -209,6 +243,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <param name="key"><para>面板键。</para>The panel key.</param>
     public bool IsPanelVisible(string key)
     {
+        if (key == Terminal) return _terminals?.IsVisible == true;
         var entry = GetEntry(key);
         UpdateHost(entry);
         if (entry?.Host is { } host)
@@ -236,6 +271,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 SetVisibleState(key, dock.VisibleDockables?.Contains(entry.Dockable) == true);
             }
         }
+        RefreshTerminalVisibility();
     }
 
     private PanelEntry? GetEntry(string key) => _panels.TryGetValue(key, out var entry) ? entry : null;
@@ -270,6 +306,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 break;
             case AdbLog:
                 AdbLogVisible = value;
+                break;
+            case Terminal:
+                TerminalVisible = value;
                 break;
         }
     }

@@ -917,6 +917,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Dispose()
     {
+        if (_factory is WorkspaceDockFactory workspaceFactory) workspaceFactory.DisposeTerminal();
         if (_documentDock is not null)
         {
             _documentDock.PropertyChanged -= OnDocumentDockPropertyChanged;

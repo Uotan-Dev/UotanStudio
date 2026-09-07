@@ -48,6 +48,7 @@
     <x:String x:Key="Menu_WindowProperties">属性</x:String>
     <x:String x:Key="Menu_WindowWorkspaceLog">输出</x:String>
     <x:String x:Key="Menu_WindowAdbLog">ADB 日志</x:String>
+    <x:String x:Key="Menu_WindowTerminal">终端</x:String>
 
     <!-- 工具菜单 -->
     <x:String x:Key="Menu_FlashTools">烧录工具</x:String>

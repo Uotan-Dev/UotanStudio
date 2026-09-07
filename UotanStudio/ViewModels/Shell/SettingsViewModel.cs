@@ -97,6 +97,39 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     [
         new OpenSourceProject
         {
+            Name = "Iciclecreek.Avalonia.Terminal",
+            Description = "跨平台终端控件，提供终端绘制、文字选择与交互输入",
+            RepositoryUrl = "https://github.com/tomlm/Iciclecreek.Avalonia.Terminal",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/tomlm/Iciclecreek.Avalonia.Terminal/blob/main/LICENSE",
+            AuthorName = "Tom Laird-McConnell",
+            AuthorGitHubUrl = "https://github.com/tomlm",
+            AuthorAvatarUrl = "https://github.com/tomlm.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "XTerm.NET",
+            Description = "终端 VT/ANSI 协议解析与屏幕缓冲区",
+            RepositoryUrl = "https://github.com/tomlm/XTerm.NET",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/tomlm/XTerm.NET/blob/main/LICENSE",
+            AuthorName = "Tom Laird-McConnell",
+            AuthorGitHubUrl = "https://github.com/tomlm",
+            AuthorAvatarUrl = "https://github.com/tomlm.png"
+        },
+        new OpenSourceProject
+        {
+            Name = "Porta.Pty",
+            Description = "Windows ConPTY 与 macOS/Linux PTY 进程通信",
+            RepositoryUrl = "https://github.com/tomlm/Porta.Pty",
+            LicenseName = "MIT",
+            LicenseUrl = "https://github.com/tomlm/Porta.Pty/blob/main/LICENSE",
+            AuthorName = "Tom Laird-McConnell",
+            AuthorGitHubUrl = "https://github.com/tomlm",
+            AuthorAvatarUrl = "https://github.com/tomlm.png"
+        },
+        new OpenSourceProject
+        {
             Name = "Avalonia",
             Description = "跨平台 UI 框架，本项目桌面端 UI 基于 Avalonia 构建",
             RepositoryUrl = "https://github.com/AvaloniaUI/Avalonia",

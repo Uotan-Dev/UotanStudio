@@ -38,6 +38,16 @@
     <x:String x:Key="Dock_NoDocumentOpenHint">打开或创建一个工程文件以开始</x:String>
     <x:String x:Key="Dock_Output">输出</x:String>
     <x:String x:Key="Dock_AdbLog">ADB 日志</x:String>
+    <x:String x:Key="Dock_Terminal">终端</x:String>
+    <x:String x:Key="Terminal_Shell">Shell</x:String>
+    <x:String x:Key="Terminal_New">新建终端</x:String>
+    <x:String x:Key="Terminal_Close">关闭终端会话</x:String>
+    <x:String x:Key="Terminal_Clear">清屏</x:String>
+    <x:String x:Key="Terminal_Bottom">滚动到底部</x:String>
+    <x:String x:Key="Terminal_NoShell">没有找到可用的 Shell。</x:String>
+    <x:String x:Key="Terminal_Starting">正在启动终端…</x:String>
+    <x:String x:Key="Terminal_StartFailed">终端启动失败：{0}</x:String>
+    <x:String x:Key="Terminal_Exited">进程已退出，退出代码：{0}</x:String>
     <x:String x:Key="Dock_NodeLeftPane">节点工具箱</x:String>
     <x:String x:Key="Dock_NodeRightPane">节点属性</x:String>
     <x:String x:Key="Dock_NodeBottomPane">执行日志</x:String>

@@ -135,6 +135,10 @@
 					     ToggleType="CheckBox"
 					     IsChecked="{Binding MenuVM.WorkspacePanels.AdbLogVisible, Mode=OneWay}"
 					     Command="{Binding MenuVM.ToggleAdbLogCommand}" />
+					<MenuItem Header="{DynamicResource Menu_WindowTerminal}"
+					     ToggleType="CheckBox"
+					     IsChecked="{Binding MenuVM.WorkspacePanels.TerminalVisible, Mode=OneWay}"
+					     Command="{Binding MenuVM.ToggleTerminalCommand}" />
 				</MenuItem>
 
 				<!-- 工具 / Tools -->

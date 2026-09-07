@@ -38,6 +38,16 @@
     <x:String x:Key="Dock_NoDocumentOpenHint">Open or create a project file to get started</x:String>
     <x:String x:Key="Dock_Output">Output</x:String>
     <x:String x:Key="Dock_AdbLog">ADB Log</x:String>
+    <x:String x:Key="Dock_Terminal">Terminal</x:String>
+    <x:String x:Key="Terminal_Shell">Shell</x:String>
+    <x:String x:Key="Terminal_New">New terminal</x:String>
+    <x:String x:Key="Terminal_Close">Close terminal session</x:String>
+    <x:String x:Key="Terminal_Clear">Clear screen</x:String>
+    <x:String x:Key="Terminal_Bottom">Scroll to bottom</x:String>
+    <x:String x:Key="Terminal_NoShell">No available shell was found.</x:String>
+    <x:String x:Key="Terminal_Starting">Starting terminal...</x:String>
+    <x:String x:Key="Terminal_StartFailed">Could not start terminal: {0}</x:String>
+    <x:String x:Key="Terminal_Exited">Process exited with code: {0}</x:String>
     <x:String x:Key="Dock_NodeLeftPane">Node Toolbox</x:String>
     <x:String x:Key="Dock_NodeRightPane">Node Properties</x:String>
     <x:String x:Key="Dock_NodeBottomPane">Execution Log</x:String>

@@ -48,6 +48,7 @@ internal static class ViewModelViewRegistry
         [typeof(DeviceViewModel)] = () => new DeviceView(),
         [typeof(WorkspaceLogViewModel)] = () => new WorkspaceLogView(),
         [typeof(AdbLogViewModel)] = () => new AdbLogView(),
+        [typeof(TerminalViewModel)] = () => new TerminalView(),
     };
 
     /// <summary>

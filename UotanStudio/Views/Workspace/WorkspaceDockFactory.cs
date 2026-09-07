@@ -19,6 +19,7 @@ public class WorkspaceDockFactory : Factory
 {
     private ProjectExplorerViewModel? _projectExplorer;
     private PropertiesViewModel? _properties;
+    private TerminalDockService? _terminals;
 
     public override IRootDock CreateLayout()
     {
@@ -182,10 +183,15 @@ public class WorkspaceDockFactory : Factory
         panels.Register(WorkspacePanelService.Properties, properties, rightTools, visible: true);
         panels.Register(WorkspacePanelService.WorkspaceLog, output, bottomTools, visible: true);
         panels.Register(WorkspacePanelService.AdbLog, adbLog, bottomTools, visible: true);
+        panels.RegisterTerminals(_terminals = new TerminalDockService(this, bottomTools));
+        _terminals.CreateTerminal(activate: false);
         adbLog.Initialize();
 
         return rootDock;
     }
+
+    /// <summary>Stops all terminal processes owned by this workspace. 停止工作区拥有的全部终端进程。</summary>
+    public void DisposeTerminal() => _terminals?.Dispose();
 
     public override void InitLayout(IDockable layout)
     {
@@ -291,7 +297,11 @@ public class WorkspaceDockFactory : Factory
 
         // 文档关闭后立即释放大对象（解析模型/原始字节/树节点），避免内存占用保持不降。
         // Release large objects as soon as a document is closed so the memory footprint drops.
-        if (dockable is UotanStudio.ViewModels.Editors.LogEditorViewModel logEditor)
+        if (dockable is TerminalViewModel terminal)
+        {
+            _terminals?.Remove(terminal);
+        }
+        else if (dockable is UotanStudio.ViewModels.Editors.LogEditorViewModel logEditor)
         {
             logEditor.Cleanup();
         }

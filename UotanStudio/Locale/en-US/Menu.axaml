@@ -48,6 +48,7 @@
     <x:String x:Key="Menu_WindowProperties">Properties</x:String>
     <x:String x:Key="Menu_WindowWorkspaceLog">Output</x:String>
     <x:String x:Key="Menu_WindowAdbLog">ADB Log</x:String>
+    <x:String x:Key="Menu_WindowTerminal">Terminal</x:String>
 
     <!-- Tools menu -->
     <x:String x:Key="Menu_FlashTools">Flash Tools</x:String>

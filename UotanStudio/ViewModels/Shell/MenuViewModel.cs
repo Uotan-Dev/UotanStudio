@@ -667,6 +667,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ToggleAdbLog() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.AdbLog);
 
+    /// <summary>显示或隐藏终端面板。 Show or hide the terminal panel.</summary>
+    [RelayCommand]
+    private void ToggleTerminal() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Terminal);
+
     // ===== 工具 / Tools =====
 
     /// <summary>
