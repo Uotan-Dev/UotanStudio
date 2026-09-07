@@ -74,7 +74,6 @@ internal class ProjectExplorerViewModel : Tool
     /// </summary>
     public void Refresh()
     {
-        TreeViewContent.Clear();
         var svc = ProjectContextService.Instance;
         if (svc.RootDirectory is not null && Directory.Exists(svc.RootDirectory))
         {
@@ -85,6 +84,17 @@ internal class ProjectExplorerViewModel : Tool
             {
                 ExplorerNode.ProjectFolderPaths.Add(sp.RootPath);
             }
+
+            if (TreeViewContent.FirstOrDefault() is { } existing
+                && string.Equals(existing.Path, svc.RootDirectory, OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+                && TreeViewContent.LastOrDefault()?.AssociatedProjectPath == svc.NodeProjectPath)
+            {
+                ApplyFileSystemChanges();
+                return;
+            }
+
+            TreeViewContent.Clear();
 
             AddRoot(svc.RootDirectory, isProjectFolder: true);
 
@@ -106,6 +116,7 @@ internal class ProjectExplorerViewModel : Tool
                 TreeViewContent.Add(nodeProject);
             }
         }
+        else TreeViewContent.Clear();
         RestartWatcher(svc);
     }
 
@@ -147,8 +158,6 @@ internal class ProjectExplorerViewModel : Tool
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.FileName
                                | NotifyFilters.DirectoryName
-                               | NotifyFilters.LastWrite
-                               | NotifyFilters.Size
             };
             _watcher.Changed += OnFileSystemChanged;
             _watcher.Created += OnFileSystemChanged;
@@ -333,16 +342,14 @@ public sealed partial class ExplorerNode : ObservableObject
             return;
         }
 
-        _childrenLoaded = true;
-        Children.Clear();
+        RefreshChildren();
+    }
 
-        if (!Directory.Exists(Path))
-        {
-            return;
-        }
-
+    private void RefreshChildren()
+    {
         try
         {
+            var discovered = new List<ExplorerNode>();
             foreach (var dir in Directory.EnumerateDirectories(Path))
             {
                 // 排除会话状态目录 .uotan/（类似 VS 的 .vs/），不在资源管理器中显示。
@@ -352,7 +359,7 @@ public sealed partial class ExplorerNode : ObservableObject
                     continue;
                 }
 
-                Children.Add(new ExplorerNode(dir, isDirectory: true, isProjectFolder: ProjectFolderPaths.Contains(dir)));
+                discovered.Add(new ExplorerNode(dir, isDirectory: true, isProjectFolder: ProjectFolderPaths.Contains(dir)));
             }
 
             foreach (var file in Directory.EnumerateFiles(Path))
@@ -373,12 +380,29 @@ public sealed partial class ExplorerNode : ObservableObject
                     continue;
                 }
 
-                Children.Add(new ExplorerNode(file, isDirectory: false));
+                discovered.Add(new ExplorerNode(file, isDirectory: false));
             }
+
+            // Keep surviving node instances and their TreeViewItem containers intact.
+            var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+            var previous = Children.Where(c => !c.IsPlaceholder).ToDictionary(c => c.Path, comparer);
+            var desired = discovered.Select(c => previous.TryGetValue(c.Path, out var old)
+                && old.IsDirectory == c.IsDirectory && old.IsProjectFolder == c.IsProjectFolder ? old : c).ToList();
+            var retained = desired.ToHashSet();
+            for (var i = Children.Count - 1; i >= 0; i--)
+                if (!retained.Contains(Children[i])) Children.RemoveAt(i);
+            for (var i = 0; i < desired.Count; i++)
+            {
+                if (i < Children.Count && ReferenceEquals(Children[i], desired[i])) continue;
+                var index = Children.IndexOf(desired[i]);
+                if (index >= 0) Children.Move(index, i);
+                else Children.Insert(i, desired[i]);
+            }
+            _childrenLoaded = true;
         }
         catch (Exception)
         {
-            // 目录不可读等异常时保持空子节点，不中断资源管理器
+            // Preserve the existing tree when a directory is temporarily unreadable.
         }
     }
 
@@ -391,16 +415,12 @@ public sealed partial class ExplorerNode : ObservableObject
     /// </summary>
     public void RefreshDescendants()
     {
-        if (!IsDirectory)
+        if (!IsDirectory || !_childrenLoaded)
         {
             return;
         }
 
-        if (_childrenLoaded)
-        {
-            _childrenLoaded = false;
-            EnsureChildrenLoaded();
-        }
+        RefreshChildren();
 
         foreach (var child in Children)
         {
