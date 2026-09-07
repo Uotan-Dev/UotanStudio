@@ -164,14 +164,14 @@ public static class AvbSignatureVerifier
         }
 
         var keyNumBytes = (int)(keyNumBits / 8);
-        if (avbRsaPublicKeyBlob.Length < 8 + keyNumBytes)
+        if (avbRsaPublicKeyBlob.Length != 8 + 2 * keyNumBytes)
         {
             return null;
         }
 
         var modulus = avbRsaPublicKeyBlob.AsSpan(8, keyNumBytes).ToArray();
 
-        if ((modulus[^1] & 1) == 0)
+        if ((modulus[^1] & 1) == 0 || (modulus[0] & 0x80) == 0)
         {
             return null;
         }
@@ -291,7 +291,7 @@ public static class AvbSignatureVerifier
             return With(result, ErrorMessage: "vbmeta image declares algorithm NONE (not signed). vbmeta 镜像声明算法为 NONE（未签名）。");
         }
 
-        if (!TryGetKeySizeAndHash(algorithmType, out _, out _) ||
+        if (!TryGetKeySizeAndHash(algorithmType, out var keySizeBits, out _) ||
             authSize > int.MaxValue || auxSize > int.MaxValue ||
             authSize > (ulong)vbmetaData.Length - HeaderSize ||
             auxSize > (ulong)vbmetaData.Length - HeaderSize - authSize)
@@ -300,7 +300,7 @@ public static class AvbSignatureVerifier
         }
 
         result = With(result, Descriptors: ExtractDescriptors(vbmetaData));
-        if (sigSize == 0 || sigOffset > authSize || sigSize > authSize - sigOffset ||
+        if (sigSize != (ulong)keySizeBits / 8 || sigOffset > authSize || sigSize > authSize - sigOffset ||
             sigOffset > int.MaxValue || sigSize > int.MaxValue)
         {
             return With(result, ErrorMessage: "vbmeta header declares no in-range signature. vbmeta 头未声明有效范围内的签名。");
@@ -584,7 +584,8 @@ public static class AvbSignatureVerifier
 
     private static bool TryVerifySignature(byte[] vbmetaData, byte[] signature, RSA key, uint algorithmType)
     {
-        if (!TryGetKeySizeAndHash(algorithmType, out _, out var hashName))
+        if (!TryGetKeySizeAndHash(algorithmType, out var keySizeBits, out var hashName) ||
+            key.KeySize != keySizeBits || signature.Length != keySizeBits / 8)
         {
             return false;
         }
