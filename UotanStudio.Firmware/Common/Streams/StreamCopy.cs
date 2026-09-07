@@ -7,16 +7,27 @@ public static class StreamCopy
     /// <para>精确复制指定字节数，输入提前结束时抛出异常。</para>
     /// </summary>
     public static void CopyExactly(Stream source, Stream destination, long count, int bufferSize = 81920)
+        => CopyExactly(source, destination, count, CancellationToken.None, bufferSize);
+
+    /// <summary>
+    /// Copies exactly the specified byte count with cancellation between buffer transfers.
+    /// <para>精确复制指定字节数，并在缓冲传输之间检查取消。</para>
+    /// </summary>
+    public static void CopyExactly(Stream source, Stream destination, long count,
+        CancellationToken cancellationToken, int bufferSize = 81920)
     {
         Validate(source, destination, count, bufferSize);
+        cancellationToken.ThrowIfCancellationRequested();
         var buffer = new byte[bufferSize];
         while (count > 0)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var read = source.Read(buffer, 0, (int)Math.Min(count, buffer.Length));
             if (read == 0) throw new EndOfStreamException("The source stream ended before the requested byte count was copied.");
             destination.Write(buffer, 0, read);
             count -= read;
         }
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     /// <summary>

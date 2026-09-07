@@ -27,8 +27,8 @@
 # Android Verified Boot image（"AVBf"；上游无）
 0	string	AVBf	Android Verified Boot image
 
-# Rockchip firmware（"Rkfw" / "RKAF"；上游 android.magic 仅 BOOT，无 Rkfw/RKAF）
-0	string	Rkfw	Rockchip firmware image
+# Rockchip firmware (RKFW / RKAF)
+0	string	RKFW	Rockchip firmware image
 0	string	RKAF	Rockchip firmware image
 
 # LZ4 frame（"04 22 4d 18"；上游 compress.magic 无此版本）
