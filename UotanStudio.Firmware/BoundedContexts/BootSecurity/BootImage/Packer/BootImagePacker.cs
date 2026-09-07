@@ -316,7 +316,9 @@ public class BootImagePacker
             packer.Header.DtbSize = (uint)dtb.Length;
         }
 
-        return packer.Pack();
+        using var ms = new MemoryStream();
+        packer.PackToStream(ms);
+        return ms.ToArray();
     }
 
     private void WritePadding(BinaryWriter writer, uint alignment)
