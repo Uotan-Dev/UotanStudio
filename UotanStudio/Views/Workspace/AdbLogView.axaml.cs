@@ -6,12 +6,15 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Rendering;
 using UotanStudio.Services;
-using UotanStudio.Services.Devices;
+using UotanStudio.Services.Logging;
+using UotanStudio.ViewModels;
+using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Views.Workspace;
@@ -19,8 +22,8 @@ namespace UotanStudio.Views.Workspace;
 public partial class AdbLogView : UserControl
 {
     private readonly List<(int Length, int LineCount)> _renderedEntries = [];
-    private readonly List<(LogLevel? Level, AdbLogcatEntry? Entry)> _lines = [];
-    private AdbLogViewModel? _model;
+    private readonly List<(LogLevel? Level, ILogLine? Entry)> _lines = [];
+    private ILogViewModel? _model;
     private ScrollViewer? _scroller;
     private bool _followScheduled;
     private bool _updating;
@@ -37,10 +40,16 @@ public partial class AdbLogView : UserControl
         LogEditor.Options.EnableHyperlinks = false;
         LogEditor.Options.EnableEmailHyperlinks = false;
         LogEditor.TextArea.TextView.ElementGenerators.Add(new LogColumnGenerator(this));
+        LogEditor.TextArea.TextView.BackgroundRenderers.Add(new LogPriorityBackgroundRenderer());
         LogEditor.TextArea.TextView.LineTransformers.Add(new LogLevelColorizer(this));
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
-        DataContextChanged += (_, _) => { if (IsLoaded) BindModel(); };
+        DataContextChanged += (_, _) =>
+        {
+            LiveControls.IsVisible = DataContext is AdbLogViewModel;
+            FileControls.IsVisible = DataContext is LogEditorViewModel;
+            if (IsLoaded) BindModel();
+        };
         LogEditor.TextArea.SelectionChanged += OnSelectionChanged;
         LogEditor.AddHandler(ScrollViewer.ScrollChangedEvent, OnScrollChanged);
     }
@@ -62,7 +71,7 @@ public partial class AdbLogView : UserControl
         LanguageService.ThemeChanged -= OnThemeChanged;
         if (_model is not null)
         {
-            _model.Lines.CollectionChanged -= OnLinesChanged;
+            _model.EntriesChanged -= OnLinesChanged;
             _model.PropertyChanged -= OnModelPropertyChanged;
         }
         _model = null;
@@ -73,13 +82,13 @@ public partial class AdbLogView : UserControl
     {
         if (_model is not null)
         {
-            _model.Lines.CollectionChanged -= OnLinesChanged;
+            _model.EntriesChanged -= OnLinesChanged;
             _model.PropertyChanged -= OnModelPropertyChanged;
         }
-        _model = DataContext as AdbLogViewModel;
+        _model = DataContext as ILogViewModel;
         if (_model is not null)
         {
-            _model.Lines.CollectionChanged += OnLinesChanged;
+            _model.EntriesChanged += OnLinesChanged;
             _model.PropertyChanged += OnModelPropertyChanged;
         }
         _updating = true;
@@ -103,7 +112,7 @@ public partial class AdbLogView : UserControl
                 switch (e.Action)
                 {
                     case NotifyCollectionChangedAction.Add when e.NewItems is not null:
-                        InsertEntries(e.NewStartingIndex, e.NewItems.Cast<AdbLogcatEntry>());
+                        InsertEntries(e.NewStartingIndex, e.NewItems.Cast<ILogLine>());
                         break;
                     case NotifyCollectionChangedAction.Remove when e.OldItems is not null:
                         preservedOffset = RemoveEntries(e.OldStartingIndex, e.OldItems.Count);
@@ -125,10 +134,10 @@ public partial class AdbLogView : UserControl
         _renderedEntries.Clear();
         _lines.Clear();
         LogEditor.Document.Text = string.Empty;
-        if (_model is not null) InsertEntries(0, _model.Lines);
+        if (_model is not null) InsertEntries(0, _model.Entries);
     }
 
-    private void InsertEntries(int index, IEnumerable<AdbLogcatEntry> entries)
+    private void InsertEntries(int index, IEnumerable<ILogLine> entries)
     {
         var offset = index == _renderedEntries.Count
             ? LogEditor.Document.TextLength : _renderedEntries.Take(index).Sum(entry => entry.Length);
@@ -140,8 +149,8 @@ public partial class AdbLogView : UserControl
             var line = entry.Text.ReplaceLineEndings("\n") + "\n";
             var lineCount = line.Count(character => character == '\n');
             _renderedEntries.Insert(index++, (line.Length, lineCount));
-            _lines.Insert(lineIndex, (entry.Level, entry.Priority == '\0' ? null : entry));
-            _lines.InsertRange(lineIndex + 1, Enumerable.Repeat<(LogLevel?, AdbLogcatEntry?)>((entry.Level, null), lineCount - 1));
+            _lines.Insert(lineIndex, (entry.Level, entry.Columns.Count == 0 ? null : entry));
+            _lines.InsertRange(lineIndex + 1, Enumerable.Repeat<(LogLevel?, ILogLine?)>((entry.Level, null), lineCount - 1));
             lineIndex += lineCount;
             text.Append(line);
         }
@@ -219,6 +228,34 @@ public partial class AdbLogView : UserControl
     private void OnCopySelectionClick(object? sender, RoutedEventArgs e) => LogEditor.Copy();
     private void OnSelectAllClick(object? sender, RoutedEventArgs e) => LogEditor.SelectAll();
 
+    private async void OnExportClick(object? sender, RoutedEventArgs e)
+    {
+        if (_model is not AdbLogViewModel { Lines.Count: > 0 } model || TopLevel.GetTopLevel(this) is not { } topLevel) return;
+        var snapshot = model.Lines.ToArray();
+        ExportLogsButton.IsEnabled = false;
+        try
+        {
+            var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = LanguageService.Instance.GetString("Log_Export"),
+                DefaultExtension = "log",
+                SuggestedFileName = $"UotanStudio_ADB_Log_{DateTime.Now:yyyyMMdd_HHmmss}",
+                FileTypeChoices = [new FilePickerFileType("Log files") { Patterns = ["*.log", "*.txt"] }]
+            });
+            if (file is null) return;
+            await using var stream = await file.OpenWriteAsync();
+            if (stream.CanSeek) stream.SetLength(0);
+            await LogFileService.WriteAsync(stream, snapshot);
+            LogService.Instance.Write(LogLevel.Info, "LogExport", LanguageService.Instance.GetString("Log_ExportDone", file.Name));
+        }
+        catch (Exception ex)
+        {
+            model.ErrorMessage = LanguageService.Instance.GetString("Log_ExportFailed", ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "LogExport", model.ErrorMessage);
+        }
+        finally { ExportLogsButton.IsEnabled = true; }
+    }
+
     private sealed class LogLevelColorizer(AdbLogView view) : DocumentColorizingTransformer
     {
         protected override void ColorizeLine(DocumentLine line)
@@ -244,7 +281,7 @@ public partial class AdbLogView : UserControl
                 element.TextRunProperties.SetBaselineAlignment(BaselineAlignment.Center);
                 if (element is LogColumnElement { IsPriority: true } && brush is ISolidColorBrush background)
                 {
-                    element.BackgroundBrush = brush;
+                    element.TextRunProperties.SetBackgroundBrush(brush);
                     element.TextRunProperties.SetForegroundBrush(ContrastingText(background.Color));
                 }
             });

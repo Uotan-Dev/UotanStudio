@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Services.Devices;
 
@@ -16,7 +17,7 @@ namespace UotanStudio.Services.Devices;
 /// <param name="Priority">Logcat priority letter. logcat 等级字母。</param>
 /// <param name="Message">Message text. 消息正文。</param>
 public sealed partial record AdbLogcatEntry(string RawText, string Timestamp, int ProcessId, int ThreadId,
-    string Tag, string ProcessName, char Priority, string Message)
+    string Tag, string ProcessName, char Priority, string Message) : ILogLine
 {
     /// <summary>Unified level; null for non-entry lines. 统一等级，非日志条目行为空。</summary>
     public LogLevel? Level { get; } = Priority switch
@@ -34,6 +35,16 @@ public sealed partial record AdbLogcatEntry(string RawText, string Timestamp, in
     public string Text { get; } = Priority == '\0' ? RawText
         : $"{Timestamp,-23} {ProcessId + "-" + ThreadId,-13} {Tag,-24} {ProcessName,-32} {Priority} {Message}";
 
+    /// <summary>Display columns retaining complete field spans. 保留完整字段范围的显示列。</summary>
+    public IReadOnlyList<LogTextColumn> Columns { get; } = Priority == '\0' ? [] :
+    [
+        new(Timestamp, Math.Max(Timestamp.Length, 23) + 1, 24),
+        new(ProcessId + "-" + ThreadId, Math.Max((ProcessId + "-" + ThreadId).Length, 13) + 1, 14),
+        new(Tag, Math.Max(Tag.Length, 24) + 1, 25, TrimMiddle: true),
+        new(ProcessName, Math.Max(ProcessName.Length, 32) + 1, 33, TrimMiddle: true),
+        new(Priority.ToString(), 1, 3, IsPriority: true)
+    ];
+
     /// <summary>
     /// Parses threadtime output; preserves headers and unrecognized lines verbatim.
     /// <para>解析 threadtime 输出；原样保留缓冲区标题和未识别的行。</para>
@@ -42,6 +53,11 @@ public sealed partial record AdbLogcatEntry(string RawText, string Timestamp, in
     {
         if (text.Length > AdbLogcatLineDecoder.MaximumLineLength)
             text = text[..AdbLogcatLineDecoder.MaximumLineLength];
+        return ParseComplete(text, processNames);
+    }
+
+    internal static AdbLogcatEntry ParseComplete(string text, IReadOnlyDictionary<int, string>? processNames = null)
+    {
         var match = ThreadtimePattern().Match(text);
         if (!match.Success
             || !int.TryParse(match.Groups["pid"].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out var pid)

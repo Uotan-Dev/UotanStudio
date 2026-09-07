@@ -133,6 +133,12 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
             mode = FileOpenMode.ResolveMode(path, header);
         }
 
+        if (mode == EditorOpenMode.Log)
+        {
+            await OpenLogAsync(path);
+            return;
+        }
+
         // 设备树二进制：走 DTB 双栏编辑器。
         // Device-tree blobs open in the DTB dual-pane editor.
         if (mode == EditorOpenMode.Dtb)
@@ -246,6 +252,26 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         {
             WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
         }
+    }
+
+    /// <summary>Opens or focuses an offline log document. 打开或聚焦离线日志文档。</summary>
+    public async Task OpenLogAsync(string path)
+    {
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null || string.IsNullOrWhiteSpace(path)) return;
+        EnsureDocumentDockSubscribed(documentDock);
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?.OfType<LogEditorViewModel>()
+            .FirstOrDefault(document => string.Equals(document.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+        var document = new LogEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath };
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+        await document.LoadAsync(fullPath);
     }
 
     /// <summary>

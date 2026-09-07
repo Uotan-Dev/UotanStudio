@@ -74,6 +74,7 @@
     <x:String x:Key="ProjectExplorer_Inner">Inner</x:String>
     <x:String x:Key="ProjectExplorer_Innermost">Innermost</x:String>
     <x:String x:Key="Explorer_OpenAsText">Open as Text</x:String>
+    <x:String x:Key="Explorer_OpenAsLog">Open as Log</x:String>
     <x:String x:Key="Explorer_OpenAsHex">Open as Hex</x:String>
     <x:String x:Key="Explorer_OpenAsDtb">Open as Device Tree</x:String>
     <x:String x:Key="Explorer_OpenAsDex">Open as DEX</x:String>

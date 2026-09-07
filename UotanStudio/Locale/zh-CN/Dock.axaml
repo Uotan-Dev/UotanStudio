@@ -195,6 +195,12 @@
     <x:String x:Key="Log_Panel_Title">全局日志</x:String>
     <x:String x:Key="Log_Clear">清空</x:String>
     <x:String x:Key="Log_Export">导出</x:String>
+    <x:String x:Key="Log_Reload">重新加载文件</x:String>
+    <x:String x:Key="Log_Loading">正在加载日志文件</x:String>
+    <x:String x:Key="Log_FileLoadFailed">加载日志失败：{0}</x:String>
+    <x:String x:Key="Log_FileTooLarge">日志超过支持的范围（64 MiB、250,000 行或单条 1 MiB），原文件未被修改。</x:String>
+    <x:String x:Key="Log_FileUnsupportedVersion">暂不支持此版本的日志导出文件。</x:String>
+    <x:String x:Key="Log_FileInvalidRecord">第 {0} 行的日志记录格式无效。</x:String>
     <x:String x:Key="Log_ExportDone">日志已导出到 {0}</x:String>
     <x:String x:Key="Log_ExportFailed">导出日志失败：{0}</x:String>
     <x:String x:Key="Log_CopyDone">日志条目已复制到剪贴板</x:String>

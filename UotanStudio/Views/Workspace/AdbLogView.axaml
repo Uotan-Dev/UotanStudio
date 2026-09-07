@@ -1,10 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:UotanStudio.ViewModels.Workspace"
+             xmlns:vm="using:UotanStudio.ViewModels"
+             xmlns:live="using:UotanStudio.ViewModels.Workspace"
+             xmlns:editor="using:UotanStudio.ViewModels.Editors"
              xmlns:edit="using:AvaloniaEdit"
              xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              x:Class="UotanStudio.Views.Workspace.AdbLogView"
-             x:DataType="vm:AdbLogViewModel">
+             x:DataType="vm:ILogViewModel">
   <UserControl.Styles>
     <Style Selector="ToggleButton#PauseLogsButton">
       <Setter Property="ToolTip.Tip" Value="{DynamicResource Log_Pause}" />
@@ -54,6 +56,8 @@
                       ToolTip.Tip="{DynamicResource Log_MatchCase}" AutomationProperties.Name="{DynamicResource Log_MatchCase}">
           <icons:MaterialIcon Kind="FormatLetterCase" Width="12" Height="12" />
         </ToggleButton>
+        <WrapPanel Name="LiveControls" DataContext="{Binding LiveModel}" x:DataType="live:AdbLogViewModel"
+                   IsVisible="False" ItemSpacing="8" LineSpacing="4">
         <ToggleButton Name="AutoScrollButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
                       VerticalAlignment="Center" IsChecked="{Binding AutoScroll, Mode=TwoWay}"
                       ToolTip.Tip="{DynamicResource Log_AutoScroll}" AutomationProperties.Name="{DynamicResource Log_AutoScroll}">
@@ -71,16 +75,34 @@
                 ToolTip.Tip="{DynamicResource AdbLog_Reset}" AutomationProperties.Name="{DynamicResource AdbLog_Reset}">
           <icons:MaterialIcon Kind="Restore" Width="12" Height="12" />
         </Button>
-        <Button Name="ClearLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
-                VerticalAlignment="Center" Command="{Binding ClearLogsCommand}"
-                ToolTip.Tip="{DynamicResource AdbLog_ClearAll}" AutomationProperties.Name="{DynamicResource AdbLog_ClearAll}">
-          <icons:MaterialIcon Kind="DeleteOutline" Width="12" Height="12" />
-        </Button>
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Name="ClearLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                  VerticalAlignment="Center" Command="{Binding ClearLogsCommand}"
+                  ToolTip.Tip="{DynamicResource AdbLog_ClearAll}" AutomationProperties.Name="{DynamicResource AdbLog_ClearAll}">
+            <icons:MaterialIcon Kind="DeleteOutline" Width="12" Height="12" />
+          </Button>
+          <Button Name="ExportLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                  VerticalAlignment="Center" Click="OnExportClick"
+                  ToolTip.Tip="{DynamicResource Log_Export}" AutomationProperties.Name="{DynamicResource Log_Export}">
+            <icons:MaterialIcon Kind="Export" Width="12" Height="12" />
+          </Button>
+        </StackPanel>
+        <TextBlock Text="{Binding ConnectedSerial}" FontSize="11" MaxWidth="180"
+                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </WrapPanel>
+        <StackPanel Name="FileControls" DataContext="{Binding FileModel}" x:DataType="editor:LogEditorViewModel" IsVisible="False"
+                    Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Button Name="ReloadLogsButton" Classes="Small" Width="20" Height="20" MinHeight="0" Padding="2"
+                  Command="{Binding ReloadCommand}" ToolTip.Tip="{DynamicResource Log_Reload}"
+                  AutomationProperties.Name="{DynamicResource Log_Reload}">
+            <icons:MaterialIcon Kind="Reload" Width="12" Height="12" />
+          </Button>
+          <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Width="64" Height="3"
+                       VerticalAlignment="Center" ToolTip.Tip="{DynamicResource Log_Loading}" />
+        </StackPanel>
         <TextBlock Name="SearchErrorText" Text="{Binding SearchError}" IsVisible="{Binding HasSearchError}"
                    Foreground="{DynamicResource LogErrorBrush}" FontSize="11" MaxWidth="180"
                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding SearchError}" />
-        <TextBlock Text="{Binding ConnectedSerial}" FontSize="11" MaxWidth="180"
-                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
         <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource LogErrorBrush}"
                    FontSize="11" MaxWidth="180" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
                    ToolTip.Tip="{Binding ErrorMessage}" />
@@ -89,7 +111,7 @@
     <!-- 日志编辑器 -->
     <edit:TextEditor Grid.Row="1" Name="LogEditor"
                      IsReadOnly="True" ShowLineNumbers="False" WordWrap="False"
-                     FontFamily="Consolas,monospace" FontSize="12"
+                     FontFamily="Consolas,monospace" FontSize="13"
                      Padding="8,4" Background="Transparent"
                      Foreground="{DynamicResource TextForeground}"
                      HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">

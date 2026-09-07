@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
 using Avalonia.Threading;
@@ -7,11 +8,12 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Logging;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Workspace;
 
-internal partial class AdbLogViewModel : Tool, IDisposable
+internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
 {
     private const int MaxLines = 5000;
     private readonly Lock _sync = new();
@@ -30,6 +32,15 @@ internal partial class AdbLogViewModel : Tool, IDisposable
     private bool _disposed;
 
     public ObservableCollection<AdbLogcatEntry> Lines { get; } = [];
+    AdbLogViewModel? ILogViewModel.LiveModel => this;
+    Editors.LogEditorViewModel? ILogViewModel.FileModel => null;
+    IReadOnlyList<ILogLine> ILogViewModel.Entries => Lines;
+    event NotifyCollectionChangedEventHandler? ILogViewModel.EntriesChanged
+    {
+        add => Lines.CollectionChanged += value;
+        remove => Lines.CollectionChanged -= value;
+    }
+    System.Windows.Input.ICommand ILogViewModel.ClearSearchCommand => ClearSearchCommand;
     [ObservableProperty] private bool _autoScroll = true;
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty]

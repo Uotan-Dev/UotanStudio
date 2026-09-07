@@ -195,6 +195,12 @@
     <x:String x:Key="Log_Panel_Title">Global Log</x:String>
     <x:String x:Key="Log_Clear">Clear</x:String>
     <x:String x:Key="Log_Export">Export</x:String>
+    <x:String x:Key="Log_Reload">Reload file</x:String>
+    <x:String x:Key="Log_Loading">Loading log file</x:String>
+    <x:String x:Key="Log_FileLoadFailed">Failed to load log: {0}</x:String>
+    <x:String x:Key="Log_FileTooLarge">The log exceeds the supported limit (64 MiB, 250,000 lines, or 1 MiB per entry). The file has not been modified.</x:String>
+    <x:String x:Key="Log_FileUnsupportedVersion">This log export version is not supported.</x:String>
+    <x:String x:Key="Log_FileInvalidRecord">Invalid log record on line {0}.</x:String>
     <x:String x:Key="Log_ExportDone">Logs exported to {0}</x:String>
     <x:String x:Key="Log_ExportFailed">Failed to export logs: {0}</x:String>
     <x:String x:Key="Log_CopyDone">Log entry copied to clipboard</x:String>
