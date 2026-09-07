@@ -216,9 +216,11 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 - **真实语料测试**（`UotanStudio.Tests/Firmware/`）：真实文件用例不再硬编码开发者本机路径，统一经 `TestInfrastructure/FirmwareCorpus.cs` 定位器（默认语料根 `D:\Firmware`，可用环境变量 `UOTAN_FIRMWARE_CORPUS` 覆盖，按文件名大小写不敏感递归查找）；语料或样本缺失时以 `Assert.Skip` 跳过，不静默假通过。`RealCorpusDeepTests` 在真实生产文件上做结构解析校验（SM7150 分区集的 EXT4 全树遍历/AVB vbmeta/Boot/DTBO、根目录 payload.bin manifest 有界读取、UPDATE.APP、Oppo OZIP 等）；`ApkParseTests`/`ArscParseTests`/`ArscWriterRoundTripTests`/`AXmlRoundTripTests` 从语料 Magisk-v30.6.apk 内读 `AndroidManifest.xml`/`resources.arsc` 条目校验，`ErofsRealImageExtractAll` 对语料 odm.img（校验 EROFS 魔数后）全量解包比对尺寸。
 - **WSL 交叉验证**（`WslCrossValidationTests`）：构建 EXT4/EROFS/F2FS 镜像后经 Alpine WSL2 工具实测——`e2fsck -fn`（基础/htree 2000 项大目录/多块组 240MB/无校验和；断言无 "not valid"/空闲计数错误）、`resize2fs` 在线扩容 128M→256M + 扩容后 e2fsck（验证 resize_inode/保留 GDT 布局）、`dumpe2fs -h`（断言特性集与 mke2fs -t ext4 默认一致、Reserved GDT 非零、无 bigalloc/read-only 误置位）、`debugfs -R 'rdump /'`（内容一致）、`fsck.erofs`（默认 LZ4 compacted 索引 + LZMA big-pcluster CBLKCNT 两用例）、`dump.erofs --ls/--cat`、`fsck.f2fs`（基础/压缩/千项目录多段/16MB 大文件）、`dump.f2fs`；按工具粒度可用性探测 + `Assert.Skip`（WSL 不可用或工具缺失时跳过，不静默 return）。挂载级验证（`WslMountTests`）：EXT4/EROFS（flat + LZ4 压缩两用例）/F2FS 镜像均可被 WSL2 内核 loop 挂载并读回内容。三者打包镜像均通过对应上游原生 fsck（e2fsck / fsck.erofs / fsck.f2fs）。
 
-- **工作区自动保存**：设置页 `AutoSave` 由 `WorkspaceAutoSaveService` 实际消费，每 2 秒检查一次，切换工程及关闭主窗口前补存；关闭开关后停止后续自动保存。`workspace-session.json` 位于应用设置目录，记录上次工程、面板可见性、标准停靠区域比例、文档顺序/打开方式/活动标签，以及无工程时的节点草稿与打包设置；启动时恢复，显式打开的工程或文档优先。所有已打开的具名文本、DTB、Manifest、分区编辑器的修改均纳入保存，包含非当前标签；原始二进制编辑和未命名文本不自动写入。工程保存覆盖活动子工程、节点输入参数/连接和操作历史，不用活动子工程数据覆盖其他子工程。JSON 快照使用源生成序列化、同目录临时文件原子替换，内容未变则不重写；文本保存保留编码并检查外部修改冲突。浮动文档可重新打开到普通文档区，但不恢复任意停靠拓扑和浮窗位置。相关验证为 `WorkspaceAutoSaveTests`。
+- **工作区自动保存**：设置页 `AutoSave` 由 `WorkspaceAutoSaveService` 消费，每 2 秒仅检查已打开编辑器的未保存内容，不定时读写工程或会话快照。工程内容在手动保存、切换工程或关闭窗口时持久化；打开页面与面板状态仅在关闭时自动记录，切换工程保留原有页面记录。`workspace-session.json` 位于设置目录，保存面板可见性、停靠比例、文档及无工程草稿；启动不自动打开上次工程或文档，恢复面板布局，用户显式打开工程时仍可恢复该工程保存的文档。支持具名文本、DTB、Manifest、分区编辑器，排除原始二进制及未命名文本。JSON 原子替换且内容未变不重写，文本保留编码并检查外部修改；关闭自动保存开关停止自动持久化。浮窗位置及任意停靠拓扑不恢复。相关验证为 `WorkspaceAutoSaveTests`。
 
 ## 维护规则
+
+项目资源管理器在目录变动时按路径增量同步已加载子节点，保留仍存在的节点实例和展开状态；同一工程上下文刷新不重建根节点。文件监听只订阅名称和目录变动，文件内容保存不触发整树刷新；目录暂时不可读时保留现有显示。
 
 EXT4、EROFS、F2FS 解包的统一元数据在 `configuration.fileSystem` / `configuration.superblock` 保存已有解析器支持的原始超级块字段，UUID 为十六进制字符串；Sparse 包装镜像也通过有界逻辑流记录内部超级块。这些字段用于原始信息查看，文件系统重建仍只消费 `packingOptions`，不直接恢复物理布局或分配状态。格式处理器和应用文件系统解包服务共用该输出。
 
