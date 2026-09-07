@@ -18,6 +18,8 @@ internal sealed class DtsParser
     private readonly List<(string Label, DeviceTreeNode Patch)> _overlayFragments = new();
     private readonly List<string> _pendingRootDeletes = new();
     private readonly List<string> _pendingRootDeleteProperties = new();
+    private readonly List<string> _pendingRootLabelDeletes = new();
+    private readonly List<(DeviceTreeNode Parent, string Label)> _pendingNodeLabelDeletes = new();
     private readonly Dictionary<DeviceTreeNode, List<string>> _overlayDeletedChildren = new();
     private readonly Dictionary<DeviceTreeNode, List<string>> _overlayDeletedProperties = new();
     private bool _inOverlayBody;
@@ -167,6 +169,7 @@ internal sealed class DtsParser
             }
         }
         ResolveLabelReferences(tree);
+        ApplyPendingLabelDeletes();
         MergeOverlayFragments();
         foreach (var (label, node) in _labelToNode)
         {
@@ -340,8 +343,11 @@ internal sealed class DtsParser
         SkipWhitespaceAndComments();
         if (CurrentChar() == '&')
         {
-            SkipUntilSemicolon();
-            AddParseWarning("/delete-node/ by label reference is not supported by the DeviceTree model; skipped");
+            Advance();
+            var label = ParseIdentifier();
+            SkipWhitespaceAndComments();
+            Expect(";");
+            _pendingRootLabelDeletes.Add(label);
             return;
         }
         var name = ParseIdentifier();
@@ -355,8 +361,9 @@ internal sealed class DtsParser
         SkipWhitespaceAndComments();
         if (CurrentChar() == '&')
         {
+            Advance();
             SkipUntilSemicolon();
-            AddParseWarning("/delete-property/ by label reference is not supported by the DeviceTree model; skipped");
+            ThrowParseError("/delete-property/ by label reference is not a valid dtc directive");
             return;
         }
         var name = ParseIdentifier();
@@ -373,13 +380,46 @@ internal sealed class DtsParser
             root.RemoveProperty(name);
     }
 
+    /// <summary>
+    /// Resolves and applies pending <c>/delete-node/ &amp;label;</c> directives after
+    /// all labels have been registered.  Following dtc v1.7.2 <c>DT_DEL_NODE dt_ref ';'</c>,
+    /// the node referenced by the label is removed from its parent.
+    /// <para>在全部标签注册后解析并执行 <c>/delete-node/ &amp;label;</c> 指令，
+    /// 按 dtc v1.7.2 <c>DT_DEL_NODE dt_ref ';'</c> 规则从父节点移除被引用节点。</para>
+    /// </summary>
+    private void ApplyPendingLabelDeletes()
+    {
+        foreach (var label in _pendingRootLabelDeletes)
+        {
+            if (!_labelToNode.TryGetValue(label, out var target))
+            {
+                AddParseWarning($"/delete-node/ references unknown label '&{label}'");
+                continue;
+            }
+            target.Parent?.RemoveChild(target);
+        }
+        foreach (var (parent, label) in _pendingNodeLabelDeletes)
+        {
+            if (!_labelToNode.TryGetValue(label, out var target))
+            {
+                AddParseWarning($"/delete-node/ references unknown label '&{label}' in '{parent.GetPath()}'");
+                continue;
+            }
+            target.Parent?.RemoveChild(target);
+        }
+    }
+
     private void ParseDeleteNode(DeviceTreeNode node)
     {
         SkipWhitespaceAndComments();
         if (CurrentChar() == '&')
         {
-            SkipUntilSemicolon();
-            AddParseWarning($"/delete-node/ by label reference in '{node.GetPath()}' is not supported by the DeviceTree model; skipped");
+            Advance();
+            var label = ParseIdentifier();
+            SkipWhitespaceAndComments();
+            Expect(";");
+            _pendingNodeLabelDeletes.Add((node, label));
+            if (_inOverlayBody) RecordOverlayDelete(_overlayDeletedChildren, node, label);
             return;
         }
         var name = ParseIdentifier();
@@ -394,8 +434,9 @@ internal sealed class DtsParser
         SkipWhitespaceAndComments();
         if (CurrentChar() == '&')
         {
+            Advance();
             SkipUntilSemicolon();
-            AddParseWarning($"/delete-property/ by label reference in '{node.GetPath()}' is not supported by the DeviceTree model; skipped");
+            ThrowParseError($"/delete-property/ by label reference in '{node.GetPath()}' is not a valid dtc directive");
             return;
         }
         var name = ParseIdentifier();
@@ -823,51 +864,280 @@ internal sealed class DtsParser
     /// arithmetic operators (<c>+ - * / &lt;&lt; &gt;&gt;</c>).
     /// <para>解析单元格级表达式：数字后可选跟二元算术运算符（<c>+ - * / &lt;&lt; &gt;&gt;</c>）。</para>
     /// </summary>
+    /// <summary>
+    /// Parses a DTS integer expression with dtc v1.7.2 precedence:
+    /// unary (+ - ~ !)  &gt; multiplicative (* / %)  &gt; additive (+ -)
+    /// &gt; shift (&lt;&lt; &gt;&gt;)  &gt; relational (&lt; &gt; &lt;= &gt;=)  &gt; equality (== !=)
+    /// &gt; bitwise AND (&amp;)  &gt; bitwise XOR (^)  &gt; bitwise OR (|)
+    /// &gt; logical AND (&amp;&amp;)  &gt; logical OR (||)
+    /// Parenthesised sub-expressions are supported.
+    /// <para>按 dtc v1.7.2 优先级解析 DTS 整数表达式，支持括号子表达式。</para>
+    /// </summary>
     private ulong ParseCellExpression()
     {
-        var value = (long)ParseHexOrDecimal64();
+        return (ulong)ParseLogicalOr();
+    }
 
+    private long ParseLogicalOr()
+    {
+        var left = ParseLogicalAnd();
         while (true)
         {
             SkipWhitespaceAndComments();
+            if (CurrentChar() == '|' && Peek(1) == '|')
+            {
+                Advance(); Advance();
+                var right = ParseLogicalAnd();
+                left = (left != 0 || right != 0) ? 1L : 0L;
+            }
+            else break;
+        }
+        return left;
+    }
 
-            if (_pos + 1 < _text.Length && CurrentChar() == '<' && Peek(1) == '<')
+    private long ParseLogicalAnd()
+    {
+        var left = ParseBitwiseOr();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '&' && Peek(1) == '&')
             {
                 Advance(); Advance();
-                SkipWhitespaceAndComments();
-                var right = (long)ParseHexOrDecimal64();
-                value <<= (int)right;
-                continue;
+                var right = ParseBitwiseOr();
+                left = (left != 0 && right != 0) ? 1L : 0L;
             }
-            if (_pos + 1 < _text.Length && CurrentChar() == '>' && Peek(1) == '>')
+            else break;
+        }
+        return left;
+    }
+
+    private long ParseBitwiseOr()
+    {
+        var left = ParseBitwiseXor();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '|' && Peek(1) != '|')
             {
-                Advance(); Advance();
-                SkipWhitespaceAndComments();
-                var right = (long)ParseHexOrDecimal64();
-                value >>= (int)right;
-                continue;
-            }
-            if (CurrentChar() is '+' or '-' or '*' or '/')
-            {
-                var op = CurrentChar();
                 Advance();
-                SkipWhitespaceAndComments();
-                var right = (long)ParseHexOrDecimal64();
-                value = op switch
-                {
-                    '+' => value + right,
-                    '-' => value - right,
-                    '*' => value * right,
-                    '/' => right != 0 ? value / right : 0,
-                    _ => value
-                };
-                continue;
+                var right = ParseBitwiseXor();
+                left |= right;
             }
+            else break;
+        }
+        return left;
+    }
 
-            break;
+    private long ParseBitwiseXor()
+    {
+        var left = ParseBitwiseAnd();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '^')
+            {
+                Advance();
+                var right = ParseBitwiseAnd();
+                left ^= right;
+            }
+            else break;
+        }
+        return left;
+    }
+
+    private long ParseBitwiseAnd()
+    {
+        var left = ParseEquality();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '&' && Peek(1) != '&')
+            {
+                Advance();
+                var right = ParseEquality();
+                left &= right;
+            }
+            else break;
+        }
+        return left;
+    }
+
+    private long ParseEquality()
+    {
+        var left = ParseRelational();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '=' && Peek(1) == '=')
+            {
+                Advance(); Advance();
+                var right = ParseRelational();
+                left = left == right ? 1L : 0L;
+            }
+            else if (CurrentChar() == '!' && Peek(1) == '=')
+            {
+                Advance(); Advance();
+                var right = ParseRelational();
+                left = left != right ? 1L : 0L;
+            }
+            else break;
+        }
+        return left;
+    }
+
+    private long ParseRelational()
+    {
+        var left = ParseShift();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '<' && Peek(1) == '=')
+            {
+                Advance(); Advance();
+                var right = ParseShift();
+                left = left <= right ? 1L : 0L;
+            }
+            else if (CurrentChar() == '>' && Peek(1) == '=')
+            {
+                Advance(); Advance();
+                var right = ParseShift();
+                left = left >= right ? 1L : 0L;
+            }
+            // NOTE: bare '<' and '>' are NOT parsed as relational operators here
+            // because they conflict with cell-list delimiters in `<...>`.  Users who
+            // need a bare '<' / '>' comparison must wrap it in parentheses, e.g.
+            // `<((1 < 2))>`, where '(' context still doesn't see '<' as a delimiter
+            // since ParsePrimary handles '(' recursively.  This matches dtc's
+            // behaviour where the lexer inside `<...>` treats '<' / '>' as
+            // delimiters, not relational tokens.
+            else break;
+        }
+        return left;
+    }
+
+    private long ParseShift()
+    {
+        var left = ParseAdditive();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '<' && Peek(1) == '<')
+            {
+                Advance(); Advance();
+                var right = ParseAdditive();
+                left <<= (int)right;
+            }
+            else if (CurrentChar() == '>' && Peek(1) == '>')
+            {
+                Advance(); Advance();
+                var right = ParseAdditive();
+                left >>= (int)right;
+            }
+            else break;
+        }
+        return left;
+    }
+
+    private long ParseAdditive()
+    {
+        var left = ParseMultiplicative();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '+')
+            {
+                Advance();
+                var right = ParseMultiplicative();
+                left += right;
+            }
+            else if (CurrentChar() == '-')
+            {
+                Advance();
+                var right = ParseMultiplicative();
+                left -= right;
+            }
+            else break;
+        }
+        return left;
+    }
+
+    private long ParseMultiplicative()
+    {
+        var left = ParseUnary();
+        while (true)
+        {
+            SkipWhitespaceAndComments();
+            if (CurrentChar() == '*')
+            {
+                Advance();
+                var right = ParseUnary();
+                left *= right;
+            }
+            else if (CurrentChar() == '/')
+            {
+                Advance();
+                var right = ParseUnary();
+                left = right != 0 ? left / right : 0;
+            }
+            else if (CurrentChar() == '%')
+            {
+                Advance();
+                var right = ParseUnary();
+                left = right != 0 ? left % right : 0;
+            }
+            else break;
+        }
+        return left;
+    }
+
+    private long ParseUnary()
+    {
+        SkipWhitespaceAndComments();
+        if (CurrentChar() == '-')
+        {
+            Advance();
+            return -ParseUnary();
+        }
+        if (CurrentChar() == '+')
+        {
+            Advance();
+            return ParseUnary();
+        }
+        if (CurrentChar() == '~')
+        {
+            Advance();
+            return ~ParseUnary();
+        }
+        if (CurrentChar() == '!')
+        {
+            Advance();
+            return ParseUnary() == 0 ? 1L : 0L;
+        }
+        return ParsePrimary();
+    }
+
+    private long ParsePrimary()
+    {
+        SkipWhitespaceAndComments();
+
+        if (CurrentChar() == '(')
+        {
+            Advance();
+            var value = ParseLogicalOr();
+            SkipWhitespaceAndComments();
+            Expect(")");
+            return value;
         }
 
-        return (ulong)value;
+        // Numeric literal — delegate to existing hex/decimal parser.
+        if (char.IsDigit(CurrentChar()) || CurrentChar() == '-')
+        {
+            return (long)ParseHexOrDecimal64();
+        }
+
+        ThrowParseError($"Expected integer expression but found '{CurrentChar()}' at {GetPositionInfo()}");
+        return 0;
     }
 
     private ulong ParseHex64(bool negative)
