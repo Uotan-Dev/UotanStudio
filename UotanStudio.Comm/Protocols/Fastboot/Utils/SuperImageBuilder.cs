@@ -30,7 +30,7 @@ public sealed class LpGeometry
     /// <summary>Gets the reported struct size from the blob. 从数据块中读取的报告结构大小。</summary>
     public uint StructSize { get; }
 
-    /// <summary>Gets the 32-byte SHA256 checksum covering the first 20 bytes of the struct. 覆盖结构前 20 字节的 32 字节 SHA256 校验和。</summary>
+    /// <summary>Gets the SHA256 checksum covering the complete 52-byte structure. 覆盖完整 52 字节结构的 SHA256 校验和。</summary>
     public byte[] Checksum { get; }
 
     /// <summary>Gets the maximum size of a metadata slot in bytes. 元数据槽位的最大大小（字节）。</summary>
@@ -43,10 +43,10 @@ public sealed class LpGeometry
     public uint LogicalBlockSize { get; }
 
     /// <summary>
-    /// Gets whether the stored checksum matches the recomputed SHA256 over the first 20 bytes
+    /// Gets whether the stored checksum matches the recomputed SHA256 over all 52 bytes
     /// (with the checksum field zeroed). Only computed when <see cref="StructSize"/> is the
     /// standard 52 bytes.
-    /// <para>存储的校验和是否与对前 20 字节（校验和字段清零）重新计算的 SHA256 一致。
+    /// <para>存储的校验和是否与对完整 52 字节（校验和字段清零）重新计算的 SHA256 一致。
     /// 仅在 <see cref="StructSize"/> 为标准 52 字节时计算。</para>
     /// </summary>
     public bool IsChecksumValid { get; }
@@ -67,7 +67,7 @@ public sealed class LpGeometry
     /// </summary>
     public static LpGeometry? TryParse(byte[] data, int offset)
     {
-        if (data == null || offset < 0 || offset + StructSizeBytes > data.Length)
+        if (data == null || offset < 0 || offset > data.Length || StructSizeBytes > data.Length - offset)
         {
             return null;
         }
@@ -158,8 +158,8 @@ public sealed class SuperImageExtent(
     /// <summary>Gets the target type (0=Linear, 1=Zero). 目标类型（0=线性，1=零）。</summary>
     public uint TargetType { get; } = targetType;
 
-    /// <summary>Gets the starting sector, relative to the first logical sector of the block device.
-    /// 起始扇区（相对块设备的首个逻辑扇区）。</summary>
+    /// <summary>Gets the absolute starting sector within the source block device.
+    /// 获取源块设备内的绝对起始扇区。</summary>
     public ulong TargetData { get; } = targetData;
 
     /// <summary>Gets the source block device index. 源块设备索引。</summary>
@@ -194,8 +194,8 @@ public sealed class SuperImageBlockDevice(
 }
 
 /// <summary>
-/// A partition specification used to build a super image with <see cref="SuperImageBuilder.Build"/>.
-/// <para>用于通过 <see cref="SuperImageBuilder.Build"/> 构建 super 镜像的分区规格。</para>
+/// A partition specification used to build a super image with <see cref="SuperImageBuilder"/>.
+/// <para>用于通过 <see cref="SuperImageBuilder"/> 构建 super 镜像的分区规格。</para>
 /// </summary>
 public sealed class SuperBuildPartition(string name, string groupName, long sizeInBytes, uint attributes = 0)
 {
@@ -282,7 +282,7 @@ public sealed class SuperImageMetadata(
             for (var e = 0; e < p.NumExtents; e++)
             {
                 var idx = (int)(p.FirstExtentIndex + e);
-                if (idx < extents.Count) sizeInBytes += (long)extents[idx].NumSectors * MetadataFormat.LP_SECTOR_SIZE;
+                if (idx < extents.Count) sizeInBytes = checked(sizeInBytes + checked((long)extents[idx].NumSectors * MetadataFormat.LP_SECTOR_SIZE));
             }
             return new SuperLogicalPartition(name, p.GroupIndex, groupName, p.Attributes, p.FirstExtentIndex, p.NumExtents, sizeInBytes);
         }).ToList();
@@ -326,7 +326,12 @@ public sealed class SuperImageBuilder
     /// Returns whether the byte array is a super partition image (LP geometry magic present).
     /// <para>返回字节数组是否为 super 分区镜像（存在 LP geometry 魔数）。</para>
     /// </summary>
-    public bool IsSuperImage(byte[] data) => data != null && (LpGeometry.TryParse(data, 0) != null || LpGeometry.TryParse(data, GeometryBlockSize) != null);
+    public bool IsSuperImage(byte[] data)
+    {
+        if (data == null) return false;
+        using var stream = new MemoryStream(data, writable: false);
+        return IsSuperImage(stream);
+    }
 
     /// <summary>
     /// Returns whether the file is a super partition image.
@@ -335,8 +340,28 @@ public sealed class SuperImageBuilder
     public bool IsSuperImage(string superImagePath)
     {
         if (!File.Exists(superImagePath)) return false;
-        try { return IsSuperImage(File.ReadAllBytes(superImagePath)); }
+        try
+        {
+            using var stream = File.OpenRead(superImagePath);
+            return IsSuperImage(stream);
+        }
         catch (IOException) { return false; }
+    }
+
+    private static bool IsSuperImage(Stream stream)
+    {
+        try { _ = ReadGeometry(stream); return true; }
+        catch (Exception ex) when (ex is InvalidDataException or IOException) { return false; }
+    }
+
+    private static LpMetadataGeometry ReadGeometry(Stream stream)
+    {
+        try { MetadataReader.ReadPrimaryGeometry(stream, out var geometry); return geometry; }
+        catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
+        {
+            MetadataReader.ReadBackupGeometry(stream, out var geometry);
+            return geometry;
+        }
     }
 
     /// <summary>
@@ -347,37 +372,29 @@ public sealed class SuperImageBuilder
     public SuperImageMetadata? ReadMetadata(byte[] imageData, int slot = 0)
     {
         if (imageData == null || imageData.Length == 0 || slot < 0) return null;
-        try
-        {
-            using var stream = new MemoryStream(imageData, writable: false);
-            LpMetadataGeometry geo;
-            try
-            {
-                geo = LpMetadataGeometry.FromBytes(imageData.AsSpan(MetadataFormat.LP_PARTITION_RESERVED_BYTES, MetadataFormat.Sizes.Geometry).ToArray());
-            }
-            catch
-            {
-                // Try backup geometry
-                if (imageData.Length < MetadataFormat.LP_PARTITION_RESERVED_BYTES + GeometryBlockSize + MetadataFormat.Sizes.Geometry)
-                    return null;
-                try
-                {
-                    geo = LpMetadataGeometry.FromBytes(imageData.AsSpan(MetadataFormat.LP_PARTITION_RESERVED_BYTES + GeometryBlockSize, MetadataFormat.Sizes.Geometry).ToArray());
-                }
-                catch
-                {
-                    return null;
-                }
-            }
+        using var stream = new MemoryStream(imageData, writable: false);
+        return ReadMetadata(stream, slot);
+    }
 
-            if (geo.Magic != GeometryMagic) return null;
-            if (slot >= (int)geo.MetadataSlotCount) return null;
-            var lp = MetadataReader.ReadPrimaryMetadata(stream, geo, (uint)slot);
-            return SuperImageMetadata.FromFirmware(lp, slot);
-        }
-        catch (Exception ex) when (ex is InvalidDataException or ArgumentException or EndOfStreamException or IOException)
+    internal static SuperImageMetadata? ReadMetadata(Stream stream, int slot)
+    {
+        try { return SuperImageMetadata.FromFirmware(ReadFirmwareMetadata(stream, slot), slot); }
+        catch (Exception ex) when (ex is InvalidDataException or ArgumentException or EndOfStreamException or IOException or OverflowException)
         {
             return null;
+        }
+    }
+
+    internal static LpMetadata ReadFirmwareMetadata(Stream stream, int slot)
+    {
+        var geometry = ReadGeometry(stream);
+        if (slot < 0 || (uint)slot >= geometry.MetadataSlotCount)
+            throw new ArgumentOutOfRangeException(nameof(slot));
+        try { return MetadataReader.ReadPrimaryMetadata(stream, geometry, (uint)slot); }
+        catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
+        {
+            stream.Position = MetadataReader.GetBackupMetadataOffset(geometry, (ulong)stream.Length, (uint)slot);
+            return MetadataReader.ParseMetadata(geometry, stream);
         }
     }
 
@@ -391,7 +408,8 @@ public sealed class SuperImageBuilder
             throw new ArgumentException("Super image path is required.", nameof(superImagePath));
         if (!File.Exists(superImagePath))
             throw new FileNotFoundException($"Super image file not found: {superImagePath}", superImagePath);
-        return GetLogicalPartitions(File.ReadAllBytes(superImagePath), slot);
+        using var stream = File.OpenRead(superImagePath);
+        return ReadMetadata(stream, slot)?.Partitions ?? [];
     }
 
     /// <summary>
@@ -403,8 +421,9 @@ public sealed class SuperImageBuilder
 
     /// <summary>
     /// Builds a super partition image using <see cref="MetadataBuilder"/> and <see cref="MetadataWriter"/>
-    /// from Firmware.Lp.
-    /// <para>使用 Firmware.Lp 的 <see cref="MetadataBuilder"/> 和 <see cref="MetadataWriter"/> 构建 super 分区镜像。</para>
+    /// from Firmware.Lp. This convenience API is limited to 256 MiB; use the stream overload for larger images.
+    /// <para>使用 Firmware.Lp 的 <see cref="MetadataBuilder"/> 和 <see cref="MetadataWriter"/> 构建 super 分区镜像。
+    /// 此便利 API 限制为 256 MiB，更大镜像请使用流重载。</para>
     /// </summary>
     public byte[] Build(
         IReadOnlyList<SuperBuildPartition> partitions,
@@ -413,10 +432,39 @@ public sealed class SuperImageBuilder
         uint metadataSlotCount,
         uint blockSize = 4096)
     {
+        if (deviceSize > 256 * 1024 * 1024)
+            throw new ArgumentOutOfRangeException(nameof(deviceSize), "The byte-array API is limited to 256 MiB; use the stream overload for larger images.");
+        using var stream = new MemoryStream();
+        Build(stream, partitions, deviceSize, metadataMaxSize, metadataSlotCount, blockSize);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Builds a zero-filled raw super image with standard LP metadata in a seekable stream.
+    /// <para>在可定位流中构建含标准 LP 元数据、分区数据区填零的原始 super 镜像。</para>
+    /// </summary>
+    /// <param name="output">Writable seekable destination; its existing contents are replaced. 可写且可定位的目标流，替换其原有内容。</param>
+    /// <param name="partitions">Logical partition definitions. 逻辑分区定义。</param>
+    /// <param name="deviceSize">Total device size in bytes. 设备总字节数。</param>
+    /// <param name="metadataMaxSize">Maximum bytes per metadata slot. 每个元数据槽的最大字节数。</param>
+    /// <param name="metadataSlotCount">Number of primary and backup metadata slots. 主、备份元数据各自的槽数。</param>
+    /// <param name="blockSize">Logical block size in bytes. 逻辑块字节数。</param>
+    public void Build(
+        Stream output,
+        IReadOnlyList<SuperBuildPartition> partitions,
+        ulong deviceSize,
+        uint metadataMaxSize,
+        uint metadataSlotCount,
+        uint blockSize = 4096)
+    {
+        ArgumentNullException.ThrowIfNull(output);
+        if (!output.CanWrite || !output.CanSeek)
+            throw new ArgumentException("The super image destination must be writable and seekable.", nameof(output));
         ArgumentNullException.ThrowIfNull(partitions);
-        if (deviceSize == 0) throw new ArgumentOutOfRangeException(nameof(deviceSize), "Super device size must be positive.");
-        if (metadataSlotCount == 0) throw new ArgumentOutOfRangeException(nameof(metadataSlotCount), "At least one metadata slot is required.");
-        if (metadataMaxSize < 256 + (4 * 12))
+        if (deviceSize == 0 || deviceSize > long.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(deviceSize), "Super device size must be positive and fit a stream length.");
+        if (metadataSlotCount is 0 or > 32) throw new ArgumentOutOfRangeException(nameof(metadataSlotCount));
+        if (metadataMaxSize < 512 || metadataMaxSize > 64 * 1024 * 1024 || metadataMaxSize % LpSectorSize != 0)
             throw new ArgumentOutOfRangeException(nameof(metadataMaxSize), "Metadata slot size is too small for an LP metadata header.");
         if (blockSize == 0 || blockSize % LpSectorSize != 0 || (blockSize & (blockSize - 1)) != 0)
             throw new ArgumentOutOfRangeException(nameof(blockSize));
@@ -433,14 +481,19 @@ public sealed class SuperImageBuilder
                 throw new ArgumentOutOfRangeException(nameof(partitions), $"Partition '{p.Name}' has a negative size.");
         }
 
-        // Validate device size can fit metadata + at least some data.
-        var metadataBytes = (ulong)metadataMaxSize * metadataSlotCount;
-        var firstLogicalByte = ((MetadataFormat.LP_PARTITION_RESERVED_BYTES + (2UL * MetadataFormat.LP_METADATA_GEOMETRY_SIZE) + metadataBytes + blockSize - 1) / blockSize) * blockSize;
-        ulong totalSectors = 0;
-        foreach (var p in partitions) totalSectors += (ulong)((Math.Max(0, p.SizeInBytes) + LpSectorSize - 1) / LpSectorSize);
-        var dataBytes = totalSectors * (ulong)LpSectorSize;
-        if (firstLogicalByte + dataBytes + metadataBytes > deviceSize)
-            throw new ArgumentOutOfRangeException(nameof(deviceSize), "Super device size is too small for metadata and partitions.");
+        var metadataBytes = MetadataFormat.LP_PARTITION_RESERVED_BYTES + 2UL * MetadataFormat.LP_METADATA_GEOMETRY_SIZE
+            + 2UL * metadataMaxSize * metadataSlotCount;
+        var firstLogicalByte = (metadataBytes + blockSize - 1) / blockSize * blockSize;
+        if (firstLogicalByte > deviceSize || blockSize > deviceSize - firstLogicalByte)
+            throw new ArgumentOutOfRangeException(nameof(deviceSize), "Super device size is too small for metadata and a logical block.");
+        var remainingBytes = deviceSize - firstLogicalByte;
+        foreach (var partition in partitions)
+        {
+            var size = ((ulong)partition.SizeInBytes + blockSize - 1) / blockSize * blockSize;
+            if (size > remainingBytes)
+                throw new ArgumentOutOfRangeException(nameof(deviceSize), "Super device size is too small for the aligned partitions.");
+            remainingBytes -= size;
+        }
 
         // Register all groups before adding partitions.
         var groups = new HashSet<string>(StringComparer.Ordinal) { "default" };
@@ -449,7 +502,7 @@ public sealed class SuperImageBuilder
             var g = string.IsNullOrWhiteSpace(p.GroupName) ? "default" : p.GroupName;
             groups.Add(g);
         }
-        var builder = MetadataBuilder.New(deviceSize, metadataMaxSize, metadataSlotCount);
+        var builder = MetadataBuilder.New(deviceSize, metadataMaxSize, metadataSlotCount, blockSize);
         foreach (var g in groups)
         {
             if (g != "default") builder.AddGroup(g, 0);
@@ -460,38 +513,9 @@ public sealed class SuperImageBuilder
         }
         var metadata = builder.Build();
 
-        // Override geometry block size if caller specified a non-default value.
-        if (blockSize != 4096)
-        {
-            metadata.Geometry = new LpMetadataGeometry
-            {
-                Magic = metadata.Geometry.Magic,
-                StructSize = metadata.Geometry.StructSize,
-                Checksum = metadata.Geometry.Checksum,
-                MetadataMaxSize = metadata.Geometry.MetadataMaxSize,
-                MetadataSlotCount = metadata.Geometry.MetadataSlotCount,
-                LogicalBlockSize = blockSize
-            };
-            // Recompute block device FirstLogicalSector for the new block size.
-            if (metadata.BlockDevices.Count > 0)
-            {
-                var bd = metadata.BlockDevices[0];
-                metadata.BlockDevices[0] = new LpMetadataBlockDevice
-                {
-                    FirstLogicalSector = (MetadataFormat.LP_PARTITION_RESERVED_BYTES
-                        + (2UL * MetadataFormat.LP_METADATA_GEOMETRY_SIZE)
-                        + (metadataMaxSize * metadataSlotCount * 2UL)) / blockSize,
-                    Alignment = bd.Alignment,
-                    AlignmentOffset = bd.AlignmentOffset,
-                    Size = bd.Size,
-                    PartitionName = bd.PartitionName,
-                    Flags = bd.Flags
-                };
-            }
-        }
-
-        using var ms = new MemoryStream();
-        MetadataWriter.WriteToImageStream(ms, metadata);
-        return ms.ToArray();
+        _ = MetadataWriter.SerializeMetadata(metadata);
+        output.SetLength(0);
+        output.SetLength((long)deviceSize);
+        MetadataWriter.WriteToImageStream(output, metadata);
     }
 }
