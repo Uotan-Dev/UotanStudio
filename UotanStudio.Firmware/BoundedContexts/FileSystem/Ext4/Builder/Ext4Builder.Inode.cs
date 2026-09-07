@@ -132,7 +132,7 @@ public sealed partial class Ext4Builder
         {
             flags = FlagExtents;
             metaBlocks = WriteExtentTree(
-                inode.AsSpan(40, 60), node.Runs, node.DataStartBlock,
+                inode.AsSpan(40, 60), node.Extents,
                 node.LeafBlocks, node.IndexBlocks, blockSize);
         }
 
@@ -181,6 +181,16 @@ public sealed partial class Ext4Builder
         WriteAt(output, baseOffset, inodeOffset, inode, inodeSize);
         foreach (var (blockAddress, data) in metaBlocks)
         {
+            if (enableMetadataCsum)
+            {
+                var crc = ComputeCrc32(uuid, 0xFFFF_FFFF);
+                var identity = new byte[8];
+                WriteU32(identity, 0, node.Inode);
+                crc = ComputeCrc32Continue(crc, identity);
+                var tailOffset = 12 + EntriesPerBlock(blockSize) * 12;
+                crc = ComputeCrc32Continue(crc, data.AsSpan(0, tailOffset));
+                WriteU32(data, tailOffset, crc);
+            }
             var metaOffset = checked(blockAddress * blockSize);
             WriteAt(output, baseOffset, metaOffset, data, blockSize);
         }

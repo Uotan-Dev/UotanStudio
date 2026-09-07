@@ -532,7 +532,7 @@ internal static class Ext4Htree
         WriteU32(block, endCap, 0);
         WriteU16(block, endCap + 4, DirentTailSize);
         block[endCap + 6] = 0x00;
-        block[endCap + 7] = 0;
+        block[endCap + 7] = 0xDE; // EXT2_DIR_NAME_LEN_CSUM.
 
         var crc = HtreeCrc32c(uuid ?? new byte[16], 0xFFFF_FFFF);
         Span<byte> le = stackalloc byte[4];
@@ -568,12 +568,13 @@ internal static class Ext4Htree
         crc = HtreeCrc32c(le4, crc);
 
 
-        crc = HtreeCrc32c(stackalloc byte[4], crc);
+        le4.Clear();
+        crc = HtreeCrc32c(le4, crc);
 
 
-        // e2fsprogs ext2fs_dx_csum: hash from count/limit through end of dx_tail only,
-        // does NOT include dot (12B) or dotdot (12B) directory entries.
-        crc = HtreeCrc32c(block.AsSpan(countOffset, tailOffset + DxTailSize - countOffset), crc);
+        // ext2fs_dx_csum hashes the prefix through used entries, then the zeroed tail.
+        crc = HtreeCrc32c(block.AsSpan(0, countOffset + count * DxEntrySize), crc);
+        crc = HtreeCrc32c(block.AsSpan(tailOffset, DxTailSize), crc);
 
 
         BinaryPrimitives.WriteUInt32LittleEndian(block.AsSpan(tailOffset + 4, 4), crc);

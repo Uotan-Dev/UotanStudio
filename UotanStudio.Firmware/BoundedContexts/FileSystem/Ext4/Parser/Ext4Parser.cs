@@ -17,7 +17,7 @@ public sealed class Ext4Parser : IDisposable
 
     public sealed record Ext4FileEntry(string Path, long Size, uint Inode, Ext4EntryKind Kind, string? SymlinkTarget = null, IReadOnlyDictionary<string, byte[]>? Xattrs = null);
 
-    private const int SuperblockReadLength = 1024 + 360;
+    private const int SuperblockReadLength = 1024 + 1024;
     private const uint RootInodeNumber = 2;
     private const uint Ext4XattrMagic = 0xEA020000;
     private const int MaxExtentLeafPointers = 12;
@@ -788,7 +788,8 @@ public sealed class Ext4Parser : IDisposable
     private uint? ReadPointerBlock(uint blockNumber, int index)
     {
         var data = ReadBlock(blockNumber);
-        return BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(index * 4, 4));
+        var address = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(index * 4, 4));
+        return address == 0 ? null : address;
     }
 
     /// <summary>

@@ -70,7 +70,7 @@ public sealed partial class Ext4Builder
         public uint Mtime { get; set; }
         public uint Ctime { get; set; }
         public long DataBlockCount { get; set; }
-        public long DataStartBlock { get; set; }
+        public List<(uint Logical, ulong Start, ushort Len)> Extents { get; } = [];
         public long[] LeafBlocks { get; set; } = [];
         public long[] IndexBlocks { get; set; } = [];
         public int ExtentTreeDepth { get; set; }
@@ -211,7 +211,7 @@ public sealed partial class Ext4Builder
         return options;
     }
 
-    private static void BuildCore(string sourceDirectory, Stream output, Ext4Options options, long baseOffset, bool freshDestination, IReadOnlyCollection<string> excludedFiles, Node? plannedRoot = null)
+    private static void BuildCore(string sourceDirectory, Stream output, Ext4Options options, long baseOffset, bool freshDestination, IReadOnlyCollection<string> excludedFiles, Node? plannedRoot = null, int minimumGroupCount = 1)
     {
         var blockSize = options.BlockSize;
         var inodeSize = options.InodeSize;
@@ -224,6 +224,11 @@ public sealed partial class Ext4Builder
         var root = plannedRoot ?? BuildTree(Path.GetFullPath(sourceDirectory), excludedFiles);
         var nodes = new List<Node>();
         var maxInode = AssignInodes(root, nodes);
+        foreach (var node in nodes)
+        {
+            node.Runs.Clear();
+            node.Extents.Clear();
+        }
 
         PlanDirectoryBlocks(nodes, blockSize, uuid, enableMetadataCsum);
         PlanDataBlocks(nodes, blockSize, options.EnableSparse);
@@ -251,7 +256,7 @@ public sealed partial class Ext4Builder
         var gdtBlocks = 1L;
         var group0Extra = 1L + gdtBlocks;
         var estimatedTotal = group0Extra + metaPerGroup + totalDataBlocks + journalBlocks;
-        var groupCount = Math.Max(1, (int)((estimatedTotal + blocksPerGroup - 1) / blocksPerGroup));
+        var groupCount = Math.Max(minimumGroupCount, (int)((estimatedTotal + blocksPerGroup - 1) / blocksPerGroup));
         groupCount = Math.Max(groupCount, (int)Math.Ceiling((double)maxInode / inodesPerGroup));
 
 
@@ -326,6 +331,8 @@ public sealed partial class Ext4Builder
 
             group.BlocksInGroup = blocksPerGroup;
             group.InodesInGroup = inodesPerGroup;
+            if (group.FirstDataBlock >= groupStart + blocksPerGroup)
+                throw new InvalidOperationException("EXT4 group metadata leaves no room for file data.");
             groups.Add(group);
         }
 
@@ -341,7 +348,13 @@ public sealed partial class Ext4Builder
             usedBlocks++;
         }
 
-        AllocateDataBlocksMultiGroup(nodes, groups, blocksPerGroup, journalBlocks, out var journalStart);
+        if (!AllocateDataBlocksMultiGroup(nodes, groups, blocksPerGroup, blockSize, journalBlocks, out var journalStart))
+        {
+            // Group boundaries can add extent-tree blocks after the initial layout estimate.
+            BuildCore(sourceDirectory, output, options, baseOffset, freshDestination, excludedFiles, root, checked(groupCount + 1));
+            return;
+        }
+        usedBlocks = groups.Sum(group => group.FirstDataBlock - (long)group.GroupIndex * blocksPerGroup + group.UsedBlocks);
         if (includeJournal)
         {
 
@@ -402,7 +415,9 @@ public sealed partial class Ext4Builder
 
         foreach (var bg in BackupSuperblockGroups(groupCount))
         {
-            WriteAt(output, baseOffset, bg * blocksPerGroup * blockSize + 1024, superblock, superblock.Length);
+            WriteU16(superblock, 0x5A, checked((ushort)bg));
+            WriteU32(superblock, 0x3FC, ComputeCrc32(superblock.AsSpan(0, 0x3FC), 0xFFFF_FFFF));
+            WriteAt(output, baseOffset, (long)bg * blocksPerGroup * blockSize, superblock, superblock.Length);
         }
 
 
@@ -468,118 +483,76 @@ public sealed partial class Ext4Builder
     }
 
     /// <summary>
-    /// Allocates node data blocks across groups (contiguous within a group when possible), then, when journalBlocks &gt; 0, reserves a contiguous region right after all file data for the internal journal.
-    /// <para>将节点的数据块分配到各组（尽量在同一组内连续分配），并在所有文件数据之后为内部日志 预留一段连续块区（journalBlocks &gt; 0 时）。</para>
+    /// Reserves the journal, then allocates extents and tree blocks without crossing group metadata.
+    /// <para>预留日志后分配 extent 和索引块，避开各块组的元数据。</para>
     /// </summary>
-    private static void AllocateDataBlocksMultiGroup(List<Node> nodes, List<GroupInfo> groups, int blocksPerGroup, int journalBlocks, out long journalStart)
+    private static bool AllocateDataBlocksMultiGroup(List<Node> nodes, List<GroupInfo> groups, int blocksPerGroup, int blockSize, int journalBlocks, out long journalStart)
     {
         journalStart = -1;
         var groupIndex = 0;
         var cursor = groups[0].FirstDataBlock;
-
-        foreach (var node in nodes)
-        {
-            if (node.DataBlockCount > 0)
-            {
-
-                node.DataStartBlock = cursor;
-                cursor += node.DataBlockCount;
-
-                var groupStart = (long)groups[groupIndex].GroupIndex * blocksPerGroup;
-                var groupEnd = groupStart + blocksPerGroup;
-                if (cursor > groupEnd && groupIndex + 1 < groups.Count)
-                {
-                    groupIndex++;
-                    cursor = groups[groupIndex].FirstDataBlock;
-                    node.DataStartBlock = cursor;
-                    cursor += node.DataBlockCount;
-                }
-            }
-
-            for (var i = 0; i < node.LeafBlocks.Length; i++)
-            {
-                node.LeafBlocks[i] = cursor;
-                cursor++;
-                var groupStart = (long)groups[groupIndex].GroupIndex * blocksPerGroup;
-                if (cursor >= groupStart + blocksPerGroup && groupIndex + 1 < groups.Count)
-                {
-                    groupIndex++;
-                    cursor = groups[groupIndex].FirstDataBlock;
-                }
-            }
-
-            for (var i = 0; i < node.IndexBlocks.Length; i++)
-            {
-                node.IndexBlocks[i] = cursor;
-                cursor++;
-                var groupStart = (long)groups[groupIndex].GroupIndex * blocksPerGroup;
-                if (cursor >= groupStart + blocksPerGroup && groupIndex + 1 < groups.Count)
-                {
-                    groupIndex++;
-                    cursor = groups[groupIndex].FirstDataBlock;
-                }
-            }
-        }
-
-
-        foreach (var node in nodes)
-        {
-            var allBlocks = new List<long>();
-            if (node.DataBlockCount > 0)
-            {
-                for (var i = 0L; i < node.DataBlockCount; i++)
-                {
-                    allBlocks.Add(node.DataStartBlock + i);
-                }
-            }
-            allBlocks.AddRange(node.LeafBlocks);
-            allBlocks.AddRange(node.IndexBlocks);
-            foreach (var block in allBlocks)
-            {
-                var gi = (int)(block / blocksPerGroup);
-                if (gi >= 0 && gi < groups.Count)
-                {
-                    groups[gi].UsedBlocks++;
-                }
-            }
-        }
-
-
-        foreach (var node in nodes)
-        {
-            var gi = (int)((node.Inode - 1) / (uint)groups[0].InodesInGroup);
-            if (gi >= 0 && gi < groups.Count)
-            {
-                groups[gi].UsedInodes++;
-                groups[gi].Nodes.Add(node);
-                if (node.IsDirectory)
-                {
-                    groups[gi].UsedDirectories++;
-                }
-            }
-        }
-
-
         if (journalBlocks > 0)
         {
-            var groupStart = (long)groups[groupIndex].GroupIndex * blocksPerGroup;
-            var groupEnd = groupStart + blocksPerGroup;
-            if (cursor + journalBlocks > groupEnd)
-            {
-                if (groupIndex + 1 >= groups.Count)
-                {
-                    throw new InvalidOperationException(
-                        "Not enough free blocks to hold the internal journal; disable IncludeJournal or shrink the source data.");
-                }
+            if (journalBlocks > blocksPerGroup - cursor)
+                throw new InvalidOperationException("EXT4 group zero cannot hold its metadata and internal journal.");
+            journalStart = cursor;
+            cursor += journalBlocks;
+            groups[0].UsedBlocks += journalBlocks;
+        }
 
-                groupIndex++;
+        bool EnsureSpace()
+        {
+            while (cursor >= (long)(groupIndex + 1) * blocksPerGroup)
+            {
+                if (++groupIndex >= groups.Count) return false;
                 cursor = groups[groupIndex].FirstDataBlock;
             }
-
-            journalStart = cursor;
-            groups[groupIndex].UsedBlocks += journalBlocks;
-            cursor += journalBlocks;
+            return true;
         }
+
+        foreach (var node in nodes)
+        {
+            node.Extents.Clear();
+            foreach (var run in node.Runs)
+            {
+                var logical = run.LogicalStart;
+                var remaining = run.Count;
+                while (remaining > 0)
+                {
+                    if (!EnsureSpace()) return false;
+                    var available = (long)(groupIndex + 1) * blocksPerGroup - cursor;
+                    var count = checked((ushort)Math.Min(Math.Min(remaining, available), MaxExtentLength));
+                    node.Extents.Add((checked((uint)logical), checked((ulong)cursor), count));
+                    groups[groupIndex].UsedBlocks += count;
+                    cursor += count;
+                    logical += count;
+                    remaining -= count;
+                }
+            }
+
+            var epb = EntriesPerBlock(blockSize);
+            var leaves = node.Extents.Count > 4 ? (node.Extents.Count + epb - 1) / epb : 0;
+            node.LeafBlocks = new long[leaves];
+            node.IndexBlocks = leaves > 4 ? new long[(leaves + epb - 1) / epb] : [];
+            for (var i = 0; i < node.LeafBlocks.Length; i++)
+            {
+                if (!EnsureSpace()) return false;
+                node.LeafBlocks[i] = cursor++;
+                groups[groupIndex].UsedBlocks++;
+            }
+            for (var i = 0; i < node.IndexBlocks.Length; i++)
+            {
+                if (!EnsureSpace()) return false;
+                node.IndexBlocks[i] = cursor++;
+                groups[groupIndex].UsedBlocks++;
+            }
+
+            var gi = checked((int)((node.Inode - 1) / (uint)groups[0].InodesInGroup));
+            groups[gi].UsedInodes++;
+            groups[gi].Nodes.Add(node);
+            if (node.IsDirectory) groups[gi].UsedDirectories++;
+        }
+        return true;
     }
 
     private static void ZeroRegion(Stream output, long offset, long length)
@@ -866,6 +839,8 @@ public sealed partial class Ext4Builder
         var epb = EntriesPerBlock(blockSize);
         foreach (var node in nodes)
         {
+            node.LeafBlocks = [];
+            node.IndexBlocks = [];
             if (node.Runs.Count == 0 || node.IsInlineData)
             {
                 continue;
@@ -898,30 +873,6 @@ public sealed partial class Ext4Builder
         }
     }
 
-    private static void AllocateDataBlocks(List<Node> nodes, long dataStart)
-    {
-        var cursor = dataStart;
-        foreach (var node in nodes)
-        {
-            if (node.DataBlockCount > 0)
-            {
-                node.DataStartBlock = cursor;
-                cursor += node.DataBlockCount;
-            }
-
-            for (var i = 0; i < node.LeafBlocks.Length; i++)
-            {
-                node.LeafBlocks[i] = cursor;
-                cursor++;
-            }
-
-            for (var i = 0; i < node.IndexBlocks.Length; i++)
-            {
-                node.IndexBlocks[i] = cursor;
-                cursor++;
-            }
-        }
-    }
 
     private static List<byte[]> BuildDirectoryBlocks(Node dir, int blockSize, byte[] uuid, bool enableMetadataCsum)
     {
@@ -1063,7 +1014,7 @@ public sealed partial class Ext4Builder
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
 
 
-        block[0xCF] = (byte)Math.Min(reservedGdtBlocks, 255);
+        WriteU16(block, 0xCE, checked((ushort)reservedGdtBlocks));
         if (hasJournal)
         {
 
@@ -1094,8 +1045,8 @@ public sealed partial class Ext4Builder
         }
 
 
-        block[0x3FC] = 0; block[0x3FD] = 0; block[0x3FE] = 0; block[0x3FF] = 0;
-        var crc = ComputeCrc32(block[..0x400], 0xFFFF_FFFF);
+        // ext2fs_superblock_csum excludes s_checksum itself.
+        var crc = ComputeCrc32(block[..0x3FC], 0xFFFF_FFFF);
         WriteU32(block, 0x3FC, crc);
     }
 

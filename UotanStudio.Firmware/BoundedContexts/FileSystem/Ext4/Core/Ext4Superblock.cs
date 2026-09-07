@@ -96,7 +96,7 @@ internal sealed class Ext4Superblock
             FeatureIncompat = BinaryPrimitives.ReadUInt32LittleEndian(span[96..100]),
             FeatureRoCompat = BinaryPrimitives.ReadUInt32LittleEndian(span[100..104]),
             Uuid = span[104..120].ToArray(),
-            DefHashVersion = span[234],
+            DefHashVersion = span[252],
             JournalInum = BinaryPrimitives.ReadUInt32LittleEndian(span[224..228]),
             LastOrphan = BinaryPrimitives.ReadUInt32LittleEndian(span[232..236]),
             HashSeed =
@@ -109,8 +109,8 @@ internal sealed class Ext4Superblock
             DescSize = BinaryPrimitives.ReadUInt16LittleEndian(span[254..256]),
             BlocksCountHi = BinaryPrimitives.ReadUInt32LittleEndian(span[336..340]),
             FreeBlocksCountHi = BinaryPrimitives.ReadUInt32LittleEndian(span[344..348]),
-            Checksum = span.Length >= 360 + 60
-                ? BinaryPrimitives.ReadUInt32LittleEndian(span[356..360])
+            Checksum = span.Length >= 1024
+                ? BinaryPrimitives.ReadUInt32LittleEndian(span[1020..1024])
                 : 0u,
         };
         if (!result.IsValid)

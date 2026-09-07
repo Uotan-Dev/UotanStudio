@@ -105,26 +105,10 @@ public sealed partial class Ext4Builder
     /// <para>将 extent 树写入 inode i_block 区域（60 字节），支持深度 0/1/2，返回需要额外写出的元数据块列表。</para>
     /// </summary>
     private static List<(long BlockAddress, byte[] Data)> WriteExtentTree(
-        Span<byte> dest, List<(long LogicalStart, long Count)> runs, long dataStart,
+        Span<byte> dest, List<(uint Logical, ulong Start, ushort Len)> extents,
         long[] leafBlocks, long[] indexBlocks, int blockSize)
     {
         var epb = EntriesPerBlock(blockSize);
-        var extents = new List<(uint Logical, ulong Start, ushort Len)>();
-        var cursor = dataStart;
-        foreach (var run in runs)
-        {
-            var remaining = run.Count;
-            var logical = run.LogicalStart;
-            while (remaining > 0)
-            {
-                var len = (ushort)Math.Min(MaxExtentLength, remaining);
-                extents.Add(((uint)logical, (ulong)cursor, len));
-                cursor += len;
-                logical += len;
-                remaining -= len;
-            }
-        }
-
         var blocksToWrite = new List<(long BlockAddress, byte[] Data)>();
 
         if (extents.Count <= 4)
@@ -264,78 +248,34 @@ public sealed partial class Ext4Builder
     /// </summary>
     private static void WriteNodeData(Stream output, long baseOffset, Node node, int blockSize)
     {
-        if ((node.IsSymlink && node.Size < 60) || node.IsInlineData)
-        {
-            return;
-        }
+        if ((node.IsSymlink && node.Size < 60) || node.IsInlineData) return;
 
-        if (node.IsDirectory)
-        {
-            for (var i = 0; i < node.DirectoryBlocks.Count; i++)
-            {
-                var offset = checked((node.DataStartBlock + i) * blockSize);
-                WriteAt(output, baseOffset, offset, node.DirectoryBlocks[i], blockSize);
-            }
-
-            return;
-        }
-
-        if (node.IsSymlink)
-        {
-            var bytes = Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty);
-            WriteBytesToBlocks(output, baseOffset, node, bytes, blockSize);
-            return;
-        }
-
+        using var input = !node.IsDirectory && !node.IsSymlink ? File.OpenRead(node.FullPath) : null;
+        var target = node.IsSymlink ? Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty) : null;
         var buffer = new byte[blockSize];
-        using (var fs = File.OpenRead(node.FullPath))
+        foreach (var extent in node.Extents)
         {
-            var assigned = node.DataStartBlock;
-            var totalBlocks = (node.Size + blockSize - 1) / blockSize;
-            for (var logical = 0L; logical < totalBlocks; logical++)
+            for (var i = 0; i < extent.Len; i++)
             {
-                if (node.HoleBlocks?.Contains((int)logical) == true)
+                var logical = (long)extent.Logical + i;
+                var offset = checked(((long)extent.Start + i) * blockSize);
+                if (node.IsDirectory)
                 {
+                    WriteAt(output, baseOffset, offset, node.DirectoryBlocks[checked((int)logical)], blockSize);
                     continue;
                 }
 
-
-                fs.Position = logical * blockSize;
-
-                buffer.AsSpan().Clear();
-                var want = (int)Math.Min(blockSize, node.Size - logical * blockSize);
-                var read = 0;
-                while (read < want)
+                var sourceOffset = checked(logical * blockSize);
+                var count = checked((int)Math.Min(blockSize, node.Size - sourceOffset));
+                if (target is not null)
+                    target.AsSpan(checked((int)sourceOffset), count).CopyTo(buffer);
+                else
                 {
-                    var n = fs.Read(buffer, read, want - read);
-                    if (n <= 0)
-                    {
-                        throw new EndOfStreamException($"Unexpected end of file '{node.FullPath}'.");
-                    }
-
-                    read += n;
+                    input!.Position = sourceOffset;
+                    input.ReadExactly(buffer.AsSpan(0, count));
                 }
-
-                var offset = checked(assigned * blockSize);
-                WriteAt(output, baseOffset, offset, buffer, want);
-                assigned++;
+                WriteAt(output, baseOffset, offset, buffer, count);
             }
-        }
-    }
-
-    private static void WriteBytesToBlocks(Stream output, long baseOffset, Node node, byte[] bytes, int blockSize)
-    {
-        var buffer = new byte[blockSize];
-        var assigned = node.DataStartBlock;
-        var total = (bytes.Length + blockSize - 1) / blockSize;
-        for (var i = 0; i < total; i++)
-        {
-            var want = Math.Min(blockSize, bytes.Length - i * blockSize);
-            buffer.AsSpan().Clear();
-            bytes.AsSpan(i * blockSize, want).CopyTo(buffer);
-            var offset = checked(assigned * blockSize);
-            WriteAt(output, baseOffset, offset, buffer, want);
-            assigned++;
         }
     }
 
