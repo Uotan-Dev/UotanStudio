@@ -47,17 +47,16 @@ public class WorkspaceDockFactory : Factory
             Title = LanguageService.Instance.GetString("Dock_Properties"),
             CanClose = true
         };
-        var output = new Tool { Id = "Output", Title = svc.GetString("Dock_Output") };
+        var output = new WorkspaceLogViewModel
+        {
+            Id = "Output",
+            Title = svc.GetString("Dock_Output"),
+            CanClose = true
+        };
         var adbLog = new AdbLogViewModel
         {
             Id = "AdbLog",
             Title = svc.GetString("Dock_AdbLog"),
-            CanClose = true
-        };
-        var workspaceLog = new WorkspaceLogViewModel
-        {
-            Id = "WorkspaceLog",
-            Title = svc.GetString("Dock_WorkspaceLog"),
             CanClose = true
         };
         var device = new WorkspaceDeviceTool { Id = "Device", Title = LanguageService.Instance.GetString("Dock_Device"), CanClose = true };
@@ -130,7 +129,7 @@ public class WorkspaceDockFactory : Factory
             Title = "BottomPane",
             Proportion = 0.25,
             ActiveDockable = null,
-            VisibleDockables = CreateList<IDockable>(output, adbLog, workspaceLog)
+            VisibleDockables = CreateList<IDockable>(output, adbLog)
         };
 
         var mainLayout = new ProportionalDock
@@ -178,7 +177,7 @@ public class WorkspaceDockFactory : Factory
         panels.Register(WorkspacePanelService.Device, device, leftTools, visible: false);
         panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
         panels.Register(WorkspacePanelService.Properties, properties, rightTools, visible: true);
-        panels.Register(WorkspacePanelService.WorkspaceLog, workspaceLog, bottomTools, visible: true);
+        panels.Register(WorkspacePanelService.WorkspaceLog, output, bottomTools, visible: true);
         panels.Register(WorkspacePanelService.AdbLog, adbLog, bottomTools, visible: true);
 
         return rootDock;

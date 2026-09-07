@@ -38,7 +38,6 @@
     <x:String x:Key="Dock_NoDocumentOpenHint">打开或创建一个工程文件以开始</x:String>
     <x:String x:Key="Dock_Output">输出</x:String>
     <x:String x:Key="Dock_AdbLog">ADB 日志</x:String>
-    <x:String x:Key="Dock_WorkspaceLog">日志</x:String>
     <x:String x:Key="Dock_NodeLeftPane">节点工具箱</x:String>
     <x:String x:Key="Dock_NodeRightPane">节点属性</x:String>
     <x:String x:Key="Dock_NodeBottomPane">执行日志</x:String>
