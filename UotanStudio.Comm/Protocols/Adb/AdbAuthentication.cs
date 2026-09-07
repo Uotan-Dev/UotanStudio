@@ -99,8 +99,13 @@ public sealed class AdbAuthentication : IDisposable
             Directory.CreateDirectory(directory);
         }
 
-        File.WriteAllText(path, created._rsa.ExportRSAPrivateKeyPem());
-        File.WriteAllText(path + ".pub", Encoding.UTF8.GetString(created.BuildPublicKeyPayload()));
+        // Write the private key with restrictive permissions from the moment of
+        // creation.  On Unix we use .NET 10's FileStreamOptions.UnixCreateMode to
+        // open the file with 0600 (user read/write only) atomically, avoiding the
+        // "create 0644 then chmod" exposure window.  On Windows the ACL inherits
+        // from the parent directory, which is the standard behaviour for %USERPROFILE%.
+        WriteKeyFile(path, created._rsa.ExportRSAPrivateKeyPem());
+        WriteKeyFile(path + ".pub", Encoding.UTF8.GetString(created.BuildPublicKeyPayload()));
         return created;
     }
 
@@ -219,6 +224,61 @@ public sealed class AdbAuthentication : IDisposable
         }
 
         return (n0inv, nTable, rrTable, e);
+    }
+
+    /// <summary>
+    /// Writes key text to <paramref name="path"/> with restrictive permissions from
+    /// the moment of creation.  On Unix this uses .NET 10's
+    /// <see cref="FileStreamOptions.UnixCreateMode"/> to atomically create the file
+    /// with mode 0600 (user read/write only), eliminating the "create 0644 then chmod"
+    /// exposure window.  On Windows the file inherits ACLs from the parent directory.
+    /// <para>以创建即受限的权限将密钥文本写入 <paramref name="path"/>。Unix 下使用
+    /// .NET 10 的 <see cref="FileStreamOptions.UnixCreateMode"/> 原子创建 0600 文件，
+    /// 消除"先 0644 再 chmod"暴露窗口。Windows 下继承父目录 ACL。</para>
+    /// </summary>
+    /// <param name="path">Destination file path. 目标文件路径。</param>
+    /// <param name="contents">The text contents to write. 待写入的文本内容。</param>
+    private static void WriteKeyFile(string path, string contents)
+    {
+        var bytes = new UTF8Encoding(false).GetBytes(contents);
+        WriteKeyFile(path, bytes);
+    }
+
+    /// <summary>
+    /// Writes key bytes to <paramref name="path"/> with restrictive permissions from
+    /// the moment of creation (see <see cref="WriteKeyFile(string, string)"/>).
+    /// <para>以创建即受限的权限将密钥字节写入 <paramref name="path"/>
+    /// （见 <see cref="WriteKeyFile(string, string)"/>）。</para>
+    /// </summary>
+    private static void WriteKeyFile(string path, byte[] bytes)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            File.WriteAllBytes(path, bytes);
+            return;
+        }
+
+        // Unix: atomically create with 0600 via FileStreamOptions.UnixCreateMode.
+        // Fall back to File.WriteAllBytes on older runtimes that lack UnixCreateMode.
+        var options = new FileStreamOptions
+        {
+            Mode = FileMode.Create,
+            Access = FileAccess.Write,
+        };
+
+        try
+        {
+            options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        }
+        catch (PlatformNotSupportedException)
+        {
+            // Runtime does not support UnixCreateMode; proceed with default mode.
+        }
+
+        using (var fs = new FileStream(path, options))
+        {
+            fs.Write(bytes, 0, bytes.Length);
+        }
     }
 
     /// <summary>
