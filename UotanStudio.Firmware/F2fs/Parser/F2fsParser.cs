@@ -1,5 +1,7 @@
 ﻿using System.Buffers.Binary;
 
+using System.Text;
+
 namespace UotanStudio.Firmware.F2fs;
 
 public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null);
@@ -22,6 +24,9 @@ public sealed class F2fsParser : IDisposable
     private long _imageSize;
     private F2fsSuperblock _superblock = null!;
     private F2fsCheckpoint _checkpoint = null!;
+    private ulong _checkpointBlock;
+    private byte[] _natVersionBitmap = [];
+    private readonly Dictionary<uint, uint> _natJournal = [];
     private int _blockSize;
     private int _blocksPerSeg;
     private readonly Dictionary<string, F2fsFileEntry> _entries = new(StringComparer.Ordinal);
@@ -140,7 +145,6 @@ public sealed class F2fsParser : IDisposable
 
 
         ValidateSuperblockChecksum();
-        ValidateCheckpointChecksum();
     }
 
     private const uint CrcPolynomial = 0xEDB88320;
@@ -157,30 +161,7 @@ public sealed class F2fsParser : IDisposable
         var computed = ComputeCrc32(F2fsSuperblock.Magic, raw.AsSpan(0, F2fsSuperblock.SuperblockSize - 4));
         if (computed != storedCrc)
         {
-            System.Diagnostics.Debug.WriteLine($"F2FS superblock CRC mismatch: stored=0x{storedCrc:X8}, computed=0x{computed:X8}.");
-        }
-    }
-
-    private void ValidateCheckpointChecksum()
-    {
-        var cpOffset = _superblock.CpBlkaddr * _blockSize;
-        var raw = ReadBytes(cpOffset, _blockSize, "Checkpoint CRC");
-        var checksumOffset = _checkpoint.ChecksumOffset;
-        if (checksumOffset == 0 || checksumOffset + 4 > _blockSize)
-        {
-            return;
-        }
-
-        var storedCrc = BinaryPrimitives.ReadUInt32LittleEndian(raw.AsSpan((int)checksumOffset, 4));
-        if (storedCrc == 0)
-        {
-            return;
-        }
-
-        var computed = ComputeCrc32(F2fsSuperblock.Magic, raw.AsSpan(0, (int)checksumOffset));
-        if (computed != storedCrc)
-        {
-            System.Diagnostics.Debug.WriteLine($"F2FS checkpoint CRC mismatch: stored=0x{storedCrc:X8}, computed=0x{computed:X8}.");
+            throw new InvalidDataException($"F2FS superblock CRC mismatch: stored=0x{storedCrc:X8}, computed=0x{computed:X8}.");
         }
     }
 
@@ -245,7 +226,7 @@ public sealed class F2fsParser : IDisposable
         var processedCount = 0;
         foreach (var entry in entries)
         {
-            var targetPath = Path.Combine(outputDirectory, entry.Path);
+            var targetPath = Common.FileExtraction.ResolvePath(outputDirectory, entry.Path);
             if (entry.Kind == F2fsEntryKind.Directory)
             {
                 Directory.CreateDirectory(targetPath);
@@ -275,7 +256,7 @@ public sealed class F2fsParser : IDisposable
                     }
                     catch
                     {
-                        System.IO.File.WriteAllText(targetPath, entry.SymlinkTarget ?? string.Empty);
+                        Common.FileExtraction.WriteAtomic(targetPath, output => output.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)), overwrite);
                     }
                 }
 
@@ -291,10 +272,7 @@ public sealed class F2fsParser : IDisposable
                 continue;
             }
 
-            using (var output = File.Create(targetPath))
-            {
-                ReadFile(entry.Path, output);
-            }
+            Common.FileExtraction.WriteAtomic(targetPath, output => ReadFile(entry.Path, output), overwrite);
 
             processedCount++;
             progress?.Report((processedCount, totalCount));
@@ -440,22 +418,65 @@ public sealed class F2fsParser : IDisposable
 
     private F2fsCheckpoint ReadCheckpoint()
     {
-        var pack1 = ReadBlockChecked(_superblock.CpBlkaddr, "Checkpoint");
-        var checkpoint = F2fsCheckpoint.FromBytes(pack1);
-        if (checkpoint.CheckpointVer != 0)
+        var first = TryReadCheckpointPack(_superblock.CpBlkaddr);
+        var secondBlock = checked((ulong)_superblock.CpBlkaddr + (uint)_blocksPerSeg);
+        var second = TryReadCheckpointPack(secondBlock);
+        var useSecond = second is not null && (first is null || unchecked((long)(second.CheckpointVer - first.CheckpointVer)) > 0);
+        var checkpoint = (useSecond ? second : first) ?? throw new InvalidDataException("Neither F2FS checkpoint pack is valid.");
+        _checkpointBlock = useSecond ? secondBlock : _superblock.CpBlkaddr;
+        if (_superblock.CpPayload >= _blocksPerSeg - 2 || checkpoint.CpPackStartSum <= _superblock.CpPayload
+            || checkpoint.CpPackStartSum >= checkpoint.CpPackTotalBlockCount - 1)
+            throw new InvalidDataException("Invalid F2FS checkpoint payload or summary range.");
+        var bitmapOffset = checkpoint.VersionBitmapOffset;
+        if ((checkpoint.CkptFlags & 0x400) != 0) bitmapOffset += 4;
+        else if (_superblock.CpPayload == 0) bitmapOffset = checked(bitmapOffset + (int)checkpoint.SitVerBitmapBytesize);
+        var payloadBytes = checked((long)(_superblock.CpPayload + 1) * _blockSize);
+        var expectedNatBytes = checked((long)_superblock.SegmentCountNat / 2 * _blocksPerSeg / 8);
+        if (checkpoint.NatVerBitmapBytesize != expectedNatBytes || bitmapOffset > payloadBytes
+            || checkpoint.NatVerBitmapBytesize > payloadBytes - bitmapOffset)
+            throw new InvalidDataException("F2FS NAT version bitmap exceeds the checkpoint payload.");
+        _natVersionBitmap = ReadBytes(checked((long)_checkpointBlock * _blockSize + bitmapOffset), checked((int)checkpoint.NatVerBitmapBytesize), "NAT version bitmap");
+        var summary = ReadBlockChecked(_checkpointBlock + checkpoint.CpPackStartSum, "Checkpoint NAT journal");
+        var journalOffset = (checkpoint.CkptFlags & F2fsCheckpoint.FlagCompactSum) != 0 ? 0 : 512 * 7;
+        var count = BinaryPrimitives.ReadUInt16LittleEndian(summary.AsSpan(journalOffset));
+        if (count > 38) throw new InvalidDataException("F2FS NAT journal exceeds the summary block.");
+        for (var i = 0; i < count; i++)
         {
-            return checkpoint;
+            var entry = summary.AsSpan(journalOffset + 2 + i * 13, 13);
+            var nid = BinaryPrimitives.ReadUInt32LittleEndian(entry);
+            if (!_natJournal.TryAdd(nid, BinaryPrimitives.ReadUInt32LittleEndian(entry[9..])))
+                throw new InvalidDataException("Duplicate F2FS NAT journal entry.");
         }
+        return checkpoint;
+    }
 
-        var pack2Block = checked(_superblock.CpBlkaddr + _blocksPerSeg);
-        var pack2 = ReadBlockChecked((ulong)pack2Block, "Checkpoint pack 2");
-        return F2fsCheckpoint.FromBytes(pack2);
+    private F2fsCheckpoint? TryReadCheckpointPack(ulong block)
+    {
+        try
+        {
+            var header = ReadBlockChecked(block, "Checkpoint pack header");
+            if (!HasValidCheckpointChecksum(header)) return null;
+            var checkpoint = F2fsCheckpoint.FromBytes(header);
+            if (checkpoint.CpPackTotalBlockCount <= 2 || checkpoint.CpPackTotalBlockCount > _blocksPerSeg) return null;
+            var trailer = ReadBlockChecked(block + checkpoint.CpPackTotalBlockCount - 1, "Checkpoint pack trailer");
+            return HasValidCheckpointChecksum(trailer) && BinaryPrimitives.ReadUInt64LittleEndian(trailer) == checkpoint.CheckpointVer ? checkpoint : null;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException) { return null; }
+    }
+
+    private static bool HasValidCheckpointChecksum(ReadOnlySpan<byte> block)
+    {
+        var offset = BinaryPrimitives.ReadUInt32LittleEndian(block[164..]);
+        if (offset is < 192 or > 4092) return false;
+        var crc = ComputeCrc32(F2fsSuperblock.Magic, block[..(int)offset]);
+        if (offset < 4092) crc = ComputeCrc32(crc, block[((int)offset + 4)..]);
+        return crc == BinaryPrimitives.ReadUInt32LittleEndian(block[(int)offset..]);
     }
 
     private F2fsInode ReadInode(uint nid)
     {
         var node = ReadInodeNode(nid);
-        return F2fsInode.FromBytes(node);
+        return F2fsInode.FromBytes(node, (_superblock.Feature & 0x40) != 0);
     }
 
     private byte[] ReadInodeNode(uint nid)
@@ -479,14 +500,20 @@ public sealed class F2fsParser : IDisposable
         }
 
 
-        var natBlockIndex = nid / F2fsNode.NatEntryPerBlock;
-        var segOff = natBlockIndex / 512;
-        var inSeg = natBlockIndex % 512;
-        var natBlockAddress = checked(_superblock.NatBlkaddr + segOff * 1024u + inSeg);
-        var natBlock = ReadBlockChecked(natBlockAddress, $"NAT block for nid {nid}");
-        var entryOffset = checked((int)(nid % F2fsNode.NatEntryPerBlock) * F2fsNode.NatEntrySize);
-        var blockAddress = BinaryPrimitives.ReadUInt32LittleEndian(natBlock.AsSpan(entryOffset + F2fsNode.NatEntryBlockOffset, 4));
-        if (blockAddress == 0)
+        if (!_natJournal.TryGetValue(nid, out var blockAddress))
+        {
+            var natBlockIndex = nid / F2fsNode.NatEntryPerBlock;
+            if (natBlockIndex >= (ulong)_natVersionBitmap.Length * 8)
+                throw new InvalidDataException("F2FS nid exceeds the NAT area.");
+            var segOff = natBlockIndex / (uint)_blocksPerSeg;
+            var inSeg = natBlockIndex % (uint)_blocksPerSeg;
+            var secondCopy = (_natVersionBitmap[natBlockIndex / 8] & (0x80 >> (int)(natBlockIndex % 8))) != 0;
+            var natBlockAddress = checked(_superblock.NatBlkaddr + segOff * (uint)_blocksPerSeg * 2 + inSeg + (secondCopy ? (uint)_blocksPerSeg : 0));
+            var natBlock = ReadBlockChecked(natBlockAddress, $"NAT block for nid {nid}");
+            var entryOffset = checked((int)(nid % F2fsNode.NatEntryPerBlock) * F2fsNode.NatEntrySize);
+            blockAddress = BinaryPrimitives.ReadUInt32LittleEndian(natBlock.AsSpan(entryOffset + F2fsNode.NatEntryBlockOffset, 4));
+        }
+        if (blockAddress < _superblock.MainBlkaddr || blockAddress >= _superblock.BlockCount)
         {
             throw new InvalidDataException($"NAT entry for nid {nid} is missing.");
         }
@@ -494,57 +521,54 @@ public sealed class F2fsParser : IDisposable
         return blockAddress;
     }
 
-    private long? MapBlock(F2fsInode inode, uint logicalBlock)
+    internal long? MapBlock(F2fsInode inode, uint logicalBlock)
     {
         if (inode.Extent.Contains(logicalBlock))
         {
             return inode.Extent.Map(logicalBlock);
         }
 
-        if (logicalBlock < F2fsNode.DefAddrsPerInode)
+        if (logicalBlock < inode.AddressCount)
         {
-            var direct = inode.Addr[logicalBlock];
+            var direct = inode.Addr[logicalBlock + inode.ExtraIsizeWords];
             return direct == 0 ? null : direct;
         }
 
-        var x = (long)logicalBlock - F2fsNode.DefAddrsPerInode;
-        if (x < F2fsNode.AddrsPerBlock)
+        var x = (long)logicalBlock - inode.AddressCount;
+        var addressesPerNode = inode.DataAddressesPerNode;
+        if (x < addressesPerNode)
         {
             return ReadDnodeAddress(inode.Nid[0], (int)x, logicalBlock);
         }
 
-        x -= F2fsNode.AddrsPerBlock;
-        if (x < F2fsNode.AddrsPerBlock)
+        x -= addressesPerNode;
+        if (x < addressesPerNode)
         {
             return ReadDnodeAddress(inode.Nid[1], (int)x, logicalBlock);
         }
 
-        x -= F2fsNode.AddrsPerBlock;
-        var perIndirect = (long)F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock;
+        x -= addressesPerNode;
+        var perIndirect = (long)F2fsNode.AddrsPerBlock * addressesPerNode;
         if (x < perIndirect)
         {
-            var level1 = (int)(x / F2fsNode.AddrsPerBlock);
-            var level2 = (int)(x % F2fsNode.AddrsPerBlock);
+            var level1 = (int)(x / addressesPerNode);
+            var level2 = (int)(x % addressesPerNode);
             return ReadIndirectAddress(inode.Nid[2], level1, level2, logicalBlock);
         }
 
 
+        x -= perIndirect;
+        if (x < perIndirect)
+        {
+            return ReadIndirectAddress(inode.Nid[3], (int)(x / addressesPerNode), (int)(x % addressesPerNode), logicalBlock);
+        }
         x -= perIndirect;
         var perDoubleIndirect = perIndirect * F2fsNode.AddrsPerBlock;
         if (x < perDoubleIndirect)
         {
             var level1 = (int)(x / perIndirect);
             var level2 = (int)(x % perIndirect);
-            return ReadDoubleIndirectAddress(inode.Nid[3], level1, level2, logicalBlock);
-        }
-
-
-        x -= perDoubleIndirect;
-        if (x < perDoubleIndirect)
-        {
-            var level1 = (int)(x / perIndirect);
-            var level2 = (int)(x % perIndirect);
-            return ReadDoubleIndirectAddress(inode.Nid[4], level1, level2, logicalBlock);
+            return ReadDoubleIndirectAddress(inode.Nid[4], level1, level2, logicalBlock, addressesPerNode);
         }
 
 
@@ -588,7 +612,7 @@ public sealed class F2fsParser : IDisposable
         uint doubleIndirectNid,
         int level1,
         int level2,
-        uint logicalBlock)
+        uint logicalBlock, int addressesPerNode)
     {
         if (doubleIndirectNid == 0 || level1 < 0 || level1 >= F2fsNode.AddrsPerBlock)
         {
@@ -607,8 +631,8 @@ public sealed class F2fsParser : IDisposable
         }
 
 
-        var siLevel1 = level2 / F2fsNode.AddrsPerBlock;
-        var siLevel2 = level2 % F2fsNode.AddrsPerBlock;
+        var siLevel1 = level2 / addressesPerNode;
+        var siLevel2 = level2 % addressesPerNode;
 
 
         return ReadIndirectAddress(singleIndirectNid, siLevel1, siLevel2, logicalBlock);
@@ -639,7 +663,7 @@ public sealed class F2fsParser : IDisposable
         var perIndirect = (long)F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock;
         var perDoubleIndirect = perIndirect * F2fsNode.AddrsPerBlock;
         var maxSupportedBlocks = checked(
-            F2fsNode.Indirect1Block + perIndirect + 2 * perDoubleIndirect);
+            inode.AddressCount + 2L * F2fsNode.AddrsPerBlock + 2 * perIndirect + perDoubleIndirect);
         var maxSupportedSize = checked(maxSupportedBlocks * _blockSize);
         if (inode.Size > (ulong)maxSupportedSize)
         {
@@ -673,7 +697,7 @@ public sealed class F2fsParser : IDisposable
 
 
         var logShift = inode.LogClusterSize + 12;
-        if (logShift is < 12 or > 16)
+        if (logShift is < 14 or > 20)
         {
             throw new InvalidDataException(
                 $"F2FS compressed cluster log size {inode.LogClusterSize} is out of range.");
@@ -701,23 +725,16 @@ public sealed class F2fsParser : IDisposable
             }
 
             var physical = MapBlock(inode, logical);
-            if (physical is null || physical == 0)
+            if (physical == uint.MaxValue - 1)
             {
-
-                WriteZeros(output, writeLength);
-                remaining -= writeLength;
-                continue;
-            }
-
-
-            var firstBlock = ReadBlockChecked((ulong)physical, $"Compressed cluster first block (logical {logical})");
-            var header = F2fsCompressedCluster.FromBytes(firstBlock);
-
-            if (header.IsCompressed && header.UncompressedSize == clusterSize)
-            {
-
-
+                var firstAddress = MapBlock(inode, logical + 1);
+                if (firstAddress is null or <= 0 or >= uint.MaxValue - 1)
+                    throw new InvalidDataException("F2FS compressed cluster has no payload block.");
+                var firstBlock = ReadBlockChecked((ulong)firstAddress, "Compressed cluster header");
+                var header = F2fsCompressedCluster.FromBytes(firstBlock);
                 var compressedBytes = header.CompressedSize;
+                if (compressedBytes <= 0 || compressedBytes > (clusterPages - 1) * blockSize - F2fsCompressedCluster.HeaderSize)
+                    throw new InvalidDataException("F2FS compressed cluster length exceeds its reserved blocks.");
                 var compressed = new byte[compressedBytes];
                 var copied = 0;
                 var blocksToRead = (F2fsCompressedCluster.HeaderSize + compressedBytes + blockSize - 1) / blockSize;
@@ -730,11 +747,9 @@ public sealed class F2fsParser : IDisposable
                     }
                     else
                     {
-                        var blkAddr = MapBlock(inode, logical + (uint)b);
-                        if (blkAddr is null || blkAddr == 0)
-                        {
-                            break;
-                        }
+                        var blkAddr = MapBlock(inode, logical + 1 + (uint)b);
+                        if (blkAddr is null or <= 0 or >= uint.MaxValue - 1)
+                            throw new InvalidDataException("F2FS compressed payload block is missing.");
 
                         blockData = ReadBlockChecked((ulong)blkAddr, $"Compressed cluster block {b} (logical {logical + (uint)b})");
                     }
@@ -757,18 +772,17 @@ public sealed class F2fsParser : IDisposable
                         $"F2FS compressed cluster at logical block {logical} was truncated ({copied}/{compressedBytes} bytes).");
                 }
 
+                if ((inode.CompressFlags & 1) != 0 && ComputeCrc32(F2fsSuperblock.Magic, compressed) != header.Checksum)
+                    throw new InvalidDataException("F2FS compressed cluster checksum mismatch.");
                 var decompressed = F2fsCompression.DecompressCluster(
                     compressed,
                     algorithm,
-                    header.UncompressedSize,
+                    clusterSize,
                     clusterSize);
 
-                var toWrite = Math.Min(decompressed.Length, writeLength);
-                output.Write(decompressed, 0, toWrite);
-                if (toWrite < writeLength)
-                {
-                    WriteZeros(output, writeLength - toWrite);
-                }
+                if (decompressed.Length != clusterSize)
+                    throw new InvalidDataException("F2FS compressed cluster has an incorrect decompressed length.");
+                output.Write(decompressed, 0, writeLength);
 
                 remaining -= writeLength;
             }
@@ -780,7 +794,7 @@ public sealed class F2fsParser : IDisposable
                 for (var b = 0; b < clusterBlocks; b++)
                 {
                     var blkAddr = MapBlock(inode, logical + (uint)b);
-                    if (blkAddr is null || blkAddr == 0)
+                    if (blkAddr is null or 0 or uint.MaxValue)
                     {
                         continue;
                     }
@@ -798,7 +812,7 @@ public sealed class F2fsParser : IDisposable
 
     /// <summary>
     /// kernel: 0=LZO,1=LZ4,2=ZSTD,3=LZORLE。
-    /// <para>将 inode i_advise 内的内核算法 ID 映射为 CompressionAlgorithm。</para>
+    /// <para>将 inode extra attributes 内的内核算法 ID 映射为 CompressionAlgorithm。</para>
     /// </summary>
     private static CompressionAlgorithm MapCompressAlgorithm(byte kernelAlgorithmId)
         => kernelAlgorithmId switch

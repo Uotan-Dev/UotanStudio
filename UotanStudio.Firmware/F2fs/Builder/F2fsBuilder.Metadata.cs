@@ -44,7 +44,7 @@ public sealed partial class F2fsBuilder
             Version = new byte[256],
 
 
-            Feature = hasCompressedFiles ? FeatureCompression : 0,
+            Feature = hasCompressedFiles ? FeatureCompression | 0x0008u : 0,
         };
     }
 
@@ -64,7 +64,7 @@ public sealed partial class F2fsBuilder
     /// </summary>
     private static void WriteCheckpoints(Stream output, long baseOffset, Layout layout, CursegPlan plan, uint validNodeCount, uint validInodeCount)
     {
-        var usedMainBlocks = layout.NodeBlocks + layout.DataBlocks;
+        var usedMainBlocks = layout.NodeBlocks + layout.DataBlocks + layout.ReservedCompressionBlocks;
 
 
         var overprovSegments = (layout.MainSegments - RsvdSegments) * 5 / 100 + RsvdSegments;
@@ -329,7 +329,7 @@ public sealed partial class F2fsBuilder
                 : node.IsDirectory ? ModeDirectory
                 : node.IsSymlink ? ModeSymbolicLink
                 : ModeRegularFile,
-            Inline = (byte)inline,
+            Inline = (byte)(inline | (node.IsCompressedFile ? F2fsInode.ExtraAttrFlag : 0)),
             Uid = node.Uid,
             Gid = node.Gid,
             Links = node.IsDirectory ? (uint)(2 + node.Children.Count(static c => c.IsDirectory)) : 1u,
@@ -340,7 +340,7 @@ public sealed partial class F2fsBuilder
                 ? 1UL + (ulong)node.DirBlocks.Count
                 : node.InlineData
                     ? 1UL
-                    : 1UL + (ulong)(node.AllocatedDataBlockCount + node.Dnodes.Count),
+                    : 1UL + (ulong)((node.IsCompressedFile ? node.DataBlockCount : node.AllocatedDataBlockCount) + node.Dnodes.Count),
             XattrNid = 0,
 
 
@@ -364,7 +364,8 @@ public sealed partial class F2fsBuilder
             MtimeNsec = 0,
             Ctime = node.Ctime > 0 ? (uint)node.Ctime : 0,
             CtimeNsec = 0,
-            ExtraIsize = 0,
+            ExtraIsize = node.IsCompressedFile ? (ushort)36 : (ushort)0,
+            CompressedBlocks = node.IsCompressedFile ? (ulong)(node.DataBlockCount - node.AllocatedDataBlockCount) : 0,
             InlineXattrSize = 0,
         };
         inode.WriteTo(block);
@@ -382,7 +383,7 @@ public sealed partial class F2fsBuilder
     private static void WriteDnode(Stream output, long baseOffset, BuildNode file, DnodePlan dnode, int blockSize)
     {
         var block = new byte[blockSize];
-        var flag = checked((uint)(dnode.LogicalStart << F2fsNodeFooter.OffsetBitShift));
+        var flag = checked(dnode.NodeOffset << F2fsNodeFooter.OffsetBitShift);
         if (dnode.IsIndirect || dnode.IsDoubleIndirect)
         {
             for (var i = 0; i < dnode.IndirectChildNids.Count; i++)
@@ -392,7 +393,7 @@ public sealed partial class F2fsBuilder
         }
         else
         {
-            for (var i = 0; i < F2fsNode.AddrsPerBlock; i++)
+            for (var i = 0; i < file.DataAddressesPerNode; i++)
             {
                 var logical = dnode.LogicalStart + i;
                 var address = logical < file.DataBlockAddrs.Count ? file.DataBlockAddrs[(int)logical] : 0u;
@@ -485,7 +486,7 @@ public sealed partial class F2fsBuilder
                 var payloadBlocks = (payload.Length + blockSize - 1) / blockSize;
                 for (var b = 0; b < payloadBlocks; b++)
                 {
-                    var address = node.DataBlockAddrs[logical + b];
+                    var address = node.DataBlockAddrs[logical + 1 + b];
                     if (address == 0)
                     {
                         throw new InvalidOperationException(
@@ -526,9 +527,9 @@ public sealed partial class F2fsBuilder
         }
         else if (!node.InlineData)
         {
-            for (var i = 0; i < node.DataBlockAddrs.Count && i < addrs.Length; i++)
+            for (var i = 0; i < node.DataBlockAddrs.Count && i < node.InodeAddressCount; i++)
             {
-                addrs[i] = node.DataBlockAddrs[i];
+                addrs[i + (node.IsCompressedFile ? 9 : 0)] = node.DataBlockAddrs[i];
             }
         }
 
@@ -544,27 +545,7 @@ public sealed partial class F2fsBuilder
         }
 
 
-        var index = 0;
-        foreach (var dnode in node.Dnodes)
-        {
-            if (!dnode.IsIndirect && !dnode.IsDoubleIndirect && index < 2)
-            {
-                nids[index] = dnode.Nid;
-            }
-
-            index++;
-        }
-
-
-        if (node.IndirectNode is not null)
-        {
-            nids[2] = node.IndirectNode.Nid;
-        }
-
-        if (node.DoubleIndirectNode is not null)
-        {
-            nids[3] = node.DoubleIndirectNode.Nid;
-        }
+        for (var i = 0; i < nids.Length; i++) nids[i] = node.RootDnodes[i]?.Nid ?? 0;
 
         return nids;
     }

@@ -65,7 +65,7 @@ public sealed partial class F2fsBuilder
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch {  }
+            try { File.Delete(temporaryPath); } catch { }
         }
     }
 
@@ -97,7 +97,7 @@ public sealed partial class F2fsBuilder
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch {  }
+            try { File.Delete(temporaryPath); } catch { }
         }
     }
 
@@ -138,7 +138,7 @@ public sealed partial class F2fsBuilder
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch {  }
+            try { File.Delete(temporaryPath); } catch { }
         }
     }
 
@@ -197,6 +197,7 @@ public sealed partial class F2fsBuilder
         var nat = new Dictionary<uint, (uint Ino, uint Block)>();
         CollectNatEntries(ordered, nat);
 
+        layout.ReservedCompressionBlocks = ordered.Where(static n => n.IsCompressedFile).Sum(static n => (long)n.DataBlockCount - n.AllocatedDataBlockCount);
         var superblock = CreateSuperblock(layout, effective, hasCompressedFiles: ordered.Exists(static n => n.IsCompressedFile));
         WriteSuperblock(output, baseOffset, superblock, blockSize);
         var inodeCount = (uint)ordered.Count;
@@ -465,10 +466,12 @@ public sealed partial class F2fsBuilder
                 {
                     compressedSizes[c] = payload.Length;
                     anyCompressed = true;
+                    node.DataBlockAddrs[logical] = uint.MaxValue - 1;
                     for (var i = 0; i < payloadBlocks; i++)
                     {
-                        node.DataBlockAddrs[logical + i] = uint.MaxValue;
+                        node.DataBlockAddrs[logical + 1 + i] = uint.MaxValue;
                     }
+                    for (var i = payloadBlocks + 1; i < clusterPages; i++) node.DataBlockAddrs[logical + i] = uint.MaxValue - 2;
 
                     allocated += payloadBlocks;
                     continue;
@@ -513,8 +516,8 @@ public sealed partial class F2fsBuilder
     }
 
     /// <summary>
-    /// Maps the public CompressionAlgorithm enum to the kernel algorithm id stored in the low 4 bits of i_advise (kernel: 0=LZO, 1=LZ4, 2=ZSTD, 3=LZORLE).
-    /// <para>把压缩算法的公共枚举映射为内核 i_advise 低 4 位的算法 ID （kernel：0=LZO，1=LZ4，2=ZSTD，3=LZORLE）。</para>
+    /// Maps the compression algorithm to the inode extra-attribute identifier.
+    /// <para>把压缩算法映射为 inode 扩展属性中的内核算法标识。</para>
     /// </summary>
     private static byte KernelCompressionAlgorithmId(CompressionAlgorithm algorithm) => algorithm switch
     {
@@ -607,76 +610,36 @@ public sealed partial class F2fsBuilder
 
     private static void PlanDnodes(BuildNode node, int dataBlocks)
     {
-        var direct1 = dataBlocks > F2fsNode.DefAddrsPerInode;
-        var direct2 = dataBlocks > F2fsNode.DefAddrsPerInode + F2fsNode.AddrsPerBlock;
-        var indirect1 = dataBlocks > F2fsNode.DefAddrsPerInode + 2 * F2fsNode.AddrsPerBlock;
-        var perIndirectCapacity = (long)F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock;
-        var remainingForIndirect = indirect1
-            ? dataBlocks - (F2fsNode.DefAddrsPerInode + 2 * F2fsNode.AddrsPerBlock)
-            : 0;
-        var indirectUsed = Math.Min(remainingForIndirect, (int)perIndirectCapacity);
-        var remainingForDoubleIndirect = remainingForIndirect > perIndirectCapacity
-            ? remainingForIndirect - perIndirectCapacity
-            : 0;
-        var perDoubleIndirectCapacity = perIndirectCapacity * F2fsNode.AddrsPerBlock;
-        if (remainingForDoubleIndirect > perDoubleIndirectCapacity)
+        var start = (long)node.InodeAddressCount;
+        var directCapacity = node.DataAddressesPerNode;
+        var indirectCapacity = (long)F2fsNode.AddrsPerBlock * directCapacity;
+        for (var slot = 0; slot < 2; slot++, start += directCapacity)
         {
-            throw new InvalidOperationException(
-                $"File '{node.FullPath}' exceeds the maximum f2fs data size.");
+            if (dataBlocks > start) node.RootDnodes[slot] = AddNode(start, 0, (uint)slot + 1);
+        }
+        for (var slot = 2; slot < 4; slot++, start += indirectCapacity)
+        {
+            if (dataBlocks > start) node.RootDnodes[slot] = AddNode(start, 1, (uint)(3 + (slot - 2) * (F2fsNode.AddrsPerBlock + 1)));
+        }
+        if (dataBlocks > start)
+        {
+            if (dataBlocks - start > indirectCapacity * F2fsNode.AddrsPerBlock)
+                throw new InvalidOperationException($"File '{node.FullPath}' exceeds the maximum f2fs data size.");
+            node.RootDnodes[4] = AddNode(start, 2, (uint)(5 + 2 * F2fsNode.AddrsPerBlock));
         }
 
-        var indirectChildCount = indirectUsed > 0 ? (indirectUsed + F2fsNode.AddrsPerBlock - 1) / F2fsNode.AddrsPerBlock : 0;
-        if (direct1)
+        DnodePlan AddNode(long logicalStart, int depth, uint nodeOffset)
         {
-            node.Dnodes.Add(new DnodePlan { LogicalStart = F2fsNode.DefAddrsPerInode });
-        }
-
-        if (direct2)
-        {
-            node.Dnodes.Add(new DnodePlan { LogicalStart = F2fsNode.DefAddrsPerInode + F2fsNode.AddrsPerBlock });
-        }
-
-        if (indirectUsed > 0)
-        {
-            var indirect = new DnodePlan { IsIndirect = true, LogicalStart = F2fsNode.DefAddrsPerInode + 2 * F2fsNode.AddrsPerBlock };
-            for (var i = 0; i < indirectChildCount; i++)
+            var plan = new DnodePlan { LogicalStart = logicalStart, IsIndirect = depth == 1, IsDoubleIndirect = depth == 2, NodeOffset = nodeOffset };
+            node.Dnodes.Add(plan);
+            if (depth > 0)
             {
-                var child = new DnodePlan { LogicalStart = indirect.LogicalStart + (long)i * F2fsNode.AddrsPerBlock };
-                node.IndirectChildren.Add(child);
-                node.Dnodes.Add(child);
+                var childCapacity = depth == 1 ? directCapacity : indirectCapacity;
+                var childCount = (int)Math.Min(F2fsNode.AddrsPerBlock, (dataBlocks - logicalStart + childCapacity - 1) / childCapacity);
+                for (var i = 0; i < childCount; i++)
+                    plan.Children.Add(AddNode(logicalStart + i * childCapacity, depth - 1, checked(nodeOffset + 1 + (uint)i * (depth == 1 ? 1u : F2fsNode.AddrsPerBlock + 1u))));
             }
-
-            node.Dnodes.Add(indirect);
-            node.IndirectNode = indirect;
-        }
-
-
-        if (remainingForDoubleIndirect > 0)
-        {
-            var doubleIndirectLogicalStart = F2fsNode.DefAddrsPerInode + 2 * F2fsNode.AddrsPerBlock + perIndirectCapacity;
-            var diIndirectCount = (int)((remainingForDoubleIndirect + perIndirectCapacity - 1) / perIndirectCapacity);
-
-            for (var i = 0; i < diIndirectCount; i++)
-            {
-                var indirectStart = doubleIndirectLogicalStart + i * perIndirectCapacity;
-                var remainingInIndirect = Math.Min(remainingForDoubleIndirect - i * perIndirectCapacity, perIndirectCapacity);
-                var directCount = (int)((remainingInIndirect + F2fsNode.AddrsPerBlock - 1) / F2fsNode.AddrsPerBlock);
-
-                for (var j = 0; j < directCount; j++)
-                {
-                    var directChild = new DnodePlan { LogicalStart = indirectStart + (long)j * F2fsNode.AddrsPerBlock };
-                    node.DoubleIndirectDirectChildren.Add(directChild);
-                    node.Dnodes.Add(directChild);
-                }
-
-                var indirectChild = new DnodePlan { IsIndirect = true, LogicalStart = indirectStart };
-                node.DoubleIndirectIndirectChildren.Add(indirectChild);
-                node.Dnodes.Add(indirectChild);
-            }
-
-            var doubleIndirect = new DnodePlan { IsDoubleIndirect = true, LogicalStart = doubleIndirectLogicalStart };
-            node.Dnodes.Add(doubleIndirect);
-            node.DoubleIndirectNode = doubleIndirect;
+            return plan;
         }
     }
 
@@ -838,41 +801,8 @@ public sealed partial class F2fsBuilder
                 maxNid = Math.Max(maxNid, dnode.Nid);
             }
 
-            if (node.IndirectNode is not null)
-            {
-                for (var i = 0; i < node.IndirectChildren.Count; i++)
-                {
-                    node.IndirectNode.IndirectChildNids.Add(node.IndirectChildren[i].Nid);
-                }
-            }
-
-            if (node.DoubleIndirectNode is not null)
-            {
-                for (var i = 0; i < node.DoubleIndirectIndirectChildren.Count; i++)
-                {
-                    node.DoubleIndirectNode.IndirectChildNids.Add(node.DoubleIndirectIndirectChildren[i].Nid);
-                }
-
-
-                var diDirectIdx = 0;
-                for (var i = 0; i < node.DoubleIndirectIndirectChildren.Count; i++)
-                {
-                    var indirectChild = node.DoubleIndirectIndirectChildren[i];
-
-                    var startLogical = indirectChild.LogicalStart;
-                    var endLogical = Math.Min(
-                        node.DoubleIndirectNode.LogicalStart + (long)(i + 1) * F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock,
-                        startLogical + (long)F2fsNode.AddrsPerBlock * F2fsNode.AddrsPerBlock);
-                    var directCount = (int)Math.Min(
-                        (endLogical - startLogical + F2fsNode.AddrsPerBlock - 1) / F2fsNode.AddrsPerBlock,
-                        F2fsNode.AddrsPerBlock);
-                    for (var j = 0; j < directCount && diDirectIdx < node.DoubleIndirectDirectChildren.Count; j++)
-                    {
-                        indirectChild.IndirectChildNids.Add(node.DoubleIndirectDirectChildren[diDirectIdx].Nid);
-                        diDirectIdx++;
-                    }
-                }
-            }
+            foreach (var dnode in node.Dnodes)
+                foreach (var child in dnode.Children) dnode.IndirectChildNids.Add(child.Nid);
         }
 
         long nodeBlocks = 0;
@@ -1055,6 +985,11 @@ public sealed partial class F2fsBuilder
             {
                 for (var i = 0; i < node.DataBlockAddrs.Count; i++)
                 {
+                    if (node.DataBlockAddrs[i] == uint.MaxValue - 2)
+                    {
+                        node.DataBlockAddrs[i] = uint.MaxValue;
+                        continue;
+                    }
                     if (node.DataBlockAddrs[i] != uint.MaxValue)
                     {
                         continue;
@@ -1150,7 +1085,7 @@ public sealed partial class F2fsBuilder
     /// </summary>
     private static uint ResolveOwnerNid(BuildNode node, int logical, out int ofsInNode)
     {
-        if (logical < F2fsNode.DefAddrsPerInode)
+        if (logical < node.InodeAddressCount)
         {
             ofsInNode = logical;
             return node.Ino;
@@ -1159,7 +1094,7 @@ public sealed partial class F2fsBuilder
         foreach (var dnode in node.Dnodes)
         {
             if (!dnode.IsIndirect && !dnode.IsDoubleIndirect
-                && dnode.LogicalStart <= logical && logical < dnode.LogicalStart + F2fsNode.AddrsPerBlock)
+                && dnode.LogicalStart <= logical && logical < dnode.LogicalStart + node.DataAddressesPerNode)
             {
                 ofsInNode = (int)(logical - dnode.LogicalStart);
                 return dnode.Nid;
@@ -1259,11 +1194,9 @@ public sealed partial class F2fsBuilder
         public CompressionAlgorithm CompressedAlgorithm;
         public int CompressionLevel;
         public List<DnodePlan> Dnodes = [];
-        public List<DnodePlan> IndirectChildren = [];
-        public DnodePlan? IndirectNode;
-        public List<DnodePlan> DoubleIndirectIndirectChildren = [];
-        public List<DnodePlan> DoubleIndirectDirectChildren = [];
-        public DnodePlan? DoubleIndirectNode;
+        public DnodePlan?[] RootDnodes = new DnodePlan?[5];
+        public int InodeAddressCount => IsCompressedFile ? (F2fsNode.DefAddrsPerInode - 9) & ~(F2fsCompression.ClusterPages - 1) : F2fsNode.DefAddrsPerInode;
+        public int DataAddressesPerNode => IsCompressedFile ? F2fsNode.AddrsPerBlock & ~(F2fsCompression.ClusterPages - 1) : F2fsNode.AddrsPerBlock;
         public List<byte[]> DirBlocks = [];
         public List<uint> DirBlockAddrs = [];
         public uint DirDepth;
@@ -1285,11 +1218,14 @@ public sealed partial class F2fsBuilder
         public bool IsIndirect;
         public bool IsDoubleIndirect;
         public long LogicalStart;
+        public uint NodeOffset;
+        public List<DnodePlan> Children = [];
         public List<uint> IndirectChildNids = [];
     }
 
     private sealed class Layout
     {
+        public long ReservedCompressionBlocks;
         public uint MaxNid;
         public long NodeBlocks;
         public long DataBlocks;

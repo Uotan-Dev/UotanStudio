@@ -8,20 +8,15 @@ internal sealed record F2fsCompressedCluster
 
     public const int ClusterSizeBytes = ClusterSizePages * F2fsNode.NodeSize;
 
-    public const int HeaderSize = 12;
-
-
-    private const int OffsetAlgorithm = 0;
-    private const int OffsetClusterPages = 1;
-    private const int OffsetReserved = 2;
-    private const int OffsetUncompressedSize = 4;
-    private const int OffsetCompressedSize = 8;
+    public const int HeaderSize = 24;
 
     public CompressionAlgorithm Algorithm { get; init; }
 
     public int UncompressedSize { get; init; }
 
     public int CompressedSize { get; init; }
+
+    public uint Checksum { get; init; }
 
     public bool IsCompressed => CompressedSize > 0 && CompressedSize < UncompressedSize;
 
@@ -42,9 +37,9 @@ internal sealed record F2fsCompressedCluster
 
         return new F2fsCompressedCluster
         {
-            Algorithm = (CompressionAlgorithm)data[OffsetAlgorithm],
-            UncompressedSize = BinaryPrimitives.ReadInt32LittleEndian(data[OffsetUncompressedSize..]),
-            CompressedSize = BinaryPrimitives.ReadInt32LittleEndian(data[OffsetCompressedSize..]),
+            UncompressedSize = ClusterSizeBytes,
+            CompressedSize = BinaryPrimitives.ReadInt32LittleEndian(data),
+            Checksum = BinaryPrimitives.ReadUInt32LittleEndian(data[4..]),
         };
     }
 
@@ -59,10 +54,8 @@ internal sealed record F2fsCompressedCluster
             throw new ArgumentException("Cluster header destination is too small.", nameof(destination));
         }
 
-        destination.Clear();
-        destination[OffsetAlgorithm] = (byte)Algorithm;
-        destination[OffsetClusterPages] = ClusterSizePages;
-        BinaryPrimitives.WriteInt32LittleEndian(destination[OffsetUncompressedSize..], UncompressedSize);
-        BinaryPrimitives.WriteInt32LittleEndian(destination[OffsetCompressedSize..], CompressedSize);
+        destination[..HeaderSize].Clear();
+        BinaryPrimitives.WriteInt32LittleEndian(destination, CompressedSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(destination[4..], Checksum);
     }
 }

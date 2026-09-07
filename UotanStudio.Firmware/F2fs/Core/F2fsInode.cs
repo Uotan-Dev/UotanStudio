@@ -96,6 +96,10 @@ internal sealed record F2fsInode
 
     public byte LogClusterSize { get; init; }
 
+    public ushort CompressFlags { get; init; }
+
+    public ulong CompressedBlocks { get; init; }
+
     public bool IsCompressed => (Flags & ComprFlag) != 0;
 
     public bool IsRegularFile => (Mode & ModeFormatMask) == ModeRegularFile;
@@ -110,6 +114,12 @@ internal sealed record F2fsInode
 
     public int ExtraIsizeWords => (Inline & ExtraAttrFlag) != 0 ? ExtraIsize / 4 : 0;
 
+    public int AddressCount => AlignAddressCount(F2fsNode.DefAddrsPerInode - ExtraIsizeWords - InlineXattrAddrs);
+
+    public int DataAddressesPerNode => AlignAddressCount(F2fsNode.AddrsPerBlock);
+
+    private int AlignAddressCount(int count) => IsCompressed ? count & ~((1 << LogClusterSize) - 1) : count;
+
     public int InlineXattrAddrs => (Inline & InlineXattrFlag) != 0 ? InlineXattrSize : 0;
 
     public int MaxInlineData => (F2fsNode.DefAddrsPerInode - ExtraIsizeWords - InlineXattrAddrs - F2fsNode.DefInlineReservedSize) * 4;
@@ -120,7 +130,7 @@ internal sealed record F2fsInode
     /// Parses the inode from a node page (the footer must be validated separately: nid == ino marks an inode node).
     /// <para>从节点页解析 inode（页脚需同时校验：nid == ino 表示 inode 节点）。</para>
     /// </summary>
-    public static F2fsInode FromBytes(ReadOnlySpan<byte> node)
+    public static F2fsInode FromBytes(ReadOnlySpan<byte> node, bool flexibleInlineXattr = true)
     {
         if (node.Length < F2fsNode.NodeSize)
         {
@@ -145,6 +155,14 @@ internal sealed record F2fsInode
         node.Slice(OffsetName).CopyTo(name);
 
         var advise = node[OffsetAdvise];
+        var extraSize = (node[OffsetInline] & ExtraAttrFlag) != 0 ? BinaryPrimitives.ReadUInt16LittleEndian(node[OffsetExtraIsize..]) : 0;
+        if (extraSize % 4 != 0 || extraSize > F2fsNode.DefAddrsPerInode * 4)
+            throw new InvalidDataException("Invalid F2FS extra inode attribute size.");
+        var compressed = (BinaryPrimitives.ReadUInt32LittleEndian(node[OffsetFlags..]) & ComprFlag) != 0;
+        if (compressed && extraSize < 36)
+            throw new InvalidDataException("F2FS compressed inode lacks compression extra attributes.");
+        if (compressed && node[393] is < 2 or > 8)
+            throw new InvalidDataException("Invalid F2FS compression cluster size.");
 
         return new F2fsInode
         {
@@ -170,9 +188,11 @@ internal sealed record F2fsInode
             Addr = addrs,
             Nid = nids,
             ExtraIsize = BinaryPrimitives.ReadUInt16LittleEndian(node[OffsetExtraIsize..]),
-            InlineXattrSize = BinaryPrimitives.ReadUInt16LittleEndian(node[OffsetInlineXattrSize..]),
-            CompressAlgorithm = (byte)(advise & 0x0F),
-            LogClusterSize = (byte)((advise >> 4) & 0x0F),
+            InlineXattrSize = !flexibleInlineXattr && (node[OffsetInline] & InlineXattrFlag) != 0 ? (ushort)50 : BinaryPrimitives.ReadUInt16LittleEndian(node[OffsetInlineXattrSize..]),
+            CompressAlgorithm = extraSize >= 36 ? node[392] : (byte)0,
+            LogClusterSize = extraSize >= 36 ? node[393] : (byte)0,
+            CompressFlags = extraSize >= 36 ? BinaryPrimitives.ReadUInt16LittleEndian(node[394..]) : (ushort)0,
+            CompressedBlocks = extraSize >= 36 ? BinaryPrimitives.ReadUInt64LittleEndian(node[384..]) : 0,
         };
     }
 
@@ -188,7 +208,7 @@ internal sealed record F2fsInode
         }
 
         BinaryPrimitives.WriteUInt16LittleEndian(node[OffsetMode..], Mode);
-        node[OffsetAdvise] = (byte)((CompressAlgorithm & 0x0F) | ((LogClusterSize & 0x0F) << 4));
+        node[OffsetAdvise] = Advise;
         node[OffsetInline] = Inline;
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetUid..], Uid);
         BinaryPrimitives.WriteUInt32LittleEndian(node[OffsetGid..], Gid);
@@ -212,11 +232,22 @@ internal sealed record F2fsInode
         node.Slice(OffsetName, Math.Min(F2fsNode.NodeSize - OffsetName, Name.Length)).Clear();
         Name.AsSpan(0, Math.Min(F2fsNode.NodeSize - OffsetName, Name.Length)).CopyTo(node[OffsetName..]);
         Extent.WriteTo(node.Slice(F2fsExtent.InodeOffset, F2fsExtent.Size));
-        BinaryPrimitives.WriteUInt16LittleEndian(node[OffsetExtraIsize..], ExtraIsize);
-        BinaryPrimitives.WriteUInt16LittleEndian(node[OffsetInlineXattrSize..], InlineXattrSize);
         for (var i = 0; i < Addr.Length; i++)
         {
             BinaryPrimitives.WriteUInt32LittleEndian(node.Slice(F2fsNode.AddrArrayOffset + i * 4, 4), Addr[i]);
+        }
+
+        if ((Inline & ExtraAttrFlag) != 0)
+        {
+            BinaryPrimitives.WriteUInt16LittleEndian(node[OffsetExtraIsize..], ExtraIsize);
+            BinaryPrimitives.WriteUInt16LittleEndian(node[OffsetInlineXattrSize..], InlineXattrSize);
+            if (ExtraIsize >= 36)
+            {
+                BinaryPrimitives.WriteUInt64LittleEndian(node[384..], CompressedBlocks);
+                node[392] = CompressAlgorithm;
+                node[393] = LogClusterSize;
+                BinaryPrimitives.WriteUInt16LittleEndian(node[394..], CompressFlags);
+            }
         }
 
         for (var i = 0; i < Nid.Length; i++)

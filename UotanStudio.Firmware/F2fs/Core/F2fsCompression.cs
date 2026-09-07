@@ -89,7 +89,7 @@ internal static class F2fsCompression
         int expectedSize,
         int maxOutputSize)
     {
-        if (expectedSize < 0 || expectedSize > ClusterBytes)
+        if (expectedSize < 0 || expectedSize > 1024 * 1024)
         {
             throw new ArgumentOutOfRangeException(nameof(expectedSize));
         }
