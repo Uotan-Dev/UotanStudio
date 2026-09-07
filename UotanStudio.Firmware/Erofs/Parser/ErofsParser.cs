@@ -54,6 +54,7 @@ public sealed partial class ErofsParser : IDisposable
     private readonly byte[]? _metaboxData;
     private readonly Stream?[]? _deviceStreams;
     private readonly ErofsDeviceSlot[]? _deviceSlots;
+    private bool _flatDevice;
     private List<ErofsFileEntry>? _fileTable;
     private ErofsInode? _packedInode;
 
@@ -83,6 +84,11 @@ public sealed partial class ErofsParser : IDisposable
         : this(OpenFileSource(filePath), ownsStream: true)
     {
     }
+
+    /// <summary>Creates a parser for an image with extra devices mapped into one stream. <para>为额外设备按设备表映射合并到单一流的镜像创建解析器。</para></summary>
+    /// <param name="stream">The readable, seekable unified device stream. <para>可读可寻址的统一设备流。</para></param>
+    /// <returns>A parser that leaves the supplied stream open. <para>不会关闭传入流的解析器。</para></returns>
+    public static ErofsParser OpenFlatDevice(Stream stream) => new(stream) { _flatDevice = true };
 
     public ErofsParser(IReadOnlyList<Stream> deviceStreams)
         : this(ValidateDeviceStreams(deviceStreams)[0], ownsStream: false)
@@ -213,7 +219,7 @@ public sealed partial class ErofsParser : IDisposable
 
 
                 _deviceSlots[0] = new ErofsDeviceSlot { Blocks = (uint)_superblock.BlockCount64, MappedBlkAddr = 0 };
-                var devTableOffset = (long)_superblock.DevtSlotoff * _blockSize;
+                var devTableOffset = (long)_superblock.DevtSlotoff * ErofsDeviceSlot.Size;
                 for (var i = 0; i < _superblock.ExtraDevices; i++)
                 {
                     var slotOffset = devTableOffset + (long)i * ErofsDeviceSlot.Size;
@@ -390,7 +396,7 @@ public sealed partial class ErofsParser : IDisposable
         catch
         {
             staging?.Dispose();
-            try { File.Delete(path); } catch {  }
+            try { File.Delete(path); } catch { }
             throw;
         }
     }
@@ -441,22 +447,47 @@ public sealed partial class ErofsParser : IDisposable
         return buffer.ToArray();
     }
 
-    private byte[] ReadDeviceBytes(int deviceId, long offset, int length, string what)
+    private void CopyFromDevice(Stream output, int deviceId, long offset, long length, string what)
     {
-        if (_deviceStreams is null || deviceId >= _deviceStreams.Length || _deviceStreams[deviceId] is null)
-            return ReadBytes(offset, length, what);
-
         if (offset < 0 || length < 0)
             throw new InvalidDataException($"{what} has invalid offset/length.");
-
-        var buffer = new byte[length];
-        lock (_streamLock)
+        if (deviceId <= 0 || _deviceSlots is null || deviceId >= _deviceSlots.Length)
+            throw new InvalidDataException($"{what} references an invalid device id {deviceId}.");
+        var slot = _deviceSlots[deviceId];
+        var deviceLength = checked((long)slot.Blocks * _blockSize);
+        if (offset > deviceLength || length > deviceLength - offset)
+            throw new InvalidDataException($"{what} exceeds device {deviceId} bounds.");
+        if (_deviceStreams?[deviceId] is not { } device)
         {
-            _deviceStreams[deviceId]!.Position = offset;
-            _deviceStreams[deviceId]!.ReadExactly(buffer);
+            if (!_flatDevice || slot.MappedBlkAddr == 0)
+                throw new InvalidDataException($"{what} requires missing EROFS device {deviceId}.");
+            var mappedOffset = checked((long)slot.MappedBlkAddr * _blockSize + offset);
+            CheckRange(mappedOffset, length, what);
+            CopyFromSource(output, mappedOffset, length);
+            return;
         }
+        if (offset > device.Length || length > device.Length - offset)
+            throw new InvalidDataException($"{what} exceeds device {deviceId} stream bounds.");
 
-        return buffer;
+        var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
+        try
+        {
+            lock (_streamLock)
+            {
+                device.Position = offset;
+                while (length > 0)
+                {
+                    var count = (int)Math.Min(CopyBufferSize, length);
+                    device.ReadExactly(buffer, 0, count);
+                    output.Write(buffer, 0, count);
+                    length -= count;
+                }
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private byte[] ReadBytes(long offset, int length, string what)

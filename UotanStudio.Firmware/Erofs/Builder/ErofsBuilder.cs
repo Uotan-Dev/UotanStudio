@@ -63,7 +63,7 @@ public sealed partial class ErofsBuilder
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch {  }
+            try { File.Delete(temporaryPath); } catch { }
         }
     }
 
@@ -95,7 +95,7 @@ public sealed partial class ErofsBuilder
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch {  }
+            try { File.Delete(temporaryPath); } catch { }
         }
     }
 
@@ -137,7 +137,7 @@ public sealed partial class ErofsBuilder
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch {  }
+            try { File.Delete(temporaryPath); } catch { }
         }
     }
 
@@ -246,7 +246,7 @@ public sealed partial class ErofsBuilder
         if ((attributes & FileAttributes.ReparsePoint) != 0)
         {
             string target = string.Empty;
-            try { target = new FileInfo(fullPath).LinkTarget ?? string.Empty; } catch {  }
+            try { target = new FileInfo(fullPath).LinkTarget ?? string.Empty; } catch { }
             return new BuildNode
             {
                 Name = name,
@@ -454,6 +454,8 @@ public sealed partial class ErofsBuilder
 
 
         var extraDevices = options.ExtraDeviceCount;
+        var compressionConfiguration = BuildCompressionConfiguration(options);
+        var compressionConfigurationOffset = InodeTableStart + (options.Metabox ? ErofsSuperblock.ExtSlotSize : 0);
         long inodeTableStart;
         long devtOffset;
         ushort devtSlotOff;
@@ -462,18 +464,17 @@ public sealed partial class ErofsBuilder
 
 
             devtOffset = blockSize;
-            var devtSlotCount = extraDevices + 1;
+            var devtSlotCount = extraDevices;
             var devtTableSize = (long)devtSlotCount * ErofsDeviceSlot.Size;
             inodeTableStart = AlignUp(devtOffset + devtTableSize, blockSize);
-            devtSlotOff = (ushort)(devtOffset / blockSize);
+            devtSlotOff = checked((ushort)(devtOffset / ErofsDeviceSlot.Size));
         }
         else
         {
 
 
-            inodeTableStart = options.Metabox
-                ? AlignUp(InodeTableStart + ErofsSuperblock.ExtSlotSize, ErofsSuperblock.CompactInodeSize)
-                : InodeTableStart;
+            inodeTableStart = AlignUp(compressionConfigurationOffset + compressionConfiguration.Length,
+                ErofsSuperblock.CompactInodeSize);
             devtOffset = 0;
             devtSlotOff = 0;
         }
@@ -781,17 +782,20 @@ public sealed partial class ErofsBuilder
 
 
         WriteAt(output, ErofsSuperblock.SuperblockOffset, superblockBuffer, superblockBuffer.Length);
+        if (compressionConfiguration.Length > 0)
+        {
+            WriteAt(output, ErofsSuperblock.SuperblockOffset + superblockBuffer.Length,
+                compressionConfiguration, compressionConfiguration.Length);
+        }
 
 
         if (extraDevices > 0)
         {
             var slotBuffer = new byte[ErofsDeviceSlot.Size];
-            var slotCount = extraDevices + 1;
+            var slotCount = extraDevices;
             for (var i = 0; i < slotCount; i++)
             {
-                var slot = i == 0
-                    ? new ErofsDeviceSlot { Blocks = (uint)totalBlocks, MappedBlkAddr = 0 }
-                    : new ErofsDeviceSlot { Blocks = 0, MappedBlkAddr = 0 };
+                var slot = new ErofsDeviceSlot { Blocks = 0, MappedBlkAddr = 0 };
                 slot.WriteTo(slotBuffer);
                 WriteAt(output, devtOffset + i * ErofsDeviceSlot.Size, slotBuffer, slotBuffer.Length);
             }

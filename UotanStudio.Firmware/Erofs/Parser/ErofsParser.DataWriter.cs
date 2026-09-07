@@ -49,7 +49,7 @@ public sealed partial class ErofsParser
 
     private void WriteInlineData(ulong nid, ErofsInode inode, Stream output)
     {
-        var length = (long)inode.Size;
+        var length = checked((long)inode.Size);
         if (length == 0)
         {
             return;
@@ -92,22 +92,23 @@ public sealed partial class ErofsParser
     /// </summary>
     private void WriteChunkData(ulong nid, ErofsInode inode, Stream output)
     {
-        var length = (long)inode.Size;
+        var length = checked((long)inode.Size);
         if (length == 0)
         {
             return;
         }
 
         var chunkBlkBits = inode.ChunkFormatBlkBits;
-        var chunkSize = _blockSize << chunkBlkBits;
-        if (chunkSize <= 0)
+        var chunkSize = (long)_blockSize << chunkBlkBits;
+        if ((inode.ChunkFormat & ~0x7F) != 0 || (inode.Chunk48Bit && !inode.UsesChunkIndexes))
         {
             throw new InvalidDataException($"Invalid chunk size (blkbits {chunkBlkBits}) for nid {nid}.");
         }
 
-        var chunkCount = (length + chunkSize - 1) / chunkSize;
+        var chunkCount = (length - 1) / chunkSize + 1;
         var usesIndexes = inode.UsesChunkIndexes;
-        var indexTableOffset = _superblock.GetInodeOffset(nid) + inode.InlineDataOffset;
+        var indexSize = usesIndexes ? 8 : 4;
+        var indexTableOffset = checked((_superblock.GetInodeOffset(nid) + inode.InlineDataOffset + indexSize - 1) & ~(long)(indexSize - 1));
         var indexBytes = usesIndexes
             ? checked(chunkCount * 8L)
             : checked(chunkCount * 4L);
@@ -121,15 +122,17 @@ public sealed partial class ErofsParser
         var remaining = length;
         for (var i = 0; i < chunkCount && remaining > 0; i++)
         {
-            var chunkLen = (int)Math.Min(chunkSize, remaining);
+            var chunkLen = Math.Min(chunkSize, remaining);
             ulong startBlk;
             var deviceId = 0;
             if (usesIndexes)
             {
                 var slot = index.AsSpan(i * 8, 8);
-                startBlk = ((ulong)BinaryPrimitives.ReadUInt16LittleEndian(slot) << 32)
-                           | BinaryPrimitives.ReadUInt32LittleEndian(slot.Slice(4));
-                deviceId = BinaryPrimitives.ReadUInt16LittleEndian(slot.Slice(2));
+                startBlk = BinaryPrimitives.ReadUInt32LittleEndian(slot.Slice(4));
+                if (inode.Chunk48Bit)
+                    startBlk |= (ulong)BinaryPrimitives.ReadUInt16LittleEndian(slot) << 32;
+                var deviceMask = System.Numerics.BitOperations.RoundUpToPowerOf2((uint)_superblock.ExtraDevices + 1) - 1;
+                deviceId = (int)(BinaryPrimitives.ReadUInt16LittleEndian(slot.Slice(2)) & deviceMask);
             }
             else
             {
@@ -138,14 +141,14 @@ public sealed partial class ErofsParser
                 startBlk = BinaryPrimitives.ReadUInt32LittleEndian(index.AsSpan(i * 4, 4));
             }
 
-            if (startBlk == ErofsNullAddr)
+            if (startBlk == (inode.Chunk48Bit ? 0xFFFFFFFFFFFFUL : uint.MaxValue))
             {
 
-                var zeroes = new byte[Math.Min(chunkLen, 1 << 16)];
-                var zeroed = 0;
+                var zeroes = new byte[(int)Math.Min(chunkLen, 1 << 16)];
+                var zeroed = 0L;
                 while (zeroed < chunkLen)
                 {
-                    var n = Math.Min(zeroes.Length, chunkLen - zeroed);
+                    var n = (int)Math.Min(zeroes.Length, chunkLen - zeroed);
                     output.Write(zeroes, 0, n);
                     zeroed += n;
                 }
@@ -154,11 +157,24 @@ public sealed partial class ErofsParser
                 continue;
             }
 
-            if (deviceId > 0 && _deviceStreams is not null && deviceId < _deviceStreams.Length)
+            if (deviceId == 0 && !_flatDevice && _deviceSlots is not null)
+            {
+                for (var mappedId = 1; mappedId < _deviceSlots.Length; mappedId++)
+                {
+                    var mapped = _deviceSlots[mappedId];
+                    if (mapped.MappedBlkAddr != 0 && startBlk >= mapped.MappedBlkAddr && startBlk - mapped.MappedBlkAddr < mapped.Blocks)
+                    {
+                        deviceId = mappedId;
+                        startBlk -= mapped.MappedBlkAddr;
+                        break;
+                    }
+                }
+            }
+
+            if (deviceId > 0)
             {
                 var devOffset = checked((long)startBlk * _blockSize);
-                var devData = ReadDeviceBytes(deviceId, devOffset, chunkLen, "Multi-device chunk data");
-                output.Write(devData, 0, devData.Length);
+                CopyFromDevice(output, deviceId, devOffset, chunkLen, "Multi-device chunk data");
             }
             else
             {
@@ -169,8 +185,6 @@ public sealed partial class ErofsParser
             remaining -= chunkLen;
         }
     }
-
-    private const ulong ErofsNullAddr = ulong.MaxValue;
 
 
     private const byte LclusterTypePlain = 0;

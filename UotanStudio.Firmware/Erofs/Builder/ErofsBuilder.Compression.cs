@@ -7,6 +7,29 @@ namespace UotanStudio.Firmware.Erofs;
 
 public sealed partial class ErofsBuilder
 {
+    private static byte[] BuildCompressionConfiguration(ErofsOptions options)
+    {
+        if (!options.Compress || options.Algorithm == ErofsCompressionAlgorithm.Lz4) return [];
+
+        // COMPR_CFGS records follow the extended superblock and include a little-endian length prefix.
+        var length = options.Algorithm == ErofsCompressionAlgorithm.Lzma ? 14 : 6;
+        var configuration = new byte[length + 2];
+        BinaryPrimitives.WriteUInt16LittleEndian(configuration, (ushort)length);
+        switch (options.Algorithm)
+        {
+            case ErofsCompressionAlgorithm.Lzma:
+                BinaryPrimitives.WriteUInt32LittleEndian(configuration.AsSpan(2), 8 << 20);
+                break;
+            case ErofsCompressionAlgorithm.Deflate:
+                configuration[2] = 15;
+                break;
+            case ErofsCompressionAlgorithm.Zstd:
+                configuration[3] = 20 - 10;
+                break;
+        }
+        return configuration;
+    }
+
     private static PclusterPlan[]? TryPlanCompressed(BuildNode node, int blockSize, ErofsOptions options)
     {
 
@@ -32,7 +55,8 @@ public sealed partial class ErofsBuilder
                 var outLen = ErofsCompression.AlgorithmCompress(
                     (ErofsAlgorithm)options.Algorithm,
                     raw, 0, candidateLen, compressed, 0, compressed.Length,
-                    Math.Max(1, options.CompressionLevel));
+                    Math.Max(1, options.CompressionLevel), 0,
+                    options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : 0);
                 if (outLen <= 0 || outLen >= blockSize - 8)
                 {
 
@@ -84,7 +108,8 @@ public sealed partial class ErofsBuilder
             var outLen = ErofsCompression.AlgorithmCompress(
                 (ErofsAlgorithm)options.Algorithm,
                 raw, 0, p.SourceLength, compressed, 0, compressed.Length,
-                Math.Max(1, options.CompressionLevel));
+                Math.Max(1, options.CompressionLevel), 0,
+                options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : 0);
             if (outLen != p.CompressedLength)
             {
                 throw new InvalidDataException(
