@@ -1,4 +1,6 @@
 using System.Text;
+using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.Common.Streams;
 
 namespace UotanStudio.Firmware.UpdateApp;
 
@@ -44,14 +46,19 @@ public static class UpdateAppProcessor
             }
 
             var headerStart = fs.Position - 4;
+            FileExtraction.ValidateRange(headerStart, 76, fs.Length, "UPDATE.APP entry header");
             var headerSize = br.ReadUInt32();
+            if (headerSize < 76)
+                throw new InvalidDataException("UPDATE.APP entry header is too short.");
+            FileExtraction.ValidateRange(headerStart, headerSize, fs.Length, "UPDATE.APP entry header");
             fs.Seek(16, SeekOrigin.Current);
             var fileSize = br.ReadUInt32();
             fs.Seek(32, SeekOrigin.Current);
 
             var nameBytes = br.ReadBytes(16);
             var filename = Encoding.ASCII.GetString(nameBytes).TrimEnd('\0');
-            filename = CleanFileName(filename).ToLower();
+            filename = CleanFileName(filename).ToLowerInvariant();
+            FileExtraction.ValidateRange(headerStart + headerSize, fileSize, fs.Length, "UPDATE.APP entry data");
 
             if (string.IsNullOrEmpty(filename))
             {
@@ -92,20 +99,28 @@ public static class UpdateAppProcessor
     /// Extracts entries from an update.app to the output directory.
     /// <para>将 update.app 中的条目提取到输出目录。</para>
     /// </summary>
-    public static int Extract(string source, string outDir, List<string>? fileList = null)
+    /// <param name="source">The update.app source path. <para>update.app 源路径。</para></param>
+    /// <param name="outDir">The output directory. <para>输出目录。</para></param>
+    /// <param name="fileList">The optional names to extract. <para>可选的待提取名称列表。</para></param>
+    /// <param name="overwrite">Whether to replace existing files. <para>是否替换已有文件。</para></param>
+    /// <param name="cancellationToken">The cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The committed entry count. <para>已提交的条目数。</para></returns>
+    public static int Extract(string source, string outDir, List<string>? fileList = null,
+        bool overwrite = true, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (!File.Exists(source))
         {
             throw new FileNotFoundException("The update.app file does not exist!", source);
         }
 
-        Directory.CreateDirectory(outDir);
-        var extractedFiles = new HashSet<string>();
+        var extractedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var count = 0;
 
         using var fs = new FileStream(source, FileMode.Open, FileAccess.Read);
         foreach (var entry in GetEntries(source))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (fileList is not null && fileList.Count > 0 &&
                 !fileList.Contains(entry.Name, StringComparer.OrdinalIgnoreCase))
             {
@@ -113,29 +128,14 @@ public static class UpdateAppProcessor
             }
 
             var finalName = entry.Name;
-            if (extractedFiles.Contains(finalName))
-            {
-                finalName = $"{finalName}_2";
-            }
+            for (var suffix = 2; extractedFiles.Contains(finalName); suffix++)
+                finalName = $"{entry.Name}_{suffix}";
 
-            var outPath = Path.Combine(outDir, $"{finalName}.img");
-            using var outFs = new FileStream(outPath, FileMode.Create, FileAccess.Write);
+            var outPath = FileExtraction.ResolvePath(outDir, $"{finalName}.img");
             fs.Seek(entry.DataOffset, SeekOrigin.Begin);
-
-            long remaining = entry.FileSize;
-            var buffer = new byte[10240];
-            while (remaining > 0)
-            {
-                var toRead = (int)Math.Min(buffer.Length, remaining);
-                var read = fs.Read(buffer, 0, toRead);
-                if (read <= 0)
-                {
-                    break;
-                }
-                outFs.Write(buffer, 0, read);
-                remaining -= read;
-            }
-            extractedFiles.Add(entry.Name);
+            FileExtraction.WriteAtomic(outPath, output => StreamCopy.CopyExactly(fs, output, entry.FileSize,
+                cancellationToken: cancellationToken), overwrite);
+            extractedFiles.Add(finalName);
             count++;
         }
 

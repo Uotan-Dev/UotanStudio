@@ -102,7 +102,6 @@ public sealed class CompressFormatHandler : IFormatHandler
                     return FirmwareOpResult.Fail($"Unrecognized compression format: '{filePath}'.");
                 }
 
-                Directory.CreateDirectory(outputDirectory);
 
 
                 var outputName = Path.GetFileNameWithoutExtension(filePath);
@@ -110,14 +109,21 @@ public sealed class CompressFormatHandler : IFormatHandler
                 {
                     outputName = "decompressed";
                 }
-                var outputPath = Path.Combine(outputDirectory, outputName);
+                var outputPath = FileExtraction.ResolvePath(outputDirectory, outputName);
 
                 if (File.Exists(outputPath) && options is { Overwrite: false })
                 {
                     return FirmwareOpResult.Fail($"Output file already exists: '{outputPath}'.");
                 }
 
-                CompressionService.DecompressFileAuto(filePath, outputPath);
+                var maximumOutputBytes = (options ?? new UnpackOptions()).MaximumOutputBytes;
+                ArgumentOutOfRangeException.ThrowIfNegative(maximumOutputBytes);
+                FileExtraction.WriteAtomic(outputPath, output =>
+                {
+                    using var input = File.OpenRead(filePath);
+                    CompressionService.Decompress(input, output, format, maximumOutputBytes, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }, options?.Overwrite ?? true);
 
                 var info = CompressionFormats.GetInfo(format);
                 return FirmwareOpResult.Ok(

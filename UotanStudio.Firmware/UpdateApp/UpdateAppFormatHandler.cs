@@ -54,6 +54,7 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
                 entries: [.. entries.Select(e => e.Name)],
                 metadata: new Dictionary<string, string> { ["EntryCount"] = entries.Count.ToString() }));
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
@@ -68,10 +69,11 @@ public sealed class UpdateAppFormatHandler : IFormatHandler
     {
         try
         {
-            Directory.CreateDirectory(outputDirectory);
-            var count = UpdateAppProcessor.Extract(filePath, outputDirectory);
+            var count = UpdateAppProcessor.Extract(filePath, outputDirectory,
+                overwrite: options?.Overwrite ?? true, cancellationToken: cancellationToken);
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted {count} partitions to {outputDirectory}"));
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));

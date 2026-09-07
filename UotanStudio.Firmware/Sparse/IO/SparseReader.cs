@@ -66,6 +66,10 @@ public static class SparseReader
 
                 var dataSize = (long)chunkHeader.TotalSize - sparseFile.Header.ChunkHeaderSize;
                 var expectedRawSize = (long)chunkHeader.ChunkSize * sparseFile.Header.BlockSize;
+                if (chunkHeader.ChunkType == (ushort)ChunkType.Crc32
+                    ? chunkHeader.ChunkSize != 0
+                    : chunkHeader.ChunkSize > sparseFile.Header.TotalBlocks - currentBlock)
+                    throw new InvalidDataException($"Chunk {i} exceeds the declared sparse block count.");
 
                 switch ((ChunkType)chunkHeader.ChunkType)
                 {
@@ -152,9 +156,14 @@ public static class SparseReader
                 if (chunkHeader.ChunkType != (ushort)ChunkType.Crc32)
                 {
                     AddChunkRaw(sparseFile, chunk);
-                    currentBlock += chunkHeader.ChunkSize;
+                    currentBlock = checked(currentBlock + chunkHeader.ChunkSize);
                 }
             }
+            if (currentBlock != sparseFile.Header.TotalBlocks)
+                throw new InvalidDataException("Sparse chunks do not cover the declared total block count.");
+            if (crc is not null && sparseFile.Header.ImageChecksum != 0 &&
+                crc.GetCurrentHashAsUInt32() != sparseFile.Header.ImageChecksum)
+                throw new InvalidDataException("Sparse header image checksum does not match the expanded data.");
         }
         catch (Exception ex) when (ex is not InvalidDataException and not NotSupportedException)
         {
@@ -292,18 +301,14 @@ public static class SparseReader
             return;
         }
 
-        Span<byte> buf = stackalloc byte[4];
-        BinaryPrimitives.WriteUInt32LittleEndian(buf, fillValue);
-        var full = (int)(totalBytes / 4);
-        for (var i = 0; i < full; i++)
+        Span<byte> buf = stackalloc byte[65536];
+        for (var i = 0; i < buf.Length; i += 4)
+            BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], fillValue);
+        while (totalBytes > 0)
         {
-            crc.Append(buf);
-        }
-
-        var rem = (int)(totalBytes % 4);
-        if (rem > 0)
-        {
-            crc.Append(buf[..rem]);
+            var size = (int)Math.Min(buf.Length, totalBytes);
+            crc.Append(buf[..size]);
+            totalBytes -= size;
         }
     }
 
@@ -315,6 +320,7 @@ public static class SparseReader
         }
 
         Span<byte> buf = stackalloc byte[4096];
+        buf.Clear();
         var remaining = totalBytes;
         while (remaining > 0)
         {
