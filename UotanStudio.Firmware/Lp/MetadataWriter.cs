@@ -1,3 +1,6 @@
+using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.Common.Streams;
+
 namespace UotanStudio.Firmware.Lp;
 
 public static class MetadataWriter
@@ -8,6 +11,7 @@ public static class MetadataWriter
     /// </summary>
     public static byte[] SerializeGeometry(LpMetadataGeometry geometry)
     {
+        MetadataReader.ValidateGeometry(geometry);
         geometry = new LpMetadataGeometry
         {
             Magic = MetadataFormat.LP_METADATA_GEOMETRY_MAGIC,
@@ -32,10 +36,25 @@ public static class MetadataWriter
     /// </summary>
     public static byte[] SerializeMetadata(LpMetadata metadata)
     {
-        var partitionTableSize = (uint)(metadata.Partitions.Count * MetadataFormat.Sizes.Partition);
-        var extentTableSize = (uint)(metadata.Extents.Count * MetadataFormat.Sizes.Extent);
-        var groupTableSize = (uint)(metadata.Groups.Count * MetadataFormat.Sizes.PartitionGroup);
-        var blockDeviceTableSize = (uint)(metadata.BlockDevices.Count * MetadataFormat.Sizes.BlockDevice);
+        MetadataReader.ValidateGeometry(metadata.Geometry);
+        if (metadata.Header.MinorVersion > 2)
+            throw new InvalidDataException("Unsupported LP metadata minor version.");
+        var minorVersion = metadata.Header.Flags != 0 ? (ushort)2 : metadata.Header.MinorVersion;
+        foreach (var partition in metadata.Partitions)
+        {
+            if ((partition.Attributes & ~0xfu) != 0)
+                throw new InvalidDataException("Unknown LP partition attributes.");
+            if ((partition.Attributes & 0xcu) != 0 && minorVersion < 1)
+                minorVersion = 1;
+        }
+        var partitionTableSize = checked((uint)metadata.Partitions.Count * MetadataFormat.Sizes.Partition);
+        var extentTableSize = checked((uint)metadata.Extents.Count * MetadataFormat.Sizes.Extent);
+        var groupTableSize = checked((uint)metadata.Groups.Count * MetadataFormat.Sizes.PartitionGroup);
+        var blockDeviceTableSize = checked((uint)metadata.BlockDevices.Count * MetadataFormat.Sizes.BlockDevice);
+        var total = checked((ulong)partitionTableSize + extentTableSize + groupTableSize + blockDeviceTableSize);
+        var headerSize = (uint)(minorVersion >= 2 ? MetadataFormat.Sizes.Header : MetadataFormat.Sizes.LegacyHeader);
+        if (total + headerSize > metadata.Geometry.MetadataMaxSize)
+            throw new InvalidDataException("LP tables exceed the metadata slot size.");
 
         var header = new LpMetadataHeader
         {
@@ -45,11 +64,11 @@ public static class MetadataWriter
             BlockDevices = new LpMetadataTableDescriptor { Offset = partitionTableSize + extentTableSize + groupTableSize, NumEntries = (uint)metadata.BlockDevices.Count, EntrySize = MetadataFormat.Sizes.BlockDevice },
             Magic = MetadataFormat.LP_METADATA_HEADER_MAGIC,
             MajorVersion = MetadataFormat.LP_METADATA_MAJOR_VERSION,
-            MinorVersion = 0,
-            HeaderSize = MetadataFormat.Sizes.Header,
+            MinorVersion = minorVersion,
+            HeaderSize = headerSize,
             HeaderChecksum = new byte[32],
             TablesChecksum = new byte[32],
-            Flags = 0
+            Flags = metadata.Header.Flags
         };
         header = new LpMetadataHeader
         {
@@ -115,8 +134,12 @@ public static class MetadataWriter
     /// </summary>
     public static void WriteToImageStream(Stream stream, LpMetadata metadata)
     {
+        MetadataReader.ValidateBlockDevices(metadata);
         var geometryBlob = SerializeGeometry(metadata.Geometry);
         var metadataBlob = SerializeMetadata(metadata);
+
+        var deviceSize = metadata.BlockDevices.Count > 0 ? metadata.BlockDevices[0].Size : (ulong)stream.Length;
+        _ = MetadataReader.GetBackupMetadataOffset(metadata.Geometry, deviceSize, metadata.Geometry.MetadataSlotCount - 1);
 
         if (metadataBlob.Length > metadata.Geometry.MetadataMaxSize)
         {
@@ -133,9 +156,8 @@ public static class MetadataWriter
             stream.Position = primaryOffset;
             stream.Write(metadataBlob);
 
-            if (metadata.BlockDevices.Count > 0)
             {
-                var backupOffset = MetadataReader.GetBackupMetadataOffset(metadata.Geometry, metadata.BlockDevices[0].Size, i);
+                var backupOffset = MetadataReader.GetBackupMetadataOffset(metadata.Geometry, deviceSize, i);
                 stream.Position = backupOffset;
                 stream.Write(metadataBlob);
             }
@@ -143,16 +165,23 @@ public static class MetadataWriter
     }
 
     /// <summary>
-    /// Writes geometry + metadata to an image file (sized by the first block device).
-    /// <para>将几何信息 + 元数据写入镜像文件(按第一个块设备定尺寸)。</para>
+    /// Atomically writes geometry and metadata, preserving existing partition data within the new device size.
+    /// <para>原子写入几何信息和元数据，保留新设备大小范围内已有的分区数据。</para>
     /// </summary>
     public static void WriteToImageFile(string path, LpMetadata metadata)
     {
-        using var stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite);
-        if (metadata.BlockDevices.Count > 0)
+        MetadataReader.ValidateGeometry(metadata.Geometry);
+        MetadataReader.ValidateBlockDevices(metadata);
+        var deviceSize = checked((long)metadata.BlockDevices[0].Size);
+        FileExtraction.WriteAtomic(path, output =>
         {
-            stream.SetLength((long)metadata.BlockDevices[0].Size);
-        }
-        WriteToImageStream(stream, metadata);
+            output.SetLength(deviceSize);
+            if (File.Exists(path))
+            {
+                using var original = File.OpenRead(path);
+                StreamCopy.CopyExactly(original, output, Math.Min(original.Length, deviceSize));
+            }
+            WriteToImageStream(output, metadata);
+        });
     }
 }

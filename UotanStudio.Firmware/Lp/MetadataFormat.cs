@@ -27,6 +27,9 @@ public static class MetadataFormat
 
         public const int Header = 256;
 
+        /// <summary>Gets the original metadata header size. <para>原始版本元数据头长度。</para></summary>
+        public const int LegacyHeader = 128;
+
         public const int TableDescriptor = 12;
 
         public const int Partition = 52;
@@ -157,7 +160,7 @@ public readonly struct LpMetadataHeader
     /// </summary>
     public static LpMetadataHeader FromBytes(ReadOnlySpan<byte> data)
     {
-        return data.Length < MetadataFormat.Sizes.Header
+        return data.Length < MetadataFormat.Sizes.LegacyHeader
             ? throw new ArgumentException("Data too small for LpMetadataHeader")
             : new LpMetadataHeader
             {
@@ -172,7 +175,10 @@ public readonly struct LpMetadataHeader
                 Extents = LpMetadataTableDescriptor.FromBytes(data[92..]),
                 Groups = LpMetadataTableDescriptor.FromBytes(data[104..]),
                 BlockDevices = LpMetadataTableDescriptor.FromBytes(data[116..]),
-                Flags = BinaryPrimitives.ReadUInt32LittleEndian(data[128..])
+                Flags = BinaryPrimitives.ReadUInt16LittleEndian(data[6..]) >= 2
+                    && BinaryPrimitives.ReadUInt32LittleEndian(data[8..]) == MetadataFormat.Sizes.Header
+                    && data.Length >= MetadataFormat.Sizes.Header
+                        ? BinaryPrimitives.ReadUInt32LittleEndian(data[128..]) : 0
             };
     }
 
@@ -182,7 +188,12 @@ public readonly struct LpMetadataHeader
     /// </summary>
     public byte[] ToBytes()
     {
-        var data = new byte[MetadataFormat.Sizes.Header];
+        var size = MinorVersion >= 2 ? MetadataFormat.Sizes.Header : MetadataFormat.Sizes.LegacyHeader;
+        if (HeaderSize != size || MajorVersion != MetadataFormat.LP_METADATA_MAJOR_VERSION || MinorVersion > 2)
+        {
+            throw new InvalidDataException("Unsupported LP metadata header version or size.");
+        }
+        var data = new byte[size];
         BinaryPrimitives.WriteUInt32LittleEndian(data, Magic);
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(4), MajorVersion);
         BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(6), MinorVersion);
@@ -194,7 +205,10 @@ public readonly struct LpMetadataHeader
         Extents.ToBytes().CopyTo(data.AsSpan(92));
         Groups.ToBytes().CopyTo(data.AsSpan(104));
         BlockDevices.ToBytes().CopyTo(data.AsSpan(116));
-        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(128), Flags);
+        if (size == MetadataFormat.Sizes.Header)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(128), Flags);
+        }
         return data;
     }
 }
