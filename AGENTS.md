@@ -60,9 +60,11 @@ UotanStudio firmware --help | --version
 ### 解包目录原始配置
 
 - 各格式处理器和应用层解包服务在成功提取后写入 `.uotanstudio-repack.json`，使用源生成 JSON、32 MiB 上限和原子替换。`sourceProperties` 为描述性信息，`packingOptions` 和 `configuration` 为实际打包配置；普通文件系统子目录不单独生成镜像配置。
+- **统一元数据目录**：当有项目打开时，元数据统一存放在 `{项目根}/.uotan/metadata/<分区名>/`（`RepackMetadata.MetadataFolderName = "metadata"`），包含 `.uotanstudio-repack.json` 以及文件系统镜像的三个 Android 风格元数据文件（`<分区名>_fs_config`、`<分区名>_file_contexts`、`<分区名>_info`，由 `FileSystemMetadataGenerator` 从解析器 inode 数据生成）。解包目录中保留轻量级指针文件（schema = `UotanStudio.Firmware.RepackPointer`，含 `metadataDirectory` 相对路径），`RepackMetadata.Read()` 自动跟随指针到实际元数据位置。无项目上下文时元数据直接写入解包目录（向后兼容）。`ProjectContextService.GetMetadataRoot()` 返回 `.uotan/metadata/` 绝对路径。
+- EXT4/EROFS/F2FS 解包时，解析器 entry 模型已暴露 inode 的 `Uid`/`Gid`/`Mode`（`Ext4FileEntry`、`ErofsFileEntry`、`F2fsFileEntry`），`FileSystemMetadataGenerator` 据此生成 `fs_config`（`path uid gid mode capabilities`）和 `file_contexts`（`path selinux_label`，优先读取 `security.selinux` xattr，缺失时回退默认标签）；`partition_info` 从超级块配置生成 `partition.key=value` 格式。
 - Boot 和 DTBO 不再生成独立的 `header`、`header.json` 或 `dtbo.json`：Boot 配置保存在 `configuration.magic/header`，vendor_boot 为 `configuration.magic/vendorHeader/ramdiskTable`，DTBO 为 `configuration.header/entries/imageSize/hasOriginalImage`。DTBO 的 `original.dtbo.img` 是无损重打包所需的二进制模板，不是额外配置文件。
 - Boot v0-v4 和 vendor_boot v3/v4 目录重建共用固件库后端，组件通过 `BootComponentFiles` 有界流式复制，SHA-1 ID 流式计算，输出原子提交。原始 `ramdisk` / `vendor_ramdisk` 是打包输入，解压的 CPIO 副本及拆分 vendor ramdisk 仅用于查看。vendor 产品名和 v4 ramdisk 条目表一并保存在配置内。
-- CLI、节点工作流、镜像面板和 MCP 自动打包均按统一元数据分派；镜像面板仅在无元数据时回退到项目打包设置。项目资源管理器双击含元数据的文件夹，以文本方式打开其配置，即使 JSON 尚未编辑完整也允许打开修复。
+- CLI、节点工作流、镜像面板和 MCP 自动打包均按统一元数据分派（`RepackMetadata.Read()` 自动跟随指针）；镜像面板仅在无元数据时回退到项目打包设置。项目资源管理器双击含元数据的文件夹，以文本方式打开其配置（`RepackConfigurationPath` 跟随指针文件解析实际元数据路径），即使 JSON 尚未编辑完整也允许打开修复。
 
 示例：
 
@@ -239,7 +241,7 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 
 EXT4、EROFS、F2FS 解包的统一元数据在 `configuration.fileSystem` / `configuration.superblock` 保存已有解析器支持的原始超级块字段，UUID 为十六进制字符串；Sparse 包装镜像也通过有界逻辑流记录内部超级块。这些字段用于原始信息查看，文件系统重建仍只消费 `packingOptions`，不直接恢复物理布局或分配状态。格式处理器和应用文件系统解包服务共用该输出。
 
-资源管理器默认过滤 `.uotanstudio-repack.json`，通过双击其所在的解包文件夹以文本方式打开；过滤不删除磁盘文件，也不影响重打包读取。目录双击处理接收树控件已处理的事件，普通文件夹继续使用原有展开行为。
+资源管理器默认过滤 `.uotanstudio-repack.json`（含指针文件），通过双击其所在的解包文件夹以文本方式打开（`RepackConfigurationPath` 自动跟随指针到 `.uotan/metadata/<分区名>/` 下的实际元数据 JSON）；过滤不删除磁盘文件，也不影响重打包读取。目录双击处理接收树控件已处理的事件，普通文件夹继续使用原有展开行为。根节点在项目打开时立即加载子目录（`EnsureChildrenLoaded`），确保 FileSystemWatcher 触发的后续刷新能生效。
 
 当以下任何一项发生变更时，**必须在同一次改动中同步更新本文件**：
 
