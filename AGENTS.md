@@ -55,7 +55,14 @@ UotanStudio firmware --help | --version
 - **真实流控**：`NodeExecutionEngine` 识别源端口类型为 `Flow` 的连接为控制流边——`Flow.Branch` 把未选中分支的下游子图标记为 `Skipped`；`Flow.Loop` 按 `Count` 输入迭代执行 Body 子图并逐次写 `Index` 输出（上限 `NodeExecutionEngine.MaxLoopIterations = 10000`）；`Flow.Parallel` 经 `Task.WhenAll` 并发执行各 Flow 输出端口的分支子图（分支内保持拓扑顺序）。
 - **数据流注入**：`FlowInputs` 先注入未连接输入端口的 `InitialValue`，再仅以上游**非空**输出值覆盖（Flow 端口等无数据连接不会清掉初始值）。
 
-`--format` 显式指定格式（按 `IFormatHandler.FormatName` 不区分大小写匹配，如 `CPIO/TAR Archive`、`Android OTA Payload (payload.bin)`、`EXT4`、`EROFS`、`Boot`）；省略时 `unpack` 自动检测，`pack` 目录默认走 EXT4、文件按内容检测。
+`--format` 显式指定格式（按 `IFormatHandler.FormatName` 不区分大小写匹配，如 `CPIO/TAR Archive`、`Android OTA Payload (payload.bin)`、`EXT4`、`EROFS`、`Android Boot / Vendor Boot Image`）；省略时 `unpack` 自动检测，`pack` 目录优先按 `.uotanstudio-repack.json` 中的 `formatName` 分派，仅无元数据的目录默认走 EXT4，文件按内容检测。元数据声明不支持目录重建时明确失败。
+
+### 解包目录原始配置
+
+- 各格式处理器和应用层解包服务在成功提取后写入 `.uotanstudio-repack.json`，使用源生成 JSON、32 MiB 上限和原子替换。`sourceProperties` 为描述性信息，`packingOptions` 和 `configuration` 为实际打包配置；普通文件系统子目录不单独生成镜像配置。
+- Boot 和 DTBO 不再生成独立的 `header`、`header.json` 或 `dtbo.json`：Boot 配置保存在 `configuration.magic/header`，vendor_boot 为 `configuration.magic/vendorHeader/ramdiskTable`，DTBO 为 `configuration.header/entries/imageSize/hasOriginalImage`。DTBO 的 `original.dtbo.img` 是无损重打包所需的二进制模板，不是额外配置文件。
+- Boot v0-v4 和 vendor_boot v3/v4 目录重建共用固件库后端，组件通过 `BootComponentFiles` 有界流式复制，SHA-1 ID 流式计算，输出原子提交。原始 `ramdisk` / `vendor_ramdisk` 是打包输入，解压的 CPIO 副本及拆分 vendor ramdisk 仅用于查看。vendor 产品名和 v4 ramdisk 条目表一并保存在配置内。
+- CLI、节点工作流、镜像面板和 MCP 自动打包均按统一元数据分派；镜像面板仅在无元数据时回退到项目打包设置。项目资源管理器双击含元数据的文件夹，以文本方式打开其配置，即使 JSON 尚未编辑完整也允许打开修复。
 
 示例：
 
@@ -197,7 +204,13 @@ ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目
 - **真实语料测试**（`UotanStudio.Tests/Firmware/`）：真实文件用例不再硬编码开发者本机路径，统一经 `TestInfrastructure/FirmwareCorpus.cs` 定位器（默认语料根 `D:\Firmware`，可用环境变量 `UOTAN_FIRMWARE_CORPUS` 覆盖，按文件名大小写不敏感递归查找）；语料或样本缺失时以 `Assert.Skip` 跳过，不静默假通过。`RealCorpusDeepTests` 在真实生产文件上做结构解析校验（SM7150 分区集的 EXT4 全树遍历/AVB vbmeta/Boot/DTBO、根目录 payload.bin manifest 有界读取、UPDATE.APP、Oppo OZIP 等）；`ApkParseTests`/`ArscParseTests`/`ArscWriterRoundTripTests`/`AXmlRoundTripTests` 从语料 Magisk-v30.6.apk 内读 `AndroidManifest.xml`/`resources.arsc` 条目校验，`ErofsRealImageExtractAll` 对语料 odm.img（校验 EROFS 魔数后）全量解包比对尺寸。
 - **WSL 交叉验证**（`WslCrossValidationTests`）：构建 EXT4/EROFS/F2FS 镜像后经 Alpine WSL2 工具实测——`e2fsck -fn`（基础/htree 2000 项大目录/多块组 240MB/无校验和；断言无 "not valid"/空闲计数错误）、`resize2fs` 在线扩容 128M→256M + 扩容后 e2fsck（验证 resize_inode/保留 GDT 布局）、`dumpe2fs -h`（断言特性集与 mke2fs -t ext4 默认一致、Reserved GDT 非零、无 bigalloc/read-only 误置位）、`debugfs -R 'rdump /'`（内容一致）、`fsck.erofs`（默认 LZ4 compacted 索引 + LZMA big-pcluster CBLKCNT 两用例）、`dump.erofs --ls/--cat`、`fsck.f2fs`（基础/压缩/千项目录多段/16MB 大文件）、`dump.f2fs`；按工具粒度可用性探测 + `Assert.Skip`（WSL 不可用或工具缺失时跳过，不静默 return）。挂载级验证（`WslMountTests`）：EXT4/EROFS（flat + LZ4 压缩两用例）/F2FS 镜像均可被 WSL2 内核 loop 挂载并读回内容。三者打包镜像均通过对应上游原生 fsck（e2fsck / fsck.erofs / fsck.f2fs）。
 
+- **工作区自动保存**：设置页 `AutoSave` 由 `WorkspaceAutoSaveService` 实际消费，每 2 秒检查一次，切换工程及关闭主窗口前补存；关闭开关后停止后续自动保存。`workspace-session.json` 位于应用设置目录，记录上次工程、面板可见性、标准停靠区域比例、文档顺序/打开方式/活动标签，以及无工程时的节点草稿与打包设置；启动时恢复，显式打开的工程或文档优先。所有已打开的具名文本、DTB、Manifest、分区编辑器的修改均纳入保存，包含非当前标签；原始二进制编辑和未命名文本不自动写入。工程保存覆盖活动子工程、节点输入参数/连接和操作历史，不用活动子工程数据覆盖其他子工程。JSON 快照使用源生成序列化、同目录临时文件原子替换，内容未变则不重写；文本保存保留编码并检查外部修改冲突。浮动文档可重新打开到普通文档区，但不恢复任意停靠拓扑和浮窗位置。相关验证为 `WorkspaceAutoSaveTests`。
+
 ## 维护规则
+
+EXT4、EROFS、F2FS 解包的统一元数据在 `configuration.fileSystem` / `configuration.superblock` 保存已有解析器支持的原始超级块字段，UUID 为十六进制字符串；Sparse 包装镜像也通过有界逻辑流记录内部超级块。这些字段用于原始信息查看，文件系统重建仍只消费 `packingOptions`，不直接恢复物理布局或分配状态。格式处理器和应用文件系统解包服务共用该输出。
+
+资源管理器默认过滤 `.uotanstudio-repack.json`，通过双击其所在的解包文件夹以文本方式打开；过滤不删除磁盘文件，也不影响重打包读取。目录双击处理接收树控件已处理的事件，普通文件夹继续使用原有展开行为。
 
 当以下任何一项发生变更时，**必须在同一次改动中同步更新本文件**：
 
