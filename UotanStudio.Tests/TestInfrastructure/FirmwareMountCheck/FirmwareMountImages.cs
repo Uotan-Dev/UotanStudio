@@ -10,11 +10,18 @@ internal static class FirmwareMountImages
 {
     internal static void Create(string outputRoot, IReadOnlyCollection<string> requestedCases)
     {
+        CreateSource(outputRoot);
         var source = Path.Combine(outputRoot, "source");
         var images = Path.Combine(outputRoot, "images");
+        Directory.CreateDirectory(images);
+        BuildImages(outputRoot, source, images, requestedCases);
+    }
+
+    internal static void CreateSource(string outputRoot)
+    {
+        var source = Path.Combine(outputRoot, "source");
         var reference = Path.Combine(outputRoot, "reference");
         Directory.CreateDirectory(source);
-        Directory.CreateDirectory(images);
         Directory.CreateDirectory(reference);
         Directory.CreateDirectory(Path.Combine(source, "nested", "empty"));
         Directory.CreateDirectory(Path.Combine(source, "indexed"));
@@ -58,7 +65,10 @@ internal static class FirmwareMountImages
         WriteLines(Path.Combine(reference, "SHA256SUMS"), hashes);
         WriteLines(Path.Combine(reference, "files.txt"), files.Select(Relative));
         WriteLines(Path.Combine(reference, "directories.txt"), new[] { "." }.Concat(Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories).Select(Relative)).Order(StringComparer.Ordinal));
+    }
 
+    private static void BuildImages(string outputRoot, string source, string images, IReadOnlyCollection<string> requestedCases)
+    {
         var cases = new List<string>();
         void Build(string name, string format, string mountOptions, Action<string> build)
         {
@@ -80,6 +90,6 @@ internal static class FirmwareMountImages
         Build("f2fs-flat", "f2fs", "ro,norecovery", path => F2fsBuilder.Build(source, path));
         foreach (var algorithm in new[] { CompressionAlgorithm.Lz4, CompressionAlgorithm.Zstd, CompressionAlgorithm.Lzo })
             Build("f2fs-" + algorithm.ToString().ToLowerInvariant(), "f2fs", "ro,norecovery", path => F2fsBuilder.Build(source, path, new F2fsOptions { EnableCompression = true, CompressionAlgorithm = algorithm }));
-        WriteLines(Path.Combine(outputRoot, "cases.tsv"), cases);
+        File.WriteAllText(Path.Combine(outputRoot, "cases.tsv"), string.Join('\n', cases) + "\n", new UTF8Encoding(false));
     }
 }

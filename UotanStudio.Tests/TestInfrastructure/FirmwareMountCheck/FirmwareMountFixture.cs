@@ -18,6 +18,7 @@ public sealed class FirmwareMountFixture : IDisposable
     private readonly Lazy<string> _nativeResult;
     private readonly Lazy<string> _root;
     private readonly bool _retain;
+    private bool _failed;
 
     /// <summary>Defers image generation until dependencies are available. <para>依赖检查通过后才生成镜像。</para></summary>
     public FirmwareMountFixture()
@@ -41,9 +42,20 @@ public sealed class FirmwareMountFixture : IDisposable
         Assert.Contains(name, CaseNames);
         var unavailable = QemuUnavailableReason(name);
         if (unavailable is not null) Assert.Skip(unavailable);
-        var result = _qemuResult.Value;
-        Assert.Contains($"RESULT {name} PASS", result.Split('\n').Select(line => line.Trim()));
-        return result;
+        try
+        {
+            var result = _qemuResult.Value;
+            Assert.True(result.Split('\n').Any(line => line.Trim() == $"RESULT {name} PASS"),
+                $"QEMU case {name} failed.\n{result}");
+            return string.Join('\n', result.Split('\n').Where(line => line.StartsWith("Artifacts:", StringComparison.Ordinal)
+                || line.StartsWith("RESULT ", StringComparison.Ordinal) || line.StartsWith("MOUNT_SUMMARY ", StringComparison.Ordinal)
+                || line.Trim() == "IMAGES_UNCHANGED").Distinct());
+        }
+        catch
+        {
+            _failed = true;
+            throw;
+        }
     }
 
     internal string VerifyNativeDeflate()
@@ -51,7 +63,12 @@ public sealed class FirmwareMountFixture : IDisposable
         var probe = _nativeProbe.Value;
         if (probe.ExitCode == 77) Assert.Skip(probe.Output.Trim());
         Assert.True(probe.ExitCode == 0, probe.Output);
-        return _nativeResult.Value;
+        try { return _nativeResult.Value; }
+        catch
+        {
+            _failed = true;
+            throw;
+        }
     }
 
     private string? QemuUnavailableReason(string name)
@@ -112,10 +129,13 @@ public sealed class FirmwareMountFixture : IDisposable
         var result = RunScript("run-qemu.sh", WslTestHelpers.ToWslPath(root), 300000);
         var consolePath = Path.Combine(root, "logs", "qemu-console.log");
         var console = File.Exists(consolePath) ? File.ReadAllText(consolePath) : string.Empty;
-        Assert.True(result.ExitCode == 0, $"QEMU verification failed (exit {result.ExitCode}). Artifacts: {root}\n{result.Output}\n{console}");
+        Assert.True(result.ExitCode is 0 or 1, $"QEMU verification failed (exit {result.ExitCode}). Artifacts: {root}\n{result.Output}\n{console}");
         Assert.Contains("IMAGES_UNCHANGED", result.Output);
+        Assert.Single(console.Split('\n'), line => line.StartsWith("MOUNT_SUMMARY ", StringComparison.Ordinal));
         Assert.Equal(cases.Length, console.Split('\n').Count(line => line.StartsWith("RESULT ", StringComparison.Ordinal)));
-        return $"Artifacts: {root}\n{result.Output}";
+        foreach (var name in cases)
+            Assert.Single(console.Split('\n'), line => line.StartsWith($"RESULT {name} ", StringComparison.Ordinal));
+        return $"Artifacts: {root}\n{result.Output}\n{console}";
     }
 
     private string RunNative()
@@ -146,9 +166,9 @@ public sealed class FirmwareMountFixture : IDisposable
         return path;
     }
 
-    /// <summary>Removes temporary artifacts unless retention was requested. <para>未指定保留目录时清理临时产物。</para></summary>
+    /// <summary>Removes successful temporary runs unless retention was requested. <para>未指定保留目录时清理成功运行的临时产物。</para></summary>
     public void Dispose()
     {
-        if (_root.IsValueCreated && !_retain) Directory.Delete(_root.Value, recursive: true);
+        if (_root.IsValueCreated && !_retain && !_failed) Directory.Delete(_root.Value, recursive: true);
     }
 }
