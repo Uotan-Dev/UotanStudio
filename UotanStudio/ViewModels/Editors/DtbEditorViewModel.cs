@@ -188,6 +188,10 @@ public partial class DtbEditorViewModel : Document
         CompileError = string.Empty;
         IsDirty = false;
 
+        // 解析完成后释放原始字节，SaveAsync 从 DTS 模型重建。
+        // Release raw bytes after parsing; SaveAsync rebuilds from the DTS model.
+        RawBytes = null;
+
         // 计算并缓存设备树统计信息，供属性面板展示。
         // Compute and cache device-tree statistics for the properties panel.
         UpdateTreeStatistics(tree);
@@ -413,5 +417,26 @@ public partial class DtbEditorViewModel : Document
         }
 
         return prop.GetCells()[0].ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// <para>释放文档持有的状态（文档关闭时调用）。</para>
+    /// Releases the state held by this document (called when the document is closed).
+    /// </summary>
+    public void Cleanup()
+    {
+        RawBytes = null;
+        Source = string.Empty;
+        _lineMap = [];
+        Nodes.Clear();
+        SelectedNode = null;
+        CompileError = string.Empty;
+        FilePath = null;
+        NodeCount = 0;
+        RootCompatible = string.Empty;
+        RootAddressCells = string.Empty;
+        RootSizeCells = string.Empty;
+        MemoryReservationCount = 0;
+        IsDirty = false;
     }
 }

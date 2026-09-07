@@ -174,6 +174,10 @@ public partial class DexEditorViewModel : Document
             IsDirty = false;
             MethodCount = result.MethodCount;
             FieldCount = result.FieldCount;
+
+            // 解析完成后释放原始字节，SaveAsync 从 _dex 模型重建。
+            // Release raw bytes after parsing; SaveAsync rebuilds from the _dex model.
+            RawBytes = null;
         }
         finally
         {

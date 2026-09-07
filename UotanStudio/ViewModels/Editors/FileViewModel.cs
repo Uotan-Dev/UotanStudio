@@ -21,6 +21,7 @@ public partial class FileViewModel : Document, IEditable
     private System.Text.Encoding _textEncoding = new System.Text.UTF8Encoding(false);
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private DateTime _loadedWriteTime;
+    private long _fileSize;
 
     /// <summary>
     /// <para>魔数嗅探缓冲区（libmagic 风格兜底，避免每文件分配）。</para>
@@ -71,9 +72,9 @@ public partial class FileViewModel : Document, IEditable
     /// Localized file size display text (status bar).
     /// </summary>
     public string SizeDisplay =>
-        RawBytes is null
+        _fileSize <= 0
             ? string.Empty
-            : string.Format(LanguageService.Instance.GetString("Dock_File_SizeFormat"), RawBytes.Length);
+            : string.Format(LanguageService.Instance.GetString("Dock_File_SizeFormat"), _fileSize);
 
     /// <summary>
     /// <para>文档是否已被修改（与磁盘内容不一致）。</para>
@@ -111,6 +112,13 @@ public partial class FileViewModel : Document, IEditable
     private string? _detectedFormat;
 
     /// <summary>
+    /// <para>编译/解析错误信息；无错误时为空字符串。</para>
+    /// Compile/parse error message; empty when no error.
+    /// </summary>
+    [ObservableProperty]
+    private string _compileError = string.Empty;
+
+    /// <summary>
     /// <para>本地化后的固件格式显示文本（状态栏与分析面板）。</para>
     /// Localized firmware format display text (status bar and analysis panel).
     /// </summary>
@@ -146,20 +154,28 @@ public partial class FileViewModel : Document, IEditable
         _isLoading = true;
         try
         {
-            RawBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
-            IsBinary = ResolveBinary(mode, path, RawBytes);
+            _fileSize = new FileInfo(path).Length;
+
+            // 先读取前 4096 字节用于二进制探测，避免将整个文件读入内存。
+            // Read only the first 4096 bytes for binary detection to avoid loading the entire file.
+            var probe = await ReadProbeBytesAsync(path).ConfigureAwait(true);
+            IsBinary = ResolveBinary(mode, path, probe);
 
             if (IsBinary)
             {
+                RawBytes = await File.ReadAllBytesAsync(path).ConfigureAwait(true);
                 Text = string.Empty;
                 await AnalyzeFirmwareAsync(path).ConfigureAwait(true);
             }
             else
             {
+                // 文本模式：不保留 RawBytes，仅读取文本内容。
+                // Text mode: do not retain RawBytes; only read the text content.
+                RawBytes = null;
                 using var reader = new StreamReader(path, new System.Text.UTF8Encoding(false), detectEncodingFromByteOrderMarks: true);
                 Text = await reader.ReadToEndAsync().ConfigureAwait(true);
                 _textEncoding = reader.CurrentEncoding;
-                DetectedEncoding = DetectEncoding(RawBytes);
+                DetectedEncoding = DetectEncoding(probe);
                 ClearAnalysis();
             }
 
@@ -498,6 +514,51 @@ public partial class FileViewModel : Document, IEditable
         {
             IsDirty = true;
         }
+    }
+
+    /// <summary>
+    /// <para>异步读取文件前 4096 字节，仅用于二进制/文本探测，避免将整个文件加载到内存。</para>
+    /// Asynchronously reads the first 4096 bytes of a file for binary/text probing, avoiding a full-file load.
+    /// </summary>
+    private static async Task<byte[]> ReadProbeBytesAsync(string path)
+    {
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 4096,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        var buffer = new byte[4096];
+        var totalRead = 0;
+        while (totalRead < 4096)
+        {
+            var n = await fs.ReadAsync(buffer.AsMemory(totalRead, 4096 - totalRead)).ConfigureAwait(true);
+            if (n == 0) break;
+            totalRead += n;
+        }
+
+        if (totalRead < 4096)
+        {
+            var trimmed = new byte[totalRead];
+            Buffer.BlockCopy(buffer, 0, trimmed, 0, totalRead);
+            return trimmed;
+        }
+
+        return buffer;
+    }
+
+    /// <summary>
+    /// <para>释放文档持有的状态（文档关闭时调用）。</para>
+    /// Releases the state held by this document (called when the document is closed).
+    /// </summary>
+    public void Cleanup()
+    {
+        RawBytes = null;
+        Text = string.Empty;
+        Analysis.Clear();
+        FilePath = null;
+        Editor = null;
+        IsDirty = false;
+        IsBinary = false;
+        _fileSize = 0;
+        DetectedFormat = string.Empty;
+        DetectedEncoding = string.Empty;
     }
 }
 

@@ -173,6 +173,10 @@ public partial class ManifestEditorViewModel : Document
             Source = doc.ToXml();
             CompileError = string.Empty;
             IsDirty = false;
+
+            // 解析完成后释放原始字节，SaveAsync 从 _doc 模型重建。
+            // Release raw bytes after parsing; SaveAsync rebuilds from the _doc model.
+            RawBytes = null;
         }
         finally
         {

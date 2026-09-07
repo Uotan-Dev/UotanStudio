@@ -309,11 +309,88 @@ public class WorkspaceDockFactory : Factory
         {
             compare.Cleanup();
         }
+        else if (dockable is UotanStudio.ViewModels.Editors.FileViewModel fileVm)
+        {
+            try
+            {
+                fileVm.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
+        else if (dockable is UotanStudio.ViewModels.Editors.HexEditorViewModel hexEditor)
+        {
+            try
+            {
+                hexEditor.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
+        else if (dockable is UotanStudio.ViewModels.Editors.DtbEditorViewModel dtbEditor)
+        {
+            try
+            {
+                dtbEditor.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
         else if (dockable is UotanStudio.ViewModels.Editors.DexEditorViewModel dexEditor)
         {
             try
             {
                 dexEditor.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
+        else if (dockable is UotanStudio.ViewModels.Editors.ManifestEditorViewModel manifestEditor)
+        {
+            try
+            {
+                manifestEditor.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
+        else if (dockable is UotanStudio.ViewModels.Editors.ArscEditorViewModel arscEditor)
+        {
+            try
+            {
+                arscEditor.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
+        else if (dockable is UotanStudio.ViewModels.Editors.FirmwareInfoViewModel firmwareInfo)
+        {
+            try
+            {
+                firmwareInfo.Cleanup();
+            }
+            catch
+            {
+                // 清理失败不影响关闭流程
+            }
+        }
+        else if (dockable is UotanStudio.ViewModels.Editors.PartitionEditorViewModel partitionEditor)
+        {
+            try
+            {
+                partitionEditor.Cleanup();
             }
             catch
             {
