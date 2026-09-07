@@ -209,14 +209,13 @@ public sealed partial class UotanStudioMcpTools
 
     /// <summary>
     /// <para>把解包产物目录打包为固件镜像。支持格式：<c>cpio</c>（CPIO newc 归档）、
-    /// <c>boot</c>（boot 镜像重打包，源目录需含 <c>header.json</c>）、<c>ext4</c>、<c>erofs</c>。
-    /// <paramref name="format"/> 缺省时按输出扩展名推断（.cpio→cpio、.erofs→erofs、.ext4→ext4、
-    /// 含 header.json 的源目录打包为 boot，其余回落到 cpio）。</para>
+    /// <c>boot</c>（boot 镜像重打包，源目录需含 <c>.uotanstudio-repack.json</c>）、<c>ext4</c>、<c>erofs</c>。
+    /// <paramref name="format"/> 缺省时优先使用统一元数据中登记的格式；无元数据时按输出扩展名推断。</para>
     /// Packs an unpacked directory into a firmware image. Supported formats: <c>cpio</c> (CPIO newc
     /// archive), <c>boot</c> (boot image repack; the source directory must contain
-    /// <c>header.json</c>), <c>ext4</c>, <c>erofs</c>. When <paramref name="format"/> is omitted the
-    /// format is inferred from the output extension (.cpio→cpio, .erofs→erofs, .ext4→ext4; a source
-    /// with header.json packs as boot, anything else falls back to cpio).
+    /// <c>.uotanstudio-repack.json</c>), <c>ext4</c>, <c>erofs</c>. When <paramref name="format"/> is omitted the
+    /// registered format is read from unified metadata, falling back to the output extension
+    /// only when metadata is absent.
     /// </summary>
     /// <param name="inputDir">
     /// <para>源目录（解包产物目录）。与 <paramref name="inputPath"/> 二选一，优先使用本参数。</para>
@@ -236,7 +235,7 @@ public sealed partial class UotanStudioMcpTools
     /// </param>
     /// <param name="ct">取消令牌。<para>Cancellation token.</para></param>
     /// <returns>结构化 JSON 字符串（success/tool/format/inputDir/outputPath/sizeBytes/summary/error）。</returns>
-    [McpServerTool(Name = "firmware.pack"), Description("Packs an unpacked directory into a firmware image (cpio, boot, ext4 or erofs) and returns the output path and size as structured JSON.")]
+    [McpServerTool(Name = "firmware.pack"), Description("Packs an unpacked directory using its repack metadata, or an explicit cpio, boot, ext4 or erofs format, and returns the output path and size as structured JSON.")]
     public async Task<string> FirmwarePack(
         string? inputDir,
         string? inputPath,
@@ -278,7 +277,7 @@ public sealed partial class UotanStudioMcpTools
                     () => Ext4Builder.Build(source, outputPath, new Ext4Options()), source, outputPath, "EXT4", ct).ConfigureAwait(false),
                 "erofs" => await PackWithBuilderAsync(
                     () => new ErofsBuilder().Build(source, outputPath, new ErofsOptions()), source, outputPath, "EROFS", ct).ConfigureAwait(false),
-                _ => FirmwareOpResult.Fail($"Unsupported pack format: {resolved}  不支持的打包格式：{resolved}"),
+                _ => await PackRegisteredDirectoryAsync(resolved, source, outputPath, ct).ConfigureAwait(false),
             };
 
             if (!result.Success)
@@ -848,16 +847,31 @@ public sealed partial class UotanStudioMcpTools
             return f is "cpio" or "boot" or "ext4" or "erofs" ? f : null;
         }
 
-        var hasHeaderJson = File.Exists(Path.Combine(sourceDir, "header.json"));
+        var metadata = RepackMetadata.Read(sourceDir);
+        if (metadata is not null)
+        {
+            if (!metadata.CanPackDirectory) throw new InvalidDataException(metadata.PackingNotes);
+            return metadata.FormatName;
+        }
         var ext = Path.GetExtension(outputPath).TrimStart('.').ToLowerInvariant();
         return ext switch
         {
             "cpio" => "cpio",
             "erofs" => "erofs",
             "ext4" => "ext4",
-            "img" => hasHeaderJson ? "boot" : "cpio",
-            _ => hasHeaderJson ? "boot" : "cpio",
+            _ => "cpio",
         };
+    }
+
+    private static async Task<FirmwareOpResult> PackRegisteredDirectoryAsync(
+        string format, string source, string output, CancellationToken cancellationToken)
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        var handler = FormatDetector.RegisteredHandlers.FirstOrDefault(h => h.FormatName == format);
+        if (handler is not IWritableFormatHandler writer)
+            return FirmwareOpResult.Fail($"No directory packer is registered for {format}.");
+        var result = await writer.PackAsync(source, output, cancellationToken).ConfigureAwait(false);
+        return new FirmwareOpResult { Success = result.Success, Summary = result.Summary };
     }
 
     /// <summary>

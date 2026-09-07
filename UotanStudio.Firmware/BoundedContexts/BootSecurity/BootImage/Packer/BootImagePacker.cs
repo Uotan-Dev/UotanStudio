@@ -9,6 +9,15 @@ namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 public class BootImagePacker
 {
     private const string BootMagic = "ANDROID!";
+    internal BootComponentFiles? ComponentFiles { get; init; }
+
+    private long ComponentLength(string name, byte[] data) => ComponentFiles?.Length(name) ?? data.LongLength;
+
+    private void WriteComponent(BinaryWriter writer, string name, byte[] data)
+    {
+        if (ComponentFiles is { } files) files.Copy(name, writer.BaseStream);
+        else writer.Write(data);
+    }
 
     /// <summary>
     /// Creates a packer from an existing boot image parser.
@@ -88,11 +97,11 @@ public class BootImagePacker
         if (pageSize < 2048 || (pageSize & (pageSize - 1)) != 0 || pageSize > 65536)
             throw new ArgumentException("Boot page size must be a power of two from 2048 to 65536.");
         var commandLine = EncodeCommandLine(1534);
-        Header.KernelSize = (uint)Kernel.Length;
-        Header.RamdiskSize = (uint)Ramdisk.Length;
-        Header.SecondSize = (uint)Second.Length;
-        Header.RecoveryDtboSize = Header.HeaderVersion >= BootImageVersion.V1 ? (uint)RecoveryDtbo.Length : 0;
-        Header.DtbSize = Header.HeaderVersion >= BootImageVersion.V2 ? (uint)Dtb.Length : 0;
+        Header.KernelSize = (uint)ComponentLength(nameof(Kernel), Kernel);
+        Header.RamdiskSize = (uint)ComponentLength(nameof(Ramdisk), Ramdisk);
+        Header.SecondSize = (uint)ComponentLength(nameof(Second), Second);
+        Header.RecoveryDtboSize = Header.HeaderVersion >= BootImageVersion.V1 ? (uint)ComponentLength(nameof(RecoveryDtbo), RecoveryDtbo) : 0;
+        Header.DtbSize = Header.HeaderVersion >= BootImageVersion.V2 ? (uint)ComponentLength(nameof(Dtb), Dtb) : 0;
 
         var writer = new BinaryWriter(output);
 
@@ -183,33 +192,33 @@ public class BootImagePacker
 
         WritePadding(writer, pageSize);
 
-        if (Kernel.Length > 0)
+        if (ComponentLength(nameof(Kernel), Kernel) > 0)
         {
-            writer.Write(Kernel);
+            WriteComponent(writer, nameof(Kernel), Kernel);
             WritePadding(writer, pageSize);
         }
 
-        if (Ramdisk.Length > 0)
+        if (ComponentLength(nameof(Ramdisk), Ramdisk) > 0)
         {
-            writer.Write(Ramdisk);
+            WriteComponent(writer, nameof(Ramdisk), Ramdisk);
             WritePadding(writer, pageSize);
         }
 
-        if (Second.Length > 0)
+        if (ComponentLength(nameof(Second), Second) > 0)
         {
-            writer.Write(Second);
+            WriteComponent(writer, nameof(Second), Second);
             WritePadding(writer, pageSize);
         }
 
-        if (Header.HeaderVersion >= BootImageVersion.V1 && RecoveryDtbo.Length > 0)
+        if (Header.HeaderVersion >= BootImageVersion.V1 && ComponentLength(nameof(RecoveryDtbo), RecoveryDtbo) > 0)
         {
-            writer.Write(RecoveryDtbo);
+            WriteComponent(writer, nameof(RecoveryDtbo), RecoveryDtbo);
             WritePadding(writer, pageSize);
         }
 
-        if (Header.HeaderVersion >= BootImageVersion.V2 && Dtb.Length > 0)
+        if (Header.HeaderVersion >= BootImageVersion.V2 && ComponentLength(nameof(Dtb), Dtb) > 0)
         {
-            writer.Write(Dtb);
+            WriteComponent(writer, nameof(Dtb), Dtb);
             WritePadding(writer, pageSize);
         }
     }
@@ -219,12 +228,12 @@ public class BootImagePacker
         var commandLine = EncodeCommandLine(1535);
         var isV4 = Header.HeaderVersion == BootImageVersion.V4;
         uint pageSize = 4096;
-        Header.KernelSize = checked((uint)Kernel.Length);
-        Header.RamdiskSize = checked((uint)Ramdisk.Length);
+        Header.KernelSize = checked((uint)ComponentLength(nameof(Kernel), Kernel));
+        Header.RamdiskSize = checked((uint)ComponentLength(nameof(Ramdisk), Ramdisk));
 
         if (isV4)
         {
-            Header.SignatureSize = checked((uint)Signature.Length);
+            Header.SignatureSize = checked((uint)ComponentLength(nameof(Signature), Signature));
         }
 
 
@@ -260,21 +269,21 @@ public class BootImagePacker
 
         WritePadding(writer, pageSize);
 
-        if (Kernel.Length > 0)
+        if (ComponentLength(nameof(Kernel), Kernel) > 0)
         {
-            writer.Write(Kernel);
+            WriteComponent(writer, nameof(Kernel), Kernel);
             WritePadding(writer, pageSize);
         }
 
-        if (Ramdisk.Length > 0)
+        if (ComponentLength(nameof(Ramdisk), Ramdisk) > 0)
         {
-            writer.Write(Ramdisk);
+            WriteComponent(writer, nameof(Ramdisk), Ramdisk);
             WritePadding(writer, pageSize);
         }
 
-        if (isV4 && Signature.Length > 0)
+        if (isV4 && ComponentLength(nameof(Signature), Signature) > 0)
         {
-            writer.Write(Signature);
+            WriteComponent(writer, nameof(Signature), Signature);
             WritePadding(writer, pageSize);
         }
     }
@@ -349,17 +358,22 @@ public class BootImagePacker
     private byte[] ComputeImageId()
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
-        Append(Kernel);
-        Append(Ramdisk);
-        Append(Second);
-        if (Header.HeaderVersion >= BootImageVersion.V1) Append(RecoveryDtbo);
-        if (Header.HeaderVersion >= BootImageVersion.V2) Append(Dtb);
+        Append(nameof(Kernel), Kernel);
+        Append(nameof(Ramdisk), Ramdisk);
+        Append(nameof(Second), Second);
+        if (Header.HeaderVersion >= BootImageVersion.V1) Append(nameof(RecoveryDtbo), RecoveryDtbo);
+        if (Header.HeaderVersion >= BootImageVersion.V2) Append(nameof(Dtb), Dtb);
         var id = new byte[32];
         hash.GetHashAndReset().CopyTo(id, 0);
         return id;
 
-        void Append(byte[] component)
+        void Append(string name, byte[] component)
         {
+            if (ComponentFiles is { } files)
+            {
+                files.AppendHash(name, hash);
+                return;
+            }
             hash.AppendData(component);
             Span<byte> size = stackalloc byte[4];
             BinaryPrimitives.WriteUInt32LittleEndian(size, checked((uint)component.Length));

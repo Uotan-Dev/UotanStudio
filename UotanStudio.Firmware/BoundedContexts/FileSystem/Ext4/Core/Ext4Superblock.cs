@@ -52,6 +52,8 @@ internal sealed class Ext4Superblock
 
     public byte[] Uuid { get; private init; } = [];
 
+    public string VolumeName { get; private init; } = string.Empty;
+
     public uint[] HashSeed { get; private init; } = [0, 0, 0, 0];
 
     public uint Checksum { get; private init; }
@@ -96,6 +98,7 @@ internal sealed class Ext4Superblock
             FeatureIncompat = BinaryPrimitives.ReadUInt32LittleEndian(span[96..100]),
             FeatureRoCompat = BinaryPrimitives.ReadUInt32LittleEndian(span[100..104]),
             Uuid = span[104..120].ToArray(),
+            VolumeName = System.Text.Encoding.UTF8.GetString(span[120..136]).TrimEnd('\0'),
             DefHashVersion = span[252],
             JournalInum = BinaryPrimitives.ReadUInt32LittleEndian(span[224..228]),
             LastOrphan = BinaryPrimitives.ReadUInt32LittleEndian(span[232..236]),

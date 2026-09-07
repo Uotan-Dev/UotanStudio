@@ -1,6 +1,7 @@
 using System.Text;
 using UotanStudio.Firmware;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 using UotanStudio.Services.Firmware;
 
 namespace UotanStudio.Services.Cli;
@@ -326,6 +327,16 @@ public static class FirmwareCli
 
     private static int RunPack(FirmwareCliCommand cmd)
     {
+        try { return RunPackCore(cmd); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return FirmwareCliExitCodes.Failure;
+        }
+    }
+
+    private static int RunPackCore(FirmwareCliCommand cmd)
+    {
         var input = cmd.InputPath!;
         if (!File.Exists(input) && !Directory.Exists(input))
         {
@@ -341,6 +352,24 @@ public static class FirmwareCli
         }
 
         IReadonlyFormatHandler? handler = null;
+        if (cmd.FormatName is null && Directory.Exists(input))
+        {
+            var repack = RepackMetadata.Read(input);
+            if (repack is not null)
+            {
+                if (!repack.CanPackDirectory)
+                {
+                    Console.Error.WriteLine(repack.PackingNotes);
+                    return FirmwareCliExitCodes.Failure;
+                }
+                handler = ResolveByFormatName(repack.FormatName);
+                if (handler is null)
+                {
+                    Console.Error.WriteLine($"Unknown repack format: {repack.FormatName}");
+                    return FirmwareCliExitCodes.Failure;
+                }
+            }
+        }
         if (cmd.FormatName is not null)
         {
             handler = ResolveByFormatName(cmd.FormatName);
@@ -351,9 +380,6 @@ public static class FirmwareCli
             }
         }
 
-        // 未显式指定 --format 时，按输入类型解析：
-        // 目录 → 默认 EXT4（系统分区常见）；文件 → 按内容检测，回退到原样复制。
-        // When --format is not given: directory defaults to EXT4; file is content-detected.
         handler ??= Directory.Exists(input)
             ? ResolveByFormatName("EXT4")
             : FormatDetector.Detect(input);

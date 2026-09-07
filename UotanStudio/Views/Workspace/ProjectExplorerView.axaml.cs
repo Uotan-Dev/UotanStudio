@@ -30,6 +30,7 @@ public partial class ProjectExplorerView : UserControl
     {
         InitializeComponent();
         ProjectTree.AddHandler(TreeViewItem.ExpandedEvent, OnItemExpanded);
+        ProjectTree.AddHandler(DoubleTappedEvent, OnTreeDoubleTapped, handledEventsToo: true);
         ProjectTree.AddHandler(PointerPressedEvent, OnTreePointerPressed, RoutingStrategies.Tunnel);
     }
 
@@ -45,6 +46,14 @@ public partial class ProjectExplorerView : UserControl
     {
         if (e.Source is not Control { DataContext: ExplorerNode node } || node.IsPlaceholder)
         {
+            return;
+        }
+
+        if (node.RepackConfigurationPath is { } configurationPath)
+        {
+            WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(
+                configurationPath, EditorOpenMode.Text));
+            e.Handled = true;
             return;
         }
 

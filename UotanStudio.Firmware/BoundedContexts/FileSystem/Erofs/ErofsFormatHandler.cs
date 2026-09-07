@@ -90,6 +90,10 @@ public sealed class ErofsFormatHandler : IFormatHandler
     /// <para>将 erofs 镜像解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+
+    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
         {
@@ -131,7 +135,12 @@ public sealed class ErofsFormatHandler : IFormatHandler
                 }
 
                 var builder = new ErofsBuilder();
-                builder.Build(inputPath, outputPath, new ErofsOptions());
+                var options = RepackMetadata.OptionsFor(inputPath, FormatName);
+                builder.Build(inputPath, outputPath, new ErofsOptions
+                {
+                    BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
+                    VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "erofs"
+                });
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");
             }

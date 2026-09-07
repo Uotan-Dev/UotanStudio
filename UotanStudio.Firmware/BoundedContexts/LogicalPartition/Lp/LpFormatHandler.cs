@@ -53,7 +53,11 @@ public sealed class LpFormatHandler : IFormatHandler
     /// Extracts complete primary-device partitions and zero extents, committing each file atomically.
     /// <para>提取完整的主设备分区及零 extent，逐文件原子提交。</para>
     /// </summary>
-    public async Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+    public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+
+    private async Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
         {

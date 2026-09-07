@@ -16,6 +16,9 @@ public class VendorBootHeader
 
     public string VendorCmdline { get; set; } = string.Empty;
 
+    /// <summary>Gets or sets the vendor boot product name.<para>获取或设置 Vendor Boot 产品名称。</para></summary>
+    public string VendorName { get; set; } = string.Empty;
+
     public uint TagsLoadAddress { get; set; }
 
     public uint VendorHeaderSize { get; set; }

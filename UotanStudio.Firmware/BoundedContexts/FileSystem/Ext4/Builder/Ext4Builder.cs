@@ -590,6 +590,7 @@ public sealed partial class Ext4Builder
     private static void Populate(Node node, IReadOnlyCollection<string> excludedFiles)
     {
         var children = Directory.EnumerateFileSystemEntries(node.FullPath)
+            .Where(path => !SharedKernel.RepackMetadata.IsMetadataFile(path))
             .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal);
         foreach (var childPath in children)
         {

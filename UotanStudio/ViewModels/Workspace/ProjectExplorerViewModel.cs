@@ -276,6 +276,17 @@ public sealed partial class ExplorerNode : ObservableObject
     /// </summary>
     public bool IsDirectory { get; }
 
+    /// <summary>Gets the existing unpack configuration without parsing editable text.<para>获取已有的解包配置路径，不解析可编辑的文本。</para></summary>
+    public string? RepackConfigurationPath
+    {
+        get
+        {
+            if (!IsDirectory || IsPlaceholder) return null;
+            var path = System.IO.Path.Combine(Path, UotanStudio.Firmware.SharedKernel.RepackMetadata.FileName);
+            return File.Exists(path) ? path : null;
+        }
+    }
+
     /// <summary>
     /// <para>获取是否为占位子节点（用于让尚未展开的目录显示展开箭头）。</para>
     /// Gets whether this node is a placeholder child (keeps the expander arrow visible for not-yet-expanded directories).
@@ -346,6 +357,12 @@ public sealed partial class ExplorerNode : ObservableObject
 
             foreach (var file in Directory.EnumerateFiles(Path))
             {
+                if (string.Equals(System.IO.Path.GetFileName(file),
+                    UotanStudio.Firmware.SharedKernel.RepackMetadata.FileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 // 隐藏项目配置文件（.uotan/.uotanfw/.uotannode），仿 VS 解决方案资源管理器行为。
                 // Hide project config files (.uotan/.uotanfw/.uotannode), mimicking VS Solution Explorer behavior.
                 var ext = System.IO.Path.GetExtension(file);

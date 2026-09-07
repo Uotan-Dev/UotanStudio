@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Services.Firmware;
@@ -13,11 +14,8 @@ namespace UotanStudio.Services.Firmware;
 internal static class PackingService
 {
     /// <summary>
-    /// <para>按当前打包设置将目录构建为镜像文件。
-    /// 当源目录包含 header.json（boot 解包产物）时自动走 boot 重打包路径。</para>
-    /// Builds a directory into an image file according to the current packing settings.
-    /// Automatically uses the boot repack path when the directory contains header.json
-    /// (boot unpack artifacts).
+    /// Builds an image using directory metadata, or project settings when metadata is absent.
+    /// <para>按目录元数据构建镜像；无元数据时使用项目打包设置。</para>
     /// </summary>
     public static (bool Success, string Summary) BuildImage(
         string sourceDirectory,
@@ -28,11 +26,16 @@ internal static class PackingService
 
         try
         {
-            // boot.img 原组件打包：检测 header.json 存在时走 BootImagePacker 路径。
-            // Boot image repack: when header.json exists, use BootImagePacker path.
-            if (File.Exists(Path.Combine(sourceDirectory, "header.json")))
+            var metadata = RepackMetadata.Read(sourceDirectory);
+            if (metadata is not null)
             {
-                return PackBootImage(sourceDirectory, outputPath, sw);
+                if (!metadata.CanPackDirectory) return (false, metadata.PackingNotes);
+                FirmwareFormatRegistry.RegisterAll();
+                var handler = FormatDetector.RegisteredHandlers.FirstOrDefault(h => h.FormatName == metadata.FormatName);
+                if (handler is not IWritableFormatHandler writer)
+                    return (false, $"No directory packer is registered for {metadata.FormatName}.");
+                var result = writer.PackAsync(sourceDirectory, outputPath).GetAwaiter().GetResult();
+                return (result.Success, result.Summary);
             }
 
             settings ??= ProjectSettingViewModel.Instance;
@@ -52,39 +55,6 @@ internal static class PackingService
         {
             return (false, $"Build failed: {ex.Message}  构建失败：{ex.Message}");
         }
-    }
-
-    /// <summary>
-    /// <para>检测指定目录是否为 boot 解包产物（含 header.json）。</para>
-    /// Detects whether the given directory is a boot unpack artifact (contains header.json).
-    /// </summary>
-    public static bool IsBootUnpackDirectory(string directory)
-    {
-        return File.Exists(Path.Combine(directory, "header.json"));
-    }
-
-    private static (bool Success, string Summary) PackBootImage(
-        string sourceDirectory,
-        string outputPath,
-        System.Diagnostics.Stopwatch sw)
-    {
-        LogService.Instance.Write(LogLevel.Info, "Packing",
-            $"Packing boot image from {sourceDirectory}  正在从组件目录打包 boot 镜像");
-
-        var firmware = FirmwareService.Instance;
-        var result = firmware.PackBootAsync(sourceDirectory, outputPath).GetAwaiter().GetResult();
-        sw.Stop();
-
-        if (result.Success)
-        {
-            var size = new FileInfo(outputPath).Length;
-            var summary = $"{result.Summary} ({size:N0} bytes, {sw.Elapsed.TotalSeconds:F1}s)";
-            LogService.Instance.Write(LogLevel.Info, "Packing", summary);
-            return (true, summary);
-        }
-
-        LogService.Instance.Write(LogLevel.Error, "Packing", result.Summary);
-        return (false, result.Summary);
     }
 
     private static (bool Success, string Summary) BuildExt4(

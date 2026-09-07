@@ -49,6 +49,7 @@ public sealed class NtpiWriter(ICryptoProvider cryptoProvider, ILzma2Compressor 
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
         var files = Directory.GetFiles(inputDir, "*", SearchOption.AllDirectories)
+            .Where(path => !SharedKernel.RepackMetadata.IsMetadataFile(path))
             .Where(path => !Path.GetFullPath(path).Equals(outputFullPath, pathComparison));
         var entries = new List<FileEntry>();
         var sourcePaths = new Dictionary<string, string>(StringComparer.Ordinal);

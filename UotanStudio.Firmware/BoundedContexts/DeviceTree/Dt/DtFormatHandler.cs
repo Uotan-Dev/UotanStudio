@@ -50,13 +50,13 @@ public sealed class DtFormatHandler : IFormatHandler
     {
         try
         {
-            var bytes = File.ReadAllBytes(filePath);
-            var isDtbo = bytes.Length >= 4
-                && (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) == FdtConstants.DtboMagic;
+            cancellationToken.ThrowIfCancellationRequested();
+            using var input = File.OpenRead(filePath);
+            var isDtbo = IsDtbo(input);
 
             if (isDtbo)
             {
-                var (header, _, _) = DtboFormat.Read(bytes);
+                var (header, _) = DtboFormat.ReadTable(input);
                 var summary = $"DTBO image: {header.EntryCount} entries, page size {header.PageSize}";
                 return Task.FromResult(FirmwareOpResult.Ok(summary, metadata: new Dictionary<string, string>
                 {
@@ -66,7 +66,7 @@ public sealed class DtFormatHandler : IFormatHandler
                 }));
             }
 
-            var tree = DtbFormat.Read(bytes);
+            var tree = DtbFormat.Read(ReadDtb(input));
             var nodeCount = CountNodes(tree.Root);
             var propCount = CountProperties(tree.Root);
             var dtbSummary = $"Device tree blob (FDT v{tree.Version}): {nodeCount} nodes, {propCount} properties, " +
@@ -80,7 +80,7 @@ public sealed class DtFormatHandler : IFormatHandler
                 ["BootCpuId"] = tree.BootCpuId.ToString()
             }));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
         }
@@ -91,37 +91,33 @@ public sealed class DtFormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+
+    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            var bytes = File.ReadAllBytes(filePath);
-            Directory.CreateDirectory(outputDirectory);
-
-            var isDtbo = bytes.Length >= 4
-                && (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) == FdtConstants.DtboMagic;
+            cancellationToken.ThrowIfCancellationRequested();
+            using var input = File.OpenRead(filePath);
+            var isDtbo = IsDtbo(input);
 
             if (isDtbo)
             {
-                var (header, _, dtbs) = DtboFormat.Read(bytes);
-                var written = new List<string>();
-                for (var i = 0; i < dtbs.Count; i++)
-                {
-                    var outPath = Path.Combine(outputDirectory, $"overlay_{i:D2}.dtb");
-                    File.WriteAllBytes(outPath, dtbs[i]);
-                    written.Add(outPath);
-                }
-                return Task.FromResult(FirmwareOpResult.Ok($"Extracted {dtbs.Count} overlays to {outputDirectory}", entries: written));
+                var written = DtboFormat.Unpack(filePath, outputDirectory, options, cancellationToken);
+                return Task.FromResult(FirmwareOpResult.Ok($"Extracted DTBO overlays and repack configuration to {outputDirectory}", entries: written));
             }
 
 
-            var tree = DtbFormat.Read(bytes);
+            Directory.CreateDirectory(outputDirectory);
+            var tree = DtbFormat.Read(ReadDtb(input));
             var dtsPath = Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(filePath) + ".dts");
             File.WriteAllText(dtsPath, SerializeDts(tree));
             var summaryPath = Path.Combine(outputDirectory, Path.GetFileNameWithoutExtension(filePath) + ".fdt.txt");
             File.WriteAllText(summaryPath, Describe(tree));
             return Task.FromResult(FirmwareOpResult.Ok($"Extracted DTS to {outputDirectory}", entries: [dtsPath, summaryPath]));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
         }
@@ -135,29 +131,63 @@ public sealed class DtFormatHandler : IFormatHandler
     {
         try
         {
-
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Directory.Exists(inputPath))
+            {
+                DtboFormat.PackDirectory(inputPath, outputPath, cancellationToken);
+                return Task.FromResult(FirmwareOpResult.Ok($"Repacked DTBO to {outputPath}"));
+            }
             if (!File.Exists(inputPath))
             {
                 return Task.FromResult(FirmwareOpResult.Fail("Input file does not exist."));
             }
 
-            var bytes = File.ReadAllBytes(inputPath);
+            byte[] bytes = [];
+            bool isDtbo;
+            using (var input = File.OpenRead(inputPath))
+            {
+                isDtbo = IsDtbo(input);
+                if (!isDtbo) bytes = ReadDtb(input);
+            }
+            if (isDtbo)
+            {
+                DtboFormat.Repack(inputPath, outputPath, cancellationToken);
+                return Task.FromResult(FirmwareOpResult.Ok($"Repacked DTBO to {outputPath}"));
+            }
             var isDtb = bytes.Length >= 4
                 && (uint)((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) == FdtConstants.FdtMagic;
             if (isDtb)
             {
                 var tree = DtbFormat.Read(bytes);
                 var outBytes = DtbFormat.Write(tree);
-                File.WriteAllBytes(outputPath, outBytes);
+                DtboFormat.AtomicWrite(outputPath, output => output.Write(outBytes), cancellationToken);
                 return Task.FromResult(FirmwareOpResult.Ok($"Repacked DTB to {outputPath}"));
             }
 
-            return Task.FromResult(FirmwareOpResult.Fail("Input must be a DTB file for packing."));
+            return Task.FromResult(FirmwareOpResult.Fail("Input must be a DTB, DTBO, or a directory containing DTBO repack metadata."));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return Task.FromResult(FirmwareOpResult.Fail(ex.Message));
         }
+    }
+
+    private static bool IsDtbo(Stream input)
+    {
+        Span<byte> magic = stackalloc byte[4];
+        input.Position = 0;
+        return input.Read(magic) == 4
+            && System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(magic) == FdtConstants.DtboMagic;
+    }
+
+    private static byte[] ReadDtb(Stream input)
+    {
+        if (input.Length > DtboFormat.DefaultMaximumDecompressedBytes)
+            throw new InvalidDataException("DTB exceeds the 256 MiB metadata limit.");
+        input.Position = 0;
+        var bytes = new byte[checked((int)input.Length)];
+        input.ReadExactly(bytes);
+        return bytes;
     }
 
     private static int CountNodes(DeviceTreeNode node) => 1 + node.Children.Sum(CountNodes);

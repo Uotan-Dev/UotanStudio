@@ -119,6 +119,10 @@ public sealed class DatFormatHandler : IFormatHandler
     /// <para>不支持：DAT 镜像对解包有意不纳入该只读处理器。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+
+    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
         => Task.FromResult(FirmwareOpResult.Fail(
             "Unpacking a DAT image pair is not supported by this read-only handler.  该只读处理器不支持解包 DAT 镜像对。"));
 

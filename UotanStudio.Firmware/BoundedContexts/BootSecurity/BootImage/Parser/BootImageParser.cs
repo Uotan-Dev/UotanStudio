@@ -24,6 +24,52 @@ public class BootImageParser : IDisposable
 
     public byte[] Signature { get; private set; } = [];
 
+    internal static BootImageHeader ReadHeaderFile(string path)
+    {
+        using var input = File.OpenRead(path);
+        var prefix = new byte[44];
+        input.ReadExactly(prefix);
+        if (!prefix.AsSpan(0, 8).SequenceEqual("ANDROID!"u8))
+            throw new InvalidDataException("Invalid boot image magic.");
+        var version = ReadUInt32LE(prefix, 40);
+        var size = version switch
+        {
+            0 => 1632, 1 => 1648, 2 => 1660, 3 => 1580, 4 => 1584,
+            _ => throw new InvalidDataException("Unsupported boot image version.")
+        };
+        var bytes = new byte[size];
+        input.Position = 0;
+        input.ReadExactly(bytes);
+        using var parser = new BootImageParser();
+        if (version <= 2)
+        {
+            parser.ParseV0V2(bytes, version);
+            if (version >= 1) parser.Header.HeaderSize = ReadUInt32LE(bytes, 1644);
+        }
+        else if (version == 3) parser.ParseV3(bytes);
+        else parser.ParseV4(bytes);
+        var header = parser.Header;
+        if (header.PageSize is < 2048 or > 65536 || (header.PageSize & (header.PageSize - 1)) != 0
+            || header.HeaderSize < size || header.HeaderSize > header.PageSize)
+            throw new InvalidDataException("Invalid boot header or page size.");
+        long Align(long value) => checked((value + header.PageSize - 1) / header.PageSize * header.PageSize);
+        var kernelOffset = Align(header.HeaderSize);
+        var ramdiskOffset = Align(kernelOffset + header.KernelSize);
+        header.KernelCompression = DetectAt(kernelOffset, header.KernelSize);
+        header.RamdiskCompression = DetectAt(ramdiskOffset, header.RamdiskSize);
+        return header;
+
+        CompressionType DetectAt(long offset, uint length)
+        {
+            if (length == 0) return CompressionType.None;
+            SharedKernel.FileExtraction.ValidateRange(offset, length, input.Length, "Boot component");
+            input.Position = offset;
+            var signature = new byte[(int)Math.Min(16u, length)];
+            input.ReadExactly(signature);
+            return BootCompressor.Detect(signature);
+        }
+    }
+
     /// <summary>
     /// Parses a boot image from a file.
     /// <para>从文件解析 Boot 镜像。</para>

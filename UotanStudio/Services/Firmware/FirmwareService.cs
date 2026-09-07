@@ -67,6 +67,28 @@ public sealed class FirmwareService
 
     private FirmwareService() { }
 
+    private static async Task<FirmwareOpResult> CompleteUnpackAsync(string sourcePath, string outputDirectory,
+        Func<Task<FirmwareOpResult>> unpack, CancellationToken cancellationToken, IReadonlyFormatHandler? expectedHandler = null,
+        bool overwrite = true)
+    {
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var metadataPath = Path.Combine(outputDirectory, RepackMetadata.FileName);
+            if (File.Exists(metadataPath) && (!overwrite || !RepackMetadata.IsMetadataFile(metadataPath)))
+                throw new IOException($"Repack metadata output already exists: {metadataPath}");
+            var result = await unpack().ConfigureAwait(false);
+            if (!result.Success) return result;
+            FirmwareFormatRegistry.RegisterAll();
+            var handler = expectedHandler ?? FormatDetector.Detect(sourcePath)
+                ?? throw new InvalidDataException("Cannot identify the source format for repack metadata.");
+            await RepackMetadata.WriteAsync(handler, sourcePath, outputDirectory, cancellationToken).ConfigureAwait(false);
+            return result;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { return FirmwareOpResult.Fail(ex.Message); }
+    }
+
     /// <summary>
     /// Lists all entry names in a CPIO/TAR archive without unpacking to disk.
     /// <para>列举 CPIO/TAR 归档的全部条目名称（不解包到磁盘）。</para>
@@ -97,7 +119,10 @@ public sealed class FirmwareService
     /// <param name="outputDirectory">The output directory.</param>
     /// <param name="overwrite">Whether to overwrite existing files.</param>
     /// <returns>Operation result.</returns>
-    public async Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory, bool overwrite = true)
+    public Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory, bool overwrite = true)
+        => CompleteUnpackAsync(archivePath, outputDirectory, () => UnpackCpioCoreAsync(archivePath, outputDirectory, overwrite), CancellationToken.None, new CpioFormatHandler(), overwrite);
+
+    private async Task<FirmwareOpResult> UnpackCpioCoreAsync(string archivePath, string outputDirectory, bool overwrite = true)
     {
         try
         {
@@ -133,6 +158,7 @@ public sealed class FirmwareService
             var entries = new List<ArchiveEntry>();
             foreach (var file in Directory.EnumerateFiles(inputDirectory, "*", SearchOption.AllDirectories))
             {
+                if (RepackMetadata.IsMetadataFile(file)) continue;
                 var rel = Path.GetRelativePath(inputDirectory, file);
                 // 惰性打开文件流，避免把整个目录的所有文件一次性读入内存。
                 // Open each file lazily so the whole directory is never materialized in memory.
@@ -168,7 +194,10 @@ public sealed class FirmwareService
     /// <param name="outputDirectory">The output directory.</param>
     /// <param name="partitionName">Target partition name; null or empty means all partitions.</param>
     /// <returns>Operation result.</returns>
-    public async Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory, string? partitionName = null)
+    public Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory, string? partitionName = null)
+        => CompleteUnpackAsync(payloadPath, outputDirectory, () => ExtractPayloadCoreAsync(payloadPath, outputDirectory, partitionName), CancellationToken.None, new PayloadFormatHandler());
+
+    private async Task<FirmwareOpResult> ExtractPayloadCoreAsync(string payloadPath, string outputDirectory, string? partitionName = null)
     {
         try
         {
@@ -417,18 +446,21 @@ public sealed class FirmwareService
     /// <summary>
     /// Unpacks a boot or vendor_boot image into a component directory: <c>kernel</c>, <c>ramdisk</c>
     /// (raw) and <c>ramdisk.cpio</c> (decompressed per <see cref="BootCompressor"/> detection),
-    /// <c>second</c>, <c>dtb</c>, <c>dtbo</c>, <c>signature</c>, plus a <c>header.json</c> that
-    /// <see cref="PackBootAsync"/> reads back for byte-identical repacking.
+    /// <c>second</c>, <c>dtb</c>, <c>dtbo</c>, <c>signature</c>, plus a <c>.uotanstudio-repack.json</c> that
+    /// <see cref="PackBootAsync"/> reads back to restore the original header configuration.
     /// <para>将 boot 或 vendor_boot 镜像解包到组件目录：<c>kernel</c>、<c>ramdisk</c>（原始）与
     /// <c>ramdisk.cpio</c>（按 <see cref="BootCompressor"/> 检测结果解压）、<c>second</c>、
     /// <c>dtb</c>、<c>dtbo</c>、<c>signature</c>，以及可供 <see cref="PackBootAsync"/> 读回的
-    /// <c>header.json</c>（用于按原版本逐字节重打包）。</para>
+    /// <c>.uotanstudio-repack.json</c>（用于恢复原始头部配置并重打包）。</para>
     /// </summary>
     /// <param name="bootPath">The boot / vendor_boot image file path. <para>boot / vendor_boot 镜像文件路径。</para></param>
     /// <param name="outputDirectory">The output directory. <para>输出目录。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
+    public Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
+        => CompleteUnpackAsync(bootPath, outputDirectory, () => UnpackBootCoreAsync(bootPath, outputDirectory, cancellationToken), cancellationToken, new BootImageFormatHandler());
+
+    private async Task<FirmwareOpResult> UnpackBootCoreAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -451,10 +483,6 @@ public sealed class FirmwareService
                         WriteComponent(outputDirectory, "dtb", parser.Dtb);
                         WriteComponent(outputDirectory, "dtbo", parser.RecoveryDtbo);
                         WriteComponent(outputDirectory, "signature", parser.Signature);
-                        await File.WriteAllTextAsync(
-                            Path.Combine(outputDirectory, "header.json"),
-                            BuildBootHeaderJson(parser.Header).ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }),
-                            cancellationToken);
                     }
 
                     return new FirmwareOpResult { Success = true, Summary = $"Unpacked boot image to {outputDirectory}  已解包 boot 镜像。" };
@@ -467,10 +495,6 @@ public sealed class FirmwareService
                         WriteComponent(outputDirectory, "vendor_ramdisk.cpio", DecompressRamdisk(parser.VendorRamdisk, parser.Header.VendorRamdiskCompression));
                         WriteComponent(outputDirectory, "dtb", parser.Dtb);
                         WriteComponent(outputDirectory, "bootconfig", parser.Bootconfig);
-                        await File.WriteAllTextAsync(
-                            Path.Combine(outputDirectory, "header.json"),
-                            BuildVendorBootHeaderJson(parser).ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }),
-                            cancellationToken);
                     }
 
                     return new FirmwareOpResult { Success = true, Summary = $"Unpacked vendor_boot image to {outputDirectory}  已解包 vendor_boot 镜像。" };
@@ -488,10 +512,10 @@ public sealed class FirmwareService
     /// <summary>
     /// Packs a component directory produced by <see cref="UnpackBootAsync"/> back into a boot image
     /// with the original header version, using the <c>kernel</c>, <c>ramdisk</c>, <c>second</c>,
-    /// <c>dtb</c> and <c>signature</c> files and the <c>header.json</c> metadata.
+    /// <c>dtb</c> and <c>signature</c> files and the <c>.uotanstudio-repack.json</c> metadata.
     /// <para>将 <see cref="UnpackBootAsync"/> 产出的组件目录按原头部版本重打包为 boot 镜像，
     /// 使用 <c>kernel</c>、<c>ramdisk</c>、<c>second</c>、<c>dtb</c>、<c>signature</c> 文件与
-    /// <c>header.json</c> 元数据。</para>
+    /// <c>.uotanstudio-repack.json</c> 元数据。</para>
     /// </summary>
     /// <param name="inputDirectory">The directory produced by <see cref="UnpackBootAsync"/>. <para>由 <see cref="UnpackBootAsync"/> 产出的目录。</para></param>
     /// <param name="outputPath">The output boot image path. <para>输出 boot 镜像路径。</para></param>
@@ -499,56 +523,8 @@ public sealed class FirmwareService
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public async Task<FirmwareOpResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var headerPath = Path.Combine(inputDirectory, "header.json");
-            if (!File.Exists(headerPath))
-            {
-                return FirmwareOpResult.Fail("header.json not found — unpack a boot image first. 未找到 header.json——请先解包 boot 镜像。");
-            }
-
-            var jsonText = await File.ReadAllTextAsync(headerPath, cancellationToken);
-            var json = JsonNode.Parse(jsonText) as JsonObject;
-            if (json == null)
-            {
-                return FirmwareOpResult.Fail("Invalid header.json. header.json 格式无效。");
-            }
-
-            if (json["magic"]?.GetValue<string>() == "VNDRBOOT")
-            {
-                return FirmwareOpResult.Fail("vendor_boot repacking is not supported yet; only the vendor_boot unpack path is available. 暂不支持 vendor_boot 重打包，仅提供 vendor_boot 解包。");
-            }
-
-            var header = ReadBootHeaderJson(json);
-            if (header == null || header.HeaderVersion == BootImageVersion.Unknown)
-            {
-                return FirmwareOpResult.Fail("Failed to read boot header from header.json. 无法从 header.json 读取 boot 头部。");
-            }
-
-            var ramdiskPath = Path.Combine(inputDirectory, "ramdisk");
-            if (!File.Exists(ramdiskPath))
-            {
-                return FirmwareOpResult.Fail("ramdisk component missing — repack needs the raw (possibly compressed) ramdisk from unpack for a byte-identical image. 缺少 ramdisk 组件——为逐字节一致重打包，需要解包产出的原始（可能已压缩）ramdisk。");
-            }
-
-            var packer = new BootImagePacker
-            {
-                Header = header,
-                Kernel = await ReadComponentAsync(inputDirectory, "kernel", cancellationToken),
-                Ramdisk = await ReadComponentAsync(inputDirectory, "ramdisk", cancellationToken),
-                Second = await ReadComponentAsync(inputDirectory, "second", cancellationToken),
-                Dtb = await ReadComponentAsync(inputDirectory, "dtb", cancellationToken),
-                RecoveryDtbo = await ReadComponentAsync(inputDirectory, "dtbo", cancellationToken),
-                Signature = await ReadComponentAsync(inputDirectory, "signature", cancellationToken)
-            };
-
-            packer.PackToFile(outputPath);
-            return new FirmwareOpResult { Success = true, Summary = $"Packed boot image (header v{(int)header.HeaderVersion}) to {outputPath}  已按头版本 v{(int)header.HeaderVersion} 重打包 boot 镜像。" };
-        }
-        catch (Exception ex)
-        {
-            return FirmwareOpResult.Fail(ex.Message);
-        }
+        var result = await new BootImageFormatHandler().PackAsync(inputDirectory, outputPath, cancellationToken).ConfigureAwait(false);
+        return new FirmwareOpResult { Success = result.Success, Summary = result.Summary };
     }
 
     private static byte[] DecompressRamdisk(byte[] raw, UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.CompressionType compression)
@@ -584,133 +560,6 @@ public sealed class FirmwareService
 
         File.WriteAllBytes(Path.Combine(directory, name), data);
     }
-
-    private static async Task<byte[]> ReadComponentAsync(string directory, string name, CancellationToken cancellationToken)
-    {
-        var path = Path.Combine(directory, name);
-        return File.Exists(path) ? await File.ReadAllBytesAsync(path, cancellationToken) : [];
-    }
-
-    private static JsonObject BuildBootHeaderJson(BootImageHeader header)
-    {
-        var ids = new JsonArray();
-        foreach (var id in header.Ids ?? [])
-        {
-            // 显式转型到 JsonNode，强制选择非泛型 Add(JsonNode?) 重载（避免 AOT 裁剪告警）。
-            // Explicit cast to JsonNode forces the non-generic Add(JsonNode?) overload (AOT-safe).
-            ids.Add((JsonNode)JsonValue.Create(id));
-        }
-
-        return new JsonObject
-        {
-            ["magic"] = "ANDROID!",
-            ["header_version"] = (int)header.HeaderVersion,
-            ["header_size"] = header.HeaderSize,
-            ["kernel_size"] = header.KernelSize,
-            ["kernel_addr"] = header.KernelAddr,
-            ["ramdisk_size"] = header.RamdiskSize,
-            ["ramdisk_addr"] = header.RamdiskAddr,
-            ["second_size"] = header.SecondSize,
-            ["second_addr"] = header.SecondAddr,
-            ["tags_addr"] = header.TagsAddr,
-            ["page_size"] = header.PageSize,
-            ["os_version"] = header.OsVersion,
-            ["image_name"] = header.ImageName,
-            ["command_line"] = header.CommandLine,
-            ["product_name"] = header.ProductName,
-            ["architecture"] = header.Architecture,
-            ["ids"] = ids,
-            ["recovery_dtbo_size"] = header.RecoveryDtboSize,
-            ["recovery_dtbo_offset"] = header.RecoveryDtboOffset,
-            ["dtb_size"] = header.DtbSize,
-            ["kernel_load_addr"] = header.KernelLoadAddr,
-            ["signature_size"] = header.SignatureSize,
-            ["kernel_compression"] = header.KernelCompression.ToString(),
-            ["ramdisk_compression"] = header.RamdiskCompression.ToString()
-        };
-    }
-
-    private static BootImageHeader? ReadBootHeaderJson(JsonObject json)
-    {
-        try
-        {
-            var versionValue = GetInt(json, "header_version") ?? -1;
-            var header = new BootImageHeader
-            {
-                HeaderVersion = versionValue is >= 0 and <= 4
-                    ? (BootImageVersion)versionValue
-                    : BootImageVersion.Unknown,
-                HeaderSize = GetUInt(json, "header_size") ?? 0,
-                KernelSize = GetUInt(json, "kernel_size") ?? 0,
-                KernelAddr = GetULong(json, "kernel_addr") ?? 0,
-                RamdiskSize = GetUInt(json, "ramdisk_size") ?? 0,
-                RamdiskAddr = GetULong(json, "ramdisk_addr") ?? 0,
-                SecondSize = GetUInt(json, "second_size") ?? 0,
-                SecondAddr = GetULong(json, "second_addr") ?? 0,
-                TagsAddr = GetULong(json, "tags_addr") ?? 0,
-                PageSize = GetUInt(json, "page_size") ?? 0,
-                OsVersion = GetUInt(json, "os_version") ?? 0,
-                ImageName = json["image_name"]?.GetValue<string>() ?? string.Empty,
-                CommandLine = json["command_line"]?.GetValue<string>() ?? string.Empty,
-                ProductName = json["product_name"]?.GetValue<string>() ?? string.Empty,
-                Architecture = GetUInt(json, "architecture") ?? 0,
-                RecoveryDtboSize = GetUInt(json, "recovery_dtbo_size") ?? 0,
-                RecoveryDtboOffset = GetULong(json, "recovery_dtbo_offset") ?? 0,
-                DtbSize = GetUInt(json, "dtb_size") ?? 0,
-                KernelLoadAddr = GetULong(json, "kernel_load_addr") ?? 0,
-                SignatureSize = GetUInt(json, "signature_size") ?? 0
-            };
-
-            if (json["ids"] is JsonArray idsArray)
-            {
-                var ids = new uint[8];
-                var i = 0;
-                foreach (var node in idsArray)
-                {
-                    if (i >= 8)
-                    {
-                        break;
-                    }
-
-                    ids[i++] = node?.GetValue<uint>() ?? 0;
-                }
-
-                header.Ids = ids;
-            }
-
-            return header;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static JsonObject BuildVendorBootHeaderJson(VendorBootParser parser)
-    {
-        var header = parser.Header;
-        return new JsonObject
-        {
-            ["magic"] = "VNDRBOOT",
-            ["header_version"] = header.HeaderVersion,
-            ["page_size"] = header.PageSize,
-            ["kernel_load_address"] = header.KernelLoadAddress,
-            ["ramdisk_load_address"] = header.RamdiskLoadAddress,
-            ["vendor_ramdisk_size"] = header.VendorRamdiskSize,
-            ["vendor_cmdline"] = header.VendorCmdline,
-            ["tags_load_address"] = header.TagsLoadAddress,
-            ["dtb_size"] = header.DtbSize,
-            ["dtb_address"] = header.DtbAddress,
-            ["vendor_ramdisk_compression"] = header.VendorRamdiskCompression.ToString(),
-            ["ramdisk_table_count"] = parser.RamdiskTable.Count
-        };
-    }
-
-    private static uint? GetUInt(JsonObject json, string key) => json[key] is JsonValue value && value.TryGetValue<uint>(out var result) ? result : null;
-
-    private static ulong? GetULong(JsonObject json, string key) => json[key] is JsonValue value && value.TryGetValue<ulong>(out var result) ? result : null;
-
-    private static int? GetInt(JsonObject json, string key) => json[key] is JsonValue value && value.TryGetValue<int>(out var result) ? result : null;
 
     /// <summary>
     /// Detects whether a file starts with the Android sparse image magic.
@@ -783,7 +632,10 @@ public sealed class FirmwareService
     /// <param name="outputDirectory">The output directory.</param>
     /// <param name="overwrite">Whether to overwrite existing files.</param>
     /// <returns>Operation result.</returns>
-    public async Task<FirmwareOpResult> ExtractOppoAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
+    public Task<FirmwareOpResult> ExtractOppoAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
+        => CompleteUnpackAsync(firmwarePath, outputDirectory, () => ExtractOppoCoreAsync(firmwarePath, outputDirectory, overwrite, cancellationToken), cancellationToken, new OppoFormatHandler(), overwrite);
+
+    private async Task<FirmwareOpResult> ExtractOppoCoreAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -840,7 +692,10 @@ public sealed class FirmwareService
     /// <param name="outputDirectory">The output directory for the extracted partition images. <para>分区镜像输出目录。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result, Entries is the extracted partition name list. <para>操作结果，Entries 为已提取的分区名称列表。</para></returns>
-    public async Task<FirmwareOpResult> UnpackSuperAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
+    public Task<FirmwareOpResult> UnpackSuperAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
+        => CompleteUnpackAsync(superPath, outputDirectory, () => UnpackSuperCoreAsync(superPath, outputDirectory, cancellationToken), cancellationToken);
+
+    private async Task<FirmwareOpResult> UnpackSuperCoreAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
     {
         return await Task.Run<FirmwareOpResult>(() =>
         {
@@ -1021,7 +876,10 @@ public sealed class FirmwareService
     /// <param name="progress">Optional progress reporter as (processed file count, total file count). <para>可选进度回调，值为 (已处理文件数, 文件总数)。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default)
+    public Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default)
+        => CompleteUnpackAsync(imagePath, outputDirectory, () => UnpackFileSystemImageCoreAsync(imagePath, outputDirectory, progress, cancellationToken), cancellationToken);
+
+    private async Task<FirmwareOpResult> UnpackFileSystemImageCoreAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default)
     {
         return await Task.Run<FirmwareOpResult>(() =>
         {

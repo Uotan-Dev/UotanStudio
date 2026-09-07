@@ -171,6 +171,7 @@ public class VendorBootParser : IDisposable
         Header.VendorRamdiskSize = ReadUInt32LE(data, 24);
         Header.VendorCmdline = ReadString(data, 28, VendorCmdlineSize).TrimEnd('\0');
         Header.TagsLoadAddress = ReadUInt32LE(data, 2076);
+        Header.VendorName = ReadString(data, 2080, 16).TrimEnd('\0');
         Header.VendorHeaderSize = ReadUInt32LE(data, 2096);
         Header.DtbSize = ReadUInt32LE(data, 2100);
         Header.DtbAddress = ReadUInt64LE(data, 2104);

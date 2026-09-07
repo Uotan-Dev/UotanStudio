@@ -250,6 +250,7 @@ public sealed partial class F2fsBuilder
             SetFilePermissions(node, fullPath, isDir: true, isSymlink: false);
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
+                if (SharedKernel.RepackMetadata.IsMetadataFile(childPath)) continue;
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
                 {

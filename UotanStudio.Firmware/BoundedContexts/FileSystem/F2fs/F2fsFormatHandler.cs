@@ -91,6 +91,10 @@ public sealed class F2fsFormatHandler : IFormatHandler
     /// <para>将 f2fs 镜像解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+
+    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
         {
@@ -131,7 +135,13 @@ public sealed class F2fsFormatHandler : IFormatHandler
                     return FirmwareOpResult.Fail($"Input path is not a directory: '{inputPath}'.");
                 }
 
-                F2fsBuilder.Build(inputPath, outputPath, new F2fsOptions());
+                var options = RepackMetadata.OptionsFor(inputPath, FormatName);
+                F2fsBuilder.Build(inputPath, outputPath, new F2fsOptions
+                {
+                    BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
+                    SegmentSize = RepackMetadata.IntegerOption(options, "SegmentSize", 2 * 1024 * 1024),
+                    VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "f2fs"
+                });
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (F2FS).");
             }

@@ -57,9 +57,7 @@ public sealed class BootImageFormatHandler : IFormatHandler
                 var magic = ReadMagic(filePath);
                 if (magic == BootMagic)
                 {
-                    using var parser = new BootImageParser();
-                    parser.ParseFile(filePath);
-                    var h = parser.Header;
+                    var h = BootImageParser.ReadHeaderFile(filePath);
                     var summary = $"Boot image v{(int)h.HeaderVersion} parsed.\n" +
                                   $"Page size: {h.PageSize}\nKernel: {h.KernelSize} bytes\n" +
                                   $"Ramdisk: {h.RamdiskSize} bytes\nCmdline: {h.CommandLine}";
@@ -118,6 +116,10 @@ public sealed class BootImageFormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
+        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+
+    private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         return Task.Run(() =>
         {
@@ -156,7 +158,8 @@ public sealed class BootImageFormatHandler : IFormatHandler
 
                 if (Directory.Exists(inputPath))
                 {
-                    return PackFromDirectory(inputPath, outputPath);
+                    BootRepackConfiguration.Pack(inputPath, outputPath, cancellationToken);
+                    return FirmwareOpResult.Ok($"Packed boot image to {outputPath}");
                 }
 
 
@@ -183,7 +186,6 @@ public sealed class BootImageFormatHandler : IFormatHandler
         var h = parser.Header;
 
         var entries = new List<string>();
-        WriteIfNonEmpty(outputDirectory, "header", Encoding.UTF8.GetBytes(h.ToHeaderFile()), entries);
 
         WriteIfNonEmpty(outputDirectory, "kernel", parser.Kernel, entries);
         WriteIfNonEmpty(outputDirectory, "ramdisk", parser.Ramdisk, entries);
@@ -206,7 +208,6 @@ public sealed class BootImageFormatHandler : IFormatHandler
         var h = parser.Header;
 
         var entries = new List<string>();
-        WriteIfNonEmpty(outputDirectory, "header", Encoding.UTF8.GetBytes(h.ToString()), entries);
         WriteIfNonEmpty(outputDirectory, "vendor_ramdisk", parser.VendorRamdisk, entries);
         WriteIfNonEmpty(outputDirectory, "dtb", parser.Dtb, entries);
         WriteIfNonEmpty(outputDirectory, "bootconfig", parser.Bootconfig, entries);
@@ -244,41 +245,6 @@ public sealed class BootImageFormatHandler : IFormatHandler
         return FirmwareOpResult.Ok(
             $"Unpacked vendor boot image v{h.HeaderVersion} ({entries.Count} files) to {outputDirectory}",
             entries: entries);
-    }
-
-    private static FirmwareOpResult PackFromDirectory(string inputDirectory, string outputPath)
-    {
-        var headerPath = Path.Combine(inputDirectory, "header");
-        if (!File.Exists(headerPath))
-        {
-            return FirmwareOpResult.Fail("Directory does not contain a 'header' file.");
-        }
-
-        var header = BootImageHeader.ParseHeaderFile(File.ReadAllText(headerPath));
-        if (header == null)
-        {
-            return FirmwareOpResult.Fail("Failed to parse the 'header' file.");
-        }
-
-        var packer = new BootImagePacker
-        {
-            Header = header,
-            Kernel = ReadComponent(inputDirectory, "kernel"),
-            Ramdisk = ReadComponent(inputDirectory, "ramdisk"),
-            Second = ReadComponent(inputDirectory, "second"),
-            Dtb = ReadComponent(inputDirectory, "dtb"),
-            RecoveryDtbo = ReadComponent(inputDirectory, "dtbo"),
-            Signature = ReadComponent(inputDirectory, "signature")
-        };
-
-        packer.PackToFile(outputPath);
-        return FirmwareOpResult.Ok($"Packed boot image v{(int)header.HeaderVersion} to {outputPath}");
-    }
-
-    private static byte[] ReadComponent(string directory, string name)
-    {
-        var path = Path.Combine(directory, name);
-        return File.Exists(path) ? File.ReadAllBytes(path) : [];
     }
 
     private static void WriteIfNonEmpty(string directory, string name, byte[] data, List<string> entries)

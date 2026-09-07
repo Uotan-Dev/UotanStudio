@@ -1,41 +1,38 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Views.Controls;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// Sparse-wrapped filesystem integration tests: an ext4 / erofs image is built with the builders,
-/// wrapped into an Android sparse image, and then verified end-to-end — detection via
-/// <see cref="FileOpenMode"/>, loading via the file-manager editor path (through the
-/// <see cref="SparseReadStream"/> logical view) and cascade unpacking via
-/// <see cref="SparseFormatHandler.UnpackAsync"/>.
-/// <para>sparse 包装文件系统集成测试：先用构建器生成 ext4/erofs 镜像，包装为 Android sparse 镜像，
-/// 再端到端验证——<see cref="FileOpenMode"/> 检测、经 <see cref="SparseReadStream"/> 逻辑视图的文件管理器
-/// 加载路径，以及 <see cref="SparseFormatHandler.UnpackAsync"/> 的级联解包。</para>
+/// Tests filesystem parsing through sparse logical streams and recursive unpacking.
+/// <para>验证稀疏逻辑流上的文件系统解析与级联解包。</para>
 /// </summary>
 public sealed class SparseWrappedFilesystemTests
 {
     [Fact]
-    public void SparseWrappedExt4_IsDetectedAsFilesystemImage()
+    public void SparseWrappedExt4_ParserReadsLogicalFileContents()
     {
         using var fixture = BuildExt4Fixture();
 
-        Assert.True(FileOpenMode.IsSparseImage(fixture.SparsePath));
-        Assert.True(FileOpenMode.IsFilesystemImage(fixture.SparsePath));
-        Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(fixture.SparsePath));
+        using var sparse = SparseReader.FromImageFile(fixture.SparsePath);
+        using var logical = new SparseReadStream(sparse);
+        using var parser = new Ext4Parser(logical);
+        using var output = new MemoryStream();
+        parser.ReadFile("blob.bin", output);
+        Assert.Equal(BinaryBlob, output.ToArray());
     }
 
     [Fact]
-    public void SparseWrappedErofs_IsDetectedAsFilesystemImage()
+    public void SparseWrappedErofs_ParserReadsLogicalFileContents()
     {
         using var fixture = BuildErofsFixture();
 
-        Assert.True(FileOpenMode.IsSparseImage(fixture.SparsePath));
-        Assert.True(FileOpenMode.IsFilesystemImage(fixture.SparsePath));
-        Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(fixture.SparsePath));
+        using var sparse = SparseReader.FromImageFile(fixture.SparsePath);
+        using var logical = new SparseReadStream(sparse);
+        using var parser = new ErofsParser(logical);
+        Assert.Equal(BinaryBlob, parser.ReadFileBytes("blob.bin"));
     }
 
     [Fact]
@@ -51,7 +48,13 @@ public sealed class SparseWrappedFilesystemTests
             Assert.True(File.Exists(Path.Combine(outDir, "hello.txt")));
             Assert.True(File.Exists(Path.Combine(outDir, "blob.bin")));
             Assert.True(File.Exists(Path.Combine(outDir, "subdir", "inner.txt")));
+            Assert.Equal("hello ext4\n", File.ReadAllText(Path.Combine(outDir, "hello.txt")));
+            Assert.Equal(BinaryBlob, File.ReadAllBytes(Path.Combine(outDir, "blob.bin")));
+            Assert.Equal("inner content\n", File.ReadAllText(Path.Combine(outDir, "subdir", "inner.txt")));
             Assert.Contains("Extracted", result.Summary);
+            var metadata = UotanStudio.Firmware.SharedKernel.RepackMetadata.Read(outDir)!;
+            Assert.Equal("EXT4", metadata.Configuration["fileSystem"]!.GetValue<string>());
+            Assert.NotNull(metadata.Configuration["superblock"]!["journalInum"]);
         }
         finally
         {
@@ -71,6 +74,11 @@ public sealed class SparseWrappedFilesystemTests
             Assert.True(result.Success);
             Assert.True(File.Exists(Path.Combine(outDir, "hello.txt")));
             Assert.True(File.Exists(Path.Combine(outDir, "blob.bin")));
+            Assert.Equal("hello erofs\n", File.ReadAllText(Path.Combine(outDir, "hello.txt")));
+            var metadata = UotanStudio.Firmware.SharedKernel.RepackMetadata.Read(outDir)!;
+            Assert.Equal("EROFS", metadata.Configuration["fileSystem"]!.GetValue<string>());
+            Assert.NotNull(metadata.Configuration["superblock"]!["availableComprAlgs"]);
+            Assert.Equal(BinaryBlob, File.ReadAllBytes(Path.Combine(outDir, "blob.bin")));
         }
         finally
         {
@@ -96,8 +104,6 @@ public sealed class SparseWrappedFilesystemTests
             File.WriteAllBytes(rawPath, randomBytes);
 
             SparseImageConverter.ConvertRawToSparse(rawPath, sparsePath);
-            Assert.True(FileOpenMode.IsSparseImage(sparsePath));
-            Assert.False(FileOpenMode.IsFilesystemImage(sparsePath));
 
             var result = await new SparseFormatHandler().UnpackAsync(sparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(result.Success);

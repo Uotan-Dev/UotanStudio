@@ -14,6 +14,15 @@ public class VendorBootPacker
 
     private const uint RamdiskTableEntrySize = 108;
     private const uint DefaultPageSize = 4096;
+    internal BootComponentFiles? ComponentFiles { get; init; }
+
+    private long ComponentLength(string name, byte[] data) => ComponentFiles?.Length(name) ?? data.LongLength;
+
+    private void WriteComponent(BinaryWriter writer, string name, byte[] data)
+    {
+        if (ComponentFiles is { } files) files.Copy(name, writer.BaseStream);
+        else writer.Write(data);
+    }
 
     public VendorBootHeader Header { get; set; } = new VendorBootHeader();
 
@@ -93,9 +102,9 @@ public class VendorBootPacker
             ? Header.VendorHeaderSize
             : (uint)minimumHeaderSize;
 
-        var vendorRamdiskSize = checked((uint)VendorRamdisk.Length);
-        var dtbSize = checked((uint)Dtb.Length);
-        var bootconfigSize = version == 4 ? checked((uint)Bootconfig.Length) : 0u;
+        var vendorRamdiskSize = checked((uint)ComponentLength(nameof(VendorRamdisk), VendorRamdisk));
+        var dtbSize = checked((uint)ComponentLength(nameof(Dtb), Dtb));
+        var bootconfigSize = version == 4 ? checked((uint)ComponentLength(nameof(Bootconfig), Bootconfig)) : 0u;
 
         var tableEntryNum = version == 4 ? checked((uint)RamdiskTable.Count) : 0u;
         foreach (var entry in RamdiskTable)
@@ -153,7 +162,7 @@ public class VendorBootPacker
         writer.Write(vendorRamdiskSize);
         WriteFixedAscii(writer, Header.VendorCmdline, VendorCmdlineSize);
         writer.Write(Header.TagsLoadAddress);
-        WriteZeroes(writer, VendorNameSize);
+        WriteFixedAscii(writer, Header.VendorName, VendorNameSize);
         writer.Write(headerSize);
         writer.Write(dtbSize);
         writer.Write(Header.DtbAddress);
@@ -174,13 +183,13 @@ public class VendorBootPacker
 
         if (vendorRamdiskSize > 0)
         {
-            writer.Write(VendorRamdisk);
+            WriteComponent(writer, nameof(VendorRamdisk), VendorRamdisk);
             WritePadding(writer, pageSize);
         }
 
         if (dtbSize > 0)
         {
-            writer.Write(Dtb);
+            WriteComponent(writer, nameof(Dtb), Dtb);
             WritePadding(writer, pageSize);
         }
 
@@ -208,7 +217,7 @@ public class VendorBootPacker
 
         if (version == 4 && bootconfigSize > 0)
         {
-            writer.Write(Bootconfig);
+            WriteComponent(writer, nameof(Bootconfig), Bootconfig);
             WritePadding(writer, pageSize);
         }
     }

@@ -299,6 +299,7 @@ public sealed partial class ErofsBuilder
             };
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
+                if (SharedKernel.RepackMetadata.IsMetadataFile(childPath)) continue;
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
                 {

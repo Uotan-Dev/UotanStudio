@@ -216,10 +216,12 @@ public sealed class McpHostToolsTests
             .OrderBy(Path.GetFileName)
             .ToArray();
         var unpackedFiles = Directory.EnumerateFiles(unpackedDir, "*", SearchOption.AllDirectories)
+            .Where(path => !UotanStudio.Firmware.SharedKernel.RepackMetadata.IsMetadataFile(path))
             .OrderBy(Path.GetFileName)
             .ToArray();
 
         Assert.Equal(sourceFiles.Length, unpackedFiles.Length);
+        Assert.NotNull(UotanStudio.Firmware.SharedKernel.RepackMetadata.Read(unpackedDir));
         for (var i = 0; i < sourceFiles.Length; i++)
         {
             var relative = Path.GetRelativePath(sourceDir, sourceFiles[i]);

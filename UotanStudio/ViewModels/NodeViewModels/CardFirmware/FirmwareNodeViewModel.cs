@@ -1,4 +1,7 @@
 using Avalonia;
+using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Firmware.SharedKernel;
+using FirmwareOpResult = UotanStudio.Services.Firmware.FirmwareOpResult;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
@@ -93,10 +96,10 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
     }
 
     /// <summary>
-    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Unpack 解包（boot/oppo）、Firmware.Pack 打包（boot/cpio）、
+    /// <para>按节点类型键（TypeKey）分发对应的固件逻辑：Firmware.Unpack 解包（boot/oppo/dt）、Firmware.Pack 打包（boot/cpio/dtbo）、
     /// Firmware.Verify 校验 AVB 签名或计算哈希、Firmware.Extract 从 payload 提取分区。</para>
-    /// Dispatches firmware logic by the node type key (TypeKey): Firmware.Unpack unpacks (boot/oppo), Firmware.Pack packs
-    /// (boot/cpio), Firmware.Verify verifies the AVB signature or computes a hash, and Firmware.Extract extracts a
+    /// Dispatches firmware logic by the node type key (TypeKey): Firmware.Unpack unpacks (boot/oppo/dt), Firmware.Pack packs
+    /// (boot/cpio/dtbo), Firmware.Verify verifies the AVB signature or computes a hash, and Firmware.Extract extracts a
     /// partition from a payload.
     /// </summary>
     /// <param name="context">
@@ -150,6 +153,20 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         }
 
         var outputDir = DeriveOutputDir(path);
+        var dt = new DtFormatHandler();
+        if (dt.CanHandle(path))
+        {
+            var result = await dt.UnpackAsync(path, outputDir, cancellationToken: context.CancellationToken).ConfigureAwait(false);
+            if (!result.Success)
+            {
+                context.Log.Write(LogLevel.Error, Title, result.Summary);
+                return;
+            }
+            WriteOutput("Output Dir", outputDir);
+            WriteOutput("Partitions", result.Entries);
+            context.Log.Write(LogLevel.Info, Title, result.Summary);
+            return;
+        }
         var service = FirmwareService.Instance;
         var boot = await service.UnpackBootAsync(path, outputDir, context.CancellationToken).ConfigureAwait(false);
         if (!boot.Success)
@@ -188,14 +205,29 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
 
         var service = FirmwareService.Instance;
         FirmwareOpResult result;
-        if (File.Exists(Path.Combine(inputDir, "header.json")))
+        var repack = RepackMetadata.Read(inputDir);
+        if (repack is not null)
         {
-            result = await service.PackBootAsync(inputDir, outputPath, context.CancellationToken).ConfigureAwait(false);
+            if (!repack.CanPackDirectory)
+            {
+                context.Log.Write(LogLevel.Error, Title, repack.PackingNotes);
+                return;
+            }
+            FirmwareFormatRegistry.RegisterAll();
+            var handler = FormatDetector.RegisteredHandlers.FirstOrDefault(h => h.FormatName == repack.FormatName);
+            if (handler is not IWritableFormatHandler writer)
+                throw new InvalidDataException($"No directory packer is registered for {repack.FormatName}.");
+            var packed = await writer.PackAsync(inputDir, outputPath, context.CancellationToken).ConfigureAwait(false);
+            if (!packed.Success)
+            {
+                context.Log.Write(LogLevel.Error, Title, packed.Summary);
+                return;
+            }
+            WriteOutput("Firmware", outputPath);
+            context.Log.Write(LogLevel.Info, Title, packed.Summary);
+            return;
         }
-        else
-        {
-            result = await service.PackCpioAsync(inputDir, outputPath, context.CancellationToken).ConfigureAwait(false);
-        }
+        result = await service.PackCpioAsync(inputDir, outputPath, context.CancellationToken).ConfigureAwait(false);
 
         if (!result.Success)
         {

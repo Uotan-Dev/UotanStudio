@@ -68,6 +68,10 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<SharedKernel.FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, SharedKernel.UnpackOptions? options = null, CancellationToken cancellationToken = default)
+        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+
+    private Task<SharedKernel.FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, SharedKernel.UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -125,7 +129,10 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
             var entries = parser.ListFiles();
             return SharedKernel.FirmwareOpResult.Ok(
                 $"Extracted {entries.Count} entries from '{filePath}' to '{outputDirectory}'.",
-                [.. entries.Select(e => e.Path)]);
+                [.. entries.Select(e => e.Path)], metadata: new Dictionary<string, string>
+                {
+                    ["InnerFormat"] = "EXT4", ["FilesystemBlockSize"] = parser.BlockSize.ToString()
+                });
         }
 
         if (probe.Length >= 1028 && BinaryPrimitives.ReadUInt32LittleEndian(probe.AsSpan(1024, 4)) == ErofsMagic)
@@ -137,7 +144,11 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
             var files = parser.EnumerateFiles();
             return SharedKernel.FirmwareOpResult.Ok(
                 $"Extracted {files.Count} entries from '{filePath}' to '{outputDirectory}'.",
-                [.. files.Select(f => f.Path)]);
+                [.. files.Select(f => f.Path)], metadata: new Dictionary<string, string>
+                {
+                    ["InnerFormat"] = "EROFS", ["FilesystemBlockSize"] = parser.BlockSize.ToString(),
+                    ["VolumeName"] = parser.VolumeName
+                });
         }
 
         if (probe.Length >= 1028 && BinaryPrimitives.ReadUInt32LittleEndian(probe.AsSpan(1024, 4)) == F2fsMagic)
@@ -149,7 +160,11 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
             var files = parser.ListFiles();
             return SharedKernel.FirmwareOpResult.Ok(
                 $"Extracted {files.Count} entries from '{filePath}' to '{outputDirectory}'.",
-                [.. files.Select(f => f.Path)]);
+                [.. files.Select(f => f.Path)], metadata: new Dictionary<string, string>
+                {
+                    ["InnerFormat"] = "F2FS", ["FilesystemBlockSize"] = parser.BlockSize.ToString(),
+                    ["VolumeName"] = parser.VolumeName
+                });
         }
 
         return null;
@@ -167,7 +182,8 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
             {
 
 
-                var rawFile = Directory.EnumerateFiles(inputPath).FirstOrDefault();
+                var rawFile = Directory.EnumerateFiles(inputPath)
+                    .FirstOrDefault(path => !SharedKernel.RepackMetadata.IsMetadataFile(path));
                 if (rawFile == null)
                 {
                     return Task.FromResult(SharedKernel.FirmwareOpResult.Fail("Input directory is empty."));
