@@ -1313,7 +1313,7 @@ internal partial class ImageViewModel : Tool
         if (header.Length >= 1082
             && System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(1080, 2)) == 0xEF53)
         {
-            return await Task.Run(() =>
+            var result = await Task.Run(() =>
             {
                 using var parser = new Ext4Parser(sourcePath);
                 parser.ExtractToDirectory(outputDir, progress: progress);
@@ -1324,6 +1324,8 @@ internal partial class ImageViewModel : Tool
                     Summary = $"Extracted {entries.Count} entries from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {entries.Count} 个条目到 '{outputDir}'"
                 };
             });
+            if (result.Success) WriteRepackMetadataSafe(sourcePath, outputDir);
+            return result;
         }
 
         // erofs 文件系统镜像 → 级联解出内部文件系统内容。
@@ -1331,7 +1333,7 @@ internal partial class ImageViewModel : Tool
         if (header.Length >= 1028
             && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xE0F5E1E2)
         {
-            return await Task.Run(() =>
+            var result = await Task.Run(() =>
             {
                 using var parser = new ErofsParser(sourcePath);
                 parser.ExtractToDirectory(outputDir, progress: progress);
@@ -1342,6 +1344,8 @@ internal partial class ImageViewModel : Tool
                     Summary = $"Extracted {files.Count} files from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {files.Count} 个文件到 '{outputDir}'"
                 };
             });
+            if (result.Success) WriteRepackMetadataSafe(sourcePath, outputDir);
+            return result;
         }
 
         // f2fs 文件系统镜像 → 级联解出内部文件系统内容。
@@ -1349,7 +1353,7 @@ internal partial class ImageViewModel : Tool
         if (header.Length >= 1028
             && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(1024, 4)) == 0xF2F52010)
         {
-            return await Task.Run(() =>
+            var result = await Task.Run(() =>
             {
                 using var parser = new F2fsParser(sourcePath);
                 parser.ExtractToDirectory(outputDir, progress: progress);
@@ -1360,11 +1364,36 @@ internal partial class ImageViewModel : Tool
                     Summary = $"Extracted {entries.Count} entries from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {entries.Count} 个条目到 '{outputDir}'"
                 };
             });
+            if (result.Success) WriteRepackMetadataSafe(sourcePath, outputDir);
+            return result;
         }
 
         // 未命中文件系统魔数 → 保留原 raw 复制行为（按字节流落盘 .raw）。
         // No filesystem magic matched → keep the original raw-copy behavior (write the byte stream as .raw).
         return await ConvertToRawAsync(sourcePath, outputDir, name);
+    }
+
+    /// <summary>
+    /// 通过格式检测器获取处理器并写入 <c>.uotanstudio-repack.json</c> 元数据；失败仅记调试日志，不阻塞提取。
+    /// Resolves the format handler via <see cref="FormatDetector"/> and writes
+    /// <c>.uotanstudio-repack.json</c> metadata; failures are swallowed to avoid blocking extraction.
+    /// </summary>
+    private static void WriteRepackMetadataSafe(string sourcePath, string outputDir)
+    {
+        try
+        {
+            UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
+            var handler = FormatDetector.Detect(sourcePath);
+            if (handler is not null)
+            {
+                var metadataRoot = ProjectContextService.Instance.GetMetadataRoot();
+                UotanStudio.Firmware.SharedKernel.RepackMetadata.WriteAsync(handler, sourcePath, outputDir, metadataRoot: metadataRoot).GetAwaiter().GetResult();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Repack metadata write failed: {ex.Message}");
+        }
     }
 
     private static string GetUniqueFileName(string directory, string fileName)

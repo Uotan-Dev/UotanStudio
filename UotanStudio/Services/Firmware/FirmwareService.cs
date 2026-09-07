@@ -69,7 +69,7 @@ public sealed class FirmwareService
 
     private static async Task<FirmwareOpResult> CompleteUnpackAsync(string sourcePath, string outputDirectory,
         Func<Task<FirmwareOpResult>> unpack, CancellationToken cancellationToken, IReadonlyFormatHandler? expectedHandler = null,
-        bool overwrite = true)
+        bool overwrite = true, string? metadataRoot = null)
     {
         try
         {
@@ -82,7 +82,7 @@ public sealed class FirmwareService
             FirmwareFormatRegistry.RegisterAll();
             var handler = expectedHandler ?? FormatDetector.Detect(sourcePath)
                 ?? throw new InvalidDataException("Cannot identify the source format for repack metadata.");
-            await RepackMetadata.WriteAsync(handler, sourcePath, outputDirectory, cancellationToken).ConfigureAwait(false);
+            await RepackMetadata.WriteAsync(handler, sourcePath, outputDirectory, cancellationToken, metadataRoot: metadataRoot).ConfigureAwait(false);
             return result;
         }
         catch (OperationCanceledException) { throw; }
@@ -120,7 +120,7 @@ public sealed class FirmwareService
     /// <param name="overwrite">Whether to overwrite existing files.</param>
     /// <returns>Operation result.</returns>
     public Task<FirmwareOpResult> UnpackCpioAsync(string archivePath, string outputDirectory, bool overwrite = true)
-        => CompleteUnpackAsync(archivePath, outputDirectory, () => UnpackCpioCoreAsync(archivePath, outputDirectory, overwrite), CancellationToken.None, new CpioFormatHandler(), overwrite);
+        => CompleteUnpackAsync(archivePath, outputDirectory, () => UnpackCpioCoreAsync(archivePath, outputDirectory, overwrite), CancellationToken.None, new CpioFormatHandler(), overwrite, Projects.ProjectContextService.Instance.GetMetadataRoot());
 
     private async Task<FirmwareOpResult> UnpackCpioCoreAsync(string archivePath, string outputDirectory, bool overwrite = true)
     {
@@ -195,7 +195,7 @@ public sealed class FirmwareService
     /// <param name="partitionName">Target partition name; null or empty means all partitions.</param>
     /// <returns>Operation result.</returns>
     public Task<FirmwareOpResult> ExtractPayloadAsync(string payloadPath, string outputDirectory, string? partitionName = null)
-        => CompleteUnpackAsync(payloadPath, outputDirectory, () => ExtractPayloadCoreAsync(payloadPath, outputDirectory, partitionName), CancellationToken.None, new PayloadFormatHandler());
+        => CompleteUnpackAsync(payloadPath, outputDirectory, () => ExtractPayloadCoreAsync(payloadPath, outputDirectory, partitionName), CancellationToken.None, new PayloadFormatHandler(), metadataRoot: Projects.ProjectContextService.Instance.GetMetadataRoot());
 
     private async Task<FirmwareOpResult> ExtractPayloadCoreAsync(string payloadPath, string outputDirectory, string? partitionName = null)
     {
@@ -458,7 +458,7 @@ public sealed class FirmwareService
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
-        => CompleteUnpackAsync(bootPath, outputDirectory, () => UnpackBootCoreAsync(bootPath, outputDirectory, cancellationToken), cancellationToken, new BootImageFormatHandler());
+        => CompleteUnpackAsync(bootPath, outputDirectory, () => UnpackBootCoreAsync(bootPath, outputDirectory, cancellationToken), cancellationToken, new BootImageFormatHandler(), metadataRoot: Projects.ProjectContextService.Instance.GetMetadataRoot());
 
     private async Task<FirmwareOpResult> UnpackBootCoreAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
     {
@@ -633,7 +633,7 @@ public sealed class FirmwareService
     /// <param name="overwrite">Whether to overwrite existing files.</param>
     /// <returns>Operation result.</returns>
     public Task<FirmwareOpResult> ExtractOppoAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
-        => CompleteUnpackAsync(firmwarePath, outputDirectory, () => ExtractOppoCoreAsync(firmwarePath, outputDirectory, overwrite, cancellationToken), cancellationToken, new OppoFormatHandler(), overwrite);
+        => CompleteUnpackAsync(firmwarePath, outputDirectory, () => ExtractOppoCoreAsync(firmwarePath, outputDirectory, overwrite, cancellationToken), cancellationToken, new OppoFormatHandler(), overwrite, Projects.ProjectContextService.Instance.GetMetadataRoot());
 
     private async Task<FirmwareOpResult> ExtractOppoCoreAsync(string firmwarePath, string outputDirectory, bool overwrite = true, CancellationToken cancellationToken = default)
     {
@@ -693,7 +693,7 @@ public sealed class FirmwareService
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result, Entries is the extracted partition name list. <para>操作结果，Entries 为已提取的分区名称列表。</para></returns>
     public Task<FirmwareOpResult> UnpackSuperAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
-        => CompleteUnpackAsync(superPath, outputDirectory, () => UnpackSuperCoreAsync(superPath, outputDirectory, cancellationToken), cancellationToken);
+        => CompleteUnpackAsync(superPath, outputDirectory, () => UnpackSuperCoreAsync(superPath, outputDirectory, cancellationToken), cancellationToken, metadataRoot: Projects.ProjectContextService.Instance.GetMetadataRoot());
 
     private async Task<FirmwareOpResult> UnpackSuperCoreAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
     {
@@ -877,7 +877,7 @@ public sealed class FirmwareService
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
     public Task<FirmwareOpResult> UnpackFileSystemImageAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default)
-        => CompleteUnpackAsync(imagePath, outputDirectory, () => UnpackFileSystemImageCoreAsync(imagePath, outputDirectory, progress, cancellationToken), cancellationToken);
+        => CompleteUnpackAsync(imagePath, outputDirectory, () => UnpackFileSystemImageCoreAsync(imagePath, outputDirectory, progress, cancellationToken), cancellationToken, metadataRoot: UotanStudio.Services.Projects.ProjectContextService.Instance.GetMetadataRoot());
 
     private async Task<FirmwareOpResult> UnpackFileSystemImageCoreAsync(string imagePath, string outputDirectory, IProgress<(int processed, int total)>? progress = null, CancellationToken cancellationToken = default)
     {

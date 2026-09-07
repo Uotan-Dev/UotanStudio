@@ -97,6 +97,10 @@ internal class ProjectExplorerViewModel : Tool
             TreeViewContent.Clear();
 
             AddRoot(svc.RootDirectory, isProjectFolder: true);
+            // 立即加载根节点子目录，使 FileSystemWatcher 触发的后续刷新能生效。
+            // Eagerly load root children so subsequent FileSystemWatcher-triggered refreshes work.
+            if (TreeViewContent.FirstOrDefault() is { IsDirectory: true } root)
+                root.EnsureChildrenLoaded();
 
             // 节点项目顶层文件夹：与解决方案根目录同级，双击打开 .uotannode。
             // Node project top-level folder: sibling of the solution root, double-click opens .uotannode.
@@ -285,14 +289,35 @@ public sealed partial class ExplorerNode : ObservableObject
     /// </summary>
     public bool IsDirectory { get; }
 
-    /// <summary>Gets the existing unpack configuration without parsing editable text.<para>获取已有的解包配置路径，不解析可编辑的文本。</para></summary>
+    /// <summary>Gets the existing unpack configuration without parsing editable text. Follows pointer files to consolidated metadata.<para>获取已有的解包配置路径（跟随指针文件到统一元数据位置），不解析可编辑的文本。</para></summary>
     public string? RepackConfigurationPath
     {
         get
         {
             if (!IsDirectory || IsPlaceholder) return null;
-            var path = System.IO.Path.Combine(Path, UotanStudio.Firmware.SharedKernel.RepackMetadata.FileName);
-            return File.Exists(path) ? path : null;
+            var pointerPath = System.IO.Path.Combine(Path, UotanStudio.Firmware.SharedKernel.RepackMetadata.FileName);
+            if (!File.Exists(pointerPath)) return null;
+            // Use RepackMetadata.Read to transparently follow pointer files
+            try
+            {
+                var metadata = UotanStudio.Firmware.SharedKernel.RepackMetadata.Read(Path);
+                if (metadata is not null)
+                {
+                    // Read succeeded. Resolve the actual metadata file path:
+                    // RepackMetadata.Read already follows pointers, so we need to find
+                    // the real file it resolved to. If a pointer exists, its target is
+                    // the consolidated metadata directory.
+                    var resolved = UotanStudio.Firmware.SharedKernel.RepackMetadata.ResolveActualMetadataPath(Path);
+                    if (resolved is not null && File.Exists(resolved)) return resolved;
+                    return pointerPath;
+                }
+            }
+            catch
+            {
+                // Metadata unreadable but file exists — still allow opening for repair
+            }
+
+            return pointerPath;
         }
     }
 

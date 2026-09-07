@@ -239,6 +239,20 @@ public sealed class ProjectContextService
     }
 
     /// <summary>
+    /// Returns the consolidated metadata root directory (<c>.uotan/metadata/</c>) for the current project,
+    /// or <c>null</c> when no solution is open. Callers should pass this to <c>RepackMetadata.WriteAsync</c>.
+    /// <para>返回当前项目的统一元数据根目录（<c>.uotan/metadata/</c>），未打开解决方案时返回 <c>null</c>。
+    /// 调用方应将其传递给 <c>RepackMetadata.WriteAsync</c>。</para>
+    /// </summary>
+    public string? GetMetadataRoot()
+    {
+        if (StateDirectory is null) return null;
+        var root = Path.Combine(StateDirectory, UotanStudio.Firmware.SharedKernel.RepackMetadata.MetadataFolderName);
+        Directory.CreateDirectory(root);
+        return root;
+    }
+
+    /// <summary>
     /// Resolves a solution-root-relative path to an absolute path; returns <c>null</c> when no solution is open.
     /// <para>将相对解决方案根目录的路径解析为绝对路径；未打开解决方案时返回 <c>null</c>。</para>
     /// </summary>
