@@ -2,7 +2,14 @@
 
   <PropertyGroup>
     <RootNamespace>UotanStudio.Firmware</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="Payload\Core\Lz4DestinationCodec.LICENSE"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
+          Pack="true" PackagePath="licenses/Lz4DestinationCodec.LICENSE" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- 上游 file(1) 可读 magic 文本规则（github.com/file/file 的 magic/Magdir/），作为嵌入式资源 -->
