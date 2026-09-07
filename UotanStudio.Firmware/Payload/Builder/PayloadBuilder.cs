@@ -1,12 +1,15 @@
 ﻿using System.Security.Cryptography;
 using Google.Protobuf;
-using SharpCompress.Compressors.BZip2;
 using UotanStudio.Firmware.Payload.Core;
 using UotanStudio.Firmware.Payload.Exceptions;
 using UotanStudio.Firmware.Payload.Proto;
 
 namespace UotanStudio.Firmware.Payload;
 
+/// <summary>
+/// Builds unsigned payloads from block-aligned partitions using at most 65536 operations of up to 1 MiB each.
+/// <para>从块对齐分区构建未签名 payload，最多使用 65536 个操作，每个操作不超过 1 MiB。</para>
+/// </summary>
 public sealed partial class PayloadBuilder : IDisposable
 {
     private readonly List<PartitionBuildInfo> _partitions = [];
@@ -127,8 +130,8 @@ public sealed partial class PayloadBuilder : IDisposable
     }
 
     /// <summary>
-    /// Adds a compressed partition using the specified compression type.
-    /// <para>使用指定的压缩类型添加压缩分区。</para>
+    /// Adds a partition using None, BZip2, or Xz; Android defines no Brotli or Zstd REPLACE operation.
+    /// <para>使用 None、BZip2 或 Xz 添加分区；Android 未定义 Brotli 或 Zstd REPLACE 操作。</para>
     /// </summary>
     public PayloadBuilder AddPartitionCompressed(string partitionName, string imagePath, CompressionType compressionType)
     {
@@ -152,10 +155,10 @@ public sealed partial class PayloadBuilder : IDisposable
         var opType = compressionType switch
         {
             CompressionType.None => InstallOperation.Types.Type.Replace,
-            CompressionType.Brotli => InstallOperation.Types.Type.Replace,
+            CompressionType.Brotli => throw new ArgumentException("Android payload has no Brotli REPLACE operation.", nameof(compressionType)),
             CompressionType.BZip2 => InstallOperation.Types.Type.ReplaceBz,
             CompressionType.Xz => InstallOperation.Types.Type.ReplaceXz,
-            CompressionType.Zstd => (InstallOperation.Types.Type)14,
+            CompressionType.Zstd => throw new ArgumentException("Android payload has no defined Zstd REPLACE operation.", nameof(compressionType)),
             _ => throw new ArgumentOutOfRangeException(nameof(compressionType), $"Compression type {compressionType} is not supported.")
         };
 
@@ -171,8 +174,8 @@ public sealed partial class PayloadBuilder : IDisposable
     }
 
     /// <summary>
-    /// Adds a zero-filled partition (for dummy or empty partitions).
-    /// <para>添加零填充分区（用于虚拟或空分区）。</para>
+    /// Adds a zero-filled partition, using REPLACE_BZ below minor version 4 and ZERO otherwise.
+    /// <para>添加零填充分区：次版本低于 4 时使用 REPLACE_BZ，其余使用 ZERO。</para>
     /// </summary>
     public PayloadBuilder AddZeroPartition(string partitionName, long sizeBytes)
     {
@@ -197,277 +200,163 @@ public sealed partial class PayloadBuilder : IDisposable
         return this;
     }
 
-    /// <summary>
-    /// Builds the payload.bin file and writes it to the specified output stream.
-    /// <para>构建 payload.bin 文件并将其写入指定的输出流。</para>
-    /// </summary>
-    public void Build(Stream outputStream)
+    /// <summary>Builds an unsigned payload using bounded operations and disk-backed layout. <para>通过有界操作和磁盘临时布局构建未签名 payload。</para></summary>
+    /// <remarks>Inputs must be block-aligned. At most 65536 operations, each at most 1 MiB, are accepted. <para>输入必须块对齐；最多接受 65536 个操作，每个操作不超过 1 MiB。</para></remarks>
+    public void Build(Stream outputStream) => BuildCore(outputStream, CancellationToken.None);
+
+    /// <summary>Builds an unsigned payload with cancellation between bounded operations. <para>构建未签名 payload，并在有界操作之间响应取消。</para></summary>
+    /// <remarks>Inputs must be block-aligned. At most 65536 operations, each at most 1 MiB, are accepted. <para>输入必须块对齐；最多接受 65536 个操作，每个操作不超过 1 MiB。</para></remarks>
+    public Task BuildAsync(Stream outputStream, CancellationToken cancellationToken = default)
+        => Task.Run(() => BuildCore(outputStream, cancellationToken), cancellationToken);
+
+    /// <summary>Atomically builds an unsigned payload from block-aligned partitions. <para>从块对齐分区原子构建未签名 payload。</para></summary>
+    /// <remarks>Unaligned inputs and more than 65536 operations of up to 1 MiB are rejected. <para>拒绝非块对齐输入，以及超过 65536 个、单个不大于 1 MiB 的操作。</para></remarks>
+    public void Build(string outputPath) => BuildFile(outputPath, CancellationToken.None);
+
+    /// <summary>Atomically builds an unsigned payload with cancellation support. <para>以支持取消的方式原子构建未签名 payload。</para></summary>
+    /// <remarks>Inputs must be block-aligned. At most 65536 operations, each at most 1 MiB, are accepted. <para>输入必须块对齐；最多接受 65536 个操作，每个操作不超过 1 MiB。</para></remarks>
+    public Task BuildAsync(string outputPath, CancellationToken cancellationToken = default)
+        => Task.Run(() => BuildFile(outputPath, cancellationToken), cancellationToken);
+
+    private void BuildFile(string outputPath, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(outputStream);
-        if (!outputStream.CanWrite)
-        {
-            throw new ArgumentException("Output stream must be writable.", nameof(outputStream));
-        }
-
-        if (!outputStream.CanSeek)
-        {
-            throw new ArgumentException("Output stream must support seeking.", nameof(outputStream));
-        }
-
-        if (_partitions.Count == 0)
-        {
-            throw new InvalidOperationException("At least one partition must be added before building.");
-        }
-
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
+        var destination = Path.GetFullPath(outputPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        var temporary = destination + ".tmp-" + Guid.NewGuid().ToString("N");
         try
         {
-            var compressedDataList = new ArraySegment<byte>[_partitions.Count];
-            var manifest = BuildManifest(compressedDataList);
-            byte[] manifestBytes;
-            using (var ms = new MemoryStream())
-            {
-                using var cos = new CodedOutputStream(ms);
-                manifest.WriteTo(cos);
-                cos.Flush();
-                manifestBytes = ms.ToArray();
-            }
-
-            uint metadataSigLength = 32;
-            var header = PayloadHeaderBuilder.BuildHeader((ulong)manifestBytes.Length, metadataSigLength);
-
-            outputStream.Write(header, 0, header.Length);
-            outputStream.Write(manifestBytes, 0, manifestBytes.Length);
-            outputStream.Write(new byte[metadataSigLength], 0, (int)metadataSigLength);
-
-            foreach (var data in compressedDataList)
-            {
-                if (data.Array != null && data.Count > 0)
-                {
-                    outputStream.Write(data.Array, data.Offset, data.Count);
-                }
-            }
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                BuildCore(stream, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporary, destination, overwrite: true);
         }
-        catch (PayloadGenerationException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new PayloadGenerationException($"Failed to build payload: {ex.Message}", ex);
-        }
+        finally { File.Delete(temporary); }
     }
 
-    /// <summary>
-    /// Asynchronously builds the payload.bin file and writes it to the specified output stream.
-    /// <para>异步构建 payload.bin 文件并将其写入指定的输出流。</para>
-    /// </summary>
-    public async Task BuildAsync(Stream outputStream, CancellationToken cancellationToken = default)
+    private void BuildCore(Stream output, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(outputStream);
-        if (!outputStream.CanWrite)
-        {
-            throw new ArgumentException("Output stream must be writable.", nameof(outputStream));
-        }
-
-        if (!outputStream.CanSeek)
-        {
-            throw new ArgumentException("Output stream must support seeking.", nameof(outputStream));
-        }
-
-        if (_partitions.Count == 0)
-        {
-            throw new InvalidOperationException("At least one partition must be added before building.");
-        }
-
+        ArgumentNullException.ThrowIfNull(output);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!output.CanWrite) throw new ArgumentException("Output stream must be writable.", nameof(output));
+        if (_partitions.Count == 0) throw new InvalidOperationException("At least one partition is required.");
         try
         {
-            var compressedDataList = new ArraySegment<byte>[_partitions.Count];
-            var manifest = BuildManifest(compressedDataList);
-            byte[] manifestBytes;
-            using (var ms = new MemoryStream())
-            {
-                using var cos = new CodedOutputStream(ms);
-                manifest.WriteTo(cos);
-                cos.Flush();
-                manifestBytes = ms.ToArray();
-            }
-
-            uint metadataSigLength = 32;
-            var header = PayloadHeaderBuilder.BuildHeader((ulong)manifestBytes.Length, metadataSigLength);
-
-            await outputStream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
-            await outputStream.WriteAsync(manifestBytes, cancellationToken).ConfigureAwait(false);
-            await outputStream.WriteAsync(new byte[metadataSigLength], cancellationToken).ConfigureAwait(false);
-
-            foreach (var data in compressedDataList)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (data.Array != null && data.Count > 0)
-                {
-                    await outputStream.WriteAsync(data.AsMemory(), cancellationToken).ConfigureAwait(false);
-                }
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            using var data = UotanStudio.Firmware.Diff.BinaryDeltaPatch.CreateTemporaryStream();
+            var manifest = BuildManifest(data, cancellationToken);
+            if (manifest.CalculateSize() > 64 * 1024 * 1024) throw new PayloadGenerationException("Payload manifest exceeds 64 MiB.");
+            var manifestBytes = manifest.ToByteArray();
+            // An unsigned v2 payload has a zero-sized metadata signature, not a dummy blob.
+            var header = PayloadHeaderBuilder.BuildHeader((ulong)manifestBytes.Length, 0);
+            output.Write(header);
+            output.Write(manifestBytes);
+            data.Position = 0;
+            UotanStudio.Firmware.Diff.BinaryDeltaPatch.CopyExactly(data, output, data.Length, cancellationToken);
         }
-        catch (PayloadGenerationException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new PayloadGenerationException($"Failed to build payload: {ex.Message}", ex);
-        }
+        catch (OperationCanceledException) { throw; }
+        catch (PayloadGenerationException) { throw; }
+        catch (Exception ex) { throw new PayloadGenerationException($"Failed to build payload: {ex.Message}", ex); }
     }
 
-    /// <summary>
-    /// Builds the payload.bin file and saves it to the specified file path.
-    /// <para>构建 payload.bin 文件并将其保存到指定的文件路径。</para>
-    /// </summary>
-    public void Build(string outputPath)
+    private DeltaArchiveManifest BuildManifest(FileStream data, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(outputPath);
-        if (string.IsNullOrWhiteSpace(outputPath))
+        const int maximumOperationBytes = 1024 * 1024;
+        const int maximumOperations = 65536;
+        if (BlockSize > maximumOperationBytes) throw new PayloadGenerationException("Payload block size exceeds the 1 MiB operation limit.");
+        if (_partitions.Count > maximumOperations) throw new PayloadGenerationException("Payload exceeds the supported 65536 partitions.");
+        var chunkSize = checked((int)(maximumOperationBytes / BlockSize * BlockSize));
+        var buffer = new byte[chunkSize];
+        var manifest = new DeltaArchiveManifest { BlockSize = BlockSize, MinorVersion = MinorVersion, MaxTimestamp = _maxTimestamp };
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var operationCount = 0;
+        foreach (var partition in _partitions)
         {
-            throw new ArgumentException("Output path cannot be empty or whitespace.", nameof(outputPath));
-        }
-
-        using var stream = File.Create(outputPath);
-        Build(stream);
-    }
-
-    /// <summary>
-    /// Asynchronously builds the payload.bin file and saves it to the specified file path.
-    /// <para>异步构建 payload.bin 文件并将其保存到指定的文件路径。</para>
-    /// </summary>
-    public async Task BuildAsync(string outputPath, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(outputPath);
-        if (string.IsNullOrWhiteSpace(outputPath))
-        {
-            throw new ArgumentException("Output path cannot be empty or whitespace.", nameof(outputPath));
-        }
-
-        using var stream = File.Create(outputPath);
-        await BuildAsync(stream, cancellationToken).ConfigureAwait(false);
-    }
-
-    private DeltaArchiveManifest BuildManifest(ArraySegment<byte>[] compressedDataList)
-    {
-        var manifest = new DeltaArchiveManifest
-        {
-            BlockSize = BlockSize,
-            MinorVersion = MinorVersion,
-            MaxTimestamp = _maxTimestamp
-        };
-
-        ulong dataBlobOffset = 0;
-
-        for (var i = 0; i < _partitions.Count; i++)
-        {
-            var partition = _partitions[i];
-            var partitionUpdate = new PartitionUpdate
-            {
-                PartitionName = partition.PartitionName
-            };
-
-            var operation = new InstallOperation
-            {
-                Type = partition.OperationType
-            };
-
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!names.Add(partition.PartitionName)) throw new PayloadGenerationException("Duplicate payload partition name.");
+            var update = new PartitionUpdate { PartitionName = partition.PartitionName };
+            using var partitionHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             if (partition.OperationType == InstallOperation.Types.Type.Zero)
             {
-                var numBlocks = partition.SizeBytes / BlockSize;
-                if (partition.SizeBytes % BlockSize != 0)
+                if (partition.SizeBytes % BlockSize != 0) throw new PayloadGenerationException("Partition size must be block-aligned.");
+                var zeroOperationCount = partition.SizeBytes / (ulong)chunkSize + (partition.SizeBytes % (ulong)chunkSize == 0 ? 0UL : 1UL);
+                if (zeroOperationCount > (ulong)(maximumOperations - operationCount))
+                    throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
+                Array.Clear(buffer);
+                var remaining = partition.SizeBytes;
+                while (remaining > 0)
                 {
-                    numBlocks++;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var count = (int)Math.Min((ulong)buffer.Length, remaining);
+                    var operation = MinorVersion >= 4
+                        ? new InstallOperation { Type = InstallOperation.Types.Type.Zero, DstLength = (ulong)count }
+                        : WriteReplaceOperation(data, buffer, count, InstallOperation.Types.Type.ReplaceBz, CompressionType.BZip2, cancellationToken);
+                    operation.DstExtents.Add(new Extent { StartBlock = (partition.SizeBytes - remaining) / BlockSize, NumBlocks = (ulong)count / BlockSize });
+                    update.Operations.Add(operation); operationCount++;
+                    partitionHash.AppendData(buffer, 0, count); remaining -= (ulong)count;
                 }
-
-                operation.DstExtents.Add(new Extent { StartBlock = 0, NumBlocks = numBlocks });
+                update.NewPartitionInfo = new PartitionInfo { Size = partition.SizeBytes, Hash = ByteString.CopyFrom(partitionHash.GetHashAndReset()) };
             }
             else
             {
-                var imageData = ProcessPartitionImage(partition);
-                var numBlocks = imageData.OriginalSize / BlockSize;
-                if (imageData.OriginalSize % BlockSize != 0)
+                using var owned = partition.ImagePath is null ? null : File.OpenRead(partition.ImagePath);
+                var input = owned ?? partition.ImageStream ?? throw new PayloadGenerationException("Partition has no image stream.");
+                if (!input.CanRead) throw new PayloadGenerationException("Partition stream must be readable.");
+                var declaredLength = input.CanSeek ? checked(input.Length - input.Position) : (long?)null;
+                if (declaredLength is { } knownLength && (knownLength < 0 || knownLength % BlockSize != 0))
+                    throw new PayloadGenerationException("Partition size must be block-aligned.");
+                ulong position = 0;
+                while (true)
                 {
-                    numBlocks++;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    int count;
+                    if (declaredLength is { } length)
+                    {
+                        var remaining = checked(length - (long)position);
+                        if (remaining == 0) break;
+                        count = (int)Math.Min(buffer.Length, remaining);
+                        input.ReadExactly(buffer.AsSpan(0, count));
+                    }
+                    else
+                    {
+                        count = input.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+                        if (count == 0) break;
+                    }
+                    if (count % BlockSize != 0) throw new PayloadGenerationException("Partition size must be block-aligned.");
+                    if (++operationCount > maximumOperations) throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
+                    partitionHash.AppendData(buffer, 0, count);
+                    var operation = WriteReplaceOperation(data, buffer, count, partition.OperationType, partition.CompressionType, cancellationToken);
+                    operation.DstExtents.Add(new Extent { StartBlock = position / BlockSize, NumBlocks = (ulong)count / BlockSize });
+                    update.Operations.Add(operation); position = checked(position + (ulong)count);
                 }
-
-                operation.DataLength = (ulong)imageData.CompressedData.Count;
-                operation.DataOffset = dataBlobOffset;
-                operation.DstExtents.Add(new Extent { StartBlock = 0, NumBlocks = numBlocks });
-                operation.DataSha256Hash = ByteString.CopyFrom(imageData.DataHash);
-
-                partitionUpdate.NewPartitionInfo = new PartitionInfo
-                {
-                    Size = imageData.OriginalSize,
-                    Hash = ByteString.CopyFrom(imageData.SrcHash)
-                };
-
-                dataBlobOffset += (ulong)imageData.CompressedData.Count;
-                compressedDataList[i] = imageData.CompressedData;
+                update.NewPartitionInfo = new PartitionInfo { Size = position, Hash = ByteString.CopyFrom(partitionHash.GetHashAndReset()) };
             }
-
-            partitionUpdate.Operations.Add(operation);
-            manifest.Partitions.Add(partitionUpdate);
+            manifest.Partitions.Add(update);
         }
-
         return manifest;
     }
 
-    private PartitionImageData ProcessPartitionImage(PartitionBuildInfo partition)
+    private static InstallOperation WriteReplaceOperation(FileStream data, byte[] buffer, int count,
+        InstallOperation.Types.Type operationType, CompressionType compressionType, CancellationToken cancellationToken)
     {
-        if (partition.ImagePath != null)
+        var offset = data.Position;
+        using (var source = new MemoryStream(buffer, 0, count, writable: false))
+        using (var bounded = new UotanStudio.Firmware.Common.Streams.CountingWriteStream(data, count * 2L + 65536, leaveOpen: true, cancellationToken: cancellationToken))
+            CompressStream(source, bounded, compressionType);
+        var storedLength = data.Position - offset;
+        byte[] digest;
+        using (var stored = new UotanStudio.Firmware.Common.Streams.BoundedReadStream(data, offset, storedLength, leaveOpen: true))
+            digest = SHA256.HashData(stored);
+        data.Position = offset + storedLength;
+        return new InstallOperation
         {
-            using var fileStream = new FileStream(partition.ImagePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920);
-            return ProcessPartitionImageFromStream(fileStream, partition.CompressionType);
-        }
-
-        if (partition.ImageStream != null)
-        {
-            using var ms = new MemoryStream();
-            partition.ImageStream.CopyTo(ms);
-            ms.Seek(0, SeekOrigin.Begin);
-            return ProcessPartitionImageFromStream(ms, partition.CompressionType);
-        }
-
-        throw new InvalidOperationException("Partition has no image data.");
-    }
-
-    private static PartitionImageData ProcessPartitionImageFromStream(Stream inputStream, CompressionType compressionType)
-    {
-        byte[] srcHash;
-        byte[] dataHash;
-        ArraySegment<byte> compressedData;
-
-
-        srcHash = SHA256.HashData(inputStream);
-
-        inputStream.Seek(0, SeekOrigin.Begin);
-        var compressedStream = new MemoryStream();
-        CompressStream(inputStream, compressedStream, compressionType);
-
-        if (compressedStream.TryGetBuffer(out var buffer))
-        {
-            dataHash = SHA256.HashData(buffer.AsSpan(0, buffer.Count));
-            compressedData = buffer;
-        }
-        else
-        {
-            var arr = compressedStream.ToArray();
-            dataHash = SHA256.HashData(arr);
-            compressedData = new ArraySegment<byte>(arr);
-        }
-
-        return new PartitionImageData
-        {
-            SrcHash = srcHash,
-            DataHash = dataHash,
-            CompressedData = compressedData,
-            OriginalSize = (ulong)inputStream.Length
+            Type = operationType,
+            DataOffset = (ulong)offset,
+            DataLength = (ulong)storedLength,
+            DataSha256Hash = ByteString.CopyFrom(digest),
+            DstLength = (ulong)count
         };
     }
-
 
     /// <summary>
     /// Releases all resources used by the PayloadBuilder.
@@ -487,14 +376,6 @@ public sealed partial class PayloadBuilder : IDisposable
         }
 
         GC.SuppressFinalize(this);
-    }
-
-    private struct PartitionImageData
-    {
-        public byte[] SrcHash;
-        public byte[] DataHash;
-        public ArraySegment<byte> CompressedData;
-        public ulong OriginalSize;
     }
 
     private sealed class PartitionBuildInfo

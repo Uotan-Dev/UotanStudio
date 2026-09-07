@@ -62,8 +62,8 @@ internal class PayloadHeader
         }
 
         var metadataSignatureLength = BigEndianReader.ReadUInt32BigEndian(stream);
-        return metadataSignatureLength == 0 || metadataSignatureLength > MaximumMetadataSignatureLength
-            ? throw new InvalidManifestException($"Metadata signature length must be between 1 and {MaximumMetadataSignatureLength} bytes.")
+        return metadataSignatureLength > MaximumMetadataSignatureLength
+            ? throw new InvalidManifestException($"Metadata signature length must be between 0 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);
     }
 
@@ -97,8 +97,8 @@ internal class PayloadHeader
         }
 
         var metadataSignatureLength = await BigEndianReader.ReadUInt32BigEndianAsync(stream).ConfigureAwait(false);
-        return metadataSignatureLength == 0 || metadataSignatureLength > MaximumMetadataSignatureLength
-            ? throw new InvalidManifestException($"Metadata signature length must be between 1 and {MaximumMetadataSignatureLength} bytes.")
+        return metadataSignatureLength > MaximumMetadataSignatureLength
+            ? throw new InvalidManifestException($"Metadata signature length must be between 0 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);
     }
 
@@ -134,8 +134,8 @@ internal class PayloadHeader
         }
 
         var metadataSignatureLength = BigEndianReader.ReadUInt32BigEndian(headerBytes, 20);
-        return metadataSignatureLength == 0 || metadataSignatureLength > MaximumMetadataSignatureLength
-            ? throw new InvalidManifestException($"Metadata signature length must be between 1 and {MaximumMetadataSignatureLength} bytes.")
+        return metadataSignatureLength > MaximumMetadataSignatureLength
+            ? throw new InvalidManifestException($"Metadata signature length must be between 0 and {MaximumMetadataSignatureLength} bytes.")
             : new PayloadHeader(magic, version, manifestLength, metadataSignatureLength);
     }
 

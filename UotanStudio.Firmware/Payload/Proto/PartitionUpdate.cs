@@ -24,6 +24,7 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     public PartitionUpdate(PartitionUpdate other) : this()
     {
         _partitionName = other._partitionName;
+        OldPartitionInfo = other.OldPartitionInfo?.Clone();
         NewPartitionInfo = other.NewPartitionInfo?.Clone();
         Operations = other.Operations.Clone();
         _unknownFields = UnknownFieldSet.Clone(other._unknownFields);
@@ -41,6 +42,12 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
 
     public const int NewPartitionInfoFieldNumber = 7;
 
+    /// <summary>Identifies the old partition info protobuf field. <para>标识旧分区信息的 protobuf 字段。</para></summary>
+    public const int OldPartitionInfoFieldNumber = 6;
+
+    /// <summary>Gets or sets the immutable source partition identity. <para>获取或设置不可变源分区身份。</para></summary>
+    public PartitionInfo? OldPartitionInfo { get; set; }
+
     public PartitionInfo? NewPartitionInfo { get; set; }
 
     public const int OperationsFieldNumber = 8;
@@ -50,7 +57,7 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     public override bool Equals(object? obj) => Equals(obj as PartitionUpdate);
 
     public bool Equals(PartitionUpdate? other)
-        => other is not null && (ReferenceEquals(other, this) || (PartitionName == other.PartitionName && Equals(NewPartitionInfo, other.NewPartitionInfo) && Operations.Equals(other.Operations) && Equals(_unknownFields, other._unknownFields)));
+        => other is not null && (ReferenceEquals(other, this) || (PartitionName == other.PartitionName && Equals(OldPartitionInfo, other.OldPartitionInfo) && Equals(NewPartitionInfo, other.NewPartitionInfo) && Operations.Equals(other.Operations) && Equals(_unknownFields, other._unknownFields)));
 
     public override int GetHashCode()
     {
@@ -66,6 +73,7 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
         }
 
         hash ^= Operations.GetHashCode();
+        if (OldPartitionInfo is not null) hash ^= OldPartitionInfo.GetHashCode();
         if (_unknownFields != null)
         {
             hash ^= _unknownFields.GetHashCode();
@@ -78,6 +86,7 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
 
     public void WriteTo(CodedOutputStream output)
     {
+        if (OldPartitionInfo is not null) { output.WriteRawTag(50); output.WriteMessage(OldPartitionInfo); }
         if (_partitionName.Length != 0)
         {
             output.WriteRawTag(10);
@@ -97,6 +106,7 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     public int CalculateSize()
     {
         var size = 0;
+        if (OldPartitionInfo is not null) size += 1 + CodedOutputStream.ComputeMessageSize(OldPartitionInfo);
         if (_partitionName.Length != 0)
         {
             size += 1 + CodedOutputStream.ComputeStringSize(PartitionName);
@@ -132,6 +142,7 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
         {
             (NewPartitionInfo ??= new PartitionInfo()).MergeFrom(other.NewPartitionInfo);
         }
+        if (other.OldPartitionInfo is not null) (OldPartitionInfo ??= new PartitionInfo()).MergeFrom(other.OldPartitionInfo);
 
         Operations.Add(other.Operations);
         _unknownFields = UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
@@ -152,6 +163,9 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
                     break;
                 case 58:
                     input.ReadMessage(NewPartitionInfo ??= new PartitionInfo());
+                    break;
+                case 50:
+                    input.ReadMessage(OldPartitionInfo ??= new PartitionInfo());
                     break;
                 case 66:
                     Operations.AddEntriesFrom(input, RepeatedOperationsCodec);

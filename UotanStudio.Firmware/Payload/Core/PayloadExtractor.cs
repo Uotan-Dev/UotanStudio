@@ -1,5 +1,6 @@
 ﻿using UotanStudio.Firmware.Payload.Exceptions;
 using UotanStudio.Firmware.Payload.Proto;
+using System.Security.Cryptography;
 
 namespace UotanStudio.Firmware.Payload.Core;
 
@@ -10,14 +11,13 @@ internal class PayloadExtractor
         InstallOperation.Types.Type.Replace,
         InstallOperation.Types.Type.ReplaceBz,
         InstallOperation.Types.Type.ReplaceXz,
-        (InstallOperation.Types.Type)14,
         InstallOperation.Types.Type.Zero,
-        InstallOperation.Types.Type.Discard,
-        InstallOperation.Types.Type.Move
+        InstallOperation.Types.Type.Discard
     ];
 
     private static readonly HashSet<InstallOperation.Types.Type> SequentialTypes =
     [
+        InstallOperation.Types.Type.Move,
         InstallOperation.Types.Type.SourceCopy,
         InstallOperation.Types.Type.SourceBsdiff,
         InstallOperation.Types.Type.BrotliBsdiff,
@@ -46,6 +46,7 @@ internal class PayloadExtractor
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        if (blockSize == 0) throw new PartitionExtractionException("Payload block size must be nonzero.", partition.PartitionName);
         var fullOutputPath = Path.GetFullPath(outFilename);
         Directory.CreateDirectory(Path.GetDirectoryName(fullOutputPath)!);
         var tempPath = fullOutputPath + ".tmp-" + Guid.NewGuid().ToString("N");
@@ -72,6 +73,13 @@ internal class PayloadExtractor
                     throw new PartitionExtractionException("Destination extent end offset exceeds the supported range", partition.PartitionName, ex);
                 }
 
+                if (partition.NewPartitionInfo is { } targetInfo)
+                {
+                    var declaredSize = checked((long)targetInfo.Size);
+                    if (totalSize > declaredSize)
+                        throw new PartitionExtractionException("Destination extents exceed the declared partition size.", partition.PartitionName);
+                    totalSize = declaredSize;
+                }
                 if (totalSize > 0)
                 {
                     outFile.SetLength(totalSize);
@@ -94,19 +102,14 @@ internal class PayloadExtractor
                         partition.PartitionName);
                 }
 
-                if (baseImagePath != null)
+                using var baseStream = baseImagePath is null ? null : new FileStream(baseImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                if (baseStream is not null && partition.OldPartitionInfo is { } sourceInfo)
+                    VerifyPartition(baseStream, sourceInfo, partition.PartitionName, cancellationToken);
+                if (baseStream is not null)
                 {
-                    if (!File.Exists(baseImagePath))
-                    {
-                        throw new PartitionExtractionException(
-                            $"Base image file '{baseImagePath}' for partition '{partition.PartitionName}' does not exist. " +
-                            $"分区 '{partition.PartitionName}' 的基座镜像文件 '{baseImagePath}' 不存在。",
-                            partition.PartitionName);
-                    }
-
-
-                    using var baseStream = new FileStream(baseImagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                    baseStream.CopyTo(outFile);
+                    baseStream.Position = 0;
+                    outFile.Position = 0;
+                    UotanStudio.Firmware.Diff.BinaryDeltaPatch.CopyExactly(baseStream, outFile, Math.Min(baseStream.Length, totalSize), cancellationToken);
                 }
 
                 object writeLock = new();
@@ -125,6 +128,7 @@ internal class PayloadExtractor
                     {
                         parallelOps.Add(op);
                     }
+                    else throw new PayloadUnsupportedOperationException($"Unsupported operation type: {op.Type}", op.Type.ToString());
                 }
 
                 Parallel.ForEach(
@@ -139,70 +143,11 @@ internal class PayloadExtractor
                 foreach (var op in sequentialOps)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    switch (op.Type)
-                    {
-                        case InstallOperation.Types.Type.SourceCopy:
-                            OperationProcessor.ProcessSourceCopy(op, outFile, blockSize);
-                            break;
-                        case InstallOperation.Types.Type.SourceBsdiff:
-                            {
-                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                                OperationProcessor.ProcessSourceBsdiff(op, patchData, outFile, blockSize);
-                            }
-                            break;
-                        case InstallOperation.Types.Type.BrotliBsdiff:
-                            {
-                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                                OperationProcessor.ProcessBrotliBsdiff(op, patchData, outFile, blockSize);
-                            }
-                            break;
-                        case InstallOperation.Types.Type.Puffdiff:
-                            {
-                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                                OperationProcessor.ProcessPuffdiff(op, patchData, patchData.Length, outFile, blockSize);
-                            }
-                            break;
-                        case InstallOperation.Types.Type.Bsdiff:
-                            {
-                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                                OperationProcessor.ProcessBsdiff(op, patchData, outFile, blockSize);
-                            }
-                            break;
-                        case InstallOperation.Types.Type.Zucchini:
-                            {
-                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                                OperationProcessor.ProcessZucchini(op, patchData, outFile, blockSize);
-                            }
-                            break;
-                        case InstallOperation.Types.Type.Lz4diffBsdiff:
-                            {
-                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                                OperationProcessor.ProcessLz4diffBsdiff(op, patchData, outFile, blockSize);
-                            }
-                            break;
-                        case InstallOperation.Types.Type.Lz4diffPuffdiff:
-                            {
-                                var patchData = ReadOperationData(op, stream, baseOffset, streamLock);
-                                OperationProcessor.ProcessLz4diffPuffdiff(op, patchData, outFile, blockSize);
-                            }
-                            break;
-                        case InstallOperation.Types.Type.Replace:
-                            break;
-                        case InstallOperation.Types.Type.ReplaceBz:
-                            break;
-                        case InstallOperation.Types.Type.Move:
-                            break;
-                        case InstallOperation.Types.Type.Zero:
-                            break;
-                        case InstallOperation.Types.Type.Discard:
-                            break;
-                        case InstallOperation.Types.Type.ReplaceXz:
-                            break;
-                        default:
-                            break;
-                    }
+                    OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, stream, baseOffset, blockSize, cancellationToken);
                 }
 
+                if (partition.NewPartitionInfo is { } newInfo)
+                    VerifyPartition(outFile, newInfo, partition.PartitionName, cancellationToken);
                 if (outFile.Length > totalSize)
                 {
                     outFile.SetLength(totalSize);
@@ -324,6 +269,7 @@ internal class PayloadExtractor
     }
 
     internal static bool IsSourceDependent(InstallOperation.Types.Type type) => type is
+        InstallOperation.Types.Type.Move or
         InstallOperation.Types.Type.SourceCopy or
         InstallOperation.Types.Type.SourceBsdiff or
         InstallOperation.Types.Type.BrotliBsdiff or
@@ -332,6 +278,24 @@ internal class PayloadExtractor
         InstallOperation.Types.Type.Lz4diffBsdiff or
         InstallOperation.Types.Type.Lz4diffPuffdiff or
         InstallOperation.Types.Type.Zucchini;
+
+    private static void VerifyPartition(Stream image, PartitionInfo info, string name, CancellationToken ct)
+    {
+        if (checked((ulong)image.Length) != info.Size)
+            throw new PartitionExtractionException("Partition length does not match its manifest.", name);
+        if (info.Hash.Length > 0)
+        {
+            if (info.Hash.Length != 32) throw new PartitionExtractionException("Invalid partition SHA-256 length.", name);
+            image.Position = 0;
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = new byte[64 * 1024];
+            int read;
+            while ((read = image.Read(buffer)) > 0) { ct.ThrowIfCancellationRequested(); hash.AppendData(buffer, 0, read); }
+            if (!CryptographicOperations.FixedTimeEquals(hash.GetHashAndReset(), info.Hash.Span))
+                throw new PartitionExtractionException("Partition SHA-256 does not match its manifest.", name);
+        }
+        image.Position = 0;
+    }
 
     private static string GetSafeOutputPath(string outputDir, string name)
     {
@@ -352,50 +316,4 @@ internal class PayloadExtractor
         return candidate;
     }
 
-    private static byte[] ReadOperationData(InstallOperation op, Stream stream, ulong baseOffset, object streamLock)
-    {
-        if (!stream.CanSeek)
-        {
-            throw new PartitionExtractionException("Payload stream must be seekable", string.Empty);
-        }
-
-        int dataLength;
-        long dataPos;
-        try
-        {
-            dataLength = checked((int)op.DataLength);
-            dataPos = checked((long)checked(baseOffset + op.DataOffset));
-        }
-        catch (OverflowException ex)
-        {
-            throw new PartitionExtractionException("Payload operation data offset or length exceeds the supported range", string.Empty, ex);
-        }
-        if (dataPos > stream.Length || dataLength > stream.Length - dataPos)
-        {
-            throw new PartitionExtractionException("Payload operation data range exceeds the stream length", string.Empty);
-        }
-
-        var data = new byte[dataLength];
-        lock (streamLock)
-        {
-            stream.Seek(dataPos, SeekOrigin.Begin);
-            var bytesRead = 0;
-            while (bytesRead < data.Length)
-            {
-                var read = stream.Read(data, bytesRead, data.Length - bytesRead);
-                if (read == 0)
-                {
-                    break;
-                }
-                bytesRead += read;
-            }
-            if (bytesRead != data.Length)
-            {
-                throw new PartitionExtractionException(
-                    $"Failed to read {data.Length} bytes from payload stream at offset {dataPos}, only {bytesRead} bytes read",
-                    string.Empty);
-            }
-        }
-        return data;
-    }
 }
