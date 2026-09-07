@@ -123,17 +123,7 @@ public static class DtsFormat
             throw new ArgumentNullException(nameof(baseTree));
         if (overlayTree is null)
             throw new ArgumentNullException(nameof(overlayTree));
-        foreach (var child in overlayTree.Root.Children.ToList())
-        {
-            var existing = baseTree.Root.FindChild(child.Name);
-            if (existing is null)
-            {
-                overlayTree.Root.RemoveChild(child);
-                baseTree.Root.AddChildNode(child);
-            }
-            else MergeNode(existing, child);
-        }
-        return baseTree;
+        return DtOverlayApplier.Apply(baseTree, overlayTree);
     }
 
     /// <summary>

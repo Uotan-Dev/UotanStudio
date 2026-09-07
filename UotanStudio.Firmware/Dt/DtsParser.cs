@@ -21,6 +21,7 @@ internal sealed class DtsParser
     private readonly Dictionary<DeviceTreeNode, List<string>> _overlayDeletedChildren = new();
     private readonly Dictionary<DeviceTreeNode, List<string>> _overlayDeletedProperties = new();
     private bool _inOverlayBody;
+    private bool _isPlugin;
 
     private int _line = 1;
     private int _column = 1;
@@ -103,7 +104,7 @@ internal sealed class DtsParser
             if (_pos >= _text.Length) break;
 
             if (Match("/dts-v1/")) { Expect(";"); SkipWhitespaceAndComments(); }
-            else if (Match("/plugin/")) { Expect(";"); SkipWhitespaceAndComments(); }
+            else if (Match("/plugin/")) { _isPlugin = true; Expect(";"); SkipWhitespaceAndComments(); }
             else if (Match("/memreserve/")) { ParseMemReserve(); SkipWhitespaceAndComments(); }
             else if (Match("/delete-node/")) { ParseTopLevelDeleteNode(); SkipWhitespaceAndComments(); }
             else if (Match("/delete-property/")) { ParseTopLevelDeleteProperty(); SkipWhitespaceAndComments(); }
@@ -134,15 +135,48 @@ internal sealed class DtsParser
 
         if (tree is null)
         {
-            ThrowParseError("No root node found in DTS source");
-            return null!;
+            if (_isPlugin) tree = new DeviceTree();
+            else
+            {
+                ThrowParseError("No root node found in DTS source");
+                return null!;
+            }
         }
 
         foreach (var mr in _memReserves)
             tree.MemoryReservations.Add(mr);
         ApplyPendingRootDeletes(tree.Root);
+        if (_isPlugin)
+        {
+            var number = 0;
+            foreach (var (label, patch) in _overlayFragments.ToList())
+            {
+                if (_labelToNode.ContainsKey(label)) continue;
+                string name;
+                do name = "fragment@" + number++; while (tree.Root.FindChild(name) is not null);
+                var fragment = tree.Root.AddChild(name);
+                if (label.StartsWith('/')) fragment.AddPropertyString("target-path", label + '\0');
+                else
+                {
+                    fragment.AddPropertyCells("target", uint.MaxValue);
+                    _pendingCellReferences.Add((fragment, "target", 0, label));
+                }
+                patch.Name = "__overlay__";
+                fragment.AddChildNode(patch);
+                _overlayFragments.Remove((label, patch));
+            }
+        }
         ResolveLabelReferences(tree);
         MergeOverlayFragments();
+        foreach (var (label, node) in _labelToNode)
+        {
+            tree.LabelPaths[label] = node.GetPath();
+            if (_isPlugin)
+            {
+                var symbols = tree.Root.FindChild("__symbols__") ?? tree.Root.AddChild("__symbols__");
+                symbols.AddPropertyString(label, node.GetPath() + '\0');
+            }
+        }
         return tree;
     }
 
@@ -273,7 +307,16 @@ internal sealed class DtsParser
     {
         Advance();
         SkipWhitespaceAndComments();
-        var label = ParseIdentifier();
+        string label;
+        if (CurrentChar() == '{')
+        {
+            Advance();
+            var start = _pos;
+            while (_pos < _text.Length && CurrentChar() != '}') Advance();
+            label = _text[start.._pos];
+            Expect("}");
+        }
+        else label = ParseIdentifier();
         SkipWhitespaceAndComments();
         if (CurrentChar() == '{')
         {
@@ -619,12 +662,32 @@ internal sealed class DtsParser
         {
             if (!_labelToNode.TryGetValue(label, out var targetNode))
             {
+                if (_isPlugin)
+                {
+                    var fixups = tree.Root.FindChild("__fixups__") ?? tree.Root.AddChild("__fixups__");
+                    var location = Encoding.UTF8.GetBytes($"{node.GetPath()}:{propName}:{offset}\0");
+                    if (fixups.FindProperty(label) is { } existing)
+                        existing.ReplaceValue(existing.ValueBytes.Concat(location).ToArray());
+                    else fixups.AddProperty(label, location);
+                    PatchCell(node, propName, offset, uint.MaxValue);
+                    continue;
+                }
                 AddParseWarning($"Cannot resolve label reference '&{label}' in '{node.GetPath()}'");
                 continue;
             }
             if (!maxScanned) { maxPhandle = FindMaxPhandleInTree(targetNode); maxScanned = true; }
             var phandle = GetOrCreatePhandle(targetNode, ref maxPhandle);
             PatchCell(node, propName, offset, phandle);
+            if (_isPlugin)
+            {
+                var local = tree.Root.FindChild("__local_fixups__") ?? tree.Root.AddChild("__local_fixups__");
+                foreach (var segment in node.GetPath().Split('/', StringSplitOptions.RemoveEmptyEntries))
+                    local = local.FindChild(segment) ?? local.AddChild(segment);
+                var offsets = local.FindProperty(propName)?.GetCells().ToList() ?? [];
+                offsets.Add((uint)offset);
+                local.RemoveProperty(propName);
+                local.AddPropertyCells(propName, offsets.ToArray());
+            }
         }
 
         foreach (var (node, propName, label) in _pendingLabelValueReferences)

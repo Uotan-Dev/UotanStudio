@@ -242,6 +242,7 @@ public sealed class DeviceTreeNode
 
 public sealed class DeviceTree
 {
+    internal Dictionary<string, string> LabelPaths { get; } = new(StringComparer.Ordinal);
     public DeviceTreeNode Root { get; } = new("/") { Name = "" };
 
     public List<MemoryReservation> MemoryReservations { get; } = [];
