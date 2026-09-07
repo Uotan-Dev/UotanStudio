@@ -148,6 +148,17 @@ public sealed class LogService : IUnifiedLog
     }
 
     /// <summary>
+    /// <para>应用调试模式设置：开启时最低级别为 <see cref="LogLevel.Trace"/>，关闭时为 <see cref="LogLevel.Info"/>。</para>
+    /// Applies the debug mode setting: when enabled the minimum level is <see cref="LogLevel.Trace"/>;
+    /// when disabled it is <see cref="LogLevel.Info"/>.
+    /// </summary>
+    /// <param name="debug"><para>是否启用调试模式。</para>Whether debug mode is enabled.</param>
+    public void ApplyDebugMode(bool debug)
+    {
+        SetMinimumLevel(debug ? LogLevel.Trace : LogLevel.Info);
+    }
+
+    /// <summary>
     /// <para>订阅日志条目推送（线程安全）。返回取消订阅的委托。</para>
     /// Subscribes to log entry push (thread-safe). Returns a delegate to unsubscribe.
     /// </summary>

@@ -12,6 +12,7 @@
     <x:String x:Key="Settings_ThemeLight">浅色</x:String>
     <x:String x:Key="Settings_ThemeDark">深色</x:String>
     <x:String x:Key="Settings_AutoSave">自动保存</x:String>
+    <x:String x:Key="Settings_DebugMode">调试模式</x:String>
     <x:String x:Key="Settings_UnpackToolPath">解包工具路径</x:String>
     <x:String x:Key="Settings_TempDir">临时文件目录</x:String>
     <x:String x:Key="Settings_AutoVerify">解包后自动校验</x:String>

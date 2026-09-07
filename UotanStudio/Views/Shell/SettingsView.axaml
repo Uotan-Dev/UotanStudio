@@ -61,11 +61,15 @@
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_General}" FontWeight="SemiBold" FontSize="16" />
                     <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto" Margin="0,4">
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource Settings_AutoSave}"
                                    VerticalAlignment="Center" FontSize="13" />
                         <ToggleSwitch Grid.Row="0" Grid.Column="1"
                                       IsChecked="{Binding AutoSave, Mode=TwoWay}" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource Settings_DebugMode}"
+                                   VerticalAlignment="Center" FontSize="13" />
+                        <ToggleSwitch Grid.Row="1" Grid.Column="1"
+                                      IsChecked="{Binding DebugMode, Mode=TwoWay}" />
                     </Grid>
                 </StackPanel>
 

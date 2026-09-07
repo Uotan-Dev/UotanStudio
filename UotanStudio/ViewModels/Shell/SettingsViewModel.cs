@@ -22,6 +22,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private LanguageInfo _selectedLanguage = LanguageInfo.SystemLanguage;
     private ThemeMode _selectedThemeMode;
     private bool _autoSave;
+    private bool _debugMode;
     private bool _isToastVisible;
     private string _toastMessage = string.Empty;
 
@@ -436,6 +437,23 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>获取或设置是否启用调试模式（开启后日志显示 Trace/Debug 级别详细诊断信息）。</para>
+    /// Gets or sets whether debug mode is enabled (when on, logs show Trace/Debug level diagnostic details).
+    /// </summary>
+    public bool DebugMode
+    {
+        get => _debugMode;
+        set
+        {
+            if (SetProperty(ref _debugMode, value))
+            {
+                LogService.Instance.ApplyDebugMode(value);
+                DebouncedSaveSettings();
+            }
+        }
+    }
+
+    /// <summary>
     /// <para>获取或设置 Toast 通知是否可见。</para>
     /// Gets or sets whether the toast notification is visible.
     /// </summary>
@@ -489,6 +507,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
               ?? new LanguageInfo(settings.CultureName, settings.CultureName, settings.CultureName);
         _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
+        _debugMode = settings.DebugMode;
 
         // Apply language based on loaded preference
         ApplyLanguageInfo(_selectedLanguage);
@@ -577,6 +596,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.CultureName = _selectedLanguage.IsSystemLanguage ? string.Empty : _selectedLanguage.CultureName;
         _appSettings.ThemeMode = _selectedThemeMode;
         _appSettings.AutoSave = _autoSave;
+        _appSettings.DebugMode = _debugMode;
 
         // 合并磁盘上最新的最近打开项目列表，避免防抖保存覆盖「最近打开」记录。
         // Merge the latest recent-projects list from disk so the debounced save never wipes the MRU record.

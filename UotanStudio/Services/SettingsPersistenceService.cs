@@ -133,6 +133,13 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("mcpExposePort")]
     public int McpExposePort { get; set; } = 18321;
+
+    /// <summary>
+    /// <para>获取或设置是否启用调试模式（开启后日志显示 Trace/Debug 级别详细诊断信息）。</para>
+    /// Gets or sets whether debug mode is enabled (when on, logs show Trace/Debug level diagnostic details).
+    /// </summary>
+    [JsonPropertyName("debugMode")]
+    public bool DebugMode { get; set; }
 }
 
 /// <summary>

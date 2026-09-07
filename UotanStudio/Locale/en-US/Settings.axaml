@@ -12,6 +12,7 @@
     <x:String x:Key="Settings_ThemeLight">Light</x:String>
     <x:String x:Key="Settings_ThemeDark">Dark</x:String>
     <x:String x:Key="Settings_AutoSave">Auto Save</x:String>
+    <x:String x:Key="Settings_DebugMode">Debug Mode</x:String>
     <x:String x:Key="Settings_UnpackToolPath">Unpack Tool Path</x:String>
     <x:String x:Key="Settings_TempDir">Temp Directory</x:String>
     <x:String x:Key="Settings_AutoVerify">Auto Verify After Unpack</x:String>
