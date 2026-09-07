@@ -1,0 +1,62 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:UotanStudio.ViewModels.Workspace"
+             xmlns:edit="using:AvaloniaEdit"
+             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="UotanStudio.Views.Workspace.AdbLogView"
+             x:DataType="vm:AdbLogViewModel">
+  <Grid RowDefinitions="Auto,*">
+    <!-- 顶栏：筛选与操作按钮 -->
+    <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+      <DockPanel>
+        <Button DockPanel.Dock="Right" HorizontalAlignment="Right" Classes="Small"
+                Width="26" Height="26" Padding="4" Click="OnClearClick" ToolTip.Tip="{DynamicResource Log_Clear}">
+          <icons:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
+        </Button>
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Text="{DynamicResource Log_LevelFilter}" FontSize="11"
+                     VerticalAlignment="Center" />
+          <ComboBox Width="110" ItemsSource="{Binding Levels}"
+                    SelectedItem="{Binding LevelFilter}"
+                    HorizontalAlignment="Left">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}"
+                           FontSize="11" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <TextBlock Text="{DynamicResource Log_SourceFilter}" FontSize="11" Margin="12,0,0,0"
+                     VerticalAlignment="Center" />
+          <ComboBox Width="140" ItemsSource="{Binding Sources}"
+                    SelectedItem="{Binding SourceFilter}"
+                    HorizontalAlignment="Left">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Converter={StaticResource LogFilterDisplayConverter}}"
+                           FontSize="11" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+        <TextBlock VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+    <!-- 日志编辑器 -->
+    <edit:TextEditor Grid.Row="1" Name="LogEditor"
+                     IsReadOnly="True" ShowLineNumbers="False" WordWrap="False"
+                     FontFamily="Consolas,monospace" FontSize="12"
+                     Padding="8,4" Background="Transparent"
+                     Foreground="{DynamicResource TextForeground}"
+                     HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+      <edit:TextEditor.ContextMenu>
+        <ContextMenu>
+          <MenuItem Name="CopySelectionMenuItem" Header="{DynamicResource Menu_Copy}"
+                    InputGesture="Ctrl+C" IsEnabled="False" Click="OnCopySelectionClick" />
+          <MenuItem Header="{DynamicResource Menu_SelectAll}"
+                    InputGesture="Ctrl+A" Click="OnSelectAllClick" />
+        </ContextMenu>
+      </edit:TextEditor.ContextMenu>
+    </edit:TextEditor>
+  </Grid>
+</UserControl>
