@@ -3,6 +3,9 @@ using UotanStudio.Firmware.Oppo.Crypto;
 using UotanStudio.Firmware.Oppo.Helpers;
 using UotanStudio.Firmware.Oppo.Models;
 
+using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.Common.Streams;
+
 namespace UotanStudio.Firmware.Oppo.Parsers;
 
 internal sealed class OfpQcFormatParser : IOppFormatParser
@@ -32,72 +35,17 @@ internal sealed class OfpQcFormatParser : IOppFormatParser
         var originalPosition = stream.Position;
         try
         {
-            var tailPage = OfpQcParser.FindTailPage(stream, fileSize) ?? throw new InvalidOppFormatException("Cannot find valid OFP QC tail page.");
-
-
-            var xmlData = OfpQcParser.ReadEncryptedXml(stream, tailPage, tailPage.PageSize, fileSize);
-
-            if (xmlData != null)
-            {
-                var decryptResult = _cryptoProvider.AutoDecryptQcXml(xmlData);
-
-                if (decryptResult != null)
-                {
-                    var entries = OfpQcParser.ParseEntries(decryptResult.Value.Xml, tailPage.PageSize);
-                    return new OppMetadata
-                    {
-                        FormatName = "OFP QC",
-                        Format = OppFormat.OfpQc,
-                        FileSize = fileSize,
-                        EntryCount = entries.Count,
-                        KeyId = decryptResult.Value.KeyId,
-                        IsZipWrapped = false
-                    };
-                }
-            }
-            else
-            {
-
-                var plainXmlOffset = tailPage.XmlSectorOffset * tailPage.PageSize;
-                if (plainXmlOffset >= 0 && plainXmlOffset < stream.Length)
-                {
-                    stream.Position = plainXmlOffset;
-                    var xmlLength = (int)tailPage.XmlLength;
-                    if (xmlLength < 200)
-                    {
-                        var tailPageOffset = fileSize - tailPage.PageSize;
-                        xmlLength = (int)(tailPageOffset - plainXmlOffset - 0x57);
-                    }
-
-                    if (xmlLength > 0 && plainXmlOffset + xmlLength <= stream.Length)
-                    {
-                        var plainData = new byte[xmlLength];
-                        var bytesRead = stream.Read(plainData, 0, xmlLength);
-                        if (bytesRead == xmlLength && OfpQcParser.IsPlaintextXml(plainData))
-                        {
-                            var xmlText = Encoding.UTF8.GetString(plainData);
-                            var entries = OfpQcParser.ParseEntries(xmlText, tailPage.PageSize);
-                            return new OppMetadata
-                            {
-                                FormatName = "OFP QC",
-                                Format = OppFormat.OfpQc,
-                                FileSize = fileSize,
-                                EntryCount = entries.Count,
-                                KeyId = "plaintext",
-                                IsZipWrapped = false
-                            };
-                        }
-                    }
-                }
-            }
-
-
+            var tailPage = OfpQcParser.FindTailPage(stream, fileSize)
+                ?? throw new InvalidOppFormatException("Cannot find valid OFP QC tail page.");
+            var (xml, keyId) = ReadXmlContent(stream, tailPage, fileSize);
+            var entries = xml is null ? [] : OfpQcParser.ParseEntries(xml, tailPage.PageSize);
             return new OppMetadata
             {
                 FormatName = "OFP QC",
                 Format = OppFormat.OfpQc,
                 FileSize = fileSize,
-                EntryCount = 0,
+                EntryCount = entries.Count,
+                KeyId = keyId,
                 IsZipWrapped = false
             };
         }
@@ -119,55 +67,24 @@ internal sealed class OfpQcFormatParser : IOppFormatParser
         try
         {
             var tailPage = OfpQcParser.FindTailPage(stream, fileSize);
-            if (tailPage == null)
-            {
+            if (tailPage is null)
                 return [];
-            }
-
-            var xmlData = OfpQcParser.ReadEncryptedXml(stream, tailPage, tailPage.PageSize, fileSize);
-
-            string? xmlContent = null;
-
-            if (xmlData != null)
-            {
-                var decryptResult = _cryptoProvider.AutoDecryptQcXml(xmlData);
-                if (decryptResult != null)
-                {
-                    xmlContent = decryptResult.Value.Xml;
-                }
-            }
-            else
-            {
-
-                var plainXmlOffset = tailPage.XmlSectorOffset * tailPage.PageSize;
-                if (plainXmlOffset >= 0 && plainXmlOffset < stream.Length)
-                {
-                    stream.Position = plainXmlOffset;
-                    var xmlLength = (int)tailPage.XmlLength;
-                    if (xmlLength < 200)
-                    {
-                        var tailPageOffset = fileSize - tailPage.PageSize;
-                        xmlLength = (int)(tailPageOffset - plainXmlOffset - 0x57);
-                    }
-
-                    if (xmlLength > 0 && plainXmlOffset + xmlLength <= stream.Length)
-                    {
-                        var plainData = new byte[xmlLength];
-                        var bytesRead = stream.Read(plainData, 0, xmlLength);
-                        if (bytesRead == xmlLength && OfpQcParser.IsPlaintextXml(plainData))
-                        {
-                            xmlContent = Encoding.UTF8.GetString(plainData);
-                        }
-                    }
-                }
-            }
-
-            return xmlContent != null ? OfpQcParser.ParseEntries(xmlContent, tailPage.PageSize) : [];
+            var (xml, _) = ReadXmlContent(stream, tailPage, fileSize);
+            return xml is null ? [] : OfpQcParser.ParseEntries(xml, tailPage.PageSize);
         }
         finally
         {
             stream.Position = originalPosition;
         }
+    }
+
+    private (string? Xml, string? KeyId) ReadXmlContent(Stream stream, OfpQcTailPage tailPage, long fileSize)
+    {
+        var data = OfpQcParser.ReadXmlData(stream, tailPage, fileSize);
+        if (OfpQcParser.IsPlaintextXml(data))
+            return (Encoding.UTF8.GetString(data), "plaintext");
+        var result = _cryptoProvider.AutoDecryptQcXml(data);
+        return result is null ? (null, null) : (result.Value.Xml, result.Value.KeyId);
     }
 
     /// <summary>
@@ -179,60 +96,36 @@ internal sealed class OfpQcFormatParser : IOppFormatParser
         Guard.ThrowIfNull(stream);
         Guard.ThrowIfNull(output);
         Guard.ThrowIfNull(entry);
-
+        FileExtraction.ValidateRange(entry.Offset, entry.Size, stream.Length, "OFP entry");
+        if (entry.EncryptedSize < 0 || entry.EncryptedSize > entry.Size)
+            throw new InvalidOppFormatException($"Invalid encrypted length for '{entry.Name}'.");
         var originalPosition = stream.Position;
         try
         {
             stream.Position = entry.Offset;
-
-            if (entry.EncryptedSize > 0 && !string.IsNullOrEmpty(keyId) && keyId != "plaintext")
+            if (entry.EncryptedSize > 0 && keyId != "plaintext")
             {
-
-                var encryptedBytes = new byte[entry.EncryptedSize];
-                var bytesRead = stream.Read(encryptedBytes, 0, (int)entry.EncryptedSize);
-                if (bytesRead != (int)entry.EncryptedSize)
-                {
-                    throw new InvalidOppFormatException("Failed to read encrypted entry data.");
-                }
-
-
-                var decrypted = _cryptoProvider.Decrypt(encryptedBytes, keyId);
-                output.Write(decrypted, 0, decrypted.Length);
-
-
-                var remaining = entry.Size - entry.EncryptedSize;
-                if (remaining > 0)
-                {
-                    CopyRange(stream, output, remaining);
-                }
+                if (string.IsNullOrEmpty(keyId))
+                    throw new OppDecryptionException($"No key is available for encrypted entry '{entry.Name}'.");
+                using var encrypted = new BoundedReadStream(stream, entry.Offset, entry.EncryptedSize, leaveOpen: true);
+                using var counted = new CountingWriteStream(output, entry.EncryptedSize, leaveOpen: true);
+                if (cryptoProvider is not null)
+                    cryptoProvider.Decrypt(encrypted, counted, keyId);
+                else
+                    _cryptoProvider.Decrypt(encrypted, counted, keyId, CancellationToken.None);
+                if (counted.BytesWritten != entry.EncryptedSize || encrypted.Position != encrypted.Length)
+                    throw new InvalidOppFormatException("OFP decryption did not consume and produce the declared length.");
+                stream.Position = checked(entry.Offset + entry.EncryptedSize);
+                StreamCopy.CopyExactly(stream, output, entry.Size - entry.EncryptedSize);
             }
             else
             {
-
-                CopyRange(stream, output, entry.Size);
+                StreamCopy.CopyExactly(stream, output, entry.Size);
             }
         }
         finally
         {
             stream.Position = originalPosition;
-        }
-    }
-
-    private static void CopyRange(Stream stream, Stream output, long count)
-    {
-        var buffer = new byte[81920];
-        var leftToRead = count;
-        while (leftToRead > 0)
-        {
-            var toRead = (int)Math.Min(buffer.Length, leftToRead);
-            var read = stream.Read(buffer, 0, toRead);
-            if (read == 0)
-            {
-                break;
-            }
-
-            output.Write(buffer, 0, read);
-            leftToRead -= read;
         }
     }
 }

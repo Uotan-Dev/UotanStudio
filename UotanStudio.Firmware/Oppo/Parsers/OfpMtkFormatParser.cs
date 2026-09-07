@@ -2,6 +2,9 @@
 using UotanStudio.Firmware.Oppo.Helpers;
 using UotanStudio.Firmware.Oppo.Models;
 
+using UotanStudio.Firmware.Common;
+using UotanStudio.Firmware.Common.Streams;
+
 namespace UotanStudio.Firmware.Oppo.Parsers;
 
 internal sealed class OfpMtkFormatParser : IOppFormatParser
@@ -90,66 +93,36 @@ internal sealed class OfpMtkFormatParser : IOppFormatParser
         Guard.ThrowIfNull(stream);
         Guard.ThrowIfNull(output);
         Guard.ThrowIfNull(entry);
-
+        FileExtraction.ValidateRange(entry.Offset, entry.Size, stream.Length, "OFP entry");
+        if (entry.EncryptedSize < 0 || entry.EncryptedSize > entry.Size)
+            throw new InvalidOppFormatException($"Invalid encrypted length for '{entry.Name}'.");
         var originalPosition = stream.Position;
         try
         {
             stream.Position = entry.Offset;
-
-            if (entry.EncryptedSize > 0 && !string.IsNullOrEmpty(keyId))
+            if (entry.EncryptedSize > 0 && keyId != "plaintext")
             {
-
-                if (entry.EncryptedSize is > int.MaxValue or < 0)
-                {
-                    throw new InvalidOppFormatException($"Encrypted size {entry.EncryptedSize} is out of range for entry '{entry.Name}'.");
-                }
-
-
-                var encryptedBytes = new byte[entry.EncryptedSize];
-                var bytesRead = stream.Read(encryptedBytes, 0, (int)entry.EncryptedSize);
-                if (bytesRead != (int)entry.EncryptedSize)
-                {
-                    throw new InvalidOppFormatException("Failed to read encrypted entry data.");
-                }
-
-
-                var decrypted = _cryptoProvider.Decrypt(encryptedBytes, keyId);
-                output.Write(decrypted, 0, decrypted.Length);
-
-
-                var remaining = entry.Size - entry.EncryptedSize;
-                if (remaining > 0)
-                {
-                    CopyRange(stream, output, remaining);
-                }
+                if (string.IsNullOrEmpty(keyId))
+                    throw new OppDecryptionException($"No key is available for encrypted entry '{entry.Name}'.");
+                using var encrypted = new BoundedReadStream(stream, entry.Offset, entry.EncryptedSize, leaveOpen: true);
+                using var counted = new CountingWriteStream(output, entry.EncryptedSize, leaveOpen: true);
+                if (cryptoProvider is not null)
+                    cryptoProvider.Decrypt(encrypted, counted, keyId);
+                else
+                    _cryptoProvider.Decrypt(encrypted, counted, keyId, CancellationToken.None);
+                if (counted.BytesWritten != entry.EncryptedSize || encrypted.Position != encrypted.Length)
+                    throw new InvalidOppFormatException("OFP decryption did not consume and produce the declared length.");
+                stream.Position = checked(entry.Offset + entry.EncryptedSize);
+                StreamCopy.CopyExactly(stream, output, entry.Size - entry.EncryptedSize);
             }
             else
             {
-
-                CopyRange(stream, output, entry.Size);
+                StreamCopy.CopyExactly(stream, output, entry.Size);
             }
         }
         finally
         {
             stream.Position = originalPosition;
-        }
-    }
-
-    private static void CopyRange(Stream stream, Stream output, long count)
-    {
-        var buffer = new byte[81920];
-        var leftToRead = count;
-        while (leftToRead > 0)
-        {
-            var toRead = (int)Math.Min(buffer.Length, leftToRead);
-            var read = stream.Read(buffer, 0, toRead);
-            if (read == 0)
-            {
-                break;
-            }
-
-            output.Write(buffer, 0, read);
-            leftToRead -= read;
         }
     }
 }

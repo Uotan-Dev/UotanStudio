@@ -92,7 +92,7 @@ internal static class OfpMtkParser
 
         stream.Position = fileSize - OfpMtkHeader.Size;
         var headerBuffer = new byte[OfpMtkHeader.Size];
-        var bytesRead = stream.Read(headerBuffer, 0, OfpMtkHeader.Size);
+        var bytesRead = stream.ReadAtLeast(headerBuffer, OfpMtkHeader.Size, throwOnEndOfStream: false);
         if (bytesRead != OfpMtkHeader.Size)
         {
             throw new InvalidOppFormatException("Failed to read MTK header.");

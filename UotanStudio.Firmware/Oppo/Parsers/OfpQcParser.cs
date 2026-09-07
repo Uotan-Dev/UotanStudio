@@ -7,6 +7,8 @@ namespace UotanStudio.Firmware.Oppo.Parsers;
 
 internal static class OfpQcParser
 {
+    internal const int MaximumXmlBytes = 16 * 1024 * 1024;
+
     /// <summary>
     /// Parses OFP QC entries from decrypted XML content.
     /// <para>从解密的 XML 内容中解析 OFP QC 条目。</para>
@@ -80,7 +82,7 @@ internal static class OfpQcParser
 
             stream.Position = fileSize - pageSize;
             var pageBuffer = new byte[pageSize];
-            var bytesRead = stream.Read(pageBuffer, 0, pageSize);
+            var bytesRead = stream.ReadAtLeast(pageBuffer, pageSize, throwOnEndOfStream: false);
             if (bytesRead != pageSize)
             {
                 continue;
@@ -97,46 +99,25 @@ internal static class OfpQcParser
     }
 
     /// <summary>
-    /// Reads encrypted XML data from the file stream.
-    /// <para>从文件流中读取加密的 XML 数据。</para>
+    /// Reads the bounded plaintext or encrypted XML metadata from the file stream.
+    /// <para>从文件流中精确读取有界的明文或加密 XML 元数据。</para>
     /// </summary>
-    internal static byte[]? ReadEncryptedXml(Stream stream, OfpQcTailPage tailPage, int pageSize, long fileSize)
+    internal static byte[] ReadXmlData(Stream stream, OfpQcTailPage tailPage, long fileSize)
     {
-        var xmlOffset = tailPage.XmlSectorOffset * pageSize;
-        if (tailPage.XmlLength > int.MaxValue)
-        {
-            return null;
-        }
-
-        var xmlLength = (int)tailPage.XmlLength;
-
-
+        if (tailPage.PageSize <= 0 || fileSize < tailPage.PageSize || fileSize > stream.Length)
+            throw new InvalidOppFormatException("Invalid OFP XML container size.");
+        var xmlOffset = checked((long)tailPage.XmlSectorOffset * tailPage.PageSize);
+        long xmlLength = tailPage.XmlLength;
         if (xmlLength < 200)
         {
             var tailPageOffset = fileSize - tailPage.PageSize;
-            xmlLength = (int)(tailPageOffset - xmlOffset - 0x57);
+            xmlLength = tailPageOffset - xmlOffset - 0x57;
         }
-
-        if (xmlOffset < 0 || xmlLength <= 0 || xmlOffset + xmlLength > stream.Length)
-        {
-            return null;
-        }
-
+        if (xmlLength <= 0 || xmlLength > MaximumXmlBytes || xmlOffset > fileSize || xmlLength > fileSize - xmlOffset)
+            throw new InvalidOppFormatException("OFP XML metadata is out of range or exceeds the 16 MiB limit.");
         stream.Position = xmlOffset;
-        var xmlData = new byte[xmlLength];
-        var bytesRead = stream.Read(xmlData, 0, xmlLength);
-        if (bytesRead != xmlLength)
-        {
-            return null;
-        }
-
-
-        var header = new ReadOnlySpan<byte>(xmlData, 0, Math.Min(5, xmlData.Length));
-        if (header.Length >= 5 && header[0] == '<' && header[1] == '?' && header[2] == 'x' && header[3] == 'm' && header[4] == 'l')
-        {
-            return null;
-        }
-
+        var xmlData = new byte[(int)xmlLength];
+        stream.ReadExactly(xmlData);
         return xmlData;
     }
 
@@ -187,11 +168,11 @@ internal static class OfpQcParser
 
         if (long.TryParse(fileOffsetAttr, out var fileOffset))
         {
-            start = fileOffset * pageSize;
+            start = SectorBytes(fileOffset, pageSize);
         }
         else if (long.TryParse(sizeInSectorAttr, out var sectorOffset))
         {
-            start = sectorOffset * pageSize;
+            start = SectorBytes(sectorOffset, pageSize);
         }
 
         long rlength = 0;
@@ -201,8 +182,17 @@ internal static class OfpQcParser
             rlength = byteSize;
         }
 
-        var length = long.TryParse(sizeInSectorAttr, out var sectorSize) ? sectorSize * pageSize : rlength;
+        if (rlength < 0)
+            throw new InvalidOppFormatException("OFP entry has a negative size.");
+        var length = long.TryParse(sizeInSectorAttr, out var sectorSize) ? SectorBytes(sectorSize, pageSize) : rlength;
         return (wfilename, start, length, rlength, (sha256sum, md5sum));
+    }
+
+    private static long SectorBytes(long sectors, int pageSize)
+    {
+        if (pageSize <= 0 || sectors < 0 || sectors > long.MaxValue / pageSize)
+            throw new InvalidOppFormatException("OFP entry sector range is invalid.");
+        return sectors * pageSize;
     }
 
     private static long ComputeEncryptedSize(string parentTag, long length, long realLength)

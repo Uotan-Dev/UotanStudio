@@ -8,6 +8,8 @@ using UotanStudio.Firmware.Oppo.Helpers;
 using UotanStudio.Firmware.Oppo.Models;
 using UotanStudio.Firmware.Oppo.Parsers;
 
+using FileExtraction = UotanStudio.Firmware.Common.FileExtraction;
+
 namespace UotanStudio.Firmware.Oppo;
 
 public sealed partial class OppReader
@@ -262,7 +264,7 @@ public sealed partial class OppReader
         cancellationToken.ThrowIfCancellationRequested();
 
         var archive = ParseFromStream(stream);
-        var result = ExtractCore(stream, archive, outputDir, options, progress);
+        var result = ExtractCore(stream, archive, outputDir, options, progress, cancellationToken);
         return Task.FromResult(result);
     }
 
@@ -271,7 +273,7 @@ public sealed partial class OppReader
     private IReadOnlyList<OppEntry> ParseEntriesFromStream(Stream stream, OppMetadata metadata)
     {
         var format = metadata.Format;
-        var fileSize = metadata.FileSize;
+        var fileSize = stream.Length;
 
         var parser = ParserRegistry.GetParser(format);
         return parser.ParseEntries(stream, fileSize, metadata, _cryptoProvider);
@@ -282,8 +284,9 @@ public sealed partial class OppReader
         OppArchive archive,
         string outputDir,
         OppExtractOptions? options,
-        IProgress<OppExtractProgress>? progress)
+        IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var overwrite = options?.Overwrite ?? false;
         var keyId = options?.KeyId;
 
@@ -295,13 +298,13 @@ public sealed partial class OppReader
 
         if (archive.Metadata.Format == OppFormat.Ozip)
         {
-            return ExtractOzipCore(stream, archive, outputDir, overwrite, keyId, progress);
+            return ExtractOzipCore(stream, archive, outputDir, overwrite, keyId, progress, cancellationToken);
         }
 
 
         return archive.Metadata.IsZipWrapped
-            ? ExtractZipWrappedCore(stream, archive, outputDir, overwrite, keyId, progress)
-            : ExtractEntriesCore(stream, archive, outputDir, overwrite, keyId, progress);
+            ? ExtractZipWrappedCore(stream, archive, outputDir, overwrite, keyId, progress, cancellationToken)
+            : ExtractEntriesCore(stream, archive, outputDir, overwrite, keyId, progress, cancellationToken);
     }
 
     private OppExtractResult ExtractZipWrappedCore(
@@ -310,14 +313,14 @@ public sealed partial class OppReader
         string outputDir,
         bool overwrite,
         string? keyId,
-        IProgress<OppExtractProgress>? progress)
+        IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), $"UotanStudio.Oppo.Ofp.{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
 
         try
         {
-            ExtractZipToDirectory(stream, tempDir);
+            ExtractZipToDirectory(stream, tempDir, cancellationToken);
 
             var innerFiles = Directory.GetFiles(tempDir, "*.ofp", SearchOption.AllDirectories);
             if (innerFiles.Length == 0)
@@ -338,7 +341,7 @@ public sealed partial class OppReader
                 DefaultBufferSize,
                 FileOptions.SequentialScan);
 
-            return ExtractEntriesCore(innerStream, archive, outputDir, overwrite, keyId, progress);
+            return ExtractEntriesCore(innerStream, archive, outputDir, overwrite, keyId, progress, cancellationToken);
         }
         finally
         {
@@ -359,7 +362,7 @@ public sealed partial class OppReader
         string outputDir,
         bool overwrite,
         string? keyId,
-        IProgress<OppExtractProgress>? progress)
+        IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken)
     {
         var entries = archive.Entries;
         var totalEntries = entries.Count;
@@ -369,6 +372,7 @@ public sealed partial class OppReader
         foreach (var entry in entries)
         {
             progress?.Report(new OppExtractProgress(totalEntries, completedEntries, entry.Name));
+            cancellationToken.ThrowIfCancellationRequested();
 
             var sanitized = SanitizeFileName(entry.Name);
             if (string.IsNullOrWhiteSpace(sanitized) || sanitized == "." || sanitized == "..")
@@ -384,7 +388,7 @@ public sealed partial class OppReader
                 continue;
             }
 
-            var outputPath = Path.Combine(outputDir, sanitized);
+            var outputPath = FileExtraction.ResolvePath(outputDir, sanitized);
             ValidateOutputPath(outputDir, outputPath);
 
             if (File.Exists(outputPath) && !overwrite)
@@ -402,14 +406,15 @@ public sealed partial class OppReader
 
 
             var parser = ParserRegistry.GetParser(archive.Metadata.Format);
-            using var outputStream = new FileStream(
-                outputPath,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                DefaultBufferSize,
-                FileOptions.SequentialScan);
-            parser.ExtractEntry(stream, outputStream, entry, archive.Metadata, keyId ?? archive.Metadata.KeyId, _cryptoProvider);
+            FileExtraction.WriteAtomic(outputPath, outputStream =>
+            {
+                using var limited = new CountingWriteStream(outputStream, entry.Size, leaveOpen: true,
+                    cancellationToken: cancellationToken);
+                parser.ExtractEntry(stream, limited, entry, archive.Metadata, keyId ?? archive.Metadata.KeyId, _cryptoProvider);
+                if (limited.BytesWritten != entry.Size)
+                    throw new InvalidOppFormatException($"Entry '{entry.Name}' extracted to an unexpected length.");
+                cancellationToken.ThrowIfCancellationRequested();
+            }, overwrite);
 
             extractedCount++;
             completedEntries++;
@@ -588,7 +593,7 @@ public sealed partial class OppReader
     /// Extracts a ZIP stream to the specified directory using the fixed password.
     /// <para>使用固定密码将 ZIP 流解压到指定目录。</para>
     /// </summary>
-    private static void ExtractZipToDirectory(Stream stream, string outputDir)
+    private static void ExtractZipToDirectory(Stream stream, string outputDir, CancellationToken cancellationToken = default)
     {
         stream.Position = 0;
 
@@ -596,10 +601,12 @@ public sealed partial class OppReader
 
         foreach (var entry in archive.Entries)
         {
-            var outputPath = Path.GetFullPath(Path.Combine(outputDir, entry.Name));
-            if (!outputPath.StartsWith(Path.GetFullPath(outputDir) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) &&
-                !outputPath.Equals(Path.GetFullPath(outputDir), StringComparison.OrdinalIgnoreCase))
+            cancellationToken.ThrowIfCancellationRequested();
+            var isDirectory = entry.FullName.EndsWith('/');
+            var outputPath = FileExtraction.ResolvePath(outputDir, isDirectory ? entry.FullName.TrimEnd('/') : entry.FullName);
+            if (isDirectory)
             {
+                Directory.CreateDirectory(outputPath);
                 continue;
             }
 
@@ -611,15 +618,14 @@ public sealed partial class OppReader
 
             try
             {
-                using var entryStream = entry.Open();
-                using var fileStream = new FileStream(
-                    outputPath,
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None,
-                    DefaultBufferSize,
-                    FileOptions.SequentialScan);
-                entryStream.CopyTo(fileStream);
+                FileExtraction.WriteAtomic(outputPath, output =>
+                {
+                    using var entryStream = entry.Open();
+                    StreamCopy.CopyExactly(entryStream, output, entry.Length, cancellationToken);
+                    if (entryStream.ReadByte() != -1)
+                        throw new InvalidDataException("ZIP entry exceeds its declared length.");
+                    cancellationToken.ThrowIfCancellationRequested();
+                });
             }
             catch (InvalidDataException ex)
             {

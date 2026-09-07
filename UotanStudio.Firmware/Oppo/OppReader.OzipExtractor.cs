@@ -13,7 +13,7 @@ public sealed partial class OppReader
         string outputDir,
         bool overwrite,
         string? keyId,
-        IProgress<OppExtractProgress>? progress)
+        IProgress<OppExtractProgress>? progress, CancellationToken cancellationToken)
     {
         if (archive.Entries.Count == 1 && archive.Entries[0].EncryptedSize > 0)
         {
@@ -23,8 +23,12 @@ public sealed partial class OppReader
             {
                 WriteAtomically(fallbackPath, overwrite, output =>
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    using var limited = new CountingWriteStream(output, archive.Entries[0].Size,
+                        leaveOpen: true, cancellationToken: cancellationToken);
                     stream.Position = 0;
-                    OzipDecryptor.DecryptFileWithAutoDetection(stream, output);
+                    OzipDecryptor.DecryptFileWithAutoDetection(stream, limited);
+                    cancellationToken.ThrowIfCancellationRequested();
                 });
                 extracted = true;
             }
@@ -50,6 +54,7 @@ public sealed partial class OppReader
         foreach (var entry in entries)
         {
             progress?.Report(new OppExtractProgress(entries.Length, completed, entry.FullName));
+            cancellationToken.ThrowIfCancellationRequested();
 
             var sanitized = SanitizeFileName(entry.FullName);
             if (string.IsNullOrWhiteSpace(sanitized) || sanitized is "." or "..")
@@ -68,7 +73,8 @@ public sealed partial class OppReader
 
             WriteAtomically(outputPath, overwrite, output =>
             {
-                using var boundedOutput = new CountingWriteStream(output, entry.Length, leaveOpen: true);
+                using var boundedOutput = new CountingWriteStream(output, entry.Length, leaveOpen: true,
+                    cancellationToken: cancellationToken);
                 using var entryStream = entry.Open();
                 entryStream.CopyTo(boundedOutput);
                 if (boundedOutput.BytesWritten != entry.Length)
@@ -76,6 +82,7 @@ public sealed partial class OppReader
                     throw new InvalidDataException(
                         $"ZIP entry '{entry.FullName}' produced {boundedOutput.BytesWritten} bytes; expected {entry.Length}.");
                 }
+                cancellationToken.ThrowIfCancellationRequested();
             });
 
             extractedCount++;
