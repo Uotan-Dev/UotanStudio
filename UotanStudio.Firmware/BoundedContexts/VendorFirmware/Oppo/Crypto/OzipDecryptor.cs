@@ -83,6 +83,12 @@ public static class OzipDecryptor
         var encryptedBuffer = new byte[EncryptedSize];
         var decryptedBuffer = new byte[EncryptedSize];
         var plaintextBuffer = new byte[PlaintextBlockSize];
+        // 聚合输出缓冲：每个单元 = 16B 解密前缀 + 16KB 明文，拼进同一缓冲后一次 Write，
+        // 消除每单元两次小写；单元边界严格保持（先读完整个单元明文再读下一前缀）。
+        // Aggregated output buffer: each unit = 16B decrypted prefix + 16KB plaintext, joined
+        // and written once per unit instead of two small writes; unit boundaries are kept
+        // strictly (the unit's plaintext is fully read before the next prefix).
+        var aggregate = new byte[EncryptedSize + PlaintextBlockSize];
 
         while (remaining > 0)
         {
@@ -97,18 +103,18 @@ public static class OzipDecryptor
             {
                 throw new CryptographicException("AES did not decrypt a complete OZip block prefix.");
             }
-
-            output.Write(decryptedBuffer, 0, EncryptedSize);
+            Buffer.BlockCopy(decryptedBuffer, 0, aggregate, 0, EncryptedSize);
             remaining -= EncryptedSize;
 
-
-            if (remaining > 0)
+            var plaintextToRead = (int)Math.Min(PlaintextBlockSize, remaining);
+            if (plaintextToRead > 0)
             {
-                var plaintextToRead = (int)Math.Min(PlaintextBlockSize, remaining);
                 ReadExactly(input, plaintextBuffer, plaintextToRead);
-                output.Write(plaintextBuffer, 0, plaintextToRead);
+                Buffer.BlockCopy(plaintextBuffer, 0, aggregate, EncryptedSize, plaintextToRead);
                 remaining -= plaintextToRead;
             }
+
+            output.Write(aggregate, 0, EncryptedSize + plaintextToRead);
         }
     }
 

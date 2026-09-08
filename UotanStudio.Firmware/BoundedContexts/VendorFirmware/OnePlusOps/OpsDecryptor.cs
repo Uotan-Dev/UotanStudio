@@ -43,9 +43,12 @@ public class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
         _logger.Debug($"Parsing {entryCount} OPS entries");
         var entries = new List<OpsEntry>((int)entryCount);
 
+        // 条目头缓冲跨条目复用，避免每条目一次小分配。
+        // The entry-header buffer is reused across entries instead of one small
+        // allocation per entry.
+        var buffer = new byte[OpsConstants.ENTRY_HEADER_SIZE];
         for (uint i = 0; i < entryCount; i++)
         {
-            var buffer = new byte[OpsConstants.ENTRY_HEADER_SIZE];
             ReadExact(_stream, buffer, 0, buffer.Length);
             entries.Add(OpsEntry.FromBytes(buffer));
         }
@@ -78,14 +81,52 @@ public class OpsDecryptor(Stream stream, IOnePlusLogger? logger = null)
     {
         var key = DeriveKey(variant);
         var sbox = GenerateSBox(key);
-        var output = new byte[encryptedData.Length];
+        return DecryptData(encryptedData.AsSpan(), sbox);
+    }
 
-        for (var i = 0; i < encryptedData.Length; i++)
-        {
-            output[i] = (byte)(encryptedData[i] ^ sbox[i % 256]);
-        }
-
+    /// <summary>
+    /// Decrypts a span using the SBox-based stream cipher, writing into a new array.
+    /// The XOR is vectorized in 256-byte segments matching the repeating key period.
+    /// <para>按 SBox 流密码解密 Span 并写入新数组；XOR 按 256 字节密钥周期分段向量化。</para>
+    /// </summary>
+    private static byte[] DecryptData(ReadOnlySpan<byte> encrypted, ReadOnlySpan<byte> sbox)
+    {
+        var output = new byte[encrypted.Length];
+        DecryptInPlace(output, sbox);
         return output;
+    }
+
+    /// <summary>
+    /// Decrypts a buffer in place with the SBox-based stream cipher.
+    /// <para>使用 SBox 流密码对缓冲就地解密。</para>
+    /// </summary>
+    private static void DecryptInPlace(Span<byte> data, ReadOnlySpan<byte> sbox)
+    {
+        // 按 256 字节密钥周期分段：段内 key 序列固定，可用 Vector<byte>.Xor 批量处理。
+        // Process in 256-byte key periods: the key sequence is constant within a segment,
+        // enabling batched Vector<byte>.Xor.
+        var width = System.Numerics.Vector<byte>.Count;
+        var i = 0;
+        while (i < data.Length)
+        {
+            var period = Math.Min(256, data.Length - i);
+            var j = 0;
+            if (System.Numerics.Vector.IsHardwareAccelerated && period >= width)
+            {
+                for (; j <= period - width; j += width)
+                {
+                    System.Numerics.Vector.Xor(
+                        new System.Numerics.Vector<byte>(data.Slice(i + j, width)),
+                        new System.Numerics.Vector<byte>(sbox.Slice(j, width)))
+                        .CopyTo(data.Slice(i + j, width));
+                }
+            }
+            for (; j < period; j++)
+            {
+                data[i + j] ^= sbox[j];
+            }
+            i += period;
+        }
     }
 
     /// <summary>

@@ -86,18 +86,12 @@ internal static class AesCfb128
                 Array.Copy(data, offset, feedback, 0, BlockSize);
 
 
-                for (var i = 0; i < BlockSize; i++)
-                {
-                    data[offset + i] ^= encrypted[i];
-                }
+                XorBlockInPlace(data.AsSpan(offset, BlockSize), encrypted);
             }
             else
             {
 
-                for (var i = 0; i < blockSize; i++)
-                {
-                    data[offset + i] ^= encrypted[i];
-                }
+                XorBlockInPlace(data.AsSpan(offset, blockSize), encrypted);
             }
 
             offset += blockSize;
@@ -132,10 +126,7 @@ internal static class AesCfb128
             if (blockSize == BlockSize)
             {
 
-                for (var i = 0; i < BlockSize; i++)
-                {
-                    data[offset + i] ^= encrypted[i];
-                }
+                XorBlockInPlace(data.AsSpan(offset, BlockSize), encrypted);
 
 
                 Array.Copy(data, offset, feedback, 0, BlockSize);
@@ -143,10 +134,7 @@ internal static class AesCfb128
             else
             {
 
-                for (var i = 0; i < blockSize; i++)
-                {
-                    data[offset + i] ^= encrypted[i];
-                }
+                XorBlockInPlace(data.AsSpan(offset, blockSize), encrypted);
             }
 
             offset += blockSize;
@@ -228,6 +216,36 @@ internal static class AesCfb128
         }
     }
 
+    /// <summary>
+    /// XORs a 16-byte block in place with the encrypted keystream block (vectorized when available).
+    /// <para>就地 XOR 16 字节块与加密密钥流块（可用时向量化）。</para>
+    /// </summary>
+    private static void XorBlockInPlace(Span<byte> data, ReadOnlySpan<byte> encryptedBlock)
+    {
+        if (System.Numerics.Vector.IsHardwareAccelerated && data.Length >= System.Numerics.Vector<byte>.Count)
+        {
+            var width = System.Numerics.Vector<byte>.Count;
+            var i = 0;
+            for (; i <= data.Length - width; i += width)
+            {
+                System.Numerics.Vector.Xor(
+                    new System.Numerics.Vector<byte>(data.Slice(i, width)),
+                    new System.Numerics.Vector<byte>(encryptedBlock.Slice(i, width)))
+                    .CopyTo(data.Slice(i, width));
+            }
+            for (; i < data.Length; i++)
+            {
+                data[i] ^= encryptedBlock[i];
+            }
+            return;
+        }
+
+        for (var i = 0; i < data.Length; i++)
+        {
+            data[i] ^= encryptedBlock[i];
+        }
+    }
+
     private static void ProcessBlock(byte[] buffer, int offset, int length, byte[] feedback, byte[] encryptedBlock, ICryptoTransform encryptor, bool encrypt)
     {
         var end = offset + length;
@@ -243,10 +261,7 @@ internal static class AesCfb128
                 if (encrypt)
                 {
 
-                    for (var i = 0; i < BlockSize; i++)
-                    {
-                        buffer[offset + i] ^= encryptedBlock[i];
-                    }
+                    XorBlockInPlace(buffer.AsSpan(offset, BlockSize), encryptedBlock);
 
 
                     Array.Copy(buffer, offset, feedback, 0, BlockSize);
@@ -257,10 +272,7 @@ internal static class AesCfb128
                     Array.Copy(buffer, offset, feedback, 0, BlockSize);
 
 
-                    for (var i = 0; i < BlockSize; i++)
-                    {
-                        buffer[offset + i] ^= encryptedBlock[i];
-                    }
+                    XorBlockInPlace(buffer.AsSpan(offset, BlockSize), encryptedBlock);
                 }
             }
             else
