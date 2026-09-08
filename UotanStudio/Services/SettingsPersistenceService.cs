@@ -235,8 +235,12 @@ public class SettingsPersistenceService
     /// Thrown when <paramref name="settings"/> is null.
     /// </exception>
     public void SaveSettings(AppSettings settings)
+        => TrySaveSettings(settings, out _);
+
+    internal bool TrySaveSettings(AppSettings settings, out string? error)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        error = null;
 
         try
         {
@@ -257,15 +261,19 @@ public class SettingsPersistenceService
                 try { File.Delete(tempPath); } catch { /* cleanup best-effort */ }
                 throw;
             }
+            return true;
         }
         catch (IOException ex)
         {
+            error = ex.Message;
             WeakReferenceMessenger.Default.Send(new SettingsSaveFailedMessage(ex.Message));
         }
         catch (UnauthorizedAccessException ex)
         {
+            error = ex.Message;
             WeakReferenceMessenger.Default.Send(new SettingsSaveFailedMessage(ex.Message));
         }
+        return false;
     }
 
     /// <summary>

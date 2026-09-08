@@ -43,6 +43,7 @@
     <x:String x:Key="Settings_ResetToDefaults">恢复默认设置</x:String>
     <x:String x:Key="Settings_ResetConfirm">确定要恢复所有设置为默认值吗？</x:String>
     <x:String x:Key="Settings_SettingsSaved">设置已保存</x:String>
+    <x:String x:Key="Settings_SaveFailed">保存设置失败：{0}</x:String>
     <x:String x:Key="Settings_ThemeFollowSystem">跟随系统</x:String>
     <x:String x:Key="Settings_ThemeLightMode">浅色模式</x:String>
     <x:String x:Key="Settings_ThemeDarkMode">深色模式</x:String>

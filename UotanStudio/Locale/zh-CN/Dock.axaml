@@ -53,8 +53,13 @@
     <x:String x:Key="Dock_NodeRightPane">节点属性</x:String>
     <x:String x:Key="Dock_NodeBottomPane">执行日志</x:String>
     <x:String x:Key="Dialog_Rename">重命名</x:String>
+    <x:String x:Key="Dialog_OK">确定</x:String>
+    <x:String x:Key="Dialog_RenameFailed">重命名失败</x:String>
+    <x:String x:Key="Dialog_DeleteFailed">删除失败</x:String>
+    <x:String x:Key="Dialog_NewFileFailed">新建文件失败</x:String>
+    <x:String x:Key="Dialog_NewFolderFailed">新建文件夹失败</x:String>
     <x:String x:Key="Dialog_ConfirmDelete">确认删除</x:String>
-    <x:String x:Key="Dialog_ConfirmDeleteMessage">确定要删除「{0}」吗？</x:String>
+    <x:String x:Key="Dialog_ConfirmDeleteMessage">确定要永久删除「{0}」吗？此操作无法撤销。</x:String>
     <x:String x:Key="Dialog_NewFile">新建文件</x:String>
     <x:String x:Key="Dialog_NewFolder">新建文件夹</x:String>
     <x:String x:Key="Dialog_SelectFile">选择文件</x:String>

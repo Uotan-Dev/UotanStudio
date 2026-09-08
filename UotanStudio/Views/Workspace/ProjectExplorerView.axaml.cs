@@ -12,6 +12,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
+using Ursa.Controls;
 
 namespace UotanStudio.Views.Workspace;
 
@@ -202,40 +203,8 @@ public partial class ProjectExplorerView : UserControl
         }
     }
 
-    private static async Task<string?> ShowInputDialogAsync(Window owner, string title, string defaultText = "")
-    {
-        var win = new Window { Title = title, Width = 350, Height = 120, WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false };
-        var panel = new StackPanel { Margin = new Thickness(8) };
-        var tb = new TextBox { Text = defaultText };
-        var ok = new Button { Content = "OK", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right, Margin = new Thickness(0, 8, 0, 0) };
-        panel.Children.Add(tb);
-        panel.Children.Add(ok);
-        win.Content = panel;
-        tb.SelectAll();
-        ok.Click += (_, _) => win.Close(tb.Text);
-        tb.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) win.Close(tb.Text); };
-        return await win.ShowDialog<string?>(owner);
-    }
-
-    private static async Task<bool> ShowConfirmDialogAsync(Window owner, string title, string message)
-    {
-        var win = new Window { Title = title, Width = 350, Height = 130, WindowStartupLocation = WindowStartupLocation.CenterOwner, CanResize = false };
-        var panel = new StackPanel { Margin = new Thickness(8) };
-        var msg = new TextBlock { Text = message, Margin = new Thickness(0, 0, 0, 8), TextWrapping = Avalonia.Media.TextWrapping.Wrap };
-        var btnPanel = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right };
-        var yesBtn = new Button { Content = "Yes", Margin = new Thickness(0, 0, 8, 0) };
-        var noBtn = new Button { Content = "No" };
-        btnPanel.Children.Add(yesBtn);
-        btnPanel.Children.Add(noBtn);
-        panel.Children.Add(msg);
-        panel.Children.Add(btnPanel);
-        win.Content = panel;
-        yesBtn.Click += (_, _) => win.Close(true);
-        noBtn.Click += (_, _) => win.Close(false);
-        return await win.ShowDialog<bool>(owner);
-    }
-
     private Window? GetOwnerWindow() =>
+        TopLevel.GetTopLevel(this) as Window ??
         (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
 
     private async void OnCopyFullPath(object? sender, RoutedEventArgs e)
@@ -275,11 +244,15 @@ public partial class ProjectExplorerView : UserControl
         if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsPlaceholder) return;
         var owner = GetOwnerWindow(); if (owner is null) return;
         var oldName = node.IsDirectory ? Path.GetFileName(Path.TrimEndingDirectorySeparator(node.Path)) : Path.GetFileName(node.Path);
-        var newName = await ShowInputDialogAsync(owner, LanguageService.Instance.GetString("Dialog_Rename"), oldName);
+        var newName = await DialogService.InputAsync(owner, LanguageService.Instance.GetString("Dialog_Rename"), oldName);
         if (string.IsNullOrWhiteSpace(newName) || newName == oldName) return;
         var newPath = Path.Combine(Path.GetDirectoryName(node.Path) ?? "", newName);
         try { if (node.IsDirectory) Directory.Move(node.Path, newPath); else File.Move(node.Path, newPath); }
-        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Explorer", $"Rename failed: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Explorer", $"Rename failed: {ex.Message}");
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_RenameFailed"), ex.Message, MessageBoxIcon.Error);
+        }
     }
 
     private void OnCut(object? sender, RoutedEventArgs e)
@@ -304,29 +277,43 @@ public partial class ProjectExplorerView : UserControl
     private async Task DeleteAsync(ExplorerNode node, Window owner)
     {
         var name = node.IsDirectory ? Path.GetFileName(Path.TrimEndingDirectorySeparator(node.Path)) : Path.GetFileName(node.Path);
-        if (!await ShowConfirmDialogAsync(owner, LanguageService.Instance.GetString("Dialog_ConfirmDelete"), string.Format(LanguageService.Instance.GetString("Dialog_ConfirmDeleteMessage"), name))) return;
+        if (!await DialogService.ConfirmAsync(owner, LanguageService.Instance.GetString("Dialog_ConfirmDelete"),
+                string.Format(LanguageService.Instance.GetString("Dialog_ConfirmDeleteMessage"), name),
+                LanguageService.Instance.GetString("Menu_Delete"))) return;
         try { if (node.IsDirectory) Directory.Delete(node.Path, true); else File.Delete(node.Path); }
-        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Explorer", $"Delete failed: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Explorer", $"Delete failed: {ex.Message}");
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_DeleteFailed"), ex.Message, MessageBoxIcon.Error);
+        }
     }
 
     private async void OnNewFile(object? sender, RoutedEventArgs e)
     {
         if (ProjectTree.SelectedItem is not ExplorerNode node || !node.IsDirectory || node.IsPlaceholder) return;
         var owner = GetOwnerWindow(); if (owner is null) return;
-        var name = await ShowInputDialogAsync(owner, LanguageService.Instance.GetString("Dialog_NewFile"));
+        var name = await DialogService.InputAsync(owner, LanguageService.Instance.GetString("Dialog_NewFile"));
         if (string.IsNullOrWhiteSpace(name)) return;
-        try { File.Create(Path.Combine(node.Path, name)).Dispose(); }
-        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Explorer", $"Create file failed: {ex.Message}"); }
+        try { using var file = new FileStream(Path.Combine(node.Path, name), FileMode.CreateNew, FileAccess.Write); }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Explorer", $"Create file failed: {ex.Message}");
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_NewFileFailed"), ex.Message, MessageBoxIcon.Error);
+        }
     }
 
     private async void OnNewFolder(object? sender, RoutedEventArgs e)
     {
         if (ProjectTree.SelectedItem is not ExplorerNode node || !node.IsDirectory || node.IsPlaceholder) return;
         var owner = GetOwnerWindow(); if (owner is null) return;
-        var name = await ShowInputDialogAsync(owner, LanguageService.Instance.GetString("Dialog_NewFolder"));
+        var name = await DialogService.InputAsync(owner, LanguageService.Instance.GetString("Dialog_NewFolder"));
         if (string.IsNullOrWhiteSpace(name)) return;
         try { Directory.CreateDirectory(Path.Combine(node.Path, name)); }
-        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Explorer", $"Create folder failed: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Explorer", $"Create folder failed: {ex.Message}");
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_NewFolderFailed"), ex.Message, MessageBoxIcon.Error);
+        }
     }
 
     private void OnUnpack(object? sender, RoutedEventArgs e)

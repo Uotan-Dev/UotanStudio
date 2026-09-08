@@ -43,6 +43,7 @@
     <x:String x:Key="Settings_ResetToDefaults">Reset to Defaults</x:String>
     <x:String x:Key="Settings_ResetConfirm">Are you sure you want to reset all settings to defaults?</x:String>
     <x:String x:Key="Settings_SettingsSaved">Settings saved</x:String>
+    <x:String x:Key="Settings_SaveFailed">Could not save settings: {0}</x:String>
     <x:String x:Key="Settings_ThemeFollowSystem">Follow System</x:String>
     <x:String x:Key="Settings_ThemeLightMode">Light Mode</x:String>
     <x:String x:Key="Settings_ThemeDarkMode">Dark Mode</x:String>

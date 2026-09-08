@@ -1,5 +1,5 @@
-using Avalonia.Controls;
-using Avalonia.Interactivity;
+using UotanStudio.Services;
+using Ursa.Controls;
 
 namespace UotanStudio.Views.Shell;
 
@@ -7,7 +7,7 @@ namespace UotanStudio.Views.Shell;
 /// <para>关于对话框，展示应用程序的版本与简介信息。</para>
 /// About dialog, showing application version and description.
 /// </summary>
-public partial class AboutDialog : Window
+public partial class AboutDialog : MessageBoxWindow
 {
     /// <summary>
     /// <para>初始化关于对话框的新实例。</para>
@@ -16,14 +16,6 @@ public partial class AboutDialog : Window
     public AboutDialog()
     {
         InitializeComponent();
-    }
-
-    /// <summary>
-    /// <para>关闭按钮点击事件处理器。</para>
-    /// Close button click event handler.
-    /// </summary>
-    private void OnCloseClick(object? sender, RoutedEventArgs e)
-    {
-        Close();
+        Resources["STRING_MENU_DIALOG_OK"] = LanguageService.Instance.GetString("About_Close");
     }
 }

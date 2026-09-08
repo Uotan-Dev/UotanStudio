@@ -53,8 +53,13 @@
     <x:String x:Key="Dock_NodeRightPane">Node Properties</x:String>
     <x:String x:Key="Dock_NodeBottomPane">Execution Log</x:String>
     <x:String x:Key="Dialog_Rename">Rename</x:String>
+    <x:String x:Key="Dialog_OK">OK</x:String>
+    <x:String x:Key="Dialog_RenameFailed">Rename failed</x:String>
+    <x:String x:Key="Dialog_DeleteFailed">Delete failed</x:String>
+    <x:String x:Key="Dialog_NewFileFailed">Could not create file</x:String>
+    <x:String x:Key="Dialog_NewFolderFailed">Could not create folder</x:String>
     <x:String x:Key="Dialog_ConfirmDelete">Confirm Delete</x:String>
-    <x:String x:Key="Dialog_ConfirmDeleteMessage">Delete '{0}'?</x:String>
+    <x:String x:Key="Dialog_ConfirmDeleteMessage">Permanently delete '{0}'? This cannot be undone.</x:String>
     <x:String x:Key="Dialog_NewFile">New File</x:String>
     <x:String x:Key="Dialog_NewFolder">New Folder</x:String>
     <x:String x:Key="Dialog_SelectFile">Select file</x:String>
