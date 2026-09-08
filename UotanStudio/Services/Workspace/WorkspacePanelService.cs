@@ -113,7 +113,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
 
     /// <summary>AI 助手面板当前是否可见。 Whether the AI assistant panel is visible.</summary>
     [ObservableProperty]
-    private bool _aiAssistantVisible = true;
+    private bool _aiAssistantVisible;
 
     /// <summary>
     /// <para>属性面板当前是否可见。</para>

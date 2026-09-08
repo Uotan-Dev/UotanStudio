@@ -48,7 +48,7 @@ public class WorkspaceDockFactory : Factory
         imagesView.Title = LanguageService.Instance.GetString("Dock_ImagesView");
         imagesView.CanClose = true;
 
-        var aiAssistant = new AiAssistantViewModel(_aiSettings);
+        var aiAssistant = AppFeatures.AiAssistantEnabled ? new AiAssistantViewModel(_aiSettings) : null;
 
         var properties = _properties = new PropertiesViewModel
         {
@@ -111,8 +111,10 @@ public class WorkspaceDockFactory : Factory
             Title = "RightPaneTop",
             Proportion = double.NaN,
             ActiveDockable = imagesView,
-            VisibleDockables = CreateList<IDockable>(imagesView, aiAssistant)
+            VisibleDockables = CreateList<IDockable>(imagesView)
         };
+        if (aiAssistant is not null)
+            rightToolsTop.VisibleDockables.Add(aiAssistant);
 
         var rightTools = new ToolDock
         {
@@ -188,7 +190,8 @@ public class WorkspaceDockFactory : Factory
         panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: true);
         panels.Register(WorkspacePanelService.Device, device, leftTools, visible: false);
         panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
-        panels.Register(WorkspacePanelService.AiAssistant, aiAssistant, rightToolsTop, visible: true);
+        if (aiAssistant is not null)
+            panels.Register(WorkspacePanelService.AiAssistant, aiAssistant, rightToolsTop, visible: true);
         panels.Register(WorkspacePanelService.Properties, properties, rightTools, visible: true);
         panels.Register(WorkspacePanelService.WorkspaceLog, output, bottomTools, visible: true);
         panels.Register(WorkspacePanelService.AdbLog, adbLog, bottomTools, visible: true);

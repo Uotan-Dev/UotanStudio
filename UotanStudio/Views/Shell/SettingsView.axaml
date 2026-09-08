@@ -5,6 +5,7 @@
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:vm="using:UotanStudio.ViewModels.Shell"
              xmlns:views="using:UotanStudio.Views.Shell"
+             xmlns:app="using:UotanStudio"
              xmlns:models="using:UotanStudio.Models"
              xmlns:mcp="using:UotanStudio.Services.Mcp"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="900"
@@ -74,7 +75,8 @@
                     </Grid>
                 </StackPanel>
 
-                <views:AiSettingsView DataContext="{Binding Ai}" />
+                <views:AiSettingsView DataContext="{Binding Ai}"
+                                      IsVisible="{x:Static app:AppFeatures.AiAssistantEnabled}" />
 
                 <!-- Section: MCP -->
                 <StackPanel Spacing="8">
