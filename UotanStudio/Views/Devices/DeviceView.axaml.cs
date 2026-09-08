@@ -1,8 +1,5 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.VisualTree;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Devices;
@@ -47,7 +44,7 @@ public partial class DeviceView : UserControl
 
         var title = LanguageService.Instance.GetString("Device_RebootConfirmTitle");
         var message = string.Format(LanguageService.Instance.GetString("Device_RebootConfirmMessage"), e.ModeDisplayName);
-        e.Confirmation.TrySetResult(await ShowConfirmDialogAsync(owner, title, message));
+        e.Confirmation.TrySetResult(await DialogService.ConfirmAsync(owner, title, message));
     }
 
     private async void OnFlashConfirmationRequested(object? sender, (string Title, string Message, TaskCompletionSource<bool> Confirmation) e)
@@ -59,63 +56,7 @@ public partial class DeviceView : UserControl
             return;
         }
 
-        e.Confirmation.TrySetResult(await ShowConfirmDialogAsync(owner, e.Title, e.Message));
-    }
-
-    /// <summary>
-    /// Shows a modal yes/no confirmation dialog bound to the given owner window.
-    /// <para>以给定窗口为所有者弹出是/否确认对话框。</para>
-    /// </summary>
-    private static async Task<bool> ShowConfirmDialogAsync(Window owner, string title, string message)
-    {
-        var yes = LanguageService.Instance.GetString("Editor_Yes");
-        var cancel = LanguageService.Instance.GetString("Editor_Cancel");
-
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 380,
-            Height = 160,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false,
-            Content = new StackPanel
-            {
-                Margin = new Thickness(20),
-                Spacing = 16,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Spacing = 8,
-                        Children =
-                        {
-                            new Button { Content = yes, Tag = true },
-                            new Button { Content = cancel, Tag = false }
-                        }
-                    }
-                }
-            }
-        };
-
-        var result = false;
-        foreach (var btn in ((StackPanel)((StackPanel)dialog.Content!).Children[1]).Children)
-        {
-            if (btn is Button b)
-            {
-                b.Click += (_, _) =>
-                {
-                    result = (bool)(b.Tag ?? false);
-                    dialog.Close();
-                };
-            }
-        }
-
-        await dialog.ShowDialog(owner);
-        return result;
+        e.Confirmation.TrySetResult(await DialogService.ConfirmAsync(owner, e.Title, e.Message));
     }
 
     // ===== 设备条目右键菜单 / Device item context menu =====

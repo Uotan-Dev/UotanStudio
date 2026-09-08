@@ -43,6 +43,7 @@
     <x:String x:Key="Settings_ResetToDefaults">Reset to Defaults</x:String>
     <x:String x:Key="Settings_ResetConfirm">Are you sure you want to reset all settings to defaults?</x:String>
     <x:String x:Key="Settings_SettingsSaved">Settings saved</x:String>
+    <x:String x:Key="Settings_SaveFailed">Could not save settings: {0}</x:String>
     <x:String x:Key="Settings_ThemeFollowSystem">Follow System</x:String>
     <x:String x:Key="Settings_ThemeLightMode">Light Mode</x:String>
     <x:String x:Key="Settings_ThemeDarkMode">Dark Mode</x:String>
@@ -65,4 +66,10 @@
     <x:String x:Key="Settings_OpenSourceNotice">This software uses or references the following open-source projects, each governed by its own license. Most use permissive licenses (MIT / Apache-2.0, etc.) and may be used in commercial projects free of charge; LGPL-3.0 components (e.g., LibUsbDotNet) impose certain obligations on distribution (e.g., providing modified source or dynamic linking). Avalonia is licensed under the MIT License and requires no additional commercial license.</x:String>
     <x:String x:Key="Settings_OpenRepository">Repository</x:String>
 
+    <x:String x:Key="Settings_AI">AI Assistant</x:String>
+    <x:String x:Key="Settings_AIEndpoint">API endpoint</x:String>
+    <x:String x:Key="Settings_AIApiKey">API key</x:String>
+    <x:String x:Key="Settings_AIToggleKey">Show / hide API key</x:String>
+    <x:String x:Key="Settings_AIModels">Model</x:String>
+    <x:String x:Key="Settings_AIFetchModels">Get models</x:String>
 </ResourceDictionary>

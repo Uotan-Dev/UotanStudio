@@ -43,6 +43,7 @@
     <x:String x:Key="Settings_ResetToDefaults">恢复默认设置</x:String>
     <x:String x:Key="Settings_ResetConfirm">确定要恢复所有设置为默认值吗？</x:String>
     <x:String x:Key="Settings_SettingsSaved">设置已保存</x:String>
+    <x:String x:Key="Settings_SaveFailed">保存设置失败：{0}</x:String>
     <x:String x:Key="Settings_ThemeFollowSystem">跟随系统</x:String>
     <x:String x:Key="Settings_ThemeLightMode">浅色模式</x:String>
     <x:String x:Key="Settings_ThemeDarkMode">深色模式</x:String>
@@ -65,4 +66,10 @@
     <x:String x:Key="Settings_OpenSourceNotice">本软件使用或参考了以下开源项目，遵循其各自的开源协议。多数项目采用宽松许可证（MIT / Apache-2.0 等），可免费用于商业项目；LGPL-3.0 组件（如 LibUsbDotNet）在分发时需遵循相应义务（如提供修改后的源码或动态链接）。Avalonia 遵循 MIT 许可证，商业使用无需额外授权。</x:String>
     <x:String x:Key="Settings_OpenRepository">仓库</x:String>
 
+    <x:String x:Key="Settings_AI">AI 助手</x:String>
+    <x:String x:Key="Settings_AIEndpoint">API 地址</x:String>
+    <x:String x:Key="Settings_AIApiKey">API 密钥</x:String>
+    <x:String x:Key="Settings_AIToggleKey">显示 / 隐藏 API 密钥</x:String>
+    <x:String x:Key="Settings_AIModels">模型</x:String>
+    <x:String x:Key="Settings_AIFetchModels">获取模型列表</x:String>
 </ResourceDictionary>

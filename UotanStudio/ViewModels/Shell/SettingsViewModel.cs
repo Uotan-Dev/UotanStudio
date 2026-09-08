@@ -14,17 +14,17 @@ namespace UotanStudio.ViewModels.Shell;
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase, IDisposable
 {
+    /// <summary>Shared, in-memory AI settings. 共用的内存 AI 设置。</summary>
+    public AiSettingsViewModel Ai { get; } = new();
+
     private AppSettings _appSettings;
     private CancellationTokenSource? _saveCts;
-    private Timer? _toastTimer;
     private bool _disposed;
 
     private LanguageInfo _selectedLanguage = LanguageInfo.SystemLanguage;
     private ThemeMode _selectedThemeMode;
     private bool _autoSave;
     private bool _debugMode;
-    private bool _isToastVisible;
-    private string _toastMessage = string.Empty;
 
     // MCP 设置字段
     // MCP settings fields
@@ -487,26 +487,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>获取或设置 Toast 通知是否可见。</para>
-    /// Gets or sets whether the toast notification is visible.
-    /// </summary>
-    public bool IsToastVisible
-    {
-        get => _isToastVisible;
-        set => SetProperty(ref _isToastVisible, value);
-    }
-
-    /// <summary>
-    /// <para>获取或设置 Toast 通知消息内容。</para>
-    /// Gets or sets the toast notification message content.
-    /// </summary>
-    public string ToastMessage
-    {
-        get => _toastMessage;
-        set => SetProperty(ref _toastMessage, value);
-    }
-
-    /// <summary>
     /// <para>初始化设置视图模型，从持久化服务加载设置并初始化所有属性。</para>
     /// Initializes the settings view model, loading settings from the persistence service and initializing all properties.
     /// </summary>
@@ -641,9 +621,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _appSettings.McpExposeEnabled = _mcpExposeEnabled;
         _appSettings.McpExposePort = _mcpExposePort;
 
-        SettingsPersistenceService.Instance.SaveSettings(_appSettings);
-
-        ShowToast(LanguageService.Instance.GetString("Settings_SettingsSaved"));
+        var saved = SettingsPersistenceService.Instance.TrySaveSettings(_appSettings, out var error);
+        WeakReferenceMessenger.Default.Send(new SettingsSaveCompletedMessage(saved, error));
     }
 
     internal void FlushPendingSave()
@@ -651,43 +630,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         if (_saveCts is null) return;
         _saveCts.Cancel();
         SaveSettings();
-    }
-
-    /// <summary>
-    /// <para>显示 Toast 通知，2 秒后在 UI 线程上自动隐藏。</para>
-    /// Shows a toast notification that automatically hides after 2 seconds on the UI thread.
-    /// </summary>
-    /// <param name="message">
-    /// <para>要显示的通知消息。</para>
-    /// The notification message to display.
-    /// </param>
-    private void ShowToast(string message)
-    {
-        // 取消上一次的 Toast 计时，避免遗留回调造成抖动
-        _toastTimer?.Dispose();
-
-        // Toast 是一个非模态覆盖层，设置可见性后立即返回，不阻塞调用方
-        ToastMessage = message;
-        IsToastVisible = true;
-
-        // Toast 计时器回调在 UI 线程上执行隐藏操作，避免跨线程访问绑定属性。
-        // 先把当前计时器存入字段，再在回调里比对引用，防止并发 ShowToast 时
-        // 旧的 Dispatcher.Post 回调误将新计时器置空。
-        Timer? createdTimer = null;
-        createdTimer = new Timer(_ =>
-        {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                // 仅当仍然指向同一计时器时才隐藏，防止竞态条件下覆盖较新的 Toast
-                if (ReferenceEquals(_toastTimer, createdTimer))
-                {
-                    IsToastVisible = false;
-                    _toastTimer?.Dispose();
-                    _toastTimer = null;
-                }
-            });
-        }, null, 2000, Timeout.Infinite);
-        _toastTimer = createdTimer;
     }
 
     /// <summary>
@@ -771,6 +713,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ResetToDefaults()
     {
+        Ai.Reset();
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
 
@@ -787,8 +730,8 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>释放所有资源，包括取消令牌源、定时器和事件订阅。</para>
-    /// Releases all resources, including cancellation token sources, timers, and event subscriptions.
+    /// <para>释放所有资源，包括取消令牌源和事件订阅。</para>
+    /// Releases all resources, including cancellation token sources and event subscriptions.
     /// </summary>
     public void Dispose()
     {
@@ -813,7 +756,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         {
             _saveCts?.Cancel();
             _saveCts?.Dispose();
-            _toastTimer?.Dispose();
             LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
             LanguagePackRegistry.Instance.LanguagePackChanged -= OnLanguagePackChanged;
         }

@@ -655,6 +655,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ToggleImagesView() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ImagesView);
 
+    /// <summary>显示或隐藏 AI 助手。 Show or hide the AI assistant.</summary>
+    [RelayCommand]
+    private void ToggleAiAssistant() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.AiAssistant);
+
     /// <summary><para>显示或隐藏属性面板。</para>Show or hide the properties panel.</summary>
     [RelayCommand]
     private void ToggleProperties() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Properties);

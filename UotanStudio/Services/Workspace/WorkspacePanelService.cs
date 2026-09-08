@@ -25,6 +25,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <summary>镜像管理面板键。 Image manager panel key.</summary>
     public const string ImagesView = "ImagesView";
 
+    /// <summary>AI 助手面板键。 AI assistant panel key.</summary>
+    public const string AiAssistant = "AiAssistant";
+
     /// <summary>属性面板键。 Properties panel key.</summary>
     public const string Properties = "Properties";
 
@@ -107,6 +110,10 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _imagesViewVisible = true;
+
+    /// <summary>AI 助手面板当前是否可见。 Whether the AI assistant panel is visible.</summary>
+    [ObservableProperty]
+    private bool _aiAssistantVisible = true;
 
     /// <summary>
     /// <para>属性面板当前是否可见。</para>
@@ -297,6 +304,9 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 break;
             case ImagesView:
                 ImagesViewVisible = value;
+                break;
+            case AiAssistant:
+                AiAssistantVisible = value;
                 break;
             case Properties:
                 PropertiesVisible = value;

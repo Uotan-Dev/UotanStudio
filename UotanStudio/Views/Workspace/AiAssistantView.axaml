@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:UotanStudio.ViewModels.Workspace"
+             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="UotanStudio.Views.Workspace.AiAssistantView"
+             x:DataType="vm:AiAssistantViewModel">
+    <UserControl.Resources>
+        <DataTemplate x:Key="AiChoiceTemplate" x:DataType="x:String">
+            <TextBlock Text="{Binding}" FontSize="12" LineHeight="16"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </DataTemplate>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="Button.ai-tool">
+            <Setter Property="Width" Value="24" />
+            <Setter Property="Height" Value="24" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="3" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="ComboBox.ai-choice">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ComboBox.ai-choice /template/ TextBlock#PlaceholderTextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="LineHeight" Value="16" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ComboBox.ai-choice ComboBoxItem">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Padding" Value="6,4" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource PageBackground}" ClipToBounds="True">
+        <Border Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                <TextBlock Text="{Binding SelectedConversation.Title}" FontSize="12"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+                    <Button Classes="ai-tool" ToolTip.Tip="{DynamicResource AI_History}"
+                            AutomationProperties.Name="{DynamicResource AI_History}">
+                        <icons:MaterialIcon Kind="History" Width="16" Height="16" />
+                        <Button.Flyout>
+                            <Flyout Placement="BottomEdgeAlignedRight">
+                                <StackPanel Width="240" Spacing="8">
+                                    <TextBlock Text="{DynamicResource AI_History}" FontWeight="SemiBold" />
+                                    <ListBox ItemsSource="{Binding Conversations}" MaxHeight="280"
+                                             SelectedItem="{Binding SelectedConversation, Mode=TwoWay}">
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:AiConversationViewModel">
+                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Button Classes="ai-tool" Command="{Binding NewConversationCommand}"
+                            ToolTip.Tip="{DynamicResource AI_NewConversation}" AutomationProperties.Name="{DynamicResource AI_NewConversation}">
+                        <icons:MaterialIcon Kind="ChatPlusOutline" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="ai-tool" Command="{Binding ClearConversationCommand}"
+                            ToolTip.Tip="{DynamicResource AI_ClearConversation}" AutomationProperties.Name="{DynamicResource AI_ClearConversation}">
+                        <icons:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="ai-tool" Command="{Binding OpenSettingsCommand}"
+                            ToolTip.Tip="{DynamicResource Settings_AI}" AutomationProperties.Name="{DynamicResource Settings_AI}">
+                        <icons:MaterialIcon Kind="CogOutline" Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <Grid MinHeight="112">
+                <StackPanel IsVisible="{Binding !SelectedConversation.Messages.Count}" Spacing="10" Margin="12,24"
+                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <icons:MaterialIcon Kind="LightningBoltOutline" Width="36" Height="36"
+                                        Foreground="{DynamicResource AccentColor}" IsVisible="{Binding SelectedConversation.IsAgent}" />
+                    <icons:MaterialIcon Kind="ChatOutline" Width="36" Height="36"
+                                        Foreground="{DynamicResource AccentColor}" IsVisible="{Binding !SelectedConversation.IsAgent}" />
+                    <TextBlock Text="{DynamicResource AI_Agent}" FontSize="22" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" IsVisible="{Binding SelectedConversation.IsAgent}" />
+                    <TextBlock Text="{DynamicResource AI_Chat}" FontSize="22" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" IsVisible="{Binding !SelectedConversation.IsAgent}" />
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding SelectedConversation.Messages}" Margin="12,8">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AiMessage">
+                            <StackPanel Spacing="6" Margin="0,8">
+                                <TextBlock Text="{Binding Author}" FontSize="12" FontWeight="SemiBold" />
+                                <SelectableTextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="13" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </ScrollViewer>
+
+        <Border Grid.Row="2" Margin="8" Padding="8" CornerRadius="6" BorderThickness="1"
+                BorderBrush="{DynamicResource BorderBrush}" Background="{DynamicResource CardBackground}">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+                <ScrollViewer MaxHeight="96" HorizontalScrollBarVisibility="Disabled"
+                              IsVisible="{Binding SelectedConversation.Attachments.Count}">
+                    <ItemsControl ItemsSource="{Binding SelectedConversation.Attachments}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AiAttachment">
+                                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6" Height="28"
+                                      ToolTip.Tip="{Binding Path}">
+                                    <icons:MaterialIcon Kind="FileDocumentOutline" Width="14" Height="14" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11"
+                                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="2" Classes="ai-tool"
+                                            Command="{Binding $parent[UserControl].DataContext.SelectedConversation.RemoveAttachmentCommand}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip.Tip="{DynamicResource AI_RemoveFile}"
+                                            AutomationProperties.Name="{DynamicResource AI_RemoveFile}">
+                                        <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                    </Button>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <TextBox Grid.Row="1" Name="PromptInput" Text="{Binding SelectedConversation.DraftText, Mode=TwoWay}"
+                         PlaceholderText="{DynamicResource AI_Prompt}" AutomationProperties.Name="{DynamicResource AI_Prompt}"
+                         AcceptsReturn="True" TextWrapping="Wrap" MinHeight="68" MaxHeight="140"
+                         VerticalContentAlignment="Top"
+                         Padding="2,4" FontSize="13" Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" />
+                <Grid Grid.Row="2" ColumnDefinitions="92,*" ColumnSpacing="6">
+                    <ComboBox Classes="ai-choice" ItemsSource="{Binding ModeOptions}"
+                              SelectedIndex="{Binding SelectedConversation.ModeIndex, Mode=TwoWay}"
+                              ToolTip.Tip="{DynamicResource AI_Mode}" AutomationProperties.Name="{DynamicResource AI_Mode}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AiModeOptionViewModel">
+                                <TextBlock Text="{Binding DisplayName}" FontSize="12" LineHeight="16"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                    <ComboBox Grid.Column="1" Classes="ai-choice" ItemsSource="{Binding Settings.Models}"
+                              ItemTemplate="{StaticResource AiChoiceTemplate}"
+                              SelectedItem="{Binding Settings.SelectedModel, Mode=TwoWay}"
+                              PlaceholderText="{DynamicResource AI_Model}" ToolTip.Tip="{Binding Settings.SelectedModel}"
+                              AutomationProperties.Name="{DynamicResource AI_Model}" />
+                </Grid>
+                <Grid Grid.Row="3" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                    <Button Name="AddFilesButton" Classes="ai-tool" Click="OnAddFilesClick"
+                            ToolTip.Tip="{DynamicResource AI_AddFiles}" AutomationProperties.Name="{DynamicResource AI_AddFiles}">
+                        <icons:MaterialIcon Kind="Paperclip" Width="16" Height="16" />
+                    </Button>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding SelectedConversation.IncludeActiveDocument, Mode=TwoWay}"
+                              FontSize="11" MinHeight="24" Padding="0"
+                              HorizontalContentAlignment="Stretch">
+                        <TextBlock Text="{DynamicResource AI_ActiveDocument}" TextTrimming="CharacterEllipsis"
+                                   ToolTip.Tip="{DynamicResource AI_ActiveDocument}" />
+                    </CheckBox>
+                    <Button Grid.Column="2" Classes="ai-tool" Command="{Binding SendMessageCommand}"
+                            ToolTip.Tip="{DynamicResource AI_Send}" AutomationProperties.Name="{DynamicResource AI_Send}">
+                        <icons:MaterialIcon Kind="SendOutline" Width="18" Height="18" />
+                    </Button>
+                </Grid>
+                <TextBlock Grid.Row="4" Text="{Binding SelectedConversation.AttachmentError}"
+                           IsVisible="{Binding SelectedConversation.AttachmentError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource LogErrorBrush}" />
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

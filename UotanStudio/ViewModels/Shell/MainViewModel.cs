@@ -4,6 +4,7 @@ using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views.Workspace;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -17,7 +18,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         await _autoSave.SaveOnCloseAsync();
     }
     public MenuViewModel MenuVM { get; } = new();
-    public WorkspaceViewModel WorkspaceVM { get; } = new();
+    public WorkspaceViewModel WorkspaceVM { get; }
     public NodeEditorViewModel NodeEditorVM { get; } = new();
     public SettingsViewModel SettingsVM { get; } = new();
 
@@ -35,6 +36,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// </summary>
     public MainViewModel()
     {
+        WorkspaceVM = new WorkspaceViewModel(new WorkspaceDockFactory(SettingsVM.Ai));
         MenuVM.NodeEditorVM = NodeEditorVM;
         MenuVM.WorkspaceVM = WorkspaceVM;
         _autoSave = new(WorkspaceVM, SettingsVM, ProjectOperationsService.Instance);
