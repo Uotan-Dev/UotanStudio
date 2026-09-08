@@ -21,6 +21,8 @@
     <x:String x:Key="ImageView_UnpackMode">解包</x:String>
     <x:String x:Key="Image_OperationSummary">成功 {0} 项，失败 {1} 项，跳过 {2} 项。详情见日志。</x:String>
     <x:String x:Key="ImageView_PackMode">打包</x:String>
+    <x:String x:Key="ImageView_OutputMode">输出</x:String>
+    <x:String x:Key="ImageView_Flash">刷入</x:String>
     <x:String x:Key="ImageView_Refresh">刷新</x:String>
     <x:String x:Key="ImageView_ExtractSelected">分解选中文件</x:String>
     <x:String x:Key="ImageView_SynthesizeImg">合成IMG</x:String>

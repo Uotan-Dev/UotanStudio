@@ -73,13 +73,10 @@ internal partial class ImageViewModel : Tool
     /// <para>获取或设置当前是否显示打包操作。</para>
     /// Gets or sets whether pack actions are currently shown.
     /// </summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsUnpackMode))]
-    private bool _isPackMode;
-
-    partial void OnIsPackModeChanged(bool value)
+    public bool IsPackMode
     {
-        _ = RefreshProjectImagesAsync();
+        get => _mode == ImageMode.Pack;
+        set { if (value) SetMode(ImageMode.Pack); }
     }
 
     /// <summary>
@@ -88,14 +85,32 @@ internal partial class ImageViewModel : Tool
     /// </summary>
     public bool IsUnpackMode
     {
-        get => !IsPackMode;
-        set
-        {
-            if (value)
-            {
-                IsPackMode = false;
-            }
-        }
+        get => _mode == ImageMode.Unpack;
+        set { if (value) SetMode(ImageMode.Unpack); }
+    }
+
+    /// <summary>
+    /// <para>获取当前是否显示输出镜像；设置为 true 时切换到输出模式。</para>
+    /// Gets whether output images are shown; setting this to true switches to output mode.
+    /// </summary>
+    public bool IsOutputMode
+    {
+        get => _mode == ImageMode.Output;
+        set { if (value) SetMode(ImageMode.Output); }
+    }
+
+    private enum ImageMode { Unpack, Pack, Output }
+
+    private ImageMode _mode;
+
+    private void SetMode(ImageMode mode)
+    {
+        if (_mode == mode) return;
+        _mode = mode;
+        OnPropertyChanged(nameof(IsUnpackMode));
+        OnPropertyChanged(nameof(IsPackMode));
+        OnPropertyChanged(nameof(IsOutputMode));
+        _ = RefreshProjectImagesAsync();
     }
 
     /// <summary>
@@ -202,9 +217,10 @@ internal partial class ImageViewModel : Tool
 
     /// <summary>
     /// <para>根据当前模式扫描工程条目：解包模式扫描 <c>images/</c> 目录中的可解包文件，
-    /// 打包模式扫描子项目根目录下的解包产物文件夹。未打开工程时清空列表。</para>
+    /// 打包模式扫描子项目根目录下的解包产物文件夹，输出模式扫描 <c>output/</c> 镜像。未打开工程时清空列表。</para>
     /// Scans project entries based on the current mode: in unpack mode scans <c>images/</c> for
-    /// unpackable files; in pack mode scans the sub-project root for unpacked result directories.
+    /// unpackable files; in pack mode scans the sub-project root for unpacked result directories;
+    /// in output mode scans <c>output/</c> for images.
     /// Clears the list when no project is open.
     /// </summary>
     private async Task RefreshProjectImagesAsync()
@@ -212,6 +228,7 @@ internal partial class ImageViewModel : Tool
         var version = ++_refreshVersion;
         var context = ProjectContextService.Instance;
         Images.Clear();
+        SelectedImage = null;
 
         if (!context.IsProjectOpen)
         {
@@ -223,20 +240,20 @@ internal partial class ImageViewModel : Tool
         try
         {
             if (IsPackMode) await RefreshPackEntriesAsync(context, version);
-            else await RefreshUnpackEntriesAsync(context, version);
+            else await RefreshFileEntriesAsync(context, version, IsOutputMode);
         }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Images", $"Refresh failed: {ex.Message}"); }
     }
 
     /// <summary>
-    /// <para>解包模式：扫描 <c>images/</c> 目录，把已知镜像格式的文件注册到列表。</para>
-    /// Unpack mode: scans the <c>images/</c> directory, registering files with known image formats.
+    /// <para>扫描 <c>images/</c> 或 <c>output/</c> 目录；输出模式同时包含 raw 镜像。</para>
+    /// Scans <c>images/</c> or <c>output/</c>; output mode also includes raw images.
     /// </summary>
-    private async Task RefreshUnpackEntriesAsync(ProjectContextService context, int version)
+    private async Task RefreshFileEntriesAsync(ProjectContextService context, int version, bool outputMode)
     {
         var root = context.RootDirectory;
         if (root is null) return;
-        var imagesDir = context.ActiveSubProject?.ImagesDir;
+        var imagesDir = outputMode ? context.ActiveSubProject?.OutputDir : context.ActiveSubProject?.ImagesDir;
         if (string.IsNullOrEmpty(imagesDir) || !Directory.Exists(imagesDir))
         {
             return;
@@ -251,7 +268,7 @@ internal partial class ImageViewModel : Tool
             foreach (var file in Directory.EnumerateFiles(imagesDir))
             {
                 var format = DetectFormat(file);
-                if (format is "unknown" or "raw")
+                if (format == "unknown" || (!outputMode && format == "raw"))
                 {
                     continue;
                 }
@@ -813,7 +830,7 @@ internal partial class ImageViewModel : Tool
         }
     }
 
-    private async Task DeleteImageAsync(ImageEntryViewModel image)
+    internal async Task DeleteImageAsync(ImageEntryViewModel image)
     {
         if (image.IsDirectory)
         {
@@ -841,6 +858,7 @@ internal partial class ImageViewModel : Tool
             var destination = Path.Combine(deletedDir, GetUniqueFileName(deletedDir, Path.GetFileName(source)));
             await Task.Run(() => File.Move(source, destination));
             Images.Remove(image);
+            if (ReferenceEquals(SelectedImage, image)) SelectedImage = null;
             LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted {image.DisplayName} -> intermediate/deleted  已删除 {image.DisplayName}");
             OperationHistoryService.Instance.Record(
                 $"Delete {image.DisplayName}",
@@ -995,11 +1013,11 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
-    /// <para>把用户勾选的可刷写镜像（boot/raw/sparse）按顺序批量刷入当前选中设备：分区名优先取
+    /// <para>把右键条目或用户勾选的可刷写镜像（boot/raw/sparse/ext4/erofs/f2fs）刷入当前选中设备：分区名优先取
     /// <see cref="ImageEntryViewModel"/> 已有分区字段，缺省用文件名去扩展名；经
     /// <see cref="BatchFlashService.FlashSelectedAsync"/> 逐分区复用 <see cref="FlashService.FlashImageAsync"/>
     /// 执行，单分区失败会继续，进度与结果回报到状态文本。</para>
-    /// Flashes the user-selected flashable images (boot/raw/sparse) to the currently selected device
+    /// Flashes the clicked or checked flashable images (boot/raw/sparse/ext4/erofs/f2fs) to the currently selected device
     /// in order: the partition name prefers an existing partition field on
     /// <see cref="ImageEntryViewModel"/>, falling back to the file name without its extension; each
     /// partition is flashed sequentially via <see cref="BatchFlashService.FlashSelectedAsync"/> which reuses
@@ -1007,9 +1025,9 @@ internal partial class ImageViewModel : Tool
     /// and progress/results are reported to the status text.
     /// </summary>
     [RelayCommand]
-    private Task FlashSelectedAsync() => RunExclusiveAsync(FlashSelectedCoreAsync);
+    private Task FlashSelectedAsync(ImageEntryViewModel? image = null) => RunExclusiveAsync(() => FlashSelectedCoreAsync(image));
 
-    private async Task FlashSelectedCoreAsync()
+    private async Task FlashSelectedCoreAsync(ImageEntryViewModel? clicked)
     {
         ProgressPercent = 0;
 
@@ -1027,9 +1045,10 @@ internal partial class ImageViewModel : Tool
         }
 
         var entries = new List<(string Partition, string ImagePath)>();
-        foreach (var image in Images.Where(image => image.IsSelected))
+        var selected = clicked is null ? GetSelectedImages() : [clicked];
+        foreach (var image in selected)
         {
-            if (image.Format is not ("boot" or "raw" or "sparse"))
+            if (image.IsDirectory || image.Format is not ("boot" or "raw" or "sparse" or "ext4" or "erofs" or "f2fs"))
             {
                 continue;
             }
@@ -1322,7 +1341,7 @@ internal partial class ImageViewModel : Tool
             // Falls back to extension-based inference when the header cannot be read.
         }
 
-        if (extension == ".img")
+        if (extension is ".img" or ".raw")
         {
             return "raw";
         }

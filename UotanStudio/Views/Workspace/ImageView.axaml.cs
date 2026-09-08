@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
@@ -23,6 +24,18 @@ public partial class ImageView : UserControl
     public ImageView()
     {
         InitializeComponent();
+    }
+
+    private void OnImageMenuOpening(object? sender, CancelEventArgs e)
+    {
+        if (sender is not ContextMenu menu || DataContext is not ImageViewModel vm) return;
+
+        foreach (var item in menu.Items.OfType<Control>())
+        {
+            if (item.Classes.Contains("unpack-action")) item.IsVisible = vm.IsUnpackMode;
+            else if (item.Classes.Contains("pack-action")) item.IsVisible = vm.IsPackMode;
+            else if (item.Classes.Contains("flash-action")) item.IsVisible = !vm.IsPackMode;
+        }
     }
 
     /// <summary>
@@ -89,23 +102,27 @@ public partial class ImageView : UserControl
         }
     }
 
-    /// <summary><para>删除右键条目对应的解包目录。</para>Delete the context-menu entry's unpacked directory.</summary>
+    /// <summary><para>删除输出文件或右键条目对应的解包目录。</para>Delete the output file or the entry's unpacked directory.</summary>
     private async void OnDeleteMenuClick(object? sender, RoutedEventArgs e)
     {
         if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel { IsOperating: false } vm)
         {
             vm.IsOperating = true;
-            try { await vm.DeleteUnpackedDirectoryAsync(image); }
+            try
+            {
+                if (vm.IsOutputMode) await vm.DeleteImageAsync(image);
+                else await vm.DeleteUnpackedDirectoryAsync(image);
+            }
             finally { vm.IsOperating = false; }
         }
     }
 
-    /// <summary><para>把用户勾选的可刷写镜像刷入选中设备。</para>Flash the selected images to the selected device.</summary>
+    /// <summary><para>把右键条目的镜像刷入选中设备。</para>Flash the context-menu image to the selected device.</summary>
     private void OnFlashSelectedMenuClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is ImageViewModel vm)
+        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel vm)
         {
-            vm.FlashSelectedCommand.Execute(null);
+            if (vm.FlashSelectedCommand.CanExecute(image)) vm.FlashSelectedCommand.Execute(image);
         }
     }
 }

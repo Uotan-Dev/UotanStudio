@@ -23,20 +23,29 @@
 
             <Border Grid.Column="1"
                     Margin="0,0"
+                    Padding="2"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Theme="{StaticResource RadioButtonGroupBorder}">
-                <StackPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" Spacing="2">
                     <RadioButton GroupName="ImageScope"
+                                 MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
                                  IsChecked="{Binding IsUnpackMode, Mode=TwoWay}"
                                  Theme="{StaticResource ButtonRadioButton}"
                                  Classes="Small"
                                  Content="{DynamicResource ImageView_UnpackMode}" />
                     <RadioButton GroupName="ImageScope"
+                                 MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
                                  IsChecked="{Binding IsPackMode, Mode=TwoWay}"
                                  Theme="{StaticResource ButtonRadioButton}"
                                  Classes="Small"
                                  Content="{DynamicResource ImageView_PackMode}" />
+                    <RadioButton GroupName="ImageScope"
+                                 MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
+                                 IsChecked="{Binding IsOutputMode, Mode=TwoWay}"
+                                 Theme="{StaticResource ButtonRadioButton}"
+                                 Classes="Small"
+                                 Content="{DynamicResource ImageView_OutputMode}" />
                 </StackPanel>
             </Border>
 
@@ -79,17 +88,44 @@
                               BasedOn="{StaticResource {x:Type DataGridRow}}">
                     <Setter Property="IsVisible" Value="{Binding IsVisible, DataType=viewmodels:ImageEntryViewModel}" />
                     <Setter Property="ContextMenu">
-                        <ContextMenu x:DataType="viewmodels:ImageEntryViewModel">
-                            <MenuItem Header="{DynamicResource ImageView_ExtractSelected}" IsEnabled="{Binding !IsDirectory}" Click="OnExtractMenuClick" />
-                            <MenuItem Header="{DynamicResource ImageView_SynthesizeImg}" Click="OnSynthesizeImgMenuClick" />
-                            <MenuItem Header="{DynamicResource ImageView_SynthesizeBr}" Click="OnSynthesizeBrMenuClick" />
+                        <ContextMenu x:DataType="viewmodels:ImageEntryViewModel" Opening="OnImageMenuOpening">
+                            <MenuItem Classes="unpack-action" Header="{DynamicResource ImageView_ExtractSelected}" IsEnabled="{Binding !IsDirectory}" Click="OnExtractMenuClick">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="PackageDown" Width="16" Height="16" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeImg}" Click="OnSynthesizeImgMenuClick">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="ImagePlus" Width="16" Height="16" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeBr}" Click="OnSynthesizeBrMenuClick">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="ArchivePlus" Width="16" Height="16" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <Separator Classes="pack-action" />
+                            <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeSuper}" Click="OnSynthesizeSuperMenuClick">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="LayersPlus" Width="16" Height="16" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeDat}" Click="OnSynthesizeDatMenuClick">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="FileMultipleOutline" Width="16" Height="16" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Classes="flash-action" Header="{DynamicResource ImageView_Flash}" Click="OnFlashSelectedMenuClick">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
+                                </MenuItem.Icon>
+                            </MenuItem>
                             <Separator />
-                            <MenuItem Header="{DynamicResource ImageView_SynthesizeSuper}" Click="OnSynthesizeSuperMenuClick" />
-                            <MenuItem Header="{DynamicResource ImageView_SynthesizeDat}" Click="OnSynthesizeDatMenuClick" />
-                            <Separator />
-                            <MenuItem Header="{DynamicResource ImageView_FlashSelected}" Click="OnFlashSelectedMenuClick" />
-                            <Separator />
-                            <MenuItem Header="{DynamicResource ImageView_DeleteSelected}" Click="OnDeleteMenuClick" />
+                            <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDeleteMenuClick">
+                                <MenuItem.Icon>
+                                    <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+                                </MenuItem.Icon>
+                            </MenuItem>
                         </ContextMenu>
                     </Setter>
                 </ControlTheme>
@@ -221,6 +257,10 @@
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>
                             </Button>
+                        </controls:JustifiedWrapPanel>
+
+                        <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
+                                                       IsVisible="{Binding IsOutputMode}">
                             <Button MinWidth="110" HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                     Command="{Binding FlashSelectedCommand}"

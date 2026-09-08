@@ -21,6 +21,8 @@
     <x:String x:Key="Dialog_SaveIncomplete">Changes remain unsaved. Please check the document and try again.</x:String>
     <x:String x:Key="ImageView_UnpackMode">Unpack</x:String>
     <x:String x:Key="ImageView_PackMode">Pack</x:String>
+    <x:String x:Key="ImageView_OutputMode">Output</x:String>
+    <x:String x:Key="ImageView_Flash">Flash</x:String>
     <x:String x:Key="ImageView_Refresh">Refresh</x:String>
     <x:String x:Key="ImageView_ExtractSelected">Extract</x:String>
     <x:String x:Key="ImageView_SynthesizeImg">Build IMG</x:String>

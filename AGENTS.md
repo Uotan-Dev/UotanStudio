@@ -251,7 +251,13 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 
 资源管理器显式选择“以文本形式打开”时，`FileViewModel` 必须使用文本视图，即使文件包含 NUL 字节或具有二进制扩展名也不得改为十六进制；只有自动打开模式按文件类型和内容选择编辑器。
 
-镜像管理的右键删除仅作用于右键条目对应的解包文件夹：固件文件通过 `ImageOperationPaths` 按子项目根目录与镜像名称定位，文件夹条目按自身 `RelativePath` 定位（保留名称中的点和括号），不消费复选框批量选择集、不删除源镜像。复用 `DialogService` 的删除确认和失败对话框；目录不存在时通过 `Image_UnpackedDirectoryMissingTitle/Message` 中英文本地化键弹出提示。顶部批量删除遇到文件夹条目时直接调用 `ImageViewModel.DeleteUnpackedDirectoryAsync` 复用同一目录删除流程；文件条目仍移入子项目 `.deleted/` 并登记可撤销历史。文件夹删除成功后移除列表条目。
+镜像管理顶部提供互斥的“解包 / 打包 / 输出”模式，分别扫描当前子项目的 `images/`、根目录下的解包文件夹、`output/`；输出模式包含普通 IMG/RAW 镜像，切换模式或子项目时刷新列表并清除当前行选择。右键菜单按模式显示：解包为提取、刷入、删除；打包为四种合成与删除；输出仅刷入与删除。右键刷入处理当前条目，底部刷入按钮仍批量处理勾选项，支持 boot/raw/sparse/ext4/erofs/f2fs。原打包模式底部的“刷入选中文件”和“打包ROM”移至输出模式，打包模式底部只显示四种合成；“打包ROM”仍为未绑定操作的现有按钮。新增中英文本地化键 `ImageView_OutputMode` / `ImageView_Flash`，右键删除复用 `Menu_Delete`。
+
+镜像管理顶部的三个模式 RadioButton 使用局部 `MinWidth="0"`、`MinHeight="24"`、`Padding="8,0"`、`Margin="0"`，组外框内边距 2、按钮间距 2，让选中按钮四周露出主题背景；整体高度 28，与两侧工具按钮对齐，保留紧凑横向占位及 `ButtonRadioButton` / `Small` 的选中样式。
+
+镜像列表右键菜单使用 16×16 Material 图标，与页面对应操作一致：提取 `PackageDown`、合成 IMG `ImagePlus`、合成 BR `ArchivePlus`、合成 SUPER `LayersPlus`、合成 DAT `FileMultipleOutline`、刷入 `Flash`、删除 `DeleteOutline`，颜色继承菜单主题。
+
+镜像管理在解包和打包模式下的右键删除仅作用于右键条目对应的解包文件夹：固件文件通过 `ImageOperationPaths` 按子项目根目录与镜像名称定位，文件夹条目按自身 `RelativePath` 定位（保留名称中的点和括号），不消费复选框批量选择集、不删除源镜像。复用 `DialogService` 的删除确认和失败对话框；目录不存在时通过 `Image_UnpackedDirectoryMissingTitle/Message` 中英文本地化键弹出提示。输出模式右键删除通过 `DeleteImageAsync` 将当前输出文件移入子项目 `.deleted/` 并登记可撤销历史。顶部批量删除遇到文件夹条目时直接调用 `ImageViewModel.DeleteUnpackedDirectoryAsync` 复用同一目录删除流程；文件条目仍移入子项目 `.deleted/` 并登记可撤销历史。删除成功后移除列表条目并清除对应当前行选择。
 
 项目资源管理器在目录变动时按路径增量同步已加载子节点，保留仍存在的节点实例和展开状态；同一工程上下文刷新不重建根节点。文件监听只订阅名称和目录变动，文件内容保存不触发整树刷新；目录暂时不可读时保留现有显示。
 
