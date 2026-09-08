@@ -44,6 +44,18 @@ internal partial class PropertiesViewModel : Tool
         public bool IsLanguageSelector { get; init; }
 
         /// <summary>
+        /// <para>此行是否使用文本编码下拉选择器。</para>
+        /// Whether this row uses the text-encoding dropdown.
+        /// </summary>
+        public bool IsEncodingSelector { get; init; }
+
+        /// <summary>
+        /// <para>此行是否以纯文本显示属性值（非任何选择器行）。</para>
+        /// Whether this row displays the value as plain text (not any selector row).
+        /// </summary>
+        public bool IsPlainValue => !IsLanguageSelector && !IsEncodingSelector;
+
+        /// <summary>
         /// <para>创建属性行。</para>
         /// Creates a property row.
         /// </summary>
@@ -101,12 +113,34 @@ internal partial class PropertiesViewModel : Tool
     public ObservableCollection<string> AvailableLanguages { get; } = [];
 
     /// <summary>
+    /// <para>编码选择器可选项；由 <see cref="FileViewModel.SupportedEncodings"/> 提供与编辑器一致的集合。</para>
+    /// Encoding dropdown options; sourced from <see cref="FileViewModel.SupportedEncodings"/> so the
+    /// editor and the properties panel share one set.
+    /// </summary>
+    public ObservableCollection<string> AvailableEncodings { get; } = [];
+
+    /// <summary>
     /// <para>当前选中的语法语言显示名称；用户在下拉栏切换时触发 <see cref="OnSelectedLanguageChanged"/>。</para>
     /// Currently selected syntax language display name; triggers <see cref="OnSelectedLanguageChanged"/>
-    /// when the user switches in the dropdown.
+    /// when the user switches it in the dropdown.
     /// </summary>
     [ObservableProperty]
     private string _selectedLanguage = string.Empty;
+
+    /// <summary>
+    /// <para>当前选中的文本编码名称；用户在下拉栏切换时回写到文档并触发重新保存。</para>
+    /// Currently selected text-encoding name; written back to the document (marking it dirty for
+    /// the next save) when the user switches it in the dropdown.
+    /// </summary>
+    [ObservableProperty]
+    private string _selectedEncoding = string.Empty;
+
+    /// <summary>
+    /// <para>编码选择器变更抑制标志（程序化设置 <see cref="SelectedEncoding"/> 时避免触发回写）。</para>
+    /// Encoding-selector change suppression flag (prevents write-back when programmatically
+    /// setting <see cref="SelectedEncoding"/>).
+    /// </summary>
+    private bool _suppressEncodingChange;
 
     /// <summary>
     /// <para>当用户在语言下拉栏中选择新语言时，将对应的语言标识写回当前文本文档。</para>
@@ -389,13 +423,21 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FileName"), fileName));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FilePath"), doc.FilePath ?? string.Empty));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Encoding"), doc.DetectedEncoding ?? "UTF-8"));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_LineCount"), doc.LineCount.ToString("N0")));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_CharCount"), doc.CharCount.ToString("N0")));
 
+        // 编码选择器：位于语法语言选择行上方，当前项随文档检测/所选编码同步。
+        // Encoding selector: placed above the language selector row, synced with the document's
+        // detected/selected encoding.
+        _currentTextDocument = doc;
+        PopulateEncodingSelector(doc);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Encoding"), string.Empty)
+        {
+            IsEncodingSelector = true
+        });
+
         // 语言选择器：填充可用语言列表并根据当前 Language 选中对应项。
         // Language selector: populate available languages and select the one matching the current Language.
-        _currentTextDocument = doc;
         PopulateLanguageSelector(doc.Language);
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Language"), string.Empty)
         {
@@ -403,6 +445,24 @@ internal partial class PropertiesViewModel : Tool
         });
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for text document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>当用户在编码下拉栏中选择新编码时，回写到当前文本文档（保存时按新编码写盘）。</para>
+    /// When the user selects a new encoding in the dropdown, writes it back to the current text
+    /// document (the next save writes the file with the chosen encoding).
+    /// </summary>
+    partial void OnSelectedEncodingChanged(string value)
+    {
+        if (_suppressEncodingChange || _currentTextDocument is not { } doc) return;
+        if (string.IsNullOrEmpty(value) || (AvailableEncodings.Count > 0 && value == AvailableEncodings[0]))
+        {
+            // 「自动检测」仅同步显示，不改变写盘编码。
+            // "Auto Detect" only syncs the display; it never changes the write encoding.
+            return;
+        }
+
+        doc.ApplyEncoding(value);
     }
 
     /// <summary>
@@ -440,6 +500,32 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
+    /// <para>填充编码下拉栏（复用 <see cref="FileViewModel.SupportedEncodings"/>）并按文档当前编码选中对应项。</para>
+    /// Populates the encoding dropdown (reusing <see cref="FileViewModel.SupportedEncodings"/>) and
+    /// selects the entry matching the document's current encoding.
+    /// </summary>
+    private void PopulateEncodingSelector(FileViewModel doc)
+    {
+        AvailableEncodings.Clear();
+        foreach (var encoding in FileViewModel.SupportedEncodings)
+        {
+            AvailableEncodings.Add(encoding);
+        }
+
+        _suppressEncodingChange = true;
+        try
+        {
+            SelectedEncoding = doc.DetectedEncoding is { } current && AvailableEncodings.Contains(current)
+                ? current
+                : AvailableEncodings[0];
+        }
+        finally
+        {
+            _suppressEncodingChange = false;
+        }
+    }
+
+    /// <summary>
     /// <para>语言选择器变更抑制标志（程序化设置 <see cref="SelectedLanguage"/> 时避免触发回写）。</para>
     /// Language-selector change suppression flag (prevents write-back when programmatically setting
     /// <see cref="SelectedLanguage"/>).
@@ -463,6 +549,19 @@ internal partial class PropertiesViewModel : Tool
         finally
         {
             _suppressLanguageChange = false;
+        }
+
+        // 编码选择器与语言选择器同生命周期：一并复位。
+        // The encoding selector shares the language selector's lifecycle: reset it too.
+        AvailableEncodings.Clear();
+        _suppressEncodingChange = true;
+        try
+        {
+            SelectedEncoding = string.Empty;
+        }
+        finally
+        {
+            _suppressEncodingChange = false;
         }
     }
 

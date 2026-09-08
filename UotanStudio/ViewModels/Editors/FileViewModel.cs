@@ -17,6 +17,15 @@ namespace UotanStudio.ViewModels.Editors;
 /// </summary>
 public partial class FileViewModel : Document, IEditable
 {
+    static FileViewModel()
+    {
+        // GB18030 等代码页编码不在默认内置集合中，须注册 CodePagesEncodingProvider 后
+        // Encoding.GetEncoding("GB18030") 才可用（AOT 兼容，无反射）。
+        // Code-page encodings such as GB18030 are not built in by default; register the
+        // CodePagesEncodingProvider so Encoding.GetEncoding("GB18030") works (AOT-safe).
+        System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+    }
+
     private bool _isLoading;
     private System.Text.Encoding _textEncoding = new System.Text.UTF8Encoding(false);
     private readonly SemaphoreSlim _saveGate = new(1, 1);
@@ -245,6 +254,43 @@ public partial class FileViewModel : Document, IEditable
     /// Detected text encoding name; <c>null</c> for non-text documents.
     /// </summary>
     [ObservableProperty] private string? _detectedEncoding;
+
+    /// <summary>
+    /// <para>编码选择器可选项（与属性面板下拉框共用，顺序即显示顺序）。</para>
+    /// Encoding options shared with the properties-panel dropdown (displayed in this order).
+    /// </summary>
+    public static IReadOnlyList<string> SupportedEncodings { get; } =
+        ["UTF-8", "UTF-8 (BOM)", "UTF-16 LE", "UTF-16 BE", "GB18030", "ASCII"];
+
+    /// <summary>
+    /// <para>把编码名称解析为写盘用的 <see cref="Encoding"/>；未知名称回落为无 BOM 的 UTF-8。</para>
+    /// Resolves an encoding name to the <see cref="Encoding"/> used when writing; unknown names fall
+    /// back to BOM-less UTF-8.
+    /// </summary>
+    public static System.Text.Encoding ResolveEncoding(string? name) => name switch
+    {
+        "UTF-8 (BOM)" => new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true),
+        "UTF-16 LE" => new System.Text.UnicodeEncoding(bigEndian: false, byteOrderMark: true),
+        "UTF-16 BE" => new System.Text.UnicodeEncoding(bigEndian: true, byteOrderMark: true),
+        "GB18030" => System.Text.Encoding.GetEncoding("GB18030"),
+        "ASCII" => System.Text.Encoding.ASCII,
+        _ => new System.Text.UTF8Encoding(false)
+    };
+
+    /// <summary>
+    /// <para>应用用户选择的保存编码：更新写盘编码、刷新编码显示并标记为已修改
+    /// （保存时按新编码写字节）。加载期间调用仅同步显示。</para>
+    /// Applies a user-chosen save encoding: updates the write encoding, refreshes the encoding
+    /// display and marks the document dirty (the next save writes the new bytes). Calls during
+    /// loading only synchronize the display.
+    /// </summary>
+    public void ApplyEncoding(string encodingName)
+    {
+        if (IsBinary || string.IsNullOrEmpty(encodingName)) return;
+        _textEncoding = ResolveEncoding(encodingName);
+        DetectedEncoding = encodingName;
+        if (!_isLoading && !IsBinary) IsDirty = true;
+    }
 
     /// <summary>
     /// <para>文本总行数（按 <c>\n</c> 计）；空文本为 0。</para>

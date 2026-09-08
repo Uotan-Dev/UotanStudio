@@ -53,7 +53,7 @@
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="viewmodels:PropertiesViewModel+PropertyRow">
               <Grid>
-                <Border Padding="6,3" Background="Transparent" IsVisible="{Binding !IsLanguageSelector}">
+                <Border Padding="6,3" Background="Transparent" IsVisible="{Binding IsPlainValue}">
                   <ToolTip.Tip>
                     <ToolTip MaxWidth="680">
                       <ScrollViewer MaxWidth="640" MaxHeight="480"
@@ -68,6 +68,21 @@
                              VerticalAlignment="Center" HorizontalAlignment="Stretch"
                              TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
                 </Border>
+                <ComboBox IsVisible="{Binding IsEncodingSelector}"
+                          ItemsSource="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).AvailableEncodings}"
+                          SelectedItem="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedEncoding, Mode=TwoWay}"
+                          ToolTip.Tip="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedEncoding}"
+                          Classes="Small" FontSize="13"
+                          HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                          MinWidth="0" MinHeight="0" Padding="6,0"
+                          BorderThickness="0" CornerRadius="0" Background="Transparent">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="x:String">
+                      <TextBlock Text="{Binding}" FontSize="13"
+                                 TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" MaxLines="1" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
                 <ComboBox IsVisible="{Binding IsLanguageSelector}"
                           ItemsSource="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).AvailableLanguages}"
                           SelectedItem="{Binding $parent[DataGrid].((viewmodels:PropertiesViewModel)DataContext).SelectedLanguage, Mode=TwoWay}"

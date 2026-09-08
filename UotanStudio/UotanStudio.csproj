@@ -51,6 +51,8 @@
     <PackageReference Include="ModelContextProtocol" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- 提供代码页编码（GB18030 等），文本编辑器编码选择器所需。 -->
+    <PackageReference Include="System.Text.Encoding.CodePages" />
   </ItemGroup>
 
 </Project>
