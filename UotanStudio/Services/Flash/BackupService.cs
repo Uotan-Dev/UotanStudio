@@ -468,13 +468,33 @@ public static class BackupService
     }
 
     /// <summary>
+    /// <para>按分区记录的上次进度上报，用于 100ms 节流去重。</para>
+    /// Last reported progress per partition, used for 100 ms throttling.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Percent, string Status, long Ticks)> LastReportByPartition = new();
+
+    /// <summary>
     /// <para>上报一条进度：写入调用方提供的 <see cref="IProgress{T}"/>，并发送
-    /// <see cref="BackupProgressMessage"/> 供输出面板 Backup 通道展示。</para>
+    /// <see cref="BackupProgressMessage"/> 供输出面板 Backup 通道展示。
+    /// 相同状态在 100ms 内重复上报会被合并（100% 终值必达），避免传输层每次写块
+    /// 都触发消息广播风暴。</para>
     /// Reports a progress entry: writes to the caller-provided <see cref="IProgress{T}"/>
     /// and sends a <see cref="BackupProgressMessage"/> for the output panel's Backup channel.
+    /// Duplicate reports with the same status within 100 ms are coalesced (the final 100%
+    /// always gets through) to avoid a message storm on every transport write chunk.
     /// </summary>
     private static void Report(IProgress<BackupProgress>? progress, string? partition, int percent, string status)
     {
+        var key = partition ?? string.Empty;
+        var now = Environment.TickCount64;
+        if (LastReportByPartition.TryGetValue(key, out var last)
+            && percent != 100
+            && string.Equals(status, last.Status, StringComparison.Ordinal)
+            && now - last.Ticks < 100)
+        {
+            return;
+        }
+        LastReportByPartition[key] = (percent, status, now);
         progress?.Report(new BackupProgress(partition, percent, status));
         WeakReferenceMessenger.Default.Send(new BackupProgressMessage(partition, percent, status));
     }
