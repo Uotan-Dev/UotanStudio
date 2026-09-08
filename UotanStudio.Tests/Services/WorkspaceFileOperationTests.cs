@@ -85,13 +85,42 @@ public class WorkspaceFileOperationTests
     }
 
     [Fact]
-    public void ExtractionCannotReplaceDirectoryContainingInput()
+    public void ImageFileUnpacksBesideImagesDirectory()
     {
         using var temp = new TempDirectory();
-        var folder = Path.Combine(temp.Path, "boot");
-        Directory.CreateDirectory(folder);
-        var input = Path.Combine(folder, "boot.img");
-        File.WriteAllText(input, "keep");
+        var input = temp.WriteBytes(Path.Combine("images", "boot.img"), [1]);
+        var paths = new ImageOperationPaths(input, false, temp.Path, temp.Path);
+        Assert.Equal(Path.Combine(temp.Path, "boot"), paths.UnpackedDirectory);
+    }
+
+    [Fact]
+    public void NonImageFileUnpacksLocally()
+    {
+        using var temp = new TempDirectory();
+        var unpacked = Path.Combine(temp.Path, "intermediate", "payload.bin");
+        Directory.CreateDirectory(unpacked);
+        var input = Path.Combine(unpacked, "boot.img");
+        File.WriteAllBytes(input, [1]);
+        var paths = new ImageOperationPaths(input, false, temp.Path, temp.Path);
+        Assert.Equal(Path.Combine(unpacked, "boot"), paths.UnpackedDirectory);
+    }
+
+    [Fact]
+    public void UnpackedDirectoryStillRejectsInvalidNames()
+    {
+        using var temp = new TempDirectory();
+        var input = temp.WriteBytes("images", [1]);
+        Assert.Throws<IOException>(() => new ImageOperationPaths(input, false, temp.Path, temp.Path).UnpackedDirectory);
+    }
+
+    [Fact]
+    public void ExtractionCannotReplaceItsOwnInput()
+    {
+        using var temp = new TempDirectory();
+        // 本地解压语义下目标为源文件同目录的同名子目录；无扩展名的源文件恰好等于目标路径时仍必须拒绝。
+        // With local unpacking the target is a sibling directory named after the source; an
+        // extension-less source file that equals the target path must still be rejected.
+        var input = temp.WriteBytes("boot", "keep"u8.ToArray());
         Assert.Throws<IOException>(new ImageOperationPaths(input, false, temp.Path, temp.Path).ValidateExtraction);
         Assert.Equal("keep", File.ReadAllText(input));
     }

@@ -10,14 +10,37 @@ internal sealed record ImageOperationPaths(string Source, bool IsDirectory, stri
     {
         get
         {
-            var path = Path.GetFullPath(IsDirectory ? Source : Path.Combine(Root, Name));
-            if (!string.Equals(Path.GetDirectoryName(path), Path.TrimEndingDirectorySeparator(Path.GetFullPath(Root)),
+            if (Name is "" or "." or "..")
+                throw new IOException("The unpacked directory must be a non-reserved child of the sub-project root.");
+
+            // images/ 内的文件解包到子项目根目录（与 images/ 同级）；其余位置一律本地解包到源文件所在目录。
+            // Files under images/ unpack to the sub-project root (beside images/); anything else unpacks
+            // locally into the directory containing the source file.
+            var sourceDir = Path.GetDirectoryName(Path.GetFullPath(Source));
+            var parent = IsDirectory || IsUnderImagesDirectory(sourceDir, Root)
+                ? Path.GetFullPath(Root)
+                : sourceDir!;
+            if (string.IsNullOrEmpty(parent))
+                throw new IOException("The unpacked directory must be a non-reserved child of the sub-project root.");
+
+            var path = Path.GetFullPath(IsDirectory ? Source : Path.Combine(parent, Name));
+            if (!string.Equals(Path.GetDirectoryName(path), Path.TrimEndingDirectorySeparator(parent),
                     StringComparison.OrdinalIgnoreCase)
-                || Name is "" or "." or ".."
                 || new[] { "images", "output", ".uotan", ".deleted" }.Contains(Name, StringComparer.OrdinalIgnoreCase))
                 throw new IOException("The unpacked directory must be a non-reserved child of the sub-project root.");
             return path;
         }
+    }
+
+    /// <summary>Determines whether the source directory is the sub-project <c>images/</c> directory or inside it. 判断源目录是否为子项目 <c>images/</c> 目录或其子目录。</summary>
+    private static bool IsUnderImagesDirectory(string? sourceDirectory, string root)
+    {
+        if (string.IsNullOrEmpty(sourceDirectory)) return false;
+        var images = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(root, "images")));
+        var current = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourceDirectory));
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(current, images, comparison)
+            || current.StartsWith(images + Path.DirectorySeparatorChar, comparison);
     }
 
     internal void ValidateExtraction()
