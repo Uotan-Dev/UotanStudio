@@ -208,6 +208,13 @@ public partial class NodeEditorViewModel : ViewModelBase
     private Action? _executionLogUnsubscribe;
 
     /// <summary>
+    /// <para>执行日志条数上限，超过后移除最旧条目，防止长工作流下集合无限增长。</para>
+    /// Execution log entry cap; the oldest entries are removed beyond it to keep the
+    /// collection bounded for long-running workflows.
+    /// </summary>
+    private const int MaxExecutionLogEntries = 1000;
+
+    /// <summary>
     /// <para>执行日志允许的日志来源集合（Engine、NodeEditor 或任一节点 Title）。</para>
     /// Allowed log sources for the execution log (Engine, NodeEditor, or any node Title).
     /// </summary>
@@ -745,6 +752,20 @@ public partial class NodeEditorViewModel : ViewModelBase
         ExecutionProgress = progress;
     }
 
+    /// <summary>
+    /// <para>向执行日志追加一行并裁剪超限条目（保持集合有界）。</para>
+    /// Appends one line to the execution log and trims over-limit entries (bounded collection).
+    /// </summary>
+    private void AppendExecutionLog(string line)
+    {
+        ExecutionLog.Add(line);
+        var overflow = ExecutionLog.Count - MaxExecutionLogEntries;
+        for (var i = 0; i < overflow; i++)
+        {
+            ExecutionLog.RemoveAt(0);
+        }
+    }
+
     private void OnNodeStatusChanged(object? sender, NodeStatusChangedEventArgs e)
     {
         // 节点状态变更：向执行日志写一行 “<Title> -> <状态>”，并记录一条调试日志
@@ -752,7 +773,7 @@ public partial class NodeEditorViewModel : ViewModelBase
         var node = e.Node;
         void Append()
         {
-            ExecutionLog.Add($"{node.Title} -> {node.StatusDisplay}");
+            AppendExecutionLog($"{node.Title} -> {node.StatusDisplay}");
         }
 
         if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
@@ -777,7 +798,7 @@ public partial class NodeEditorViewModel : ViewModelBase
 
         void Append()
         {
-            ExecutionLog.Add($"[{entry.Timestamp:HH:mm:ss}] {entry.Source}: {entry.Message}");
+            AppendExecutionLog($"[{entry.Timestamp:HH:mm:ss}] {entry.Source}: {entry.Message}");
         }
 
         if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())

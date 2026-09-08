@@ -1,9 +1,9 @@
 using System;
 using System.Collections.ObjectModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
-
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
@@ -100,6 +100,37 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     private const int MaxEntries = 5000;
 
     /// <summary>
+    /// <para>待刷新日志的锁对象，保护跨线程入队的 <see cref="_pendingEntries"/>。</para>
+    /// Lock guarding <see cref="_pendingEntries"/> which is enqueued from any thread.
+    /// </summary>
+    private readonly object _pendingGate = new();
+
+    /// <summary>
+    /// <para>待批量刷新的日志队列：入队线程只做加锁追加，UI 线程由定时器批量消费。</para>
+    /// Backlog of entries waiting for the batch flush; producer threads only lock-append,
+    /// the UI thread drains it on the flush timer.
+    /// </summary>
+    private readonly List<LogEntry> _pendingEntries = [];
+
+    /// <summary>
+    /// <para>已登记组件名的哈希集合，替代对 <see cref="Sources"/> 的线性 Contains 查找。</para>
+    /// Hash set of registered source names, replacing linear Contains lookups on <see cref="Sources"/>.
+    /// </summary>
+    private readonly HashSet<string> _sourceSet = new(StringComparer.Ordinal) { string.Empty };
+
+    /// <summary>
+    /// <para>批量刷新定时器：每 100ms 在 UI 线程一次性消费积压日志。</para>
+    /// Batch flush timer: drains the backlog on the UI thread every 100 ms.
+    /// </summary>
+    private readonly DispatcherTimer _flushTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+
+    /// <summary>
+    /// <para>搜索输入防抖定时器（250ms），避免每次按键都全量重建展示集合。</para>
+    /// Search input debounce timer (250 ms); avoids rebuilding the display collection on every keystroke.
+    /// </summary>
+    private DispatcherTimer? _searchDebounce;
+
+    /// <summary>
     /// <para>取消订阅委托。</para>
     /// Unsubscribe delegate.
     /// </summary>
@@ -136,7 +167,22 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// </summary>
     [ObservableProperty] private string _searchText = string.Empty;
 
-    partial void OnSearchTextChanged(string value) => ReapplyFilter();
+    partial void OnSearchTextChanged(string value)
+    {
+        // 搜索输入 250ms 防抖：避免每次按键都全量重建展示集合。
+        // 250 ms debounce for search input: avoids rebuilding the display collection on every keystroke.
+        if (_searchDebounce is null)
+        {
+            _searchDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            _searchDebounce.Tick += (_, _) =>
+            {
+                _searchDebounce?.Stop();
+                ReapplyFilter();
+            };
+        }
+        _searchDebounce.Stop();
+        _searchDebounce.Start();
+    }
 
     [RelayCommand]
     private void ClearSearch() => SearchText = string.Empty;
@@ -192,6 +238,8 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         SelectedChannel = Channels[0];
         LanguageService.Instance.LanguageChanged += OnLanguageChanged;
         _unsubscribe = LogService.Instance.Subscribe(OnLogEnqueued);
+        _flushTimer.Tick += (_, _) => FlushPending();
+        _flushTimer.Start();
         foreach (var e in LogService.Instance.Entries)
         {
             AppendEntry(e);
@@ -199,34 +247,56 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>日志条目入队回调，追加到集合并裁剪超限条目；跨线程调用时调度到 UI 线程，
-    /// 确保 <see cref="ObservableCollection{T}"/> 的变更总能触发界面刷新。</para>
-    /// Log entry enqueue callback, appending to the collection and trimming over-limit entries;
-    /// cross-thread calls are dispatched to the UI thread so collection changes always refresh the view.
+    /// <para>日志条目入队回调：仅加锁追加到待刷新队列，由 <see cref="_flushTimer"/> 每 100ms
+    /// 在 UI 线程批量消费，避免日志风暴时每条一次 Dispatcher.Post 与 O(n) 裁剪。</para>
+    /// Log entry enqueue callback: only lock-appends to the pending backlog; the flush timer
+    /// drains it on the UI thread every 100 ms, avoiding one Dispatcher.Post plus O(n) trimming
+    /// per entry during log storms.
     /// </summary>
     /// <param name="sender"><para>事件源。</para>Event source.</param>
     /// <param name="entry"><para>日志条目记录。</para>Log entry record.</param>
     private void OnLogEnqueued(object? sender, LogEntry entry)
     {
-        void AppendAndTrim()
+        lock (_pendingGate)
         {
-            AppendEntry(entry);
-            while (_allEntries.Count > MaxEntries && _allEntries.Count > 0)
+            _pendingEntries.Add(entry);
+        }
+    }
+
+    /// <summary>
+    /// <para>定时批量刷新：一次性把积压日志追加到集合并批量裁剪超限条目。</para>
+    /// Timed batch flush: appends the whole backlog at once and trims over-limit entries in bulk.
+    /// </summary>
+    private void FlushPending()
+    {
+        List<LogEntry> batch;
+        lock (_pendingGate)
+        {
+            if (_pendingEntries.Count == 0)
             {
-                var removed = _allEntries[0];
-                _allEntries.RemoveAt(0);
-                Entries.Remove(removed);
+                return;
             }
+            batch = new List<LogEntry>(_pendingEntries);
+            _pendingEntries.Clear();
         }
 
-        if (Avalonia.Threading.Dispatcher.UIThread.CheckAccess())
+        foreach (var entry in batch)
         {
-            AppendAndTrim();
+            AppendEntry(entry);
         }
-        else
+
+        // 批量裁剪：一次移除全部超限条目，替代逐条 RemoveAt(0) 的 O(n) 搬移。
+        // Bulk trim: remove all over-limit entries in one pass instead of per-entry RemoveAt(0).
+        var overflow = _allEntries.Count - MaxEntries;
+        if (overflow <= 0)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(AppendAndTrim);
+            return;
         }
+        for (var i = 0; i < overflow; i++)
+        {
+            Entries.Remove(_allEntries[i]);
+        }
+        _allEntries.RemoveRange(0, overflow);
     }
 
     /// <summary>
@@ -240,7 +310,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         var vm = new LogEntryViewModel(ts, entry.Level, entry.Source, entry.Message);
         _allEntries.Add(vm);
 
-        if (!Sources.Contains(entry.Source))
+        if (_sourceSet.Add(entry.Source))
         {
             Sources.Add(entry.Source);
         }
@@ -283,9 +353,15 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Clear()
     {
+        lock (_pendingGate)
+        {
+            _pendingEntries.Clear();
+        }
         _allEntries.Clear();
         Entries.Clear();
         Sources.Clear();
+        _sourceSet.Clear();
+        _sourceSet.Add(string.Empty);
         Sources.Add(string.Empty);
     }
 
@@ -302,8 +378,8 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>释放资源：取消订阅日志服务与语言变更事件。</para>
-    /// Releases resources: unsubscribes from the log service and language change events.
+    /// <para>释放资源：取消订阅日志服务与语言变更事件并停止定时器。</para>
+    /// Releases resources: unsubscribes from the log service and language change events and stops the timers.
     /// </summary>
     public void Dispose()
     {
@@ -311,6 +387,8 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         _unsubscribe?.Invoke();
         _unsubscribe = null;
         LanguageService.Instance.LanguageChanged -= OnLanguageChanged;
+        _flushTimer.Stop();
+        _searchDebounce?.Stop();
         _disposed = true;
         GC.SuppressFinalize(this);
     }
