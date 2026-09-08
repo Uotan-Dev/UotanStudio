@@ -728,9 +728,27 @@ public sealed partial class ErofsParser : IDisposable
 
     /// <summary>
     /// Loads the long xattr name prefix table (feature XATTR_PREFIXES); null without the feature.
-    /// <para>加载长 xattr 名称前缀表（feature XATTR_PREFIXES）；无特性时返回 null。</para>
+    /// The table is image-level static data and cached after the first load, avoiding one full
+    /// re-read per file during directory walks.
+    /// <para>加载长 xattr 名称前缀表（feature XATTR_PREFIXES）；无特性时返回 null。
+    /// 表内容为镜像级静态数据，首次加载后缓存，避免目录遍历时每文件重读。</para>
     /// </summary>
+    private IReadOnlyList<(byte BaseIndex, string Infix)>? _xattrPrefixTable;
+    private bool _xattrPrefixTableLoaded;
+
     private IReadOnlyList<(byte BaseIndex, string Infix)>? LoadXattrPrefixTable()
+    {
+        if (_xattrPrefixTableLoaded)
+        {
+            return _xattrPrefixTable;
+        }
+
+        _xattrPrefixTable = LoadXattrPrefixTableCore();
+        _xattrPrefixTableLoaded = true;
+        return _xattrPrefixTable;
+    }
+
+    private IReadOnlyList<(byte BaseIndex, string Infix)>? LoadXattrPrefixTableCore()
     {
         if (!_superblock.HasXattrPrefixes || _superblock.XattrPrefixCount == 0)
         {
@@ -787,15 +805,20 @@ public sealed partial class ErofsParser : IDisposable
             throw new InvalidDataException($"Inode nid {nid} is out of range.");
         }
 
-        var advise = BinaryPrimitives.ReadUInt16LittleEndian(
-            ReadBytes(offset, 2, $"Inode nid {nid}"));
+        // 单次读取 inode 最大长度（含 advise 字段），按 advise 判定 compact/extended 后解释，
+        // 消除先读 2 字节 advise 再全量读的每文件两次 IO。
+        // Single read of the maximum inode size (covering the advise field) interpreted as
+        // compact/extended per the advise flags, removing the two reads per inode.
+        var available = (int)Math.Min(ErofsInode.ExtendedSize, _imageSize - offset);
+        var data = ReadBytes(offset, available, $"Inode nid {nid}");
+        var advise = BinaryPrimitives.ReadUInt16LittleEndian(data);
         var inodeSize = (advise & ErofsInode.FlagExtended) != 0 ? ErofsInode.ExtendedSize : ErofsInode.CompactSize;
-        if (offset < 0 || inodeSize < 0 || offset > _imageSize || inodeSize > _imageSize - offset)
+        if (inodeSize > data.Length)
         {
             throw new InvalidDataException($"Inode nid {nid} exceeds the image bounds.");
         }
 
-        return ErofsInode.FromBytes(ReadBytes(offset, inodeSize, $"Inode nid {nid}"));
+        return ErofsInode.FromBytes(data.AsSpan(0, inodeSize));
     }
 
     private int DirectoryBlockSize => _superblock.DirBlkBits == 0 ? _blockSize : 1 << _superblock.DirBlkBits;

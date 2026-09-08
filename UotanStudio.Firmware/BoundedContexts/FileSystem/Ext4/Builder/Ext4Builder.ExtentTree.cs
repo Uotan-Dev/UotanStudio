@@ -127,10 +127,13 @@ public sealed partial class Ext4Builder
         }
 
 
+        // 索引切片替代 Skip(i).Take(epb)，避免分块循环的 O(n^2) LINQ 拷贝。
+        // Index slicing instead of Skip(i).Take(epb), avoiding O(n^2) LINQ copies in the loop.
         var leafGroups = new List<(uint Logical, ulong Start, ushort Len)[]>();
         for (var i = 0; i < extents.Count; i += epb)
         {
-            leafGroups.Add(extents.Skip(i).Take(epb).ToArray());
+            var count = Math.Min(epb, extents.Count - i);
+            leafGroups.Add(extents.GetRange(i, count).ToArray());
         }
 
         if (leafBlocks.Length < leafGroups.Count)
@@ -172,10 +175,13 @@ public sealed partial class Ext4Builder
         }
 
 
+        // 索引切片替代 Skip(i).Take(epb)，避免分块循环的 O(n^2) LINQ 拷贝。
+        // Index slicing instead of Skip(i).Take(epb), avoiding O(n^2) LINQ copies in the loop.
         var indexGroups = new List<(uint LogicalStart, long BlockAddress)[]>();
         for (var i = 0; i < indexEntries.Count; i += epb)
         {
-            indexGroups.Add(indexEntries.Skip(i).Take(epb).ToArray());
+            var count = Math.Min(epb, indexEntries.Count - i);
+            indexGroups.Add(indexEntries.GetRange(i, count).ToArray());
         }
 
         if (indexBlocks.Length < indexGroups.Count)

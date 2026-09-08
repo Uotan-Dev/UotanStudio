@@ -623,13 +623,19 @@ public sealed partial class Ext4Builder
         var children = Directory.EnumerateFileSystemEntries(node.FullPath)
             .Where(path => !SharedKernel.RepackMetadata.IsMetadataFile(path))
             .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal);
+        // 排除表构建为 HashSet（对齐 ErofsBuilder/F2fsBuilder 做法），把每子路径的
+        // O(排除数) 线性扫描降为 O(1)。
+        // Build the exclusion set as a HashSet (matching ErofsBuilder/F2fsBuilder), turning
+        // the per-path O(exclusions) scan into O(1).
+        var excludedSet = excludedFiles.Count == 0
+            ? null
+            : new HashSet<string>(
+                excludedFiles.Select(Path.GetFullPath),
+                OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         foreach (var childPath in children)
         {
-
-
-            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
             var fullChildPath = Path.GetFullPath(childPath);
-            if (excludedFiles.Any(excluded => string.Equals(fullChildPath, excluded, comparison)))
+            if (excludedSet is not null && excludedSet.Contains(fullChildPath))
             {
                 continue;
             }

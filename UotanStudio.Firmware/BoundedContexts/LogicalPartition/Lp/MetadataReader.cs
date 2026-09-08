@@ -11,7 +11,7 @@ public static class MetadataReader
     /// </summary>
     public static LpMetadata ReadFromImageFile(string path)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
         return ReadFromImageStream(stream);
     }
 

@@ -33,6 +33,29 @@ public sealed class F2fsParser : IDisposable
     private bool _walked;
 
     /// <summary>
+    /// Bounded cache of NAT blocks keyed by NAT block index; sequential file reads resolve
+    /// many nids that share the same NAT block. Cleared wholesale when over capacity.
+    /// <para>按 NAT 块号缓存 NAT 块的有界缓存——顺序读取大文件时大量 nid 共享同一 NAT 块；
+    /// 超容量时整体清空。</para>
+    /// </summary>
+    private readonly Dictionary<ulong, byte[]> _natBlockCache = new();
+
+    /// <summary>
+    /// Bounded cache of node blocks keyed by nid (inode/direct/indirect nodes revisited per
+    /// logical block during sequential reads). Guarded by <see cref="_streamLock"/> since node
+    /// reads share the stream lock. Cleared wholesale when over capacity.
+    /// <para>按 nid 缓存节点块（inode/direct/indirect）的有界缓存——顺序读取时每逻辑块都会
+    /// 重走映射链；受 <see cref="_streamLock"/> 保护，超容量时整体清空。</para>
+    /// </summary>
+    private readonly Dictionary<uint, byte[]> _nodeBlockCache = new();
+
+    /// <summary>
+    /// Maximum number of blocks retained in each parser-level block cache.
+    /// <para>解析器级块缓存各自保留的块数量上限。</para>
+    /// </summary>
+    private const int MaxCachedBlocks = 256;
+
+    /// <summary>
     /// Opens an f2fs image file for parsing.
     /// <para>打开 f2fs 镜像文件进行解析。</para>
     /// </summary>
@@ -358,7 +381,9 @@ public sealed class F2fsParser : IDisposable
     {
         using var ms = new MemoryStream();
         WriteFileData(nid, inode, ms);
-        return System.Text.Encoding.UTF8.GetString(ms.ToArray());
+        // 直接从 MemoryStream 内部缓冲解码，避免 ToArray 的整份复制。
+        // Decode from the MemoryStream's internal buffer to skip the ToArray copy.
+        return System.Text.Encoding.UTF8.GetString(ms.GetBuffer().AsSpan(0, (int)ms.Length));
     }
 
     private List<F2fsDirectoryEntry> ReadDirectory(uint ino, F2fsInode inode)
@@ -509,7 +534,17 @@ public sealed class F2fsParser : IDisposable
             var inSeg = natBlockIndex % (uint)_blocksPerSeg;
             var secondCopy = (_natVersionBitmap[natBlockIndex / 8] & (0x80 >> (int)(natBlockIndex % 8))) != 0;
             var natBlockAddress = checked(_superblock.NatBlkaddr + segOff * (uint)_blocksPerSeg * 2 + inSeg + (secondCopy ? (uint)_blocksPerSeg : 0));
-            var natBlock = ReadBlockChecked(natBlockAddress, $"NAT block for nid {nid}");
+            // NAT 块缓存：同一 NAT 块会被大量 nid 重复读取，命中时避免整块重读。
+            // NAT block cache: the same NAT block is re-read for many nids; a hit skips the full re-read.
+            if (!_natBlockCache.TryGetValue(natBlockIndex, out var natBlock))
+            {
+                natBlock = ReadBlockChecked(natBlockAddress, $"NAT block for nid {nid}");
+                if (_natBlockCache.Count >= MaxCachedBlocks)
+                {
+                    _natBlockCache.Clear();
+                }
+                _natBlockCache[natBlockIndex] = natBlock;
+            }
             var entryOffset = checked((int)(nid % F2fsNode.NatEntryPerBlock) * F2fsNode.NatEntrySize);
             blockAddress = BinaryPrimitives.ReadUInt32LittleEndian(natBlock.AsSpan(entryOffset + F2fsNode.NatEntryBlockOffset, 4));
         }
@@ -519,6 +554,33 @@ public sealed class F2fsParser : IDisposable
         }
 
         return blockAddress;
+    }
+
+    /// <summary>
+    /// Reads a node block by nid through the bounded node-block cache, avoiding the repeated
+    /// full re-read of the same node when sequential reads walk the mapping chain per block.
+    /// <para>经有界节点块缓存按 nid 读取节点块，避免顺序读取逐块重走映射链时反复整块重读同一节点。</para>
+    /// </summary>
+    private byte[] ReadNodeBlockCached(uint nid, string what)
+    {
+        lock (_streamLock)
+        {
+            if (_nodeBlockCache.TryGetValue(nid, out var cached))
+            {
+                return cached;
+            }
+        }
+
+        var node = ReadBlockChecked(ReadNatBlockAddress(nid), what);
+        lock (_streamLock)
+        {
+            if (_nodeBlockCache.Count >= MaxCachedBlocks)
+            {
+                _nodeBlockCache.Clear();
+            }
+            _nodeBlockCache[nid] = node;
+        }
+        return node;
     }
 
     internal long? MapBlock(F2fsInode inode, uint logicalBlock)
@@ -582,7 +644,7 @@ public sealed class F2fsParser : IDisposable
             return null;
         }
 
-        var node = ReadBlockChecked(ReadNatBlockAddress(nodeNid), $"Direct node {nodeNid} (logical {logicalBlock})");
+        var node = ReadNodeBlockCached(nodeNid, $"Direct node {nodeNid} (logical {logicalBlock})");
         var address = BinaryPrimitives.ReadUInt32LittleEndian(node.AsSpan(index * 4, 4));
         return address == 0 ? null : address;
     }
@@ -594,7 +656,7 @@ public sealed class F2fsParser : IDisposable
             return null;
         }
 
-        var node = ReadBlockChecked(ReadNatBlockAddress(indirectNid), $"Indirect node {indirectNid} (logical {logicalBlock})");
+        var node = ReadNodeBlockCached(indirectNid, $"Indirect node {indirectNid} (logical {logicalBlock})");
         var directNid = BinaryPrimitives.ReadUInt32LittleEndian(node.AsSpan(level1 * 4, 4));
         if (directNid == 0)
         {
@@ -619,8 +681,8 @@ public sealed class F2fsParser : IDisposable
             return null;
         }
 
-        var doubleNode = ReadBlockChecked(
-            ReadNatBlockAddress(doubleIndirectNid),
+        var doubleNode = ReadNodeBlockCached(
+            doubleIndirectNid,
             $"Double indirect node {doubleIndirectNid} (logical {logicalBlock})");
 
 
@@ -826,6 +888,12 @@ public sealed class F2fsParser : IDisposable
                 $"Unknown F2FS compression algorithm id {kernelAlgorithmId}."),
         };
 
+    /// <summary>
+    /// Shared zero buffer for hole/zero writes, avoiding a fresh allocation per call.
+    /// <para>空洞/零写入的共享零缓冲，避免每次调用新分配。</para>
+    /// </summary>
+    private static readonly byte[] ZeroBuffer = new byte[1024 * 1024];
+
     private static void WriteZeros(Stream output, int count)
     {
         if (count <= 0)
@@ -833,7 +901,12 @@ public sealed class F2fsParser : IDisposable
             return;
         }
 
-        output.Write(new byte[count], 0, count);
+        while (count > 0)
+        {
+            var n = Math.Min(count, ZeroBuffer.Length);
+            output.Write(ZeroBuffer, 0, n);
+            count -= n;
+        }
     }
 
     private byte[] ReadBlockChecked(ulong blockAddress, string what)

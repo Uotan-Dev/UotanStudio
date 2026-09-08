@@ -55,13 +55,28 @@ public sealed class Ext4Parser : IDisposable
     private Journal.JournalOverlay _journalOverlay = Journal.JournalOverlay.Empty;
 
     /// <summary>
+    /// Bounded cache of metadata blocks (indirect pointer blocks and extent index/leaf blocks)
+    /// that are re-read once per logical block during sequential file reads. Cleared wholesale
+    /// when over capacity; parser instances are single-threaded by usage model.
+    /// <para>元数据块（间接指针块与 extent 索引/叶子块）的有界缓存——顺序读取大文件时这些块
+    /// 会被逐逻辑块重复读取；超容量时整体清空。解析器实例按现有使用模型为单线程。</para>
+    /// </summary>
+    private readonly Dictionary<ulong, byte[]> _metadataBlockCache = new();
+
+    /// <summary>
+    /// Maximum number of metadata blocks retained in <see cref="_metadataBlockCache"/>.
+    /// <para><see cref="_metadataBlockCache"/> 保留的元数据块数量上限。</para>
+    /// </summary>
+    private const int MaxCachedMetadataBlocks = 64;
+
+    /// <summary>
     /// Opens an ext4 image file for parsing.
     /// <para>打开 ext4 镜像文件进行解析。</para>
     /// </summary>
     public Ext4Parser(string imagePath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(imagePath);
-        _stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        _stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
         Initialize();
     }
 
@@ -89,9 +104,46 @@ public sealed class Ext4Parser : IDisposable
 
     public uint InodeCount => _superblock.InodesCount;
 
-    public int FileCount => _entries.Values.Count(e => e.Kind != Ext4EntryKind.Directory);
+    /// <summary>
+    /// Cached counts computed once after the directory walk, replacing the per-call LINQ
+    /// full-table scan.
+    /// <para>目录遍历后一次性缓存的计数，替代每次调用的 LINQ 全表遍历。</para>
+    /// </summary>
+    private int? _fileCountCache;
+    private int? _directoryCountCache;
 
-    public int DirectoryCount => _entries.Values.Count(e => e.Kind == Ext4EntryKind.Directory);
+    /// <summary>
+    /// Ensures the directory tree has been walked once before reading cached counters.
+    /// <para>读取缓存计数前确保目录树已遍历一次。</para>
+    /// </summary>
+    private void EnsureWalked()
+    {
+        if (!_walked)
+        {
+            WalkDirectory(RootInodeNumber, string.Empty, new HashSet<uint>(), 0);
+            _walked = true;
+        }
+    }
+
+    public int FileCount
+    {
+        get
+        {
+            EnsureWalked();
+            _fileCountCache ??= _entries.Values.Count(e => e.Kind != Ext4EntryKind.Directory);
+            return _fileCountCache.Value;
+        }
+    }
+
+    public int DirectoryCount
+    {
+        get
+        {
+            EnsureWalked();
+            _directoryCountCache ??= _entries.Values.Count(e => e.Kind == Ext4EntryKind.Directory);
+            return _directoryCountCache.Value;
+        }
+    }
 
     private void Initialize()
     {
@@ -615,7 +667,9 @@ public sealed class Ext4Parser : IDisposable
 
         using var ms = new MemoryStream(size);
         ReadInodeContent(eaInode, size, ms);
-        return ms.ToArray();
+        // 直接从 MemoryStream 内部缓冲截取，避免 ToArray 的整份复制。
+        // Copy from the MemoryStream's internal buffer to skip an extra full copy.
+        return ms.GetBuffer().AsSpan(0, (int)ms.Length).ToArray();
     }
 
     private string? ReadSymlinkTarget(Ext4Inode inode)
@@ -680,8 +734,23 @@ public sealed class Ext4Parser : IDisposable
 
     private byte[] ReadBlock(ulong physicalBlock)
     {
+        // 元数据块缓存：顺序读取大文件时同一指针/索引块会被逐逻辑块重复请求，
+        // 命中缓存可消除重复 IO 与每次 new byte[blockSize] 的分配。
+        // Metadata block cache: sequential large-file reads request the same pointer/index
+        // block once per logical block; a hit avoids both the repeated IO and the
+        // per-call byte[blockSize] allocation.
+        if (_metadataBlockCache.TryGetValue(physicalBlock, out var cached))
+        {
+            return cached;
+        }
+
         var buffer = new byte[_blockSize];
         ReadBlockTo(physicalBlock, buffer);
+        if (_metadataBlockCache.Count >= MaxCachedMetadataBlocks)
+        {
+            _metadataBlockCache.Clear();
+        }
+        _metadataBlockCache[physicalBlock] = buffer;
         return buffer;
     }
 

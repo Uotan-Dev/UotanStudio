@@ -161,16 +161,23 @@ public sealed class SparseFile : IDisposable
                     break;
                 case ChunkType.Fill:
                     {
+                        // 预建一块填充缓冲循环填满后按大块写出，消除每 4 字节一次 stream.Write 的热点。
+                        // Prebuild one fill buffer and write it in large blocks, avoiding a
+                        // stream.Write call per 4-byte pattern.
                         var fill = BitConverter.GetBytes(chunk.FillValue);
                         var total = (long)chunk.Header.ChunkSize * blockSize;
+                        var fillBuffer = new byte[Math.Min(Math.Max(blockSize, 64 * 1024), 4 * 1024 * 1024)];
+                        for (var i = 0; i < fillBuffer.Length; i += 4)
+                        {
+                            fillBuffer[i] = fill[0];
+                            if (i + 1 < fillBuffer.Length) fillBuffer[i + 1] = fill[1];
+                            if (i + 2 < fillBuffer.Length) fillBuffer[i + 2] = fill[2];
+                            if (i + 3 < fillBuffer.Length) fillBuffer[i + 3] = fill[3];
+                        }
                         while (total > 0)
                         {
-                            var n = (int)Math.Min(blockSize, total);
-                            for (var i = 0; i < n; i += 4)
-                            {
-                                var copy = Math.Min(4, n - i);
-                                stream.Write(fill, 0, copy);
-                            }
+                            var n = (int)Math.Min(fillBuffer.Length, total);
+                            stream.Write(fillBuffer, 0, n);
                             total -= n;
                         }
                         written += (long)chunk.Header.ChunkSize * blockSize;

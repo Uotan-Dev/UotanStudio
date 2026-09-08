@@ -512,9 +512,15 @@ public sealed partial class ErofsParser
         return heads;
     }
 
+    /// <summary>
+    /// Shared zero buffer for zero-fill writes, avoiding a fresh allocation per call.
+    /// <para>补零写入的共享零缓冲，避免每次调用新分配。</para>
+    /// </summary>
+    private static readonly byte[] SharedZeroBuffer = new byte[1 << 16];
+
     private static void WriteZeroes(Stream output, long count)
     {
-        var zeroes = new byte[Math.Min(count, 1 << 16)];
+        var zeroes = SharedZeroBuffer;
         var written = 0L;
         while (written < count)
         {

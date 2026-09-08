@@ -80,6 +80,14 @@ public class FileDataProvider(string filePath, long offset, long length) : ISpar
     public int Read(long inOffset, byte[] buffer, int bufferOffset, int count) => Read(inOffset, buffer.AsSpan(bufferOffset, count));
 
     /// <summary>
+    /// Lazily opened long-lived stream used by <see cref="Read(long, Span{Byte})"/>; avoids
+    /// opening and closing a FileStream on every read call.
+    /// <para>由 <see cref="Read(long, Span{Byte})"/> 懒打开的长生命周期流，避免每次读取
+    /// 都新建并关闭 FileStream。</para>
+    /// </summary>
+    private FileStream? _readStream;
+
+    /// <summary>
     /// Reads data from the provider into a Span{Byte}.
     /// <para>从提供程序读取数据到 Span{Byte}。</para>
     /// </summary>
@@ -91,9 +99,15 @@ public class FileDataProvider(string filePath, long offset, long length) : ISpar
         }
 
         var toRead = (int)Math.Min(buffer.Length, Length - inOffset);
-        using var fs = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.RandomAccess);
-        fs.Seek(_offset + inOffset, SeekOrigin.Begin);
-        return fs.Read(buffer[..toRead]);
+        // 持有单个长生命周期流并在 Dispose 时关闭；调用方逐块读取时不再重复开/关句柄。
+        // Hold a single long-lived stream closed on Dispose; chunked callers no longer
+        // open/close a handle per read.
+        if (_readStream is null)
+        {
+            _readStream = new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.RandomAccess);
+        }
+        _readStream.Seek(_offset + inOffset, SeekOrigin.Begin);
+        return _readStream.Read(buffer[..toRead]);
     }
 
     /// <summary>
@@ -106,5 +120,9 @@ public class FileDataProvider(string filePath, long offset, long length) : ISpar
     /// Releases any resources held by the provider.
     /// <para>释放提供程序持有的所有资源。</para>
     /// </summary>
-    public virtual void Dispose() { }
+    public virtual void Dispose()
+    {
+        _readStream?.Dispose();
+        _readStream = null;
+    }
 }

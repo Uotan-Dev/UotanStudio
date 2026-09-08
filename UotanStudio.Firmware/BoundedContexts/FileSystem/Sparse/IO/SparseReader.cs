@@ -209,7 +209,7 @@ public static class SparseReader
     {
 
 
-        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan);
+        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
         try
         {
             var sparse = FromStream(stream, validateCrc, verbose);
@@ -294,6 +294,22 @@ public static class SparseReader
         chunks.Insert(index, chunk);
     }
 
+    /// <summary>
+    /// Shared fill buffer for CRC computation, prebuilt once per process.
+    /// <para>CRC 计算共享的填充缓冲，进程内仅构建一次。</para>
+    /// </summary>
+    private static readonly byte[] CrcFillBuffer = CreateCrcFillBuffer();
+
+    private static byte[] CreateCrcFillBuffer()
+    {
+        var buf = new byte[64 * 1024];
+        for (var i = 0; i < buf.Length; i += 4)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(buf.AsSpan(i), 0x01000000); // 占位，AppendRepeated 时重写
+        }
+        return buf;
+    }
+
     private static void AppendRepeated(Crc32? crc, uint fillValue, long totalBytes)
     {
         if (crc is null)
@@ -301,9 +317,14 @@ public static class SparseReader
             return;
         }
 
-        Span<byte> buf = stackalloc byte[65536];
+        // 共享填充缓冲替代 64KB stackalloc，避免深调用栈溢出风险；按块写入模式值。
+        // Shared fill buffer instead of a 64KB stackalloc (stack-overflow safe in deep stacks);
+        // the pattern is written per block.
+        Span<byte> buf = CrcFillBuffer;
         for (var i = 0; i < buf.Length; i += 4)
+        {
             BinaryPrimitives.WriteUInt32LittleEndian(buf[i..], fillValue);
+        }
         while (totalBytes > 0)
         {
             var size = (int)Math.Min(buf.Length, totalBytes);

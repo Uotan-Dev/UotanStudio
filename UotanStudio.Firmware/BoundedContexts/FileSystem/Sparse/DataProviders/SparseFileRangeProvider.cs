@@ -146,15 +146,37 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
         var requestedEnd = checked(absoluteOffset + buffer.Length);
         var written = 0;
 
-        foreach (var chunk in _owner.Chunks)
+        // 二分定位起始 chunk（对齐 SparseReadStream.ReadLogical），避免每次读取都
+        // 从头线性扫描整个 chunk 列表。
+        // Binary-search the starting chunk (mirrors SparseReadStream.ReadLogical) instead
+        // of linearly scanning the whole chunk list on every read.
+        var chunks = _owner.Chunks;
+        var startBlock = requestedStart / blockSize;
+        int lo = 0, hi = chunks.Count;
+        while (lo < hi)
         {
-            if (written >= buffer.Length)
+            var mid = lo + (hi - lo) / 2;
+            var endBlock = (long)chunks[mid].StartBlock + chunks[mid].Header.ChunkSize;
+            if (endBlock > startBlock)
+            {
+                hi = mid;
+            }
+            else
+            {
+                lo = mid + 1;
+            }
+        }
+
+        for (var i = lo; i < chunks.Count && written < buffer.Length; i++)
+        {
+            var chunk = chunks[i];
+            var chunkStart = chunk.StartBlock * blockSize;
+            var chunkEnd = chunkStart + chunk.Header.ChunkSize * blockSize;
+            if (chunkStart >= requestedEnd)
             {
                 break;
             }
 
-            var chunkStart = chunk.StartBlock * blockSize;
-            var chunkEnd = chunkStart + chunk.Header.ChunkSize * blockSize;
             var overlapStart = Math.Max(requestedStart, chunkStart);
             var overlapEnd = Math.Min(requestedEnd, chunkEnd);
             if (overlapStart >= overlapEnd)
@@ -202,12 +224,26 @@ public sealed class SparseFileRangeProvider : ISparseDataProvider
 
             case ChunkType.Fill:
                 {
+                    // 按 4 字节对齐段复制替代逐字节取模写。
+                    // Copy in 4-byte aligned segments instead of per-byte modulo writes.
                     Span<byte> pattern = stackalloc byte[4];
                     BinaryPrimitives.WriteUInt32LittleEndian(pattern, chunk.FillValue);
                     var offset = (int)(chunkLocal % 4);
-                    for (var i = 0; i < destination.Length; i++)
+                    var i = 0;
+                    if (offset != 0)
                     {
-                        destination[i] = pattern[(offset + i) % 4];
+                        var head = Math.Min(4 - offset, destination.Length);
+                        pattern.Slice(offset, head).CopyTo(destination);
+                        i = head;
+                    }
+                    while (i + 4 <= destination.Length)
+                    {
+                        pattern.CopyTo(destination.Slice(i));
+                        i += 4;
+                    }
+                    if (i < destination.Length)
+                    {
+                        pattern[..(destination.Length - i)].CopyTo(destination[i..]);
                     }
                     break;
                 }
