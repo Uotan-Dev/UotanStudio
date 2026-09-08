@@ -343,6 +343,70 @@ public sealed class FirmwareService
     }
 
     /// <summary>
+    /// Signs an APK with user-provided key material (v1/v2/v3). The input file is not modified.
+    /// <para>使用用户提供的密钥材料签署 APK（v1/v2/v3）。不修改输入文件。</para>
+    /// </summary>
+    /// <param name="inputApk">Input APK path. <para>输入 APK 路径。</para></param>
+    /// <param name="outputApk">Output signed APK path. <para>输出已签名 APK 路径。</para></param>
+    /// <param name="keyPath">Private key file (PKCS#8/PKCS#1, PEM or DER). <para>私钥文件（PKCS#8/PKCS#1，PEM 或 DER）。</para></param>
+    /// <param name="certPath">Certificate file (PEM/DER/PFX). <para>证书文件（PEM/DER/PFX）。</para></param>
+    /// <param name="keyPassword">Optional private key password. <para>可选私钥密码。</para></param>
+    /// <param name="certPassword">Optional certificate (PFX) password. <para>可选证书（PFX）密码。</para></param>
+    /// <param name="enableV1">Enable JAR signature. <para>启用 JAR 签名。</para></param>
+    /// <param name="enableV2">Enable scheme v2. <para>启用 v2 方案。</para></param>
+    /// <param name="enableV3">Enable scheme v3. <para>启用 v3 方案。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Operation result. <para>操作结果。</para></returns>
+    public async Task<FirmwareOpResult> SignApkAsync(
+        string inputApk,
+        string outputApk,
+        string keyPath,
+        string certPath,
+        string? keyPassword = null,
+        string? certPassword = null,
+        bool enableV1 = true,
+        bool enableV2 = true,
+        bool enableV3 = true,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await Task.Run(() =>
+            {
+                using var keyMaterial = UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSignerKeyMaterial.Load(
+                    keyPath, keyPassword, certPath, certPassword);
+                var options = new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningOptions
+                {
+                    EnableV1 = enableV1,
+                    EnableV2 = enableV2,
+                    EnableV3 = enableV3,
+                };
+                UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigner.Sign(
+                    inputApk, outputApk, keyMaterial, options, cancellationToken);
+
+                var schemes = new List<string>();
+                if (enableV1) { schemes.Add("v1"); }
+                if (enableV2) { schemes.Add("v2"); }
+                if (enableV3) { schemes.Add("v3"); }
+                return new FirmwareOpResult
+                {
+                    Success = true,
+                    Summary = $"APK signed ({string.Join(", ", schemes)}) -> {outputApk}  APK 已签名（{string.Join(", ", schemes)}）→ {outputApk}",
+                    Entries = [outputApk],
+                };
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return FirmwareOpResult.Fail($"APK sign failed: {ex.Message}  APK 签名失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// <para>一键禁用 VBMeta 镜像的 AVB 校验：置位 hashtree/verification 两个禁用标志并清零认证块
     /// （见 <see cref="AvbSigner.DisableVbmetaVerificationAsync"/>），无需私钥。输出经临时文件原子提交。</para>
     /// Disables AVB verification on a VBMeta image in one step: sets the hashtree/verification

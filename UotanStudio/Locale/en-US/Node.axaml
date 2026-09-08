@@ -140,4 +140,5 @@
     <x:String x:Key="Node_MCP_ListTools">List MCP Tools</x:String>
     <x:String x:Key="Node_MCP_CallTool">Call MCP Tool</x:String>
 
+    <x:String x:Key="Node_Firmware_SignApk">Sign APK</x:String>
 </ResourceDictionary>

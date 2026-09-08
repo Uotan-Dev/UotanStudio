@@ -278,4 +278,13 @@
     <x:String x:Key="FindReplace_Replaced">已替换 {0} 项</x:String>
     <x:String x:Key="FindReplace_ConfirmReplaceAll">替换 {1} 个文档中的 {0} 处匹配？</x:String>
     <x:String x:Key="FindReplace_EditorNotReady">编辑器尚未就绪，请在文档显示后重试。</x:String>
+    <x:String x:Key="ApkSign_Title">APK 签名</x:String>
+    <x:String x:Key="ApkSign_Key">私钥（PKCS#8 / PKCS#1 / SEC1，PEM 或 DER）</x:String>
+    <x:String x:Key="ApkSign_Certificate">证书（PEM / DER / PFX）</x:String>
+    <x:String x:Key="ApkSign_Output">已签名 APK 输出路径</x:String>
+    <x:String x:Key="ApkSign_KeyPassword">私钥密码（可选）</x:String>
+    <x:String x:Key="ApkSign_CertificatePassword">证书密码（可选）</x:String>
+    <x:String x:Key="ApkSign_Browse">浏览…</x:String>
+    <x:String x:Key="ApkSign_Cancel">取消</x:String>
+    <x:String x:Key="ApkSign_Cancelled">签名已取消。</x:String>
 </ResourceDictionary>

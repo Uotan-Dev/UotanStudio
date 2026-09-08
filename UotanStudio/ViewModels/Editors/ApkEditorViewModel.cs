@@ -128,6 +128,7 @@ public partial class ApkEditorViewModel : Document
         }
 
         FilePath = path;
+        SigningOutputPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, Path.GetFileNameWithoutExtension(path) + "-signed.apk");
         Title = Path.GetFileName(path);
 
         IsBusy = true;

@@ -34,6 +34,8 @@
     <None Include="Firmware\Files\review-native-rkfw.img" CopyToOutputDirectory="PreserveNewest" />
     <!-- 固定 avbtool 随测试复制并直接运行；明确文件名使缺失夹具导致构建失败。 -->
     <None Include="TestInfrastructure\avbtool.py" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\ApkSigning\Verify.java" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\ApkSigning\unsigned.apk" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\avbtool.py.md" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\FirmwareMountCheck\run-qemu.sh" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\FirmwareMountCheck\guest-init.sh" CopyToOutputDirectory="PreserveNewest" />

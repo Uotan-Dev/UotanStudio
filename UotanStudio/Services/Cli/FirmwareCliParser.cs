@@ -60,6 +60,7 @@ public static class FirmwareCliParser
             "decompile-dex" => ParseDecompileDex(args),
             "disassemble-dex" => ParseDisassembleDex(args),
             "checksum" => ParseChecksum(args),
+            "sign" => ParseSign(args),
             _ => FirmwareCliParseResult.Fail($"Unknown firmware subcommand: {first}"),
         };
     }
@@ -945,7 +946,145 @@ public static class FirmwareCliParser
         });
     }
 
-    private static bool IsHelp(string arg) => arg == "--help" || arg == "-h";
+    private static FirmwareCliParseResult ParseSign(string[] args)
+    {
+        string? input = null;
+        string? output = null;
+        string? keyPath = null;
+        string? keyPassword = null;
+        string? certPath = null;
+        string? certPassword = null;
+        bool? enableV1 = null;
+        bool? enableV2 = null;
+        bool? enableV3 = null;
 
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (IsHelp(arg))
+            {
+                return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+                {
+                    Verb = FirmwareCliVerb.Sign,
+                    HelpRequested = true,
+                });
+            }
+
+            switch (arg)
+            {
+                case "-o":
+                case "--output":
+                    if (++i >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'sign' flag -o/--output requires a value");
+                    }
+
+                    output = args[i];
+                    break;
+                case "--key":
+                    if (++i >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'sign' flag --key requires a value");
+                    }
+
+                    keyPath = args[i];
+                    break;
+                case "--key-pass":
+                    if (++i >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'sign' flag --key-pass requires a value");
+                    }
+
+                    keyPassword = args[i];
+                    break;
+                case "--cert":
+                    if (++i >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'sign' flag --cert requires a value");
+                    }
+
+                    certPath = args[i];
+                    break;
+                case "--cert-pass":
+                    if (++i >= args.Length)
+                    {
+                        return FirmwareCliParseResult.Fail("'sign' flag --cert-pass requires a value");
+                    }
+
+                    certPassword = args[i];
+                    break;
+                case "--v1":
+                    enableV1 = true;
+                    break;
+                case "--no-v1":
+                    enableV1 = false;
+                    break;
+                case "--v2":
+                    enableV2 = true;
+                    break;
+                case "--no-v2":
+                    enableV2 = false;
+                    break;
+                case "--v3":
+                    enableV3 = true;
+                    break;
+                case "--no-v3":
+                    enableV3 = false;
+                    break;
+                default:
+                    if (arg.StartsWith("-", StringComparison.Ordinal))
+                    {
+                        return FirmwareCliParseResult.Fail($"Unknown flag for 'sign': {arg}");
+                    }
+
+                    if (input is null)
+                    {
+                        input = arg;
+                    }
+                    else
+                    {
+                        return FirmwareCliParseResult.Fail($"'sign' takes one APK path; got extra: {arg}");
+                    }
+
+                    break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return FirmwareCliParseResult.Fail("'sign' requires an APK path: firmware sign <apk> --key <pk8/pem> --cert <pem/pfx> -o <out.apk>");
+        }
+
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return FirmwareCliParseResult.Fail("'sign' requires -o <output.apk>");
+        }
+
+        if (string.IsNullOrWhiteSpace(keyPath))
+        {
+            return FirmwareCliParseResult.Fail("'sign' requires --key <private key file> (PKCS#8/PKCS#1, PEM or DER)");
+        }
+
+        if (string.IsNullOrWhiteSpace(certPath))
+        {
+            return FirmwareCliParseResult.Fail("'sign' requires --cert <certificate file> (PEM/DER/PFX)");
+        }
+
+        return FirmwareCliParseResult.Ok(new FirmwareCliCommand
+        {
+            Verb = FirmwareCliVerb.Sign,
+            InputPath = input,
+            OutputPath = output,
+            KeyPath = keyPath,
+            KeyPassword = keyPassword,
+            CertPath = certPath,
+            CertPassword = certPassword,
+            EnableV1 = enableV1 ?? true,
+            EnableV2 = enableV2 ?? true,
+            EnableV3 = enableV3 ?? true,
+        });
+    }
+
+    private static bool IsHelp(string arg) => arg == "--help" || arg == "-h";
     private static bool IsVersion(string arg) => arg == "--version" || arg == "-v";
 }

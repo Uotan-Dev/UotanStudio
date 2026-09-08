@@ -65,6 +65,10 @@ public enum FirmwareCliVerb
     /// <summary>Compute streaming SHA-256 checksum of a file.</summary>
     /// <para>计算文件的流式 SHA-256 校验和。</para>
     Checksum,
+
+    /// <summary>Sign an APK with a user-provided key and certificate.</summary>
+    /// <para>使用用户提供的密钥与证书签署 APK。</para>
+    Sign,
 }
 
 /// <summary>
@@ -120,6 +124,34 @@ public sealed class FirmwareCliCommand
     /// <summary>Optional public key path for AVB verification (verify only).</summary>
     /// <para>可选的 AVB 校验公钥路径（仅 verify）。</para>
     public string? PublicKeyPath { get; init; }
+
+    /// <summary>Private key file path for APK signing (sign only; user-provided).</summary>
+    /// <para>APK 签名私钥文件路径（仅 sign；由用户提供）。</para>
+    public string? KeyPath { get; init; }
+
+    /// <summary>Private key password for APK signing (sign only; optional).</summary>
+    /// <para>APK 签名私钥密码（仅 sign；可选）。</para>
+    public string? KeyPassword { get; init; }
+
+    /// <summary>Certificate file path for APK signing (sign only; user-provided PEM/DER/PFX).</summary>
+    /// <para>APK 签名证书文件路径（仅 sign；用户提供的 PEM/DER/PFX）。</para>
+    public string? CertPath { get; init; }
+
+    /// <summary>Certificate (PFX) password for APK signing (sign only; optional).</summary>
+    /// <para>APK 签名证书（PFX）密码（仅 sign；可选）。</para>
+    public string? CertPassword { get; init; }
+
+    /// <summary>Whether the v1 JAR signature is requested (sign only; default enabled).</summary>
+    /// <para>是否启用 v1 JAR 签名（仅 sign；默认启用）。</para>
+    public bool EnableV1 { get; init; } = true;
+
+    /// <summary>Whether the v2 signature scheme is requested (sign only; default enabled).</summary>
+    /// <para>是否启用 v2 签名方案（仅 sign；默认启用）。</para>
+    public bool EnableV2 { get; init; } = true;
+
+    /// <summary>Whether the v3 signature scheme is requested (sign only; default enabled).</summary>
+    /// <para>是否启用 v3 签名方案（仅 sign；默认启用）。</para>
+    public bool EnableV3 { get; init; } = true;
 }
 
 /// <summary>

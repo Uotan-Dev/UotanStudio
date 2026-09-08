@@ -90,8 +90,67 @@ public static class FirmwareCli
             FirmwareCliVerb.DecompileDex => RunDecompileDex(cmd),
             FirmwareCliVerb.DisassembleDex => RunDisassembleDex(cmd),
             FirmwareCliVerb.Checksum => RunChecksum(cmd),
+            FirmwareCliVerb.Sign => RunSign(cmd),
             _ => FirmwareCliExitCodes.Failure,
         };
+    }
+
+    /// <summary>
+    /// Signs an APK with the user-provided key and certificate files.
+    /// <para>使用用户提供的密钥与证书文件签署 APK。</para>
+    /// </summary>
+    private static int RunSign(FirmwareCliCommand cmd)
+    {
+        var input = cmd.InputPath!;
+        if (!File.Exists(input))
+        {
+            Console.Error.WriteLine($"File not found: {input}  文件未找到");
+            return FirmwareCliExitCodes.Failure;
+        }
+
+        var output = cmd.OutputPath!;
+        var dir = Path.GetDirectoryName(output);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        try
+        {
+            using var keyMaterial = UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSignerKeyMaterial.Load(
+                cmd.KeyPath!, cmd.KeyPassword, cmd.CertPath!, cmd.CertPassword);
+            var options = new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningOptions
+            {
+                EnableV1 = cmd.EnableV1,
+                EnableV2 = cmd.EnableV2,
+                EnableV3 = cmd.EnableV3,
+            };
+
+            UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigner.Sign(
+                input, output, keyMaterial, options, CancellationToken.None);
+
+            var schemes = new List<string>();
+            if (cmd.EnableV1)
+            {
+                schemes.Add("v1");
+            }
+            if (cmd.EnableV2)
+            {
+                schemes.Add("v2");
+            }
+            if (cmd.EnableV3)
+            {
+                schemes.Add("v3");
+            }
+
+            Console.WriteLine($"APK signed ({string.Join(", ", schemes)}) -> {output}  APK 已签名（{string.Join(", ", schemes)}）→ {output}");
+            return FirmwareCliExitCodes.Ok;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"APK sign failed: {ex.Message}  APK 签名失败：{ex.Message}");
+            return FirmwareCliExitCodes.Failure;
+        }
     }
 
     /// <summary>
@@ -846,6 +905,7 @@ public static class FirmwareCli
         writer.WriteLine("  decompile-dex <file.dex> [-o <f>] Decompile DEX to pseudo-Java source");
         writer.WriteLine("  disassemble-dex <file> [-o <dir>] Disassemble DEX to Smali text");
         writer.WriteLine("  checksum <file>                   Compute streaming SHA-256 checksum");
+        writer.WriteLine("  sign <apk> -o <file>              Sign an APK (v1/v2/v3) with a custom key/cert");
         writer.WriteLine("  disable-verification <v> -o <f>   Patch vbmeta to disable AVB verification");
         writer.WriteLine();
         writer.WriteLine("Options:");
@@ -856,6 +916,13 @@ public static class FirmwareCli
         writer.WriteLine("  -p, --partition <name>            Target partition name (flash/extract)");
         writer.WriteLine("  -d, --serial <serial>             Target device serial");
         writer.WriteLine("  -k, --public-key <path>           Trusted AVB public key (verify)");
+        writer.WriteLine("      --key <path>                  Private key file, PKCS#8/PKCS#1 PEM/DER (sign)");
+        writer.WriteLine("      --key-pass <password>         Private key password (sign, optional)");
+        writer.WriteLine("      --cert <path>                 Certificate file, PEM/DER/PFX (sign)");
+        writer.WriteLine("      --cert-pass <password>        Certificate PFX password (sign, optional)");
+        writer.WriteLine("      --v1 / --no-v1                Enable/disable JAR signature (sign, default on)");
+        writer.WriteLine("      --v2 / --no-v2                Enable/disable scheme v2 (sign, default on)");
+        writer.WriteLine("      --v3 / --no-v3                Enable/disable scheme v3 (sign, default on)");
         writer.WriteLine("  -h, --help                        Show this help and exit");
         writer.WriteLine("  -v, --version                     Show version and exit");
         writer.WriteLine();
@@ -883,6 +950,8 @@ public static class FirmwareCli
         writer.WriteLine("  firmware reboot bootloader");
         writer.WriteLine("  firmware reboot edl -d 1234567890ABCDEF");
         writer.WriteLine("  firmware disable-verification vbmeta.img -o vbmeta_disabled.img");
+        writer.WriteLine("  firmware sign app.apk -o app_signed.apk --key release.pk8 --cert release.x509.pem");
+        writer.WriteLine("  firmware sign app.apk -o app_signed.apk --key release.pk8 --cert release.pfx --cert-pass secret --no-v1");
     }
 
     /// <summary>
