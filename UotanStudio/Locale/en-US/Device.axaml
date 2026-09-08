@@ -7,6 +7,7 @@
     <x:String x:Key="Device_Connect">Connect</x:String>
     <x:String x:Key="Device_Disconnect">Disconnect</x:String>
     <x:String x:Key="Device_NoDevices">No devices detected.</x:String>
+    <x:String x:Key="Device_Select">Select device</x:String>
     <x:String x:Key="Device_Scanning">Scanning for devices...</x:String>
     <x:String x:Key="Device_Reboot">Reboot</x:String>
     <x:String x:Key="Device_RebootBootloader">Reboot to Bootloader</x:String>

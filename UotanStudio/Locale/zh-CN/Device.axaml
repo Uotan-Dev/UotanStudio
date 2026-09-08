@@ -7,6 +7,7 @@
     <x:String x:Key="Device_Connect">连接</x:String>
     <x:String x:Key="Device_Disconnect">断开</x:String>
     <x:String x:Key="Device_NoDevices">未检测到设备。</x:String>
+    <x:String x:Key="Device_Select">选择设备</x:String>
     <x:String x:Key="Device_Scanning">正在扫描设备...</x:String>
     <x:String x:Key="Device_Reboot">重启</x:String>
     <x:String x:Key="Device_RebootBootloader">重启到 Bootloader</x:String>
