@@ -3,6 +3,7 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 
@@ -179,7 +180,47 @@ public sealed partial class ErofsBuilder
                 excludedPaths.Select(Path.GetFullPath),
                 OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         root = CollectNodes(directoryPath, exclusions);
+        ApplyMetadataOverrides(root, effective);
         return effective;
+    }
+
+    /// <summary>
+    /// Applies fs_config (uid/gid/mode) and file_contexts (security.selinux inline xattr) overrides
+    /// from the Android-style metadata files onto the collected tree.
+    /// <para>将 Android 风格元数据文件中的 fs_config（uid/gid/mode）与 file_contexts
+    /// （security.selinux inline xattr）覆盖应用到收集完成的目录树。</para>
+    /// </summary>
+    private static void ApplyMetadataOverrides(BuildNode root, ErofsOptions options)
+    {
+        if (options.FsConfigPath is null && options.FileContextsPath is null) return;
+        var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
+        var contexts = FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
+        var ordered = new List<BuildNode>();
+        CollectPreOrder(root, ordered);
+        foreach (var node in ordered)
+        {
+            var relative = BuildImagePath(node);
+            if (options.FsConfigPath is not null && FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry))
+            {
+                node.Uid = entry.Uid;
+                node.Gid = entry.Gid;
+                node.ModeOverride = entry.Mode;
+            }
+
+            if (options.FileContextsPath is not null && node.XattrIbody.Length == 0 &&
+                FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
+            {
+                node.XattrIbody = ErofsXattr.EncodeInline(
+                [
+                    new ErofsXattrEntry
+                    {
+                        Name = "security.selinux",
+                        Value = FileSystemMetadataOverrides.ToSelinuxXattrValue(label),
+                        NameIndex = ErofsXattr.NameIndexSecurity,
+                    }
+                ]);
+            }
+        }
     }
 
     private static BuildNode CollectNodes(string directoryPath, HashSet<string>? excludedPaths)
@@ -412,6 +453,7 @@ public sealed partial class ErofsBuilder
         public ushort DeviceMode;
         public uint Uid;
         public uint Gid;
+        public ushort ModeOverride;
         public long Mtime;
 
 

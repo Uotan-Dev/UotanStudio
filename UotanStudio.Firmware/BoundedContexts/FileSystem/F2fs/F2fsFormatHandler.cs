@@ -140,7 +140,8 @@ public sealed class F2fsFormatHandler : IFormatHandler
                 {
                     BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
                     SegmentSize = RepackMetadata.IntegerOption(options, "SegmentSize", 2 * 1024 * 1024),
-                    VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "f2fs"
+                    VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "f2fs",
+                    FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
                 });
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (F2FS).");

@@ -2,6 +2,7 @@
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Core;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Journal;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 
@@ -211,6 +212,35 @@ public sealed partial class Ext4Builder
         return options;
     }
 
+    /// <summary>
+    /// Applies fs_config (uid/gid/mode) and file_contexts (security.selinux xattr) overrides
+    /// from the Android-style metadata files onto the built tree.
+    /// <para>将 Android 风格元数据文件中的 fs_config（uid/gid/mode）与 file_contexts
+    /// （security.selinux xattr）覆盖应用到已构建的目录树。</para>
+    /// </summary>
+    private static void ApplyMetadataOverrides(Node root, List<Node> nodes, Ext4Options options)
+    {
+        if (options.FsConfigPath is null && options.FileContextsPath is null) return;
+        var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
+        var contexts = FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
+        foreach (var node in nodes)
+        {
+            var relative = node == root ? string.Empty : node.RelativePath;
+            if (options.FsConfigPath is not null && FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry))
+            {
+                node.Uid = entry.Uid;
+                node.Gid = entry.Gid;
+                node.Mode = entry.Mode;
+            }
+
+            if (options.FileContextsPath is not null && FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
+            {
+                node.Xattrs ??= new Dictionary<string, byte[]>(StringComparer.Ordinal);
+                node.Xattrs["security.selinux"] = FileSystemMetadataOverrides.ToSelinuxXattrValue(label);
+            }
+        }
+    }
+
     private static void BuildCore(string sourceDirectory, Stream output, Ext4Options options, long baseOffset, bool freshDestination, IReadOnlyCollection<string> excludedFiles, Node? plannedRoot = null, int minimumGroupCount = 1)
     {
         var blockSize = options.BlockSize;
@@ -224,6 +254,7 @@ public sealed partial class Ext4Builder
         var root = plannedRoot ?? BuildTree(Path.GetFullPath(sourceDirectory), excludedFiles);
         var nodes = new List<Node>();
         var maxInode = AssignInodes(root, nodes);
+        ApplyMetadataOverrides(root, nodes, options);
         foreach (var node in nodes)
         {
             node.Runs.Clear();

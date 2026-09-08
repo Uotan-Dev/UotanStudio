@@ -6,6 +6,18 @@ they call parsers directly. Ordinary filesystem subdirectories do not represent
 independent images and do not receive separate metadata. Previously extracted
 directories are not backfilled without their source image.
 
+When a project is open, the application services pass a metadata root and the
+metadata file plus the filesystem sidecars are stored under
+`{project root}/.uotan/metadata/<partition name>/`; the extraction directory
+itself contains no metadata files. Without a project (for example the CLI), the
+metadata file is written directly into the extraction directory. Reads use
+exactly one location: when `RepackMetadata.DefaultMetadataRoot` is set (project
+open) the consolidated location keyed by the extraction directory name or its
+detected partition name is used exclusively; otherwise the extraction directory
+itself is checked. There is no cross-fallback between the two layouts.
+`ProjectContextService` sets and clears the ambient default root on project
+open/close.
+
 Example for an EROFS image:
 
 ```json
@@ -54,9 +66,10 @@ are not applied as packing options; physical layout and allocation are rebuilt.
 
 | Format | Options |
 | --- | --- |
-| EXT4 | `BlockSize` |
-| EROFS | `BlockSize`, `VolumeName` |
-| F2FS | `BlockSize`, `SegmentSize`, `VolumeName` |
+| EXT4 | `BlockSize`, `FsConfigPath`, `FileContextsPath` |
+| EROFS | `BlockSize`, `VolumeName`, `FsConfigPath`, `FileContextsPath` |
+| F2FS | `BlockSize`, `SegmentSize`, `VolumeName`, `FsConfigPath` |
+| CPIO | (consumes `<partition>_fs_config` for uid/gid/mode) |
 
 Options use invariant-culture numeric strings. `configuration` embeds the original
 format configuration: DTBO uses `header`, ordered `entries`, `imageSize` and
@@ -82,9 +95,13 @@ directories with metadata use that configuration; directories without metadata
 continue to use the project packing settings.
 
 Double-clicking an extraction directory in the project explorer opens its
-`.uotanstudio-repack.json` in the text editor. The file is opened even if it
-contains an unfinished JSON edit so it can be repaired. Ordinary subdirectories
-without metadata retain their existing navigation behavior.
+`.uotanstudio-repack.json` in the text editor. The path resolution uses the
+same single-location rule: the consolidated metadata file under
+`.uotan/metadata/<partition name>/` when a project is open, the local file
+otherwise. The file is opened even if it contains an unfinished JSON edit so it
+can be repaired. Directories without any discoverable metadata retain their
+existing navigation behavior. The metadata file is shown in the project
+explorer like any other file.
 
 The generic metadata file is excluded from filesystem, CPIO, NTPI, NB0, OPS and
 Sparse directory inputs. Image-only packers already select `*.img` inputs. Only

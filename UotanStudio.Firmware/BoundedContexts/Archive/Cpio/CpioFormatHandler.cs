@@ -186,7 +186,9 @@ public sealed class CpioFormatHandler : IFormatHandler
                     return FirmwareOpResult.Fail($"Input path is not a directory: '{inputPath}'.");
                 }
 
-                var entries = EnumerateDirectoryEntries(inputPath);
+                var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(
+                    RepackMetadata.DiscoverMetadataFile(inputPath, "_fs_config"));
+                var entries = EnumerateDirectoryEntries(inputPath, fsConfig);
                 cancellationToken.ThrowIfCancellationRequested();
 
                 using (var fs = File.Create(outputPath))
@@ -215,7 +217,7 @@ public sealed class CpioFormatHandler : IFormatHandler
         return _archive.DetectFormat(fs).ToString();
     }
 
-    private static List<ArchiveEntry> EnumerateDirectoryEntries(string sourceRoot)
+    private static List<ArchiveEntry> EnumerateDirectoryEntries(string sourceRoot, IReadOnlyDictionary<string, FsConfigEntry> fsConfig)
     {
         var rootFull = Path.GetFullPath(sourceRoot);
         var result = new List<ArchiveEntry>();
@@ -234,7 +236,7 @@ public sealed class CpioFormatHandler : IFormatHandler
                 }
 
                 pending.Push(directoryPath);
-                result.Add(BuildDirectoryEntry(directoryPath, rootFull));
+                result.Add(BuildDirectoryEntry(directoryPath, rootFull, fsConfig));
             }
 
             foreach (var filePath in Directory.EnumerateFiles(current))
@@ -246,16 +248,24 @@ public sealed class CpioFormatHandler : IFormatHandler
                     continue;
                 }
 
-                result.Add(BuildRegularFileEntry(filePath, rootFull));
+                result.Add(BuildRegularFileEntry(filePath, rootFull, fsConfig));
             }
         }
 
         return result;
     }
 
-    private static ArchiveEntry BuildDirectoryEntry(string fullPath, string sourceRoot)
+    private static ArchiveEntry BuildDirectoryEntry(string fullPath, string sourceRoot, IReadOnlyDictionary<string, FsConfigEntry> fsConfig)
     {
         var permissions = GetUnixPermissions(fullPath, fallback: 0x1ED);
+        uint uid = 0, gid = 0;
+        if (FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, ToArchiveRelativePath(fullPath, sourceRoot), out var entry))
+        {
+            uid = entry.Uid;
+            gid = entry.Gid;
+            permissions = entry.Mode & 0xFFF;
+        }
+
         return new ArchiveEntry
         {
             Name = ToArchiveRelativePath(fullPath, sourceRoot),
@@ -264,6 +274,8 @@ public sealed class CpioFormatHandler : IFormatHandler
             Metadata = new ArchiveEntryMetadata
             {
                 Mode = CpioFieldParser.ToMode(CpioFileType.Directory, permissions),
+                UserId = uid,
+                GroupId = gid,
                 LinkCount = 1,
                 ModificationTimeUnixSeconds = new DateTimeOffset(Directory.GetLastWriteTimeUtc(fullPath)).ToUnixTimeSeconds(),
                 FileType = CpioFileType.Directory,
@@ -272,9 +284,17 @@ public sealed class CpioFormatHandler : IFormatHandler
         };
     }
 
-    private static ArchiveEntry BuildRegularFileEntry(string fullPath, string sourceRoot)
+    private static ArchiveEntry BuildRegularFileEntry(string fullPath, string sourceRoot, IReadOnlyDictionary<string, FsConfigEntry> fsConfig)
     {
         var permissions = GetUnixPermissions(fullPath, fallback: 0x1A4);
+        uint uid = 0, gid = 0;
+        if (FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, ToArchiveRelativePath(fullPath, sourceRoot), out var entry))
+        {
+            uid = entry.Uid;
+            gid = entry.Gid;
+            permissions = entry.Mode & 0xFFF;
+        }
+
         var info = new FileInfo(fullPath);
         var expectedLength = info.Length;
         var expectedWriteTime = info.LastWriteTimeUtc;

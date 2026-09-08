@@ -289,35 +289,27 @@ public sealed partial class ExplorerNode : ObservableObject
     /// </summary>
     public bool IsDirectory { get; }
 
-    /// <summary>Gets the existing unpack configuration without parsing editable text. Follows pointer files to consolidated metadata.<para>获取已有的解包配置路径（跟随指针文件到统一元数据位置），不解析可编辑的文本。</para></summary>
+    /// <summary>Gets the existing unpack configuration without parsing editable text. Uses the single-location rule: the consolidated metadata location when a project is open, the local file otherwise.<para>获取已有的解包配置路径（按单一位置规则：有项目时使用统一元数据位置，无项目时使用本地文件），不解析可编辑的文本。</para></summary>
     public string? RepackConfigurationPath
     {
         get
         {
             if (!IsDirectory || IsPlaceholder) return null;
-            var pointerPath = System.IO.Path.Combine(Path, UotanStudio.Firmware.SharedKernel.RepackMetadata.FileName);
-            if (!File.Exists(pointerPath)) return null;
-            // Use RepackMetadata.Read to transparently follow pointer files
+            var localPath = System.IO.Path.Combine(Path, UotanStudio.Firmware.SharedKernel.RepackMetadata.FileName);
             try
             {
-                var metadata = UotanStudio.Firmware.SharedKernel.RepackMetadata.Read(Path);
-                if (metadata is not null)
-                {
-                    // Read succeeded. Resolve the actual metadata file path:
-                    // RepackMetadata.Read already follows pointers, so we need to find
-                    // the real file it resolved to. If a pointer exists, its target is
-                    // the consolidated metadata directory.
-                    var resolved = UotanStudio.Firmware.SharedKernel.RepackMetadata.ResolveActualMetadataPath(Path);
-                    if (resolved is not null && File.Exists(resolved)) return resolved;
-                    return pointerPath;
-                }
+                // ResolveActualMetadataPath applies the single-location rule: the consolidated
+                // .uotan/metadata/<partition>/ when a project is open, the local file otherwise.
+                var resolved = UotanStudio.Firmware.SharedKernel.RepackMetadata.ResolveActualMetadataPath(Path);
+                if (resolved is not null && File.Exists(resolved)) return resolved;
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
             {
-                // Metadata unreadable but file exists — still allow opening for repair
+                // Local file unreadable (e.g. unfinished JSON edit) — fall through so an
+                // existing local file can still be opened for repair.
             }
 
-            return pointerPath;
+            return File.Exists(localPath) ? localPath : null;
         }
     }
 
@@ -389,12 +381,6 @@ public sealed partial class ExplorerNode : ObservableObject
 
             foreach (var file in Directory.EnumerateFiles(Path))
             {
-                if (string.Equals(System.IO.Path.GetFileName(file),
-                    UotanStudio.Firmware.SharedKernel.RepackMetadata.FileName, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
                 // 隐藏项目配置文件（.uotan/.uotanfw/.uotannode），仿 VS 解决方案资源管理器行为。
                 // Hide project config files (.uotan/.uotanfw/.uotannode), mimicking VS Solution Explorer behavior.
                 var ext = System.IO.Path.GetExtension(file);

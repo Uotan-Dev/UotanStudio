@@ -21,6 +21,22 @@ public sealed class F2fsOptions
     public int CompressionLevel { get; init; }
 
     /// <summary>
+    /// Optional path to an Android-style <c>fs_config</c> file (<c>path uid gid mode capabilities</c>)
+    /// applied over the source tree; matching entries override the scanned uid/gid/mode.
+    /// <para>可选的 Android 风格 <c>fs_config</c> 文件路径（<c>path uid gid mode capabilities</c>），
+    /// 覆盖源树扫描结果：命中的条目以文件中的 uid/gid/mode 为准。</para>
+    /// </summary>
+    public string? FsConfigPath { get; init; }
+
+    /// <summary>
+    /// Optional path to an Android-style <c>file_contexts</c> file (<c>path label</c>) applied over
+    /// the source tree; matching entries are stored as <c>security.selinux</c> extra attributes.
+    /// <para>可选的 Android 风格 <c>file_contexts</c> 文件路径（<c>path label</c>），
+    /// 命中的条目以 <c>security.selinux</c> 扩展属性写入镜像。</para>
+    /// </summary>
+    public string? FileContextsPath { get; init; }
+
+    /// <summary>
     /// Validates and normalizes the options.
     /// <para>校验并规整选项。</para>
     /// </summary>

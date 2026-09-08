@@ -139,7 +139,9 @@ public sealed class ErofsFormatHandler : IFormatHandler
                 builder.Build(inputPath, outputPath, new ErofsOptions
                 {
                     BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
-                    VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "erofs"
+                    VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "erofs",
+                    FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
+                    FileContextsPath = RepackMetadata.NullIfEmpty(options, "FileContextsPath"),
                 });
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");

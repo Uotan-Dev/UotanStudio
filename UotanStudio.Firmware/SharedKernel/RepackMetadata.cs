@@ -78,39 +78,16 @@ public sealed class RepackMetadata
     }
 
     /// <summary>
-    /// Reads bounded, versioned metadata from an extraction directory, following pointer files to
-    /// the consolidated metadata location. Returns null if absent.
-    /// <para>从解包目录读取有界且带版本的元数据，跟随指针文件到统一元数据位置。不存在时返回 null。</para>
+    /// Reads bounded, versioned metadata for an extraction directory. When an ambient metadata
+    /// root is set (project open), the metadata is read exclusively from the consolidated
+    /// location; otherwise it is read from the extraction directory itself. Returns null if absent.
+    /// <para>读取解包目录的有界且带版本的元数据。设置了环境元数据根（项目打开）时只从统一位置读取；
+    /// 否则只从解包目录读取。不存在时返回 null。</para>
     /// </summary>
     public static RepackMetadata? Read(string directory)
     {
-        var path = Path.Combine(directory, FileName);
-        if (!File.Exists(path)) return null;
-        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-            throw new InvalidDataException("Repack metadata must not be a symbolic link.");
-        using var input = File.OpenRead(path);
-        if (input.Length > MaximumBytes) throw new InvalidDataException("Repack metadata exceeds 32 MiB.");
-        // Peek at schema to detect pointer files
-        var doc = JsonNode.Parse(input);
-        if (doc is null) return null;
-        var schema = doc["schema"]?.GetValue<string>();
-        if (schema == PointerSchemaName)
-        {
-            var relDir = doc["metadataDirectory"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(relDir)) return null;
-            var absDir = Path.GetFullPath(Path.Combine(directory, relDir));
-            var metaPath = Path.Combine(absDir, FileName);
-            if (!File.Exists(metaPath)) return null;
-            return ReadFromAbsolute(metaPath);
-        }
-
-        // Legacy or direct metadata file
-        var metadata = doc.Deserialize(RepackJsonContext.Default.RepackMetadata);
-        if (metadata is null || metadata.Schema != SchemaName || metadata.Version != 1
-            || string.IsNullOrWhiteSpace(metadata.FormatName) || metadata.SourceLength < 0
-            || metadata.SourceProperties is null || metadata.PackingOptions is null || metadata.Configuration is null)
-            throw new InvalidDataException("Invalid or unsupported repack metadata.");
-        return metadata;
+        var path = ResolveMetadataPath(directory);
+        return path is null ? null : ReadFromAbsolute(path);
     }
 
     /// <summary>
@@ -133,41 +110,107 @@ public sealed class RepackMetadata
     }
 
     /// <summary>
-    /// Resolves the actual metadata file path from an extraction directory, following pointer files.
-    /// Returns the absolute path to the real <c>.uotanstudio-repack.json</c>, or <c>null</c> if absent.
-    /// <para>从解包目录解析实际元数据文件路径，跟随指针文件。返回真实 <c>.uotanstudio-repack.json</c> 的绝对路径，
-    /// 不存在时返回 <c>null</c>。</para>
+    /// Resolves the actual metadata file path for an extraction directory. When an ambient
+    /// metadata root is set (project open), the consolidated location is used exclusively;
+    /// otherwise the extraction directory itself is checked. Returns <c>null</c> if absent.
+    /// <para>解析解包目录的实际元数据文件路径。设置了环境元数据根（项目打开）时只使用统一位置；
+    /// 否则只检查解包目录自身。不存在时返回 <c>null</c>。</para>
     /// </summary>
     public static string? ResolveActualMetadataPath(string extractionDirectory)
+        => ResolveMetadataPath(extractionDirectory);
+
+    /// <summary>
+    /// Single resolution point for metadata reads: the consolidated location when
+    /// <see cref="DefaultMetadataRoot"/> is set, the extraction directory otherwise.
+    /// <para>元数据读取的统一解析点：设置了 <see cref="DefaultMetadataRoot"/> 时使用统一位置，
+    /// 否则使用解包目录自身。</para>
+    /// </summary>
+    private static string? ResolveMetadataPath(string extractionDirectory)
     {
-        var localPath = Path.Combine(extractionDirectory, FileName);
-        if (!File.Exists(localPath)) return null;
-        // Peek at schema to detect pointer
-        using var input = File.OpenRead(localPath);
-        var doc = JsonNode.Parse(input);
-        if (doc is null) return localPath;
-        var schema = doc["schema"]?.GetValue<string>();
-        if (schema == PointerSchemaName)
+        if (!string.IsNullOrWhiteSpace(DefaultMetadataRoot))
         {
-            var relDir = doc["metadataDirectory"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(relDir)) return localPath;
-            var absDir = Path.GetFullPath(Path.Combine(extractionDirectory, relDir));
-            var metaPath = Path.Combine(absDir, FileName);
-            return File.Exists(metaPath) ? metaPath : localPath;
+            var directoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(extractionDirectory)));
+            if (string.IsNullOrWhiteSpace(directoryName)) return null;
+            // Extraction directories are usually named after the source image (e.g. "system.img"),
+            // while metadata is keyed by partition name ("system") — try both candidates.
+            // 解包目录通常以源镜像命名（如 "system.img"），而元数据按键（分区名 "system"）存放——两个候选都尝试。
+            foreach (var candidate in new[] { directoryName, DetectPartitionName(directoryName) })
+            {
+                if (string.IsNullOrWhiteSpace(candidate)) continue;
+                var metaPath = Path.Combine(DefaultMetadataRoot, candidate, FileName);
+                if (File.Exists(metaPath)) return metaPath;
+            }
+
+            return null;
         }
 
-        return localPath;
+        var localPath = Path.Combine(extractionDirectory, FileName);
+        return File.Exists(localPath) ? localPath : null;
+    }
+
+    /// <summary>
+    /// Discovers a generated metadata sidecar file (e.g. <c>&lt;partition&gt;_fs_config</c>) in the
+    /// consolidated metadata directory resolved for an extraction directory.
+    /// Returns <c>null</c> when no metadata directory or matching file exists.
+    /// <para>在解包目录对应的统一元数据目录中查找生成的元数据附属文件
+    /// （如 <c>&lt;partition&gt;_fs_config</c>）。不存在时返回 <c>null</c>。</para>
+    /// </summary>
+    internal static string? DiscoverMetadataFile(string directory, string suffix)
+    {
+        try
+        {
+            var metadataDir = Path.GetDirectoryName(Path.GetFullPath(ResolveActualMetadataPath(directory) ?? directory));
+            if (metadataDir is null || !Directory.Exists(metadataDir)) return null;
+            return Directory.EnumerateFiles(metadataDir, "*" + suffix).FirstOrDefault();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     internal static IReadOnlyDictionary<string, string> OptionsFor(string directory, string formatName)
     {
         var metadata = Read(directory);
-        return metadata?.FormatName == formatName ? metadata.PackingOptions : new Dictionary<string, string>();
+        if (metadata?.FormatName != formatName) return new Dictionary<string, string>();
+        var options = new Dictionary<string, string>(metadata.PackingOptions, StringComparer.Ordinal);
+        // Backfill superblock keys from partition_info and expose fs_config/file_contexts paths;
+        // packingOptions always win, discovered files only fill absent keys.
+        // 从 partition_info 回填超级块键值并暴露 fs_config/file_contexts 路径；
+        // packingOptions 优先，发现的文件仅补缺。
+        try
+        {
+            var infoPath = DiscoverMetadataFile(directory, "_info");
+            if (infoPath is not null)
+            {
+                foreach (var (key, value) in FileSystemMetadataOverrides.LoadPartitionInfo(infoPath))
+                {
+                    if (!options.ContainsKey(key)) options[key] = value;
+                }
+            }
+
+            if (!options.ContainsKey("FsConfigPath"))
+                options["FsConfigPath"] = DiscoverMetadataFile(directory, "_fs_config") ?? string.Empty;
+            if (!options.ContainsKey("FileContextsPath"))
+                options["FileContextsPath"] = DiscoverMetadataFile(directory, "_file_contexts") ?? string.Empty;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Backfill is best-effort; packingOptions alone remain usable.
+            // 回填尽力而为；仅 packingOptions 时打包仍可用。
+        }
+
+        return options;
     }
 
     internal static int IntegerOption(IReadOnlyDictionary<string, string> options, string key, int fallback)
         => options.TryGetValue(key, out var value)
             ? int.Parse(value, System.Globalization.CultureInfo.InvariantCulture) : fallback;
+
+    /// <summary>Gets an option as a nullable path: empty values (sidecar file absent) become null.
+    /// <para>以可空路径形式获取选项：空值（附属文件不存在）转换为 <c>null</c>。</para></summary>
+    internal static string? NullIfEmpty(IReadOnlyDictionary<string, string> options, string key)
+        => options.TryGetValue(key, out var value) && value.Length > 0 ? value : null;
 
     /// <summary>
     /// Identifies generated metadata files so directory packers can exclude them from payloads.
@@ -221,10 +264,11 @@ public sealed class RepackMetadata
     /// <summary>
     /// Writes source and packing metadata after a successful extraction through an application service.
     /// When <paramref name="metadataRoot"/> is provided, metadata is stored under
-    /// <c>{metadataRoot}/{partitionName}/</c> and a pointer file is left in <paramref name="outputDirectory"/>.
-    /// Otherwise, metadata is written directly into <paramref name="outputDirectory"/> (legacy behavior).
+    /// <c>{metadataRoot}/{partitionName}/</c> and the extraction directory is left untouched.
+    /// Otherwise, metadata is written directly into <paramref name="outputDirectory"/> (no-project fallback).
     /// <para>应用服务成功解包后写入来源和打包元数据。提供 <paramref name="metadataRoot"/> 时，
-    /// 元数据存放在 <c>{metadataRoot}/{partitionName}/</c>，解包目录保留指针文件；否则直接写入解包目录（旧版行为）。</para>
+    /// 元数据存放在 <c>{metadataRoot}/{partitionName}/</c>，解包目录不写入任何元数据文件；
+    /// 否则直接写入解包目录（无项目回退）。</para>
     /// </summary>
     public static async Task WriteAsync(IReadonlyFormatHandler handler, string sourcePath, string outputDirectory,
         CancellationToken cancellationToken = default, IReadOnlyDictionary<string, string>? extractionProperties = null,
@@ -296,7 +340,6 @@ public sealed class RepackMetadata
             // Generate Android-style metadata files for filesystem images
             if (handler.FormatName is "EXT4" or "EROFS" or "F2FS" or "Android Sparse Image (simg)")
                 GenerateFileSystemMetadata(metaDir, partitionName, handler, sourcePath, metadata.Configuration);
-            WritePointerFile(outputDirectory, metaDir);
         }
         else
         {
@@ -327,30 +370,6 @@ public sealed class RepackMetadata
             }
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporary, path, overwrite: true);
-        }
-        finally { File.Delete(temporary); }
-    }
-
-    /// <summary>
-    /// Writes a pointer file in the extraction directory that redirects to the consolidated metadata location.
-    /// <para>在解包目录写入指向统一元数据位置的指针文件。</para>
-    /// </summary>
-    private static void WritePointerFile(string extractionDirectory, string metadataAbsoluteDirectory)
-    {
-        var pointerPath = Path.GetFullPath(Path.Combine(extractionDirectory, FileName));
-        var relDir = Path.GetRelativePath(extractionDirectory, metadataAbsoluteDirectory)
-            .Replace(Path.DirectorySeparatorChar, '/');
-        var pointer = new JsonObject
-        {
-            ["schema"] = PointerSchemaName,
-            ["version"] = 1,
-            ["metadataDirectory"] = relDir
-        };
-        var temporary = pointerPath + ".tmp-" + Guid.NewGuid().ToString("N");
-        try
-        {
-            File.WriteAllText(temporary, pointer.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
-            File.Move(temporary, pointerPath, overwrite: true);
         }
         finally { File.Delete(temporary); }
     }

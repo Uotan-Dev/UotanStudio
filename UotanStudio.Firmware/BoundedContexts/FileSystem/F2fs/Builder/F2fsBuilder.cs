@@ -1,5 +1,6 @@
 ﻿using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 
@@ -160,6 +161,46 @@ public sealed partial class F2fsBuilder
         }
     }
 
+    /// <summary>
+    /// Applies fs_config (uid/gid/mode) overrides from the Android-style metadata file onto the
+    /// collected tree. Permission bits from fs_config (mode &amp; 0xFFF, no type bits) replace the
+    /// node's permission bits while the file-type bits (directory/symlink/regular) are preserved.
+    /// F2FS SELinux xattr writing is not yet implemented; file_contexts is intentionally not consumed.
+    /// <para>将 Android 风格 fs_config（uid/gid/mode）覆盖应用到收集完成的目录树。
+    /// fs_config 的权限位（mode &amp; 0xFFF，不含类型位）替换节点权限位，同时保留文件类型位
+    /// （目录/符号链接/普通文件）。F2FS SELinux xattr 写入尚未实现，暂不消费 file_contexts。</para>
+    /// </summary>
+    private static void ApplyFsConfigOverrides(List<BuildNode> ordered, F2fsOptions options)
+    {
+        if (options.FsConfigPath is null) return;
+        var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
+        foreach (var node in ordered)
+        {
+            var relative = node.Parent is null ? string.Empty : BuildRelativePath(node);
+            if (!FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry)) continue;
+            node.Uid = entry.Uid;
+            node.Gid = entry.Gid;
+            // fs_config stores permission bits only (mode & 0xFFF); keep the node's type bits.
+            node.Mode = (ushort)((node.Mode & 0xF000) | (entry.Mode & 0xFFF));
+        }
+    }
+
+    /// <summary>
+    /// Image-relative path of a node ('/'-separated; root is "").
+    /// <para>节点的镜像内相对路径（'/' 分隔；根为 ""）。</para>
+    /// </summary>
+    private static string BuildRelativePath(BuildNode node)
+    {
+        var parts = new List<string>();
+        for (var current = node; current.Parent is not null; current = current.Parent)
+        {
+            parts.Add(current.Name);
+        }
+
+        parts.Reverse();
+        return string.Join('/', parts);
+    }
+
     private static void WriteImageCore(BuildNode root, Stream output, long baseOffset, bool freshDestination, F2fsOptions? options)
     {
         ArgumentNullException.ThrowIfNull(output);
@@ -170,6 +211,7 @@ public sealed partial class F2fsBuilder
 
         var ordered = CollectPreOrder(root!);
         AssignInodeNumbers(ordered);
+        ApplyFsConfigOverrides(ordered, effective);
         foreach (var node in ordered)
         {
             if (!node.IsDirectory)

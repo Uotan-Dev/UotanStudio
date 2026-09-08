@@ -142,7 +142,9 @@ public sealed class Ext4FormatHandler : IFormatHandler
             var options = RepackMetadata.OptionsFor(inputPath, FormatName);
             Ext4Builder.Build(inputPath, outputPath, new Ext4Options
             {
-                BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096)
+                BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
+                FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
+                FileContextsPath = RepackMetadata.NullIfEmpty(options, "FileContextsPath"),
             });
             return Task.FromResult(FirmwareOpResult.Ok(
                 $"Packed EXT4 image '{inputPath}' -> '{outputPath}' ({new FileInfo(outputPath).Length} bytes).",

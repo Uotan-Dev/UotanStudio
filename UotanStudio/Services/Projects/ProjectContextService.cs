@@ -135,6 +135,12 @@ public sealed class ProjectContextService
         NodeProjectPath = Path.Combine(RootDirectory, SolutionName + ".uotannode");
         StateDirectory = Path.Combine(RootDirectory, ".uotan");
         Directory.CreateDirectory(StateDirectory);
+        // 同步固件层环境元数据根，使无显式 metadataRoot 的解包路径（格式处理器直调）
+        // 与元数据读取回退链都能解析到 .uotan/metadata/。无项目时在 CloseProject 中清除。
+        // Sync the firmware-layer ambient metadata root so extraction paths without an explicit
+        // metadataRoot (direct handler calls) and metadata read fallback resolve to .uotan/metadata/.
+        // Cleared in CloseProject when no project is open.
+        UotanStudio.Firmware.SharedKernel.RepackMetadata.DefaultMetadataRoot = GetMetadataRoot();
 
         // Build sub-project list from snapshot or by scanning the root directory
         var subProjects = new List<SubProjectContext>();
@@ -206,6 +212,10 @@ public sealed class ProjectContextService
         StateDirectory = null;
         SubProjects = [];
         ActiveSubProject = null;
+        // 清除固件层环境元数据根目录，使后续解包回退为直写解包目录。
+        // Clear the firmware-layer ambient metadata root so subsequent extractions fall back
+        // to writing metadata directly into the extraction directory.
+        UotanStudio.Firmware.SharedKernel.RepackMetadata.DefaultMetadataRoot = null;
     }
 
     /// <summary>
