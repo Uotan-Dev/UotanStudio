@@ -15,6 +15,8 @@
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <!-- Media library under test (platform video decoder abstraction / NV12 conversion) -->
+    <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />
     <!-- Application backend services: CLI, flashing, persistence, comparison, and workflow execution. -->
     <ProjectReference Include="..\UotanStudio\UotanStudio.csproj" />
   </ItemGroup>

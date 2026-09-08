@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- 独立媒体解码库：仅依赖 OS 内置原生解码 API（P/Invoke），零 NuGet 依赖 -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <RootNamespace>UotanStudio.Media</RootNamespace>
+  </PropertyGroup>
+
+</Project>
