@@ -92,6 +92,7 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<ExitApplicationMessage>(this, OnExitApplication);
         WeakReferenceMessenger.Default.Register<OpenDocumentRequestMessage>(this, OnOpenDocument);
         WeakReferenceMessenger.Default.Register<OpenCompareRequestMessage>(this, OnOpenCompare);
+        WeakReferenceMessenger.Default.Register<OpenScreenMirrorRequestMessage>(this, OnOpenScreenMirror);
         WeakReferenceMessenger.Default.Register<OpenFileCompareRequestMessage>(this, OnOpenFileCompare);
         WeakReferenceMessenger.Default.Register<OpenFolderCompareRequestMessage>(this, OnOpenFolderCompare);
 
@@ -260,6 +261,27 @@ public partial class App : Application
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "App", $"Open compare failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>响应投屏请求：打开投屏文档并对指定设备启动会话。</para>
+    /// Responds to the mirror request: opens the mirror document and starts the session for the device.
+    /// </summary>
+    private void OnOpenScreenMirror(object recipient, OpenScreenMirrorRequestMessage message)
+    {
+        try
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+                && desktop.MainWindow?.DataContext is MainViewModel mainVm
+                && mainVm.WorkspaceVM.OpenScreenMirrorDocument() is { } mirror)
+            {
+                mirror.StartForDevice(message.Serial);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "App", $"Open screen mirror failed: {ex.Message}");
         }
     }
 

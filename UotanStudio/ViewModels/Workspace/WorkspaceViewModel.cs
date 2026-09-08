@@ -25,6 +25,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     private DocumentDock? _documentDock;
     private bool _subscribedDocumentDock;
     private CompareViewModel? _compareDocument;
+    private ScreenMirrorViewModel? _screenMirrorDocument;
 
     /// <summary>
     /// <para>获取或设置 Dock 根布局。</para>
@@ -84,6 +85,41 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
         WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
         return _compareDocument;
+    }
+
+    /// <summary>
+    /// <para>在工作区文档区打开或聚焦投屏文档，复用尚未关闭的实例并切换到工作区。</para>
+    /// Opens or focuses the screen-mirror document, reusing its instance until closed,
+    /// and navigates to the workspace.
+    /// </summary>
+    /// <returns><para>投屏文档；布局未就绪时为 null。</para>The screen-mirror document, or null if the layout is unavailable.</returns>
+    public ScreenMirrorViewModel? OpenScreenMirrorDocument()
+    {
+        if (_screenMirrorDocument?.Owner is not IDock owner || owner.VisibleDockables?.Contains(_screenMirrorDocument) != true)
+        {
+            var documentDock = _documentDock ??= FindDocumentsPane();
+            if (documentDock is null)
+            {
+                return null;
+            }
+
+            EnsureDocumentDockSubscribed(documentDock);
+            _screenMirrorDocument = new ScreenMirrorViewModel
+            {
+                Id = "ScreenMirrorDocument",
+                Title = LanguageService.Instance.GetString("Tab_ScreenMirror"),
+                CanClose = true
+            };
+            _factory.AddDockable(documentDock, _screenMirrorDocument);
+        }
+
+        _factory.SetActiveDockable(_screenMirrorDocument);
+        if (_factory.FindRoot(_screenMirrorDocument) is { } root)
+        {
+            _factory.SetFocusedDockable(root, _screenMirrorDocument);
+        }
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
+        return _screenMirrorDocument;
     }
 
     /// <summary>

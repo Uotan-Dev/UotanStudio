@@ -1,0 +1,155 @@
+using System.Buffers.Binary;
+using System.Text;
+using UotanStudio.Comm.Protocols.Scrcpy;
+using Xunit;
+
+namespace UotanStudio.Tests.Comm.Protocols;
+
+/// <summary>
+/// scrcpy 2.7 control message wire-format conformance: byte layouts are
+/// checked against the server's ControlMessageReader.parse* order.
+/// <para>scrcpy 2.7 控制消息线格式符合性：字节布局按服务端 ControlMessageReader.parse* 的读取顺序核对。</para>
+/// </summary>
+public class ScrcpyControlMessageTests
+{
+    [Fact]
+    public void InjectKeyCode_MatchesWireLayout()
+    {
+        var msg = ScrcpyControlMessageWriter.InjectKeyCode(
+            ScrcpyConstants.ActionDown, keyCode: 25, repeat: 2, metaState: 1);
+
+        Assert.Equal(14, msg.Length);
+        Assert.Equal(ScrcpyConstants.ControlTypeInjectKeyCode, msg[0]);
+        Assert.Equal(ScrcpyConstants.ActionDown, msg[1]);
+        Assert.Equal(25, BinaryPrimitives.ReadInt32BigEndian(msg.AsSpan(2)));
+        Assert.Equal(2, BinaryPrimitives.ReadInt32BigEndian(msg.AsSpan(6)));
+        Assert.Equal(1, BinaryPrimitives.ReadInt32BigEndian(msg.AsSpan(10)));
+    }
+
+    [Fact]
+    public void InjectText_LengthPrefixAndUtf8Payload()
+    {
+        var msg = ScrcpyControlMessageWriter.InjectText("你好");
+
+        Assert.Equal(5 + Encoding.UTF8.GetByteCount("你好"), msg.Length);
+        Assert.Equal(ScrcpyConstants.ControlTypeInjectText, msg[0]);
+        Assert.Equal(Encoding.UTF8.GetByteCount("你好"), BinaryPrimitives.ReadInt32BigEndian(msg.AsSpan(1)));
+        Assert.Equal("你好", Encoding.UTF8.GetString(msg, 5, msg.Length - 5));
+    }
+
+    [Fact]
+    public void InjectText_RejectsOverlongPayload()
+    {
+        Assert.Throws<ArgumentException>(() => ScrcpyControlMessageWriter.InjectText(new string('a', 301)));
+    }
+
+    [Fact]
+    public void InjectTouchEvent_Matches32ByteWireLayout()
+    {
+        // Layout per scrcpy 2.7: type(1)@0 action(1)@1 pointerId(8)@2 position(12)@10
+        // pressure(2)@22 actionButton(4)@24 buttons(4)@28.
+        // 按 scrcpy 2.7 布局：type(1)@0 action(1)@1 pointerId(8)@2 position(12)@10
+        // pressure(2)@22 actionButton(4)@24 buttons(4)@28。
+        var msg = ScrcpyControlMessageWriter.InjectTouchEvent(
+            ScrcpyConstants.ActionDown, ScrcpyConstants.PointerIdMouse,
+            x: 100, y: 200, width: 1080, height: 2400,
+            pressure: 0xFFFF, actionButton: ScrcpyConstants.ButtonLeft, buttons: ScrcpyConstants.ButtonLeft);
+
+        Assert.Equal(32, msg.Length);
+        Assert.Equal(ScrcpyConstants.ControlTypeInjectTouchEvent, msg[0]);
+        Assert.Equal(ScrcpyConstants.ActionDown, msg[1]);
+        // pointerId -2 as two's complement u64.
+        // pointerId -2 的二进制补码 u64。
+        Assert.Equal(unchecked((ulong)ScrcpyConstants.PointerIdMouse), BinaryPrimitives.ReadUInt64BigEndian(msg.AsSpan(2)));
+        // Position: raw video pixel coordinates + frame size.
+        // 位置：原始视频像素坐标 + 帧尺寸。
+        Assert.Equal(100u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(10)));
+        Assert.Equal(200u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(14)));
+        Assert.Equal(1080, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(18)));
+        Assert.Equal(2400, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(20)));
+        Assert.Equal(0xFFFF, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(22)));
+        Assert.Equal(ScrcpyConstants.ButtonLeft, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(24)));
+        Assert.Equal(ScrcpyConstants.ButtonLeft, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(28)));
+    }
+
+    [Fact]
+    public void InjectTouchEvent_RejectsOutOfBoundsCoordinates()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            ScrcpyControlMessageWriter.InjectTouchEvent(ScrcpyConstants.ActionDown, 0, x: 5, y: 0, width: 4, height: 4));
+    }
+
+    [Fact]
+    public void InjectScrollEvent_Matches21ByteWireLayout()
+    {
+        // Layout per scrcpy 2.7: position(12)@1 hScroll(i16)@13 vScroll(i16)@15 buttons(4)@17.
+        // 按 scrcpy 2.7 布局：position(12)@1 hScroll(i16)@13 vScroll(i16)@15 buttons(4)@17。
+        var msg = ScrcpyControlMessageWriter.InjectScrollEvent(
+            x: 10, y: 20, width: 1080, height: 2400,
+            hScroll: 0f, vScroll: -1f, buttons: 0);
+
+        Assert.Equal(21, msg.Length);
+        Assert.Equal(ScrcpyConstants.ControlTypeInjectScrollEvent, msg[0]);
+        Assert.Equal(10u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(1)));
+        Assert.Equal(20u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(5)));
+        Assert.Equal(1080, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(9)));
+        Assert.Equal(2400, BinaryPrimitives.ReadUInt16BigEndian(msg.AsSpan(11)));
+        // -1 tick = -0x7FFF i16 fixed point (vScroll at offset 15).
+        // -1 刻度 = -0x7FFF 的 i16 定点数（vScroll 位于偏移 15）。
+        Assert.Equal(0, BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(13)));
+        Assert.Equal(unchecked((short)-32767), BinaryPrimitives.ReadInt16BigEndian(msg.AsSpan(15)));
+        Assert.Equal(0u, BinaryPrimitives.ReadUInt32BigEndian(msg.AsSpan(17)));
+    }
+
+    [Fact]
+    public void BackOrScreenOn_TwoBytes()
+    {
+        var msg = ScrcpyControlMessageWriter.BackOrScreenOn(ScrcpyConstants.ActionUp);
+
+        Assert.Equal(2, msg.Length);
+        Assert.Equal(ScrcpyConstants.ControlTypeBackOrScreenOn, msg[0]);
+        Assert.Equal(ScrcpyConstants.ActionUp, msg[1]);
+    }
+
+    [Theory]
+    [InlineData(ScrcpyConstants.ControlTypeExpandNotificationPanel)]
+    [InlineData(ScrcpyConstants.ControlTypeExpandSettingsPanel)]
+    [InlineData(ScrcpyConstants.ControlTypeCollapsePanels)]
+    [InlineData(ScrcpyConstants.ControlTypeSetDisplayPower)]
+    public void Simple_SingleByteMessages(byte type)
+    {
+        var msg = ScrcpyControlMessageWriter.Simple(type);
+
+        Assert.Equal(1, msg.Length);
+        Assert.Equal(type, msg[0]);
+    }
+
+    [Fact]
+    public void Simple_RejectsMultiByteTypes()
+    {
+        Assert.Throws<ArgumentException>(() => ScrcpyControlMessageWriter.Simple(ScrcpyConstants.ControlTypeInjectKeyCode));
+    }
+
+    [Fact]
+    public void SetClipboard_MatchesWireLayout()
+    {
+        var msg = ScrcpyControlMessageWriter.SetClipboard("abc", paste: true, sequence: 0x1234);
+
+        Assert.Equal(14 + 3, msg.Length);
+        Assert.Equal(ScrcpyConstants.ControlTypeSetClipboard, msg[0]);
+        Assert.Equal(0x1234UL, BinaryPrimitives.ReadUInt64BigEndian(msg.AsSpan(1)));
+        Assert.Equal(1, msg[9]);
+        Assert.Equal(3, BinaryPrimitives.ReadInt32BigEndian(msg.AsSpan(10)));
+        Assert.Equal("abc", Encoding.UTF8.GetString(msg, 14, 3));
+    }
+
+    [Fact]
+    public void GetClipboard_CarriesCopyKey()
+    {
+        var msg = ScrcpyControlMessageWriter.GetClipboard(ScrcpyConstants.CopyKeyCut);
+
+        Assert.Equal(2, msg.Length);
+        Assert.Equal(ScrcpyConstants.ControlTypeGetClipboard, msg[0]);
+        Assert.Equal(ScrcpyConstants.CopyKeyCut, msg[1]);
+    }
+}

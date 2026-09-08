@@ -40,6 +40,7 @@ internal static class ViewModelViewRegistry
         [typeof(ArscEditorViewModel)] = () => new ArscEditorView(),
         [typeof(HexEditorViewModel)] = () => new HexEditorView(),
         [typeof(LogEditorViewModel)] = () => new LogEditorView(),
+        [typeof(ScreenMirrorViewModel)] = () => new ScreenMirrorView(),
         [typeof(ApkEditorViewModel)] = () => new ApkEditorView(),
         [typeof(FirmwareInfoViewModel)] = () => new FirmwareInfoView(),
         [typeof(FileManagerEditorViewModel)] = () => new FileManagerEditorView(),

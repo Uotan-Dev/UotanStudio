@@ -140,6 +140,27 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("debugMode")]
     public bool DebugMode { get; set; }
+
+    /// <summary>
+    /// <para>获取或设置 scrcpy 投屏视频码率（bps）。</para>
+    /// Gets or sets the scrcpy mirroring video bit rate (bps).
+    /// </summary>
+    [JsonPropertyName("screenMirrorBitRate")]
+    public int ScreenMirrorBitRate { get; set; } = 8_000_000;
+
+    /// <summary>
+    /// <para>获取或设置 scrcpy 投屏最大帧率（0 表示不限制）。</para>
+    /// Gets or sets the scrcpy mirroring max frame rate (0 = no limit).
+    /// </summary>
+    [JsonPropertyName("screenMirrorMaxFps")]
+    public int ScreenMirrorMaxFps { get; set; } = 60;
+
+    /// <summary>
+    /// <para>获取或设置 scrcpy 投屏最大尺寸（0 表示不限制）。</para>
+    /// Gets or sets the scrcpy mirroring max size (0 = no limit).
+    /// </summary>
+    [JsonPropertyName("screenMirrorMaxSize")]
+    public int ScreenMirrorMaxSize { get; set; }
 }
 
 /// <summary>

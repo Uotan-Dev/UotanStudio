@@ -23,6 +23,7 @@
     <x:String x:Key="Device_GroupRkdl">RKDL 设备</x:String>
     <x:String x:Key="Device_EmptyHint">点击刷新以扫描已连接的设备。</x:String>
     <x:String x:Key="Device_OpenAdbShell">打开 ADB Shell</x:String>
+    <x:String x:Key="Device_ScreenMirror">屏幕投屏 (scrcpy)</x:String>
     <x:String x:Key="Device_FastbootReadInfo">读取 Fastboot 设备信息</x:String>
     <x:String x:Key="Device_QuickFlash">快速刷写 boot 分区</x:String>
 

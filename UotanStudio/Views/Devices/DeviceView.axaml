@@ -107,6 +107,11 @@
                     <avalonia:MaterialIcon Kind="Terminal" Width="16" Height="16" />
                 </Button>
                 <Button Width="28" Height="28" Padding="0"
+                        Command="{Binding ScreenMirrorCommand}"
+                        ToolTip.Tip="{DynamicResource Device_ScreenMirror}">
+                    <avalonia:MaterialIcon Kind="Cast" Width="16" Height="16" />
+                </Button>
+                <Button Width="28" Height="28" Padding="0"
                         Command="{Binding FastbootReadInfoCommand}"
                         ToolTip.Tip="{DynamicResource Device_FastbootReadInfo}">
                     <avalonia:MaterialIcon Kind="InformationOutline" Width="16" Height="16" />

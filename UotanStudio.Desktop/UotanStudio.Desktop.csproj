@@ -31,5 +31,10 @@
     <Content Include="Assets\*.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <!-- scrcpy 服务端（v2.7）：随输出目录复制，投屏时推送到设备。 -->
+    <!-- scrcpy server (v2.7): copied to the output directory and pushed to devices when mirroring. -->
+    <Content Include="Assets\scrcpy-server.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 </Project>

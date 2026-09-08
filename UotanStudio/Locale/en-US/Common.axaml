@@ -8,6 +8,13 @@
     <x:String x:Key="Tab_Log">Log</x:String>
     <x:String x:Key="Tab_Settings">Settings</x:String>
     <x:String x:Key="Tab_Compare">Compare</x:String>
+    <x:String x:Key="Tab_ScreenMirror">Mirror</x:String>
+    <x:String x:Key="ScreenMirror_Preparing">Preparing mirroring...</x:String>
+    <x:String x:Key="ScreenMirror_Installing">Installing scrcpy server...</x:String>
+    <x:String x:Key="ScreenMirror_Connecting">Connecting to device...</x:String>
+    <x:String x:Key="ScreenMirror_Mirroring">Mirroring</x:String>
+    <x:String x:Key="ScreenMirror_Stopped">Mirroring stopped</x:String>
+    <x:String x:Key="ScreenMirror_Failed">Mirroring failed: </x:String>
 
     <!-- ViewLocator -->
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>

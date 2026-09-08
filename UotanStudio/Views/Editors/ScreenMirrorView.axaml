@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:UotanStudio.ViewModels.Editors"
+             mc:Ignorable="d"
+             d:DesignWidth="800"
+             d:DesignHeight="600"
+             x:DataType="vm:ScreenMirrorViewModel"
+             x:Class="UotanStudio.Views.Editors.ScreenMirrorView">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Border Grid.Row="0"
+            Padding="8,4"
+            Background="{DynamicResource PageBackground}">
+      <TextBlock Text="{Binding StatusText}"
+                 FontSize="12"
+                 VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+    </Border>
+
+    <Panel Grid.Row="1" Background="Black">
+      <Image x:Name="FrameImage"
+             Source="{Binding Frame}"
+             HorizontalAlignment="Center"
+             VerticalAlignment="Center"
+             Stretch="Uniform" />
+      <TextBlock IsVisible="{Binding Frame, Converter={x:Static ObjectConverters.IsNull}}"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 Foreground="White"
+                 FontSize="13"
+                 Text="{Binding DeviceName}" />
+    </Panel>
+  </Grid>
+</UserControl>

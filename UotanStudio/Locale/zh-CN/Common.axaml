@@ -8,6 +8,13 @@
     <x:String x:Key="Tab_Log">日志</x:String>
     <x:String x:Key="Tab_Settings">设置</x:String>
     <x:String x:Key="Tab_Compare">对比</x:String>
+    <x:String x:Key="Tab_ScreenMirror">投屏</x:String>
+    <x:String x:Key="ScreenMirror_Preparing">正在准备投屏...</x:String>
+    <x:String x:Key="ScreenMirror_Installing">正在安装 scrcpy 服务端...</x:String>
+    <x:String x:Key="ScreenMirror_Connecting">正在连接设备...</x:String>
+    <x:String x:Key="ScreenMirror_Mirroring">投屏中</x:String>
+    <x:String x:Key="ScreenMirror_Stopped">投屏已停止</x:String>
+    <x:String x:Key="ScreenMirror_Failed">投屏失败：</x:String>
 
     <!-- 视图定位器 -->
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>

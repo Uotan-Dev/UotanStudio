@@ -74,11 +74,13 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(CanFastbootReadInfo));
                 OnPropertyChanged(nameof(CanQuickFlash));
                 OnPropertyChanged(nameof(CanBackupRestore));
+                OnPropertyChanged(nameof(CanScreenMirror));
                 OpenAdbShellCommand.NotifyCanExecuteChanged();
                 FastbootReadInfoCommand.NotifyCanExecuteChanged();
                 QuickFlashCommand.NotifyCanExecuteChanged();
                 BackupPartitionCommand.NotifyCanExecuteChanged();
                 RestorePartitionCommand.NotifyCanExecuteChanged();
+                ScreenMirrorCommand.NotifyCanExecuteChanged();
                 foreach (var device in Devices)
                 {
                     device.NotifySelectionChanged();
@@ -1043,6 +1045,29 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// (Fastboot / EDL mode devices).
     /// </summary>
     public bool CanBackupRestore => SelectedDevice?.Protocol is DeviceProtocolKind.Fastboot or DeviceProtocolKind.Edl;
+
+    /// <summary>
+    /// <para>是否可对选中设备开启 scrcpy 投屏（需要 ADB 协议设备）。</para>
+    /// Whether scrcpy mirroring can start for the selected device (requires the ADB protocol).
+    /// </summary>
+    public bool CanScreenMirror => SelectedDevice?.Protocol is DeviceProtocolKind.Adb;
+
+    /// <summary>
+    /// <para>对选中的 ADB 设备开启 scrcpy 投屏：打开工作区投屏文档并发送请求消息。</para>
+    /// Starts scrcpy mirroring for the selected ADB device: opens the workspace mirror document
+    /// and sends the request message.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanScreenMirror))]
+    private void ScreenMirror()
+    {
+        var device = SelectedDevice;
+        if (device is null)
+        {
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new OpenScreenMirrorRequestMessage { Serial = device.Serial });
+    }
 
     /// <summary>
     /// <para>打开选中设备的 ADB Shell 终端：使用设置中配置的 ADB 路径（未配置则用 PATH 中的 adb），
