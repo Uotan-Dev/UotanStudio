@@ -250,9 +250,14 @@ public sealed class DeviceMonitorService : IDisposable
         var adbUsbSerials = new List<string>();
         var adbStates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var adbClient = AdbServerClient;
-        if (adbClient is not null)
+        // 一次取回 adb 设备列表，USB 序列号补全与网络设备合并两处复用，避免每次扫描
+        // 对 adb server 做两次 host:devices 往返。
+        // Fetch the adb device list once and reuse it for both USB serial backfill and the
+        // network-device merge, halving the adb server round-trips per scan.
+        var adbDevices = adbClient?.GetDevices().ToList();
+        if (adbDevices is not null)
         {
-            foreach (var d in adbClient.GetDevices())
+            foreach (var d in adbDevices)
             {
                 if (d.Serial.Contains(':'))
                 {
@@ -347,9 +352,9 @@ public sealed class DeviceMonitorService : IDisposable
         }
 
         // adb server 中的网络设备（host:port 序列号）。
-        if (adbClient is not null)
+        if (adbDevices is not null)
         {
-            foreach (var d in adbClient.GetDevices())
+            foreach (var d in adbDevices)
             {
                 if (!d.Serial.Contains(':'))
                 {

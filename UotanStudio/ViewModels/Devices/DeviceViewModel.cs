@@ -181,10 +181,41 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         {
             var scanned = await Task.Run(() => DeviceMonitorService.Instance.Scan()).ConfigureAwait(true);
 
-            Devices.Clear();
-            foreach (var d in scanned)
+            // 差量更新：列表无变化直接跳过，有变化时按键保留/替换/插入/移除，
+            // 避免 ObservableCollection 整表 Reset 造成选中丢失与界面闪烁。
+            // Differential update: skip entirely when unchanged; otherwise keep/replace/insert/
+            // remove by key instead of a full Clear+Add that resets the whole ItemsControl.
+            var changed = Devices.Count != scanned.Count;
+            if (!changed)
             {
-                Devices.Add(new DeviceInfo(d));
+                for (var i = 0; i < scanned.Count; i++)
+                {
+                    if (Devices[i].Key != scanned[i].Key || Devices[i].State != scanned[i].State)
+                    {
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+            if (changed)
+            {
+                for (var i = 0; i < scanned.Count; i++)
+                {
+                    var match = i < Devices.Count && Devices[i].Key == scanned[i].Key ? Devices[i] : null;
+                    if (match is not null)
+                    {
+                        if (match.State != scanned[i].State)
+                        {
+                            Devices[i] = new DeviceInfo(scanned[i]);
+                        }
+                        continue;
+                    }
+                    Devices.Insert(i, new DeviceInfo(scanned[i]));
+                }
+                for (var i = Devices.Count - 1; i >= scanned.Count; i--)
+                {
+                    Devices.RemoveAt(i);
+                }
             }
 
             if (selectedKey is not null)
