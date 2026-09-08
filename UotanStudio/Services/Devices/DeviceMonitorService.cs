@@ -4,6 +4,7 @@ using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
+using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
@@ -37,6 +38,8 @@ public enum DeviceProtocolKind
     Edl,
     /// <summary>瑞芯微 bootrom/loader（rockusb）。 Rockchip bootrom/loader.</summary>
     Rkdl,
+    /// <summary>OpenHarmony HDC（USB 直连或经本机 hdc server）。 OpenHarmony HDC (USB direct or via the local hdc server).</summary>
+    Hdc,
 }
 
 /// <summary>
@@ -86,6 +89,36 @@ public sealed class DeviceMonitorService : IDisposable
     private IDisposable? _usbMonitor;
     private DeviceMonitor? _adbMonitor;
     private Timer? _debounce;
+    private CancellationTokenSource? _hdcMonitorLifetime;
+
+    private async Task MonitorHdcTargetsAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        string? previous = null;
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+            {
+                string snapshot;
+                try
+                {
+                    using var server = new HdcServerClient();
+                    snapshot = System.Text.Encoding.UTF8.GetString(await server.ExecuteAsync(
+                        string.Empty, "list targets -v", 1500, ct).ConfigureAwait(false));
+                }
+                catch (Exception) when (!ct.IsCancellationRequested) { snapshot = string.Empty; }
+                if (snapshot == previous) continue;
+                previous = snapshot;
+                lock (_sync)
+                {
+                    if (ct.IsCancellationRequested) return;
+                    _hdcProbeTicks = 0;
+                    ScheduleChange();
+                }
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    }
     private volatile bool _started;
     private volatile IReadOnlyList<DetectedDevice>? _cachedScan;
     private readonly Lock _sync = new();
@@ -114,6 +147,8 @@ public sealed class DeviceMonitorService : IDisposable
             }
 
             _started = true;
+            _hdcMonitorLifetime = new CancellationTokenSource();
+            _ = MonitorHdcTargetsAsync(_hdcMonitorLifetime.Token);
         }
 
         LogService.Instance.Write(LogLevel.Info, "DeviceMonitor", "Device monitor starting (initial full USB scan).");
@@ -344,11 +379,51 @@ public sealed class DeviceMonitorService : IDisposable
                     DeviceProtocolKind.Fastboot => "fastboot",
                     DeviceProtocolKind.Edl => "edl",
                     DeviceProtocolKind.Rkdl => RkdlState(info),
+                    DeviceProtocolKind.Hdc => "device",
                     _ => string.Empty,
                 },
                 VendorId = info.VendorId,
                 ProductId = info.ProductId,
             });
+        }
+
+        // hdc server 通道（系统内存在 hdc server 时，作为 client 列举其管理的全部目标，
+        // 与 adb server 网络设备合并方式一致）。USB 直连枚举命中同一物理设备时以
+        // SerialNumber 去重：server 在前时丢弃 USB 条目（接口由 server 独占持有）。
+        // hdc-server channel (when a local hdc server exists, enumerate its targets as a
+        // client, mirroring the adb-server network-device merge). Dedupe against the
+        // USB-direct entry for the same physical device by serial: when the server entry
+        // wins, drop the USB entry (the server exclusively holds the interface).
+        var hdcServer = ProbeHdcServer();
+        if (hdcServer is not null)
+        {
+            try
+            {
+                foreach (var connectKey in hdcServer.ListTargets())
+                {
+                    if (string.IsNullOrWhiteSpace(connectKey))
+                    {
+                        continue;
+                    }
+
+                    devices.RemoveAll(d => d.Protocol == DeviceProtocolKind.Hdc &&
+                        string.Equals(d.Serial, connectKey, StringComparison.OrdinalIgnoreCase));
+                    devices.Add(new DetectedDevice
+                    {
+                        Key = "hdc:" + connectKey,
+                        Serial = connectKey,
+                        Protocol = DeviceProtocolKind.Hdc,
+                        Transport = DeviceTransportKind.Tcp,
+                        State = "device",
+                    });
+                    LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
+                        $"hdc server channel device: {connectKey}");
+                }
+            }
+            catch
+            {
+                // server 列举失败（连接被断开等）不影响 USB 直连结果。
+            }
         }
 
         // adb server 中的网络设备（host:port 序列号）。
@@ -451,6 +526,21 @@ public sealed class DeviceMonitorService : IDisposable
     }
 
     /// <summary>
+    /// <para>为设备打开 HDC 协议会话：系统内存在 hdc server 时作为 client 经 server 交互
+    /// （与 ADB server 模式一致），否则回退 USB 直连通信。</para>
+    /// Opens an HDC protocol session for the device: when a local hdc server is present the
+    /// toolbox talks to the device as a server client (mirroring the ADB server mode),
+    /// otherwise it falls back to direct USB communication.
+    /// </summary>
+    public HdcSession? OpenHdcSession(DetectedDevice device)
+    {
+        if (device.Protocol != DeviceProtocolKind.Hdc) return null;
+        // A host channel is required even for USB targets managed by the official server.
+        // Do not feed host frames into the legacy direct-device session transport.
+        return ProbeHdcServer()?.CreateSession(device.Serial);
+    }
+
+    /// <summary>
     /// <para>获取与 Google 官方 adb server 交互的客户端；server 未运行时返回 <c>null</c>。</para>
     /// Gets a client for the official Google adb server, or <c>null</c> when it is not running.
     /// </summary>
@@ -462,6 +552,13 @@ public sealed class DeviceMonitorService : IDisposable
     /// </summary>
     private AdbClient? _cachedAdbClient;
     private long _adbProbeTicks;
+
+    /// <summary>
+    /// <para>缓存的 hdc server 客户端与探测时间。</para>
+    /// Cached hdc-server client and probe timestamp.
+    /// </summary>
+    private HdcServerClient? _cachedHdcClient;
+    private long _hdcProbeTicks;
 
     /// <summary>
     /// <para>探测官方 adb server（127.0.0.1:5037），结果缓存 3 秒——避免每次扫描/重启
@@ -502,6 +599,46 @@ public sealed class DeviceMonitorService : IDisposable
                 _cachedAdbClient = null;
             }
             return _cachedAdbClient;
+        }
+    }
+
+    /// <summary>
+    /// <para>探测本机 hdc server（127.0.0.1:8710），结果缓存 3 秒（与 adb server 探测一致）。
+    /// server 未运行时返回 <c>null</c>，调用方回退 USB 直连通道。</para>
+    /// Probes the local hdc server (127.0.0.1:8710) with a 3-second result cache (mirroring
+    /// the adb-server probe). Returns <c>null</c> when the server is not running; callers
+    /// fall back to the USB-direct channel.
+    /// </summary>
+    private HdcServerClient? ProbeHdcServer()
+    {
+        var now = Environment.TickCount64;
+        lock (_sync)
+        {
+            if (now - _hdcProbeTicks < 3000)
+            {
+                return _cachedHdcClient;
+            }
+
+            _hdcProbeTicks = now;
+            _cachedHdcClient = null;
+            try
+            {
+                var client = new HdcServerClient();
+                if (client.DetectServer())
+                {
+                    client.Connect();
+                    _cachedHdcClient = client;
+                }
+                else
+                {
+                    client.Dispose();
+                }
+            }
+            catch
+            {
+                // 探测/握手失败视为无 server，USB 直连不受影响。
+            }
+            return _cachedHdcClient;
         }
     }
 
@@ -594,6 +731,29 @@ public sealed class DeviceMonitorService : IDisposable
             }
         }
 
+        // HDC 设备：经 HDC 会话的 UnityReboot 服务重启（USB 直连或 hdc server 通道均可）。
+        // HDC devices: reboot via the HDC session's UnityReboot service (USB direct or
+        // the hdc-server channel).
+        if (device.Protocol == DeviceProtocolKind.Hdc)
+        {
+            using var hdc = OpenHdcSession(device);
+            if (hdc is null)
+            {
+                return false;
+            }
+
+            try
+            {
+                hdc.Connect();
+                hdc.CreateDeviceServices().Reboot(mode);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         var client = AdbServerClient;
         if (client is null)
         {
@@ -634,6 +794,18 @@ public sealed class DeviceMonitorService : IDisposable
     /// </summary>
     public async Task StartLogcatStreamingAsync(DetectedDevice device, Action<AdbLogcatEntry> onEntry, CancellationToken cancellationToken)
     {
+        if (device.Protocol == DeviceProtocolKind.Hdc)
+        {
+            using var hdc = new HdcServerClient();
+            var decoder = new AdbLogcatLineDecoder(line => onEntry(AdbLogcatEntry.Parse(line)));
+            try
+            {
+                await hdc.ExecuteStreamingAsync(device.Serial, "shell hilog -v year",
+                    bytes => decoder.Feed(bytes), cancellationToken).ConfigureAwait(false);
+            }
+            finally { if (!cancellationToken.IsCancellationRequested) decoder.Feed([], flush: true); }
+            return;
+        }
         if (device.Protocol != DeviceProtocolKind.Adb)
             throw new ArgumentException("Logcat requires an ADB device.", nameof(device));
         cancellationToken.ThrowIfCancellationRequested();
@@ -689,6 +861,11 @@ public sealed class DeviceMonitorService : IDisposable
     /// </summary>
     public async Task ClearLogcatBuffersAsync(DetectedDevice device, CancellationToken cancellationToken = default)
     {
+        if (device.Protocol == DeviceProtocolKind.Hdc)
+        {
+            await HdcDeviceService.FromSettings().ShellAsync(device, "hilog -r", cancellationToken).ConfigureAwait(false);
+            return;
+        }
         if (device.Protocol != DeviceProtocolKind.Adb)
             throw new ArgumentException("Logcat requires an ADB device.", nameof(device));
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -747,6 +924,12 @@ public sealed class DeviceMonitorService : IDisposable
         }
     }
 
+    /// <summary>HDC USB 接口子类（上游 developtools_hdc harmonySubClass = 0x50）。 HDC USB interface subclass (upstream harmonySubClass = 0x50).</summary>
+    private const byte HdcSubClass = 0x50;
+
+    /// <summary>HDC USB 接口协议（上游 harmonyProtocol = 0x01）。 HDC USB interface protocol (upstream harmonyProtocol = 0x01).</summary>
+    private const byte HdcInterfaceProtocol = 0x01;
+
     /// <summary>
     /// <para>按接口类/VID-PID 将 USB 设备分类到协议类型；不匹配任何协议时返回 <c>null</c>。</para>
     /// Classifies a USB device into a protocol kind by interface class / VID-PID;
@@ -764,6 +947,28 @@ public sealed class DeviceMonitorService : IDisposable
         if (info.VendorId == 0x2207 && ((info.ProductId >> 8) != 0 || IsKnownRkdlLoader(info.ProductId)))
         {
             return DeviceProtocolKind.Rkdl;
+        }
+
+        // HDC：对齐上游 developtools_hdc IsDebuggableDev（host_usb.cpp）——接口类 0xFF、
+        // 子类 0x50、协议 0x01（两个 bulk 端点）。HDC 无固定 VID/PID，接口三元组为准。
+        // HDC: aligned with upstream developtools_hdc IsDebuggableDev (host_usb.cpp) —
+        // interface class 0xFF, subclass 0x50, protocol 0x01 (two bulk endpoints). HDC has
+        // no fixed VID/PID; the interface triple is authoritative.
+        foreach (var iface in info.Interfaces)
+        {
+            if (iface.Class == HdcConstants.InterfaceClass &&
+                iface.SubClass == HdcSubClass &&
+                iface.Protocol == HdcInterfaceProtocol)
+            {
+                return DeviceProtocolKind.Hdc;
+            }
+        }
+        if (info.InterfaceMetadataObserved &&
+            info.InterfaceClass == HdcConstants.InterfaceClass &&
+            info.InterfaceSubClass == HdcSubClass &&
+            info.InterfaceProtocol == HdcInterfaceProtocol)
+        {
+            return DeviceProtocolKind.Hdc;
         }
 
         // ADB / Fastboot：接口类 0xFF/0x42，协议 0x01 / 0x03。
@@ -835,6 +1040,11 @@ public sealed class DeviceMonitorService : IDisposable
             _adbMonitor = null;
             _debounce?.Dispose();
             _debounce = null;
+            _hdcMonitorLifetime?.Cancel();
+            _hdcMonitorLifetime?.Dispose();
+            _hdcMonitorLifetime = null;
+            _cachedHdcClient?.Dispose();
+            _cachedHdcClient = null;
             _started = false;
         }
     }

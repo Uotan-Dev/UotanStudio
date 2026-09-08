@@ -22,7 +22,7 @@
     <x:String x:Key="Device_GroupEdl">EDL 设备</x:String>
     <x:String x:Key="Device_GroupRkdl">RKDL 设备</x:String>
     <x:String x:Key="Device_EmptyHint">点击刷新以扫描已连接的设备。</x:String>
-    <x:String x:Key="Device_OpenAdbShell">打开 ADB Shell</x:String>
+    <x:String x:Key="Device_OpenAdbShell">打开设备 Shell</x:String>
     <x:String x:Key="Device_ScreenMirror">屏幕投屏 (scrcpy)</x:String>
     <x:String x:Key="Device_FastbootReadInfo">读取 Fastboot 设备信息</x:String>
     <x:String x:Key="Device_QuickFlash">快速刷写 boot 分区</x:String>
@@ -35,7 +35,7 @@
     <x:String x:Key="Device_RkdlInfo">RKDL 模式信息</x:String>
     <x:String x:Key="Device_Serial">序列号</x:String>
     <x:String x:Key="Device_Model">型号</x:String>
-    <x:String x:Key="Device_AndroidVersion">Android 版本</x:String>
+    <x:String x:Key="Device_AndroidVersion">系统版本</x:String>
     <x:String x:Key="Device_State">状态</x:String>
     <x:String x:Key="Device_Transport">连接方式</x:String>
     <x:String x:Key="Device_LinkPort">链接端口</x:String>
@@ -94,4 +94,12 @@
     <x:String x:Key="Backup_RestoreFailed">还原失败</x:String>
     <x:String x:Key="Backup_SelectRawProgram">选择 rawprogram XML（分区几何）</x:String>
 
+    <x:String x:Key="Device_HdcSend">发送文件（HDC）</x:String>
+    <x:String x:Key="Device_HdcReceive">接收文件（HDC）</x:String>
+    <x:String x:Key="Device_HdcInstall">安装应用（HDC）</x:String>
+    <x:String x:Key="Device_HdcUninstall">卸载应用（HDC）</x:String>
+    <x:String x:Key="Device_HdcRemotePath">设备文件路径</x:String>
+    <x:String x:Key="Device_HdcBundleName">应用包名</x:String>
+    <x:String x:Key="Device_HdcCancel">取消 HDC 任务</x:String>
+    <x:String x:Key="Device_HdcCancelled">HDC 任务已取消</x:String>
 </ResourceDictionary>

@@ -76,6 +76,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(CanBackupRestore));
                 OnPropertyChanged(nameof(CanScreenMirror));
                 OpenAdbShellCommand.NotifyCanExecuteChanged();
+                HdcOperationCommand.NotifyCanExecuteChanged();
                 FastbootReadInfoCommand.NotifyCanExecuteChanged();
                 QuickFlashCommand.NotifyCanExecuteChanged();
                 BackupPartitionCommand.NotifyCanExecuteChanged();
@@ -291,7 +292,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 $"Scan completed: {Devices.Count} device(s) found.");
 
             var enrichable = Devices
-                .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot)
+                .Where(x => x.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot or DeviceProtocolKind.Hdc)
                 .ToList();
             if (enrichable.Count > 0)
             {
@@ -327,6 +328,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     private Task EnrichDeviceInfoAsync(DeviceInfo device) => device.Protocol switch
     {
         DeviceProtocolKind.Adb => EnrichAdbInfoAsync(device),
+        DeviceProtocolKind.Hdc => EnrichHdcInfoAsync(device),
         DeviceProtocolKind.Fastboot => EnrichFastbootInfoAsync(device),
         // EDL/RKDL 处于 bootrom/loader 模式，无可拉取的系统属性。
         // EDL/RKDL stay in bootrom/loader mode with no system properties to retrieve.
@@ -853,7 +855,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 DeviceProtocolKind.Edl => true, // EDL 握手需要 programmer，此处仅确认设备在位
                 DeviceProtocolKind.Rkdl => TryRkdl(device),
                 DeviceProtocolKind.Adb => TryAdb(device),
-                _ => TryAdb(device),
+                DeviceProtocolKind.Hdc => TryHdc(device),
+                _ => false,
             }).ConfigureAwait(true);
 
             device.State = ok ? device.State : "offline";
@@ -944,7 +947,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial}...";
         try
         {
-            if (device.Transport == "Network")
+            if (device.Protocol == DeviceProtocolKind.Hdc)
+            {
+                await HdcDeviceService.FromSettings().DisconnectAsync(device.Device).ConfigureAwait(true);
+                await DeviceMonitorService.Instance.ForceRefreshAsync().ConfigureAwait(true);
+            }
+            else if (device.Transport == "Network")
             {
                 var client = DeviceMonitorService.Instance.AdbServerClient;
                 if (client is not null)
@@ -1022,7 +1030,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// <para>是否可打开选中设备的 ADB Shell（仅 ADB 模式设备）。</para>
     /// Whether an ADB shell can be opened for the selected device (ADB-mode devices only).
     /// </summary>
-    public bool CanOpenAdbShell => SelectedDevice?.Protocol == DeviceProtocolKind.Adb;
+    public bool CanOpenAdbShell => SelectedDevice?.Protocol is DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc;
 
     /// <summary>
     /// <para>是否可读取选中设备的 Fastboot 分区/getvar 信息（仅 Fastboot 模式设备）。</para>
@@ -1086,7 +1094,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
 
         try
         {
-            var adbPath = SettingsPersistenceService.Instance.LoadSettings().AdbPath;
+            var adbPath = device.Protocol == DeviceProtocolKind.Hdc ? HdcDeviceService.ResolveExecutable() : SettingsPersistenceService.Instance.LoadSettings().AdbPath;
             if (string.IsNullOrWhiteSpace(adbPath))
             {
                 adbPath = "adb";
@@ -1095,17 +1103,19 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             var psi = new ProcessStartInfo
             {
                 FileName = adbPath,
-                Arguments = $"-s {device.Serial} shell",
                 UseShellExecute = true
             };
+            psi.ArgumentList.Add(device.Protocol == DeviceProtocolKind.Hdc ? "-t" : "-s");
+            psi.ArgumentList.Add(device.Serial);
+            psi.ArgumentList.Add("shell");
             Process.Start(psi);
             StatusText = $"{LanguageService.Instance.GetString("Device_OpenAdbShell")} {device.Serial} OK";
-            LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"Open ADB shell for {device.Serial}.");
+            LogService.Instance.Write(LogLevel.Info, "DeviceManager", $"Open {device.Mode} shell for {device.Serial}.");
         }
         catch (Exception ex)
         {
             StatusText = $"{LanguageService.Instance.GetString("Device_OpenAdbShell")} {device.Serial} FAIL";
-            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Open ADB shell for {device.Serial} failed: {ex.Message}");
+            LogService.Instance.Write(LogLevel.Error, "DeviceManager", $"Open {device.Mode} shell for {device.Serial} failed: {ex.Message}");
         }
     }
 
@@ -1648,6 +1658,7 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
         DeviceProtocolKind.Fastboot => "Fastboot",
         DeviceProtocolKind.Edl => "EDL",
         DeviceProtocolKind.Rkdl => "RKDL",
+        DeviceProtocolKind.Hdc => "HDC",
         _ => throw new ArgumentOutOfRangeException(nameof(Device.Protocol), Device.Protocol, "Unexpected protocol kind."),
     };
 
@@ -1702,6 +1713,12 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
 
     /// <summary>是否为 ADB 设备。 Whether the device is in ADB mode.</summary>
     public bool IsAdb => Device.Protocol == DeviceProtocolKind.Adb;
+
+    /// <summary>Whether this is an HDC device.</summary>
+    public bool IsHdc => Device.Protocol == DeviceProtocolKind.Hdc;
+
+    /// <summary>Whether system details are available.</summary>
+    public bool HasSystemInfo => IsAdb || IsHdc;
 
     /// <summary>是否为 Fastboot 设备。 Whether the device is in Fastboot mode.</summary>
     public bool IsFastboot => Device.Protocol == DeviceProtocolKind.Fastboot;
@@ -1890,7 +1907,7 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
     /// <para>资源使用信息（电池/内存/存储）是否至少一项可用。</para>
     /// Whether at least one of battery/memory/storage resource metrics is available.
     /// </summary>
-    public bool HasResourceInfo => IsAdb && (HasBattery || HasMem || HasDisk);
+    public bool HasResourceInfo => HasSystemInfo && (HasBattery || HasMem || HasDisk);
 
     /// <summary>
     /// <para>磁盘占用文本（已用/总量）。</para>

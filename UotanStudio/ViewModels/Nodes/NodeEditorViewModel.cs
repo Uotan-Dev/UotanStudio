@@ -441,6 +441,8 @@ public partial class NodeEditorViewModel : ViewModelBase
             svc.GetString("Node_CatFlash"),
             NodeViewModels.NodeCategory.Flash,
             [
+                .. NodeViewModels.HdcNodeViewModel.Operations.Select(operation => new NodeToolboxItem(
+                    svc.GetString("Node_Hdc_" + operation), () => NodeViewModels.HdcNodeViewModel.Create(operation))),
                 new NodeToolboxItem(svc.GetString("Node_Flash_SelectDevice"), () => NodeViewModels.SelectDeviceNodeViewModel.CreateSelectDeviceNode()),
                 new NodeToolboxItem(svc.GetString("Node_Flash_Flash"), () => NodeViewModels.FlashNodeViewModel.CreateFlashNode()),
                 new NodeToolboxItem(svc.GetString("Node_Flash_Erase"), () => NodeViewModels.FlashNodeViewModel.CreateEraseNode()),

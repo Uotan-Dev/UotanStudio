@@ -45,12 +45,25 @@ public readonly struct ShellResult(byte[] stdout, byte[] stderr, int exitCode)
 /// Initializes a new shell client for the given command.
 /// <para>为给定命令初始化新的 shell 客户端。</para>
 /// </remarks>
-/// <param name="connection">The HDC connection. HDC 连接。</param>
-/// <param name="command">The command to execute. 要执行的命令。</param>
-public sealed class HdcShellClient(HdcConnection connection, string command)
+public sealed class HdcShellClient
 {
-    private readonly HdcConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-    private readonly string _command = command ?? throw new ArgumentNullException(nameof(command));
+    private readonly HdcConnection? _connection;
+    private readonly HdcServerClient? _server;
+    private readonly string? _connectKey;
+    private readonly string _command;
+
+    /// <summary>Creates a direct client.</summary>
+    public HdcShellClient(HdcConnection connection, string command)
+    {
+        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+        _command = command ?? throw new ArgumentNullException(nameof(command));
+    }
+    internal HdcShellClient(HdcServerClient server, string connectKey, string command)
+    {
+        _server = server;
+        _connectKey = connectKey;
+        _command = command;
+    }
 
     /// <summary>
     /// Executes the command and returns captured stdout/stderr/exit code.
@@ -61,9 +74,15 @@ public sealed class HdcShellClient(HdcConnection connection, string command)
     /// <para>包含 stdout、stderr 和退出码的 shell 结果。</para></returns>
     public ShellResult Execute(int timeoutMs = 30000)
     {
-        using var stream = _connection.OpenChannel(HdcCommand.ShellInit, Encoding.UTF8.GetBytes(_command));
-        var stdout = new MemoryStream();
-        int exitCode = 0;
+        if (_server is not null)
+        {
+            var output = _server.ExecuteOnDevice(_connectKey!, "shell " + _command, timeoutMs);
+            HdcServerClient.ThrowOnFailure(Encoding.UTF8.GetString(output));
+            return new ShellResult(output, [], -1);
+        }
+        using var stream = _connection!.OpenChannel(HdcCommand.ShellInit, Encoding.UTF8.GetBytes(_command));
+        using var stdout = new MemoryStream();
+        int exitCode = -1;
 
         while (true)
         {
@@ -78,11 +97,13 @@ public sealed class HdcShellClient(HdcConnection connection, string command)
                 break;
             }
 
+            if (stdout.Length + chunk.Length > HdcServerClient.MaximumOutputBytes)
+                throw new InvalidDataException("HDC shell output limit exceeded.");
             stdout.Write(chunk, 0, chunk.Length);
         }
 
         // HDC shell does not carry exit code in ChannelClose by default;
-        // treat normal stream close as exit code 0.
+        // report an unknown exit code (-1).
         // HDC shell 默认不在 ChannelClose 中携带退出码；
         // 将正常流关闭视为退出码 0。
 
@@ -100,7 +121,13 @@ public sealed class HdcShellClient(HdcConnection connection, string command)
     /// <returns>The exit code. 退出码。</returns>
     public int ExecuteStreaming(Action<byte[]>? onStdout, Action<byte[]>? onStderr, CancellationToken cancellationToken = default)
     {
-        using var stream = _connection.OpenChannel(HdcCommand.ShellInit, Encoding.UTF8.GetBytes(_command));
+        cancellationToken.ThrowIfCancellationRequested();
+        if (_server is not null)
+        {
+            _server.ExecuteStreamingAsync(_connectKey!, "shell " + _command, bytes => onStdout?.Invoke(bytes), cancellationToken).GetAwaiter().GetResult();
+            return -1;
+        }
+        using var stream = _connection!.OpenChannel(HdcCommand.ShellInit, Encoding.UTF8.GetBytes(_command));
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -118,6 +145,7 @@ public sealed class HdcShellClient(HdcConnection connection, string command)
             onStdout?.Invoke(chunk);
         }
 
-        return 0; // HDC shell does not expose exit code via stream.
+        cancellationToken.ThrowIfCancellationRequested();
+        return -1; // Unknown: HDC merges output and does not carry the remote exit code.
     }
 }

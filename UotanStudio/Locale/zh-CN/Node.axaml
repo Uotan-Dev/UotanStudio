@@ -141,4 +141,14 @@
     <x:String x:Key="Node_MCP_CallTool">调用 MCP 工具</x:String>
 
     <x:String x:Key="Node_Firmware_SignApk">APK 签名</x:String>
+    <x:String x:Key="Node_Hdc_Shell">HDC Shell 命令</x:String>
+    <x:String x:Key="Node_Hdc_GetProperty">HDC 读取系统参数</x:String>
+    <x:String x:Key="Node_Hdc_Send">HDC 发送文件</x:String>
+    <x:String x:Key="Node_Hdc_Receive">HDC 接收文件</x:String>
+    <x:String x:Key="Node_Hdc_Install">HDC 安装应用</x:String>
+    <x:String x:Key="Node_Hdc_Uninstall">HDC 卸载应用</x:String>
+    <x:String x:Key="Node_Hdc_Forward">HDC 正向端口转发</x:String>
+    <x:String x:Key="Node_Hdc_Reverse">HDC 反向端口转发</x:String>
+    <x:String x:Key="Node_Hdc_ListForwards">HDC 列出转发</x:String>
+    <x:String x:Key="Node_Hdc_Remount">HDC 重新挂载</x:String>
 </ResourceDictionary>

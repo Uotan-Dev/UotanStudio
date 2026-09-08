@@ -58,7 +58,7 @@
     <x:String x:Key="Dock_NoDocumentOpen">未打开任何文档</x:String>
     <x:String x:Key="Dock_NoDocumentOpenHint">打开或创建一个工程文件以开始</x:String>
     <x:String x:Key="Dock_Output">输出</x:String>
-    <x:String x:Key="Dock_AdbLog">ADB 日志</x:String>
+    <x:String x:Key="Dock_AdbLog">设备日志</x:String>
     <x:String x:Key="Dock_Terminal">终端</x:String>
     <x:String x:Key="Terminal_Shell">Shell</x:String>
     <x:String x:Key="Terminal_New">新建终端</x:String>
@@ -250,8 +250,8 @@
     <x:String x:Key="Log_Pause">暂停</x:String>
     <x:String x:Key="Log_Resume">继续</x:String>
     <x:String x:Key="AdbLog_Reset">重置：仅清除本地日志</x:String>
-    <x:String x:Key="AdbLog_ClearAll">清空：清除本地日志及设备 logcat 缓冲区</x:String>
-    <x:String x:Key="AdbLog_ClearFailed">清空设备 logcat 缓冲区失败：{0}</x:String>
+    <x:String x:Key="AdbLog_ClearAll">清空：清除本地日志及设备日志缓冲区</x:String>
+    <x:String x:Key="AdbLog_ClearFailed">清空设备日志缓冲区失败：{0}</x:String>
     <x:String x:Key="Log_RegexInvalid">正则表达式无效：{0}</x:String>
     <x:String x:Key="Log_RegexTimeout">正则匹配超时，请简化表达式</x:String>
     <x:String x:Key="Log_FilterAll">全部</x:String>

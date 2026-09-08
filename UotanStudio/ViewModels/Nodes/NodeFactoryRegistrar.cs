@@ -21,6 +21,8 @@ public static class NodeFactoryRegistrar
     /// </summary>
     public static void RegisterAll()
     {
+        foreach (var operation in HdcNodeViewModel.Operations)
+            NodeTypeRegistry.Register("HDC." + operation, () => HdcNodeViewModel.Create(operation));
         NodeTypeRegistry.Register("Firmware.Unpack", () => NodeViewModels.FirmwareNodeViewModel.CreateUnpackNode());
         NodeTypeRegistry.Register("Firmware.Pack", () => NodeViewModels.FirmwareNodeViewModel.CreatePackNode());
         NodeTypeRegistry.Register("Firmware.Verify", () => NodeViewModels.FirmwareNodeViewModel.CreateVerifyNode());

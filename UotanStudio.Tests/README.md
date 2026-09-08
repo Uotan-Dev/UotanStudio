@@ -35,3 +35,14 @@ discovery returns zero tests, run the built executable directly:
 
 Native-tool and QEMU cases need their documented local runtimes. See
 [the filesystem mount fixture](TestInfrastructure/FirmwareMountCheck/README.md).
+
+## HDC read-only hardware checks
+
+`HdcServerClientTests` and `HdcDeviceServiceTests` exercise the host protocol and
+process/error handling without modifying a device. `HdcReadOnlyDeviceTests` is
+opt-in via `UOTAN_TEST_HDC_TARGET` (exact connect key) and `UOTAN_TEST_HDC_EXE`
+(official executable path); absent values cause a skip. The existing
+`OHOS_HDC_SERVER_PORT` environment override is respected. The hardware checks
+read system parameters, shell output, a short HiLog stream, and the public
+`/system/bin/toybox` file into a temporary local directory for SHA-256 comparison.
+They never write device files, clear logs, install/uninstall, reboot or elevate.

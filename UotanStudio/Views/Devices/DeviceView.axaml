@@ -134,6 +134,18 @@
                         ToolTip.Tip="{DynamicResource Device_RestorePartition}">
                     <avalonia:MaterialIcon Kind="DatabaseArrowDown" Width="16" Height="16" />
                 </Button>
+                <Button Content="HDC" IsVisible="{Binding SelectedDevice.IsHdc}">
+                    <Button.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Header="{DynamicResource Device_HdcSend}" Command="{Binding HdcOperationCommand}" CommandParameter="Send" />
+                            <MenuItem Header="{DynamicResource Device_HdcReceive}" Command="{Binding HdcOperationCommand}" CommandParameter="Receive" />
+                            <MenuItem Header="{DynamicResource Device_HdcInstall}" Command="{Binding HdcOperationCommand}" CommandParameter="Install" />
+                            <MenuItem Header="{DynamicResource Device_HdcUninstall}" Command="{Binding HdcOperationCommand}" CommandParameter="Uninstall" />
+                            <Separator />
+                            <MenuItem Header="{DynamicResource Device_HdcCancel}" Command="{Binding HdcOperationCancelCommand}" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
                 <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
                            FontSize="12" Opacity="0.7" Margin="8,0" />
             </StackPanel>
@@ -181,6 +193,11 @@
                                             <MenuItem Header="{DynamicResource Device_RebootEdl}" Click="OnRebootMenuClick" CommandParameter="edl" />
                                             <Separator />
                                             <MenuItem Header="{DynamicResource Device_OpenAdbShell}" Click="OnOpenAdbShellMenuClick" />
+                                            <MenuItem Header="{DynamicResource Device_HdcSend}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Send" />
+                                            <MenuItem Header="{DynamicResource Device_HdcReceive}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Receive" />
+                                            <MenuItem Header="{DynamicResource Device_HdcInstall}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Install" />
+                                            <MenuItem Header="{DynamicResource Device_HdcUninstall}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Uninstall" />
+
                                             <MenuItem Header="{DynamicResource Device_FastbootReadInfo}" Click="OnFastbootReadInfoMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_QuickFlash}" Click="OnQuickFlashMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_BackupPartition}" Click="OnBackupMenuClick" />
@@ -192,8 +209,8 @@
                                     <!-- 模式 + 类型徽标 -->
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <Border Classes="ModeChip" Background="#1B5E20"
-                                                IsVisible="{Binding IsAdb}">
-                                            <TextBlock Text="ADB" FontSize="10" Foreground="White" />
+                                                IsVisible="{Binding HasSystemInfo}">
+                                            <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="White" />
                                         </Border>
                                         <Border Classes="ModeChip" Background="#0D47A1"
                                                 IsVisible="{Binding IsFastboot}">
@@ -250,8 +267,8 @@
                                            TextTrimming="CharacterEllipsis" />
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <Border Classes="ModeChip" CornerRadius="4" Background="#1B5E20"
-                                            IsVisible="{Binding IsAdb}">
-                                        <TextBlock Text="ADB" FontSize="11" Foreground="White" />
+                                            IsVisible="{Binding HasSystemInfo}">
+                                        <TextBlock Text="{Binding Mode}" FontSize="11" Foreground="White" />
                                     </Border>
                                     <Border Classes="ModeChip" CornerRadius="4" Background="#0D47A1"
                                             IsVisible="{Binding IsFastboot}">
@@ -325,7 +342,7 @@
                         </Border>
 
                         <!-- ADB 系统信息 -->
-                        <Border Classes="InfoCard" IsVisible="{Binding IsAdb}">
+                        <Border Classes="InfoCard" IsVisible="{Binding HasSystemInfo}">
                             <StackPanel>
                                 <TextBlock Classes="CardCaption" Text="{DynamicResource Device_SystemOverview}" />
                                 <Grid ColumnDefinitions="150,*"

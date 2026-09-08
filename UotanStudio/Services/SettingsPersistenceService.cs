@@ -63,6 +63,9 @@ public class AppSettings
     [JsonPropertyName("adbPath")]
     public string AdbPath { get; set; } = string.Empty;
 
+    /// <summary>Official HDC executable path; empty uses PATH or DevEco.</summary>
+    public string HdcPath { get; set; } = string.Empty;
+
     /// <summary>
     /// <para>获取或设置 Fastboot 路径。</para>
     /// Gets or sets the Fastboot path.

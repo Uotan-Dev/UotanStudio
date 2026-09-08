@@ -72,4 +72,6 @@
     <x:String x:Key="Settings_AIToggleKey">Show / hide API key</x:String>
     <x:String x:Key="Settings_AIModels">Model</x:String>
     <x:String x:Key="Settings_AIFetchModels">Get models</x:String>
+    <x:String x:Key="Settings_HdcPath">HDC executable</x:String>
+    <x:String x:Key="Settings_HdcPathHint">Leave empty to use PATH or the standard DevEco SDK</x:String>
 </ResourceDictionary>

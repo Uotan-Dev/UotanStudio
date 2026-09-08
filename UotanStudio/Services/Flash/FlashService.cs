@@ -306,6 +306,13 @@ public sealed class FlashService : IFlashService
                 throw new ArgumentException("Property name must not be empty.", nameof(propertyName));
             }
 
+            if (device.Protocol == DeviceProtocolKind.Hdc)
+            {
+                var value = await Services.Devices.HdcDeviceService.FromSettings()
+                    .GetPropertyAsync(device.Device, propertyName, ct).ConfigureAwait(false);
+                return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
+            }
+
             return await Task.Run(() =>
             {
                 if (device.Protocol == DeviceProtocolKind.Fastboot)
@@ -341,7 +348,7 @@ public sealed class FlashService : IFlashService
                     return new FlashResult { Success = true, Summary = $"{propertyName}={value}" };
                 }
 
-                return new FlashResult { Success = false, Summary = "Get property is only supported via adb or fastboot. 属性查询仅支持 ADB 或 fastboot 模式。" };
+                return new FlashResult { Success = false, Summary = "Get property requires ADB, HDC or fastboot. 属性查询需要 ADB、HDC 或 fastboot。" };
             }, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException)

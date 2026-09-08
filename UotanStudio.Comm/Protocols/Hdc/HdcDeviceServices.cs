@@ -1,153 +1,100 @@
-using System.Text;
+﻿using System.Text;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
-/// <summary>
-/// Client for one-shot device-level HDC services (reboot, remount, getprop, ...).
-/// <para>一次性设备级 HDC 服务（reboot、remount、getprop 等）客户端。</para>
-/// </summary>
-/// <remarks>
-/// Initializes a new device services client.
-/// <para>初始化新的设备服务客户端。</para>
-/// </remarks>
-/// <param name="connection">An established HDC connection. 已建立的 HDC 连接。</param>
-public sealed class HdcDeviceServices(HdcConnection connection)
+/// <summary>HDC device commands, using native OpenHarmony semantics.
+/// <para>使用 OpenHarmony 原生命令语义的 HDC 设备服务。</para></summary>
+public sealed class HdcDeviceServices
 {
-    private readonly HdcConnection _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-
-    /// <summary>
-    /// Runs a one-shot command via UnityExecute and returns all output as text.
-    /// <para>通过 UnityExecute 运行一次性命令并将全部输出作为文本返回。</para>
-    /// </summary>
-    /// <param name="command">The command to execute. 要执行的命令。</param>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns>The command output text. 命令输出文本。</returns>
+    private readonly HdcConnection? _connection;
+    private readonly HdcServerClient? _server;
+    private readonly string? _connectKey;
+    /// <summary>Creates direct device services. 创建直连设备服务。</summary>
+    public HdcDeviceServices(HdcConnection connection) => _connection = connection;
+    internal HdcDeviceServices(HdcServerClient server, string connectKey)
+    {
+        _server = server;
+        _connectKey = connectKey;
+    }
+    /// <summary>Quotes one device shell argument. 转义单个设备 Shell 参数。</summary>
+    public static string QuoteShellArgument(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Contains('\0')) throw new ArgumentException("Argument contains NUL.", nameof(value));
+        return "'" + value.Replace("'", "'\"'\"'", StringComparison.Ordinal) + "'";
+    }
+    /// <summary>Executes a shell command. 执行 Shell 命令。</summary>
     public string RunCommand(string command, int timeoutMs = 30000)
     {
-        if (command is null)
-        {
-            throw new ArgumentNullException(nameof(command));
-        }
-
-        using var stream = _connection.OpenChannel(HdcCommand.UnityExecute, Encoding.UTF8.GetBytes(command));
-        var sb = new StringBuilder();
-        byte[]? chunk;
-        while ((chunk = stream.Read(timeoutMs)) is not null)
-        {
-            sb.Append(Encoding.UTF8.GetString(chunk));
-        }
-
-        return sb.ToString();
+        var shell = _server is null ? new HdcShellClient(_connection!, command)
+            : new HdcShellClient(_server, _connectKey!, command);
+        return Encoding.UTF8.GetString(shell.Execute(timeoutMs).Stdout);
     }
-
-    /// <summary>
-    /// Lists connected device targets.
-    /// <para>列出已连接的设备目标。</para>
-    /// </summary>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns>A string containing device target information.
-    /// <para>包含设备目标信息的字符串。</para></returns>
-    public string ListTargets(int timeoutMs = 10000)
-    {
-        using var stream = _connection.OpenChannel(HdcCommand.TargetList);
-        var sb = new StringBuilder();
-        byte[]? chunk;
-        while ((chunk = stream.Read(timeoutMs)) is not null)
-        {
-            sb.Append(Encoding.UTF8.GetString(chunk));
-        }
-
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// Reboots the device, optionally into a specified mode.
-    /// <para>重启设备，可选进入指定模式。</para>
-    /// </summary>
-    /// <param name="mode">
-    /// The reboot target mode: <c>null</c> for normal reboot,
-    /// <c>"bootloader"</c>, <c>"recovery"</c>, or <c>"updater"</c>.
-    /// <para>重启目标模式：<c>null</c> 为正常重启，
-    /// <c>"bootloader"</c>、<c>"recovery"</c> 或 <c>"updater"</c>。</para>
-    /// </param>
-    public void Reboot(string? mode = null)
-    {
-        var payload = string.IsNullOrEmpty(mode) ? null : Encoding.UTF8.GetBytes(mode);
-        using var stream = _connection.OpenChannel(HdcCommand.UnityReboot, payload);
-        // The device reboots; the stream may close abruptly, which is expected.
-        // 设备随即重启；流可能突然关闭，属预期行为。
-        _ = stream.Read(5000);
-    }
-
-    /// <summary>
-    /// Remounts the filesystem read-write (requires a userdebug build).
-    /// <para>重新挂载为可读写（需要 userdebug 构建）。</para>
-    /// </summary>
-    public void Remount()
-    {
-        using var stream = _connection.OpenChannel(HdcCommand.UnityRemount);
-        _ = stream.Read(10000);
-    }
-
-    /// <summary>
-    /// Reads a system property via the shell <c>getprop</c> command.
-    /// <para>通过 shell <c>getprop</c> 命令读取系统属性。</para>
-    /// </summary>
-    /// <param name="key">The property key. 属性名。</param>
-    /// <returns>The property value, trimmed. 去除首尾空白的属性值。</returns>
+    /// <summary>Reads an OpenHarmony system parameter. 读取 OpenHarmony 系统参数。</summary>
     public string GetProp(string key)
     {
-        if (key is null)
-        {
-            throw new ArgumentNullException(nameof(key));
-        }
-
-        var shell = new HdcShellClient(_connection, $"getprop {key}");
-        var result = shell.Execute();
-        return Encoding.UTF8.GetString(result.Stdout).Trim();
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        return RunCommand("param get " + QuoteShellArgument(key)).Trim();
     }
-
-    /// <summary>
-    /// Checks whether the HDC server is reachable.
-    /// <para>检查 HDC server 是否可达。</para>
-    /// </summary>
-    /// <returns>The server response text. 服务器响应文本。</returns>
+    /// <summary>Maps supported UI reboot modes to upstream target boot arguments.
+    /// <para>将界面支持的重启模式映射为上游 target boot 参数。</para></summary>
+    public static string RebootArgument(string? mode) => mode switch
+    {
+        null or "" or "system" => "",
+        "bootloader" => "-bootloader",
+        "recovery" => "-recovery",
+        _ => throw new NotSupportedException($"Unsupported HDC reboot mode: {mode}")
+    };
+    /// <summary>Reboots to system, bootloader or recovery. 重启至系统、bootloader 或 recovery。</summary>
+    public void Reboot(string? mode = null)
+    {
+        var argument = RebootArgument(mode);
+        ExecuteService("target boot" + (argument.Length == 0 ? "" : " " + argument), HdcCommand.UnityReboot, argument, 10000);
+    }
+    /// <summary>Remounts system/vendor when permitted by the device. 在设备允许时重新挂载 system/vendor。</summary>
+    public void Remount() => ExecuteService("target mount", HdcCommand.UnityRemount, "", 10000);
+    private string ExecuteService(string command, HdcCommand nativeCommand, string argument, int timeoutMs)
+    {
+        if (_server is not null)
+        {
+            var response = Encoding.UTF8.GetString(_server.ExecuteOnDevice(_connectKey!, command, timeoutMs));
+            HdcServerClient.ThrowOnFailure(response);
+            return response;
+        }
+        using var channel = _connection!.OpenChannel(nativeCommand, Encoding.UTF8.GetBytes(argument));
+        using var output = new MemoryStream();
+        while (channel.Read(timeoutMs) is { } bytes)
+        {
+            if (output.Length + bytes.Length > HdcServerClient.MaximumOutputBytes)
+                throw new InvalidDataException("HDC service output limit exceeded.");
+            output.Write(bytes);
+        }
+        if (!channel.IsClosed) throw new TimeoutException("HDC service did not complete.");
+        var text = Encoding.UTF8.GetString(output.ToArray());
+        HdcServerClient.ThrowOnFailure(text);
+        return text;
+    }
+    /// <summary>Lists server targets. 列出服务端目标。</summary>
+    public string ListTargets(int timeoutMs = 10000) => _server is null
+        ? throw new NotSupportedException("Target enumeration is a host server command.")
+        : string.Join('\n', _server.ListTargets(timeoutMs));
+    /// <summary>Checks server availability. 检查服务端可用性。</summary>
     public string CheckServer()
     {
-        using var stream = _connection.OpenChannel(HdcCommand.CheckServer);
-        var sb = new StringBuilder();
-        byte[]? chunk;
-        while ((chunk = stream.Read(5000)) is not null)
-        {
-            sb.Append(Encoding.UTF8.GetString(chunk));
-        }
-
-        return sb.ToString();
+        if (_server is null) throw new NotSupportedException("Server checks require a host channel.");
+        _server.Connect();
+        return "OHOS HDC";
     }
-
-    /// <summary>
-    /// Waits for a device matching the given connect key to become available.
-    /// <para>等待匹配给定连接键的设备变为可用。</para>
-    /// </summary>
-    /// <param name="connectKey">The device connect key (serial or USB address).
-    /// <para>设备连接键（序列号或 USB 地址）。</para></param>
-    /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    /// <returns>The response text. 响应文本。</returns>
+    /// <summary>Waits for a selected target with a bounded deadline. 在有限时限内等待选定目标。</summary>
     public string WaitFor(string connectKey, int timeoutMs = 30000)
     {
-        if (connectKey is null)
+        if (_server is null) throw new NotSupportedException("Waiting for targets requires a host channel.");
+        var start = Environment.TickCount64;
+        while (Environment.TickCount64 - start < timeoutMs)
         {
-            throw new ArgumentNullException(nameof(connectKey));
+            if (_server.ListTargets((int)Math.Max(1, timeoutMs - (Environment.TickCount64 - start))).Contains(connectKey)) return connectKey;
+            Thread.Sleep(100);
         }
-
-        using var stream = _connection.OpenChannel(HdcCommand.WaitFor, Encoding.UTF8.GetBytes(connectKey));
-        var sb = new StringBuilder();
-        byte[]? chunk;
-        while ((chunk = stream.Read(timeoutMs)) is not null)
-        {
-            sb.Append(Encoding.UTF8.GetString(chunk));
-        }
-
-        return sb.ToString();
+        throw new TimeoutException("HDC target did not become available.");
     }
 }

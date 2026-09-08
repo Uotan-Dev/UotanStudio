@@ -141,4 +141,14 @@
     <x:String x:Key="Node_MCP_CallTool">Call MCP Tool</x:String>
 
     <x:String x:Key="Node_Firmware_SignApk">Sign APK</x:String>
+    <x:String x:Key="Node_Hdc_Shell">HDC Shell</x:String>
+    <x:String x:Key="Node_Hdc_GetProperty">HDC GetProperty</x:String>
+    <x:String x:Key="Node_Hdc_Send">HDC Send</x:String>
+    <x:String x:Key="Node_Hdc_Receive">HDC Receive</x:String>
+    <x:String x:Key="Node_Hdc_Install">HDC Install</x:String>
+    <x:String x:Key="Node_Hdc_Uninstall">HDC Uninstall</x:String>
+    <x:String x:Key="Node_Hdc_Forward">HDC Forward</x:String>
+    <x:String x:Key="Node_Hdc_Reverse">HDC Reverse</x:String>
+    <x:String x:Key="Node_Hdc_ListForwards">HDC ListForwards</x:String>
+    <x:String x:Key="Node_Hdc_Remount">HDC Remount</x:String>
 </ResourceDictionary>

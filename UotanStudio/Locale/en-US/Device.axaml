@@ -22,7 +22,7 @@
     <x:String x:Key="Device_GroupEdl">EDL Devices</x:String>
     <x:String x:Key="Device_GroupRkdl">RKDL Devices</x:String>
     <x:String x:Key="Device_EmptyHint">Click Refresh to scan connected devices.</x:String>
-    <x:String x:Key="Device_OpenAdbShell">Open ADB Shell</x:String>
+    <x:String x:Key="Device_OpenAdbShell">Open device Shell</x:String>
     <x:String x:Key="Device_ScreenMirror">Screen Mirror (scrcpy)</x:String>
     <x:String x:Key="Device_FastbootReadInfo">Read Fastboot Device Info</x:String>
     <x:String x:Key="Device_QuickFlash">Quick Flash to boot Partition</x:String>
@@ -35,7 +35,7 @@
     <x:String x:Key="Device_RkdlInfo">RKDL Mode Information</x:String>
     <x:String x:Key="Device_Serial">Serial</x:String>
     <x:String x:Key="Device_Model">Model</x:String>
-    <x:String x:Key="Device_AndroidVersion">Android Version</x:String>
+    <x:String x:Key="Device_AndroidVersion">System Version</x:String>
     <x:String x:Key="Device_State">State</x:String>
     <x:String x:Key="Device_Transport">Transport</x:String>
     <x:String x:Key="Device_LinkPort">Link Port</x:String>
@@ -94,4 +94,12 @@
     <x:String x:Key="Backup_RestoreFailed">Restore failed</x:String>
     <x:String x:Key="Backup_SelectRawProgram">Select rawprogram XML (partition geometry)</x:String>
 
+    <x:String x:Key="Device_HdcSend">Send file (HDC)</x:String>
+    <x:String x:Key="Device_HdcReceive">Receive file (HDC)</x:String>
+    <x:String x:Key="Device_HdcInstall">Install application (HDC)</x:String>
+    <x:String x:Key="Device_HdcUninstall">Uninstall application (HDC)</x:String>
+    <x:String x:Key="Device_HdcRemotePath">Device file path</x:String>
+    <x:String x:Key="Device_HdcBundleName">Application bundle name</x:String>
+    <x:String x:Key="Device_HdcCancel">Cancel HDC task</x:String>
+    <x:String x:Key="Device_HdcCancelled">HDC task cancelled</x:String>
 </ResourceDictionary>

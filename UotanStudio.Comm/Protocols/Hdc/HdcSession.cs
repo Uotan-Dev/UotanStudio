@@ -10,6 +10,16 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 public sealed class HdcSession : IProtocolSession
 {
     private bool _disposed;
+    private readonly HdcServerClient? _server;
+    private readonly string? _connectKey;
+    private readonly HdcConnection? _connection;
+    private bool _serverConnected;
+
+    internal HdcSession(HdcServerClient server, string connectKey)
+    {
+        _server = server;
+        _connectKey = connectKey;
+    }
 
     /// <summary>
     /// Gets the protocol name.
@@ -27,13 +37,13 @@ public sealed class HdcSession : IProtocolSession
     /// Gets whether the session is connected and authenticated.
     /// <para>获取会话是否已连接并通过认证。</para>
     /// </summary>
-    public bool IsConnected => Connection.IsConnected && !_disposed;
+    public bool IsConnected => (_server is not null ? _serverConnected : Connection.IsConnected) && !_disposed;
 
     /// <summary>
     /// Gets the HDC connection.
     /// <para>获取 HDC 连接。</para>
     /// </summary>
-    public HdcConnection Connection { get; }
+    public HdcConnection Connection => _connection ?? throw new NotSupportedException("Server channels do not expose a daemon connection. Use session command clients.");
 
     /// <summary>
     /// Gets the peer protocol version reported during handshake.
@@ -73,7 +83,7 @@ public sealed class HdcSession : IProtocolSession
         if (transport is null) throw new ArgumentNullException(nameof(transport));
         if (authentication is null) throw new ArgumentNullException(nameof(authentication));
 
-        Connection = new HdcConnection(transport, authentication);
+        _connection = new HdcConnection(transport, authentication);
     }
 
     /// <summary>
@@ -83,6 +93,13 @@ public sealed class HdcSession : IProtocolSession
     public void Connect()
     {
         ThrowIfDisposed();
+        if (_server is not null)
+        {
+            _server.Connect();
+            _serverConnected = true;
+            PeerBanner = "OHOS HDC";
+            return;
+        }
         Connection.Connect();
         PeerVersion = Connection.PeerVersion;
         PeerBanner = Connection.PeerBanner;
@@ -96,6 +113,13 @@ public sealed class HdcSession : IProtocolSession
     public async Task ConnectAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
+        if (_server is not null)
+        {
+            await _server.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            _serverConnected = true;
+            PeerBanner = "OHOS HDC";
+            return;
+        }
         await Connection.ConnectAsync(cancellationToken).ConfigureAwait(false);
         PeerVersion = Connection.PeerVersion;
         PeerBanner = Connection.PeerBanner;
@@ -122,7 +146,7 @@ public sealed class HdcSession : IProtocolSession
     public HdcShellClient CreateShellClient(string command)
     {
         ThrowIfDisposed();
-        return new HdcShellClient(Connection, command);
+        return _server is null ? new HdcShellClient(Connection, command) : new HdcShellClient(_server, _connectKey!, command);
     }
 
     /// <summary>
@@ -133,7 +157,7 @@ public sealed class HdcSession : IProtocolSession
     public HdcDeviceServices CreateDeviceServices()
     {
         ThrowIfDisposed();
-        return new HdcDeviceServices(Connection);
+        return _server is null ? new HdcDeviceServices(Connection) : new HdcDeviceServices(_server, _connectKey!);
     }
 
     /// <summary>
@@ -170,6 +194,7 @@ public sealed class HdcSession : IProtocolSession
         }
 
         _disposed = true;
-        Connection.Dispose();
+        _connection?.Dispose();
+        _server?.Dispose();
     }
 }

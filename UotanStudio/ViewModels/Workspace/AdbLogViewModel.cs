@@ -180,7 +180,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
     }
 
     internal static bool SupportsLogcat(DetectedDevice? device) =>
-        device is { Protocol: DeviceProtocolKind.Adb } &&
+        device is { Protocol: DeviceProtocolKind.Adb or DeviceProtocolKind.Hdc } &&
         device.State.ToLowerInvariant() is not ("offline" or "unauthorized" or "sideload" or "disconnected");
 
     internal void SetDevice(DetectedDevice? device)

@@ -21,6 +21,14 @@ public partial class DeviceView : UserControl
         InitializeComponent();
     }
 
+    private void OnHdcOperationMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm
+            && sender is MenuItem { CommandParameter: string operation }
+            && vm.HdcOperationCommand.CanExecute(operation))
+            vm.HdcOperationCommand.Execute(operation);
+    }
+
     // ===== 设备条目右键菜单 / Device item context menu =====
 
     /// <summary>
