@@ -14,7 +14,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     private readonly SettingsViewModel _settings;
     private readonly ProjectOperationsService _projects;
     private readonly AutoSaveCoordinator _coordinator;
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(15) };
     private readonly string _sessionPath;
     private bool _initialized;
     private Task? _initialization;
@@ -29,6 +29,40 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         _settings.PropertyChanged += OnSettingsChanged;
         _timer.Tick += OnTick;
         _projects.BeforeProjectChangeAsync = FlushAsync;
+    }
+
+    /// <summary>
+    /// <para>上次会话快照的轻量签名；无变化时跳过整轮 DTO 构建与序列化。</para>
+    /// Lightweight signature of the last session snapshot; the whole DTO build/serialize
+    /// pass is skipped when nothing changed.
+    /// </summary>
+    private string? _lastSessionSignature;
+
+    /// <summary>
+    /// <para>计算会话状态的轻量变更签名（文档路径集合、停靠比例/活动项、节点拓扑与缩放），
+    /// 避免每轮定时器都全量重建 DTO 并序列化。</para>
+    /// Computes a lightweight change signature of the session state (document path set, dock
+    /// proportions/active items, node topology and zoom) so the timer skips full DTO rebuilds
+    /// and serialization when nothing changed.
+    /// </summary>
+    private string ComputeSessionSignature()
+    {
+        var sb = new System.Text.StringBuilder(64);
+        var documents = WorkspaceSessionCapture.Documents(_workspace.Layout, Environment.CurrentDirectory);
+        sb.Append(documents.Count).Append('|');
+        foreach (var document in documents)
+            sb.Append(document.Kind).Append(':').Append(document.RelativePath).Append(':')
+              .Append(document.IsActive ? 'a' : '-').Append(';');
+        foreach (var dock in WorkspaceSessionCapture.Docks(_workspace.Layout))
+            sb.Append(dock.Id).Append(':').Append(dock.Proportion?.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-")
+              .Append(':').Append(dock.ActiveId ?? "-").Append(';');
+        if (_projects.NodeEditorVM is { } nodes)
+        {
+            sb.Append('|').Append(nodes.Nodes.Count).Append(':').Append(nodes.Connections.Count)
+                .Append(':').Append(nodes.Zoom.ToString("R", System.Globalization.CultureInfo.InvariantCulture))
+                .Append(':').Append(nodes.ShowMinimap ? '1' : '0');
+        }
+        return sb.ToString();
     }
 
     internal Task InitializeAsync() => _initialization ??= RestoreAsync();
@@ -102,6 +136,13 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         if (!_initialized || _projects.IsBusy) return;
         try
         {
+            // 轻量签名未变化时跳过整轮 DTO 构建与序列化（WriteIfChangedAsync 只省落盘，不省构建）。
+            // Skip the full DTO build/serialize pass when the lightweight signature is unchanged
+            // (WriteIfChangedAsync only avoids the disk write, not the build).
+            var signature = ComputeSessionSignature();
+            if (string.Equals(signature, _lastSessionSignature, StringComparison.Ordinal)) return;
+            _lastSessionSignature = signature;
+
             var documents = WorkspaceSessionCapture.Documents(_workspace.Layout, Environment.CurrentDirectory);
             foreach (var document in documents)
                 if (document.RelativePath.Length > 0) document.RelativePath = Path.GetFullPath(document.RelativePath);
