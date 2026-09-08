@@ -174,6 +174,11 @@ public partial class ProjectExplorerView : UserControl
         OpenWith(EditorOpenMode.Firmware);
     }
 
+    private void OnOpenAsFileSystem(object? sender, RoutedEventArgs e)
+    {
+        OpenWith(EditorOpenMode.FileSystem);
+    }
+
     private void OnNewEmptySubProject(object? sender, RoutedEventArgs e)
     {
         if (ProjectTree.SelectedItem is ExplorerNode node && node.IsDirectory)

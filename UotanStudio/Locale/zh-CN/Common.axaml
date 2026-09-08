@@ -96,6 +96,7 @@
     <x:String x:Key="Explorer_OpenAsArsc">以 ARSC 打开</x:String>
     <x:String x:Key="Explorer_OpenAsApk">以 APK 打开</x:String>
     <x:String x:Key="Explorer_OpenAsFirmware">在固件信息中打开</x:String>
+    <x:String x:Key="Explorer_OpenAsFileSystem">以文件管理视图打开</x:String>
     <x:String x:Key="Explorer_OpenAsMenu">打开方式</x:String>
     <x:String x:Key="Explorer_SetAsPackProject">设为打包项目</x:String>
     <x:String x:Key="Menu_AddSubProject">添加子项目</x:String>

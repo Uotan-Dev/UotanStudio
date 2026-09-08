@@ -32,6 +32,8 @@
                                       Click="OnOpenAsApk" />
                             <MenuItem Header="{DynamicResource Explorer_OpenAsFirmware}"
                                       Click="OnOpenAsFirmware" />
+                            <MenuItem Header="{DynamicResource Explorer_OpenAsFileSystem}"
+                                      Click="OnOpenAsFileSystem" />
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_Add}" IsVisible="{Binding IsDirectory}">
                             <MenuItem Header="{DynamicResource Explorer_NewEmptySubProject}" Click="OnNewEmptySubProject" />

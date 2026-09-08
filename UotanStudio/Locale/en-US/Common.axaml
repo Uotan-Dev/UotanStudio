@@ -96,6 +96,7 @@
     <x:String x:Key="Explorer_OpenAsArsc">Open as ARSC</x:String>
     <x:String x:Key="Explorer_OpenAsApk">Open as APK</x:String>
     <x:String x:Key="Explorer_OpenAsFirmware">Open in Firmware Info</x:String>
+    <x:String x:Key="Explorer_OpenAsFileSystem">Open in File Manager View</x:String>
     <x:String x:Key="Explorer_OpenAsMenu">Open With</x:String>
     <x:String x:Key="Explorer_SetAsPackProject">Set as Pack Project</x:String>
     <x:String x:Key="Menu_AddSubProject">Add Sub-Project</x:String>
