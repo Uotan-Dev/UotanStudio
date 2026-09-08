@@ -52,6 +52,12 @@ internal partial class ImageViewModel : Tool
     /// </summary>
     internal event EventHandler<(string DirectoryName, TaskCompletionSource<bool> Confirmation)>? ExtractOverwriteRequested;
 
+    /// <summary>
+    /// <para>请求视图复用目录删除确认和结果对话框。</para>
+    /// Requests directory deletion through the view's shared confirmation and result dialogs.
+    /// </summary>
+    internal event Func<ImageEntryViewModel, Task>? DeleteDirectoryRequested;
+
     private async Task<bool> RequestExtractOverwriteAsync(string directoryName)
     {
         var tcs = new TaskCompletionSource<bool>();
@@ -949,6 +955,15 @@ internal partial class ImageViewModel : Tool
 
     private async Task DeleteImageAsync(ImageEntryViewModel image)
     {
+        if (image.IsDirectory)
+        {
+            if (DeleteDirectoryRequested is { } deleteDirectory)
+            {
+                await deleteDirectory(image);
+            }
+            return;
+        }
+
         var source = GetSelectedSourcePath(image, "Delete");
         if (source is null)
         {
@@ -966,7 +981,7 @@ internal partial class ImageViewModel : Tool
 
             var deletedDir = Path.Combine(subProjectRoot, ".deleted");
             Directory.CreateDirectory(deletedDir);
-            var destination = GetUniqueFileName(deletedDir, Path.GetFileName(source));
+            var destination = Path.Combine(deletedDir, GetUniqueFileName(deletedDir, Path.GetFileName(source)));
             await Task.Run(() => File.Move(source, destination));
             Images.Remove(image);
             LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted {image.DisplayName} -> intermediate/deleted  已删除 {image.DisplayName}");
@@ -1273,7 +1288,7 @@ internal partial class ImageViewModel : Tool
         return Images.Where(image => image.IsSelected).ToArray();
     }
 
-    private static string GetEntryBaseName(ImageEntryViewModel image)
+    internal static string GetEntryBaseName(ImageEntryViewModel image)
     {
         var name = Path.GetFileNameWithoutExtension(image.RelativePath);
         return string.IsNullOrWhiteSpace(name) ? image.DisplayName : name;
