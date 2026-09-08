@@ -345,19 +345,17 @@ public partial class FileViewModel : Document, IEditable
     /// <summary>
     /// <para>按打开方式、扩展名与内容综合判定是否为二进制（应走十六进制编辑器）。
     /// <c>Text</c> 强制为文本；<c>Hex</c> 强制为二进制；<c>Auto</c> 依据扩展名白名单与内容探测。
-    /// 即使请求为 <c>Text</c>，内容明显为二进制（含 NUL 字节，如 AXML / UTF-16 无 BOM）时仍按二进制
-    /// 处理，避免在代码编辑器中显示大量 NUL 字符图标。</para>
+    /// 显式请求 <c>Text</c> 时不以二进制内容检测覆盖用户选择。</para>
     /// Decides whether the file is binary (opens in the hex editor) from open mode, extension and content.
     /// <c>Text</c> forces text; <c>Hex</c> forces binary; <c>Auto</c> uses the extension whitelist and content
-    /// sniffing. Even for <c>Text</c>, content that is clearly binary (NUL bytes present, e.g. AXML or
-    /// UTF-16 without BOM) is still treated as binary, so the code editor does not show NUL glyphs.
+    /// sniffing. An explicit <c>Text</c> request is never overridden by binary-content detection.
     /// </summary>
     private static bool ResolveBinary(EditorOpenMode mode, string path, byte[] data)
     {
         switch (mode)
         {
             case EditorOpenMode.Text:
-                return FileOpenMode.IsBinaryContent(data);
+                return false;
             case EditorOpenMode.Hex:
                 return true;
             case EditorOpenMode.Dtb:
