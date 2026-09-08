@@ -10,6 +10,7 @@ using Material.Icons.Avalonia;
 using UotanStudio.Services;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Devices;
+using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Devices;
 
@@ -17,9 +18,14 @@ namespace UotanStudio.Views.Workspace;
 
 public class WorkspaceDockFactory : Factory
 {
+    private readonly AiSettingsViewModel _aiSettings;
     private ProjectExplorerViewModel? _projectExplorer;
     private PropertiesViewModel? _properties;
     private TerminalDockService? _terminals;
+
+    public WorkspaceDockFactory() : this(new AiSettingsViewModel()) { }
+
+    public WorkspaceDockFactory(AiSettingsViewModel aiSettings) => _aiSettings = aiSettings;
 
     public override IRootDock CreateLayout()
     {
@@ -41,6 +47,8 @@ public class WorkspaceDockFactory : Factory
         imagesView.Id = "ImagesView";
         imagesView.Title = LanguageService.Instance.GetString("Dock_ImagesView");
         imagesView.CanClose = true;
+
+        var aiAssistant = new AiAssistantViewModel(_aiSettings);
 
         var properties = _properties = new PropertiesViewModel
         {
@@ -103,7 +111,7 @@ public class WorkspaceDockFactory : Factory
             Title = "RightPaneTop",
             Proportion = double.NaN,
             ActiveDockable = imagesView,
-            VisibleDockables = CreateList<IDockable>(imagesView)
+            VisibleDockables = CreateList<IDockable>(imagesView, aiAssistant)
         };
 
         var rightTools = new ToolDock
@@ -180,6 +188,7 @@ public class WorkspaceDockFactory : Factory
         panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: true);
         panels.Register(WorkspacePanelService.Device, device, leftTools, visible: false);
         panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
+        panels.Register(WorkspacePanelService.AiAssistant, aiAssistant, rightToolsTop, visible: true);
         panels.Register(WorkspacePanelService.Properties, properties, rightTools, visible: true);
         panels.Register(WorkspacePanelService.WorkspaceLog, output, bottomTools, visible: true);
         panels.Register(WorkspacePanelService.AdbLog, adbLog, bottomTools, visible: true);

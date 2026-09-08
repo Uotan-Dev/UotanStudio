@@ -14,6 +14,9 @@ namespace UotanStudio.ViewModels.Shell;
 /// </summary>
 public partial class SettingsViewModel : ViewModelBase, IDisposable
 {
+    /// <summary>Shared, in-memory AI settings. 共用的内存 AI 设置。</summary>
+    public AiSettingsViewModel Ai { get; } = new();
+
     private AppSettings _appSettings;
     private CancellationTokenSource? _saveCts;
     private bool _disposed;
@@ -710,6 +713,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ResetToDefaults()
     {
+        Ai.Reset();
         _appSettings = SettingsPersistenceService.Instance.ResetToDefaults();
         InitializeFromAppSettings(_appSettings);
 

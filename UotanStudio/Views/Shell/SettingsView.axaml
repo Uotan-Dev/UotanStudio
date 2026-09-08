@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:vm="using:UotanStudio.ViewModels.Shell"
+             xmlns:views="using:UotanStudio.Views.Shell"
              xmlns:models="using:UotanStudio.Models"
              xmlns:mcp="using:UotanStudio.Services.Mcp"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="900"
@@ -72,6 +73,8 @@
                                       IsChecked="{Binding DebugMode, Mode=TwoWay}" />
                     </Grid>
                 </StackPanel>
+
+                <views:AiSettingsView DataContext="{Binding Ai}" />
 
                 <!-- Section: MCP -->
                 <StackPanel Spacing="8">

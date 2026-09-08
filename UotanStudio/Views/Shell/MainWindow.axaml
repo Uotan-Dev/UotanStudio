@@ -123,6 +123,10 @@
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ImagesViewVisible, Mode=OneWay}"
 							  Command="{Binding MenuVM.ToggleImagesViewCommand}" />
+					<MenuItem Header="{DynamicResource Dock_AiAssistant}"
+					          ToggleType="CheckBox"
+					          IsChecked="{Binding MenuVM.WorkspacePanels.AiAssistantVisible, Mode=OneWay}"
+					          Command="{Binding MenuVM.ToggleAiAssistantCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowProperties}"
 					     ToggleType="CheckBox"
 					     IsChecked="{Binding MenuVM.WorkspacePanels.PropertiesVisible, Mode=OneWay}"

@@ -236,4 +236,18 @@
     <x:String x:Key="Log_RegexTimeout">正则匹配超时，请简化表达式</x:String>
     <x:String x:Key="Log_FilterAll">全部</x:String>
 
+    <x:String x:Key="Dock_AiAssistant">AI 对话助手</x:String>
+    <x:String x:Key="AI_NewConversation">新建对话</x:String>
+    <x:String x:Key="AI_History">对话历史</x:String>
+    <x:String x:Key="AI_ClearConversation">清空对话</x:String>
+    <x:String x:Key="AI_Chat">聊天</x:String>
+    <x:String x:Key="AI_Agent">智能体</x:String>
+    <x:String x:Key="AI_Mode">对话模式</x:String>
+    <x:String x:Key="AI_Model">选择模型</x:String>
+    <x:String x:Key="AI_Prompt">询问 UotanStudio</x:String>
+    <x:String x:Key="AI_ActiveDocument">活动文档</x:String>
+    <x:String x:Key="AI_AddFiles">添加文件</x:String>
+    <x:String x:Key="AI_RemoveFile">移除附件</x:String>
+    <x:String x:Key="AI_AddFilesFailed">无法选择文件，请重试。</x:String>
+    <x:String x:Key="AI_Send">发送消息</x:String>
 </ResourceDictionary>

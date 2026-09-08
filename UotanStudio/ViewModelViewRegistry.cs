@@ -3,10 +3,12 @@ using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Compare;
 using UotanStudio.Views.Devices;
 using UotanStudio.Views.Editors;
 using UotanStudio.Views.Workspace;
+using UotanStudio.Views.Shell;
 
 namespace UotanStudio;
 
@@ -42,6 +44,8 @@ internal static class ViewModelViewRegistry
         [typeof(FirmwareInfoViewModel)] = () => new FirmwareInfoView(),
         [typeof(FileManagerEditorViewModel)] = () => new FileManagerEditorView(),
         [typeof(ImageViewModel)] = () => new ImageView(),
+        [typeof(AiAssistantViewModel)] = () => new AiAssistantView(),
+        [typeof(AiSettingsViewModel)] = () => new AiSettingsView(),
         [typeof(ProjectExplorerViewModel)] = () => new ProjectExplorerView(),
         [typeof(ProjectSettingViewModel)] = () => new ProjectSettingView(),
         [typeof(PropertiesViewModel)] = () => new PropertiesView(),

@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:UotanStudio.ViewModels.Shell"
+             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="UotanStudio.Views.Shell.AiSettingsView"
+             x:DataType="vm:AiSettingsViewModel">
+    <StackPanel Spacing="8">
+        <TextBlock Text="{DynamicResource Settings_AI}" FontWeight="SemiBold" FontSize="16" />
+        <Border Height="1" Background="{DynamicResource BorderBrush}" />
+
+        <TextBlock Text="{DynamicResource Settings_AIEndpoint}" FontSize="13" Margin="0,4,0,0" />
+        <TextBox Text="{Binding ApiEndpoint, Mode=TwoWay}" PlaceholderText="https://api.example.com/v1"
+                 AutomationProperties.Name="{DynamicResource Settings_AIEndpoint}" />
+
+        <TextBlock Text="{DynamicResource Settings_AIApiKey}" FontSize="13" Margin="0,4,0,0" />
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBox Text="{Binding ApiKey, Mode=TwoWay}" PasswordChar="{Binding ApiKeyPasswordChar}"
+                     AutomationProperties.Name="{DynamicResource Settings_AIApiKey}" />
+            <ToggleButton Grid.Column="1" IsChecked="{Binding IsApiKeyVisible, Mode=TwoWay}"
+                          Width="32" Height="32" Padding="6"
+                          ToolTip.Tip="{DynamicResource Settings_AIToggleKey}" AutomationProperties.Name="{DynamicResource Settings_AIToggleKey}">
+                <Grid>
+                    <icons:MaterialIcon Kind="EyeOutline" Width="16" Height="16" IsVisible="{Binding !IsApiKeyVisible}" />
+                    <icons:MaterialIcon Kind="EyeOffOutline" Width="16" Height="16" IsVisible="{Binding IsApiKeyVisible}" />
+                </Grid>
+            </ToggleButton>
+        </Grid>
+
+        <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0" ColumnSpacing="8">
+            <TextBlock Text="{DynamicResource Settings_AIModels}" FontSize="13" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Command="{Binding FetchModelsCommand}" Padding="8,4">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <icons:MaterialIcon Kind="Refresh" Width="14" Height="14" />
+                    <TextBlock Text="{DynamicResource Settings_AIFetchModels}" FontSize="12" />
+                </StackPanel>
+            </Button>
+        </Grid>
+        <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsFetchingModels}" Height="3" />
+        <ComboBox ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel, Mode=TwoWay}"
+                  PlaceholderText="{DynamicResource AI_Model}" HorizontalAlignment="Stretch"
+                  AutomationProperties.Name="{DynamicResource Settings_AIModels}">
+            <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" />
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+    </StackPanel>
+</UserControl>
