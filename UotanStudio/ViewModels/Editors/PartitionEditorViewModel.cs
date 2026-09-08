@@ -101,6 +101,8 @@ public partial class PartitionEditorViewModel : Document
     /// </summary>
     [ObservableProperty] private bool _isDirty;
 
+    partial void OnIsDirtyChanged(bool value) => IsModified = value;
+
     /// <summary>
     /// <para>最后一次解析/保存错误文本；为空表示无错误。</para>
     /// The last parse/save error text; empty means no error.

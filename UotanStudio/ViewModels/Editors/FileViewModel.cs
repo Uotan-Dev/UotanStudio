@@ -83,6 +83,8 @@ public partial class FileViewModel : Document, IEditable
     [ObservableProperty]
     private bool _isDirty;
 
+    partial void OnIsDirtyChanged(bool value) => IsModified = value;
+
     /// <summary>
     /// <para>是否为二进制文件（无法以文本方式显示）。</para>
     /// Whether the file is binary (cannot be displayed as text).

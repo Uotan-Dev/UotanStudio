@@ -62,6 +62,8 @@ public partial class HexEditorViewModel : Document
     /// </summary>
     [ObservableProperty] private bool _isDirty;
 
+    partial void OnIsDirtyChanged(bool value) => IsModified = value;
+
     /// <summary>
     /// <para>文件大小显示文本（状态栏）。</para>
     /// The localized file-size display text (status bar).

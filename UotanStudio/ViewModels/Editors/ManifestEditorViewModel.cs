@@ -76,6 +76,8 @@ public partial class ManifestEditorViewModel : Document
     /// </summary>
     [ObservableProperty] private bool _isDirty;
 
+    partial void OnIsDirtyChanged(bool value) => IsModified = value;
+
     /// <summary>
     /// <para>当前选中的树节点（左栏选择联动，驱动右栏属性面板）。</para>
     /// The currently selected tree node (left-pane selection linkage, drives the right properties pane).

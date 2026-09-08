@@ -204,7 +204,7 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 - **工程文件（VS 式布局）**：`SolutionPersistenceService`（`Services/Projects/`，静态，`SolutionJsonContext` 源生成 JSON）读写三类文件——解决方案 `<名称>.uotan`（`SolutionSnapshot`：解决方案名 + 引用的固件/节点项目相对路径）、固件项目 `<名称>.uotanfw`（`FirmwareProjectSnapshot`：镜像清单 `ImageEntryDto`（相对路径）+ 打包设置 `ProjectSettingsDto`）、节点项目 `<名称>.uotannode`（`NodeProjectSnapshot`：节点画布 `NodeDto`+`ConnectionDto`）。新建 / 打开 / 保存由 `MenuViewModel` 编排；`MenuViewModel.OpenProjectFromPathAsync(path)` / `ImportFilesAsync(paths)` 供菜单与命令行共用。旧单文件 `.uotan`（`ProjectSnapshot`）已废弃。
 - **工程目录约定**：`ProjectContextService`（`Services/Projects/`，单例）承载当前解决方案：`RootDirectory` = 解决方案文件同名目录，`images/` 存导入镜像，`intermediate/<操作>/` 存中间产物（解包、合成、deleted），`.uotan/` 存会话状态（`settings.json` + `history.json`，类似 VS 的 `.vs/`）。镜像条目一律存相对路径。
 - **操作历史**：`OperationHistoryService`（`Services/Projects/`，单例）维护内存撤销/重做栈（容量 50），工作区操作通过 `Record(description, [HistoryOperationDto,] undo, redo)` 登记；带 `HistoryOperationDto` 的条目可经 `SaveAsync`/`LoadAsync` 持久化到 `.uotan/history.json` 并跨会话重建（重建工厂由 `ImageViewModel` 注册到 `ReconstructOperation`）。`MenuViewModel` 的 Undo/Redo 按当前页面路由：文本页面使用编辑器撤销栈，节点页面转发 `NodeEditorActionMessage`，不再隐式执行磁盘操作历史。
-- **窗口标题**：`MainViewModel.WindowTitle`（`"<解决方案名> - UotanStudio"`）绑定 `MainWindow.Title` 与顶部标题栏 `TextBlock`，随 `ProjectContextChangedMessage` 更新。
+- **窗口标题**：`MainViewModel.WindowTitle`（`"<解决方案名> - UotanStudio"`）仅绑定顶部自绘标题栏 `TextBlock`，随 `ProjectContextChangedMessage` 更新；`MainWindow.Title` 保持为空，避免系统标题叠在菜单上。
 
 ### 9. 设备管理器
 设备监视与协议交互**统一基于 `UotanStudio.Comm`**，由 `DeviceMonitorService`（`UotanStudio/Services/Devices/DeviceMonitorService.cs`，单例）驱动：
@@ -242,6 +242,10 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 - **工作区自动保存**：设置页 `AutoSave` 由 `WorkspaceAutoSaveService` 消费，每 15 秒检查已打开编辑器的未保存内容，不定时读写工程或会话快照；会话快照（`workspace-session.json`）以轻量变更签名（文档路径集合、停靠比例/活动项、节点拓扑与缩放）判断内容未变化时跳过整轮 DTO 构建与序列化。工程内容在手动保存、切换工程或关闭窗口时持久化；打开页面与面板状态仅在关闭时自动记录，切换工程保留原有页面记录。`workspace-session.json` 位于设置目录，保存面板可见性、停靠比例、文档及无工程草稿；启动不自动打开上次工程或文档，恢复面板布局，用户显式打开工程时仍可恢复该工程保存的文档。支持具名文本、DTB、Manifest、分区编辑器，排除原始二进制及未命名文本。JSON 原子替换且内容未变不重写，文本保留编码并检查外部修改；关闭自动保存开关停止自动持久化。浮窗位置及任意停靠拓扑不恢复。相关验证为 `WorkspaceAutoSaveTests`。
 
 ## 维护规则
+
+主窗口使用自绘菜单标题栏，`Window.Title` 保持为空，界面内仅显示菜单右侧的自绘标题；不依赖 `WindowDrawnDecorations` 模板选择器隐藏原生系统标题。
+
+文件未保存标识复用 Dock 原生 `IsModified`：文本、Hex、DTB、Manifest、分区编辑器在 `IsDirty` 变化时同步该属性，使用既有主题的标签标识，不修改文件名或 `Title`。`WorkspaceModificationTracker` 监听文档集合及浮窗布局中的未保存状态，自绘主窗口标题 `WindowTitle` 在存在未保存文件时加圆点前缀；文档保存或关闭后实时更新，不使用轮询。
 
 切换工程和退出主窗口时先暂停定时保存、等待已开始的保存结束，再遍历工作区文档复用保存／不保存／取消确认；确认之前不得强制发起自动保存。确认后只持久化工程与会话状态，不再次保存用户选择不保存的文档；取消或保存失败时保留工作区并恢复定时保存。未启用自动保存时仍检查未保存文档。
 

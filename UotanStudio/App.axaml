@@ -6,6 +6,7 @@
              xmlns:converters="using:UotanStudio.Converters"
              xmlns:viewmodels="using:UotanStudio.ViewModels"
              xmlns:devices="using:UotanStudio.ViewModels.Devices"
+             xmlns:dock="using:Dock.Avalonia.Controls"
              x:Class="UotanStudio.App"
              RequestedThemeVariant="Default">
 
@@ -29,6 +30,14 @@
         <semi:UrsaSemiTheme />
         <semi:SemiPopupAnimations />
         <semi:DockSemiTheme />
+        <Style Selector="dock|DocumentControl">
+            <Setter Property="ModifiedTemplate">
+                <DataTemplate>
+                    <TextBlock Text="&#x25CF;" FontSize="10" Width="12"
+                               TextAlignment="Center" VerticalAlignment="Center" />
+                </DataTemplate>
+            </Setter>
+        </Style>
         <semi:DataGridSemiTheme />
         <semi:AvaloniaEditSemiTheme />
         <materialIcons:MaterialIconStyles />

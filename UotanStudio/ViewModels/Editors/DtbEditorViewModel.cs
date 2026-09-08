@@ -78,6 +78,8 @@ public partial class DtbEditorViewModel : Document, IEditable
     /// </summary>
     [ObservableProperty] private bool _isDirty;
 
+    partial void OnIsDirtyChanged(bool value) => IsModified = value;
+
     /// <summary>
     /// <para>设备树节点总数（含根节点）；未加载时为 0。</para>
     /// Total node count of the device tree (including the root); 0 when not loaded.

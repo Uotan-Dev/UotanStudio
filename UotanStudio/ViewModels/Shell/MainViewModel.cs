@@ -11,6 +11,7 @@ namespace UotanStudio.ViewModels.Shell;
 public partial class MainViewModel : ViewModelBase, IDisposable
 {
     private readonly Services.Workspace.WorkspaceAutoSaveService _autoSave;
+    private readonly Services.Workspace.WorkspaceModificationTracker _modifications;
     internal Task InitializeAutoSaveAsync() => _autoSave.InitializeAsync();
     internal void ResumeAutoSave() => _autoSave.Resume();
     internal async Task<bool> FlushAutoSaveAsync()
@@ -38,6 +39,9 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public MainViewModel()
     {
         WorkspaceVM = new WorkspaceViewModel(new WorkspaceDockFactory(SettingsVM.Ai));
+        _modifications = new(() => WorkspaceVM.Layout);
+        _modifications.Changed += OnModificationsChanged;
+        WorkspaceVM.PropertyChanged += OnWorkspacePropertyChanged;
         MenuVM.NodeEditorVM = NodeEditorVM;
         MenuVM.WorkspaceVM = WorkspaceVM;
         _autoSave = new(WorkspaceVM, SettingsVM, ProjectOperationsService.Instance);
@@ -47,18 +51,29 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 
     private void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message) => UpdateWindowTitle();
 
+    private void OnModificationsChanged(object? sender, EventArgs e) => UpdateWindowTitle();
+
+    private void OnWorkspacePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(WorkspaceVM.Layout)) _modifications.Refresh();
+    }
+
     private void UpdateWindowTitle()
     {
         var context = ProjectContextService.Instance;
-        WindowTitle = context.IsProjectOpen && context.SolutionName is { Length: > 0 } name
+        var title = context.IsProjectOpen && context.SolutionName is { Length: > 0 } name
             ? $"{name} - UotanStudio"
             : "UotanStudio";
+        WindowTitle = _modifications.HasUnsavedChanges ? "\u25cf " + title : title;
     }
 
     /// <summary>Stops workspace persistence and releases subscriptions.<para>停止工作区持久化并释放订阅。</para></summary>
     public void Dispose()
     {
         _autoSave.Dispose();
+        WorkspaceVM.PropertyChanged -= OnWorkspacePropertyChanged;
+        _modifications.Changed -= OnModificationsChanged;
+        _modifications.Dispose();
         SettingsVM.Dispose();
         WorkspaceVM.Dispose();
         WeakReferenceMessenger.Default.UnregisterAll(this);
