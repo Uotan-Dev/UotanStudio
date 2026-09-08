@@ -33,6 +33,7 @@ public partial class WorkspaceView : UserControl
     public WorkspaceView()
     {
         InitializeComponent();
+        InitializeDocumentSearch();
     }
 
     // ===== 系统文件拖拽 =====

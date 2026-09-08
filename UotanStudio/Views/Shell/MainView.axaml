@@ -34,7 +34,7 @@
 				<ContentPage.Header>
 					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Workspace}" FontSize="13" FontWeight="SemiBold" />
 				</ContentPage.Header>
-				<workspaceviews:WorkspaceView DataContext="{Binding WorkspaceVM}" />
+				<workspaceviews:WorkspaceView Name="WorkspaceDocuments" DataContext="{Binding WorkspaceVM}" />
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>

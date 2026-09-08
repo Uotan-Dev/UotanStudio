@@ -600,6 +600,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// </summary>
     private IEditable? TryGetEditable() => WorkspaceVM?.FindDocumentsPanePublic()?.ActiveDockable as IEditable;
 
+    [RelayCommand]
+    private void Find() => WeakReferenceMessenger.Default.Send(new OpenDocumentSearchMessage(ShowReplace: false));
+
+    [RelayCommand]
+    private void Replace() => WeakReferenceMessenger.Default.Send(new OpenDocumentSearchMessage(ShowReplace: true));
+
     // ===== 视图 / View =====
 
     /// <summary><para>切换到工作区选项卡。</para>Switch to the Workspace tab.</summary>

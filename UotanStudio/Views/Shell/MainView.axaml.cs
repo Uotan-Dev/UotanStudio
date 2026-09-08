@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
 using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
@@ -69,6 +70,17 @@ public partial class MainView : UserControl
         WeakReferenceMessenger.Default.Send(new ActiveTabChangedMessage(tab));
     }
 
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        WeakReferenceMessenger.Default.Register<MainView, OpenDocumentSearchMessage>(this, static (view, message) =>
+        {
+            view.MainTabs.SelectedIndex = 3;
+            // Wait for the selected page's document dock to complete layout before positioning search.
+            Dispatcher.UIThread.Post(() => view.WorkspaceDocuments.ShowDocumentSearch(message.ShowReplace), DispatcherPriority.Loaded);
+        });
+    }
+
     /// <summary>
     /// <para>视图从可视化树分离时取消消息订阅与事件挂载，防止内存泄漏。</para>
     /// Unregisters message subscriptions and event handlers when the view detaches from the visual tree.
@@ -77,6 +89,7 @@ public partial class MainView : UserControl
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
         WeakReferenceMessenger.Default.Unregister<NavigateToTabMessage>(this);
+        WeakReferenceMessenger.Default.Unregister<OpenDocumentSearchMessage>(this);
         MainTabs.SelectionChanged -= OnSelectionChanged;
         base.OnDetachedFromVisualTree(e);
     }

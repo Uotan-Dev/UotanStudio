@@ -4,10 +4,12 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
              xmlns:dock="using:Dock.Avalonia.Controls"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.Workspace.WorkspaceView"
              x:DataType="viewmodels:WorkspaceViewModel"
              Background="Transparent"
+             Focusable="True"
              DragDrop.AllowDrop="True"
              DragDrop.DragOver="OnDragOver"
              DragDrop.Drop="OnDrop">
@@ -16,8 +18,16 @@
        InputHitTest 失败会让 DragDropDevice.GetTarget 返回 null，OS 光标显示禁止。 -->
   <!-- Transparent background is required so hit-testing lands on empty areas of this view;
        otherwise the OS drag cursor may show the "not allowed" glyph. -->
-  <dock:DockControl x:Name="DockControl"
+  <Grid>
+    <dock:DockControl x:Name="DockControl"
                      Layout="{Binding Layout}"
                      IsDockingEnabled="True"
                      AutoCreateDataTemplates="True" />
+    <Canvas>
+      <Grid Name="DocumentSearchHost" IsVisible="False" ClipToBounds="True">
+        <controls:FindReplacePanel Name="DocumentSearchPanel" IsVisible="False" MaxWidth="300" Margin="4"
+                                   HorizontalAlignment="Stretch" VerticalAlignment="Top" />
+      </Grid>
+    </Canvas>
+  </Grid>
 </UserControl>
