@@ -102,6 +102,7 @@
               <ListBox x:Name="LeftList"
                        ItemsSource="{Binding LeftRows}"
                        SelectionChanged="OnLeftSelectionChanged"
+                       AutoScrollToSelectedItem="False"
                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
                        ScrollViewer.VerticalScrollBarVisibility="Auto"
                        Background="Transparent">
@@ -172,6 +173,7 @@
               <ListBox x:Name="RightList"
                        ItemsSource="{Binding RightRows}"
                        SelectionChanged="OnRightSelectionChanged"
+                       AutoScrollToSelectedItem="False"
                        ScrollViewer.HorizontalScrollBarVisibility="Auto"
                        ScrollViewer.VerticalScrollBarVisibility="Auto"
                        Background="Transparent">

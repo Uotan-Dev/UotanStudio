@@ -124,6 +124,11 @@ public sealed class TextDiffService
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
+        // DiffPlex 1.9.0 的公共 API 均以整段文本为输入（行数组无法直接喂入），
+        // 故保留 Join 行为；本重载的优化点是读取侧的限长检查不再逐行扫描。
+        // DiffPlex 1.9.0's public APIs all take whole text (line arrays cannot be fed
+        // directly), so keep the Join; this overload's win is the read-side size bound
+        // without per-line rescans.
         var leftLines = ReadLinesBounded(left, ct);
         var rightLines = ReadLinesBounded(right, ct);
         return DiffLines(string.Join('\n', leftLines), string.Join('\n', rightLines));
@@ -229,6 +234,17 @@ public sealed class TextDiffService
         List<string> lines = [];
         long totalBytes = 0;
 
+        // 可 seek 的流（文件场景）一次性按流剩余长度做字节上限检查，消除每行
+        // Encoding.UTF8.GetByteCount 的重复全文扫描；非 seek 流回退为逐行累计。
+        // Seekable streams (the file case) check the byte cap once against the remaining
+        // stream length, removing the per-line Encoding.UTF8.GetByteCount rescan;
+        // non-seekable streams fall back to per-line accumulation.
+        var perLineCounting = !stream.CanSeek;
+        if (!perLineCounting && stream.Length - stream.Position > MaxDiffBytes)
+        {
+            throw new FormatException($"Text stream exceeds the {MaxDiffBytes} byte limit.");
+        }
+
         using var reader = new StreamReader(
             stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 81920, leaveOpen: true);
 
@@ -242,10 +258,13 @@ public sealed class TextDiffService
                 throw new FormatException($"Text stream exceeds the {MaxDiffLines} line limit.");
             }
 
-            totalBytes += Encoding.UTF8.GetByteCount(line);
-            if (totalBytes > MaxDiffBytes)
+            if (perLineCounting)
             {
-                throw new FormatException($"Text stream exceeds the {MaxDiffBytes} byte limit.");
+                totalBytes += reader.CurrentEncoding.GetByteCount(line) + 2;
+                if (totalBytes > MaxDiffBytes)
+                {
+                    throw new FormatException($"Text stream exceeds the {MaxDiffBytes} byte limit.");
+                }
             }
 
             lines.Add(line);

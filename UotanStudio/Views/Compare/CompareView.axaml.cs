@@ -476,7 +476,10 @@ public partial class CompareView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (string.Equals(e.PropertyName, nameof(CompareViewModel.SelectedIndex), StringComparison.Ordinal))
+        // 仅差异导航（ScrollToIndex）触发滚动：普通点选只改 SelectedIndex，不产生任何滚动。
+        // Only diff navigation (ScrollToIndex) triggers scrolling: a plain click only changes
+        // SelectedIndex and never scrolls.
+        if (string.Equals(e.PropertyName, nameof(CompareViewModel.ScrollToIndex), StringComparison.Ordinal))
         {
             ScrollToSelected();
             return;
@@ -498,15 +501,18 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// <para>选中项变化时让左右两栏都精确滚到对应行索引（先按引用在两侧行列表中查找，
-    /// 找不到则忽略；文本/文件夹/十六进制模式两侧共享同一列表可确保找到）。用与滚动镜像
-    /// 相同的行索引对齐逻辑设置偏移，保证点选一行后同一 Rows 行落在两侧同一水平高度；
+    /// <para>差异导航滚动：把左右两栏都顶部对齐滚到 <see cref="CompareViewModel.ScrollToIndex"/>
+    /// 指定的行（先按引用在两侧行列表中查找，找不到则忽略；文本/十六进制模式两侧共享同一列表
+    /// 可确保找到）。目标偏移 = 索引 × 行高，**不夹取到 Extent 内**（ScrollViewer 自身对越界
+    /// 偏移有兜底；镜像用的 <see cref="ScrollListToIndex"/> 保持夹取行为不变）；
     /// <c>_syncing</c> 防止两侧回写互相触发镜像。</para>
-    /// Scrolls both panes to the selected row index when the selection changes (looks the item up
-    /// by reference in each pane's list; ignored when the item is not found — all modes share the
-    /// same list so the item is always found). Uses the same row-index alignment as the scroll
-    /// mirror, so clicking a row keeps the same Rows row on the same horizontal position in both
-    /// panes; <c>_syncing</c> prevents the writes from mirroring each other.
+    /// Diff-navigation scroll: top-aligns both panes to the row specified by
+    /// <see cref="CompareViewModel.ScrollToIndex"/> (looks the item up by reference in each pane's
+    /// list; ignored when the item is not found — both modes share the same list so the item is
+    /// always found). Target offset = index × row height, **without clamping to the Extent** (the
+    /// ScrollViewer itself bounds out-of-range offsets; the mirror's <see cref="ScrollListToIndex"/>
+    /// keeps its clamping behavior unchanged); <c>_syncing</c> prevents the writes from mirroring
+    /// each other.
     /// </summary>
     private void ScrollToSelected()
     {
@@ -515,7 +521,7 @@ public partial class CompareView : UserControl
             return;
         }
 
-        var index = vm.SelectedIndex;
+        var index = vm.ScrollToIndex;
         if (index < 0 || index >= vm.Rows.Count)
         {
             return;
@@ -530,18 +536,53 @@ public partial class CompareView : UserControl
         {
             if (leftIndex >= 0)
             {
-                ScrollListToIndex(LeftList, _leftScroll, leftIndex);
+                ScrollListTopAligned(LeftList, _leftScroll, leftIndex);
             }
 
             if (rightIndex >= 0)
             {
-                ScrollListToIndex(RightList, _rightScroll, rightIndex);
+                ScrollListTopAligned(RightList, _rightScroll, rightIndex);
             }
         }
         finally
         {
             _syncing = false;
         }
+    }
+
+    /// <summary>
+    /// <para>差异导航专用：把 ListBox 顶部对齐滚到指定行索引，目标偏移 = 索引 × 行高，
+    /// 不夹取到 Extent 内（ScrollViewer 自身对越界偏移有兜底）。滚动容器尚未解析时退化为
+    /// <see cref="ItemsControl.ScrollIntoView"/> 尽力定位。与滚动镜像共用的
+    /// <see cref="ScrollListToIndex"/> 保持夹取行为不变。</para>
+    /// Diff-navigation-specific: top-aligns a ListBox to the given row index, target offset =
+    /// index × row height, without clamping to the Extent (the ScrollViewer itself bounds
+    /// out-of-range offsets). Falls back to <c>ScrollIntoView</c> when the scroll container is not
+    /// resolved yet. The mirror-shared <see cref="ScrollListToIndex"/> keeps its clamping behavior.
+    /// </summary>
+    private static void ScrollListTopAligned(ListBox list, ScrollViewer? scroll, int index)
+    {
+        if (list.ItemsSource is not IReadOnlyList<CompareRowViewModel> rows || rows.Count == 0)
+        {
+            return;
+        }
+
+        index = Math.Clamp(index, 0, rows.Count - 1);
+
+        if (scroll is null)
+        {
+            list.ScrollIntoView(index);
+            return;
+        }
+
+        var rowHeight = GetRowHeight(list);
+        if (rowHeight <= 0)
+        {
+            list.ScrollIntoView(index);
+            return;
+        }
+
+        scroll.Offset = new Vector(scroll.Offset.X, index * rowHeight);
     }
 
     // ===== 系统文件拖拽（原实现保留） =====

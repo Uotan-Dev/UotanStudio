@@ -401,10 +401,57 @@ public sealed class FolderCompareService
 
     private static async Task<bool> AreFilesEqualAsync(string leftPath, string rightPath, CancellationToken ct)
     {
-        var leftHash = await ComputeSha256Async(leftPath, ct).ConfigureAwait(false);
-        var rightHash = await ComputeSha256Async(rightPath, ct).ConfigureAwait(false);
-        return leftHash.AsSpan().SequenceEqual(rightHash);
+        // 等长文件先分块逐块 SequenceEqual 早退比较（不同即停）；SHA256 仅在
+        // 块比较无法判定时不再需要——块比较本身已是精确判定，直接返回结果，
+        // 避免等长且相同的文件再各读一遍算哈希。
+        // For equal-length files, compare in chunks with early exit on the first
+        // difference; the chunk comparison is already an exact verdict, so no extra
+        // SHA-256 pass is performed for equal-length files.
+        var length = new FileInfo(leftPath).Length;
+        await using var left = new FileStream(
+            leftPath, FileMode.Open, FileAccess.Read, FileShare.Read, 0,
+            FileOptions.Asynchronous | FileOptions.RandomAccess);
+        await using var right = new FileStream(
+            rightPath, FileMode.Open, FileAccess.Read, FileShare.Read, 0,
+            FileOptions.Asynchronous | FileOptions.RandomAccess);
+
+        var bufferA = System.Buffers.ArrayPool<byte>.Shared.Rent(ChunkSize);
+        var bufferB = System.Buffers.ArrayPool<byte>.Shared.Rent(ChunkSize);
+        try
+        {
+            long position = 0;
+            while (position < length)
+            {
+                ct.ThrowIfCancellationRequested();
+                var count = (int)Math.Min(ChunkSize, length - position);
+                var readA = await left.ReadAsync(bufferA.AsMemory(0, count), ct).ConfigureAwait(false);
+                var readB = await right.ReadAsync(bufferB.AsMemory(0, count), ct).ConfigureAwait(false);
+                if (readA != count || readB != count)
+                {
+                    // 文件在比较期间被缩短：视为不同。
+                    // The file shrank mid-comparison: treat as different.
+                    return false;
+                }
+                if (!bufferA.AsSpan(0, count).SequenceEqual(bufferB.AsSpan(0, count)))
+                {
+                    return false;
+                }
+                position += count;
+            }
+            return true;
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(bufferA);
+            System.Buffers.ArrayPool<byte>.Shared.Return(bufferB);
+        }
     }
+
+    /// <summary>
+    /// Chunk size for the streaming equality comparison.
+    /// <para>流式相等比较的分块大小。</para>
+    /// </summary>
+    private const int ChunkSize = 1024 * 1024;
 
     private static async Task<byte[]> ComputeSha256Async(string path, CancellationToken ct)
     {

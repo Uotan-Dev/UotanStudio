@@ -122,6 +122,17 @@ public sealed partial class CompareViewModel : Document
     [ObservableProperty] private int _selectedIndex = -1;
 
     /// <summary>
+    /// <para>差异导航滚动请求：由上一处/下一处差异命令写入目标行索引，视图据此把两栏
+    /// 顶部对齐滚动到该行；普通点选不写此属性（不触发滚动）。先写 -1 再写目标值以保证
+    /// 同一索引重复导航也能再次触发属性通知。</para>
+    /// Diff-navigation scroll request: written by the prev/next-diff commands with the target row
+    /// index; the view top-aligns both panes to that row. Plain clicks never write it (no scroll
+    /// happens). Written as -1 first, then the target, so re-navigating to the same index still
+    /// raises a property-change notification.
+    /// </summary>
+    [ObservableProperty] private int _scrollToIndex = -1;
+
+    /// <summary>
     /// <para>是否正在后台加载/比对（驱动忙碌指示）。</para>
     /// Whether a background load/comparison is running (drives the busy indicator).
     /// </summary>
@@ -739,6 +750,8 @@ public sealed partial class CompareViewModel : Document
             if (Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
             {
                 SelectedIndex = idx;
+                ScrollToIndex = -1;
+                ScrollToIndex = idx;
                 return;
             }
         }
@@ -763,6 +776,8 @@ public sealed partial class CompareViewModel : Document
             if (Rows[idx].IsLeftDiff || Rows[idx].IsRightDiff)
             {
                 SelectedIndex = idx;
+                ScrollToIndex = -1;
+                ScrollToIndex = idx;
                 return;
             }
         }
@@ -1319,6 +1334,17 @@ public sealed partial class CompareViewModel : Document
         var rows = new List<CompareRowViewModel>();
         using var stream = new FileStream(
             path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
+
+        // 可 seek 流一次性按流长度做字节上限检查，消除每行 Encoding.UTF8.GetByteCount
+        // 的重复全文扫描；非 seek 流保留逐行累计。
+        // Seekable streams check the byte cap once against the stream length, removing the
+        // per-line Encoding.UTF8.GetByteCount rescan; non-seekable streams keep per-line counting.
+        var perLineCounting = !stream.CanSeek;
+        if (!perLineCounting && stream.Length > maxBytes)
+        {
+            throw new FormatException($"Text file exceeds the {maxBytes} byte limit.");
+        }
+
         using var reader = new StreamReader(
             stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 81920, leaveOpen: false);
 
@@ -1334,10 +1360,13 @@ public sealed partial class CompareViewModel : Document
                 throw new FormatException($"Text file exceeds the {maxLines} line limit.");
             }
 
-            totalBytes += Encoding.UTF8.GetByteCount(line);
-            if (totalBytes > maxBytes)
+            if (perLineCounting)
             {
-                throw new FormatException($"Text file exceeds the {maxBytes} byte limit.");
+                totalBytes += Encoding.UTF8.GetByteCount(line);
+                if (totalBytes > maxBytes)
+                {
+                    throw new FormatException($"Text file exceeds the {maxBytes} byte limit.");
+                }
             }
 
             lineNumber++;
