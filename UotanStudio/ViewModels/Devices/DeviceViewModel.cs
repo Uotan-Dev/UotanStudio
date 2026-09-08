@@ -777,36 +777,37 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task ConnectAsync()
     {
-        if (SelectedDevice == null)
+        var device = SelectedDevice;
+        if (device == null)
         {
             return;
         }
 
-        StatusText = $"{LanguageService.Instance.GetString("Device_Connecting")} {SelectedDevice.Serial}";
+        StatusText = $"{LanguageService.Instance.GetString("Device_Connecting")} {device.Serial}";
         try
         {
-            var ok = await Task.Run(() => SelectedDevice.Protocol switch
+            var ok = await Task.Run(() => device.Protocol switch
             {
-                DeviceProtocolKind.Fastboot => TryFastboot(SelectedDevice),
+                DeviceProtocolKind.Fastboot => TryFastboot(device),
                 DeviceProtocolKind.Edl => true, // EDL 握手需要 programmer，此处仅确认设备在位
-                DeviceProtocolKind.Rkdl => TryRkdl(SelectedDevice),
-                DeviceProtocolKind.Adb => TryAdb(SelectedDevice),
-                _ => TryAdb(SelectedDevice),
+                DeviceProtocolKind.Rkdl => TryRkdl(device),
+                DeviceProtocolKind.Adb => TryAdb(device),
+                _ => TryAdb(device),
             }).ConfigureAwait(true);
 
-            SelectedDevice.State = ok ? SelectedDevice.State : "offline";
+            device.State = ok ? device.State : "offline";
             StatusText = ok
-                ? $"{LanguageService.Instance.GetString("Device_Connect")} {SelectedDevice.Serial} OK"
-                : $"{LanguageService.Instance.GetString("Device_Connect")} {SelectedDevice.Serial} FAIL";
+                ? $"{LanguageService.Instance.GetString("Device_Connect")} {device.Serial} OK"
+                : $"{LanguageService.Instance.GetString("Device_Connect")} {device.Serial} FAIL";
             LogService.Instance.Write(ok ? LogLevel.Info : LogLevel.Error, "DeviceManager",
-                $"Connect {SelectedDevice.Serial} ({SelectedDevice.Mode}): {(ok ? "OK" : "FAIL")}");
+                $"Connect {device.Serial} ({device.Mode}): {(ok ? "OK" : "FAIL")}");
             OnPropertyChanged(nameof(DeviceDetail));
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Connect")} {SelectedDevice.Serial} FAIL";
+            StatusText = $"{LanguageService.Instance.GetString("Device_Connect")} {device.Serial} FAIL";
             LogService.Instance.Write(LogLevel.Error, "DeviceManager",
-                $"Connect {SelectedDevice.Serial} failed: {ex.Message}");
+                $"Connect {device.Serial} failed: {ex.Message}");
         }
     }
 
@@ -873,29 +874,30 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task DisconnectAsync()
     {
-        if (SelectedDevice == null)
+        var device = SelectedDevice;
+        if (device == null)
         {
             return;
         }
 
-        StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {SelectedDevice.Serial}...";
+        StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial}...";
         try
         {
-            if (SelectedDevice.Transport == "Network")
+            if (device.Transport == "Network")
             {
                 var client = DeviceMonitorService.Instance.AdbServerClient;
                 if (client is not null)
                 {
-                    await client.DisconnectAsync(SelectedDevice.Serial).ConfigureAwait(true);
+                    await client.DisconnectAsync(device.Serial).ConfigureAwait(true);
                 }
             }
-            SelectedDevice.State = "offline";
-            StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {SelectedDevice.Serial} OK";
+            device.State = "offline";
+            StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial} OK";
             OnPropertyChanged(nameof(DeviceDetail));
         }
         catch
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {SelectedDevice.Serial} FAIL";
+            StatusText = $"{LanguageService.Instance.GetString("Device_Disconnect")} {device.Serial} FAIL";
         }
     }
 
@@ -908,7 +910,8 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task RebootAsync(string? mode)
     {
-        if (SelectedDevice == null || string.IsNullOrEmpty(mode))
+        var device = SelectedDevice;
+        if (device == null || string.IsNullOrEmpty(mode))
         {
             return;
         }
@@ -923,38 +926,34 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             _ => mode
         };
 
-        var tcs = new TaskCompletionSource<bool>();
-        RebootConfirmationRequested?.Invoke(this, (mode, modeDisplayName, tcs));
-        var confirmed = await tcs.Task;
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null) return;
+        var confirmed = await DialogService.ConfirmAsync(owner,
+            LanguageService.Instance.GetString("Device_RebootConfirmTitle"),
+            string.Format(LanguageService.Instance.GetString("Device_RebootConfirmMessage"), modeDisplayName) + $"\n{device.Serial}");
         if (!confirmed)
         {
             return;
         }
 
-        StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {SelectedDevice.Serial} -> {mode}...";
+        StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode}...";
         try
         {
-            var ok = await DeviceMonitorService.Instance.RebootAsync(SelectedDevice.Device, mode).ConfigureAwait(true);
+            var ok = await DeviceMonitorService.Instance.RebootAsync(device.Device, mode).ConfigureAwait(true);
             StatusText = ok
-                ? $"{LanguageService.Instance.GetString("Device_Reboot")} {SelectedDevice.Serial} -> {mode} OK"
-                : $"{LanguageService.Instance.GetString("Device_Reboot")} {SelectedDevice.Serial} -> {mode} FAIL";
+                ? $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} OK"
+                : $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} FAIL";
             LogService.Instance.Write(ok ? LogLevel.Info : LogLevel.Error, "DeviceManager",
-                $"Reboot {SelectedDevice.Serial} -> {mode}: {(ok ? "OK" : "FAIL")}");
+                $"Reboot {device.Serial} -> {mode}: {(ok ? "OK" : "FAIL")}");
         }
         catch (Exception ex)
         {
-            StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {SelectedDevice.Serial} -> {mode} FAIL";
+            StatusText = $"{LanguageService.Instance.GetString("Device_Reboot")} {device.Serial} -> {mode} FAIL";
             LogService.Instance.Write(LogLevel.Error, "DeviceManager",
-                $"Reboot {SelectedDevice.Serial} -> {mode} failed: {ex.Message}");
+                $"Reboot {device.Serial} -> {mode} failed: {ex.Message}");
         }
     }
 
-    /// <summary>
-    /// <para>当需要确认重启操作时引发，由视图处理对话框并将结果写入 TaskCompletionSource。</para>
-    /// Raised when a reboot operation needs confirmation; the view handles the dialog
-    /// and writes the result to the TaskCompletionSource.
-    /// </summary>
-    public event EventHandler<(string Mode, string ModeDisplayName, TaskCompletionSource<bool> Confirmation)>? RebootConfirmationRequested;
 
     // ===== 快速固件操作 / Quick firmware operations =====
 
@@ -1085,11 +1084,11 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// <para>快速刷写入口：为选中设备选择镜像并刷写到指定分区（默认 boot），经
     /// <see cref="FlashService.FlashImageAsync"/> 执行，进度与结果回报到状态栏与统一日志。
-    /// 刷写前会经 <see cref="FlashConfirmationRequested"/> 请求用户确认。</para>
+    /// 刷写前会经 DialogService 请求用户确认。</para>
     /// Quick flash entry: picks an image and flashes it to the given partition (default "boot") on
     /// the selected device via <see cref="FlashService.FlashImageAsync"/>, reporting progress and
     /// results to the status bar and unified log. User confirmation is requested through
-    /// <see cref="FlashConfirmationRequested"/> before flashing.
+    /// DialogService before flashing.
     /// </summary>
     /// <param name="partition"><para>目标分区名；null 时使用 "boot"。</para>The target partition; "boot" when null.</param>
     [RelayCommand(CanExecute = nameof(CanQuickFlash))]
@@ -1129,12 +1128,10 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         }
 
         var imagePath = files[0].Path.LocalPath;
-        var tcs = new TaskCompletionSource<bool>();
-        FlashConfirmationRequested?.Invoke(this, (
+        if (topLevel is not Avalonia.Controls.Window owner) return;
+        if (!await DialogService.ConfirmAsync(owner,
             LanguageService.Instance.GetString("Device_FlashConfirmTitle"),
-            LanguageService.Instance.GetString("Device_FlashConfirmMessage"),
-            tcs));
-        if (!await tcs.Task.ConfigureAwait(true))
+            LanguageService.Instance.GetString("Device_FlashConfirmMessage") + $"\n{device.Serial}\n{partitionName}\n{imagePath}"))
         {
             return;
         }
@@ -1480,12 +1477,6 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>
-    /// <para>当需要确认快速刷写操作时引发，由视图处理对话框并将结果写入 TaskCompletionSource。</para>
-    /// Raised when a quick flash operation needs confirmation; the view handles the dialog
-    /// and writes the result to the TaskCompletionSource.
-    /// </summary>
-    public event EventHandler<(string Title, string Message, TaskCompletionSource<bool> Confirmation)>? FlashConfirmationRequested;
 
     /// <summary>
     /// <para>取消订阅设备变更事件。</para>

@@ -19,44 +19,6 @@ public partial class DeviceView : UserControl
     public DeviceView()
     {
         InitializeComponent();
-        DataContextChanged += OnDataContextChanged;
-    }
-
-    private void OnDataContextChanged(object? sender, System.EventArgs e)
-    {
-        if (DataContext is DeviceViewModel vm)
-        {
-            vm.RebootConfirmationRequested -= OnRebootConfirmationRequested;
-            vm.RebootConfirmationRequested += OnRebootConfirmationRequested;
-            vm.FlashConfirmationRequested -= OnFlashConfirmationRequested;
-            vm.FlashConfirmationRequested += OnFlashConfirmationRequested;
-        }
-    }
-
-    private async void OnRebootConfirmationRequested(object? sender, (string Mode, string ModeDisplayName, TaskCompletionSource<bool> Confirmation) e)
-    {
-        var owner = this.FindAncestorOfType<Window>();
-        if (owner is null)
-        {
-            e.Confirmation.TrySetResult(false);
-            return;
-        }
-
-        var title = LanguageService.Instance.GetString("Device_RebootConfirmTitle");
-        var message = string.Format(LanguageService.Instance.GetString("Device_RebootConfirmMessage"), e.ModeDisplayName);
-        e.Confirmation.TrySetResult(await DialogService.ConfirmAsync(owner, title, message));
-    }
-
-    private async void OnFlashConfirmationRequested(object? sender, (string Title, string Message, TaskCompletionSource<bool> Confirmation) e)
-    {
-        var owner = this.FindAncestorOfType<Window>();
-        if (owner is null)
-        {
-            e.Confirmation.TrySetResult(false);
-            return;
-        }
-
-        e.Confirmation.TrySetResult(await DialogService.ConfirmAsync(owner, e.Title, e.Message));
     }
 
     // ===== 设备条目右键菜单 / Device item context menu =====
@@ -85,7 +47,7 @@ public partial class DeviceView : UserControl
     {
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
         {
-            vm.ConnectCommand.Execute(null);
+            if (vm.ConnectCommand.CanExecute(null)) vm.ConnectCommand.Execute(null);
         }
     }
 
@@ -94,7 +56,7 @@ public partial class DeviceView : UserControl
     {
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
         {
-            vm.DisconnectCommand.Execute(null);
+            if (vm.DisconnectCommand.CanExecute(null)) vm.DisconnectCommand.Execute(null);
         }
     }
 
@@ -104,7 +66,7 @@ public partial class DeviceView : UserControl
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm
             && sender is MenuItem { CommandParameter: string mode })
         {
-            vm.RebootCommand.Execute(mode);
+            if (vm.RebootCommand.CanExecute(mode)) vm.RebootCommand.Execute(mode);
         }
     }
 
@@ -113,7 +75,7 @@ public partial class DeviceView : UserControl
     {
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
         {
-            vm.OpenAdbShellCommand.Execute(null);
+            if (vm.OpenAdbShellCommand.CanExecute(null)) vm.OpenAdbShellCommand.Execute(null);
         }
     }
 
@@ -122,7 +84,7 @@ public partial class DeviceView : UserControl
     {
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
         {
-            vm.FastbootReadInfoCommand.Execute(null);
+            if (vm.FastbootReadInfoCommand.CanExecute(null)) vm.FastbootReadInfoCommand.Execute(null);
         }
     }
 
@@ -131,7 +93,7 @@ public partial class DeviceView : UserControl
     {
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
         {
-            vm.QuickFlashCommand.Execute("boot");
+            if (vm.QuickFlashCommand.CanExecute("boot")) vm.QuickFlashCommand.Execute("boot");
         }
     }
 
@@ -140,7 +102,7 @@ public partial class DeviceView : UserControl
     {
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
         {
-            vm.BackupPartitionCommand.Execute("boot");
+            if (vm.BackupPartitionCommand.CanExecute("boot")) vm.BackupPartitionCommand.Execute("boot");
         }
     }
 
@@ -149,7 +111,7 @@ public partial class DeviceView : UserControl
     {
         if (SelectMenuDevice(sender) is not null && DataContext is DeviceViewModel vm)
         {
-            vm.RestorePartitionCommand.Execute("boot");
+            if (vm.RestorePartitionCommand.CanExecute("boot")) vm.RestorePartitionCommand.Execute("boot");
         }
     }
 }

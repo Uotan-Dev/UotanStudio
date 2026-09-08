@@ -18,5 +18,5 @@ internal sealed class WorkspaceDeviceTool : Tool
     /// <para>获取面板内容视图。</para>
     /// Gets the content view of the panel.
     /// </summary>
-    public Control Content => new DeviceView();
+    public Control Content { get; } = new DeviceView { DataContext = ViewModels.Devices.DeviceViewModel.EnsureInstance() };
 }
