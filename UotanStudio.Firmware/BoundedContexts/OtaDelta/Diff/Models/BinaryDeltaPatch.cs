@@ -40,57 +40,97 @@ internal static class BinaryDeltaPatch
         using var diff = Decoder(diffRange, extended ? header[6] : (byte)1);
         using var extra = Decoder(extraRange, extended ? header[7] : (byte)1);
         using var boundedOutput = new CountingWriteStream(output, outputLength, leaveOpen: true, cancellationToken: ct);
-        var deltaBuffer = new byte[64 * 1024];
-        var oldBuffer = new byte[deltaBuffer.Length];
-        Span<byte> tuple = stackalloc byte[24];
-        long oldPosition = 0;
-        long newPosition = 0;
-        long controlEntries = 0;
-        while (newPosition < outputLength)
+        // 64KB 工作缓冲租借自 ArrayPool，替代每次调用的两份分配。
+        // The 64KB working buffers are rented from ArrayPool instead of two per-call allocations.
+        var deltaBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(64 * 1024);
+        var oldBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(deltaBuffer.Length);
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            if (++controlEntries > Math.Max(outputLength, 1024 * 1024)) throw new InvalidDataException("Binary patch control-entry limit exceeded.");
-            control.ReadExactly(tuple);
-            var addLength = ReadNumber(tuple[..8]);
-            var extraLength = ReadNumber(tuple[8..16]);
-            var adjustment = ReadNumber(tuple[16..24]);
-            if (addLength < 0 || extraLength < 0 || addLength > outputLength - newPosition ||
-                extraLength > outputLength - newPosition - addLength)
-                throw new InvalidDataException("Invalid binary patch control tuple.");
-            long remaining = addLength;
-            while (remaining > 0)
+            Span<byte> tuple = stackalloc byte[24];
+            long oldPosition = 0;
+            long newPosition = 0;
+            long controlEntries = 0;
+            while (newPosition < outputLength)
             {
                 ct.ThrowIfCancellationRequested();
-                var count = (int)Math.Min(remaining, deltaBuffer.Length);
-                diff.ReadExactly(deltaBuffer.AsSpan(0, count));
-                Array.Clear(oldBuffer, 0, count);
-                var end = checked(oldPosition + count);
-                var validStart = Math.Max(0, oldPosition);
-                var validEnd = Math.Min(source.Length, end);
-                if (validStart < validEnd)
+                if (++controlEntries > Math.Max(outputLength, 1024 * 1024)) throw new InvalidDataException("Binary patch control-entry limit exceeded.");
+                control.ReadExactly(tuple);
+                var addLength = ReadNumber(tuple[..8]);
+                var extraLength = ReadNumber(tuple[8..16]);
+                var adjustment = ReadNumber(tuple[16..24]);
+                if (addLength < 0 || extraLength < 0 || addLength > outputLength - newPosition ||
+                    extraLength > outputLength - newPosition - addLength)
+                    throw new InvalidDataException("Invalid binary patch control tuple.");
+                long remaining = addLength;
+                while (remaining > 0)
                 {
-                    source.Position = validStart;
-                    source.ReadExactly(oldBuffer.AsSpan(checked((int)(validStart - oldPosition)), checked((int)(validEnd - validStart))));
+                    ct.ThrowIfCancellationRequested();
+                    var count = (int)Math.Min(remaining, deltaBuffer.Length);
+                    diff.ReadExactly(deltaBuffer.AsSpan(0, count));
+                    Array.Clear(oldBuffer, 0, count);
+                    var end = checked(oldPosition + count);
+                    var validStart = Math.Max(0, oldPosition);
+                    var validEnd = Math.Min(source.Length, end);
+                    if (validStart < validEnd)
+                    {
+                        source.Position = validStart;
+                        source.ReadExactly(oldBuffer.AsSpan(checked((int)(validStart - oldPosition)), checked((int)(validEnd - validStart))));
+                    }
+                    AddBytesUnchecked(deltaBuffer.AsSpan(0, count), oldBuffer.AsSpan(0, count));
+                    boundedOutput.Write(deltaBuffer, 0, count);
+                    oldPosition = end;
+                    remaining -= count;
                 }
-                for (var i = 0; i < count; i++) deltaBuffer[i] = unchecked((byte)(deltaBuffer[i] + oldBuffer[i]));
-                boundedOutput.Write(deltaBuffer, 0, count);
-                oldPosition = end;
-                remaining -= count;
+                remaining = extraLength;
+                while (remaining > 0)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var count = (int)Math.Min(remaining, deltaBuffer.Length);
+                    extra.ReadExactly(deltaBuffer.AsSpan(0, count));
+                    boundedOutput.Write(deltaBuffer, 0, count);
+                    remaining -= count;
+                }
+                oldPosition = checked(oldPosition + adjustment);
+                newPosition += addLength + extraLength;
             }
-            remaining = extraLength;
-            while (remaining > 0)
-            {
-                ct.ThrowIfCancellationRequested();
-                var count = (int)Math.Min(remaining, deltaBuffer.Length);
-                extra.ReadExactly(deltaBuffer.AsSpan(0, count));
-                boundedOutput.Write(deltaBuffer, 0, count);
-                remaining -= count;
-            }
-            oldPosition = checked(oldPosition + adjustment);
-            newPosition += addLength + extraLength;
+            if (control.ReadByte() != -1 || diff.ReadByte() != -1 || extra.ReadByte() != -1)
+                throw new InvalidDataException("Binary patch contains unused decompressed data.");
         }
-        if (control.ReadByte() != -1 || diff.ReadByte() != -1 || extra.ReadByte() != -1)
-            throw new InvalidDataException("Binary patch contains unused decompressed data.");
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(deltaBuffer);
+            System.Buffers.ArrayPool<byte>.Shared.Return(oldBuffer);
+        }
+    }
+
+    /// <summary>
+    /// Adds two byte spans with wraparound semantics, vectorized via <see cref="System.Numerics.Vector{T}"/>.
+    /// <para>按字节回绕语义相加两个 Span，经 <see cref="System.Numerics.Vector{T}"/> 向量化。</para>
+    /// </summary>
+    private static void AddBytesUnchecked(Span<byte> target, ReadOnlySpan<byte> addend)
+    {
+        if (System.Numerics.Vector.IsHardwareAccelerated && target.Length >= System.Numerics.Vector<byte>.Count)
+        {
+            var width = System.Numerics.Vector<byte>.Count;
+            var i = 0;
+            for (; i <= target.Length - width; i += width)
+            {
+                System.Numerics.Vector.Add(
+                    new System.Numerics.Vector<byte>(target.Slice(i, width)),
+                    new System.Numerics.Vector<byte>(addend.Slice(i, width)))
+                    .CopyTo(target.Slice(i, width));
+            }
+            for (; i < target.Length; i++)
+            {
+                target[i] = unchecked((byte)(target[i] + addend[i]));
+            }
+            return;
+        }
+
+        for (var i = 0; i < target.Length; i++)
+        {
+            target[i] = unchecked((byte)(target[i] + addend[i]));
+        }
     }
 
     internal static void Create(Stream source, Stream target, Stream output, CancellationToken ct = default)
@@ -146,14 +186,23 @@ internal static class BinaryDeltaPatch
 
     internal static void CopyExactly(Stream source, Stream target, long length, CancellationToken ct = default)
     {
-        var buffer = new byte[64 * 1024];
-        while (length > 0)
+        // 缓冲租借自 ArrayPool，替代每次调用分配 64KB。
+        // The buffer is rented from ArrayPool instead of a fresh 64KB per call.
+        var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            var count = (int)Math.Min(length, buffer.Length);
-            source.ReadExactly(buffer.AsSpan(0, count));
-            target.Write(buffer, 0, count);
-            length -= count;
+            while (length > 0)
+            {
+                ct.ThrowIfCancellationRequested();
+                var count = (int)Math.Min(length, buffer.Length);
+                source.ReadExactly(buffer.AsSpan(0, count));
+                target.Write(buffer, 0, count);
+                length -= count;
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

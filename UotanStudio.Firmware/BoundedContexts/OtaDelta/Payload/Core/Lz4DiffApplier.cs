@@ -46,16 +46,35 @@ internal static class Lz4DiffApplier
         }
         if (sourcePosition != source.Length) throw new InvalidDataException("Unexpected LZ4DIFF source tail.");
         var innerPatch = patch.AsSpan(checked(16 + (int)headerLength)); byte[] plainTarget;
+        var plainTargetPooled = false;
         if (innerType == 0)
         {
-            using var result = new MemoryStream();
-            BinaryDeltaPatch.Apply(new MemoryStream(plainSource, false), new MemoryStream(innerPatch.ToArray(), false), result, targetSize);
-            if (result.Length != targetSize) throw new InvalidDataException("LZ4DIFF inner target length mismatch.");
-            plainTarget = result.ToArray();
+            // 结果直接写入池化缓冲，去掉 MemoryStream→ToArray 的整份复制。
+            // The result is written straight into a pooled buffer, skipping the
+            // MemoryStream→ToArray full copy.
+            var pooled = System.Buffers.ArrayPool<byte>.Shared.Rent(targetSize);
+            try
+            {
+                using var result = new MemoryStream(pooled, 0, targetSize, writable: true);
+                BinaryDeltaPatch.Apply(new MemoryStream(plainSource, false), new MemoryStream(innerPatch.ToArray(), false), result, targetSize);
+                if (result.Length != targetSize) throw new InvalidDataException("LZ4DIFF inner target length mismatch.");
+                plainTarget = pooled;
+                plainTargetPooled = true;
+            }
+            catch
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(pooled);
+                throw;
+            }
         }
         else if (innerType == 1) plainTarget = PuffDiffApplier.Apply(innerPatch, plainSource);
         else throw new InvalidDataException("Unknown LZ4DIFF inner patch type.");
-        if (plainTarget.Length != targetSize) throw new InvalidDataException("LZ4DIFF target length mismatch.");
+        // 池化路径的长度已由内层 MemoryStream(result.Length) 校验；池化缓冲容量可能
+        // 大于 targetSize，不能按数组长度校验。
+        // The pooled path's length is already validated via the inner MemoryStream
+        // (result.Length); the pooled buffer's capacity may exceed targetSize, so the
+        // array length must not be checked.
+        if (!plainTargetPooled && plainTarget.Length != targetSize) throw new InvalidDataException("LZ4DIFF target length mismatch.");
         var storedTotal = targetInfo.Blocks.Aggregate(0L, (length, block) => checked(length + block.StoredLength));
         if (storedTotal != expectedLength) throw new InvalidDataException("LZ4DIFF stored output does not match destination extents.");
         var output = new byte[expectedLength]; int position = 0;
@@ -80,6 +99,10 @@ internal static class Lz4DiffApplier
                 result.GetBuffer().AsSpan(0, stored.Length).CopyTo(stored);
             }
             position += block.StoredLength;
+        }
+        if (plainTargetPooled)
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(plainTarget);
         }
         return output;
     }

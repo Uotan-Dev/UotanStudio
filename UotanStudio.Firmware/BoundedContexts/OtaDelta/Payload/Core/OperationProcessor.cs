@@ -41,23 +41,66 @@ internal static class OperationProcessor
             const int maximumOperationBytes = 256 * 1024 * 1024;
             if (oldData.Length > maximumOperationBytes || patch.Length > maximumOperationBytes || output.Length > maximumOperationBytes)
                 throw new InvalidDataException("This delta codec exceeds the supported 256 MiB operation limit.");
-            var oldBytes = new byte[checked((int)oldData.Length)];
-            var patchBytes = new byte[checked((int)patch.Length)];
-            oldData.ReadExactly(oldBytes);
-            patch.ReadExactly(patchBytes);
-            if (op.Type == InstallOperation.Types.Type.Puffdiff) output.Write(PuffDiffApplier.Apply(patchBytes, oldBytes));
+            if (op.Type == InstallOperation.Types.Type.Puffdiff)
+            {
+                // PuffDiff 支持 Span 输入：old/patch 缓冲租借自 ArrayPool（finally 归还），
+                // 消除最高 2×256 MiB 的 LOH 分配。
+                // PuffDiff accepts Span inputs: old/patch buffers are rented from ArrayPool
+                // (returned in finally), removing up to 2x256 MiB LOH allocations.
+                var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
+                var patchBytes = ArrayPool<byte>.Shared.Rent(checked((int)patch.Length));
+                try
+                {
+                    oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
+                    patch.ReadExactly(patchBytes.AsSpan(0, (int)patch.Length));
+                    output.Write(PuffDiffApplier.Apply(
+                        patchBytes.AsSpan(0, (int)patch.Length),
+                        oldBytes.AsSpan(0, (int)oldData.Length)));
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(oldBytes);
+                    ArrayPool<byte>.Shared.Return(patchBytes);
+                }
+            }
             else if (op.Type == InstallOperation.Types.Type.Zucchini)
             {
-                var result = new byte[checked((int)output.Length)];
-                using var decoded = new MemoryStream();
-                using (var decoder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.StrictBrotliReadStream(new MemoryStream(patchBytes, false)))
-                using (var bounded = new CountingWriteStream(decoded, maximumOperationBytes, leaveOpen: true, cancellationToken: ct))
-                    decoder.CopyTo(bounded);
-                ZucchiniPatchApplier.Apply(oldBytes, decoded.GetBuffer().AsSpan(0, checked((int)decoded.Length)), result);
-                output.Write(result);
+                // old/result 缓冲池化；解码数据长度不等于输出长度，保留可扩展
+                // MemoryStream 并用 GetBuffer() 零复制取出（patch 流直接喂解码器，免物化）。
+                // old/result buffers are pooled; the decoded size differs from the output size,
+                // so keep an expandable MemoryStream and extract via GetBuffer() (zero copy).
+                // The patch stream feeds the decoder directly, avoiding full materialization.
+                var oldBytes = ArrayPool<byte>.Shared.Rent(checked((int)oldData.Length));
+                var result = ArrayPool<byte>.Shared.Rent(checked((int)output.Length));
+                try
+                {
+                    oldData.ReadExactly(oldBytes.AsSpan(0, (int)oldData.Length));
+                    using var decoded = new MemoryStream();
+                    using (var decoder = new UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.StrictBrotliReadStream(patch))
+                    using (var bounded = new CountingWriteStream(decoded, maximumOperationBytes, leaveOpen: true, cancellationToken: ct))
+                        decoder.CopyTo(bounded);
+                    ZucchiniPatchApplier.Apply(
+                        oldBytes.AsSpan(0, (int)oldData.Length),
+                        decoded.GetBuffer().AsSpan(0, checked((int)decoded.Length)),
+                        result.AsSpan(0, (int)output.Length));
+                    output.Write(result.AsSpan(0, (int)output.Length));
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(oldBytes);
+                    ArrayPool<byte>.Shared.Return(result);
+                }
             }
             else if (op.Type is InstallOperation.Types.Type.Lz4diffBsdiff or InstallOperation.Types.Type.Lz4diffPuffdiff)
+            {
+                // Lz4DiffApplier 仅提供 byte[] API，保持精确长度分配（原行为）。
+                // Lz4DiffApplier only exposes a byte[] API; keep exact-length allocations (original behavior).
+                var oldBytes = new byte[checked((int)oldData.Length)];
+                var patchBytes = new byte[checked((int)patch.Length)];
+                oldData.ReadExactly(oldBytes);
+                patch.ReadExactly(patchBytes);
                 output.Write(Lz4DiffApplier.Apply(oldBytes, patchBytes, checked((int)output.Length)));
+            }
             else throw new PayloadUnsupportedOperationException("Unsupported delta operation.", op.Type.ToString());
         }
         output.Complete();
