@@ -270,4 +270,12 @@
     <x:String x:Key="Log_RegexTimeout">Regular expression timed out; simplify the pattern</x:String>
     <x:String x:Key="Log_FilterAll">All</x:String>
 
+    <x:String x:Key="FindReplace_Searching">Searching...</x:String>
+    <x:String x:Key="FindReplace_NoMatches">No matches</x:String>
+    <x:String x:Key="FindReplace_ResultCount">{0} of {1}</x:String>
+    <x:String x:Key="FindReplace_NoProject">No project is open.</x:String>
+    <x:String x:Key="FindReplace_Changed">The document changed after searching. Search again.</x:String>
+    <x:String x:Key="FindReplace_Replaced">Replaced {0} matches</x:String>
+    <x:String x:Key="FindReplace_ConfirmReplaceAll">Replace {0} matches in {1} documents?</x:String>
+    <x:String x:Key="FindReplace_EditorNotReady">The editor is not ready. Retry when the document is visible.</x:String>
 </ResourceDictionary>

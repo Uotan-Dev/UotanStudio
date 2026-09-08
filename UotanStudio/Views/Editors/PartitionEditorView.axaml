@@ -6,7 +6,7 @@
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.PartitionEditorView"
              x:DataType="viewmodels:PartitionEditorViewModel">
-  <DockPanel>
+  <DockPanel IsEnabled="{Binding !IsBusy}">
     <!-- 顶部工具栏：数据源描述 + 解析错误状态 -->
     <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>

@@ -19,7 +19,7 @@ public sealed class ProjectOperationsService
 {
     private readonly SemaphoreSlim _operationGate = new(1, 1);
     internal bool IsBusy => _operationGate.CurrentCount == 0;
-    internal Func<Task>? BeforeProjectChangeAsync { get; set; }
+    internal Func<Task<bool>>? BeforeProjectChangeAsync { get; set; }
 
     internal async Task WaitForIdleAsync()
     {
@@ -29,7 +29,12 @@ public sealed class ProjectOperationsService
 
     private async Task RunOperationAsync(Func<Task> operation, bool changingProject = false)
     {
-        if (changingProject && BeforeProjectChangeAsync is { } flush) await flush();
+        if (changingProject && ImageViewModel.Instance.IsOperating)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Projects", "Wait for the image operation before switching projects. 请等待镜像操作完成后再切换工程。");
+            return;
+        }
+        if (changingProject && BeforeProjectChangeAsync is { } flush && !await flush()) return;
         await _operationGate.WaitAsync();
         try { await operation(); }
         finally { _operationGate.Release(); }
@@ -264,9 +269,9 @@ public sealed class ProjectOperationsService
     /// Saves the current project: first tries to save the active document editor, then persists the
     /// project snapshot. Returns false when there is no path so the caller can trigger Save As.
     /// </summary>
-    public async Task<bool> SaveAsync()
+    public async Task<bool> SaveAsync(bool saveActiveDocument = true)
     {
-        await SaveActiveDocumentAsync();
+        if (saveActiveDocument) await SaveActiveDocumentAsync();
 
         if (string.IsNullOrEmpty(CurrentProjectPath))
         {
@@ -442,31 +447,18 @@ public sealed class ProjectOperationsService
             return;
         }
 
-        if (active is FileViewModel { IsDirty: true, IsBinary: false } text)
-        {
-            await text.SaveAsync();
-            return;
-        }
-
-        CommunityToolkit.Mvvm.Input.IAsyncRelayCommand? saveCmd = active switch
-        {
-            ManifestEditorViewModel m => m.SaveCommand,
-            DtbEditorViewModel d => d.SaveCommand,
-            PartitionEditorViewModel p => p.SaveCommand,
-            _ => null
-        };
-
-        if (saveCmd is not null && saveCmd.CanExecute(null))
-        {
-            await saveCmd.ExecuteAsync(null);
-        }
+        if (Services.Workspace.DocumentSaveService.CanSave(active))
+            await Services.Workspace.DocumentSaveService.SaveAsync(active);
     }
 
     /// <summary>
     /// <para>将当前工程完整快照写入指定路径。</para>
     /// Writes the complete project snapshot to the specified path.
     /// </summary>
-    public Task PersistToAsync(string path) => RunOperationAsync(() => PersistCoreAsync(path));
+    public Task PersistToAsync(string path) => PersistToAsync(path, persistPageState: true);
+
+    internal Task PersistToAsync(string path, bool persistPageState)
+        => RunOperationAsync(() => PersistCoreAsync(path, persistPageState));
 
     private async Task PersistCoreAsync(string path, bool persistPageState = true)
     {

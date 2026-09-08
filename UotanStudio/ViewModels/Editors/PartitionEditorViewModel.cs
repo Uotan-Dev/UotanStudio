@@ -252,7 +252,7 @@ public partial class PartitionEditorViewModel : Document
     /// </summary>
     public async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(FilePath))
+        if (IsBusy || string.IsNullOrWhiteSpace(FilePath))
         {
             return;
         }
@@ -267,6 +267,7 @@ public partial class PartitionEditorViewModel : Document
             }
         }
 
+        IsBusy = true;
         try
         {
             switch (_source)
@@ -298,6 +299,7 @@ public partial class PartitionEditorViewModel : Document
         {
             CompileError = $"Failed to save partition table: {ex.Message} 保存分区表失败。";
         }
+        finally { IsBusy = false; }
     }
 
     /// <summary>

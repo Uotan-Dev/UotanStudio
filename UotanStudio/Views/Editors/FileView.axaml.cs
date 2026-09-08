@@ -10,6 +10,7 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public partial class FileView : UserControl
 {
+    private FileViewModel? _editorOwner;
     /// <summary>
     /// <para>构造文件文档视图并初始化组件。</para>
     /// Creates the file document view and initializes its components.
@@ -25,14 +26,17 @@ public partial class FileView : UserControl
             hex.BytesEdited += OnHexBytesEdited;
         }
 
-        // Wire the text editor reference for IEditable clipboard operations.
-        Loaded += (_, _) =>
-        {
-            if (this.FindControl<AvaloniaEdit.TextEditor>("Editor") is { } editor && DataContext is FileViewModel vm)
-            {
-                vm.Editor = editor;
-            }
-        };
+        Loaded += (_, _) => UpdateEditorOwner();
+        Unloaded += (_, _) => UpdateEditorOwner(detach: true);
+        DataContextChanged += (_, _) => UpdateEditorOwner();
+    }
+
+    private void UpdateEditorOwner(bool detach = false)
+    {
+        var editor = this.FindControl<AvaloniaEdit.TextEditor>("Editor");
+        if (_editorOwner is { } previous && ReferenceEquals(previous.Editor, editor)) previous.Editor = null;
+        _editorOwner = !detach && IsLoaded ? DataContext as FileViewModel : null;
+        if (_editorOwner is { } current) current.Editor = editor;
     }
 
     private void OnHexBytesEdited(object? sender, System.EventArgs e)

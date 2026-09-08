@@ -270,4 +270,12 @@
     <x:String x:Key="AI_RemoveFile">移除附件</x:String>
     <x:String x:Key="AI_AddFilesFailed">无法选择文件，请重试。</x:String>
     <x:String x:Key="AI_Send">发送消息</x:String>
+    <x:String x:Key="FindReplace_Searching">正在查找...</x:String>
+    <x:String x:Key="FindReplace_NoMatches">无匹配项</x:String>
+    <x:String x:Key="FindReplace_ResultCount">第 {0} 项，共 {1} 项</x:String>
+    <x:String x:Key="FindReplace_NoProject">尚未打开项目。</x:String>
+    <x:String x:Key="FindReplace_Changed">文档在查找后发生了变化，请重新查找。</x:String>
+    <x:String x:Key="FindReplace_Replaced">已替换 {0} 项</x:String>
+    <x:String x:Key="FindReplace_ConfirmReplaceAll">替换 {1} 个文档中的 {0} 处匹配？</x:String>
+    <x:String x:Key="FindReplace_EditorNotReady">编辑器尚未就绪，请在文档显示后重试。</x:String>
 </ResourceDictionary>

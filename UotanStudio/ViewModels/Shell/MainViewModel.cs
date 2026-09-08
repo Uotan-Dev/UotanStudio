@@ -12,10 +12,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
 {
     private readonly Services.Workspace.WorkspaceAutoSaveService _autoSave;
     internal Task InitializeAutoSaveAsync() => _autoSave.InitializeAsync();
-    internal async Task FlushAutoSaveAsync()
+    internal void ResumeAutoSave() => _autoSave.Resume();
+    internal async Task<bool> FlushAutoSaveAsync()
     {
         SettingsVM.FlushPendingSave();
-        await _autoSave.SaveOnCloseAsync();
+        return await _autoSave.SaveOnCloseAsync();
     }
     public MenuViewModel MenuVM { get; } = new();
     public WorkspaceViewModel WorkspaceVM { get; }

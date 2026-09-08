@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
+using UotanStudio.Messages;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -12,7 +13,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// DTB device-tree dual-pane editor view model: a left device-node tree plus an editable DTS source pane,
 /// with bidirectional linkage and recompile-save (DTS→DTB).
 /// </summary>
-public partial class DtbEditorViewModel : Document
+public partial class DtbEditorViewModel : Document, IEditable
 {
     private Dictionary<string, int> _lineMap = [];
 
@@ -143,9 +144,9 @@ public partial class DtbEditorViewModel : Document
 
     partial void OnSourceChanged(string value)
     {
-        if (value != Source) return;
-        // 仅当非加载过程中的文本变更才标记为已修改，加载路径手动复位 IsDirty。
-        // Mark dirty only for edits outside loading; the load path explicitly resets it.
+        // Loading and cleanup reset this after assigning the source.
+        // 加载与清理在设置源码后重置此状态。
+        IsDirty = true;
     }
 
     /// <summary>
@@ -197,6 +198,23 @@ public partial class DtbEditorViewModel : Document
         UpdateTreeStatistics(tree);
     }
 
+    /// <summary>Active source editor for workspace actions. 供工作区操作使用的源码编辑器。</summary>
+    internal AvaloniaEdit.TextEditor? Editor { get; set; }
+
+    /// <inheritdoc/>
+    public void Cut() => Editor?.Cut();
+    /// <inheritdoc/>
+    public void Copy() => Editor?.Copy();
+    /// <inheritdoc/>
+    public void Paste() => Editor?.Paste();
+    /// <inheritdoc/>
+    public void SelectAll() => Editor?.SelectAll();
+    /// <inheritdoc/>
+    public void Delete()
+    {
+        if (Editor is { SelectionLength: > 0 } editor) editor.SelectedText = string.Empty;
+    }
+
     /// <summary>
     /// <para>保存：解析 DTS 源码 → 校验 → 回编译为 DTB 字节 → 写回原文件并刷新。</para>
     /// Saves: parses the DTS source, validates it, recompiles to DTB bytes, writes back to the file and refreshes.
@@ -208,12 +226,13 @@ public partial class DtbEditorViewModel : Document
             return;
         }
 
-        var result = DtsFormat.Parse(Source);
+        var source = Source;
+        var result = DtsFormat.Parse(source);
         CompileError = result.IsSuccess
             ? string.Empty
             : string.Join("\n", result.Errors.Select(e => $"[L{e.Line}:C{e.Column}] {e.Severity}: {e.Message}"));
 
-        if (result.Tree is null)
+        if (!result.IsSuccess || result.Tree is null)
         {
             return;
         }
@@ -225,7 +244,7 @@ public partial class DtbEditorViewModel : Document
         // Refresh the raw bytes and rebuild the line map so linkage stays consistent.
         RawBytes = outBytes;
         _lineMap = DtsFormat.GetNodeLineMap(result.Tree);
-        IsDirty = false;
+        IsDirty = Source != source;
     }
 
     /// <summary>

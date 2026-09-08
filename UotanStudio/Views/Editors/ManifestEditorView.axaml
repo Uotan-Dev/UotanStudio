@@ -8,7 +8,7 @@
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.ManifestEditorView"
              x:DataType="viewmodels:ManifestEditorViewModel">
-  <DockPanel>
+  <DockPanel IsEnabled="{Binding !IsBusy}">
     <!-- 顶部工具栏：文件路径 + 解析错误状态 + 右侧视图布局切换 -->
     <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <Grid ColumnDefinitions="*,Auto,Auto">

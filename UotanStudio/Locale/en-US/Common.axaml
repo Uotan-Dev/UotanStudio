@@ -13,6 +13,12 @@
     <x:String x:Key="ViewLocator_NotFound">Not Found: </x:String>
 
     <!-- ImageView -->
+    <x:String x:Key="Image_OperationSummary">Succeeded: {0}; failed: {1}; skipped: {2}. See the log for details.</x:String>
+    <x:String x:Key="Dialog_UnsavedTitle">Unsaved Changes</x:String>
+    <x:String x:Key="Dialog_UnsavedMessage">Save changes to '{0}' before closing?</x:String>
+    <x:String x:Key="Dialog_DiscardChanges">Discard</x:String>
+    <x:String x:Key="Dialog_SaveFailed">Save Failed</x:String>
+    <x:String x:Key="Dialog_SaveIncomplete">Changes remain unsaved. Please check the document and try again.</x:String>
     <x:String x:Key="ImageView_UnpackMode">Unpack</x:String>
     <x:String x:Key="ImageView_PackMode">Pack</x:String>
     <x:String x:Key="ImageView_Refresh">Refresh</x:String>

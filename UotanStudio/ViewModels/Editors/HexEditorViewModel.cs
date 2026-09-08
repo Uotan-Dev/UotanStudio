@@ -137,9 +137,14 @@ public partial class HexEditorViewModel : Document
             return;
         }
 
+        if (IsBusy) return;
+        var path = FilePath;
+        var temporary = path + ".save-" + Guid.NewGuid().ToString("N");
+        IsBusy = true;
         try
         {
-            await File.WriteAllBytesAsync(FilePath, RawBytes).ConfigureAwait(true);
+            await File.WriteAllBytesAsync(temporary, RawBytes).ConfigureAwait(true);
+            File.Move(temporary, path, overwrite: true);
             IsDirty = false;
             CompileError = string.Empty;
             LogService.Instance.Write(LogLevel.Info, "HexEditor", $"Saved {FilePath}");
@@ -147,6 +152,11 @@ public partial class HexEditorViewModel : Document
         catch (Exception ex)
         {
             CompileError = $"Failed to save: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            if (File.Exists(temporary)) File.Delete(temporary);
         }
     }
 

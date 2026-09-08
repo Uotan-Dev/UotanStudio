@@ -10,6 +10,22 @@ namespace UotanStudio.Services;
 /// </summary>
 internal static class DialogService
 {
+    internal static Window? GetOwnerWindow() =>
+        Avalonia.Application.Current?.ApplicationLifetime is Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop
+            ? desktop.Windows.FirstOrDefault(window => window.IsActive) ?? desktop.MainWindow
+            : null;
+
+    internal static Task<MessageBoxResult> SaveChangesAsync(Window owner, string name)
+    {
+        var language = LanguageService.Instance;
+        var dialog = CreateWindow(language.GetString("Dialog_UnsavedTitle"),
+            string.Format(language.GetString("Dialog_UnsavedMessage"), name),
+            MessageBoxIcon.Warning, MessageBoxButton.YesNoCancel);
+        dialog.Resources["STRING_MENU_DIALOG_YES"] = language.GetString("Menu_Save");
+        dialog.Resources["STRING_MENU_DIALOG_NO"] = language.GetString("Dialog_DiscardChanges");
+        return dialog.ShowDialog<MessageBoxResult>(owner);
+    }
+
     internal static Task<MessageBoxResult> ShowAsync(
         Window owner, string title, string message, MessageBoxIcon icon) =>
         CreateWindow(title, message, icon, MessageBoxButton.OK)

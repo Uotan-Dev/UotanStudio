@@ -11,6 +11,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Nodes;
+using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Shell;
 
@@ -325,7 +326,13 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private async Task SaveAsync()
     {
-        if (!await _projectOps.SaveAsync())
+        if (_currentTab == ActiveTab.Workspace && WorkspaceVM?.FindDocumentsPanePublic()?.ActiveDockable is { } document
+            && DocumentSaveService.CanSave(document))
+        {
+            await DocumentSaveService.SaveAsync(document);
+            return;
+        }
+        if (!await _projectOps.SaveAsync(saveActiveDocument: _currentTab == ActiveTab.Workspace))
         {
             await SaveAsAsync();
         }
@@ -431,7 +438,14 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private async Task ExportAsync()
     {
         var topLevel = TopLevel;
-        if (topLevel == null) return;
+        if (topLevel is not Window owner) return;
+        var root = ProjectContextService.Instance.RootDirectory;
+        if (root is null)
+        {
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"),
+                LanguageService.Instance.GetString("FindReplace_NoProject"), Ursa.Controls.MessageBoxIcon.Information);
+            return;
+        }
 
         var files = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
@@ -444,7 +458,35 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             ]
         });
 
-        _ = files?.Path;
+        if (files?.TryGetLocalPath() is not { } output) return;
+        try
+        {
+            if (root != ProjectContextService.Instance.RootDirectory) throw new IOException("The active project changed.");
+            foreach (var document in WorkspaceSessionCapture.Enumerate(WorkspaceVM?.Layout).Where(DocumentSaveService.IsDirty).ToArray())
+            {
+                var path = document switch
+                {
+                    FileViewModel text => text.FilePath,
+                    HexEditorViewModel hex => hex.FilePath,
+                    DtbEditorViewModel dtb => dtb.FilePath,
+                    ManifestEditorViewModel manifest => manifest.FilePath,
+                    PartitionEditorViewModel partition => partition.FilePath,
+                    _ => null
+                };
+                if (path is null || !Path.GetFullPath(path).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root))
+                        + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!await DocumentSaveService.SaveAsync(document, owner)) return;
+            }
+            if (root != ProjectContextService.Instance.RootDirectory) throw new IOException("The active project changed.");
+            if (!await _projectOps.SaveAsync(saveActiveDocument: false)) return;
+            await Task.Run(() => ProjectArchiveService.ExportAsync(root, output));
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), output, Ursa.Controls.MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Export", ex.Message);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
     }
 
     /// <summary>
@@ -530,28 +572,22 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
     // ===== 编辑 / Edit =====
 
-    /// <summary><para>撤销操作：优先执行工作区操作历史，无历史时转发到节点编辑器。</para>Undo: executes the workspace operation history first, falling back to the node editor.</summary>
+    /// <summary><para>撤销当前页面内的编辑。</para>Undoes edits in the current page.</summary>
     [RelayCommand]
     private void Undo()
     {
-        if (OperationHistoryService.Instance.Undo())
-        {
-            return;
-        }
-
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Undo));
+        if (_currentTab == ActiveTab.NodeEditor)
+            WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Undo));
+        else CurrentTextEditor()?.Undo();
     }
 
-    /// <summary><para>重做操作：优先执行工作区操作历史，无历史时转发到节点编辑器。</para>Redo: executes the workspace operation history first, falling back to the node editor.</summary>
+    /// <summary><para>重做当前页面内的编辑。</para>Redoes edits in the current page.</summary>
     [RelayCommand]
     private void Redo()
     {
-        if (OperationHistoryService.Instance.Redo())
-        {
-            return;
-        }
-
-        WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Redo));
+        if (_currentTab == ActiveTab.NodeEditor)
+            WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Redo));
+        else CurrentTextEditor()?.Redo();
     }
 
     /// <summary><para>剪切选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Cut selection: delegates to the active document first, falling back to the node editor.</summary>
@@ -559,7 +595,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void Cut()
     {
         if (TryGetEditable() is { } e) e.Cut();
-        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Cut));
+        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Cut));
     }
 
     /// <summary><para>复制选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Copy selection: delegates to the active document first, falling back to the node editor.</summary>
@@ -567,7 +603,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void Copy()
     {
         if (TryGetEditable() is { } e) e.Copy();
-        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy));
+        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy));
     }
 
     /// <summary><para>粘贴剪贴板内容：优先委托给活动文档，否则转发到节点编辑器。</para>Paste clipboard contents: delegates to the active document first, falling back to the node editor.</summary>
@@ -575,7 +611,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void Paste()
     {
         if (TryGetEditable() is { } e) e.Paste();
-        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste));
+        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste));
     }
 
     /// <summary><para>删除选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Delete selection: delegates to the active document first, falling back to the node editor.</summary>
@@ -583,7 +619,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void Delete()
     {
         if (TryGetEditable() is { } e) e.Delete();
-        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Delete));
+        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Delete));
     }
 
     /// <summary><para>全选：优先委托给活动文档，否则转发到节点编辑器。</para>Select all: delegates to the active document first, falling back to the node editor.</summary>
@@ -591,14 +627,23 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void SelectAll()
     {
         if (TryGetEditable() is { } e) e.SelectAll();
-        else WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.SelectAll));
+        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.SelectAll));
     }
 
     /// <summary>
     /// <para>尝试获取当前活动文档的可编辑视图模型。</para>
     /// Attempts to get the editable view model of the currently active document.
     /// </summary>
-    private IEditable? TryGetEditable() => WorkspaceVM?.FindDocumentsPanePublic()?.ActiveDockable as IEditable;
+    private IEditable? TryGetEditable() => _currentTab == ActiveTab.Workspace
+        ? WorkspaceVM?.FindDocumentsPanePublic()?.ActiveDockable as IEditable : null;
+
+    private AvaloniaEdit.TextEditor? CurrentTextEditor() => _currentTab == ActiveTab.Workspace
+        ? WorkspaceVM?.FindDocumentsPanePublic()?.ActiveDockable switch
+        {
+            FileViewModel { IsBinary: false } text => text.Editor,
+            DtbEditorViewModel dtb => dtb.Editor,
+            _ => null
+        } : null;
 
     [RelayCommand]
     private void Find() => WeakReferenceMessenger.Default.Send(new OpenDocumentSearchMessage(ShowReplace: false));

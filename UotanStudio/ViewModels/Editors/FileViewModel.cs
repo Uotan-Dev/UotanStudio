@@ -216,6 +216,28 @@ public partial class FileViewModel : Document, IEditable
         }
     }
 
+    /// <summary>Saves an unnamed text document to a chosen path. 将未命名文本保存到所选路径。</summary>
+    internal async Task SaveAsAsync(string path)
+    {
+        await _saveGate.WaitAsync();
+        var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            var text = Text;
+            await File.WriteAllTextAsync(temporary, text, _textEncoding);
+            File.Move(temporary, path, overwrite: true);
+            FilePath = path;
+            Title = Path.GetFileName(path);
+            _loadedWriteTime = File.GetLastWriteTimeUtc(path);
+            if (Text == text) IsDirty = false;
+        }
+        finally
+        {
+            try { if (File.Exists(temporary)) File.Delete(temporary); }
+            finally { _saveGate.Release(); }
+        }
+    }
+
     /// <summary>
     /// <para>检测到的文本编码名称；非文本文档时为 <c>null</c>。</para>
     /// Detected text encoding name; <c>null</c> for non-text documents.

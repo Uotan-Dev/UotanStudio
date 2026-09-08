@@ -51,7 +51,8 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
         {
             values.Add(current);
             if (values.Count == 1) { started.SetResult(); await release.Task; }
-        }) { Enabled = true };
+        })
+        { Enabled = true };
         var first = saver.TickAsync();
         await started.Task.WaitAsync(TimeSpan.FromSeconds(5), Cancellation);
         Assert.Same(first, saver.TickAsync());
@@ -64,11 +65,35 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
     }
 
     [Fact]
+    public async Task Coordinator_WaitForIdle_DoesNotSavePendingEdits()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var saved = new List<string>();
+        var content = "before exit";
+        var saver = new AutoSaveCoordinator(async () =>
+        {
+            saved.Add(content);
+            await release.Task;
+        })
+        { Enabled = true };
+        var saving = saver.TickAsync();
+        content = "unsaved edit";
+        var waiting = saver.WaitForIdleAsync();
+        Assert.False(waiting.IsCompleted);
+        release.SetResult();
+        await waiting.WaitAsync(TimeSpan.FromSeconds(5), Cancellation);
+        await saving;
+        await saver.WaitForIdleAsync();
+        Assert.Equal(["before exit"], saved);
+    }
+
+    [Fact]
     public async Task Coordinator_RetriesAfterFailure()
     {
         var calls = 0;
         var saver = new AutoSaveCoordinator(() => ++calls == 1
-            ? Task.FromException(new IOException("test")) : Task.CompletedTask) { Enabled = true };
+            ? Task.FromException(new IOException("test")) : Task.CompletedTask)
+        { Enabled = true };
         await Assert.ThrowsAsync<IOException>(saver.TickAsync);
         await saver.TickAsync();
         Assert.Equal(2, calls);
@@ -243,12 +268,14 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
         Assert.True(await SolutionPersistenceService.SaveFirmwareProjectAsync(firstProject, new() { ProjectName = "first" }, Cancellation));
         Assert.True(await SolutionPersistenceService.SaveFirmwareProjectAsync(secondProject, new()
         {
-            ProjectName = "second", Images = [new() { RelativePath = "second-only.img", Format = "EXT4", SizeBytes = 4096 }]
+            ProjectName = "second",
+            Images = [new() { RelativePath = "second-only.img", Format = "EXT4", SizeBytes = 4096 }]
         }, Cancellation));
         var untouched = File.ReadAllBytes(secondProject);
         var solution = new SolutionSnapshot
         {
-            SolutionName = "test", SubProjects = [new() { Name = "first", RelativePath = "first/first.uotanfw" }, new() { Name = "second", RelativePath = "second/second.uotanfw" }]
+            SolutionName = "test",
+            SubProjects = [new() { Name = "first", RelativePath = "first/first.uotanfw" }, new() { Name = "second", RelativePath = "second/second.uotanfw" }]
         };
         ProjectContextService.Instance.OpenSolution(solutionPath, solution);
         var images = ImageViewModel.EnsureInstance();

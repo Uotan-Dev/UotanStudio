@@ -13,7 +13,13 @@
     <x:String x:Key="ViewLocator_NotFound">未找到: </x:String>
 
     <!-- ImageView -->
+    <x:String x:Key="Dialog_UnsavedTitle">未保存的修改</x:String>
+    <x:String x:Key="Dialog_UnsavedMessage">是否在关闭前保存“{0}”的修改？</x:String>
+    <x:String x:Key="Dialog_DiscardChanges">放弃修改</x:String>
+    <x:String x:Key="Dialog_SaveFailed">保存失败</x:String>
+    <x:String x:Key="Dialog_SaveIncomplete">仍有未保存的修改，请检查文档后重试。</x:String>
     <x:String x:Key="ImageView_UnpackMode">解包</x:String>
+    <x:String x:Key="Image_OperationSummary">成功 {0} 项，失败 {1} 项，跳过 {2} 项。详情见日志。</x:String>
     <x:String x:Key="ImageView_PackMode">打包</x:String>
     <x:String x:Key="ImageView_Refresh">刷新</x:String>
     <x:String x:Key="ImageView_ExtractSelected">分解选中文件</x:String>

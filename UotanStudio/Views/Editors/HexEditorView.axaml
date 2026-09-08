@@ -19,7 +19,7 @@
     </Border>
 
     <!-- Hex 视图：自绘制 HexViewer 控件承载二进制查看/编辑（编辑就地写回 RawBytes） -->
-    <controls:HexViewer Grid.Row="1" Data="{Binding RawBytes}"
+    <controls:HexViewer Grid.Row="1" Data="{Binding RawBytes}" IsEnabled="{Binding !IsBusy}"
                         BytesEdited="OnBytesEdited" />
 
     <!-- 底部状态栏：文件大小 + 编辑状态 -->

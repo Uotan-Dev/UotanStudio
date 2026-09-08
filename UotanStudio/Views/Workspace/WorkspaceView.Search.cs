@@ -18,11 +18,28 @@ public partial class WorkspaceView
     {
         LayoutUpdated += OnSearchLayoutUpdated;
         DocumentSearchPanel.CloseRequested += (_, _) => CloseDocumentSearch();
+        DocumentSearchPanel.OptionsChanged += (_, _) =>
+        {
+            _searchOperationStatus = null;
+            _searchResumeOffset = null;
+            _documentSearchCancellation?.Cancel();
+            QueueDocumentSearch();
+        };
+        DocumentSearchPanel.ActionRequested += ExecuteSearchAction;
+        DetachedFromVisualTree += (_, _) => StopDocumentSearch();
         AddHandler(KeyDownEvent, OnSearchKeyDown, RoutingStrategies.Tunnel);
     }
 
     private void OnSearchLayoutUpdated(object? sender, EventArgs e)
     {
+        if (DocumentSearchPanel.IsVisible && !_searchActionRunning && !_searchNavigating
+            && (!ReferenceEquals(_searchContextDocument, ActiveSearchDocument)
+                || _searchProjectRoot != Services.Projects.ProjectContextService.Instance.RootDirectory))
+        {
+            _searchProjectRoot = Services.Projects.ProjectContextService.Instance.RootDirectory;
+            CaptureSearchSelection();
+            QueueDocumentSearch();
+        }
         if (_searchDocumentDock is null || !_searchDocumentDock.IsEffectivelyVisible
             || !_searchDocumentDock.GetVisualAncestors().Contains(DockControl))
         {
@@ -58,14 +75,22 @@ public partial class WorkspaceView
         if (!DocumentSearchHost.IsVisible) return;
 
         if (!DocumentSearchPanel.IsVisible)
+        {
             _searchReturnFocus = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as InputElement;
+            CaptureSearchSelection();
+            if (SearchEditor(ActiveSearchDocument) is { SelectionLength: > 0 } editor
+                && editor.SelectedText.Length <= 256 && !editor.SelectedText.Contains('\n'))
+                DocumentSearchPanel.SetQuery(editor.SelectedText);
+        }
         DocumentSearchPanel.IsVisible = true;
+        QueueDocumentSearch();
         Dispatcher.UIThread.Post(() => DocumentSearchPanel.FocusFind(showReplace), DispatcherPriority.Input);
     }
 
     private void CloseDocumentSearch()
     {
         DocumentSearchPanel.IsVisible = false;
+        StopDocumentSearch();
         if (_searchReturnFocus is { IsEffectivelyVisible: true }
             && _searchReturnFocus.GetVisualAncestors().Contains(this)) _searchReturnFocus.Focus();
         else Focus();

@@ -190,15 +190,18 @@ public partial class ManifestEditorViewModel : Document
     /// </summary>
     public async Task SaveAsync()
     {
-        if (_doc is null || string.IsNullOrWhiteSpace(FilePath))
+        if (IsBusy || _doc is null || string.IsNullOrWhiteSpace(FilePath))
         {
             return;
         }
 
+        var temporary = FilePath + ".save-" + Guid.NewGuid().ToString("N");
+        IsBusy = true;
         try
         {
             var outBytes = await Task.Run(() => AXmlWriter.Write(_doc), default).ConfigureAwait(true);
-            await File.WriteAllBytesAsync(FilePath, outBytes).ConfigureAwait(true);
+            await File.WriteAllBytesAsync(temporary, outBytes).ConfigureAwait(true);
+            File.Move(temporary, FilePath, overwrite: true);
             RawBytes = outBytes;
             IsDirty = false;
             CompileError = string.Empty;
@@ -207,6 +210,11 @@ public partial class ManifestEditorViewModel : Document
         catch (Exception ex)
         {
             CompileError = $"Failed to rebuild AXML: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            if (File.Exists(temporary)) File.Delete(temporary);
         }
     }
 

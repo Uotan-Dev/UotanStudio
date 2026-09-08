@@ -22,6 +22,7 @@ public class WorkspaceDockFactory : Factory
     private ProjectExplorerViewModel? _projectExplorer;
     private PropertiesViewModel? _properties;
     private TerminalDockService? _terminals;
+    private readonly HashSet<IDockable> _closingDocuments = [];
 
     public WorkspaceDockFactory() : this(new AiSettingsViewModel()) { }
 
@@ -242,7 +243,7 @@ public class WorkspaceDockFactory : Factory
         return new ManagedHostWindow(options);
     }
 
-    public override void CloseDockable(IDockable? dockable)
+    public override async void CloseDockable(IDockable? dockable)
     {
         if (dockable == null)
         {
@@ -254,14 +255,17 @@ public class WorkspaceDockFactory : Factory
             return;
         }
 
+        if (!_closingDocuments.Add(dockable)) return;
         try
         {
+            if (!await DocumentSaveService.ConfirmCloseAsync(dockable)) return;
             SafeRemoveDockable(dockable);
         }
-        catch
+        catch (Exception ex)
         {
-            // 关闭流程中的异常不阻断用户操作。
+            LogService.Instance.Write(LogLevel.Error, "Editor", $"Close failed: {ex.Message}");
         }
+        finally { _closingDocuments.Remove(dockable); }
     }
 
     private void SafeRemoveDockable(IDockable dockable)

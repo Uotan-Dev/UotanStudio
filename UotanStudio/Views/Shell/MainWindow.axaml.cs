@@ -44,21 +44,32 @@ public partial class MainWindow : Window
         if (!_closeAfterSave && DataContext is MainViewModel viewModel)
         {
             e.Cancel = true;
+            if (ViewModels.Workspace.ImageViewModel.Instance.IsOperating)
+            {
+                Services.LogService.Instance.Write(Services.LogLevel.Warn, "Images", "Wait for the image operation before closing. 请等待镜像操作完成后关闭。");
+                return;
+            }
             if (_closing) return;
             _closing = true;
             try
             {
                 await _sessionInitialization;
-                await viewModel.FlushAutoSaveAsync();
+                if (!await viewModel.FlushAutoSaveAsync())
+                {
+                    viewModel.ResumeAutoSave();
+                    return;
+                }
+                _closeAfterSave = true;
+                Avalonia.Threading.Dispatcher.UIThread.Post(Close);
             }
             catch (Exception ex)
             {
                 Services.LogService.Instance.Write(Services.LogLevel.Error, "AutoSave", ex.Message);
+                viewModel.ResumeAutoSave();
             }
             finally
             {
-                _closeAfterSave = true;
-                Avalonia.Threading.Dispatcher.UIThread.Post(Close);
+                _closing = false;
             }
             return;
         }

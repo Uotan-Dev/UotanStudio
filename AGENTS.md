@@ -140,7 +140,7 @@ dotnet run --project UotanStudio.Desktop -- firmware pack system_dir/ -o system.
 ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目录同构**：`ViewModels/{Shell,Workspace,Editors,Devices,Nodes,Compare}/` ↔ `Views/{Shell,Workspace,Editors,Devices,Nodes,Compare}/`（纯控件与布局工厂在 `Views/Controls/`、`Views/Workspace/WorkspaceDockFactory.cs`、`Views/Nodes/NodeDockFactory.cs`）。解析统一走 `ViewModelViewRegistry`（显式注册表，非反射）。ViewModel 统一继承 `ViewModelBase : ObservableObject`，属性用 `[ObservableProperty]` 自动生成。
 
 ### 6. 主题与样式
-- **文档查找与替换浮窗**：`Views/Controls/FindReplacePanel.axaml(.cs)` 提供 VS 风格的纯界面，`WorkspaceView.Search.cs` 按工作区 `DocumentsPane` 的实际停靠边界定位在标签栏下方右上角，随面板尺寸调整。宽度上限 300（常规布局输入框宽 196、范围框宽 171）、输入框高 24、图标按钮与范围框高 22，内外边距 4、行距 3；宽度小于 300 时范围框换行。通过顶部“编辑 → 查找 / 替换”或主窗口 `Ctrl+F` / `Ctrl+H` 打开，`MenuViewModel` 发送 `OpenDocumentSearchMessage`，`MainView` 切回工作区并在布局完成后打开对应模式；关闭按钮或 Esc 收起，文档区不保留常驻搜索按钮。文本、匹配选项与范围为控件本地状态，查找导航和替换操作保持禁用，未接入后端。沿用 Material 图标与现有主题资源，中英文本位于 `Dock` 本地化模块；不使用 Test 项目。
+- **文档查找与替换浮窗**：`Views/Controls/FindReplacePanel.axaml(.cs)` 提供 VS 风格的查找替换界面，`WorkspaceView.Search.cs` 按工作区 `DocumentsPane` 的实际停靠边界定位在标签栏下方右上角，随面板尺寸调整。宽度上限 300（常规布局输入框宽 196、范围框宽 171）、输入框高 24、图标按钮与范围框高 22，内外边距 4、行距 3；宽度小于 300 时范围框换行。通过顶部“编辑 → 查找 / 替换”或主窗口 `Ctrl+F` / `Ctrl+H` 打开，`MenuViewModel` 发送 `OpenDocumentSearchMessage`，`MainView` 切回工作区并在布局完成后打开对应模式；关闭按钮或 Esc 收起，文档区不保留常驻搜索按钮。文本、匹配选项与范围为控件本地状态，`WorkspaceView.SearchOperations.cs` 接线 `TextSearchService` / `ProjectTextSearchService`：支持当前文本/DTB 源码、固定选区、已打开文档和项目范围，大小写/整词/正则/保留大小写、前后循环导航、单次/全部替换。项目范围跳过二进制与超过 8 MiB 的文件，不跟随链接；扫描限 10000 个条目、64 MiB，匹配限 10000 项，正则有超时。替换先校验快照，写入文档未保存状态，复用原保存入口；已加载编辑器按文档合并撤销，项目替换不直接覆写磁盘。沿用 Material 图标与现有主题资源，中英文本位于 `Dock` 本地化模块；仅在 Test 项目验证搜索、替换与项目文件读取等后端逻辑，不构造 UI。
 - **AI 输入区下拉框**：模式与模型选择框共用局部 `ai-choice` 样式，固定高度 28、字号 12、上下内边距 0；文本模板行高 16 并垂直居中，占位文字采用相同度量。模式通过 `ModeOptions` 中实例稳定的 `AiModeOptionViewModel` 绑定 `ItemsSource`，语言切换仅通知 `DisplayName` 更新；不直接放置 `ComboBoxItem`，避免展开列表后切换 Dock 导致选项失效。下拉项使用紧凑内边距，避免与 Semi 的 `Small` 尺寸样式混用。
 - **AI 会话附件**：输入区提供「添加文件」图标入口，使用系统文件选择器多选任意文件；每个 `AiConversationViewModel.Attachments` 独立保存文件名和路径，按平台路径大小写规则去重，可逐项移除，清空会话同步清除附件。附件列表限高滚动，长文件名省略，悬停显示完整路径；不读取、上传或持久化文件内容，活动文档开关独立保留。
 - **AI 助手界面**：代码保留，但 `AppFeatures.AiAssistantEnabled` 固定为 `false`，Debug / Release 均隐藏 AI 窗口菜单项及设置区块，工作区不创建或注册 AI 面板，因此旧的面板可见性记录无法重新显示它。启用时，`AiAssistantViewModel` / `AiAssistantView` 位于 `Workspace` 分区，注册到右上 `RightPaneTop`，与镜像文件管理叠放，并接入「窗口」菜单和现有面板可见性保存。`MainViewModel` 将设置页的 `AiSettingsViewModel` 传给工作区工厂，共用 API 地址、密钥、模型列表与选中模型的内存状态；`AiSettingsView` 位于 `Shell` 分区。仅实现 UI 和绑定：会话草稿、历史切换、清空、聊天/智能体模式及活动文档开关为本地状态；发送和获取模型命令保持禁用，未接入网络、智能体执行、文件读取或 AI 配置持久化，密钥默认遮蔽。中英文本沿用 `Dock` / `Settings` 本地化模块，视图使用显式注册表。
@@ -203,7 +203,7 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 - **镜像面板**：`ImageViewModel`（`ViewModels/Workspace/ImageViewModel.cs`）为单例（`EnsureInstance()` / `Instance`），维护 `Images`（相对工程根目录的 `ImageEntryViewModel`）与 8 个命令（提取 / 合成 img / 合成 br / 删除 / 合成 super / 合成 dat / 打包镜像 / 全选刷入），操作经 `FirmwareService`（`Services/Firmware/FirmwareService.cs`，`SynthesizeSuperAsync` 等）、`PackingService`（`Services/Firmware/PackingService.cs`，按打包设置面板的镜像类型/格式/压缩选项调 `Ext4Builder`/`ErofsBuilder` 打包系统镜像）与 `UotanStudio.Firmware.Dat.DatWriter` 落到 `intermediate/`；文件菜单含「导入镜像」「导出镜像」。`ImageView`（`Views/Workspace/ImageView.axaml(.cs)`）以 `DataGrid` 展示镜像（勾选列 / 名称 / 格式 / 大小），当前行 `SelectedImage` 用于单文件操作与属性面板，`ImageEntryViewModel.IsSelected` 复选框独立维护批量选择集（提取、删除、合成 super、批量刷入消费全部勾选项）；表格行为条目提供**右键菜单**（提取/合成 img/br/super/dat/打包镜像/删除/全部刷入，Click 处理器先 `SelectedImage = 菜单条目` 再执行命令）。批量刷入经 `BatchFlashService`（`Services/Flash/BatchFlashService.cs`，新建）按勾选分区列表逐分区复用 `FlashService.FlashImageAsync`，单分区失败继续，进度回报 `StatusText`。镜像面板顶部「向导刷写」按钮（`ImageView_FlashWizard` 键）打开 **`FlashWizardView`**（`FlashWizardViewModel`，`Messages/FlashWizardMessages.cs` 的 `FlashWizardConfirmRequestMessage` 请求确认）：选分区镜像 → 选目标设备（跟随 `DeviceViewModel` 选中）→ 模式白名单（Fastboot/RKDL 分区名非空即可刷、EDL 需分区名在 `rawprogram*.xml` 命中（缺失时回退基础校验）、ADB 禁用）→ `FlashService.FlashImageAsync` 刷写（进度回报 `StatusText` + `ProgressPercent` 并转发 `FlashProgressMessage`）→ 可选 `RebootAsync` 重启。
 - **工程文件（VS 式布局）**：`SolutionPersistenceService`（`Services/Projects/`，静态，`SolutionJsonContext` 源生成 JSON）读写三类文件——解决方案 `<名称>.uotan`（`SolutionSnapshot`：解决方案名 + 引用的固件/节点项目相对路径）、固件项目 `<名称>.uotanfw`（`FirmwareProjectSnapshot`：镜像清单 `ImageEntryDto`（相对路径）+ 打包设置 `ProjectSettingsDto`）、节点项目 `<名称>.uotannode`（`NodeProjectSnapshot`：节点画布 `NodeDto`+`ConnectionDto`）。新建 / 打开 / 保存由 `MenuViewModel` 编排；`MenuViewModel.OpenProjectFromPathAsync(path)` / `ImportFilesAsync(paths)` 供菜单与命令行共用。旧单文件 `.uotan`（`ProjectSnapshot`）已废弃。
 - **工程目录约定**：`ProjectContextService`（`Services/Projects/`，单例）承载当前解决方案：`RootDirectory` = 解决方案文件同名目录，`images/` 存导入镜像，`intermediate/<操作>/` 存中间产物（解包、合成、deleted），`.uotan/` 存会话状态（`settings.json` + `history.json`，类似 VS 的 `.vs/`）。镜像条目一律存相对路径。
-- **操作历史**：`OperationHistoryService`（`Services/Projects/`，单例）维护内存撤销/重做栈（容量 50），工作区操作通过 `Record(description, [HistoryOperationDto,] undo, redo)` 登记；带 `HistoryOperationDto` 的条目可经 `SaveAsync`/`LoadAsync` 持久化到 `.uotan/history.json` 并跨会话重建（重建工厂由 `ImageViewModel` 注册到 `ReconstructOperation`）。`MenuViewModel` 的 Undo/Redo 优先执行历史，未命中再转发 `NodeEditorActionMessage`。
+- **操作历史**：`OperationHistoryService`（`Services/Projects/`，单例）维护内存撤销/重做栈（容量 50），工作区操作通过 `Record(description, [HistoryOperationDto,] undo, redo)` 登记；带 `HistoryOperationDto` 的条目可经 `SaveAsync`/`LoadAsync` 持久化到 `.uotan/history.json` 并跨会话重建（重建工厂由 `ImageViewModel` 注册到 `ReconstructOperation`）。`MenuViewModel` 的 Undo/Redo 按当前页面路由：文本页面使用编辑器撤销栈，节点页面转发 `NodeEditorActionMessage`，不再隐式执行磁盘操作历史。
 - **窗口标题**：`MainViewModel.WindowTitle`（`"<解决方案名> - UotanStudio"`）绑定 `MainWindow.Title` 与顶部标题栏 `TextBlock`，随 `ProjectContextChangedMessage` 更新。
 
 ### 9. 设备管理器
@@ -243,9 +243,11 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 
 ## 维护规则
 
+切换工程和退出主窗口时先暂停定时保存、等待已开始的保存结束，再遍历工作区文档复用保存／不保存／取消确认；确认之前不得强制发起自动保存。确认后只持久化工程与会话状态，不再次保存用户选择不保存的文档；取消或保存失败时保留工作区并恢复定时保存。未启用自动保存时仍检查未保存文档。
+
 资源管理器显式选择“以文本形式打开”时，`FileViewModel` 必须使用文本视图，即使文件包含 NUL 字节或具有二进制扩展名也不得改为十六进制；只有自动打开模式按文件类型和内容选择编辑器。
 
-镜像管理的右键删除仅作用于右键条目对应的解包文件夹：固件文件按子项目根目录与 `GetEntryBaseName` 定位，文件夹条目按自身 `RelativePath` 定位（保留名称中的点和括号），不消费复选框批量选择集、不删除源镜像。复用 `DialogService` 的删除确认和失败对话框；目录不存在时通过 `Image_UnpackedDirectoryMissingTitle/Message` 中英文本地化键弹出提示。顶部批量删除遇到文件夹条目时通过 `DeleteDirectoryRequested` 复用同一目录删除流程；文件条目仍移入子项目 `.deleted/` 并登记可撤销历史。文件夹删除成功后移除列表条目。
+镜像管理的右键删除仅作用于右键条目对应的解包文件夹：固件文件通过 `ImageOperationPaths` 按子项目根目录与镜像名称定位，文件夹条目按自身 `RelativePath` 定位（保留名称中的点和括号），不消费复选框批量选择集、不删除源镜像。复用 `DialogService` 的删除确认和失败对话框；目录不存在时通过 `Image_UnpackedDirectoryMissingTitle/Message` 中英文本地化键弹出提示。顶部批量删除遇到文件夹条目时直接调用 `ImageViewModel.DeleteUnpackedDirectoryAsync` 复用同一目录删除流程；文件条目仍移入子项目 `.deleted/` 并登记可撤销历史。文件夹删除成功后移除列表条目。
 
 项目资源管理器在目录变动时按路径增量同步已加载子节点，保留仍存在的节点实例和展开状态；同一工程上下文刷新不重建根节点。文件监听只订阅名称和目录变动，文件内容保存不触发整树刷新；目录暂时不可读时保留现有显示。
 
@@ -260,3 +262,6 @@ EXT4、EROFS、F2FS 解包的统一元数据在 `configuration.fileSystem` / `co
 - 插件注册流程、节点定义基类、消息约定变化。
 - 本地化模块、主题资源键、样式层变化。
 - 本文件记录的任何事实性信息。
+
+
+当前页面手动保存统一经既有保存入口和 Ctrl+S 分派到 `DocumentSaveService`，覆盖文本、Hex、DTB、Manifest 与分区编辑器；未命名文本复用另存选择器。关闭文档、切换工程和退出窗口先处理未保存修改，保存失败或取消时保留页面。镜像右键提取/打包仅处理右键条目，工具栏保留勾选批量操作；解包拒绝目录输入，覆盖失败恢复旧目录，IMG 按统一元数据分派，DAT/BR 生成 Android transfer list 与数据文件。设备确认通过 `DialogService` 单点发起并固定目标设备，节点搜索只在 UI 线程发布集合。资源管理器粘贴复用 `ExplorerFileOperations`，拒绝覆盖与复制到自身子目录。新增回归验证集中于后端 `WorkspaceFileOperationTests`。

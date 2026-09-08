@@ -15,8 +15,6 @@ public partial class MainView : UserControl
         // 默认选中 Workspace Tab（移除设备/日志底栏后：Workspace=3, NodeEditor=4, Settings=5）
         MainTabs.SelectedIndex = 3;
 
-        WeakReferenceMessenger.Default.Register<NavigateToTabMessage>(this, OnNavigateToTab);
-        MainTabs.SelectionChanged += OnSelectionChanged;
         // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex=3 对应）
         SendActiveTabChanged(MainTabs.SelectedIndex);
     }
@@ -73,6 +71,8 @@ public partial class MainView : UserControl
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        WeakReferenceMessenger.Default.Register<NavigateToTabMessage>(this, OnNavigateToTab);
+        MainTabs.SelectionChanged += OnSelectionChanged;
         WeakReferenceMessenger.Default.Register<MainView, OpenDocumentSearchMessage>(this, static (view, message) =>
         {
             view.MainTabs.SelectedIndex = 3;

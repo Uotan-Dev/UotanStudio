@@ -172,25 +172,44 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", $"Save workspace failed: {ex.Message}"); }
     }
 
-    internal async Task FlushAsync()
-    {
-        if (!_initialized) return;
-        await _projects.WaitForIdleAsync();
-        await _coordinator.FlushAsync();
-        if (_coordinator.Enabled) await _projects.AutoSaveAsync(persistPageState: false);
-    }
-
-    internal async Task SaveOnCloseAsync()
+    internal async Task<bool> FlushAsync()
     {
         _timer.Stop();
-        if (!_initialized) return;
-        await _projects.WaitForIdleAsync();
-        await _coordinator.FlushAsync();
-        if (_coordinator.Enabled)
+        try
         {
-            await _projects.AutoSaveAsync();
+            await _coordinator.WaitForIdleAsync();
+            await _projects.WaitForIdleAsync();
+            if (!await DocumentSaveService.ConfirmAllAsync(WorkspaceSessionCapture.Enumerate(_workspace.Layout)))
+                return false;
+            if (_initialized && _coordinator.Enabled && _projects.CurrentProjectPath is { Length: > 0 } path)
+                await _projects.PersistToAsync(path, persistPageState: false);
+            return true;
+        }
+        finally { Resume(); }
+    }
+
+    internal void Resume()
+    {
+        if (_initialized) _timer.Start();
+    }
+
+    internal async Task<bool> SaveOnCloseAsync()
+    {
+        _timer.Stop();
+        await _coordinator.WaitForIdleAsync();
+        await _projects.WaitForIdleAsync();
+        if (!await DocumentSaveService.ConfirmAllAsync(WorkspaceSessionCapture.Enumerate(_workspace.Layout)))
+        {
+            Resume();
+            return false;
+        }
+        if (_initialized && _coordinator.Enabled)
+        {
+            if (_projects.CurrentProjectPath is { Length: > 0 } path)
+                await _projects.PersistToAsync(path);
             await SaveSessionAsync();
         }
+        return true;
     }
 
     public void Dispose()

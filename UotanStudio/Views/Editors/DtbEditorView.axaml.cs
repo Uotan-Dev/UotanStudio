@@ -14,6 +14,7 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public partial class DtbEditorView : UserControl
 {
+    private DtbEditorViewModel? _editorOwner;
     /// <summary>
     /// <para>保存按钮的本地化标题。</para>
     /// The localized title of the save button.
@@ -27,7 +28,9 @@ public partial class DtbEditorView : UserControl
     public DtbEditorView()
     {
         InitializeComponent();
-        SourceEditor.TextChanged += (_, _) => OnSourceEdited();
+        Loaded += (_, _) => UpdateEditorOwner();
+        Unloaded += (_, _) => UpdateEditorOwner(detach: true);
+        DataContextChanged += (_, _) => UpdateEditorOwner();
         // 光标位置联动：右栏光标变化时反查并高亮左栏所属节点（XAML 无法直接绑定该事件）。
         // Caret-position linkage: highlight the owning node in the left tree on caret movement.
         if (SourceEditor.TextArea?.Caret is { } caret)
@@ -74,6 +77,13 @@ public partial class DtbEditorView : UserControl
         }
     }
 
+    private void UpdateEditorOwner(bool detach = false)
+    {
+        if (_editorOwner is { } previous && ReferenceEquals(previous.Editor, SourceEditor)) previous.Editor = null;
+        _editorOwner = !detach && IsLoaded ? DataContext as DtbEditorViewModel : null;
+        if (_editorOwner is { } current) current.Editor = SourceEditor;
+    }
+
     /// <summary>
     /// <para>右栏光标/选区变化 → 左栏高亮所属节点。</para>
     /// Right-pane caret/selection change highlights the owning node in the left tree.
@@ -100,11 +110,4 @@ public partial class DtbEditorView : UserControl
         }
     }
 
-    private void OnSourceEdited()
-    {
-        if (DataContext is DtbEditorViewModel vm && !vm.IsDirty)
-        {
-            vm.IsDirty = true;
-        }
-    }
 }
