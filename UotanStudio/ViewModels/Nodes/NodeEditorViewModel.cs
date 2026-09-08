@@ -121,16 +121,23 @@ public partial class NodeEditorViewModel : ViewModelBase
                 var cts = new CancellationTokenSource();
                 _searchDebounceCts = cts;
 
-                _ = Task.Delay(200, cts.Token)
-                    .ContinueWith(t =>
-                    {
-                        if (!t.IsCanceled)
-                        {
-                            RefreshVisibleToolbox();
-                        }
-                    }, TaskScheduler.Default);
+                _ = RefreshToolboxAfterDelayAsync(cts.Token);
             }
         }
+    }
+
+    private async Task RefreshToolboxAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(200, cancellationToken);
+            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested) RefreshVisibleToolbox();
+            });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Nodes", ex.Message); }
     }
 
     /// <summary>
