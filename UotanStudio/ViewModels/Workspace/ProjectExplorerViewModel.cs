@@ -362,7 +362,7 @@ public sealed partial class ExplorerNode : ObservableObject
         RefreshChildren();
     }
 
-    private void RefreshChildren()
+    internal void RefreshChildren()
     {
         try
         {

@@ -316,16 +316,41 @@ public partial class ProjectExplorerView : UserControl
         }
     }
 
-    private void OnUnpack(object? sender, RoutedEventArgs e)
+    private async void OnPaste(object? sender, RoutedEventArgs e)
     {
-        if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsDirectory || node.IsPlaceholder) return;
-        LogService.Instance.Write(LogLevel.Info, "Explorer", $"Unpack requested for: {node.Path}");
+        if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsPlaceholder) return;
+        var owner = GetOwnerWindow();
+        if (owner is null) return;
+        var destination = node.IsDirectory ? node.Path : Path.GetDirectoryName(node.Path);
+        if (destination is null) return;
+        var sources = ExplorerClipboard.Paths.ToArray();
+        var move = ExplorerClipboard.IsCutMode;
+        try
+        {
+            foreach (var source in sources)
+            {
+                await Task.Run(() => ExplorerFileOperations.Transfer(source, destination, move));
+                if (move && ExplorerClipboard.IsCutMode) ExplorerClipboard.Paths.Remove(source);
+            }
+            if (node.IsDirectory) node.RefreshChildren();
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Paste"), ex.Message, MessageBoxIcon.Error);
+        }
     }
 
-    private void OnPackRom(object? sender, RoutedEventArgs e)
+    private async void OnUnpack(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsDirectory || node.IsPlaceholder) return;
+        await ImageViewModel.Instance.RunExplorerOperationAsync(node.Path, false);
+    }
+
+    private async void OnPackRom(object? sender, RoutedEventArgs e)
     {
         if (ProjectTree.SelectedItem is not ExplorerNode node || !node.IsDirectory || node.IsPlaceholder) return;
-        LogService.Instance.Write(LogLevel.Info, "Explorer", $"Pack ROM requested for: {node.Path}");
+        await ImageViewModel.Instance.RunExplorerOperationAsync(node.Path, true);
     }
 }
 

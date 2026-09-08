@@ -15,7 +15,6 @@ namespace UotanStudio.Views.Workspace;
 /// </summary>
 public partial class ImageView : UserControl
 {
-    private ImageViewModel? _subscribedViewModel;
 
     /// <summary>
     /// <para>创建镜像管理面板视图并初始化组件。</para>
@@ -24,41 +23,6 @@ public partial class ImageView : UserControl
     public ImageView()
     {
         InitializeComponent();
-        DataContextChanged += OnDataContextChanged;
-    }
-
-    private void OnDataContextChanged(object? sender, System.EventArgs e)
-    {
-        if (_subscribedViewModel is { } previous)
-        {
-            previous.ExtractOverwriteRequested -= OnExtractOverwriteRequested;
-            previous.DeleteDirectoryRequested -= DeleteUnpackedDirectoryAsync;
-        }
-
-        _subscribedViewModel = DataContext as ImageViewModel;
-        if (DataContext is ImageViewModel vm)
-        {
-            vm.ExtractOverwriteRequested -= OnExtractOverwriteRequested;
-            vm.ExtractOverwriteRequested += OnExtractOverwriteRequested;
-            vm.DeleteDirectoryRequested += DeleteUnpackedDirectoryAsync;
-        }
-    }
-
-    private async void OnExtractOverwriteRequested(object? sender, (string DirectoryName, TaskCompletionSource<bool> Confirmation) e)
-    {
-        var owner = this.FindAncestorOfType<Window>();
-        if (owner is null)
-        {
-            e.Confirmation.TrySetResult(false);
-            return;
-        }
-
-        var title = LanguageService.Instance.GetString("Image_ExtractOverwriteTitle");
-        var message = string.Format(LanguageService.Instance.GetString("Image_ExtractOverwriteMessage"), e.DirectoryName);
-        var overwrite = LanguageService.Instance.GetString("Image_ExtractOverwrite");
-        var skip = LanguageService.Instance.GetString("Image_ExtractSkip");
-
-        e.Confirmation.TrySetResult(await DialogService.ConfirmAsync(owner, title, message, overwrite, skip));
     }
 
     /// <summary>
@@ -83,27 +47,27 @@ public partial class ImageView : UserControl
     /// <summary><para>分解右键菜单选中的镜像。</para>Extract the image from the context menu.</summary>
     private void OnExtractMenuClick(object? sender, RoutedEventArgs e)
     {
-        if (SelectMenuImage(sender) is not null && DataContext is ImageViewModel vm)
+        if (SelectMenuImage(sender) is { IsDirectory: false } image && DataContext is ImageViewModel vm)
         {
-            vm.ExtractSelectedCommand.Execute(null);
+            if (vm.ExtractSelectedCommand.CanExecute(image)) vm.ExtractSelectedCommand.Execute(image);
         }
     }
 
     /// <summary><para>合成右键菜单选中的镜像为 img。</para>Synthesize the context-menu image into an img.</summary>
     private void OnSynthesizeImgMenuClick(object? sender, RoutedEventArgs e)
     {
-        if (SelectMenuImage(sender) is not null && DataContext is ImageViewModel vm)
+        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel vm)
         {
-            vm.SynthesizeImgCommand.Execute(null);
+            if (vm.SynthesizeImgCommand.CanExecute(image)) vm.SynthesizeImgCommand.Execute(image);
         }
     }
 
     /// <summary><para>合成右键菜单选中的镜像为 br。</para>Synthesize the context-menu image into a br.</summary>
     private void OnSynthesizeBrMenuClick(object? sender, RoutedEventArgs e)
     {
-        if (SelectMenuImage(sender) is not null && DataContext is ImageViewModel vm)
+        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel vm)
         {
-            vm.SynthesizeBrCommand.Execute(null);
+            if (vm.SynthesizeBrCommand.CanExecute(image)) vm.SynthesizeBrCommand.Execute(image);
         }
     }
 
@@ -119,75 +83,20 @@ public partial class ImageView : UserControl
     /// <summary><para>从右键菜单选中的镜像合成 dat。</para>Synthesize a dat from the context-menu image.</summary>
     private void OnSynthesizeDatMenuClick(object? sender, RoutedEventArgs e)
     {
-        if (SelectMenuImage(sender) is not null && DataContext is ImageViewModel vm)
+        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel vm)
         {
-            vm.SynthesizeDatCommand.Execute(null);
+            if (vm.SynthesizeDatCommand.CanExecute(image)) vm.SynthesizeDatCommand.Execute(image);
         }
     }
 
     /// <summary><para>删除右键条目对应的解包目录。</para>Delete the context-menu entry's unpacked directory.</summary>
     private async void OnDeleteMenuClick(object? sender, RoutedEventArgs e)
     {
-        if (SelectMenuImage(sender) is { } image)
+        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel { IsOperating: false } vm)
         {
-            await DeleteUnpackedDirectoryAsync(image);
-        }
-    }
-
-    private async Task DeleteUnpackedDirectoryAsync(ImageEntryViewModel image)
-    {
-        var owner = this.FindAncestorOfType<Window>();
-        var context = ProjectContextService.Instance;
-        var root = context.ActiveSubProject?.RootPath;
-        if (owner is null || root is null || DataContext is not ImageViewModel vm)
-        {
-            return;
-        }
-
-        var language = LanguageService.Instance;
-        try
-        {
-            var directory = image.IsDirectory
-                ? context.ResolvePath(image.RelativePath)
-                : Path.GetFullPath(Path.Combine(root, ImageViewModel.GetEntryBaseName(image)));
-            if (directory is null)
-            {
-                return;
-            }
-            if (!string.Equals(Path.GetDirectoryName(directory), Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)),
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                throw new IOException("The unpacked directory must be a direct child of the sub-project root.");
-            }
-
-            if (!Directory.Exists(directory))
-            {
-                await DialogService.ShowAsync(owner, language.GetString("Image_UnpackedDirectoryMissingTitle"),
-                    string.Format(language.GetString("Image_UnpackedDirectoryMissingMessage"), directory), MessageBoxIcon.Information);
-                return;
-            }
-
-            if (!await DialogService.ConfirmAsync(owner, language.GetString("Dialog_ConfirmDelete"),
-                    string.Format(language.GetString("Dialog_ConfirmDeleteMessage"), directory),
-                    language.GetString("Menu_Delete")))
-            {
-                return;
-            }
-
-            await Task.Run(() => Directory.Delete(directory, recursive: true));
-            image.IsUnpacked = false;
-            if (image.IsDirectory)
-            {
-                vm.Images.Remove(image);
-                if (ReferenceEquals(vm.SelectedImage, image)) vm.SelectedImage = null;
-            }
-            vm.StatusText = language.GetString("ImageView_OperationDone");
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted unpacked directory: {directory}");
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Images", $"Delete unpacked directory failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, language.GetString("Dialog_DeleteFailed"), ex.Message, MessageBoxIcon.Error);
+            vm.IsOperating = true;
+            try { await vm.DeleteUnpackedDirectoryAsync(image); }
+            finally { vm.IsOperating = false; }
         }
     }
 

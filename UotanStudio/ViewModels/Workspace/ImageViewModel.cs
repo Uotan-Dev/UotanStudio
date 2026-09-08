@@ -44,25 +44,23 @@ internal partial class ImageViewModel : Tool
 
     private readonly FirmwareService _firmware = FirmwareService.Instance;
 
-    /// <summary>
-    /// <para>解包时目标目录已存在，请求用户确认是否覆盖；视图层订阅此事件并弹出对话框，
-    /// 将结果写入 <c>TaskCompletionSource&lt;bool&gt;</c>。</para>
-    /// Raised when the extract target directory already exists; the view subscribes and shows a
-    /// confirmation dialog, writing the result to the <c>TaskCompletionSource&lt;bool&gt;</c>.
-    /// </summary>
-    internal event EventHandler<(string DirectoryName, TaskCompletionSource<bool> Confirmation)>? ExtractOverwriteRequested;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanOperate))]
+    private bool _isOperating;
 
-    /// <summary>
-    /// <para>请求视图复用目录删除确认和结果对话框。</para>
-    /// Requests directory deletion through the view's shared confirmation and result dialogs.
-    /// </summary>
-    internal event Func<ImageEntryViewModel, Task>? DeleteDirectoryRequested;
+    internal bool CanOperate => !IsOperating;
+
+    private int _refreshVersion;
+
 
     private async Task<bool> RequestExtractOverwriteAsync(string directoryName)
     {
-        var tcs = new TaskCompletionSource<bool>();
-        ExtractOverwriteRequested?.Invoke(this, (directoryName, tcs));
-        return await tcs.Task;
+        var owner = TopLevelExtensions.GetTopLevel() as Avalonia.Controls.Window;
+        if (owner is null) return false;
+        var language = LanguageService.Instance;
+        return await DialogService.ConfirmAsync(owner, language.GetString("Image_ExtractOverwriteTitle"),
+            string.Format(language.GetString("Image_ExtractOverwriteMessage"), directoryName),
+            language.GetString("Image_ExtractOverwrite"), language.GetString("Image_ExtractSkip"));
     }
 
     /// <summary>
@@ -124,7 +122,7 @@ internal partial class ImageViewModel : Tool
 
     partial void OnSelectedSubProjectChanged(string? value)
     {
-        if (string.IsNullOrEmpty(value))
+        if (IsOperating || string.IsNullOrEmpty(value))
         {
             return;
         }
@@ -211,6 +209,7 @@ internal partial class ImageViewModel : Tool
     /// </summary>
     private async Task RefreshProjectImagesAsync()
     {
+        var version = ++_refreshVersion;
         var context = ProjectContextService.Instance;
         Images.Clear();
 
@@ -221,22 +220,22 @@ internal partial class ImageViewModel : Tool
 
         RebuildSubProjectItems();
 
-        if (IsPackMode)
+        try
         {
-            await RefreshPackEntriesAsync(context);
+            if (IsPackMode) await RefreshPackEntriesAsync(context, version);
+            else await RefreshUnpackEntriesAsync(context, version);
         }
-        else
-        {
-            await RefreshUnpackEntriesAsync(context);
-        }
+        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Images", $"Refresh failed: {ex.Message}"); }
     }
 
     /// <summary>
     /// <para>解包模式：扫描 <c>images/</c> 目录，把已知镜像格式的文件注册到列表。</para>
     /// Unpack mode: scans the <c>images/</c> directory, registering files with known image formats.
     /// </summary>
-    private async Task RefreshUnpackEntriesAsync(ProjectContextService context)
+    private async Task RefreshUnpackEntriesAsync(ProjectContextService context, int version)
     {
+        var root = context.RootDirectory;
+        if (root is null) return;
         var imagesDir = context.ActiveSubProject?.ImagesDir;
         if (string.IsNullOrEmpty(imagesDir) || !Directory.Exists(imagesDir))
         {
@@ -257,7 +256,7 @@ internal partial class ImageViewModel : Tool
                     continue;
                 }
 
-                var relative = context.RelativePath(file);
+                var relative = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
                 if (relative is not null)
                 {
                     list.Add((relative, new FileInfo(file).Length, format));
@@ -268,6 +267,7 @@ internal partial class ImageViewModel : Tool
 
         foreach (var (relative, size, format) in discovered)
         {
+            if (version != _refreshVersion) return;
             if (Images.Any(i => i.RelativePath == relative))
             {
                 continue;
@@ -290,8 +290,10 @@ internal partial class ImageViewModel : Tool
     /// Pack mode: scans first-level sub-directories of the sub-project root (excluding reserved ones),
     /// registering them as packable entries.
     /// </summary>
-    private async Task RefreshPackEntriesAsync(ProjectContextService context)
+    private async Task RefreshPackEntriesAsync(ProjectContextService context, int version)
     {
+        var root = context.RootDirectory;
+        if (root is null) return;
         var subProjectRoot = context.ActiveSubProject?.RootPath;
         if (string.IsNullOrEmpty(subProjectRoot) || !Directory.Exists(subProjectRoot))
         {
@@ -311,7 +313,7 @@ internal partial class ImageViewModel : Tool
                     continue;
                 }
 
-                var relative = context.RelativePath(dir);
+                var relative = Path.GetRelativePath(root, dir).Replace(Path.DirectorySeparatorChar, '/');
                 if (relative is not null)
                 {
                     list.Add((name, relative));
@@ -322,6 +324,7 @@ internal partial class ImageViewModel : Tool
 
         foreach (var (name, relative) in discovered)
         {
+            if (version != _refreshVersion) return;
             if (Images.Any(i => i.RelativePath == relative))
             {
                 continue;
@@ -636,287 +639,133 @@ internal partial class ImageViewModel : Tool
         }
     }
 
-    /// <summary>
-    /// <para>按选中镜像的格式分发到对应解包逻辑，输出到 <c>intermediate/&lt;名称&gt;/</c> 并登记历史（撤销删除输出目录）。</para>
-    /// Dispatches the selected image by its format to the matching unpack logic, writing to
-    /// <c>intermediate/&lt;name&gt;/</c> and recording history (undo deletes the output directory).
-    /// </summary>
+    /// <summary>Extracts the clicked entry or checked entries. 提取右键条目或勾选条目。</summary>
     [RelayCommand]
-    private async Task ExtractSelectedAsync()
+    private Task ExtractSelectedAsync(ImageEntryViewModel? image = null) => RunImagesAsync("extract", image);
+
+    /// <summary>Builds images using directory metadata. 按目录元数据构建镜像。</summary>
+    [RelayCommand]
+    private Task SynthesizeImgAsync(ImageEntryViewModel? image = null) => RunImagesAsync("img", image);
+
+    /// <summary>Builds Brotli-compressed DAT output. 构建 Brotli 压缩的 DAT 输出。</summary>
+    [RelayCommand]
+    private Task SynthesizeBrAsync(ImageEntryViewModel? image = null) => RunImagesAsync("br", image);
+
+    internal async Task RunExplorerOperationAsync(string path, bool pack)
     {
-        var selectedImages = GetSelectedImages();
-        if (selectedImages.Count == 0)
+        try
         {
-            return;
+            if (IsOperating) return;
+            var root = ProjectContextService.Instance.ActiveSubProject?.RootPath;
+            if (root is null || !Path.GetFullPath(path).StartsWith(
+                    Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Select the sub-project containing this entry before operating on it. 请先选择此条目所属的子项目。");
+            var relative = ProjectContextService.Instance.RelativePath(path);
+            if (relative is null) throw new IOException("The selected path is outside the project.");
+            await RunImagesAsync(pack ? "img" : "extract", new ImageEntryViewModel
+            {
+                RelativePath = relative,
+                DisplayName = Path.GetFileName(path),
+                IsDirectory = pack,
+                Format = pack ? "folder" : DetectFormat(path)
+            });
+            if (TopLevelExtensions.GetTopLevel() is Avalonia.Controls.Window owner)
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dock_ImagesView"), StatusText,
+                    Ursa.Controls.MessageBoxIcon.Information);
         }
-
-        if (!ProjectContextService.Instance.IsProjectOpen)
+        catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Extract aborted: no project is open  分解中止：尚未打开工程");
-            return;
+            LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
+            if (TopLevelExtensions.GetTopLevel() is Avalonia.Controls.Window owner)
+                await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dock_ImagesView"), ex.Message,
+                    Ursa.Controls.MessageBoxIcon.Error);
         }
-
-        ProgressPercent = 0;
-        for (var i = 0; i < selectedImages.Count; i++)
-        {
-            var image = selectedImages[i];
-            StatusText = $"[{i + 1}/{selectedImages.Count}] Extracting {image.DisplayName}  正在分解 {image.DisplayName}";
-            await ExtractImageAsync(image, i, selectedImages.Count);
-            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
-        }
-
-        StatusText = $"Extracted {selectedImages.Count} image(s)  已分解 {selectedImages.Count} 个镜像";
-        ProgressPercent = 100;
     }
 
-    private async Task ExtractImageAsync(ImageEntryViewModel image, int fileIndex = 0, int fileCount = 1)
+    private async Task RunImagesAsync(string operation, ImageEntryViewModel? clicked)
     {
-        var source = GetSelectedSourcePath(image, "Extract");
-        if (source is null)
+        if (IsOperating) return;
+        var entries = clicked is null ? GetSelectedImages() : new[] { clicked };
+        if (entries.Count == 0)
         {
+            StatusText = LanguageService.Instance.GetString("ImageView_NoSelection");
             return;
         }
 
         var context = ProjectContextService.Instance;
-        var name = GetEntryBaseName(image);
+        var project = context.ActiveSubProject;
+        if (project is null) return;
+        var requests = entries.Select(entry => (Entry: entry, Paths: new ImageOperationPaths(
+            context.ResolvePath(entry.RelativePath) ?? string.Empty, entry.IsDirectory, project.RootPath, project.OutputDir))).ToArray();
+        var brotliLevel = ProjectSettingViewModel.Instance?.BRComGrade ?? 3;
+        IsOperating = true;
+        var succeeded = 0;
+        var failed = 0;
+        var skipped = 0;
+        ProgressPercent = 0;
         try
         {
-            // 解包产物输出到子项目根目录（与 images/ 同级），而非 intermediate/ 目录。
-            // Unpack output goes to the sub-project root (same level as images/), not intermediate/.
-            var subProjectRoot = context.ActiveSubProject?.RootPath;
-            if (subProjectRoot is null)
+            for (var index = 0; index < requests.Length; index++)
             {
-                LogService.Instance.Write(LogLevel.Error, "Images", "Extract aborted: no active sub-project  分解中止：无活动子项目");
-                return;
-            }
-
-            var outputDir = Path.Combine(subProjectRoot, name);
-
-            // 目标目录已存在时弹出确认对话框，用户选择覆盖则删除后重建，选择跳过则中止。
-            // When the target directory exists, prompt the user: overwrite deletes and recreates, skip aborts.
-            if (Directory.Exists(outputDir))
-            {
-                var overwrite = await RequestExtractOverwriteAsync(name);
-                if (!overwrite)
+                var (entry, paths) = requests[index];
+                StatusText = $"[{index + 1}/{requests.Length}] {operation}: {entry.DisplayName}";
+                try
                 {
-                    LogService.Instance.Write(LogLevel.Info, "Images", $"Extract skipped: directory \"{name}\" already exists  分解跳过：目录 \"{name}\" 已存在");
-                    return;
-                }
-
-                DeleteDirectorySafe(outputDir);
-            }
-
-            Directory.CreateDirectory(outputDir);
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Extracting {image.Format}: {image.RelativePath} -> {outputDir}  正在分解 {image.Format}：{image.RelativePath} -> {outputDir}");
-            var result = image.Format switch
-            {
-                "boot" => await Task.Run(() => _firmware.UnpackBootAsync(source, outputDir)),
-                "payload" => await Task.Run(() => _firmware.ExtractPayloadAsync(source, outputDir)),
-                "cpio" => await Task.Run(() => _firmware.UnpackCpioAsync(source, outputDir)),
-                "oppo" => await Task.Run(() => _firmware.ExtractOppoAsync(source, outputDir)),
-                // sparse 镜像级联解出内部文件系统内容（非文件系统内容时服务内回退 .raw）。
-                // Sparse images cascade into the internal filesystem contents (falls back to .raw
-                // inside the service when the content is not a filesystem).
-                "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(source, outputDir)),
-                // 文件系统镜像：用对应解析器级联解出内部文件系统内容。
-                // Filesystem images: cascade into the internal filesystem contents with the matching parser.
-                "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(source, outputDir, name,
-                    new Progress<(int processed, int total)>(p =>
+                    _ = paths.UnpackedDirectory;
+                    FirmwareOpResult result;
+                    if (operation == "extract")
                     {
-                        if (p.total > 0)
+                        paths.ValidateExtraction();
+                        UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
+                        var handler = FormatDetector.Detect(paths.Source)
+                            ?? throw new IOException("Unsupported firmware format.");
+                        if (Directory.Exists(paths.UnpackedDirectory))
                         {
-                            // 加权进度：当前文件内部进度按文件在总列表中的占比缩放。
-                            // Weighted progress: per-file internal progress scaled by file's share of the total.
-                            ProgressPercent = ((double)fileIndex + (double)p.processed / p.total) / fileCount * 100;
+                            if (!await RequestExtractOverwriteAsync(paths.UnpackedDirectory))
+                            {
+                                skipped++;
+                                continue;
+                            }
                         }
-                    })),
-                _ => FirmwareOpResult.Fail($"Unsupported image format: {image.Format}  不支持的镜像格式：{image.Format}")
-            };
-
-            if (!result.Success)
-            {
-                LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
-                return;
-            }
-
-            LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
-            OperationHistoryService.Instance.Record(
-                $"Extract {image.DisplayName}",
-                new HistoryOperationDto
+                        result = await ExtractionDirectory.ReplaceAsync(paths.UnpackedDirectory, async () => entry.Format switch
+                        {
+                            "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, paths.UnpackedDirectory)),
+                            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, paths.UnpackedDirectory)),
+                            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, paths.UnpackedDirectory, paths.Name),
+                            _ => await Task.Run(async () =>
+                            {
+                                var unpacked = await handler.UnpackAsync(paths.Source, paths.UnpackedDirectory,
+                                    new UotanStudio.Firmware.SharedKernel.UnpackOptions(), CancellationToken.None);
+                                return new FirmwareOpResult { Success = unpacked.Success, Summary = unpacked.Summary };
+                            })
+                        });
+                    }
+                    else
+                    {
+                        Directory.CreateDirectory(paths.OutputRoot);
+                        result = await Task.Run(() => ImageOutputService.Build(paths, operation, brotliLevel));
+                    }
+                    if (result.Success)
+                    {
+                        succeeded++;
+                        if (operation == "extract") entry.IsUnpacked = true;
+                    }
+                    else failed++;
+                    LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
+                }
+                catch (Exception ex)
                 {
-                    Kind = HistoryOperationKind.ExtractImage,
-                    Description = $"Extract {image.DisplayName}",
-                    DisplayName = image.DisplayName,
-                    OutputPaths = [outputDir]
-                },
-                () => DeleteDirectorySafe(outputDir),
-                () => { });
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Images", $"Extract failed: {ex.Message}  分解失败：{ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// <para>从解包目录重新打包 boot 镜像到 <c>intermediate/img/</c> 并登记历史。</para>
-    /// Repacks a boot image from the unpack directory to <c>intermediate/img/</c> and records history.
-    /// </summary>
-    [RelayCommand]
-    private async Task SynthesizeImgAsync()
-    {
-        var selectedImages = GetSelectedImages();
-        if (selectedImages.Count == 0)
-        {
-            return;
-        }
-
-        if (!ProjectContextService.Instance.IsProjectOpen)
-        {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Synthesize img aborted: no project is open  合成 img 中止：尚未打开工程");
-            return;
-        }
-
-        ProgressPercent = 0;
-        for (var i = 0; i < selectedImages.Count; i++)
-        {
-            var image = selectedImages[i];
-            StatusText = $"[{i + 1}/{selectedImages.Count}] Synthesizing img: {image.DisplayName}  正在合成 img：{image.DisplayName}";
-            await SynthesizeSingleImgAsync(image);
-            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
-        }
-
-        StatusText = $"Synthesized img: {selectedImages.Count} image(s)  已合成 img：{selectedImages.Count} 个镜像";
-        ProgressPercent = 100;
-    }
-
-    private async Task SynthesizeSingleImgAsync(ImageEntryViewModel image)
-    {
-        var name = GetEntryBaseName(image);
-        try
-        {
-            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
-            if (subProjectRoot is null)
-            {
-                LogService.Instance.Write(LogLevel.Error, "Images", "Synthesize img aborted: no active sub-project  合成 img 中止：无活动子项目");
-                return;
+                    failed++;
+                    LogService.Instance.Write(LogLevel.Error, "Images", $"{entry.DisplayName}: {ex.Message}");
+                }
+                finally { ProgressPercent = (double)(index + 1) / requests.Length * 100; }
             }
-
-            var unpackDir = Path.Combine(subProjectRoot, name);
-            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
-            var outputPath = Path.Combine(outputDir, name + "-synthesized.img");
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing boot image from {unpackDir}  正在从解包目录合成 boot 镜像");
-            var result = await Task.Run(() => _firmware.PackBootAsync(unpackDir, outputPath));
-            if (!result.Success)
-            {
-                LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
-                StatusText = $"Synthesize img failed  合成 img 失败";
-                ProgressPercent = 0;
-                return;
-            }
-
-            LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
-            OperationHistoryService.Instance.Record(
-                $"Synthesize img {image.DisplayName}",
-                new HistoryOperationDto
-                {
-                    Kind = HistoryOperationKind.SynthesizeImg,
-                    Description = $"Synthesize img {image.DisplayName}",
-                    DisplayName = image.DisplayName,
-                    OutputPaths = [outputPath]
-                },
-                () => DeleteFileSafe(outputPath),
-                () => { });
+            StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, skipped);
         }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize img failed: {ex.Message}  合成 img 失败：{ex.Message}");
-            StatusText = $"Synthesize img failed: {ex.Message}  合成 img 失败：{ex.Message}";
-            ProgressPercent = 0;
-        }
+        finally { IsOperating = false; }
     }
 
-    /// <summary>
-    /// <para>从 ramdisk（或解包）目录打包 CPIO 到 <c>intermediate/br/</c> 并登记历史。</para>
-    /// Packs a CPIO archive from the ramdisk (or unpack) directory to <c>intermediate/br/</c> and records history.
-    /// </summary>
-    [RelayCommand]
-    private async Task SynthesizeBrAsync()
-    {
-        var selectedImages = GetSelectedImages();
-        if (selectedImages.Count == 0)
-        {
-            return;
-        }
-
-        if (!ProjectContextService.Instance.IsProjectOpen)
-        {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Synthesize br aborted: no project is open  合成 br 中止：尚未打开工程");
-            return;
-        }
-
-        ProgressPercent = 0;
-        for (var i = 0; i < selectedImages.Count; i++)
-        {
-            var image = selectedImages[i];
-            StatusText = $"[{i + 1}/{selectedImages.Count}] Synthesizing CPIO: {image.DisplayName}  正在打包 CPIO：{image.DisplayName}";
-            await SynthesizeSingleBrAsync(image);
-            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
-        }
-
-        StatusText = $"Synthesized CPIO: {selectedImages.Count} image(s)  已打包 CPIO：{selectedImages.Count} 个镜像";
-        ProgressPercent = 100;
-    }
-
-    private async Task SynthesizeSingleBrAsync(ImageEntryViewModel image)
-    {
-        var name = GetEntryBaseName(image);
-        try
-        {
-            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
-            if (subProjectRoot is null)
-            {
-                LogService.Instance.Write(LogLevel.Error, "Images", "Synthesize br aborted: no active sub-project  合成 br 中止：无活动子项目");
-                return;
-            }
-
-            var unpackDir = Path.Combine(subProjectRoot, name);
-            // 优先使用 boot 解包产物的 ramdisk 子目录，否则使用解包目录本身。
-            // Prefer the ramdisk sub-directory produced by a boot unpack, otherwise the unpack directory.
-            var ramdiskDir = Path.Combine(unpackDir, "ramdisk");
-            var inputDir = Directory.Exists(ramdiskDir) ? ramdiskDir : unpackDir;
-            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
-            var outputPath = Path.Combine(outputDir, name + "-ramdisk.cpio");
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing cpio from {inputDir}  正在从 {inputDir} 打包 CPIO");
-            var result = await Task.Run(() => _firmware.PackCpioAsync(inputDir, outputPath));
-            if (!result.Success)
-            {
-                LogService.Instance.Write(LogLevel.Error, "Images", result.Summary);
-                StatusText = $"Synthesize br failed  合成 br 失败";
-                ProgressPercent = 0;
-                return;
-            }
-
-            LogService.Instance.Write(LogLevel.Info, "Images", result.Summary);
-            OperationHistoryService.Instance.Record(
-                $"Synthesize br {image.DisplayName}",
-                new HistoryOperationDto
-                {
-                    Kind = HistoryOperationKind.SynthesizeBr,
-                    Description = $"Synthesize br {image.DisplayName}",
-                    DisplayName = image.DisplayName,
-                    OutputPaths = [outputPath]
-                },
-                () => DeleteFileSafe(outputPath),
-                () => { });
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize br failed: {ex.Message}  合成 br 失败：{ex.Message}");
-            StatusText = $"Synthesize br failed: {ex.Message}  合成 br 失败：{ex.Message}";
-            ProgressPercent = 0;
-        }
-    }
 
     /// <summary>
     /// <para>将选中镜像从列表移除并把项目内文件移动到 <c>intermediate/deleted/</c>，登记可撤销历史（撤销移回）。</para>
@@ -924,7 +773,18 @@ internal partial class ImageViewModel : Tool
     /// <c>intermediate/deleted/</c>, recording reversible history (undo moves it back).
     /// </summary>
     [RelayCommand]
-    private async Task DeleteSelectedAsync()
+    private Task DeleteSelectedAsync() => RunExclusiveAsync(DeleteSelectedCoreAsync);
+
+    private async Task RunExclusiveAsync(Func<Task> operation)
+    {
+        if (IsOperating) return;
+        IsOperating = true;
+        try { await operation(); }
+        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Images", ex.Message); }
+        finally { IsOperating = false; }
+    }
+
+    private async Task DeleteSelectedCoreAsync()
     {
         var selectedImages = GetSelectedImages();
         if (selectedImages.Count == 0)
@@ -957,10 +817,7 @@ internal partial class ImageViewModel : Tool
     {
         if (image.IsDirectory)
         {
-            if (DeleteDirectoryRequested is { } deleteDirectory)
-            {
-                await deleteDirectory(image);
-            }
+            await DeleteUnpackedDirectoryAsync(image);
             return;
         }
 
@@ -1012,6 +869,53 @@ internal partial class ImageViewModel : Tool
         }
     }
 
+    internal async Task DeleteUnpackedDirectoryAsync(ImageEntryViewModel image)
+    {
+        var owner = TopLevelExtensions.GetTopLevel() as Avalonia.Controls.Window;
+        var context = ProjectContextService.Instance;
+        var root = context.ActiveSubProject?.RootPath;
+        if (owner is null || root is null)
+        {
+            return;
+        }
+
+        var language = LanguageService.Instance;
+        try
+        {
+            var source = context.ResolvePath(image.RelativePath) ?? throw new IOException("Invalid project path.");
+            var directory = new ImageOperationPaths(source, image.IsDirectory, root, root).UnpackedDirectory;
+
+            if (!Directory.Exists(directory))
+            {
+                await DialogService.ShowAsync(owner, language.GetString("Image_UnpackedDirectoryMissingTitle"),
+                    string.Format(language.GetString("Image_UnpackedDirectoryMissingMessage"), directory), Ursa.Controls.MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!await DialogService.ConfirmAsync(owner, language.GetString("Dialog_ConfirmDelete"),
+                    string.Format(language.GetString("Dialog_ConfirmDeleteMessage"), directory),
+                    language.GetString("Menu_Delete")))
+            {
+                return;
+            }
+
+            await Task.Run(() => Directory.Delete(directory, recursive: true));
+            image.IsUnpacked = false;
+            if (image.IsDirectory)
+            {
+                Images.Remove(image);
+                if (ReferenceEquals(SelectedImage, image)) SelectedImage = null;
+            }
+            StatusText = language.GetString("ImageView_OperationDone");
+            LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted unpacked directory: {directory}");
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Images", $"Delete unpacked directory failed: {ex.Message}");
+            await DialogService.ShowAsync(owner, language.GetString("Dialog_DeleteFailed"), ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+    }
+
     /// <summary>
     /// <para>使用 LP 元数据构建器与 sparse 写入器将项目内 raw/sparse 镜像合成为 super 镜像，输出到
     /// <c>intermediate/super/</c> 并登记历史。</para>
@@ -1019,7 +923,9 @@ internal partial class ImageViewModel : Tool
     /// sparse writer, outputting to <c>intermediate/super/</c> and recording history.
     /// </summary>
     [RelayCommand]
-    private async Task SynthesizeSuperAsync()
+    private Task SynthesizeSuperAsync() => RunExclusiveAsync(SynthesizeSuperCoreAsync);
+
+    private async Task SynthesizeSuperCoreAsync()
     {
         if (!ProjectContextService.Instance.IsProjectOpen)
         {
@@ -1101,7 +1007,9 @@ internal partial class ImageViewModel : Tool
     /// and progress/results are reported to the status text.
     /// </summary>
     [RelayCommand]
-    private async Task FlashSelectedAsync()
+    private Task FlashSelectedAsync() => RunExclusiveAsync(FlashSelectedCoreAsync);
+
+    private async Task FlashSelectedCoreAsync()
     {
         ProgressPercent = 0;
 
@@ -1167,96 +1075,9 @@ internal partial class ImageViewModel : Tool
         }
     }
 
-    /// <summary>
-    /// <para>使用 <see cref="DatWriter"/> 将选中镜像生成为 <c>.new.dat</c> 与 <c>.transfer.list</c>，
-    /// 输出到 <c>intermediate/dat/</c> 并登记历史。</para>
-    /// Uses <see cref="DatWriter"/> to generate a <c>.new.dat</c> and a <c>.transfer.list</c> from the
-    /// selected image, outputting to <c>intermediate/dat/</c> and recording history.
-    /// </summary>
+    /// <summary>Builds DAT output for the clicked or checked entries. 为右键或勾选条目构建 DAT。</summary>
     [RelayCommand]
-    private async Task SynthesizeDatAsync()
-    {
-        var selectedImages = GetSelectedImages();
-        if (selectedImages.Count == 0)
-        {
-            return;
-        }
-
-        if (!ProjectContextService.Instance.IsProjectOpen)
-        {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Synthesize dat aborted: no project is open  合成 dat 中止：尚未打开工程");
-            return;
-        }
-
-        ProgressPercent = 0;
-        for (var i = 0; i < selectedImages.Count; i++)
-        {
-            var image = selectedImages[i];
-            StatusText = $"[{i + 1}/{selectedImages.Count}] Synthesizing DAT: {image.DisplayName}  正在生成 DAT：{image.DisplayName}";
-            await SynthesizeSingleDatAsync(image);
-            ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
-        }
-
-        StatusText = $"Synthesized DAT: {selectedImages.Count} image(s)  已生成 DAT：{selectedImages.Count} 个镜像";
-        ProgressPercent = 100;
-    }
-
-    private async Task SynthesizeSingleDatAsync(ImageEntryViewModel image)
-    {
-        var source = GetSelectedSourcePath(image, "Synthesize dat");
-        if (source is null)
-        {
-            return;
-        }
-
-        var name = GetEntryBaseName(image);
-        try
-        {
-            var outputDir = ProjectContextService.Instance.EnsureOutputDirectory();
-            var datPath = Path.Combine(outputDir, name + ".new.dat");
-            var listPath = Path.Combine(outputDir, name + ".transfer.list");
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Synthesizing DAT: {image.RelativePath}  正在生成 DAT：{image.RelativePath}");
-
-            // sparse 输入先解为 raw 再生成 DAT。
-            // Sparse inputs are first converted to raw before generating the DAT output.
-            var rawSource = source;
-            if (image.Format == "sparse")
-            {
-                var converted = await ConvertToRawAsync(source, outputDir, name);
-                if (!converted.Success)
-                {
-                    LogService.Instance.Write(LogLevel.Error, "Images", converted.Summary);
-                    return;
-                }
-
-                rawSource = Path.Combine(outputDir, name + ".raw");
-            }
-
-            await Task.Run(() => DatWriter.Write(rawSource, datPath, listPath));
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Generated {datPath} + {listPath}  已生成 DAT 输出");
-            OperationHistoryService.Instance.Record(
-                $"Synthesize dat {image.DisplayName}",
-                new HistoryOperationDto
-                {
-                    Kind = HistoryOperationKind.SynthesizeDat,
-                    Description = $"Synthesize dat {image.DisplayName}",
-                    DisplayName = image.DisplayName,
-                    OutputPaths = [datPath, listPath]
-                },
-                () =>
-                {
-                    DeleteFileSafe(datPath);
-                    DeleteFileSafe(listPath);
-                },
-                () => { });
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Images", $"Synthesize dat failed: {ex.Message}  合成 dat 失败：{ex.Message}");
-            StatusText = $"Synthesize dat failed: {ex.Message}  合成 dat 失败：{ex.Message}";
-            ProgressPercent = 0;
-        }
-    }
+    private Task SynthesizeDatAsync(ImageEntryViewModel? image = null) => RunImagesAsync("dat", image);
 
     private static string? GetSelectedSourcePath(ImageEntryViewModel image, string operation)
     {

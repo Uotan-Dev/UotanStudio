@@ -8,7 +8,7 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.Workspace.ImageView"
              x:DataType="viewmodels:ImageViewModel">
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" IsEnabled="{Binding CanOperate}">
         <Grid Grid.Row="0" Margin="5,5" ColumnDefinitions="28,*,28">
             <Button Grid.Column="0"
                     Width="28" Height="28"
@@ -80,7 +80,7 @@
                     <Setter Property="IsVisible" Value="{Binding IsVisible, DataType=viewmodels:ImageEntryViewModel}" />
                     <Setter Property="ContextMenu">
                         <ContextMenu x:DataType="viewmodels:ImageEntryViewModel">
-                            <MenuItem Header="{DynamicResource ImageView_ExtractSelected}" Click="OnExtractMenuClick" />
+                            <MenuItem Header="{DynamicResource ImageView_ExtractSelected}" IsEnabled="{Binding !IsDirectory}" Click="OnExtractMenuClick" />
                             <MenuItem Header="{DynamicResource ImageView_SynthesizeImg}" Click="OnSynthesizeImgMenuClick" />
                             <MenuItem Header="{DynamicResource ImageView_SynthesizeBr}" Click="OnSynthesizeBrMenuClick" />
                             <Separator />

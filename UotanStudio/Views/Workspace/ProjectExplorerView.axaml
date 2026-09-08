@@ -46,6 +46,7 @@
                         <Separator />
                         <MenuItem Header="{DynamicResource Menu_Cut}" Click="OnCut" />
                         <MenuItem Header="{DynamicResource Menu_Copy}" Click="OnCopy" />
+                        <MenuItem Header="{DynamicResource Menu_Paste}" Click="OnPaste" />
                         <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDelete" />
                         <MenuItem Header="{DynamicResource Explorer_Rename}" Click="OnRename" />
                         <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" Click="OnCopyFullPath" />
