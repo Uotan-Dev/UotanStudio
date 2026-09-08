@@ -44,8 +44,10 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     internal static DeviceViewModel EnsureInstance() => Instance ??= new();
 
     /// <summary>
-    /// <para>获取或设置已检测到的设备列表。</para>
-    /// Gets or sets the list of detected devices.
+    /// <para>获取或设置已检测到的设备列表。集合增删时同步通知
+    /// <see cref="HasDevices"/> / <see cref="HasNoDevices"/>。</para>
+    /// Gets or sets the list of detected devices. Collection changes also notify
+    /// <see cref="HasDevices"/> / <see cref="HasNoDevices"/>.
     /// </summary>
     public ObservableCollection<DeviceInfo> Devices
     {
@@ -64,6 +66,9 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
         {
             if (SetProperty(ref field, value))
             {
+                OnPropertyChanged(nameof(HasSelectedDevice));
+                OnPropertyChanged(nameof(ShowSelectPlaceholder));
+                OnPropertyChanged(nameof(SelectedDeviceName));
                 OnPropertyChanged(nameof(DeviceDetail));
                 OnPropertyChanged(nameof(CanOpenAdbShell));
                 OnPropertyChanged(nameof(CanFastbootReadInfo));
@@ -74,6 +79,10 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 QuickFlashCommand.NotifyCanExecuteChanged();
                 BackupPartitionCommand.NotifyCanExecuteChanged();
                 RestorePartitionCommand.NotifyCanExecuteChanged();
+                foreach (var device in Devices)
+                {
+                    device.NotifySelectionChanged();
+                }
             }
         }
     }
@@ -105,6 +114,40 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     public bool HasNoDevices => !IsRefreshing && Devices.Count == 0;
 
     /// <summary>
+    /// <para>获取是否存在任何设备（用于顶栏选择器切换占位项与设备列表）。</para>
+    /// Gets whether any device exists (the top-bar selector switches between the
+    /// placeholder and the device list based on this).
+    /// </summary>
+    public bool HasDevices => Devices.Count > 0;
+
+    /// <summary>
+    /// <para>获取是否已选中设备（用于顶栏选择器切换显示设备名或占位文本）。</para>
+    /// Gets whether a device is selected (the top-bar selector switches between the
+    /// device name and the placeholder text based on this).
+    /// </summary>
+    public bool HasSelectedDevice => SelectedDevice is not null;
+
+    /// <summary>
+    /// <para>获取是否显示「选择设备」占位文本（有设备但未选中时）。</para>
+    /// Gets whether to show the "select device" placeholder (devices present but none selected).
+    /// </summary>
+    public bool ShowSelectPlaceholder => HasDevices && !HasSelectedDevice;
+
+    /// <summary>
+    /// <para>获取当前选中设备的显示名称（未选中时为空，供顶栏头部绑定避免空路径）。</para>
+    /// Gets the display name of the selected device (empty when none; keeps the top-bar
+    /// header binding free of null-path errors).
+    /// </summary>
+    public string SelectedDeviceName => SelectedDevice?.DisplayName ?? string.Empty;
+
+    /// <summary>
+    /// <para>选中指定设备（顶栏选择器点选入口，与设备面板共享同一选择状态）。</para>
+    /// Selects the specified device (top-bar selector entry point, sharing the same
+    /// selection state with the device panel).
+    /// </summary>
+    internal void SelectDevice(DeviceInfo? device) => SelectedDevice = device;
+
+    /// <summary>
     /// <para>获取选中设备的详情文本。</para>
     /// Gets the detail text of the selected device.
     /// </summary>
@@ -129,6 +172,12 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
     public DeviceViewModel()
     {
         Instance = this;
+        Devices.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasDevices));
+            OnPropertyChanged(nameof(HasNoDevices));
+            OnPropertyChanged(nameof(ShowSelectPlaceholder));
+        };
         DeviceMonitorService.Instance.DevicesChanged += OnDevicesChanged;
         DeviceMonitorService.Instance.Start();
         _ = RefreshDevicesAsync();
@@ -206,11 +255,11 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                     {
                         if (match.State != scanned[i].State)
                         {
-                            Devices[i] = new DeviceInfo(scanned[i]);
+                            Devices[i] = new DeviceInfo(scanned[i], this);
                         }
                         continue;
                     }
-                    Devices.Insert(i, new DeviceInfo(scanned[i]));
+                    Devices.Insert(i, new DeviceInfo(scanned[i], this));
                 }
                 for (var i = Devices.Count - 1; i >= scanned.Count; i--)
                 {
@@ -221,6 +270,16 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
             if (selectedKey is not null)
             {
                 SelectedDevice = Devices.FirstOrDefault(x => x.Key == selectedKey);
+            }
+
+            // 选中不变式：只要列表中存在设备就保证选中项非空——原选中设备仍在则保留，
+            // 已断开或从未选中时自动回退到当前列表第一项。
+            // Selection invariant: whenever any device exists, keep a non-null selection —
+            // retain the previous device if still present, otherwise fall back to the first
+            // item (covers disconnects and the initial default selection).
+            if (SelectedDevice is null && Devices.Count > 0)
+            {
+                SelectedDevice = Devices[0];
             }
 
             StatusText = Devices.Count == 0
@@ -1498,11 +1557,44 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
 /// <para>初始化设备信息。</para>
 /// Initializes the device info.
 /// </remarks>
-public class DeviceInfo(DetectedDevice device) : ViewModelBase
+public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = null) : ViewModelBase
 {
 
     /// <summary>底层枚举设备。 The underlying detected device.</summary>
     public DetectedDevice Device { get; } = device;
+
+    /// <summary>
+    /// <para>获取或设置当前条目是否为全局选中设备（顶栏选择器打勾标记；
+    /// 选中状态变化由 <see cref="DeviceViewModel"/> 统一通知）。</para>
+    /// Gets or sets whether this entry is the globally selected device (top-bar selector
+    /// check mark; selection changes are notified by <see cref="DeviceViewModel"/>).
+    /// </summary>
+    public bool IsSelected
+    {
+        get;
+        private set => SetProperty(ref field, value);
+    }
+
+    /// <summary>
+    /// <para>由 <see cref="DeviceViewModel"/> 在选中设备变化时调用，刷新打勾绑定。</para>
+    /// Called by <see cref="DeviceViewModel"/> when the selected device changes, refreshing
+    /// the check-mark binding.
+    /// </summary>
+    internal void NotifySelectionChanged() => IsSelected = owner is not null && ReferenceEquals(owner.SelectedDevice, this);
+
+    /// <summary>
+    /// <para>选中本设备（顶栏选择器点选入口；无宿主 <see cref="DeviceViewModel"/> 的临时实例不可执行）。</para>
+    /// Selects this device (top-bar selector entry point; not executable for temporary
+    /// instances without an owning <see cref="DeviceViewModel"/>).
+    /// </summary>
+    [RelayCommand]
+    private void Select()
+    {
+        if (owner is not null)
+        {
+            owner.SelectDevice(this);
+        }
+    }
 
     /// <summary>稳定键。 Stable key.</summary>
     public string Key => Device.Key;

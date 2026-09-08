@@ -25,6 +25,15 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     public SettingsViewModel SettingsVM { get; } = new();
 
     /// <summary>
+    /// <para>设备面板单例：顶栏设备选择器与设备面板共享同一实例，
+    /// 首次访问时创建并启动设备监视服务（USB 全量扫描 + 热插拔监听）。</para>
+    /// Device panel singleton: shared by the top-bar device selector and the device
+    /// panel; first access creates it and starts the monitor service (full USB scan
+    /// plus hotplug monitoring).
+    /// </summary>
+    public ViewModels.Devices.DeviceViewModel DeviceVM => ViewModels.Devices.DeviceViewModel.EnsureInstance();
+
+    /// <summary>
     /// <para>窗口标题（含当前解决方案名），随解决方案打开/关闭更新。</para>
     /// Window title (including the current solution name), updated when a solution is opened or closed.
     /// </summary>

@@ -6,6 +6,8 @@
    xmlns:views="using:UotanStudio.Views.Shell"
    xmlns:app="using:UotanStudio"
    xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+   xmlns:devices="using:UotanStudio.ViewModels.Devices"
+   xmlns:conv="using:UotanStudio.Converters"
    mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
    x:Class="UotanStudio.Views.Shell.MainWindow"
    x:DataType="vm:MainViewModel"
@@ -298,13 +300,36 @@
 					<MenuItem.Header>
 						<Grid ColumnDefinitions="16,*,12" ColumnSpacing="8" MinWidth="132" MaxWidth="280">
 							<avalonia:MaterialIcon Kind="Cellphone" Width="16" Height="16" />
+							<!-- 未选中时显示占位文本，选中后显示设备名（两块互斥切换，保留本地化资源引用）。 -->
 							<TextBlock Grid.Column="1" Text="{DynamicResource Device_Select}"
-									   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+									   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+									   IsVisible="{Binding DeviceVM.HasSelectedDevice, Converter={x:Static BoolConverters.Not}}" />
+							<TextBlock Grid.Column="1" Text="{Binding DeviceVM.SelectedDeviceName}"
+									   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+									   IsVisible="{Binding DeviceVM.HasSelectedDevice}" />
 							<avalonia:MaterialIcon Grid.Column="2" Kind="ChevronDown" Width="12" Height="12" />
 						</Grid>
 					</MenuItem.Header>
-					<!-- UI placeholder until the device selector is connected to a device source. -->
-					<MenuItem Header="{DynamicResource Device_NoDevices}" IsEnabled="False" />
+					<!-- 空态：未检测到设备时显示禁用占位项。 -->
+					<MenuItem Header="{DynamicResource Device_NoDevices}" IsEnabled="False"
+							  IsVisible="{Binding DeviceVM.HasDevices, Converter={x:Static BoolConverters.Not}}" />
+					<!-- 真实设备列表：绑定 DeviceViewModel 单例，点选同步 SelectedDevice（与设备面板共享选择状态）。 -->
+					<MenuItem Header="{DynamicResource Device_Select}" ItemsSource="{Binding DeviceVM.Devices}"
+							  IsVisible="{Binding DeviceVM.HasDevices}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="Cellphone" Width="16" Height="16" />
+						</MenuItem.Icon>
+						<!-- 注意：不能用 ItemTemplate 嵌套 MenuItem（会容器套容器且外层无 Command 被禁用），
+						     须用 ItemContainerTheme 直接给生成的 MenuItem 容器设置 Header/Command/选中打勾。 -->
+						<MenuItem.ItemContainerTheme>
+							<ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+								<Setter Property="Header" Value="{Binding DisplayName, x:DataType=devices:DeviceInfo}" />
+								<Setter Property="ToggleType" Value="CheckBox" />
+								<Setter Property="IsChecked" Value="{Binding IsSelected, x:DataType=devices:DeviceInfo, Mode=OneWay}" />
+								<Setter Property="Command" Value="{Binding SelectCommand, x:DataType=devices:DeviceInfo}" />
+							</ControlTheme>
+						</MenuItem.ItemContainerTheme>
+					</MenuItem>
 					<Separator />
 					<MenuItem x:Name="DeviceSelectorManagerItem" Header="{DynamicResource Menu_DeviceManager}"
 							  Command="{Binding MenuVM.OpenDeviceCommand}">
