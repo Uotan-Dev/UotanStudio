@@ -32,6 +32,35 @@ public class HexViewer : Grid
     /// </summary>
     public event EventHandler? BytesEdited;
 
+    /// <summary>
+    /// Encoding name used to decode the text column and encode text input; <c>null</c> keeps the
+    /// legacy single-byte ASCII rendering.
+    /// <para>文本列解码与文本输入使用的编码名称；<c>null</c> 保持旧的单字节 ASCII 渲染。</para>
+    /// </summary>
+    public static readonly StyledProperty<string?> EncodingNameProperty =
+        AvaloniaProperty.Register<HexViewer, string?>(nameof(EncodingName));
+
+    /// <summary>
+    /// Gets or sets the encoding name for the text column and text input (e.g. "ASCII", "UTF-8",
+    /// "GB18030"); <c>null</c> means plain ASCII.
+    /// <para>获取或设置文本列与文本输入的编码名称（如 "ASCII"、"UTF-8"、"GB18030"）；<c>null</c> 表示纯 ASCII。</para>
+    /// </summary>
+    public string? EncodingName
+    {
+        get => GetValue(EncodingNameProperty);
+        set => SetValue(EncodingNameProperty, value);
+    }
+
+    /// <inheritdoc />
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == EncodingNameProperty)
+        {
+            _viewport.SetEncodingName(change.NewValue as string);
+        }
+    }
+
     private byte[]? _data = System.Array.Empty<byte>();
     private readonly ScrollViewer _scroll;
     private readonly HexViewport _viewport;
@@ -154,6 +183,7 @@ public class HexViewer : Grid
 
         private readonly ScrollViewer _scroll;
         private byte[]? _data = System.Array.Empty<byte>();
+        private System.Text.Encoding _textEncoding = System.Text.Encoding.ASCII;
         private long _caretOffset;
         private long _selectionAnchor = -1;
         private bool _hasSelection;
@@ -223,6 +253,33 @@ public class HexViewer : Grid
             _pendingHighNibble = false;
             _editedOffsets.Clear();
             InvalidateMeasure();
+            InvalidateVisual();
+        }
+
+        /// <summary>
+        /// <para>设置文本列与文本输入的编码；未知名称回落为 ASCII。</para>
+        /// Sets the encoding for the text column and text input; unknown names fall back to ASCII.
+        /// </summary>
+        public void SetEncodingName(string? name)
+        {
+            System.Text.Encoding encoding;
+            try
+            {
+                encoding = string.IsNullOrEmpty(name) || name == "ASCII"
+                    ? System.Text.Encoding.ASCII
+                    : System.Text.Encoding.GetEncoding(name);
+            }
+            catch (ArgumentException)
+            {
+                encoding = System.Text.Encoding.ASCII;
+            }
+
+            if (_textEncoding.CodePage == encoding.CodePage)
+            {
+                return;
+            }
+
+            _textEncoding = encoding;
             InvalidateVisual();
         }
 
@@ -318,7 +375,7 @@ public class HexViewer : Grid
                     var ch = _data[start + b];
                     DrawCenteredText(
                         context,
-                        ch is >= 0x20 and < 0x7F ? ((char)ch).ToString() : ".",
+                        DecodeByte(ch),
                         layout.XFromByteIndex(b, hexZone: false),
                         layout.AsciiCellWidth,
                         y,
@@ -657,7 +714,9 @@ public class HexViewer : Grid
                     InsertNibble((byte)nibble);
                 }
             }
-            else if (e.Text.Length == 1 && e.Text[0] is >= ' ' and <= '~')
+            else if (e.Text.Length == 1
+                && (e.Text[0] is >= ' ' and <= '~'
+                    || (!_textEncoding.IsSingleByte && e.Text[0] >= ' ')))
             {
                 InsertAscii(e.Text[0]);
             }
@@ -750,7 +809,11 @@ public class HexViewer : Grid
 
         private void InsertAscii(char c)
         {
-            WriteByteAtCaret((byte)c);
+            // 按当前编码取首字节写入（就地单字节编辑模型；多字节字符仅写入首字节）。
+            // Take the first byte of the current encoding (in-place single-byte editing; multi-byte
+            // characters write only their first byte).
+            var bytes = _textEncoding.GetBytes(c.ToString());
+            WriteByteAtCaret(bytes.Length > 0 ? bytes[0] : (byte)c);
             AdvanceCaret();
         }
 
@@ -793,6 +856,29 @@ public class HexViewer : Grid
             }
 
             return -1;
+        }
+
+        /// <summary>
+        /// <para>按当前编码把单字节解码为文本列显示字符；不可打印/无法解码时显示 "."。</para>
+        /// Decodes one byte to a text-column character using the current encoding; non-printable or
+        /// undecodable bytes render as ".".
+        /// </summary>
+        private string DecodeByte(byte value)
+        {
+            if (value is >= 0x20 and < 0x7F)
+            {
+                return ((char)value).ToString();
+            }
+
+            // 多字节编码：单字节无法组成完整序列，无法独立解码，显示占位符。
+            // Multi-byte encodings: a lone byte cannot complete a sequence; show a placeholder.
+            if (!_textEncoding.IsSingleByte && _textEncoding != System.Text.Encoding.ASCII)
+            {
+                return ".";
+            }
+
+            var decoded = _textEncoding.GetString(new[] { value });
+            return decoded.Length == 1 && decoded[0] is >= ' ' and <= '~' ? decoded : ".";
         }
 
         // ===== 剪贴板 / Clipboard =====

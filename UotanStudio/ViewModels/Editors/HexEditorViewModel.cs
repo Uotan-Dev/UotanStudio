@@ -77,6 +77,23 @@ public partial class HexEditorViewModel : Document
     [ObservableProperty] private byte[]? _rawBytes;
 
     /// <summary>
+    /// <para>文本列解码/输入使用的编码名称（默认 ASCII，与属性面板下拉框共用集合）。</para>
+    /// Encoding name used for text-column decoding/input (default ASCII; shares the options list
+    /// with the properties-panel dropdown).
+    /// </summary>
+    [ObservableProperty] private string _encodingName = "ASCII";
+
+    /// <summary>
+    /// <para>应用用户选择的文本列编码（仅影响显示与输入，不改变保存的字节内容）。</para>
+    /// Applies a user-chosen text-column encoding (display/input only; never changes saved bytes).
+    /// </summary>
+    public void ApplyEncoding(string encodingName)
+    {
+        if (string.IsNullOrEmpty(encodingName)) return;
+        EncodingName = encodingName;
+    }
+
+    /// <summary>
     /// <para>保存命令：把字节数组写回原文件。</para>
     /// Save command: writes the byte array back to the file.
     /// </summary>
@@ -169,6 +186,7 @@ public partial class HexEditorViewModel : Document
     public void Cleanup()
     {
         RawBytes = null;
+        EncodingName = "ASCII";
         SizeDisplay = string.Empty;
         CompileError = string.Empty;
         IsDirty = false;

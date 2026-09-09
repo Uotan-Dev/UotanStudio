@@ -100,6 +100,13 @@ internal partial class PropertiesViewModel : Tool
     private FileViewModel? _currentTextDocument;
 
     /// <summary>
+    /// <para>当前活动的 Hex 文档引用（编码选择器回写目标）；非 Hex 文档时为 <c>null</c>。</para>
+    /// Reference to the current Hex document (target for encoding-selector write-back);
+    /// <c>null</c> when the active document is not a Hex document.
+    /// </summary>
+    private HexEditorViewModel? _currentHexDocument;
+
+    /// <summary>
     /// <para>语言选择器是否可见（仅文本文档类型显示）。</para>
     /// Whether the language selector is visible (shown only for text document types).
     /// </summary>
@@ -454,7 +461,21 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     partial void OnSelectedEncodingChanged(string value)
     {
-        if (_suppressEncodingChange || _currentTextDocument is not { } doc) return;
+        if (_suppressEncodingChange) return;
+
+        // Hex 文档：回写文本列编码（仅影响显示/输入，不改变保存字节）。
+        // Hex document: write back the text-column encoding (display/input only; saved bytes unchanged).
+        if (_currentHexDocument is { } hex)
+        {
+            if (!string.IsNullOrEmpty(value))
+            {
+                hex.ApplyEncoding(value);
+            }
+
+            return;
+        }
+
+        if (_currentTextDocument is not { } doc) return;
         if (string.IsNullOrEmpty(value) || (AvailableEncodings.Count > 0 && value == AvailableEncodings[0]))
         {
             // 「自动检测」仅同步显示，不改变写盘编码。
@@ -539,6 +560,7 @@ internal partial class PropertiesViewModel : Tool
     private void ClearLanguageSelector()
     {
         _currentTextDocument = null;
+        _currentHexDocument = null;
         HasLanguageSelector = false;
         AvailableLanguages.Clear();
         _suppressLanguageChange = true;
@@ -784,7 +806,42 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_ByteCount"), doc.SizeDisplay));
 
+        // 编码选择器：与文本文档同一下拉行样式，控制 HexViewer 文本列解码/输入编码。
+        // Encoding selector: same dropdown-row style as text documents; controls the HexViewer
+        // text-column decode/input encoding.
+        _currentHexDocument = doc;
+        PopulateHexEncodingSelector(doc.EncodingName);
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Encoding"), string.Empty)
+        {
+            IsEncodingSelector = true
+        });
+
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Hex document '{doc.FilePath}'");
+    }
+
+    /// <summary>
+    /// <para>填充 Hex 文档的编码下拉栏并选中当前编码。</para>
+    /// Populates the Hex document's encoding dropdown and selects the current encoding.
+    /// </summary>
+    private void PopulateHexEncodingSelector(string currentEncoding)
+    {
+        AvailableEncodings.Clear();
+        foreach (var encoding in FileViewModel.SupportedEncodings)
+        {
+            AvailableEncodings.Add(encoding);
+        }
+
+        _suppressEncodingChange = true;
+        try
+        {
+            SelectedEncoding = AvailableEncodings.Contains(currentEncoding)
+                ? currentEncoding
+                : AvailableEncodings[0];
+        }
+        finally
+        {
+            _suppressEncodingChange = false;
+        }
     }
 
     /// <summary>
