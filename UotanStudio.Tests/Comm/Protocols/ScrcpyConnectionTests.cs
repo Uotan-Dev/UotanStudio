@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Comm.Protocols.Scrcpy;
 using Xunit;
@@ -45,6 +45,26 @@ public class ScrcpyConnectionTests
             Assert.Contains("tunnel_forward=true", options.BuildArguments());
             Assert.DoesNotContain(options.BuildArguments(), item => item.StartsWith("socket_name=", StringComparison.Ordinal));
         }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Connect_DisabledAudio_DoesNotBreakVideo(int status)
+    {
+        byte[] video = new byte[12];
+        BinaryPrimitives.WriteUInt32BigEndian(video, 0x68323634);
+        BinaryPrimitives.WriteInt32BigEndian(video.AsSpan(4), 64);
+        BinaryPrimitives.WriteInt32BigEndian(video.AsSpan(8), 64);
+        byte[] audio = new byte[4];
+        BinaryPrimitives.WriteInt32BigEndian(audio, status);
+        int opens = 0;
+        using var client = new ScrcpyClient(_ => new MemoryStream(++opens == 1 ? video : audio),
+            new ScrcpyServerOptions { Audio = true, Control = false, SendDummyByte = false, SendDeviceMeta = false });
+        client.Connect();
+        Assert.NotNull(client.VideoMetadata);
+        Assert.Null(client.AudioMetadata);
+        Assert.True(client.AudioDisabledByServer);
     }
 
     [Fact]

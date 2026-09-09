@@ -187,6 +187,9 @@ public sealed class ScrcpyClient : IDisposable
     /// <summary>获取音频 socket 上宣告的音频编码元数据。</summary>
     public ScrcpyAudioMetadata? AudioMetadata { get; private set; }
 
+    /// <summary>Whether the server explicitly disabled audio (codec header 0 or 1).</summary>
+    public bool AudioDisabledByServer { get; private set; }
+
     /// <summary>
     /// Gets a value indicating whether the control socket is connected.
     /// </summary>
@@ -207,6 +210,7 @@ public sealed class ScrcpyClient : IDisposable
         DeviceName = string.Empty;
         VideoMetadata = null;
         AudioMetadata = null;
+        AudioDisabledByServer = false;
         try { ConnectCore(timeoutMs); }
         catch { Dispose(); throw; }
     }
@@ -264,7 +268,14 @@ public sealed class ScrcpyClient : IDisposable
         if (_audioStream is not null && _options.SendCodecMeta)
         {
             var audioCodec = ReadExact(_audioStream, 4, timeoutMs);
-            AudioMetadata = new ScrcpyAudioMetadata(BinaryPrimitives.ReadUInt32BigEndian(audioCodec));
+            uint codecId = BinaryPrimitives.ReadUInt32BigEndian(audioCodec);
+            if (codecId <= 1)
+            {
+                AudioDisabledByServer = true;
+                _audioStream.Dispose();
+                _audioStream = null;
+            }
+            else AudioMetadata = new ScrcpyAudioMetadata(codecId);
         }
     }
 
@@ -383,24 +394,24 @@ public sealed class ScrcpyClient : IDisposable
         switch (type[0])
         {
             case ScrcpyConstants.DeviceTypeClipboard:
-            {
-                var lengthBytes = ReadExact(stream, 4, timeoutMs);
-                var length = BinaryPrimitives.ReadInt32BigEndian(lengthBytes);
-                if (length is < 0 or > MaxClipboardLength)
                 {
-                    throw new InvalidDataException(
-                        $"Clipboard length {length} exceeds the bound. 剪贴板长度 {length} 超出上限。");
+                    var lengthBytes = ReadExact(stream, 4, timeoutMs);
+                    var length = BinaryPrimitives.ReadInt32BigEndian(lengthBytes);
+                    if (length is < 0 or > MaxClipboardLength)
+                    {
+                        throw new InvalidDataException(
+                            $"Clipboard length {length} exceeds the bound. 剪贴板长度 {length} 超出上限。");
+                    }
+
+                    var text = ReadExact(stream, length, timeoutMs);
+                    return new ScrcpyDeviceMessage(type[0], Encoding.UTF8.GetString(text));
                 }
 
-                var text = ReadExact(stream, length, timeoutMs);
-                return new ScrcpyDeviceMessage(type[0], Encoding.UTF8.GetString(text));
-            }
-
             case ScrcpyConstants.DeviceTypeAckClipboard:
-            {
-                var seq = ReadExact(stream, 8, timeoutMs);
-                return new ScrcpyDeviceMessage(type[0], AckSequence: BinaryPrimitives.ReadUInt64BigEndian(seq));
-            }
+                {
+                    var seq = ReadExact(stream, 8, timeoutMs);
+                    return new ScrcpyDeviceMessage(type[0], AckSequence: BinaryPrimitives.ReadUInt64BigEndian(seq));
+                }
 
             default:
                 throw new InvalidDataException($"Unknown device message type {type[0]}. 未知的设备消息类型 {type[0]}。");

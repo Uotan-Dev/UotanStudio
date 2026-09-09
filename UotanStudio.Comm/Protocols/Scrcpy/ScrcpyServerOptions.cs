@@ -32,6 +32,12 @@ public sealed class ScrcpyServerOptions
     /// <summary>Gets or sets the video codec ("h264" or "h265").</summary>
     /// <summary>获取或设置视频编码格式（"h264" 或 "h265"）。</summary>
     public string VideoCodec { get; init; } = "h264";
+    /// <summary>Audio codec (aac/opus/flac/raw). 音频编码格式。</summary>
+    public string AudioCodec { get; init; } = "aac";
+    /// <summary>Explicit Android video encoder name, or empty for automatic selection. 设备端视频编码器名称。</summary>
+    public string VideoEncoder { get; init; } = string.Empty;
+    /// <summary>Audio encoding bitrate. 音频编码码率。</summary>
+    public int AudioBitRate { get; init; } = 128000;
 
     /// <summary>Gets or sets whether video capture is enabled.</summary>
     /// <summary>获取或设置是否启用视频采集。</summary>
@@ -71,7 +77,12 @@ public sealed class ScrcpyServerOptions
     public string[] BuildArguments()
     {
         if (Scid > int.MaxValue) throw new ArgumentOutOfRangeException(nameof(Scid));
-        if (VideoCodec is not ("h264" or "h265")) throw new ArgumentException("Unsupported video codec.", nameof(VideoCodec));
+        if (VideoCodec is not ("h264" or "h265" or "av1")) throw new ArgumentException("Unsupported video codec.", nameof(VideoCodec));
+        if (AudioCodec is not ("aac" or "opus" or "flac" or "raw")) throw new ArgumentException("Unsupported audio codec.", nameof(AudioCodec));
+        if (VideoEncoder.Length > 256 || VideoEncoder.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not ('.' or '_' or '-')))
+            throw new ArgumentException("Invalid encoder name.", nameof(VideoEncoder));
+        if (VideoBitRate is < 64000 or > 200000000 || AudioBitRate is < 8000 or > 1000000 || MaxFps is < 0 or > 240 || MaxSize is < 0 or > 16384)
+            throw new ArgumentOutOfRangeException(nameof(VideoBitRate), "Invalid capture limits.");
         if (LogLevel is not ("verbose" or "debug" or "info" or "warn" or "error")) throw new ArgumentException("Invalid server log level.", nameof(LogLevel));
         var args = new List<string>
         {
@@ -82,6 +93,8 @@ public sealed class ScrcpyServerOptions
             $"video_bit_rate={VideoBitRate.ToString(CultureInfo.InvariantCulture)}",
             $"max_fps={MaxFps.ToString(CultureInfo.InvariantCulture)}",
             $"video_codec={VideoCodec}",
+            $"audio_codec={AudioCodec}",
+            $"audio_bit_rate={AudioBitRate}",
             $"video={Bool(Video)}",
             $"audio={Bool(Audio)}",
             $"control={Bool(Control)}",
@@ -93,6 +106,7 @@ public sealed class ScrcpyServerOptions
             "cleanup=true",
             "tunnel_forward=true",
         };
+        if (VideoEncoder.Length > 0) args.Add($"video_encoder={VideoEncoder}");
         return [.. args];
     }
 
