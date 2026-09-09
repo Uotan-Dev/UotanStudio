@@ -26,7 +26,11 @@ public sealed record NewProjectFormResult(
 /// </summary>
 public partial class NewProjectWindow : Window
 {
+    private const double ImageRowHeight = 28;
+    private const double MinimumImageColumnWidth = 240;
+    private const int MaximumImageColumns = 3;
     private NewProjectImageEntry[] _images = [];
+    private int _imageColumnCount;
     private bool _updatingSelection;
     private bool _validationRequested;
 
@@ -37,6 +41,7 @@ public partial class NewProjectWindow : Window
     public NewProjectWindow()
     {
         InitializeComponent();
+        ImageList.SizeChanged += (_, _) => UpdateImageColumns();
         SelectAllBox.IsCheckedChanged += OnSelectAllChanged;
         UnpackFullyBox.IsCheckedChanged += (_, _) =>
         {
@@ -115,12 +120,27 @@ public partial class NewProjectWindow : Window
         DetachImageHandlers();
         _images = images;
         foreach (var image in images) image.PropertyChanged += OnImageSelectionChanged;
-        ImageList.ItemsSource = images.Chunk(2).Select(pair => new NewProjectImageRow(pair[0], pair.Length > 1 ? pair[1] : null)).ToArray();
+        _imageColumnCount = 0;
+        UpdateImageColumns();
         ImagePathsBox.Text = string.Join("; ", images.Select(image => image.FilePath));
         ToolTip.SetTip(ImagePathsBox, ImagePathsBox.Text);
         ImageListPanel.IsVisible = images.Length > 0;
         ClearImagesButton.IsVisible = images.Length > 0;
         UpdateSelectAll();
+    }
+
+    private void UpdateImageColumns()
+    {
+        // Use the fewest columns that fit the available height, while keeping each column readable.
+        // 根据列表可用高度选择最少列数，并限制每列的最小宽度；窗口增高时自动合并列。
+        var rowsPerColumn = Math.Max(1, (int)Math.Floor(ImageList.Bounds.Height / ImageRowHeight));
+        var widthLimit = Math.Clamp((int)(ImageList.Bounds.Width / MinimumImageColumnWidth), 1, MaximumImageColumns);
+        var requiredColumns = (int)Math.Ceiling((double)_images.Length / rowsPerColumn);
+        var columns = Math.Clamp(requiredColumns, 1, widthLimit);
+        if (columns == _imageColumnCount) return;
+        _imageColumnCount = columns;
+        ImageHeaders.ItemsSource = Enumerable.Range(0, columns).ToArray();
+        ImageList.ItemsSource = _images.Chunk(columns).Select(entries => new NewProjectImageRow(entries, columns)).ToArray();
     }
 
     private void DetachImageHandlers()
@@ -195,7 +215,4 @@ internal sealed partial class NewProjectImageEntry(string filePath) : Observable
     [ObservableProperty] private bool _isSelected = true;
 }
 
-internal sealed record NewProjectImageRow(NewProjectImageEntry Left, NewProjectImageEntry? Right)
-{
-    public bool HasRight => Right is not null;
-}
+internal sealed record NewProjectImageRow(NewProjectImageEntry[] Images, int ColumnCount);

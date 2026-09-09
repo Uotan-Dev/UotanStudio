@@ -25,6 +25,8 @@
     <x:String x:Key="NewProject_LocationRequired">请选择或输入项目位置</x:String>
     <x:String x:Key="NewProject_BrowseLocation">选择项目位置</x:String>
     <x:String x:Key="NewProject_BrowseImages">选择ROM或镜像文件</x:String>
+    <x:String x:Key="NewProject_SelectFolder">选择目录</x:String>
+    <x:String x:Key="NewProject_SelectImages">选择镜像</x:String>
     <x:String x:Key="NewProject_ClearImages">清除已选文件</x:String>
     <x:String x:Key="NewProject_ImageFiles">ROM与镜像文件</x:String>
     <x:String x:Key="NewProject_PickerFailed">无法选择文件或目录</x:String>

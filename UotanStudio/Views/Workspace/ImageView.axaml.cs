@@ -5,6 +5,7 @@ using Avalonia.VisualTree;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views.Shell;
 using Ursa.Controls;
 
 namespace UotanStudio.Views.Workspace;
@@ -124,5 +125,11 @@ public partial class ImageView : UserControl
         {
             if (vm.FlashSelectedCommand.CanExecute(image)) vm.FlashSelectedCommand.Execute(image);
         }
+    }
+
+    private async void OnPackSuperRomClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not ImageViewModel { IsOperating: false } || TopLevel.GetTopLevel(this) is not Window owner) return;
+        await new PackSuperRomWindow().ShowDialog(owner);
     }
 }

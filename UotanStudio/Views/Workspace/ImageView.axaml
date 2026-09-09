@@ -220,8 +220,7 @@
                             </Button>
                         </controls:JustifiedWrapPanel>
 
-                        <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
-                                                       IsVisible="{Binding IsPackMode}">
+                        <StackPanel Spacing="6" IsVisible="{Binding IsPackMode}">
                             <Button MinWidth="110" HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
                                     Command="{Binding SynthesizeImgCommand}">
@@ -232,39 +231,30 @@
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>
                             </Button>
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding SynthesizeSuperCommand}"
-                                    ToolTip.Tip="{DynamicResource ImageView_SuperHint}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:MaterialIcon Grid.Column="0" Kind="LayersPlus" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeSuper}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding SynthesizeBrCommand}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:MaterialIcon Grid.Column="0" Kind="ArchivePlus" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeBr}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                            <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Command="{Binding SynthesizeDatCommand}"
-                                    ToolTip.Tip="{DynamicResource ImageView_DatHint}">
-                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                                    <avalonia:MaterialIcon Grid.Column="0" Kind="FileMultipleOutline" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeDat}"
-                                               FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
-                                               VerticalAlignment="Center" MaxLines="2" />
-                                </Grid>
-                            </Button>
-                        </controls:JustifiedWrapPanel>
+                            <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6">
+                                <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                        Command="{Binding SynthesizeBrCommand}">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                        <avalonia:MaterialIcon Grid.Column="0" Kind="ArchivePlus" Width="14" Height="14" />
+                                        <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeBr}"
+                                                   FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Grid>
+                                </Button>
+                                <Button MinWidth="110" HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                        Command="{Binding SynthesizeDatCommand}"
+                                        ToolTip.Tip="{DynamicResource ImageView_DatHint}">
+                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
+                                        <avalonia:MaterialIcon Grid.Column="0" Kind="FileMultipleOutline" Width="14" Height="14" />
+                                        <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_SynthesizeDat}"
+                                                   FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
+                                                   VerticalAlignment="Center" MaxLines="2" />
+                                    </Grid>
+                                </Button>
+                            </controls:JustifiedWrapPanel>
+                        </StackPanel>
 
                         <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
                                                        IsVisible="{Binding IsOutputMode}">
@@ -280,10 +270,11 @@
                                 </Grid>
                             </Button>
                             <Button MinWidth="110" HorizontalAlignment="Stretch"
-                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center">
+                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
+                                    Click="OnPackSuperRomClick">
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
                                     <avalonia:MaterialIcon Grid.Column="0" Kind="Archive" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_PackRom}"
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_PackSuperRom}"
                                                FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>

@@ -1,0 +1,240 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:UotanStudio.Views.Shell"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        x:Class="UotanStudio.Views.Shell.PackSuperRomWindow"
+        Title="{DynamicResource ImageView_PackSuperRom}"
+        Width="800" Height="600" MinWidth="720" MinHeight="540"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        CanMinimize="False" CanMaximize="False"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+    <Window.Resources>
+        <DataTemplate x:Key="PackImageGroupTemplate" x:DataType="local:PackImageGroup">
+            <Border CornerRadius="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,Auto,*">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="8,6" ColumnSpacing="8">
+                        <CheckBox Content="{DynamicResource Menu_SelectAll}" IsChecked="{Binding AllSelected, Mode=TwoWay}"
+                                  IsEnabled="{Binding HasImages}" MinWidth="0" MinHeight="24" Padding="0" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                        <Button Grid.Column="2" Classes="Small" Padding="2" IsVisible="{Binding IsExternal}"
+                                Click="OnRemoveImageGroupClick" ToolTip.Tip="{DynamicResource PackDialog_RemoveGroup}"
+                                AutomationProperties.Name="{DynamicResource PackDialog_RemoveGroup}">
+                            <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                        </Button>
+                    </Grid>
+                    <Border Grid.Row="1" Background="{DynamicResource PageBackground}"
+                            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,1">
+                        <Grid ColumnDefinitions="42,Auto,*" MinHeight="34" Margin="4,0">
+                            <TextBlock Text="{DynamicResource PackDialog_Select}" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Width="76" Text="{DynamicResource PackDialog_IncludeSuper}"
+                                       IsVisible="{Binding ShowSuperColumn}" TextWrapping="Wrap" TextAlignment="Center"
+                                       VerticalAlignment="Center" Margin="0,4" />
+                            <TextBlock Grid.Column="2" Text="{DynamicResource NewProject_ImageName}" VerticalAlignment="Center" Margin="6,0" />
+                        </Grid>
+                    </Border>
+                    <Grid Grid.Row="2">
+                        <ListBox Classes="pack-image-list" ItemsSource="{Binding Images}" Background="Transparent"
+                                 BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="local:PackImageEntry">
+                                    <Grid ColumnDefinitions="42,Auto,*" MinHeight="30" Margin="4,0">
+                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Classes="image-choice"
+                                                  AutomationProperties.Name="{Binding Name}" />
+                                        <Border Grid.Column="1" Width="76" IsVisible="{Binding ShowSuperColumn}">
+                                            <CheckBox IsChecked="{Binding IncludeInSuper, Mode=TwoWay}" Classes="image-choice"
+                                                      AutomationProperties.Name="{DynamicResource PackDialog_IncludeSuper}" />
+                                        </Border>
+                                        <Grid Grid.Column="2" ColumnDefinitions="*,Auto" Margin="6,0" ColumnSpacing="4"
+                                              ToolTip.Tip="{Binding FilePath}">
+                                            <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="1" Text="{DynamicResource PackDialog_Original}"
+                                                       IsVisible="{Binding IsOriginal}" VerticalAlignment="Center" FontSize="11"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </Grid>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Text="{DynamicResource PackDialog_NoImages}" IsVisible="{Binding !HasImages}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+    <Window.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="ComboBoxItem">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
+            <Setter Property="IsVisible" Value="False" />
+            <Setter Property="IsEnabled" Value="False" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+            <Setter Property="Background">
+                <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+            </Setter>
+        </Style>
+        <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+            <Setter Property="Margin" Value="40,0,48,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="TextBox.pack-field">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ComboBox.pack-field">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.field-label">
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Right" />
+        </Style>
+        <Style Selector="CheckBox.image-choice">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ListBox.pack-image-list > ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="ListBox.pack-image-list > ListBoxItem:selected">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="*,Auto" Margin="0,32,0,0">
+        <Grid RowDefinitions="Auto,Auto,*" Margin="20,20,20,16" RowSpacing="14">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="20">
+                    <CheckBox Name="PackZipBox" Content="{DynamicResource PackDialog_PackZip}" IsChecked="True" />
+                    <CheckBox Name="PackSuperBox" Content="{DynamicResource PackDialog_PackSuper}" />
+                    <CheckBox Name="PackPayloadBox" Content="{DynamicResource PackDialog_PackPayload}" />
+                </StackPanel>
+                <CheckBox Grid.Column="1" Name="ShowOriginalBox" Content="{DynamicResource PackDialog_ShowOriginal}" />
+            </Grid>
+            <StackPanel Grid.Row="1" Spacing="12" Grid.IsSharedSizeScope="True">
+                <Grid Name="ZipSection" RowDefinitions="Auto,Auto" RowSpacing="8" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="PackFieldLabel" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="160" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Classes="field-label" Text="{DynamicResource PackDialog_ZipName}" />
+                    <TextBox Grid.Column="1" Name="ZipNameBox" Classes="pack-field"
+                             AutomationProperties.Name="{DynamicResource PackDialog_ZipName}" />
+                    <ComboBox Grid.Column="2" Name="CompressionBox" Classes="pack-field" HorizontalAlignment="Stretch"
+                              ToolTip.Tip="{DynamicResource PackDialog_Compression}" AutomationProperties.Name="{DynamicResource PackDialog_Compression}" />
+                    <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="20">
+                        <CheckBox Name="ZipFormatBox" Content="ZIP" IsChecked="True" />
+                        <CheckBox Name="SevenZipFormatBox" Content="7z" />
+                        <CheckBox Name="RarFormatBox" Content="RAR" />
+                        <CheckBox Name="SuperZstBox" Content="{DynamicResource PackDialog_SuperZst}" />
+                    </StackPanel>
+                </Grid>
+                <Grid Name="SuperSection" ColumnSpacing="8" IsVisible="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="PackFieldLabel" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Classes="field-label" Text="{DynamicResource PackDialog_PackSuper}" />
+                    <TextBox Grid.Column="1" Name="SuperNameBox" Classes="pack-field" Text="super.img"
+                             AutomationProperties.Name="{DynamicResource PackDialog_PackSuper}" />
+                </Grid>
+                <Grid Name="PayloadSection" ColumnSpacing="8" IsVisible="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="PackFieldLabel" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Classes="field-label" Text="{DynamicResource PackDialog_PackPayload}" />
+                    <TextBox Grid.Column="1" Name="PayloadNameBox" Classes="pack-field" Text="payload.bin"
+                             AutomationProperties.Name="{DynamicResource PackDialog_PackPayload}" />
+                </Grid>
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="PackFieldLabel" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Classes="field-label" Text="{DynamicResource PackDialog_OutputLocation}" />
+                    <TextBox Grid.Column="1" Name="OutputLocationBox" Classes="pack-field"
+                             AutomationProperties.Name="{DynamicResource PackDialog_OutputLocation}" />
+                    <Button Grid.Column="2" MinWidth="100" Height="32" Padding="12,0" Click="OnBrowseOutputClick"
+                            ToolTip.Tip="{DynamicResource PackDialog_BrowseOutput}" AutomationProperties.Name="{DynamicResource PackDialog_BrowseOutput}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <icons:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource PackDialog_SelectFolder}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </StackPanel>
+            <Grid Grid.Row="2" RowDefinitions="*,Auto" RowSpacing="8">
+                <Grid Name="ImageColumns" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <Grid Name="ImageGroupsHost" ColumnSpacing="10" />
+                    <Button Grid.Column="1" Name="AddImagesButton" Width="40" Height="40" Padding="0" VerticalAlignment="Center"
+                            Click="OnAddImagesClick" ToolTip.Tip="{DynamicResource PackDialog_AddImages}" AutomationProperties.Name="{DynamicResource PackDialog_AddImages}">
+                        <icons:MaterialIcon Kind="Plus" Width="22" Height="22" />
+                    </Button>
+                </Grid>
+                <Grid Name="GroupPager" Grid.Row="1" ColumnDefinitions="Auto,*,Auto" IsVisible="False">
+                    <Button Name="PreviousPageButton" Classes="Small" Padding="6,2" Click="OnPreviousPageClick"
+                            ToolTip.Tip="{DynamicResource PackDialog_Previous}" AutomationProperties.Name="{DynamicResource PackDialog_Previous}">
+                        <icons:MaterialIcon Kind="ChevronLeft" Width="16" Height="16" />
+                    </Button>
+                    <TextBlock Grid.Column="1" Name="PageLabel" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Button Grid.Column="2" Name="NextPageButton" Classes="Small" Padding="6,2" Click="OnNextPageClick"
+                            ToolTip.Tip="{DynamicResource PackDialog_Next}" AutomationProperties.Name="{DynamicResource PackDialog_Next}">
+                        <icons:MaterialIcon Kind="ChevronRight" Width="16" Height="16" />
+                    </Button>
+                </Grid>
+            </Grid>
+        </Grid>
+        <Border Grid.Row="1" Padding="20,14" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                Background="{DynamicResource PageBackground}">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+                <ProgressBar Name="PackingProgress" Minimum="0" Maximum="100" Value="0" Height="20" Width="260"
+                             HorizontalAlignment="Left" VerticalAlignment="Center" ShowProgressText="True"
+                             AutomationProperties.Name="{DynamicResource PackDialog_Progress}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                    <Button Name="CancelButton" Content="{DynamicResource Editor_Cancel}" MinWidth="88" Height="32"
+                            IsCancel="True" Click="OnCancelClick" />
+                    <Button Name="ConfirmButton" Content="{DynamicResource PackDialog_Confirm}" Theme="{StaticResource SolidButton}"
+                            MinWidth="88" Height="32" IsDefault="True" Click="OnConfirmClick" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
