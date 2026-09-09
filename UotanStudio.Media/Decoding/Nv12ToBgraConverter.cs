@@ -8,16 +8,9 @@ namespace UotanStudio.Media.Decoding;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The conversion uses the BT.601 limited-range coefficients that match what
-/// Android screen encoders emit for scrcpy-style streams. Chroma is upsampled
-/// with bilinear-free nearest sampling at half resolution (each UV byte pair
-/// covers a 2×2 pixel block), which is the standard fast path for video
-/// content and keeps the loop allocation-free.
-/// </para>
-/// <para>
-/// 转换使用 BT.601 有限范围系数，与 scrcpy 类码流中 Android 屏幕编码器的输出
-/// 一致。色度按半分辨率最近邻上采样（每对 UV 字节覆盖 2×2 像素块），这是
-/// 视频内容的标准快速路径，且循环全程无分配。
+/// The conversion uses BT.601 limited-range coefficients. It does not infer color
+/// metadata from a codec and must not be used as a BT.709/BT.2020 or full-range converter.
+/// Chroma uses nearest-neighbour sampling at half resolution.
 /// </para>
 /// </remarks>
 public static unsafe class Nv12ToBgraConverter
@@ -61,6 +54,12 @@ public static unsafe class Nv12ToBgraConverter
         }
 
         Validate(width, height, nv12Stride, destination.Length, destinationStride);
+        int sourceLength = VideoFrameLimits.Nv12Length(width, height, nv12Stride);
+        if (nv12.Length < sourceLength)
+        {
+            throw new ArgumentException("The source does not contain complete NV12 planes.", nameof(nv12));
+        }
+
 
         fixed (byte* src = nv12)
         fixed (byte* dst = destination)

@@ -31,6 +31,8 @@
   <ItemGroup>
     <!-- 测试夹具：真实世界 DEX 文件随构建复制到输出目录 -->
     <None Include="Firmware\Files\**\*.dex" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\Media\black-64x64.h264" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\Media\openh264-qcif-cabac.h264" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Firmware\Files\review-native-rkfw.img" CopyToOutputDirectory="PreserveNewest" />
     <!-- 固定 avbtool 随测试复制并直接运行；明确文件名使缺失夹具导致构建失败。 -->
     <None Include="TestInfrastructure\avbtool.py" CopyToOutputDirectory="PreserveNewest" />

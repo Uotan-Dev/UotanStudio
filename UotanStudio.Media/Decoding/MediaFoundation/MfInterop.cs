@@ -3,15 +3,9 @@ using System.Runtime.Versioning;
 
 namespace UotanStudio.Media.Decoding.MediaFoundation;
 
-// ---------------------------------------------------------------------------
-// Minimal MediaFoundation COM interop for push-style H.264/H.265 decoding.
-// Vtable order matters: IMFMediaType / IMFSample / IMFActivate all inherit
-// IMFAttributes, so they must be declared as derived interfaces; unused
-// methods are still declared (with correct signatures) to keep slot alignment.
-// 最小化的 MediaFoundation COM 互操作，用于推送式 H.264/H.265 解码。vtable 顺序
-// 至关重要：IMFMediaType / IMFSample / IMFActivate 均继承 IMFAttributes，必须以
-// 接口继承方式声明；未使用的方法仍按正确签名声明，以保持槽位对齐。
-// ---------------------------------------------------------------------------
+// Source-faithful unmanaged calls replace runtime COM marshalling.
+// Slots below follow the Windows SDK mfobjects.h / mftransform.h ABI.
+// No runtime COM wrappers; NativeAOT uses the same unmanaged ABI.
 
 /// <summary>MediaFoundation interop helpers: functions, GUIDs and error codes.</summary>
 /// <summary>MediaFoundation 互操作辅助：函数、GUID 与错误码。</summary>
@@ -60,6 +54,9 @@ internal static partial class MfInterop
     [LibraryImport("ole32.dll")]
     public static partial int CoInitializeEx(IntPtr pvReserved, uint dwCoInit);
 
+    [LibraryImport("ole32.dll")]
+    public static partial void CoUninitialize();
+
     // --- Well-known GUIDs -----------------------------------------------------
 
     /// <summary>MFMediaType_Video ('vids').</summary>
@@ -100,7 +97,7 @@ internal static partial class MfInterop
 
     /// <summary>IID_IMFTransform.</summary>
     /// <summary>IID_IMFTransform。</summary>
-    public static readonly Guid IidImfTransform = new("bf94c121-36b4-4554-9a0b-91d73cbcd82c");
+    public static readonly Guid IidImfTransform = new("bf94c121-5b05-4e6f-8000-ba598961414d");
 
     // --- Enum flags -----------------------------------------------------------
 
@@ -110,7 +107,7 @@ internal static partial class MfInterop
 
     /// <summary>MFT_OUTPUT_STREAM_PROVIDES_SAMPLES.</summary>
     /// <summary>MFT_OUTPUT_STREAM_PROVIDES_SAMPLES。</summary>
-    public const uint MftOutputStreamProvidesSamples = 0x2;
+    public const uint MftOutputStreamProvidesSamples = 0x100;
 
     /// <summary>MFT_OUTPUT_DATA_BUFFER_FORMAT_CHANGE.</summary>
     /// <summary>MFT_OUTPUT_DATA_BUFFER_FORMAT_CHANGE。</summary>
@@ -122,11 +119,11 @@ internal static partial class MfInterop
 
     /// <summary>MFT_MESSAGE_NOTIFY_BEGIN_STREAMING.</summary>
     /// <summary>MFT_MESSAGE_NOTIFY_BEGIN_STREAMING。</summary>
-    public const uint MftMessageBeginStreaming = 1;
+    public const uint MftMessageBeginStreaming = 0x10000000;
 
     /// <summary>MFT_MESSAGE_NOTIFY_START_OF_STREAM.</summary>
     /// <summary>MFT_MESSAGE_NOTIFY_START_OF_STREAM。</summary>
-    public const uint MftMessageStartOfStream = 4;
+    public const uint MftMessageStartOfStream = 0x10000003;
 
     // --- Error codes ----------------------------------------------------------
 
@@ -134,40 +131,29 @@ internal static partial class MfInterop
     public const int SFalse = 1;
     public const int MfETransformNeedMoreInput = unchecked((int)0xC00D6D72);
     public const int MfETransformStreamChange = unchecked((int)0xC00D6D61);
-    public const int MfENotAccepting = unchecked((int)0xC00D6D78);
+    public const int MfENotAccepting = unchecked((int)0xC00D36B5);
     public const int MfEAttributeNotFound = unchecked((int)0xC00D36E6);
     public const int MfENoMoreTypes = unchecked((int)0xC00D36B9);
 }
 
-/// <summary>MFT_REGISTER_TYPE_INFO structure describing a registered MFT's stream type.</summary>
-/// <summary>MFT_REGISTER_TYPE_INFO 结构，描述已注册 MFT 的流类型。</summary>
+// Unmanaged layouts and vtable calls follow mfobjects.h / mftransform.h.
+// No runtime COM marshalling: these calls also work in NativeAOT.
 [StructLayout(LayoutKind.Sequential)]
-internal struct MftRegisterTypeInfo
+internal struct MftRegisterTypeInfo(Guid majorType, Guid subtype)
 {
-    public Guid MajorType;
-
-    public Guid Subtype;
-
-    public MftRegisterTypeInfo(Guid majorType, Guid subtype)
-    {
-        MajorType = majorType;
-        Subtype = subtype;
-    }
+    public Guid MajorType = majorType;
+    public Guid Subtype = subtype;
 }
 
-/// <summary>MFT_OUTPUT_DATA_BUFFER structure (passed by reference to ProcessOutput).</summary>
-/// <summary>MFT_OUTPUT_DATA_BUFFER 结构（以引用方式传给 ProcessOutput）。</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct MftOutputDataBuffer
 {
     public uint StreamId;
-    public IMFSample? Sample;
+    public nint Sample;
     public uint Status;
-    public IMFSample? Events;
+    public nint Events;
 }
 
-/// <summary>MFT_OUTPUT_STREAM_INFO structure.</summary>
-/// <summary>MFT_OUTPUT_STREAM_INFO 结构。</summary>
 [StructLayout(LayoutKind.Sequential)]
 internal struct MftOutputStreamInfo
 {
@@ -176,148 +162,117 @@ internal struct MftOutputStreamInfo
     public uint Alignment;
 }
 
-/// <summary>MFT_INPUT_STREAM_INFO structure.</summary>
-/// <summary>MFT_INPUT_STREAM_INFO 结构。</summary>
-[StructLayout(LayoutKind.Sequential)]
-internal struct MftInputStreamInfo
+[StructLayout(LayoutKind.Explicit, Size = 24)]
+internal struct MfVariant
 {
-    public long MaxLatency;
-    public uint Flags;
-    public uint Size;
-    public uint MaxLookahead;
-    public uint Alignment;
+    [FieldOffset(0)] public ushort Type;
+    [FieldOffset(8)] public short Boolean;
+    [FieldOffset(8)] public uint UInt32;
 }
 
-/// <summary>
-/// IMFAttributes — all 32 vtable slots declared in mfobjects.h order.
-/// </summary>
-/// <summary>
-/// IMFAttributes — 按 mfobjects.h 顺序声明全部 32 个 vtable 槽位。
-/// </summary>
-[ComImport]
-[Guid("2cd2d921-c447-449c-a34e-c21d2febf4bd")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFAttributes
+internal static unsafe class MfCom
 {
-    [PreserveSig] int GetItem(in Guid key, IntPtr pValue);
-    [PreserveSig] int GetItemType(in Guid key, out int type);
-    [PreserveSig] int CompareItem(in Guid key, IntPtr value, IntPtr pResult);
-    [PreserveSig] int Compare(IMFAttributes theOther, int matchType, IntPtr pResult);
-    [PreserveSig] int GetUINT32(in Guid key, out uint value);
-    [PreserveSig] int GetUINT64(in Guid key, out ulong value);
-    [PreserveSig] int GetDouble(in Guid key, out double value);
-    [PreserveSig] int GetGUID(in Guid key, out Guid value);
-    [PreserveSig] int GetStringLength(in Guid key, out uint length);
-    [PreserveSig] int GetString(in Guid key, IntPtr buffer, uint bufferSize, out uint length);
-    [PreserveSig] int GetAllocatedString(in Guid key, out IntPtr buffer, out uint length);
-    [PreserveSig] int GetBlobSize(in Guid key, out uint size);
-    [PreserveSig] int GetBlob(in Guid key, IntPtr buffer, uint bufferSize, out uint size);
-    [PreserveSig] int GetAllocatedBlob(in Guid key, out IntPtr buffer, out uint size);
-    [PreserveSig] int SetUnknown(in Guid key, [MarshalAs(UnmanagedType.IUnknown)] object unknown);
-    [PreserveSig] int GetUnknown(in Guid key, in Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object unknown);
-    [PreserveSig] int SetItem(in Guid key, IntPtr value);
-    [PreserveSig] int DeleteItem(in Guid key);
-    [PreserveSig] int DeleteAllItems();
-    [PreserveSig] int SetUINT32(in Guid key, uint value);
-    [PreserveSig] int SetUINT64(in Guid key, ulong value);
-    [PreserveSig] int SetDouble(in Guid key, double value);
-    [PreserveSig] int SetGUID(in Guid key, in Guid value);
-    [PreserveSig] int SetStringLength(in Guid key, uint value);
-    [PreserveSig] int SetString(in Guid key, [MarshalAs(UnmanagedType.LPWStr)] string value);
-    [PreserveSig] int SetBlob(in Guid key, IntPtr buffer, uint size);
-    [PreserveSig] int SetBlobSize(in Guid key, uint size);
-    [PreserveSig] int LockStore();
-    [PreserveSig] int UnlockStore();
-    [PreserveSig] int GetCount(out uint count);
-    [PreserveSig] int GetItemByIndex(uint index, out Guid key, IntPtr pValue);
-    [PreserveSig] int CopyAllItems(IMFAttributes destination);
-}
-
-/// <summary>IMFMediaType — inherits the 32 IMFAttributes slots, then 4 of its own.</summary>
-/// <summary>IMFMediaType — 继承 IMFAttributes 的 32 个槽位，再追加自身 4 个。</summary>
-[ComImport]
-[Guid("44ae0fa8-ea31-4109-8d2e-4cae4997c858")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFMediaType : IMFAttributes
-{
-    [PreserveSig] int GetMajorType(out Guid majorType);
-    [PreserveSig] int IsCompressedFormat(out int compressed);
-    [PreserveSig] int GetRepresentation(in Guid representation, out IntPtr representationData);
-    [PreserveSig] int FreeRepresentation(in Guid representation, IntPtr representationData);
-}
-
-/// <summary>IMFMediaBuffer.</summary>
-/// <summary>IMFMediaBuffer。</summary>
-[ComImport]
-[Guid("045fa593-8b98-4d9d-a27c-cea88a95a6fe")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFMediaBuffer
-{
-    [PreserveSig] int Lock(out IntPtr buffer, out uint maxLength, out uint currentLength);
-    [PreserveSig] int Unlock();
-    [PreserveSig] int GetCurrentLength(out uint currentLength);
-    [PreserveSig] int SetCurrentLength(uint currentLength);
-    [PreserveSig] int GetMaxLength(out uint maxLength);
-}
-
-/// <summary>IMFSample — inherits the 32 IMFAttributes slots, then 12 of its own.</summary>
-/// <summary>IMFSample — 继承 IMFAttributes 的 32 个槽位，再追加自身 12 个。</summary>
-[ComImport]
-[Guid("b7c2cbf4-3c5f-4b8f-8c14-1e2f4c5d6a7b")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFSample : IMFAttributes
-{
-    [PreserveSig] int GetSampleTime(out long time);
-    [PreserveSig] int SetSampleTime(long time);
-    [PreserveSig] int GetSampleDuration(out long duration);
-    [PreserveSig] int SetSampleDuration(long duration);
-    [PreserveSig] int GetBufferCount(out uint count);
-    [PreserveSig] int GetBufferByIndex(uint index, out IMFMediaBuffer buffer);
-    [PreserveSig] int ConvertToContiguousBuffer(out IMFMediaBuffer buffer);
-    [PreserveSig] int AddBuffer(IMFMediaBuffer buffer);
-    [PreserveSig] int RemoveBufferByIndex(uint index);
-    [PreserveSig] int RemoveAllBuffers();
-    [PreserveSig] int GetTotalLength(out uint length);
-    [PreserveSig] int CopyToBuffer(IMFMediaBuffer buffer);
-}
-
-/// <summary>IMFActivate — inherits the 32 IMFAttributes slots, then 3 of its own.</summary>
-/// <summary>IMFActivate — 继承 IMFAttributes 的 32 个槽位，再追加自身 3 个。</summary>
-[ComImport]
-[Guid("1140318e-0f48-45a5-a285-91e1b0c1e14a")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFActivate : IMFAttributes
-{
-    [PreserveSig] int ActivateObject(in Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object ppv);
-    [PreserveSig] int ShutdownObject();
-    [PreserveSig] int DetachObject();
-}
-
-/// <summary>IMFTransform (vtable order per mftransform.h; standalone IUnknown).</summary>
-/// <summary>IMFTransform（按 mftransform.h 的 vtable 顺序；独立 IUnknown 接口）。</summary>
-[ComImport]
-[Guid("bf94c121-36b4-4554-9a0b-91d73cbcd82c")]
-[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-internal interface IMFTransform
-{
-    [PreserveSig] int GetStreamLimits(
-        out uint inputMinimum, out uint inputMaximum, out uint outputMinimum, out uint outputMaximum);
-    [PreserveSig] int GetStreamCount(out uint inputCount, out uint outputCount);
-    [PreserveSig] int GetStreamIDs(uint inputIdArraySize, IntPtr inputIds, uint outputIdArraySize, IntPtr outputIds);
-    [PreserveSig] int GetInputStreamInfo(uint streamId, out MftInputStreamInfo info);
-    [PreserveSig] int GetOutputStreamInfo(uint streamId, out MftOutputStreamInfo info);
-    [PreserveSig] int GetAttributes(out IMFAttributes attributes);
-    [PreserveSig] int GetInputAvailableType(uint streamId, uint typeIndex, out IMFMediaType type);
-    [PreserveSig] int GetOutputAvailableType(uint streamId, uint typeIndex, out IMFMediaType type);
-    [PreserveSig] int SetInputType(uint streamId, IMFMediaType? type, uint flags);
-    [PreserveSig] int SetOutputType(uint streamId, IMFMediaType? type, uint flags);
-    [PreserveSig] int GetInputCurrentType(uint streamId, out IMFMediaType type);
-    [PreserveSig] int GetOutputCurrentType(uint streamId, out IMFMediaType type);
-    [PreserveSig] int GetInputStatus(uint streamId, out uint status);
-    [PreserveSig] int GetOutputStatus(out uint status);
-    [PreserveSig] int SetOutputBounds(long lower, long upper);
-    [PreserveSig] int ProcessEvent(uint streamId, IntPtr events);
-    [PreserveSig] int ProcessMessage(uint message, IntPtr param);
-    [PreserveSig] int ProcessInput(uint streamId, IMFSample sample, uint flags);
-    [PreserveSig] int ProcessOutput(uint flags, uint outputBufferCount, ref MftOutputDataBuffer outputSamples, out uint status);
+    private static void* Slot(nint value, int index) => (*(void***)value)[index];
+    public static int QueryInterface(nint value, in Guid iid, out nint result)
+    {
+        fixed (Guid* key = &iid) fixed (nint* p = &result)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)Slot(value, 0))(value, key, p);
+    }
+    public static int SetCodecLowLatency(nint value, in Guid key, bool useUInt32)
+    {
+        // Microsoft's H.264 decoder uniquely requires VT_UI4 for AVLowLatencyMode.
+        var variant = useUInt32 ? new MfVariant { Type = 19, UInt32 = 1 }
+            : new MfVariant { Type = 11, Boolean = -1 };
+        fixed (Guid* k = &key)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, MfVariant*, int>)Slot(value, 9))(value, k, &variant);
+    }
+    public static int GetAttributes(nint value, out nint attributes)
+    {
+        fixed (nint* p = &attributes)
+            return ((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(value, 8))(value, p);
+    }
+    public static int SetUInt32(nint value, in Guid key, uint data)
+    {
+        fixed (Guid* k = &key)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, uint, int>)Slot(value, 21))(value, k, data);
+    }
+    public static void Release(nint value)
+    {
+        if (value != 0) _ = ((delegate* unmanaged[Stdcall]<nint, uint>)Slot(value, 2))(value);
+    }
+    public static int SetGuid(nint value, in Guid key, in Guid data)
+    {
+        fixed (Guid* k = &key, d = &data)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, Guid*, int>)Slot(value, 24))(value, k, d);
+    }
+    public static int GetGuid(nint value, in Guid key, out Guid data)
+    {
+        fixed (Guid* k = &key, d = &data)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, Guid*, int>)Slot(value, 10))(value, k, d);
+    }
+    public static int GetUInt32(nint value, in Guid key, out uint data)
+    {
+        fixed (Guid* k = &key) fixed (uint* d = &data)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, uint*, int>)Slot(value, 7))(value, k, d);
+    }
+    public static int GetUInt64(nint value, in Guid key, out ulong data)
+    {
+        fixed (Guid* k = &key) fixed (ulong* d = &data)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, ulong*, int>)Slot(value, 8))(value, k, d);
+    }
+    public static int SetUInt64(nint value, in Guid key, ulong data)
+    {
+        fixed (Guid* k = &key)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, ulong, int>)Slot(value, 22))(value, k, data);
+    }
+    public static int Activate(nint value, in Guid iid, out nint instance)
+    {
+        fixed (Guid* k = &iid) fixed (nint* d = &instance)
+            return ((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)Slot(value, 33))(value, k, d);
+    }
+    public static int Message(nint value, uint message) =>
+        ((delegate* unmanaged[Stdcall]<nint, uint, nuint, int>)Slot(value, 23))(value, message, 0);
+    public static int SetType(nint value, nint type, bool input) =>
+        ((delegate* unmanaged[Stdcall]<nint, uint, nint, uint, int>)Slot(value, input ? 15 : 16))(value, 0, type, 0);
+    public static int OutputType(nint value, uint index, out nint type)
+    {
+        fixed (nint* t = &type)
+            return ((delegate* unmanaged[Stdcall]<nint, uint, uint, nint*, int>)Slot(value, 14))(value, 0, index, t);
+    }
+    public static int OutputInfo(nint value, out MftOutputStreamInfo info)
+    {
+        fixed (MftOutputStreamInfo* p = &info)
+            return ((delegate* unmanaged[Stdcall]<nint, uint, MftOutputStreamInfo*, int>)Slot(value, 7))(value, 0, p);
+    }
+    public static int Input(nint value, nint sample) =>
+        ((delegate* unmanaged[Stdcall]<nint, uint, nint, uint, int>)Slot(value, 24))(value, 0, sample, 0);
+    public static int Output(nint value, ref MftOutputDataBuffer buffer)
+    {
+        uint status;
+        fixed (MftOutputDataBuffer* p = &buffer)
+            return ((delegate* unmanaged[Stdcall]<nint, uint, uint, MftOutputDataBuffer*, uint*, int>)Slot(value, 25))(value, 0, 1, p, &status);
+    }
+    public static int AddBuffer(nint value, nint buffer) =>
+        ((delegate* unmanaged[Stdcall]<nint, nint, int>)Slot(value, 42))(value, buffer);
+    public static int ContiguousBuffer(nint value, out nint buffer)
+    {
+        fixed (nint* p = &buffer)
+            return ((delegate* unmanaged[Stdcall]<nint, nint*, int>)Slot(value, 41))(value, p);
+    }
+    public static int SetTime(nint value, long time) =>
+        ((delegate* unmanaged[Stdcall]<nint, long, int>)Slot(value, 36))(value, time);
+    public static int GetTime(nint value, out long time)
+    {
+        fixed (long* p = &time)
+            return ((delegate* unmanaged[Stdcall]<nint, long*, int>)Slot(value, 35))(value, p);
+    }
+    public static int Lock(nint value, out nint data, out uint length)
+    {
+        uint capacity;
+        fixed (nint* p = &data) fixed (uint* n = &length)
+            return ((delegate* unmanaged[Stdcall]<nint, nint*, uint*, uint*, int>)Slot(value, 3))(value, p, &capacity, n);
+    }
+    public static int Unlock(nint value) => ((delegate* unmanaged[Stdcall]<nint, int>)Slot(value, 4))(value);
+    public static int SetLength(nint value, uint length) =>
+        ((delegate* unmanaged[Stdcall]<nint, uint, int>)Slot(value, 6))(value, length);
 }

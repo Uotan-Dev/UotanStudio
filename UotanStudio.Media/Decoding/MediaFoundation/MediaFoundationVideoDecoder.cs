@@ -1,478 +1,311 @@
+using System.Buffers;
 using System.Runtime.InteropServices;
-
 using System.Runtime.Versioning;
 
 namespace UotanStudio.Media.Decoding.MediaFoundation;
 
 /// <summary>
-/// Push-style H.264/H.265 decoder built on the MediaFoundation MFT pipeline
-/// (MFTEnumEx → IMFTransform → ProcessInput/ProcessOutput), emitting NV12
-/// frames through the callback registered in <see cref="Initialize"/>.
-/// <para>
-/// 基于 MediaFoundation MFT 管线（MFTEnumEx → IMFTransform →
-/// ProcessInput/ProcessOutput）的推送式 H.264/H.265 解码器，经
-/// <see cref="Initialize"/> 注册的回调输出 NV12 帧。
-/// </para>
+/// Synchronous Media Foundation decoder with CPU-readable NV12 output.
+/// 同步 Media Foundation 解码器；不声明 D3D 硬件解码或 GPU 零拷贝支持。
 /// </summary>
-/// <remarks>
-/// <para>
-/// The decoder drains output eagerly after each input sample so it works in
-/// both async-MFT and sync-MFT modes. A format change (resolution change)
-/// reported by <c>ProcessOutput</c> is resolved by re-reading the output type
-/// and resetting the internal stride/dimension cache.
-/// </para>
-/// <para>
-/// 解码器在每次输入后立即排空输出，因此同时兼容异步 MFT 与同步 MFT 模式。
-/// ProcessOutput 报告的格式变更（分辨率变更）会通过重新读取输出类型并重置
-/// 内部 stride/尺寸缓存来处理。
-/// </para>
-/// </remarks>
+/// <remarks>Initialize, Decode, Reset and Dispose must run on the same thread.</remarks>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
 {
-    private const uint OutputStreamId = 0;
-
-    private readonly bool _ownsMfStartup;
-
-    private IMFTransform? _transform;
-    private Action<DecodedVideoFrame>? _frameCallback;
-    private VideoCodecId _codec;
-    private int _width;
-    private int _height;
-    private int _stride = -1;
-    private long _referenceTimestampTicks;
-    private bool _initialized;
-
-    /// <summary>Initializes MF once per process; the first instance owns shutdown.</summary>
-    /// <summary>进程内仅初始化一次 MF；首个实例负责关闭。</summary>
-    private static readonly object MfInitLock = new();
-    private static bool _mfStarted;
-    private static int _activeDecoders;
-
-    /// <summary>Creates the decoder. COM apartment and MF startup are handled lazily.</summary>
-    /// <summary>创建解码器。COM 单元与 MF 启动按需惰性处理。</summary>
-    public MediaFoundationVideoDecoder()
-    {
-        _ownsMfStartup = EnsureMediaFoundationStarted();
-        Interlocked.Increment(ref _activeDecoders);
-    }
+    private static readonly object LifetimeLock = new();
+    private static int _leases;
+    private nint _transform;
+    private Action<DecodedVideoFrame>? _callback;
+    private int _width, _height, _stride;
+    private int _ownerThread;
+    private bool _comOwned, _mfOwned, _disposed;
+    private long _sequence;
+    private bool _inCallback;
 
     /// <inheritdoc />
-    public bool IsInitialized => _initialized;
+    public bool IsInitialized => _transform != 0;
 
     /// <inheritdoc />
     public void Initialize(VideoCodecId codec, int width, int height, Action<DecodedVideoFrame> frameCallback)
     {
-        if (width <= 0 || height <= 0)
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        VideoFrameLimits.ValidateDimensions(width, height);
+        ArgumentNullException.ThrowIfNull(frameCallback);
+        Guid format = CodecGuid(codec);
+        if (_ownerThread != 0) CheckThread();
+        ReleaseTransform();
+        if (!_mfOwned)
         {
-            throw new ArgumentOutOfRangeException(nameof(width), "Frame dimensions must be positive. 帧尺寸必须为正。");
+            int hr = MfInterop.CoInitializeEx(0, 0);
+            // RPC_E_CHANGED_MODE means the caller already owns a different apartment.
+            if (hr != unchecked((int)0x80010106)) Check(hr, "CoInitializeEx");
+            _comOwned = hr >= 0;
+            _ownerThread = Environment.CurrentManagedThreadId;
+            try
+            {
+                lock (LifetimeLock)
+                {
+                    if (_leases == 0) Check(MfInterop.MFStartup(MfInterop.MfVersion, 0), "MFStartup");
+                    _leases++;
+                    _mfOwned = true;
+                }
+            }
+            catch
+            {
+                if (_comOwned) MfInterop.CoUninitialize();
+                _comOwned = false;
+                _ownerThread = 0;
+                throw;
+            }
         }
 
-        ArgumentNullException.ThrowIfNull(frameCallback);
-
-        ReleaseTransform();
-
-        _transform = CreateTransform(codec, width, height);
-        _codec = codec;
-        _width = width;
-        _height = height;
-        _stride = -1;
-        _referenceTimestampTicks = 0;
-        _frameCallback = frameCallback;
-        _initialized = true;
-
-        _ = _transform.ProcessMessage(MfInterop.MftMessageBeginStreaming, IntPtr.Zero);
-        _ = _transform.ProcessMessage(MfInterop.MftMessageStartOfStream, IntPtr.Zero);
+        Check(MfInterop.MFCreateMediaType(out nint input), "MFCreateMediaType");
+        try
+        {
+            Check(MfCom.SetGuid(input, MfInterop.MtMajorType, MfInterop.MediaTypeVideo), "major type");
+            Check(MfCom.SetGuid(input, MfInterop.MtSubtype, format), "subtype");
+            Check(MfCom.SetUInt64(input, MfInterop.MtFrameSize, ((ulong)(uint)width << 32) | (uint)height), "frame size");
+            var registration = new MftRegisterTypeInfo(MfInterop.MediaTypeVideo, format);
+            Check(MfInterop.MFTEnumEx(MfInterop.CategoryVideoDecoder, MfInterop.MftEnumFlags,
+                registration, 0, out nint activates, out uint count), "MFTEnumEx");
+            try
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    nint activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
+                    int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out nint transform);
+                    if (hr < 0) { MfCom.Release(transform); continue; }
+                    _transform = transform;
+                    if (MfCom.SetType(transform, input, true) >= 0 && SelectOutputType())
+                    {
+                        ConfigureLowLatency(transform, codec);
+                        break;
+                    }
+                    ReleaseTransform();
+                }
+            }
+            finally
+            {
+                for (int i = 0; i < count; i++) MfCom.Release(Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size)));
+                Marshal.FreeCoTaskMem(activates);
+            }
+            if (_transform == 0) throw new NotSupportedException($"No synchronous Media Foundation NV12 decoder accepts {codec}.");
+            _callback = frameCallback;
+            _sequence = 0;
+            Check(MfCom.Message(_transform, MfInterop.MftMessageBeginStreaming), "begin streaming");
+            Check(MfCom.Message(_transform, MfInterop.MftMessageStartOfStream), "start of stream");
+        }
+        catch { ReleaseTransform(); throw; }
+        finally { MfCom.Release(input); }
     }
 
     /// <inheritdoc />
     public void Decode(ReadOnlySpan<byte> accessUnit)
-    {
-        var transform = _transform;
-        if (!_initialized || transform is null || accessUnit.IsEmpty)
-        {
-            throw new InvalidOperationException(
-                "Decoder is not initialized. 解码器尚未初始化。");
-        }
+        => Decode(accessUnit, checked(_sequence++ * 166667));
 
-        var sample = CreateSample(accessUnit);
+    /// <inheritdoc />
+    public void Decode(ReadOnlySpan<byte> accessUnit, long timestampTicks)
+    {
+        CheckReady();
+        VideoFrameLimits.ValidateAccessUnit(accessUnit);
+        nint sample = CreateSample(accessUnit, 0, 0);
         try
         {
-            var hr = transform.ProcessInput(0, sample, 0);
-            if (hr != MfInterop.SOk && hr != MfInterop.MfENotAccepting)
+            Check(MfCom.SetTime(sample, timestampTicks), "sample time");
+            int hr = MfCom.Input(_transform, sample);
+            if (hr == MfInterop.MfENotAccepting)
             {
-                Throw(hr, "ProcessInput");
+                DrainOutput();
+                hr = MfCom.Input(_transform, sample); // Retry the exact same sample; never drop it.
             }
-
-            DrainOutput(transform);
+            Check(hr, "ProcessInput");
+            DrainOutput();
         }
-        finally
-        {
-            _ = Marshal.ReleaseComObject(sample);
-        }
+        finally { MfCom.Release(sample); }
     }
 
     /// <inheritdoc />
     public void Reset()
     {
-        var transform = _transform;
-        if (transform is null)
-        {
-            return;
-        }
+        CheckReady();
+        Check(MfCom.Message(_transform, MfInterop.MftMessageFlush), "flush");
+        Check(MfCom.Message(_transform, MfInterop.MftMessageStartOfStream), "restart stream");
+        _sequence = 0;
+    }
 
-        _ = transform.ProcessMessage(MfInterop.MftMessageFlush, IntPtr.Zero);
-        _stride = -1;
+    /// <inheritdoc />
+    public void Drain()
+    {
+        CheckReady();
+        Check(MfCom.Message(_transform, 0x10000002), "end of stream");
+        Check(MfCom.Message(_transform, 1), "drain command");
+        DrainOutput();
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
+        if (_disposed) return;
+        if (_ownerThread != 0) CheckThread();
+        _disposed = true;
         ReleaseTransform();
-        Interlocked.Decrement(ref _activeDecoders);
-        if (_ownsMfStartup)
+        if (_mfOwned)
         {
-            // The first instance owns MF lifetime; MFShutdown must wait until all
-            // decoders are gone. In practice this instance is the last one when
-            // the app tears down the decode loop sequentially, but guard anyway.
-            // 首个实例持有 MF 生命周期；必须等全部解码器销毁后才能关闭。实践中
-            // 解码循环顺序销毁时本实例已是最后一个，但此处仍加保护。
-            if (Interlocked.CompareExchange(ref _activeDecoders, 0, 0) == 0)
+            lock (LifetimeLock)
             {
-                lock (MfInitLock)
-                {
-                    if (_mfStarted)
-                    {
-                        _ = MfInterop.MFShutdown();
-                        _mfStarted = false;
-                    }
-                }
+                if (--_leases == 0) _ = MfInterop.MFShutdown();
+                _mfOwned = false;
             }
         }
+        if (_comOwned) { MfInterop.CoUninitialize(); _comOwned = false; }
     }
 
-    private static bool EnsureMediaFoundationStarted()
+    private static void ConfigureLowLatency(nint transform, VideoCodecId codec)
     {
-        lock (MfInitLock)
+        if (MfCom.GetAttributes(transform, out nint attributes) >= 0 && attributes != 0)
         {
-            if (!_mfStarted)
-            {
-                _ = MfInterop.CoInitializeEx(IntPtr.Zero, MfInterop.CoInitMultithreaded);
-                var hr = MfInterop.MFStartup(MfInterop.MfVersion, 0);
-                if (hr < 0)
-                {
-                    Throw(hr, "MFStartup");
-                }
+            try { Check(MfCom.SetUInt32(attributes, new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee"), 1), "low latency attribute"); }
+            finally { MfCom.Release(attributes); }
+        }
+        int hr = MfCom.QueryInterface(transform, new Guid("901db4c7-31ce-41a2-85dc-8fa0bf41b8da"), out nint codecApi);
+        if (hr < 0) return; // Third-party synchronous transforms may only expose attributes.
+        try
+        {
+            Check(MfCom.SetCodecLowLatency(codecApi, new Guid("9c27891a-ed7a-40e1-88e8-b22727a024ee"), codec == VideoCodecId.H264), "enable low latency");
+        }
+        finally { MfCom.Release(codecApi); }
+    }
 
-                _mfStarted = true;
+    private bool SelectOutputType()
+    {
+        for (uint index = 0; index < 256; index++)
+        {
+            int hr = MfCom.OutputType(_transform, index, out nint type);
+            if (hr < 0) { MfCom.Release(type); return false; }
+            try
+            {
+                if (MfCom.GetGuid(type, MfInterop.MtSubtype, out Guid subtype) < 0 || subtype != MfInterop.VideoFormatNv12) continue;
+                if (MfCom.SetType(_transform, type, false) < 0) continue;
+                Check(MfCom.GetUInt64(type, MfInterop.MtFrameSize, out ulong size), "output dimensions");
+                _width = checked((int)(size >> 32));
+                _height = checked((int)(size & uint.MaxValue));
+                VideoFrameLimits.ValidateDimensions(_width, _height);
+                _stride = MfCom.GetUInt32(type, MfInterop.MtDefaultStride, out uint stride) >= 0
+                    ? checked((int)stride) : checked((_width + 1) & ~1);
+                _ = VideoFrameLimits.Nv12Length(_width, _height, _stride);
                 return true;
             }
+            finally { MfCom.Release(type); }
         }
-
         return false;
     }
 
-    private static IMFTransform CreateTransform(VideoCodecId codec, int width, int height)
+    private void DrainOutput()
     {
-        var formatGuid = codec switch
+        for (int attempts = 0; attempts < 256; attempts++)
         {
-            VideoCodecId.H264 => MfInterop.VideoFormatH264,
-            VideoCodecId.H265 => MfInterop.VideoFormatHevc,
-            _ => throw new ArgumentOutOfRangeException(nameof(codec), "Unsupported codec. 不支持的编码格式。"),
-        };
-
-        var inputType = CreateMediaType(formatGuid, width, height);
-        try
-        {
-            var registerInfo = new MftRegisterTypeInfo(MfInterop.MediaTypeVideo, formatGuid);
-            var hr = MfInterop.MFTEnumEx(
-                MfInterop.CategoryVideoDecoder,
-                MfInterop.MftEnumFlags,
-                in registerInfo,
-                IntPtr.Zero,
-                out var activatesPtr,
-                out var count);
-            Throw(hr, "MFTEnumEx");
-            if (count == 0)
-            {
-                throw new NotSupportedException(
-                    $"No MediaFoundation decoder found for {codec}. 未找到支持 {codec} 的 MediaFoundation 解码器。");
-            }
-
+            Check(MfCom.OutputInfo(_transform, out var info), "GetOutputStreamInfo");
+            nint supplied = (info.Flags & MfInterop.MftOutputStreamProvidesSamples) == 0
+                ? CreateSample([], info.Size, info.Alignment) : 0;
+            var output = new MftOutputDataBuffer { Sample = supplied };
             try
             {
-                for (var i = 0; i < count; i++)
+                int hr = MfCom.Output(_transform, ref output);
+                if (hr == MfInterop.MfETransformNeedMoreInput) return;
+                if (hr == MfInterop.MfETransformStreamChange)
                 {
-                    var activatePtr = Marshal.ReadIntPtr(activatesPtr, i * IntPtr.Size);
-                    var activate = (IMFActivate)Marshal.GetObjectForIUnknown(activatePtr);
-                    try
-                    {
-                        _ = activate.ActivateObject(MfInterop.IidImfTransform, out var obj);
-                        if (obj is not IMFTransform transform)
-                        {
-                            _ = Marshal.ReleaseComObject(obj);
-                            continue;
-                        }
-
-                        if (ConfigureTypes(transform, inputType))
-                        {
-                            return transform;
-                        }
-
-                        _ = Marshal.ReleaseComObject(transform);
-                    }
-                    finally
-                    {
-                        _ = Marshal.ReleaseComObject(activate);
-                    }
+                    if (!SelectOutputType()) throw new NotSupportedException("Decoder changed to a non-NV12 output format.");
+                    continue;
                 }
+                Check(hr, "ProcessOutput");
+                if (output.Sample == 0) return;
+                EmitFrame(output.Sample);
             }
             finally
             {
-                Marshal.FreeCoTaskMem(activatesPtr);
+                MfCom.Release(output.Events);
+                if (output.Sample != supplied) MfCom.Release(output.Sample);
+                MfCom.Release(supplied);
             }
-
-            throw new NotSupportedException(
-                $"No usable MediaFoundation {codec} decoder accepted the stream configuration. 没有可用的 MediaFoundation {codec} 解码器接受该码流配置。");
         }
-        finally
-        {
-            _ = Marshal.ReleaseComObject(inputType);
-        }
+        throw new InvalidOperationException("Decoder failed to make bounded output progress.");
     }
 
-    private static bool ConfigureTypes(IMFTransform transform, IMFMediaType inputType)
+    private void EmitFrame(nint sample)
     {
-        if (transform.SetInputType(0, inputType, 0) != MfInterop.SOk)
-        {
-            return false;
-        }
-
-        // Pick the first available output type that is NV12.
-        // 选择第一个 NV12 输出类型。
-        for (var index = 0u; ; index++)
-        {
-            var hr = transform.GetOutputAvailableType(0, index, out var candidate);
-            if (hr != MfInterop.SOk)
-            {
-                return false;
-            }
-
-            try
-            {
-                if (candidate.GetGUID(MfInterop.MtSubtype, out var subtype) == MfInterop.SOk
-                    && subtype == MfInterop.VideoFormatNv12
-                    && transform.SetOutputType(0, candidate, 0) == MfInterop.SOk)
-                {
-                    return true;
-                }
-            }
-            finally
-            {
-                _ = Marshal.ReleaseComObject(candidate);
-            }
-        }
-    }
-
-    private static IMFMediaType CreateMediaType(Guid subtype, int width, int height)
-    {
-        Throw(MfInterop.MFCreateMediaType(out var typePtr), "MFCreateMediaType");
-        var type = (IMFMediaType)Marshal.GetObjectForIUnknown(typePtr);
+        Check(MfCom.ContiguousBuffer(sample, out nint buffer), "ConvertToContiguousBuffer");
         try
         {
-            Throw(type.SetGUID(MfInterop.MtMajorType, MfInterop.MediaTypeVideo), "SetGUID(MAJOR_TYPE)");
-            Throw(type.SetGUID(MfInterop.MtSubtype, subtype), "SetGUID(SUBTYPE)");
-            var frameSize = ((ulong)(uint)width << 32) | (uint)height;
-            Throw(type.SetUINT64(MfInterop.MtFrameSize, frameSize), "SetUINT64(FRAME_SIZE)");
-            return type;
+            Check(MfCom.Lock(buffer, out nint source, out uint length), "buffer lock");
+            try
+            {
+                int required = VideoFrameLimits.Nv12Length(_width, _height, _stride);
+                if (length < required) throw new InvalidDataException("Truncated NV12 output.");
+                byte[] pooled = ArrayPool<byte>.Shared.Rent(required);
+                _ = MfCom.GetTime(sample, out long timestamp);
+                using var frame = new DecodedVideoFrame(pooled, required, _width, _height, _stride, timestamp);
+                new ReadOnlySpan<byte>((void*)source, required).CopyTo(pooled);
+                _inCallback = true;
+                try { _callback!(frame); }
+                finally { _inCallback = false; }
+            }
+            finally { Check(MfCom.Unlock(buffer), "buffer unlock"); }
         }
-        catch
-        {
-            _ = Marshal.ReleaseComObject(type);
-            throw;
-        }
+        finally { MfCom.Release(buffer); }
     }
 
-    private static IMFSample CreateSample(ReadOnlySpan<byte> data)
+    private static nint CreateSample(ReadOnlySpan<byte> data, uint capacity, uint alignment)
     {
-        Throw(MfInterop.MFCreateMemoryBuffer((uint)data.Length, out var bufferPtr), "MFCreateMemoryBuffer");
-        var buffer = (IMFMediaBuffer)Marshal.GetObjectForIUnknown(bufferPtr);
+        uint size = Math.Max((uint)data.Length, capacity);
+        if (size > VideoFrameLimits.MaximumFrameBytes) throw new InvalidDataException("MFT buffer exceeds the frame limit.");
+        if (alignment > 4096 || alignment != 0 && (alignment & (alignment - 1)) != 0)
+            throw new InvalidDataException("Invalid MFT buffer alignment.");
+        Check(MfInterop.MFCreateAlignedMemoryBuffer(Math.Max(size, 1), alignment == 0 ? 0 : alignment - 1, out nint buffer), "MFCreateAlignedMemoryBuffer");
         try
         {
-            Throw(buffer.Lock(out var dest, out _, out _), "Buffer.Lock");
-            try
+            if (!data.IsEmpty)
             {
-                fixed (byte* src = data)
-                {
-                    Buffer.MemoryCopy((void*)dest, (void*)src, data.Length, data.Length);
-                }
+                Check(MfCom.Lock(buffer, out nint target, out _), "buffer lock");
+                try { data.CopyTo(new Span<byte>((void*)target, data.Length)); }
+                finally { Check(MfCom.Unlock(buffer), "buffer unlock"); }
+                Check(MfCom.SetLength(buffer, (uint)data.Length), "buffer length");
             }
-            finally
-            {
-                _ = buffer.Unlock();
-            }
-
-            Throw(buffer.SetCurrentLength((uint)data.Length), "SetCurrentLength");
-
-            Throw(MfInterop.MFCreateSample(out var samplePtr), "MFCreateSample");
-            var sample = (IMFSample)Marshal.GetObjectForIUnknown(samplePtr);
-            try
-            {
-                Throw(sample.AddBuffer(buffer), "AddBuffer");
-                return sample;
-            }
-            catch
-            {
-                _ = Marshal.ReleaseComObject(sample);
-                throw;
-            }
+            Check(MfInterop.MFCreateSample(out nint sample), "MFCreateSample");
+            try { Check(MfCom.AddBuffer(sample, buffer), "AddBuffer"); return sample; }
+            catch { MfCom.Release(sample); throw; }
         }
-        finally
-        {
-            _ = Marshal.ReleaseComObject(buffer);
-        }
+        finally { MfCom.Release(buffer); }
     }
-
-    private void DrainOutput(IMFTransform transform)
-    {
-        while (true)
-        {
-            var outputBuffer = new MftOutputDataBuffer { StreamId = OutputStreamId };
-            var hr = transform.ProcessOutput(0, 1, ref outputBuffer, out var status);
-            if (hr == MfInterop.MfETransformNeedMoreInput)
-            {
-                return;
-            }
-
-            if (hr == MfInterop.MfETransformStreamChange
-                || (outputBuffer.Status & MfInterop.MftOutputDataBufferFormatChange) != 0)
-            {
-                ResolveOutputType(transform);
-                continue;
-            }
-
-            Throw(hr, "ProcessOutput");
-
-            var sample = outputBuffer.Sample;
-            if (sample is null)
-            {
-                return;
-            }
-
-            try
-            {
-                EmitFrame(sample);
-            }
-            finally
-            {
-                _ = Marshal.ReleaseComObject(sample);
-            }
-        }
-    }
-
-    private void ResolveOutputType(IMFTransform transform)
-    {
-        Throw(transform.GetOutputCurrentType(0, out var type), "GetOutputCurrentType");
-        try
-        {
-            if (type.GetUINT64(MfInterop.MtFrameSize, out var frameSize) == MfInterop.SOk)
-            {
-                _width = (int)(frameSize >> 32);
-                _height = (int)(frameSize & 0xFFFFFFFF);
-            }
-
-            if (type.GetUINT32(MfInterop.MtDefaultStride, out var stride) == MfInterop.SOk && stride > 0)
-            {
-                _stride = (int)stride;
-            }
-            else
-            {
-                _stride = -1;
-            }
-        }
-        finally
-        {
-            _ = Marshal.ReleaseComObject(type);
-        }
-    }
-
-    private void EmitFrame(IMFSample sample)
-    {
-        Throw(sample.ConvertToContiguousBuffer(out var buffer), "ConvertToContiguousBuffer");
-        try
-        {
-            Throw(buffer.Lock(out var src, out _, out var length), "Buffer.Lock");
-            try
-            {
-                var stride = _stride > 0
-                    ? _stride
-                    : ComputeDefaultStride(_width);
-
-                var frameHeight = _height;
-                var required = checked((int)((long)stride * frameHeight * 3 / 2));
-                var copyLength = Math.Min((int)length, required);
-
-                var pooled = System.Buffers.ArrayPool<byte>.Shared.Rent(required);
-                var frame = new DecodedVideoFrame(
-                    pooled,
-                    copyLength,
-                    _width,
-                    frameHeight,
-                    stride,
-                    _referenceTimestampTicks);
-                try
-                {
-                    fixed (byte* dst = pooled)
-                    {
-                        Buffer.MemoryCopy(dst, (void*)src, copyLength, copyLength);
-                    }
-
-                    // Ownership contract: the decoder disposes the frame once the
-                    // callback returns; consumers must copy or convert within it.
-                    // 所有权契约：回调返回后由解码器释放帧；消费方须在回调内完成
-                    // 复制或转换。
-                    _frameCallback?.Invoke(frame);
-                }
-                finally
-                {
-                    frame.Dispose();
-                }
-            }
-            finally
-            {
-                _ = buffer.Unlock();
-            }
-        }
-        finally
-        {
-            _ = Marshal.ReleaseComObject(buffer);
-        }
-    }
-
-    private static int ComputeDefaultStride(int width)
-        // NV12 default stride: width rounded up to 2 bytes (chroma pairs).
-        // NV12 默认行距：宽度向上取整到 2 字节（色度对）。
-        => (width + 1) & ~1;
 
     private void ReleaseTransform()
     {
-        if (_transform is not null)
+        if (_transform != 0)
         {
-            _ = _transform.ProcessMessage(MfInterop.MftMessageFlush, IntPtr.Zero);
-            _ = Marshal.ReleaseComObject(_transform);
-            _transform = null;
+            _ = MfCom.Message(_transform, MfInterop.MftMessageFlush);
+            MfCom.Release(_transform);
+            _transform = 0;
         }
-
-        _initialized = false;
-        _frameCallback = null;
+        _callback = null;
     }
-
-    private static void Throw(int hr, string operation)
+    private void CheckThread()
     {
-        if (hr < 0)
-        {
-            throw new InvalidOperationException(
-                $"MediaFoundation operation '{operation}' failed: 0x{hr:X8}. MediaFoundation 操作“{operation}”失败：0x{hr:X8}。");
-        }
+        if (_inCallback) throw new InvalidOperationException("Decoder callbacks must not reenter the decoder.");
+        if (_ownerThread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
+    }
+    private void CheckReady()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!IsInitialized) throw new InvalidOperationException("Decoder is not initialized.");
+        CheckThread();
+    }
+    private static Guid CodecGuid(VideoCodecId codec) => codec switch
+    {
+        VideoCodecId.H264 => MfInterop.VideoFormatH264,
+        VideoCodecId.H265 => MfInterop.VideoFormatHevc,
+        _ => throw new ArgumentOutOfRangeException(nameof(codec)),
+    };
+    private static void Check(int hr, string operation)
+    {
+        if (hr < 0) throw new InvalidOperationException($"Media Foundation {operation} failed: 0x{hr:X8}.");
     }
 }

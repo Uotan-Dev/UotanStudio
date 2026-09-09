@@ -223,18 +223,10 @@ public class Nv12ToBgraConverterTests
         Nv12ToBgraConverter.Convert(nv12, width, height, stride, spanResult);
 
         var pooled = System.Buffers.ArrayPool<byte>.Shared.Rent(stride * (height + (height / 2)));
-        try
-        {
-            Array.Copy(nv12, pooled, nv12.Length);
-            var frameResult = new byte[Nv12ToBgraConverter.GetBgraBufferSize(width, height)];
-            using var frame = new DecodedVideoFrame(pooled, nv12.Length, width, height, stride, timestampTicks: 42);
-            Nv12ToBgraConverter.Convert(in frame, frameResult);
-
-            Assert.Equal(spanResult, frameResult);
-        }
-        finally
-        {
-            System.Buffers.ArrayPool<byte>.Shared.Return(pooled);
-        }
+        Array.Copy(nv12, pooled, nv12.Length);
+        var frameResult = new byte[Nv12ToBgraConverter.GetBgraBufferSize(width, height)];
+        using var frame = new DecodedVideoFrame(pooled, nv12.Length, width, height, stride, timestampTicks: 42);
+        Nv12ToBgraConverter.Convert(in frame, frameResult);
+        Assert.Equal(spanResult, frameResult);
     }
 }

@@ -7,12 +7,12 @@ namespace UotanStudio.Media.Decoding;
 /// <remarks>
 /// <para>
 /// Implementations are push-style: the caller feeds access units through
-/// <see cref="Decode"/> and receives decoded frames via the callback supplied to
+/// <see cref="Decode(ReadOnlySpan{byte})"/> and receives decoded frames via the callback supplied to
 /// <see cref="Initialize"/>. This mirrors how a screen-mirroring client consumes
 /// a continuous bitstream from a socket.
 /// </para>
 /// <para>
-/// 实现为推送式：调用方通过 <see cref="Decode"/> 输入访问单元，解码帧经
+/// 实现为推送式：调用方通过 <see cref="Decode(ReadOnlySpan{byte})"/> 输入访问单元，解码帧经
 /// <see cref="Initialize"/> 提供的回调返回。这与投屏客户端从 socket 消费
 /// 连续码流的方式一致。
 /// </para>
@@ -63,6 +63,12 @@ public interface IVideoDecoder : IDisposable
     /// </param>
     /// <exception cref="InvalidOperationException">Thrown when not initialized. 未初始化时抛出。</exception>
     void Decode(ReadOnlySpan<byte> accessUnit);
+
+    /// <summary>Feeds an Annex-B access unit with an explicit presentation timestamp in TimeSpan ticks.</summary>
+    void Decode(ReadOnlySpan<byte> accessUnit, long timestampTicks);
+
+    /// <summary>Delivers delayed output at end of stream. Reset before decoding a new stream.</summary>
+    void Drain();
 
     /// <summary>
     /// Resets decoder state (after a resolution change or stream discontinuity);

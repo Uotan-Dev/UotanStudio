@@ -54,14 +54,10 @@ public sealed class DecodedVideoFrame : IDisposable
             throw new ArgumentOutOfRangeException(nameof(length));
         }
 
-        if (width <= 0 || height <= 0)
+        int required = VideoFrameLimits.Nv12Length(width, height, stride);
+        if (length < required)
         {
-            throw new ArgumentOutOfRangeException(nameof(width), "Frame dimensions must be positive. 帧尺寸必须为正。");
-        }
-
-        if (stride < width)
-        {
-            throw new ArgumentOutOfRangeException(nameof(stride), "Stride must be at least the frame width. 行距不得小于帧宽度。");
+            throw new ArgumentException("The buffer does not contain complete NV12 planes.", nameof(length));
         }
 
         _buffer = buffer;
@@ -102,7 +98,7 @@ public sealed class DecodedVideoFrame : IDisposable
     /// <summary>
     /// 返回 NV12 缓冲区的有效部分；已释放时抛出异常。
     /// </summary>
-    public ReadOnlySpan<byte> Span => _buffer.AsSpan(0, Length);
+    public ReadOnlySpan<byte> Span => Buffer.AsSpan(0, Length);
 
     /// <inheritdoc />
     public void Dispose()
