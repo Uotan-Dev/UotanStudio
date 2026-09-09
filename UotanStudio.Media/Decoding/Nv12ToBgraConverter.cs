@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Runtime.Intrinsics;
 
 namespace UotanStudio.Media.Decoding;
 
@@ -112,7 +113,29 @@ public static unsafe class Nv12ToBgraConverter
             var uvRow = uvPlane + (long)(row >> 1) * uvStride;
             var dstRow = dst + (long)row * dstStride;
 
-            for (var col = 0; col < width; col += 2)
+            int col = 0;
+            if (Vector128.IsHardwareAccelerated)
+            {
+                // Four pixels share two chroma pairs. Keep exact integer rounding
+                // and saturate before packing BGRA; no temporary buffers or allocations.
+                for (; col <= width - 4; col += 4)
+                {
+                    var y = Vector128.Create((int)yRow[col], yRow[col + 1], yRow[col + 2], yRow[col + 3]);
+                    var d = Vector128.Create((int)uvRow[col], uvRow[col], uvRow[col + 2], uvRow[col + 2]) - Vector128.Create(128);
+                    var e = Vector128.Create((int)uvRow[col + 1], uvRow[col + 1], uvRow[col + 3], uvRow[col + 3]) - Vector128.Create(128);
+                    var c = (y - Vector128.Create(16)) * Vector128.Create(298) + Vector128.Create(128);
+                    var r = Vector128.ShiftRightArithmetic(c + e * Vector128.Create(409), 8);
+                    var g = Vector128.ShiftRightArithmetic(c - d * Vector128.Create(100) - e * Vector128.Create(208), 8);
+                    var b = Vector128.ShiftRightArithmetic(c + d * Vector128.Create(516), 8);
+                    r = Vector128.Min(Vector128.Max(r, Vector128<int>.Zero), Vector128.Create(255));
+                    g = Vector128.Min(Vector128.Max(g, Vector128<int>.Zero), Vector128.Create(255));
+                    b = Vector128.Min(Vector128.Max(b, Vector128<int>.Zero), Vector128.Create(255));
+                    var pixels = b | Vector128.ShiftLeft(g, 8) | Vector128.ShiftLeft(r, 16) | Vector128.Create(unchecked((int)0xff000000));
+                    pixels.Store((int*)(dstRow + col * 4));
+                }
+            }
+
+            for (; col < width; col += 2)
             {
                 // Each 2×2 pixel block shares one UV pair; every pixel uses its
                 // own luma value.

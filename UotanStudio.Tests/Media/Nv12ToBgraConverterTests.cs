@@ -8,6 +8,35 @@ namespace UotanStudio.Tests.Media;
 /// </summary>
 public class Nv12ToBgraConverterTests
 {
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(3, 5)]
+    [InlineData(4, 2)]
+    [InlineData(7, 9)]
+    [InlineData(65, 17)]
+    [InlineData(1920, 3)]
+    public void Convert_RandomPixelsAndPaddedRows_MatchScalarReference(int width, int height)
+    {
+        int stride = ((width + 1) & ~1) + 6;
+        int outputStride = width * 4 + 13;
+        byte[] source = new byte[stride * (height + (height + 1) / 2)];
+        new Random(42).NextBytes(source);
+        byte[] actual = new byte[outputStride * height];
+        Array.Fill(actual, (byte)0xa5);
+        Nv12ToBgraConverter.Convert(source, width, height, stride, actual, outputStride);
+        for (int row = 0; row < height; row++)
+        {
+            for (int col = 0; col < width; col++)
+            {
+                int uv = stride * height + (row / 2) * stride + (col & ~1);
+                var expected = ExpectedPixel(source[row * stride + col], source[uv], source[uv + 1]);
+                int offset = row * outputStride + col * 4;
+                Assert.Equal(expected, (actual[offset], actual[offset + 1], actual[offset + 2], actual[offset + 3]));
+            }
+            Assert.All(actual.AsSpan(row * outputStride + width * 4, 13).ToArray(), value => Assert.Equal(0xa5, value));
+        }
+    }
+
     /// <summary>构造一帧 NV12 数据（可选自定义 stride）。</summary>
     private static (byte[] Nv12, int Stride) BuildNv12(int width, int height, int stride, Func<int, int, byte>? yFunc = null, Func<int, int, (byte U, byte V)>? uvFunc = null)
     {

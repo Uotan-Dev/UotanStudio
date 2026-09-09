@@ -1,6 +1,21 @@
 ﻿using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Decoding;
 
+if (args is ["--benchmark-conversion"])
+{
+    foreach (var (width, height) in new[] { (1024, 576), (1600, 900), (1920, 1080) })
+    {
+        byte[] source = new byte[width * height * 3 / 2];
+        new Random(42).NextBytes(source);
+        byte[] destination = new byte[width * height * 4];
+        for (int i = 0; i < 30; i++) Nv12ToBgraConverter.Convert(source, width, height, width, destination);
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        for (int i = 0; i < 200; i++) Nv12ToBgraConverter.Convert(source, width, height, width, destination);
+        Console.WriteLine($"{width}x{height}: {watch.Elapsed.TotalMilliseconds / 200:F3} ms/frame; hash={Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(destination))}");
+    }
+    return 0;
+}
+
 if (args is ["--probe"])
 {
     Console.WriteLine($"OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription}");
@@ -21,7 +36,7 @@ if (args is ["--probe"])
 }
 if (args is not ["--decode-black", var path])
 {
-    Console.Error.WriteLine("Usage: MediaProbe --probe | --decode-black <black-64x64.h264>");
+    Console.Error.WriteLine("Usage: MediaProbe --probe | --decode-black <black-64x64.h264> | --benchmark-conversion");
     return 2;
 }
 byte[] packet = File.ReadAllBytes(path);
