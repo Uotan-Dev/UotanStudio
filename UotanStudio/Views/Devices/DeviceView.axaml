@@ -134,7 +134,7 @@
                         ToolTip.Tip="{DynamicResource Device_RestorePartition}">
                     <avalonia:MaterialIcon Kind="DatabaseArrowDown" Width="16" Height="16" />
                 </Button>
-                <Button Content="HDC" IsVisible="{Binding SelectedDevice.IsHdc}">
+                <Button Content="HDC" IsVisible="{Binding SelectedDevice.IsHdc, FallbackValue=False}">
                     <Button.Flyout>
                         <MenuFlyout>
                             <MenuItem Header="{DynamicResource Device_HdcSend}" Command="{Binding HdcOperationCommand}" CommandParameter="Send" />

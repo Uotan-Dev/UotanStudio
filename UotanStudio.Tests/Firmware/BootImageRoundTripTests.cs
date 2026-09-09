@@ -19,6 +19,25 @@ public class BootImageRoundTripTests
     private static readonly byte[] TestVendorDtb = BuildBytes(2048, factor: 17);
     private static readonly byte[] TestVendorBootconfig = BuildBytes(512, factor: 23);
 
+    /// <summary>
+    /// Test helper: collects the streaming packer output into an in-memory byte array
+    /// (replaces the obsolete <c>Pack()</c> convenience overload).
+    /// <para>测试辅助方法：把流式打包输出收集为内存字节数组（替代已过时的 <c>Pack()</c>）。</para>
+    /// </summary>
+    private static byte[] PackToArray(BootImagePacker packer)
+    {
+        using var ms = new MemoryStream();
+        packer.PackToStream(ms);
+        return ms.ToArray();
+    }
+
+    private static byte[] PackToArray(VendorBootPacker packer)
+    {
+        using var ms = new MemoryStream();
+        packer.PackToStream(ms);
+        return ms.ToArray();
+    }
+
     [Fact]
     public void V2_UnpackRepack_PreservesComponentsAndKeyFields()
     {
@@ -42,7 +61,7 @@ public class BootImageRoundTripTests
             Dtb = TestDtb,
         };
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
         Assert.StartsWith("ANDROID!", System.Text.Encoding.ASCII.GetString(image, 0, 8));
 
         using var parser = new BootImageParser();
@@ -91,7 +110,7 @@ public class BootImageRoundTripTests
             Ramdisk = TestRamdisk,
         };
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
 
         using var parser = new BootImageParser();
         parser.Parse(image);
@@ -132,7 +151,7 @@ public class BootImageRoundTripTests
             Signature = TestSignature,
         };
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
 
         using var parser = new BootImageParser();
         parser.Parse(image);
@@ -170,7 +189,7 @@ public class BootImageRoundTripTests
             Dtb = TestVendorDtb,
         };
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
         Assert.StartsWith("VNDRBOOT", System.Text.Encoding.ASCII.GetString(image, 0, 8));
 
         using var parser = new VendorBootParser();
@@ -233,7 +252,7 @@ public class BootImageRoundTripTests
             RamdiskName = "dlkm",
         });
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
         Assert.StartsWith("VNDRBOOT", System.Text.Encoding.ASCII.GetString(image, 0, 8));
 
         using var parser = new VendorBootParser();
@@ -296,7 +315,7 @@ public class BootImageRoundTripTests
             Second = BuildBytes(256, factor: 29),
         };
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
         Assert.StartsWith("ANDROID!", System.Text.Encoding.ASCII.GetString(image, 0, 8));
 
         using var parser = new BootImageParser();
@@ -340,7 +359,7 @@ public class BootImageRoundTripTests
             RecoveryDtbo = recoveryDtbo,
         };
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
 
         using var parser = new BootImageParser();
         parser.Parse(image);
@@ -384,7 +403,7 @@ public class BootImageRoundTripTests
             Dtb = TestDtb,
         };
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
 
         using var parser = new BootImageParser();
         parser.Parse(image);
@@ -415,7 +434,7 @@ public class BootImageRoundTripTests
             Ramdisk = TestRamdisk,
         };
 
-        var image = packer.Pack();
+        var image = PackToArray(packer);
         // 整页截断：解析器对超出镜像末尾的段按既有约定返回空组件（宽松截断语义）。
         // A full page is removed; per the existing contract the parser yields empty
         // components for segments extending past EOF (lenient truncation semantics).

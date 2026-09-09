@@ -151,4 +151,7 @@
     <x:String x:Key="Node_Hdc_Reverse">HDC 反向端口转发</x:String>
     <x:String x:Key="Node_Hdc_ListForwards">HDC 列出转发</x:String>
     <x:String x:Key="Node_Hdc_Remount">HDC 重新挂载</x:String>
+    <x:String x:Key="Node_Hdc_RemoveForward">HDC 移除正向转发</x:String>
+    <x:String x:Key="Node_Hdc_RemoveReverse">HDC 移除反向转发</x:String>
+    <x:String x:Key="Node_Hdc_ListDebugProcesses">HDC 调试进程列表</x:String>
 </ResourceDictionary>

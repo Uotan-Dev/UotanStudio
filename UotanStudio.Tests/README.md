@@ -46,3 +46,15 @@ opt-in via `UOTAN_TEST_HDC_TARGET` (exact connect key) and `UOTAN_TEST_HDC_EXE`
 read system parameters, shell output, a short HiLog stream, and the public
 `/system/bin/toybox` file into a temporary local directory for SHA-256 comparison.
 They never write device files, clear logs, install/uninstall, reboot or elevate.
+
+### Direct HDC USB read-only checks
+
+Set `UOTAN_TEST_HDC_USB_SERIAL` to the exact USB serial, then run `HdcDirectReadOnlyDeviceTests`.
+The selected FF/50/01 interface must be available and the existing key at `~/.harmony/hdckey` must be readable.
+This test never starts/stops HDC servers or generates a new device authorization identity. It performs
+  concurrent parameter and HiLog reads, cancellation and connection reuse, plain/LZ4 reception of `/system/bin/toybox` compared against device sha256sum, interrupted transfers, missing-path errors, and debug-process enumeration.
+It runs in a nonparallel collection because native USB discovery emits process-global diagnostics.
+Do not enable this together with official-server hardware checks: their USB ownership is exclusive.
+An explicitly enabled test fails when the interface cannot be opened; it does not silently skip that failure.
+
+Native transfer and forwarding state machines are covered by HdcTransferTests and HdcForwardTests, including upstream byte fixtures, directory traversal rejection, atomic publication, app result modes, loopback bidirectional forwarding and channel-slot release after repeated failures. These simulations do not install packages, send device files or create hardware forwarding rules.

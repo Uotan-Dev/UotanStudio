@@ -23,11 +23,24 @@ public sealed class HdcConnection : IDisposable
     private readonly ManualResetEventSlim _peerReady = new(false);
     private Thread? _messageThread;
     private uint _sessionId;
-    private uint _peerSessionId;
     private uint _peerVersion;
     private string? _peerBanner;
     private bool _connected;
     private bool _disposed;
+    private HdcForwardManager? _forwards;
+
+    /// <summary>Persistent native TCP mappings owned by this connection.</summary>
+    public HdcForwardManager Forwards
+    {
+        get
+        {
+            lock (_streamsLock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                return _forwards ??= new HdcForwardManager(this);
+            }
+        }
+    }
     private uint _nextChannelId = 1;
 
     /// <summary>
@@ -92,49 +105,40 @@ public sealed class HdcConnection : IDisposable
         // <para>生成随机会话 ID。</para>
         _sessionId = (uint)Random.Shared.Next();
 
-        // Build and send our session handshake.
-        // <para>构建并发送本端会话握手。</para>
-        var handshake = new HdcSessionHandShake
+        // session.h auth states: NONE=0, SIGNATURE=2, PUBLICKEY=3, OK=4.
+        Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
+            HdcDaemonCodec.Handshake(0, _sessionId, string.Empty, System.Text.Encoding.ASCII.GetBytes("authtype        1               1"), "Ver: 3.2.0f")));
+        var authenticated = false;
+        var authDeadline = Environment.TickCount64 + 30000;
+        for (var round = 0; round < 8; round++)
         {
-            Banner = HdcConstants.HandshakeMessage,
-            AuthType = _authentication.VerifyType,
-            SessionId = _sessionId,
-            ConnectKey = string.Empty,
-            Buf = _authentication.BuildPublicKeyPayload(),
-            Version = HdcConstants.ProtocolVersion,
-        };
-        SendHandShake(handshake);
-
-        // Read the peer's handshake response (synchronous, before the message loop starts).
-        // <para>读取对端握手响应（同步，在消息循环启动前完成）。</para>
-        var response = ReadMessage();
-        if (response.Command != HdcCommand.Handshake)
-        {
-            throw new InvalidDataException(
-                $"Expected session handshake response, but received command {response.Command}.");
+            if (Environment.TickCount64 >= authDeadline) throw new TimeoutException("HDC authentication deadline exceeded.");
+            var response = ReadMessage();
+            if (response.Command != HdcCommand.Handshake || response.ChannelId != 0)
+                throw new InvalidDataException("Expected HDC authentication handshake.");
+            var handshake = HdcDaemonCodec.ReadHandshake(response.Payload ?? []);
+            if (handshake.SessionId != 0 && handshake.SessionId != _sessionId)
+                throw new InvalidDataException("HDC authentication session mismatch.");
+            _peerBanner = HdcConstants.HandshakeMessage;
+            _peerVersion = HdcConstants.ProtocolVersion;
+            if (handshake.State == 4)
+            {
+                var status = System.Text.Encoding.UTF8.GetString(handshake.Buffer);
+                if (status.Contains("DAEMON_UNAUTH", StringComparison.Ordinal))
+                    throw new UnauthorizedAccessException("HDC device did not authorize this host.");
+                authenticated = true; break;
+            }
+            byte[] buffer = handshake.State switch
+            {
+                3 => _authentication.BuildDaemonPublicKeyPayload(),
+                2 => System.Text.Encoding.ASCII.GetBytes(Convert.ToBase64String(_authentication.SignToken(handshake.Buffer))),
+                5 => throw new UnauthorizedAccessException("HDC device rejected host authorization."),
+                _ => throw new NotSupportedException($"HDC authentication state {handshake.State} is not supported."),
+            };
+            Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
+                HdcDaemonCodec.Handshake(handshake.State, handshake.SessionId, string.Empty, buffer, "Ver: 3.2.0f")));
         }
-
-        if (response.Payload is not { Length: > 0 })
-        {
-            throw new InvalidDataException("Session handshake response contains no payload.");
-        }
-
-        var peerHandshake = HdcSessionHandShake.Parse(response.Payload);
-
-        // Verify the peer banner.
-        // <para>验证对端横幅。</para>
-        if (!string.Equals(peerHandshake.Banner, HdcConstants.HandshakeMessage, StringComparison.Ordinal))
-        {
-            throw new InvalidDataException(
-                $"Peer banner mismatch: expected \"{HdcConstants.HandshakeMessage}\", " +
-                $"got \"{peerHandshake.Banner}\".");
-        }
-
-        // Save peer session information.
-        // <para>保存对端会话信息。</para>
-        _peerSessionId = peerHandshake.SessionId;
-        _peerVersion = peerHandshake.Version;
-        _peerBanner = peerHandshake.Banner;
+        if (!authenticated) throw new UnauthorizedAccessException("HDC authorization did not complete.");
 
         // Start the background message loop.
         // <para>启动后台消息循环。</para>
@@ -154,8 +158,14 @@ public sealed class HdcConnection : IDisposable
     /// <para>异步连接到 HDC 对端。</para>
     /// </summary>
     /// <param name="cancellationToken">Cancellation token. 取消令牌。</param>
-    public async Task ConnectAsync(CancellationToken cancellationToken = default) =>
-        await Task.Run(Connect, cancellationToken).ConfigureAwait(false);
+    public async Task ConnectAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var cancellation = cancellationToken.Register(() => _transport.Dispose());
+        try { await Task.Run(Connect, cancellationToken).ConfigureAwait(false); }
+        catch (Exception) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
+        cancellationToken.ThrowIfCancellationRequested();
+    }
 
     /// <summary>
     /// Opens a channel to a remote service (e.g. "shell:cmd", "file:sync", "forward:tcp:").
@@ -165,76 +175,30 @@ public sealed class HdcConnection : IDisposable
     /// <returns>An HDC stream. HDC 流。</returns>
     public HdcStream OpenChannel(string command)
     {
-        if (command is null)
-        {
-            throw new ArgumentNullException(nameof(command));
-        }
+        ArgumentNullException.ThrowIfNull(command);
+        if (command.StartsWith("shell:", StringComparison.Ordinal))
+            return OpenChannel(HdcCommand.UnityExecute, System.Text.Encoding.UTF8.GetBytes(command[6..]));
+        if (command.StartsWith("exec:", StringComparison.Ordinal))
+            return OpenChannel(HdcCommand.UnityExecute, System.Text.Encoding.UTF8.GetBytes(command[5..]));
+        throw new NotSupportedException("Use a native HDC command identifier for device channels.");
+    }
 
+    /// <summary>Starts a native task directly on a shared channel ID, without a host-channel handshake.</summary>
+    public HdcStream OpenChannel(HdcCommand command, byte[]? initialPayload = null)
+    {
         EnsureConnected();
-
-        uint channelId;
         HdcStream stream;
         lock (_streamsLock)
         {
-            channelId = _nextChannelId++;
-            stream = new HdcStream(this, channelId)
-            {
-                DataCommand = InferDataCommand(command),
-            };
-            _streams[channelId] = stream;
+            if (_streams.Count >= 128) throw new IOException("HDC channel limit exceeded.");
+            var id = _nextChannelId++;
+            if (id == 0) throw new IOException("HDC channel IDs exhausted.");
+            stream = new HdcStream(this, id) { DataCommand = command == HdcCommand.ShellInit ? HdcCommand.ShellData : command };
+            stream.SetRemoteId(id);
+            _streams.Add(id, stream);
         }
-
-        // Build and send the channel-level handshake with our channelId.
-        // <para>构建并发送通道级握手，携带本端 channelId。</para>
-        var channelPayload = HdcChannelHandShake.Serialize(command);
-        Send(new HdcMessage(HdcCommand.Handshake, channelId, _sessionId, channelPayload));
-
-        // Wait for the peer to acknowledge the channel (sets RemoteChannelId).
-        // <para>等待对端确认通道（设置 RemoteChannelId）。</para>
-        if (!stream.WaitReady(ChannelOpenTimeoutMs))
-        {
-            lock (_streamsLock) { _streams.Remove(channelId); }
-            throw new TimeoutException("Channel open timed out waiting for peer acknowledgment.");
-        }
-
-        return stream;
-    }
-
-    /// <summary>
-    /// Opens a channel for the specified HDC command with an optional initial payload.
-    /// <para>为指定 HDC 命令打开通道，可选附带初始负载。</para>
-    /// </summary>
-    /// <param name="command">The HDC command identifier. HDC 命令标识。</param>
-    /// <param name="initialPayload">Optional initial payload to send with the first data message.
-    /// <para>可选的初始负载，随首条数据消息发送。</para></param>
-    /// <returns>An HDC stream. HDC 流。</returns>
-    public HdcStream OpenChannel(HdcCommand command, byte[]? initialPayload = null)
-    {
-        var serviceName = command switch
-        {
-            HdcCommand.ShellInit => "shell:",
-            HdcCommand.UnityExecute => "exec:",
-            HdcCommand.UnityReboot => "reboot:",
-            HdcCommand.UnityRemount => "remount:",
-            HdcCommand.TargetList => "list:",
-            HdcCommand.TargetConnect => "connect:",
-            HdcCommand.WaitFor => "wait:",
-            HdcCommand.CheckServer => "check:",
-            HdcCommand.FileInit => "file:",
-            HdcCommand.ForwardInit => "forward:",
-            _ => $"cmd:{(ushort)command}:",
-        };
-
-        var stream = OpenChannel(serviceName);
-
-        // If an initial payload is provided, send it as the first data message.
-        // <para>如果提供了初始负载，将其作为首条数据消息发送。</para>
-        if (initialPayload is { Length: > 0 })
-        {
-            stream.DataCommand = command;
-            stream.Write(initialPayload);
-        }
-
+        try { Send(new HdcMessage(command, stream.ChannelId, _sessionId, initialPayload)); }
+        catch { lock (_streamsLock) _streams.Remove(stream.ChannelId); stream.MarkClosed(); throw; }
         return stream;
     }
 
@@ -246,12 +210,13 @@ public sealed class HdcConnection : IDisposable
     /// <returns><c>true</c> if the peer responded; otherwise, <c>false</c>. 对端是否响应。</returns>
     public bool WaitForPeer(int timeoutMs = 10000) => _peerReady.Wait(timeoutMs);
 
-    /// <summary>
-    /// Writes data to the specified stream.
-    /// <para>向指定流写入数据。</para>
-    /// </summary>
-    /// <param name="stream">The target stream. 目标流。</param>
-    /// <param name="data">The data to write. 要写入的数据。</param>
+    /// <summary>Sends a native task transition on a registered channel.</summary>
+    internal void SendOnChannel(HdcStream stream, HdcCommand command, byte[] payload)
+    {
+        EnsureConnected();
+        Send(new HdcMessage(command, stream.ChannelId, _sessionId, payload));
+    }
+
     internal void WriteToStream(HdcStream stream, byte[] data)
     {
         EnsureConnected();
@@ -274,108 +239,84 @@ public sealed class HdcConnection : IDisposable
     /// <para>关闭指定通道并通知对端。</para>
     /// </summary>
     /// <param name="stream">The stream to close. 要关闭的流。</param>
-    internal void CloseChannel(HdcStream stream)
+    /// <param name="notify">Whether the peer still needs a close request.</param>
+    internal void CloseChannel(HdcStream stream, bool notify = true)
     {
         lock (_streamsLock) { _streams.Remove(stream.ChannelId); }
-        Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, stream.ChannelId, null));
+        if (notify) Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, stream.ChannelId, [1]));
     }
 
-    /// <summary>
-    /// Serializes and sends a session handshake through the transport.
-    /// <para>序列化并通过传输发送会话握手。</para>
-    /// </summary>
-    /// <param name="handshake">The session handshake to send. 要发送的会话握手。</param>
-    private void SendHandShake(HdcSessionHandShake handshake)
-    {
-        var msg = HdcMessaging.BuildConnectHandshake(
-            handshake.AuthType,
-            handshake.SessionId,
-            handshake.ConnectKey,
-            handshake.Buf,
-            handshake.Version);
-
-        lock (_sendLock)
-        {
-            var data = HdcMessaging.Serialize(msg, _sessionId);
-            _transport.Write(data, 0, data.Length, DefaultTimeoutMs);
-        }
-    }
-
-    /// <summary>
-    /// Sends a command message to the transport. If the payload exceeds the single-packet
-    /// limit, it is automatically fragmented into multiple packets.
-    /// <para>向传输发送命令消息。若负载超过单包限制，将自动分片为多个数据包。</para>
-    /// </summary>
-    /// <param name="message">The message to send. 要发送的消息。</param>
     private void Send(HdcMessage message)
     {
         lock (_sendLock)
         {
-            if (message.Payload is not { Length: > 0 })
+            var packet = HdcDaemonCodec.Encode(message);
+            if (_transport is UsbDeviceTransport usb)
             {
-                var packet = HdcMessaging.Serialize(message, _sessionId);
-                _transport.Write(packet, 0, packet.Length, DefaultTimeoutMs);
-                return;
+                WriteUsbHeader(1, (uint)packet.Length);
+                WriteExact(packet);
+                var packetSize = usb.Session.DeviceInfo.Interfaces.SelectMany(i => i.Endpoints)
+                    .FirstOrDefault(e => e.EndpointAddress == usb.Session.EndpointOut)?.MaxPacketSize ?? 0;
+                if (packetSize == 0 || packet.Length % packetSize == 0) WriteUsbHeader(0, 0);
             }
-
-            // Fragment the payload when it exceeds the single-packet limit.
-            // <para>负载超过单包限制时进行分片。</para>
-            var payload = message.Payload;
-            var offset = 0;
-            while (offset < payload.Length)
-            {
-                var chunkSize = Math.Min(payload.Length - offset, HdcConstants.MaxPayloadSize);
-                var chunk = new byte[chunkSize];
-                Buffer.BlockCopy(payload, offset, chunk, 0, chunkSize);
-
-                var fragment = new HdcMessage(
-                    message.Command,
-                    message.ChannelId,
-                    message.SessionId,
-                    chunk);
-
-                var packet = HdcMessaging.Serialize(fragment, _sessionId);
-                _transport.Write(packet, 0, packet.Length, DefaultTimeoutMs);
-
-                offset += chunkSize;
-            }
+            else WriteExact(packet);
         }
     }
 
-    /// <summary>
-    /// Reads the next complete HDC message from the transport.
-    /// <para>从传输读取下一条完整的 HDC 消息。</para>
-    /// </summary>
-    /// <returns>The parsed HDC message. 解析后的 HDC 消息。</returns>
+    private void WriteUsbHeader(byte option, uint size)
+    {
+        var header = new byte[11];
+        new HdcUsbHead
+        {
+            Flag0 = (byte)'U',
+            Flag1 = (byte)'B',
+            Option = option,
+            SessionId = _sessionId,
+            DataSize = size
+        }.WriteTo(header);
+        WriteExact(header);
+    }
+
+    private void WriteExact(byte[] data)
+    {
+        var offset = 0;
+        var deadline = Environment.TickCount64 + DefaultTimeoutMs;
+        while (offset < data.Length)
+        {
+            var remaining = deadline - Environment.TickCount64;
+            if (remaining <= 0) throw new TimeoutException("HDC write deadline exceeded.");
+            var written = _transport.Write(data, offset, data.Length - offset, (int)remaining);
+            if (written <= 0 || written > data.Length - offset) throw new IOException("Incomplete HDC transport write.");
+            offset += (int)written;
+        }
+    }
+
+    private byte[] ReadBody(int length)
+    {
+        try { return ReadExact(length, DefaultTimeoutMs); }
+        catch (TimeoutException ex) { throw new IOException("HDC frame body timed out.", ex); }
+    }
+
     private HdcMessage ReadMessage()
     {
-        // Step 1: Read PayloadHead (11 bytes) — transport framing header.
-        // <para>步骤 1：读取 PayloadHead（11 字节）— 传输帧头。</para>
-        var headerBytes = ReadExact(HdcConstants.HeaderSize, DefaultTimeoutMs);
-        var head = HdcMessaging.ParseHeader(headerBytes);
-
-        // Step 2: Read PayloadProtect channel metadata (14 bytes, always first 14 bytes
-        // of the data portion). The command identifier lives in CommandFlag.
-        // <para>步骤 2：读取 PayloadProtect 通道元数据（14 字节，始终为数据部分的前 14 字节）。
-        // 命令标识位于 CommandFlag 字段。</para>
-        var protectBytes = ReadExact(HdcPayloadProtect.Size, DefaultTimeoutMs);
-        var protect = HdcMessaging.ParsePayloadProtect(protectBytes);
-
-        // Step 3: Read the remaining data payload (DataSize - 14 bytes).
-        // <para>步骤 3：读取剩余数据负载（DataSize - 14 字节）。</para>
-        var dataSize = (int)head.DataSize;
-        var remainingSize = dataSize - HdcPayloadProtect.Size;
-        byte[]? payload = null;
-        if (remainingSize > 0)
+        if (_transport is UsbDeviceTransport)
         {
-            payload = ReadExact(remainingSize, DefaultTimeoutMs);
+            while (true)
+            {
+                var usb = HdcUsbHead.Parse(ReadExact(11, DefaultTimeoutMs));
+                if (usb.Flag0 != 'U' || usb.Flag1 != 'B' || usb.SessionId != _sessionId)
+                    throw new InvalidDataException("Invalid HDC USB identity.");
+                if ((usb.Option & 2) != 0) throw new IOException("HDC USB session reset by peer.");
+                if (usb.Option == 0 && usb.DataSize == 0) continue;
+                if (usb.Option != 1 || usb.DataSize < 11 || usb.DataSize > HdcConstants.MaxPayloadSize + 1035)
+                    throw new InvalidDataException("Invalid HDC USB block.");
+                return HdcDaemonCodec.Decode(ReadBody((int)usb.DataSize));
+            }
         }
-
-        return new HdcMessage(
-            (HdcCommand)protect.CommandFlag,
-            protect.ChannelId,
-            head.SessionId,
-            payload);
+        var header = ReadExact(11, DefaultTimeoutMs);
+        var (metadata, payload) = HdcDaemonCodec.ReadHeader(header);
+        var body = ReadBody(metadata + payload);
+        return HdcDaemonCodec.Decode([.. header, .. body]);
     }
 
     /// <summary>
@@ -393,12 +334,11 @@ public sealed class HdcConnection : IDisposable
                 {
                     message = ReadMessage();
                 }
-                catch (InvalidDataException)
+                catch (TimeoutException) when (_connected)
                 {
-                    // Single message parse failure — skip this message and continue the loop.
-                    // <para>单条消息解析失败 — 跳过此消息并继续循环。</para>
                     continue;
                 }
+                catch (InvalidDataException) { throw; }
 
                 try
                 {
@@ -417,6 +357,10 @@ public sealed class HdcConnection : IDisposable
                             HandleChannelClose(message);
                             break;
 
+                        case HdcCommand.WakeupSlaveTask:
+                            // session.cpp wakes the already-created task; no task payload or reply.
+                            break;
+
                         case HdcCommand.ShellData:
                         case HdcCommand.FileData:
                         case HdcCommand.ForwardData:
@@ -426,18 +370,15 @@ public sealed class HdcConnection : IDisposable
                         case HdcCommand.HeartbeatMsg:
                             // Reply with a heartbeat to keep the connection alive.
                             // <para>回复心跳以保持连接活跃。</para>
-                            Send(HdcMessaging.BuildHeartbeat(message.ChannelId));
+                            Send(message);
                             break;
 
                         default:
+                            HandleData(message);
                             break;
                     }
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    // Per-message handler failure — log-worthy but the connection survives.
-                    // <para>单条消息处理失败 — 值得记录日志，但连接不受影响。</para>
-                }
+                catch { throw; }
             }
         }
         catch (Exception ex)
@@ -455,29 +396,7 @@ public sealed class HdcConnection : IDisposable
     /// <param name="message">The handshake message. 握手消息。</param>
     private void HandleHandshake(HdcMessage message)
     {
-        if (message.ChannelId != 0)
-        {
-            // Channel-level handshake response — acknowledge the pending channel.
-            // <para>通道级握手响应 — 确认等待中的通道。</para>
-            lock (_streamsLock)
-            {
-                if (_streams.TryGetValue(message.ChannelId, out var stream))
-                {
-                    // In HDC the channelId is shared between both sides.
-                    // <para>在 HDC 中 channelId 由双方共享。</para>
-                    stream.SetRemoteId(message.ChannelId);
-                }
-            }
-        }
-        else if (message.Payload is { Length: > 0 })
-        {
-            // Session-level handshake (re-handshake during the session).
-            // <para>会话级握手（会话期间的重握手）。</para>
-            var handshake = HdcSessionHandShake.Parse(message.Payload);
-            _peerSessionId = handshake.SessionId;
-            _peerVersion = handshake.Version;
-            _peerBanner = handshake.Banner;
-        }
+        throw new InvalidDataException("Unexpected authentication message on an established HDC session.");
     }
 
     /// <summary>
@@ -487,6 +406,17 @@ public sealed class HdcConnection : IDisposable
     /// <param name="message">The echo message. Echo 消息。</param>
     private void HandleEcho(HdcMessage message)
     {
+        if (message.Command == HdcCommand.EchoRaw) { HandleData(message); return; }
+        if (message.Payload is { Length: > 0 } payload)
+        {
+            if (payload[0] == 0)
+            {
+                lock (_streamsLock)
+                    if (_streams.TryGetValue(message.ChannelId, out var stream))
+                        stream.MarkFaulted(new IOException(System.Text.Encoding.UTF8.GetString(payload.AsSpan(1))));
+            }
+            else HandleData(message with { Payload = payload[1..] });
+        }
         // Echo messages carry diagnostic text in the payload.
         // Currently consumed silently; callers can extend via events if needed.
         // <para>Echo 消息在负载中携带诊断文本。
@@ -513,7 +443,8 @@ public sealed class HdcConnection : IDisposable
 
         // Echo CLSE back so the peer tears down its side.
         // <para>回送 CLSE 使对端拆除其侧流。</para>
-        Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, message.ChannelId, null));
+        if (message.Payload is { Length: > 0 } close && close[0] > 0)
+            Send(HdcMessaging.BuildCommand(HdcCommand.ChannelClose, message.ChannelId, [(byte)(close[0] - 1)]));
     }
 
     /// <summary>
@@ -527,7 +458,7 @@ public sealed class HdcConnection : IDisposable
         {
             if (_streams.TryGetValue(message.ChannelId, out var stream))
             {
-                stream.EnqueueData(message.Payload ?? []);
+                stream.EnqueueData(message with { Payload = message.Payload ?? [] });
             }
         }
     }
@@ -593,12 +524,16 @@ public sealed class HdcConnection : IDisposable
     {
         var buffer = new byte[length];
         var totalRead = 0;
+        var deadline = Environment.TickCount64 + timeoutMs;
         while (totalRead < length)
         {
-            var n = _transport.Read(buffer, totalRead, length - totalRead, timeoutMs);
+            var remaining = deadline - Environment.TickCount64;
+            if (remaining <= 0) throw new IOException("HDC frame deadline exceeded.");
+            var n = _transport.Read(buffer, totalRead, length - totalRead, (int)remaining);
             if (n == 0)
             {
-                throw new TimeoutException("HDC read timeout.");
+                if (totalRead == 0) throw new TimeoutException("HDC idle read timeout.");
+                throw new IOException("HDC frame truncated by timeout.");
             }
 
             totalRead += n;
@@ -631,6 +566,7 @@ public sealed class HdcConnection : IDisposable
         }
 
         _disposed = true;
+        _forwards?.Dispose();
 
         lock (_streamsLock)
         {
@@ -645,6 +581,7 @@ public sealed class HdcConnection : IDisposable
 
         _transport.Dispose();
         _authentication.Dispose();
+        _messageThread?.Join(DefaultTimeoutMs + 100);
         _peerReady.Dispose();
         GC.SuppressFinalize(this);
     }

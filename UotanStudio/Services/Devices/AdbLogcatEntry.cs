@@ -32,11 +32,13 @@ public sealed partial record AdbLogcatEntry(string RawText, string Timestamp, in
     };
 
     /// <summary>Complete displayed and searchable text. 用于显示和搜索的完整日志行。</summary>
-    public string Text { get; } = Priority == '\0' ? RawText
+    private string? _text;
+    public string Text => _text ??= Priority == '\0' ? RawText
         : $"{Timestamp,-23} {ProcessId + "-" + ThreadId,-13} {Tag,-24} {ProcessName,-32} {Priority} {Message}";
 
     /// <summary>Display columns retaining complete field spans. 保留完整字段范围的显示列。</summary>
-    public IReadOnlyList<LogTextColumn> Columns { get; } = Priority == '\0' ? [] :
+    private IReadOnlyList<LogTextColumn>? _columns;
+    public IReadOnlyList<LogTextColumn> Columns => _columns ??= Priority == '\0' ? [] :
     [
         new(Timestamp, Math.Max(Timestamp.Length, 23) + 1, 24),
         new(ProcessId + "-" + ThreadId, Math.Max((ProcessId + "-" + ThreadId).Length, 13) + 1, 14),

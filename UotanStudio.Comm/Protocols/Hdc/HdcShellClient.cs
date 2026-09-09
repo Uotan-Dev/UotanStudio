@@ -80,13 +80,17 @@ public sealed class HdcShellClient
             HdcServerClient.ThrowOnFailure(Encoding.UTF8.GetString(output));
             return new ShellResult(output, [], -1);
         }
-        using var stream = _connection!.OpenChannel(HdcCommand.ShellInit, Encoding.UTF8.GetBytes(_command));
+        using var stream = _connection!.OpenChannel(HdcCommand.UnityExecute, Encoding.UTF8.GetBytes(_command));
         using var stdout = new MemoryStream();
         int exitCode = -1;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(timeoutMs);
+        var deadline = Environment.TickCount64 + timeoutMs;
 
         while (true)
         {
-            var chunk = stream.Read(timeoutMs);
+            var remaining = deadline - Environment.TickCount64;
+            if (remaining <= 0) throw new TimeoutException("HDC shell deadline exceeded.");
+            var chunk = stream.Read((int)remaining);
             if (chunk is null)
             {
                 if (!stream.IsClosed)
@@ -127,7 +131,7 @@ public sealed class HdcShellClient
             _server.ExecuteStreamingAsync(_connectKey!, "shell " + _command, bytes => onStdout?.Invoke(bytes), cancellationToken).GetAwaiter().GetResult();
             return -1;
         }
-        using var stream = _connection!.OpenChannel(HdcCommand.ShellInit, Encoding.UTF8.GetBytes(_command));
+        using var stream = _connection!.OpenChannel(HdcCommand.UnityExecute, Encoding.UTF8.GetBytes(_command));
 
         while (!cancellationToken.IsCancellationRequested)
         {

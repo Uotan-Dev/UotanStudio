@@ -10,7 +10,7 @@ public sealed class HdcNodeViewModel : FlowNodeViewModel
 {
     /// <summary>Registered HDC operation names. 已注册 HDC 操作名称。</summary>
     public static IReadOnlyList<string> Operations { get; } =
-        ["Shell", "GetProperty", "Send", "Receive", "Install", "Uninstall", "Forward", "Reverse", "ListForwards", "Remount"];
+        ["Shell", "GetProperty", "Send", "Receive", "Install", "Uninstall", "Forward", "Reverse", "ListForwards", "RemoveForward", "RemoveReverse", "ListDebugProcesses", "Remount"];
 
     private HdcNodeViewModel(string operation) : base("HDC " + operation, NodeCategory.Flash)
         => TypeKey = "HDC." + operation;
@@ -31,6 +31,8 @@ public sealed class HdcNodeViewModel : FlowNodeViewModel
             case "Install": Input("Package", NodePortType.Path); break;
             case "Uninstall": Input("Bundle", NodePortType.Text); break;
             case "Forward":
+            case "RemoveForward":
+            case "RemoveReverse":
             case "Reverse": Input("Local Port", NodePortType.Number); Input("Remote Port", NodePortType.Number); break;
         }
         node.Output.Add(new() { Title = "Result", PortType = NodePortType.Text });
@@ -59,8 +61,11 @@ public sealed class HdcNodeViewModel : FlowNodeViewModel
             "HDC.Uninstall" => await service.UninstallAsync(device, Text("Bundle"), ct).ConfigureAwait(false),
             "HDC.Forward" => await service.ForwardAsync(device, Port("Local Port"), Port("Remote Port"), ct: ct).ConfigureAwait(false),
             "HDC.Reverse" => await service.ForwardAsync(device, Port("Local Port"), Port("Remote Port"), reverse: true, ct: ct).ConfigureAwait(false),
-            "HDC.ListForwards" => await service.RunTaskAsync(device, ["fport", "ls"], ct).ConfigureAwait(false),
-            "HDC.Remount" => await service.RunTaskAsync(device, ["target", "mount"], ct).ConfigureAwait(false),
+            "HDC.ListForwards" => await service.ListForwardsAsync(device, ct).ConfigureAwait(false),
+            "HDC.RemoveForward" => await service.RemoveForwardAsync(device, Port("Local Port"), Port("Remote Port"), ct: ct).ConfigureAwait(false),
+            "HDC.RemoveReverse" => await service.RemoveForwardAsync(device, Port("Local Port"), Port("Remote Port"), reverse: true, ct: ct).ConfigureAwait(false),
+            "HDC.ListDebugProcesses" => await service.ListDebugProcessesAsync(device, ct).ConfigureAwait(false),
+            "HDC.Remount" => await service.RemountAsync(device, ct).ConfigureAwait(false),
             _ => throw new NotSupportedException(TypeKey)
         };
         WriteOutput("Result", result);

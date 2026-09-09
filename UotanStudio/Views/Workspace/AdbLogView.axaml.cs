@@ -76,6 +76,9 @@ public partial class AdbLogView : UserControl
         }
         _model = null;
         _scroller = null;
+        _renderedEntries.Clear();
+        _lines.Clear();
+        LogEditor.Document.Text = string.Empty;
     }
 
     private void BindModel()
@@ -149,7 +152,7 @@ public partial class AdbLogView : UserControl
             var line = entry.Text.ReplaceLineEndings("\n") + "\n";
             var lineCount = line.Count(character => character == '\n');
             _renderedEntries.Insert(index++, (line.Length, lineCount));
-            _lines.Insert(lineIndex, (entry.Level, entry.Columns.Count == 0 ? null : entry));
+            _lines.Insert(lineIndex, (entry.Level, entry));
             _lines.InsertRange(lineIndex + 1, Enumerable.Repeat<(LogLevel?, ILogLine?)>((entry.Level, null), lineCount - 1));
             lineIndex += lineCount;
             text.Append(line);

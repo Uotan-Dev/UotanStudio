@@ -53,6 +53,50 @@ public sealed class HdcDeviceServices
     }
     /// <summary>Remounts system/vendor when permitted by the device. 在设备允许时重新挂载 system/vendor。</summary>
     public void Remount() => ExecuteService("target mount", HdcCommand.UnityRemount, "", 10000);
+
+    /// <summary>Lists processes exposed by the device's debug service.</summary>
+    public string ListDebugProcesses() => ExecuteService("jpid", HdcCommand.JdwpList, "", 10000);
+
+    /// <summary>Opens a native interactive shell; callers own its lifetime and terminal input.</summary>
+    public HdcStream OpenInteractiveShell() => (_connection ?? throw new NotSupportedException("Interactive byte streams require a direct connection."))
+        .OpenChannel(HdcCommand.ShellInit, []);
+
+    /// <summary>Opens a native debug-process tracker with the upstream default, package or all-process mode.</summary>
+    public HdcStream TrackDebugProcesses(string mode = "")
+    {
+        if (mode is not ("" or "p" or "a")) throw new ArgumentException("Invalid HDC process tracking mode.", nameof(mode));
+        return (_connection ?? throw new NotSupportedException("Native process tracking requires a direct connection."))
+            .OpenChannel(HdcCommand.JdwpTrack, Encoding.UTF8.GetBytes(mode));
+    }
+
+    /// <summary>Streams a device diagnostic report to a caller-owned destination without whole-report buffering.</summary>
+    public void Bugreport(Stream destination, CancellationToken cancellationToken = default)
+    {
+        using var channel = (_connection ?? throw new NotSupportedException("Native report streaming requires a direct connection."))
+            .OpenChannel(HdcCommand.UnityBugreportInit, []);
+        var deadline = Environment.TickCount64 + 300000;
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Environment.TickCount64 >= deadline) throw new TimeoutException("HDC diagnostic report timed out.");
+            var message = channel.ReadMessage(250);
+            if (message is null) { if (channel.IsClosed) return; continue; }
+            if (message.Command == HdcCommand.UnityBugreportData) destination.Write(message.Payload ?? []);
+            else if (message.Command is not (HdcCommand.Echo or HdcCommand.EchoRaw))
+                throw new InvalidDataException("Unexpected HDC diagnostic report command.");
+        }
+    }
+
+    /// <summary>Requests root or normal daemon startup, subject to device authorization and build policy.</summary>
+    public void SetRootMode(bool enabled) => ExecuteService(enabled ? "smode" : "smode -r", HdcCommand.UnityRootRun, enabled ? "" : "r", 10000);
+
+    /// <summary>Switches the daemon to USB or TCP mode using upstream tmode arguments.</summary>
+    public void SetRunMode(int? tcpPort)
+    {
+        if (tcpPort is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(tcpPort));
+        var argument = tcpPort is { } port ? $"port {port}" : "usb";
+        ExecuteService("tmode " + argument, HdcCommand.UnityRunmode, argument, 10000);
+    }
     private string ExecuteService(string command, HdcCommand nativeCommand, string argument, int timeoutMs)
     {
         if (_server is not null)

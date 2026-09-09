@@ -14,7 +14,7 @@ namespace UotanStudio.Tests.Firmware;
 /// </summary>
 public class RealCorpusDeepTests
 {
-    private static string? Resolve(string fileName)
+    private static string Resolve(string fileName)
     {
         var path = FirmwareCorpus.FindFile(fileName);
         if (path is null)
@@ -22,7 +22,11 @@ public class RealCorpusDeepTests
             Assert.Skip($"{fileName} not found in firmware corpus");
         }
 
-        return path;
+        // Assert.Skip 抛出 SkipException 终止执行，故此后 path 必非 null；
+        // 编译器无法感知该终止语义，用 ! 收紧可空性。
+        // Assert.Skip throws SkipException so path is non-null past this point; the compiler
+        // cannot see the terminating semantics, hence the null-forgiving operator.
+        return path!;
     }
 
     [Fact]
@@ -39,7 +43,7 @@ public class RealCorpusDeepTests
     }
 
     [Fact]
-    public void Avb_SM7150Vbmeta_ParsesMetadata()
+    public async Task Avb_SM7150Vbmeta_ParsesMetadata()
     {
         var path = Resolve("vbmeta_a.img");
         FirmwareFormatRegistry.RegisterAll();
@@ -47,13 +51,13 @@ public class RealCorpusDeepTests
         Assert.NotNull(handler);
         Assert.Contains("Verified Boot", handler!.FormatName, StringComparison.OrdinalIgnoreCase);
 
-        var result = handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        var result = await handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
         Assert.NotNull(result.Metadata);
     }
 
     [Fact]
-    public void Boot_SM7150BootImage_ParsesMetadata()
+    public async Task Boot_SM7150BootImage_ParsesMetadata()
     {
         var path = Resolve("boot_a.img");
         FirmwareFormatRegistry.RegisterAll();
@@ -61,12 +65,12 @@ public class RealCorpusDeepTests
         Assert.NotNull(handler);
         Assert.Contains("Boot", handler!.FormatName, StringComparison.OrdinalIgnoreCase);
 
-        var result = handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        var result = await handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
     }
 
     [Fact]
-    public void Payload_RootPayloadBin_ReadsManifest()
+    public async Task Payload_RootPayloadBin_ReadsManifest()
     {
         var path = Resolve("payload.bin");
         FirmwareFormatRegistry.RegisterAll();
@@ -76,13 +80,13 @@ public class RealCorpusDeepTests
 
         // 仅读取 manifest 元数据（有界头部读取），不解包 7.4GB 镜像。
         // Reads manifest metadata only (bounded head reads), never unpacks the 7.4 GB image.
-        var result = handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        var result = await handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
         Assert.True(result.Entries.Count > 10, "payload manifest should list many partitions");
     }
 
     [Fact]
-    public void Huawei_RootUpdateApp_ReadsMetadata()
+    public async Task Huawei_RootUpdateApp_ReadsMetadata()
     {
         var path = Resolve("UPDATE.APP");
         FirmwareFormatRegistry.RegisterAll();
@@ -90,12 +94,12 @@ public class RealCorpusDeepTests
         Assert.NotNull(handler);
         Assert.Contains("update.app", handler!.FormatName, StringComparison.OrdinalIgnoreCase);
 
-        var result = handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        var result = await handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
     }
 
     [Fact]
-    public void Oppo_RootOzip_ReadsMetadata()
+    public async Task Oppo_RootOzip_ReadsMetadata()
     {
         var path = Resolve("1.ozip");
         FirmwareFormatRegistry.RegisterAll();
@@ -103,14 +107,14 @@ public class RealCorpusDeepTests
         Assert.NotNull(handler);
         Assert.Contains("Oppo", handler!.FormatName, StringComparison.OrdinalIgnoreCase);
 
-        var result = handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        var result = await handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
         Assert.True(result.Components.Count > 10 || result.Entries.Count > 10,
             "ozip should list its internal entries or firmware components");
     }
 
     [Fact]
-    public void Dt_SM7150Dtbo_ReadsMetadata()
+    public async Task Dt_SM7150Dtbo_ReadsMetadata()
     {
         var path = Resolve("dtbo_a.img");
         FirmwareFormatRegistry.RegisterAll();
@@ -118,7 +122,7 @@ public class RealCorpusDeepTests
         Assert.NotNull(handler);
         Assert.Contains("Device Tree", handler!.FormatName, StringComparison.OrdinalIgnoreCase);
 
-        var result = handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken).GetAwaiter().GetResult();
+        var result = await handler.ReadMetadataAsync(path, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
     }
 }

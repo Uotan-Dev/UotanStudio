@@ -297,9 +297,11 @@ APK 签名入口：APK 文档页提供自定义私钥、证书、输出路径、
 ### 9.1 HDC / OpenHarmony 支持
 
 - 应用层 HDC 操作使用官方服务端管理的目标（包括 USB 设备）。`HdcServerClient` 按上游 `channel.h/channel.cpp` 与 `host/client.cpp` 实现主机通道：服务端先发握手，4 字节大端长度，12 字节 banner + 32 字节 connectKey 联合体，命令带 NUL；每次操作独占连接，完整读取至 EOF。默认端口遵循 `OHOS_HDC_SERVER_PORT`，未设置时为 8710。单帧上限 4 MiB、捕获输出上限 16 MiB，有总超时和取消；不把 `DataAvailable` 或超时当作完成。
-- `DeviceMonitorService` 合并官方 HDC 目标与 USB 枚举，优先按序列号采用 server 条目；每 3 秒只读查询目标状态，变化时刷新。`OpenHdcSession` 使用目标绑定的主机通道，不再把 server 通道包装为设备端协议连接；保留在 Comm 中的历史 USB 设备端实现不属于本轮互通验证范围。
+- `DeviceMonitorService` 以官方详细目标列表提供的 USB/TCP/UART 类型和授权状态为准；没有服务端时使用 FF/50/01 原始 USB 接口，排除无端点的接口别名。`HdcDaemonCodec` 使用上游设备 PayloadHead 与 protobuf 元数据，USB 外层 UB 帧独立读写；`HdcConnection` 执行 AUTH_NONE/PUBLICKEY/SIGNATURE/OK 状态机，声明 RSA-SHA512 能力并使用 ~/.harmony/hdckey。`HdcDirectSessionPool` 让详情、Shell、HiLog 共用已认证连接和独立通道，断连/退出释放。官方主机通道与原生设备通道不能混用。直连单文件传输、应用安装/卸载、TCP 正反转发及移除已接入原生任务；目录接收通过通信库 RecvDirectory 提供。文件配置使用上游 protobuf、64 字节数据前缀及 LZ4 原始块；WakeupSlaveTask 为会话控制消息。能力与真机证据见 docs/hdc-support.md。
 - `HdcDeviceService` 共用于界面和工作流：Shell 通过独立退出码标记验证远端结果，属性使用 OpenHarmony `param get`，重启仅映射 system/bootloader/recovery 到 `target boot`，不支持的模式明确失败。原始 `HdcShellClient` 返回 -1 表示远端退出码未知，不能将关闭通道认作成功。
-- 设备管理支持 HDC 连接检查、系统详情、Shell、文件发送/接收、HAP/HSP/APP 安装及按 bundle 名卸载；文件/应用任务使用官方 HDC 可执行文件，参数使用 `ArgumentList`，同时排空输出、支持取消和总时限。接收先暂存到本地独立目录再原子发布。安装/卸载验证上游 `msg:install/uninstall bundle successfully.`，不能把 `[Info]` 当成功。设置页提供 `AppSettings.HdcPath`；留空查找 PATH 或 Windows 标准 DevEco SDK。该字段使用既有源生成 JSON 持久化。
+- 设备管理支持 HDC 连接检查、系统详情、Shell、文件发送/接收、HAP/HSP/APP 安装及按 bundle 名卸载；官方服务端目标的文件/应用任务使用官方 HDC 可执行文件，参数使用 `ArgumentList`，同时排空输出、支持取消和总时限。接收先暂存到本地独立目录再原子发布。安装/卸载验证上游 `msg:install/uninstall bundle successfully.`，不能把 `[Info]` 当成功。设置页提供 `AppSettings.HdcPath`；留空查找 PATH 或 Windows 标准 DevEco SDK。该字段使用既有源生成 JSON 持久化。
 - 设备详情的不可读取项独立降级，权限不足不影响其他信息。原 ADB 日志面板统一显示为“设备日志”，ADB 读取 logcat、HDC 读取 `shell hilog -v year`，共用有界 UTF-8 解码、搜索与过滤；清空动作按协议分派，HDC 为 `hilog -r`。scrcpy 投屏仍仅适用于 ADB，HDC 不复用其协议。
-- HDC 工作流 TypeKey 为 `HDC.Shell/GetProperty/Send/Receive/Install/Uninstall/Forward/Reverse/ListForwards/Remount`；集中在 `NodeFactoryRegistrar` 注册，与 UI 工具箱共用，稳定 Device/Path/Text/Number 端口，异常及取消传播给引擎。既有 `Flash.GetProp` / `Flash.Reboot` 同时支持 HDC 的对应能力。
+- HDC 工作流 TypeKey 为 `HDC.Shell/GetProperty/Send/Receive/Install/Uninstall/Forward/Reverse/ListForwards/RemoveForward/RemoveReverse/ListDebugProcesses/Remount`；集中在 `NodeFactoryRegistrar` 注册，与 UI 工具箱共用，稳定 Device/Path/Text/Number 端口，异常及取消传播给引擎。既有 `Flash.GetProp` / `Flash.Reboot` 同时支持 HDC 的对应能力。
 - 回归测试见 `HdcServerClientTests` / `HdcDeviceServiceTests`。`HdcReadOnlyDeviceTests` 仅在显式设置 `UOTAN_TEST_HDC_TARGET` 和 `UOTAN_TEST_HDC_EXE` 时执行真实设备的只读命令、日志和文件接收；普通测试跳过。不得在真机验证中自动重启、提权、安装、卸载、写文件、清日志或刷写。上游依据与验证边界见 `docs/hdc-support.md`。
+
+- 设备日志继续使用 AvaloniaEdit 可见行虚拟化；每 100 ms 按最多 250 行/约 128 Ki 原始字符批量更新，范围集合最多两个通知。待显示与历史队列各限 5,000 行和 2 Mi 原始字符；可见列延迟生成，过滤一次 Reset，卸载视图释放文档。原生 HDC 每通道未消费数据上限 4 MiB。

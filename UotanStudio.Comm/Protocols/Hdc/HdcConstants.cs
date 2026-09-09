@@ -19,7 +19,7 @@ public static class HdcConstants
     public const int DefaultPort = 8710;
 
     /// <summary>
-    /// Two-byte packet flag for TCP/server channels ("HW").
+    /// Two-byte packet flag for daemon channels ("HW").
     /// <para>TCP/服务通道的两字节包标识（"HW"）。</para>
     /// </summary>
     public const string PacketFlag = "HW";
@@ -67,8 +67,8 @@ public static class HdcConstants
     public const int HeartbeatIntervalMs = 5000;
 
     /// <summary>
-    /// Fixed PayloadHead header size in bytes (flag 2 + option 1 + sessionId 4 + dataSize 4 = 11).
-    /// <para>PayloadHead 固定大小（flag 2 + option 1 + sessionId 4 + dataSize 4 = 11 字节）。</para>
+    /// Fixed daemon PayloadHead size (flag 2 + reserve 2 + version 1 + headSize 2 + dataSize 4).
+    /// <para>设备 PayloadHead 固定大小为 11 字节；sessionId 仅在 USBHead 中。</para>
     /// </summary>
     public const int HeaderSize = 11;
 
@@ -136,6 +136,8 @@ public enum HdcCommand : ushort
     Echo = 9,
     /// <summary>Raw echo request. 原始回显请求。</summary>
     EchoRaw = 10,
+    /// <summary>Peer announces task creation; there is no response payload.</summary>
+    WakeupSlaveTask = 12,
     /// <summary>Enable keep-alive. 启用保活。</summary>
     EnableKeepalive = 11,
     /// <summary>Check HDC server status. 检查 HDC 服务端状态。</summary>
@@ -163,6 +165,10 @@ public enum HdcCommand : ushort
     UnityHilog = 1005,
     /// <summary>Execute as root. 以 root 执行。</summary>
     UnityRootRun = 1007,
+    /// <summary>Lists debuggable processes.</summary>
+    JdwpList = 1008,
+    /// <summary>Tracks changes to debuggable processes.</summary>
+    JdwpTrack = 1009,
     /// <summary>Initialize bugreport. 初始化 bugreport。</summary>
     UnityBugreportInit = 1011,
     /// <summary>Bugreport data transfer. bugreport 数据传输。</summary>

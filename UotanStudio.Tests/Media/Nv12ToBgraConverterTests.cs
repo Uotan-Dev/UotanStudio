@@ -176,14 +176,15 @@ public class Nv12ToBgraConverterTests
 
         Nv12ToBgraConverter.Convert(nv12, width, height, stride, destination);
 
+        // 饱和色度（U=16/V=240）应精确钳位到参考值：B=29 / G=208 / R=255。
+        // Saturated chroma (U=16/V=240) must clamp exactly to the reference values.
+        var (b, g, r, a) = ExpectedPixel(y: 235, u: 16, v: 240);
         for (var i = 0; i < width * height; i++)
         {
-            var b = destination[(i * 4) + 0];
-            var g = destination[(i * 4) + 1];
-            var r = destination[(i * 4) + 2];
-            Assert.True(b is >= 0 and <= 255, $"B out of range: {b}");
-            Assert.True(g is >= 0 and <= 255, $"G out of range: {g}");
-            Assert.True(r is >= 0 and <= 255, $"R out of range: {r}");
+            Assert.Equal(b, destination[(i * 4) + 0]);
+            Assert.Equal(g, destination[(i * 4) + 1]);
+            Assert.Equal(r, destination[(i * 4) + 2]);
+            Assert.Equal(a, destination[(i * 4) + 3]);
         }
     }
 

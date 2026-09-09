@@ -8,10 +8,12 @@ public sealed class HdcStream : IDisposable
 {
     private readonly HdcConnection _connection;
     private readonly Lock _lock = new();
-    private readonly Queue<byte[]> _incoming = new();
+    private readonly Queue<HdcMessage> _incoming = new();
     private readonly ManualResetEventSlim _dataAvailable = new(false);
     private readonly ManualResetEventSlim _ready = new(false);
     private bool _closed;
+    private bool _released;
+    private int _queuedBytes;
 
     /// <summary>
     /// Gets the local channel identifier.
@@ -97,9 +99,10 @@ public sealed class HdcStream : IDisposable
     /// Enqueues incoming data from the peer.
     /// <para>将来自对端的数据入队。</para>
     /// </summary>
-    /// <param name="payload">The data payload. 数据负载。</param>
-    internal void EnqueueData(byte[] payload)
+    /// <param name="message">The command envelope. 数据负载。</param>
+    internal void EnqueueData(HdcMessage message)
     {
+        var payload = message.Payload ?? [];
         lock (_lock)
         {
             if (_closed)
@@ -107,7 +110,13 @@ public sealed class HdcStream : IDisposable
                 return;
             }
 
-            _incoming.Enqueue(payload);
+            if (_queuedBytes + payload.Length > 4 * 1024 * 1024 || _incoming.Count >= 4096)
+            {
+                MarkFaulted(new IOException("HDC channel receive buffer limit exceeded."));
+                return;
+            }
+            _queuedBytes += payload.Length;
+            _incoming.Enqueue(message);
         }
 
         _dataAvailable.Set();
@@ -136,6 +145,8 @@ public sealed class HdcStream : IDisposable
             IsFaulted = true;
             Fault = ex;
             _closed = true;
+            _incoming.Clear();
+            _queuedBytes = 0;
         }
 
         _ready.Set();
@@ -162,21 +173,34 @@ public sealed class HdcStream : IDisposable
         _connection.WriteToStream(this, data);
     }
 
+    /// <summary>Sends a task state transition on this channel.</summary>
+    public void SendCommand(HdcCommand command, byte[] payload)
+    {
+        if (IsClosed) throw new IOException("HDC channel is closed.");
+        _connection.SendOnChannel(this, command, payload);
+    }
+
     /// <summary>
     /// Reads the next chunk, blocking until data arrives or stream closes.
     /// <para>读取下一块数据，阻塞直至有数据到达或流关闭。</para>
     /// </summary>
     /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
     /// <returns>The data chunk, or <c>null</c> if the stream is closed. 数据块，流关闭时返回 null。</returns>
-    public byte[]? Read(int timeoutMs = Timeout.Infinite)
+    public byte[]? Read(int timeoutMs = Timeout.Infinite) => ReadMessage(timeoutMs)?.Payload;
+
+    /// <summary>Reads a complete command envelope without discarding native task metadata.</summary>
+    public HdcMessage? ReadMessage(int timeoutMs = Timeout.Infinite)
     {
         while (true)
         {
             lock (_lock)
             {
+                if (IsFaulted) throw new IOException("HDC channel failed.", Fault);
                 if (_incoming.Count > 0)
                 {
-                    return _incoming.Dequeue();
+                    var payload = _incoming.Dequeue();
+                    _queuedBytes -= payload.Payload?.Length ?? 0;
+                    return payload;
                 }
 
                 if (_closed)
@@ -201,12 +225,15 @@ public sealed class HdcStream : IDisposable
     public void Close()
     {
         bool shouldNotify;
-        lock (_lock) { shouldNotify = !_closed; _closed = true; }
-        if (shouldNotify)
+        lock (_lock)
         {
-            try { _connection.CloseChannel(this); }
-            catch { /* Swallow — best-effort notification. */ }
+            if (_released) return;
+            _released = true;
+            shouldNotify = !_closed || IsFaulted;
+            _closed = true;
         }
+        try { _connection.CloseChannel(this, shouldNotify); }
+        catch { /* Best-effort peer notification; local registration is already removed. */ }
 
         _dataAvailable.Set();
     }
@@ -218,7 +245,9 @@ public sealed class HdcStream : IDisposable
     public void Dispose()
     {
         Close();
-        _dataAvailable.Dispose();
+        lock (_lock) { _incoming.Clear(); _queuedBytes = 0; }
+        // Readers and the dispatch thread can still be unwinding after Close.
+        // These slim events never expose WaitHandle; let GC release them safely.
         GC.SuppressFinalize(this);
     }
 }
