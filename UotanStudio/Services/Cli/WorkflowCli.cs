@@ -384,7 +384,7 @@ public static class WorkflowCli
             var nodesArr = new System.Text.Json.Nodes.JsonArray();
             foreach (var n in snapshot.Nodes)
             {
-                nodesArr.Add(new System.Text.Json.Nodes.JsonObject
+                nodesArr.Append(new System.Text.Json.Nodes.JsonObject
                 {
                     ["typeKey"] = n.TypeKey ?? "(unknown)",
                     ["title"] = n.Title ?? "(untitled)",
@@ -397,7 +397,7 @@ public static class WorkflowCli
             var connsArr = new System.Text.Json.Nodes.JsonArray();
             foreach (var c in snapshot.Connections)
             {
-                connsArr.Add(new System.Text.Json.Nodes.JsonObject
+                connsArr.Append(new System.Text.Json.Nodes.JsonObject
                 {
                     ["source"] = c.SourceConnectorTitle ?? "",
                     ["target"] = c.TargetConnectorTitle ?? "",
@@ -460,7 +460,7 @@ public static class WorkflowCli
                 var inputs = new System.Text.Json.Nodes.JsonArray();
                 foreach (var c in node.Input)
                 {
-                    inputs.Add(new System.Text.Json.Nodes.JsonObject
+                    inputs.Append(new System.Text.Json.Nodes.JsonObject
                     {
                         ["title"] = c.Title,
                         ["portType"] = c.PortType.ToString(),
@@ -471,7 +471,7 @@ public static class WorkflowCli
                 var outputs = new System.Text.Json.Nodes.JsonArray();
                 foreach (var c in node.Output)
                 {
-                    outputs.Add(new System.Text.Json.Nodes.JsonObject
+                    outputs.Append(new System.Text.Json.Nodes.JsonObject
                     {
                         ["title"] = c.Title,
                         ["portType"] = c.PortType.ToString(),
@@ -479,7 +479,7 @@ public static class WorkflowCli
                 }
                 obj["output"] = outputs;
 
-                arr.Add(obj);
+                arr.Append(obj);
             }
 
             Console.WriteLine(arr.ToJsonString(new System.Text.Json.JsonSerializerOptions

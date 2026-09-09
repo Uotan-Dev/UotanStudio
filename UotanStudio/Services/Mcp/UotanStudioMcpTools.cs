@@ -73,7 +73,7 @@ public sealed partial class UotanStudioMcpTools
             if (result.Entries is { Count: > 0 })
             {
                 var entries = new JsonArray();
-                foreach (var entry in result.Entries) entries.Add(JsonValue.Create(entry));
+                foreach (var entry in result.Entries) entries.Append(JsonValue.Create(entry));
                 json["entries"] = entries;
             }
             if (result.Metadata is { Count: > 0 })
@@ -87,7 +87,7 @@ public sealed partial class UotanStudioMcpTools
                 var comps = new JsonArray();
                 foreach (var c in result.Components)
                 {
-                    comps.Add(new JsonObject
+                    comps.Append(new JsonObject
                     {
                         ["name"] = c.Name,
                         ["sizeBytes"] = c.SizeBytes,
@@ -184,7 +184,7 @@ public sealed partial class UotanStudioMcpTools
                 var entries = new JsonArray();
                 foreach (var entry in result.Entries)
                 {
-                    entries.Add(JsonValue.Create(entry));
+                    entries.Append(JsonValue.Create(entry));
                 }
 
                 json["entries"] = entries;
@@ -449,7 +449,7 @@ public sealed partial class UotanStudioMcpTools
             if (result.Entries is { Count: > 0 })
             {
                 var entries = new JsonArray();
-                foreach (var entry in result.Entries) entries.Add(JsonValue.Create(entry));
+                foreach (var entry in result.Entries) entries.Append(JsonValue.Create(entry));
                 json["entries"] = entries;
             }
 
@@ -507,7 +507,7 @@ public sealed partial class UotanStudioMcpTools
             if (result.Entries is { Count: > 0 })
             {
                 var entries = new JsonArray();
-                foreach (var entry in result.Entries) entries.Add(JsonValue.Create(entry));
+                foreach (var entry in result.Entries) entries.Append(JsonValue.Create(entry));
                 json["entries"] = entries;
             }
 
@@ -604,7 +604,7 @@ public sealed partial class UotanStudioMcpTools
             var arr = new JsonArray();
             foreach (var d in devices)
             {
-                arr.Add(new JsonObject
+                arr.Append(new JsonObject
                 {
                     ["serial"] = d.Serial,
                     ["protocol"] = d.Protocol.ToString(),
