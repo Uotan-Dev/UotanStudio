@@ -120,7 +120,7 @@ public class ScrcpyControlMessageTests
     {
         var msg = ScrcpyControlMessageWriter.Simple(type);
 
-        Assert.Equal(1, msg.Length);
+        Assert.Single(msg);
         Assert.Equal(type, msg[0]);
     }
 

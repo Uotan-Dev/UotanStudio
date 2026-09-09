@@ -29,11 +29,11 @@ public class ApkUnpackTests
         var output = Path.Combine(Path.GetTempPath(), "apk-unpack-out-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = await new ApkFormatHandler().UnpackAsync(path, output);
+            var result = await new ApkFormatHandler().UnpackAsync(path, output, cancellationToken: TestContext.Current.CancellationToken);
             Assert.True(result.Success, result.Summary);
-            Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(Path.Combine(output, "classes.dex")));
+            Assert.Equal([1, 2, 3, 4], await File.ReadAllBytesAsync(Path.Combine(output, "classes.dex"), TestContext.Current.CancellationToken));
             Assert.Equal("<resources/>", File.ReadAllText(Path.Combine(output, "res", "values.xml")));
-            Assert.Empty(await File.ReadAllTextAsync(Path.Combine(output, "empty.txt")));
+            Assert.Empty(await File.ReadAllTextAsync(Path.Combine(output, "empty.txt"), TestContext.Current.CancellationToken));
             Assert.True(File.Exists(Path.Combine(output, "apk-metadata.txt")));
         }
         finally
@@ -54,7 +54,7 @@ public class ApkUnpackTests
         var output = Path.Combine(Path.GetTempPath(), "apk-unpack-out-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = await new ApkFormatHandler().UnpackAsync(path, output);
+            var result = await new ApkFormatHandler().UnpackAsync(path, output, cancellationToken: TestContext.Current.CancellationToken);
             Assert.False(result.Success);
             Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(output)!, "escape.txt")));
         }
@@ -94,7 +94,7 @@ public class ApkUnpackTests
         var output = Path.Combine(Path.GetTempPath(), "apk-unpack-out-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var result = await new ApkFormatHandler().UnpackAsync(path, output);
+            var result = await new ApkFormatHandler().UnpackAsync(path, output, cancellationToken: TestContext.Current.CancellationToken);
             Assert.False(result.Success);
         }
         finally
