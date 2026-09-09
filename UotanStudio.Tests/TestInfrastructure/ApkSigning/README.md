@@ -13,4 +13,4 @@ SHA-256：`AE120B95157566008EBAEF1D3583F9ECFEBB59EF80C7C63E31F02768C99DF439`。
 - [二进制](https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/8.9.2/apksig-8.9.2.jar)，SHA-256 `C070ED1394629D74641AA0906F60B2FFA1EE77E6366A1F93437F59717B1AEB89`。
 - [源码](https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/8.9.2/apksig-8.9.2-sources.jar)，SHA-256 `C7A0F43D1E40FDF39725AC090F5C7BBAEAE82D1E0BFD9CF2EE507A70EB5136B5`。
 
-设备验证与证据边界见 [验证报告](../../../docs/validation/APK_SIGNING_VALIDATION_2026-09-09.md)。
+设备安装验证不替代上游 apksig 的签名完整性验证。

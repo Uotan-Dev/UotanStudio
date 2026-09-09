@@ -1,4 +1,0 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup><OutputType>Exe</OutputType><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
-<ItemGroup><ProjectReference Include="../../UotanStudio.Comm/UotanStudio.Comm.csproj"/><ProjectReference Include="../../UotanStudio.Media/UotanStudio.Media.csproj"/></ItemGroup>
-</Project>
