@@ -7,7 +7,6 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Rockchip;
 using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Services.Cli;
 using UotanStudio.Services.Firmware;
 using Xunit;
 
@@ -63,7 +62,7 @@ public sealed class RepackMetadataTests : IDisposable
             Assert.Equal(Convert.ToHexStringLower(bytes.AsSpan(uuidOffset, 16)), superblock["uuid"]!.GetValue<string>());
         }
         Assert.NotNull(superblock[format == "F2FS" ? "feature" : "featureIncompat"]);
-        Assert.Equal(0, FirmwareCli.Run(["pack", Extracted, "-o", Output]));
+        Assert.True(PackingService.BuildImage(Extracted, Output).Success);
         var info = await handler.ReadMetadataAsync(Output, Cancellation);
         Assert.True(info.Success, info.Summary);
         Assert.DoesNotContain(info.Entries, path => path.Contains(RepackMetadata.FileName));
@@ -79,7 +78,7 @@ public sealed class RepackMetadataTests : IDisposable
         var metadata = Assert.IsType<RepackMetadata>(RepackMetadata.Read(Extracted));
         Assert.Equal("vendor", metadata.PackingOptions["VolumeName"]);
         EditMetadata(json => json["packingOptions"]!["VolumeName"] = "modified");
-        Assert.Equal(0, FirmwareCli.Run(["pack", Extracted, "-o", Output]));
+        Assert.True(PackingService.BuildImage(Extracted, Output).Success);
         using var parser = new ErofsParser(Output);
         Assert.Equal("modified", parser.VolumeName);
     }
@@ -119,7 +118,7 @@ public sealed class RepackMetadataTests : IDisposable
         var unpack = await handler.UnpackAsync(Image, Extracted, cancellationToken: Cancellation);
         Assert.True(unpack.Success, unpack.Summary);
         Assert.True(RepackMetadata.Read(Extracted)!.CanPackDirectory);
-        Assert.Equal(0, FirmwareCli.Run(["pack", Extracted, "-o", Output]));
+        Assert.True(PackingService.BuildImage(Extracted, Output).Success);
         var info = await handler.ReadMetadataAsync(Output, Cancellation);
         Assert.Equal(["hello.txt"], info.Entries);
     }
@@ -135,7 +134,7 @@ public sealed class RepackMetadataTests : IDisposable
         Assert.Single(metadata.Configuration["entries"]!.AsArray());
         Assert.False(File.Exists(Path.Combine(Extracted, "dtbo.json")));
         Assert.Equal("1", metadata.SourceProperties["EntryCount"]);
-        Assert.Equal(0, FirmwareCli.Run(["pack", Extracted, "-o", Output]));
+        Assert.True(PackingService.BuildImage(Extracted, Output).Success);
         Assert.Equal(File.ReadAllBytes(Image), File.ReadAllBytes(Output));
     }
 
@@ -148,7 +147,7 @@ public sealed class RepackMetadataTests : IDisposable
         var metadata = Assert.IsType<RepackMetadata>(RepackMetadata.Read(Extracted));
         Assert.Equal("Rockchip RKAF/RKFW Firmware", metadata.FormatName);
         Assert.False(metadata.CanPackDirectory);
-        Assert.Equal(1, FirmwareCli.Run(["pack", Extracted, "-o", Output]));
+        Assert.False(PackingService.BuildImage(Extracted, Output).Success);
         Assert.False(File.Exists(Output));
     }
 
@@ -206,7 +205,7 @@ public sealed class RepackMetadataTests : IDisposable
         Assert.True((await new Ext4FormatHandler().UnpackAsync(Image, Extracted, cancellationToken: Cancellation)).Success);
         EditMetadata(json => json["packingOptions"]!["BlockSize"] = "invalid");
         File.WriteAllText(Output, "keep");
-        Assert.Equal(1, FirmwareCli.Run(["pack", Extracted, "-o", Output]));
+        Assert.False(PackingService.BuildImage(Extracted, Output).Success);
         Assert.Equal("keep", File.ReadAllText(Output));
     }
 
@@ -216,7 +215,7 @@ public sealed class RepackMetadataTests : IDisposable
         Directory.CreateDirectory(Extracted);
         File.WriteAllText(Path.Combine(Extracted, RepackMetadata.FileName), "{invalid");
         File.WriteAllText(Output, "keep");
-        Assert.Equal(1, FirmwareCli.Run(["pack", Extracted, "-o", Output]));
+        Assert.False(PackingService.BuildImage(Extracted, Output).Success);
         Assert.Equal("keep", File.ReadAllText(Output));
     }
 

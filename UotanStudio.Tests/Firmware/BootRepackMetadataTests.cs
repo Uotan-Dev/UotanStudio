@@ -1,9 +1,7 @@
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
 using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Services.Cli;
 using UotanStudio.Services.Firmware;
-using UotanStudio.Services.Mcp;
 using UotanStudio.ViewModels.Workspace;
 using Xunit;
 
@@ -50,7 +48,7 @@ public sealed class BootRepackMetadataTests : IDisposable
         Assert.Equal(version, header["headerVersion"]!.GetValue<int>());
         Assert.Equal(8, header["ids"]!.AsArray().Count);
         Assert.True(metadata.CanPackDirectory);
-        Assert.Equal(0, FirmwareCli.Run(["pack", DirectoryPath, "-o", Output]));
+        Assert.True(PackingService.BuildImage(DirectoryPath, Output).Success);
         Assert.Equal(File.ReadAllBytes(Image), File.ReadAllBytes(Output));
 
         header["commandLine"] = "console=ttyS1 edited=1";
@@ -98,7 +96,7 @@ public sealed class BootRepackMetadataTests : IDisposable
             Assert.True(result.Success, result.Summary);
         }
         AssertNoLegacyFiles();
-        Assert.Equal(0, FirmwareCli.Run(["pack", DirectoryPath, "-o", Output]));
+        Assert.True(PackingService.BuildImage(DirectoryPath, Output).Success);
         Assert.Equal(File.ReadAllBytes(Image), File.ReadAllBytes(Output));
         var metadata = RepackMetadata.Read(DirectoryPath)!;
         metadata.Configuration["vendorHeader"]!["vendorCmdline"] = "vendor.edited=1";
@@ -178,13 +176,11 @@ public sealed class BootRepackMetadataTests : IDisposable
     }
 
     [Fact]
-    public async Task Mcp_AutoPack_UsesMetadataRegardlessOfOutputExtension()
+    public async Task ImagePanel_AutoPack_UsesMetadataRegardlessOfOutputExtension()
     {
         CreateBoot(4);
         Assert.True((await new BootImageFormatHandler().UnpackAsync(Image, DirectoryPath, cancellationToken: Cancellation)).Success);
-        var response = await new UotanStudioMcpTools().FirmwarePack(DirectoryPath, null, Output + ".cpio", ct: Cancellation);
-        var json = JsonNode.Parse(response)!;
-        Assert.True(json["success"]!.GetValue<bool>(), response);
+        Assert.True(PackingService.BuildImage(DirectoryPath, Output + ".cpio").Success);
         Assert.Equal(File.ReadAllBytes(Image), File.ReadAllBytes(Output + ".cpio"));
     }
 

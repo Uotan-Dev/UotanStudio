@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
-using UotanStudio.Services.Mcp;
 
 namespace UotanStudio.Services;
 
@@ -18,15 +17,7 @@ public class AppSettings
     {
         var copy = (AppSettings)MemberwiseClone();
         copy.RecentProjects = [.. RecentProjects];
-        copy.McpServers = McpServers.Select(server => new McpServerConfig
-        {
-            Name = server.Name,
-            Transport = server.Transport,
-            Command = server.Command,
-            Arguments = server.Arguments,
-            Url = server.Url,
-            Enabled = server.Enabled
-        }).ToList();
+        copy.AdditionalSettings = AdditionalSettings is null ? null : new(AdditionalSettings);
         return copy;
     }
 
@@ -132,27 +123,9 @@ public class AppSettings
     [JsonPropertyName("recentProjects")]
     public List<string> RecentProjects { get; set; } = [];
 
-    /// <summary>
-    /// <para>获取或设置 MCP 服务器连接列表（工具箱 MCP 节点按名称调用其工具）。</para>
-    /// Gets or sets the MCP server connection list (the toolbox MCP nodes call their tools by name).
-    /// </summary>
-    [JsonPropertyName("mcpServers")]
-    public List<McpServerConfig> McpServers { get; set; } = [];
-
-    /// <summary>
-    /// <para>获取或设置是否把本应用固件能力暴露为 MCP 服务器（HTTP 端口见 <see cref="McpExposePort"/>）。</para>
-    /// Gets or sets whether to expose this application's firmware capabilities as an MCP server
-    /// (HTTP port in <see cref="McpExposePort"/>).
-    /// </summary>
-    [JsonPropertyName("mcpExposeEnabled")]
-    public bool McpExposeEnabled { get; set; }
-
-    /// <summary>
-    /// <para>获取或设置 MCP 服务器暴露端口。</para>
-    /// Gets or sets the MCP server exposure port.
-    /// </summary>
-    [JsonPropertyName("mcpExposePort")]
-    public int McpExposePort { get; set; } = 18321;
+    /// <summary>Preserves settings from temporarily unavailable features without activating them.</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? AdditionalSettings { get; set; }
 
     /// <summary>
     /// <para>获取或设置是否启用调试模式（开启后日志显示 Trace/Debug 级别详细诊断信息）。</para>
@@ -218,14 +191,12 @@ public class AppSettings
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(Workspace.WorkspaceSessionSnapshot))]
 [JsonSerializable(typeof(ThemeMode))]
-[JsonSerializable(typeof(McpServerConfig))]
-[JsonSerializable(typeof(McpTransportKind))]
 [JsonSerializable(typeof(UotanStudio.Services.Logging.LogFileRecord))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<McpTransportKind>)])]
+    Converters = [typeof(JsonStringEnumConverter<ThemeMode>)])]
 internal partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>

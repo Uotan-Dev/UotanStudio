@@ -4,7 +4,6 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
-using UotanStudio.Services.Mcp;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -40,12 +39,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     private bool _autoSave;
     private bool _debugMode;
 
-    // MCP 设置字段
-    // MCP settings fields
-    private bool _mcpExposeEnabled;
-    private int _mcpExposePort = 18321;
-    private McpServerConfig? _selectedMcpServer;
-
     /// <summary>
     /// <para>获取可用语言列表，从语言服务动态获取。</para>
     /// Gets the list of available languages, dynamically retrieved from the language service.
@@ -58,49 +51,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </summary>
     public List<ThemeMode> Themes { get; } =
         [ThemeMode.System, ThemeMode.Light, ThemeMode.Dark];
-
-    /// <summary>
-    /// <para>获取 MCP 服务器连接列表（MCP 设置区块数据源；工具箱 MCP 节点按名称调用其工具）。</para>
-    /// Gets the MCP server connection list (data source for the MCP settings section; the toolbox MCP
-    /// nodes call their tools by name).
-    /// </summary>
-    public ObservableCollection<McpServerConfig> McpServers { get; } = [];
-
-    /// <summary>
-    /// <para>获取 MCP 传输类型列表（传输下拉框数据源）。</para>
-    /// Gets the MCP transport kind list (data source for the transport combo box).
-    /// </summary>
-    public IReadOnlyList<McpTransportKind> McpTransportKinds { get; } = Enum.GetValues<McpTransportKind>();
-
-    /// <summary>
-    /// <para>获取或设置是否把本应用固件能力暴露为 MCP 服务器。</para>
-    /// Gets or sets whether to expose this application's firmware capabilities as an MCP server.
-    /// </summary>
-    public bool McpExposeEnabled
-    {
-        get => _mcpExposeEnabled;
-        set => SetProperty(ref _mcpExposeEnabled, value);
-    }
-
-    /// <summary>
-    /// <para>获取或设置 MCP 服务器暴露端口。</para>
-    /// Gets or sets the MCP server exposure port.
-    /// </summary>
-    public int McpExposePort
-    {
-        get => _mcpExposePort;
-        set => SetProperty(ref _mcpExposePort, value);
-    }
-
-    /// <summary>
-    /// <para>获取或设置当前选中的 MCP 服务器配置（删除按钮目标）。</para>
-    /// Gets or sets the currently selected MCP server config (the remove-button target).
-    /// </summary>
-    public McpServerConfig? SelectedMcpServer
-    {
-        get => _selectedMcpServer;
-        set => SetProperty(ref _selectedMcpServer, value);
-    }
 
     /// <summary>
     /// <para>获取本项目使用或参考的开源项目列表（开源致谢区块数据源，静态只读，AOT 友好）。</para>
@@ -539,23 +489,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         // Apply language based on loaded preference
         ApplyLanguageInfo(_selectedLanguage);
 
-        // 初始化 MCP 设置
-        McpServers.Clear();
-        foreach (var server in settings.McpServers)
-        {
-            McpServers.Add(new McpServerConfig
-            {
-                Name = server.Name,
-                Transport = server.Transport,
-                Command = server.Command,
-                Arguments = server.Arguments,
-                Url = server.Url,
-                Enabled = server.Enabled
-            });
-        }
 
-        _mcpExposeEnabled = settings.McpExposeEnabled;
-        _mcpExposePort = settings.McpExposePort > 0 ? settings.McpExposePort : 18321;
     }
 
     /// <summary>
@@ -630,11 +564,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         var latest = SettingsPersistenceService.Instance.LoadSettings();
         _appSettings.RecentProjects = latest.RecentProjects;
 
-        // MCP 设置
-        _appSettings.McpServers = [.. McpServers];
-        _appSettings.McpExposeEnabled = _mcpExposeEnabled;
-        _appSettings.McpExposePort = _mcpExposePort;
-
         var saved = SettingsPersistenceService.Instance.TrySaveSettings(_appSettings, out var error);
         WeakReferenceMessenger.Default.Send(new SettingsSaveCompletedMessage(saved, error));
     }
@@ -666,57 +595,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         foreach (var lang in LanguageService.Instance.AvailableLanguages)
         {
             Languages.Add(lang);
-        }
-    }
-
-    /// <summary>
-    /// <para>添加一条默认的 MCP 服务器配置（HTTP 传输）。</para>
-    /// Adds a default MCP server config (HTTP transport).
-    /// </summary>
-    [RelayCommand]
-    private void AddMcpServer()
-    {
-        var index = McpServers.Count + 1;
-        McpServers.Add(new McpServerConfig
-        {
-            Name = $"MCP Server {index}",
-            Transport = McpTransportKind.Http,
-            Url = "http://localhost:8080/mcp",
-            Enabled = true
-        });
-    }
-
-    /// <summary>
-    /// <para>删除选中的 MCP 服务器配置。</para>
-    /// Removes the selected MCP server config.
-    /// </summary>
-    [RelayCommand]
-    private void RemoveMcpServer(McpServerConfig? server)
-    {
-        if (server is not null)
-        {
-            McpServers.Remove(server);
-        }
-    }
-
-    /// <summary>
-    /// <para>保存 MCP 设置：同步到 <see cref="AppSettings"/> 并持久化，重置客户端连接缓存，
-    /// 按「暴露为 MCP 服务器」开关与端口启动/停止服务器宿主。</para>
-    /// Saves the MCP settings: syncs into <see cref="AppSettings"/> and persists, resets the client
-    /// connection cache, and starts/stops the server host per the expose toggle and port.
-    /// </summary>
-    [RelayCommand]
-    private void SaveMcpSettings()
-    {
-        SaveSettings();
-        McpClientService.Instance.Reset();
-        if (_mcpExposeEnabled && _mcpExposePort > 0)
-        {
-            McpHostService.Instance.Start(_mcpExposePort);
-        }
-        else
-        {
-            McpHostService.Instance.Stop();
         }
     }
 

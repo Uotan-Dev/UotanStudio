@@ -1,14 +1,10 @@
 using System.Reflection;
-using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Core;
 using Dock.Model.Controls;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Messages;
-using UotanStudio.Services.Cli;
-using UotanStudio.Services.Mcp;
 using UotanStudio.Services.Projects;
 using UotanStudio.Tests.Comm.TestDoubles;
 using UotanStudio.ViewModels.Editors;
@@ -23,24 +19,6 @@ namespace UotanStudio.Tests.Services;
 [Collection("Workspace state")]
 public sealed class EntryPointCompatibilityTests
 {
-    [Theory]
-    [InlineData("Saved title.Milliseconds=0", 0)]
-    [InlineData("Delay.Milliseconds=0", 2)]
-    public async Task WorkflowCli_PreservesSavedTitleForOverrides(string input, int expectedExitCode)
-    {
-        using var temp = new TempDirectory();
-        var path = Path.Combine(temp.Path, "flow.uotannode");
-        var snapshot = new WorkflowSnapshot
-        {
-            Nodes = [new() { TypeKey = "Flow.Delay", InstanceId = "saved-id", Title = "Saved title",
-                InputInitialValues = new() { ["Milliseconds"] = "0" } }]
-        };
-        await using (var stream = File.Create(path))
-            await JsonSerializer.SerializeAsync(stream, snapshot, WorkflowJsonContext.Default.WorkflowSnapshot,
-                TestContext.Current.CancellationToken);
-        Assert.Equal(expectedExitCode, WorkflowCli.Run(["run", path, "--set", input]));
-    }
-
     [Fact]
     public async Task WorkspaceOpen_PreservesActivationAndLoadedRefreshWithoutDuplicateOnRefocus()
     {
@@ -85,7 +63,7 @@ public sealed class EntryPointCompatibilityTests
     }
 
     [Fact]
-    public async Task SparseUnpack_PreservesMcpRejectionAndEditorRawFallback()
+    public async Task SparseUnpack_PreservesEditorRawFallback()
     {
         using var temp = new TempDirectory();
         var path = Path.Combine(temp.Path, "system.img");
@@ -95,10 +73,6 @@ public sealed class EntryPointCompatibilityTests
             using var stream = File.Create(path);
             sparse.WriteToStream(stream, sparse: true);
         }
-        using var mcp = JsonDocument.Parse(await new UotanStudioMcpTools().FirmwareUnpack(path,
-            outputDir: Path.Combine(temp.Path, "mcp"), ct: TestContext.Current.CancellationToken));
-        Assert.False(mcp.RootElement.GetProperty("success").GetBoolean());
-        Assert.Contains("Unpack is not supported for format: Android Sparse Image (simg)", mcp.RootElement.GetProperty("error").GetString());
         var editor = new FirmwareInfoViewModel { FormatName = "Android Sparse Image (simg)" };
         var dispatch = typeof(FirmwareInfoViewModel).GetMethod("DispatchUnpackAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var result = await (Task<UotanStudio.Services.Firmware.FirmwareOpResult>)dispatch.Invoke(editor,
@@ -117,42 +91,4 @@ public sealed class EntryPointCompatibilityTests
         }
     }
 
-    [Theory]
-    [InlineData(" ext4 ", "EXT4")]
-    [InlineData("boot", null)]
-    [InlineData(".ext4", null)]
-    public void CliFormatNames_PreserveWhitespaceAndAliasPolicy(string name, string? expected)
-    {
-        FirmwareFormatRegistry.RegisterAll();
-        Assert.Equal(expected, FirmwareCli.ResolveByFormatNameForTest(name)?.FormatName);
-    }
-
-    [Theory]
-    [InlineData(null, "unknown.img", "cpio")]
-    [InlineData(null, "system.erofs", "erofs")]
-    [InlineData(" EXT4 ", "unknown.img", "ext4")]
-    [InlineData("f2fs", "system.f2fs", null)]
-    [InlineData("CPIO/TAR Archive", "ramdisk.cpio", null)]
-    public void McpPack_PreservesDefaultAndExplicitFormatPolicy(string? format, string output, string? expected)
-    {
-        using var temp = new TempDirectory();
-        var method = typeof(UotanStudioMcpTools).GetMethod("ResolvePackFormat", BindingFlags.NonPublic | BindingFlags.Static)!;
-        Assert.Equal(expected, method.Invoke(null, [format, temp.Path, output]));
-    }
-
-    [Fact]
-    public async Task McpPack_UnknownOutputExtensionStillProducesCpio()
-    {
-        using var temp = new TempDirectory();
-        var source = Path.Combine(temp.Path, "source");
-        Directory.CreateDirectory(source);
-        File.WriteAllText(Path.Combine(source, "hello.txt"), "compatibility");
-        var output = Path.Combine(temp.Path, "result.img");
-        var tools = new UotanStudioMcpTools();
-        using var result = JsonDocument.Parse(await tools.FirmwarePack(outputPath: output, inputDir: source, inputPath: null,
-            ct: TestContext.Current.CancellationToken));
-        Assert.True(result.RootElement.GetProperty("success").GetBoolean(), result.RootElement.ToString());
-        Assert.Equal("cpio", result.RootElement.GetProperty("format").GetString());
-        Assert.Equal("CPIO/TAR Archive", FormatDetector.Detect(output)?.FormatName);
-    }
 }

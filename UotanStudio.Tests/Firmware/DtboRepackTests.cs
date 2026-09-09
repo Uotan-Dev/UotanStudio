@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Services.Cli;
+using UotanStudio.Services.Firmware;
 using UotanStudio.Tests.Infrastructure;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
@@ -258,13 +258,13 @@ public sealed class DtboRepackTests : IDisposable
     }
 
     [Fact]
-    public void Cli_DirectoryAutoDetection_ProducesDtbo()
+    public async Task ImagePanel_DirectoryAutoDetection_ProducesDtbo()
     {
         CreateImage();
-        Assert.Equal(0, FirmwareCli.Run(["unpack", Input, "-o", Unpacked]));
-        File.WriteAllBytes(Path.Combine(Unpacked, "overlay_00.dtb"), Dtb("CLI-modified"));
-        Assert.Equal(0, FirmwareCli.Run(["pack", Unpacked, "-o", Output]));
-        Assert.Equal(Dtb("CLI-modified"), DtboFormat.Read(File.ReadAllBytes(Output)).Dtbs[0]);
+        Assert.True((await new DtFormatHandler().UnpackAsync(Input, Unpacked, cancellationToken: Cancellation)).Success);
+        File.WriteAllBytes(Path.Combine(Unpacked, "overlay_00.dtb"), Dtb("panel-modified"));
+        Assert.True(PackingService.BuildImage(Unpacked, Output).Success);
+        Assert.Equal(Dtb("panel-modified"), DtboFormat.Read(File.ReadAllBytes(Output)).Dtbs[0]);
     }
 
     [Fact]

@@ -136,9 +136,6 @@
     <x:String x:Key="Node_Dex_Disassemble">逆向 DEX</x:String>
     <x:String x:Key="Node_Dex_Rebuild">编译 DEX</x:String>
     <x:String x:Key="Node_Dex_Decompile">反编译 DEX</x:String>
-    <x:String x:Key="Node_CatMCP">MCP 工具</x:String>
-    <x:String x:Key="Node_MCP_ListTools">列举 MCP 工具</x:String>
-    <x:String x:Key="Node_MCP_CallTool">调用 MCP 工具</x:String>
 
     <x:String x:Key="Node_Firmware_SignApk">APK 签名</x:String>
     <x:String x:Key="Node_Hdc_Shell">HDC Shell 命令</x:String>

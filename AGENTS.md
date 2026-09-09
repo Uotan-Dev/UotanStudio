@@ -1,5 +1,13 @@
 # UotanStudio 项目指令
 
+## 当前功能边界（2026-09-10）
+
+- CLI、MCP 客户端／宿主、MCP 设置与工具箱节点、Avalonia MCP 诊断接入已暂时移除。完整实现保存在本地分支 `codex/archive-cli-mcp`（`9c55695`）。下文尚涉及这些功能的描述为归档版本背景，不代表当前可用能力。
+- Desktop 直接启动图形界面，仅保留文件关联传入路径的打开／导入；不再提供 `firmware`、`workflow`、帮助／版本及其他命令行选项。
+- 固件库、桌面镜像操作和可视化节点工作流继续保留。旧工程中的 MCP 节点按既有未知节点规则处理；请勿在当前版本覆盖保存需要保留 MCP 节点的工程。
+- 设置通过源生成 JSON 的 `JsonExtensionData` 保留暂不可用功能的原始字段，不启动旧设置中启用的 MCP 服务。
+- 本次移除及验证记录见 `docs/cli-mcp-removal.md`。`docs/entry-point-refactoring.md` 中的 CLI／MCP 对照测试结果属于移除前版本。
+
 ## 事件与入口复用（2026-09-10）
 
 - `FirmwareUnpackDispatcher` 共用界面与 MCP 的服务层解包分派；调用方显式保留 Sparse 支持、后台调度、分区选择和原有取消能力。CLI 继续直接调用格式处理器，不自动改为级联解包。
@@ -32,42 +40,13 @@ dotnet run --project UotanStudio.Desktop
 dotnet publish UotanStudio.Desktop -c Release -r win-x64
 ```
 
-### 固件 CLI（`firmware` 子命令）
+### 可视化工作流与节点流控
 
-`UotanStudio.Desktop/Program.cs` 的 `Main` 在启动 Avalonia **之前**分发 `firmware` 子命令（单二进制即提供无 UI 的固件解包/打包 CLI；`Main` 返回 `int` 退出码）。CLI 逻辑位于 `UotanStudio/Services/Cli/`：
-
-| 文件 | 职责 |
-|---|---|
-| `Services/Cli/FirmwareCliCommand.cs` | 命令模型：`FirmwareCliVerb`（List/Info/Unpack/Pack/Flash/DisableVerification）、`FirmwareCliCommand`、`FirmwareCliParseResult` |
-| `Services/Cli/FirmwareCliParser.cs` | 手写纯解析器（AOT 友好，无反射）：`Parse(string[]? args) → FirmwareCliParseResult` |
-| `Services/Cli/FirmwareCli.cs` | 入口 `Run(string[]? args) → int`：注册 `FirmwareFormatRegistry.RegisterAll()` → `FormatDetector.Detect` / `ResolveByFormatName` → 分发到 `IFormatHandler` / `FlashService` / `FirmwareService`；进度经 `IFirmwareProgress` 打印到 stdout |
-| `Services/Cli/WorkflowCli.cs` | `workflow` 子命令入口：无头运行节点工作流（见下「工作流 CLI」） |
-
-命令面（中英双语帮助）：
-
-```
-UotanStudio firmware list                          # 列出已注册格式与扩展名
-UotanStudio firmware info <file>                   # 检测格式 + 读元数据
-UotanStudio firmware unpack <file> -o <dir> [--no-overwrite] [--format <名称>]
-UotanStudio firmware pack <input> -o <file> [--format <名称>]   # 目录→镜像；镜像→重打包
-UotanStudio firmware flash <image> -p <分区> [--serial <序列号>] # 无头刷写（Fastboot/EDL/RKDL/ADB）
-UotanStudio firmware disable-verification <vbmeta> -o <file>    # 置位禁校验标志并清零认证块（无需私钥）
-UotanStudio firmware sign <apk> -o <file> --key <pk8/pem> --cert <pem/pfx> [--v1|--no-v1] [--v2|--no-v2] [--v3|--no-v3] # 自定义密钥签名 APK
-UotanStudio workflow run <file.uotannode> [--set 节点.端口=值 ...] # 无头执行节点工作流
-UotanStudio firmware --help | --version
-```
-
-退出码：`0` 成功 / `1` 失败（处理器错误、不支持格式、文件未找到）/ `2` 用法错误（缺参数/多参数/未知标志/未知子命令）。
-
-### 工作流 CLI（`workflow` 子命令）与节点流控
-
-- `Program.cs` 的 `Main` 同样在启动 Avalonia 前分发 `workflow` 子命令：`WorkflowPersistenceService.LoadAsync` 加载 `.uotannode` 快照 → `NodeFactoryRegistrar.RegisterAll()` 注册工厂 → 按 TypeKey 重建节点 → 构建引擎连接 → `NodeExecutionEngine.ExecuteAsync` 执行 → 按退出码约定返回。`--set 节点.端口=值`（可重复，节点按 Title 或 InstanceId 匹配）覆盖输入端口初始值。
 - **节点工厂注册**：`NodeFactoryRegistrar.RegisterAll()`（`ViewModels/Nodes/NodeFactoryRegistrar.cs`）集中登记全部 TypeKey → 工厂映射，UI 工具箱初始化与无头 CLI 共用；新增节点类型必须在此登记（`InitializeToolbox` 仅负责本地化工具箱条目）。
 - **连接持久化**：`ConnectionDto` 携带可选 `SourceInstanceId`/`TargetInstanceId`（`WorkflowPersistenceService.BuildConnectionDtos` 解析连接器所属节点写入）；`NodeEditorViewModel.LoadFromAsync` 与 WorkflowCli 优先按实例 ID 精确重建拓扑，缺失时回退按连接器标题匹配（旧版工程兼容）。
 - **真实流控**：`NodeExecutionEngine` 识别源端口类型为 `Flow` 的连接为控制流边——`Flow.Branch` 把未选中分支的下游子图标记为 `Skipped`；`Flow.Loop` 按 `Count` 输入迭代执行 Body 子图并逐次写 `Index` 输出（上限 `NodeExecutionEngine.MaxLoopIterations = 10000`）；`Flow.Parallel` 经 `Task.WhenAll` 并发执行各 Flow 输出端口的分支子图（分支内保持拓扑顺序）。
 - **数据流注入**：`FlowInputs` 先注入未连接输入端口的 `InitialValue`，再仅以上游**非空**输出值覆盖（Flow 端口等无数据连接不会清掉初始值）。
 
-`--format` 显式指定格式（按 `IFormatHandler.FormatName` 不区分大小写匹配，如 `CPIO/TAR Archive`、`Android OTA Payload (payload.bin)`、`EXT4`、`EROFS`、`Android Boot / Vendor Boot Image`）；省略时 `unpack` 自动检测，`pack` 目录优先按 `.uotanstudio-repack.json` 中的 `formatName` 分派，仅无元数据的目录默认走 EXT4，文件按内容检测。元数据声明不支持目录重建时明确失败。
 
 ### 解包目录原始配置
 
@@ -80,25 +59,6 @@ UotanStudio firmware --help | --version
 - **APK 解包**：APK 按标准 ZIP 容器完整解出全部条目（`ApkFormatHandler.UnpackCoreAsync`：`FileExtraction.ResolvePath` zip-slip 校验、`CountingWriteStream` 按 `entry.Length` 有界复制 + `UnpackOptions.MaximumOutputBytes` 总量预算、`FileExtraction.WriteAtomicAsync` 原子提交、目录占位条目仅建目录）；解包目录另写 `apk-metadata.txt` 概要文件，该文件与 `.uotanstudio-repack.json` 同规则统一管理——有项目上下文时写入 `.uotan/metadata/<分区名>/`（分区名按源文件名 `DetectPartitionName` 检测），无项目时写入解包目录。
 - **APK 重打包与签名**（`Apk/Signing/` 目录，全托管、AOT 安全、零反射）：`ApkRepacker` 把解包目录重建为可安装 APK（自研流式 ZIP 写入器：`resources.arsc` 未压缩 + 4 字节对齐、`.so` 按 `NativeLibraryAlignmentBytes` 对齐（默认 4096，16 KiB 页设备可设 16384，zipalign 语义、`0xd935` 对齐 extra 字段）、确定性条目排序与固定时间戳保证输出可复现、临时文件原子提交、剥离旧 v1 签名条目）；`ApkSigner` 编排 v1/v2/v3 组合签名（`ApkEntryStripper` 直接解析中央目录重写 ZIP 层，剔除旧签名条目/追加 STORED 条目，无反射；v2/v3 经 `ApkContentDigest` 两级分块摘要 + `ApkSigningBlock` 插入签名分块——摘要中的 EOCD 指向签名块起点，不依赖签名块长度；签名完成后再按真实签名块长度修正输出 EOCD；EOCD 中央目录偏移同步修正）；v1 为 JAR 规范工件（`ApkV1Signer`：MANIFEST.MF 条目 SHA-256 摘要、`.SF` 含 `X-Android-APK-Signed: 2, 3` 防剥离属性、PKCS#7 CMS 经平台 `System.Security.Cryptography.Pkcs` 的 `SignedCms` 生成，分离式 CMS，IssuerAndSerialNumber 标识，SHA-256-Digest-Manifest 及逐段摘要对齐 apksig）。**签名密钥完全由用户自定义指定**，不内置任何密钥材料：`ApkSignerKeyMaterial.Load` 支持私钥 PKCS#8 明文/加密、PKCS#1（RSA）或 SEC1（EC），PEM 或 DER；证书支持 PEM/DER/PFX（`.pfx/.p12` 带可选密码）。算法按 apksigner 默认策略选择（`ApkSignatureAlgorithmSelector`：RSA 使用 PKCS#1 v1_5，超过 3072 位用 SHA-512，否则 SHA-256；EC 超过 256 位用 SHA-512，否则 SHA-256，签名编码为 DER）。`ApkFormatHandler.PackAsync` 对目录输入走 `ApkRepacker` 重建。服务层入口 `FirmwareService.SignApkAsync`。CLI：`firmware sign <apk> -o <out> --key <pk8/pem> [--key-pass 密码] --cert <pem/der/pfx> [--cert-pass 密码] [--v1|--no-v1] [--v2|--no-v2] [--v3|--no-v3]`。测试见 `UotanStudio.Tests/Firmware/ApkSigningTests.cs`（签名块结构/分块摘要确定性/v2+v3 回环/重签名剥离/v1 工件与 CMS 签名验证/重打包与对齐）。
 - **解包目标目录规则**：`ImageOperationPaths.UnpackedDirectory` 按 `IsUnderImagesDirectory` 判定——源文件位于子项目 `images/` 目录（或其子目录）时解包到 `Root/<文件名>/`（与 images/ 同级）；其余位置一律**本地解包**到源文件所在目录下的同名子目录。保留名（images/output/.uotan/.deleted）与非法 `Name` 仍拒绝；`ValidateExtraction` 保留源归属与「输出不得包含源文件」检查。
-
-示例：
-
-```bash
-# 列出全部已注册固件格式
-dotnet run --project UotanStudio.Desktop -- firmware list
-
-# 解包 boot 镜像到目录
-dotnet run --project UotanStudio.Desktop -- firmware unpack boot.img -o boot_out/
-
-# 解包 payload.bin，显式指定格式
-dotnet run --project UotanStudio.Desktop -- firmware unpack payload.bin -o payload_out/ -f "Android OTA Payload (payload.bin)"
-
-# 把目录打包为 ext4 镜像
-dotnet run --project UotanStudio.Desktop -- firmware pack system_dir/ -o system.img -f ext4
-
-# 用自定义密钥/证书签署 APK（密钥材料全部由用户提供，支持 PKCS#8/PKCS#1/PEM/DER 私钥与 PEM/DER/PFX 证书）
-dotnet run --project UotanStudio.Desktop -- firmware sign app.apk -o app_signed.apk --key release.pk8 --cert release.x509.pem
-```
 
 ## 解决方案结构
 
@@ -122,7 +82,6 @@ dotnet run --project UotanStudio.Desktop -- firmware sign app.apk -o app_signed.
 - View 解析无反射：`ViewLocator` 经 `ViewModelViewRegistry`（`UotanStudio/ViewModelViewRegistry.cs`）按 VM 类型显式查表构造视图，**不依赖反射**；新增 ViewModel 须在该注册表登记（View 与 ViewModel 均按特性分区，见 §5）。
 
 **Debug 诊断工具（仅 DEBUG 启用，`#if DEBUG` 隔离 + 包引用按 `$(Configuration)` 条件剔除，不进入 Release/AOT 发布）：**
-- `AvaloniaMcp.Diagnostics`（`UotanStudio.Desktop/Program.cs` 末尾 `.UseMcpDiagnostics()`）：启动命名管道 MCP 诊断服务器。
 - `Dock.Avalonia.Diagnostics`（`MainWindow` 打开时 `AttachDockDebugOverlay()`）：按 F9 显示 Dock 布局覆盖诊断。
 
 ### 1.1 有界流式 IO（固件库强制）

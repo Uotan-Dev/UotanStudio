@@ -10,8 +10,9 @@ an Avalonia application or a headless UI platform.
 - `Firmware`: format conformance, bounded I/O, round trips, native-tool
   interoperability, and QEMU filesystem mount verification.
 - `Comm`: protocol encoding, transport framing, device operations, and flashing.
-- `Services`, `Cli`, and `Compare`: execution scheduling, persistence, command
-  parsing, file comparison, and backend workflows.
+- `Services` and `Compare`: execution scheduling, persistence, file comparison,
+  and backend workflows. CLI and MCP tests are archived on `codex/archive-cli-mcp`;
+  metadata packing coverage now exercises the desktop packing service.
 - `Devices`: incremental logcat text decoding.
 
 The application project reference is required for backend services that currently

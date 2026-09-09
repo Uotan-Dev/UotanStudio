@@ -9,7 +9,6 @@ using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
-using UotanStudio.Services.Mcp;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
 
@@ -17,12 +16,8 @@ namespace UotanStudio;
 
 public partial class App : Application
 {
-    /// <summary>
-    /// <para>由 <c>Program.Main</c> 解析并注入的命令行选项；启动序列在主窗口预构建后据此打开解决方案/导入文件。</para>
-    /// Command-line options parsed and injected by <c>Program.Main</c>; the startup sequence opens a solution
-    /// and/or imports files based on them after the main window is pre-built.
-    /// </summary>
-    public static CommandLineOptions? StartupOptions { get; set; }
+    /// <summary>Existing files passed by desktop file associations, opened after window creation.</summary>
+    public static string[] StartupFiles { get; set; } = [];
 
     public override void Initialize()
     {
@@ -97,22 +92,6 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<OpenFileCompareRequestMessage>(this, OnOpenFileCompare);
         WeakReferenceMessenger.Default.Register<OpenFolderCompareRequestMessage>(this, OnOpenFolderCompare);
 
-        // 启动 MCP 服务器宿主（设置页「暴露为 MCP 服务器」开启时）。
-        // Starts the MCP server host (when the settings page's "expose as MCP server" is enabled).
-        StartMcpHostIfEnabled();
-    }
-
-    /// <summary>
-    /// <para>按设置启动 MCP 服务器宿主（暴露开关与端口）。</para>
-    /// Starts the MCP server host per the settings (expose toggle and port).
-    /// </summary>
-    private static void StartMcpHostIfEnabled()
-    {
-        var settings = SettingsPersistenceService.Instance.LoadSettings();
-        if (settings.McpExposeEnabled && settings.McpExposePort > 0)
-        {
-            McpHostService.Instance.Start(settings.McpExposePort);
-        }
     }
 
     /// <summary>
@@ -166,9 +145,9 @@ public partial class App : Application
 
         // 应用命令行选项：打开解决方案 / 导入文件（失败仅记日志，不阻断启动）。
         // Apply command-line options: open a solution / import files (failures only log, never block startup).
-        if (StartupOptions is { } startupOptions)
+        if (StartupFiles.Length > 0)
         {
-            await ApplyStartupOptionsAsync(splashWindow, startupOptions).ConfigureAwait(true);
+            await ApplyStartupFilesAsync(splashWindow, StartupFiles).ConfigureAwait(true);
         }
 
         splash.StatusText = string.Format(
@@ -185,7 +164,7 @@ public partial class App : Application
     /// Applies the command-line options: opens the specified solution and imports files (failures only log,
     /// never block startup).
     /// </summary>
-    private async Task ApplyStartupOptionsAsync(MainSplashWindow splashWindow, CommandLineOptions options)
+    private async Task ApplyStartupFilesAsync(MainSplashWindow splashWindow, string[] files)
     {
         try
         {
@@ -194,19 +173,20 @@ public partial class App : Application
                 return;
             }
 
-            if (options.ProjectPath is { } projectPath)
+            if (files.LastOrDefault(path => path.EndsWith(".uotan", StringComparison.OrdinalIgnoreCase)) is { } projectPath)
             {
                 await mainVm.MenuVM.OpenProjectFromPathAsync(projectPath);
             }
 
-            if (options.ImportFiles.Count > 0)
+            var imports = files.Where(path => !path.EndsWith(".uotan", StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (imports.Length > 0)
             {
-                await mainVm.MenuVM.ImportFilesAsync([.. options.ImportFiles]);
+                await mainVm.MenuVM.ImportFilesAsync(imports);
             }
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "App", $"Apply startup options failed: {ex.Message}");
+            LogService.Instance.Write(LogLevel.Error, "App", $"Open startup files failed: {ex.Message}");
         }
     }
 

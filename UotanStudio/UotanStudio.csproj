@@ -49,8 +49,6 @@
     <PackageReference Include="NodifyM.Avalonia" />
     <PackageReference Include="AdvancedSharpAdbClient" />
     <PackageReference Include="DiffPlex" />
-    <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 

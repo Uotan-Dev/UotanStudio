@@ -136,9 +136,6 @@
     <x:String x:Key="Node_Dex_Disassemble">Disassemble DEX</x:String>
     <x:String x:Key="Node_Dex_Rebuild">Rebuild DEX</x:String>
     <x:String x:Key="Node_Dex_Decompile">Decompile DEX</x:String>
-    <x:String x:Key="Node_CatMCP">MCP</x:String>
-    <x:String x:Key="Node_MCP_ListTools">List MCP Tools</x:String>
-    <x:String x:Key="Node_MCP_CallTool">Call MCP Tool</x:String>
 
     <x:String x:Key="Node_Firmware_SignApk">Sign APK</x:String>
     <x:String x:Key="Node_Hdc_Shell">HDC Shell</x:String>

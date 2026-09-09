@@ -50,19 +50,6 @@
     <x:String x:Key="Settings_AutoDetect">自动检测</x:String>
     <x:String x:Key="Settings_AdbPath">ADB 路径</x:String>
     <x:String x:Key="Settings_FastbootPath">Fastboot 路径</x:String>
-    <x:String x:Key="Settings_Mcp">MCP</x:String>
-    <x:String x:Key="Settings_McpHint">连接到 MCP 服务器供 AI 工具编排使用；工具箱 MCP 节点按名称调用其工具。</x:String>
-    <x:String x:Key="Settings_McpServerName">名称</x:String>
-    <x:String x:Key="Settings_McpTransport">传输</x:String>
-    <x:String x:Key="Settings_McpCommand">命令</x:String>
-    <x:String x:Key="Settings_McpArguments">参数</x:String>
-    <x:String x:Key="Settings_McpUrl">URL</x:String>
-    <x:String x:Key="Settings_McpEnabled">启用</x:String>
-    <x:String x:Key="Settings_McpAdd">添加服务器</x:String>
-    <x:String x:Key="Settings_McpRemove">删除</x:String>
-    <x:String x:Key="Settings_McpExpose">暴露为 MCP 服务器</x:String>
-    <x:String x:Key="Settings_McpExposePort">端口</x:String>
-    <x:String x:Key="Settings_McpSave">保存 MCP 设置</x:String>
     <x:String x:Key="Settings_OpenSourceNotice">本软件使用或参考了以下开源项目，遵循其各自的开源协议。多数项目采用宽松许可证（MIT / Apache-2.0 等），可免费用于商业项目；LGPL-3.0 组件（如 LibUsbDotNet）在分发时需遵循相应义务（如提供修改后的源码或动态链接）。Avalonia 遵循 MIT 许可证，商业使用无需额外授权。</x:String>
     <x:String x:Key="Settings_OpenRepository">仓库</x:String>
 

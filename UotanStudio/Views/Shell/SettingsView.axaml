@@ -7,7 +7,6 @@
              xmlns:views="using:UotanStudio.Views.Shell"
              xmlns:app="using:UotanStudio"
              xmlns:models="using:UotanStudio.Models"
-             xmlns:mcp="using:UotanStudio.Services.Mcp"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="900"
              x:Class="UotanStudio.Views.Shell.SettingsView"
              x:DataType="vm:SettingsViewModel">
@@ -82,57 +81,6 @@
 
                 <views:AiSettingsView DataContext="{Binding Ai}"
                                       IsVisible="{x:Static app:AppFeatures.AiAssistantEnabled}" />
-
-                <!-- Section: MCP -->
-                <StackPanel Spacing="8">
-                    <TextBlock Text="{DynamicResource Settings_Mcp}" FontWeight="SemiBold" FontSize="16" />
-                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
-                    <TextBlock Text="{DynamicResource Settings_McpHint}" FontSize="12" Opacity="0.7"
-                               TextWrapping="Wrap" Margin="0,0,0,4" />
-
-                    <!-- MCP 服务器连接列表 -->
-                    <ItemsControl ItemsSource="{Binding McpServers}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="mcp:McpServerConfig">
-                                <Grid ColumnDefinitions="120,80,130,140,*,36,52" ColumnSpacing="6" Margin="0,3">
-                                    <TextBox Grid.Column="0" Text="{Binding Name}"
-                                             PlaceholderText="{DynamicResource Settings_McpServerName}" />
-                                    <ComboBox Grid.Column="1"
-                                              ItemsSource="{Binding $parent[UserControl].DataContext.McpTransportKinds}"
-                                              SelectedItem="{Binding Transport}" />
-                                    <TextBox Grid.Column="2" Text="{Binding Command}"
-                                             PlaceholderText="{DynamicResource Settings_McpCommand}" />
-                                    <TextBox Grid.Column="3" Text="{Binding Arguments}"
-                                             PlaceholderText="{DynamicResource Settings_McpArguments}" />
-                                    <TextBox Grid.Column="4" Text="{Binding Url}"
-                                             PlaceholderText="{DynamicResource Settings_McpUrl}" />
-                                    <CheckBox Grid.Column="5" IsChecked="{Binding Enabled}" VerticalAlignment="Center"
-                                              ToolTip.Tip="{DynamicResource Settings_McpEnabled}" />
-                                    <Button Grid.Column="6" Content="{DynamicResource Settings_McpRemove}"
-                                            Command="{Binding $parent[UserControl].DataContext.RemoveMcpServerCommand}"
-                                            CommandParameter="{Binding}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-
-                    <Button Content="{DynamicResource Settings_McpAdd}" Command="{Binding AddMcpServerCommand}"
-                            HorizontalAlignment="Left" />
-
-                    <!-- 暴露为 MCP 服务器 -->
-                    <Grid ColumnDefinitions="160,*,180" ColumnSpacing="8" Margin="0,8,0,0">
-                        <TextBlock Grid.Column="0" Text="{DynamicResource Settings_McpExpose}"
-                                   VerticalAlignment="Center" FontSize="13" />
-                        <ToggleSwitch Grid.Column="1" IsChecked="{Binding McpExposeEnabled, Mode=TwoWay}" />
-                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <TextBlock Text="{DynamicResource Settings_McpExposePort}" FontSize="13" />
-                            <NumericUpDown Value="{Binding McpExposePort, Mode=TwoWay}" Minimum="1" Maximum="65535" Width="100" />
-                        </StackPanel>
-                    </Grid>
-
-                    <Button Content="{DynamicResource Settings_McpSave}" Command="{Binding SaveMcpSettingsCommand}"
-                            HorizontalAlignment="Left" />
-                </StackPanel>
 
                 <!-- Section 4: Open Source Credits -->
                 <StackPanel Spacing="8">

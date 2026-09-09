@@ -35,10 +35,5 @@ public enum NodeCategory
     /// <para>输出节点。</para>
     /// Output node.
     /// </summary>
-    Output,
-    /// <summary>
-    /// <para>MCP 工具节点（调用设置页配置的 MCP 服务器）。</para>
-    /// MCP tool node (calls MCP servers configured on the settings page).
-    /// </summary>
-    Mcp
+    Output
 }

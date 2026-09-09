@@ -514,18 +514,7 @@ public partial class NodeEditorViewModel : ViewModelBase
             ]
         ));
 
-        // MCP 工具分类：调用设置页配置的外部 MCP 服务器（工具列举/调用）。
-        // MCP tool category: calls the externally configured MCP servers (tool listing/calling).
-        NodeTypeRegistry.Register("MCP.ListTools", () => NodeViewModels.McpNodeViewModel.CreateListToolsNode());
-        NodeTypeRegistry.Register("MCP.CallTool", () => NodeViewModels.McpNodeViewModel.CreateCallToolNode());
-        ToolboxCategories.Add(new NodeToolboxCategory(
-            svc.GetString("Node_CatMCP"),
-            NodeViewModels.NodeCategory.Mcp,
-            [
-                new NodeToolboxItem(svc.GetString("Node_MCP_ListTools"), () => NodeViewModels.McpNodeViewModel.CreateListToolsNode()),
-                new NodeToolboxItem(svc.GetString("Node_MCP_CallTool"), () => NodeViewModels.McpNodeViewModel.CreateCallToolNode()),
-            ]
-        ));
+
     }
 
     /// <summary>
