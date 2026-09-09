@@ -4,172 +4,179 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Workspace"
              xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:ursa="using:Ursa.Controls"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.Workspace.ImageView"
              x:DataType="viewmodels:ImageViewModel">
-    <Grid RowDefinitions="Auto,Auto,*,Auto" IsEnabled="{Binding CanOperate}">
-        <Grid Grid.Row="0" Margin="5,5" ColumnDefinitions="28,*,28">
-            <Button Grid.Column="0"
-                    Width="28" Height="28"
-                    Padding="0"
-                    Classes="Small"
-                    HorizontalAlignment="Left"
-                    VerticalAlignment="Center"
-                    Command="{Binding DeleteSelectedCommand}"
-                    ToolTip.Tip="{DynamicResource ImageView_DeleteSelected}">
-                <avalonia:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
-            </Button>
+    <Grid RowDefinitions="*,Auto">
+        <ursa:LoadingContainer Grid.Row="0" Name="ImageBusyContainer"
+                               IsLoading="{Binding IsOperating}"
+                               LoadingMessage="{DynamicResource ImageView_Processing}">
+            <Grid RowDefinitions="Auto,Auto,*" IsEnabled="{Binding CanOperate}">
+                <Grid Grid.Row="0" Margin="5,5" ColumnDefinitions="28,*,28">
+                    <Button Grid.Column="0"
+                            Width="28" Height="28"
+                            Padding="0"
+                            Classes="Small"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            Command="{Binding DeleteSelectedCommand}"
+                            ToolTip.Tip="{DynamicResource ImageView_DeleteSelected}">
+                        <avalonia:MaterialIcon Kind="DeleteOutline" Width="14" Height="14" />
+                    </Button>
 
-            <Border Grid.Column="1"
-                    Margin="0,0"
-                    Padding="2"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Theme="{StaticResource RadioButtonGroupBorder}">
-                <StackPanel Orientation="Horizontal" Spacing="2">
-                    <RadioButton GroupName="ImageScope"
-                                 MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
-                                 IsChecked="{Binding IsUnpackMode, Mode=TwoWay}"
-                                 Theme="{StaticResource ButtonRadioButton}"
-                                 Classes="Small"
-                                 Content="{DynamicResource ImageView_UnpackMode}" />
-                    <RadioButton GroupName="ImageScope"
-                                 MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
-                                 IsChecked="{Binding IsPackMode, Mode=TwoWay}"
-                                 Theme="{StaticResource ButtonRadioButton}"
-                                 Classes="Small"
-                                 Content="{DynamicResource ImageView_PackMode}" />
-                    <RadioButton GroupName="ImageScope"
-                                 MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
-                                 IsChecked="{Binding IsOutputMode, Mode=TwoWay}"
-                                 Theme="{StaticResource ButtonRadioButton}"
-                                 Classes="Small"
-                                 Content="{DynamicResource ImageView_OutputMode}" />
-                </StackPanel>
-            </Border>
+                    <Border Grid.Column="1"
+                            Margin="0,0"
+                            Padding="2"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Theme="{StaticResource RadioButtonGroupBorder}">
+                        <StackPanel Orientation="Horizontal" Spacing="2">
+                            <RadioButton GroupName="ImageScope"
+                                         MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
+                                         IsChecked="{Binding IsUnpackMode, Mode=TwoWay}"
+                                         Theme="{StaticResource ButtonRadioButton}"
+                                         Classes="Small"
+                                         Content="{DynamicResource ImageView_UnpackMode}" />
+                            <RadioButton GroupName="ImageScope"
+                                         MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
+                                         IsChecked="{Binding IsPackMode, Mode=TwoWay}"
+                                         Theme="{StaticResource ButtonRadioButton}"
+                                         Classes="Small"
+                                         Content="{DynamicResource ImageView_PackMode}" />
+                            <RadioButton GroupName="ImageScope"
+                                         MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
+                                         IsChecked="{Binding IsOutputMode, Mode=TwoWay}"
+                                         Theme="{StaticResource ButtonRadioButton}"
+                                         Classes="Small"
+                                         Content="{DynamicResource ImageView_OutputMode}" />
+                        </StackPanel>
+                    </Border>
 
-            <Button Grid.Column="2"
-                    Width="28" Height="28"
-                    Padding="0"
-                    Classes="Small"
-                    HorizontalAlignment="Right"
-                    VerticalAlignment="Center"
-                    Command="{Binding RefreshCommand}"
-                    ToolTip.Tip="{DynamicResource ImageView_Refresh}">
-                <avalonia:MaterialIcon Kind="Refresh" Width="14" Height="14" />
-            </Button>
-        </Grid>
+                    <Button Grid.Column="2"
+                            Width="28" Height="28"
+                            Padding="0"
+                            Classes="Small"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Command="{Binding RefreshCommand}"
+                            ToolTip.Tip="{DynamicResource ImageView_Refresh}">
+                        <avalonia:MaterialIcon Kind="Refresh" Width="14" Height="14" />
+                    </Button>
+                </Grid>
 
-        <ComboBox Grid.Row="1"
-                  Classes="Small"
-                  FontSize="12"
-                  ItemsSource="{Binding SubProjectItems}"
-                  SelectedItem="{Binding SelectedSubProject}"
-                  Margin="5,0,5,5"
-                  HorizontalAlignment="Stretch"
-                  IsVisible="{Binding IsSubProjectVisible}" />
+                <ComboBox Grid.Row="1"
+                          Classes="Small"
+                          FontSize="12"
+                          ItemsSource="{Binding SubProjectItems}"
+                          SelectedItem="{Binding SelectedSubProject}"
+                          Margin="5,0,5,5"
+                          HorizontalAlignment="Stretch"
+                          IsVisible="{Binding IsSubProjectVisible}" />
 
-        <!-- 镜像表格：当前行用于单文件操作，复选框用于批量选择。 -->
-        <DataGrid Grid.Row="2" Name="ImagesGrid"
-                  ItemsSource="{Binding Images}"
-                  SelectedItem="{Binding SelectedImage, Mode=TwoWay}"
-                  SelectionMode="Single"
-                  AutoGenerateColumns="False"
-                  CanUserResizeColumns="True"
-                  CanUserSortColumns="True"
-                  GridLinesVisibility="Horizontal"
-                  HeadersVisibility="None"
-                  FontSize="12"
-                  Background="Transparent"
-                  BorderThickness="0">
-            <DataGrid.RowTheme>
-                <ControlTheme TargetType="DataGridRow"
-                              BasedOn="{StaticResource {x:Type DataGridRow}}">
-                    <Setter Property="IsVisible" Value="{Binding IsVisible, DataType=viewmodels:ImageEntryViewModel}" />
-                    <Setter Property="ContextMenu">
-                        <ContextMenu x:DataType="viewmodels:ImageEntryViewModel" Opening="OnImageMenuOpening">
-                            <MenuItem Classes="unpack-action" Header="{DynamicResource ImageView_ExtractSelected}" IsEnabled="{Binding !IsDirectory}" Click="OnExtractMenuClick">
-                                <MenuItem.Icon>
-                                    <avalonia:MaterialIcon Kind="PackageDown" Width="16" Height="16" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeImg}" Click="OnSynthesizeImgMenuClick">
-                                <MenuItem.Icon>
-                                    <avalonia:MaterialIcon Kind="ImagePlus" Width="16" Height="16" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeBr}" Click="OnSynthesizeBrMenuClick">
-                                <MenuItem.Icon>
-                                    <avalonia:MaterialIcon Kind="ArchivePlus" Width="16" Height="16" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <Separator Classes="pack-action" />
-                            <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeSuper}" Click="OnSynthesizeSuperMenuClick">
-                                <MenuItem.Icon>
-                                    <avalonia:MaterialIcon Kind="LayersPlus" Width="16" Height="16" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeDat}" Click="OnSynthesizeDatMenuClick">
-                                <MenuItem.Icon>
-                                    <avalonia:MaterialIcon Kind="FileMultipleOutline" Width="16" Height="16" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <MenuItem Classes="flash-action" Header="{DynamicResource ImageView_Flash}" Click="OnFlashSelectedMenuClick">
-                                <MenuItem.Icon>
-                                    <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                            <Separator />
-                            <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDeleteMenuClick">
-                                <MenuItem.Icon>
-                                    <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
-                                </MenuItem.Icon>
-                            </MenuItem>
-                        </ContextMenu>
-                    </Setter>
-                </ControlTheme>
-            </DataGrid.RowTheme>
+                <!-- 镜像表格：当前行用于单文件操作，复选框用于批量选择。 -->
+                <DataGrid Grid.Row="2" Name="ImagesGrid"
+                          ItemsSource="{Binding Images}"
+                          SelectedItem="{Binding SelectedImage, Mode=TwoWay}"
+                          SelectionMode="Single"
+                          AutoGenerateColumns="False"
+                          CanUserResizeColumns="True"
+                          CanUserSortColumns="True"
+                          GridLinesVisibility="Horizontal"
+                          HeadersVisibility="None"
+                          FontSize="12"
+                          Background="Transparent"
+                          BorderThickness="0">
+                    <DataGrid.RowTheme>
+                        <ControlTheme TargetType="DataGridRow"
+                                      BasedOn="{StaticResource {x:Type DataGridRow}}">
+                            <Setter Property="IsVisible" Value="{Binding IsVisible, DataType=viewmodels:ImageEntryViewModel}" />
+                            <Setter Property="ContextMenu">
+                                <ContextMenu x:DataType="viewmodels:ImageEntryViewModel" Opening="OnImageMenuOpening">
+                                    <MenuItem Classes="unpack-action" Header="{DynamicResource ImageView_ExtractSelected}" IsEnabled="{Binding !IsDirectory}" Click="OnExtractMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="PackageDown" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeImg}" Click="OnSynthesizeImgMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="ImagePlus" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeBr}" Click="OnSynthesizeBrMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="ArchivePlus" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <Separator Classes="pack-action" />
+                                    <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeSuper}" Click="OnSynthesizeSuperMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="LayersPlus" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Classes="pack-action" Header="{DynamicResource ImageView_SynthesizeDat}" Click="OnSynthesizeDatMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="FileMultipleOutline" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Classes="flash-action" Header="{DynamicResource ImageView_Flash}" Click="OnFlashSelectedMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <Separator />
+                                    <MenuItem Header="{DynamicResource Menu_Delete}" Click="OnDeleteMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="DeleteOutline" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </Setter>
+                        </ControlTheme>
+                    </DataGrid.RowTheme>
 
-            <DataGrid.Columns>
-                <DataGridTemplateColumn Width="Auto" CanUserSort="False">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="viewmodels:ImageEntryViewModel">
-                            <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"
-                                      ToolTip.Tip="{DynamicResource ImageView_SelectHint}" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Width="Auto" CanUserSort="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="viewmodels:ImageEntryViewModel">
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              ToolTip.Tip="{DynamicResource ImageView_SelectHint}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
-                <DataGridTemplateColumn Width="Auto" SortMemberPath="DisplayName">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="viewmodels:ImageEntryViewModel">
-                            <TextBlock Text="{Binding DisplayName}" FontSize="12"
-                                       Margin="4,0" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding RelativePath}" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Width="Auto" SortMemberPath="DisplayName">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="viewmodels:ImageEntryViewModel">
+                                    <TextBlock Text="{Binding DisplayName}" FontSize="12"
+                                               Margin="4,0" VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding RelativePath}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
-                <DataGridTextColumn Binding="{Binding Format}" Width="Auto" FontSize="12" IsReadOnly="True" />
+                        <DataGridTextColumn Binding="{Binding Format}" Width="Auto" FontSize="12" IsReadOnly="True" />
 
-                <DataGridTemplateColumn Width="Auto" CanUserSort="True" SortMemberPath="SizeBytes">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="viewmodels:ImageEntryViewModel">
-                            <TextBlock Text="{Binding DisplaySize}" FontSize="12"
-                                       Margin="4,0" VerticalAlignment="Center"
-                                       HorizontalAlignment="Right" Opacity="0.72" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-            </DataGrid.Columns>
-        </DataGrid>
+                        <DataGridTemplateColumn Width="Auto" CanUserSort="True" SortMemberPath="SizeBytes">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="viewmodels:ImageEntryViewModel">
+                                    <TextBlock Text="{Binding DisplaySize}" FontSize="12"
+                                               Margin="4,0" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right" Opacity="0.72" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </ursa:LoadingContainer>
 
         <!-- 底部按钮区 -->
-        <Border Grid.Row="3" Padding="6" Background="{DynamicResource ControlFillColorDefaultBrush}"
+        <Border Grid.Row="1" Name="ImageOperationFooter" Padding="6" Background="{DynamicResource ControlFillColorDefaultBrush}"
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
             <StackPanel>
                 <StackPanel Spacing="5">
@@ -186,7 +193,7 @@
                                Margin="0,2,0,0"
                                TextTrimming="CharacterEllipsis"
                                IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <Grid>
+                    <Grid IsEnabled="{Binding CanOperate}">
                         <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
                                                        IsVisible="{Binding IsUnpackMode}">
                             <Button MinWidth="110" HorizontalAlignment="Stretch"

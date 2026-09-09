@@ -271,6 +271,8 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 
 镜像列表右键菜单使用 16×16 Material 图标，与页面对应操作一致：提取 `PackageDown`、合成 IMG `ImagePlus`、合成 BR `ArchivePlus`、合成 SUPER `LayersPlus`、合成 DAT `FileMultipleOutline`、刷入 `Flash`、删除 `DeleteOutline`，颜色继承菜单主题。
 
+镜像管理进度条上方的模式切换、子项目选择与列表区域包在 Ursa `LoadingContainer` 中，`IsLoading` 绑定 `ImageViewModel.IsOperating`，提示使用中英 `ImageView_Processing`。解包、合成、刷入等现有命令在开始时置位，并在 `finally` 中复位；完成、失败或跳过后自动解除 Busy。忙碌期间上方内容和底部操作按钮禁用，进度条与状态文字保持正常显示；未绑定操作的“打包ROM”按钮沿用原状态。
+
 镜像管理在解包和打包模式下的右键删除仅作用于右键条目对应的解包文件夹：固件文件通过 `ImageOperationPaths` 按子项目根目录与镜像名称定位，文件夹条目按自身 `RelativePath` 定位（保留名称中的点和括号），不消费复选框批量选择集、不删除源镜像。复用 `DialogService` 的删除确认和失败对话框；目录不存在时通过 `Image_UnpackedDirectoryMissingTitle/Message` 中英文本地化键弹出提示。输出模式右键删除通过 `DeleteImageAsync` 将当前输出文件移入子项目 `.deleted/` 并登记可撤销历史。顶部批量删除遇到文件夹条目时直接调用 `ImageViewModel.DeleteUnpackedDirectoryAsync` 复用同一目录删除流程；文件条目仍移入子项目 `.deleted/` 并登记可撤销历史。删除成功后移除列表条目并清除对应当前行选择。
 
 项目资源管理器在目录变动时按路径增量同步已加载子节点，保留仍存在的节点实例和展开状态；同一工程上下文刷新不重建根节点。文件监听只订阅名称和目录变动，文件内容保存不触发整树刷新；目录暂时不可读时保留现有显示。

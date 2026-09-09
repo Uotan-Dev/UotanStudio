@@ -29,6 +29,7 @@
     <x:String x:Key="ImageView_UnpackMode">Unpack</x:String>
     <x:String x:Key="ImageView_PackMode">Pack</x:String>
     <x:String x:Key="ImageView_OutputMode">Output</x:String>
+    <x:String x:Key="ImageView_Processing">Processing…</x:String>
     <x:String x:Key="ImageView_Flash">Flash</x:String>
     <x:String x:Key="ImageView_Refresh">Refresh</x:String>
     <x:String x:Key="ImageView_ExtractSelected">Extract</x:String>
