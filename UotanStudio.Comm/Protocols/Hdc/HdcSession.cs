@@ -10,6 +10,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 public sealed class HdcSession : IProtocolSession
 {
     private bool _disposed;
+    private bool _isLease;
     private readonly HdcServerClient? _server;
     private readonly string? _connectKey;
     private readonly HdcConnection? _connection;
@@ -19,6 +20,16 @@ public sealed class HdcSession : IProtocolSession
     {
         _server = server;
         _connectKey = connectKey;
+    }
+
+    private HdcSession(HdcConnection connection) { _connection = connection; _isLease = true; }
+
+    /// <summary>Creates a non-owning view of an authenticated direct connection. The owner must outlive its leases.</summary>
+    public HdcSession CreateLease()
+    {
+        ThrowIfDisposed();
+        if (!IsConnected || _connection is null) throw new InvalidOperationException("An authenticated direct connection is required.");
+        return new HdcSession(_connection);
     }
 
     /// <summary>
@@ -194,7 +205,7 @@ public sealed class HdcSession : IProtocolSession
         }
 
         _disposed = true;
-        _connection?.Dispose();
+        if (!_isLease) _connection?.Dispose();
         _server?.Dispose();
     }
 }

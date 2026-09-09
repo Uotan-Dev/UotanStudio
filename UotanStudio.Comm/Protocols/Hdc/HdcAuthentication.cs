@@ -54,17 +54,17 @@ public sealed class HdcAuthentication : IDisposable
     private readonly HdcAuthVerifyType _verifyType;
 
     /// <summary>
-    /// Gets the default key directory (~/.hdc), matching the OpenHarmony HDC key location.
-    /// <para>获取默认密钥目录（~/.hdc），与 OpenHarmony HDC 密钥位置一致。</para>
+    /// Gets the default key directory (~/.harmony), matching the OpenHarmony HDC key location.
+    /// <para>获取默认密钥目录（~/.harmony），与 OpenHarmony HDC 密钥位置一致。</para>
     /// </summary>
-    public static string DefaultKeyDirectory => Path.Combine(GetHomeDirectory(), ".hdc");
+    public static string DefaultKeyDirectory => Path.Combine(GetHomeDirectory(), ".harmony");
 
     /// <summary>
-    /// Gets the default private key file path (~/.hdc/keys), matching the OpenHarmony HDC
+    /// Gets the default private key file path (~/.harmony/hdckey), matching the OpenHarmony HDC
     /// key location.
-    /// <para>获取默认私钥文件路径（~/.hdc/keys），与 OpenHarmony HDC 密钥位置一致。</para>
+    /// <para>获取默认私钥文件路径（~/.harmony/hdckey），与 OpenHarmony HDC 密钥位置一致。</para>
     /// </summary>
-    public static string DefaultKeyFilePath => Path.Combine(DefaultKeyDirectory, "keys");
+    public static string DefaultKeyFilePath => Path.Combine(DefaultKeyDirectory, "hdckey");
 
     /// <summary>
     /// Gets the authentication verify type.
@@ -153,7 +153,7 @@ public sealed class HdcAuthentication : IDisposable
         // "create 0644 then chmod" exposure window.  On Windows the ACL inherits
         // from the parent directory, which is the standard behaviour for %USERPROFILE%.
         WriteKeyFile(path, created._rsa.ExportRSAPrivateKeyPem());
-        WriteKeyFile(path + ".pub", created.PublicKeyToBase64());
+        WriteKeyFile(path + ".pub", created._rsa.ExportSubjectPublicKeyInfoPem() + "\n");
         return created;
     }
 
@@ -200,6 +200,8 @@ public sealed class HdcAuthentication : IDisposable
     /// </summary>
     /// <returns>The Base64-encoded public key payload bytes.
     /// Base64 编码的公钥负载字节。</returns>
+    public byte[] BuildDaemonPublicKeyPayload() => Encoding.UTF8.GetBytes(Environment.MachineName + "\f" + _rsa.ExportSubjectPublicKeyInfoPem() + "\n");
+
     public byte[] BuildPublicKeyPayload()
     {
         var base64 = PublicKeyToBase64();
@@ -289,15 +291,15 @@ public sealed class HdcAuthentication : IDisposable
     }
 
     /// <summary>
-    /// Gets the default private key path (~/.hdc/keys).
-    /// <para>获取默认私钥路径（~/.hdc/keys）。</para>
+    /// Gets the default private key path (~/.harmony/hdckey).
+    /// <para>获取默认私钥路径（~/.harmony/hdckey）。</para>
     /// </summary>
     /// <returns>The default private key path. 默认私钥路径。</returns>
     public static string GetKeyPath() => DefaultKeyFilePath;
 
     /// <summary>
-    /// Gets the default public key path (~/.hdc/keys.pub).
-    /// <para>获取默认公钥路径（~/.hdc/keys.pub）。</para>
+    /// Gets the default public key path (~/.harmony/hdckey.pub).
+    /// <para>获取默认公钥路径（~/.harmony/hdckey.pub）。</para>
     /// </summary>
     /// <returns>The default public key path. 默认公钥路径。</returns>
     public static string GetPublicKeyPath() => DefaultKeyFilePath + ".pub";

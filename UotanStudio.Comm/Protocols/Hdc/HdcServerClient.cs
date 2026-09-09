@@ -141,6 +141,10 @@ public sealed class HdcServerClient(string host = "127.0.0.1", int? port = null)
             .Select(line => line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)[0])
             .Distinct(StringComparer.Ordinal).ToArray();
     }
+    /// <summary>Lists authoritative transport and authorization state from the host server.</summary>
+    public IReadOnlyList<HdcTargetInfo> ListTargetDetails(int timeoutMs = 10000)
+        => HdcTargetInfo.Parse(Encoding.UTF8.GetString(ExecuteOnDevice(string.Empty, "list targets -v", timeoutMs)));
+
     /// <summary>Rejects explicit server failures. 拒绝服务端明确失败响应。</summary>
     public static void ThrowOnFailure(string output)
     {

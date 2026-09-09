@@ -7,10 +7,7 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 /// <summary>
 /// Factory for creating <see cref="HdcSession"/> instances from USB device sessions.
 /// <para>从 USB 设备会话创建 <see cref="HdcSession"/> 实例的工厂。</para>
-/// A factory targets the HDC USB interface (class 0xFF, vendor-specific) and
-/// matches by VID/PID (Huawei 0x12D1:0x107E) when available.
-/// <para>工厂针对 HDC USB 接口（类 0xFF，厂商自定义），并在可用时按 VID/PID
-/// （华为 0x12D1:0x107E）匹配。</para>
+/// Matches the upstream FF/50/01 interface and its bound bulk endpoint pair.
 /// </summary>
 public sealed class HdcFactory : IProtocolFactory
 {
@@ -60,36 +57,13 @@ public sealed class HdcFactory : IProtocolFactory
                 return false;
             }
 
-            // Check for the HDC USB interface.
-            // HDC uses vendor-specific class (0xFF). Unlike ADB, HDC has no fixed
-            // subclass/protocol; detection primarily relies on VID/PID.
-            // <para>检查 HDC USB 接口。HDC 使用厂商自定义类（0xFF）。与 ADB 不同，
-            // HDC 没有固定的 subclass/protocol；主要依赖 VID/PID 检测。</para>
-            var hasHdcInterface = false;
-            if (info.InterfaceMetadataObserved)
-            {
-                foreach (var iface in info.Interfaces)
-                {
-                    if (iface.Class == HdcConstants.InterfaceClass)
-                    {
-                        hasHdcInterface = true;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                // No interface metadata available; fall back to VID/PID matching.
-                // Huawei's default HDC device is 0x12D1:0x107E.
-                // <para>无接口元数据；回退到 VID/PID 匹配。
-                // 华为默认 HDC 设备为 0x12D1:0x107E。</para>
-                hasHdcInterface = info.VendorId == HdcConstants.HuaweiVendorId;
-            }
-
-            if (!hasHdcInterface)
-            {
-                return false;
-            }
+            // Upstream host_usb.cpp identifies HDC by FF/50/01, not vendor alone.
+            var iface = info.Interfaces.FirstOrDefault(i => i.Class == 0xff && i.SubClass == 0x50 && i.Protocol == 1
+                && i.Endpoints.Any(e => e.EndpointAddress == transport.EndpointIn)
+                && i.Endpoints.Any(e => e.EndpointAddress == transport.EndpointOut));
+            var hasHdcInterface = iface is not null ||
+                (info.Interfaces.Count == 0 && info.InterfaceClass == 0xff && info.InterfaceSubClass == 0x50 && info.InterfaceProtocol == 1);
+            if (!hasHdcInterface || transport.EndpointIn == 0 || transport.EndpointOut == 0) return false;
 
             session = new HdcSession(new UsbDeviceTransport(transport));
             return true;
