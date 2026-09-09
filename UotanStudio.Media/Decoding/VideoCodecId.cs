@@ -11,4 +11,6 @@ public enum VideoCodecId
 
     /// <summary>H.265 / HEVC. H.265（HEVC）编码。</summary>
     H265 = 2,
+    /// <summary>AV1 low-overhead OBU stream. AV1 低开销 OBU 码流。</summary>
+    Av1 = 3,
 }

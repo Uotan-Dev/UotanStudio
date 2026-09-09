@@ -33,10 +33,13 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     private nint _converter;
     private GCHandle _self;
     private Action<DecodedAudioFrame>? _callback;
-    private byte[]? _pendingPacket;
+    private nint _packetData, _packetDescription;
+    private int _packetBytes;
+    private bool _packetConsumed;
     private int _sampleRate, _channels;
     private int _thread = Environment.CurrentManagedThreadId;
     private bool _disposed;
+    private bool _inCallback;
 
     /// <inheritdoc />
     public bool IsInitialized => _converter != 0;
@@ -53,15 +56,16 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     /// <inheritdoc />
     public void Initialize(ReadOnlySpan<byte> codecConfig, Action<DecodedAudioFrame> frameCallback)
     {
+        if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot reenter the decoder.");
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(frameCallback);
-        if (codecConfig.Length is 0 or > 64) throw new InvalidDataException("AAC AudioSpecificConfig is required (2-4 bytes).");
+        if (codecConfig.Length is 0 or > 64) throw new InvalidDataException("AAC AudioSpecificConfig is required (2-64 bytes).");
         if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
         Release();
 
         // Parse the AudioSpecificConfig: object type, sampling frequency, channels.
         // 解析 AudioSpecificConfig：对象类型、采样频率、通道配置。
-        (int rate, int channels) = ParseConfig(codecConfig);
+        (int rate, int channels) = AudioFormatLimits.ParseAacConfig(codecConfig);
         var source = new AudioStreamBasicDescription
         {
             SampleRate = rate,
@@ -109,87 +113,72 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     {
         CheckReady();
         if (packet.IsEmpty || packet.Length > 1024 * 1024) throw new InvalidDataException("Invalid AAC packet.");
-        _pendingPacket = packet.ToArray();
+        int bufferBytes = 1024 * 2 * _channels;
+        byte[]? buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bufferBytes);
         try
         {
-            // One AAC packet carries 1024 frames per channel; request exactly one packet.
-            // 一个 AAC 包承载每通道 1024 帧；每次请求一个包。
-            uint packets = 1;
-            int bufferBytes = 1024 * 4 * _channels;
-            byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bufferBytes);
-            try
+            fixed (byte* input = packet, outputData = buffer)
             {
+                var description = new AudioStreamPacketDescription { DataByteSize = (uint)packet.Length, Frames = 1024 };
+                _packetData = (nint)input;
+                _packetDescription = (nint)(&description);
+                _packetBytes = packet.Length;
+                _packetConsumed = false;
+                uint packets = 1024; // PCM packets contain one sample frame, not one AAC access unit.
                 var output = new AudioBufferList
                 {
                     NumberBuffers = 1,
-                    Buffer0 = new AudioBuffer { NumberChannels = (uint)_channels, DataByteSize = (uint)bufferBytes, Data = 0 },
+                    Buffer0 = new AudioBuffer { NumberChannels = (uint)_channels, DataByteSize = (uint)bufferBytes, Data = (nint)outputData },
                 };
-                AudioBufferList* list = &output;
-                fixed (byte* data = buffer)
-                {
-                    output.Buffer0.Data = (nint)data;
-                    Check(AudioConverterFillComplexBuffer(_converter, &InputProc, GCHandle.ToIntPtr(_self), ref packets, list, null), "decode packet");
-                    int bytes = checked((int)output.Buffer0.DataByteSize);
-                    int blockAlign = _channels * 2;
-                    if (bytes == 0 || bytes % blockAlign != 0) throw new InvalidDataException("Truncated PCM output from AudioConverter.");
-                    using var frame = new DecodedAudioFrame(buffer, bytes, bytes / blockAlign, _channels, _sampleRate, 16, timestampTicks);
-                    _callback!(frame);
-                }
+                int status = AudioConverterFillComplexBuffer(_converter, &InputProc, GCHandle.ToIntPtr(_self), ref packets, &output, null);
+                if (status != 0 && status != InputCallbackError) Check(status, "decode packet");
+                if (packets == 0) return;
+                int bytes = checked((int)output.Buffer0.DataByteSize);
+                if (bytes > bufferBytes || bytes != packets * _channels * 2) throw new InvalidDataException("Invalid AudioConverter PCM output.");
+                using var frame = new DecodedAudioFrame(buffer, bytes, (int)packets, _channels, _sampleRate, 16, timestampTicks);
+                buffer = null; // Ownership passed to frame; never return this array twice.
+                _inCallback = true;
+                try { _callback!(frame); } finally { _inCallback = false; }
             }
-            finally { System.Buffers.ArrayPool<byte>.Shared.Return(buffer); }
         }
-        finally { _pendingPacket = null; }
+        finally
+        {
+            _packetData = _packetDescription = 0;
+            if (buffer is not null) System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
-
     /// <inheritdoc />
     public void Reset()
     {
         CheckReady();
-        // Stateless per-packet conversion; nothing to flush between packets.
-        // 逐包无状态转换；包间无需冲刷。
+        Check(AudioConverterReset(_converter), "reset converter");
     }
 
     [UnmanagedCallersOnly]
     private static int InputProc(nint converter, nint packetCount, nint bufferList, nint packetDescriptions, nint userData)
     {
-        // The instance context rides through the GCHandle supplied as userData.
-        // 实例上下文经作为 userData 传入的 GCHandle 携带。
-        var decoder = GCHandle.FromIntPtr(userData).Target as AudioToolboxAacDecoder;
-        if (decoder?._pendingPacket is not { } packet) return InputCallbackError;
+        var decoder = (AudioToolboxAacDecoder?)GCHandle.FromIntPtr(userData).Target;
+        if (decoder is null || decoder._packetConsumed || decoder._packetData == 0)
+        {
+            *(uint*)packetCount = 0;
+            return InputCallbackError;
+        }
+        decoder._packetConsumed = true;
+        *(uint*)packetCount = 1;
         var list = (AudioBufferList*)bufferList;
-        uint bytes = (uint)packet.Length;
-        if (list->Buffer0.DataByteSize < (int)bytes) return InputCallbackError;
-        fixed (byte* source = packet)
+        list->NumberBuffers = 1;
+        list->Buffer0 = new AudioBuffer
         {
-            Buffer.MemoryCopy(source, (void*)list->Buffer0.Data, bytes, bytes);
-        }
-        list->Buffer0.DataByteSize = (uint)bytes;
-        if (packetDescriptions != 0)
-        {
-            var description = (AudioStreamPacketDescription*)packetDescriptions;
-            *description = new AudioStreamPacketDescription { StartOffset = 0, DataByteSize = (int)bytes, Frames = 1024 };
-        }
+            NumberChannels = (uint)decoder._channels,
+            DataByteSize = (uint)decoder._packetBytes,
+            Data = decoder._packetData,
+        };
+        if (packetDescriptions != 0) *(nint*)packetDescriptions = decoder._packetDescription;
         return 0;
     }
-
-    private static (int Rate, int Channels) ParseConfig(ReadOnlySpan<byte> config)
-    {
-        // Frequency table from ISO 14496-3 (samplingFrequencyIndex).
-        // ISO 14496-3 采样频率表（samplingFrequencyIndex）。
-        int[] rates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
-        int objectType = (config[0] >> 3) & 0x1F;
-        int index = ((config[0] & 0x07) << 1) | (config[1] >> 7);
-        int rate = index == 15
-            ? ((config[1] & 0x7F) << 17) | (config[2] << 9) | (config[3] << 1) | (config[4] >> 7)
-            : rates[index];
-        int channels = (config[1] >> 3) & 0x0F;
-        if (objectType is < 1 or > 4 || channels is < 1 or > 8 || rate < 8000 || rate > 192000)
-            throw new InvalidDataException($"Unsupported AAC config: object {objectType}, {channels}ch, {rate}Hz.");
-        return (rate, channels);
-    }
-
     private void CheckReady()
     {
+        if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot reenter the decoder.");
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_converter == 0 || _callback is null) throw new InvalidOperationException("Audio decoder is not initialized.");
         if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
@@ -206,6 +195,7 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     public void Dispose()
     {
         if (_disposed) return;
+        if (_inCallback || _thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("Dispose must run on the owner thread outside callbacks.");
         _disposed = true;
         Release();
     }
@@ -248,13 +238,14 @@ public sealed unsafe partial class AudioToolboxAacDecoder : IAudioDecoder
     private struct AudioStreamPacketDescription
     {
         public long StartOffset;
-        public int DataByteSize;
         public uint Frames;
+        public uint DataByteSize;
     }
 
     private const string At = "/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox";
 
     [LibraryImport(At)] private static partial int AudioConverterNew(AudioStreamBasicDescription* source, AudioStreamBasicDescription* target, out nint converter);
+    [LibraryImport(At)] private static partial int AudioConverterReset(nint converter);
     [LibraryImport(At)] private static partial int AudioConverterDispose(nint converter);
     [LibraryImport(At)] private static partial int AudioConverterSetProperty(nint converter, uint propertyId, uint size, void* data);
     [LibraryImport(At)] private static partial int AudioConverterFillComplexBuffer(nint converter, delegate* unmanaged<nint, nint, nint, nint, nint, int> inputProc, nint userData, ref uint packetCount, AudioBufferList* data, AudioStreamPacketDescription* packetDescriptions);

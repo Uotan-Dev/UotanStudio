@@ -179,9 +179,10 @@ internal static unsafe partial class D3D11Interop
     [StructLayout(LayoutKind.Sequential)]
     public struct VideoProcessorOutputViewDesc
     {
-        public uint FourCC;
         public uint ViewDimension;
         public uint Texture2DMipSlice;
+        public uint FirstArraySlice;
+        public uint ArraySize;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -193,7 +194,10 @@ internal static unsafe partial class D3D11Interop
         public int PastFrames;
         public int FutureFrames;
         public nint PastFramesPtr;
-        public nint FutureFramesPtr;
         public nint InputFramePtr;
+        public nint FutureFramesPtr;
+        public nint PastFramesRightPtr;
+        public nint InputFrameRightPtr;
+        public nint FutureFramesRightPtr;
     }
 }

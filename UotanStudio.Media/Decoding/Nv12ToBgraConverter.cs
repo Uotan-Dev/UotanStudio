@@ -47,7 +47,9 @@ public static unsafe class Nv12ToBgraConverter
     /// Row pitch in bytes of the destination (defaults to width × 4).
     /// 目标缓冲区的行距（字节），默认为宽度 × 4。
     /// </param>
-    public static void Convert(ReadOnlySpan<byte> nv12, int width, int height, int nv12Stride, Span<byte> destination, int destinationStride = 0)
+    /// <param name="matrix">YUV matrix. YUV 色彩矩阵。</param>
+    /// <param name="range">YUV range. YUV 数值范围。</param>
+    public static void Convert(ReadOnlySpan<byte> nv12, int width, int height, int nv12Stride, Span<byte> destination, int destinationStride = 0, VideoColorMatrix matrix = VideoColorMatrix.Bt601, VideoColorRange range = VideoColorRange.Limited)
     {
         if (destinationStride == 0)
         {
@@ -65,7 +67,7 @@ public static unsafe class Nv12ToBgraConverter
         fixed (byte* src = nv12)
         fixed (byte* dst = destination)
         {
-            ConvertCore(src, dst, width, height, nv12Stride, destinationStride);
+            ConvertCore(src, dst, width, height, nv12Stride, destinationStride, matrix, range);
         }
     }
 
@@ -101,8 +103,15 @@ public static unsafe class Nv12ToBgraConverter
     }
 
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    private static void ConvertCore(byte* src, byte* dst, int width, int height, int nv12Stride, int dstStride)
+    private static void ConvertCore(byte* src, byte* dst, int width, int height, int nv12Stride, int dstStride, VideoColorMatrix matrix, VideoColorRange range)
     {
+        bool full = range == VideoColorRange.Full;
+        bool hd = matrix == VideoColorMatrix.Bt709;
+        int yOffset = full ? 0 : 16, yScale = full ? 256 : 298;
+        int red = hd ? (full ? 403 : 459) : (full ? 359 : 409);
+        int greenU = hd ? (full ? 48 : 55) : (full ? 88 : 100);
+        int greenV = hd ? (full ? 120 : 136) : (full ? 183 : 208);
+        int blue = hd ? (full ? 475 : 541) : (full ? 454 : 516);
         var yPlane = src;
         var uvPlane = src + (long)nv12Stride * height;
         var uvStride = nv12Stride;
@@ -123,10 +132,10 @@ public static unsafe class Nv12ToBgraConverter
                     var y = Vector128.Create((int)yRow[col], yRow[col + 1], yRow[col + 2], yRow[col + 3]);
                     var d = Vector128.Create((int)uvRow[col], uvRow[col], uvRow[col + 2], uvRow[col + 2]) - Vector128.Create(128);
                     var e = Vector128.Create((int)uvRow[col + 1], uvRow[col + 1], uvRow[col + 3], uvRow[col + 3]) - Vector128.Create(128);
-                    var c = (y - Vector128.Create(16)) * Vector128.Create(298) + Vector128.Create(128);
-                    var r = Vector128.ShiftRightArithmetic(c + e * Vector128.Create(409), 8);
-                    var g = Vector128.ShiftRightArithmetic(c - d * Vector128.Create(100) - e * Vector128.Create(208), 8);
-                    var b = Vector128.ShiftRightArithmetic(c + d * Vector128.Create(516), 8);
+                    var c = (y - Vector128.Create(yOffset)) * Vector128.Create(yScale) + Vector128.Create(128);
+                    var r = Vector128.ShiftRightArithmetic(c + e * Vector128.Create(red), 8);
+                    var g = Vector128.ShiftRightArithmetic(c - d * Vector128.Create(greenU) - e * Vector128.Create(greenV), 8);
+                    var b = Vector128.ShiftRightArithmetic(c + d * Vector128.Create(blue), 8);
                     r = Vector128.Min(Vector128.Max(r, Vector128<int>.Zero), Vector128.Create(255));
                     g = Vector128.Min(Vector128.Max(g, Vector128<int>.Zero), Vector128.Create(255));
                     b = Vector128.Min(Vector128.Max(b, Vector128<int>.Zero), Vector128.Create(255));
@@ -148,13 +157,13 @@ public static unsafe class Nv12ToBgraConverter
 
                 for (var pixel = col; pixel < Math.Min(col + 2, width); pixel++)
                 {
-                    var c = yRow[pixel] - 16;
+                    var c = yRow[pixel] - yOffset;
 
                     // BT.601 limited range: Y in [16,235], UV in [16,240] scaled by 1/256.
                     // BT.601 有限范围：Y ∈ [16,235]，UV ∈ [16,240]，按 1/256 缩放。
-                    var r = (298 * c + 409 * e + 128) >> 8;
-                    var g = (298 * c - 100 * d - 208 * e + 128) >> 8;
-                    var b = (298 * c + 516 * d + 128) >> 8;
+                    var r = (yScale * c + red * e + 128) >> 8;
+                    var g = (yScale * c - greenU * d - greenV * e + 128) >> 8;
+                    var b = (yScale * c + blue * d + 128) >> 8;
 
                     dstRow[pixel * 4 + 0] = Clamp(b);
                     dstRow[pixel * 4 + 1] = Clamp(g);

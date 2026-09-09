@@ -1,26 +1,27 @@
-﻿namespace UotanStudio.Media.Decoding;
+namespace UotanStudio.Media.Decoding;
 
 /// <summary>Creates AOT-safe platform decoders and probes native codec availability.</summary>
 public static class VideoDecoderFactory
 {
     /// <summary>
-    /// Checks whether a backend accepts a small stream configuration (Windows) or advertises
+    /// Checks whether a backend accepts a 1920x1080 stream configuration (Windows) or advertises
     /// hardware codec support (macOS). Actual stream profile, dimensions and decoding can still fail.
-    /// Linux VA/EGL primitives do not yet provide an Annex-B parser/DPB and are not advertised here.
+    /// Linux checks installed GStreamer codec plugins; a real stream may still fail.
     /// </summary>
     public static bool IsSupported(VideoCodecId codec)
     {
-        if (codec is not (VideoCodecId.H264 or VideoCodecId.H265)) return false;
+        if (codec is not (VideoCodecId.H264 or VideoCodecId.H265 or VideoCodecId.Av1)) return false;
         try
         {
             if (OperatingSystem.IsWindows())
             {
-                using var decoder = Create();
-                decoder.Initialize(codec, 64, 64, static _ => { });
+                using var decoder = Create(codec, new VideoDecoderOptions());
+                decoder.Initialize(codec, 1920, 1080, static _ => { });
                 return true;
             }
+            if (OperatingSystem.IsLinux()) return GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true) || GStreamer.GStreamerVideoDecoder.IsAvailable(codec, false);
             if (OperatingSystem.IsMacOS())
-                return VideoToolbox.VtNative.VTIsHardwareDecodeSupported(VideoToolbox.VtNative.Codec(codec)) != 0;
+                return codec == VideoCodecId.Av1 ? GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true) : VideoToolbox.VtNative.VTIsHardwareDecodeSupported(VideoToolbox.VtNative.Codec(codec)) != 0;
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or NotSupportedException or InvalidOperationException)
         {
@@ -33,47 +34,73 @@ public static class VideoDecoderFactory
     /// <summary>创建未初始化的平台解码器。</summary>
     /// <remarks>
     /// <para>
-    /// On Windows the GPU path (asynchronous hardware MFT + D3D11 video processor) is tried
+    /// On Windows the GPU path (D3D11-aware MFT + D3D11 video processor) is tried
     /// first; the synchronous CPU decoder is the fallback when no suitable hardware MFT exists.
     /// </para>
     /// <para>
-    /// Windows 上优先尝试 GPU 路径（异步硬件 MFT + D3D11 视频处理器）；无合适硬件 MFT 时
+    /// Windows 上优先尝试 GPU 路径（D3D11 感知 MFT + D3D11 视频处理器）；无合适硬件 MFT 时
     /// 回退到同步 CPU 解码器。
     /// </para>
     /// </remarks>
-    public static IVideoDecoder Create()
+    public static IVideoDecoder Create() => Create(new VideoDecoderOptions());
+
+    /// <summary>Creates the requested backend; explicit choices never silently switch. 按用户选择创建后端，显式选择不静默切换。</summary>
+    public static IVideoDecoder Create(VideoDecoderOptions options)
     {
-        if (OperatingSystem.IsWindows())
+        ArgumentNullException.ThrowIfNull(options);
+        return options.Backend switch
         {
-            try
-            {
-                return new MediaFoundation.MediaFoundationGpuVideoDecoder();
-            }
-            catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException)
-            {
-                // D3D11 / MF plumbing missing entirely — go straight to the CPU path.
-                return new MediaFoundation.MediaFoundationVideoDecoder();
-            }
-        }
-        if (OperatingSystem.IsMacOS()) return new VideoToolbox.VideoToolboxVideoDecoder();
-        throw new NotSupportedException("An Annex-B video decoder is not available on this platform. Linux VA-API/EGL primitives require a codec parser and reference-picture manager.");
+            VideoDecoderBackend.Auto when OperatingSystem.IsWindows() => new FallbackVideoDecoder(
+                () => Create(options with { Backend = VideoDecoderBackend.MediaFoundationGpu }),
+                () => Create(options with { Backend = VideoDecoderBackend.MediaFoundationCpu })),
+            VideoDecoderBackend.Auto when OperatingSystem.IsMacOS() => new VideoToolbox.VideoToolboxVideoDecoder(),
+            VideoDecoderBackend.Auto when OperatingSystem.IsLinux() => new FallbackVideoDecoder(
+                static () => new GStreamer.GStreamerVideoDecoder(true), static () => new GStreamer.GStreamerVideoDecoder(false)),
+            VideoDecoderBackend.MediaFoundationGpu when OperatingSystem.IsWindows() => new MediaFoundation.MediaFoundationGpuVideoDecoder(options),
+            VideoDecoderBackend.MediaFoundationCpu when OperatingSystem.IsWindows() => new MediaFoundation.MediaFoundationVideoDecoder(),
+            VideoDecoderBackend.VideoToolbox when OperatingSystem.IsMacOS() => new VideoToolbox.VideoToolboxVideoDecoder(),
+            VideoDecoderBackend.GStreamerHardware => new GStreamer.GStreamerVideoDecoder(true),
+            VideoDecoderBackend.GStreamerSoftware => new GStreamer.GStreamerVideoDecoder(false),
+            _ => throw new NotSupportedException("Selected video backend is unavailable on this platform."),
+        };
     }
 
-    /// <summary>
-    /// Reports which backend <see cref="Create"/> would return on Windows: the asynchronous
-    /// hardware path when an async hardware MFT exists for the codec, otherwise the CPU decoder.
-    /// </summary>
-    /// <summary>
-    /// 报告 Windows 上 <see cref="Create"/> 会返回的后端：存在该编码格式的异步硬件 MFT 时为
-    /// 硬件路径，否则为 CPU 解码器。
-    /// </summary>
+    /// <summary>Creates a codec-aware platform backend, including AV1 on macOS via GStreamer VideoToolbox. 按编码格式创建平台后端。</summary>
+    public static IVideoDecoder Create(VideoCodecId codec, VideoDecoderOptions options)
+    {
+        if (OperatingSystem.IsMacOS() && codec == VideoCodecId.Av1 && options.Backend is VideoDecoderBackend.Auto or VideoDecoderBackend.VideoToolbox)
+            return new GStreamer.GStreamerVideoDecoder(true);
+        return Create(options);
+    }
+    /// <summary>Gets the initialized backend name, including the actual choice after fallback.</summary>
+    public static string GetBackendName(IVideoDecoder decoder)
+    {
+        if (decoder is FallbackVideoDecoder selection)
+            return selection.ActiveDecoder is { } active ? GetBackendName(active) : "Uninitialized";
+        return decoder switch
+        {
+            MediaFoundation.MediaFoundationGpuVideoDecoder => "Media Foundation (GPU)",
+            MediaFoundation.MediaFoundationVideoDecoder => "Media Foundation (CPU)",
+            VideoToolbox.VideoToolboxVideoDecoder => "VideoToolbox (hardware)",
+            GStreamer.GStreamerVideoDecoder gst => $"GStreamer ({(gst.UsesHardware ? "GPU" : "CPU")}: {gst.DecoderElement})",
+            _ => "Unknown",
+        };
+    }
+
+    /// <summary>Gets why the preferred backend failed during the most recent initialization.</summary>
+    public static string? GetFallbackReason(IVideoDecoder decoder) => (decoder as FallbackVideoDecoder)?.FallbackReason;
+
+    /// <summary>Probes D3D11 initialization at 1920x1080. Actual stream decoding can still fail.</summary>
     public static bool HasGpuDecoder(VideoCodecId codec)
     {
+        if (codec is not (VideoCodecId.H264 or VideoCodecId.H265 or VideoCodecId.Av1)) return false;
+        if (OperatingSystem.IsLinux() || (OperatingSystem.IsMacOS() && codec == VideoCodecId.Av1)) return GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true);
+        if (OperatingSystem.IsMacOS()) return VideoToolbox.VtNative.VTIsHardwareDecodeSupported(VideoToolbox.VtNative.Codec(codec)) != 0;
         if (!OperatingSystem.IsWindows()) return false;
         try
         {
             using var decoder = new MediaFoundation.MediaFoundationGpuVideoDecoder();
-            decoder.Initialize(codec, 64, 64, static _ => { });
+            decoder.Initialize(codec, 1920, 1080, static _ => { });
             return true;
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or NotSupportedException or InvalidOperationException)

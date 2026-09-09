@@ -126,7 +126,7 @@ internal static partial class MfInterop
 
     /// <summary>MF_MT_AUDIO_BITS_PER_SAMPLE.</summary>
     /// <summary>MF_MT_AUDIO_BITS_PER_SAMPLE。</summary>
-    public static readonly Guid MtAudioBitsPerSample = new("f2deb57f-45fa-4d41-91e3-b0bef9d33d8c");
+    public static readonly Guid MtAudioBitsPerSample = new("f2deb57f-40fa-4764-aa33-ed4f2d1ff669");
 
     /// <summary>MFT_CATEGORY_AUDIO_DECODER.</summary>
     /// <summary>MFT_CATEGORY_AUDIO_DECODER。</summary>
@@ -150,19 +150,15 @@ internal static partial class MfInterop
 
     /// <summary>MF_TRANSFORM_ASYNC.</summary>
     /// <summary>MF_TRANSFORM_ASYNC。</summary>
-    public static readonly Guid TransformAsync = new("e5666d6b-3422-4eb6-a421-da7db1f8e207");
+    public static readonly Guid TransformAsync = new("f81a699a-649a-497d-8c73-29f8fed6ad7a");
 
     /// <summary>MF_TRANSFORM_ASYNC_UNLOCK.</summary>
     /// <summary>MF_TRANSFORM_ASYNC_UNLOCK。</summary>
-    public static readonly Guid TransformAsyncUnlock = new("e5666d6c-3422-4eb6-a421-da7db1f8e207");
+    public static readonly Guid TransformAsyncUnlock = new("e5666d6b-3422-4eb6-a421-da7db1f8e207");
 
     /// <summary>MF_SA_D3D11_AWARE.</summary>
     /// <summary>MF_SA_D3D11_AWARE。</summary>
     public static readonly Guid SaD3D11Aware = new("206b4fc8-fcf9-4c51-afe3-9764369e33a0");
-
-    /// <summary>MF_DECODER_D3D_MANAGER (mfidl.h; enables GPU decode on async MFTs).</summary>
-    /// <summary>MF_DECODER_D3D_MANAGER（mfidl.h；在异步 MFT 上启用 GPU 解码）。</summary>
-    public static readonly Guid DecoderD3DManager = new("f3974c0c-b44a-4fef-96d5-0a21e2d5b1a6");
 
     /// <summary>IID_IMFDXGIDeviceManager.</summary>
     /// <summary>IID_IMFDXGIDeviceManager。</summary>
@@ -331,8 +327,8 @@ internal static unsafe class MfCom
         fixed (Guid* k = &iid) fixed (nint* d = &instance)
             return ((delegate* unmanaged[Stdcall]<nint, Guid*, nint*, int>)Slot(value, 33))(value, k, d);
     }
-    public static int Message(nint value, uint message) =>
-        ((delegate* unmanaged[Stdcall]<nint, uint, nuint, int>)Slot(value, 23))(value, message, 0);
+    public static int Message(nint value, uint message, nint parameter = 0) =>
+        ((delegate* unmanaged[Stdcall]<nint, uint, nuint, int>)Slot(value, 23))(value, message, (nuint)parameter);
     public static int SetType(nint value, nint type, bool input) =>
         ((delegate* unmanaged[Stdcall]<nint, uint, nint, uint, int>)Slot(value, input ? 15 : 16))(value, 0, type, 0);
     public static int OutputType(nint value, uint index, out nint type)
@@ -443,23 +439,6 @@ internal static unsafe class MfCom
             return ((delegate* unmanaged[Stdcall]<nint, uint*, int>)Slot(dxgiBuffer, 4))(dxgiBuffer, s);
     }
 
-    /// <summary>IMFDXGIDeviceManager.LockDevice (slot 5).</summary>
-    /// <summary>IMFDXGIDeviceManager.LockDevice（槽位 5）。</summary>
-    public static int DxgiLockDevice(nint deviceManager, out nint device, out uint token)
-    {
-        nint deviceLocal;
-        uint tokenLocal;
-        int hr = ((delegate* unmanaged[Stdcall]<nint, void**, uint*, int>)Slot(deviceManager, 5))(deviceManager, (void**)&deviceLocal, &tokenLocal);
-        device = deviceLocal;
-        token = tokenLocal;
-        return hr;
-    }
-
-    /// <summary>IMFDXGIDeviceManager.UnlockDevice (slot 9).</summary>
-    /// <summary>IMFDXGIDeviceManager.UnlockDevice（槽位 9）。</summary>
-    public static int DxgiUnlockDevice(nint deviceManager, nint device, bool block) =>
-        ((delegate* unmanaged[Stdcall]<nint, nint, int, int>)Slot(deviceManager, 9))(deviceManager, device, block ? 1 : 0);
-
     /// <summary>IMFDXGIDeviceManager.ResetDevice (slot 7).</summary>
     /// <summary>IMFDXGIDeviceManager.ResetDevice（槽位 7）。</summary>
     public static int DxgiResetDevice(nint deviceManager, nint device, uint token) =>
@@ -473,15 +452,6 @@ internal static unsafe class MfCom
     {
         fixed (D3D11Interop.Texture2DDesc* d = &desc) fixed (nint* t = &texture)
             return ((delegate* unmanaged[Stdcall]<nint, D3D11Interop.Texture2DDesc*, nint, nint*, int>)Slot(device, 5))(device, d, initialData, t);
-    }
-
-    /// <summary>ID3D11Device.GetImmediateContext (slot 40; out-parameter form).</summary>
-    /// <summary>ID3D11Device.GetImmediateContext（槽位 40；out 参数形式）。</summary>
-    public static nint D3DGetImmediateContext(nint device)
-    {
-        nint context;
-        _ = ((delegate* unmanaged[Stdcall]<nint, nint*, nint>)Slot(device, 40))(device, &context);
-        return context;
     }
 
     /// <summary>ID3D11Device.QueryInterface via MfCom.QueryInterface.</summary>
@@ -524,18 +494,18 @@ internal static unsafe class MfCom
 
     /// <summary>ID3D11VideoDevice.CreateVideoProcessorInputView (slot 8).</summary>
     /// <summary>ID3D11VideoDevice.CreateVideoProcessorInputView（槽位 8）。</summary>
-    public static int D3DCreateVideoProcessorInputView(nint videoDevice, nint resource, in D3D11Interop.VideoProcessorInputViewDesc desc, out nint view)
+    public static int D3DCreateVideoProcessorInputView(nint videoDevice, nint resource, nint enumerator, in D3D11Interop.VideoProcessorInputViewDesc desc, out nint view)
     {
         fixed (D3D11Interop.VideoProcessorInputViewDesc* d = &desc) fixed (nint* v = &view)
-            return ((delegate* unmanaged[Stdcall]<nint, nint, D3D11Interop.VideoProcessorInputViewDesc*, nint*, int>)Slot(videoDevice, 8))(videoDevice, resource, d, v);
+            return ((delegate* unmanaged[Stdcall]<nint, nint, nint, D3D11Interop.VideoProcessorInputViewDesc*, nint*, int>)Slot(videoDevice, 8))(videoDevice, resource, enumerator, d, v);
     }
 
     /// <summary>ID3D11VideoDevice.CreateVideoProcessorOutputView (slot 9).</summary>
     /// <summary>ID3D11VideoDevice.CreateVideoProcessorOutputView（槽位 9）。</summary>
-    public static int D3DCreateVideoProcessorOutputView(nint videoDevice, nint resource, in D3D11Interop.VideoProcessorOutputViewDesc desc, out nint view)
+    public static int D3DCreateVideoProcessorOutputView(nint videoDevice, nint resource, nint enumerator, in D3D11Interop.VideoProcessorOutputViewDesc desc, out nint view)
     {
         fixed (D3D11Interop.VideoProcessorOutputViewDesc* d = &desc) fixed (nint* v = &view)
-            return ((delegate* unmanaged[Stdcall]<nint, nint, D3D11Interop.VideoProcessorOutputViewDesc*, nint*, int>)Slot(videoDevice, 9))(videoDevice, resource, d, v);
+            return ((delegate* unmanaged[Stdcall]<nint, nint, nint, D3D11Interop.VideoProcessorOutputViewDesc*, nint*, int>)Slot(videoDevice, 9))(videoDevice, resource, enumerator, d, v);
     }
 
     /// <summary>ID3D11VideoContext.VideoProcessorBlt (slot 53).</summary>
@@ -579,12 +549,12 @@ internal static unsafe class MfCom
 internal struct D3D11VideoProcessorContentDesc
 {
     public uint InputFrameFormat;
-    public ulong InputFrameRateNumerator;
-    public ulong InputFrameRateDenominator;
+    public uint InputFrameRateNumerator;
+    public uint InputFrameRateDenominator;
     public uint InputWidth;
     public uint InputHeight;
-    public ulong OutputFrameRateNumerator;
-    public ulong OutputFrameRateDenominator;
+    public uint OutputFrameRateNumerator;
+    public uint OutputFrameRateDenominator;
     public uint OutputWidth;
     public uint OutputHeight;
     public uint Usage;
@@ -596,17 +566,6 @@ internal struct D3D11VideoProcessorContentDesc
 internal struct D3D11VideoProcessorColorSpace
 {
     public uint Bits;
-    private const uint UsageBit = 0x1u;
-    private const uint RgbRangeBit = 0x2u;
-    private const uint YcbcrMatrixBit = 0x4u;
-    private const uint NominalRangeMask = 0x30u;
-    /// <summary>Sets full 8-bit packed value. 设置完整 32 位打包值。</summary>
+    /// <summary>Creates the native bitfield value defined by d3d11.h.</summary>
     public static D3D11VideoProcessorColorSpace FromBits(uint bits) => new() { Bits = bits };
-    /// <summary>Builds a BT.601 limited-range YUV → full-range RGB configuration. 构建 BT.601 有限范围 YUV → 全范围 RGB 配置。</summary>
-    public static D3D11VideoProcessorColorSpace Bt601LimitedToRgbFull() => new()
-    {
-        Bits = 0u // Usage=0, RGB_Range=0 (full), YCbCr_Matrix=0 (BT.601), Nominal_Range=0 (16-235)
-    };
-    /// <summary>Raw packed value for direct assignment. 供直接赋值的原始打包值。</summary>
-    public uint Value => Bits;
 }

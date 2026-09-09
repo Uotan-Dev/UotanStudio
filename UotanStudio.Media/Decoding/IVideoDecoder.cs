@@ -69,6 +69,8 @@ public interface IVideoDecoder : IDisposable
 
     /// <summary>Delivers delayed output at end of stream. Reset before decoding a new stream.</summary>
     void Drain();
+    /// <summary>Delivers asynchronously completed output without consuming another input packet. 提取已完成的异步输出。</summary>
+    void Poll() { }
 
     /// <summary>
     /// Resets decoder state (after a resolution change or stream discontinuity);

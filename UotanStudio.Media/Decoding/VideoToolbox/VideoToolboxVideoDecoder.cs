@@ -221,7 +221,18 @@ public sealed unsafe class VideoToolboxVideoDecoder : IVideoDecoder
                     for (int row = 0; row < rows; row++)
                         new ReadOnlySpan<byte>((byte*)pointer + checked((nuint)row * pitch), rowBytes).CopyTo(bytes.AsSpan(start + row * stride, rowBytes));
                 }
-                return new(bytes, length, width, height, stride, timestamp);
+                VideoColorMatrix matrix = VideoColorMatrix.Auto;
+                nint attachment = VtNative.CVBufferCopyAttachment(image, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrixKey"), 0);
+                if (attachment != 0)
+                {
+                    try
+                    {
+                        if (VtNative.CFEqual(attachment, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrix_ITU_R_709_2")) != 0) matrix = VideoColorMatrix.Bt709;
+                        else if (VtNative.CFEqual(attachment, VtNative.Symbol(VtNative.Cv, "kCVImageBufferYCbCrMatrix_ITU_R_601_4")) != 0) matrix = VideoColorMatrix.Bt601;
+                    }
+                    finally { VtNative.CFRelease(attachment); }
+                }
+                return new(bytes, length, width, height, stride, timestamp) { ColorMatrix = matrix, ColorRange = VideoColorRange.Limited };
             }
             catch { ArrayPool<byte>.Shared.Return(bytes); throw; }
         }

@@ -48,6 +48,7 @@ public static class AudioSinkFactory
     {
         if (OperatingSystem.IsWindows()) return new WasapiAudioSink();
         if (OperatingSystem.IsMacOS()) return new AudioUnitSink();
+        if (OperatingSystem.IsLinux()) return new GStreamerAudioSink();
         throw new PlatformNotSupportedException("No audio sink is available on this platform.");
     }
 }

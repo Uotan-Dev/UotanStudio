@@ -160,7 +160,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         if (_comOwned) { MfInterop.CoUninitialize(); _comOwned = false; }
     }
 
-    private static void ConfigureLowLatency(nint transform, VideoCodecId codec)
+    internal static void ConfigureLowLatency(nint transform, VideoCodecId codec)
     {
         if (MfCom.GetAttributes(transform, out nint attributes) >= 0 && attributes != 0)
         {
@@ -176,6 +176,9 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
         finally { MfCom.Release(codecApi); }
     }
 
+    private VideoColorMatrix _colorMatrix;
+    private VideoColorRange _colorRange;
+
     private bool SelectOutputType()
     {
         for (uint index = 0; index < 256; index++)
@@ -187,6 +190,10 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
                 if (MfCom.GetGuid(type, MfInterop.MtSubtype, out Guid subtype) < 0 || subtype != MfInterop.VideoFormatNv12) continue;
                 if (MfCom.SetType(_transform, type, false) < 0) continue;
                 Check(MfCom.GetUInt64(type, MfInterop.MtFrameSize, out ulong size), "output dimensions");
+                _ = MfCom.GetUInt32(type, new Guid("c21b8ee5-b956-4071-8daf-325edf5cab11"), out uint range);
+                _ = MfCom.GetUInt32(type, new Guid("3e23d450-2c75-4d25-a00e-b91670d12327"), out uint matrix);
+                _colorMatrix = matrix switch { 1 => VideoColorMatrix.Bt709, 2 => VideoColorMatrix.Bt601, _ => VideoColorMatrix.Auto };
+                _colorRange = range switch { 1 => VideoColorRange.Full, 2 => VideoColorRange.Limited, _ => VideoColorRange.Auto };
                 _width = checked((int)(size >> 32));
                 _height = checked((int)(size & uint.MaxValue));
                 VideoFrameLimits.ValidateDimensions(_width, _height);
@@ -243,7 +250,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
                 if (length < required) throw new InvalidDataException("Truncated NV12 output.");
                 byte[] pooled = ArrayPool<byte>.Shared.Rent(required);
                 _ = MfCom.GetTime(sample, out long timestamp);
-                using var frame = new DecodedVideoFrame(pooled, required, _width, _height, _stride, timestamp);
+                using var frame = new DecodedVideoFrame(pooled, required, _width, _height, _stride, timestamp) { ColorMatrix = _colorMatrix, ColorRange = _colorRange };
                 new ReadOnlySpan<byte>((void*)source, required).CopyTo(pooled);
                 _inCallback = true;
                 try { _callback!(frame); }
@@ -302,6 +309,7 @@ public sealed unsafe class MediaFoundationVideoDecoder : IVideoDecoder
     {
         VideoCodecId.H264 => MfInterop.VideoFormatH264,
         VideoCodecId.H265 => MfInterop.VideoFormatHevc,
+        VideoCodecId.Av1 => new Guid("31305641-0000-0010-8000-00aa00389b71"),
         _ => throw new ArgumentOutOfRangeException(nameof(codec)),
     };
     private static void Check(int hr, string operation)

@@ -1,9 +1,10 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using UotanStudio.Media.Decoding;
+using UotanStudio.Media.Decoding.MediaFoundation;
 using UotanStudio.Media.Decoding.VideoToolbox;
 
 namespace UotanStudio.Media.Encoding;
@@ -30,6 +31,7 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
     private readonly ConcurrentQueue<EncodedVideoPacket> _packets = new();
     private ExceptionDispatchInfo? _error;
     private bool _disposed;
+    private bool _inCallback;
     private long _lastTimestamp = -1;
 
     /// <summary>Creates a low-latency hardware encoder, failing if the codec or stream configuration is unavailable.</summary>
@@ -57,6 +59,7 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
     /// <summary>Encodes a complete NV12 frame with a nonnegative, strictly increasing timestamp, then delivers output.</summary>
     public void Encode(DecodedVideoFrame frame)
     {
+        if (frame is GpuDecodedVideoFrame) throw new ArgumentException("Encoder requires NV12 input, not BGRA.", nameof(frame));
         CheckReady();
         ArgumentNullException.ThrowIfNull(frame);
         if (frame.Width != _width || frame.Height != _height) throw new ArgumentException("Frame dimensions do not match the encoder.", nameof(frame));
@@ -96,7 +99,11 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
         CheckReady();
         VtNative.Check(VtNative.VTCompressionSessionCompleteFrames(_session, default), "complete frames"); // kCMTimeInvalid means all pending frames.
         Interlocked.Exchange(ref _error, null)?.Throw();
-        while (_packets.TryDequeue(out var packet)) _callback(packet);
+        while (_packets.TryDequeue(out var packet))
+        {
+            _inCallback = true;
+            try { _callback(packet); } finally { _inCallback = false; }
+        }
     }
 
     /// <inheritdoc />
@@ -182,6 +189,7 @@ public sealed unsafe class VideoToolboxVideoEncoder : IDisposable
     private void CheckReady() { ObjectDisposedException.ThrowIf(_disposed, this); CheckThread(); }
     private void CheckThread()
     {
+        if (_inCallback) throw new InvalidOperationException("Encoder callbacks cannot reenter the encoder.");
         if (_thread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("Encoder belongs to another thread.");
     }
 }

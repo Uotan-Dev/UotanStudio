@@ -58,6 +58,8 @@ internal static unsafe partial class VtNative
         finally { CFRelease(number); }
         return dictionary;
     }
+    [LibraryImport(Cf)] internal static partial byte CFEqual(nint left, nint right);
+    [LibraryImport(Cv)] internal static partial nint CVBufferCopyAttachment(nint buffer, nint key, nint mode);
     [LibraryImport(Cf)] internal static partial void CFRelease(nint value);
     [LibraryImport(Cf)] internal static partial nint CFDictionaryCreateMutable(nint allocator, nint capacity, nint keys, nint values);
     [LibraryImport(Cf)] internal static partial void CFDictionarySetValue(nint dictionary, nint key, nint value);

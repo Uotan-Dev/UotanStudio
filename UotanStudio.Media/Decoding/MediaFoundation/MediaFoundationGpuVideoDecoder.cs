@@ -5,32 +5,18 @@ using System.Runtime.Versioning;
 namespace UotanStudio.Media.Decoding.MediaFoundation;
 
 /// <summary>
-/// Hardware-accelerated H.264/H.265 decoder: an asynchronous D3D11-aware Media
-/// Foundation MFT decodes NV12 on the GPU, and the Microsoft video processor
-/// converts NV12 → BGRA before a staging readback into pooled CPU buffers.
-/// <para>硬件加速 H.264/H.265 解码器：异步 D3D11 感知的 Media Foundation MFT 在
-/// GPU 上解码出 NV12，微软视频处理器把 NV12 转为 BGRA，再经 staging 回读进
-/// 池化 CPU 缓冲区。</para>
+/// D3D11-aware H.264/H.265 decoding with GPU NV12-to-BGRA processing and pooled staging readback.
+/// Supports synchronous system transforms and asynchronous hardware transforms sharing one D3D11 device.
 /// </summary>
-/// <remarks>
-/// <para>
-/// The async MFT is driven through its <c>IMFMediaEventGenerator</c>
-/// (NeedInput / HaveOutput). A single D3D11 device is shared between the
-/// decoder and the video processor via <c>IMFDXGIDeviceManager</c>; the final
-/// BGRA pixels reach the callback with the same pooling contract as the CPU
-/// decoder, so consumers do not change. Any initialization failure falls back
-/// to <see cref="MediaFoundationVideoDecoder"/> at the factory.
-/// </para>
-/// <para>
-/// 异步 MFT 经其 <c>IMFMediaEventGenerator</c>（NeedInput / HaveOutput）驱动。
-/// 单一 D3D11 设备经 <c>IMFDXGIDeviceManager</c> 在解码器与视频处理器之间共享；
-/// 最终 BGRA 像素以与 CPU 解码器相同的池化契约到达回调，消费方无需改动。
-/// 初始化任何失败都会在工厂处回退到 <see cref="MediaFoundationVideoDecoder"/>。
-/// </para>
-/// </remarks>
+/// <remarks>Direct instances never fall back to CPU. The platform factory owns initialization fallback.</remarks>
 [SupportedOSPlatform("windows")]
 public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 {
+    private readonly VideoDecoderOptions _options;
+    /// <summary>Creates a D3D11 decoder using stream color metadata. 创建采用码流色彩信息的 D3D11 解码器。</summary>
+    public MediaFoundationGpuVideoDecoder() : this(new VideoDecoderOptions()) { }
+    /// <summary>Creates a D3D11 decoder with per-session color overrides. 创建带会话色彩设置的 D3D11 解码器。</summary>
+    public MediaFoundationGpuVideoDecoder(VideoDecoderOptions options) => _options = options ?? throw new ArgumentNullException(nameof(options));
     private static readonly object LifetimeLock = new();
     private static int _leases;
     private nint _transform;
@@ -47,13 +33,16 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private nint _stagingTexture;
     private nint _inputType;
     private Action<DecodedVideoFrame>? _callback;
+    private bool _inCallback;
     private int _width, _height;
     private int _ownerThread;
     private bool _comOwned, _mfOwned, _disposed;
     private long _sequence;
     private uint _outputFrameCounter;
-    private bool _waitingForInput;
-    private bool _waitingForOutput;
+    private bool _isAsync;
+    private int _inputRequests;
+    private bool _drainComplete;
+    private uint _inputColorSpace;
 
     /// <inheritdoc />
     public bool IsInitialized => _transform != 0;
@@ -66,7 +55,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         ArgumentNullException.ThrowIfNull(frameCallback);
         if (_ownerThread != 0) CheckThread();
         ReleaseAll();
-        AcquireLifetime();
+        if (!_mfOwned) AcquireLifetime();
         _callback = frameCallback;
         _sequence = 0;
         _outputFrameCounter = 0;
@@ -74,7 +63,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         {
             CreateD3D11Device();
             CreateDeviceManager();
-            CreateAsyncDecoder(codec, width, height);
+            CreateDecoder(codec, width, height);
         }
         catch
         {
@@ -96,7 +85,18 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         try
         {
             Check(MfCom.SetTime(sample, timestampTicks), "sample time");
-            PumpUntilInputAccepted(sample, timestampTicks);
+            if (_isAsync) PumpUntilInputAccepted(sample);
+            else
+            {
+                int hr = MfCom.Input(_transform, sample);
+                if (hr == MfInterop.MfENotAccepting)
+                {
+                    DrainSynchronousOutput();
+                    hr = MfCom.Input(_transform, sample);
+                }
+                Check(hr, "ProcessInput");
+                DrainSynchronousOutput();
+            }
         }
         finally { MfCom.Release(sample); }
     }
@@ -106,10 +106,12 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     {
         CheckReady();
         Check(MfCom.Message(_transform, MfInterop.MftMessageFlush), "flush");
+        if (_isAsync) DiscardPendingEvents();
         Check(MfCom.Message(_transform, MfInterop.MftMessageStartOfStream), "restart stream");
         _sequence = 0;
-        _waitingForInput = false;
-        _waitingForOutput = false;
+        _outputFrameCounter = 0;
+        _inputRequests = 0;
+        _drainComplete = false;
     }
 
     /// <inheritdoc />
@@ -117,8 +119,10 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     {
         CheckReady();
         Check(MfCom.Message(_transform, MfInterop.MftMessageNotifyEndOfStream), "end of stream");
+        _drainComplete = false;
         Check(MfCom.Message(_transform, MfInterop.MftMessageCommandDrain), "drain command");
-        PumpEvents(acceptOutput: true, blocking: false);
+        if (_isAsync) WaitForEventCondition(drain: true);
+        else DrainSynchronousOutput();
     }
 
     /// <inheritdoc />
@@ -215,22 +219,31 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         }
     }
 
-    private void CreateAsyncDecoder(VideoCodecId codec, int width, int height)
+    private void CreateDecoder(VideoCodecId codec, int width, int height)
     {
         Guid format = CodecGuid(codec);
         Guid inputSubtype = format;
         var registration = new MftRegisterTypeInfo(MfInterop.MediaTypeVideo, inputSubtype);
-        Check(MfInterop.MFTEnumEx(MfInterop.CategoryVideoDecoder, MfInterop.MftEnumFlagsAsyncHardware,
-            registration, 0, out nint activates, out uint count), "MFTEnumEx(async)");
+        Check(MfInterop.MFTEnumEx(MfInterop.CategoryVideoDecoder, MfInterop.MftEnumFlagsAsyncHardware | MfInterop.MftEnumFlags,
+            registration, 0, out nint activates, out uint count), "MFTEnumEx(D3D11 candidates)");
+        var failures = new List<string>();
         try
         {
             for (int i = 0; i < count; i++)
             {
                 nint activate = Marshal.ReadIntPtr(activates, checked(i * IntPtr.Size));
                 int hr = MfCom.Activate(activate, MfInterop.IidImfTransform, out nint transform);
-                if (hr < 0) { MfCom.Release(transform); continue; }
+                if (hr < 0) { failures.Add($"activate: 0x{hr:X8}"); MfCom.Release(transform); continue; }
                 _transform = transform;
-                if (TryConfigureDecoder(transform, codec, width, height)) break;
+                try
+                {
+                    if (TryConfigureDecoder(transform, codec, width, height)) break;
+                    failures.Add("unsupported capabilities or media type");
+                }
+                catch (Exception error) when (error is InvalidOperationException or NotSupportedException)
+                {
+                    failures.Add(error.Message);
+                }
                 ReleaseTransformOnly();
             }
         }
@@ -240,26 +253,27 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             Marshal.FreeCoTaskMem(activates);
         }
         if (_transform == 0)
-            throw new NotSupportedException($"No asynchronous hardware Media Foundation decoder accepts {codec}.");
+            throw new NotSupportedException($"No D3D11-aware Media Foundation decoder accepts {codec} ({width}x{height}; candidates={count}; {string.Join("; ", failures)}).");
         StartStreaming();
     }
 
     private bool TryConfigureDecoder(nint transform, VideoCodecId codec, int width, int height)
     {
-        // Verify the MFT is D3D11-aware and async before investing in it.
+        // Verify the MFT is D3D11-aware before investing in it.
         if (MfCom.GetAttributes(transform, out nint attributes) < 0 || attributes == 0) return false;
         try
         {
             if (MfCom.GetUInt32(attributes, MfInterop.SaD3D11Aware, out uint aware) < 0 || aware == 0) return false;
-            if (MfCom.GetUInt32(attributes, MfInterop.TransformAsync, out uint asyncFlag) < 0 || asyncFlag == 0) return false;
-            Check(MfCom.SetUInt32(attributes, MfInterop.TransformAsyncUnlock, 1), "unlock async MFT");
+            _isAsync = MfCom.GetUInt32(attributes, MfInterop.TransformAsync, out uint asyncFlag) >= 0 && asyncFlag != 0;
+            if (_isAsync) Check(MfCom.SetUInt32(attributes, MfInterop.TransformAsyncUnlock, 1), "unlock async MFT");
 
-            // Hand the D3D11 device to the decoder through MF_DECODER_D3D_MANAGER.
-            Check(MfCom.SetUnknown(attributes, MfInterop.DecoderD3DManager, _deviceManager), "set D3D manager");
+
         }
         finally { MfCom.Release(attributes); }
 
-        Check(MfCom.QueryInterface(transform, MfInterop.IidImfMediaEventGenerator, out _eventGenerator), "event generator");
+        Check(MfCom.Message(transform, 2 /* MFT_MESSAGE_SET_D3D_MANAGER */, _deviceManager), "set D3D manager");
+        if (_isAsync) Check(MfCom.QueryInterface(transform, MfInterop.IidImfMediaEventGenerator, out _eventGenerator), "event generator");
+        MediaFoundationVideoDecoder.ConfigureLowLatency(transform, codec);
 
         if (!BuildInputType(codec, width, height)) return false;
         if (!SelectOutputType()) return false;
@@ -274,7 +288,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         Check(MfCom.SetGuid(input, MfInterop.MtMajorType, MfInterop.MediaTypeVideo), "major type");
         Check(MfCom.SetGuid(input, MfInterop.MtSubtype, CodecGuid(codec)), "subtype");
         Check(MfCom.SetUInt64(input, MfInterop.MtFrameSize, ((ulong)(uint)width << 32) | (uint)height), "frame size");
-        if (MfCom.SetType(_transform, input, true) < 0) return false;
+        Check(MfCom.SetType(_transform, input, true), "input type");
         _width = width;
         _height = height;
         return true;
@@ -294,6 +308,12 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                 _width = checked((int)(size >> 32));
                 _height = checked((int)(size & uint.MaxValue));
                 VideoFrameLimits.ValidateDimensions(_width, _height);
+                // MF and D3D11 use different numeric values for nominal range.
+                _ = MfCom.GetUInt32(type, new Guid("c21b8ee5-b956-4071-8daf-325edf5cab11"), out uint range);
+                _ = MfCom.GetUInt32(type, new Guid("3e23d450-2c75-4d25-a00e-b91670d12327"), out uint matrix);
+                if (_options.ColorRange != VideoColorRange.Auto) range = _options.ColorRange == VideoColorRange.Full ? 1u : 2u;
+                if (_options.ColorMatrix != VideoColorMatrix.Auto) matrix = _options.ColorMatrix == VideoColorMatrix.Bt709 ? 1u : 2u;
+                _inputColorSpace = ((range == 1 ? 2u : 1u) << 4) | (matrix == 1 ? 4u : 0u);
                 return true;
             }
             finally { MfCom.Release(type); }
@@ -303,6 +323,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void BuildVideoProcessor()
     {
+        ReleaseVideoProcessor();
         var content = new D3D11VideoProcessorContentDesc
         {
             InputFrameFormat = D3D11Interop.VideoFrameFormatProgressive,
@@ -318,6 +339,10 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         };
         Check(MfCom.D3DCreateVideoProcessorEnumerator(_videoDevice, content, out _processorEnumerator), "CreateVideoProcessorEnumerator");
         Check(MfCom.D3DCreateVideoProcessor(_videoDevice, _processorEnumerator, 0, out _processor), "CreateVideoProcessor");
+        MfCom.D3DVideoProcessorSetStreamFrameFormat(_videoContext, _processor, 0, D3D11Interop.VideoFrameFormatProgressive);
+        MfCom.D3DVideoProcessorSetStreamAutoProcessingMode(_videoContext, _processor, 0, 0);
+        MfCom.D3DVideoProcessorSetStreamColorSpace(_videoContext, _processor, 0, D3D11VideoProcessorColorSpace.FromBits(_inputColorSpace));
+        MfCom.D3DVideoProcessorSetOutputColorSpace(_videoContext, _processor, D3D11VideoProcessorColorSpace.FromBits(2u << 4));
 
         var outputDesc = new D3D11Interop.Texture2DDesc
         {
@@ -335,7 +360,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         {
             ViewDimension = D3D11Interop.VpovDimensionTexture2D,
         };
-        Check(MfCom.D3DCreateVideoProcessorOutputView(_videoDevice, _outputTexture, outputViewDesc, out _outputView), "CreateVideoProcessorOutputView");
+        Check(MfCom.D3DCreateVideoProcessorOutputView(_videoDevice, _outputTexture, _processorEnumerator, outputViewDesc, out _outputView), "CreateVideoProcessorOutputView");
 
         var stagingDesc = outputDesc;
         stagingDesc.Usage = D3D11Interop.UsageStaging;
@@ -350,97 +375,100 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
         Check(MfCom.Message(_transform, MfInterop.MftMessageStartOfStream), "start of stream");
     }
 
-    /// <summary>
-    /// Feeds one sample, pumping the async event loop until the MFT accepts it,
-    /// then drains whatever output became available.
-    /// </summary>
-    private void PumpUntilInputAccepted(nint sample, long timestampTicks)
+    private void PumpUntilInputAccepted(nint sample)
     {
-        for (int round = 0; round < 256; round++)
-        {
-            if (!_waitingForInput && !_waitingForOutput)
-                PumpEvents(acceptOutput: true, blocking: false);
-
-            if (!_waitingForOutput)
-            {
-                int hr = MfCom.Input(_transform, sample);
-                if (hr >= 0) { DrainAvailableOutput(); return; }
-                if (hr == MfInterop.MfENotAccepting) { _waitingForInput = true; continue; }
-                Check(hr, "ProcessInput");
-            }
-
-            PumpEvents(acceptOutput: true, blocking: true);
-        }
-        throw new InvalidOperationException("Async decoder failed to accept input within bounded rounds.");
+        WaitForEventCondition(drain: false);
+        Check(MfCom.Input(_transform, sample), "ProcessInput");
+        _inputRequests--;
+        for (int i = 0; i < 4096; i++)
+            if (!PumpEvent()) return;
+        throw new InvalidOperationException("Decoder event queue exceeded the per-packet limit.");
     }
 
-    private void DrainAvailableOutput()
+    private void WaitForEventCondition(bool drain)
     {
-        while (_waitingForOutput)
+        long deadline = Environment.TickCount64 + 5000;
+        while (drain ? !_drainComplete : _inputRequests == 0)
         {
-            bool handled = PumpEvents(acceptOutput: true, blocking: false);
-            if (!handled && !_waitingForOutput) break;
+            if (Environment.TickCount64 >= deadline)
+                throw new TimeoutException("Hardware decoder event wait exceeded five seconds.");
+            if (!PumpEvent()) Thread.Sleep(1);
         }
     }
-
-    /// <summary>Pumps the event generator; returns true when any event was handled.</summary>
-    private bool PumpEvents(bool acceptOutput, bool blocking)
+    private void DiscardPendingEvents()
     {
-        bool handled = false;
-        while (true)
+        for (int i = 0; i < 4096; i++)
         {
-            int hr = MfCom.GetEvent(_eventGenerator, blocking ? 0u : 1u, out nint mediaEvent);
-            if (hr < 0)
-            {
-                MfCom.Release(mediaEvent);
-                if (hr == D3D11Interop.MfENoEventsAvailable) return handled;
-                Check(hr, "GetEvent");
-            }
-            try
-            {
-                uint type;
-                Check(MfCom.EventType(mediaEvent, out type), "event type");
-                switch (type)
-                {
-                    case D3D11Interop.MeTransformNeedInput:
-                        _waitingForInput = false;
-                        handled = true;
-                        break;
-                    case D3D11Interop.MeTransformHaveOutput:
-                        if (acceptOutput) { ProduceOutput(); handled = true; }
-                        else _waitingForOutput = true;
-                        break;
-                    default:
-                        handled = true;
-                        break;
-                }
-            }
-            finally { MfCom.Release(mediaEvent); }
-            if (!blocking) return handled;
+            int hr = MfCom.GetEvent(_eventGenerator, 1, out nint mediaEvent);
+            MfCom.Release(mediaEvent);
+            if (hr == D3D11Interop.MfENoEventsAvailable) return;
+            Check(hr, "discard flushed event");
         }
+        throw new InvalidOperationException("Decoder event queue did not empty after flush.");
     }
 
-    private void ProduceOutput()
+    // Never block GetEvent: a broken driver must not trap the owning decode thread forever.
+    private bool PumpEvent()
     {
-        var output = new MftOutputDataBuffer();
-        Check(MfCom.Output(_transform, ref output), "ProcessOutput(async)");
+        int hr = MfCom.GetEvent(_eventGenerator, 1, out nint mediaEvent);
         try
         {
-            if (output.Sample != 0) ConvertSample(output.Sample);
+            if (hr == D3D11Interop.MfENoEventsAvailable) return false;
+            Check(hr, "GetEvent");
+            Check(MfCom.EventType(mediaEvent, out uint type), "event type");
+            int status;
+            Check(((delegate* unmanaged[Stdcall]<nint, int*, int>)MfCom.PublicSlot(mediaEvent, 35))(mediaEvent, &status), "event status");
+            Check(status, "asynchronous event");
+            switch (type)
+            {
+                case D3D11Interop.MeTransformNeedInput: _inputRequests++; break;
+                case D3D11Interop.MeTransformHaveOutput: ProduceOutput(); break;
+                case D3D11Interop.MeTransformDrainComplete: _drainComplete = true; break;
+            }
+            return true;
         }
-        finally
+        finally { MfCom.Release(mediaEvent); }
+    }
+
+    private void DrainSynchronousOutput()
+    {
+        for (int i = 0; i < 4096; i++)
+            if (!ProduceOutput()) return;
+        throw new InvalidOperationException("Decoder output exceeded the per-packet frame limit.");
+    }
+
+    private bool ProduceOutput()
+    {
+        for (int attempt = 0; attempt < 8; attempt++)
         {
-            MfCom.Release(output.Events);
-            // Async MFTs provide their own samples (MFT_OUTPUT_STREAM_PROVIDES_SAMPLES),
-            // so output.Sample is always the MFT-owned instance here.
-            if (output.Sample != 0) MfCom.Release(output.Sample);
+            var output = new MftOutputDataBuffer();
+            int hr = MfCom.Output(_transform, ref output);
+            try
+            {
+                if (hr == MfInterop.MfETransformStreamChange)
+                {
+                    if (!SelectOutputType()) throw new NotSupportedException("Hardware decoder cannot renegotiate NV12 output.");
+                    BuildVideoProcessor();
+                    continue;
+                }
+                if (hr == MfInterop.MfETransformNeedMoreInput) return false;
+                Check(hr, "ProcessOutput");
+                if (output.Sample != 0) ConvertSample(output.Sample);
+                return true;
+            }
+            finally
+            {
+                MfCom.Release(output.Events);
+                MfCom.Release(output.Sample);
+            }
         }
+        throw new InvalidOperationException("Hardware decoder repeatedly changed output type.");
     }
 
     private void ConvertSample(nint sample)
     {
         Check(MfCom.GetTime(sample, out long timestamp), "sample time");
-        // The async hardware MFT hands back one DXGI-backed buffer per sample.
+        // The D3D11-aware MFT hands back one DXGI-backed buffer per sample.
         Check(MfCom.BufferCount(sample, out uint buffers), "GetBufferCount");
         if (buffers == 0) throw new InvalidDataException("Decoder produced a sample without buffers.");
         Check(MfCom.GetBufferByIndex(sample, 0, out nint buffer), "GetBufferByIndex");
@@ -450,10 +478,13 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             try
             {
                 Check(MfCom.DxgiGetResource(dxgiBuffer, D3D11Interop.IidTexture2D, out nint sourceTexture), "GetResource(Texture2D)");
-                Check(MfCom.DxgiSubresourceIndex(dxgiBuffer, out uint subresource), "GetSubresourceIndex");
-
-                BlitToOutput(sourceTexture, subresource);
-                ReadBack(timestamp);
+                try
+                {
+                    Check(MfCom.DxgiSubresourceIndex(dxgiBuffer, out uint subresource), "GetSubresourceIndex");
+                    BlitToOutput(sourceTexture, subresource);
+                    ReadBack(timestamp);
+                }
+                finally { MfCom.Release(sourceTexture); }
             }
             finally { MfCom.Release(dxgiBuffer); }
         }
@@ -467,7 +498,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             ViewDimension = D3D11Interop.VpivDimensionTexture2D,
             Texture2DArraySlice = subresource,
         };
-        Check(MfCom.D3DCreateVideoProcessorInputView(_videoDevice, sourceTexture, inputViewDesc, out nint inputView), "CreateVideoProcessorInputView");
+        Check(MfCom.D3DCreateVideoProcessorInputView(_videoDevice, sourceTexture, _processorEnumerator, inputViewDesc, out nint inputView), "CreateVideoProcessorInputView");
         try
         {
             var stream = new D3D11Interop.VideoProcessorStream
@@ -487,13 +518,14 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void ReadBack(long timestampTicks)
     {
+        MfCom.D3DCopySubresourceRegion(_context, _stagingTexture, 0, 0, 0, 0, _outputTexture, 0, 0);
         Check(MfCom.D3DMap(_context, _stagingTexture, 0, 1 /* D3D11_MAP_READ */, 0, out var mapped), "Map(staging)");
         try
         {
             int stride = checked((int)mapped.RowPitch);
             int rowBytes = checked(_width * 4);
             int required = checked(rowBytes * _height);
-            if (stride * _height < required) throw new InvalidDataException("Staging readback is truncated.");
+            if (stride < rowBytes) throw new InvalidDataException("Staging readback is truncated.");
             byte[] pooled = ArrayPool<byte>.Shared.Rent(required);
             fixed (byte* target = pooled.AsSpan(0, required))
             {
@@ -504,8 +536,13 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                         .CopyTo(destination.Slice(row * rowBytes, rowBytes));
                 }
             }
-            using var frame = new GpuDecodedVideoFrame(pooled, required, _width, _height, rowBytes, timestampTicks);
-            _callback!(frame);
+            using var frame = new GpuDecodedVideoFrame(pooled, required, _width, _height, rowBytes, timestampTicks)
+            {
+                ColorMatrix = (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,
+                ColorRange = (_inputColorSpace & 0x30) == 0x20 ? VideoColorRange.Full : VideoColorRange.Limited,
+            };
+            _inCallback = true;
+            try { _callback!(frame); } finally { _inCallback = false; }
         }
         finally { MfCom.D3DUnmap(_context, _stagingTexture, 0); }
     }
@@ -533,28 +570,33 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void ReleaseAll()
     {
         ReleaseTransformOnly();
+        ReleaseVideoProcessor();
+        _callback = null;
+        ReleaseD3D();
+        if (_deviceManager != 0) { MfCom.Release(_deviceManager); _deviceManager = 0; }
+        _inputRequests = 0;
+        _drainComplete = false;
+    }
+
+    private void ReleaseVideoProcessor()
+    {
         if (_stagingTexture != 0) { MfCom.Release(_stagingTexture); _stagingTexture = 0; }
         if (_outputView != 0) { MfCom.Release(_outputView); _outputView = 0; }
         if (_outputTexture != 0) { MfCom.Release(_outputTexture); _outputTexture = 0; }
         if (_processor != 0) { MfCom.Release(_processor); _processor = 0; }
         if (_processorEnumerator != 0) { MfCom.Release(_processorEnumerator); _processorEnumerator = 0; }
-        if (_inputType != 0) { MfCom.Release(_inputType); _inputType = 0; }
-        if (_eventGenerator != 0) { _eventGenerator = 0; } // Released with the transform (same object).
-        ReleaseD3D();
-        if (_deviceManager != 0) { MfCom.Release(_deviceManager); _deviceManager = 0; }
-        _waitingForInput = false;
-        _waitingForOutput = false;
     }
 
     private void ReleaseTransformOnly()
     {
+        if (_eventGenerator != 0) { MfCom.Release(_eventGenerator); _eventGenerator = 0; }
+        if (_inputType != 0) { MfCom.Release(_inputType); _inputType = 0; }
         if (_transform != 0)
         {
             _ = MfCom.Message(_transform, MfInterop.MftMessageFlush);
             MfCom.Release(_transform);
             _transform = 0;
         }
-        _callback = null;
     }
 
     private void ReleaseD3D()
@@ -567,6 +609,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void CheckThread()
     {
+        if (_inCallback) throw new InvalidOperationException("Decoder callbacks cannot reenter the decoder.");
         if (_ownerThread != Environment.CurrentManagedThreadId) throw new InvalidOperationException("The decoder must remain on its owning thread.");
     }
 
@@ -581,6 +624,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     {
         VideoCodecId.H264 => MfInterop.VideoFormatH264,
         VideoCodecId.H265 => MfInterop.VideoFormatHevc,
+        VideoCodecId.Av1 => new Guid("31305641-0000-0010-8000-00aa00389b71"),
         _ => throw new ArgumentOutOfRangeException(nameof(codec)),
     };
 

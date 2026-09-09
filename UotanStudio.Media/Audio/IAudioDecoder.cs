@@ -28,6 +28,10 @@ public sealed class DecodedAudioFrame : IDisposable
     {
         if (buffer is null) throw new ArgumentNullException(nameof(buffer));
         if (length < 0 || length > buffer.Length) throw new ArgumentOutOfRangeException(nameof(length));
+        AudioFormatLimits.Validate(channels, sampleRate, bitsPerSample);
+        if (sampleCount < 0 || length > AudioFormatLimits.MaximumPacketBytes
+            || (long)sampleCount * channels * (bitsPerSample / 8) != length)
+            throw new ArgumentException("PCM byte count does not match the sample layout.");
         _buffer = buffer;
         Length = length;
         SampleCount = sampleCount;
@@ -124,4 +128,6 @@ public interface IAudioDecoder : IDisposable
     /// <summary>Resets decoder state for a new stream; the decoder stays initialized.</summary>
     /// <summary>重置解码器状态以开始新码流；解码器保持已初始化。</summary>
     void Reset();
+    /// <summary>Delivers pending asynchronous PCM output. 提取待处理的异步 PCM 输出。</summary>
+    void Poll() { }
 }

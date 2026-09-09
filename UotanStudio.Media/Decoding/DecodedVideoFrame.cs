@@ -29,6 +29,10 @@ namespace UotanStudio.Media.Decoding;
 /// </remarks>
 public class DecodedVideoFrame : IDisposable
 {
+    /// <summary>Reported/effective YUV matrix, or Auto when unreported. 已报告或实际采用的色彩矩阵。</summary>
+    public VideoColorMatrix ColorMatrix { get; init; }
+    /// <summary>Reported/effective YUV range, or Auto when unreported. 已报告或实际采用的色彩范围。</summary>
+    public VideoColorRange ColorRange { get; init; }
     private byte[]? _buffer;
 
     /// <summary>Creates a frame that takes ownership of an existing pooled buffer.</summary>
