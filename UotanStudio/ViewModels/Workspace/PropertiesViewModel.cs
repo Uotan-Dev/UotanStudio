@@ -19,6 +19,8 @@ namespace UotanStudio.ViewModels.Workspace;
 /// </summary>
 internal partial class PropertiesViewModel : Tool
 {
+    /// <summary>Stable setting value with a localized label. 稳定设置值与本地化标签。</summary>
+    public sealed record PropertyChoice(string Value, string Label);
     /// <summary>
     /// <para>单个属性行视图模型，承载名称-值对。</para>
     /// Single property row view model, carrying a name-value pair.
@@ -48,12 +50,24 @@ internal partial class PropertiesViewModel : Tool
         /// Whether this row uses the text-encoding dropdown.
         /// </summary>
         public bool IsEncodingSelector { get; init; }
+        /// <summary>Choices for editable session settings. 会话设置下拉选项。</summary>
+        public IReadOnlyList<PropertyChoice> Choices { get; init; } = [];
+        /// <summary>Stable identifier for session setting controls. 会话设置控件稳定标识。</summary>
+        public string SettingKey { get; init; } = string.Empty;
+        /// <summary>Whether the row contains a session setting selector. 是否显示会话下拉框。</summary>
+        public bool IsChoiceSelector => Choices.Count > 0;
+        [ObservableProperty] private PropertyChoice? _selectedChoice;
+        internal Action<string>? ChoiceChanged { get; set; }
+        partial void OnSelectedChoiceChanged(PropertyChoice? value)
+        {
+            if (value is not null) ChoiceChanged?.Invoke(value.Value);
+        }
 
         /// <summary>
         /// <para>此行是否以纯文本显示属性值（非任何选择器行）。</para>
         /// Whether this row displays the value as plain text (not any selector row).
         /// </summary>
-        public bool IsPlainValue => !IsLanguageSelector && !IsEncodingSelector;
+        public bool IsPlainValue => !IsLanguageSelector && !IsEncodingSelector && !IsChoiceSelector;
 
         /// <summary>
         /// <para>创建属性行。</para>

@@ -13,6 +13,23 @@ namespace UotanStudio.Services;
 /// </summary>
 public class AppSettings
 {
+    /// <summary>Copies settings with independently editable collections.<para>复制设置，隔离可编辑集合。</para></summary>
+    internal AppSettings Copy()
+    {
+        var copy = (AppSettings)MemberwiseClone();
+        copy.RecentProjects = [.. RecentProjects];
+        copy.McpServers = McpServers.Select(server => new McpServerConfig
+        {
+            Name = server.Name,
+            Transport = server.Transport,
+            Command = server.Command,
+            Arguments = server.Arguments,
+            Url = server.Url,
+            Enabled = server.Enabled
+        }).ToList();
+        return copy;
+    }
+
     /// <summary>
     /// <para>获取或设置当前语言的文化名称（如 "en-US"、"zh-CN"）。空字符串表示跟随系统。</para>
     /// Gets or sets the culture name of the current language (e.g., "en-US", "zh-CN"). Empty string means follow system.
@@ -178,6 +195,20 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("screenMirrorAudioEnabled")]
     public bool ScreenMirrorAudioEnabled { get; set; }
+    /// <summary>Video decoder backend. 视频解码后端。</summary>
+    public UotanStudio.Media.Decoding.VideoDecoderBackend ScreenMirrorDecoderBackend { get; set; }
+    /// <summary>Source color matrix override. 源色彩矩阵覆盖。</summary>
+    public UotanStudio.Media.Decoding.VideoColorMatrix ScreenMirrorColorMatrix { get; set; }
+    /// <summary>Source color range override. 源色彩范围覆盖。</summary>
+    public UotanStudio.Media.Decoding.VideoColorRange ScreenMirrorColorRange { get; set; }
+    /// <summary>Audio codec. 音频编码格式。</summary>
+    public string ScreenMirrorAudioCodec { get; set; } = "aac";
+    /// <summary>Audio decoder backend. 音频解码后端。</summary>
+    public UotanStudio.Media.Audio.AudioDecoderBackend ScreenMirrorAudioBackend { get; set; }
+    /// <summary>Playback volume. 播放音量。</summary>
+    public float ScreenMirrorVolume { get; set; } = 1;
+    /// <summary>Enable remote input. 是否允许远程输入。</summary>
+    public bool ScreenMirrorControl { get; set; } = true;
 }
 
 /// <summary>

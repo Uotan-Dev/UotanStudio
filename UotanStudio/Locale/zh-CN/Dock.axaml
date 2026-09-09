@@ -313,4 +313,26 @@
     <x:String x:Key="MirrorProperty_Unlimited">不限制</x:String>
     <x:String x:Key="MirrorProperty_ConversionValue">BT.601 有限范围 → BGRA（CPU）</x:String>
     <x:String x:Key="MirrorProperty_EncoderValue">Android 自动选择；未报告名称</x:String>
+  <x:String x:Key="MirrorSetting_Apply">应用并重新连接</x:String>
+  <x:String x:Key="MirrorSetting_ApplyHint">修改后重新连接生效。可用后端取决于系统、驱动和已安装插件；设备端编码格式也需要设备支持。</x:String>
+  <x:String x:Key="MirrorSetting_AudioBackend">音频解码后端</x:String>
+  <x:String x:Key="MirrorSetting_AudioCodec">音频编码</x:String>
+  <x:String x:Key="MirrorSetting_Auto">自动</x:String>
+  <x:String x:Key="MirrorSetting_Backend">视频解码后端</x:String>
+  <x:String x:Key="MirrorSetting_BitRate">视频码率</x:String>
+  <x:String x:Key="MirrorSetting_Control">允许远程控制</x:String>
+  <x:String x:Key="MirrorSetting_Full">全范围（0–255）</x:String>
+  <x:String x:Key="MirrorSetting_Limited">有限范围（16–235）</x:String>
+  <x:String x:Key="MirrorSetting_Matrix">色彩矩阵</x:String>
+  <x:String x:Key="MirrorSetting_MaxFps">帧率上限</x:String>
+  <x:String x:Key="MirrorSetting_MaxSize">最长边上限</x:String>
+  <x:String x:Key="MirrorSetting_Native">系统原生</x:String>
+  <x:String x:Key="MirrorSetting_Off">关闭</x:String>
+  <x:String x:Key="MirrorSetting_On">开启</x:String>
+  <x:String x:Key="MirrorSetting_Original">原始尺寸</x:String>
+  <x:String x:Key="MirrorSetting_Range">色彩范围</x:String>
+  <x:String x:Key="MirrorSetting_Unlimited">不限</x:String>
+  <x:String x:Key="MirrorSetting_VideoCodec">目标视频编码</x:String>
+  <x:String x:Key="MirrorSetting_Volume">播放音量</x:String>
+    <x:String x:Key="MirrorProperty_AudioUnavailable">设备未提供音频</x:String>
 </ResourceDictionary>

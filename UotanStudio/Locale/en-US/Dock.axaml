@@ -313,4 +313,26 @@
     <x:String x:Key="MirrorProperty_Unlimited">Unlimited</x:String>
     <x:String x:Key="MirrorProperty_ConversionValue">BT.601 limited range → BGRA (CPU)</x:String>
     <x:String x:Key="MirrorProperty_EncoderValue">Selected by Android; name not reported</x:String>
+  <x:String x:Key="MirrorSetting_Apply">Apply and reconnect</x:String>
+  <x:String x:Key="MirrorSetting_ApplyHint">Reconnect to apply changes. Backend availability depends on the system, drivers and installed plugins. The device must support the selected encoding format.</x:String>
+  <x:String x:Key="MirrorSetting_AudioBackend">Audio decoder</x:String>
+  <x:String x:Key="MirrorSetting_AudioCodec">Audio codec</x:String>
+  <x:String x:Key="MirrorSetting_Auto">Automatic</x:String>
+  <x:String x:Key="MirrorSetting_Backend">Video decoder</x:String>
+  <x:String x:Key="MirrorSetting_BitRate">Video bitrate</x:String>
+  <x:String x:Key="MirrorSetting_Control">Remote control</x:String>
+  <x:String x:Key="MirrorSetting_Full">Full (0–255)</x:String>
+  <x:String x:Key="MirrorSetting_Limited">Limited (16–235)</x:String>
+  <x:String x:Key="MirrorSetting_Matrix">Color matrix</x:String>
+  <x:String x:Key="MirrorSetting_MaxFps">Frame rate limit</x:String>
+  <x:String x:Key="MirrorSetting_MaxSize">Maximum edge</x:String>
+  <x:String x:Key="MirrorSetting_Native">System native</x:String>
+  <x:String x:Key="MirrorSetting_Off">Off</x:String>
+  <x:String x:Key="MirrorSetting_On">On</x:String>
+  <x:String x:Key="MirrorSetting_Original">Original size</x:String>
+  <x:String x:Key="MirrorSetting_Range">Color range</x:String>
+  <x:String x:Key="MirrorSetting_Unlimited">Unlimited</x:String>
+  <x:String x:Key="MirrorSetting_VideoCodec">Target video codec</x:String>
+  <x:String x:Key="MirrorSetting_Volume">Playback volume</x:String>
+    <x:String x:Key="MirrorProperty_AudioUnavailable">Audio unavailable from device</x:String>
 </ResourceDictionary>

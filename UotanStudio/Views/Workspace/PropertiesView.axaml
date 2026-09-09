@@ -7,7 +7,7 @@
     mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
     x:Class="UotanStudio.Views.Workspace.PropertiesView"
     x:DataType="viewmodels:PropertiesViewModel">
-  <Grid>
+  <Grid RowDefinitions="*,Auto">
     <!-- 无选择占位 -->
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8"
                 IsVisible="{Binding !HasSelection}">
@@ -53,6 +53,17 @@
           <DataGridTemplateColumn.CellTemplate>
             <DataTemplate x:DataType="viewmodels:PropertiesViewModel+PropertyRow">
               <Grid>
+                <ComboBox IsVisible="{Binding IsChoiceSelector}" ItemsSource="{Binding Choices}"
+                          AutomationProperties.AutomationId="{Binding SettingKey}"
+                          SelectedItem="{Binding SelectedChoice, Mode=TwoWay}" Classes="Small"
+                          FontSize="12" HorizontalAlignment="Stretch" MinWidth="0" MinHeight="0"
+                          Padding="6,0" BorderThickness="0" CornerRadius="0" Background="Transparent">
+                  <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="viewmodels:PropertiesViewModel+PropertyChoice">
+                      <TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                    </DataTemplate>
+                  </ComboBox.ItemTemplate>
+                </ComboBox>
                 <Border Padding="6,3" Background="Transparent" IsVisible="{Binding IsPlainValue}">
                   <ToolTip.Tip>
                     <ToolTip MaxWidth="680">
@@ -104,5 +115,10 @@
         </DataGridTemplateColumn>
       </DataGrid.Columns>
     </DataGrid>
+    <StackPanel Grid.Row="1" IsVisible="{Binding IsMirrorSelected}" Margin="8" Spacing="6">
+      <TextBlock Text="{DynamicResource MirrorSetting_ApplyHint}" FontSize="11" TextWrapping="Wrap" Opacity="0.7" />
+      <Button Name="ApplyMirrorSettingsButton" Content="{DynamicResource MirrorSetting_Apply}" Command="{Binding ActiveMirror.ApplyMirrorSettingsCommand, FallbackValue={x:Null}}"
+              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" />
+    </StackPanel>
   </Grid>
 </UserControl>

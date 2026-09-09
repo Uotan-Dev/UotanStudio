@@ -89,6 +89,7 @@ public partial class ScreenMirrorViewModel : Document
     internal ScrcpyVideoMetadata? StreamMetadata => _client?.VideoMetadata;
     internal Comm.Protocols.Scrcpy.ScrcpyAudioMetadata? StreamMetadataAudio => _client?.AudioMetadata;
     internal bool IsStopped => _disposed;
+    internal bool AudioDisabledByServer => _client?.AudioDisabledByServer == true;
 
     [ObservableProperty]
     private string _statusText = string.Empty;
@@ -108,8 +109,10 @@ public partial class ScreenMirrorViewModel : Document
     {
         if (_disposed || _client is not null || Interlocked.CompareExchange(ref _starting, 1, 0) != 0) return;
 
+        _serial = serial;
+        ApplyMirrorSettingsCommand.NotifyCanExecuteChanged();
         StatusText = GetLocalizedString("ScreenMirror_Preparing");
-        Task.Run(() =>
+        _startTask = Task.Run(() =>
         {
             try
             {
@@ -182,6 +185,7 @@ public partial class ScreenMirrorViewModel : Document
         var client = _client ?? throw new InvalidOperationException("Missing scrcpy client.");
         // Drain server output during streaming so logging cannot block the remote process.
         var shell = _shellStream;
+        var serverOutput = new System.Text.StringBuilder();
         _ = Task.Run(() =>
         {
             if (shell is null) return;
@@ -195,13 +199,32 @@ public partial class ScreenMirrorViewModel : Document
                     catch (TimeoutException) { continue; }
                     catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut }) { continue; }
                     if (count == 0) break;
-                    UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Debug,
-                        "ScreenMirror", System.Text.Encoding.UTF8.GetString(buffer, 0, count));
+                    string text = System.Text.Encoding.UTF8.GetString(buffer, 0, count);
+                    lock (serverOutput)
+                    {
+                        serverOutput.Append(text);
+                        if (serverOutput.Length > 4096) serverOutput.Remove(0, serverOutput.Length - 4096);
+                    }
+                    UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Debug, "ScreenMirror", text);
                 }
             }
             catch (Exception) { /* Closing the owned shell cancels the reader. */ }
         });
-        ConnectWithRetry(client);
+        try { ConnectWithRetry(client); }
+        catch (Exception error)
+        {
+            string detail;
+            lock (serverOutput) detail = serverOutput.ToString().Trim();
+            if (detail.Length > 0)
+            {
+                string summary = string.Join("\n", detail.Split('\n')
+                    .Where(line => line.Contains("ERROR:", StringComparison.Ordinal) && !line.Contains("Exception on thread", StringComparison.Ordinal)
+                        || line.TrimStart().StartsWith("--video-", StringComparison.Ordinal))
+                    .Take(6));
+                throw new IOException(summary.Length > 0 ? summary : error.Message, error);
+            }
+            throw;
+        }
         if (_disposed) { client.Dispose(); shell?.Dispose(); return; }
 
         DeviceName = client.DeviceName;
@@ -230,112 +253,6 @@ public partial class ScreenMirrorViewModel : Document
             };
             _audioThread.Start();
         }
-    }
-
-    private void AudioLoop(ScrcpyClient client, CancellationToken token)
-    {
-        var metadata = client.AudioMetadata;
-        bool aac = metadata?.CodecName == "AAC";
-        IAudioDecoder? decoder = null;
-        IAudioSink? sink = null;
-        try
-        {
-            if (aac)
-            {
-                decoder = CreateAudioDecoder();
-                if (decoder is not null)
-                {
-                    long decodedFrames = 0;
-                    decoder.Initialize([], frame =>
-                    {
-                        Interlocked.Increment(ref _audioDecodedFrames);
-                        if (_disposed) { frame.Dispose(); return; }
-                        Interlocked.Exchange(ref _audioSampleRate, frame.SampleRate);
-                        Interlocked.Exchange(ref _audioChannels, frame.Channels);
-                        // The sink opens lazily on the first decoded format; later
-                        // frames must match or they are dropped until reset.
-                        // 播放端按首个解码格式惰性打开；后续帧格式不符时丢弃。
-                        if (sink is null)
-                        {
-                            try
-                            {
-                                sink = AudioSinkFactory.Create();
-                                sink.Open(frame.Channels, frame.SampleRate, frame.BitsPerSample);
-                                sink.Volume = 1f;
-                                AudioSinkOpened?.Invoke(this, EventArgs.Empty);
-                            }
-                            catch (Exception exception)
-                            {
-                                UotanStudio.Services.LogService.Instance.Write(
-                                    UotanStudio.Services.LogLevel.Warn, "ScreenMirror",
-                                    $"Audio sink unavailable: {exception.Message}");
-                                sink?.Dispose();
-                                sink = null;
-                            }
-                        }
-                        if (sink is not null && sink.IsOpen
-                            && sink.Channels == frame.Channels && sink.SampleRate == frame.SampleRate)
-                        {
-                            sink.Write(frame.Span);
-                            Interlocked.Increment(ref decodedFrames);
-                        }
-                        frame.Dispose();
-                    });
-                }
-                else
-                {
-                    UotanStudio.Services.LogService.Instance.Write(
-                        UotanStudio.Services.LogLevel.Warn, "ScreenMirror", "No AAC audio decoder on this platform.");
-                }
-            }
-            else if (metadata is not null)
-            {
-                UotanStudio.Services.LogService.Instance.Write(
-                    UotanStudio.Services.LogLevel.Info, "ScreenMirror",
-                    $"Audio codec {metadata.CodecName} is not decoded; draining only.");
-            }
-
-            while (!token.IsCancellationRequested)
-            {
-                var frame = client.ReadAudioFrame(1000);
-                if (frame is null) continue;
-                if (decoder is null) continue;
-                if (frame.IsCodecConfig)
-                {
-                    decoder.Reset();
-                    decoder.Initialize(frame.Data, static _ => { });
-                    continue;
-                }
-                decoder.Decode(frame.Data, frame.PresentationTimestampMicroseconds);
-            }
-        }
-        catch (Exception exception) when (!token.IsCancellationRequested)
-        {
-            UotanStudio.Services.LogService.Instance.Write(
-                UotanStudio.Services.LogLevel.Error, "ScreenMirror", $"Audio read failed: {exception.Message}");
-        }
-        catch (Exception) when (token.IsCancellationRequested) { }
-        finally
-        {
-            sink?.Dispose();
-            decoder?.Dispose();
-        }
-    }
-
-    private static IAudioDecoder? CreateAudioDecoder()
-    {
-        try
-        {
-            if (OperatingSystem.IsWindows()) return new UotanStudio.Media.Audio.MediaFoundationAacDecoder();
-            if (OperatingSystem.IsMacOS()) return new UotanStudio.Media.Audio.AudioToolboxAacDecoder();
-        }
-        catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException or PlatformNotSupportedException)
-        {
-            UotanStudio.Services.LogService.Instance.Write(
-                UotanStudio.Services.LogLevel.Warn, "ScreenMirror", $"Audio decoder unavailable: {exception.Message}");
-            return null;
-        }
-        return null;
     }
 
     /// <summary>
@@ -505,25 +422,24 @@ public partial class ScreenMirrorViewModel : Document
         try
         {
             var metadata = client.VideoMetadata ?? throw new InvalidDataException("Missing scrcpy video metadata.");
-            var codec = metadata.CodecName.ToUpperInvariant() switch
+            var codec = metadata.CodecName.TrimEnd('\0', ' ').ToUpperInvariant() switch
             {
                 "H264" => VideoCodecId.H264,
                 "H265" or "HEVC" => VideoCodecId.H265,
+                "AV1" or "AV01" => VideoCodecId.Av1,
                 _ => throw new NotSupportedException($"Unsupported video codec '{metadata.CodecName}'."),
             };
-            using var decoder = VideoDecoderFactory.Create();
+            using var decoder = VideoDecoderFactory.Create(codec, ActiveDecoderOptions);
             decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
-            _decoderBackend = decoder switch
-            {
-                MediaFoundationGpuVideoDecoder => OperatingSystem.IsWindows() ? "Media Foundation (GPU)" : "Media Foundation (GPU)",
-                MediaFoundationVideoDecoder => "Media Foundation (CPU)",
-                _ => "VideoToolbox (hardware)",
-            };
+            _decoderBackend = VideoDecoderFactory.GetBackendName(decoder);
+            if (VideoDecoderFactory.GetFallbackReason(decoder) is { } reason)
+                UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Warn,
+                    "ScreenMirror", $"GPU initialization failed; using CPU: {reason}");
             byte[]? configuration = null;
             while (!token.IsCancellationRequested)
             {
                 ScrcpyVideoFrame? packet = client.ReadFrame(1000);
-                if (packet is null) continue;
+                if (packet is null) { decoder.Poll(); continue; }
                 Interlocked.Add(ref _receivedBytes, packet.Data.Length);
                 if (packet.IsCodecConfig)
                 {
@@ -574,14 +490,18 @@ public partial class ScreenMirrorViewModel : Document
         // 在此按紧凑行距转换。
         if (frame is GpuDecodedVideoFrame bgraFrame)
         {
-            PublishBgra(bgraFrame.Buffer, bgraFrame.Length, bgraFrame.Width, bgraFrame.Height, bgraFrame.Stride);
+            // Decoder owns its pooled buffer until this callback returns. The UI queue needs its own copy.
+            byte[] pixels = ArrayPool<byte>.Shared.Rent(bgraFrame.Length);
+            bgraFrame.Span.CopyTo(pixels);
+            PublishBgra(pixels, bgraFrame.Length, bgraFrame.Width, bgraFrame.Height, bgraFrame.Stride);
             return;
         }
         int bgraSize = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
         byte[]? bgra = ArrayPool<byte>.Shared.Rent(bgraSize);
         try
         {
-            Nv12ToBgraConverter.Convert(in frame, bgra.AsSpan(0, bgraSize));
+            Nv12ToBgraConverter.Convert(frame.Span, frame.Width, frame.Height, frame.Stride, bgra.AsSpan(0, bgraSize),
+                matrix: _activeSettings.ScreenMirrorColorMatrix == VideoColorMatrix.Auto ? frame.ColorMatrix : _activeSettings.ScreenMirrorColorMatrix, range: _activeSettings.ScreenMirrorColorRange == VideoColorRange.Auto ? frame.ColorRange : _activeSettings.ScreenMirrorColorRange);
             PublishBgra(bgra, bgraSize, frame.Width, frame.Height, frame.Width * 4);
             bgra = null; // Ownership passes to the bounded, latest-frame slot.
         }
@@ -592,7 +512,7 @@ public partial class ScreenMirrorViewModel : Document
     {
         lock (_frameLock)
         {
-            if (_disposed) return;
+            if (_disposed) { ArrayPool<byte>.Shared.Return(pixels); return; }
             if (_pendingFrame is { } previous) ArrayPool<byte>.Shared.Return(previous.Pixels);
             _pendingFrame = new(pixels, length, width, height, stride);
             if (!_renderScheduled)
@@ -656,23 +576,19 @@ public partial class ScreenMirrorViewModel : Document
 
     /// <summary>Builds server options from the persisted app settings.</summary>
     /// <summary>按持久化应用设置构建服务端选项。</summary>
-    private static ScrcpyServerOptions CreateOptionsFromSettings()
+    private ScrcpyServerOptions CreateOptionsFromSettings()
     {
-        var settings = UotanStudio.Services.SettingsPersistenceService.Instance.LoadSettings();
-        // The server encoder must match the host decoder, so capability probing
-        // happens before launch: H.265 falls back to H.264 when no HEVC decoder exists.
-        // 服务端编码格式必须与主机解码器一致，因此在启动前探测能力：
-        // 无 HEVC 解码能力时 H.265 回退为 H.264。
-        string codec = settings.ScreenMirrorVideoCodec == "h265"
-            && !UotanStudio.Media.Decoding.VideoDecoderFactory.IsSupported(UotanStudio.Media.Decoding.VideoCodecId.H265)
-            ? "h264" : settings.ScreenMirrorVideoCodec;
+        _activeSettings = PendingSettings.Copy();
+        var settings = _activeSettings;
         return new ScrcpyServerOptions
         {
             VideoBitRate = settings.ScreenMirrorBitRate,
             MaxFps = settings.ScreenMirrorMaxFps,
             MaxSize = settings.ScreenMirrorMaxSize,
-            VideoCodec = codec,
+            VideoCodec = settings.ScreenMirrorVideoCodec,
             Audio = settings.ScreenMirrorAudioEnabled,
+            AudioCodec = settings.ScreenMirrorAudioCodec,
+            Control = settings.ScreenMirrorControl,
         };
     }
 }
