@@ -21,8 +21,18 @@ public sealed class HdcReadOnlyDeviceTests
         using var client = new HdcServerClient();
         var targets = await Task.Run(() => client.ListTargets(), ct);
         Assert.Contains(key, targets);
-        var device = new DetectedDevice { Key = "hdc:" + key, Serial = key, Protocol = DeviceProtocolKind.Hdc,
-            Transport = DeviceTransportKind.Tcp, State = "device" };
+        var details = await Task.Run(() => client.ListTargetDetails(), ct);
+        var target = Assert.Single(details, target => target.ConnectKey == key);
+        var officialDetails = await HdcCommandClient.RunAsync(executable, ["list", "targets", "-v"], ct);
+        Assert.Contains(target, HdcTargetInfo.Parse(officialDetails));
+        var device = new DetectedDevice
+        {
+            Key = "hdc:" + key,
+            Serial = key,
+            Protocol = DeviceProtocolKind.Hdc,
+            Transport = DeviceTransportKind.Tcp,
+            State = "device"
+        };
         var service = new HdcDeviceService(executable);
         foreach (var property in new[] { "const.product.model", "const.ohos.fullname", "const.ohos.apiversion" })
         {
@@ -65,8 +75,14 @@ public sealed class HdcReadOnlyDeviceTests
         if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(executable))
             Assert.Skip("Read-only HDC hardware check is opt-in.");
         var ct = TestContext.Current.CancellationToken;
-        var device = new DetectedDevice { Key = "hdc:" + key, Serial = key, Protocol = DeviceProtocolKind.Hdc,
-            Transport = DeviceTransportKind.Tcp, State = "device" };
+        var device = new DetectedDevice
+        {
+            Key = "hdc:" + key,
+            Serial = key,
+            Protocol = DeviceProtocolKind.Hdc,
+            Transport = DeviceTransportKind.Tcp,
+            State = "device"
+        };
         var service = new HdcDeviceService(executable);
         // A regular, public system file; local destination deliberately includes spaces.
         const string remote = "/system/bin/toybox";

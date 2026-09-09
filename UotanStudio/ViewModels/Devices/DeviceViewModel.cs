@@ -1671,7 +1671,7 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
         DeviceTransportKind.Tcp => "Network",
         DeviceTransportKind.Serial => "Serial",
         DeviceTransportKind.Usb => "USB",
-        _ => throw new ArgumentOutOfRangeException(nameof(Device.Transport), Device.Transport, "Unexpected transport kind."),
+        _ => "Unknown",
     };
 
     /// <summary>设备型号（ro.product.model 或 fastboot product）。 Device model.</summary>
@@ -1700,7 +1700,7 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
             Device.Key.StartsWith("tcp:", StringComparison.OrdinalIgnoreCase) ? Device.Key[4..] : Device.Key,
         DeviceTransportKind.Serial => Device.Key,
         DeviceTransportKind.Usb => "USB",
-        _ => throw new ArgumentOutOfRangeException(nameof(Device.Transport), Device.Transport, "Unexpected transport kind."),
+        _ => "Unknown",
     };
 
     /// <summary>厂商/产品 USB ID（十六进制 VID:PID）。 Vendor/product USB ID.</summary>

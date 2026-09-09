@@ -16,6 +16,8 @@ namespace UotanStudio.Services.Devices;
 /// </summary>
 public enum DeviceTransportKind
 {
+    /// <summary>Transport not recognized by this client.</summary>
+    Unknown = -1,
     /// <summary>USB 直连。 Direct USB.</summary>
     Usb,
     /// <summary>网络（adb server / TCP）。 Network (adb server / TCP).</summary>
@@ -260,6 +262,7 @@ public sealed class DeviceMonitorService : IDisposable
         }
 
         var devices = ScanCore();
+        HdcDirectSessionPool.Retain(devices);
         _cachedScan = devices;
         return devices;
     }
@@ -332,6 +335,13 @@ public sealed class DeviceMonitorService : IDisposable
 
             // adb server 报告的 USB 序列号(与设备路径中的实例号一致)优先于
             // VID:PID 回退;adb server 未运行时(列表为空)保持原有回退行为。
+            // While we own an exclusive USB handle, discovery may only recover its path.
+            // Reuse identity only for that exact still-present path, never by VID/PID.
+            if (protocol == DeviceProtocolKind.Hdc && HdcDirectSessionPool.FindOwnedDevice(info.DevicePath) is { } owned)
+            {
+                if (!devices.Any(d => d.Key == owned.Key)) devices.Add(owned);
+                continue;
+            }
             var serial = info.SerialNumber;
             if (string.IsNullOrEmpty(serial) &&
                 protocol == DeviceProtocolKind.Adb &&
@@ -365,6 +375,11 @@ public sealed class DeviceMonitorService : IDisposable
                 }
             }
 
+            // Ignore duplicate Windows interface aliases without usable endpoint descriptors.
+            if (protocol == DeviceProtocolKind.Hdc && !info.Interfaces.Any(i => i.Class == 0xff && i.SubClass == 0x50 && i.Protocol == 1 && i.Endpoints.Count >= 2))
+                continue;
+            if (protocol == DeviceProtocolKind.Hdc && !string.IsNullOrEmpty(serial) && devices.Any(d => d.Protocol == DeviceProtocolKind.Hdc && d.Serial == serial))
+                continue;
             devices.Add(new DetectedDevice
             {
                 Key = info.DeviceKey,
@@ -389,35 +404,34 @@ public sealed class DeviceMonitorService : IDisposable
 
         // hdc server 通道（系统内存在 hdc server 时，作为 client 列举其管理的全部目标，
         // 与 adb server 网络设备合并方式一致）。USB 直连枚举命中同一物理设备时以
-        // SerialNumber 去重：server 在前时丢弃 USB 条目（接口由 server 独占持有）。
-        // hdc-server channel (when a local hdc server exists, enumerate its targets as a
-        // client, mirroring the adb-server network-device merge). Dedupe against the
-        // USB-direct entry for the same physical device by serial: when the server entry
-        // wins, drop the USB entry (the server exclusively holds the interface).
+        // The host server owns HDC target identity and physical transport metadata.
         var hdcServer = ProbeHdcServer();
         if (hdcServer is not null)
         {
             try
             {
-                foreach (var connectKey in hdcServer.ListTargets())
+                var targets = hdcServer.ListTargetDetails();
+                // Host targets are authoritative: raw USB descriptors may have no serial
+                // and cannot be addressed through the server. Never guess by VID/PID.
+                devices.RemoveAll(d => d.Protocol == DeviceProtocolKind.Hdc);
+                foreach (var target in targets)
                 {
-                    if (string.IsNullOrWhiteSpace(connectKey))
-                    {
-                        continue;
-                    }
-
-                    devices.RemoveAll(d => d.Protocol == DeviceProtocolKind.Hdc &&
-                        string.Equals(d.Serial, connectKey, StringComparison.OrdinalIgnoreCase));
                     devices.Add(new DetectedDevice
                     {
-                        Key = "hdc:" + connectKey,
-                        Serial = connectKey,
+                        Key = "hdc:" + target.ConnectKey,
+                        Serial = target.ConnectKey,
                         Protocol = DeviceProtocolKind.Hdc,
-                        Transport = DeviceTransportKind.Tcp,
-                        State = "device",
+                        Transport = target.Transport switch
+                        {
+                            "USB" => DeviceTransportKind.Usb,
+                            "TCP" => DeviceTransportKind.Tcp,
+                            "UART" => DeviceTransportKind.Serial,
+                            _ => DeviceTransportKind.Unknown,
+                        },
+                        State = target.State.Equals("Connected", StringComparison.OrdinalIgnoreCase)
+                            ? "device" : target.State.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase)
+                                ? "unauthorized" : "offline",
                     });
-                    LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-                        $"hdc server channel device: {connectKey}");
                 }
             }
             catch
@@ -537,7 +551,9 @@ public sealed class DeviceMonitorService : IDisposable
         if (device.Protocol != DeviceProtocolKind.Hdc) return null;
         // A host channel is required even for USB targets managed by the official server.
         // Do not feed host frames into the legacy direct-device session transport.
-        return ProbeHdcServer()?.CreateSession(device.Serial);
+        return device.Key.StartsWith("hdc:", StringComparison.Ordinal)
+            ? ProbeHdcServer()?.CreateSession(device.Serial)
+            : HdcDirectSessionPool.Acquire(device);
     }
 
     /// <summary>
@@ -800,8 +816,15 @@ public sealed class DeviceMonitorService : IDisposable
             var decoder = new AdbLogcatLineDecoder(line => onEntry(AdbLogcatEntry.Parse(line)));
             try
             {
-                await hdc.ExecuteStreamingAsync(device.Serial, "shell hilog -v year",
-                    bytes => decoder.Feed(bytes), cancellationToken).ConfigureAwait(false);
+                if (device.Key.StartsWith("hdc:", StringComparison.Ordinal))
+                    await hdc.ExecuteStreamingAsync(device.Serial, "shell hilog -v year",
+                        bytes => decoder.Feed(bytes), cancellationToken).ConfigureAwait(false);
+                else
+                    await Task.Run(() =>
+                    {
+                        using var session = HdcDirectSessionPool.Acquire(device);
+                        session.CreateShellClient("hilog -v year").ExecuteStreaming(bytes => decoder.Feed(bytes), null, cancellationToken);
+                    }, cancellationToken).ConfigureAwait(false);
             }
             finally { if (!cancellationToken.IsCancellationRequested) decoder.Feed([], flush: true); }
             return;
@@ -1043,6 +1066,7 @@ public sealed class DeviceMonitorService : IDisposable
             _hdcMonitorLifetime?.Cancel();
             _hdcMonitorLifetime?.Dispose();
             _hdcMonitorLifetime = null;
+            HdcDirectSessionPool.Clear();
             _cachedHdcClient?.Dispose();
             _cachedHdcClient = null;
             _started = false;

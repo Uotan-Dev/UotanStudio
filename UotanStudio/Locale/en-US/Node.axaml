@@ -151,4 +151,7 @@
     <x:String x:Key="Node_Hdc_Reverse">HDC Reverse</x:String>
     <x:String x:Key="Node_Hdc_ListForwards">HDC ListForwards</x:String>
     <x:String x:Key="Node_Hdc_Remount">HDC Remount</x:String>
+    <x:String x:Key="Node_Hdc_RemoveForward">HDC Remove Forward</x:String>
+    <x:String x:Key="Node_Hdc_RemoveReverse">HDC Remove Reverse</x:String>
+    <x:String x:Key="Node_Hdc_ListDebugProcesses">HDC Debug Processes</x:String>
 </ResourceDictionary>
