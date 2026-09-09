@@ -16,13 +16,63 @@ namespace UotanStudio.ViewModels.Workspace;
 /// <c>images/</c> and <c>intermediate/</c> folders, rebuilding on project open/close via the
 /// project-context-changed message.
 /// </summary>
-internal class ProjectExplorerViewModel : Tool
+internal partial class ProjectExplorerViewModel : Tool, IDisposable
 {
     /// <summary>
-    /// <para>树根节点集合，UI 绑定此项；未打开工程时为空白树。</para>
-    /// Collection of root tree nodes, bound by the UI; empty when no project is open.
+    /// <para>树根节点集合，包含工程根和通过文件菜单打开的普通文件夹。</para>
+    /// Root nodes for the project and a folder opened from the File menu.
     /// </summary>
     public AvaloniaList<ExplorerNode> TreeViewContent { get; } = [];
+
+    [ObservableProperty] private ExplorerNode? _selectedNode;
+    private ExplorerNode? _openedFolder;
+    private FileSystemWatcher? _folderWatcher;
+    private bool _disposed;
+
+    internal string? CreationDirectory => SelectedNode is { IsPlaceholder: false } node
+        ? node.IsDirectory ? node.Path : Path.GetDirectoryName(node.Path)
+        : _openedFolder?.Path ?? ProjectContextService.Instance.RootDirectory;
+
+    internal void OpenFolder(string directory)
+    {
+        directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        if (!Directory.Exists(directory)) throw new DirectoryNotFoundException(directory);
+        var existing = TreeViewContent.FirstOrDefault(node => string.Equals(node.Path, directory,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
+        if (existing is not null)
+        {
+            existing.EnsureChildrenLoaded();
+            existing.IsExpanded = true;
+            SelectedNode = existing;
+            return;
+        }
+
+        _folderWatcher?.Dispose();
+        _folderWatcher = null;
+        if (_openedFolder is not null) TreeViewContent.Remove(_openedFolder);
+        _openedFolder = new ExplorerNode(directory, isDirectory: true);
+        _openedFolder.EnsureChildrenLoaded();
+        _openedFolder.IsExpanded = true;
+        TreeViewContent.Add(_openedFolder);
+        SelectedNode = _openedFolder;
+        try
+        {
+            _folderWatcher = new FileSystemWatcher(directory)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
+            };
+            _folderWatcher.Created += OnFileSystemChanged;
+            _folderWatcher.Deleted += OnFileSystemChanged;
+            _folderWatcher.Renamed += OnFileSystemChanged;
+            _folderWatcher.EnableRaisingEvents = true;
+        }
+        catch (Exception)
+        {
+            _folderWatcher?.Dispose();
+            _folderWatcher = null;
+        }
+    }
 
     /// <summary>
     /// <para>监听工程 <c>images/</c> 与 <c>intermediate/</c> 目录的文件系统变更，
@@ -88,7 +138,7 @@ internal class ProjectExplorerViewModel : Tool
             if (TreeViewContent.FirstOrDefault() is { } existing
                 && string.Equals(existing.Path, svc.RootDirectory, OperatingSystem.IsWindows()
                     ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
-                && TreeViewContent.LastOrDefault()?.AssociatedProjectPath == svc.NodeProjectPath)
+                && TreeViewContent.LastOrDefault(node => !ReferenceEquals(node, _openedFolder))?.AssociatedProjectPath == svc.NodeProjectPath)
             {
                 ApplyFileSystemChanges();
                 return;
@@ -120,8 +170,29 @@ internal class ProjectExplorerViewModel : Tool
                 TreeViewContent.Add(nodeProject);
             }
         }
-        else TreeViewContent.Clear();
+        else
+        {
+            if (_openedFolder is not null && TreeViewContent.Count == 1 && ReferenceEquals(TreeViewContent[0], _openedFolder))
+            {
+                ApplyFileSystemChanges();
+                RestartWatcher(svc);
+                return;
+            }
+            TreeViewContent.Clear();
+        }
+        if (_openedFolder is not null && !TreeViewContent.Any(node => string.Equals(node.Path, _openedFolder.Path,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            TreeViewContent.Add(_openedFolder);
+        if (SelectedNode is not null && !TreeViewContent.Any(root => IsUnderRoot(SelectedNode.Path, root.Path)))
+            SelectedNode = null;
         RestartWatcher(svc);
+    }
+
+    private static bool IsUnderRoot(string path, string root)
+    {
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return string.Equals(path, root, comparison)
+            || path.StartsWith(Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar, comparison);
     }
 
     private void AddRoot(string? directory, bool isProjectFolder = false)
@@ -180,7 +251,9 @@ internal class ProjectExplorerViewModel : Tool
     {
         // 防抖：重置计时器，批量事件合并为一次刷新。
         // Debounce: reset the timer so a burst of events becomes a single refresh.
-        _fsDebounceTimer.Change(400, Timeout.Infinite);
+        if (_disposed) return;
+        try { _fsDebounceTimer.Change(400, Timeout.Infinite); }
+        catch (ObjectDisposedException) { }
     }
 
     /// <summary>
@@ -190,10 +263,21 @@ internal class ProjectExplorerViewModel : Tool
     /// </summary>
     private void ApplyFileSystemChanges()
     {
+        if (_disposed) return;
         foreach (var root in TreeViewContent)
         {
             root.RefreshDescendants();
         }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _watcher?.Dispose();
+        _folderWatcher?.Dispose();
+        _fsDebounceTimer.Dispose();
+        WeakReferenceMessenger.Default.UnregisterAll(this);
+        GC.SuppressFinalize(this);
     }
 }
 
@@ -203,6 +287,9 @@ internal class ProjectExplorerViewModel : Tool
 /// </summary>
 public sealed partial class ExplorerNode : ObservableObject
 {
+    /// <summary>目录展开状态。 Whether the directory is expanded.</summary>
+    [ObservableProperty] private bool _isExpanded;
+
     /// <summary>
     /// <para>资源管理器右键「以文本打开」菜单项的本地化标题。</para>
     /// Localized title of the "open as text" context-menu item in the explorer.

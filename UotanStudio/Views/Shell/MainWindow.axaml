@@ -16,6 +16,14 @@
    MinWidth="720"
    ExtendClientAreaToDecorationsHint="True"
    ExtendClientAreaTitleBarHeightHint="32">
+	<Window.Resources>
+		<ControlTheme x:Key="DeviceSelectorItemTheme" TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
+			<Setter Property="Header" Value="{Binding DisplayName, x:DataType=devices:DeviceInfo}" />
+			<Setter Property="ToggleType" Value="CheckBox" />
+			<Setter Property="IsChecked" Value="{Binding IsSelected, x:DataType=devices:DeviceInfo, Mode=OneWay}" />
+			<Setter Property="Command" Value="{Binding SelectCommand, x:DataType=devices:DeviceInfo}" />
+		</ControlTheme>
+	</Window.Resources>
 	<Window.KeyBindings>
 		<KeyBinding Gesture="Ctrl+S" Command="{Binding MenuVM.SaveCommand}" />
 		<KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding MenuVM.SaveAsCommand}" />
@@ -37,6 +45,17 @@
 							<avalonia:MaterialIcon Kind="FolderPlus" Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
+					<MenuItem Header="{DynamicResource Explorer_NewFolder}" Command="{Binding MenuVM.NewFolderCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="FolderPlusOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Explorer_NewFile}" Command="{Binding MenuVM.NewFileCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="FilePlusOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+						</MenuItem>
+					<Separator />
 					<MenuItem Header="{DynamicResource Menu_OpenProject}" Command="{Binding MenuVM.OpenProjectCommand}">
 						<MenuItem.Icon>
 							<avalonia:MaterialIcon Kind="FolderOpen" Width="16" Height="16" />
@@ -56,6 +75,16 @@
 								<Setter Property="Command" Value="{Binding OpenCommand, x:DataType=vm:RecentProjectEntry}" />
 							</ControlTheme>
 						</MenuItem.ItemContainerTheme>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_OpenFolder}" Command="{Binding MenuVM.OpenFolderCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
+					</MenuItem>
+					<MenuItem Header="{DynamicResource Menu_OpenFile}" Command="{Binding MenuVM.OpenFileCommand}">
+						<MenuItem.Icon>
+							<avalonia:MaterialIcon Kind="FileDocumentOutline" Width="16" Height="16" />
+						</MenuItem.Icon>
 					</MenuItem>
 					<Separator />
 					<MenuItem Header="{DynamicResource Menu_Save}" Command="{Binding MenuVM.SaveCommand}" InputGesture="Ctrl+S">
@@ -313,23 +342,7 @@
 					<!-- 空态：未检测到设备时显示禁用占位项。 -->
 					<MenuItem Header="{DynamicResource Device_NoDevices}" IsEnabled="False"
 							  IsVisible="{Binding DeviceVM.HasDevices, Converter={x:Static BoolConverters.Not}}" />
-					<!-- 真实设备列表：绑定 DeviceViewModel 单例，点选同步 SelectedDevice（与设备面板共享选择状态）。 -->
-					<MenuItem Header="{DynamicResource Device_Select}" ItemsSource="{Binding DeviceVM.Devices}"
-							  IsVisible="{Binding DeviceVM.HasDevices}">
-						<MenuItem.Icon>
-							<avalonia:MaterialIcon Kind="Cellphone" Width="16" Height="16" />
-						</MenuItem.Icon>
-						<!-- 注意：不能用 ItemTemplate 嵌套 MenuItem（会容器套容器且外层无 Command 被禁用），
-						     须用 ItemContainerTheme 直接给生成的 MenuItem 容器设置 Header/Command/选中打勾。 -->
-						<MenuItem.ItemContainerTheme>
-							<ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}">
-								<Setter Property="Header" Value="{Binding DisplayName, x:DataType=devices:DeviceInfo}" />
-								<Setter Property="ToggleType" Value="CheckBox" />
-								<Setter Property="IsChecked" Value="{Binding IsSelected, x:DataType=devices:DeviceInfo, Mode=OneWay}" />
-								<Setter Property="Command" Value="{Binding SelectCommand, x:DataType=devices:DeviceInfo}" />
-							</ControlTheme>
-						</MenuItem.ItemContainerTheme>
-					</MenuItem>
+					<!-- 设备项由代码后置直接插入此处，与底部入口同级。 -->
 					<Separator />
 					<MenuItem x:Name="DeviceSelectorManagerItem" Header="{DynamicResource Menu_DeviceManager}"
 							  Command="{Binding MenuVM.OpenDeviceCommand}">

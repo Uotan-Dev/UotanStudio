@@ -14,6 +14,7 @@ using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Editors;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Shell;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -182,33 +183,109 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     // ===== 文件 / File =====
 
     /// <summary>
-    /// <para>创建一个新解决方案，弹出文件保存对话框选择 <c>.uotan</c> 路径，打开解决方案上下文后清空画布、
-    /// 镜像清单与历史，并写入空的固件项目、节点项目与解决方案文件。</para>
-    /// Creates a new solution by showing a file-save dialog to pick the <c>.uotan</c> path, opening the
-    /// solution context, clearing the canvas, image list and history, then writing empty firmware project,
-    /// node project and solution files.
+    /// <para>打开新建项目配置窗口；当前仅提供表单与文件选择，不创建或切换工程。</para>
+    /// Opens the new project form without creating or switching projects.
     /// </summary>
     [RelayCommand]
     private async Task NewProjectAsync()
     {
-        var path = await PickProjectFileAsync(isSave: true);
-        if (path == null)
-        {
-            return;
-        }
-
-        await CreateNewSolutionAsync(path);
+        if (DialogService.GetOwnerWindow() is { } owner)
+            await new NewProjectWindow().ShowDialog(owner);
     }
 
-    /// <summary>
-    /// <para>在指定路径创建并持久化一个空解决方案（固件项目 + 节点项目 + 状态目录）。</para>
-    /// Creates and persists an empty solution (firmware project + node project + state directory) at the
-    /// specified path.
-    /// </summary>
-    private async Task CreateNewSolutionAsync(string path)
+    /// <summary><para>在资源管理器选定目录中新建文件夹。</para>Creates a folder in the explorer directory.</summary>
+    [RelayCommand]
+    private Task NewFolderAsync() => CreateExplorerItemAsync(isDirectory: true);
+
+    /// <summary><para>在资源管理器选定目录中新建文件。</para>Creates a file in the explorer directory.</summary>
+    [RelayCommand]
+    private Task NewFileAsync() => CreateExplorerItemAsync(isDirectory: false);
+
+    private async Task CreateExplorerItemAsync(bool isDirectory)
     {
-        await _projectOps.CreateNewSolutionAsync(path);
-        RecordRecentProject(path);
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null || WorkspaceVM?.ProjectExplorer is not { } explorer) return;
+        try
+        {
+            var directory = explorer.CreationDirectory;
+            var pickedDirectory = string.IsNullOrEmpty(directory) || !Directory.Exists(directory);
+            if (pickedDirectory) directory = await PickFolderAsync(owner, "Menu_SelectCreationDirectory");
+            if (directory is null) return;
+            var path = await ExplorerItemCreationService.CreateAsync(owner, directory, isDirectory);
+            if (path is null) return;
+            if (pickedDirectory) explorer.OpenFolder(directory);
+            explorer.Refresh();
+            WorkspacePanelService.Instance.Show(WorkspacePanelService.ProjectExplorer);
+            GoToWorkspace();
+            if (!isDirectory) await WorkspaceVM.OpenDocumentAsync(path, EditorOpenMode.Text);
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString(
+                isDirectory ? "Dialog_NewFolderFailed" : "Dialog_NewFileFailed"), ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary><para>选择普通文件夹并在资源管理器中浏览。</para>Browses a selected folder in the explorer.</summary>
+    [RelayCommand]
+    private async Task OpenFolderAsync()
+    {
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null || WorkspaceVM?.ProjectExplorer is not { } explorer) return;
+        try
+        {
+            var directory = await PickFolderAsync(owner, "Menu_OpenFolder");
+            if (directory is null) return;
+            explorer.OpenFolder(directory);
+            WorkspacePanelService.Instance.Show(WorkspacePanelService.ProjectExplorer);
+            GoToWorkspace();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary><para>选择文件并使用现有编辑器打开。</para>Opens selected files in the existing editors.</summary>
+    [RelayCommand]
+    private async Task OpenFileAsync()
+    {
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null || WorkspaceVM is null || !owner.StorageProvider.CanOpen) return;
+        try
+        {
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = LanguageService.Instance.GetString("Menu_OpenFile"),
+                AllowMultiple = true,
+                FileTypeFilter = [FilePickerFileTypes.All]
+            });
+            foreach (var file in files)
+            {
+                if (file.TryGetLocalPath() is { } path)
+                {
+                    GoToWorkspace();
+                    await WorkspaceVM.OpenDocumentAsync(path);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_OpenFailed"),
+                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+    }
+
+    private static async Task<string?> PickFolderAsync(Window owner, string titleKey)
+    {
+        if (!owner.StorageProvider.CanPickFolder) return null;
+        var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = LanguageService.Instance.GetString(titleKey),
+            AllowMultiple = false
+        });
+        return folders.FirstOrDefault()?.TryGetLocalPath();
     }
 
     /// <summary>

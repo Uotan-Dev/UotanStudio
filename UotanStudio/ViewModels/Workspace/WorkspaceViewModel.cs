@@ -26,6 +26,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     private bool _subscribedDocumentDock;
     private CompareViewModel? _compareDocument;
     private ScreenMirrorViewModel? _screenMirrorDocument;
+    internal ProjectExplorerViewModel? ProjectExplorer => (_factory as WorkspaceDockFactory)?.ProjectExplorer;
 
     /// <summary>
     /// <para>获取或设置 Dock 根布局。</para>
@@ -953,6 +954,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void Dispose()
     {
+        ProjectExplorer?.Dispose();
         if (_factory is WorkspaceDockFactory workspaceFactory) workspaceFactory.DisposeTerminal();
         if (_documentDock is not null)
         {

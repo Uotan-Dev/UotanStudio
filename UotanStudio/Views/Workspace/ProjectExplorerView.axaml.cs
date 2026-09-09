@@ -297,28 +297,16 @@ public partial class ProjectExplorerView : UserControl
     {
         if (ProjectTree.SelectedItem is not ExplorerNode node || !node.IsDirectory || node.IsPlaceholder) return;
         var owner = GetOwnerWindow(); if (owner is null) return;
-        var name = await DialogService.InputAsync(owner, LanguageService.Instance.GetString("Dialog_NewFile"));
-        if (string.IsNullOrWhiteSpace(name)) return;
-        try { using var file = new FileStream(Path.Combine(node.Path, name), FileMode.CreateNew, FileAccess.Write); }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Explorer", $"Create file failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_NewFileFailed"), ex.Message, MessageBoxIcon.Error);
-        }
+        if (await ExplorerItemCreationService.CreateAsync(owner, node.Path, isDirectory: false) is not null)
+            node.RefreshChildren();
     }
 
     private async void OnNewFolder(object? sender, RoutedEventArgs e)
     {
         if (ProjectTree.SelectedItem is not ExplorerNode node || !node.IsDirectory || node.IsPlaceholder) return;
         var owner = GetOwnerWindow(); if (owner is null) return;
-        var name = await DialogService.InputAsync(owner, LanguageService.Instance.GetString("Dialog_NewFolder"));
-        if (string.IsNullOrWhiteSpace(name)) return;
-        try { Directory.CreateDirectory(Path.Combine(node.Path, name)); }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "Explorer", $"Create folder failed: {ex.Message}");
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_NewFolderFailed"), ex.Message, MessageBoxIcon.Error);
-        }
+        if (await ExplorerItemCreationService.CreateAsync(owner, node.Path, isDirectory: true) is not null)
+            node.RefreshChildren();
     }
 
     private async void OnPaste(object? sender, RoutedEventArgs e)

@@ -96,6 +96,8 @@
     <x:String x:Key="Dialog_ConfirmDeleteMessage">Permanently delete '{0}'? This cannot be undone.</x:String>
     <x:String x:Key="Dialog_NewFile">New File</x:String>
     <x:String x:Key="Dialog_NewFolder">New Folder</x:String>
+    <x:String x:Key="Explorer_InvalidItemName">Enter a valid name without a path or invalid characters.</x:String>
+    <x:String x:Key="Explorer_ItemAlreadyExists">“{0}” already exists. Choose another name.</x:String>
     <x:String x:Key="Dialog_SelectFile">Select file</x:String>
 
     <!-- File view -->

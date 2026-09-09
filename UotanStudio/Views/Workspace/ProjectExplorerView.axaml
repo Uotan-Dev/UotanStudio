@@ -6,10 +6,12 @@
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="UotanStudio.Views.Workspace.ProjectExplorerView"
              x:DataType="viewmodels:ProjectExplorerViewModel">
-    <TreeView x:Name="ProjectTree" Margin="0 5 0 0" ItemsSource="{Binding TreeViewContent}">
+    <TreeView x:Name="ProjectTree" Margin="0 5 0 0" ItemsSource="{Binding TreeViewContent}"
+              SelectedItem="{Binding SelectedNode, Mode=TwoWay}">
         <TreeView.ItemContainerTheme>
             <ControlTheme TargetType="TreeViewItem"
                           BasedOn="{StaticResource {x:Type TreeViewItem}}">
+                <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay, x:DataType=viewmodels:ExplorerNode}" />
                 <Setter Property="ContextMenu">
                     <ContextMenu x:DataType="viewmodels:ExplorerNode">
                         <!-- 文件节点右键菜单：打开方式 -->

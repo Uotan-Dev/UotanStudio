@@ -20,6 +20,7 @@ public class WorkspaceDockFactory : Factory
 {
     private readonly AiSettingsViewModel _aiSettings;
     private ProjectExplorerViewModel? _projectExplorer;
+    internal ProjectExplorerViewModel? ProjectExplorer => _projectExplorer;
     private PropertiesViewModel? _properties;
     private TerminalDockService? _terminals;
     private readonly HashSet<IDockable> _closingDocuments = [];
@@ -37,6 +38,7 @@ public class WorkspaceDockFactory : Factory
         projectSetting.Title = LanguageService.Instance.GetString("Dock_ProjectSetting");
         projectSetting.CanClose = true;
 
+        _projectExplorer?.Dispose();
         var projectExplorer = _projectExplorer = new ProjectExplorerViewModel
         {
             Id = "ProjectExplorer",

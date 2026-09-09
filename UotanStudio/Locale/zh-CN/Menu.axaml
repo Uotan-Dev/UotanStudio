@@ -11,7 +11,28 @@
 
     <!-- 文件菜单 -->
     <x:String x:Key="Menu_NewProject">新建项目</x:String>
+    <x:String x:Key="NewProject_Name">项目名称</x:String>
+    <x:String x:Key="NewProject_NamePlaceholder">输入项目名称</x:String>
+    <x:String x:Key="NewProject_Location">项目位置</x:String>
+    <x:String x:Key="NewProject_AddImages">添加ROM或镜像</x:String>
+    <x:String x:Key="NewProject_ImagesPlaceholder">支持多选IMG或选择ZIP、Super.img、Payload.bin 等格式文件</x:String>
+    <x:String x:Key="NewProject_UnpackImages">解包为镜像</x:String>
+    <x:String x:Key="NewProject_UnpackFully">完全解包</x:String>
+    <x:String x:Key="NewProject_ImageName">镜像名称</x:String>
+    <x:String x:Key="NewProject_ImageFormat">镜像格式</x:String>
+    <x:String x:Key="NewProject_Create">创建</x:String>
+    <x:String x:Key="NewProject_NameRequired">请输入项目名称</x:String>
+    <x:String x:Key="NewProject_LocationRequired">请选择或输入项目位置</x:String>
+    <x:String x:Key="NewProject_BrowseLocation">选择项目位置</x:String>
+    <x:String x:Key="NewProject_BrowseImages">选择ROM或镜像文件</x:String>
+    <x:String x:Key="NewProject_ClearImages">清除已选文件</x:String>
+    <x:String x:Key="NewProject_ImageFiles">ROM与镜像文件</x:String>
+    <x:String x:Key="NewProject_PickerFailed">无法选择文件或目录</x:String>
     <x:String x:Key="Menu_OpenProject">打开项目...</x:String>
+    <x:String x:Key="Menu_OpenFolder">打开文件夹...</x:String>
+    <x:String x:Key="Menu_OpenFile">打开文件...</x:String>
+    <x:String x:Key="Menu_SelectCreationDirectory">选择新建位置</x:String>
+    <x:String x:Key="Menu_OpenFailed">打开失败</x:String>
     <x:String x:Key="Menu_OpenRecent">最近打开</x:String>
     <x:String x:Key="Menu_Save">保存</x:String>
     <x:String x:Key="Menu_SaveAs">另存为...</x:String>

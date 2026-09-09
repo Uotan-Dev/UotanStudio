@@ -11,7 +11,28 @@
 
     <!-- File menu -->
     <x:String x:Key="Menu_NewProject">New Project</x:String>
+    <x:String x:Key="NewProject_Name">Project name</x:String>
+    <x:String x:Key="NewProject_NamePlaceholder">Enter a project name</x:String>
+    <x:String x:Key="NewProject_Location">Project location</x:String>
+    <x:String x:Key="NewProject_AddImages">Add ROM or images</x:String>
+    <x:String x:Key="NewProject_ImagesPlaceholder">Select multiple IMG files, or ZIP, Super.img, Payload.bin and other formats</x:String>
+    <x:String x:Key="NewProject_UnpackImages">Unpack to images</x:String>
+    <x:String x:Key="NewProject_UnpackFully">Fully unpack</x:String>
+    <x:String x:Key="NewProject_ImageName">Image name</x:String>
+    <x:String x:Key="NewProject_ImageFormat">Image format</x:String>
+    <x:String x:Key="NewProject_Create">Create</x:String>
+    <x:String x:Key="NewProject_NameRequired">Enter a project name</x:String>
+    <x:String x:Key="NewProject_LocationRequired">Select or enter a project location</x:String>
+    <x:String x:Key="NewProject_BrowseLocation">Select project location</x:String>
+    <x:String x:Key="NewProject_BrowseImages">Select ROM or image files</x:String>
+    <x:String x:Key="NewProject_ClearImages">Clear selected files</x:String>
+    <x:String x:Key="NewProject_ImageFiles">ROM and image files</x:String>
+    <x:String x:Key="NewProject_PickerFailed">Unable to select files or folder</x:String>
     <x:String x:Key="Menu_OpenProject">Open Project...</x:String>
+    <x:String x:Key="Menu_OpenFolder">Open Folder...</x:String>
+    <x:String x:Key="Menu_OpenFile">Open File...</x:String>
+    <x:String x:Key="Menu_SelectCreationDirectory">Select where to create the item</x:String>
+    <x:String x:Key="Menu_OpenFailed">Unable to open</x:String>
     <x:String x:Key="Menu_OpenRecent">Open Recent</x:String>
     <x:String x:Key="Menu_Save">Save</x:String>
     <x:String x:Key="Menu_SaveAs">Save As...</x:String>

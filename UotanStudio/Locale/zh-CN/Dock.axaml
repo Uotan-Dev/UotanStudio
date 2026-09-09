@@ -82,6 +82,8 @@
     <x:String x:Key="Dialog_ConfirmDeleteMessage">确定要永久删除「{0}」吗？此操作无法撤销。</x:String>
     <x:String x:Key="Dialog_NewFile">新建文件</x:String>
     <x:String x:Key="Dialog_NewFolder">新建文件夹</x:String>
+    <x:String x:Key="Explorer_InvalidItemName">请输入有效的名称，不要包含路径或特殊字符。</x:String>
+    <x:String x:Key="Explorer_ItemAlreadyExists">“{0}”已存在，请使用其他名称。</x:String>
     <x:String x:Key="Dialog_SelectFile">选择文件</x:String>
 
     <!-- 文件视图 -->

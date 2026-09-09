@@ -1,0 +1,188 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="using:UotanStudio.Views.Shell"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        x:Class="UotanStudio.Views.Shell.NewProjectWindow"
+        Title="{DynamicResource Menu_NewProject}"
+        Width="900" Height="680" MinWidth="780" MinHeight="600"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        CanMinimize="False" CanMaximize="False"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+    <Window.Resources>
+        <DataTemplate x:Key="ImageEntryTemplate" x:DataType="local:NewProjectImageEntry">
+            <Grid Height="28" Margin="8,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="24" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageName" />
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageFormat" />
+                </Grid.ColumnDefinitions>
+                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" MinWidth="0" MinHeight="0"
+                          Padding="0" VerticalAlignment="Center" AutomationProperties.Name="{Binding Name}" />
+                <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" MaxWidth="150" Margin="0,0,8,0"
+                           HorizontalAlignment="Left" ToolTip.Tip="{Binding FilePath}" />
+                <TextBlock Grid.Column="2" Text="{Binding Format}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" MaxWidth="160" HorizontalAlignment="Left" ToolTip.Tip="{Binding Format}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </Grid>
+        </DataTemplate>
+    </Window.Resources>
+    <Window.Styles>
+        <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
+            <Setter Property="IsVisible" Value="False" />
+            <Setter Property="IsEnabled" Value="False" />
+        </Style>
+        <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+            <Setter Property="Background">
+                <ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" />
+            </Setter>
+        </Style>
+        <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+            <Setter Property="Margin" Value="40,0,48,0" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style Selector="TextBlock.field-label">
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style Selector="TextBox.project-field">
+            <Setter Property="Height" Value="36" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.field-error">
+            <Setter Property="Foreground" Value="{DynamicResource SemiColorDanger}" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Margin" Value="0,4,0,0" />
+        </Style>
+        <Style Selector="Button.browse">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="36" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="ListBox.image-list > ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="28" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="ListBox.image-list > ListBoxItem:selected">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+    </Window.Styles>
+    <Grid RowDefinitions="*,Auto" Margin="0,32,0,0">
+        <Grid RowDefinitions="Auto,*" Margin="24,24,24,20" RowSpacing="16">
+            <StackPanel Spacing="20">
+                <StackPanel>
+                    <TextBlock Classes="field-label" Text="{DynamicResource NewProject_Name}" />
+                    <TextBox Name="ProjectNameBox" Classes="project-field"
+                             PlaceholderText="{DynamicResource NewProject_NamePlaceholder}"
+                             AutomationProperties.Name="{DynamicResource NewProject_Name}" />
+                    <TextBlock Name="ProjectNameError" Classes="field-error" IsVisible="False"
+                               Text="{DynamicResource NewProject_NameRequired}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Classes="field-label" Text="{DynamicResource NewProject_Location}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBox Name="ProjectLocationBox" Classes="project-field"
+                                 AutomationProperties.Name="{DynamicResource NewProject_Location}" />
+                        <Button Grid.Column="1" Classes="browse" Click="OnBrowseLocationClick"
+                                ToolTip.Tip="{DynamicResource NewProject_BrowseLocation}"
+                                AutomationProperties.Name="{DynamicResource NewProject_BrowseLocation}">
+                            <icons:MaterialIcon Kind="FolderOpenOutline" Width="18" Height="18" />
+                        </Button>
+                    </Grid>
+                    <TextBlock Name="ProjectLocationError" Classes="field-error" IsVisible="False"
+                               Text="{DynamicResource NewProject_LocationRequired}" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Classes="field-label" Text="{DynamicResource NewProject_AddImages}" />
+                    <Grid Name="ImagePicker" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <TextBox Name="ImagePathsBox" Classes="project-field" IsReadOnly="True"
+                                 PlaceholderText="{DynamicResource NewProject_ImagesPlaceholder}"
+                                 AutomationProperties.Name="{DynamicResource NewProject_AddImages}">
+                            <TextBox.InnerRightContent>
+                                <Button Name="ClearImagesButton" IsVisible="False" Classes="Small" Padding="4"
+                                        Click="OnClearImagesClick" ToolTip.Tip="{DynamicResource NewProject_ClearImages}"
+                                        AutomationProperties.Name="{DynamicResource NewProject_ClearImages}">
+                                    <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                </Button>
+                            </TextBox.InnerRightContent>
+                        </TextBox>
+                        <Button Grid.Column="1" Classes="browse" Click="OnBrowseImagesClick"
+                                ToolTip.Tip="{DynamicResource NewProject_BrowseImages}"
+                                AutomationProperties.Name="{DynamicResource NewProject_BrowseImages}">
+                            <icons:MaterialIcon Kind="FileMultipleOutline" Width="18" Height="18" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="24" Margin="0,12,0,0">
+                        <CheckBox Name="SelectAllBox" Content="{DynamicResource Menu_SelectAll}" IsChecked="True" />
+                        <CheckBox Name="UnpackImagesBox" Content="{DynamicResource NewProject_UnpackImages}" IsChecked="True" />
+                        <CheckBox Name="UnpackFullyBox" Content="{DynamicResource NewProject_UnpackFully}" IsChecked="True" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+            <Border Name="ImageListPanel" Grid.Row="1" IsVisible="False" CornerRadius="6"
+                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ClipToBounds="True">
+                <Grid RowDefinitions="Auto,*" Grid.IsSharedSizeScope="True">
+                    <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+                            Background="{DynamicResource PageBackground}">
+                        <Grid ColumnDefinitions="Auto,Auto" Height="28" HorizontalAlignment="Left">
+                            <Grid Margin="8,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageName" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageFormat" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="1" Text="{DynamicResource NewProject_ImageName}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{DynamicResource NewProject_ImageFormat}" VerticalAlignment="Center" />
+                            </Grid>
+                            <Grid Grid.Column="1" Margin="9,0,8,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageName" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageFormat" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="1" Text="{DynamicResource NewProject_ImageName}" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="2" Text="{DynamicResource NewProject_ImageFormat}" VerticalAlignment="Center" />
+                            </Grid>
+                        </Grid>
+                    </Border>
+                    <ListBox Name="ImageList" Grid.Row="1" Classes="image-list" Background="Transparent"
+                             BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemsPanel>
+                            <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+                        </ListBox.ItemsPanel>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate x:DataType="local:NewProjectImageRow">
+                                <Grid ColumnDefinitions="Auto,Auto" HorizontalAlignment="Left">
+                                    <ContentControl Content="{Binding Left}" ContentTemplate="{StaticResource ImageEntryTemplate}"
+                                                    HorizontalContentAlignment="Stretch" />
+                                    <Border Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+                                        <ContentControl Content="{Binding Right}" ContentTemplate="{StaticResource ImageEntryTemplate}"
+                                                        IsVisible="{Binding HasRight}" HorizontalContentAlignment="Stretch" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+        </Grid>
+        <Border Grid.Row="1" Padding="24,16" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+                Background="{DynamicResource PageBackground}">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12">
+                <Button Name="CancelButton" Content="{DynamicResource Editor_Cancel}" MinWidth="96" Height="36"
+                        IsCancel="True" Click="OnCancelClick" />
+                <Button Name="CreateButton" Content="{DynamicResource NewProject_Create}" Theme="{StaticResource SolidButton}"
+                        MinWidth="96" Height="36" IsDefault="True" Click="OnCreateClick" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>
