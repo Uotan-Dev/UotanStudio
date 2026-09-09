@@ -1,5 +1,6 @@
 using Avalonia.Input;
 using Avalonia.Controls;
+using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Protocols.Scrcpy;
 using UotanStudio.ViewModels.Editors;
 
@@ -12,6 +13,10 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public partial class ScreenMirrorView : UserControl
 {
+    private ScreenMirrorViewModel? _subscribed;
+    private IPointer? _pressedPointer;
+    private uint _pressedButton;
+    private (int X, int Y, int Width, int Height) _lastTouch;
     /// <summary>
     /// <para>构造投屏视图。</para>
     /// Creates the screen-mirror view.
@@ -19,7 +24,30 @@ public partial class ScreenMirrorView : UserControl
     public ScreenMirrorView()
     {
         InitializeComponent();
+        DataContextChanged += (_, _) => SubscribeToFrames();
+        AttachedToVisualTree += (_, _) => SubscribeToFrames();
+        DetachedFromVisualTree += (_, _) => UnsubscribeFromFrames();
     }
+
+    private void SubscribeToFrames()
+    {
+        UnsubscribeFromFrames();
+        if (VisualRoot is not null && ViewModel is { } viewModel)
+        {
+            _subscribed = viewModel;
+            viewModel.FramePresented += OnFramePresented;
+        }
+    }
+
+    private void UnsubscribeFromFrames()
+    {
+        EndGesture(cancel: true);
+        if (_subscribed is { } previous) previous.FramePresented -= OnFramePresented;
+        _subscribed = null;
+    }
+
+    private void OnFramePresented(object? sender, EventArgs e)
+        => FrameImage.InvalidateVisual();
 
     private ScreenMirrorViewModel? ViewModel => DataContext as ScreenMirrorViewModel;
 
@@ -27,80 +55,99 @@ public partial class ScreenMirrorView : UserControl
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (TranslateTouch(e.GetCurrentPoint(this), out var x, out var y, out var width, out var height) && ViewModel is not null)
-        {
-            var buttons = e.GetCurrentPoint(this).Properties.IsLeftButtonPressed ? ScrcpyConstants.ButtonLeft
-                : e.GetCurrentPoint(this).Properties.IsMiddleButtonPressed ? ScrcpyConstants.ButtonMiddle
-                : e.GetCurrentPoint(this).Properties.IsRightButtonPressed ? ScrcpyConstants.ButtonRight : 0u;
-            ViewModel.InjectTouch(ScrcpyConstants.ActionDown, ScrcpyConstants.PointerIdMouse, x, y, width, height, buttons);
-            e.Handled = true;
-        }
+        if (ViewModel is { } selected)
+            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new UotanStudio.Messages.ActiveDocumentChangedMessage(selected));
+        if (_pressedPointer is not null || _subscribed is null) return;
+        uint button = ActionButton(e.GetCurrentPoint(FrameImage).Properties.PointerUpdateKind);
+        if (button == 0 || !TranslateTouch(e, false, out var point)) return;
+        _lastTouch = point;
+        _pressedButton = button;
+        _pressedPointer = e.Pointer;
+        e.Pointer.Capture(this);
+        _subscribed.InjectTouch(ScrcpyConstants.ActionDown, ScrcpyConstants.PointerIdMouse,
+            point.X, point.Y, point.Width, point.Height, button, button);
+        e.Handled = true;
     }
 
     /// <inheritdoc />
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (TranslateTouch(e.GetCurrentPoint(this), out var x, out var y, out var width, out var height)
-            && ViewModel is not null
-            && e.Pointer.Captured == this)
+        if (e.Pointer != _pressedPointer || _subscribed is null) return;
+        if (TranslateTouch(e, true, out var point))
         {
-            ViewModel.InjectTouch(ScrcpyConstants.ActionMove, ScrcpyConstants.PointerIdMouse, x, y, width, height, ScrcpyConstants.ButtonLeft);
-            e.Handled = true;
+            if (point.Width != _lastTouch.Width || point.Height != _lastTouch.Height)
+            {
+                EndGesture(cancel: true);
+                return;
+            }
+            _lastTouch = point;
+            _subscribed.InjectTouch(ScrcpyConstants.ActionMove, ScrcpyConstants.PointerIdMouse,
+                point.X, point.Y, point.Width, point.Height, _pressedButton);
         }
+        e.Handled = true;
     }
 
     /// <inheritdoc />
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
-        if (TranslateTouch(e.GetCurrentPoint(this), out var x, out var y, out var width, out var height) && ViewModel is not null)
-        {
-            ViewModel.InjectTouch(ScrcpyConstants.ActionUp, ScrcpyConstants.PointerIdMouse, x, y, width, height, 0);
-            e.Handled = true;
-        }
+        if (e.Pointer != _pressedPointer
+            || ActionButton(e.GetCurrentPoint(FrameImage).Properties.PointerUpdateKind) != _pressedButton) return;
+        if (TranslateTouch(e, true, out var point)) _lastTouch = point;
+        EndGesture(cancel: false);
+        e.Handled = true;
+    }
+
+    /// <inheritdoc />
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        if (e.Pointer == _pressedPointer) EndGesture(cancel: true);
+    }
+
+    private void EndGesture(bool cancel)
+    {
+        var pointer = _pressedPointer;
+        if (pointer is null) return;
+        _pressedPointer = null; // Clear first: releasing capture may synchronously raise CaptureLost.
+        var point = _lastTouch;
+        _subscribed?.InjectTouch(cancel ? (byte)3 : ScrcpyConstants.ActionUp, ScrcpyConstants.PointerIdMouse,
+            point.X, point.Y, point.Width, point.Height, 0, cancel ? 0 : _pressedButton);
+        _pressedButton = 0;
+        if (pointer.Captured == this) pointer.Capture(null);
     }
 
     /// <inheritdoc />
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        if (TranslateTouch(e.GetCurrentPoint(this), out var x, out var y, out var width, out var height) && ViewModel is not null)
+        if (TranslateTouch(e, false, out var point) && ViewModel is { } viewModel)
         {
-            // Avalonia: positive Delta.Y scrolls up, matching the wire semantics.
-            // Avalonia 的正向 Delta.Y 对应向上滚动，与线路语义一致。
-            ViewModel.InjectScroll(x, y, width, height, (float)e.Delta.Y);
+            // InjectScroll accepts positive-down; Avalonia Delta.Y is positive-up.
+            viewModel.InjectScroll(point.X, point.Y, point.Width, point.Height, -(float)e.Delta.Y);
             e.Handled = true;
         }
     }
 
-    private bool TranslateTouch(PointerPoint point, out int x, out int y, out int width, out int height)
+    private static uint ActionButton(PointerUpdateKind kind) => kind switch
     {
-        x = y = width = height = 0;
-        if (ViewModel?.Frame is not { } frame)
-        {
-            return false;
-        }
+        PointerUpdateKind.LeftButtonPressed or PointerUpdateKind.LeftButtonReleased => ScrcpyConstants.ButtonLeft,
+        PointerUpdateKind.RightButtonPressed or PointerUpdateKind.RightButtonReleased => ScrcpyConstants.ButtonRight,
+        PointerUpdateKind.MiddleButtonPressed or PointerUpdateKind.MiddleButtonReleased => ScrcpyConstants.ButtonMiddle,
+        _ => 0,
+    };
 
-        width = frame.PixelSize.Width;
-        height = frame.PixelSize.Height;
-        // The Image is Stretch=Uniform and centered; convert via the Image
-        // bounds relative to the rendered source rectangle.
-        // Image 为 Stretch=Uniform 居中显示；按 Image 相对渲染源矩形转换。
-        if (this.GetControl<Image>("FrameImage") is { } image && image.Bounds.Width > 0 && image.Bounds.Height > 0)
-        {
-            var scale = Math.Min(image.Bounds.Width / width, image.Bounds.Height / height);
-            var offsetX = (image.Bounds.Width - width * scale) / 2;
-            var offsetY = (image.Bounds.Height - height * scale) / 2;
-            var local = point.Position;
-            x = (int)((local.X - offsetX) / scale);
-            y = (int)((local.Y - offsetY) / scale);
-        }
-        else
-        {
-            return false;
-        }
-
-        return x >= 0 && y >= 0 && x < width && y < height;
+    private bool TranslateTouch(PointerEventArgs e, bool clamp, out (int X, int Y, int Width, int Height) point)
+    {
+        point = default;
+        if (ViewModel?.Frame is not { } frame) return false;
+        int width = frame.PixelSize.Width, height = frame.PixelSize.Height;
+        // GetPosition applies the complete visual transform, including status row,
+        // dock offsets and DPI. Both inputs below are image-local logical units.
+        if (!ScreenMirrorCoordinates.TryMap(e.GetPosition(FrameImage), FrameImage.Bounds.Size,
+            width, height, clamp, out int x, out int y)) return false;
+        point = (x, y, width, height);
+        return true;
     }
 }

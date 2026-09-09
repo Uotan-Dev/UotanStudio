@@ -40,7 +40,8 @@ public partial class ScreenMirrorViewModel : Document
 
     private AdbSession? _session;
     private ScrcpyClient? _client;
-    private AdbStream? _shellStream;
+    private Stream? _shellStream;
+    private int _starting;
     private readonly object _frameLock = new();
     private PendingFrame? _pendingFrame;
     private bool _renderScheduled;
@@ -48,6 +49,21 @@ public partial class ScreenMirrorViewModel : Document
     private CancellationTokenSource? _cts;
     private Thread? _decodeThread;
     private volatile bool _disposed;
+
+    /// <summary>Raised on the UI thread after the mutable bitmap has been unlocked.</summary>
+    public event EventHandler? FramePresented;
+
+    private long _receivedFrames, _decodedFrames, _uploadedFrames, _receivedBytes;
+    private string _decoderBackend = string.Empty;
+    private ScrcpyServerOptions? _streamOptions;
+    /// <summary>Session parameters and counters; frame rates are calculated from counter deltas.</summary>
+    internal (long Received, long Decoded, long Uploaded, long Bytes) ReadCounters()
+        => (Interlocked.Read(ref _receivedFrames), Interlocked.Read(ref _decodedFrames),
+            Interlocked.Read(ref _uploadedFrames), Interlocked.Read(ref _receivedBytes));
+    internal string DecoderBackend => _decoderBackend;
+    internal ScrcpyServerOptions? StreamOptions => _streamOptions;
+    internal ScrcpyVideoMetadata? StreamMetadata => _client?.VideoMetadata;
+    internal bool IsStopped => _disposed;
 
     [ObservableProperty]
     private string _statusText = string.Empty;
@@ -65,10 +81,7 @@ public partial class ScreenMirrorViewModel : Document
     /// <param name="serial"><para>目标设备序列号。</para>The target device serial.</param>
     public void StartForDevice(string serial)
     {
-        if (_session is not null)
-        {
-            return; // Already running. 已在运行。
-        }
+        if (_disposed || _client is not null || Interlocked.CompareExchange(ref _starting, 1, 0) != 0) return;
 
         StatusText = GetLocalizedString("ScreenMirror_Preparing");
         Task.Run(() =>
@@ -77,21 +90,35 @@ public partial class ScreenMirrorViewModel : Document
             {
                 var device = UotanStudio.Services.Devices.DeviceMonitorService.Instance.FindDeviceBySerial(serial)
                     ?? throw new InvalidOperationException($"Device {serial} is not connected. 设备 {serial} 未连接。");
-                var session = UotanStudio.Services.Devices.DeviceMonitorService.Instance.OpenAdbSession(device);
-                if (session is null)
+                var options = CreateOptionsFromSettings();
+                _streamOptions = options;
+                if (device.Transport == UotanStudio.Services.Devices.DeviceTransportKind.Tcp)
                 {
-                    throw new InvalidOperationException($"ADB session for {serial} unavailable. 无法建立 {serial} 的 ADB 会话。");
+                    var server = new AdbServerServices(serial);
+                    server.Push(ResolveServerJarPath(), ScrcpyConstants.ServerDevicePath);
+                    if (_disposed) return;
+                    _shellStream = server.Open("shell:" + options.BuildShellCommand());
+                    _client = new ScrcpyClient(server, options);
+                    BeginStreaming();
                 }
-
-                Start(session, CreateOptionsFromSettings());
+                else
+                {
+                    var session = UotanStudio.Services.Devices.DeviceMonitorService.Instance.OpenAdbSession(device)
+                        ?? throw new InvalidOperationException($"ADB session unavailable: {serial}.");
+                    session.Connect();
+                    Start(session, options);
+                }
             }
             catch (Exception ex)
             {
                 StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + ex.Message;
                 UotanStudio.Services.LogService.Instance.Write(
                     UotanStudio.Services.LogLevel.Error, "ScreenMirror", $"Start failed: {ex.Message}");
-                _session = null;
+                _client?.Dispose(); _client = null;
+                _shellStream?.Dispose(); _shellStream = null;
+                _session?.Dispose(); _session = null;
             }
+            finally { Interlocked.Exchange(ref _starting, 0); }
         });
     }
 
@@ -104,6 +131,7 @@ public partial class ScreenMirrorViewModel : Document
     /// <param name="options"><para>服务端启动选项。</para>Server launch options.</param>
     public void Start(AdbSession session, ScrcpyServerOptions options)
     {
+        _streamOptions = options;
         if (_session is not null)
         {
             throw new InvalidOperationException("Mirroring is already running. 投屏已在运行中。");
@@ -116,17 +144,46 @@ public partial class ScreenMirrorViewModel : Document
         StatusText = GetLocalizedString("ScreenMirror_Installing");
 
         ScrcpyServerManager.PushServer(session, jarPath);
-        _shellStream = ScrcpyServerManager.StartServer(session, options);
+        _shellStream = new AdbServiceStream(ScrcpyServerManager.StartServer(session, options));
 
         StatusText = GetLocalizedString("ScreenMirror_Connecting");
         _client = new ScrcpyClient(session, options);
-        ConnectWithRetry(_client);
+        BeginStreaming();
+    }
 
-        DeviceName = _client.DeviceName;
+    private void BeginStreaming()
+    {
+        if (_disposed) { _client?.Dispose(); _shellStream?.Dispose(); return; }
+        var client = _client ?? throw new InvalidOperationException("Missing scrcpy client.");
+        // Drain server output during streaming so logging cannot block the remote process.
+        var shell = _shellStream;
+        _ = Task.Run(() =>
+        {
+            if (shell is null) return;
+            try
+            {
+                byte[] buffer = new byte[4096];
+                int count;
+                while (!_disposed)
+                {
+                    try { count = shell.Read(buffer, 0, buffer.Length); }
+                    catch (TimeoutException) { continue; }
+                    catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut }) { continue; }
+                    if (count == 0) break;
+                    UotanStudio.Services.LogService.Instance.Write(UotanStudio.Services.LogLevel.Debug,
+                        "ScreenMirror", System.Text.Encoding.UTF8.GetString(buffer, 0, count));
+                }
+            }
+            catch (Exception) { /* Closing the owned shell cancels the reader. */ }
+        });
+        ConnectWithRetry(client);
+        if (_disposed) { client.Dispose(); shell?.Dispose(); return; }
+
+        DeviceName = client.DeviceName;
         StatusText = GetLocalizedString("ScreenMirror_Mirroring");
 
         _cts = new CancellationTokenSource();
-        var decodeClient = _client;
+        var decodeClient = client;
         var decodeToken = _cts.Token;
         _decodeThread = new Thread(() => DecodeLoop(decodeClient, decodeToken))
         {
@@ -172,6 +229,7 @@ public partial class ScreenMirrorViewModel : Document
         _shellStream = null;
         _cts?.Dispose();
         _cts = null;
+        _session?.Dispose();
         _session = null;
 
         StatusText = GetLocalizedString("ScreenMirror_Stopped");
@@ -188,8 +246,11 @@ public partial class ScreenMirrorViewModel : Document
     /// <param name="width"><para>解码帧宽度。</para>Decoded frame width.</param>
     /// <param name="height"><para>解码帧高度。</para>Decoded frame height.</param>
     /// <param name="buttons"><para>当前按键状态掩码。</para>Current button state mask.</param>
-    public void InjectTouch(byte action, long pointerId, int x, int y, int width, int height, uint buttons)
-        => SendControl(ScrcpyControlMessageWriter.InjectTouchEvent(action, pointerId, x, y, width, height, buttons: buttons));
+    /// <param name="actionButton">Button that changed on press/release; zero for movement or cancellation.</param>
+    public void InjectTouch(byte action, long pointerId, int x, int y, int width, int height, uint buttons, uint actionButton = 0)
+        => SendControl(ScrcpyControlMessageWriter.InjectTouchEvent(action, pointerId, x, y, width, height,
+            pressure: action is ScrcpyConstants.ActionUp or 3 ? (ushort)0 : ushort.MaxValue,
+            actionButton: actionButton, buttons: buttons));
 
     /// <summary>
     /// <para>注入滚轮事件（视频像素坐标）。</para>
@@ -298,11 +359,13 @@ public partial class ScreenMirrorViewModel : Document
             };
             using var decoder = VideoDecoderFactory.Create();
             decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
+            _decoderBackend = OperatingSystem.IsWindows() ? "Media Foundation (CPU)" : "VideoToolbox (hardware)";
             byte[]? configuration = null;
             while (!token.IsCancellationRequested)
             {
                 ScrcpyVideoFrame? packet = client.ReadFrame(1000);
                 if (packet is null) continue;
+                Interlocked.Add(ref _receivedBytes, packet.Data.Length);
                 if (packet.IsCodecConfig)
                 {
                     // Some MFTs require parameter sets and the first picture in a single sample.
@@ -312,6 +375,7 @@ public partial class ScreenMirrorViewModel : Document
                     continue;
                 }
                 long timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
+                Interlocked.Increment(ref _receivedFrames);
                 if (configuration is null) decoder.Decode(packet.Data, timestampTicks);
                 else
                 {
@@ -343,6 +407,7 @@ public partial class ScreenMirrorViewModel : Document
 
     private void OnDecodedFrame(DecodedVideoFrame frame)
     {
+        Interlocked.Increment(ref _decodedFrames);
         if (_disposed) return;
         int bgraSize = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
         byte[]? bgra = ArrayPool<byte>.Shared.Rent(bgraSize);
@@ -358,7 +423,7 @@ public partial class ScreenMirrorViewModel : Document
                 if (!_renderScheduled)
                 {
                     _renderScheduled = true;
-                    Dispatcher.UIThread.Post(RenderPendingFrame);
+                    Dispatcher.UIThread.Post(RenderPendingFrame, DispatcherPriority.Render);
                 }
             }
         }
@@ -377,7 +442,12 @@ public partial class ScreenMirrorViewModel : Document
         if (pending is null) return;
         try
         {
-            if (!_disposed) RenderBgra(pending.Pixels, pending.Length, pending.Width, pending.Height);
+            if (!_disposed)
+            {
+                RenderBgra(pending.Pixels, pending.Length, pending.Width, pending.Height);
+                Interlocked.Increment(ref _uploadedFrames);
+                FramePresented?.Invoke(this, EventArgs.Empty);
+            }
         }
         finally { ArrayPool<byte>.Shared.Return(pending.Pixels); }
     }

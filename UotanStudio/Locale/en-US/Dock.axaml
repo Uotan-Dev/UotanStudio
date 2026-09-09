@@ -289,4 +289,24 @@
     <x:String x:Key="ApkSign_Browse">Browse…</x:String>
     <x:String x:Key="ApkSign_Cancel">Cancel</x:String>
     <x:String x:Key="ApkSign_Cancelled">Signing cancelled.</x:String>
+    <x:String x:Key="MirrorProperty_Status">Session status</x:String>
+    <x:String x:Key="MirrorProperty_Codec">Video codec</x:String>
+    <x:String x:Key="MirrorProperty_Decoder">Decoder backend</x:String>
+    <x:String x:Key="MirrorProperty_Resolution">Video resolution</x:String>
+    <x:String x:Key="MirrorProperty_SourceColor">Source color space</x:String>
+    <x:String x:Key="MirrorProperty_PixelFormat">Decoded pixel format</x:String>
+    <x:String x:Key="MirrorProperty_Conversion">Display conversion</x:String>
+    <x:String x:Key="MirrorProperty_ReceiveFps">Receive rate (1 s)</x:String>
+    <x:String x:Key="MirrorProperty_DecodeFps">Decode rate (1 s)</x:String>
+    <x:String x:Key="MirrorProperty_UploadFps">Bitmap updates (1 s)</x:String>
+    <x:String x:Key="MirrorProperty_MaxFps">Frame rate limit</x:String>
+    <x:String x:Key="MirrorProperty_BitRate">Target bit rate</x:String>
+    <x:String x:Key="MirrorProperty_ActualBitRate">Received bit rate (1 s)</x:String>
+    <x:String x:Key="MirrorProperty_Encoder">Device encoder</x:String>
+    <x:String x:Key="MirrorProperty_Device">Device name</x:String>
+    <x:String x:Key="MirrorProperty_Version">scrcpy version</x:String>
+    <x:String x:Key="MirrorProperty_Unknown">Not reported / not parsed</x:String>
+    <x:String x:Key="MirrorProperty_Unlimited">Unlimited</x:String>
+    <x:String x:Key="MirrorProperty_ConversionValue">BT.601 limited range → BGRA (CPU)</x:String>
+    <x:String x:Key="MirrorProperty_EncoderValue">Selected by Android; name not reported</x:String>
 </ResourceDictionary>

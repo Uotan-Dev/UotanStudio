@@ -185,6 +185,7 @@ internal partial class PropertiesViewModel : Tool
         {
             var typeName = ContentType switch
             {
+                PropertiesContentType.ScreenMirror => LanguageService.Instance.GetString("Tab_ScreenMirror"),
                 PropertiesContentType.Image => LanguageService.Instance.GetString("Dock_Properties_Type_Image"),
                 PropertiesContentType.FileAnalysis => LanguageService.Instance.GetString("Dock_Properties_Type_FileAnalysis"),
                 PropertiesContentType.TextDocument => LanguageService.Instance.GetString("Dock_Properties_Type_TextDocument"),
@@ -252,6 +253,11 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void OnActiveDocumentChanged(object recipient, ActiveDocumentChangedMessage message)
     {
+        if (message.ActiveDocument is ScreenMirrorViewModel mirror)
+        {
+            RefreshForScreenMirror(mirror);
+            return;
+        }
         // DTB 编辑器文档：走设备树展示路径。
         // DTB editor document: route through the device-tree display path.
         if (message.DtbDocument is { } dtb)
@@ -329,7 +335,8 @@ internal partial class PropertiesViewModel : Tool
                 || ContentType == PropertiesContentType.FirmwareDocument
                 || ContentType == PropertiesContentType.HexDocument
                 || ContentType == PropertiesContentType.FileManagerDocument
-                || ContentType == PropertiesContentType.FileManagerEntry)
+                || ContentType == PropertiesContentType.FileManagerEntry
+                || ContentType == PropertiesContentType.ScreenMirror)
             {
                 ClearProperties();
                 SelectedNodeTitle = string.Empty;
@@ -593,6 +600,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void ClearProperties()
     {
+        StopMirrorUpdates();
         ClearLanguageSelector();
         Properties.Clear();
     }
@@ -1223,5 +1231,8 @@ public enum PropertiesContentType
     /// <para>文件管理器内部条目信息。</para>
     /// File-manager entry information.
     /// </summary>
-    FileManagerEntry
+    FileManagerEntry,
+
+    /// <summary>Live screen-mirror parameters and rates.</summary>
+    ScreenMirror
 }

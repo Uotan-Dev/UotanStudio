@@ -289,4 +289,24 @@
     <x:String x:Key="ApkSign_Browse">浏览…</x:String>
     <x:String x:Key="ApkSign_Cancel">取消</x:String>
     <x:String x:Key="ApkSign_Cancelled">签名已取消。</x:String>
+    <x:String x:Key="MirrorProperty_Status">会话状态</x:String>
+    <x:String x:Key="MirrorProperty_Codec">视频编码</x:String>
+    <x:String x:Key="MirrorProperty_Decoder">解码后端</x:String>
+    <x:String x:Key="MirrorProperty_Resolution">视频分辨率</x:String>
+    <x:String x:Key="MirrorProperty_SourceColor">源色彩空间</x:String>
+    <x:String x:Key="MirrorProperty_PixelFormat">解码像素格式</x:String>
+    <x:String x:Key="MirrorProperty_Conversion">显示色彩转换</x:String>
+    <x:String x:Key="MirrorProperty_ReceiveFps">接收帧率（1秒）</x:String>
+    <x:String x:Key="MirrorProperty_DecodeFps">解码帧率（1秒）</x:String>
+    <x:String x:Key="MirrorProperty_UploadFps">位图更新率（1秒）</x:String>
+    <x:String x:Key="MirrorProperty_MaxFps">帧率上限</x:String>
+    <x:String x:Key="MirrorProperty_BitRate">目标码率</x:String>
+    <x:String x:Key="MirrorProperty_ActualBitRate">接收码率（1秒）</x:String>
+    <x:String x:Key="MirrorProperty_Encoder">设备编码器</x:String>
+    <x:String x:Key="MirrorProperty_Device">设备名称</x:String>
+    <x:String x:Key="MirrorProperty_Version">scrcpy 版本</x:String>
+    <x:String x:Key="MirrorProperty_Unknown">未报告／未解析</x:String>
+    <x:String x:Key="MirrorProperty_Unlimited">不限制</x:String>
+    <x:String x:Key="MirrorProperty_ConversionValue">BT.601 有限范围 → BGRA（CPU）</x:String>
+    <x:String x:Key="MirrorProperty_EncoderValue">Android 自动选择；未报告名称</x:String>
 </ResourceDictionary>

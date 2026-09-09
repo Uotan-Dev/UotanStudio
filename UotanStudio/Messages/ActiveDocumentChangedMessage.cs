@@ -12,6 +12,8 @@ using UotanStudio.ViewModels.Editors;
 /// </summary>
 public class ActiveDocumentChangedMessage
 {
+    /// <summary>Creates a selection notification for a screen-mirror document.</summary>
+    public ActiveDocumentChangedMessage(ScreenMirrorViewModel screenMirror) => ActiveDocument = screenMirror;
     /// <summary>
     /// <para>获取新激活的 <see cref="FileViewModel"/> 文档；非文本/二进制文档时为 <c>null</c>。</para>
     /// Gets the newly activated <see cref="FileViewModel"/> document; <c>null</c> for non-file

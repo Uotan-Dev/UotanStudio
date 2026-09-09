@@ -807,6 +807,9 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         var active = dock.ActiveDockable;
         switch (active)
         {
+            case ScreenMirrorViewModel mirror:
+                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(mirror));
+                break;
             case DtbEditorViewModel dtb:
                 WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dtb));
                 break;
