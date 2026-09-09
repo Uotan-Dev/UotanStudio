@@ -37,7 +37,7 @@
     <PackageVersion Include="AdvancedSharpAdbClient" Version="3.6.16" />
     <PackageVersion Include="LibUsbDotNet" Version="3.0.224" />
     <PackageVersion Include="Makaretu.Dns.Multicast" Version="0.27.0" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="System.IO.Ports" Version="10.0.11" />
     <!-- UotanStudio.Firmware third-party dependencies -->
     <PackageVersion Include="BrotliSharpLib" Version="0.3.3" />
@@ -60,6 +60,6 @@
     <!-- Text diffing (line-level diff for the compare services) -->
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
   </ItemGroup>
 </Project>
