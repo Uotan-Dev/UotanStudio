@@ -29,9 +29,17 @@ public static class ScrcpyConstants
     /// <summary>经 app_process 启动的主类。</summary>
     public const string ServerMainClass = "com.genymobile.scrcpy.Server";
 
-    /// <summary>Sentinel pts (u64 all-ones) marking the codec config packet.</summary>
-    /// <summary>标记编码器配置包的哨兵 pts（u64 全 1）。</summary>
+    /// <summary>Legacy no-timestamp sentinel; on the wire scrcpy 2.7 uses PacketFlagConfig.</summary>
     public const ulong NoPts = 0xFFFF_FFFF_FFFF_FFFF;
+
+    /// <summary>scrcpy 2.7 Streamer.PACKET_FLAG_CONFIG.</summary>
+    public const ulong PacketFlagConfig = 1UL << 63;
+
+    /// <summary>scrcpy 2.7 Streamer.PACKET_FLAG_KEY_FRAME.</summary>
+    public const ulong PacketFlagKeyFrame = 1UL << 62;
+
+    /// <summary>Presentation timestamp bits, expressed in microseconds.</summary>
+    public const ulong PacketTimestampMask = PacketFlagKeyFrame - 1;
 
     /// <summary>Device name field length following the dummy byte on the first socket.</summary>
     /// <summary>首个 socket 上哑字节之后的设备名字段长度。</summary>

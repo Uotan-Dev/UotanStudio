@@ -305,3 +305,10 @@ APK 签名入口：APK 文档页提供自定义私钥、证书、输出路径、
 - 回归测试见 `HdcServerClientTests` / `HdcDeviceServiceTests`。`HdcReadOnlyDeviceTests` 仅在显式设置 `UOTAN_TEST_HDC_TARGET` 和 `UOTAN_TEST_HDC_EXE` 时执行真实设备的只读命令、日志和文件接收；普通测试跳过。不得在真机验证中自动重启、提权、安装、卸载、写文件、清日志或刷写。上游依据与验证边界见 `docs/hdc-support.md`。
 
 - 设备日志继续使用 AvaloniaEdit 可见行虚拟化；每 100 ms 按最多 250 行/约 128 Ki 原始字符批量更新，范围集合最多两个通知。待显示与历史队列各限 5,000 行和 2 Mi 原始字符；可见列延迟生成，过滤一次 Reset，卸载视图释放文档。原生 HDC 每通道未消费数据上限 4 MiB。
+
+### 平台媒体与投屏验证边界（2026-09-09）
+
+- scrcpy 2.7 视频头使用小写 `h264/h265` fourcc；配置位为 bit 63，关键帧位为 bit 62，余下位为微秒 PTS。`ScrcpyVideoFrame` 按位解析配置/关键帧并提供去标志时间戳；投屏将配置包与下一帧合并，按微秒 ×10 传递 ticks。
+- `ScreenMirrorViewModel` 在专用线程创建、使用并释放解码器，关闭时先打断 socket 读取；显示只保留最新待处理帧，替换与渲染后均归还池化缓冲区。解码错误进入日志/状态。当前显示仍为 CPU NV12→BGRA→WriteableBitmap 上传，不宣称 GPU 零拷贝，CPU 转换仅支持 BT.601 有限范围。
+- Windows 同步路径通过 H.264 固定 I_PCM 黑帧逐像素验证、上游 CABAC 30 帧完整排空、多实例与 Reset，以及 `tools/MediaProbe` 的 NativeAOT 实际运行。设置低延迟属性不保证无排队：CABAC 样本 30 次输入先输出 14 帧，Drain 后共 30 帧。真实设备延迟、H.265 码流、Windows GPU、Mac 硬件、Linux VA/EGL 均不得用编译或能力枚举代替运行证明。
+- Mac 新增硬件编码→解码回环测试，非 Mac 显式跳过；Linux VA 测试通过 `UOTAN_TEST_VA_RENDER_NODE` 选择已有节点，缺环境跳过。测试夹具来源和哈希在 `UotanStudio.Tests/TestInfrastructure/Media/README.md`，集中评估见 `docs/validation/PLATFORM_MEDIA_ACCELERATION_2026-09-09.md`。

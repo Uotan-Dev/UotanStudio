@@ -20,13 +20,13 @@ namespace UotanStudio.ViewModels.Editors;
 /// </summary>
 /// <remarks>
 /// <para>
-/// 解码循环运行在专用线程：scrcpy 帧解包 → <see cref="IVideoDecoder"/> 硬解 →
+/// 解码循环运行在专用线程：scrcpy 帧解包 → <see cref="IVideoDecoder"/> 平台解码 →
 /// NV12→BGRA 转换 → 经 Dispatcher 在 UI 线程写入 <see cref="WriteableBitmap"/>。
 /// 回调契约要求在解码回调内完成转换（帧随后被解码器释放）。
 /// </para>
 /// <para>
 /// The decode loop runs on a dedicated thread: scrcpy frame demux →
-/// <see cref="IVideoDecoder"/> hardware decode → NV12→BGRA conversion →
+/// <see cref="IVideoDecoder"/> platform decode → NV12→BGRA conversion →
 /// WriteableBitmap update on the UI thread via the Dispatcher. The decoder
 /// callback contract requires the conversion to happen inside the callback
 /// (the frame is disposed right after it returns).
@@ -41,10 +41,13 @@ public partial class ScreenMirrorViewModel : Document
     private AdbSession? _session;
     private ScrcpyClient? _client;
     private AdbStream? _shellStream;
-    private IVideoDecoder? _decoder;
+    private readonly object _frameLock = new();
+    private PendingFrame? _pendingFrame;
+    private bool _renderScheduled;
+    private sealed record PendingFrame(byte[] Pixels, int Length, int Width, int Height);
     private CancellationTokenSource? _cts;
     private Thread? _decodeThread;
-    private bool _disposed;
+    private volatile bool _disposed;
 
     [ObservableProperty]
     private string _statusText = string.Empty;
@@ -123,7 +126,9 @@ public partial class ScreenMirrorViewModel : Document
         StatusText = GetLocalizedString("ScreenMirror_Mirroring");
 
         _cts = new CancellationTokenSource();
-        _decodeThread = new Thread(() => DecodeLoop(_client, _cts.Token))
+        var decodeClient = _client;
+        var decodeToken = _cts.Token;
+        _decodeThread = new Thread(() => DecodeLoop(decodeClient, decodeToken))
         {
             IsBackground = true,
             Name = "UotanStudio.ScreenMirror",
@@ -145,6 +150,12 @@ public partial class ScreenMirrorViewModel : Document
 
         _disposed = true;
         _cts?.Cancel();
+        _client?.Dispose(); // Unblock socket reads before waiting; decoder disposal stays on its owner thread.
+        lock (_frameLock)
+        {
+            if (_pendingFrame is { } pending) ArrayPool<byte>.Shared.Return(pending.Pixels);
+            _pendingFrame = null;
+        }
         try
         {
             _decodeThread?.Join(2000);
@@ -154,11 +165,9 @@ public partial class ScreenMirrorViewModel : Document
             // Join may fail if the thread already exited. 线程已退出时 Join 可能失败。
         }
 
-        _decoder?.Dispose();
         _client?.Dispose();
         _shellStream?.Dispose();
 
-        _decoder = null;
         _client = null;
         _shellStream = null;
         _cts?.Dispose();
@@ -278,90 +287,99 @@ public partial class ScreenMirrorViewModel : Document
 
     private void DecodeLoop(ScrcpyClient client, CancellationToken token)
     {
-        while (!token.IsCancellationRequested)
+        try
         {
-            ScrcpyVideoFrame? packet;
-            try
+            var metadata = client.VideoMetadata ?? throw new InvalidDataException("Missing scrcpy video metadata.");
+            var codec = metadata.CodecName.ToUpperInvariant() switch
             {
-                packet = client.ReadFrame(1000);
-            }
-            catch (Exception)
+                "H264" => VideoCodecId.H264,
+                "H265" or "HEVC" => VideoCodecId.H265,
+                _ => throw new NotSupportedException($"Unsupported video codec '{metadata.CodecName}'."),
+            };
+            using var decoder = VideoDecoderFactory.Create();
+            decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
+            byte[]? configuration = null;
+            while (!token.IsCancellationRequested)
             {
-                break; // Socket closed or timed out fatally. socket 关闭或致命超时。
-            }
-
-            if (packet is null)
-            {
-                continue; // Read timeout with no data; keep polling. 读取超时且无数据，继续轮询。
-            }
-
-            if (packet.IsCodecConfig)
-            {
-                continue; // Annex-B config arrives per key frame; decoder handles it. 配置包由解码器随关键帧处理。
-            }
-
-            EnsureDecoder(client.VideoMetadata);
-            var decoder = _decoder;
-            if (decoder is null)
-            {
-                continue;
-            }
-
-            try
-            {
-                decoder.Decode(packet.Data);
-            }
-            catch (Exception)
-            {
-                // A corrupt access unit must not kill the loop.
-                // 单个损坏的访问单元不应终止解码循环。
-                decoder.Reset();
+                ScrcpyVideoFrame? packet = client.ReadFrame(1000);
+                if (packet is null) continue;
+                if (packet.IsCodecConfig)
+                {
+                    // Some MFTs require parameter sets and the first picture in a single sample.
+                    // Keep the complete scrcpy config packet and prepend it to the next picture.
+                    if (packet.Data.Length > 1024 * 1024) throw new InvalidDataException("Excessive scrcpy codec configuration.");
+                    configuration = packet.Data;
+                    continue;
+                }
+                long timestampTicks = checked(packet.PresentationTimestampMicroseconds * 10);
+                if (configuration is null) decoder.Decode(packet.Data, timestampTicks);
+                else
+                {
+                    int length = checked(configuration.Length + packet.Data.Length);
+                    if (length > 32 * 1024 * 1024) throw new InvalidDataException("Excessive scrcpy access unit.");
+                    byte[] combined = ArrayPool<byte>.Shared.Rent(length);
+                    try
+                    {
+                        configuration.CopyTo(combined, 0);
+                        packet.Data.CopyTo(combined, configuration.Length);
+                        decoder.Decode(combined.AsSpan(0, length), timestampTicks);
+                        configuration = null;
+                    }
+                    finally { ArrayPool<byte>.Shared.Return(combined); }
+                }
             }
         }
-    }
-
-    private void EnsureDecoder(ScrcpyVideoMetadata? metadata)
-    {
-        if (_decoder is not null || metadata is null)
+        catch (Exception exception) when (!token.IsCancellationRequested)
         {
-            return;
+            UotanStudio.Services.LogService.Instance.Write(
+                UotanStudio.Services.LogLevel.Error, "ScreenMirror", $"Decode failed: {exception.Message}");
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_disposed) StatusText = GetLocalizedString("ScreenMirror_Failed") + " " + exception.Message;
+            });
         }
-
-        var codec = metadata.CodecName switch
-        {
-            "H264" => VideoCodecId.H264,
-            "H265" or "HEVC" => VideoCodecId.H265,
-            _ => throw new NotSupportedException(
-                $"Unsupported video codec '{metadata.CodecName}'. 不支持的视频编码“{metadata.CodecName}”。"),
-        };
-
-        _decoder = VideoDecoderFactory.Create();
-        _decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
+        catch (Exception) when (token.IsCancellationRequested) { }
     }
 
     private void OnDecodedFrame(DecodedVideoFrame frame)
     {
-        // Decoder contract: convert inside the callback; the frame is disposed
-        // right after. BGRA conversion happens on the decode thread; only the
-        // bitmap write is marshalled to the UI thread.
-        // 解码器契约：在回调内完成转换；回调返回后帧即被释放。BGRA 转换在解码
-        // 线程执行，仅位图写入被调度到 UI 线程。
-        var bgraSize = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
-        var bgra = ArrayPool<byte>.Shared.Rent(bgraSize);
+        if (_disposed) return;
+        int bgraSize = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
+        byte[]? bgra = ArrayPool<byte>.Shared.Rent(bgraSize);
         try
         {
             Nv12ToBgraConverter.Convert(in frame, bgra.AsSpan(0, bgraSize));
+            lock (_frameLock)
+            {
+                if (_disposed) return;
+                if (_pendingFrame is { } previous) ArrayPool<byte>.Shared.Return(previous.Pixels);
+                _pendingFrame = new(bgra, bgraSize, frame.Width, frame.Height);
+                bgra = null; // Ownership passes to the bounded, latest-frame slot.
+                if (!_renderScheduled)
+                {
+                    _renderScheduled = true;
+                    Dispatcher.UIThread.Post(RenderPendingFrame);
+                }
+            }
+        }
+        finally { if (bgra is not null) ArrayPool<byte>.Shared.Return(bgra); }
+    }
 
-            var width = frame.Width;
-            var height = frame.Height;
-            var payload = bgra;
-            Dispatcher.UIThread.Post(() => RenderBgra(payload, bgraSize, width, height));
-        }
-        catch
+    private void RenderPendingFrame()
+    {
+        PendingFrame? pending;
+        lock (_frameLock)
         {
-            ArrayPool<byte>.Shared.Return(bgra);
-            throw;
+            pending = _pendingFrame;
+            _pendingFrame = null;
+            _renderScheduled = false;
         }
+        if (pending is null) return;
+        try
+        {
+            if (!_disposed) RenderBgra(pending.Pixels, pending.Length, pending.Width, pending.Height);
+        }
+        finally { ArrayPool<byte>.Shared.Return(pending.Pixels); }
     }
 
     private void RenderBgra(byte[] bgra, int bgraSize, int width, int height)

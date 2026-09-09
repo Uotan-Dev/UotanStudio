@@ -88,7 +88,7 @@ public sealed class ScrcpyServerOptions
             "send_dummy_byte=true",
             "send_codec_meta=true",
             "cleanup=true",
-            $"socket_name={SocketName}",
+            "tunnel_forward=true",
         };
         return [.. args];
     }
@@ -99,7 +99,7 @@ public sealed class ScrcpyServerOptions
     {
         Span<byte> bytes = stackalloc byte[4];
         System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
-        return BitConverter.ToUInt32(bytes);
+        return BitConverter.ToUInt32(bytes) & 0x7fffffff;
     }
 
     /// <summary>Builds the full <c>app_process</c> command line for the shell.</summary>

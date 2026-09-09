@@ -40,7 +40,15 @@ public sealed record ScrcpyVideoFrame(long Pts, byte[] Data)
 {
     /// <summary>Gets a value indicating whether this packet carries codec config (SPS/PPS).</summary>
     /// <summary>获取一个值，指示该包是否为编码器配置（SPS/PPS）。</summary>
-    public bool IsCodecConfig => Pts == unchecked((long)ScrcpyConstants.NoPts);
+    public bool IsCodecConfig => ((ulong)Pts & ScrcpyConstants.PacketFlagConfig) != 0;
+
+    /// <summary>Gets the key-frame flag independently of the presentation timestamp.</summary>
+    public bool IsKeyFrame => !IsCodecConfig && ((ulong)Pts & ScrcpyConstants.PacketFlagKeyFrame) != 0;
+
+    /// <summary>Gets the media timestamp with config/key-frame flags removed.</summary>
+    public long PresentationTimestampMicroseconds => !IsCodecConfig
+        ? (long)((ulong)Pts & ScrcpyConstants.PacketTimestampMask)
+        : throw new InvalidOperationException("Codec configuration has no presentation timestamp.");
 }
 
 /// <summary>
@@ -89,12 +97,12 @@ public sealed class ScrcpyClient : IDisposable
     /// <summary>设备剪贴板文本上限（1 MiB）。</summary>
     public const int MaxClipboardLength = 1024 * 1024;
 
-    private readonly AdbSession _session;
+    private readonly Func<string, Stream> _open;
     private readonly ScrcpyServerOptions _options;
 
-    private AdbStream? _videoStream;
-    private AdbStream? _audioStream;
-    private AdbStream? _controlStream;
+    private Stream? _videoStream;
+    private Stream? _audioStream;
+    private Stream? _controlStream;
 
     /// <summary>Initializes the client; call <see cref="Connect"/> after the server is running.</summary>
     /// <summary>初始化客户端；服务端启动后调用 <see cref="Connect"/>。</summary>
@@ -102,7 +110,16 @@ public sealed class ScrcpyClient : IDisposable
     /// <param name="options">The options the server was started with. 服务端启动时使用的选项。</param>
     public ScrcpyClient(AdbSession session, ScrcpyServerOptions options)
     {
-        _session = session ?? throw new ArgumentNullException(nameof(session));
+        ArgumentNullException.ThrowIfNull(session);
+        _open = service => new AdbServiceStream(session.Connection.OpenStream(service));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    /// <summary>Creates a client using owned service streams from an existing ADB server.</summary>
+    public ScrcpyClient(AdbServerServices server, ScrcpyServerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        _open = server.Open;
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
@@ -132,7 +149,7 @@ public sealed class ScrcpyClient : IDisposable
     {
         // Socket 1: video (dummy byte + device name + codec meta + framed stream).
         // socket 1：视频（哑字节 + 设备名 + 编码器元数据 + 分帧码流）。
-        _videoStream = _session.Connection.OpenStream("localabstract:" + _options.SocketName);
+        _videoStream = _open("localabstract:" + _options.SocketName);
 
         if (_options.SendDummyByte)
         {
@@ -143,6 +160,20 @@ public sealed class ScrcpyClient : IDisposable
             }
         }
 
+        // Socket 2: audio (codec id only, no dummy/meta in current version).
+        // socket 2：音频（当前版本仅含编码器 ID，无哑字节/设备元数据）。
+        if (_options.Audio)
+        {
+            _audioStream = _open("localabstract:" + _options.SocketName);
+
+        }
+
+        // Socket 3: control.
+        // socket 3：控制。
+        if (_options.Control)
+        {
+            _controlStream = _open("localabstract:" + _options.SocketName);
+        }
         if (_options.SendDeviceMeta)
         {
             var name = ReadExact(_videoStream, ScrcpyConstants.DeviceNameLength, timeoutMs);
@@ -164,20 +195,8 @@ public sealed class ScrcpyClient : IDisposable
             VideoMetadata = new ScrcpyVideoMetadata(codec, width, height);
         }
 
-        // Socket 2: audio (codec id only, no dummy/meta in current version).
-        // socket 2：音频（当前版本仅含编码器 ID，无哑字节/设备元数据）。
-        if (_options.Audio)
-        {
-            _audioStream = _session.Connection.OpenStream("localabstract:" + _options.SocketName);
-            _ = ReadExact(_audioStream, 4, timeoutMs); // audio codec id — 音频编码器 ID
-        }
+        if (_audioStream is not null) _ = ReadExact(_audioStream, 4, timeoutMs);
 
-        // Socket 3: control.
-        // socket 3：控制。
-        if (_options.Control)
-        {
-            _controlStream = _session.Connection.OpenStream("localabstract:" + _options.SocketName);
-        }
     }
 
     /// <summary>
@@ -285,7 +304,7 @@ public sealed class ScrcpyClient : IDisposable
         _controlStream?.Dispose();
     }
 
-    private static byte[] ReadExact(AdbStream stream, int length, int timeoutMs)
+    private static byte[] ReadExact(Stream stream, int length, int timeoutMs)
     {
         if (!TryReadExact(stream, length, timeoutMs, out var result) || result!.Length != length)
         {
@@ -296,10 +315,10 @@ public sealed class ScrcpyClient : IDisposable
         return result!;
     }
 
-    private static byte[]? TryReadExact(AdbStream stream, int length, int timeoutMs)
+    private static byte[]? TryReadExact(Stream stream, int length, int timeoutMs)
         => TryReadExact(stream, length, timeoutMs, out var result) ? result : null;
 
-    private static bool TryReadExact(AdbStream stream, int length, int timeoutMs, out byte[]? result)
+    private static bool TryReadExact(Stream stream, int length, int timeoutMs, out byte[]? result)
     {
         if (length == 0)
         {
@@ -311,16 +330,14 @@ public sealed class ScrcpyClient : IDisposable
         var offset = 0;
         while (offset < length)
         {
-            var chunk = stream.Read(timeoutMs);
-            if (chunk is null || chunk.Length == 0)
-            {
-                result = buffer[..offset];
-                return false; // EOF. 流结束。
-            }
-
-            var copy = Math.Min(chunk.Length, length - offset);
-            Buffer.BlockCopy(chunk, 0, buffer, offset, copy);
-            offset += copy;
+            if (stream.CanTimeout) stream.ReadTimeout = timeoutMs;
+            int count;
+            try { count = stream.Read(buffer, offset, length - offset); }
+            catch (TimeoutException) when (offset == 0) { result = null; return false; }
+            catch (IOException ex) when (offset == 0 && ex.InnerException is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.TimedOut })
+            { result = null; return false; }
+            if (count == 0) throw new EndOfStreamException("scrcpy service closed during a packet read.");
+            offset += count;
         }
 
         result = buffer;
