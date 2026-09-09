@@ -31,6 +31,7 @@
   <ItemGroup>
     <!-- 测试夹具：真实世界 DEX 文件随构建复制到输出目录 -->
     <None Include="Firmware\Files\**\*.dex" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="TestInfrastructure\Media\*.aac;TestInfrastructure\Media\*.h265;TestInfrastructure\Media\*.obu" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\Media\black-64x64.h264" CopyToOutputDirectory="PreserveNewest" />
     <None Include="TestInfrastructure\Media\openh264-qcif-cabac.h264" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Firmware\Files\review-native-rkfw.img" CopyToOutputDirectory="PreserveNewest" />

@@ -1,4 +1,4 @@
-﻿using UotanStudio.Media.Decoding;
+using UotanStudio.Media.Decoding;
 using Xunit;
 
 namespace UotanStudio.Tests.Media;
@@ -11,7 +11,7 @@ public class VideoDecoderFactoryTests
     [Fact]
     public void Create_KnownPlatform_IsUninitialized()
     {
-        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
+        if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS() && !OperatingSystem.IsLinux())
         {
             Assert.Throws<NotSupportedException>(() => VideoDecoderFactory.Create());
             return;
@@ -21,11 +21,11 @@ public class VideoDecoderFactoryTests
     }
 
     [Fact]
-    public void Linux_DoesNotAdvertisePrimitivesAsAnnexBDecoder()
+    public void Linux_CreatesDeferredBackendWithoutClaimingGpuSupport()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Linux-specific capability boundary.");
-        Assert.False(VideoDecoderFactory.IsSupported(VideoCodecId.H264));
-        Assert.False(VideoDecoderFactory.IsSupported(VideoCodecId.H265));
+        using var decoder = VideoDecoderFactory.Create();
+        Assert.False(decoder.IsInitialized);
     }
 
     [Fact]

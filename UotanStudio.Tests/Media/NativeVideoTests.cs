@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using UotanStudio.Media.Acceleration.Linux;
 using UotanStudio.Media.Decoding;
+using UotanStudio.Media.Decoding.MediaFoundation;
 using Xunit;
 
 namespace UotanStudio.Tests.Media;
@@ -36,8 +37,10 @@ public class NativeVideoTests
         Assert.Equal(8, frames);
     }
 
-    [Fact]
-    public void PlatformDecoder_OpenH264Cabac_ProducesChangingFrames()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PlatformDecoder_OpenH264Cabac_ProducesChangingFrames(bool directGpu)
     {
         if (!OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS())
         {
@@ -50,13 +53,17 @@ public class NativeVideoTests
             Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)));
         int count = 0;
         var hashes = new HashSet<string>();
-        using var decoder = VideoDecoderFactory.Create();
+        if (directGpu && !OperatingSystem.IsWindows()) { Assert.Skip("D3D11 requires Windows."); return; }
+        if (directGpu) Assert.SkipUnless(VideoDecoderFactory.HasGpuDecoder(VideoCodecId.H264), "No D3D11 decoder.");
+        using var decoder = directGpu && OperatingSystem.IsWindows() ? new MediaFoundationGpuVideoDecoder() : VideoDecoderFactory.Create();
         decoder.Initialize(VideoCodecId.H264, 176, 144, frame =>
         {
             Assert.Equal(176, frame.Width);
             Assert.Equal(144, frame.Height);
-            byte[] visibleLuma = new byte[176 * 144];
-            for (int row = 0; row < 144; row++) frame.Span.Slice(row * frame.Stride, 176).CopyTo(visibleLuma.AsSpan(row * 176));
+            if (directGpu) Assert.IsType<GpuDecodedVideoFrame>(frame);
+            int rowBytes = frame is GpuDecodedVideoFrame ? 176 * 4 : 176;
+            byte[] visibleLuma = new byte[rowBytes * 144];
+            for (int row = 0; row < 144; row++) frame.Span.Slice(row * frame.Stride, rowBytes).CopyTo(visibleLuma.AsSpan(row * rowBytes));
             hashes.Add(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(visibleLuma)));
             count++;
         });
@@ -77,32 +84,59 @@ public class NativeVideoTests
         Assert.True(hashes.Count >= 10, "Expected changing output pixels across the upstream CABAC pictures.");
     }
 
-    [Fact]
-    public void PlatformDecoder_IpcmH264_OutputsExactBlackPixels()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PlatformDecoder_IpcmH264_OutputsExactBlackPixels(bool directGpu)
     {
         Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), "No Annex-B backend on this platform.");
         if (OperatingSystem.IsMacOS()) Assert.SkipUnless(VideoDecoderFactory.IsSupported(VideoCodecId.H264), "Mac hardware H.264 is unavailable.");
         byte[] packet = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "TestInfrastructure", "Media", "black-64x64.h264"));
         int count = 0;
-        using var decoder = VideoDecoderFactory.Create();
+        if (directGpu && !OperatingSystem.IsWindows()) { Assert.Skip("D3D11 requires Windows."); return; }
+        if (directGpu) Assert.SkipUnless(VideoDecoderFactory.HasGpuDecoder(VideoCodecId.H264), "No D3D11 decoder.");
+        using var decoder = directGpu && OperatingSystem.IsWindows() ? new MediaFoundationGpuVideoDecoder() : VideoDecoderFactory.Create();
         decoder.Initialize(VideoCodecId.H264, 64, 64, frame =>
         {
             Assert.Equal(64, frame.Width);
             Assert.Equal(64, frame.Height);
-            for (int y = 0; y < 64; y++)
-                Assert.All(frame.Span.Slice(y * frame.Stride, 64).ToArray(), value => Assert.Equal(16, value));
-            for (int y = 0; y < 32; y++)
-                Assert.All(frame.Span.Slice((64 + y) * frame.Stride, 64).ToArray(), value => Assert.Equal(128, value));
+            if (directGpu) Assert.IsType<GpuDecodedVideoFrame>(frame);
+            if (frame is GpuDecodedVideoFrame)
+            {
+                for (int y = 0; y < 64; y++)
+                    for (int x = 0; x < 64 * 4; x++)
+                        Assert.Equal(x % 4 == 3 ? 255 : 0, frame.Span[y * frame.Stride + x]);
+            }
+            else
+            {
+                for (int y = 0; y < 64; y++)
+                    Assert.All(frame.Span.Slice(y * frame.Stride, 64).ToArray(), value => Assert.Equal(16, value));
+                for (int y = 0; y < 32; y++)
+                    Assert.All(frame.Span.Slice((64 + y) * frame.Stride, 64).ToArray(), value => Assert.Equal(128, value));
+            }
             count++;
         });
         byte[] original = packet.ToArray();
         for (int i = 0; i < 12; i++) decoder.Decode(packet);
+        decoder.Drain();
+        Assert.Equal(12, count);
         Assert.True(count > 0, "Native decoder produced no frames.");
         Assert.Equal(original, packet); // Regression for reversed native input copy.
         decoder.Reset();
         int before = count;
         for (int i = 0; i < 12; i++) decoder.Decode(packet);
+        decoder.Drain();
+        Assert.Equal(before + 12, count);
         Assert.True(count > before, "Native decoder did not recover after Reset.");
+        int reinitialized = 0;
+        decoder.Initialize(VideoCodecId.H264, 64, 64, frame =>
+        {
+            if (directGpu) Assert.IsType<GpuDecodedVideoFrame>(frame);
+            reinitialized++;
+        });
+        for (int i = 0; i < 12; i++) decoder.Decode(packet);
+        decoder.Drain();
+        Assert.Equal(12, reinitialized);
         decoder.Dispose();
         decoder.Dispose();
         Assert.Throws<ObjectDisposedException>(() => decoder.Decode(packet));
@@ -128,6 +162,14 @@ public class NativeVideoTests
     [Fact]
     public void NativeLayouts_MatchSdkAbi()
     {
+        Assert.Equal(40, Marshal.SizeOf<D3D11VideoProcessorContentDesc>());
+        if (OperatingSystem.IsWindows())
+        {
+            Assert.Equal(16, Marshal.SizeOf<D3D11Interop.VideoProcessorInputViewDesc>());
+            Assert.Equal(16, Marshal.SizeOf<D3D11Interop.VideoProcessorOutputViewDesc>());
+            Assert.Equal(IntPtr.Size == 8 ? 72 : 44, Marshal.SizeOf<D3D11Interop.VideoProcessorStream>());
+            Assert.Equal(IntPtr.Size == 8 ? 32 : 24, Marshal.OffsetOf<D3D11Interop.VideoProcessorStream>("InputFramePtr").ToInt32());
+        }
         Assert.Equal(312, Marshal.SizeOf<DmaBufDescriptor>());
         Assert.Equal(24, Marshal.SizeOf<UotanStudio.Media.Decoding.VideoToolbox.CmTime>());
         Assert.Equal(72, Marshal.SizeOf<UotanStudio.Media.Decoding.VideoToolbox.CmTiming>());

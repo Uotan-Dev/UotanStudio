@@ -1,4 +1,4 @@
-﻿# 固定媒体测试夹具
+# 固定媒体测试夹具
 
 `black-64x64.h264` 是本项目为原生解码边界验证构造的原创 H.264 Baseline / Level 1.0 测试访问单元：AUD + SPS + PPS + 单 IDR slice，64×64，4×4 个 I_PCM 宏块，全部 Y=16、Cb=Cr=128，4:2:0 8-bit。使用 ITU-T H.264 的 SPS/PPS/slice header / I_PCM 语法和 Annex-B start code、emulation-prevention 规则构造，不依赖被测解码器生成。单帧大小 6209 字节，原生输出应为精确黑色，不允许近似像素通过。
 
@@ -11,3 +11,19 @@ SHA-256：`5BD0CA16A908E858640C20D733E50CB35597D49E34D953A3A40B2FA99F02766E`。
 SHA-256：`D5A2D70C45100CF8143572D9E9E48A867C04890690E4DE7633ED4E655DD95F9E`。
 
 上游许可证保存在 `OPENH264-LICENSE.txt`。测试运行不下载文件、安装 codec 或修改系统配置；夹具缺失和哈希不一致必须失败。Mac 硬件测试只在 Mac 上执行，Windows 测试使用本机 Media Foundation；不把非目标平台跳过记作硬件验证通过。
+
+## 2026-09-10 扩展夹具
+
+以下夹具由 Debian 13 的 FFmpeg 7.1.5 独立生成，不依赖被测库。H.265/AV1 为 128×96、10 fps、1 秒动态 testsrc2，8-bit YUV420；AAC 为 48 kHz 双声道静音、0.3 秒 ADTS。测试剥离 ADTS 后传入原始 AAC 包。编码器版本变化可能产生不同字节，仓库固定文件及哈希为本次验证对象。
+
+```sh
+ffmpeg -v error -f lavfi -i anullsrc=r=48000:cl=stereo -t 0.3 -c:a aac -f adts silence-48k-stereo.aac
+ffmpeg -v error -f lavfi -i testsrc2=size=128x96:rate=10 -t 1 -c:v libx265 -x265-params log-level=error -f hevc testsrc-128x96.h265
+ffmpeg -v error -f lavfi -i testsrc2=size=128x96:rate=10 -t 1 -c:v libaom-av1 -cpu-used 8 -f obu testsrc-128x96.obu
+```
+
+| 文件 | 字节数 | SHA-256 |
+|---|---:|---|
+| silence-48k-stereo.aac | 225 | `2D118EBB8D85EE1BBB7B258C7C1679A1C5631EF415BA84F00C7A70EC09932210` |
+| testsrc-128x96.h265 | 9797 | `C70E0C692102CB16CBDB4DDF156AE6EBEC67B5B12E8EDC5DF1BAE20CBCC169C2` |
+| testsrc-128x96.obu | 4867 | `4321ADBA660244F5D8E55331BA7253AD6D51CC0C4277DA0060899DED1F953CBD` |
