@@ -23,12 +23,17 @@ internal static class ExtractionDirectory
         }
         finally
         {
-            if (!success)
+            // Large extraction trees must not be deleted on the caller's UI thread.
+            // 大型解包目录的清理和回滚不能阻塞调用方的 UI 线程。
+            await Task.Run(() =>
             {
-                if (Directory.Exists(target)) Directory.Delete(target, true);
-                if (hadOriginal) Directory.Move(backup, target);
-            }
-            else if (hadOriginal) Directory.Delete(backup, true);
+                if (!success)
+                {
+                    if (Directory.Exists(target)) Directory.Delete(target, true);
+                    if (hadOriginal) Directory.Move(backup, target);
+                }
+                else if (hadOriginal) Directory.Delete(backup, true);
+            }).ConfigureAwait(false);
         }
     }
 }

@@ -731,7 +731,7 @@ internal partial class ImageViewModel : Tool
                 // Scale in-item progress into overall progress: each item owns a 1/N slice of the bar.
                 var itemBase = (double)index / requests.Length * 100;
                 var itemSlice = 100.0 / requests.Length;
-                var itemProgress = new Progress<double>(p => ProgressPercent = itemBase + p / 100 * itemSlice);
+                var itemProgress = new Progress<double>(p => ProgressPercent = Math.Max(ProgressPercent, itemBase + Math.Clamp(p, 0, 99.9) / 100 * itemSlice));
                 try
                 {
                     _ = paths.UnpackedDirectory;
@@ -851,7 +851,7 @@ internal partial class ImageViewModel : Tool
                 // are approximated by the completed count.
                 var itemBase = (double)done / Math.Max(1, total) * 100;
                 var itemSlice = 100.0 / Math.Max(1, total);
-                var itemProgress = new Progress<double>(p => ProgressPercent = Math.Min(99.9, itemBase + p / 100 * itemSlice));
+                var itemProgress = new Progress<double>(p => ProgressPercent = Math.Max(ProgressPercent, Math.Min(99.9, itemBase + Math.Clamp(p, 0, 99.9) / 100 * itemSlice)));
                 try
                 {
                     var paths = new ImageOperationPaths(source, entry.IsDirectory, project.RootPath, project.OutputDir);
@@ -863,7 +863,8 @@ internal partial class ImageViewModel : Tool
                         entry.IsUnpacked = true;
                         if (unpackFully)
                         {
-                            foreach (var nested in CollectNestedImages(paths.UnpackedDirectory))
+                            var nestedImages = await Task.Run(() => CollectNestedImages(paths.UnpackedDirectory));
+                            foreach (var nested in nestedImages)
                             {
                                 total++;
                                 queue.Enqueue(nested);
@@ -1328,7 +1329,7 @@ internal partial class ImageViewModel : Tool
                     Summary = $"Extracted {entries.Count} entries from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {entries.Count} 个条目到 '{outputDir}'"
                 };
             });
-            if (result.Success) WriteRepackMetadataSafe(sourcePath, outputDir);
+            if (result.Success) await WriteRepackMetadataSafeAsync(sourcePath, outputDir);
             return result;
         }
 
@@ -1348,7 +1349,7 @@ internal partial class ImageViewModel : Tool
                     Summary = $"Extracted {files.Count} files from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {files.Count} 个文件到 '{outputDir}'"
                 };
             });
-            if (result.Success) WriteRepackMetadataSafe(sourcePath, outputDir);
+            if (result.Success) await WriteRepackMetadataSafeAsync(sourcePath, outputDir);
             return result;
         }
 
@@ -1368,7 +1369,7 @@ internal partial class ImageViewModel : Tool
                     Summary = $"Extracted {entries.Count} entries from '{sourcePath}' to '{outputDir}'  已从 '{sourcePath}' 解出 {entries.Count} 个条目到 '{outputDir}'"
                 };
             });
-            if (result.Success) WriteRepackMetadataSafe(sourcePath, outputDir);
+            if (result.Success) await WriteRepackMetadataSafeAsync(sourcePath, outputDir);
             return result;
         }
 
@@ -1382,7 +1383,7 @@ internal partial class ImageViewModel : Tool
     /// Resolves the format handler via <see cref="FormatDetector"/> and writes
     /// <c>.uotanstudio-repack.json</c> metadata; failures are swallowed to avoid blocking extraction.
     /// </summary>
-    private static void WriteRepackMetadataSafe(string sourcePath, string outputDir)
+    private static async Task WriteRepackMetadataSafeAsync(string sourcePath, string outputDir)
     {
         try
         {
@@ -1391,7 +1392,10 @@ internal partial class ImageViewModel : Tool
             if (handler is not null)
             {
                 var metadataRoot = ProjectContextService.Instance.GetMetadataRoot();
-                UotanStudio.Firmware.SharedKernel.RepackMetadata.WriteAsync(handler, sourcePath, outputDir, metadataRoot: metadataRoot).GetAwaiter().GetResult();
+                // Metadata parsing and inode enumeration perform synchronous disk I/O before yielding.
+                // 元数据解析及 inode 遍历包含同步磁盘 I/O，整个写入过程都必须离开 UI 线程。
+                await Task.Run(() => UotanStudio.Firmware.SharedKernel.RepackMetadata.WriteAsync(
+                    handler, sourcePath, outputDir, metadataRoot: metadataRoot));
             }
         }
         catch (Exception ex)
