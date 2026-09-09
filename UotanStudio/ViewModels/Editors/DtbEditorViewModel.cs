@@ -13,7 +13,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// DTB device-tree dual-pane editor view model: a left device-node tree plus an editable DTS source pane,
 /// with bidirectional linkage and recompile-save (DTS→DTB).
 /// </summary>
-public partial class DtbEditorViewModel : Document, IEditable
+public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableDocument
 {
     private Dictionary<string, int> _lineMap = [];
 

@@ -579,23 +579,8 @@ public partial class FirmwareInfoViewModel : Document
     /// <returns>解包操作结果。<para>The unpack operation result.</para></returns>
     private Task<FirmwareOpResult> DispatchUnpackAsync(string path, string outputDirectory)
     {
-        var service = FirmwareService.Instance;
-        return FormatName switch
-        {
-            "Android Boot / Vendor Boot Image" => Task.Run(() => service.UnpackBootAsync(path, outputDirectory)),
-            "CPIO/TAR Archive" => Task.Run(() => service.UnpackCpioAsync(path, outputDirectory)),
-            "Android OTA Payload (payload.bin)" => Task.Run(() => service.ExtractPayloadAsync(path, outputDirectory)),
-            "Oppo Firmware (OFP/OPS/OZIP)" => Task.Run(() => service.ExtractOppoAsync(path, outputDirectory)),
-            "Android Logical Partition (super)" => Task.Run(() => service.UnpackSuperAsync(path, outputDirectory)),
-            // Android sparse 镜像（如 product.img）：级联解出内部文件系统内容（非文件系统内容时服务内回退 .raw）。
-            // Android sparse images (e.g. product.img): cascade into the internal filesystem contents
-            // (falls back to .raw inside the service when the content is not a filesystem).
-            "Android Sparse Image (simg)" => Task.Run(() => service.UnpackSparseImageAsync(path, outputDirectory)),
-            // 文件系统镜像（ext4/erofs/f2fs）：通过对应流式解析器级联解包到目录。
-            // Filesystem images (ext4/erofs/f2fs): cascade-unpack into the directory via the matching streaming parser.
-            "EXT4" or "EROFS" or "F2FS" => Task.Run(() => service.UnpackFileSystemImageAsync(path, outputDirectory)),
-            _ => Task.FromResult(FirmwareOpResult.Fail(UnpackUnsupportedLabel))
-        };
+        return FirmwareUnpackDispatcher.UnpackAsync(FormatName, path, outputDirectory, UnpackUnsupportedLabel,
+            allowSparse: true, runInBackground: true);
     }
 
     /// <summary>

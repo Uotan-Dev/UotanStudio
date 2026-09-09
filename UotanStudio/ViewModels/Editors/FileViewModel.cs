@@ -15,7 +15,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// Document view model, holding the document editor's text content, syntax language, file path and
 /// dirty state, with support for hex viewing and firmware structure analysis of binary files.
 /// </summary>
-public partial class FileViewModel : Document, IEditable
+public partial class FileViewModel : Document, IEditable, ISaveableDocument
 {
     static FileViewModel()
     {

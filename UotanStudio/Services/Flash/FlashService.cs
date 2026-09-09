@@ -1035,7 +1035,7 @@ public sealed class FlashService : IFlashService
     /// <para>按分区记录的上次进度上报，用于 100ms 节流去重。</para>
     /// Last reported progress per partition, used for 100 ms throttling.
     /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int Percent, string Status, long Ticks)> LastReportByPartition = new();
+    private static readonly PartitionProgressThrottle ProgressThrottle = new();
 
     /// <summary>
     /// <para>上报一条进度：既写入调用方提供的 <see cref="IProgress{T}"/>，
@@ -1049,16 +1049,7 @@ public sealed class FlashService : IFlashService
     /// </summary>
     private static void Report(IProgress<FlashProgress>? progress, string? partition, int percent, string status)
     {
-        var key = partition ?? string.Empty;
-        var now = Environment.TickCount64;
-        if (LastReportByPartition.TryGetValue(key, out var last)
-            && percent != 100
-            && string.Equals(status, last.Status, StringComparison.Ordinal)
-            && now - last.Ticks < 100)
-        {
-            return;
-        }
-        LastReportByPartition[key] = (percent, status, now);
+        if (!ProgressThrottle.ShouldReport(partition, percent, status, Environment.TickCount64)) return;
         progress?.Report(new FlashProgress(partition, percent, status));
         WeakReferenceMessenger.Default.Send(new FlashProgressMessage(partition, percent, status));
     }

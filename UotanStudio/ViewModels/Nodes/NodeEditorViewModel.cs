@@ -923,31 +923,15 @@ public partial class NodeEditorViewModel : ViewModelBase
             {
                 category = NodeViewModels.NodeCategory.Firmware;
             }
-            if (string.IsNullOrEmpty(dto.TypeKey) || !NodeTypeRegistry.Contains(dto.TypeKey))
+            if (!Services.Projects.WorkflowReconstruction.TryCreateNode(dto, out var node))
             {
                 _log.Write(LogLevel.Warn, "NodeEditor", $"Unknown node type '{dto.TypeKey}' skipped while loading workflow.");
                 continue;
             }
-            var node = NodeTypeRegistry.Create(dto.TypeKey)!;
             node.Location = new Point(dto.X, dto.Y);
             // 恢复输入端口初始值：标题匹配输入端口，值为字符串；数字/布尔按原类型宽松转换。
             // Restore input initial values: match input ports by title; the value is a string, leniently converted for numbers/booleans.
-            if (dto.InputInitialValues is { Count: > 0 })
-            {
-                foreach (var kv in dto.InputInitialValues)
-                {
-                    var input = node.Input.FirstOrDefault(c => string.Equals(c.Title, kv.Key, StringComparison.Ordinal));
-                    if (input is null || input.PortType == NodeViewModels.NodePortType.Flow) continue;
-                    input.InitialValue = input.PortType switch
-                    {
-                        NodeViewModels.NodePortType.Number
-                            when double.TryParse(kv.Value, System.Globalization.NumberStyles.Float,
-                                System.Globalization.CultureInfo.InvariantCulture, out var n) => n,
-                        NodeViewModels.NodePortType.Boolean when bool.TryParse(kv.Value, out var b) => b,
-                        _ => kv.Value
-                    };
-                }
-            }
+            Services.Projects.WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues);
             Nodes.Add(node); // 加载操作直接写入画布，不进入撤销栈
             if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
         }
@@ -958,33 +942,10 @@ public partial class NodeEditorViewModel : ViewModelBase
         // fall back to connector-title matching when absent (lenient matching, succeeds only when titles are unique).
         foreach (var cdto in snapshot.Connections)
         {
-            NodeViewModels.NodeConnectorViewModel? src = null, tgt = null;
-
-            if (!string.IsNullOrEmpty(cdto.SourceInstanceId) && created.TryGetValue(cdto.SourceInstanceId, out var srcNode))
-            {
-                src = srcNode.Output.FirstOrDefault(oc => oc.Title == cdto.SourceConnectorTitle);
-            }
-            if (!string.IsNullOrEmpty(cdto.TargetInstanceId) && created.TryGetValue(cdto.TargetInstanceId, out var tgtNode))
-            {
-                tgt = tgtNode.Input.FirstOrDefault(ic => ic.Title == cdto.TargetConnectorTitle);
-            }
-
-            if (src == null)
-            {
-                foreach (var n in Nodes)
-                {
-                    foreach (var oc in n.Output) { if (oc.Title == cdto.SourceConnectorTitle) { src = oc; break; } }
-                    if (src != null) break;
-                }
-            }
-            if (tgt == null)
-            {
-                foreach (var n in Nodes)
-                {
-                    foreach (var ic in n.Input) { if (ic.Title == cdto.TargetConnectorTitle) { tgt = ic; break; } }
-                    if (tgt != null) break;
-                }
-            }
+            var (_, src) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(Nodes, created,
+                cdto.SourceInstanceId, cdto.SourceConnectorTitle, output: true, fallbackOnMissingPort: true);
+            var (_, tgt) = Services.Projects.WorkflowReconstruction.ResolveEndpoint(Nodes, created,
+                cdto.TargetInstanceId, cdto.TargetConnectorTitle, output: false, fallbackOnMissingPort: true);
             if (src != null && tgt != null)
             {
                 Connections.Add(new NodeViewModels.NodeConnectionViewModel(src, tgt));

@@ -762,52 +762,7 @@ public sealed partial class UotanStudioMcpTools
     /// </summary>
     private static IReadonlyFormatHandler? ResolveFormatHandler(string? format, string filePath)
     {
-        FirmwareFormatRegistry.RegisterAll();
-        if (string.IsNullOrWhiteSpace(format))
-        {
-            return FormatDetector.Detect(filePath);
-        }
-
-        var key = format.Trim().TrimStart('.').ToLowerInvariant();
-        foreach (var handler in FormatDetector.RegisteredHandlers)
-        {
-            if (handler.FormatName.Equals(format, StringComparison.OrdinalIgnoreCase))
-            {
-                return handler;
-            }
-
-            foreach (var ext in handler.FileExtensions)
-            {
-                if (ext.Equals(key, StringComparison.OrdinalIgnoreCase))
-                {
-                    return handler;
-                }
-            }
-        }
-
-        var canonical = key switch
-        {
-            "boot" or "bootimg" or "vendor_boot" or "vendorboot" => "Android Boot / Vendor Boot Image",
-            "cpio" or "tar" or "cpiogz" => "CPIO/TAR Archive",
-            "payload" or "payloadbin" or "payload.bin" or "ota" => "Android OTA Payload (payload.bin)",
-            "oppo" or "ofp" or "ops" or "ozip" => "Oppo Firmware (OFP/OPS/OZIP)",
-            "super" or "lp" or "superimage" => "Android Logical Partition (super)",
-            _ => null,
-        };
-        if (canonical is null)
-        {
-            return null;
-        }
-
-        foreach (var handler in FormatDetector.RegisteredHandlers)
-        {
-            if (handler.FormatName == canonical)
-            {
-                return handler;
-            }
-        }
-
-        return null;
+        return FirmwareFormatResolution.ResolveHint(format, filePath);
     }
 
     /// <summary>
@@ -819,19 +774,9 @@ public sealed partial class UotanStudioMcpTools
     private static Task<FirmwareOpResult> DispatchUnpackAsync(
         IReadonlyFormatHandler handler, string filePath, string outputDirectory, string[]? extractFiles, CancellationToken ct)
     {
-        var service = FirmwareService.Instance;
-        return handler.FormatName switch
-        {
-            "Android Boot / Vendor Boot Image" => service.UnpackBootAsync(filePath, outputDirectory, ct),
-            "CPIO/TAR Archive" => service.UnpackCpioAsync(filePath, outputDirectory),
-            "Android OTA Payload (payload.bin)" => service.ExtractPayloadAsync(filePath, outputDirectory, FirstNonEmpty(extractFiles)),
-            "Oppo Firmware (OFP/OPS/OZIP)" => service.ExtractOppoAsync(filePath, outputDirectory, overwrite: true, ct),
-            "Android Logical Partition (super)" => service.UnpackSuperAsync(filePath, outputDirectory, ct),
-            // 文件系统镜像（ext4/erofs/f2fs）：通过对应流式解析器级联解包到目录。
-            // Filesystem images (ext4/erofs/f2fs): cascade-unpack into the directory via the matching streaming parser.
-            "EXT4" or "EROFS" or "F2FS" => service.UnpackFileSystemImageAsync(filePath, outputDirectory, cancellationToken: ct),
-            _ => Task.FromResult(FirmwareOpResult.Fail($"Unpack is not supported for format: {handler.FormatName}  不支持解包该格式：{handler.FormatName}")),
-        };
+        return FirmwareUnpackDispatcher.UnpackAsync(handler.FormatName, filePath, outputDirectory,
+            $"Unpack is not supported for format: {handler.FormatName}  不支持解包该格式：{handler.FormatName}",
+            partition: FirstNonEmpty(extractFiles), cancellationToken: ct);
     }
 
     /// <summary>
@@ -841,37 +786,13 @@ public sealed partial class UotanStudioMcpTools
     /// </summary>
     private static string? ResolvePackFormat(string? format, string sourceDir, string outputPath)
     {
-        if (!string.IsNullOrWhiteSpace(format))
-        {
-            var f = format.Trim().ToLowerInvariant();
-            return f is "cpio" or "boot" or "ext4" or "erofs" ? f : null;
-        }
-
-        var metadata = RepackMetadata.Read(sourceDir);
-        if (metadata is not null)
-        {
-            if (!metadata.CanPackDirectory) throw new InvalidDataException(metadata.PackingNotes);
-            return metadata.FormatName;
-        }
-        var ext = Path.GetExtension(outputPath).TrimStart('.').ToLowerInvariant();
-        return ext switch
-        {
-            "cpio" => "cpio",
-            "erofs" => "erofs",
-            "ext4" => "ext4",
-            _ => "cpio",
-        };
+        return FirmwareFormatResolution.ResolveMcpPackFormat(format, sourceDir, outputPath);
     }
 
     private static async Task<FirmwareOpResult> PackRegisteredDirectoryAsync(
         string format, string source, string output, CancellationToken cancellationToken)
     {
-        FirmwareFormatRegistry.RegisterAll();
-        var handler = FormatDetector.RegisteredHandlers.FirstOrDefault(h => h.FormatName == format);
-        if (handler is not IWritableFormatHandler writer)
-            return FirmwareOpResult.Fail($"No directory packer is registered for {format}.");
-        var result = await writer.PackAsync(source, output, cancellationToken).ConfigureAwait(false);
-        return new FirmwareOpResult { Success = result.Success, Summary = result.Summary };
+        return await RegisteredFirmwareFormats.PackDirectoryAsync(format, source, output, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

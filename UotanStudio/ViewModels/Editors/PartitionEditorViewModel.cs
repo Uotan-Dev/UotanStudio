@@ -18,7 +18,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// (name/start/size/type), supporting Android LP super metadata and Rockchip parameter files; it
 /// parses, edits visually and saves the table back to the file.
 /// </summary>
-public partial class PartitionEditorViewModel : Document
+public partial class PartitionEditorViewModel : Document, ICommandSaveableDocument
 {
     private PartitionTableSource _source;
     private LpMetadata? _lpMetadata;

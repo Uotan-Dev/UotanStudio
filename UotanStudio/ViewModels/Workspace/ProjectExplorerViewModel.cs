@@ -57,15 +57,8 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
         SelectedNode = _openedFolder;
         try
         {
-            _folderWatcher = new FileSystemWatcher(directory)
-            {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName
-            };
-            _folderWatcher.Created += OnFileSystemChanged;
-            _folderWatcher.Deleted += OnFileSystemChanged;
-            _folderWatcher.Renamed += OnFileSystemChanged;
-            _folderWatcher.EnableRaisingEvents = true;
+            _folderWatcher = new FileSystemWatcher(directory);
+            ConfigureWatcher(_folderWatcher, includeChanged: false);
         }
         catch (Exception)
         {
@@ -228,23 +221,26 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
 
         try
         {
-            _watcher = new FileSystemWatcher(svc.RootDirectory)
-            {
-                IncludeSubdirectories = true,
-                NotifyFilter = NotifyFilters.FileName
-                               | NotifyFilters.DirectoryName
-            };
-            _watcher.Changed += OnFileSystemChanged;
-            _watcher.Created += OnFileSystemChanged;
-            _watcher.Deleted += OnFileSystemChanged;
-            _watcher.Renamed += OnFileSystemChanged;
-            _watcher.EnableRaisingEvents = true;
+            _watcher = new FileSystemWatcher(svc.RootDirectory);
+            ConfigureWatcher(_watcher, includeChanged: true);
         }
         catch (Exception)
         {
             // 监听启动失败（路径不可达等）不影响资源管理器基本功能。
             // A failed watcher start (unreachable path etc.) must not break the explorer.
         }
+    }
+
+    /// <summary>Shares watcher setup while retaining the two roots and their existing event subscriptions.</summary>
+    private void ConfigureWatcher(FileSystemWatcher watcher, bool includeChanged)
+    {
+        watcher.IncludeSubdirectories = true;
+        watcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName;
+        if (includeChanged) watcher.Changed += OnFileSystemChanged;
+        watcher.Created += OnFileSystemChanged;
+        watcher.Deleted += OnFileSystemChanged;
+        watcher.Renamed += OnFileSystemChanged;
+        watcher.EnableRaisingEvents = true;
     }
 
     private void OnFileSystemChanged(object sender, FileSystemEventArgs e)

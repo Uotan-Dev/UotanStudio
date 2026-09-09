@@ -848,16 +848,7 @@ public static class FirmwareCli
 
     private static IReadonlyFormatHandler? ResolveByFormatName(string formatName)
     {
-        var name = formatName.Trim();
-        foreach (var h in FormatDetector.RegisteredHandlers)
-        {
-            if (string.Equals(h.FormatName, name, StringComparison.OrdinalIgnoreCase))
-            {
-                return h;
-            }
-        }
-
-        return null;
+        return RegisteredFirmwareFormats.FindByName(formatName.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

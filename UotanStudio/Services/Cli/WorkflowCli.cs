@@ -87,14 +87,13 @@ public static class WorkflowCli
         var created = new Dictionary<string, FlowNodeViewModel>(StringComparer.OrdinalIgnoreCase);
         foreach (var dto in snapshot.Nodes)
         {
-            if (string.IsNullOrEmpty(dto.TypeKey) || !NodeTypeRegistry.Contains(dto.TypeKey))
+            if (!WorkflowReconstruction.TryCreateNode(dto, out var node))
             {
                 Console.Error.WriteLine($"Unknown node type '{dto.TypeKey}' skipped  未注册节点类型已跳过");
                 continue;
             }
-            var node = NodeTypeRegistry.Create(dto.TypeKey)!;
             node.Title = dto.Title;
-            RestoreInitialValues(node, dto.InputInitialValues);
+            WorkflowReconstruction.RestoreInitialValues(node, dto.InputInitialValues);
             nodes.Add(node);
             if (!string.IsNullOrEmpty(dto.InstanceId)) created[dto.InstanceId] = node;
         }
@@ -110,11 +109,10 @@ public static class WorkflowCli
         var connections = new List<NodeConnection>(snapshot.Connections.Count);
         foreach (var cdto in snapshot.Connections)
         {
-            FlowNodeViewModel? src = null, tgt = null;
-            if (!string.IsNullOrEmpty(cdto.SourceInstanceId)) created.TryGetValue(cdto.SourceInstanceId, out src);
-            if (!string.IsNullOrEmpty(cdto.TargetInstanceId)) created.TryGetValue(cdto.TargetInstanceId, out tgt);
-            src ??= nodes.FirstOrDefault(n => n.Output.Any(o => o.Title == cdto.SourceConnectorTitle));
-            tgt ??= nodes.FirstOrDefault(n => n.Input.Any(i => i.Title == cdto.TargetConnectorTitle));
+            var (src, _) = WorkflowReconstruction.ResolveEndpoint(nodes, created,
+                cdto.SourceInstanceId, cdto.SourceConnectorTitle, output: true, fallbackOnMissingPort: false);
+            var (tgt, _) = WorkflowReconstruction.ResolveEndpoint(nodes, created,
+                cdto.TargetInstanceId, cdto.TargetConnectorTitle, output: false, fallbackOnMissingPort: false);
 
             if (src is null || tgt is null)
             {
@@ -148,7 +146,7 @@ public static class WorkflowCli
                 Console.Error.WriteLine($"--set: input port '{port}' not found on node '{node.Title}'  输入端口未找到");
                 return FirmwareCliExitCodes.Usage;
             }
-            input.InitialValue = ConvertInputValue(input.PortType, value);
+            input.InitialValue = WorkflowReconstruction.ConvertInputValue(input.PortType, value);
             input.Data = null; // 覆盖值经 InitialValue 注入  The override is injected via InitialValue.
         }
 
@@ -167,34 +165,6 @@ public static class WorkflowCli
             _ => FirmwareCliExitCodes.Failure,
         };
     }
-
-    /// <summary>
-    /// <para>恢复输入端口初始值：标题匹配输入端口，值为字符串；数字/布尔按原类型宽松转换。</para>
-    /// Restores input initial values: match input ports by title; values are strings, leniently converted
-    /// for numbers/booleans.
-    /// </summary>
-    private static void RestoreInitialValues(FlowNodeViewModel node, Dictionary<string, string>? initialValues)
-    {
-        if (initialValues is not { Count: > 0 }) return;
-        foreach (var kv in initialValues)
-        {
-            var input = node.Input.FirstOrDefault(c => string.Equals(c.Title, kv.Key, StringComparison.Ordinal));
-            if (input is null || input.PortType == NodePortType.Flow) continue;
-            input.InitialValue = ConvertInputValue(input.PortType, kv.Value);
-        }
-    }
-
-    /// <summary>
-    /// <para>按端口类型把字符串宽松转换为端口值（Number→double、Boolean→bool、其余原样）。</para>
-    /// Leniently converts a string to a port value by port type (Number→double, Boolean→bool, otherwise as-is).
-    /// </summary>
-    private static object ConvertInputValue(NodePortType portType, string value) => portType switch
-    {
-        NodePortType.Number when double.TryParse(value, System.Globalization.NumberStyles.Float,
-            System.Globalization.CultureInfo.InvariantCulture, out var n) => n,
-        NodePortType.Boolean when bool.TryParse(value, out var b) => b,
-        _ => value
-    };
 
     /// <summary>
     /// Parsed workflow CLI arguments.

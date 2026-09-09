@@ -177,9 +177,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         _timer.Stop();
         try
         {
-            await _coordinator.WaitForIdleAsync();
-            await _projects.WaitForIdleAsync();
-            if (!await DocumentSaveService.ConfirmAllAsync(WorkspaceSessionCapture.Enumerate(_workspace.Layout)))
+            if (!await WaitAndConfirmDocumentsAsync())
                 return false;
             if (_initialized && _coordinator.Enabled && _projects.CurrentProjectPath is { Length: > 0 } path)
                 await _projects.PersistToAsync(path, persistPageState: false);
@@ -196,9 +194,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     internal async Task<bool> SaveOnCloseAsync()
     {
         _timer.Stop();
-        await _coordinator.WaitForIdleAsync();
-        await _projects.WaitForIdleAsync();
-        if (!await DocumentSaveService.ConfirmAllAsync(WorkspaceSessionCapture.Enumerate(_workspace.Layout)))
+        if (!await WaitAndConfirmDocumentsAsync())
         {
             Resume();
             return false;
@@ -210,6 +206,14 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             await SaveSessionAsync();
         }
         return true;
+    }
+
+    /// <summary>Waits for existing work before prompting; never initiates a save before confirmation.</summary>
+    private async Task<bool> WaitAndConfirmDocumentsAsync()
+    {
+        await _coordinator.WaitForIdleAsync();
+        await _projects.WaitForIdleAsync();
+        return await DocumentSaveService.ConfirmAllAsync(WorkspaceSessionCapture.Enumerate(_workspace.Layout));
     }
 
     public void Dispose()

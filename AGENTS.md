@@ -1,5 +1,16 @@
 # UotanStudio 项目指令
 
+## 事件与入口复用（2026-09-10）
+
+- `FirmwareUnpackDispatcher` 共用界面与 MCP 的服务层解包分派；调用方显式保留 Sparse 支持、后台调度、分区选择和原有取消能力。CLI 继续直接调用格式处理器，不自动改为级联解包。
+- `RegisteredFirmwareFormats` 共用注册格式名称查找和元数据目录打包；`FirmwareFormatResolution` 保存 MCP 的别名及默认格式策略。CLI 名称先 Trim 后忽略大小写，元数据处理器查找仍精确匹配。无元数据时 CLI 默认 EXT4、MCP 保留扩展名推断及 CPIO 回退、界面保留项目设置。
+- `WorkflowReconstruction` 共用节点创建、初始值转换和连接端点查找。UI 保留工厂标题并恢复坐标，CLI 保留快照标题；UI 对实例命中但端口缺失的连接继续回退查找，CLI 保留该实例交由引擎处理。未知类型、失效连接的原有日志和退出行为由各入口保留。
+- `DocumentNotifications` 是活动文档消息的公共发布适配器，保持同步发送、类型化消息字段和不支持文档时的空载荷。Dock 切换、加载完成补发及投屏点击的发送位置和次数保持不变，不能按文档实例简单去重。
+- `PartitionProgressThrottle` 共用刷写与备份的 100 ms 节流算法，但两服务仍各自持有静态历史，保持按分区名匹配、状态变化立即发送、100% 必达以及先 IProgress 后 Messenger 的顺序。本次纯重构没有改变并发任务的节流作用域。
+- `ISaveableDocument` / `ICommandSaveableDocument` 仅由原先支持统一保存的五种编辑器实现；文本的另存为与其他编辑器的原有保存命令保持不变。自动保存的公共等待／确认步骤不主动保存，项目切换与关闭仍分别决定页面和会话的持久化范围。
+- 资源管理器共用监听器配置，但保留项目／独立文件夹两个监听器、原有订阅集合和防抖逻辑。公共消息类型、语言 CLR 事件和 Messenger 通知均保留兼容性；未在仓库内找到消费者不构成直接删除公共入口的依据。
+- 对照与回归测试见 `EntryPointCompatibilityTests` 和 `SharedEntryPointTests`；实施范围及验证边界见 `docs/entry-point-refactoring.md`。
+
 ## 构建与运行
 
 > 本项目面向 .NET 10.0，使用 Central Package Management，所有包版本集中在 `Directory.Packages.props`，请勿在各 `.csproj` 中重复指定版本号。

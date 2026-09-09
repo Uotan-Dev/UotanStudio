@@ -287,7 +287,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // the real line/char counts and encoding (the first refresh fired before the text was ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+            Services.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -364,7 +364,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // (the first refresh fired when the document data was not yet ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dtbDocument: document));
+            Services.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -421,7 +421,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // (the first refresh fired when the document data was not yet ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dexDocument: document));
+            Services.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -478,7 +478,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // (the first refresh fired when the document data was not yet ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(manifestDocument: document));
+            Services.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -535,7 +535,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // (the first refresh fired when the document data was not yet ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+            Services.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -592,7 +592,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // (the first refresh fired when the document data was not yet ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+            Services.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -649,7 +649,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // (the first refresh fired when the document data was not yet ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(apkDocument: document));
+            Services.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -733,7 +733,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         // (the first refresh fired when the document data was not yet ready).
         if (ReferenceEquals(documentDock.ActiveDockable, document))
         {
-            WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+            Services.Workspace.DocumentNotifications.Publish(document);
         }
     }
 
@@ -793,7 +793,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 $"Failed to open filesystem image '{fullPath}': {ex.Message}");
         }
 
-        WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(document));
+        Services.Workspace.DocumentNotifications.Publish(document);
     }
 
     /// <summary>
@@ -823,43 +823,7 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
 
         // 按活动文档类型发送对应重载的消息，属性面板据此切换展示路径。
         // Send the matching message overload by document type so the properties panel can switch paths.
-        var active = dock.ActiveDockable;
-        switch (active)
-        {
-            case ScreenMirrorViewModel mirror:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(mirror));
-                break;
-            case DtbEditorViewModel dtb:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dtb));
-                break;
-            case DexEditorViewModel dex:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(dex));
-                break;
-            case ManifestEditorViewModel manifest:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(manifest));
-                break;
-            case ArscEditorViewModel arsc:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(arsc));
-                break;
-            case ApkEditorViewModel apk:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(apk));
-                break;
-            case FirmwareInfoViewModel firmware:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(firmware));
-                break;
-            case HexEditorViewModel hex:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(hex));
-                break;
-            case FileViewModel file:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(file));
-                break;
-            case FileManagerEditorViewModel fileManager:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage(fileManager));
-                break;
-            default:
-                WeakReferenceMessenger.Default.Send(new ActiveDocumentChangedMessage((FileViewModel?)null));
-                break;
-        }
+        Services.Workspace.DocumentNotifications.Publish(dock.ActiveDockable);
     }
 
     /// <summary>

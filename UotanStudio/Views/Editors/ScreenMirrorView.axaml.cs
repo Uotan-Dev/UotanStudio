@@ -1,6 +1,5 @@
 using Avalonia.Input;
 using Avalonia.Controls;
-using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Comm.Protocols.Scrcpy;
 using UotanStudio.ViewModels.Editors;
 
@@ -56,7 +55,7 @@ public partial class ScreenMirrorView : UserControl
     {
         base.OnPointerPressed(e);
         if (ViewModel is { } selected)
-            CommunityToolkit.Mvvm.Messaging.WeakReferenceMessenger.Default.Send(new UotanStudio.Messages.ActiveDocumentChangedMessage(selected));
+            Services.Workspace.DocumentNotifications.Publish(selected);
         if (_pressedPointer is not null || _subscribed is null) return;
         uint button = ActionButton(e.GetCurrentPoint(FrameImage).Properties.PointerUpdateKind);
         if (button == 0 || !TranslateTouch(e, false, out var point)) return;

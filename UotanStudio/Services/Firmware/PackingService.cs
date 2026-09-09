@@ -30,11 +30,8 @@ internal static class PackingService
             if (metadata is not null)
             {
                 if (!metadata.CanPackDirectory) return (false, metadata.PackingNotes);
-                FirmwareFormatRegistry.RegisterAll();
-                var handler = FormatDetector.RegisteredHandlers.FirstOrDefault(h => h.FormatName == metadata.FormatName);
-                if (handler is not IWritableFormatHandler writer)
-                    return (false, $"No directory packer is registered for {metadata.FormatName}.");
-                var result = writer.PackAsync(sourceDirectory, outputPath).GetAwaiter().GetResult();
+                var result = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath)
+                    .GetAwaiter().GetResult();
                 return (result.Success, result.Summary);
             }
 

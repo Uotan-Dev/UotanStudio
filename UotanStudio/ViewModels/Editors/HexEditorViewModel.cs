@@ -13,7 +13,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// <c>HexViewer</c> control), holding the raw byte array (edits mutate it in place), size
 /// statistics and dirty state; saving writes the byte array back to the file.
 /// </summary>
-public partial class HexEditorViewModel : Document
+public partial class HexEditorViewModel : Document, ICommandSaveableDocument
 {
     /// <summary>
     /// <para>保存按钮的本地化标题。</para>

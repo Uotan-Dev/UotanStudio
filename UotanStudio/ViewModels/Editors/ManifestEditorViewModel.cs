@@ -13,7 +13,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// Manifest (AndroidManifest.xml / AXML) editor view model: a left element tree plus a right
 /// attribute-editing / XML-preview pane, supporting parse, visual editing and rebuild-write.
 /// </summary>
-public partial class ManifestEditorViewModel : Document
+public partial class ManifestEditorViewModel : Document, ICommandSaveableDocument
 {
     /// <summary>
     /// <para>保存按钮的本地化标题。</para>

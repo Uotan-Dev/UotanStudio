@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
-using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Core;
 using UotanStudio.ViewModels;
 using UotanStudio.ViewModels.Editors;
@@ -13,18 +12,9 @@ internal static class DocumentSaveService
 {
     private static readonly SemaphoreSlim SaveGate = new(1, 1);
 
-    internal static bool CanSave(object? document) => document is FileViewModel or HexEditorViewModel
-        or DtbEditorViewModel or ManifestEditorViewModel or PartitionEditorViewModel;
+    internal static bool CanSave(object? document) => document is ISaveableDocument;
 
-    internal static bool IsDirty(object? document) => document switch
-    {
-        FileViewModel text => text.IsDirty,
-        HexEditorViewModel hex => hex.IsDirty,
-        DtbEditorViewModel dtb => dtb.IsDirty,
-        ManifestEditorViewModel manifest => manifest.IsDirty,
-        PartitionEditorViewModel partition => partition.IsDirty,
-        _ => false
-    };
+    internal static bool IsDirty(object? document) => document is ISaveableDocument { IsDirty: true };
 
     internal static async Task<bool> SaveAsync(object document, Window? owner = null)
     {
@@ -49,28 +39,13 @@ internal static class DocumentSaveService
             }
             else
             {
-                IAsyncRelayCommand? command = document switch
-                {
-                    HexEditorViewModel hex => hex.SaveCommand,
-                    DtbEditorViewModel dtb => dtb.SaveCommand,
-                    ManifestEditorViewModel manifest => manifest.SaveCommand,
-                    PartitionEditorViewModel partition => partition.SaveCommand,
-                    _ => null
-                };
+                var command = (document as ICommandSaveableDocument)?.SaveCommand;
                 if (command is null) return false;
                 if (command.IsRunning && command.ExecutionTask is { } pending) await pending;
                 else if (command.CanExecute(null)) await command.ExecuteAsync(null);
             }
 
-            var error = document switch
-            {
-                FileViewModel textDocument => textDocument.CompileError,
-                HexEditorViewModel hex => hex.CompileError,
-                DtbEditorViewModel dtb => dtb.CompileError,
-                ManifestEditorViewModel manifest => manifest.CompileError,
-                PartitionEditorViewModel partition => partition.CompileError,
-                _ => string.Empty
-            };
+            var error = (document as ISaveableDocument)?.CompileError ?? string.Empty;
             if (!string.IsNullOrEmpty(error) || IsDirty(document))
                 throw new IOException(string.IsNullOrEmpty(error)
                     ? LanguageService.Instance.GetString("Dialog_SaveIncomplete") : error);
