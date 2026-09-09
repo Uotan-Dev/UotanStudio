@@ -126,7 +126,7 @@
     <x:String x:Key="FileManager_GridView">网格视图</x:String>
     <x:String x:Key="FileManager_EmptyDirectory">此目录为空</x:String>
     <x:String x:Key="FileManager_Extract">提取</x:String>
-    <x:String x:Key="FileManager_Loading">正在加载文件系统树…</x:String>
+    <x:String x:Key="FileManager_Loading">正在加载文件目录…</x:String>
     <x:String x:Key="FileManager_FileCount">文件数：{0}</x:String>
     <x:String x:Key="FileManager_DirectoryCount">目录数：{0}</x:String>
     <x:String x:Key="FileManager_ImageSize">大小：{0}</x:String>
@@ -136,7 +136,7 @@
     <x:String x:Key="FileManager_KindFile">文件</x:String>
     <x:String x:Key="FileManager_KindDirectory">目录</x:String>
     <x:String x:Key="FileManager_KindSymlink">符号链接</x:String>
-    <x:String x:Key="FileManager_Unrecognized">无法识别的文件系统镜像（仅支持 ext4/EROFS/F2FS）</x:String>
+    <x:String x:Key="FileManager_Unrecognized">无法识别的文件：支持 ext4/EROFS/F2FS 镜像、CPIO/TAR 归档及受支持的压缩文件</x:String>
 
     <!-- Hex 文档属性面板标签 -->
     <x:String x:Key="Dock_Properties_Hex_FileName">文件名</x:String>

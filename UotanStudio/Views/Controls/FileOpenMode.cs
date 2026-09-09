@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 using UotanStudio.Firmware;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
@@ -172,9 +173,9 @@ public static class FileOpenMode
             return EditorOpenMode.FileSystem;
         }
 
-        // CPIO/TAR 归档：直接路由到文件管理器编辑器（目录树浏览）。
-        // CPIO/TAR archives: route directly to the file-manager editor (directory-tree browsing).
-        if (IsCpioArchiveExtension(ext))
+        // 归档及压缩文件在文件管理器中浏览；压缩归档展开内部目录，单文件压缩显示一个条目。
+        // Browse archives and compressed files; single-file compression exposes one member.
+        if (ArchiveBrowser.SupportsPath(path))
         {
             return EditorOpenMode.FileSystem;
         }

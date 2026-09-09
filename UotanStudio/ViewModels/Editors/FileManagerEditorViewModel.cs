@@ -8,7 +8,7 @@ using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Formats.Cpio;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
 using UotanStudio.Messages;
 using UotanStudio.Services;
@@ -326,6 +326,11 @@ public partial class FileManagerEditorViewModel : Document
             // 解析与建树为 CPU/IO 密集操作，放到线程池执行避免阻塞 UI。
             // Parse and tree building are CPU/IO-bound; run them on the thread pool to keep the UI responsive.
             var result = await Task.Run(() => LoadImageCore(path, ct), ct).ConfigureAwait(true);
+            if (ct.IsCancellationRequested)
+            {
+                result.Parser.Dispose();
+                result.OwnedSource?.Dispose();
+            }
             ct.ThrowIfCancellationRequested();
             ApplyLoadResult(result);
         }
@@ -650,6 +655,8 @@ public partial class FileManagerEditorViewModel : Document
         // registry semantics with the firmware panel.
         FirmwareFormatRegistry.RegisterAll();
 
+        if (ArchiveBrowser.SupportsPath(path)) return LoadCpio(path, ct);
+
         var kind = DetectFilesystem(path);
         // 输入是否为 sparse 包装镜像（如 product.img）：sparse 以逻辑流视图解析。
         // Whether the input is sparse-wrapped (e.g. product.img): sparse images are parsed via a
@@ -840,41 +847,20 @@ public partial class FileManagerEditorViewModel : Document
 
     private static LoadResult LoadCpio(string path, CancellationToken ct)
     {
-        var reader = new CpioArchiveReader();
-        var entries = new List<FlatEntry>();
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
-
-        foreach (var entry in reader.ReadEntriesStreaming(stream, null, 64L * 1024 * 1024 * 1024, ct))
+        var browser = ArchiveBrowser.Open(path, ct);
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            var name = entry.Name?.TrimStart('/') ?? string.Empty;
-            if (string.IsNullOrEmpty(name) || name == "." || name == "TRAILER!!!")
-            {
-                continue;
-            }
-
-            var kind = entry.Metadata.FileType switch
+            var entries = browser.Members.Select(entry => new FlatEntry(entry.Path, entry.Size, entry.Kind switch
             {
                 CpioFileType.Directory => FileEntryKind.Directory,
                 CpioFileType.SymbolicLink => FileEntryKind.Symlink,
-                _ => FileEntryKind.File,
-            };
-
-            entries.Add(new FlatEntry("/" + name, entry.Data?.LongLength ?? entry.DataLength, kind));
+                _ => FileEntryKind.File
+            })).ToList();
+            return new LoadResult(browser.FormatName, new FileInfo(path).Length, browser, entries,
+                FileManagerTreeBuilder.Build(entries), null);
         }
-
-        var size = new FileInfo(path).Length;
-        var tree = FileManagerTreeBuilder.Build(entries);
-        // CPIO 不使用 IDisposable 解析器持有；传 null 占位。
-        // CPIO does not hold an IDisposable parser; pass null as placeholder.
-        return new LoadResult("CPIO", size, new DummyDisposable(), entries, tree, null);
+        catch { browser.Dispose(); throw; }
     }
-
-    /// <summary>
-    /// <para>CPIO 归档无需持有的空释放器。</para>
-    /// No-op disposable for CPIO archives that do not hold a persistent parser.
-    /// </summary>
-    private sealed class DummyDisposable : IDisposable { public void Dispose() { } }
 
     /// <summary>
     /// <para>应用后台加载结果到 UI 线程可见属性。</para>
@@ -1022,6 +1008,9 @@ public partial class FileManagerEditorViewModel : Document
         Directory.CreateDirectory(targetDirectory);
         switch (_parser)
         {
+            case ArchiveBrowser archive:
+                archive.Extract(relativePath, targetDirectory);
+                break;
             case Ext4Parser ext4:
                 ExtractExt4(ext4, relativePath, targetDirectory);
                 break;
