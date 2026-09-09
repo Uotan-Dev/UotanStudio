@@ -727,49 +727,33 @@ internal partial class ImageViewModel : Tool
             {
                 var (entry, paths) = requests[index];
                 StatusText = $"[{index + 1}/{requests.Length}] {operation}: {entry.DisplayName}";
+                // 条目内进度换算为总进度：当前条目占用 1/N 的进度条区间。
+                // Scale in-item progress into overall progress: each item owns a 1/N slice of the bar.
+                var itemBase = (double)index / requests.Length * 100;
+                var itemSlice = 100.0 / requests.Length;
+                var itemProgress = new Progress<double>(p => ProgressPercent = itemBase + p / 100 * itemSlice);
                 try
                 {
                     _ = paths.UnpackedDirectory;
-                    FirmwareOpResult result;
                     if (operation == "extract")
                     {
-                        paths.ValidateExtraction();
-                        UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
-                        var handler = FormatDetector.Detect(paths.Source)
-                            ?? throw new IOException("Unsupported firmware format.");
-                        if (Directory.Exists(paths.UnpackedDirectory))
+                        var (success, skippedEntry) = await ExtractEntryAsync(entry, paths, itemProgress);
+                        if (skippedEntry) skipped++;
+                        else if (success)
                         {
-                            if (!await RequestExtractOverwriteAsync(paths.UnpackedDirectory))
-                            {
-                                skipped++;
-                                continue;
-                            }
+                            succeeded++;
+                            entry.IsUnpacked = true;
                         }
-                        result = await ExtractionDirectory.ReplaceAsync(paths.UnpackedDirectory, async () => entry.Format switch
-                        {
-                            "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, paths.UnpackedDirectory)),
-                            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, paths.UnpackedDirectory)),
-                            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, paths.UnpackedDirectory, paths.Name),
-                            _ => await Task.Run(async () =>
-                            {
-                                var unpacked = await handler.UnpackAsync(paths.Source, paths.UnpackedDirectory,
-                                    new UotanStudio.Firmware.SharedKernel.UnpackOptions(), CancellationToken.None);
-                                return new FirmwareOpResult { Success = unpacked.Success, Summary = unpacked.Summary };
-                            })
-                        });
+                        else failed++;
                     }
                     else
                     {
                         Directory.CreateDirectory(paths.OutputRoot);
-                        result = await Task.Run(() => ImageOutputService.Build(paths, operation, brotliLevel));
+                        var result = await Task.Run(() => ImageOutputService.Build(paths, operation, brotliLevel));
+                        if (result.Success) succeeded++;
+                        else failed++;
+                        LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
                     }
-                    if (result.Success)
-                    {
-                        succeeded++;
-                        if (operation == "extract") entry.IsUnpacked = true;
-                    }
-                    else failed++;
-                    LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
                 }
                 catch (Exception ex)
                 {
@@ -781,6 +765,171 @@ internal partial class ImageViewModel : Tool
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, skipped);
         }
         finally { IsOperating = false; }
+    }
+
+    /// <summary>
+    /// <para>解包单个镜像条目：校验范围、检测格式、按需确认覆盖并按格式分派解包；
+    /// 结果摘要写入统一日志。</para>
+    /// Unpacks a single image entry: validates ranges, detects the format, confirms overwrite on
+    /// demand and dispatches by format; the result summary goes to the unified log.
+    /// </summary>
+    /// <param name="entry"><para>镜像条目（用于按格式分派）。</para>The image entry (used for format dispatch).</param>
+    /// <param name="paths"><para>操作路径（源文件与解包目录）。</para>Operation paths (source file and unpacked directory).</param>
+    /// <param name="itemProgress"><para>条目内进度（0-100，可选），由调用方换算为总进度。</para>Optional in-item progress (0-100); the caller scales it into overall progress.</param>
+    /// <returns>解包是否成功，以及是否被用户跳过。Whether extraction succeeded and whether the user skipped it.</returns>
+    private async Task<(bool Success, bool Skipped)> ExtractEntryAsync(ImageEntryViewModel entry, ImageOperationPaths paths, IProgress<double>? itemProgress = null)
+    {
+        paths.ValidateExtraction();
+        UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
+        var handler = FormatDetector.Detect(paths.Source)
+            ?? throw new IOException("Unsupported firmware format.");
+        if (Directory.Exists(paths.UnpackedDirectory)
+            && !await RequestExtractOverwriteAsync(paths.UnpackedDirectory))
+        {
+            return (false, true);
+        }
+
+        // 文件系统解析器的 (已处理, 总数) 回调换算为条目内百分比。
+        // Convert the filesystem parsers' (processed, total) callbacks into an in-item percentage.
+        var fileProgress = itemProgress is null
+            ? null
+            : new Progress<(int processed, int total)>(t => itemProgress.Report(t.total > 0 ? t.processed * 100.0 / t.total : 0));
+
+        var result = await ExtractionDirectory.ReplaceAsync(paths.UnpackedDirectory, async () => entry.Format switch
+        {
+            "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, paths.UnpackedDirectory)),
+            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, paths.UnpackedDirectory)),
+            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, paths.UnpackedDirectory, paths.Name, fileProgress),
+            _ => await Task.Run(async () =>
+            {
+                var options = new UotanStudio.Firmware.SharedKernel.UnpackOptions();
+                if (itemProgress is not null) options.Progress = new FirmwareItemProgress(itemProgress);
+                var unpacked = await handler.UnpackAsync(paths.Source, paths.UnpackedDirectory, options, CancellationToken.None);
+                return new FirmwareOpResult { Success = unpacked.Success, Summary = unpacked.Summary };
+            })
+        });
+        LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);
+        return (result.Success, false);
+    }
+
+    /// <summary>
+    /// <para>供新建项目流程调用的解包入口：把导入的镜像逐个解包到工程目录；开启完全解包时
+    /// 继续扫描解包产物中的嵌套镜像（如 ROM 包内的 payload.bin、payload 产出的分区镜像）并
+    /// 递归解包。进度与状态写入本视图模型，由镜像面板进度条显示。</para>
+    /// Unpack entry for the new-project flow: unpacks imported images into the project directory one
+    /// by one; with full unpack enabled, scans unpacked output for nested images (payload.bin inside a
+    /// ROM package, partition images produced by payload) and unpacks them recursively. Progress and
+    /// status are written to this view model for the image panel progress bar.
+    /// </summary>
+    /// <param name="entries"><para>要解包的镜像条目。</para>The image entries to unpack.</param>
+    /// <param name="unpackFully"><para>是否递归解包嵌套镜像。</para>Whether to unpack nested images recursively.</param>
+    public async Task UnpackFromProjectCreationAsync(IReadOnlyList<ImageEntryViewModel> entries, bool unpackFully)
+    {
+        if (IsOperating || entries.Count == 0) return;
+        var context = ProjectContextService.Instance;
+        var project = context.ActiveSubProject;
+        if (project is null) return;
+
+        IsOperating = true;
+        var succeeded = 0;
+        var failed = 0;
+        ProgressPercent = 0;
+        try
+        {
+            var queue = new Queue<ImageEntryViewModel>(entries);
+            var processed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var done = 0;
+            var total = queue.Count;
+            while (queue.Count > 0)
+            {
+                var entry = queue.Dequeue();
+                var source = context.ResolvePath(entry.RelativePath) ?? string.Empty;
+                if (!processed.Add(source)) continue;
+                StatusText = $"[{done + 1}/{total}] extract: {entry.DisplayName}";
+                // 条目内进度换算为总进度：队列可能动态增长，按已完成数近似分片。
+                // Scale in-item progress into overall progress; the queue may grow, so slices
+                // are approximated by the completed count.
+                var itemBase = (double)done / Math.Max(1, total) * 100;
+                var itemSlice = 100.0 / Math.Max(1, total);
+                var itemProgress = new Progress<double>(p => ProgressPercent = Math.Min(99.9, itemBase + p / 100 * itemSlice));
+                try
+                {
+                    var paths = new ImageOperationPaths(source, entry.IsDirectory, project.RootPath, project.OutputDir);
+                    var (success, skippedEntry) = await ExtractEntryAsync(entry, paths, itemProgress);
+                    if (skippedEntry) continue;
+                    if (success)
+                    {
+                        succeeded++;
+                        entry.IsUnpacked = true;
+                        if (unpackFully)
+                        {
+                            foreach (var nested in CollectNestedImages(paths.UnpackedDirectory))
+                            {
+                                total++;
+                                queue.Enqueue(nested);
+                            }
+                        }
+                    }
+                    else failed++;
+                }
+                catch (Exception ex)
+                {
+                    failed++;
+                    LogService.Instance.Write(LogLevel.Error, "Images", $"{entry.DisplayName}: {ex.Message}");
+                }
+                finally
+                {
+                    done++;
+                    ProgressPercent = (double)done / total * 100;
+                }
+            }
+            StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, 0);
+        }
+        finally { IsOperating = false; }
+    }
+
+    /// <summary>
+    /// <para>扫描解包目录根层与一级子目录，收集可继续解包的嵌套镜像条目；
+    /// <c>unknown</c>/<c>raw</c> 格式与工程外的文件被跳过。</para>
+    /// Scans the unpacked directory root and first-level subdirectories for nested images that can be
+    /// unpacked further; <c>unknown</c>/<c>raw</c> formats and files outside the project are skipped.
+    /// </summary>
+    private static List<ImageEntryViewModel> CollectNestedImages(string directory)
+    {
+        var nested = new List<ImageEntryViewModel>();
+        if (!Directory.Exists(directory)) return nested;
+
+        var candidates = new List<string>();
+        try
+        {
+            candidates.AddRange(Directory.EnumerateFiles(directory));
+            foreach (var sub in Directory.EnumerateDirectories(directory))
+            {
+                candidates.AddRange(Directory.EnumerateFiles(sub));
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images", $"Nested image scan failed for {directory}: {ex.Message}  嵌套镜像扫描失败：{ex.Message}");
+            return nested;
+        }
+
+        var context = ProjectContextService.Instance;
+        foreach (var file in candidates)
+        {
+            var format = DetectFormat(file);
+            if (format is "unknown" or "raw" or "folder") continue;
+            var relative = context.RelativePath(file);
+            if (relative is null) continue;
+            nested.Add(new ImageEntryViewModel
+            {
+                DisplayName = Path.GetFileName(file),
+                RelativePath = relative,
+                SizeBytes = 0,
+                Format = format
+            });
+        }
+        return nested;
     }
 
 
@@ -1479,4 +1628,16 @@ public sealed partial class ImageEntryViewModel : ObservableObject
 
         return $"{size:0.##} {units[unitIndex]}";
     }
+}
+
+/// <summary>
+/// <para>把固件库 <see cref="UotanStudio.Firmware.SharedKernel.IFirmwareProgress"/> 的百分比回调
+/// 适配为条目内 <see cref="IProgress{Double}"/>，供 <see cref="UnpackOptions.Progress"/> 使用。</para>
+/// Adapts the firmware library's <see cref="UotanStudio.Firmware.SharedKernel.IFirmwareProgress"/>
+/// percent callbacks to an in-item <see cref="IProgress{Double}"/> for <see cref="UnpackOptions.Progress"/>.
+/// </summary>
+internal sealed class FirmwareItemProgress(IProgress<double> itemProgress) : UotanStudio.Firmware.SharedKernel.IFirmwareProgress
+{
+    /// <inheritdoc />
+    public void Report(double percent, string message) => itemProgress.Report(percent);
 }

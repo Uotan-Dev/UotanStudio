@@ -28,6 +28,7 @@
     <x:String x:Key="NewProject_ClearImages">Clear selected files</x:String>
     <x:String x:Key="NewProject_ImageFiles">ROM and image files</x:String>
     <x:String x:Key="NewProject_PickerFailed">Unable to select files or folder</x:String>
+    <x:String x:Key="NewProject_CreateFailed">Failed to create project</x:String>
     <x:String x:Key="Menu_OpenProject">Open Project...</x:String>
     <x:String x:Key="Menu_OpenFolder">Open Folder...</x:String>
     <x:String x:Key="Menu_OpenFile">Open File...</x:String>

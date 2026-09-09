@@ -183,14 +183,56 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     // ===== 文件 / File =====
 
     /// <summary>
-    /// <para>打开新建项目配置窗口；当前仅提供表单与文件选择，不创建或切换工程。</para>
-    /// Opens the new project form without creating or switching projects.
+    /// <para>打开新建项目配置窗口；点击创建后按表单结果创建工程、导入选中镜像，勾选解包时
+    /// 回到工作区并经镜像面板进度条执行（完全）解包。</para>
+    /// Opens the new project form; on create, builds the project from the form result, imports the
+    /// selected images and, when unpack is checked, returns to the workspace and runs (full) unpacking
+    /// through the image panel progress bar.
     /// </summary>
     [RelayCommand]
     private async Task NewProjectAsync()
     {
-        if (DialogService.GetOwnerWindow() is { } owner)
-            await new NewProjectWindow().ShowDialog(owner);
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null) return;
+        var window = new NewProjectWindow();
+        await window.ShowDialog(owner);
+        var form = window.Result;
+        if (form is null) return;
+        try
+        {
+            var solutionPath = Path.Combine(form.Location, form.ProjectName, form.ProjectName + ".uotan");
+            await _projectOps.CreateNewSolutionAsync(solutionPath);
+            RecordRecentProject(solutionPath);
+
+            var images = ImageViewModel.EnsureInstance();
+            if (form.SelectedImagePaths.Length > 0)
+            {
+                await images.ImportAsync(form.SelectedImagePaths);
+            }
+
+            WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
+            GoToWorkspace();
+
+            if (form.UnpackImages && form.SelectedImagePaths.Length > 0)
+            {
+                // 只解包导入成功的镜像条目；导入失败（格式未知等）的文件不在列表中。
+                // Unpack only imported entries; files rejected at import (unknown format etc.) are not listed.
+                var entries = images.Images
+                    .Where(entry => !entry.IsDirectory && form.SelectedImagePaths
+                        .Any(path => string.Equals(Path.GetFileName(path), entry.DisplayName,
+                            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+                    .ToList();
+                if (entries.Count > 0)
+                {
+                    await images.UnpackFromProjectCreationAsync(entries, form.UnpackFully);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("NewProject_CreateFailed"),
+                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
     }
 
     /// <summary><para>在资源管理器选定目录中新建文件夹。</para>Creates a folder in the explorer directory.</summary>

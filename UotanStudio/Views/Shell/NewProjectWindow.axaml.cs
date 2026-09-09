@@ -8,14 +8,30 @@ using UotanStudio.Services;
 namespace UotanStudio.Views.Shell;
 
 /// <summary>
-/// <para>新建项目配置窗口；仅维护表单与文件选择，不创建项目或执行解包。</para>
-/// New project form; holds local selections without creating projects or unpacking files.
+/// <para>新建项目表单的提交结果；仅在点击创建且校验通过后非空。</para>
+/// Submitted new-project form result; non-null only after Create is clicked with valid input.
+/// </summary>
+public sealed record NewProjectFormResult(
+    string ProjectName,
+    string Location,
+    string[] SelectedImagePaths,
+    bool UnpackImages,
+    bool UnpackFully);
+
+/// <summary>
+/// <para>新建项目配置窗口；维护表单与文件选择，点击创建时输出 <see cref="Result"/> 并关闭，
+/// 由调用方创建工程与执行解包。</para>
+/// New project form; holds local selections, outputs <see cref="Result"/> on create so the
+/// caller creates the project and runs unpacking.
 /// </summary>
 public partial class NewProjectWindow : Window
 {
     private NewProjectImageEntry[] _images = [];
     private bool _updatingSelection;
     private bool _validationRequested;
+
+    /// <summary><para>表单提交结果；取消或关闭时保持为空。</para>Form result; stays null on cancel/close.</summary>
+    public NewProjectFormResult? Result { get; private set; }
 
     /// <summary><para>初始化空白项目表单。</para>Initializes the empty project form.</summary>
     public NewProjectWindow()
@@ -142,7 +158,18 @@ public partial class NewProjectWindow : Window
         UpdateValidation();
         if (ProjectNameError.IsVisible) ProjectNameBox.Focus();
         else if (ProjectLocationError.IsVisible) ProjectLocationBox.Focus();
-        // Project creation is intentionally deferred; valid input remains available in the form.
+        else
+        {
+            // Output the form result and close; the caller creates the project and runs unpacking.
+            // 输出表单结果并关闭；由调用方创建工程并执行解包。
+            Result = new NewProjectFormResult(
+                ProjectNameBox.Text?.Trim() ?? string.Empty,
+                ProjectLocationBox.Text?.Trim() ?? string.Empty,
+                _images.Where(image => image.IsSelected).Select(image => image.FilePath).ToArray(),
+                UnpackImagesBox.IsChecked == true,
+                UnpackFullyBox.IsChecked == true);
+            Close();
+        }
     }
 
     private void UpdateValidation()

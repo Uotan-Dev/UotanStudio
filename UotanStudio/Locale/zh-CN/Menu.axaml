@@ -28,6 +28,7 @@
     <x:String x:Key="NewProject_ClearImages">清除已选文件</x:String>
     <x:String x:Key="NewProject_ImageFiles">ROM与镜像文件</x:String>
     <x:String x:Key="NewProject_PickerFailed">无法选择文件或目录</x:String>
+    <x:String x:Key="NewProject_CreateFailed">创建项目失败</x:String>
     <x:String x:Key="Menu_OpenProject">打开项目...</x:String>
     <x:String x:Key="Menu_OpenFolder">打开文件夹...</x:String>
     <x:String x:Key="Menu_OpenFile">打开文件...</x:String>
