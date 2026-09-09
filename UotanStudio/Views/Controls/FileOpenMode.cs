@@ -313,6 +313,22 @@ public static class FileOpenMode
             return EditorOpenMode.Arsc;
         }
 
+        // 无扩展名文件的格式注册表嗅探：遍历已注册格式处理器按内容识别（boot/payload/sparse/
+        // CPIO/Oppo/RKAF 等），命中时走固件元数据面板；面板解析失败会由 WorkspaceViewModel
+        // 回退到 Hex。仅在扩展名为空时执行，避免与既有扩展名路由双源冲突。
+        // Format-registry sniffing for extension-less files: iterate registered format handlers for
+        // content-based detection (boot/payload/sparse/CPIO/Oppo/RKAF etc.); a hit opens the firmware
+        // metadata panel (which WorkspaceViewModel falls back to Hex on parse failure). Only runs for
+        // extension-less files to avoid dual-source conflicts with the extension routes above.
+        if (header is not null && header.Length > 0 && string.IsNullOrEmpty(Path.GetExtension(path)))
+        {
+            FirmwareFormatRegistry.RegisterAll();
+            if (FormatDetector.Detect(path) is not null)
+            {
+                return EditorOpenMode.Firmware;
+            }
+        }
+
         // Auto 分支的 magic 兜底：识别出强二进制类型视为十六进制。
         // Magic fallback for the Auto branch: a recognized strongly-binary type opens as hex.
         if (header is not null && ManagedMagic.Detect(header) is not null)

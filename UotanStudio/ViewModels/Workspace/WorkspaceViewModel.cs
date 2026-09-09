@@ -708,6 +708,25 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
                 $"Failed to open firmware info for '{fullPath}': {ex.Message}");
         }
 
+        // 固件信息无法解析（格式未识别或元数据读取失败）时回退十六进制视图：
+        // 移除刚创建的固件文档并改用 Hex 编辑器打开，仅对本次新建且失败的文档生效。
+        // When firmware info cannot be parsed (unrecognized format or metadata read failure), fall back
+        // to the hex view: remove the just-created firmware document and reopen it in the Hex editor;
+        // only applies to newly-created documents that failed to load.
+        if (document.HasError)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Workspace",
+                $"Firmware info could not parse '{fullPath}'; falling back to the hex editor.");
+            documentDock.VisibleDockables?.Remove(document);
+            if (ReferenceEquals(documentDock.ActiveDockable, document))
+            {
+                documentDock.ActiveDockable = documentDock.VisibleDockables?.FirstOrDefault();
+            }
+
+            await OpenHexAsync(path);
+            return;
+        }
+
         // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
         // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
         // Re-send the active-document message after load so the properties panel shows real values
