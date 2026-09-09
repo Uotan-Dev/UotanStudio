@@ -123,6 +123,12 @@ public sealed class ScrcpyClient : IDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
+    internal ScrcpyClient(Func<string, Stream> open, ScrcpyServerOptions options)
+    {
+        _open = open;
+        _options = options;
+    }
+
     /// <summary>Gets the device name announced on the first socket.</summary>
     /// <summary>获取首个 socket 宣告的设备名。</summary>
     public string DeviceName { get; private set; } = string.Empty;
@@ -146,6 +152,15 @@ public sealed class ScrcpyClient : IDisposable
     /// <param name="timeoutMs">Per-read timeout in milliseconds. 单次读取超时（毫秒）。</param>
     /// <exception cref="InvalidDataException">Thrown when the handshake fails. 握手失败时抛出。</exception>
     public void Connect(int timeoutMs = 10000)
+    {
+        Dispose();
+        DeviceName = string.Empty;
+        VideoMetadata = null;
+        try { ConnectCore(timeoutMs); }
+        catch { Dispose(); throw; }
+    }
+
+    private void ConnectCore(int timeoutMs)
     {
         // Socket 1: video (dummy byte + device name + codec meta + framed stream).
         // socket 1：视频（哑字节 + 设备名 + 编码器元数据 + 分帧码流）。
@@ -195,7 +210,7 @@ public sealed class ScrcpyClient : IDisposable
             VideoMetadata = new ScrcpyVideoMetadata(codec, width, height);
         }
 
-        if (_audioStream is not null) _ = ReadExact(_audioStream, 4, timeoutMs);
+        if (_audioStream is not null && _options.SendCodecMeta) _ = ReadExact(_audioStream, 4, timeoutMs);
 
     }
 
@@ -204,7 +219,8 @@ public sealed class ScrcpyClient : IDisposable
     /// <para>从视频 socket 读取一个分帧视频包。</para>
     /// </summary>
     /// <param name="timeoutMs">Per-read timeout in milliseconds. 单次读取超时（毫秒）。</param>
-    /// <returns>The frame, or <see langword="null"/> when the stream ended. 视频帧；流结束时为 <see langword="null"/>。</returns>
+    /// <returns>The frame, or <see langword="null"/> when no header arrived before timeout.</returns>
+    /// <exception cref="EndOfStreamException">The server closed the video stream.</exception>
     public ScrcpyVideoFrame? ReadFrame(int timeoutMs)
     {
         var stream = _videoStream;
@@ -216,7 +232,7 @@ public sealed class ScrcpyClient : IDisposable
         var header = TryReadExact(stream, 12, timeoutMs);
         if (header is null || header.Length != 12)
         {
-            return null; // EOF — server closed the stream. 服务端已关闭流。
+            return null; // No header arrived before the read timeout.
         }
 
         var pts = BinaryPrimitives.ReadInt64BigEndian(header);
@@ -299,9 +315,9 @@ public sealed class ScrcpyClient : IDisposable
     /// <inheritdoc />
     public void Dispose()
     {
-        _videoStream?.Dispose();
-        _audioStream?.Dispose();
-        _controlStream?.Dispose();
+        Interlocked.Exchange(ref _videoStream, null)?.Dispose();
+        Interlocked.Exchange(ref _audioStream, null)?.Dispose();
+        Interlocked.Exchange(ref _controlStream, null)?.Dispose();
     }
 
     private static byte[] ReadExact(Stream stream, int length, int timeoutMs)
@@ -330,7 +346,7 @@ public sealed class ScrcpyClient : IDisposable
         var offset = 0;
         while (offset < length)
         {
-            if (stream.CanTimeout) stream.ReadTimeout = timeoutMs;
+            if (stream.CanTimeout) stream.ReadTimeout = timeoutMs == 0 ? 1 : timeoutMs;
             int count;
             try { count = stream.Read(buffer, offset, length - offset); }
             catch (TimeoutException) when (offset == 0) { result = null; return false; }

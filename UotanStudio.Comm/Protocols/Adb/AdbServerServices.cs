@@ -73,6 +73,7 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
 /// <summary>Preserves unread bytes when adapting ADB packet chunks to a byte-oriented stream.</summary>
 public sealed class AdbServiceStream(AdbStream stream) : Stream
 {
+    private bool _disposed;
     private byte[]? _pending;
     private int _offset;
     /// <inheritdoc />
@@ -120,5 +121,9 @@ public sealed class AdbServiceStream(AdbStream stream) : Stream
     /// <inheritdoc />
     public override void SetLength(long value) => throw new NotSupportedException();
     /// <inheritdoc />
-    protected override void Dispose(bool disposing) { if (disposing) stream.Dispose(); base.Dispose(disposing); }
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && !_disposed) { _disposed = true; stream.Dispose(); }
+        base.Dispose(disposing);
+    }
 }

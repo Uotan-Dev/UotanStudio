@@ -70,6 +70,9 @@ public sealed class ScrcpyServerOptions
     /// <returns>The argument strings. 参数字符串数组。</returns>
     public string[] BuildArguments()
     {
+        if (Scid > int.MaxValue) throw new ArgumentOutOfRangeException(nameof(Scid));
+        if (VideoCodec is not ("h264" or "h265")) throw new ArgumentException("Unsupported video codec.", nameof(VideoCodec));
+        if (LogLevel is not ("verbose" or "debug" or "info" or "warn" or "error")) throw new ArgumentException("Invalid server log level.", nameof(LogLevel));
         var args = new List<string>
         {
             ScrcpyConstants.ServerVersion,
@@ -83,10 +86,10 @@ public sealed class ScrcpyServerOptions
             $"audio={Bool(Audio)}",
             $"control={Bool(Control)}",
             $"stay_awake={Bool(StayAwake)}",
-            "send_device_meta=true",
+            $"send_device_meta={Bool(SendDeviceMeta)}",
             "send_frame_meta=true",
-            "send_dummy_byte=true",
-            "send_codec_meta=true",
+            $"send_dummy_byte={Bool(SendDummyByte)}",
+            $"send_codec_meta={Bool(SendCodecMeta)}",
             "cleanup=true",
             "tunnel_forward=true",
         };
