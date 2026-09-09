@@ -310,6 +310,15 @@ APK 签名入口：APK 文档页提供自定义私钥、证书、输出路径、
 
 ### 平台媒体与投屏验证边界（2026-09-09）
 
+- 选中投屏文档或点击投屏视图，通过 `ActiveDocumentChangedMessage` 选择 `PropertiesContentType.ScreenMirror`。`PropertiesViewModel.ScreenMirror.cs` 按 1 秒实际采样间隔更新既有属性行的 Value，不重建集合；切换内容或关闭会话停止定时更新。显示编码格式、实际解码后端、当前帧尺寸、NV12 像素格式、BT.601 有限范围显示转换、接收/解码/位图更新率、帧率上限、目标/接收码率等。计数使用 Interlocked，配置包不算视频帧；位图更新率不是显示器 present FPS。源色彩空间未解析、设备编码器名称未报告时必须明确标未知/自动选择，不从转换公式或旧日志推断。中英文本集中于 Locale/*/Dock.axaml。
+
+- 投屏鼠标坐标必须经 `e.GetPosition(FrameImage)` 取得图像控件本地逻辑坐标，再由 `ScreenMirrorCoordinates` 按居中 `Stretch=Uniform` 映射为视频像素；禁止混用整个视图坐标和图像尺寸，也不重复乘 DPI。黑边与右/下排他边缘在整数转换前拒绝。鼠标按下捕获指针，拖动越界钳制，释放/失去捕获/视图卸载结束手势；发送正确的 actionButton 与释放时零压力。滚轮按 Avalonia 正向向上与 VM 正向向下约定转换一次。验证见 `docs/validation/SCRCPY_INPUT_VALIDATION_2026-09-09.md`。
+
+- 投屏复用 `WriteableBitmap` 时，每帧解锁后通过 UI 线程 `FramePresented` 事件通知 `FrameImage.InvalidateVisual()`；仅写像素不会替代控件的重绘请求。视图在挂载/DataContext 切换时订阅、卸载时解除；最新帧通过 `DispatcherPriority.Render` 调度。NV12→BGRA 使用精确整数 `Vector128` 路径，保留标量尾部与无向量平台回退，颜色语义仍为 BT.601 有限范围。`MediaProbe --benchmark-conversion` 与 `ScrcpyProbe ... h264 --performance` 提供转换/真实流计时，后者发送重复通知栏动画、以 60 fps 上限和原尺寸采集，不执行逐帧哈希和码流写盘；显示帧率不得由解码帧数直接推断。实测报告见 `docs/validation/SCRCPY_FRAME_RATE_OPTIMIZATION_2026-09-09.md`。
+
+- 模拟器/TCP 投屏通过 `AdbServerServices` 使用既有 ADB server（默认 127.0.0.1:5037），按序列号打开 sync/shell/localabstract 服务；USB 路径显式建立原生 ADB 会话。`AdbServiceStream` 保留 ADB 数据块未读尾部。scrcpy 使用 `tunnel_forward=true` 与非负有符号 32 位 SCID；先读视频 dummy，再打开音频/控制，最后读取元数据，避免上游等待连接时死锁。无数据超时返回空，EOF/部分读取失败抛错；连接失败释放全部已开流。
+- `tools/ScrcpyProbe` 是真实设备链路测试入口，会推送服务端并发送 HOME/通知栏/BACK；要求显式设备序列号。MuMu Android 15 的 H.264 两轮视频包全部解码（242/242、207/207），桌面实际显示已验证；H.265 因模拟器没有 HEVC 编码器而未能验证主机解码。结果不代表 GPU 硬解、端到端延迟或持续帧率上限，报告见 `docs/validation/SCRCPY_EMULATOR_VALIDATION_2026-09-09.md`。
+
 - scrcpy 2.7 视频头使用小写 `h264/h265` fourcc；配置位为 bit 63，关键帧位为 bit 62，余下位为微秒 PTS。`ScrcpyVideoFrame` 按位解析配置/关键帧并提供去标志时间戳；投屏将配置包与下一帧合并，按微秒 ×10 传递 ticks。
 - `ScreenMirrorViewModel` 在专用线程创建、使用并释放解码器，关闭时先打断 socket 读取；显示只保留最新待处理帧，替换与渲染后均归还池化缓冲区。解码错误进入日志/状态。当前显示仍为 CPU NV12→BGRA→WriteableBitmap 上传，不宣称 GPU 零拷贝，CPU 转换仅支持 BT.601 有限范围。
 - Windows 同步路径通过 H.264 固定 I_PCM 黑帧逐像素验证、上游 CABAC 30 帧完整排空、多实例与 Reset，以及 `tools/MediaProbe` 的 NativeAOT 实际运行。设置低延迟属性不保证无排队：CABAC 样本 30 次输入先输出 14 帧，Drain 后共 30 帧。真实设备延迟、H.265 码流、Windows GPU、Mac 硬件、Linux VA/EGL 均不得用编译或能力枚举代替运行证明。
