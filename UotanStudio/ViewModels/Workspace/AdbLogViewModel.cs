@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Text.RegularExpressions;
@@ -15,10 +14,9 @@ namespace UotanStudio.ViewModels.Workspace;
 
 internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
 {
-    private const int MaxLines = 5000;
     private readonly Lock _sync = new();
-    private readonly Queue<AdbLogcatEntry> _pending = new();
-    private readonly Queue<AdbLogcatEntry> _allLines = new();
+    private readonly BoundedDeviceLogBuffer _pending = new();
+    private readonly BoundedDeviceLogBuffer _allLines = new();
     private readonly Func<DetectedDevice, Action<AdbLogcatEntry>, CancellationToken, Task> _stream;
     private readonly Func<DetectedDevice, CancellationToken, Task> _clearDeviceBuffers;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
@@ -31,7 +29,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
     private Regex? _searchPattern;
     private bool _disposed;
 
-    public ObservableCollection<AdbLogcatEntry> Lines { get; } = [];
+    public LogEntryCollection<AdbLogcatEntry> Lines { get; } = [];
     AdbLogViewModel? ILogViewModel.LiveModel => this;
     Editors.LogEditorViewModel? ILogViewModel.FileModel => null;
     IReadOnlyList<ILogLine> ILogViewModel.Entries => Lines;
@@ -134,17 +132,18 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
 
     private void ReapplyFilter()
     {
-        Lines.Clear();
-        foreach (var line in _allLines)
+        var filtered = new List<AdbLogcatEntry>();
+        foreach (var line in _allLines.Entries)
         {
-            if (MatchesFilter(line)) Lines.Add(line);
+            if (MatchesFilter(line)) filtered.Add(line);
             if (HasSearchError) break;
         }
-        if (HasSearchError) Lines.Clear();
+        Lines.Replace(HasSearchError ? [] : filtered);
     }
 
     public AdbLogViewModel() : this(DeviceMonitorService.Instance.StartLogcatStreamingAsync,
-        DeviceMonitorService.Instance.ClearLogcatBuffersAsync) { }
+        DeviceMonitorService.Instance.ClearLogcatBuffersAsync)
+    { }
 
     internal AdbLogViewModel(Func<DetectedDevice, Action<AdbLogcatEntry>, CancellationToken, Task> stream,
         Func<DetectedDevice, CancellationToken, Task> clearDeviceBuffers)
@@ -256,8 +255,7 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
         lock (_sync)
         {
             if (!ReferenceEquals(_capture, capture)) return;
-            if (_pending.Count == MaxLines) _pending.Dequeue();
-            _pending.Enqueue(entry);
+            _pending.Add(entry);
         }
     }
 
@@ -267,24 +265,30 @@ internal partial class AdbLogViewModel : Tool, IDisposable, ILogViewModel
     {
         // Keep the visible history fixed; Enqueue still retains the latest bounded batch.
         if (IsPaused) return;
-        AdbLogcatEntry[] batch;
+        var batch = new List<AdbLogcatEntry>(250);
         lock (_sync)
         {
-            var count = Math.Min(250, _pending.Count);
-            batch = new AdbLogcatEntry[count];
-            for (var i = 0; i < count; i++) batch[i] = _pending.Dequeue();
+            var characters = 0;
+            while (_pending.Count > 0 && batch.Count < 250 && characters < 128 * 1024)
+            {
+                var entry = _pending.Take();
+                batch.Add(entry);
+                characters += entry.RawText.Length;
+            }
         }
+        if (batch.Count == 0) return;
+        var removedCount = 0;
+        var appended = new List<AdbLogcatEntry>(batch.Count);
         foreach (var entry in batch)
         {
-            if (_allLines.Count == MaxLines)
+            _allLines.Add(entry, removed =>
             {
-                var removed = _allLines.Dequeue();
-                if (Lines.Count > 0 && ReferenceEquals(Lines[0], removed)) Lines.RemoveAt(0);
-            }
-            _allLines.Enqueue(entry);
-            if (MatchesFilter(entry)) Lines.Add(entry);
+                if (removedCount < Lines.Count && ReferenceEquals(Lines[removedCount], removed)) removedCount++;
+            });
+            if (MatchesFilter(entry)) appended.Add(entry);
         }
-        if (HasSearchError && Lines.Count > 0) Lines.Clear();
+        if (HasSearchError) Lines.Replace([]);
+        else Lines.Apply(removedCount, appended);
     }
 
     private void StopCapture()
