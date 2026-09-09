@@ -93,6 +93,7 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<OpenDocumentRequestMessage>(this, OnOpenDocument);
         WeakReferenceMessenger.Default.Register<OpenCompareRequestMessage>(this, OnOpenCompare);
         WeakReferenceMessenger.Default.Register<OpenScreenMirrorRequestMessage>(this, OnOpenScreenMirror);
+        WeakReferenceMessenger.Default.Register<AddSubProjectRequestMessage>(this, OnAddSubProject);
         WeakReferenceMessenger.Default.Register<OpenFileCompareRequestMessage>(this, OnOpenFileCompare);
         WeakReferenceMessenger.Default.Register<OpenFolderCompareRequestMessage>(this, OnOpenFolderCompare);
 
@@ -282,6 +283,27 @@ public partial class App : Application
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "App", $"Open screen mirror failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <para>响应添加子项目请求：转发到菜单命令（打开子项目模式的新建窗口）。</para>
+    /// Responds to the add-sub-project request: forwards to the menu command (the new-project window
+    /// in sub-project mode).
+    /// </summary>
+    private async void OnAddSubProject(object recipient, AddSubProjectRequestMessage message)
+    {
+        try
+        {
+            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+                && desktop.MainWindow?.DataContext is MainViewModel mainVm)
+            {
+                await mainVm.MenuVM.AddSubProjectCommand.ExecuteAsync(null);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "App", $"Open add sub-project failed: {ex.Message}");
         }
     }
 

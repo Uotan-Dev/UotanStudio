@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Nodes;
@@ -183,29 +184,37 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     // ===== 文件 / File =====
 
     /// <summary>
-    /// <para>打开新建项目配置窗口；点击创建后按表单结果创建工程、导入选中镜像，勾选解包时
-    /// 回到工作区并经镜像面板进度条执行（完全）解包。</para>
-    /// Opens the new project form; on create, builds the project from the form result, imports the
-    /// selected images and, when unpack is checked, returns to the workspace and runs (full) unpacking
-    /// through the image panel progress bar.
+    /// <para>打开新建项目配置窗口（新建解决方案语义）；点击创建后按组合路径创建解决方案、
+    /// 导入选中镜像；单文件容器（super / payload.bin / zip）按勾选条目在 images/ 内原地进行向提取，
+    /// 勾选完全解压时对提取出的受支持 img 继续递归解包为同名文件夹。</para>
+    /// Opens the new-project form (new-solution semantics); on create, builds the solution from the
+    /// combined path, imports selected images, extracts selected entries from a single super /
+    /// payload.bin / zip container in place inside images/, and, with full unpack checked, recursively
+    /// unpacks the extracted supported imgs into same-name folders.
     /// </summary>
     [RelayCommand]
     private async Task NewProjectAsync()
     {
         var owner = DialogService.GetOwnerWindow();
         if (owner is null) return;
-        var window = new NewProjectWindow();
+        var window = new NewProjectWindow(NewProjectWindowMode.Solution, null, null);
         await window.ShowDialog(owner);
         var form = window.Result;
         if (form is null) return;
         try
         {
-            var solutionPath = Path.Combine(form.Location, form.ProjectName, form.ProjectName + ".uotan");
+            // 位置已是组合后的完整目录（基础目录/解决方案名），直接作为解决方案目录使用。
+            // The location is already the combined directory (base/solution name); use it directly.
+            var solutionPath = Path.Combine(form.Location, form.ProjectName + ".uotan");
             await _projectOps.CreateNewSolutionAsync(solutionPath);
             RecordRecentProject(solutionPath);
 
             var images = ImageViewModel.EnsureInstance();
-            if (form.SelectedImagePaths.Length > 0)
+            if (form.ContainerPath is not null)
+            {
+                await ImportContainerWithSelectionAsync(form, images);
+            }
+            else if (form.SelectedImagePaths.Length > 0)
             {
                 await images.ImportAsync(form.SelectedImagePaths);
             }
@@ -213,25 +222,105 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
             GoToWorkspace();
 
-            if (form.UnpackImages && form.SelectedImagePaths.Length > 0)
+            if (form.ContainerPath is null)
             {
-                // 只解包导入成功的镜像条目；导入失败（格式未知等）的文件不在列表中。
-                // Unpack only imported entries; files rejected at import (unknown format etc.) are not listed.
-                var entries = images.Images
-                    .Where(entry => !entry.IsDirectory && form.SelectedImagePaths
-                        .Any(path => string.Equals(Path.GetFileName(path), entry.DisplayName,
-                            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
-                    .ToList();
-                if (entries.Count > 0)
-                {
-                    await images.UnpackFromProjectCreationAsync(entries, form.UnpackFully);
-                }
+                await UnpackSelectedPlainImagesAsync(form, images);
             }
         }
         catch (Exception ex)
         {
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("NewProject_CreateFailed"),
                 ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+    }
+
+    /// <summary>
+    /// <para>普通多选镜像的解包（新建解决方案与新增子项目共用）：只解包导入成功的镜像条目，
+    /// 勾选完全解压时递归解包嵌套镜像。</para>
+    /// Unpacking for plain multi-selected images (shared by new solution and new sub-project): only
+    /// imported entries are unpacked; with full unpack checked nested images are unpacked recursively.
+    /// </summary>
+    private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images)
+    {
+        if (!form.UnpackImages || form.SelectedImagePaths.Length == 0) return;
+        // 只解包导入成功的镜像条目；导入失败（格式未知等）的文件不在列表中。
+        // Unpack only imported entries; files rejected at import (unknown format etc.) are not listed.
+        var entries = images.Images
+            .Where(entry => !entry.IsDirectory && form.SelectedImagePaths
+                .Any(path => string.Equals(Path.GetFileName(path), entry.DisplayName,
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            .ToList();
+        if (entries.Count == 0) return;
+        await images.UnpackFromProjectCreationAsync(entries, form.UnpackFully);
+    }
+
+    /// <summary>
+    /// <para>容器导入与定向提取（新建解决方案与新增子项目共用）：复制容器到 images/ 后按勾选
+    /// 原地提取；勾选完全解压时对提取产物执行递归解包。提取在后台线程执行并写入日志。</para>
+    /// Container import plus targeted extraction (shared by new solution and new sub-project): the
+    /// container is copied into images/ and the selected entries are extracted in place; with full
+    /// unpack checked the extracted images are recursively unpacked. Extraction runs on a background
+    /// thread and writes to the log.
+    /// </summary>
+    private async Task ImportContainerWithSelectionAsync(NewProjectFormResult form, ImageViewModel images)
+    {
+        var source = form.ContainerPath;
+        if (source is null) return;
+        var container = await images.ImportContainerAsync(source, form.ContainerKind switch
+        {
+            ContainerKind.Super => "super",
+            ContainerKind.Payload => "payload",
+            ContainerKind.Zip => "zip",
+            _ => "raw"
+        });
+        if (container is null) return;
+
+        var containerPath = ProjectContextService.Instance.ResolvePath(container.RelativePath) ?? source;
+        if (!form.UnpackImages
+            || (form.SelectedZipMembers.Length == 0 && form.SelectedPartitions.Length == 0))
+        {
+            return;
+        }
+
+        var extractedPaths = new List<string>();
+        try
+        {
+            if (form.ContainerKind == ContainerKind.Zip && form.SelectedZipMembers.Length > 0)
+            {
+                var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
+                    containerPath, form.SelectedZipMembers, fromPayloadOnly: false)).ConfigureAwait(true);
+                extractedPaths.AddRange(result.OutputPaths);
+            }
+
+            if (form.SelectedPartitions.Length > 0)
+            {
+                var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
+                    containerPath, form.SelectedPartitions,
+                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip)).ConfigureAwait(true);
+                extractedPaths.AddRange(result.OutputPaths);
+            }
+
+            LogService.Instance.Write(LogLevel.Info, "Images",
+                $"Extracted {extractedPaths.Count} image(s) from {Path.GetFileName(containerPath)}  已从 {Path.GetFileName(containerPath)} 提取 {extractedPaths.Count} 个镜像");
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Images",
+                $"Container extraction failed: {ex.Message}  容器提取失败：{ex.Message}");
+        }
+
+        if (extractedPaths.Count == 0) return;
+
+        // 提取产物登记为镜像条目；勾选完全解压时对受支持产物继续递归解包（解包目录与 images/ 同级）。
+        // Register extracted files as entries; with full unpack, recursively unpack them (folders
+        // next to images/).
+        var extractedEntries = extractedPaths
+            .Select(images.AddExtractedImage)
+            .OfType<ImageEntryViewModel>()
+            .ToList();
+        if (form.UnpackFully && extractedEntries.Count > 0)
+        {
+            await images.UnpackFromProjectCreationAsync(extractedEntries, unpackFully: false);
         }
     }
 
@@ -371,10 +460,13 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// <para>向当前解决方案添加新子项目：创建子项目目录结构（<c>images/</c>、<c>output/</c>、<c>.uotanfw</c>），
-    /// 重名时拒绝操作并记录全局日志。</para>
-    /// Adds a new sub-project to the current solution: creates the sub-project directory structure
-    /// (<c>images/</c>, <c>output/</c>, <c>.uotanfw</c>); refuses and logs on name collision.
+    /// <para>向当前解决方案添加新子项目：打开新建表单（子项目模式，位置默认当前解决方案根目录、
+    /// 名称默认跳过现有子项目的 NewProjectN）；点击创建后写入 <c>.uotanfw</c> 与解决方案文件，
+    /// 随后按勾选导入镜像或从容器定向提取（与新建解决方案共用同一流程）。</para>
+    /// Adds a new sub-project to the current solution: opens the new-project form (sub-project mode;
+    /// the location defaults to the solution root and the name to the first NewProjectN that skips
+    /// existing sub-projects); on create, writes the <c>.uotanfw</c> and solution files, then imports
+    /// images or extracts from a container per the selection (shared with the new-solution flow).
     /// </summary>
     [RelayCommand]
     private async Task AddSubProjectAsync()
@@ -386,25 +478,43 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var topLevel = TopLevel;
-        if (topLevel == null) return;
-
-        var result = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var owner = DialogService.GetOwnerWindow();
+        if (owner is null) return;
+        var window = new NewProjectWindow(
+            NewProjectWindowMode.SubProject,
+            context.RootDirectory,
+            context.SubProjects.Select(sp => sp.Name));
+        await window.ShowDialog(owner);
+        var form = window.Result;
+        if (form is null) return;
+        try
         {
-            Title = LanguageService.Instance.GetString("Menu_AddSubProject"),
-            SuggestedFileName = "NewDevice.uotanfw",
-            FileTypeChoices =
-            [
-                new FilePickerFileType("UotanStudio Firmware Project") { Patterns = ["*.uotanfw"] }
-            ]
-        });
+            // 位置已是组合后的完整目录（解决方案根/子项目名），.uotanfw 与目录同名。
+            // The location is the combined directory (solution root/sub-project name); the .uotanfw
+            // file shares the directory name.
+            var fwPath = Path.Combine(form.Location, form.ProjectName + ".uotanfw");
+            await _projectOps.AddSubProjectAsync(fwPath);
+            // 重新加载解决方案后活动子项目回到第一项；切回刚创建的子项目再导入。
+            // Reloading the solution resets the active sub-project to the first one; switch back to
+            // the newly created one before importing.
+            ProjectContextService.Instance.SetActiveSubProject(form.ProjectName);
 
-        if (result is null) return;
-
-        var fwPath = result.TryGetLocalPath();
-        if (string.IsNullOrEmpty(fwPath)) return;
-
-        await _projectOps.AddSubProjectAsync(fwPath);
+            var images = ImageViewModel.EnsureInstance();
+            if (form.ContainerPath is not null)
+            {
+                await ImportContainerWithSelectionAsync(form, images);
+            }
+            else if (form.SelectedImagePaths.Length > 0)
+            {
+                await images.ImportAsync(form.SelectedImagePaths);
+                await UnpackSelectedPlainImagesAsync(form, images);
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("NewProject_CreateFailed"),
+                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
     }
 
     /// <summary>

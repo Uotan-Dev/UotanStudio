@@ -624,6 +624,76 @@ internal partial class ImageViewModel : Tool
     }
 
     /// <summary>
+    /// <para>把单个容器文件（super / payload.bin / zip）复制进项目 <c>images/</c> 目录并登记条目；
+    /// 格式列使用调用方给定的标签（普通导入的格式判定不识别容器类型）。</para>
+    /// Copies a single container file (super / payload.bin / zip) into the project <c>images/</c>
+    /// directory and registers its entry; the format column uses the caller-supplied label since the
+    /// plain import format detection does not recognize container types.
+    /// </summary>
+    /// <param name="sourcePath"><para>容器源文件路径。</para>Source container path.</param>
+    /// <param name="formatLabel"><para>格式列显示文本（super / payload / zip）。</para>Format column text (super / payload / zip).</param>
+    /// <returns><para>登记的镜像条目；未打开工程或源不存在时为 null。</para>The registered entry; null when no project is open or the source is missing.</returns>
+    public async Task<ImageEntryViewModel?> ImportContainerAsync(string sourcePath, string formatLabel)
+    {
+        var context = ProjectContextService.Instance;
+        if (!context.IsProjectOpen || context.ActiveSubProject is null || !File.Exists(sourcePath))
+        {
+            return null;
+        }
+
+        var imagesDir = context.EnsureImagesDirectory();
+        var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(sourcePath)));
+        await Task.Run(() => File.Copy(sourcePath, destination)).ConfigureAwait(true);
+        var relative = context.RelativePath(destination);
+        if (relative is null)
+        {
+            File.Delete(destination);
+            return null;
+        }
+
+        var entry = new ImageEntryViewModel
+        {
+            DisplayName = Path.GetFileName(destination),
+            RelativePath = relative,
+            SizeBytes = new FileInfo(destination).Length,
+            Format = formatLabel
+        };
+        Images.Add(entry);
+        return entry;
+    }
+
+    /// <summary>
+    /// <para>把已在工程内（images/）的提取产物登记为镜像条目（不复制文件）。</para>
+    /// Registers an extracted file already inside the project (images/) as an image entry (no copy).
+    /// </summary>
+    /// <param name="absolutePath"><para>提取产物的绝对路径。</para>Absolute path of the extracted file.</param>
+    /// <returns><para>登记的镜像条目；路径不在工程内时为 null。</para>The registered entry; null when the path is outside the project.</returns>
+    public ImageEntryViewModel? AddExtractedImage(string absolutePath)
+    {
+        var context = ProjectContextService.Instance;
+        if (!context.IsProjectOpen || !File.Exists(absolutePath))
+        {
+            return null;
+        }
+
+        var relative = context.RelativePath(absolutePath);
+        if (relative is null)
+        {
+            return null;
+        }
+
+        var entry = new ImageEntryViewModel
+        {
+            DisplayName = Path.GetFileName(absolutePath),
+            RelativePath = relative,
+            SizeBytes = new FileInfo(absolutePath).Length,
+            Format = DetectFormat(absolutePath)
+        };
+        Images.Add(entry);
+        return entry;
+    }
+
+    /// <summary>
     /// <para>将当前选中的镜像从项目目录复制到目标路径。</para>
     /// Copies the currently selected image from the project directory to the target path.
     /// </summary>

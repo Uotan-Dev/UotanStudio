@@ -181,15 +181,9 @@ public partial class ProjectExplorerView : UserControl
 
     private void OnNewEmptySubProject(object? sender, RoutedEventArgs e)
     {
-        if (ProjectTree.SelectedItem is ExplorerNode node && node.IsDirectory)
-        {
-            var dirName = System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(node.Path));
-            if (!string.IsNullOrEmpty(dirName))
-            {
-                var fwPath = System.IO.Path.Combine(node.Path, dirName + ".uotanfw");
-                _ = ProjectOperationsService.Instance.AddSubProjectAsync(fwPath);
-            }
-        }
+        // 右键「新建子项目」与顶部菜单共用同一表单流程（子项目模式的新建窗口）。
+        // The explorer "new sub-project" entry shares the form flow with the File menu.
+        WeakReferenceMessenger.Default.Send(new AddSubProjectRequestMessage());
     }
 
     private void OnImportExistingSubProject(object? sender, RoutedEventArgs e)

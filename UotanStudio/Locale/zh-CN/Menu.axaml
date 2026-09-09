@@ -23,6 +23,10 @@
     <x:String x:Key="NewProject_Create">创建</x:String>
     <x:String x:Key="NewProject_NameRequired">请输入项目名称</x:String>
     <x:String x:Key="NewProject_LocationRequired">请选择或输入项目位置</x:String>
+    <x:String x:Key="NewProject_LocationNotEmpty">目标文件夹必须为空或尚不存在</x:String>
+    <x:String x:Key="NewProject_GroupSuperPartitions">super 分区 — {0}</x:String>
+    <x:String x:Key="NewProject_GroupPayloadPartitions">payload 分区 — {0}</x:String>
+    <x:String x:Key="NewProject_GroupZipImages">压缩包内镜像 — {0}</x:String>
     <x:String x:Key="NewProject_BrowseLocation">选择项目位置</x:String>
     <x:String x:Key="NewProject_BrowseImages">选择ROM或镜像文件</x:String>
     <x:String x:Key="NewProject_SelectFolder">选择目录</x:String>
