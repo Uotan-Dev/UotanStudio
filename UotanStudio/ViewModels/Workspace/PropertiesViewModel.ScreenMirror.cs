@@ -11,7 +11,8 @@ internal partial class PropertiesViewModel
     private DispatcherTimer? _mirrorTimer;
     private long _mirrorSampleTime;
     private (long Received, long Decoded, long Uploaded, long Bytes) _mirrorCounters;
-    private static readonly string[] MirrorKeys = ["Status", "Codec", "Decoder", "Resolution", "SourceColor", "PixelFormat", "Conversion", "ReceiveFps", "DecodeFps", "UploadFps", "MaxFps", "BitRate", "ActualBitRate", "Encoder", "Device", "Version"];
+    private long _mirrorAudioFrames;
+    private static readonly string[] MirrorKeys = ["Status", "Codec", "Decoder", "Resolution", "SourceColor", "PixelFormat", "Conversion", "ReceiveFps", "DecodeFps", "UploadFps", "MaxFps", "BitRate", "ActualBitRate", "Encoder", "Audio", "AudioFormat", "AudioFps", "Device", "Version"];
 
     internal void RefreshForScreenMirror(ScreenMirrorViewModel mirror)
     {
@@ -50,10 +51,11 @@ internal partial class PropertiesViewModel
         string unknown = svc.GetString("MirrorProperty_Unknown");
         string waiting = "—";
         string received = waiting, decoded = waiting, uploaded = waiting, bitrate = waiting;
+        double seconds = 0;
         if (sample)
         {
             long now = Stopwatch.GetTimestamp();
-            double seconds = (now - _mirrorSampleTime) / (double)Stopwatch.Frequency;
+            seconds = (now - _mirrorSampleTime) / (double)Stopwatch.Frequency;
             var counters = mirror.ReadCounters();
             if (seconds > 0)
             {
@@ -65,13 +67,33 @@ internal partial class PropertiesViewModel
             _mirrorCounters = counters;
             _mirrorSampleTime = now;
         }
+        string audioValue;
+        if (!mirror.AudioEnabled)
+        {
+            audioValue = svc.GetString("MirrorProperty_AudioOff");
+        }
+        else
+        {
+            var audioMeta = mirror.StreamMetadataAudio;
+            audioValue = audioMeta?.CodecName.ToUpperInvariant() ?? "AAC";
+        }
+        int audioRate = mirror.AudioSampleRate;
+        int audioChannels = mirror.AudioChannels;
+        string audioFormat = !mirror.AudioEnabled ? waiting
+            : audioRate > 0 ? $"{audioRate} Hz · {audioChannels} ch" : waiting;
+        string audioFps = !mirror.AudioEnabled ? waiting
+            : sample && audioRate > 0
+                ? $"{Math.Max(0, mirror.AudioDecodedFrames - _mirrorAudioFrames) / seconds:F1} fps"
+                : waiting;
+        if (sample) _mirrorAudioFrames = mirror.AudioDecodedFrames;
         string[] values = [mirror.StatusText, meta?.CodecName.ToUpperInvariant() ?? options?.VideoCodec.ToUpperInvariant() ?? waiting,
             string.IsNullOrEmpty(mirror.DecoderBackend) ? waiting : mirror.DecoderBackend,
             size is { } s ? $"{s.Width} × {s.Height}" : meta is { } m ? $"{m.Width} × {m.Height}" : waiting,
             unknown, "NV12 · 8-bit · YUV 4:2:0", svc.GetString("MirrorProperty_ConversionValue"), received, decoded, uploaded,
             options is null ? waiting : options.MaxFps > 0 ? $"{options.MaxFps} fps" : svc.GetString("MirrorProperty_Unlimited"),
             options is null ? waiting : $"{options.VideoBitRate / 1_000_000.0:F2} Mbps", bitrate,
-            svc.GetString("MirrorProperty_EncoderValue"), mirror.DeviceName, UotanStudio.Comm.Protocols.Scrcpy.ScrcpyConstants.ServerVersion];
+            svc.GetString("MirrorProperty_EncoderValue"), audioValue, audioFormat, audioFps,
+            mirror.DeviceName, UotanStudio.Comm.Protocols.Scrcpy.ScrcpyConstants.ServerVersion];
         for (int i = 0; i < values.Length; i++)
         {
             Properties[i].Name = svc.GetString("MirrorProperty_" + MirrorKeys[i]);

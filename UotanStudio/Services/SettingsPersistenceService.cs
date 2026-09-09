@@ -164,6 +164,20 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("screenMirrorMaxSize")]
     public int ScreenMirrorMaxSize { get; set; }
+
+    /// <summary>
+    /// <para>获取或设置 scrcpy 投屏视频编码格式（"h264" 或 "h265"）。</para>
+    /// Gets or sets the scrcpy mirroring video codec ("h264" or "h265").
+    /// </summary>
+    [JsonPropertyName("screenMirrorVideoCodec")]
+    public string ScreenMirrorVideoCodec { get; set; } = "h264";
+
+    /// <summary>
+    /// <para>获取或设置是否启用 scrcpy 投屏音频转发。</para>
+    /// Gets or sets whether scrcpy mirroring forwards audio.
+    /// </summary>
+    [JsonPropertyName("screenMirrorAudioEnabled")]
+    public bool ScreenMirrorAudioEnabled { get; set; }
 }
 
 /// <summary>

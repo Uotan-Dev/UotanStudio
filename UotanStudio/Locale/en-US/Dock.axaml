@@ -303,6 +303,10 @@
     <x:String x:Key="MirrorProperty_BitRate">Target bit rate</x:String>
     <x:String x:Key="MirrorProperty_ActualBitRate">Received bit rate (1 s)</x:String>
     <x:String x:Key="MirrorProperty_Encoder">Device encoder</x:String>
+    <x:String x:Key="MirrorProperty_Audio">Audio</x:String>
+    <x:String x:Key="MirrorProperty_AudioFormat">Audio format</x:String>
+    <x:String x:Key="MirrorProperty_AudioFps">Decode rate (audio, 1 s)</x:String>
+    <x:String x:Key="MirrorProperty_AudioOff">Off</x:String>
     <x:String x:Key="MirrorProperty_Device">Device name</x:String>
     <x:String x:Key="MirrorProperty_Version">scrcpy version</x:String>
     <x:String x:Key="MirrorProperty_Unknown">Not reported / not parsed</x:String>

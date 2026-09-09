@@ -303,6 +303,10 @@
     <x:String x:Key="MirrorProperty_BitRate">目标码率</x:String>
     <x:String x:Key="MirrorProperty_ActualBitRate">接收码率（1秒）</x:String>
     <x:String x:Key="MirrorProperty_Encoder">设备编码器</x:String>
+    <x:String x:Key="MirrorProperty_Audio">音频</x:String>
+    <x:String x:Key="MirrorProperty_AudioFormat">音频格式</x:String>
+    <x:String x:Key="MirrorProperty_AudioFps">解码率（音频，1秒）</x:String>
+    <x:String x:Key="MirrorProperty_AudioOff">关闭</x:String>
     <x:String x:Key="MirrorProperty_Device">设备名称</x:String>
     <x:String x:Key="MirrorProperty_Version">scrcpy 版本</x:String>
     <x:String x:Key="MirrorProperty_Unknown">未报告／未解析</x:String>

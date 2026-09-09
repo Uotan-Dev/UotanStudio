@@ -27,9 +27,53 @@ namespace UotanStudio.Media.Decoding;
 /// 数十个缓冲区，转换或复制像素后应立即调用 <see cref="Dispose"/>。
 /// </para>
 /// </remarks>
-public sealed class DecodedVideoFrame : IDisposable
+public class DecodedVideoFrame : IDisposable
 {
     private byte[]? _buffer;
+
+    /// <summary>Creates a frame that takes ownership of an existing pooled buffer.</summary>
+    /// <summary>创建一个接管现有池化缓冲区所有权的帧。</summary>
+    /// <param name="buffer">The pooled buffer holding the NV12 planes. 持有 NV12 平面的池化缓冲区。</param>
+    /// <param name="length">The number of valid bytes in <paramref name="buffer"/>. <paramref name="buffer"/> 中的有效字节数。</param>
+    /// <param name="width">Frame width in pixels. 帧宽度（像素）。</param>
+    /// <param name="height">Frame height in pixels. 帧高度（像素）。</param>
+    /// <param name="stride">
+    /// Row pitch in bytes of the NV12 buffer (may exceed width for alignment).
+    /// NV12 缓冲区的行距（字节），为对齐可能大于宽度。
+    /// </param>
+    /// <param name="timestampTicks">Presentation timestamp in ticks. 显示时间戳（tick）。</param>
+    /// <param name="skipNv12Validation">
+    /// Skips the NV12 plane-length validation for derived frame layouts (e.g. BGRA).
+    /// 对派生帧布局（如 BGRA）跳过 NV12 平面长度校验。
+    /// </param>
+    protected DecodedVideoFrame(byte[] buffer, int length, int width, int height, int stride, long timestampTicks, bool skipNv12Validation)
+    {
+        if (buffer is null)
+        {
+            throw new ArgumentNullException(nameof(buffer));
+        }
+
+        if (length < 0 || length > buffer.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(length));
+        }
+
+        if (!skipNv12Validation)
+        {
+            int required = VideoFrameLimits.Nv12Length(width, height, stride);
+            if (length < required)
+            {
+                throw new ArgumentException("The buffer does not contain complete NV12 planes.", nameof(length));
+            }
+        }
+
+        _buffer = buffer;
+        Length = length;
+        Width = width;
+        Height = height;
+        Stride = stride;
+        TimestampTicks = timestampTicks;
+    }
 
     /// <summary>Creates a frame that takes ownership of an existing pooled buffer.</summary>
     /// <summary>创建一个接管现有池化缓冲区所有权的帧。</summary>

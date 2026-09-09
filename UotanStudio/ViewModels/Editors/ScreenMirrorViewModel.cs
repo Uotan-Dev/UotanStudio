@@ -10,6 +10,8 @@ using Dock.Model.Mvvm.Controls;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Scrcpy;
 using UotanStudio.Media.Decoding;
+using UotanStudio.Media.Decoding.MediaFoundation;
+using UotanStudio.Media.Audio;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -45,15 +47,37 @@ public partial class ScreenMirrorViewModel : Document
     private readonly object _frameLock = new();
     private PendingFrame? _pendingFrame;
     private bool _renderScheduled;
-    private sealed record PendingFrame(byte[] Pixels, int Length, int Width, int Height);
+    private sealed record PendingFrame(byte[] Pixels, int Length, int Width, int Height, int Stride);
     private CancellationTokenSource? _cts;
     private Thread? _decodeThread;
+    private Thread? _audioThread;
     private volatile bool _disposed;
+
+    /// <summary>Raised on the audio thread after the output sink opened successfully.</summary>
+    public event EventHandler? AudioSinkOpened;
+
+    /// <summary>Gets the total decoded audio frames; 0 while audio is off or unsupported.</summary>
+    /// <summary>获取累计解码音频帧数；音频关闭或编码不受支持时为 0。</summary>
+    public long AudioDecodedFrames => Interlocked.Read(ref _audioDecodedFrames);
+
+    /// <summary>Gets the decoded audio sample rate; 0 until the first decoded frame.</summary>
+    /// <summary>获取解码音频采样率；首帧解码前为 0。</summary>
+    public int AudioSampleRate => Volatile.Read(ref _audioSampleRate);
+
+    /// <summary>Gets the decoded audio channel count; 0 until the first decoded frame.</summary>
+    /// <summary>获取解码音频声道数；首帧解码前为 0。</summary>
+    public int AudioChannels => Volatile.Read(ref _audioChannels);
+
+    /// <summary>Gets whether the session requested an audio stream.</summary>
+    /// <summary>获取本会话是否请求了音频流。</summary>
+    public bool AudioEnabled => StreamOptions?.Audio ?? false;
 
     /// <summary>Raised on the UI thread after the mutable bitmap has been unlocked.</summary>
     public event EventHandler? FramePresented;
 
     private long _receivedFrames, _decodedFrames, _uploadedFrames, _receivedBytes;
+    private long _audioDecodedFrames;
+    private int _audioSampleRate, _audioChannels;
     private string _decoderBackend = string.Empty;
     private ScrcpyServerOptions? _streamOptions;
     /// <summary>Session parameters and counters; frame rates are calculated from counter deltas.</summary>
@@ -63,6 +87,7 @@ public partial class ScreenMirrorViewModel : Document
     internal string DecoderBackend => _decoderBackend;
     internal ScrcpyServerOptions? StreamOptions => _streamOptions;
     internal ScrcpyVideoMetadata? StreamMetadata => _client?.VideoMetadata;
+    internal Comm.Protocols.Scrcpy.ScrcpyAudioMetadata? StreamMetadataAudio => _client?.AudioMetadata;
     internal bool IsStopped => _disposed;
 
     [ObservableProperty]
@@ -191,6 +216,126 @@ public partial class ScreenMirrorViewModel : Document
             Name = "UotanStudio.ScreenMirror",
         };
         _decodeThread.Start();
+        if (decodeClient.AudioMetadata is not null)
+        {
+            // Consume audio continuously so the server's audio socket never
+            // fills up and stalls the whole mirroring process; AAC is decoded
+            // and played, unsupported codecs keep draining.
+            // 持续消费音频，避免服务端音频 socket 缓冲填满阻塞整个投屏进程；
+            // AAC 解码并播放，不支持的编码保持排空。
+            _audioThread = new Thread(() => AudioLoop(decodeClient, decodeToken))
+            {
+                IsBackground = true,
+                Name = "UotanStudio.ScreenMirror.Audio",
+            };
+            _audioThread.Start();
+        }
+    }
+
+    private void AudioLoop(ScrcpyClient client, CancellationToken token)
+    {
+        var metadata = client.AudioMetadata;
+        bool aac = metadata?.CodecName == "AAC";
+        IAudioDecoder? decoder = null;
+        IAudioSink? sink = null;
+        try
+        {
+            if (aac)
+            {
+                decoder = CreateAudioDecoder();
+                if (decoder is not null)
+                {
+                    long decodedFrames = 0;
+                    decoder.Initialize([], frame =>
+                    {
+                        Interlocked.Increment(ref _audioDecodedFrames);
+                        if (_disposed) { frame.Dispose(); return; }
+                        Interlocked.Exchange(ref _audioSampleRate, frame.SampleRate);
+                        Interlocked.Exchange(ref _audioChannels, frame.Channels);
+                        // The sink opens lazily on the first decoded format; later
+                        // frames must match or they are dropped until reset.
+                        // 播放端按首个解码格式惰性打开；后续帧格式不符时丢弃。
+                        if (sink is null)
+                        {
+                            try
+                            {
+                                sink = AudioSinkFactory.Create();
+                                sink.Open(frame.Channels, frame.SampleRate, frame.BitsPerSample);
+                                sink.Volume = 1f;
+                                AudioSinkOpened?.Invoke(this, EventArgs.Empty);
+                            }
+                            catch (Exception exception)
+                            {
+                                UotanStudio.Services.LogService.Instance.Write(
+                                    UotanStudio.Services.LogLevel.Warn, "ScreenMirror",
+                                    $"Audio sink unavailable: {exception.Message}");
+                                sink?.Dispose();
+                                sink = null;
+                            }
+                        }
+                        if (sink is not null && sink.IsOpen
+                            && sink.Channels == frame.Channels && sink.SampleRate == frame.SampleRate)
+                        {
+                            sink.Write(frame.Span);
+                            Interlocked.Increment(ref decodedFrames);
+                        }
+                        frame.Dispose();
+                    });
+                }
+                else
+                {
+                    UotanStudio.Services.LogService.Instance.Write(
+                        UotanStudio.Services.LogLevel.Warn, "ScreenMirror", "No AAC audio decoder on this platform.");
+                }
+            }
+            else if (metadata is not null)
+            {
+                UotanStudio.Services.LogService.Instance.Write(
+                    UotanStudio.Services.LogLevel.Info, "ScreenMirror",
+                    $"Audio codec {metadata.CodecName} is not decoded; draining only.");
+            }
+
+            while (!token.IsCancellationRequested)
+            {
+                var frame = client.ReadAudioFrame(1000);
+                if (frame is null) continue;
+                if (decoder is null) continue;
+                if (frame.IsCodecConfig)
+                {
+                    decoder.Reset();
+                    decoder.Initialize(frame.Data, static _ => { });
+                    continue;
+                }
+                decoder.Decode(frame.Data, frame.PresentationTimestampMicroseconds);
+            }
+        }
+        catch (Exception exception) when (!token.IsCancellationRequested)
+        {
+            UotanStudio.Services.LogService.Instance.Write(
+                UotanStudio.Services.LogLevel.Error, "ScreenMirror", $"Audio read failed: {exception.Message}");
+        }
+        catch (Exception) when (token.IsCancellationRequested) { }
+        finally
+        {
+            sink?.Dispose();
+            decoder?.Dispose();
+        }
+    }
+
+    private static IAudioDecoder? CreateAudioDecoder()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows()) return new UotanStudio.Media.Audio.MediaFoundationAacDecoder();
+            if (OperatingSystem.IsMacOS()) return new UotanStudio.Media.Audio.AudioToolboxAacDecoder();
+        }
+        catch (Exception exception) when (exception is DllNotFoundException or EntryPointNotFoundException or PlatformNotSupportedException)
+        {
+            UotanStudio.Services.LogService.Instance.Write(
+                UotanStudio.Services.LogLevel.Warn, "ScreenMirror", $"Audio decoder unavailable: {exception.Message}");
+            return null;
+        }
+        return null;
     }
 
     /// <summary>
@@ -221,6 +366,15 @@ public partial class ScreenMirrorViewModel : Document
         {
             // Join may fail if the thread already exited. 线程已退出时 Join 可能失败。
         }
+        try
+        {
+            _audioThread?.Join(2000);
+        }
+        catch
+        {
+            // Join may fail if the thread already exited. 线程已退出时 Join 可能失败。
+        }
+        _audioThread = null;
 
         _client?.Dispose();
         _shellStream?.Dispose();
@@ -359,7 +513,12 @@ public partial class ScreenMirrorViewModel : Document
             };
             using var decoder = VideoDecoderFactory.Create();
             decoder.Initialize(codec, metadata.Width, metadata.Height, OnDecodedFrame);
-            _decoderBackend = OperatingSystem.IsWindows() ? "Media Foundation (CPU)" : "VideoToolbox (hardware)";
+            _decoderBackend = decoder switch
+            {
+                MediaFoundationGpuVideoDecoder => OperatingSystem.IsWindows() ? "Media Foundation (GPU)" : "Media Foundation (GPU)",
+                MediaFoundationVideoDecoder => "Media Foundation (CPU)",
+                _ => "VideoToolbox (hardware)",
+            };
             byte[]? configuration = null;
             while (!token.IsCancellationRequested)
             {
@@ -409,25 +568,39 @@ public partial class ScreenMirrorViewModel : Document
     {
         Interlocked.Increment(ref _decodedFrames);
         if (_disposed) return;
+        // The GPU decoder delivers BGRA directly (stride ≥ width × 4); the CPU
+        // path delivers NV12 and is converted here with a tight stride.
+        // GPU 解码器直接输出 BGRA（行距 ≥ 宽度 × 4）；CPU 路径输出 NV12，
+        // 在此按紧凑行距转换。
+        if (frame is GpuDecodedVideoFrame bgraFrame)
+        {
+            PublishBgra(bgraFrame.Buffer, bgraFrame.Length, bgraFrame.Width, bgraFrame.Height, bgraFrame.Stride);
+            return;
+        }
         int bgraSize = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
         byte[]? bgra = ArrayPool<byte>.Shared.Rent(bgraSize);
         try
         {
             Nv12ToBgraConverter.Convert(in frame, bgra.AsSpan(0, bgraSize));
-            lock (_frameLock)
-            {
-                if (_disposed) return;
-                if (_pendingFrame is { } previous) ArrayPool<byte>.Shared.Return(previous.Pixels);
-                _pendingFrame = new(bgra, bgraSize, frame.Width, frame.Height);
-                bgra = null; // Ownership passes to the bounded, latest-frame slot.
-                if (!_renderScheduled)
-                {
-                    _renderScheduled = true;
-                    Dispatcher.UIThread.Post(RenderPendingFrame, DispatcherPriority.Render);
-                }
-            }
+            PublishBgra(bgra, bgraSize, frame.Width, frame.Height, frame.Width * 4);
+            bgra = null; // Ownership passes to the bounded, latest-frame slot.
         }
         finally { if (bgra is not null) ArrayPool<byte>.Shared.Return(bgra); }
+    }
+
+    private void PublishBgra(byte[] pixels, int length, int width, int height, int stride)
+    {
+        lock (_frameLock)
+        {
+            if (_disposed) return;
+            if (_pendingFrame is { } previous) ArrayPool<byte>.Shared.Return(previous.Pixels);
+            _pendingFrame = new(pixels, length, width, height, stride);
+            if (!_renderScheduled)
+            {
+                _renderScheduled = true;
+                Dispatcher.UIThread.Post(RenderPendingFrame, DispatcherPriority.Render);
+            }
+        }
     }
 
     private void RenderPendingFrame()
@@ -444,7 +617,7 @@ public partial class ScreenMirrorViewModel : Document
         {
             if (!_disposed)
             {
-                RenderBgra(pending.Pixels, pending.Length, pending.Width, pending.Height);
+                RenderBgra(pending.Pixels, pending.Length, pending.Width, pending.Height, pending.Stride);
                 Interlocked.Increment(ref _uploadedFrames);
                 FramePresented?.Invoke(this, EventArgs.Empty);
             }
@@ -452,7 +625,7 @@ public partial class ScreenMirrorViewModel : Document
         finally { ArrayPool<byte>.Shared.Return(pending.Pixels); }
     }
 
-    private void RenderBgra(byte[] bgra, int bgraSize, int width, int height)
+    private void RenderBgra(byte[] bgra, int bgraSize, int width, int height, int sourceStride)
     {
         var bitmap = Frame;
         if (bitmap is null || bitmap.PixelSize.Width != width || bitmap.PixelSize.Height != height)
@@ -469,12 +642,12 @@ public partial class ScreenMirrorViewModel : Document
         var stride = framebuffer.RowBytes;
         var rowBytes = Math.Min(width * 4, stride);
         var dst = framebuffer.Address;
-        // 逐行复制到锁定帧缓冲，保证 stride 与托管源行距不一致时的安全。
-        // Copy row by row into the locked framebuffer so a stride mismatch
-        // between the managed source and the bitmap stays safe.
+        // 逐行复制到锁定帧缓冲，保证源行距（GPU 回读可能带填充）与位图行距不一致时的安全。
+        // Copy row by row into the locked framebuffer so a source-row-pitch mismatch
+        // (GPU readback may include padding) against the bitmap stride stays safe.
         for (var row = 0; row < height; row++)
         {
-            Marshal.Copy(bgra, row * width * 4, IntPtr.Add(dst, row * stride), rowBytes);
+            Marshal.Copy(bgra, row * sourceStride, IntPtr.Add(dst, row * stride), rowBytes);
         }
     }
 
@@ -486,11 +659,20 @@ public partial class ScreenMirrorViewModel : Document
     private static ScrcpyServerOptions CreateOptionsFromSettings()
     {
         var settings = UotanStudio.Services.SettingsPersistenceService.Instance.LoadSettings();
+        // The server encoder must match the host decoder, so capability probing
+        // happens before launch: H.265 falls back to H.264 when no HEVC decoder exists.
+        // 服务端编码格式必须与主机解码器一致，因此在启动前探测能力：
+        // 无 HEVC 解码能力时 H.265 回退为 H.264。
+        string codec = settings.ScreenMirrorVideoCodec == "h265"
+            && !UotanStudio.Media.Decoding.VideoDecoderFactory.IsSupported(UotanStudio.Media.Decoding.VideoCodecId.H265)
+            ? "h264" : settings.ScreenMirrorVideoCodec;
         return new ScrcpyServerOptions
         {
             VideoBitRate = settings.ScreenMirrorBitRate,
             MaxFps = settings.ScreenMirrorMaxFps,
             MaxSize = settings.ScreenMirrorMaxSize,
+            VideoCodec = codec,
+            Audio = settings.ScreenMirrorAudioEnabled,
         };
     }
 }

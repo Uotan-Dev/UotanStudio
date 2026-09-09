@@ -61,6 +61,48 @@ public sealed record ScrcpyVideoFrame(long Pts, byte[] Data)
 public sealed record ScrcpyDeviceMessage(byte Type, string? Clipboard = null, ulong AckSequence = 0);
 
 /// <summary>
+/// Audio stream metadata announced by the server on the audio socket.
+/// <para>服务端在音频 socket 上宣告的音频流元数据。</para>
+/// </summary>
+/// <param name="CodecFourCc">Codec four-character code ("opus", "aac", "flac"). 编码四字符码（"opus"、"aac"、"flac"）。</param>
+public sealed record ScrcpyAudioMetadata(uint CodecFourCc)
+{
+    /// <summary>Gets the uppercase codec name ("OPUS", "AAC", "FLAC").</summary>
+    /// <summary>获取大写编码名称（"OPUS"、"AAC"、"FLAC"）。</summary>
+    public string CodecName
+    {
+        get
+        {
+            var bytes = BitConverter.GetBytes(CodecFourCc);
+            Array.Reverse(bytes);
+            return Encoding.ASCII.GetString(bytes).TrimEnd('\0', ' ').ToUpperInvariant();
+        }
+    }
+}
+
+/// <summary>
+/// One demuxed audio packet from the audio socket.
+/// <para>音频 socket 上解出的一个音频包。</para>
+/// </summary>
+/// <param name="Pts">
+/// Presentation timestamp; the config flag marks the codec config packet.
+/// 显示时间戳；配置标志表示编码器配置包。
+/// </param>
+/// <param name="Data">The compressed audio packet bytes. 压缩音频包字节。</param>
+public sealed record ScrcpyAudioFrame(long Pts, byte[] Data)
+{
+    /// <summary>Gets a value indicating whether this packet carries codec config.</summary>
+    /// <summary>获取一个值，指示该包是否为编码器配置。</summary>
+    public bool IsCodecConfig => ((ulong)Pts & ScrcpyConstants.PacketFlagConfig) != 0;
+
+    /// <summary>Gets the media timestamp with flags removed.</summary>
+    /// <summary>获取去除标志后的媒体时间戳。</summary>
+    public long PresentationTimestampMicroseconds => !IsCodecConfig
+        ? (long)((ulong)Pts & ScrcpyConstants.PacketTimestampMask)
+        : throw new InvalidOperationException("Codec configuration has no presentation timestamp.");
+}
+
+/// <summary>
 /// scrcpy client: connects the video / audio / control sockets over adbd
 /// localabstract forwarding, demuxes framed video and exchanges control
 /// messages.
@@ -92,6 +134,10 @@ public sealed class ScrcpyClient : IDisposable
     /// <summary>Upper bound for a single compressed access unit (32 MiB).</summary>
     /// <summary>单个压缩访问单元的上限（32 MiB）。</summary>
     public const int MaxFrameLength = 32 * 1024 * 1024;
+
+    /// <summary>Upper bound for a single compressed audio packet (4 MiB).</summary>
+    /// <summary>单个压缩音频包的上限（4 MiB）。</summary>
+    public const int MaxAudioFrameLength = 4 * 1024 * 1024;
 
     /// <summary>Upper bound for device clipboard text (1 MiB).</summary>
     /// <summary>设备剪贴板文本上限（1 MiB）。</summary>
@@ -137,6 +183,10 @@ public sealed class ScrcpyClient : IDisposable
     /// <summary>获取首个 socket 宣告的视频元数据。</summary>
     public ScrcpyVideoMetadata? VideoMetadata { get; private set; }
 
+    /// <summary>Gets the audio codec metadata announced on the audio socket.</summary>
+    /// <summary>获取音频 socket 上宣告的音频编码元数据。</summary>
+    public ScrcpyAudioMetadata? AudioMetadata { get; private set; }
+
     /// <summary>
     /// Gets a value indicating whether the control socket is connected.
     /// </summary>
@@ -156,6 +206,7 @@ public sealed class ScrcpyClient : IDisposable
         Dispose();
         DeviceName = string.Empty;
         VideoMetadata = null;
+        AudioMetadata = null;
         try { ConnectCore(timeoutMs); }
         catch { Dispose(); throw; }
     }
@@ -210,8 +261,11 @@ public sealed class ScrcpyClient : IDisposable
             VideoMetadata = new ScrcpyVideoMetadata(codec, width, height);
         }
 
-        if (_audioStream is not null && _options.SendCodecMeta) _ = ReadExact(_audioStream, 4, timeoutMs);
-
+        if (_audioStream is not null && _options.SendCodecMeta)
+        {
+            var audioCodec = ReadExact(_audioStream, 4, timeoutMs);
+            AudioMetadata = new ScrcpyAudioMetadata(BinaryPrimitives.ReadUInt32BigEndian(audioCodec));
+        }
     }
 
     /// <summary>
@@ -245,6 +299,47 @@ public sealed class ScrcpyClient : IDisposable
 
         var payload = ReadExact(stream, length, timeoutMs);
         return new ScrcpyVideoFrame(pts, payload);
+    }
+
+    /// <summary>
+    /// Reads one framed audio packet from the audio socket.
+    /// <para>从音频 socket 读取一个分帧音频包。</para>
+    /// </summary>
+    /// <remarks>
+    /// Audio packets use the same 12-byte header as video (PTS + length).
+    /// The payload bound is <see cref="MaxAudioFrameLength"/>; violations throw.
+    /// 音频包与视频共用 12 字节头（PTS + 长度）。负载上限
+    /// <see cref="MaxAudioFrameLength"/>，越界即抛出。
+    /// </remarks>
+    /// <param name="timeoutMs">Per-read timeout in milliseconds. 单次读取超时（毫秒）。</param>
+    /// <returns>The frame, or <see langword="null"/> when no header arrived before timeout.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when audio is disabled or not connected. 音频未启用或未连接时抛出。</exception>
+    /// <exception cref="EndOfStreamException">The server closed the audio stream.</exception>
+    public ScrcpyAudioFrame? ReadAudioFrame(int timeoutMs)
+    {
+        var stream = _audioStream;
+        if (stream is null)
+        {
+            throw new InvalidOperationException(
+                "Audio is not enabled or the client is not connected. 音频未启用或客户端尚未连接。");
+        }
+
+        var header = TryReadExact(stream, 12, timeoutMs);
+        if (header is null || header.Length != 12)
+        {
+            return null; // No header arrived before the read timeout.
+        }
+
+        var pts = BinaryPrimitives.ReadInt64BigEndian(header);
+        var length = BinaryPrimitives.ReadInt32BigEndian(header.AsSpan(8));
+        if (length is < 0 or > MaxAudioFrameLength)
+        {
+            throw new InvalidDataException(
+                $"Audio frame length {length} exceeds the {MaxAudioFrameLength}-byte bound. 音频帧长度 {length} 超出 {MaxAudioFrameLength} 字节上限。");
+        }
+
+        var payload = ReadExact(stream, length, timeoutMs);
+        return new ScrcpyAudioFrame(pts, payload);
     }
 
     /// <summary>
