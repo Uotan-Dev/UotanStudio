@@ -23,13 +23,13 @@ internal sealed class FallbackVideoDecoder(Func<IVideoDecoder> preferred, Func<I
         {
             InitializeBackend(preferred, codec, width, height, frameCallback);
         }
-        catch (Exception error) when (error is DllNotFoundException or EntryPointNotFoundException or NotSupportedException or InvalidOperationException)
+        catch (Exception error) when (error is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or NotSupportedException or InvalidOperationException)
         {
             FallbackReason = error.Message;
             try { InitializeBackend(fallback, codec, width, height, frameCallback); }
             catch (Exception fallbackError)
             {
-                throw new InvalidOperationException($"GPU initialization failed: {error.Message} CPU initialization failed: {fallbackError.Message}",
+                throw new InvalidOperationException($"Preferred backend initialization failed: {error.Message} Fallback initialization failed: {fallbackError.Message}",
                     new AggregateException(error, fallbackError));
             }
         }

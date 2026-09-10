@@ -1,12 +1,24 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- 独立媒体解码库：仅依赖 OS 内置原生解码 API（P/Invoke），零 NuGet 依赖 -->
+    <!-- Zero NuGet dependencies. Linux VA/GStreamer use separately installed native runtimes. -->
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <RootNamespace>UotanStudio.Media</RootNamespace>
   </PropertyGroup>
+
+  <!-- Build the native bridge first (Native/Linux/README.md), then set this path.
+       Copying Content transitively also covers Desktop and test/publish outputs. -->
+  <ItemGroup Condition="'$(UotanVaNativeLibrary)' != ''">
+    <Content Include="$(UotanVaNativeLibrary)" Link="libuotan_media_va.so"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="ValidateUotanVaNativeLibrary" BeforeTargets="PrepareForBuild"
+          Condition="'$(UotanVaNativeLibrary)' != '' and !Exists('$(UotanVaNativeLibrary)')">
+    <Error Text="UotanVaNativeLibrary must point to a built Linux libuotan_media_va.so." />
+  </Target>
 
 </Project>

@@ -1,3 +1,5 @@
+using UotanStudio.Media.Acceleration.Linux;
+
 namespace UotanStudio.Media.Decoding;
 
 /// <summary>Creates AOT-safe platform decoders and probes native codec availability.</summary>
@@ -6,7 +8,7 @@ public static class VideoDecoderFactory
     /// <summary>
     /// Checks whether a backend accepts a 1920x1080 stream configuration (Windows) or advertises
     /// hardware codec support (macOS). Actual stream profile, dimensions and decoding can still fail.
-    /// Linux checks installed GStreamer codec plugins; a real stream may still fail.
+    /// Linux probes the VA bridge/driver and installed GStreamer plugins; a real stream may still fail.
     /// </summary>
     public static bool IsSupported(VideoCodecId codec)
     {
@@ -19,7 +21,7 @@ public static class VideoDecoderFactory
                 decoder.Initialize(codec, 1920, 1080, static _ => { });
                 return true;
             }
-            if (OperatingSystem.IsLinux()) return GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true) || GStreamer.GStreamerVideoDecoder.IsAvailable(codec, false);
+            if (OperatingSystem.IsLinux()) return VaApiVideoDecoder.IsSupported(codec) || GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true) || GStreamer.GStreamerVideoDecoder.IsAvailable(codec, false);
             if (OperatingSystem.IsMacOS())
                 return codec == VideoCodecId.Av1 ? GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true) : VideoToolbox.VtNative.VTIsHardwareDecodeSupported(VideoToolbox.VtNative.Codec(codec)) != 0;
         }
@@ -55,7 +57,11 @@ public static class VideoDecoderFactory
                 () => Create(options with { Backend = VideoDecoderBackend.MediaFoundationCpu })),
             VideoDecoderBackend.Auto when OperatingSystem.IsMacOS() => new VideoToolbox.VideoToolboxVideoDecoder(),
             VideoDecoderBackend.Auto when OperatingSystem.IsLinux() => new FallbackVideoDecoder(
-                static () => new GStreamer.GStreamerVideoDecoder(true), static () => new GStreamer.GStreamerVideoDecoder(false)),
+                () => new VaApiVideoDecoder(options),
+                static () => new FallbackVideoDecoder(
+                    static () => new GStreamer.GStreamerVideoDecoder(true),
+                    static () => new GStreamer.GStreamerVideoDecoder(false))),
+            VideoDecoderBackend.VaApi when OperatingSystem.IsLinux() => new VaApiVideoDecoder(options),
             VideoDecoderBackend.MediaFoundationGpu when OperatingSystem.IsWindows() => new MediaFoundation.MediaFoundationGpuVideoDecoder(options),
             VideoDecoderBackend.MediaFoundationCpu when OperatingSystem.IsWindows() => new MediaFoundation.MediaFoundationVideoDecoder(),
             VideoDecoderBackend.VideoToolbox when OperatingSystem.IsMacOS() => new VideoToolbox.VideoToolboxVideoDecoder(),
@@ -68,10 +74,14 @@ public static class VideoDecoderFactory
     /// <summary>Creates a codec-aware platform backend, including AV1 on macOS via GStreamer VideoToolbox. 按编码格式创建平台后端。</summary>
     public static IVideoDecoder Create(VideoCodecId codec, VideoDecoderOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        if (codec is not (VideoCodecId.H264 or VideoCodecId.H265 or VideoCodecId.Av1)) throw new ArgumentOutOfRangeException(nameof(codec));
         if (OperatingSystem.IsMacOS() && codec == VideoCodecId.Av1 && options.Backend is VideoDecoderBackend.Auto or VideoDecoderBackend.VideoToolbox)
             return new GStreamer.GStreamerVideoDecoder(true);
+
         return Create(options);
     }
+
     /// <summary>Gets the initialized backend name, including the actual choice after fallback.</summary>
     public static string GetBackendName(IVideoDecoder decoder)
     {
@@ -83,18 +93,25 @@ public static class VideoDecoderFactory
             MediaFoundation.MediaFoundationVideoDecoder => "Media Foundation (CPU)",
             VideoToolbox.VideoToolboxVideoDecoder => "VideoToolbox (hardware)",
             GStreamer.GStreamerVideoDecoder gst => $"GStreamer ({(gst.UsesHardware ? "GPU" : "CPU")}: {gst.DecoderElement})",
+            VaApiVideoDecoder => "VA-API (libavcodec, hardware)",
             _ => "Unknown",
         };
     }
 
     /// <summary>Gets why the preferred backend failed during the most recent initialization.</summary>
-    public static string? GetFallbackReason(IVideoDecoder decoder) => (decoder as FallbackVideoDecoder)?.FallbackReason;
+    public static string? GetFallbackReason(IVideoDecoder decoder)
+    {
+        if (decoder is not FallbackVideoDecoder selection) return null;
+        string? nested = selection.ActiveDecoder is { } active ? GetFallbackReason(active) : null;
+        return nested is null ? selection.FallbackReason : $"{selection.FallbackReason}; {nested}";
+    }
 
     /// <summary>Probes D3D11 initialization at 1920x1080. Actual stream decoding can still fail.</summary>
     public static bool HasGpuDecoder(VideoCodecId codec)
     {
         if (codec is not (VideoCodecId.H264 or VideoCodecId.H265 or VideoCodecId.Av1)) return false;
-        if (OperatingSystem.IsLinux() || (OperatingSystem.IsMacOS() && codec == VideoCodecId.Av1)) return GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true);
+        if (OperatingSystem.IsLinux()) return VaApiVideoDecoder.IsSupported(codec) || GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true);
+        if (OperatingSystem.IsMacOS() && codec == VideoCodecId.Av1) return GStreamer.GStreamerVideoDecoder.IsAvailable(codec, true);
         if (OperatingSystem.IsMacOS()) return VideoToolbox.VtNative.VTIsHardwareDecodeSupported(VideoToolbox.VtNative.Codec(codec)) != 0;
         if (!OperatingSystem.IsWindows()) return false;
         try

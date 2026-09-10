@@ -15,6 +15,8 @@ public enum VideoDecoderBackend
     GStreamerHardware,
     /// <summary>Explicit GStreamer software decoding. GStreamer 软件解码。</summary>
     GStreamerSoftware,
+    /// <summary>Linux VA-API hardware via the native libavcodec bridge; no GStreamer or software fallback.</summary>
+    VaApi,
 }
 
 /// <summary>YUV matrix override. YUV 色彩矩阵覆盖。</summary>
@@ -48,4 +50,6 @@ public sealed record VideoDecoderOptions
     public VideoColorMatrix ColorMatrix { get; init; }
     /// <summary>Source YUV range override. 源 YUV 范围覆盖。</summary>
     public VideoColorRange ColorRange { get; init; }
+    /// <summary>Optional absolute Linux DRM render-node path. When omitted, probe available render nodes in order.</summary>
+    public string? VaApiRenderNode { get; init; }
 }

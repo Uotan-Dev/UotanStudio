@@ -54,6 +54,40 @@ public sealed unsafe class VaApiSession : IDisposable
     /// <summary>Gets the negotiated libva API version.</summary>
     public Version Version { get; } = new(0, 0);
 
+    /// <summary>
+    /// Probes existing render nodes. This is device availability, not codec or stream support.
+    /// </summary>
+    public static bool IsSupported()
+    {
+        if (!OperatingSystem.IsLinux()) return false;
+        return RenderNodes().Any(Probe);
+    }
+
+    internal static string[] RenderNodes() => Directory.Exists("/dev/dri")
+        ? Directory.GetFiles("/dev/dri", "renderD*").Order(StringComparer.Ordinal).ToArray() : [];
+
+    // libva 2.22 va.h. Profile discovery does not guarantee the actual stream's profile/size.
+    internal static bool SupportsCodec(VaApiCapability capability, VideoCodecId codec) => capability.Entrypoint == 1 && codec switch
+    {
+        VideoCodecId.H264 => capability.Profile is 5 or 6 or 7 or 13,
+        VideoCodecId.H265 => capability.Profile == 17,
+        VideoCodecId.Av1 => capability.Profile == 32,
+        _ => false,
+    };
+
+    private static bool Probe(string node)
+    {
+        try
+        {
+            using var session = new VaApiSession(node);
+            return session.Version.Major > 0;
+        }
+        catch (Exception ex) when (ex is IOException or NotSupportedException or InvalidOperationException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>Queries actual driver profile/entrypoint pairs for decoding, encoding and processing.</summary>
     public IReadOnlyList<VaApiCapability> QueryCapabilities()
     {
