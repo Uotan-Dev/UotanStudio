@@ -1,22 +1,18 @@
-using CommunityToolkit.Mvvm.Messaging;
-using UotanStudio.Messages;
-
 namespace UotanStudio.Services.Projects;
 
-public sealed partial class ProjectOperationsService
+public sealed partial class ProjectSession
 {
     /// <summary>Publishes a prepared copy before changing the live project context.</summary>
-    private async Task SaveAsCoreAsync(string path)
+    private async Task SaveAsCoreAsync(string path, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        if (!_workspace.HasNodeEditor) throw new InvalidOperationException("No node editor is bound.");
-        var context = ProjectContextService.Instance;
+        var context = Context;
         var sourceRoot = context.RootDirectory;
         var fullPath = Path.GetFullPath(path);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         if (context.CurrentSolutionPath is { } current && string.Equals(current, fullPath, comparison))
         {
-            await PersistCoreAsync(fullPath);
+            await PersistCoreAsync(fullPath, true, cancellationToken);
             return;
         }
 
@@ -40,14 +36,14 @@ public sealed partial class ProjectOperationsService
         var packing = _workspace.CaptureSettings();
         // Existing editors keep their original file identity. Store those paths relative to the new root.
         var documents = _workspace.CaptureDocuments(transaction.RootDirectory);
-        var history = OperationHistoryService.Instance.CaptureSnapshot();
+        var history = History.CaptureSnapshot();
         var sourceSettingsPath = context.StateDirectory is { } state ? Path.Combine(state, "settings.json") : null;
         var settings = sourceSettingsPath is null ? new SolutionSettings()
-            : await SolutionSettingsService.LoadAsync(sourceSettingsPath)
+            : await SolutionSettingsService.LoadAsync(sourceSettingsPath, cancellationToken)
                 ?? (File.Exists(sourceSettingsPath) ? throw new InvalidDataException("Cannot read the source project settings.") : new SolutionSettings());
         settings.RecentDocuments = documents.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
 
-        await transaction.PrepareAsync(sourceRoot);
+        await transaction.PrepareAsync(sourceRoot, cancellationToken);
         if (references.Count == 0)
         {
             activeName = name;
@@ -64,25 +60,27 @@ public sealed partial class ProjectOperationsService
             Images = images,
             Settings = packing,
             OpenDocuments = documents.Count > 0 ? documents : null
-        }, SolutionJsonContext.Default.FirmwareProjectSnapshot);
+        }, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
         await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(transaction.StagingRoot, name + ".uotannode"), node,
-            SolutionJsonContext.Default.NodeProjectSnapshot);
+            SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);
         await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(transaction.StagingRoot, ".uotan", "settings.json"), settings,
-            SolutionSettingsJsonContext.Default.SolutionSettings);
+            SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
         await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(transaction.StagingRoot, ".uotan", "history.json"), history,
-            HistoryJsonContext.Default.ListHistoryOperationDto);
+            HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken);
         var solution = new SolutionSnapshot
         {
             SolutionName = name,
             NodeProjectPath = $"{name}/{name}.uotannode",
             SubProjects = references
         };
-        await AtomicJsonFile.WriteIfChangedAsync(transaction.StagingSolution, solution, SolutionJsonContext.Default.SolutionSnapshot);
+        await AtomicJsonFile.WriteIfChangedAsync(transaction.StagingSolution, solution, SolutionJsonContext.Default.SolutionSnapshot, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         transaction.Commit();
 
         context.OpenSolution(fullPath, solution);
         context.SetActiveSubProject(active.Name);
         CurrentProjectPath = fullPath;
-        WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+        _workspace.ChangeProjectRoot(context.RootDirectory!, preserveDocuments: true);
+        Changed?.Invoke();
     }
 }

@@ -61,12 +61,16 @@ internal partial class ProjectSettingViewModel : Tool
             return;
         }
 
-        var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(context.FirmwareProjectPath);
-        if (firmware?.Settings is not null)
+        var path = context.FirmwareProjectPath;
+        var version = ++_loadVersion;
+        var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(path);
+        if (version == _loadVersion && context.FirmwareProjectPath == path && firmware?.Settings is not null)
         {
             ApplyFromDto(firmware.Settings);
         }
     }
+
+    private int _loadVersion;
 
     /// <summary>
     /// <para>将当前面板状态导出为打包设置数据传输对象。</para>

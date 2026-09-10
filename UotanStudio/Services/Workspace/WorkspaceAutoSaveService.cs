@@ -206,7 +206,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 await _projects.PersistToAsync(path);
             await SaveSessionAsync();
         }
-        return true;
+        return string.IsNullOrEmpty(_projects.CurrentProjectPath) || await _projects.CloseAfterSaveAsync();
     }
 
     /// <summary>Waits for existing work before prompting; never initiates a save before confirmation.</summary>

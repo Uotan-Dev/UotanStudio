@@ -55,9 +55,10 @@ public static class SolutionSettingsService
             await AtomicJsonFile.WriteIfChangedAsync(path, settings, SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken).ConfigureAwait(false);
             return true;
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Persistence", $"Save solution settings failed: {ex.Message}");
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Persistence", $"Save solution settings failed: {ex.Message}");
             return false;
         }
     }
@@ -77,12 +78,14 @@ public static class SolutionSettingsService
 
         try
         {
-            await using var stream = File.OpenRead(path);
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            if (stream.Length > 32 * 1024 * 1024) throw new InvalidDataException("Project state exceeds 32 MiB.");
             return await JsonSerializer.DeserializeAsync(stream, SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Persistence", $"Load solution settings failed: {ex.Message}");
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Persistence", $"Load solution settings failed: {ex.Message}");
             return null;
         }
     }

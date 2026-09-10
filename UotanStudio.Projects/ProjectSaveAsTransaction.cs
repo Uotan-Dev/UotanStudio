@@ -56,28 +56,41 @@ internal sealed class ProjectSaveAsTransaction : IDisposable
         return resolved;
     }
 
-    internal Task PrepareAsync(string? sourceRoot) => Task.Run(() =>
+    internal Task PrepareAsync(string? sourceRoot, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
         // Existing unrelated destination files survive successful Save As.
         Directory.CreateDirectory(StagingRoot);
-        if (Directory.Exists(RootDirectory)) CopyTree(RootDirectory, StagingRoot);
-        if (sourceRoot is not null) CopyTree(sourceRoot, StagingRoot);
+        if (Directory.Exists(RootDirectory)) CopyTree(RootDirectory, StagingRoot, cancellationToken);
+        if (sourceRoot is not null) CopyTree(sourceRoot, StagingRoot, cancellationToken);
     });
 
-    private static void CopyTree(string source, string destination)
+    private static void CopyTree(string source, string destination, CancellationToken cancellationToken)
     {
         var pending = new Stack<(string Source, string Destination)>();
         pending.Push((source, destination));
         while (pending.TryPop(out var directory))
         {
+            cancellationToken.ThrowIfCancellationRequested();
             RejectLink(directory.Source);
             Directory.CreateDirectory(directory.Destination);
             foreach (var entry in Directory.EnumerateFileSystemEntries(directory.Source))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var attributes = RejectLink(entry);
                 var target = Path.Combine(directory.Destination, Path.GetFileName(entry));
                 if ((attributes & FileAttributes.Directory) != 0) pending.Push((entry, target));
-                else File.Copy(entry, target, overwrite: true);
+                else
+                {
+                    using var input = File.OpenRead(entry);
+                    using var output = File.Create(target);
+                    var buffer = new byte[65536];
+                    int count;
+                    while ((count = input.Read(buffer)) != 0)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        output.Write(buffer, 0, count);
+                    }
+                }
             }
         }
     }
@@ -130,6 +143,7 @@ internal sealed class ProjectSaveAsTransaction : IDisposable
             if (directory) { if (Directory.Exists(ownedPath)) Directory.Delete(ownedPath, recursive: true); }
             else File.Delete(ownedPath);
         }
-        catch (Exception ex) { LogService.Instance.Write(LogLevel.Warn, "Projects", $"Temporary project cleanup failed ({ownedPath}): {ex.Message}"); }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex) { ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Projects", $"Temporary project cleanup failed ({ownedPath}): {ex.Message}"); }
     }
 }

@@ -500,7 +500,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             // 重新加载解决方案后活动子项目回到第一项；切回刚创建的子项目再导入。
             // Reloading the solution resets the active sub-project to the first one; switch back to
             // the newly created one before importing.
-            ProjectContextService.Instance.SetActiveSubProject(form.ProjectName);
+            if (!await _projectOps.SwitchSubProjectAsync(form.ProjectName)) return;
 
             var images = ImageViewModel.EnsureInstance();
             if (form.ContainerPath is not null)
@@ -711,7 +711,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             }
             if (root != ProjectContextService.Instance.RootDirectory) throw new IOException("The active project changed.");
             if (!await _projectOps.SaveAsync(saveActiveDocument: false)) return;
-            await Task.Run(() => ProjectArchiveService.ExportAsync(root, output));
+            await _projectOps.ExportAsync(output);
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Menu_Export"), output, Ursa.Controls.MessageBoxIcon.Information);
         }
         catch (Exception ex)

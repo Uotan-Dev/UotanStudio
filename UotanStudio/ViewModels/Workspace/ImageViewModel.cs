@@ -137,15 +137,31 @@ internal partial class ImageViewModel : Tool
 
     partial void OnSelectedSubProjectChanged(string? value)
     {
-        if (IsOperating || string.IsNullOrEmpty(value))
+        if (_synchronizingSubProject || string.IsNullOrEmpty(value))
         {
             return;
         }
+        if (value == ProjectContextService.Instance.ActiveSubProject?.Name) return;
+        _ = SwitchSelectedSubProjectAsync(value);
+    }
 
-        var context = ProjectContextService.Instance;
-        if (context.SetActiveSubProject(value))
+    private bool _synchronizingSubProject;
+
+    private async Task SwitchSelectedSubProjectAsync(string name)
+    {
+        try
         {
-            _ = RefreshProjectImagesAsync();
+            if (!IsOperating) await ProjectOperationsService.Instance.SwitchSubProjectAsync(name);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Projects", $"Switch sub-project failed: {ex.Message}");
+        }
+        finally
+        {
+            _synchronizingSubProject = true;
+            try { SelectedSubProject = ProjectContextService.Instance.ActiveSubProject?.Name; }
+            finally { _synchronizingSubProject = false; }
         }
     }
 
@@ -367,6 +383,13 @@ internal partial class ImageViewModel : Tool
     /// </summary>
     private void RebuildSubProjectItems()
     {
+        _synchronizingSubProject = true;
+        try { RebuildSubProjectItemsCore(); }
+        finally { _synchronizingSubProject = false; }
+    }
+
+    private void RebuildSubProjectItemsCore()
+    {
         var context = ProjectContextService.Instance;
         var subProjects = context.SubProjects;
 
@@ -386,13 +409,13 @@ internal partial class ImageViewModel : Tool
         }
 
         var items = new ObservableCollection<string>(subProjects.Select(sp => sp.Name));
-        SubProjectItems = items;
+        if (SubProjectItems is null || !SubProjectItems.SequenceEqual(items)) SubProjectItems = items;
         IsSubProjectVisible = true;
 
         // 保持当前选中项有效；若无效则回退到活动子项目。
         // Keep the current selection valid; fall back to the active sub-project.
         var activeName = context.ActiveSubProject?.Name;
-        if (SelectedSubProject is null || !items.Contains(SelectedSubProject))
+        if (SelectedSubProject != activeName)
         {
             SelectedSubProject = activeName ?? items[0];
         }
@@ -550,7 +573,7 @@ internal partial class ImageViewModel : Tool
                 }
 
                 var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(path)));
-                await Task.Run(() => File.Copy(path, destination));
+                await ProjectFiles.CopyAsync(path, destination);
                 var relative = context.RelativePath(destination);
                 if (relative is null)
                 {
@@ -643,7 +666,7 @@ internal partial class ImageViewModel : Tool
 
         var imagesDir = context.EnsureImagesDirectory();
         var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(sourcePath)));
-        await Task.Run(() => File.Copy(sourcePath, destination)).ConfigureAwait(true);
+        await ProjectFiles.CopyAsync(sourcePath, destination).ConfigureAwait(true);
         var relative = context.RelativePath(destination);
         if (relative is null)
         {
@@ -717,7 +740,7 @@ internal partial class ImageViewModel : Tool
 
         try
         {
-            await Task.Run(() => File.Copy(source, targetPath, overwrite: true));
+            await ProjectFiles.CopyAsync(source, targetPath, overwrite: true);
             LogService.Instance.Write(LogLevel.Info, "Images", $"Exported {image.DisplayName} -> {targetPath}  已导出 {image.DisplayName}");
         }
         catch (Exception ex)
@@ -1086,7 +1109,7 @@ internal partial class ImageViewModel : Tool
             var deletedDir = Path.Combine(subProjectRoot, ".deleted");
             Directory.CreateDirectory(deletedDir);
             var destination = Path.Combine(deletedDir, GetUniqueFileName(deletedDir, Path.GetFileName(source)));
-            await Task.Run(() => File.Move(source, destination));
+            await ProjectFiles.MoveAsync(source, destination);
             Images.Remove(image);
             if (ReferenceEquals(SelectedImage, image)) SelectedImage = null;
             LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted {image.DisplayName} -> intermediate/deleted  已删除 {image.DisplayName}");
@@ -1485,19 +1508,7 @@ internal partial class ImageViewModel : Tool
     }
 
     private static string GetUniqueFileName(string directory, string fileName)
-    {
-        var candidate = fileName;
-        var baseName = Path.GetFileNameWithoutExtension(fileName);
-        var extension = Path.GetExtension(fileName);
-        var index = 1;
-        while (File.Exists(Path.Combine(directory, candidate)))
-        {
-            candidate = $"{baseName}_{index}{extension}";
-            index++;
-        }
-
-        return candidate;
-    }
+        => ProjectFiles.GetUniqueFileName(directory, fileName);
 
     private static string DetectFormat(string filePath)
     {

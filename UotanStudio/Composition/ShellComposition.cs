@@ -14,6 +14,7 @@ internal static class ShellComposition
     internal static ShellComponents Create()
     {
         var projects = ProjectOperationsService.Instance;
+        if (projects.IsWorkspaceAttached) throw new InvalidOperationException("Only one desktop project shell may be active.");
         var menu = new MenuViewModel(projects);
         var nodes = new NodeEditorViewModel();
         var settings = new SettingsViewModel();
@@ -26,6 +27,7 @@ internal static class ShellComposition
 internal sealed class ShellComponents : IDisposable
 {
     private bool _disposed;
+    private readonly IDisposable _projectBinding;
     internal ProjectOperationsService Projects { get; }
     internal MenuViewModel Menu { get; }
     internal NodeEditorViewModel Nodes { get; }
@@ -43,8 +45,7 @@ internal sealed class ShellComponents : IDisposable
         Settings = settings;
         Workspace = workspace;
         Modifications = new(() => workspace.Layout);
-        projects.NodeEditorVM = nodes;
-        projects.WorkspaceVM = workspace;
+        _projectBinding = projects.AttachWorkspace(nodes, workspace);
         AutoSave = new(workspace, settings, projects);
     }
 
@@ -56,8 +57,7 @@ internal sealed class ShellComponents : IDisposable
         Modifications.Dispose();
         Menu.Dispose();
         WeakReferenceMessenger.Default.UnregisterAll(Nodes);
-        if (ReferenceEquals(Projects.NodeEditorVM, Nodes)) Projects.NodeEditorVM = null;
-        if (ReferenceEquals(Projects.WorkspaceVM, Workspace)) Projects.WorkspaceVM = null;
+        _projectBinding.Dispose();
         try { Settings.Dispose(); }
         finally { Workspace.Dispose(); }
     }

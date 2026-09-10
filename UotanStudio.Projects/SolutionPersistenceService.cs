@@ -101,39 +101,52 @@ public static class SolutionPersistenceService
 
     private static async Task<bool> SaveAsync<T>(string path, T snapshot, JsonTypeInfo<T> typeInfo, string label, CancellationToken cancellationToken)
     {
-        var log = LogService.Instance;
+
         try
         {
             if (await AtomicJsonFile.WriteIfChangedAsync(path, snapshot, typeInfo, cancellationToken).ConfigureAwait(false))
-                log.Write(LogLevel.Info, "Persistence", $"Saved {label}: {path}");
+                ProjectDiagnostics.Write(ProjectLogLevel.Info, "Persistence", $"Saved {label}: {path}");
             return true;
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            log.Write(LogLevel.Error, "Persistence", $"Save {label} failed: {ex.Message}");
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Persistence", $"Save {label} failed: {ex.Message}");
             return false;
         }
     }
 
     private static async Task<T?> LoadAsync<T>(string path, JsonTypeInfo<T> typeInfo, string label, CancellationToken cancellationToken)
     {
-        var log = LogService.Instance;
+
         if (!File.Exists(path))
         {
-            log.Write(LogLevel.Warn, "Persistence", $"Load {label} aborted: missing file '{path}'");
+            ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Persistence", $"Load {label} aborted: missing file '{path}'");
             return default;
         }
 
         try
         {
-            await using var stream = File.OpenRead(path);
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 65536, FileOptions.Asynchronous | FileOptions.SequentialScan);
+            if (stream.Length > 32 * 1024 * 1024) throw new InvalidDataException("Project state exceeds 32 MiB.");
             var result = await JsonSerializer.DeserializeAsync(stream, typeInfo, cancellationToken).ConfigureAwait(false);
-            log.Write(LogLevel.Info, "Persistence", $"Loaded {label}: {path}");
+            switch (result)
+            {
+                case SolutionSnapshot solution: ProjectValidation.ValidateSolution(solution); break;
+                case FirmwareProjectSnapshot firmware when firmware.FormatVersion != 1 || firmware.Images is null
+                    || firmware.Images.Any(image => image is null || string.IsNullOrWhiteSpace(image.RelativePath)):
+                    throw new InvalidDataException("Invalid or unsupported firmware project snapshot.");
+                case NodeProjectSnapshot node when node.FormatVersion != 1 || node.Nodes is null || node.Connections is null
+                    || node.Nodes.Any(item => item is null) || node.Connections.Any(item => item is null):
+                    throw new InvalidDataException("Invalid or unsupported workflow snapshot.");
+            }
+            ProjectDiagnostics.Write(ProjectLogLevel.Info, "Persistence", $"Loaded {label}: {path}");
             return result;
         }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
-            log.Write(LogLevel.Error, "Persistence", $"Load {label} failed: {ex.Message}");
+            ProjectDiagnostics.Write(ProjectLogLevel.Error, "Persistence", $"Load {label} failed: {ex.Message}");
             return default;
         }
     }

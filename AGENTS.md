@@ -13,7 +13,7 @@
 ## 事件与入口复用（2026-09-10）
 
 - **应用结构**：保留模块化单体 + MVVM，`Composition/ShellComposition` 显式组装主窗口组件并复用 `ProjectOperationsService.Instance`；`ShellComponents` 释放菜单/节点订阅、工作区和自动保存，解绑需校验当前归属。`MainWindow` 在 `Closed` 后释放所属主视图模型，桌面设备监视由 `DesktopApplicationServices` 在退出时释放。
-- **项目操作边界**：核心项目操作通过 `IProjectWorkspace` 消费 DTO 与工作区操作，界面收集/恢复位于 `ProjectWorkspaceCoordinator`；`ProjectOperationsService.Desktop.cs` 保留原 `Instance`/`NodeEditorVM`/`WorkspaceVM` 兼容入口。互斥门、自动保存支持范围与页面持久化策略保留。实施和测试见 `docs/application-architecture.md`。
+- **项目生命周期类库**：`UotanStudio.Projects` 独立承载工程 DTO、源生成 JSON、路径上下文、历史、另存为事务、归档导出和 `ProjectSession`，无应用／固件库／界面包依赖。默认会话独立持有 `ProjectContext`、`ProjectHistory` 和纯数据工作区；`IProjectWorkspace` 供宿主适配，界面收集/恢复仍在 `ProjectWorkspaceCoordinator`。桌面 `ProjectOperationsService` 通过组合保留原 `Instance`/`NodeEditorVM`/`WorkspaceVM` 入口，原公共数据／存储类型由应用程序集转发。子项目切换与关闭接入会话操作门，固件全局元数据根仅由桌面门面同步。自动保存支持范围及页面策略保留。独立测试见 `UotanStudio.Projects.Tests`，真实窗口验证见 `tools/ProjectLifecycleSmoke`，边界及验证见 `docs/project-library-extraction.md` 和 `UotanStudio.Projects/README.md`。
 - **项目另存为与子项目注册**：`ProjectSaveAsTransaction` 在目标旁准备完整项目目录副本和最新快照，捕获写入/发布失败时回滚目录替换，发布成功后才切换路径、活动子项目与元数据根。保留目标不冲突文件；源/目标目录重叠、符号链接/联接及源根外共享子项目明确拒绝。已打开编辑器保持原文件身份，页面记录按新根重算相对路径。新增/导入子项目先保存 `.uotan` 引用，再在同一操作互斥门内重载；普通工程持久化写入失败向上抛错，不再返回成功。
 
 - **当前主项目分批合并**：DTB/DEX/Manifest/ARSC/Hex/APK 打开共用 `OpenOrActivateDocumentAsync`，按编辑器类型+路径复用，仍活动才加载后补发；拖放解析共用 `FileDropPaths`，工作区导入与比较策略独立。节点元数据打包接入 `RegisteredFirmwareFormats`，显式保留不支持格式时的异常策略与 CPIO 回退。
@@ -45,7 +45,7 @@ dotnet test UotanStudio.slnx -c Debug
 # 启动应用（Desktop 为启动项目）
 dotnet run --project UotanStudio.Desktop
 
-# AOT 发布（IsAotCompatible / PublishAot / TrimMode=partial 均已启用，`dotnet publish -r win-x64` 发布冒烟通过；仅有 Dock.Avalonia 的 IL2026 裁剪警告，属第三方 XAML trampoline，TrimMode=partial 下可接受）
+# AOT 发布（IsAotCompatible / PublishAot / TrimMode=partial 均已启用；项目类库提取后的 win-x64 发布通过，仍有第三方和生成 XAML 的 IL2026/IL2104/IL3053 诊断，详见 docs/project-library-extraction.md；不代表原生包全部运行路径已验证）
 dotnet publish UotanStudio.Desktop -c Release -r win-x64
 ```
 
