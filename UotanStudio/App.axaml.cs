@@ -11,17 +11,22 @@ using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
+using UotanStudio.Composition;
 
 namespace UotanStudio;
 
 public partial class App : Application
 {
+    private DesktopApplicationServices? _desktopServices;
     /// <summary>Existing files passed by desktop file associations, opened after window creation.</summary>
     public static string[] StartupFiles { get; set; } = [];
 
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        // Subscribe before startup settings are applied; retain LanguageChangedMessage for legacy callers.
+        WeakReferenceMessenger.Default.Register<App, LanguageStateChangedMessage>(this,
+            static (app, message) => app.UpdateSemiThemeLocale(message.CultureName));
         // 跟随系统主题时，ActualThemeVariant 会随系统切换；据此重新合并
         // LightColors/DarkColors，使 Hex* 等自定义画刷同步刷新。
         ActualThemeVariantChanged += (_, _) =>
@@ -57,6 +62,8 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            _desktopServices = new DesktopApplicationServices();
+            desktop.Exit += OnDesktopExit;
             // 桌面端：立即显示 Ursa 主题启动窗，启动序列（应用设置 + 首次全局 USB 扫描
             // + 预构建主窗口）完成后关闭，由 SplashWindow 过渡到主窗口。
             var splash = new MainSplashWindow
@@ -120,11 +127,7 @@ public partial class App : Application
 
         // 3) 启动设备监视并执行首次全局 USB 扫描，整体放后台线程：Start 内含 SetupAPI 初次
         //    全量快照与 adb server 探测（可达数百毫秒），不能阻塞 UI 线程（启动窗会冻结）。
-        var scanTask = Task.Run(() =>
-        {
-            DeviceMonitorService.Instance.Start();
-            return DeviceMonitorService.Instance.Scan();
-        });
+        var scanTask = _desktopServices!.StartAndScanAsync();
 
         // 最小可见时长与扫描并行计时，缩短总启动耗时。
         var minShowTask = Task.Delay(600);
@@ -157,6 +160,19 @@ public partial class App : Application
 
         await minShowTask.ConfigureAwait(true);
         splash.StatusText = LanguageService.Instance.GetString("Splash_Preparing");
+    }
+
+    /// <summary>Releases application-wide monitoring only after desktop shutdown has been accepted.</summary>
+    private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
+    {
+        if (sender is IClassicDesktopStyleApplicationLifetime desktop) desktop.Exit -= OnDesktopExit;
+        try { _desktopServices?.Dispose(); }
+        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Lifecycle", ex.Message); }
+        finally
+        {
+            _desktopServices = null;
+            WeakReferenceMessenger.Default.UnregisterAll(this);
+        }
     }
 
     /// <summary>
@@ -206,44 +222,15 @@ public partial class App : Application
     /// view model, which opens the requested document.
     /// </summary>
     private async void OnOpenDocument(object recipient, OpenDocumentRequestMessage message)
-    {
-        try
-        {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow?.DataContext is MainViewModel mainVm)
-            {
-                await mainVm.WorkspaceVM.OpenDocumentAsync(message.Path, message.Mode);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "App", $"Open document failed: {ex.Message}");
-        }
-    }
+        => await RunMainRequestAsync("Open document failed", main => main.WorkspaceVM.OpenDocumentAsync(message.Path, message.Mode));
 
     /// <summary>
     /// <para>打开或聚焦工作区对比文档，并将右键选中的路径加入比较。</para>
     /// Opens or focuses the workspace compare document and adds the explorer selection when provided.
     /// </summary>
     private async void OnOpenCompare(object recipient, OpenCompareRequestMessage message)
-    {
-        try
-        {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow?.DataContext is MainViewModel mainVm
-                && mainVm.WorkspaceVM.OpenCompareDocument() is { } compare)
-            {
-                if (message.Path is { } path)
-                {
-                    await compare.AddComparisonPathAsync(path);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "App", $"Open compare failed: {ex.Message}");
-        }
-    }
+        => await RunCompareRequestAsync("Open compare failed", compare => message.Path is { } path
+            ? compare.AddComparisonPathAsync(path) : Task.CompletedTask);
 
     /// <summary>
     /// <para>响应投屏请求：打开投屏文档并对指定设备启动会话。</para>
@@ -253,9 +240,7 @@ public partial class App : Application
     {
         try
         {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow?.DataContext is MainViewModel mainVm
-                && mainVm.WorkspaceVM.OpenScreenMirrorDocument() is { } mirror)
+            if (GetDesktopMainViewModel()?.WorkspaceVM.OpenScreenMirrorDocument() is { } mirror)
             {
                 mirror.StartForDevice(message.Serial);
             }
@@ -272,62 +257,23 @@ public partial class App : Application
     /// in sub-project mode).
     /// </summary>
     private async void OnAddSubProject(object recipient, AddSubProjectRequestMessage message)
-    {
-        try
-        {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow?.DataContext is MainViewModel mainVm)
-            {
-                await mainVm.MenuVM.AddSubProjectCommand.ExecuteAsync(null);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "App", $"Open add sub-project failed: {ex.Message}");
-        }
-    }
+        => await RunMainRequestAsync("Open add sub-project failed", main => main.MenuVM.AddSubProjectCommand.ExecuteAsync(null));
 
     /// <summary>
     /// <para>响应文件比较请求消息，在工作区对比文档中载入两个文件。</para>
     /// Responds to file-compare requests by loading both files in the workspace compare document.
     /// </summary>
     private async void OnOpenFileCompare(object recipient, OpenFileCompareRequestMessage message)
-    {
-        try
-        {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow?.DataContext is MainViewModel mainVm
-                && mainVm.WorkspaceVM.OpenCompareDocument() is { } compare)
-            {
-                await compare.OpenCompareFilesAsync(message.LeftPath, message.RightPath);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "App", $"Open file compare failed: {ex.Message}");
-        }
-    }
+        => await RunCompareRequestAsync("Open file compare failed",
+            compare => compare.OpenCompareFilesAsync(message.LeftPath, message.RightPath));
 
     /// <summary>
     /// <para>响应文件夹比较请求消息，在工作区对比文档中载入两个目录。</para>
     /// Responds to folder-compare requests by loading both directories in the workspace compare document.
     /// </summary>
     private async void OnOpenFolderCompare(object recipient, OpenFolderCompareRequestMessage message)
-    {
-        try
-        {
-            if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
-                && desktop.MainWindow?.DataContext is MainViewModel mainVm
-                && mainVm.WorkspaceVM.OpenCompareDocument() is { } compare)
-            {
-                await compare.OpenCompareFoldersAsync(message.LeftDirectory, message.RightDirectory);
-            }
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "App", $"Open folder compare failed: {ex.Message}");
-        }
-    }
+        => await RunCompareRequestAsync("Open folder compare failed",
+            compare => compare.OpenCompareFoldersAsync(message.LeftDirectory, message.RightDirectory));
 
     /// <summary>
     /// <para>响应退出应用程序消息，关闭主窗口并退出。</para>
@@ -345,6 +291,23 @@ public partial class App : Application
             controlled.Shutdown();
         }
     }
+
+    /// <summary>Resolves the same desktop request target used by the existing message adapters.</summary>
+    private MainViewModel? GetDesktopMainViewModel() => ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop
+        ? desktop.MainWindow?.DataContext as MainViewModel : null;
+
+    private async Task RunMainRequestAsync(string error, Func<MainViewModel, Task> operation)
+    {
+        try
+        {
+            if (GetDesktopMainViewModel() is { } main) await operation(main);
+        }
+        catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "App", $"{error}: {ex.Message}"); }
+    }
+
+    private Task RunCompareRequestAsync(string error, Func<UotanStudio.ViewModels.Compare.CompareViewModel, Task> operation)
+        => RunMainRequestAsync(error, main => main.WorkspaceVM.OpenCompareDocument() is { } compare
+            ? operation(compare) : Task.CompletedTask);
 
     private void ApplyTheme(ThemeMode themeMode)
     {

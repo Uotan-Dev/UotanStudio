@@ -82,6 +82,67 @@ public sealed class EntryPointCompatibilityTests
         Assert.Equal(Enumerable.Repeat((byte)1, 4096), File.ReadAllBytes(raw));
     }
 
+    [Fact]
+    public async Task TypedOpen_DoesNotPublishLoadedDocumentAfterUserSwitchesAway()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.WriteBytes("pending.bin", [1]);
+        using var workspace = new WorkspaceViewModel(new TestWorkspaceFactory());
+        var recipient = new object();
+        var notifications = new List<ActiveDocumentChangedMessage>();
+        var loaded = new TaskCompletionSource();
+        WeakReferenceMessenger.Default.Register<ActiveDocumentChangedMessage>(recipient, (_, message) => notifications.Add(message));
+        try
+        {
+            var pending = workspace.OpenOrActivateDocumentAsync(path,
+                static (HexEditorViewModel document) => document.FilePath,
+                static fullPath => new HexEditorViewModel { FilePath = fullPath },
+                (_, _) => loaded.Task);
+            var dock = workspace.FindDocumentsPanePublic()!;
+            var other = new Document();
+            dock.VisibleDockables!.Add(other);
+            dock.ActiveDockable = other;
+            var count = notifications.Count;
+            loaded.SetResult();
+            await pending;
+            Assert.Equal(count, notifications.Count);
+            Assert.Same(other, dock.ActiveDockable);
+        }
+        finally { WeakReferenceMessenger.Default.UnregisterAll(recipient); }
+    }
+
+    [Fact]
+    public async Task TypedOpen_ReusesOnlyMatchingEditorAndLoadsItOnce()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.WriteBytes("shared.bin", [1]);
+        using var workspace = new WorkspaceViewModel(new TestWorkspaceFactory());
+        await workspace.OpenDocumentAsync(path, EditorOpenMode.Text);
+        var loads = 0;
+        Task OpenHex() => workspace.OpenOrActivateDocumentAsync(path,
+            static (HexEditorViewModel document) => document.FilePath,
+            static fullPath => new HexEditorViewModel { FilePath = fullPath },
+            (_, _) => { loads++; return Task.CompletedTask; });
+        await OpenHex();
+        var active = workspace.FindDocumentsPanePublic()!.ActiveDockable;
+        await OpenHex();
+        Assert.Equal(1, loads);
+        Assert.Same(active, workspace.FindDocumentsPanePublic()!.ActiveDockable);
+        Assert.Equal(2, workspace.FindDocumentsPanePublic()!.VisibleDockables!.Count);
+    }
+
+    [Fact]
+    public async Task DirectoryPacking_PreservesCallerFailurePolicy()
+    {
+        var result = await UotanStudio.Services.Firmware.RegisteredFirmwareFormats.PackDirectoryAsync(
+            "missing-format", "source", "output", TestContext.Current.CancellationToken);
+        Assert.False(result.Success);
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            UotanStudio.Services.Firmware.RegisteredFirmwareFormats.PackDirectoryAsync(
+                "missing-format", "source", "output", TestContext.Current.CancellationToken, throwIfUnsupported: true));
+        Assert.Equal(result.Summary, error.Message);
+    }
+
     private sealed class TestWorkspaceFactory : Dock.Model.Mvvm.Factory
     {
         public override IRootDock CreateLayout()

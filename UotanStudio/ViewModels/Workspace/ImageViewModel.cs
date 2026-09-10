@@ -799,9 +799,7 @@ internal partial class ImageViewModel : Tool
                 StatusText = $"[{index + 1}/{requests.Length}] {operation}: {entry.DisplayName}";
                 // 条目内进度换算为总进度：当前条目占用 1/N 的进度条区间。
                 // Scale in-item progress into overall progress: each item owns a 1/N slice of the bar.
-                var itemBase = (double)index / requests.Length * 100;
-                var itemSlice = 100.0 / requests.Length;
-                var itemProgress = new Progress<double>(p => ProgressPercent = Math.Max(ProgressPercent, itemBase + Math.Clamp(p, 0, 99.9) / 100 * itemSlice));
+                var itemProgress = CreateItemProgress(index, requests.Length);
                 try
                 {
                     _ = paths.UnpackedDirectory;
@@ -835,6 +833,20 @@ internal partial class ImageViewModel : Tool
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, skipped);
         }
         finally { IsOperating = false; }
+    }
+
+    /// <summary>Maps item progress into a batch slice, preserving the dynamic queue's completion cap.</summary>
+    private IProgress<double> CreateItemProgress(int completed, int total, bool growingQueue = false)
+    {
+        var denominator = growingQueue ? Math.Max(1, total) : total;
+        var itemBase = (double)completed / denominator * 100;
+        var itemSlice = 100.0 / denominator;
+        return new Progress<double>(percent =>
+        {
+            var value = itemBase + Math.Clamp(percent, 0, 99.9) / 100 * itemSlice;
+            if (growingQueue) value = Math.Min(99.9, value);
+            ProgressPercent = Math.Max(ProgressPercent, value);
+        });
     }
 
     /// <summary>
@@ -919,9 +931,7 @@ internal partial class ImageViewModel : Tool
                 // 条目内进度换算为总进度：队列可能动态增长，按已完成数近似分片。
                 // Scale in-item progress into overall progress; the queue may grow, so slices
                 // are approximated by the completed count.
-                var itemBase = (double)done / Math.Max(1, total) * 100;
-                var itemSlice = 100.0 / Math.Max(1, total);
-                var itemProgress = new Progress<double>(p => ProgressPercent = Math.Max(ProgressPercent, Math.Min(99.9, itemBase + Math.Clamp(p, 0, 99.9) / 100 * itemSlice)));
+                var itemProgress = CreateItemProgress(done, total, growingQueue: true);
                 try
                 {
                     var paths = new ImageOperationPaths(source, entry.IsDirectory, project.RootPath, project.OutputDir);

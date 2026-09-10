@@ -213,11 +213,8 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
                 context.Log.Write(LogLevel.Error, Title, repack.PackingNotes);
                 return;
             }
-            FirmwareFormatRegistry.RegisterAll();
-            var handler = FormatDetector.RegisteredHandlers.FirstOrDefault(h => h.FormatName == repack.FormatName);
-            if (handler is not IWritableFormatHandler writer)
-                throw new InvalidDataException($"No directory packer is registered for {repack.FormatName}.");
-            var packed = await writer.PackAsync(inputDir, outputPath, context.CancellationToken).ConfigureAwait(false);
+            var packed = await RegisteredFirmwareFormats.PackDirectoryAsync(repack.FormatName, inputDir,
+                outputPath, context.CancellationToken, throwIfUnsupported: true).ConfigureAwait(false);
             if (!packed.Success)
             {
                 context.Log.Write(LogLevel.Error, Title, packed.Summary);

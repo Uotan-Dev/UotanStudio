@@ -267,74 +267,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void OnActiveDocumentChanged(object recipient, ActiveDocumentChangedMessage message)
     {
-        if (message.ActiveDocument is ScreenMirrorViewModel mirror)
-        {
-            RefreshForScreenMirror(mirror);
-            return;
-        }
-        // DTB 编辑器文档：走设备树展示路径。
-        // DTB editor document: route through the device-tree display path.
-        if (message.DtbDocument is { } dtb)
-        {
-            RefreshForDtbDocument(dtb);
-            return;
-        }
-
-        // DEX 编辑器文档：走 DEX 展示路径。
-        // DEX editor document: route through the DEX display path.
-        if (message.DexDocument is { } dex)
-        {
-            RefreshForDexDocument(dex);
-            return;
-        }
-
-        // Manifest 编辑器文档：走 Manifest 展示路径。
-        // Manifest editor document: route through the Manifest display path.
-        if (message.ManifestDocument is { } manifest)
-        {
-            RefreshForManifestDocument(manifest);
-            return;
-        }
-
-        // ARSC 编辑器文档：走 ARSC 展示路径。
-        // ARSC editor document: route through the ARSC display path.
-        if (message.ArscDocument is { } arsc)
-        {
-            RefreshForArscDocument(arsc);
-            return;
-        }
-
-        // APK 编辑器文档：走 APK 展示路径。
-        // APK editor document: route through the APK display path.
-        if (message.ApkDocument is { } apk)
-        {
-            RefreshForApkDocument(apk);
-            return;
-        }
-
-        // 固件信息文档：走固件展示路径。
-        // Firmware-info document: route through the firmware display path.
-        if (message.FirmwareDocument is { } firmware)
-        {
-            RefreshForFirmwareDocument(firmware);
-            return;
-        }
-
-        // Hex 编辑器文档：走 Hex 展示路径。
-        // Hex editor document: route through the Hex display path.
-        if (message.HexDocument is { } hex)
-        {
-            RefreshForHexDocument(hex);
-            return;
-        }
-
-        // 文件管理器文档：走文件管理器展示路径。
-        // File-manager editor document: route through the file-manager display path.
-        if (message.FileManagerDocument is { } fileManager)
-        {
-            RefreshForFileManagerDocument(fileManager);
-            return;
-        }
+        if (RefreshTypedDocument(message)) return;
 
         var doc = message.Document;
         if (doc is null)
@@ -353,9 +286,7 @@ internal partial class PropertiesViewModel : Tool
                 || ContentType == PropertiesContentType.ScreenMirror)
             {
                 ClearProperties();
-                SelectedNodeTitle = string.Empty;
-                HasSelection = false;
-                ContentType = PropertiesContentType.None;
+                ResetSelection();
             }
             return;
         }
@@ -374,6 +305,24 @@ internal partial class PropertiesViewModel : Tool
         // 文本文档：展示文本相关属性。
         // Text document: display text-related properties.
         RefreshForTextDocument(doc);
+    }
+
+    /// <summary>Dispatches typed document properties in the existing precedence order.</summary>
+    private bool RefreshTypedDocument(ActiveDocumentChangedMessage message)
+    {
+        switch (message)
+        {
+            case { ActiveDocument: ScreenMirrorViewModel mirror }: RefreshForScreenMirror(mirror); return true;
+            case { DtbDocument: { } dtb }: RefreshForDtbDocument(dtb); return true;
+            case { DexDocument: { } dex }: RefreshForDexDocument(dex); return true;
+            case { ManifestDocument: { } manifest }: RefreshForManifestDocument(manifest); return true;
+            case { ArscDocument: { } arsc }: RefreshForArscDocument(arsc); return true;
+            case { ApkDocument: { } apk }: RefreshForApkDocument(apk); return true;
+            case { FirmwareDocument: { } firmware }: RefreshForFirmwareDocument(firmware); return true;
+            case { HexDocument: { } hex }: RefreshForHexDocument(hex); return true;
+            case { FileManagerDocument: { } manager }: RefreshForFileManagerDocument(manager); return true;
+            default: return false;
+        }
     }
 
     /// <summary>
@@ -406,9 +355,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (image is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -437,9 +384,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (doc is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -608,6 +553,14 @@ internal partial class PropertiesViewModel : Tool
         }
     }
 
+    /// <summary>Resets selection state after the caller has cleared its own property rows.</summary>
+    private void ResetSelection()
+    {
+        SelectedNodeTitle = string.Empty;
+        HasSelection = false;
+        ContentType = PropertiesContentType.None;
+    }
+
     /// <summary>
     /// <para>清空全部属性行并复位语言选择器。</para>
     /// Clears all property rows and resets the language selector.
@@ -641,9 +594,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (doc is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -674,9 +625,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (doc is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -704,9 +653,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (node is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -740,9 +687,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (doc is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -774,9 +719,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (doc is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -812,9 +755,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (doc is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -875,9 +816,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (doc is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -904,9 +843,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (node is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -990,9 +927,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (node is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -1018,9 +953,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (doc is null)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
@@ -1101,9 +1034,7 @@ internal partial class PropertiesViewModel : Tool
         ClearProperties();
         if (analysis is null || analysis.Analysis.Count == 0)
         {
-            SelectedNodeTitle = string.Empty;
-            HasSelection = false;
-            ContentType = PropertiesContentType.None;
+            ResetSelection();
             return;
         }
 
