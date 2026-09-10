@@ -126,6 +126,16 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     }
 
     /// <inheritdoc />
+    public void Poll()
+    {
+        CheckReady();
+        if (!_isAsync) return;
+        for (int i = 0; i < 4096; i++)
+            if (!PumpEvent()) return;
+        throw new InvalidOperationException("Decoder event queue exceeded the polling limit.");
+    }
+
+    /// <inheritdoc />
     public void Dispose()
     {
         if (_disposed) return;
