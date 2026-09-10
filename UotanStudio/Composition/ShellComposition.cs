@@ -11,9 +11,25 @@ namespace UotanStudio.Composition;
 /// <summary>Explicitly assembles one shell, reusing the existing application project service.</summary>
 internal static class ShellComposition
 {
-    internal static ShellComponents Create()
+    /// <summary>
+    /// <para>兼容入口：使用 <see cref="ProjectOperationsService.Instance"/> 单例组装默认 Shell。</para>
+    /// Compatibility entry: assembles the default shell around the
+    /// <see cref="ProjectOperationsService.Instance"/> singleton.
+    /// </summary>
+    internal static ShellComponents Create() => Create(ProjectOperationsService.Instance);
+
+    /// <summary>
+    /// <para>显式装配：接收工程操作服务（桌面单例身份与释放归属不变，仍由应用进程持有），
+    /// Shell 内对象由返回的 <see cref="ShellComponents"/> 持有并在 Dispose 时按
+    /// AutoSave → Modifications → Menu/Nodes → projectBinding → Settings → Workspace 顺序释放。</para>
+    /// Explicit assembly: receives the project operations service (its desktop singleton identity
+    /// and release ownership are unchanged — still held by the application process); shell-scoped
+    /// objects are owned by the returned <see cref="ShellComponents"/> and released on Dispose in
+    /// the order AutoSave → Modifications → Menu/Nodes → projectBinding → Settings → Workspace.
+    /// </summary>
+    internal static ShellComponents Create(ProjectOperationsService projects)
     {
-        var projects = ProjectOperationsService.Instance;
+        if (projects is null) throw new ArgumentNullException(nameof(projects));
         if (projects.IsWorkspaceAttached) throw new InvalidOperationException("Only one desktop project shell may be active.");
         var menu = new MenuViewModel(projects);
         var nodes = new NodeEditorViewModel();
@@ -23,7 +39,13 @@ internal static class ShellComposition
     }
 }
 
-/// <summary>Owns shell objects; shared application services remain alive when the shell is released.</summary>
+/// <summary>
+/// <para>持有 Shell 作用域对象；工程操作服务与应用级服务（设备监视、日志、语言）的生命周期长于
+/// Shell，不在此释放。装配来源见 <see cref="ShellComposition.Create(ProjectOperationsService)"/>。</para>
+/// Owns shell-scoped objects; the project operations service and application-scoped services
+/// (device monitoring, logging, language) outlive the shell and are not released here. Assembly
+/// source: <see cref="ShellComposition.Create(ProjectOperationsService)"/>.
+/// </summary>
 internal sealed class ShellComponents : IDisposable
 {
     private bool _disposed;
