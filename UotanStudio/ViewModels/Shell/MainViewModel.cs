@@ -4,12 +4,14 @@ using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Workspace;
+using UotanStudio.Composition;
 
 namespace UotanStudio.ViewModels.Shell;
 
 public partial class MainViewModel : ViewModelBase, IDisposable
 {
+    private readonly ShellComponents _components;
+    private bool _disposed;
     private readonly Services.Workspace.WorkspaceAutoSaveService _autoSave;
     private readonly Services.Workspace.WorkspaceModificationTracker _modifications;
     internal Task InitializeAutoSaveAsync() => _autoSave.InitializeAsync();
@@ -19,10 +21,10 @@ public partial class MainViewModel : ViewModelBase, IDisposable
         SettingsVM.FlushPendingSave();
         return await _autoSave.SaveOnCloseAsync();
     }
-    public MenuViewModel MenuVM { get; } = new();
+    public MenuViewModel MenuVM { get; }
     public WorkspaceViewModel WorkspaceVM { get; }
-    public NodeEditorViewModel NodeEditorVM { get; } = new();
-    public SettingsViewModel SettingsVM { get; } = new();
+    public NodeEditorViewModel NodeEditorVM { get; }
+    public SettingsViewModel SettingsVM { get; }
 
     /// <summary>
     /// <para>设备面板单例：顶栏设备选择器与设备面板共享同一实例，
@@ -45,15 +47,19 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// Constructs the main view model, binding the node editor reference to the menu and subscribing to
     /// solution-context changes to keep the window title in sync.
     /// </summary>
-    public MainViewModel()
+    public MainViewModel() : this(ShellComposition.Create()) { }
+
+    internal MainViewModel(ShellComponents components)
     {
-        WorkspaceVM = new WorkspaceViewModel(new WorkspaceDockFactory(SettingsVM.Ai));
-        _modifications = new(() => WorkspaceVM.Layout);
+        _components = components;
+        MenuVM = components.Menu;
+        NodeEditorVM = components.Nodes;
+        SettingsVM = components.Settings;
+        WorkspaceVM = components.Workspace;
+        _autoSave = components.AutoSave;
+        _modifications = components.Modifications;
         _modifications.Changed += OnModificationsChanged;
         WorkspaceVM.PropertyChanged += OnWorkspacePropertyChanged;
-        MenuVM.NodeEditorVM = NodeEditorVM;
-        MenuVM.WorkspaceVM = WorkspaceVM;
-        _autoSave = new(WorkspaceVM, SettingsVM, ProjectOperationsService.Instance);
         WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
         UpdateWindowTitle();
     }
@@ -79,12 +85,11 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     /// <summary>Stops workspace persistence and releases subscriptions.<para>停止工作区持久化并释放订阅。</para></summary>
     public void Dispose()
     {
-        _autoSave.Dispose();
+        if (_disposed) return;
+        _disposed = true;
         WorkspaceVM.PropertyChanged -= OnWorkspacePropertyChanged;
         _modifications.Changed -= OnModificationsChanged;
-        _modifications.Dispose();
-        SettingsVM.Dispose();
-        WorkspaceVM.Dispose();
+        _components.Dispose();
         WeakReferenceMessenger.Default.UnregisterAll(this);
     }
 }

@@ -37,7 +37,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// </remarks>
     private ActiveTab _currentTab = ActiveTab.Workspace;
 
-    private readonly ProjectOperationsService _projectOps = ProjectOperationsService.Instance;
+    private readonly ProjectOperationsService _projectOps;
 
     /// <summary>
     /// <para>缓存的集合变更事件处理器，用于在 <see cref="Dispose"/> 中取消订阅。</para>
@@ -50,8 +50,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// Creates the menu view model, subscribing to active-tab-changed messages to maintain <see cref="_currentTab"/>
     /// and loading the recent projects list.
     /// </summary>
-    public MenuViewModel()
+    public MenuViewModel() : this(ProjectOperationsService.Instance) { }
+
+    internal MenuViewModel(ProjectOperationsService projectOperations)
     {
+        _projectOps = projectOperations;
         WeakReferenceMessenger.Default.Register<ActiveTabChangedMessage>(this, OnActiveTabChanged);
         _recentProjectsChangedHandler = (_, _) => OnPropertyChanged(nameof(HasRecentProjects));
         RecentProjects.CollectionChanged += _recentProjectsChangedHandler;
@@ -821,42 +824,29 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
     /// <summary><para>剪切选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Cut selection: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
-    private void Cut()
-    {
-        if (TryGetEditable() is { } e) e.Cut();
-        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Cut));
-    }
+    private void Cut() => ExecuteEditAction(NodeEditorAction.Cut, static editable => editable.Cut());
 
     /// <summary><para>复制选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Copy selection: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
-    private void Copy()
-    {
-        if (TryGetEditable() is { } e) e.Copy();
-        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Copy));
-    }
+    private void Copy() => ExecuteEditAction(NodeEditorAction.Copy, static editable => editable.Copy());
 
     /// <summary><para>粘贴剪贴板内容：优先委托给活动文档，否则转发到节点编辑器。</para>Paste clipboard contents: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
-    private void Paste()
-    {
-        if (TryGetEditable() is { } e) e.Paste();
-        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Paste));
-    }
+    private void Paste() => ExecuteEditAction(NodeEditorAction.Paste, static editable => editable.Paste());
 
     /// <summary><para>删除选中内容：优先委托给活动文档，否则转发到节点编辑器。</para>Delete selection: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
-    private void Delete()
-    {
-        if (TryGetEditable() is { } e) e.Delete();
-        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.Delete));
-    }
+    private void Delete() => ExecuteEditAction(NodeEditorAction.Delete, static editable => editable.Delete());
 
     /// <summary><para>全选：优先委托给活动文档，否则转发到节点编辑器。</para>Select all: delegates to the active document first, falling back to the node editor.</summary>
     [RelayCommand]
-    private void SelectAll()
+    private void SelectAll() => ExecuteEditAction(NodeEditorAction.SelectAll, static editable => editable.SelectAll());
+
+    private void ExecuteEditAction(NodeEditorAction action, Action<IEditable> edit)
     {
-        if (TryGetEditable() is { } e) e.SelectAll();
-        else if (_currentTab == ActiveTab.NodeEditor) WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(NodeEditorAction.SelectAll));
+        if (TryGetEditable() is { } editable) edit(editable);
+        else if (_currentTab == ActiveTab.NodeEditor)
+            WeakReferenceMessenger.Default.Send(new NodeEditorActionMessage(action));
     }
 
     /// <summary>

@@ -12,6 +12,7 @@ namespace UotanStudio.Views.Shell;
 
 public partial class MainWindow : Window
 {
+    private readonly MainViewModel _ownedViewModel;
     private bool _closeAfterSave;
     private bool _closing;
     private Task _sessionInitialization = Task.CompletedTask;
@@ -21,11 +22,15 @@ public partial class MainWindow : Window
     private IDisposable? _dockDebugOverlay;
 #endif
 
-    public MainWindow()
+    public MainWindow() : this(new MainViewModel()) { }
+
+    /// <summary>Creates a window that owns the explicitly supplied shell for its lifetime.</summary>
+    internal MainWindow(MainViewModel viewModel)
     {
         // 在 InitializeComponent 之前设置 DataContext，使子控件绑定尽早可用；
         // 也保证 SplashWindow 过渡的 fallback 路径（未预构建时）同样带数据上下文。
-        DataContext = new MainViewModel();
+        _ownedViewModel = viewModel;
+        DataContext = viewModel;
         InitializeComponent();
         DeviceSelector.DataContextChanged += (_, _) => BindDeviceSelector();
         BindDeviceSelector();
@@ -33,6 +38,12 @@ public partial class MainWindow : Window
         {
             if (_selectorDevices is not null)
                 _selectorDevices.CollectionChanged -= OnSelectorDevicesChanged;
+            try { _ownedViewModel.Dispose(); }
+            catch (Exception ex) { Services.LogService.Instance.Write(Services.LogLevel.Error, "Lifecycle", ex.Message); }
+#if DEBUG
+            _dockDebugOverlay?.Dispose();
+            _dockDebugOverlay = null;
+#endif
         };
         Closing += MainWindow_Closing;
         Opened += (_, _) =>
@@ -128,17 +139,6 @@ public partial class MainWindow : Window
                 _closing = false;
             }
             return;
-        }
-        try
-        {
-            if (DataContext is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-        }
-        catch
-        {
-            // 清理过程中的异常不阻断窗口关闭。
         }
     }
 }
