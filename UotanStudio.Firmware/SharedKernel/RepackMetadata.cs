@@ -91,6 +91,19 @@ public sealed class RepackMetadata
     }
 
     /// <summary>
+    /// Reads bounded metadata for an extraction directory under an explicit context. Explicit
+    /// project-root / local-directory contexts never consult
+    /// <see cref="DefaultMetadataRoot"/> and never cross-fallback.
+    /// <para>在显式上下文下读取解包目录的有界元数据。显式工程根／本地目录上下文绝不读取
+    /// <see cref="DefaultMetadataRoot"/>，也绝不交叉回退。</para>
+    /// </summary>
+    public static RepackMetadata? Read(string directory, RepackMetadataContext context)
+    {
+        var path = context.ResolveMetadataPath(directory);
+        return path is null ? null : ReadFromAbsolute(path);
+    }
+
+    /// <summary>
     /// Reads metadata from a specific absolute path (used after pointer resolution and by tests).
     /// <para>从指定绝对路径读取元数据（指针解析后及测试使用）。</para>
     /// </summary>
@@ -120,12 +133,31 @@ public sealed class RepackMetadata
         => ResolveMetadataPath(extractionDirectory);
 
     /// <summary>
+    /// Resolves the actual metadata file path under an explicit context. Explicit contexts are
+    /// evaluated immediately and never re-read <see cref="DefaultMetadataRoot"/> after awaits.
+    /// <para>在显式上下文下解析实际元数据文件路径。显式上下文立即求值，
+    /// await 之后绝不重读 <see cref="DefaultMetadataRoot"/>。</para>
+    /// </summary>
+    public static string? ResolveActualMetadataPath(string extractionDirectory, RepackMetadataContext context)
+        => context.ResolveMetadataPath(extractionDirectory);
+
+    /// <summary>
     /// Single resolution point for metadata reads: the consolidated location when
     /// <see cref="DefaultMetadataRoot"/> is set, the extraction directory otherwise.
     /// <para>元数据读取的统一解析点：设置了 <see cref="DefaultMetadataRoot"/> 时使用统一位置，
     /// 否则使用解包目录自身。</para>
     /// </summary>
     private static string? ResolveMetadataPath(string extractionDirectory)
+        => ResolveAmbientMetadataPath(extractionDirectory);
+
+    /// <summary>
+    /// Ambient resolution used by <see cref="RepackMetadataContext"/> for the unspecified kind:
+    /// the consolidated location when <see cref="DefaultMetadataRoot"/> is set, the extraction
+    /// directory otherwise.
+    /// <para>供 <see cref="RepackMetadataContext"/> 在未指定状态下使用的环境解析：
+    /// 设置了 <see cref="DefaultMetadataRoot"/> 时使用统一位置，否则使用解包目录自身。</para>
+    /// </summary>
+    internal static string? ResolveAmbientMetadataPath(string extractionDirectory)
     {
         if (!string.IsNullOrWhiteSpace(DefaultMetadataRoot))
         {
@@ -222,14 +254,16 @@ public sealed class RepackMetadata
         if (!Path.GetFileName(path).Equals(FileName, StringComparison.OrdinalIgnoreCase)) return false;
         try
         {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return false;
             using var input = File.OpenRead(path);
+            if (input.Length > MaximumBytes) return false;
             var doc = JsonNode.Parse(input);
             if (doc is null) return false;
             var schema = doc["schema"]?.GetValue<string>();
             // Valid pointer file
             if (schema == PointerSchemaName) return true;
             // Valid direct metadata
-            return Read(Path.GetDirectoryName(Path.GetFullPath(path))!) is not null;
+            return ReadFromAbsolute(path) is not null;
         }
         catch (Exception ex) when (ex is IOException or JsonException or InvalidDataException or UnauthorizedAccessException)
         {
@@ -245,6 +279,21 @@ public sealed class RepackMetadata
     public static async Task<FirmwareOpResult> UnpackAsync(IReadonlyFormatHandler handler, string sourcePath,
         string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken, Func<Task<FirmwareOpResult>> unpack,
         string? metadataRoot = null)
+        => await UnpackAsync(handler, sourcePath, outputDirectory, options, cancellationToken, unpack,
+            RepackMetadataContext.Unspecified, metadataRoot).ConfigureAwait(false);
+
+    /// <summary>
+    /// Runs an extraction delegate and writes unified repack metadata afterwards using an explicit
+    /// context. The context is captured at call time: explicit project-root / local-directory
+    /// kinds never consult <see cref="DefaultMetadataRoot"/> after awaits, and the legacy
+    /// <paramref name="metadataRoot"/> parameter is ignored when the context is explicit.
+    /// <para>以显式上下文运行解包委托并随后写入统一打包元数据。上下文在调用时固定：
+    /// 显式工程根／本地目录在 await 之后绝不读取 <see cref="DefaultMetadataRoot"/>；
+    /// 上下文为显式状态时忽略旧 <paramref name="metadataRoot"/> 参数。</para>
+    /// </summary>
+    public static async Task<FirmwareOpResult> UnpackAsync(IReadonlyFormatHandler handler, string sourcePath,
+        string outputDirectory, UnpackOptions? options, CancellationToken cancellationToken, Func<Task<FirmwareOpResult>> unpack,
+        RepackMetadataContext context, string? metadataRoot = null)
     {
         try
         {
@@ -254,7 +303,7 @@ public sealed class RepackMetadata
                 throw new IOException($"Repack metadata output already exists: {metadataPath}");
             var result = await unpack().ConfigureAwait(false);
             if (!result.Success) return result;
-            await WriteAsync(handler, sourcePath, outputDirectory, cancellationToken, result.Metadata, metadataRoot: metadataRoot).ConfigureAwait(false);
+            await WriteAsync(handler, sourcePath, outputDirectory, context, cancellationToken, result.Metadata, metadataRoot).ConfigureAwait(false);
             return result;
         }
         catch (OperationCanceledException) { throw; }
@@ -276,6 +325,40 @@ public sealed class RepackMetadata
     {
         cancellationToken.ThrowIfCancellationRequested();
         var effectiveRoot = metadataRoot ?? DefaultMetadataRoot;
+        await WriteAsyncCore(handler, sourcePath, outputDirectory, cancellationToken, extractionProperties, effectiveRoot).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes source and packing metadata using an explicit context. When the context is an
+    /// explicit project root, metadata is stored under <c>{root}/{partitionName}/</c> exclusively;
+    /// when it is an explicit local mode, metadata is written directly into
+    /// <paramref name="outputDirectory"/> even if an ambient root is set. The context is captured
+    /// at call time and never re-read <see cref="DefaultMetadataRoot"/> after awaits.
+    /// <para>以显式上下文写入来源和打包元数据。显式工程根时元数据只存放在
+    /// <c>{root}/{分区名}/</c>；显式本地模式时即使环境根已设置也直接写入
+    /// <paramref name="outputDirectory"/>。上下文在调用时固定，await 之后绝不重读
+    /// <see cref="DefaultMetadataRoot"/>。</para>
+    /// </summary>
+    /// <remarks>
+    /// When <paramref name="context"/> is unspecified (default), <paramref name="metadataRoot"/>
+    /// keeps its historical meaning and the ambient <see cref="DefaultMetadataRoot"/> applies;
+    /// an explicit context supersedes <paramref name="metadataRoot"/> (mutually exclusive).
+    /// <para><paramref name="context"/> 未指定（默认）时 <paramref name="metadataRoot"/> 保持原有
+    /// 语义并应用环境 <see cref="RepackMetadata.DefaultMetadataRoot"/>；显式上下文优先于
+    /// <paramref name="metadataRoot"/>（两者互斥）。</para>
+    /// </remarks>
+    public static async Task WriteAsync(IReadonlyFormatHandler handler, string sourcePath, string outputDirectory,
+        RepackMetadataContext context, CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, string>? extractionProperties = null, string? metadataRoot = null)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var effectiveRoot = context.ResolveWriteRoot(metadataRoot);
+        await WriteAsyncCore(handler, sourcePath, outputDirectory, cancellationToken, extractionProperties, effectiveRoot).ConfigureAwait(false);
+    }
+
+    private static async Task WriteAsyncCore(IReadonlyFormatHandler handler, string sourcePath, string outputDirectory,
+        CancellationToken cancellationToken, IReadOnlyDictionary<string, string>? extractionProperties, string? effectiveRoot)
+    {
         var path = Path.GetFullPath(Path.Combine(outputDirectory, FileName));
         if (File.Exists(path) && !IsMetadataFile(path))
             throw new IOException("The extracted image contains a file reserved for repack metadata.");

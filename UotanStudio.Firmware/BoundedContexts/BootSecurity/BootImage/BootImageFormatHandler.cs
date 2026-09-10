@@ -145,7 +145,14 @@ public sealed class BootImageFormatHandler : IFormatHandler
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        => PackAsync(inputPath, outputPath, cancellationToken, RepackMetadataContext.Unspecified);
+
+    /// <summary>Packs using a metadata context captured before background work.
+    /// <para>后台执行前固定元数据上下文并打包。</para></summary>
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken,
+        RepackMetadataContext context)
     {
+        context = context.Capture();
         return Task.Run(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -158,7 +165,7 @@ public sealed class BootImageFormatHandler : IFormatHandler
 
                 if (Directory.Exists(inputPath))
                 {
-                    BootRepackConfiguration.Pack(inputPath, outputPath, cancellationToken);
+                    BootRepackConfiguration.Pack(inputPath, outputPath, cancellationToken, context);
                     return FirmwareOpResult.Ok($"Packed boot image to {outputPath}");
                 }
 

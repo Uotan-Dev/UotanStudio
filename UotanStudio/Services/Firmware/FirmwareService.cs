@@ -69,8 +69,11 @@ public sealed class FirmwareService
 
     private static async Task<FirmwareOpResult> CompleteUnpackAsync(string sourcePath, string outputDirectory,
         Func<Task<FirmwareOpResult>> unpack, CancellationToken cancellationToken, IReadonlyFormatHandler? expectedHandler = null,
-        bool overwrite = true, string? metadataRoot = null)
+        bool overwrite = true, string? metadataRoot = null, RepackMetadataContext context = default)
     {
+        context = context.IsUnspecified
+            ? (metadataRoot is not null ? RepackMetadataContext.FromProjectRoot(metadataRoot) : RepackMetadataContext.LocalDirectory)
+            : context;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -82,7 +85,7 @@ public sealed class FirmwareService
             FirmwareFormatRegistry.RegisterAll();
             var handler = expectedHandler ?? FormatDetector.Detect(sourcePath)
                 ?? throw new InvalidDataException("Cannot identify the source format for repack metadata.");
-            await RepackMetadata.WriteAsync(handler, sourcePath, outputDirectory, cancellationToken, metadataRoot: metadataRoot).ConfigureAwait(false);
+            await RepackMetadata.WriteAsync(handler, sourcePath, outputDirectory, context, cancellationToken).ConfigureAwait(false);
             return result;
         }
         catch (OperationCanceledException) { throw; }
@@ -524,6 +527,13 @@ public sealed class FirmwareService
     public Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
         => CompleteUnpackAsync(bootPath, outputDirectory, () => UnpackBootCoreAsync(bootPath, outputDirectory, cancellationToken), cancellationToken, new BootImageFormatHandler(), metadataRoot: Projects.ProjectContextService.Instance.GetMetadataRoot());
 
+    /// <summary>Extracts Boot components and metadata using one explicit context.
+    /// <para>使用固定上下文提取 Boot 组件和元数据。</para></summary>
+    public Task<FirmwareOpResult> UnpackBootAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken,
+        RepackMetadataContext context)
+        => CompleteUnpackAsync(bootPath, outputDirectory, () => UnpackBootCoreAsync(bootPath, outputDirectory, cancellationToken),
+            cancellationToken, new BootImageFormatHandler(), context: context.Capture());
+
     private async Task<FirmwareOpResult> UnpackBootCoreAsync(string bootPath, string outputDirectory, CancellationToken cancellationToken = default)
     {
         try
@@ -585,9 +595,15 @@ public sealed class FirmwareService
     /// <param name="outputPath">The output boot image path. <para>输出 boot 镜像路径。</para></param>
     /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
     /// <returns>Operation result. <para>操作结果。</para></returns>
-    public async Task<FirmwareOpResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken = default)
+    public Task<FirmwareOpResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken = default)
+        => PackBootAsync(inputDirectory, outputPath, cancellationToken, RepackMetadataContext.Unspecified.Capture());
+
+    /// <summary>Reads Boot configuration and packs with a fixed metadata context.
+    /// <para>使用固定元数据上下文读取 Boot 配置并打包。</para></summary>
+    public async Task<FirmwareOpResult> PackBootAsync(string inputDirectory, string outputPath, CancellationToken cancellationToken,
+        RepackMetadataContext context)
     {
-        var result = await new BootImageFormatHandler().PackAsync(inputDirectory, outputPath, cancellationToken).ConfigureAwait(false);
+        var result = await new BootImageFormatHandler().PackAsync(inputDirectory, outputPath, cancellationToken, context.Capture()).ConfigureAwait(false);
         return new FirmwareOpResult { Success = result.Success, Summary = result.Summary };
     }
 

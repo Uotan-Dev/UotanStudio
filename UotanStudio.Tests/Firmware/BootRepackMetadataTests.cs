@@ -7,6 +7,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+[Collection("Workspace state")]
 public sealed class BootRepackMetadataTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-boot-config-" + Guid.NewGuid().ToString("N"));
@@ -154,6 +155,40 @@ public sealed class BootRepackMetadataTests : IDisposable
         var result = PackingService.BuildImage(DirectoryPath, Output);
         Assert.True(result.Success, result.Summary);
         Assert.Equal(File.ReadAllBytes(Image), File.ReadAllBytes(Output));
+    }
+
+    [Fact]
+    public async Task ExplicitContexts_ConcurrentBootRoundTrips_ConsumeTheirOwnEditedConfiguration()
+    {
+        CreateBoot(4);
+        var previousRoot = RepackMetadata.DefaultMetadataRoot;
+        var unrelated = Path.Combine(_root, "unrelated");
+        RepackMetadata.DefaultMetadataRoot = unrelated;
+        try
+        {
+            async Task RoundTrip(string name, bool local)
+            {
+                var directory = Path.Combine(_root, name, "boot");
+                var context = local ? RepackMetadataContext.LocalDirectory
+                    : RepackMetadataContext.FromProjectRoot(Path.Combine(_root, name, "metadata"));
+                var result = await FirmwareService.Instance.UnpackBootAsync(Image, directory, Cancellation, context);
+                Assert.True(result.Success, result.Summary);
+                var metadata = Assert.IsType<RepackMetadata>(RepackMetadata.Read(directory, context));
+                metadata.Configuration["header"]!["commandLine"] = name;
+                var metadataPath = RepackMetadata.ResolveActualMetadataPath(directory, context)!;
+                await metadata.SaveAsync(Path.GetDirectoryName(metadataPath)!, Cancellation);
+                var output = Path.Combine(_root, name, "rebuilt.img");
+                result = await FirmwareService.Instance.PackBootAsync(directory, output, Cancellation, context);
+                Assert.True(result.Success, result.Summary);
+                using var parser = new BootImageParser();
+                parser.ParseFile(output);
+                Assert.Equal(name, parser.Header.CommandLine);
+                Assert.Equal(new byte[] { 4, 5, 6 }, parser.Ramdisk);
+            }
+            await Task.WhenAll(RoundTrip("project-a", false), RoundTrip("project-b", false), RoundTrip("local", true));
+            Assert.False(Directory.Exists(unrelated));
+        }
+        finally { RepackMetadata.DefaultMetadataRoot = previousRoot; }
     }
 
     private void CreateBoot(int version)

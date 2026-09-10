@@ -32,9 +32,9 @@ internal sealed class BootRepackConfiguration
         return (JsonObject)JsonSerializer.SerializeToNode(configuration, BootRepackJsonContext.Default.BootRepackConfiguration)!;
     }
 
-    internal static void Pack(string directory, string outputPath, CancellationToken cancellationToken)
+    internal static void Pack(string directory, string outputPath, CancellationToken cancellationToken, RepackMetadataContext context)
     {
-        var metadata = RepackMetadata.Read(directory);
+        var metadata = RepackMetadata.Read(directory, context);
         if (metadata?.FormatName != new BootImageFormatHandler().FormatName)
             throw new InvalidDataException("Missing Boot repack metadata.");
         var configuration = metadata.Configuration.Deserialize(BootRepackJsonContext.Default.BootRepackConfiguration)
