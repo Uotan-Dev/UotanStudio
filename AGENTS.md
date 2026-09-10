@@ -12,6 +12,13 @@
 
 ## 事件与入口复用（2026-09-10）
 
+- **应用结构**：保留模块化单体 + MVVM，`Composition/ShellComposition` 显式组装主窗口组件并复用 `ProjectOperationsService.Instance`；`ShellComponents` 释放菜单/节点订阅、工作区和自动保存，解绑需校验当前归属。`MainWindow` 在 `Closed` 后释放所属主视图模型，桌面设备监视由 `DesktopApplicationServices` 在退出时释放。
+- **项目操作边界**：核心项目操作通过 `IProjectWorkspace` 消费 DTO 与工作区操作，界面收集/恢复位于 `ProjectWorkspaceCoordinator`；`ProjectOperationsService.Desktop.cs` 保留原 `Instance`/`NodeEditorVM`/`WorkspaceVM` 兼容入口。互斥门、自动保存支持范围与页面持久化策略保留。实施和测试见 `docs/application-architecture.md`。
+- **项目另存为与子项目注册**：`ProjectSaveAsTransaction` 在目标旁准备完整项目目录副本和最新快照，捕获写入/发布失败时回滚目录替换，发布成功后才切换路径、活动子项目与元数据根。保留目标不冲突文件；源/目标目录重叠、符号链接/联接及源根外共享子项目明确拒绝。已打开编辑器保持原文件身份，页面记录按新根重算相对路径。新增/导入子项目先保存 `.uotan` 引用，再在同一操作互斥门内重载；普通工程持久化写入失败向上抛错，不再返回成功。
+
+- **当前主项目分批合并**：DTB/DEX/Manifest/ARSC/Hex/APK 打开共用 `OpenOrActivateDocumentAsync`，按编辑器类型+路径复用，仍活动才加载后补发；拖放解析共用 `FileDropPaths`，工作区导入与比较策略独立。节点元数据打包接入 `RegisteredFirmwareFormats`，显式保留不支持格式时的异常策略与 CPIO 回退。
+- **日志视图复用**：全局/工作区日志共用 `LogTextBuffer` / `LogTextPresenter`，增量淘汰保留选区，卸载作废排队滚动；工作区 DataContext 更换成对解绑/重绑。ADB/离线日志仅共用行高计算，专用列不合并。文本/DTB 编辑器引用归属共用 `EditorOwnerBinding`。
+- App 转发、菜单编辑目标、镜像条目进度、属性类型分派与空选择状态重置已局部合并。App 另订阅 `LanguageStateChangedMessage` 同步 Semi/Ursa Locale，保留旧语言消息和 CLR 事件。实施与验证见 `docs/entry-point-consolidation.md`，真实窗口回归工具为 `tools/EntryPointSmoke`。
 - `FirmwareUnpackDispatcher` 共用界面与 MCP 的服务层解包分派；调用方显式保留 Sparse 支持、后台调度、分区选择和原有取消能力。CLI 继续直接调用格式处理器，不自动改为级联解包。
 - `RegisteredFirmwareFormats` 共用注册格式名称查找和元数据目录打包；`FirmwareFormatResolution` 保存 MCP 的别名及默认格式策略。CLI 名称先 Trim 后忽略大小写，元数据处理器查找仍精确匹配。无元数据时 CLI 默认 EXT4、MCP 保留扩展名推断及 CPIO 回退、界面保留项目设置。
 - `WorkflowReconstruction` 共用节点创建、初始值转换和连接端点查找。UI 保留工厂标题并恢复坐标，CLI 保留快照标题；UI 对实例命中但端口缺失的连接继续回退查找，CLI 保留该实例交由引擎处理。未知类型、失效连接的原有日志和退出行为由各入口保留。
