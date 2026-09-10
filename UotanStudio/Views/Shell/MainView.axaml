@@ -38,6 +38,15 @@
 			</ContentPage>
 			<ContentPage>
 				<ContentPage.Icon>
+					<avalonia:MaterialIcon Kind="PackageVariantClosed" Width="18" Margin="0 -10 0 0" />
+				</ContentPage.Icon>
+				<ContentPage.Header>
+					<TextBlock Margin="0 0 0 -10" Text="{DynamicResource Tab_Delivery}" FontSize="13" FontWeight="SemiBold" />
+				</ContentPage.Header>
+				<shellviews:DeliveryView Name="DeliveryPage" />
+			</ContentPage>
+			<ContentPage>
+				<ContentPage.Icon>
 					<avalonia:MaterialIcon Kind="ScriptTextPlayOutline" Width="18" Margin="0 -10 0 0" />
 				</ContentPage.Icon>
 				<ContentPage.Header>

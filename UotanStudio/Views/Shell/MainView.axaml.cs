@@ -12,7 +12,7 @@ public partial class MainView : UserControl
     public MainView()
     {
         InitializeComponent();
-        // 默认选中 Workspace Tab（移除设备/日志底栏后：Workspace=3, NodeEditor=4, Settings=5）
+        // 默认选中 Workspace Tab（Workspace=3, Delivery=4, NodeEditor=5, Settings=6）。
         MainTabs.SelectedIndex = 3;
 
         // 初始同步：告知订阅者当前激活面板为 Workspace（与默认 SelectedIndex=3 对应）
@@ -32,11 +32,14 @@ public partial class MainView : UserControl
             var index = message.Target switch
             {
                 NavigationTarget.Workspace => 3,
-                NavigationTarget.NodeEditor => 4,
-                NavigationTarget.Settings => 5,
+                NavigationTarget.Delivery => 4,
+                NavigationTarget.NodeEditor => 5,
+                NavigationTarget.Settings => 6,
                 _ => MainTabs.SelectedIndex
             };
-            MainTabs.SelectedIndex = index;
+            if (MainTabs.SelectedIndex == index && message.Target == NavigationTarget.Delivery)
+                DeliveryPage.Refresh();
+            else MainTabs.SelectedIndex = index;
         });
     }
 
@@ -49,6 +52,7 @@ public partial class MainView : UserControl
     private void OnSelectionChanged(object? sender, PageSelectionChangedEventArgs e)
     {
         SendActiveTabChanged(MainTabs.SelectedIndex);
+        if (MainTabs.SelectedIndex == 4) DeliveryPage.Refresh();
     }
 
     /// <summary>
@@ -61,8 +65,9 @@ public partial class MainView : UserControl
         var tab = selectedIndex switch
         {
             3 => ActiveTab.Workspace,
-            4 => ActiveTab.NodeEditor,
-            5 => ActiveTab.Settings,
+            4 => ActiveTab.Delivery,
+            5 => ActiveTab.NodeEditor,
+            6 => ActiveTab.Settings,
             _ => ActiveTab.Workspace
         };
         WeakReferenceMessenger.Default.Send(new ActiveTabChangedMessage(tab));

@@ -1165,7 +1165,9 @@ public enum NavigationTarget
     /// <summary><para>全局日志面板。</para>Global log panel.</summary>
     Log,
     /// <summary><para>设置。</para>Settings.</summary>
-    Settings
+    Settings,
+    /// <summary><para>ROM 交付配置。</para>ROM delivery configuration.</summary>
+    Delivery
 }
 
 /// <summary>
@@ -1206,7 +1208,9 @@ public enum ActiveTab
     /// <summary><para>全局日志面板。</para>Global log panel.</summary>
     Log,
     /// <summary><para>设置面板。</para>Settings panel.</summary>
-    Settings
+    Settings,
+    /// <summary><para>ROM 交付配置面板。</para>ROM delivery configuration panel.</summary>
+    Delivery
 }
 
 /// <summary>

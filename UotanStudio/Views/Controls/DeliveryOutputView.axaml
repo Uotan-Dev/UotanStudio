@@ -1,0 +1,133 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:UotanStudio.Views.Controls"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             x:Class="UotanStudio.Views.Controls.DeliveryOutputView">
+    <UserControl.Styles>
+        <Style Selector="Expander.output-section">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="8" />
+        </Style>
+        <Style Selector="DataGridColumnHeader">
+            <Setter Property="Padding" Value="6,0" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBox#AuthorInfoBox /template/ TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </UserControl.Styles>
+    <Grid Name="OutputLayout" ColumnDefinitions="180,12,*">
+        <Grid Name="OutputSettings" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+            <TextBlock Text="{DynamicResource Delivery_OutputImages}" FontWeight="SemiBold"
+                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+            <local:DeliveryOutputSectionsPanel Name="OutputSections" Grid.Row="1" Spacing="10" Margin="0,0,8,0">
+                <Expander Name="OutputImagesExpander" Classes="output-section" IsExpanded="True"
+                          Header="{DynamicResource Delivery_OutputImageList}">
+                    <DataGrid Name="OutputImages" AutoGenerateColumns="False" IsReadOnly="False"
+                              x:DataType="local:DeliveryOutputImage" HeadersVisibility="Column" RowHeight="30"
+                              GridLinesVisibility="None" CanUserSortColumns="False" CanUserReorderColumns="False"
+                              Background="Transparent" BorderThickness="0" SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Width="Auto" MinWidth="44">
+                                <DataGridTemplateColumn.Header>
+                                    <TextBlock Text="{DynamicResource Delivery_OptionalImage}"
+                                               ToolTip.Tip="{DynamicResource Delivery_OptionalImageHint}" />
+                                </DataGridTemplateColumn.Header>
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="local:DeliveryOutputImage">
+                                        <CheckBox IsChecked="{Binding IsOptional, Mode=TwoWay}" MinHeight="24" Padding="0"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  ToolTip.Tip="{DynamicResource Delivery_OptionalImageHint}"
+                                                  AutomationProperties.Name="{DynamicResource Delivery_OptionalImageHint}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="{DynamicResource Delivery_PartitionName}" Width="Auto" MinWidth="72"
+                                                Binding="{Binding PartitionName, Mode=TwoWay}" FontSize="13" />
+                            <DataGridTemplateColumn Header="{DynamicResource Delivery_ImageFileName}" Width="Auto"
+                                                    MinWidth="96" IsReadOnly="True">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="local:DeliveryOutputImage">
+                                        <TextBlock Text="{Binding FileName}" Margin="6,0" VerticalAlignment="Center"
+                                                   ToolTip.Tip="{Binding FilePath}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Expander>
+                <Expander Name="ScriptSettingsExpander" Classes="output-section" IsExpanded="False"
+                          Header="{DynamicResource Delivery_ScriptGenerator}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AllowAutoHide="True">
+                        <StackPanel Spacing="10">
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{DynamicResource Delivery_SelectScripts}" />
+                                <WrapPanel ItemSpacing="12" LineSpacing="6">
+                                    <CheckBox Name="TxtScriptBox" Content="{DynamicResource Delivery_TxtScript}" IsChecked="True" />
+                                    <CheckBox Name="BatchShellScriptBox" Content="{DynamicResource Delivery_BatchShellScript}" />
+                                    <CheckBox Name="RecoveryScriptBox" Content="{DynamicResource Delivery_RecoveryScript}" />
+                                </WrapPanel>
+                            </StackPanel>
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{DynamicResource Delivery_DeviceCodename}" />
+                                <TextBox Name="DeviceCodenameBox" Height="32"
+                                         AutomationProperties.Name="{DynamicResource Delivery_DeviceCodename}" />
+                            </StackPanel>
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="{DynamicResource Delivery_AuthorInfo}" />
+                                <TextBox Name="AuthorInfoBox" AcceptsReturn="True" TextWrapping="Wrap" Height="NaN" Padding="6"
+                                         IsEnabled="{Binding !IsChecked, ElementName=TxtScriptBox}"
+                                         MinLines="9" MaxLines="9" VerticalContentAlignment="Center"
+                                         PlaceholderText="{DynamicResource Delivery_AuthorInfoWatermark}"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         AutomationProperties.Name="{DynamicResource Delivery_AuthorInfo}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Expander>
+            </local:DeliveryOutputSectionsPanel>
+            <Grid Name="OutputFooter" Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <ProgressBar Name="OutputProgress" Minimum="0" Maximum="100" Value="0" Height="20" MinWidth="0"
+                             ShowProgressText="True" VerticalAlignment="Center"
+                             AutomationProperties.Name="{DynamicResource Delivery_OutputProgress}" />
+                <Button Name="StartOutputButton" Grid.Column="1" Content="{DynamicResource Delivery_StartOutput}"
+                        Height="32" MinWidth="96" Padding="12,0" />
+            </Grid>
+        </Grid>
+        <Grid Name="DocumentPane" Grid.Column="2" RowDefinitions="Auto,*" RowSpacing="6">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" AllowAutoHide="True">
+                    <TabStrip Name="DocumentTabs" SelectionChanged="OnDocumentSelectionChanged">
+                        <TabStrip.ItemTemplate>
+                            <DataTemplate x:DataType="local:DeliveryScriptDocument">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding Title}" MaxWidth="140" TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" ToolTip.Tip="{Binding Title}" />
+                                    <Button Classes="Small" Width="20" Height="22" MinWidth="0" Padding="0"
+                                            Click="OnCloseDocumentClick" ToolTip.Tip="{DynamicResource Delivery_CloseText}"
+                                            AutomationProperties.Name="{DynamicResource Delivery_CloseText}">
+                                        <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                    </Button>
+                                </StackPanel>
+                            </DataTemplate>
+                        </TabStrip.ItemTemplate>
+                    </TabStrip>
+                </ScrollViewer>
+                <Button Name="AddDocumentButton" Grid.Column="1" Width="28" Height="28" MinWidth="0" Padding="0"
+                        VerticalAlignment="Top" Click="OnAddDocumentClick" ToolTip.Tip="{DynamicResource Delivery_NewText}"
+                        AutomationProperties.Name="{DynamicResource Delivery_NewText}">
+                    <icons:MaterialIcon Kind="Plus" Width="16" Height="16" />
+                </Button>
+            </Grid>
+            <Border Grid.Row="1" BorderThickness="1" BorderBrush="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+                    CornerRadius="6" ClipToBounds="True">
+                <local:CodeEditor Name="ScriptEditor" FontSize="13" Language="plaintext"
+                                  AutomationProperties.Name="{DynamicResource Delivery_ScriptEditor}" />
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -1,0 +1,234 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:UotanStudio.Views.Controls"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             xmlns:vm="using:UotanStudio.ViewModels.Workspace"
+             x:Class="UotanStudio.Views.Shell.DeliveryView">
+    <UserControl.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="CheckBox#UseProjectSuperSettingsBox">
+            <Setter Property="Content" Value="{DynamicResource Delivery_UseProjectSuperSettings}" />
+        </Style>
+        <Style Selector="CheckBox#UseProjectSuperSettingsBox.payload">
+            <Setter Property="Content" Value="{DynamicResource Delivery_UseProjectPayloadSettings}" />
+        </Style>
+        <Style Selector="RadioButton">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="TextBlock.field-label">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <Style Selector="ComboBox">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinHeight" Value="32" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style Selector="Button.file-action">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="100" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+        <Style Selector="controls|RoundedPaneDivider.pane-edge">
+            <Setter Property="EdgeBrush" Value="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="UseLayoutRounding" Value="False" />
+        </Style>
+        <Style Selector="controls|RoundedPaneDivider.pane-edge.vertical">
+            <Setter Property="Width" Value="0.5" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="IsVertical" Value="True" />
+        </Style>
+        <Style Selector="controls|RoundedPaneDivider.pane-edge.horizontal">
+            <Setter Property="Height" Value="0.5" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="IsVertical" Value="False" />
+        </Style>
+        <Style Selector="GridSplitter.pane-splitter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="ResizeBehavior" Value="PreviousAndNext" />
+        </Style>
+        <Style Selector="GridSplitter.pane-splitter.vertical">
+            <Setter Property="Width" Value="9" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+            <Setter Property="ResizeDirection" Value="Columns" />
+            <Setter Property="Cursor" Value="SizeWestEast" />
+        </Style>
+        <Style Selector="GridSplitter.pane-splitter.horizontal">
+            <Setter Property="Height" Value="9" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ResizeDirection" Value="Rows" />
+            <Setter Property="Cursor" Value="SizeNorthSouth" />
+        </Style>
+    </UserControl.Styles>
+    <Grid Name="DeliveryLayout" ColumnDefinitions="268,1,*" RowDefinitions="*" ClipToBounds="True">
+        <Border Name="Sidebar" Padding="0,1,4,0">
+            <ScrollViewer Name="SidebarScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          AllowAutoHide="True">
+                <StackPanel Name="SidebarForm" Margin="12" Spacing="16">
+                    <TextBlock Name="PackSettingsTitle" Text="{DynamicResource Delivery_PackSettingsTitle}"
+                               FontSize="15" FontWeight="SemiBold" />
+                    <StackPanel Spacing="6">
+                        <TextBlock Classes="field-label" Text="{DynamicResource Delivery_OutputDirectory}" />
+                        <Grid Name="OutputDirectoryRow" ColumnDefinitions="*,8,Auto" RowDefinitions="Auto"
+                              SizeChanged="OnOutputDirectoryRowSizeChanged">
+                            <TextBox Name="OutputDirectoryBox" HorizontalAlignment="Stretch"
+                                     AutomationProperties.Name="{DynamicResource Delivery_OutputDirectory}" />
+                            <Button Name="BrowseOutputButton" Grid.Column="2" MinWidth="100" Height="32" Padding="12,0"
+                                    HorizontalAlignment="Right" Click="OnBrowseOutputClick"
+                                    ToolTip.Tip="{DynamicResource PackDialog_BrowseOutput}"
+                                    AutomationProperties.Name="{DynamicResource PackDialog_SelectFolder}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <icons:MaterialIcon Kind="FolderOpenOutline" Width="16" Height="16" VerticalAlignment="Center" />
+                                    <TextBlock Text="{DynamicResource PackDialog_SelectFolder}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                    </StackPanel>
+                    <Border Height="1" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                    <WrapPanel Name="OutputOptions" Orientation="Horizontal" ItemsAlignment="Center" ItemSpacing="12" LineSpacing="6">
+                        <CheckBox Name="DirectOutputBox" Content="{DynamicResource Delivery_DirectOutput}" IsChecked="True" />
+                        <CheckBox Name="PackSuperBox" Content="{DynamicResource Delivery_PackSuper}" />
+                        <CheckBox Name="PackPayloadBox" Content="{DynamicResource PackDialog_PackPayload}" />
+                    </WrapPanel>
+                    <Border Name="SettingsDivider" Height="1" IsVisible="False" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                    <StackPanel Name="ProjectSettingsSelector" Spacing="6" IsVisible="False">
+                        <CheckBox Name="UseProjectSuperSettingsBox"
+                                  IsChecked="False" VerticalAlignment="Center" />
+                        <ComboBox Name="SuperSettingsProjectBox" HorizontalAlignment="Stretch" IsEnabled="False"
+                                  PlaceholderText="{DynamicResource Delivery_SelectProject}"
+                                  AutomationProperties.Name="{Binding #UseProjectSuperSettingsBox.Content}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="x:String">
+                                    <TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Name="SuperSettings" x:DataType="vm:ProjectSettingViewModel" Spacing="12" IsVisible="False">
+                        <StackPanel Name="SuperFormatOptions" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+                            <TextBlock Name="SuperFormatLabel" Classes="field-label" Text="{DynamicResource Delivery_SuperFormat}" />
+                            <RadioButton Name="SuperRawBox" GroupName="DeliverySuperFormat"
+                                         Content="RAW" IsChecked="{Binding SUPERRAW, Mode=TwoWay}" />
+                            <RadioButton Name="SuperSparseBox" GroupName="DeliverySuperFormat"
+                                         Content="SPARSE" IsChecked="{Binding SUPERSPARSE, Mode=TwoWay}" />
+                        </StackPanel>
+                        <StackPanel Name="SuperDeviceTypeOptions" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_DeviceType}" />
+                            <RadioButton Name="SuperVabBox" GroupName="DeliverySuperDeviceType" Content="VAB" IsChecked="True" />
+                            <RadioButton Name="SuperAOnlyBox" GroupName="DeliverySuperDeviceType" Content="A-Only" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperDeviceName}" />
+                            <TextBox Name="SuperDeviceNameBox" Text="super"
+                                     AutomationProperties.Name="{DynamicResource Delivery_SuperDeviceName}" />
+                        </StackPanel>
+                        <StackPanel Name="SuperMetadataSizeField" Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_MetadataSize}" />
+                            <TextBox Name="SuperMetadataSizeBox" Text="65536"
+                                     AutomationProperties.Name="{DynamicResource Delivery_MetadataSize}" />
+                        </StackPanel>
+                        <StackPanel Name="SuperBlockSizeField" Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_BlockSize}" />
+                            <TextBox Name="SuperBlockSizeBox" Text="4096"
+                                     AutomationProperties.Name="{DynamicResource Delivery_BlockSize}" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperSize}" />
+                            <TextBox Name="SuperSizeBox" Text="{Binding SUPERSize, Mode=TwoWay}"
+                                     AutomationProperties.Name="{DynamicResource Delivery_SuperSize}" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperGroupName}" />
+                            <TextBox Name="SuperGroupNameBox" Text="{Binding SUPERName, Mode=TwoWay}"
+                                     AutomationProperties.Name="{DynamicResource Delivery_SuperGroupName}" />
+                        </StackPanel>
+                        <StackPanel Name="SuperMetadataSlotsField" Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_MetadataSlots}" />
+                            <TextBox Name="SuperMetadataSlotsBox" Text="3"
+                                     AutomationProperties.Name="{DynamicResource Delivery_MetadataSlots}" />
+                        </StackPanel>
+                        <WrapPanel Name="SuperImageOptions" Orientation="Horizontal" ItemSpacing="12" LineSpacing="6">
+                            <CheckBox Name="ForceFullSuperImageBox" Content="{DynamicResource Delivery_ForceFullImage}" IsChecked="True" />
+                            <CheckBox Name="GenerateSuperEmptyBox" IsChecked="False"
+                                      AutomationProperties.Name="{DynamicResource Delivery_GenerateSuperEmpty}">
+                                <TextBlock Text="{DynamicResource Delivery_GenerateSuperEmpty}" />
+                            </CheckBox>
+                        </WrapPanel>
+                    </StackPanel>
+                    <StackPanel Name="PayloadSettings" Spacing="12" IsVisible="False">
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_PayloadVersion}" />
+                            <TextBox Name="PayloadVersionBox" Text="2"
+                                     AutomationProperties.Name="{DynamicResource Delivery_PayloadVersion}" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_PayloadMinorVersion}" />
+                            <TextBox Name="PayloadMinorVersionBox" Text="0"
+                                     AutomationProperties.Name="{DynamicResource Delivery_PayloadMinorVersion}" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_DynamicPartitionsFile}" />
+                            <TextBox Name="DynamicPartitionsFileBox"
+                                     AutomationProperties.Name="{DynamicResource Delivery_DynamicPartitionsFile}" />
+                            <WrapPanel ItemSpacing="8" LineSpacing="6">
+                                <Button Name="BrowseDynamicPartitionsButton" Classes="file-action"
+                                        Content="{DynamicResource Delivery_SelectFile}" Click="OnBrowsePayloadFileClick" />
+                                <Button Name="GenerateDynamicPartitionsButton" Classes="file-action" IsEnabled="False"
+                                        Content="{DynamicResource Delivery_AutoGenerate}" />
+                            </WrapPanel>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_Signature}" />
+                            <Grid ColumnDefinitions="*,8,Auto" SizeChanged="OnPayloadFileRowSizeChanged">
+                                <TextBox Name="PayloadSignatureBox"
+                                         AutomationProperties.Name="{DynamicResource Delivery_Signature}" />
+                                <Button Name="BrowsePayloadSignatureButton" Grid.Column="2" Classes="file-action"
+                                        HorizontalAlignment="Right" Content="{DynamicResource Delivery_SelectFile}" Click="OnBrowsePayloadFileClick" />
+                            </Grid>
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="Postinstall" />
+                            <Grid ColumnDefinitions="*,8,Auto" SizeChanged="OnPayloadFileRowSizeChanged">
+                                <TextBox Name="PayloadPostinstallBox" AutomationProperties.Name="Postinstall" />
+                                <Button Name="BrowsePayloadPostinstallButton" Grid.Column="2" Classes="file-action"
+                                        HorizontalAlignment="Right" Content="{DynamicResource Delivery_SelectFile}" Click="OnBrowsePayloadFileClick" />
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+        <Border Name="SidebarTopDivider" Height="1" VerticalAlignment="Top" Margin="0,0,6,0"
+                Background="{DynamicResource TabControlSeparatorBorderBrush}" IsHitTestVisible="False" />
+        <controls:RoundedPaneDivider Name="SidebarDivider" Grid.Column="1" Classes="pane-edge vertical" />
+        <GridSplitter Name="SidebarSplitter" Grid.Column="1" Classes="pane-splitter vertical" />
+        <Grid Name="DeliveryContent" Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="3*" MinHeight="48" />
+                <RowDefinition Height="1" />
+                <RowDefinition Height="2*" MinHeight="160" />
+            </Grid.RowDefinitions>
+            <Border Name="UpperArea" Padding="12">
+                <controls:DeliveryCompositionView Name="Composition" />
+            </Border>
+            <controls:RoundedPaneDivider Name="ImagesDivider" Grid.Row="1" Classes="pane-edge horizontal" ShadowUp="True" />
+            <GridSplitter Name="ImagesSplitter" Grid.Row="1" Classes="pane-splitter horizontal" />
+            <controls:PackImageSelectionView Name="ImageSelection" Grid.Row="2" Margin="12" ShowEmptyList="True" />
+        </Grid>
+    </Grid>
+</UserControl>

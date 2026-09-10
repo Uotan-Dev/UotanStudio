@@ -271,10 +271,10 @@
                             </Button>
                             <Button MinWidth="110" HorizontalAlignment="Stretch"
                                     HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center"
-                                    Click="OnPackSuperRomClick">
+                                    Click="OnPackRomClick">
                                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
                                     <avalonia:MaterialIcon Grid.Column="0" Kind="Archive" Width="14" Height="14" />
-                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_PackSuperRom}"
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource ImageView_PackRom}"
                                                FontSize="11" TextWrapping="Wrap" TextAlignment="Center"
                                                VerticalAlignment="Center" MaxLines="2" />
                                 </Grid>

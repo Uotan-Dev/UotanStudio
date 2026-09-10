@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:UotanStudio.Views.Controls"
+             xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             x:Class="UotanStudio.Views.Controls.PackImageSelectionView">
+    <UserControl.Resources>
+        <DataTemplate x:Key="PackImageGroupTemplate" x:DataType="local:PackImageGroup">
+            <Border CornerRadius="6" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" ClipToBounds="True"
+                    Grid.IsSharedSizeScope="True">
+                <Grid RowDefinitions="Auto,*">
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="8,6" ColumnSpacing="8">
+                        <CheckBox Content="{DynamicResource Menu_SelectAll}" IsChecked="{Binding AllSelected, Mode=TwoWay}"
+                                  IsEnabled="{Binding HasImages}" MinWidth="0" MinHeight="24" Padding="0" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
+                        <Button Grid.Column="2" Classes="Small" Padding="2" IsVisible="{Binding IsExternal}"
+                                Click="OnRemoveImageGroupClick" ToolTip.Tip="{DynamicResource PackDialog_RemoveGroup}"
+                                AutomationProperties.Name="{DynamicResource PackDialog_RemoveGroup}">
+                            <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                        </Button>
+                    </Grid>
+                    <ScrollViewer Name="SourceImagesScroll" Grid.Row="1" HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled" AllowAutoHide="True">
+                        <Grid RowDefinitions="Auto,*" MinWidth="{Binding #SourceImagesScroll.Viewport.Width}">
+                            <Border Background="{DynamicResource PageBackground}"
+                                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,1">
+                                <Grid MinHeight="34" Margin="4,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSelection" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ImageName" />
+                                        <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSize" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{DynamicResource PackDialog_Select}" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Text="{DynamicResource NewProject_ImageName}" VerticalAlignment="Center" Margin="6,0" />
+                                    <TextBlock Grid.Column="2" Text="{DynamicResource Dock_Properties_Size}" VerticalAlignment="Center"
+                                               HorizontalAlignment="Right" Margin="4,0" />
+                                </Grid>
+                            </Border>
+                            <Grid Grid.Row="1">
+                                <ListBox Classes="pack-image-list" ItemsSource="{Binding Images}" Background="Transparent"
+                                         BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="local:PackImageEntry">
+                                            <Grid MinHeight="30" Margin="4,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSelection" />
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageName" />
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSize" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" Classes="image-choice"
+                                                          AutomationProperties.Name="{Binding Name}" />
+                                                <Grid Grid.Column="1" ColumnDefinitions="*,Auto" Margin="6,0" ColumnSpacing="4"
+                                                      ToolTip.Tip="{Binding FilePath}">
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                    <TextBlock Grid.Column="1" Text="{DynamicResource PackDialog_Original}"
+                                                               IsVisible="{Binding IsOriginal}" VerticalAlignment="Center" FontSize="11"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                </Grid>
+                                                <TextBlock Grid.Column="2" Text="{Binding DisplaySize}" VerticalAlignment="Center" Margin="4,0"
+                                                           HorizontalAlignment="Right" ToolTip.Tip="{Binding DisplaySize}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock Text="{DynamicResource PackDialog_NoImages}" IsVisible="{Binding !HasImages}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            </Grid>
+                        </Grid>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+    <UserControl.Styles>
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="CheckBox">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="CheckBox.image-choice">
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style Selector="ListBox.pack-image-list > ListBoxItem">
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="ListBox.pack-image-list > ListBoxItem:selected">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+    </UserControl.Styles>
+    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8">
+        <CheckBox Name="ShowOriginalBox" HorizontalAlignment="Left" Margin="8,0,0,0"
+                  Content="{DynamicResource PackDialog_ShowOriginal}" />
+        <Grid Grid.Row="1" RowDefinitions="*,Auto" RowSpacing="8">
+            <Grid Name="ImageColumns" ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                <Grid Name="ImageGroupsHost" ColumnSpacing="10" />
+                <Button Grid.Column="1" Name="AddImagesButton" Width="40" Height="40" Padding="0" VerticalAlignment="Center"
+                        Click="OnAddImagesClick" ToolTip.Tip="{DynamicResource PackDialog_AddImages}" AutomationProperties.Name="{DynamicResource PackDialog_AddImages}">
+                    <icons:MaterialIcon Kind="Plus" Width="22" Height="22" />
+                </Button>
+            </Grid>
+            <Grid Name="GroupPager" Grid.Row="1" ColumnDefinitions="Auto,*,Auto" IsVisible="False">
+                <Button Name="PreviousPageButton" Classes="Small" Padding="6,2" Click="OnPreviousPageClick"
+                        ToolTip.Tip="{DynamicResource PackDialog_Previous}" AutomationProperties.Name="{DynamicResource PackDialog_Previous}">
+                    <icons:MaterialIcon Kind="ChevronLeft" Width="16" Height="16" />
+                </Button>
+                <TextBlock Grid.Column="1" Name="PageLabel" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Button Grid.Column="2" Name="NextPageButton" Classes="Small" Padding="6,2" Click="OnNextPageClick"
+                        ToolTip.Tip="{DynamicResource PackDialog_Next}" AutomationProperties.Name="{DynamicResource PackDialog_Next}">
+                    <icons:MaterialIcon Kind="ChevronRight" Width="16" Height="16" />
+                </Button>
+            </Grid>
+        </Grid>
+        <TextBlock Grid.Row="2" Name="LoadError" IsVisible="False" TextWrapping="Wrap"
+                   Foreground="{DynamicResource SemiColorDanger}" />
+    </Grid>
+</UserControl>

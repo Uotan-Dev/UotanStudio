@@ -1,0 +1,144 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:UotanStudio.Views.Controls"
+             xmlns:icons="using:Material.Icons.Avalonia"
+             x:Class="UotanStudio.Views.Controls.DeliveryCompositionView">
+    <UserControl.Styles>
+        <Style Selector="TextBlock.list-title">
+            <Setter Property="Text" Value="{DynamicResource Delivery_SuperImageList}" />
+        </Style>
+        <Style Selector="TextBlock.list-title.payload">
+            <Setter Property="Text" Value="{DynamicResource Delivery_PayloadImageList}" />
+        </Style>
+        <Style Selector="ListBox.composition-images > ListBoxItem">
+            <Setter Property="Padding" Value="4,5" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="ListBox.composition-images > ListBoxItem.dragging">
+            <Setter Property="Opacity" Value="0.5" />
+        </Style>
+    </UserControl.Styles>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" AllowAutoHide="True">
+        <Grid Name="CompositionLayout" ColumnDefinitions="*,25,3*" Margin="0,0,12,0">
+            <Grid Name="ImagePane" RowDefinitions="*,Auto" RowSpacing="8">
+                <Grid Name="ImageCompositionContent" RowDefinitions="Auto,Auto,*,Auto" RowSpacing="8">
+                    <TextBlock Name="ImageListTitle" Classes="list-title" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+                    <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" MinHeight="24">
+                        <CheckBox Name="AutoZeroPartitionsBox" IsChecked="True" MinHeight="24" Padding="0">
+                            <TextBlock Text="{DynamicResource Delivery_AutoZeroPartitions}" TextWrapping="Wrap" />
+                        </CheckBox>
+                        <TextBlock Name="TotalImagesSize" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                   ToolTip.Tip="{DynamicResource Delivery_TotalImageSizeHint}"
+                                   AutomationProperties.Name="{DynamicResource Delivery_TotalImageSize}" />
+                    </Grid>
+                    <ScrollViewer Name="OrderedImagesScroll" Grid.Row="2" HorizontalScrollBarVisibility="Auto"
+                                  VerticalScrollBarVisibility="Disabled" AllowAutoHide="True">
+                        <Grid Name="OrderedImagesColumns" RowDefinitions="Auto,*" Grid.IsSharedSizeScope="True"
+                              MinWidth="{Binding #OrderedImagesScroll.Viewport.Width}">
+                            <Grid ColumnSpacing="4" Margin="4,0" MinHeight="28">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageName" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSource" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSize" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Name="SuperMembershipHeader" Grid.Column="1" Text="Super" Width="30" FontSize="10"
+                                           TextAlignment="Center" VerticalAlignment="Center" IsVisible="False"
+                                           ToolTip.Tip="{DynamicResource Delivery_BelongsToSuper}" />
+                                <TextBlock Grid.Column="2" Text="{DynamicResource NewProject_ImageName}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="3" Text="{DynamicResource Delivery_SourceProject}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="4" Text="{DynamicResource Dock_Properties_Size}" VerticalAlignment="Center"
+                                           HorizontalAlignment="Right" />
+                            </Grid>
+                            <Grid Grid.Row="1">
+                                <ListBox Name="OrderedImages" Classes="composition-images" Background="Transparent" Padding="0"
+                                         ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                         AutomationProperties.Name="{Binding #ImageListTitle.Text}">
+                                    <ListBox.ItemsPanel>
+                                        <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+                                    </ListBox.ItemsPanel>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate x:DataType="local:DeliveryImageItem">
+                                            <Grid ColumnSpacing="4" ToolTip.Tip="{Binding Description}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="12" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageName" />
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSource" />
+                                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ImageSize" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <icons:MaterialIcon Kind="DragVertical" Width="12" Height="18" VerticalAlignment="Center"
+                                                                   Opacity="0.5" Cursor="SizeAll" />
+                                                <Border Grid.Column="1" Width="30" IsVisible="{Binding ShowSuperChoice}">
+                                                    <CheckBox IsChecked="{Binding IncludeInSuper, Mode=TwoWay}" MinHeight="0" MinWidth="0" Padding="0"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              ToolTip.Tip="{DynamicResource Delivery_BelongsToSuper}"
+                                                              AutomationProperties.Name="{DynamicResource Delivery_BelongsToSuper}" />
+                                                </Border>
+                                                <Grid Grid.Column="2" ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                    <Button Grid.Column="1" Classes="Small" Width="20" Height="22" MinWidth="0" Padding="0"
+                                                            IsVisible="{Binding IsZeroSize}"
+                                                            Click="OnRemoveZeroPartitionClick" ToolTip.Tip="{DynamicResource Menu_Delete}"
+                                                            AutomationProperties.Name="{DynamicResource Menu_Delete}">
+                                                        <icons:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                                    </Button>
+                                                </Grid>
+                                                <TextBlock Grid.Column="3" Text="{Binding GroupName}" IsVisible="{Binding !IsZeroSize}"
+                                                           VerticalAlignment="Center" ToolTip.Tip="{Binding GroupName}" />
+                                                <TextBlock Grid.Column="4" Text="{Binding DisplaySize}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                           ToolTip.Tip="{Binding DisplaySize}" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <TextBlock Name="EmptyImagesHint" Text="{DynamicResource Delivery_SelectImagesBelow}"
+                                           TextWrapping="Wrap" TextAlignment="Center" Margin="8"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <Border Name="DropIndicator" Height="2" VerticalAlignment="Top" IsVisible="False"
+                                        Background="{DynamicResource TextForeground}" IsHitTestVisible="False" />
+                            </Grid>
+                        </Grid>
+                    </ScrollViewer>
+                    <StackPanel Name="ZeroPartitionForm" Grid.Row="3" Spacing="8" IsVisible="False">
+                        <Border Height="1" Margin="8,4" Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+                        <TextBlock Text="{DynamicResource Delivery_AddZeroPartition}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <local:ResponsiveFormRow MinLabelWidth="0" MaxLabelWidth="70" MinEditorWidth="100" ColumnSpacing="6" RowSpacing="6">
+                            <TextBlock Text="{DynamicResource Delivery_PartitionName}" VerticalAlignment="Center" />
+                            <Grid ColumnDefinitions="*,6,Auto">
+                                <TextBox Name="ZeroPartitionNameBox" MinWidth="0" Height="32"
+                                         AutomationProperties.Name="{DynamicResource Delivery_PartitionName}" />
+                                <Button Name="AddZeroPartitionButton" Grid.Column="2" Height="32" MinWidth="48" Padding="8,0"
+                                        Content="{DynamicResource Delivery_AddPartition}" IsEnabled="False" Click="OnAddZeroPartitionClick" />
+                            </Grid>
+                        </local:ResponsiveFormRow>
+                    </StackPanel>
+                </Grid>
+                <Grid Name="CompositionFooter" Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,4,0,0">
+                    <Button Name="CancelCompositionButton" Content="{DynamicResource Editor_Cancel}" Height="32"
+                            HorizontalAlignment="Stretch" IsEnabled="False" Click="OnCancelCompositionClick" />
+                    <Button Name="ConfirmCompositionButton" Grid.Column="1" Content="{DynamicResource PackDialog_Confirm}"
+                            Theme="{StaticResource SolidButton}" Height="32" HorizontalAlignment="Stretch" IsEnabled="False"
+                            Click="OnConfirmCompositionClick" />
+                </Grid>
+                <Grid Name="CompositionOutputFooter" Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="12"
+                      Margin="0,4,0,0" IsVisible="False">
+                    <ProgressBar Name="CompositionOutputProgress" Minimum="0" Maximum="100" Value="0" Height="20" MinWidth="0"
+                                 ShowProgressText="True" VerticalAlignment="Center"
+                                 AutomationProperties.Name="{DynamicResource Delivery_OutputProgress}" />
+                    <Button Name="StartCompositionOutputButton" Grid.Column="1" Content="{DynamicResource Delivery_StartOutput}"
+                            Height="32" MinWidth="96" Padding="12,0" />
+                </Grid>
+            </Grid>
+            <Border Name="CompositionDivider" Grid.Column="1" Width="1" HorizontalAlignment="Center" Margin="0,8"
+                    Background="{DynamicResource EditorPaneSplitterBackgroundBrush}" IsHitTestVisible="False" />
+            <local:DeliveryOutputView Name="ScriptPane" Grid.Column="2" SettingsWidth="{Binding #ImagePane.Bounds.Width}" />
+        </Grid>
+    </ScrollViewer>
+</UserControl>

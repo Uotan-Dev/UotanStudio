@@ -1,0 +1,368 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
+using UotanStudio.Services;
+using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Workspace;
+
+namespace UotanStudio.Views.Shell;
+
+/// <summary><para>ROM 交付配置页面，只维护选项和镜像选择，不执行打包。</para>ROM delivery form; maintains options and image selections without packaging.</summary>
+public partial class DeliveryView : UserControl
+{
+    private const double MinimumSidebarWidth = 268;
+    private const double MinimumContentWidth = 260;
+    private bool _updatingOptions;
+    private bool _attached;
+    private string? _solutionPath;
+    private bool? _stacked;
+    private double _defaultSidebarWidth = MinimumSidebarWidth;
+    private double? _customSidebarWidth;
+    private ColumnDefinition? _sidebarColumn;
+    private bool _updatingSidebarWidth;
+    private double _stackedRatio = 0.4;
+    private bool? _outputDirectoryStacked;
+    private bool _pickingOutput;
+    private bool _pickingPayloadFile;
+
+    /// <summary><para>初始化交付配置与共用 SUPER 设置。</para>Initializes delivery options and shared SUPER settings.</summary>
+    public DeliveryView()
+    {
+        InitializeComponent();
+        SuperSettings.DataContext = ProjectSettingViewModel.EnsureInstance();
+        DirectOutputBox.IsCheckedChanged += OnOutputOptionChanged;
+        PackSuperBox.IsCheckedChanged += OnOutputOptionChanged;
+        PackPayloadBox.IsCheckedChanged += OnOutputOptionChanged;
+        UseProjectSuperSettingsBox.IsCheckedChanged += (_, _) => UpdateProjectSuperSelector();
+        SuperVabBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
+        SuperAOnlyBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
+        ForceFullSuperImageBox.IsCheckedChanged += OnSuperImageOptionChanged;
+        GenerateSuperEmptyBox.IsCheckedChanged += OnSuperImageOptionChanged;
+        ImageSelection.SelectedImagesChanged += (_, _) => UpdateCompositionImages();
+        foreach (var option in OutputOptions.Children)
+            option.SizeChanged += OnOutputOptionSizeChanged;
+        SizeChanged += (_, _) => UpdateResponsiveLayout();
+        UpdateProjectDefaults();
+        UpdatePackingFields();
+    }
+
+    private void OnOutputOptionChanged(object? sender, RoutedEventArgs e)
+    {
+        if (_updatingOptions) return;
+        _updatingOptions = true;
+        try
+        {
+            if (ReferenceEquals(sender, PackSuperBox) && PackSuperBox.IsChecked == true)
+            {
+                PackPayloadBox.IsChecked = false;
+                SuperDeviceNameBox.Text = "super";
+            }
+            else if (ReferenceEquals(sender, PackPayloadBox) && PackPayloadBox.IsChecked == true)
+            {
+                PackSuperBox.IsChecked = false;
+                SuperDeviceNameBox.Text = "payload.bin";
+            }
+            UpdatePackingFields();
+        }
+        finally { _updatingOptions = false; }
+    }
+
+    private void UpdatePackingFields()
+    {
+        var packSuper = PackSuperBox.IsChecked == true;
+        var packPayload = PackPayloadBox.IsChecked == true;
+        SettingsDivider.IsVisible = packSuper || packPayload;
+        ProjectSettingsSelector.IsVisible = packSuper || packPayload;
+        SuperSettings.IsVisible = packSuper || packPayload;
+        SuperFormatOptions.IsVisible = packSuper;
+        SuperMetadataSizeField.IsVisible = packSuper;
+        SuperBlockSizeField.IsVisible = packSuper;
+        SuperMetadataSlotsField.IsVisible = packSuper;
+        SuperImageOptions.IsVisible = packSuper;
+        PayloadSettings.IsVisible = packPayload;
+        UseProjectSuperSettingsBox.Classes.Set("payload", packPayload);
+        Composition.SetOutputOptions(DirectOutputBox.IsChecked == true, packSuper, packPayload);
+        UpdateCompositionImages();
+    }
+
+    private void UpdateCompositionImages() => Composition.SetImages(ImageSelection.GetSelectedImages());
+
+    private void UpdateProjectDefaults()
+    {
+        var context = ProjectContextService.Instance;
+        UpdateSuperProjectChoices(context, _solutionPath != context.CurrentSolutionPath);
+        if (_solutionPath == context.CurrentSolutionPath) return;
+        _solutionPath = context.CurrentSolutionPath;
+        Composition.Reset();
+        OutputDirectoryBox.Text = context.SubProjects.FirstOrDefault()?.OutputDir ?? string.Empty;
+        DirectOutputBox.IsChecked = true;
+        PackSuperBox.IsChecked = false;
+        PackPayloadBox.IsChecked = false;
+        ImageSelection.ShowOriginals = false;
+        UseProjectSuperSettingsBox.IsChecked = false;
+        SuperVabBox.IsChecked = true;
+        SuperAOnlyBox.IsChecked = false;
+        SuperDeviceNameBox.Text = "super";
+        SuperMetadataSizeBox.Text = "65536";
+        SuperBlockSizeBox.Text = "4096";
+        SuperMetadataSlotsBox.Text = "3";
+        ForceFullSuperImageBox.IsChecked = true;
+        GenerateSuperEmptyBox.IsChecked = false;
+        PayloadVersionBox.Text = "2";
+        PayloadMinorVersionBox.Text = "0";
+        DynamicPartitionsFileBox.Text = string.Empty;
+        PayloadSignatureBox.Text = string.Empty;
+        PayloadPostinstallBox.Text = string.Empty;
+    }
+
+    private void OnSuperDeviceTypeChanged(object? sender, RoutedEventArgs e)
+    {
+        if (sender is RadioButton { IsChecked: true })
+            SuperMetadataSlotsBox.Text = ReferenceEquals(sender, SuperVabBox) ? "3" : "2";
+    }
+
+    private void OnSuperImageOptionChanged(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox { IsChecked: true }) return;
+        if (ReferenceEquals(sender, ForceFullSuperImageBox)) GenerateSuperEmptyBox.IsChecked = false;
+        else if (ReferenceEquals(sender, GenerateSuperEmptyBox)) ForceFullSuperImageBox.IsChecked = false;
+    }
+
+    private void UpdateProjectSuperSelector() => SuperSettingsProjectBox.IsEnabled =
+        UseProjectSuperSettingsBox.IsChecked == true && SuperSettingsProjectBox.Items.Count > 0;
+
+    private void UpdateSuperProjectChoices(ProjectContextService context, bool resetSelection)
+    {
+        // Only populate local form choices; selecting a project does not load or apply its SUPER settings.
+        // 仅维护表单选项，选择项目不会加载或应用该项目的 SUPER 配置。
+        var selected = resetSelection ? null : SuperSettingsProjectBox.SelectedItem as string;
+        var names = context.SubProjects.Select(project => project.Name).ToArray();
+        if (SuperSettingsProjectBox.ItemsSource is not string[] previous || !previous.SequenceEqual(names))
+            SuperSettingsProjectBox.ItemsSource = names;
+        SuperSettingsProjectBox.SelectedItem = names.FirstOrDefault(name => name == selected)
+            ?? names.FirstOrDefault(name => name == context.ActiveSubProject?.Name) ?? names.FirstOrDefault();
+        UpdateProjectSuperSelector();
+    }
+
+    private void OnOutputDirectoryRowSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (OutputDirectoryRow.Bounds.Width <= 0) return;
+        var stacked = OutputDirectoryRow.Bounds.Width < 300;
+        if (_outputDirectoryStacked == stacked) return;
+        _outputDirectoryStacked = stacked;
+        OutputDirectoryRow.ColumnDefinitions = new ColumnDefinitions(stacked ? "*" : "*,8,Auto");
+        OutputDirectoryRow.RowDefinitions = new RowDefinitions(stacked ? "Auto,8,Auto" : "Auto");
+        Grid.SetColumn(BrowseOutputButton, stacked ? 0 : 2);
+        Grid.SetRow(BrowseOutputButton, stacked ? 2 : 0);
+    }
+
+    private async void OnBrowseOutputClick(object? sender, RoutedEventArgs e)
+    {
+        if (_pickingOutput || TopLevel.GetTopLevel(this) is not { StorageProvider.CanPickFolder: true } owner) return;
+        var solutionPath = ProjectContextService.Instance.CurrentSolutionPath;
+        _pickingOutput = true;
+        BrowseOutputButton.IsEnabled = false;
+        try
+        {
+            var currentPath = OutputDirectoryBox.Text?.Trim();
+            using var startFolder = Directory.Exists(currentPath)
+                ? await owner.StorageProvider.TryGetFolderFromPathAsync(new Uri(Path.GetFullPath(currentPath!))) : null;
+            var folders = await owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            {
+                Title = LanguageService.Instance.GetString("PackDialog_BrowseOutput"),
+                AllowMultiple = false,
+                SuggestedStartLocation = startFolder
+            });
+            using var selectedFolder = folders.FirstOrDefault();
+            if (_attached && solutionPath == ProjectContextService.Instance.CurrentSolutionPath &&
+                selectedFolder?.TryGetLocalPath() is { } path)
+                OutputDirectoryBox.Text = path;
+        }
+        catch (Exception ex)
+        {
+            if (_attached && owner is Window window)
+                await DialogService.ShowAsync(window, LanguageService.Instance.GetString("NewProject_PickerFailed"),
+                    ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _pickingOutput = false;
+            BrowseOutputButton.IsEnabled = true;
+        }
+    }
+
+    private void OnPayloadFileRowSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (sender is not Grid row || row.Bounds.Width <= 0 || row.Children[1] is not Button button) return;
+        var stacked = row.Bounds.Width < 300;
+        if (stacked == (row.ColumnDefinitions.Count == 1)) return;
+        row.ColumnDefinitions = new ColumnDefinitions(stacked ? "*" : "*,8,Auto");
+        row.RowDefinitions = new RowDefinitions(stacked ? "Auto,8,Auto" : "Auto");
+        Grid.SetColumn(button, stacked ? 0 : 2);
+        Grid.SetRow(button, stacked ? 2 : 0);
+    }
+
+    private async void OnBrowsePayloadFileClick(object? sender, RoutedEventArgs e)
+    {
+        if (_pickingPayloadFile || TopLevel.GetTopLevel(this) is not { StorageProvider.CanOpen: true } owner) return;
+        var editor = ReferenceEquals(sender, BrowseDynamicPartitionsButton) ? DynamicPartitionsFileBox
+            : ReferenceEquals(sender, BrowsePayloadSignatureButton) ? PayloadSignatureBox
+            : ReferenceEquals(sender, BrowsePayloadPostinstallButton) ? PayloadPostinstallBox : null;
+        if (editor is null) return;
+        var solutionPath = ProjectContextService.Instance.CurrentSolutionPath;
+        _pickingPayloadFile = true;
+        SetPayloadFileButtonsEnabled(false);
+        try
+        {
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = LanguageService.Instance.GetString("Delivery_SelectFile"),
+                AllowMultiple = false,
+                FileTypeFilter = [FilePickerFileTypes.All]
+            });
+            using var selectedFile = files.FirstOrDefault();
+            if (_attached && solutionPath == ProjectContextService.Instance.CurrentSolutionPath &&
+                selectedFile?.TryGetLocalPath() is { } path)
+                editor.Text = path;
+        }
+        catch (Exception ex)
+        {
+            if (_attached && owner is Window window)
+                await DialogService.ShowAsync(window, LanguageService.Instance.GetString("NewProject_PickerFailed"),
+                    ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _pickingPayloadFile = false;
+            SetPayloadFileButtonsEnabled(true);
+        }
+    }
+
+    private void SetPayloadFileButtonsEnabled(bool enabled)
+    {
+        BrowseDynamicPartitionsButton.IsEnabled = enabled;
+        BrowsePayloadSignatureButton.IsEnabled = enabled;
+        BrowsePayloadPostinstallButton.IsEnabled = enabled;
+    }
+
+    /// <summary><para>进入交付页面时刷新项目镜像，并保留当前项目的表单选择。</para>Refreshes images on entry, retaining the current project's form choices.</summary>
+    public void Refresh()
+    {
+        UpdateProjectDefaults();
+        _ = ImageSelection.RefreshAsync();
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _attached = true;
+        WeakReferenceMessenger.Default.Register<DeliveryView, ProjectContextChangedMessage>(this, static (view, _) =>
+            Dispatcher.UIThread.Post(() => { if (view._attached) view.Refresh(); }));
+        UpdateProjectDefaults();
+        UpdateResponsiveLayout();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        _attached = false;
+        WeakReferenceMessenger.Default.Unregister<ProjectContextChangedMessage>(this);
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnOutputOptionSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (OutputOptions.Children.Any(option => option.DesiredSize.Width <= 0)) return;
+        var width = Math.Max(MinimumSidebarWidth, Math.Ceiling(
+            OutputOptions.Children.Sum(option => option.DesiredSize.Width) +
+            OutputOptions.ItemSpacing * (OutputOptions.Children.Count - 1) +
+            SidebarForm.Margin.Left + SidebarForm.Margin.Right + Sidebar.Padding.Left + Sidebar.Padding.Right));
+        if (Math.Abs(width - _defaultSidebarWidth) < 0.5) return;
+        _defaultSidebarWidth = width;
+        UpdateResponsiveLayout();
+    }
+
+    private void OnSidebarColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        // GridSplitter changes this property for both pointer and keyboard resizing.
+        // 鼠标拖动及键盘调整均由 GridSplitter 更新列宽；保留用户选择的固定宽度。
+        if (!_updatingSidebarWidth && e.Property == ColumnDefinition.WidthProperty && _sidebarColumn is { } column)
+            _customSidebarWidth = column.Width.Value;
+    }
+
+    private void UpdateSidebarWidth()
+    {
+        if (_sidebarColumn is not { } column) return;
+        _updatingSidebarWidth = true;
+        try
+        {
+            column.MaxWidth = Math.Max(MinimumSidebarWidth, Bounds.Width - 1 - MinimumContentWidth);
+            column.Width = new GridLength(_customSidebarWidth ?? _defaultSidebarWidth);
+        }
+        finally { _updatingSidebarWidth = false; }
+    }
+
+    private void UpdateResponsiveLayout()
+    {
+        if (Bounds.Width <= 0) return;
+        var stacked = Bounds.Width < Math.Max(640, _defaultSidebarWidth + 1 + MinimumContentWidth);
+        if (_stacked == stacked)
+        {
+            if (!stacked) UpdateSidebarWidth();
+            return;
+        }
+        // Preserve the stacked layout's height ratio while keeping the sidebar width independent of window size.
+        // 上下布局保留高度比例，左右布局的侧栏使用独立于窗口大小的固定宽度。
+        if (_stacked == true)
+            _stackedRatio = DeliveryLayout.RowDefinitions[0].Height.Value /
+                (DeliveryLayout.RowDefinitions[0].Height.Value + DeliveryLayout.RowDefinitions[2].Height.Value);
+        if (_sidebarColumn is not null)
+            _sidebarColumn.PropertyChanged -= OnSidebarColumnChanged;
+        _sidebarColumn = null;
+        _stacked = stacked;
+        SidebarTopDivider.Margin = stacked ? default : new Thickness(0, 0, 6, 0);
+        SidebarDivider.Classes.Set("vertical", !stacked);
+        SidebarDivider.Classes.Set("horizontal", stacked);
+        SidebarSplitter.Classes.Set("vertical", !stacked);
+        SidebarSplitter.Classes.Set("horizontal", stacked);
+        if (stacked)
+        {
+            DeliveryLayout.ColumnDefinitions = new ColumnDefinitions("*");
+            DeliveryLayout.RowDefinitions =
+            [
+                new RowDefinition(new GridLength(_stackedRatio, GridUnitType.Star)) { MinHeight = 120 },
+                new RowDefinition(new GridLength(1)),
+                new RowDefinition(new GridLength(1 - _stackedRatio, GridUnitType.Star)) { MinHeight = 240 }
+            ];
+            Grid.SetColumn(SidebarDivider, 0);
+            Grid.SetRow(SidebarDivider, 1);
+            Grid.SetColumn(SidebarSplitter, 0);
+            Grid.SetRow(SidebarSplitter, 1);
+            Grid.SetColumn(DeliveryContent, 0);
+            Grid.SetRow(DeliveryContent, 2);
+        }
+        else
+        {
+            _sidebarColumn = new ColumnDefinition(new GridLength(_customSidebarWidth ?? _defaultSidebarWidth))
+            { MinWidth = MinimumSidebarWidth };
+            DeliveryLayout.ColumnDefinitions =
+            [
+                _sidebarColumn,
+                new ColumnDefinition(new GridLength(1)),
+                new ColumnDefinition(GridLength.Star) { MinWidth = MinimumContentWidth }
+            ];
+            _sidebarColumn.PropertyChanged += OnSidebarColumnChanged;
+            UpdateSidebarWidth();
+            DeliveryLayout.RowDefinitions = new RowDefinitions("*");
+            Grid.SetColumn(SidebarDivider, 1);
+            Grid.SetRow(SidebarDivider, 0);
+            Grid.SetColumn(SidebarSplitter, 1);
+            Grid.SetRow(SidebarSplitter, 0);
+            Grid.SetColumn(DeliveryContent, 2);
+            Grid.SetRow(DeliveryContent, 0);
+        }
+    }
+}

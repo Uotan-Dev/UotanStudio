@@ -2,10 +2,11 @@ using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Shell;
+using UotanStudio.ViewModels.Shell;
 using Ursa.Controls;
 
 namespace UotanStudio.Views.Workspace;
@@ -107,10 +108,10 @@ public partial class ImageView : UserControl
     private void OnFlashSelectedMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuImage(sender, static vm => vm.FlashSelectedCommand);
 
-    private async void OnPackSuperRomClick(object? sender, RoutedEventArgs e)
+    private void OnPackRomClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not ImageViewModel { IsOperating: false } || TopLevel.GetTopLevel(this) is not Window owner) return;
-        await new PackSuperRomWindow().ShowDialog(owner);
+        if (DataContext is not ImageViewModel { IsOperating: false }) return;
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Delivery));
     }
 
     private void ExecuteForMenuImage(object? sender,

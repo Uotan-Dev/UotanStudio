@@ -111,43 +111,6 @@
                       HorizontalAlignment="Stretch" Padding="5"
                       ItemsSource="0123456789" SelectedIndex="{Binding EROFSComGrade}" />
         </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,0,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_SUPERSize}" />
-            <TextBox MinWidth="155" MaxWidth="240"
-                     HorizontalAlignment="Stretch" Padding="5"
-                     Text="{Binding SUPERSize}" FontSize="13" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,0,5,0"
-                                    MinLabelWidth="90" MaxLabelWidth="90"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center"
-                       FontSize="13"
-                       TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_SUPERName}" />
-            <TextBox MinWidth="155" MaxWidth="240"
-                     HorizontalAlignment="Stretch" Padding="5"
-                     Text="{Binding SUPERName}" FontSize="13" />
-        </controls:ResponsiveFormRow>
-        <controls:ResponsiveFormRow Margin="8,15,5,0"
-                                    MinLabelWidth="75" MaxLabelWidth="180"
-                                    ColumnSpacing="5">
-            <TextBlock VerticalAlignment="Center" FontSize="13" TextWrapping="Wrap"
-                       Text="{DynamicResource Dock_SUPERFormat}" />
-            <StackPanel MinWidth="145" Orientation="Horizontal" Spacing="12"
-                        HorizontalAlignment="Left">
-                <RadioButton FontSize="13" IsChecked="{Binding SUPERRAW}">
-                    <TextBlock Text="RAW" TextWrapping="NoWrap" />
-                </RadioButton>
-                <RadioButton FontSize="13" IsChecked="{Binding SUPERSPARSE}">
-                    <TextBlock Text="SPARSE" TextWrapping="NoWrap" />
-                </RadioButton>
-            </StackPanel>
-        </controls:ResponsiveFormRow>
         <controls:ResponsiveFormRow Margin="8,10,5,0"
                                     MinLabelWidth="90" MaxLabelWidth="90"
                                     ColumnSpacing="5">

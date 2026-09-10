@@ -2,21 +2,13 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace UotanStudio.Views.Shell;
+namespace UotanStudio.Views.Controls;
 
-/// <summary><para>打包窗口确认的本地表单快照，不执行打包。</para>Local packaging form snapshot; does not perform packaging.</summary>
-public sealed record PackSuperRomFormResult(
-    bool PackZip, bool PackSuper, bool PackPayload,
-    string ZipName, string ArchiveFormat, string CompressionAlgorithm, bool SuperAsZst,
-    string SuperName, string OutputLocation, string PayloadName,
-    IReadOnlyList<PackSuperRomImageSelection> Images);
-
-/// <summary><para>所选镜像及其 SUPER 归属。</para>Selected image and its SUPER membership.</summary>
-public sealed record PackSuperRomImageSelection(string GroupName, string FilePath, bool IncludeInSuper);
-
-internal sealed record PackCompressionChoice(string Id, string DisplayName)
+/// <summary><para>交付页面所选镜像及其来源项目。</para>Selected delivery image and its source project.</summary>
+public sealed record PackImageSelection(string GroupName, string FilePath)
 {
-    public override string ToString() => DisplayName;
+    /// <summary><para>实际文件大小；无法读取时为空。</para>Actual file size, or null when unavailable.</summary>
+    public long? SizeBytes { get; init; }
 }
 
 internal sealed partial class PackImageEntry(string filePath, bool isOriginal = false) : ObservableObject
@@ -26,17 +18,12 @@ internal sealed partial class PackImageEntry(string filePath, bool isOriginal = 
     public bool IsOriginal { get; } = isOriginal;
 
     [ObservableProperty] private bool _isSelected;
-    [ObservableProperty] private bool _includeInSuper;
-    [ObservableProperty] private bool _showSuperColumn;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(DisplaySize))] private long? _sizeBytes;
+    public string DisplaySize => SizeBytes is { } bytes ? PackImageFileInfo.FormatSize(bytes) : "—";
 
-    partial void OnIsSelectedChanged(bool value)
+    internal void UpdateFileInfo(PackImageFileInfo info)
     {
-        if (!value) IncludeInSuper = false;
-    }
-
-    partial void OnIncludeInSuperChanged(bool value)
-    {
-        if (value) IsSelected = true;
+        SizeBytes = info.SizeBytes;
     }
 }
 
@@ -50,7 +37,8 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
     public ObservableCollection<PackImageEntry> Images { get; } = [];
     public bool HasImages => Images.Count > 0;
     public IEnumerable<string> FilePaths => _entries.Select(entry => entry.FilePath);
-    [ObservableProperty] private bool _showSuperColumn;
+    internal IReadOnlyList<PackImageEntry> Entries => _entries;
+    internal event EventHandler? SelectionChanged;
 
     public bool? AllSelected
     {
@@ -63,6 +51,7 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
             try { foreach (var entry in Images) entry.IsSelected = value.Value; }
             finally { _updatingSelection = false; }
             OnPropertyChanged();
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -82,17 +71,16 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
             if (showOriginal || !entry.IsOriginal) Images.Add(entry);
         OnPropertyChanged(nameof(HasImages));
         OnPropertyChanged(nameof(AllSelected));
-    }
-
-    partial void OnShowSuperColumnChanged(bool value)
-    {
-        foreach (var entry in _entries) entry.ShowSuperColumn = value;
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSelectionChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (!_updatingSelection && e.PropertyName == nameof(PackImageEntry.IsSelected))
+        {
             OnPropertyChanged(nameof(AllSelected));
+            SelectionChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     public void Dispose()
