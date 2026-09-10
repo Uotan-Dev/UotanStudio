@@ -86,7 +86,7 @@ public sealed class TextDiffService
     /// </summary>
     public static TextDiffService Instance => LazyInstance.Value;
 
-    private TextDiffService() { }
+    internal TextDiffService() { }
 
     private const int MaxDiffLines = 2_000_000;
     private const long MaxDiffBytes = 256L * 1024 * 1024;

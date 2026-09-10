@@ -122,7 +122,7 @@ public sealed class FolderCompareService
     /// </summary>
     public static FolderCompareService Instance => LazyInstance.Value;
 
-    private FolderCompareService() { }
+    internal FolderCompareService() { }
 
     /// <summary>
     /// <para>递归比较两个目录。目录项只比较存在性（状态为 Equal/LeftOnly/RightOnly，尺寸为 -1，不比较目录内容）；

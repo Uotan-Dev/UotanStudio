@@ -1,106 +1,39 @@
-using System.Text;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services;
 using UotanStudio.Services.Compare;
 
 namespace UotanStudio.ViewModels.Compare;
 
 /// <summary>
-/// <para>对比面板的展示模式。</para>
-/// The compare panel's display mode.
-/// </summary>
-public enum CompareMode
-{
-    /// <summary>
-    /// <para>空态：尚无比较内容。</para>
-    /// Empty state: no comparison yet.
-    /// </summary>
-    None,
-
-    /// <summary>
-    /// <para>文件夹比较。</para>
-    /// Folder comparison.
-    /// </summary>
-    Folder,
-
-    /// <summary>
-    /// <para>文本比较。</para>
-    /// Text comparison.
-    /// </summary>
-    Text,
-
-    /// <summary>
-    /// <para>二进制比较（元数据或十六进制差异视图）。</para>
-    /// Binary comparison (metadata or hex-diff view).
-    /// </summary>
-    Binary,
-}
-
-/// <summary>
-/// <para>二进制比较的展示视图。</para>
-/// The binary comparison's display view.
-/// </summary>
-public enum BinaryViewKind
-{
-    /// <summary>
-    /// <para>元数据视图（格式名/摘要/键值对/条目/组件）。</para>
-    /// Metadata view (format name / summary / key-values / entries / components).
-    /// </summary>
-    Metadata,
-
-    /// <summary>
-    /// <para>十六进制差异视图。</para>
-    /// Hex-diff view.
-    /// </summary>
-    Hex,
-}
-
-/// <summary>
-/// <para>工作区对比文档视图模型：统一双栏对比面板的宿主，按 <see cref="CompareMode"/> 承载
-/// 文件夹 / 文本 / 二进制三种比较。文件夹比较走 <see cref="FolderCompareService"/>，
-/// 文本走 <see cref="TextDiffService"/>（流式、有界），二进制先以 <see cref="FormatDetector"/> +
-/// <see cref="IFormatHandler.ReadMetadataAsync"/> 展示元数据，再以 <see cref="BinaryDiffService"/>
-/// 提供十六进制差异视图（懒加载）。</para>
-/// Workspace compare document view model: hosts the unified two-column compare panel, carrying
-/// folder / text / binary comparisons per <see cref="CompareMode"/>. Folder comparisons use
-/// <see cref="FolderCompareService"/>, text uses <see cref="TextDiffService"/> (streamed and bounded),
-/// and binary first shows metadata via <see cref="FormatDetector"/> +
-/// <see cref="IFormatHandler.ReadMetadataAsync"/>, then offers a lazily-loaded hex-diff view via
-/// <see cref="BinaryDiffService"/>.
+/// <para>双栏比较文档，管理展示状态、取消、缓存和命令协调。
+/// 文件读取与比较交给注入的后端，展示行由独立构建器生成；二进制差异仍按需扫描。</para>
+/// Owns display state, cancellation, caches and commands for a two-column comparison.
+/// An injected backend reads and compares files; a separate builder projects display rows.
+/// Binary difference scans remain lazy.
 /// </summary>
 public sealed partial class CompareViewModel : Document
 {
+    private readonly IComparisonService _comparison;
+
+    /// <summary>Creates a compare document with the default file-comparison services.</summary>
+    public CompareViewModel() : this(ComparisonService.CreateDefault()) { }
+
+    /// <summary>Creates a document with an explicitly supplied comparison backend.</summary>
+    internal CompareViewModel(IComparisonService comparison)
+    {
+        ArgumentNullException.ThrowIfNull(comparison);
+        _comparison = comparison;
+    }
+
     private CancellationTokenSource _loadCts = new();
     private FolderCompareResult? _lastFolderResult;
     private List<FolderCompareItem> _folderItems = [];
-    private SideBinaryMetadata? _leftMetadata;
-    private SideBinaryMetadata? _rightMetadata;
+    private ComparisonMetadata? _leftMetadata;
+    private ComparisonMetadata? _rightMetadata;
     private CompareHexRowCollection? _currentHexRows;
     private string _statsText = string.Empty;
-
-    /// <summary>
-    /// <para>单侧固件元数据缓存（避免在元数据/十六进制视图间切换时重复读取）。</para>
-    /// Per-side firmware metadata cache (avoids re-reading when toggling between the metadata and hex
-    /// views).
-    /// </summary>
-    private sealed record SideBinaryMetadata(
-        string FormatName,
-        string Summary,
-        IReadOnlyDictionary<string, string> Metadata,
-        IReadOnlyList<string> Entries,
-        IReadOnlyList<FirmwareComponent> Components)
-    {
-        /// <summary>
-        /// <para>未识别侧的占位元数据。</para>
-        /// The placeholder metadata for an unrecognized side.
-        /// </summary>
-        public static SideBinaryMetadata Unrecognized { get; } =
-            new(string.Empty, string.Empty, new Dictionary<string, string>(), [], []);
-    }
 
     /// <summary>
     /// <para>左侧路径：文件夹比较时为目录，文本/二进制比较时为文件。</para>
@@ -616,122 +549,6 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>刷新命令：在文件夹模式下重新比对并重建行与计数。</para>
-    /// Refresh command: re-compares in folder mode and rebuilds the rows and counts.
-    /// </summary>
-    [RelayCommand]
-    private async Task RefreshAsync()
-    {
-        if (Mode != CompareMode.Folder)
-        {
-            return;
-        }
-
-        var ct = BeginLoad();
-        IsBusy = true;
-        HasError = false;
-        ErrorMessage = string.Empty;
-        try
-        {
-            // 右侧留空（单路径拖入等待第二次拖入）：不比对，自行递归枚举左侧目录生成仅左侧行。
-            // With the right side empty (single-path drop awaiting a second drop) no comparison runs;
-            // the left directory is recursively enumerated into left-only rows.
-            if (string.IsNullOrWhiteSpace(RightPath))
-            {
-                var rows = await Task.Run(() => BuildLeftOnlyFolderRows(LeftPath, ct), ct);
-                ct.ThrowIfCancellationRequested();
-                _lastFolderResult = null;
-                _folderItems = [];
-                Rows = rows;
-                EqualCount = 0;
-                DifferentCount = 0;
-                LeftOnlyCount = rows.Count;
-                RightOnlyCount = 0;
-                StatsText = LanguageService.Instance.GetString("Compare_DropRightFolder");
-                SelectedIndex = -1;
-                return;
-            }
-
-            var result = await FolderCompareService.Instance.CompareAsync(LeftPath, RightPath, ct);
-            ct.ThrowIfCancellationRequested();
-
-            EqualCount = result.EqualCount;
-            DifferentCount = result.DifferentCount;
-            LeftOnlyCount = result.LeftOnlyCount;
-            RightOnlyCount = result.RightOnlyCount;
-            _lastFolderResult = result;
-            StatsText = string.Empty;
-            ApplyFolderFilters();
-        }
-        catch (OperationCanceledException)
-        {
-            // 取消：保持当前状态，下次刷新覆盖。
-            // Cancelled: keep the current state; the next refresh overwrites it.
-        }
-        catch (Exception ex)
-        {
-            HasError = true;
-            ErrorMessage = ex.Message;
-            LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
-        }
-        finally
-        {
-            // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
-            // 不得把新加载的 busy 状态置 false。
-            // Clear busy only while this load is still the current one: a cancelled older load
-            // must not clear the newer load's busy state.
-            if (ct == _loadCts.Token)
-            {
-                IsBusy = false;
-            }
-        }
-    }
-
-    /// <summary>
-    /// <para>把选中条目从左复制到右命令（复制成功后刷新比对）。</para>
-    /// Copy-selected-left-to-right command (refreshes the comparison after the copy succeeds).
-    /// </summary>
-    [RelayCommand]
-    private async Task CopyLeftToRightAsync() => await CopyAsync(fromLeftToRight: true);
-
-    /// <summary>
-    /// <para>把选中条目从右复制到左命令（复制成功后刷新比对）。</para>
-    /// Copy-selected-right-to-left command (refreshes the comparison after the copy succeeds).
-    /// </summary>
-    [RelayCommand]
-    private async Task CopyRightToLeftAsync() => await CopyAsync(fromLeftToRight: false);
-
-    /// <summary>
-    /// <para>删除左目录中选中文件命令（删除成功后刷新比对）。</para>
-    /// Delete-selected-in-left command (refreshes the comparison after the deletion succeeds).
-    /// </summary>
-    [RelayCommand]
-    private async Task DeleteLeftAsync()
-    {
-        if (SelectedIndex < 0 || SelectedIndex >= _folderItems.Count || _folderItems[SelectedIndex].Status == FolderItemStatus.RightOnly)
-        {
-            return;
-        }
-
-        await DeleteAsync(_folderItems[SelectedIndex], LeftPath);
-    }
-
-    /// <summary>
-    /// <para>删除右目录中选中文件命令（删除成功后刷新比对）。</para>
-    /// Delete-selected-in-right command (refreshes the comparison after the deletion succeeds).
-    /// </summary>
-    [RelayCommand]
-    private async Task DeleteRightAsync()
-    {
-        if (SelectedIndex < 0 || SelectedIndex >= _folderItems.Count || _folderItems[SelectedIndex].Status == FolderItemStatus.LeftOnly)
-        {
-            return;
-        }
-
-        await DeleteAsync(_folderItems[SelectedIndex], RightPath);
-    }
-
-    /// <summary>
     /// <para>下一差异命令：在文本/十六进制模式下从选中行之后查找差异行并选中，绕回循环。</para>
     /// Next-diff command: in text/hex mode finds the next diff row after the selected one and selects
     /// it, wrapping around.
@@ -803,7 +620,7 @@ public sealed partial class CompareViewModel : Document
             _currentHexRows?.Dispose();
             _currentHexRows = null;
             BinaryViewKind = BinaryViewKind.Metadata;
-            Rows = BuildBinaryMetadataRows(_leftMetadata, _rightMetadata);
+            Rows = ComparisonRowBuilder.ForMetadata(_leftMetadata, _rightMetadata, LanguageService.Instance.GetString("Compare_Unrecognized"));
             SelectedIndex = -1;
             return;
         }
@@ -823,7 +640,7 @@ public sealed partial class CompareViewModel : Document
         {
             var maxLength = Math.Max(new FileInfo(LeftPath).Length, new FileInfo(RightPath).Length);
             var rowDiffBitmap = new byte[BinaryDiffService.RowBitmapLength(maxLength)];
-            var stats = await Task.Run(() => BinaryDiffService.Instance.CompareStats(LeftPath, RightPath, rowDiffBitmap, ct), ct);
+            var stats = await _comparison.CompareBinaryAsync(LeftPath, RightPath, rowDiffBitmap, ct);
             if (ct.IsCancellationRequested)
             {
                 // 协作式取消：位图/统计基于部分扫描结果，直接丢弃并保持当前视图。
@@ -921,11 +738,6 @@ public sealed partial class CompareViewModel : Document
             return;
         }
 
-        // 幂等注册全部格式处理器（应用启动时通常已注册），确保扩展名与检测集合完整。
-        // Idempotently register every format handler (the app usually does at startup) so the
-        // extension and detection sets are complete.
-        FirmwareFormatRegistry.RegisterAll();
-
         var ct = BeginLoad();
         _currentHexRows?.Dispose();
         _currentHexRows = null;
@@ -937,7 +749,7 @@ public sealed partial class CompareViewModel : Document
         ResetFolderState();
         try
         {
-            var leftIsText = await Task.Run(() => IsTextLikeFile(LeftPath), ct);
+            var leftIsText = await _comparison.IsTextLikeFileAsync(LeftPath, ct);
             ct.ThrowIfCancellationRequested();
 
             if (string.IsNullOrWhiteSpace(RightPath))
@@ -955,7 +767,7 @@ public sealed partial class CompareViewModel : Document
                 return;
             }
 
-            var rightIsText = await Task.Run(() => IsTextLikeFile(RightPath), ct);
+            var rightIsText = await _comparison.IsTextLikeFileAsync(RightPath, ct);
             ct.ThrowIfCancellationRequested();
 
             if (leftIsText && rightIsText)
@@ -1000,14 +812,7 @@ public sealed partial class CompareViewModel : Document
     /// </summary>
     private async Task LoadTextBothSidesAsync(CancellationToken ct)
     {
-        await using var left = new FileStream(
-            LeftPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-        await using var right = new FileStream(
-            RightPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
-
-        var lines = await Task.Run(() => TextDiffService.Instance.DiffLines(left, right, ct), ct);
+        var lines = await _comparison.CompareTextAsync(LeftPath, RightPath, ct);
         ct.ThrowIfCancellationRequested();
 
         var rows = new List<CompareRowViewModel>(lines.Count);
@@ -1040,7 +845,9 @@ public sealed partial class CompareViewModel : Document
     /// </summary>
     private async Task LoadTextSingleSideAsync(CancellationToken ct)
     {
-        var rows = await Task.Run(() => ReadTextRowsLeftOnly(LeftPath, ct), ct);
+        var lines = await _comparison.ReadTextAsync(LeftPath, ct);
+        ct.ThrowIfCancellationRequested();
+        var rows = await Task.Run(() => ComparisonRowBuilder.ForText(lines), ct);
         ct.ThrowIfCancellationRequested();
 
         Rows = rows;
@@ -1060,15 +867,15 @@ public sealed partial class CompareViewModel : Document
     {
         try
         {
-            var leftMeta = await Task.Run(() => ReadBinaryMetadata(LeftPath, ct), ct);
+            var leftMeta = await _comparison.ReadMetadataAsync(LeftPath, ct);
             ct.ThrowIfCancellationRequested();
-            var rightMeta = await Task.Run(() => ReadBinaryMetadata(RightPath, ct), ct);
+            var rightMeta = await _comparison.ReadMetadataAsync(RightPath, ct);
             ct.ThrowIfCancellationRequested();
 
             _leftMetadata = leftMeta;
             _rightMetadata = rightMeta;
             BinaryViewKind = BinaryViewKind.Metadata;
-            Rows = BuildBinaryMetadataRows(leftMeta, rightMeta);
+            Rows = ComparisonRowBuilder.ForMetadata(leftMeta, rightMeta, LanguageService.Instance.GetString("Compare_Unrecognized"));
             SelectedIndex = -1;
 
             // 不在此跑全文件差异扫描：二进制模式下 StatsText 不显示，且多 GB 固件的全量扫描
@@ -1098,127 +905,17 @@ public sealed partial class CompareViewModel : Document
     /// </summary>
     private async Task LoadBinarySingleSideAsync(CancellationToken ct)
     {
-        var leftMeta = await Task.Run(() => ReadBinaryMetadata(LeftPath, ct), ct);
+        var leftMeta = await _comparison.ReadMetadataAsync(LeftPath, ct);
         ct.ThrowIfCancellationRequested();
 
         _leftMetadata = leftMeta;
         _rightMetadata = null;
         BinaryViewKind = BinaryViewKind.Metadata;
-        Rows = BuildBinaryMetadataRows(leftMeta, null);
+        Rows = ComparisonRowBuilder.ForMetadata(leftMeta, null, LanguageService.Instance.GetString("Compare_Unrecognized"));
         SelectedIndex = -1;
         StatsText = LanguageService.Instance.GetString("Compare_DropRightFile");
         HasError = false;
         ErrorMessage = string.Empty;
-    }
-
-    /// <summary>
-    /// <para>按过滤开关重建文件夹行，并维护与行平行的底层条目列表（供复制/删除定位）。</para>
-    /// Rebuilds the folder rows by the active filter toggles and keeps a parallel underlying-item list
-    /// (for copy/delete targeting).
-    /// </summary>
-    private void ApplyFolderFilters()
-    {
-        _folderItems = [];
-        if (_lastFolderResult is null)
-        {
-            Rows = null;
-            return;
-        }
-
-        var rows = new List<CompareRowViewModel>();
-        var items = new List<FolderCompareItem>();
-        foreach (var item in _lastFolderResult.Items)
-        {
-            if (ShouldShow(item))
-            {
-                rows.Add(CompareRowViewModel.ForFolder(item));
-                items.Add(item);
-            }
-        }
-
-        _folderItems = items;
-        Rows = rows;
-        SelectedIndex = -1;
-    }
-
-    /// <summary>
-    /// <para>判断文件夹条目是否按当前过滤开关显示。</para>
-    /// Determines whether a folder item is shown under the active filter toggles.
-    /// </summary>
-    private bool ShouldShow(FolderCompareItem item) => item.Status switch
-    {
-        FolderItemStatus.Equal => ShowEqual,
-        FolderItemStatus.Different => ShowDifferent,
-        FolderItemStatus.LeftOnly => ShowLeftOnly,
-        FolderItemStatus.RightOnly => ShowRightOnly,
-        _ => true,
-    };
-
-    /// <summary>
-    /// <para>把选中文件从一侧复制到另一侧，成功后刷新比对。</para>
-    /// Copies the selected file from one side to the other, refreshing the comparison afterwards.
-    /// </summary>
-    /// <param name="fromLeftToRight">从左复制到右为 true，反之为 false。
-    /// <para>true when copying left to right; false otherwise.</para></param>
-    private async Task CopyAsync(bool fromLeftToRight)
-    {
-        if (Mode != CompareMode.Folder || SelectedIndex < 0 || SelectedIndex >= _folderItems.Count)
-        {
-            return;
-        }
-
-        var item = _folderItems[SelectedIndex];
-        if (item.IsDirectory || (fromLeftToRight && item.Status == FolderItemStatus.RightOnly)
-            || (!fromLeftToRight && item.Status == FolderItemStatus.LeftOnly))
-        {
-            return;
-        }
-
-        try
-        {
-            if (fromLeftToRight)
-            {
-                await FolderCompareService.Instance.CopyAsync(LeftPath, RightPath, item.RelativePath);
-            }
-            else
-            {
-                await FolderCompareService.Instance.CopyAsync(RightPath, LeftPath, item.RelativePath);
-            }
-
-            await RefreshAsync();
-        }
-        catch (Exception ex)
-        {
-            HasError = true;
-            ErrorMessage = ex.Message;
-            LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// <para>删除指定目录下的选中文件，成功后刷新比对。</para>
-    /// Deletes the selected file under the given directory, refreshing the comparison afterwards.
-    /// </summary>
-    /// <param name="item">被删除的文件夹条目。<para>The folder item to delete.</para></param>
-    /// <param name="directory">所属目录路径。<para>The owning directory path.</para></param>
-    private async Task DeleteAsync(FolderCompareItem item, string directory)
-    {
-        if (item.IsDirectory)
-        {
-            return;
-        }
-
-        try
-        {
-            await FolderCompareService.Instance.DeleteAsync(directory, item.RelativePath);
-            await RefreshAsync();
-        }
-        catch (Exception ex)
-        {
-            HasError = true;
-            ErrorMessage = ex.Message;
-            LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
-        }
     }
 
     /// <summary>
@@ -1231,371 +928,6 @@ public sealed partial class CompareViewModel : Document
         _loadCts.Dispose();
         _loadCts = new CancellationTokenSource();
         return _loadCts.Token;
-    }
-
-    /// <summary>
-    /// <para>清理文件夹模式的缓存状态（计数与条目映射），用于切换到文件模式前。</para>
-    /// Clears the folder-mode cached state (counts and the item map) before switching to file modes.
-    /// </summary>
-    private void ResetFolderState()
-    {
-        _lastFolderResult = null;
-        _folderItems = [];
-        Rows = null;
-        EqualCount = 0;
-        DifferentCount = 0;
-        LeftOnlyCount = 0;
-        RightOnlyCount = 0;
-    }
-
-    /// <summary>
-    /// <para>判断文件是否应按文本模式处理：通过 NUL 文本探测且无已知固件扩展名。</para>
-    /// Determines whether a file should be treated as text: passes the NUL probe and has no known
-    /// firmware extension.
-    /// </summary>
-    private static bool IsTextLikeFile(string path) => BinaryDiffService.Instance.IsTextFile(path) && !IsFirmwareExtension(path);
-
-    /// <summary>
-    /// <para>判断文件扩展名是否为已注册格式处理器的典型扩展名（视为固件 → 二进制模式）。</para>
-    /// Determines whether a file's extension is a registered format handler's typical extension
-    /// (treated as firmware → binary mode).
-    /// </summary>
-    private static bool IsFirmwareExtension(string path)
-    {
-        var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
-        if (ext.Length == 0)
-        {
-            return false;
-        }
-
-        foreach (var handler in FormatDetector.RegisteredHandlers)
-        {
-            foreach (var handlerExtension in handler.FileExtensions)
-            {
-                if (string.Equals(handlerExtension, ext, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /// <summary>
-    /// <para>递归枚举左侧目录生成仅左侧对比行（名称 + 大小，深度按路径段），并按键排序。</para>
-    /// Recursively enumerates the left directory into left-only compare rows (name + size, depth by
-    /// path segment), sorted by key.
-    /// </summary>
-    private static List<CompareRowViewModel> BuildLeftOnlyFolderRows(string directory, CancellationToken ct)
-    {
-        var entries = new List<(string Relative, bool IsDirectory, long Size)>();
-        foreach (var entry in Directory.EnumerateFileSystemEntries(directory, "*", SearchOption.AllDirectories))
-        {
-            ct.ThrowIfCancellationRequested();
-            var isDirectory = Directory.Exists(entry);
-            var relative = Path.GetRelativePath(directory, entry).Replace('\\', '/');
-            entries.Add((relative, isDirectory, isDirectory ? -1 : new FileInfo(entry).Length));
-        }
-
-        entries.Sort(static (a, b) => string.CompareOrdinal(a.Relative, b.Relative));
-
-        var rows = new List<CompareRowViewModel>(entries.Count);
-        foreach (var (relative, isDirectory, size) in entries)
-        {
-            rows.Add(new CompareRowViewModel(
-                FolderItemStatus.LeftOnly,
-                isDirectory,
-                relative.Count(static c => c == '/'),
-                string.Empty,
-                Path.GetFileName(relative),
-                isDirectory ? "-" : FormatSize(size),
-                true,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                false));
-        }
-
-        return rows;
-    }
-
-    /// <summary>
-    /// <para>自行流式读取左侧文本文件行（UTF-8，上限 200 万行/256 MB，超出抛 <see cref="FormatException"/>）
-    /// 生成仅左侧对比行。</para>
-    /// Streams the left text file's lines itself (UTF-8, bounded to 2,000,000 lines / 256 MB, throwing
-    /// <see cref="FormatException"/> beyond) into left-only compare rows.
-    /// </summary>
-    private static List<CompareRowViewModel> ReadTextRowsLeftOnly(string path, CancellationToken ct)
-    {
-        const int maxLines = 2_000_000;
-        const long maxBytes = 256L * 1024 * 1024;
-
-        var rows = new List<CompareRowViewModel>();
-        using var stream = new FileStream(
-            path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan);
-
-        // 可 seek 流一次性按流长度做字节上限检查，消除每行 Encoding.UTF8.GetByteCount
-        // 的重复全文扫描；非 seek 流保留逐行累计。
-        // Seekable streams check the byte cap once against the stream length, removing the
-        // per-line Encoding.UTF8.GetByteCount rescan; non-seekable streams keep per-line counting.
-        var perLineCounting = !stream.CanSeek;
-        if (!perLineCounting && stream.Length > maxBytes)
-        {
-            throw new FormatException($"Text file exceeds the {maxBytes} byte limit.");
-        }
-
-        using var reader = new StreamReader(
-            stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 81920, leaveOpen: false);
-
-        long totalBytes = 0;
-        var lineNumber = 0;
-        string? line;
-        while ((line = reader.ReadLine()) != null)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            if (rows.Count >= maxLines)
-            {
-                throw new FormatException($"Text file exceeds the {maxLines} line limit.");
-            }
-
-            if (perLineCounting)
-            {
-                totalBytes += Encoding.UTF8.GetByteCount(line);
-                if (totalBytes > maxBytes)
-                {
-                    throw new FormatException($"Text file exceeds the {maxBytes} byte limit.");
-                }
-            }
-
-            lineNumber++;
-            rows.Add(new CompareRowViewModel(
-                FolderItemStatus.LeftOnly,
-                false,
-                0,
-                lineNumber.ToString(),
-                line,
-                string.Empty,
-                true,
-                string.Empty,
-                string.Empty,
-                string.Empty,
-                false));
-        }
-
-        return rows;
-    }
-
-    /// <summary>
-    /// <para>识别单个文件的固件格式并读取元数据；未识别或读取失败时返回未识别占位。</para>
-    /// Detects a file's firmware format and reads its metadata; returns the unrecognized placeholder
-    /// when detection or the read fails.
-    /// </summary>
-    private static SideBinaryMetadata ReadBinaryMetadata(string path, CancellationToken ct)
-    {
-        ct.ThrowIfCancellationRequested();
-
-        var handler = FormatDetector.Detect(path);
-        if (handler is null)
-        {
-            return SideBinaryMetadata.Unrecognized;
-        }
-
-        var result = handler.ReadMetadataAsync(path, ct).GetAwaiter().GetResult();
-        ct.ThrowIfCancellationRequested();
-        if (!result.Success)
-        {
-            LogService.Instance.Write(LogLevel.Warn, "Compare",
-                $"Metadata read failed for '{path}': {result.Summary}");
-            return SideBinaryMetadata.Unrecognized;
-        }
-
-        return new SideBinaryMetadata(
-            handler.FormatName,
-            result.Summary,
-            result.Metadata,
-            result.Entries,
-            result.Components);
-    }
-
-    /// <summary>
-    /// <para>由两侧元数据构建元数据视图行：格式名行、摘要行、键值对行（键并集）、条目行与组件行；
-    /// 条目与组件按**名称**对齐（两侧名称并集，同名条目落在同一水平行；仅单侧条目在缺失侧
-    /// 置空占位，不显示名称），键值对缺失侧取 "-"；**同名但值不同也判定为差异**——键值对值不同、
-    /// 组件大小不同均标记为 Different 并整行差异高亮，仅单侧存在的键/组件标记为 LeftOnly/RightOnly；
-    /// 两侧都无法识别时给出单条"无法识别"提示行。</para>
-    /// Builds the metadata-view rows from both sides' metadata: a format-name row, summary rows,
-    /// key-value rows (key union), entry rows and component rows. Entries and components are aligned
-    /// **by name** (union of both sides' names; same-name items land on the same horizontal row, and
-    /// single-side items leave the missing side blank), while key-values show "-" on the missing side.
-    /// **Same-name items with different values also count as differences**: differing key-value pairs
-    /// and differing component sizes are marked Different with a full-row diff highlight, and keys or
-    /// components present on only one side are marked LeftOnly/RightOnly; a single "unrecognized" hint
-    /// row is produced when neither side is recognized.
-    /// </summary>
-    private static List<CompareRowViewModel> BuildBinaryMetadataRows(SideBinaryMetadata? left, SideBinaryMetadata? right)
-    {
-        var rows = new List<CompareRowViewModel>();
-        var leftRecognized = left is { FormatName.Length: > 0 };
-        var rightRecognized = right is { FormatName.Length: > 0 };
-
-        if (!leftRecognized && !rightRecognized)
-        {
-            var unrecognized = LanguageService.Instance.GetString("Compare_Unrecognized");
-            rows.Add(new CompareRowViewModel(
-                FolderItemStatus.Equal, false, 0,
-                string.Empty, unrecognized, string.Empty, false,
-                string.Empty, right is null ? string.Empty : unrecognized, string.Empty, false));
-            return rows;
-        }
-
-        // 格式名行。 Format-name row.
-        rows.Add(new CompareRowViewModel(
-            FolderItemStatus.Equal, false, 0,
-            string.Empty, leftRecognized ? left!.FormatName : "-", string.Empty, false,
-            string.Empty, rightRecognized ? right!.FormatName : right is null ? string.Empty : "-", string.Empty, false));
-
-        // 摘要行（按行拆分）。 Summary rows (split by line).
-        var leftSummary = leftRecognized ? SplitLines(left!.Summary) : [];
-        var rightSummary = rightRecognized ? SplitLines(right!.Summary) : [];
-        var summaryCount = Math.Max(leftSummary.Count, rightSummary.Count);
-        for (var i = 0; i < summaryCount; i++)
-        {
-            rows.Add(new CompareRowViewModel(
-                FolderItemStatus.Equal, false, 1,
-                string.Empty, i < leftSummary.Count ? leftSummary[i] : "-", string.Empty, false,
-                string.Empty, i < rightSummary.Count ? rightSummary[i] : right is null ? string.Empty : "-", string.Empty, false));
-        }
-
-        // 元数据键值对（左右并排，取两字典键并集）。 Metadata key-values (side by side, key union).
-        var keys = new SortedSet<string>(StringComparer.Ordinal);
-        if (leftRecognized)
-        {
-            foreach (var key in left!.Metadata.Keys)
-            {
-                keys.Add(key);
-            }
-        }
-
-        if (rightRecognized)
-        {
-            foreach (var key in right!.Metadata.Keys)
-            {
-                keys.Add(key);
-            }
-        }
-
-        foreach (var key in keys)
-        {
-            var leftValue = leftRecognized && left!.Metadata.TryGetValue(key, out var lv) ? lv : null;
-            var rightValue = rightRecognized && right!.Metadata.TryGetValue(key, out var rv) ? rv : null;
-            var hasLeft = leftValue is not null;
-            var hasRight = rightValue is not null;
-            var valueDiffers = hasLeft && hasRight
-                && !string.Equals(leftValue, rightValue, StringComparison.Ordinal);
-
-            // 同名键值对：值不同算差异（整行高亮）；仅单侧存在算单侧条目。
-            // Same-name key-values: differing values count as a difference (full-row highlight);
-            // keys present on only one side are single-side rows.
-            var status = valueDiffers ? FolderItemStatus.Different
-                : hasLeft && hasRight ? FolderItemStatus.Equal
-                : hasLeft ? FolderItemStatus.LeftOnly
-                : FolderItemStatus.RightOnly;
-
-            rows.Add(new CompareRowViewModel(
-                status, false, 1,
-                string.Empty, key, hasLeft ? leftValue! : "-", valueDiffers,
-                string.Empty, right is null ? string.Empty : key, hasRight ? rightValue! : right is null ? string.Empty : "-", valueDiffers));
-        }
-
-        // 条目行（按名称对齐：两侧名称并集，同名条目同一水平行；仅单侧条目在缺失侧置空占位，
-        // 不显示名称——与文件夹模式一致）。 Entry rows (aligned by name: union of both sides'
-        // names, same-name entries share a row; single-side entries leave the missing side blank,
-        // matching the folder-mode behavior).
-        var leftEntries = leftRecognized ? left!.Entries : [];
-        var rightEntries = rightRecognized ? right!.Entries : [];
-        var entryNames = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var entry in leftEntries)
-        {
-            entryNames.Add(entry);
-        }
-
-        foreach (var entry in rightEntries)
-        {
-            entryNames.Add(entry);
-        }
-
-        foreach (var name in entryNames)
-        {
-            var hasLeft = leftEntries.Contains(name);
-            var hasRight = rightEntries.Contains(name);
-            rows.Add(new CompareRowViewModel(
-                hasLeft && hasRight ? FolderItemStatus.Equal : hasLeft ? FolderItemStatus.LeftOnly : FolderItemStatus.RightOnly,
-                false, 1,
-                string.Empty, hasLeft ? name : string.Empty, string.Empty, false,
-                string.Empty, hasRight ? name : string.Empty, string.Empty, false));
-        }
-
-        // 组件行（名称 + 大小，同样按名称对齐；仅单侧组件在缺失侧置空）。
-        // Component rows (name + size, aligned by name too; single-side components leave the
-        // missing side blank).
-        var leftComponents = leftRecognized ? left!.Components : [];
-        var rightComponents = rightRecognized ? right!.Components : [];
-        var componentNames = new SortedSet<string>(StringComparer.Ordinal);
-        foreach (var component in leftComponents)
-        {
-            componentNames.Add(component.Name);
-        }
-
-        foreach (var component in rightComponents)
-        {
-            componentNames.Add(component.Name);
-        }
-
-        foreach (var name in componentNames)
-        {
-            var leftComponent = leftComponents.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.Ordinal));
-            var rightComponent = rightComponents.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.Ordinal));
-            var hasLeft = leftComponent is not null;
-            var hasRight = rightComponent is not null;
-            var sizeDiffers = hasLeft && hasRight && leftComponent!.SizeBytes != rightComponent!.SizeBytes;
-
-            // 同名组件：大小不同算差异（整行高亮）；仅单侧存在算单侧条目。
-            // Same-name components: differing sizes count as a difference (full-row highlight);
-            // components present on only one side are single-side rows.
-            var status = sizeDiffers ? FolderItemStatus.Different
-                : hasLeft && hasRight ? FolderItemStatus.Equal
-                : hasLeft ? FolderItemStatus.LeftOnly
-                : FolderItemStatus.RightOnly;
-
-            rows.Add(new CompareRowViewModel(
-                status, false, 1,
-                string.Empty, hasLeft ? leftComponent!.Name : string.Empty, hasLeft ? FormatSize(leftComponent!.SizeBytes) : string.Empty, sizeDiffers,
-                string.Empty, hasRight ? rightComponent!.Name : string.Empty, hasRight ? FormatSize(rightComponent!.SizeBytes) : string.Empty, sizeDiffers));
-        }
-
-        return rows;
-    }
-
-    /// <summary>
-    /// <para>按 '\n' 拆分文本并去除行尾 '\r'；空文本返回空列表。</para>
-    /// Splits text by '\n' and trims trailing '\r'; an empty text yields an empty list.
-    /// </summary>
-    private static List<string> SplitLines(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-        {
-            return [];
-        }
-
-        var result = new List<string>();
-        foreach (var raw in text.Split('\n'))
-        {
-            result.Add(raw.TrimEnd('\r'));
-        }
-
-        return result;
     }
 
     /// <summary>
@@ -1615,29 +947,5 @@ public sealed partial class CompareViewModel : Document
         RightRows = Rows;
     }
 
-    /// <summary>
-    /// <para>将字节数格式化为可读大小文本（如 "1.5 MB"）；0 字节显示 "0 B"。</para>
-    /// Formats a byte count into a human-readable size string (e.g. "1.5 MB"); 0 bytes shows "0 B".
-    /// </summary>
-    private static string FormatSize(long bytes)
-    {
-        if (bytes <= 0)
-        {
-            return "0 B";
-        }
 
-        var abs = Math.Abs(bytes);
-        var units = new[] { "B", "KB", "MB", "GB", "TB" };
-        var unit = 0;
-        var value = (double)abs;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return unit == 0
-            ? $"{bytes} {units[0]}"
-            : $"{value:0.##} {units[unit]}";
-    }
 }

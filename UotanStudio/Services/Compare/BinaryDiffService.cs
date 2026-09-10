@@ -45,7 +45,7 @@ public sealed class BinaryDiffService
     /// </summary>
     public static BinaryDiffService Instance => LazyInstance.Value;
 
-    private BinaryDiffService() { }
+    internal BinaryDiffService() { }
 
     private const int BufferSize = 64 * 1024;
 
