@@ -54,7 +54,7 @@ await session.CloseAsync(cancellationToken: cancellationToken);
 
 ## 验证
 
-`UotanStudio.Projects.Tests` 只引用本库，验证独立生命周期、已有另存为边界、取消、旧格式和路径身份。桌面兼容测试仍在 `UotanStudio.Tests`。真实 Avalonia 窗口验证见 `tools/ProjectLifecycleSmoke`；实施记录见 `docs/project-library-extraction.md`。
+`UotanStudio.Tests/Projects` 验证独立生命周期、已有另存为边界、取消、旧格式和路径身份，与桌面兼容测试统一由 `UotanStudio.Tests` 运行。测试使用独立会话和纯数据工作区，不初始化 Avalonia。真实 Avalonia 窗口验证见 `tools/ProjectLifecycleSmoke`；实施记录见 `docs/project-library-extraction.md`。
 
 ## 后续边界收口（2026-09-10）
 

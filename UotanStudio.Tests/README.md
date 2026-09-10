@@ -9,6 +9,8 @@ an Avalonia application or a headless UI platform.
 
 - `Firmware`: format conformance, bounded I/O, round trips, native-tool
   interoperability, and QEMU filesystem mount verification.
+- `Projects`: project lifecycle, session isolation, save-as rollback, cancellation,
+  legacy formats, and path identity using independent sessions and data workspaces.
 - `Comm`: protocol encoding, transport framing, device operations, and flashing.
 - `Services` and `Compare`: execution scheduling, persistence, file comparison,
   and backend workflows. CLI and MCP tests are archived on `codex/archive-cli-mcp`;

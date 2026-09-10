@@ -1,7 +1,7 @@
 using UotanStudio.Services.Projects;
 using Xunit;
 
-namespace UotanStudio.Projects.Tests;
+namespace UotanStudio.Tests.Projects;
 
 /// <summary>Exercises project operations through data only, without constructing a desktop workspace.</summary>
 public sealed class ProjectSessionBoundaryTests : IDisposable

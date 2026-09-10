@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Projects\UotanStudio.Projects.csproj" />
     <!-- Firmware library under test (AVB, boot image, CPIO, Sparse, compression, Payload) -->
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->

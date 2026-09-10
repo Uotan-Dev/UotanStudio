@@ -3,7 +3,6 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Project Path="UotanStudio.Projects/UotanStudio.Projects.csproj" />
-  <Project Path="UotanStudio.Projects.Tests/UotanStudio.Projects.Tests.csproj" />
   <Project Path="UotanStudio.Comm/UotanStudio.Comm.csproj" />
   <Project Path="UotanStudio.Desktop/UotanStudio.Desktop.csproj" />
   <Project Path="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />

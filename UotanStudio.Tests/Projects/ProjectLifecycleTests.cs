@@ -2,7 +2,7 @@ using System.IO.Compression;
 using UotanStudio.Services.Projects;
 using Xunit;
 
-namespace UotanStudio.Projects.Tests;
+namespace UotanStudio.Tests.Projects;
 
 public sealed class ProjectLifecycleTests : IDisposable
 {

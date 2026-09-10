@@ -5,6 +5,5 @@
   <ItemGroup>
     <InternalsVisibleTo Include="UotanStudio" />
     <InternalsVisibleTo Include="UotanStudio.Tests" />
-    <InternalsVisibleTo Include="UotanStudio.Projects.Tests" />
   </ItemGroup>
 </Project>
