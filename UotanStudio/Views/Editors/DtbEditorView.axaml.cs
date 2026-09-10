@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Editors;
 
@@ -14,7 +15,9 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public partial class DtbEditorView : UserControl
 {
-    private DtbEditorViewModel? _editorOwner;
+    private readonly EditorOwnerBinding<DtbEditorViewModel> _editorOwner =
+        new(static model => model.Editor, static (model, editor) => model.Editor = editor);
+
     /// <summary>
     /// <para>保存按钮的本地化标题。</para>
     /// The localized title of the save button.
@@ -78,11 +81,7 @@ public partial class DtbEditorView : UserControl
     }
 
     private void UpdateEditorOwner(bool detach = false)
-    {
-        if (_editorOwner is { } previous && ReferenceEquals(previous.Editor, SourceEditor)) previous.Editor = null;
-        _editorOwner = !detach && IsLoaded ? DataContext as DtbEditorViewModel : null;
-        if (_editorOwner is { } current) current.Editor = SourceEditor;
-    }
+        => _editorOwner.Update(!detach && IsLoaded ? DataContext as DtbEditorViewModel : null, SourceEditor);
 
     /// <summary>
     /// <para>右栏光标/选区变化 → 左栏高亮所属节点。</para>

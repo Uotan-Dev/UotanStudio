@@ -10,7 +10,9 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public partial class FileView : UserControl
 {
-    private FileViewModel? _editorOwner;
+    private readonly EditorOwnerBinding<FileViewModel> _editorOwner =
+        new(static model => model.Editor, static (model, editor) => model.Editor = editor);
+
     /// <summary>
     /// <para>构造文件文档视图并初始化组件。</para>
     /// Creates the file document view and initializes its components.
@@ -32,12 +34,7 @@ public partial class FileView : UserControl
     }
 
     private void UpdateEditorOwner(bool detach = false)
-    {
-        var editor = this.FindControl<AvaloniaEdit.TextEditor>("Editor");
-        if (_editorOwner is { } previous && ReferenceEquals(previous.Editor, editor)) previous.Editor = null;
-        _editorOwner = !detach && IsLoaded ? DataContext as FileViewModel : null;
-        if (_editorOwner is { } current) current.Editor = editor;
-    }
+        => _editorOwner.Update(!detach && IsLoaded ? DataContext as FileViewModel : null, this.FindControl<AvaloniaEdit.TextEditor>("Editor"));
 
     private void OnHexBytesEdited(object? sender, System.EventArgs e)
     {

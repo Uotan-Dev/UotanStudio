@@ -5,7 +5,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.Media.TextFormatting;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -56,10 +55,7 @@ public partial class AdbLogView : UserControl
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        var textView = LogEditor.TextArea.TextView;
-        using var metrics = new TextLayout("Ag中文", new Typeface(LogEditor.FontFamily), LogEditor.FontSize, Brushes.Black);
-        var defaultTextHeight = textView.DefaultLineHeight / LogEditor.Options.LineHeightFactor;
-        LogEditor.Options.LineHeightFactor = Math.Ceiling(Math.Max(metrics.Height, defaultTextHeight)) / defaultTextHeight;
+        UotanStudio.Views.Controls.LogEditorMetrics.ApplyLineHeight(LogEditor);
         LanguageService.ThemeChanged += OnThemeChanged;
         _scroller = LogEditor.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
         _scroller?.SetCurrentValue(ScrollViewer.AllowAutoHideProperty, true);

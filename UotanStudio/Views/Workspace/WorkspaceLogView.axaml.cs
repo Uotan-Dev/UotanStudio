@@ -1,193 +1,59 @@
 using System.Collections.Specialized;
-using System.Text;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Media;
-using Avalonia.Media.TextFormatting;
-using Avalonia.Threading;
-using Avalonia.VisualTree;
-using AvaloniaEdit.Document;
-using AvaloniaEdit.Rendering;
-using UotanStudio.Services;
 using UotanStudio.ViewModels.Workspace;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Workspace;
 
-/// <summary>
-/// <para>工作区输出面板视图，实时展示固件与烧录通道的日志条目。</para>
-/// Workspace output panel view, displaying Firmware and Flash channel log entries in real time.
-/// </summary>
+/// <summary>Displays workspace log entries with shared incremental rendering and scrolling.</summary>
 public partial class WorkspaceLogView : UserControl
 {
-    private readonly List<(int Length, int LineCount)> _renderedEntries = [];
-    private readonly List<LogLevel> _lineLevels = [];
-    private ScrollViewer? _logScroller;
-    private bool _closed;
+    private readonly LogTextPresenter<WorkspaceLogViewModel.LogEntryViewModel> _presenter;
+    private WorkspaceLogViewModel? _model;
 
     public WorkspaceLogView()
     {
         InitializeComponent();
-        LogEditor.Document.UndoStack.SizeLimit = 0;
-        LogEditor.Options.AllowScrollBelowDocument = false;
-        LogEditor.TextArea.TextView.LineTransformers.Add(new LogLevelColorizer(this));
+        _presenter = new(this, LogEditor, static entry => entry.Text, static entry => entry.Level,
+            () => _model?.AutoScroll == true,
+            value => { if (_model is { } model) model.AutoScroll = value; },
+            value => CopySelectionMenuItem.IsEnabled = value);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
+        DataContextChanged += (_, _) => { if (IsLoaded) BindModel(); };
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
-        _closed = false;
-        LogEditor.Loaded += OnLogEditorLoaded;
-        LogEditor.TextArea.SelectionChanged += OnSelectionChanged;
-        LogEditor.AddHandler(ScrollViewer.ScrollChangedEvent, OnScrollChanged);
-        LanguageService.ThemeChanged += OnThemeChanged;
+        _presenter.Attach();
+        BindModel();
+    }
 
-        if (DataContext is WorkspaceLogViewModel vm)
-        {
-            vm.Entries.CollectionChanged += OnEntriesCollectionChanged;
-            RebuildDocument();
-        }
+    private void BindModel()
+    {
+        if (_model is not null) _model.Entries.CollectionChanged -= OnEntriesCollectionChanged;
+        _model = DataContext as WorkspaceLogViewModel;
+        if (_model is not null) _model.Entries.CollectionChanged += OnEntriesCollectionChanged;
+        _presenter.Rebuild(_model?.Entries.AsEnumerable() ?? []);
     }
 
     private void OnUnloaded(object? sender, RoutedEventArgs e)
     {
-        _closed = true;
-        LogEditor.Loaded -= OnLogEditorLoaded;
-        LogEditor.TextArea.SelectionChanged -= OnSelectionChanged;
-        LogEditor.RemoveHandler(ScrollViewer.ScrollChangedEvent, OnScrollChanged);
-        LanguageService.ThemeChanged -= OnThemeChanged;
-
-        if (DataContext is WorkspaceLogViewModel vm)
-        {
-            vm.Entries.CollectionChanged -= OnEntriesCollectionChanged;
-        }
-        _logScroller = null;
+        _presenter.Detach();
+        if (_model is not null) _model.Entries.CollectionChanged -= OnEntriesCollectionChanged;
+        _model = null;
     }
 
     private void OnEntriesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
-    {
-        // View-model changes arrive on the UI thread; preserve Reset/Add order while filtering.
-        using (LogEditor.Document.RunUpdate())
-        {
-            switch (e.Action)
-            {
-                case NotifyCollectionChangedAction.Add:
-                    if (e.NewItems is not null)
-                        InsertEntries(e.NewStartingIndex, e.NewItems.Cast<WorkspaceLogViewModel.LogEntryViewModel>());
-                    break;
-                default:
-                    RebuildDocument();
-                    break;
-            }
-        }
-        FollowAutoScroll();
-    }
-
-    private void RebuildDocument()
-    {
-        _renderedEntries.Clear();
-        _lineLevels.Clear();
-        LogEditor.Document.Text = string.Empty;
-        if (DataContext is not WorkspaceLogViewModel vm) return;
-        InsertEntries(0, vm.Entries);
-    }
-
-    private void InsertEntries(int index, IEnumerable<WorkspaceLogViewModel.LogEntryViewModel> entries)
-    {
-        var offset = index == _renderedEntries.Count
-            ? LogEditor.Document.TextLength
-            : _renderedEntries.Take(index).Sum(e => e.Length);
-        var lineIndex = index == _renderedEntries.Count
-            ? _lineLevels.Count
-            : _renderedEntries.Take(index).Sum(e => e.LineCount);
-        var text = new StringBuilder();
-        foreach (var entry in entries)
-        {
-            var line = entry.Text + "\n";
-            var lineCount = line.Count(c => c == '\n');
-            _renderedEntries.Insert(index++, (line.Length, lineCount));
-            _lineLevels.InsertRange(lineIndex, Enumerable.Repeat(entry.Level, lineCount));
-            lineIndex += lineCount;
-            text.Append(line);
-        }
-        if (text.Length > 0)
-            LogEditor.Document.Insert(offset, text.ToString());
-    }
-
-    private void OnLogEditorLoaded(object? sender, RoutedEventArgs e)
-    {
-        var textView = LogEditor.TextArea.TextView;
-        using var metrics = new TextLayout("Ag中文", new Typeface(LogEditor.FontFamily), LogEditor.FontSize, Brushes.Black);
-        var defaultTextHeight = textView.DefaultLineHeight / LogEditor.Options.LineHeightFactor;
-        LogEditor.Options.LineHeightFactor = Math.Ceiling(Math.Max(metrics.Height, defaultTextHeight)) / defaultTextHeight;
-
-        if (_logScroller is null)
-        {
-            _logScroller = LogEditor.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-            _logScroller?.SetCurrentValue(ScrollViewer.AllowAutoHideProperty, true);
-        }
-        FollowAutoScroll();
-    }
+        => _presenter.Update(e, _model?.Entries.AsEnumerable() ?? []);
 
     private void OnClearClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is WorkspaceLogViewModel vm)
-            vm.Clear();
-        ScrollToEnd();
+        _model?.Clear();
+        _presenter.ScrollToEnd();
     }
 
     private void OnCopySelectionClick(object? sender, RoutedEventArgs e) => LogEditor.Copy();
     private void OnSelectAllClick(object? sender, RoutedEventArgs e) => LogEditor.SelectAll();
-
-    private void OnSelectionChanged(object? sender, EventArgs e)
-    {
-        if (CopySelectionMenuItem != null) CopySelectionMenuItem.IsEnabled = LogEditor.SelectionLength > 0;
-    }
-
-    private void OnThemeChanged(object? sender, EventArgs e) => LogEditor.TextArea.TextView.Redraw();
-
-    private void OnScrollChanged(object? sender, RoutedEventArgs e) => UpdateAutoScroll();
-
-    private void UpdateAutoScroll()
-    {
-        if (_logScroller is not null && DataContext is WorkspaceLogViewModel vm)
-            vm.AutoScroll = LogEditor.SelectionLength == 0
-                && _logScroller.Offset.Y + _logScroller.Viewport.Height >= _logScroller.Extent.Height - 4;
-    }
-
-    private void FollowAutoScroll()
-    {
-        if (!_closed && DataContext is WorkspaceLogViewModel vm && vm.AutoScroll && LogEditor.SelectionLength == 0)
-        {
-            Dispatcher.UIThread.Post(ScrollToEnd, DispatcherPriority.Loaded);
-        }
-    }
-
-    private void ScrollToEnd() => _logScroller?.ScrollToEnd();
-
-    private sealed class LogLevelColorizer(WorkspaceLogView view) : DocumentColorizingTransformer
-    {
-        protected override void ColorizeLine(DocumentLine line)
-        {
-            if (line.LineNumber > view._lineLevels.Count)
-                return;
-
-            var resourceKey = view._lineLevels[line.LineNumber - 1] switch
-            {
-                LogLevel.Trace => "LogTraceBrush",
-                LogLevel.Debug => "LogDebugBrush",
-                LogLevel.Info => "LogInfoBrush",
-                LogLevel.Warn => "LogWarnBrush",
-                LogLevel.Error => "LogErrorBrush",
-                LogLevel.Fatal => "LogFatalBrush",
-                _ => "LogInfoBrush",
-            };
-            if (view.TryFindResource(resourceKey, view.ActualThemeVariant, out var resource) && resource is IBrush brush)
-                ChangeLinePart(line.Offset, line.EndOffset, element =>
-                {
-                    element.TextRunProperties.SetForegroundBrush(brush);
-                    element.TextRunProperties.SetBaselineAlignment(BaselineAlignment.Center);
-                });
-        }
-    }
 }
