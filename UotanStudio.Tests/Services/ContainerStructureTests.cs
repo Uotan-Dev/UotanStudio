@@ -173,7 +173,7 @@ public sealed class ContainerStructureTests
     // ============== Extract: super ==============
 
     [Fact]
-    public void Extract_SuperSelection_WritesSelectedPartitionsOnly()
+    public async Task Extract_SuperSelection_WritesSelectedPartitionsOnly()
     {
         using var temp = new TempDirectory();
         var path = Path.Combine(temp.Path, "super.img");
@@ -212,7 +212,7 @@ public sealed class ContainerStructureTests
 
         File.WriteAllBytes(path, bytes);
 
-        var result = ContainerEntryExtractor.ExtractAsync(path, ["vendor"]).GetAwaiter().GetResult();
+        var result = await ContainerEntryExtractor.ExtractAsync(path, ["vendor"], cancellationToken: TestContext.Current.CancellationToken);
         var outputPath = Assert.Single(result.OutputPaths);
         Assert.Equal("vendor.img", Path.GetFileName(outputPath));
         Assert.Equal(expected["vendor"], File.ReadAllBytes(outputPath));
@@ -234,7 +234,7 @@ public sealed class ContainerStructureTests
             await builder.AddPartition("boot", source).BuildAsync(payload, TestContext.Current.CancellationToken);
         }
 
-        var result = await ContainerEntryExtractor.ExtractAsync(payload, ["boot"]);
+        var result = await ContainerEntryExtractor.ExtractAsync(payload, ["boot"], cancellationToken: TestContext.Current.CancellationToken);
         var outputPath = Assert.Single(result.OutputPaths);
         Assert.Equal("boot.img", Path.GetFileName(outputPath));
         Assert.Equal(content, File.ReadAllBytes(outputPath));
@@ -256,7 +256,7 @@ public sealed class ContainerStructureTests
             stream.Write(content);
         }
 
-        var result = await ContainerEntryExtractor.ExtractAsync(zipPath, ["images/system.img"]);
+        var result = await ContainerEntryExtractor.ExtractAsync(zipPath, ["images/system.img"], cancellationToken: TestContext.Current.CancellationToken);
         var outputPath = Assert.Single(result.OutputPaths);
         Assert.Equal("system.img", Path.GetFileName(outputPath));
         Assert.Equal(content, File.ReadAllBytes(outputPath));
@@ -279,7 +279,7 @@ public sealed class ContainerStructureTests
             archive.CreateEntryFromFile(payload, "payload.bin");
         }
 
-        var result = await ContainerEntryExtractor.ExtractAsync(zipPath, ["boot"], fromPayloadOnly: true);
+        var result = await ContainerEntryExtractor.ExtractAsync(zipPath, ["boot"], fromPayloadOnly: true, cancellationToken: TestContext.Current.CancellationToken);
         var outputPath = Assert.Single(result.OutputPaths);
         Assert.Equal("boot.img", Path.GetFileName(outputPath));
         Assert.Equal(File.ReadAllBytes(source), File.ReadAllBytes(outputPath));
