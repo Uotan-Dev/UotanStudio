@@ -17,6 +17,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(15) };
     private readonly string _sessionPath;
     private bool _initialized;
+    private bool _disposed;
     private Task? _initialization;
 
     internal WorkspaceAutoSaveService(WorkspaceViewModel workspace, SettingsViewModel settings, ProjectOperationsService projects)
@@ -65,7 +66,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         return sb.ToString();
     }
 
-    internal Task InitializeAsync() => _initialization ??= RestoreAsync();
+    internal Task InitializeAsync() => _disposed ? Task.CompletedTask : _initialization ??= RestoreAsync();
 
     private async Task RestoreAsync()
     {
@@ -109,7 +110,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         finally
         {
             _initialized = true;
-            _timer.Start();
+            if (!_disposed) _timer.Start();
         }
     }
 
@@ -188,7 +189,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
 
     internal void Resume()
     {
-        if (_initialized) _timer.Start();
+        if (_initialized && !_disposed) _timer.Start();
     }
 
     internal async Task<bool> SaveOnCloseAsync()
@@ -218,9 +219,12 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
 
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _timer.Stop();
         _timer.Tick -= OnTick;
         _settings.PropertyChanged -= OnSettingsChanged;
-        _projects.BeforeProjectChangeAsync = null;
+        if (_projects.BeforeProjectChangeAsync == FlushAsync)
+            _projects.BeforeProjectChangeAsync = null;
     }
 }

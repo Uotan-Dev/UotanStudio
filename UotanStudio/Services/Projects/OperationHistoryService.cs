@@ -255,14 +255,7 @@ public sealed class OperationHistoryService
             return;
         }
 
-        var operations = new List<HistoryOperationDto>();
-        foreach (var entry in _undoStack)
-        {
-            if (entry.Operation is not null)
-            {
-                operations.Add(entry.Operation);
-            }
-        }
+        var operations = CaptureSnapshot();
 
         try
         {
@@ -272,6 +265,21 @@ public sealed class OperationHistoryService
         {
             LogService.Instance.Write(LogLevel.Error, "History", $"Save history failed: {ex.Message}");
         }
+    }
+
+    /// <summary>Captures serializable history without performing I/O or swallowing write errors.</summary>
+    internal List<HistoryOperationDto> CaptureSnapshot()
+    {
+        var operations = new List<HistoryOperationDto>();
+        foreach (var entry in _undoStack)
+        {
+            if (entry.Operation is not null)
+            {
+                operations.Add(entry.Operation);
+            }
+        }
+
+        return operations;
     }
 
     /// <summary>

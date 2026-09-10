@@ -6,6 +6,8 @@ using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
 
+// This fixture changes the process-wide metadata root used by every format handler.
+[Collection("Workspace state")]
 public sealed class MetadataConsolidationTests : IDisposable
 {
     private readonly string _root = Path.Combine(OperatingSystem.IsWindows()
