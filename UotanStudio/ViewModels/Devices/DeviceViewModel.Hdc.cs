@@ -41,16 +41,16 @@ public partial class DeviceViewModel
             device.CpuAbi = await Parameter("const.product.cpu.abilist");
             device.CompileVersion = await Parameter("const.product.software.version");
             await Optional("uname -r", text => device.Kernel = text.Trim());
-            await Optional("cat /proc/uptime", text => device.PowerOnTime = FormatUptime(text));
+            await Optional("cat /proc/uptime", text => device.PowerOnTime = DevicePropertyReader.FormatUptime(text, LanguageService.Instance.GetString));
             await Optional("cat /proc/meminfo", text =>
             {
-                var (level, description) = ParseMem(text);
+                var (level, description) = DevicePropertyReader.ParseMem(text);
                 device.MemLevel = level;
                 device.MemText = description;
             });
             await Optional("df /data", text =>
             {
-                var (level, description) = ParseDisk(text);
+                var (level, description) = DevicePropertyReader.ParseDisk(text);
                 device.DiskLevel = level;
                 device.DiskText = description;
             });
