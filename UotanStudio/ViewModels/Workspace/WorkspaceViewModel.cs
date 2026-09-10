@@ -321,52 +321,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>要打开的 DTB 文件路径。</para>
     /// The path of the DTB file to open.
     /// </param>
-    public async Task OpenDtbAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        var documentDock = _documentDock ??= FindDocumentsPane();
-        if (documentDock is null)
-        {
-            return;
-        }
-
-        EnsureDocumentDockSubscribed(documentDock);
-
-        var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<DtbEditorViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
-
-        if (existing is not null)
-        {
-            documentDock.ActiveDockable = existing;
-            return;
-        }
-
-        var document = new DtbEditorViewModel
-        {
-            Title = Path.GetFileName(fullPath),
-            FilePath = fullPath
-        };
-
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
-
-        await document.LoadAsync(fullPath);
-
-        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
-        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
-        // Re-send the active-document message after load so the properties panel shows real values
-        // (the first refresh fired when the document data was not yet ready).
-        if (ReferenceEquals(documentDock.ActiveDockable, document))
-        {
-            Services.Workspace.DocumentNotifications.Publish(document);
-        }
-    }
+    public Task OpenDtbAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new DtbEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
     /// <para>在文档区以 DEX 双栏编辑器打开指定的 DEX 文件：若已打开则聚焦并返回；
@@ -378,52 +336,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>要打开的 DEX 文件路径。</para>
     /// The path of the DEX file to open.
     /// </param>
-    public async Task OpenDexAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        var documentDock = _documentDock ??= FindDocumentsPane();
-        if (documentDock is null)
-        {
-            return;
-        }
-
-        EnsureDocumentDockSubscribed(documentDock);
-
-        var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<DexEditorViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
-
-        if (existing is not null)
-        {
-            documentDock.ActiveDockable = existing;
-            return;
-        }
-
-        var document = new DexEditorViewModel
-        {
-            Title = Path.GetFileName(fullPath),
-            FilePath = fullPath
-        };
-
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
-
-        await document.LoadAsync(fullPath);
-
-        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
-        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
-        // Re-send the active-document message after load so the properties panel shows real values
-        // (the first refresh fired when the document data was not yet ready).
-        if (ReferenceEquals(documentDock.ActiveDockable, document))
-        {
-            Services.Workspace.DocumentNotifications.Publish(document);
-        }
-    }
+    public Task OpenDexAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new DexEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
     /// <para>在文档区以 Manifest 编辑器打开指定的 AXML 文件：若已打开则聚焦并返回；
@@ -435,52 +351,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>要打开的 AXML 文件路径。</para>
     /// The path of the AXML file to open.
     /// </param>
-    public async Task OpenManifestAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        var documentDock = _documentDock ??= FindDocumentsPane();
-        if (documentDock is null)
-        {
-            return;
-        }
-
-        EnsureDocumentDockSubscribed(documentDock);
-
-        var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<ManifestEditorViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
-
-        if (existing is not null)
-        {
-            documentDock.ActiveDockable = existing;
-            return;
-        }
-
-        var document = new ManifestEditorViewModel
-        {
-            Title = Path.GetFileName(fullPath),
-            FilePath = fullPath
-        };
-
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
-
-        await document.LoadAsync(fullPath);
-
-        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
-        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
-        // Re-send the active-document message after load so the properties panel shows real values
-        // (the first refresh fired when the document data was not yet ready).
-        if (ReferenceEquals(documentDock.ActiveDockable, document))
-        {
-            Services.Workspace.DocumentNotifications.Publish(document);
-        }
-    }
+    public Task OpenManifestAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new ManifestEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
     /// <para>在文档区以 ARSC 资源表编辑器打开指定的 resources.arsc 文件：若已打开则聚焦并返回；
@@ -492,52 +366,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>要打开的 ARSC 文件路径。</para>
     /// The path of the ARSC file to open.
     /// </param>
-    public async Task OpenArscAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        var documentDock = _documentDock ??= FindDocumentsPane();
-        if (documentDock is null)
-        {
-            return;
-        }
-
-        EnsureDocumentDockSubscribed(documentDock);
-
-        var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<ArscEditorViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
-
-        if (existing is not null)
-        {
-            documentDock.ActiveDockable = existing;
-            return;
-        }
-
-        var document = new ArscEditorViewModel
-        {
-            Title = Path.GetFileName(fullPath),
-            FilePath = fullPath
-        };
-
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
-
-        await document.LoadAsync(fullPath);
-
-        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
-        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
-        // Re-send the active-document message after load so the properties panel shows real values
-        // (the first refresh fired when the document data was not yet ready).
-        if (ReferenceEquals(documentDock.ActiveDockable, document))
-        {
-            Services.Workspace.DocumentNotifications.Publish(document);
-        }
-    }
+    public Task OpenArscAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new ArscEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
     /// <para>在文档区以 Hex 编辑器打开指定的二进制文件：若已打开则聚焦并返回；
@@ -549,52 +381,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>要打开的二进制文件路径。</para>
     /// The path of the binary file to open.
     /// </param>
-    public async Task OpenHexAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        var documentDock = _documentDock ??= FindDocumentsPane();
-        if (documentDock is null)
-        {
-            return;
-        }
-
-        EnsureDocumentDockSubscribed(documentDock);
-
-        var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<HexEditorViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
-
-        if (existing is not null)
-        {
-            documentDock.ActiveDockable = existing;
-            return;
-        }
-
-        var document = new HexEditorViewModel
-        {
-            Title = Path.GetFileName(fullPath),
-            FilePath = fullPath
-        };
-
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
-
-        await document.LoadAsync(fullPath);
-
-        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
-        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
-        // Re-send the active-document message after load so the properties panel shows real values
-        // (the first refresh fired when the document data was not yet ready).
-        if (ReferenceEquals(documentDock.ActiveDockable, document))
-        {
-            Services.Workspace.DocumentNotifications.Publish(document);
-        }
-    }
+    public Task OpenHexAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new HexEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
     /// <para>在文档区以 APK 元数据编辑器打开指定的 APK 文件：若已打开则聚焦并返回；
@@ -606,52 +396,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     /// <para>要打开的 APK 文件路径。</para>
     /// The path of the APK file to open.
     /// </param>
-    public async Task OpenApkAsync(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return;
-        }
-
-        var documentDock = _documentDock ??= FindDocumentsPane();
-        if (documentDock is null)
-        {
-            return;
-        }
-
-        EnsureDocumentDockSubscribed(documentDock);
-
-        var fullPath = Path.GetFullPath(path);
-        var existing = documentDock.VisibleDockables?
-            .OfType<ApkEditorViewModel>()
-            .FirstOrDefault(doc => string.Equals(doc.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
-
-        if (existing is not null)
-        {
-            documentDock.ActiveDockable = existing;
-            return;
-        }
-
-        var document = new ApkEditorViewModel
-        {
-            Title = Path.GetFileName(fullPath),
-            FilePath = fullPath
-        };
-
-        _factory.AddDockable(documentDock, document);
-        documentDock.ActiveDockable = document;
-
-        await document.LoadAsync(fullPath);
-
-        // 加载完成后补发活动文档消息，使属性面板刷新出真实属性值
-        // （ActiveDockable 在加载前就已触发一次刷新，当时文档数据尚未就绪）。
-        // Re-send the active-document message after load so the properties panel shows real values
-        // (the first refresh fired when the document data was not yet ready).
-        if (ReferenceEquals(documentDock.ActiveDockable, document))
-        {
-            Services.Workspace.DocumentNotifications.Publish(document);
-        }
-    }
+    public Task OpenApkAsync(string path) => OpenOrActivateDocumentAsync(
+        path, static document => document.FilePath,
+        static fullPath => new ApkEditorViewModel { Title = Path.GetFileName(fullPath), FilePath = fullPath },
+        static (document, fullPath) => document.LoadAsync(fullPath));
 
     /// <summary>
     /// <para>在文档区以固件元数据面板打开指定的固件文件：若已打开则聚焦并返回；
@@ -794,6 +542,31 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
         }
 
         Services.Workspace.DocumentNotifications.Publish(document);
+    }
+
+    /// <summary>Opens a typed document and refreshes its properties after loading only while it remains active.</summary>
+    internal async Task OpenOrActivateDocumentAsync<TDocument>(string path,
+        Func<TDocument, string?> getPath, Func<string, TDocument> create,
+        Func<TDocument, string, Task> load) where TDocument : class, IDockable
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null) return;
+        EnsureDocumentDockSubscribed(documentDock);
+        var fullPath = Path.GetFullPath(path);
+        var existing = documentDock.VisibleDockables?.OfType<TDocument>()
+            .FirstOrDefault(document => string.Equals(getPath(document), fullPath, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            documentDock.ActiveDockable = existing;
+            return;
+        }
+        var document = create(fullPath);
+        _factory.AddDockable(documentDock, document);
+        documentDock.ActiveDockable = document;
+        await load(document, fullPath);
+        if (ReferenceEquals(documentDock.ActiveDockable, document))
+            Services.Workspace.DocumentNotifications.Publish(document);
     }
 
     /// <summary>

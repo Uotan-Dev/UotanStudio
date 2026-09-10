@@ -617,34 +617,7 @@ public partial class CompareView : UserControl
     /// file-format name (<c>FileDrop</c> on Windows).
     /// </summary>
     private static bool HasFilePayload(IDataTransfer transfer)
-    {
-        if (transfer.Contains(DataFormat.File))
-        {
-            return true;
-        }
-
-        try
-        {
-            if (transfer.TryGetFiles() is { Length: > 0 })
-            {
-                return true;
-            }
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "CompareView", ex.Message);
-        }
-
-        foreach (var format in transfer.Formats)
-        {
-            if (string.Equals(format.Identifier, "FileDrop", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+        => UotanStudio.Views.Controls.FileDropPaths.HasFilePayload(transfer, "CompareView");
 
     /// <summary>
     /// <para>拖放事件：把拖入的文件/文件夹路径交给视图模型打开比较（含 OS 拖拽的平台格式提取）。
@@ -678,47 +651,7 @@ public partial class CompareView : UserControl
     /// <see cref="IStorageItem"/>.
     /// </summary>
     private static IReadOnlyList<string> TryExtractPaths(IDataTransfer transfer)
-    {
-        var items = transfer.TryGetFiles();
-        if (items is { Length: > 0 })
-        {
-            return items.Select(static item => item.Path.LocalPath).ToList();
-        }
-
-        foreach (var format in transfer.Formats)
-        {
-            if (!string.Equals(format.Identifier, "FileDrop", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            foreach (var item in transfer.Items)
-            {
-                if (!item.Contains(format))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    if (item.TryGetRaw(format) is System.Collections.IEnumerable enumerable)
-                    {
-                        var storage = enumerable.OfType<IStorageItem>().ToArray();
-                        if (storage.Length > 0)
-                        {
-                            return storage.Select(static s => s.Path.LocalPath).ToList();
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogService.Instance.Write(LogLevel.Error, "CompareView", ex.Message);
-                }
-            }
-        }
-
-        return [];
-    }
+        => UotanStudio.Views.Controls.FileDropPaths.TryExtractPaths(transfer, "CompareView");
 }
 
 /// <summary>

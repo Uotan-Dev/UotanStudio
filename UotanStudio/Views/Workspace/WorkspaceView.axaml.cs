@@ -63,34 +63,7 @@ public partial class WorkspaceView : UserControl
     /// file-format name (<c>FileDrop</c> on Windows).
     /// </summary>
     private static bool HasFilePayload(IDataTransfer transfer)
-    {
-        if (transfer.Contains(DataFormat.File))
-        {
-            return true;
-        }
-
-        try
-        {
-            if (transfer.TryGetFiles() is { Length: > 0 })
-            {
-                return true;
-            }
-        }
-        catch (Exception ex)
-        {
-            LogService.Instance.Write(LogLevel.Error, "WorkspaceView", ex.Message);
-        }
-
-        foreach (var format in transfer.Formats)
-        {
-            if (string.Equals(format.Identifier, "FileDrop", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+        => FileDropPaths.HasFilePayload(transfer, "WorkspaceView");
 
     /// <summary>
     /// <para>拖放事件：立即消费并解析拖入的文件/文件夹路径，再异步分发——
@@ -226,45 +199,5 @@ public partial class WorkspaceView : UserControl
     /// <see cref="IStorageItem"/>.
     /// </summary>
     private static IReadOnlyList<string> TryExtractPaths(IDataTransfer transfer)
-    {
-        var items = transfer.TryGetFiles();
-        if (items is { Length: > 0 })
-        {
-            return items.Select(static item => item.Path.LocalPath).ToList();
-        }
-
-        foreach (var format in transfer.Formats)
-        {
-            if (!string.Equals(format.Identifier, "FileDrop", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            foreach (var item in transfer.Items)
-            {
-                if (!item.Contains(format))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    if (item.TryGetRaw(format) is System.Collections.IEnumerable enumerable)
-                    {
-                        var storage = enumerable.OfType<IStorageItem>().ToArray();
-                        if (storage.Length > 0)
-                        {
-                            return storage.Select(static s => s.Path.LocalPath).ToList();
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogService.Instance.Write(LogLevel.Error, "WorkspaceView", ex.Message);
-                }
-            }
-        }
-
-        return [];
-    }
+        => FileDropPaths.TryExtractPaths(transfer, "WorkspaceView");
 }

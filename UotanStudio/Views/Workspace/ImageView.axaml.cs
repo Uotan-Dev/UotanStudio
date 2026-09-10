@@ -69,21 +69,11 @@ public partial class ImageView : UserControl
 
     /// <summary><para>合成右键菜单选中的镜像为 img。</para>Synthesize the context-menu image into an img.</summary>
     private void OnSynthesizeImgMenuClick(object? sender, RoutedEventArgs e)
-    {
-        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel vm)
-        {
-            if (vm.SynthesizeImgCommand.CanExecute(image)) vm.SynthesizeImgCommand.Execute(image);
-        }
-    }
+        => ExecuteForMenuImage(sender, static vm => vm.SynthesizeImgCommand);
 
     /// <summary><para>合成右键菜单选中的镜像为 br。</para>Synthesize the context-menu image into a br.</summary>
     private void OnSynthesizeBrMenuClick(object? sender, RoutedEventArgs e)
-    {
-        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel vm)
-        {
-            if (vm.SynthesizeBrCommand.CanExecute(image)) vm.SynthesizeBrCommand.Execute(image);
-        }
-    }
+        => ExecuteForMenuImage(sender, static vm => vm.SynthesizeBrCommand);
 
     /// <summary><para>从工程镜像合成 super 镜像。</para>Synthesize a super image from the project images.</summary>
     private void OnSynthesizeSuperMenuClick(object? sender, RoutedEventArgs e)
@@ -96,12 +86,7 @@ public partial class ImageView : UserControl
 
     /// <summary><para>从右键菜单选中的镜像合成 dat。</para>Synthesize a dat from the context-menu image.</summary>
     private void OnSynthesizeDatMenuClick(object? sender, RoutedEventArgs e)
-    {
-        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel vm)
-        {
-            if (vm.SynthesizeDatCommand.CanExecute(image)) vm.SynthesizeDatCommand.Execute(image);
-        }
-    }
+        => ExecuteForMenuImage(sender, static vm => vm.SynthesizeDatCommand);
 
     /// <summary><para>删除输出文件或右键条目对应的解包目录。</para>Delete the output file or the entry's unpacked directory.</summary>
     private async void OnDeleteMenuClick(object? sender, RoutedEventArgs e)
@@ -120,16 +105,19 @@ public partial class ImageView : UserControl
 
     /// <summary><para>把右键条目的镜像刷入选中设备。</para>Flash the context-menu image to the selected device.</summary>
     private void OnFlashSelectedMenuClick(object? sender, RoutedEventArgs e)
-    {
-        if (SelectMenuImage(sender) is { } image && DataContext is ImageViewModel vm)
-        {
-            if (vm.FlashSelectedCommand.CanExecute(image)) vm.FlashSelectedCommand.Execute(image);
-        }
-    }
+        => ExecuteForMenuImage(sender, static vm => vm.FlashSelectedCommand);
 
     private async void OnPackSuperRomClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not ImageViewModel { IsOperating: false } || TopLevel.GetTopLevel(this) is not Window owner) return;
         await new PackSuperRomWindow().ShowDialog(owner);
+    }
+
+    private void ExecuteForMenuImage(object? sender,
+        Func<ImageViewModel, System.Windows.Input.ICommand> getCommand)
+    {
+        if (SelectMenuImage(sender) is not { } image || DataContext is not ImageViewModel vm) return;
+        var command = getCommand(vm);
+        if (command.CanExecute(image)) command.Execute(image);
     }
 }
