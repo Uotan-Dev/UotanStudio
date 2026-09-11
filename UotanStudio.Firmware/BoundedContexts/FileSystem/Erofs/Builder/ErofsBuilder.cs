@@ -46,6 +46,10 @@ public sealed partial class ErofsBuilder
     /// Packs a directory into erofs image bytes.
     /// <para>将目录打包为 erofs 镜像字节。</para>
     /// </summary>
+    // 结果整镜像驻留内存（峰值约为镜像大小的 2 倍托管内存）；大型输出请改用流式重载。
+    // The result is resident in memory (peak managed memory about 2x the image);
+    // use the streaming overloads for large outputs.
+    [Obsolete("Loads the entire image into memory. Use Build(directoryPath, outputPath) instead. 整镜像驻留内存；请使用文件路径重载。")]
     public byte[] Build(string directoryPath, ErofsOptions? options = null)
     {
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"uotan-erofs-{Guid.NewGuid():N}.tmp");

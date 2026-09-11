@@ -47,6 +47,10 @@ public sealed partial class F2fsBuilder
     /// Builds an F2FS image from sourceDirectory and returns it as a byte array.
     /// <para>从 sourceDirectory 构建 f2fs 镜像并以字节数组返回。</para>
     /// </summary>
+    // 结果整镜像驻留内存（峰值约为镜像大小的 2 倍托管内存）；大型输出请改用流式重载。
+    // The result is resident in memory (peak managed memory about 2x the image);
+    // use the streaming overloads for large outputs.
+    [Obsolete("Loads the entire image into memory. Use Build(sourceDirectory, outputPath) or Build(sourceDirectory, Stream) instead. 整镜像驻留内存；请使用文件路径或流式重载。")]
     public static byte[] Build(string sourceDirectory, F2fsOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(sourceDirectory);
