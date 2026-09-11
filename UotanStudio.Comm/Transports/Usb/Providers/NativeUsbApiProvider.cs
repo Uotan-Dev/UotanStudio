@@ -61,6 +61,12 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
                 new UsbBackendCapability { BackendName = "winusb", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "winusb-legacy", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "linux-usbfs", SupportsNativeAsyncIo = true, ResetReenumeratesDevice = true },
+                // Apple's official IOUSBHost user-space framework: resetWithError:
+                // re-enumerates the device (libusb darwin semantics), so the session
+                // must be re-opened after a reset.
+                // <para>苹果官方 IOUSBHost 用户空间框架：resetWithError: 会使设备重新
+                // 枚举（libusb darwin 语义），复位后必须重开会话。</para>
+                new UsbBackendCapability { BackendName = "macos-usbhost", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true },
                 new UsbBackendCapability { BackendName = "macos-iokit", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = false },
                 new UsbBackendCapability { BackendName = "harmony-ddk", SupportsNativeAsyncIo = false, ResetReenumeratesDevice = true }
             ],
@@ -81,17 +87,29 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
         {
-            // The IOKit classic API (IOServiceMatching + IOCreatePlugInInterfaceForService,
-            // aligned with Google adb/fastboot usb_osx.cc) is the ONLY macOS backend: it
-            // lives in IOKit.framework and is loadable on every macOS release. The former
-            // IOUSBHost (IOUSBLib) fallback was removed — its framework main binary is
-            // absent on current macOS (only a BridgeSupport stub remains), so every
-            // [DllImport(IOUSBHost)] throws DllNotFoundException.
-            // <para>IOKit 经典 API（IOServiceMatching + IOCreatePlugInInterfaceForService，
-            // 与谷歌 adb/fastboot usb_osx.cc 对齐）是唯一的 macOS 后端：它位于
-            // IOKit.framework，在每个 macOS 发行版上均可加载。IOUSBHost（IOUSBLib）
-            // 不可用——当前 macOS 上其框架主二进制缺失（仅剩 BridgeSupport 桩），
-            // 故每个 [DllImport(IOUSBHost)] 都抛 DllNotFoundException。</para>
+            // Preferred backend: Apple's official IOUSBHost user-space framework
+            // (ObjC classes, driven via the ObjC runtime — no bridge library). The
+            // IOUSBHost main binary lives in the dyld shared cache and dlopens
+            // successfully on current macOS, so the former "framework is unloadable"
+            // note no longer holds. Availability is re-checked on every enumeration
+            // (never cached negatively); when the classes are absent the classic
+            // IOKit plug-in API (IOServiceMatching + IOCreatePlugInInterfaceForService,
+            // aligned with Google adb/fastboot usb_osx.cc) is used as the fallback.
+            // <para>首选后端：苹果官方 IOUSBHost 用户空间框架（ObjC 类，经 ObjC 运行时
+            // 驱动——无桥接库）。IOUSBHost 主二进制位于 dyld 共享缓存，当前 macOS 上
+            // dlopen 成功，故旧有"框架不可加载"的说明不再成立。可用性在每次枚举时
+            // 重新检查（绝不缓存负结果）；类不可加载时回退到 IOKit 经典插件 API
+            // （IOServiceMatching + IOCreatePlugInInterfaceForService，与谷歌
+            // adb/fastboot usb_osx.cc 对齐）。</para>
+            var usbHostDevices = UsbHostFinder.FindDevice(filter);
+            if (UsbHostFinder.LastUsbHostAvailable)
+            {
+                // Classes available: empty result means no devices, not absence —
+                // do not fall back to IOKit classic in that case.
+                // <para>类可用：空结果表示无设备而非缺失——此时不回退 IOKit 经典。</para>
+                return usbHostDevices;
+            }
+
             return IOKitUsbFinder.FindDevice(filter);
         }
 
