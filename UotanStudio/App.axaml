@@ -8,6 +8,7 @@
              xmlns:devices="using:UotanStudio.ViewModels.Devices"
              xmlns:dock="using:Dock.Avalonia.Controls"
              x:Class="UotanStudio.App"
+             Name="UotanStudio"
              RequestedThemeVariant="Default">
 
     <Application.Resources>

@@ -1,4 +1,5 @@
 using UotanStudio.ViewModels.Shell;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Styling;
 using System.Collections.ObjectModel;
@@ -18,6 +19,7 @@ public partial class MainWindow : Window
     private Task _sessionInitialization = Task.CompletedTask;
     private ObservableCollection<DeviceInfo>? _selectorDevices;
     private readonly List<MenuItem> _selectorDeviceItems = [];
+    private readonly MainWindowNativeMenu? _nativeMenu;
 #if DEBUG
     private IDisposable? _dockDebugOverlay;
 #endif
@@ -32,10 +34,21 @@ public partial class MainWindow : Window
         _ownedViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
+        if (OperatingSystem.IsMacOS())
+        {
+            _nativeMenu = new MainWindowNativeMenu(this, TopMenu);
+            TitleBar.SizeChanged += OnTitleBarSizeChanged;
+            DeviceSelectorMenu.SizeChanged += OnTitleBarSizeChanged;
+            TopMenu.SizeChanged += OnTitleBarSizeChanged;
+        }
         DeviceSelector.DataContextChanged += (_, _) => BindDeviceSelector();
         BindDeviceSelector();
         Closed += (_, _) =>
         {
+            _nativeMenu?.Dispose();
+            TitleBar.SizeChanged -= OnTitleBarSizeChanged;
+            DeviceSelectorMenu.SizeChanged -= OnTitleBarSizeChanged;
+            TopMenu.SizeChanged -= OnTitleBarSizeChanged;
             if (_selectorDevices is not null)
                 _selectorDevices.CollectionChanged -= OnSelectorDevicesChanged;
             try { _ownedViewModel.Dispose(); }
@@ -53,6 +66,15 @@ public partial class MainWindow : Window
 #if DEBUG
         Opened += MainWindow_Opened;
 #endif
+    }
+
+    private void OnTitleBarSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        // Equal insets center the title on the whole window, while long titles avoid both controls.
+        // 对称留白使标题相对整个窗口居中；设备名变长时同步收窄标题，避免重叠。
+        var leftInset = TitleBarControls.Margin.Left + (TopMenu.IsVisible ? TopMenu.Bounds.Width : 0) + 12;
+        var rightInset = DeviceSelectorMenu.Bounds.Width + DeviceSelectorMenu.Margin.Right + 12;
+        MacWindowTitle.Margin = new Thickness(Math.Max(leftInset, rightInset), 0);
     }
 
     private void BindDeviceSelector()

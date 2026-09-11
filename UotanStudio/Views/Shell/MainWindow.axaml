@@ -25,14 +25,17 @@
 		</ControlTheme>
 	</Window.Resources>
 	<Window.KeyBindings>
-		<KeyBinding Gesture="Ctrl+S" Command="{Binding MenuVM.SaveCommand}" />
-		<KeyBinding Gesture="Ctrl+Shift+S" Command="{Binding MenuVM.SaveAsCommand}" />
-		<KeyBinding Gesture="Ctrl+F" Command="{Binding MenuVM.FindCommand}" />
-		<KeyBinding Gesture="Ctrl+H" Command="{Binding MenuVM.ReplaceCommand}" />
+		<KeyBinding Gesture="{OnPlatform Default=Ctrl+S, macOS=Meta+S}" Command="{Binding MenuVM.SaveCommand}" />
+		<KeyBinding Gesture="{OnPlatform Default=Ctrl+Shift+S, macOS=Meta+Shift+S}" Command="{Binding MenuVM.SaveAsCommand}" />
+		<KeyBinding Gesture="{OnPlatform Default=Ctrl+F, macOS=Meta+F}" Command="{Binding MenuVM.FindCommand}" />
+		<KeyBinding Gesture="{OnPlatform Default=Ctrl+H, macOS=Meta+Alt+F}" Command="{Binding MenuVM.ReplaceCommand}" />
 	</Window.KeyBindings>
 	<DockPanel>
-		<Grid DockPanel.Dock="Top" Height="32" ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,136,0">
-			<Image Grid.Column="0" Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"/>
+		<Grid x:Name="TitleBar" DockPanel.Dock="Top" Height="32">
+		<Grid x:Name="TitleBarControls" ColumnDefinitions="Auto,Auto,*,Auto"
+			  Margin="{OnPlatform Default='0,0,136,0', macOS='80,0,0,0'}">
+			<Image Grid.Column="0" Height="25" Margin="5" Source="/Assets/UotanToolbox.png" HorizontalAlignment="Left"
+				   IsVisible="{OnPlatform Default=True, macOS=False}"/>
 			<Menu Grid.Column="1" x:Name="TopMenu" HorizontalAlignment="Left">
 
 				<!-- 文件 / File -->
@@ -324,6 +327,7 @@
 
 			</Menu>
 			<TextBlock Grid.Column="2" Text="{Binding WindowTitle}" FontSize="12" Opacity="0.7"
+					   IsVisible="{OnPlatform Default=True, macOS=False}"
 					   VerticalAlignment="Center" Margin="16 0 12 0" TextTrimming="CharacterEllipsis" />
 			<Menu Grid.Column="3" x:Name="DeviceSelectorMenu" VerticalAlignment="Center" Margin="0,0,4,0">
 				<MenuItem x:Name="DeviceSelector" Height="28" Padding="8,2"
@@ -355,6 +359,11 @@
 					</MenuItem>
 				</MenuItem>
 			</Menu>
+		</Grid>
+			<TextBlock x:Name="MacWindowTitle" Text="{Binding WindowTitle}" FontSize="12" Opacity="0.7"
+					   IsVisible="{OnPlatform Default=False, macOS=True}" IsHitTestVisible="False"
+					   TextAlignment="Center" VerticalAlignment="Center" Margin="92,0"
+					   TextTrimming="CharacterEllipsis" />
 		</Grid>
 
 		<!-- 主内容页面区域 -->

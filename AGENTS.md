@@ -20,6 +20,14 @@
 - libusb 接口申请失败立即终止打开，保留原始 claim 错误日志；释放时仅清理本会话已申请的接口，自动发现的端点同步到会话属性。投屏 ADB 握手失败须释放尚未移交的会话。
 - 回归测试与 macOS 真机验证边界见 `docs/macos-scrcpy-usb.md`。
 
+## macOS 主窗口菜单（2026-09-11）
+
+- `App.axaml` 显式设置 `Application.Name=UotanStudio`，供 macOS 应用菜单及进程名称使用。
+- `MacOSApplicationMenu` 在桌面框架初始化后接入 Avalonia 12.1.2 默认应用菜单，以原始英文标题识别默认项后绑定 `Menu_Mac*` 中英文资源；保留服务子菜单和隐藏、显示、退出的原生回调。默认 `About Avalonia` 条目整体替换，点击时调用当前主窗口已有 `MenuVM.AboutCommand` 打开项目 `AboutDialog`，不复用框架关于回调；应用退出时释放绑定。
+- `MainWindowNativeMenu` 仅在 macOS 将现有 `TopMenu` 映射到 `NativeMenu`，复用同一菜单定义、命令、本地化、可用性与面板勾选状态；最近项目直接消费 `RecentProjectEntry` 和集合变更，不依赖隐藏菜单的容器生成。原生菜单导出成功时隐藏窗口内菜单，未导出时保留；关闭窗口解除全部订阅。
+- 关闭时 `MainWindowNativeMenu.Dispose` 保留已导出的 `NativeMenu` 对象，只释放订阅、绑定并清空原集合，且可重复调用。Avalonia 12.1.2 原生导出器要求菜单实例保持一致，禁止在 `Closed` 中调用 `NativeMenu.SetMenu(window, null)` 或替换为新菜单，否则抛出 `The menu being updated does not match` 并导致异常退出；退出验证须检查真实进程退出码及标准错误。
+- macOS 主窗口顶栏隐藏 Logo，左侧为系统交通灯按钮预留 80 DIP，右侧不再预留 Windows 按钮区域。软件标题与项目名相对整个窗口居中，按两侧按钮/设备选择器实际宽度取对称留白，长标题省略且保留拖动区域；其他平台继续使用原顶栏布局。原生菜单将 Ctrl 快捷键映射为 Command，替换为 ⌘⌥F、重做为 ⇧⌘Z，隐藏其他应用为 ⌘⌥H；窗口保存、另存为、查找、替换的快捷键同步按平台选择。
+
 ## 交付页面合并约定（2026-09-11）
 
 - 镜像归属、确认与返回编辑统一沿用 `ViewModels/Shell/DeliveryViewModel`；视图通过 `Model.SelectSources`、`Model.Confirm`、`Model.ReturnToContainer` 接入，源列表通过 `SetAssignedPaths` / `RestoreAssignedSources` 同步。合并时移除重复的视图内选择投影、锁定状态及输出集合维护逻辑，不并存两套实现。
@@ -275,7 +283,7 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 
 ## 维护规则
 
-主窗口使用自绘菜单标题栏，`Window.Title` 保持为空，界面内仅显示菜单右侧的自绘标题；不依赖 `WindowDrawnDecorations` 模板选择器隐藏原生系统标题。
+主窗口保留自绘项目标题，`Window.Title` 保持为空；macOS 原生菜单导出后，菜单显示在系统顶部，其他平台继续显示窗口内菜单。界面内的自绘标题与设备选择器按平台避让窗口按钮，不依赖 `WindowDrawnDecorations` 模板选择器隐藏原生系统标题。
 
 文件未保存标识复用 Dock 原生 `IsModified`：文本、Hex、DTB、Manifest、分区编辑器在 `IsDirty` 变化时同步该属性，使用既有主题的标签标识，不修改文件名或 `Title`。`WorkspaceModificationTracker` 监听文档集合及浮窗布局中的未保存状态，自绘主窗口标题 `WindowTitle` 在存在未保存文件时加圆点前缀；文档保存或关闭后实时更新，不使用轮询。
 
