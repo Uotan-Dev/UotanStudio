@@ -91,7 +91,7 @@ internal sealed partial class ImageBrowserSession
             // A symlink target is a short text (fast symlinks are ≤ 60 bytes); read it into memory.
             using var buffer = new MemoryStream();
             readFile(flat.Path, buffer);
-            var targetText = System.Text.Encoding.UTF8.GetString(buffer.ToArray());
+            var targetText = System.Text.Encoding.UTF8.GetString(buffer.GetBuffer().AsSpan(0, checked((int)buffer.Length)));
             try
             {
                 File.CreateSymbolicLink(target, targetText);
