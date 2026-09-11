@@ -106,4 +106,31 @@
     <x:String x:Key="Menu_CompareFiles">Compare Files</x:String>
     <x:String x:Key="Menu_CompareFolders">Compare Folders</x:String>
 
+    <x:String x:Key="Menu_KeyManager">Key manager</x:String>
+    <x:String x:Key="Keys_Subtitle">Manage device authentication and Payload signing keys across projects.</x:String>
+    <x:String x:Key="Keys_Search">Search name, purpose or fingerprint</x:String>
+    <x:String x:Key="Keys_Library">My keys</x:String>
+    <x:String x:Key="Keys_Refresh">Refresh</x:String>
+    <x:String x:Key="Keys_Create">Generate and import</x:String>
+    <x:String x:Key="Keys_Name">Key name</x:String>
+    <x:String x:Key="Keys_Formats">ADB: RSA 2048 · HDC: RSA 3072 · Payload: RSA 2048 / 4096. Private keys stay in your local library. Generating keys does not replace device identities or sign images.</x:String>
+    <x:String x:Key="Keys_Generate">Generate key pair</x:String>
+    <x:String x:Key="Keys_Import">Import private key…</x:String>
+    <x:String x:Key="Keys_Password">Import password (optional)</x:String>
+    <x:String x:Key="Keys_Details">Key details</x:String>
+    <x:String x:Key="Keys_Empty">Generate, import or select a key to view its details.</x:String>
+    <x:String x:Key="Keys_Rename">Rename</x:String>
+    <x:String x:Key="Keys_CopyPublic">Copy public key</x:String>
+    <x:String x:Key="Keys_ExportPublic">Export public key…</x:String>
+    <x:String x:Key="Keys_ExportPair">Export key pair…</x:String>
+    <x:String x:Key="Keys_RemoveHint">Remove from the list; keep files in the library’s .deleted folder</x:String>
+    <x:String x:Key="Keys_Remove">Remove key</x:String>
+    <x:String x:Key="Keys_New">New key</x:String>
+    <x:String x:Key="Keys_Delete">Delete permanently</x:String>
+    <x:String x:Key="Keys_DeleteHint">Confirm permanent deletion of the selected key</x:String>
+    <x:String x:Key="Keys_PayloadSigning">Payload signing key</x:String>
+    <x:String x:Key="Keys_ChoosePayload">Choose a Payload key from your library</x:String>
+    <x:String x:Key="Keys_ExternalPrivate">Or select an external PEM / DER private key</x:String>
+    <x:String x:Key="Keys_Unsigned">Unsigned</x:String>
+    <x:String x:Key="Keys_PayloadSigningHint">Signs both metadata and Payload. External keys must be unencrypted RSA 2048/4096; import encrypted PEM keys into the library first.</x:String>
 </ResourceDictionary>

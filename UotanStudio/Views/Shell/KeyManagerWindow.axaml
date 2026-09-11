@@ -1,0 +1,78 @@
+﻿<Window xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:UotanStudio.ViewModels.Shell" xmlns:keys="using:UotanStudio.Services.Keys"
+        x:Class="UotanStudio.Views.Shell.KeyManagerWindow" x:DataType="vm:KeyManagerViewModel"
+        Title="{DynamicResource Menu_KeyManager}" Width="1080" Height="760" MinWidth="900" MinHeight="640"
+        WindowStartupLocation="CenterScreen" Icon="/Assets/UotanToolbox.png">
+    <Grid Margin="24" RowDefinitions="Auto,*,Auto,Auto" RowSpacing="16">
+        <StackPanel Spacing="5">
+            <TextBlock Text="{DynamicResource Menu_KeyManager}" FontSize="26" FontWeight="SemiBold" />
+            <TextBlock Text="{DynamicResource Keys_Subtitle}" Opacity="0.65" />
+        </StackPanel>
+        <Grid Grid.Row="1" ColumnDefinitions="310,*" ColumnSpacing="24" IsEnabled="{Binding IsIdle}">
+            <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="12">
+                <TextBox PlaceholderText="{DynamicResource Keys_Search}" Text="{Binding Search}" />
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto">
+                    <TextBlock Text="{DynamicResource Keys_Library}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Content="{DynamicResource Keys_New}" Command="{Binding NewKeyCommand}" Click="NewClick" />
+                </Grid>
+                <ListBox Grid.Row="2" ItemsSource="{Binding Keys}" SelectedItem="{Binding SelectedKey}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="keys:ManagedKey">
+                            <StackPanel Spacing="5" Margin="4,8">
+                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding Summary}" FontSize="12" Opacity="0.65" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <Button Grid.Row="3" Content="{DynamicResource Keys_Refresh}" Command="{Binding RefreshCommand}" />
+            </Grid>
+            <ScrollViewer Name="DetailsScroll" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="{DynamicResource Keys_Create}" FontSize="18" FontWeight="SemiBold" />
+                    <Grid ColumnDefinitions="*,150,110" ColumnSpacing="10">
+                        <TextBox Name="NewKeyNameBox" PlaceholderText="{DynamicResource Keys_Name}" Text="{Binding Name}" MaxLength="80" />
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding Kinds}" SelectedIndex="{Binding KindIndex}" HorizontalAlignment="Stretch" />
+                        <ComboBox Grid.Column="2" ItemsSource="{Binding PayloadSizes}" SelectedItem="{Binding PayloadBits}" IsEnabled="{Binding IsPayload}" HorizontalAlignment="Stretch" />
+                    </Grid>
+                    <TextBlock Text="{DynamicResource Keys_Formats}" TextWrapping="Wrap" Opacity="0.65" FontSize="12" />
+                    <WrapPanel Orientation="Horizontal">
+                        <Button Content="{DynamicResource Keys_Generate}" Command="{Binding GenerateCommand}" Margin="0,0,10,8" />
+                        <Button Content="{DynamicResource Keys_Import}" Click="ImportClick" Margin="0,0,10,8" />
+                        <TextBox Width="210" Text="{Binding Password}" PasswordChar="●" PlaceholderText="{DynamicResource Keys_Password}" Margin="0,0,0,8" />
+                    </WrapPanel>
+                    <Separator />
+                    <TextBlock Text="{DynamicResource Keys_Details}" FontSize="18" FontWeight="SemiBold" />
+                    <TextBlock Text="{DynamicResource Keys_Empty}" IsVisible="{Binding !HasSelection}" Opacity="0.65" />
+                    <StackPanel Spacing="12" IsVisible="{Binding HasSelection}">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <TextBox Text="{Binding RenameText}" MaxLength="80" />
+                            <Button Grid.Column="1" Content="{DynamicResource Keys_Rename}" Command="{Binding RenameCommand}" />
+                        </Grid>
+                        <TextBlock Text="{Binding SelectedKey.Summary}" />
+                        <SelectableTextBlock Text="{Binding SelectedKey.Fingerprint}" TextWrapping="Wrap" FontSize="12" />
+                        <SelectableTextBlock Text="{Binding SelectedPath}" TextWrapping="Wrap" FontSize="12" Opacity="0.65" />
+                        <TextBox Text="{Binding PublicKey, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True" Height="140"
+                                 FontFamily="Consolas, monospace" FontSize="12" TextWrapping="Wrap" />
+                        <WrapPanel>
+                            <Button Content="{DynamicResource Keys_CopyPublic}" Click="CopyClick" Margin="0,0,8,8" />
+                            <Button Content="{DynamicResource Keys_ExportPublic}" Click="ExportPublicClick" Margin="0,0,8,8" />
+                            <Button Content="{DynamicResource Keys_ExportPair}" Click="ExportPairClick" Margin="0,0,8,8" />
+                        </WrapPanel>
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+        <ProgressBar Grid.Row="2" IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="3" />
+        <StackPanel Grid.Row="3" Spacing="5">
+            <WrapPanel IsVisible="{Binding HasSelection}" IsEnabled="{Binding IsIdle}" ItemSpacing="10" LineSpacing="8">
+                <CheckBox Content="{DynamicResource Keys_DeleteHint}" IsChecked="{Binding ConfirmDeletion}" />
+                <Button Content="{DynamicResource Keys_Delete}" Command="{Binding DeleteCommand}" IsEnabled="{Binding ConfirmDeletion}" />
+                <CheckBox Content="{DynamicResource Keys_RemoveHint}" IsChecked="{Binding ConfirmRemoval}" />
+                <Button Content="{DynamicResource Keys_Remove}" Command="{Binding RemoveCommand}" IsEnabled="{Binding ConfirmRemoval}" />
+            </WrapPanel>
+            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding LibraryPath}" FontSize="11" Opacity="0.5" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+    </Grid>
+</Window>

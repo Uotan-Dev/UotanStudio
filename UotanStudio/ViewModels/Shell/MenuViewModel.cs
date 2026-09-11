@@ -993,6 +993,14 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// </summary>
     private static Window? _logWindow;
 
+    private static Window? _keyManagerWindow;
+
+    /// <summary>Opens or activates the independent key library.</summary>
+    [RelayCommand]
+    private void OpenKeyManager() => ShowKeyManagerWindow();
+
+    internal static void ShowKeyManagerWindow() => ShowWindow(ref _keyManagerWindow, () => new KeyManagerWindow());
+
     /// <summary>
     /// <para>显示辅助工具窗口：若尚未打开则创建并显示，否则前置并恢复正常窗口状态。</para>
     /// Shows a helper tool window: creates and shows it if not open, otherwise brings it to the foreground and restores the normal window state.
