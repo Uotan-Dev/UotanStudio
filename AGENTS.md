@@ -1,9 +1,16 @@
 # UotanStudio 项目指令
 
+## ADB / HDC server 路由统一（2026-09-11）
+
+- 新操作经 `Comm.Protocols.Common.DebugBridgeRoute` 判断 server；server endpoint 可连接时固定走 server，目标缺失、offline、unauthorized、协议失败不得回退 USB。仅连接被拒绝视为不存在，不缓存负结果。本条替代下文 scrcpy 的“无对应 server 目标时保留直连”。
+- ADB 的 `OpenAdbSession` 同时支持 server 服务流与原生 USB，Shell/Sync/重启/刷写共用；HDC 操作不再以旧 `hdc:` Key 前缀决定直连。原始 USB API 检测到 server 时拒绝打开调试接口，原生握手前再次检查。
+- server serial/connect key 为权威身份，不按枚举顺序或 VID/PID 将其配给 USB key。USB 重开先精确筛选物理路径再打开；元数据枚举不得申请调试接口。实现与验证边界见 `docs/adb-hdc-server-routing.md`。
+
 ## 投屏内存优化（2026-09-11）
 
-- Windows 投屏保留 GPU 解码及 GPU NV12→BGRA 转换，默认不启用 `VideoDecoderOptions.PreferNv12Output`。此前将颜色转换移到 CPU 的默认优化造成帧率回退，已撤回；媒体库的 NV12 选项仅保留给显式选择的调用方。
-- `ScreenMirrorPixelBuffer` 由会话最多复用三份：解码写入、最新待显示、UI 读取。锁内只交换归属，整帧复制、颜色转换及位图锁定必须在锁外执行，避免 UI 等待反压解码；仍只调度最新画面。关闭后丢弃会话缓冲区，并在 UI 线程清空／释放所捕获的旧 `WriteableBitmap`，不得释放重连后的新位图。
+- 三个平台共用 `ScreenMirrorGpuPresenter` / `ScreenMirrorVideoControl`，对齐官方 scrcpy 的紧凑 YUV 上传与 GPU 颜色转换路径。仅在实际取得 Skia GPU 上下文并成功准备 shader 后启用；Windows 此时设置 `PreferNv12Output=true`，不再在 CPU 上转换整幅 BGRA。GPU 不可用时保留原位图路径；此规则替代旧版无条件关闭 NV12 的描述。
+- GPU 路径最多保留三份不可变视频图像，场景操作按引用交接；只淘汰已解码的显示帧，不丢压缩包。上传纹理不计入通用 GPU 缓存，锁内只交换归属。位图回退最多复用两份 `ScreenMirrorPixelBuffer`；关闭释放所属图像／旧位图，重连创建新的呈现器。视频尺寸通过 `VideoPixelSize` 获取，不能以 `Frame` 是否为空判断 GPU 投屏状态。
+- 本次跨平台实现、测试工具与实机验证边界见 `docs/scrcpy-gpu-presentation.md` 和 `tools/GpuMirrorSmoke`。GPU 绘制计数不是显示器实际 present FPS；CPU 着色测试、平台构建和真实 GPU 验收须分别报告。仍有原生解码帧回读，不宣称 D3D11／IOSurface／DMA-BUF 零拷贝显示。
 - 真实窗口内存测量工具为 `tools/ScreenMirrorMemorySmoke`；数据和验证边界见 `docs/screen-mirror-memory.md`。工具的最终强制 GC 仅用于诊断残留，生产投屏流程不强制 GC。
 - 帧率回归使用 `tools/ScreenMirrorFrameRateSmoke`，以固定 1440×2880、60 fps H.264 动态码流验证完整解码帧数和 UI 更新；对照数据见 `docs/screen-mirror-frame-rate.md`，UI 更新次数不得当成显示器实际 present FPS。
 
