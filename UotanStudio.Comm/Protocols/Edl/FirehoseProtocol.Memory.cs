@@ -202,6 +202,11 @@ public sealed partial class FirehoseProtocol
         var totalBudgetMs = ((long)Configuration.ResponseTimeoutSeconds * 1000) + (totalBytes / 1024);
         var start = Environment.TickCount64;
 
+        // 每次调用复用同一读取缓冲：多 GB 读取不再每 1MB 块分配 1-2 个新数组。
+        // One reusable read buffer per call: multi-GB reads no longer allocate one
+        // or two new arrays per 1 MB chunk.
+        var rawBuffer = new byte[EdlConstants.RawReadChunkBytes];
+
         while (bytesRead < totalBytes)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -211,26 +216,31 @@ public sealed partial class FirehoseProtocol
                     $"Raw payload read exceeded total budget ({totalBudgetMs} ms) after {bytesRead}/{totalBytes} bytes.");
             }
 
-            byte[] chunk;
+            byte[] chunkBuffer;
+            int chunkLength;
             if (_rxBufferBytes > 0)
             {
                 // Consume the carry-over buffer first (it may already hold raw payload read
-                // past the command response).
-                // 先消费结转缓冲（其中可能已包含越过命令响应读到的原始数据）。
+                // past the command response). Strip reads directly from _rxBuffer, so the
+                // shift must run afterwards.
+                // 先消费结转缓冲（其中可能已包含越过命令响应读到的原始数据）。剥离逻辑
+                // 直接读取 _rxBuffer，因此左移必须在剥离之后执行。
                 var fromRx = Math.Min(_rxBufferBytes, (int)Math.Min(totalBytes - bytesRead, int.MaxValue));
-                chunk = new byte[fromRx];
-                Array.Copy(_rxBuffer, 0, chunk, 0, fromRx);
-                ShiftRxBufferLeft(fromRx);
+                chunkBuffer = _rxBuffer;
+                chunkLength = fromRx;
             }
             else
             {
                 var toRead = (int)Math.Min(EdlConstants.RawReadChunkBytes, totalBytes - bytesRead);
-                chunk = await ReadChunkAsync(toRead, _cmdTimeoutMs, cancellationToken);
-                if (chunk.Length == 0)
+                var n = await _transport.ReadAsync(rawBuffer, 0, toRead, _cmdTimeoutMs, cancellationToken).ConfigureAwait(false);
+                if (n == 0)
                 {
                     throw new EdlException(EdlErrorCode.ReadPortTimeout,
                         $"Raw payload read timed out after {bytesRead}/{totalBytes} bytes.");
                 }
+
+                chunkBuffer = rawBuffer;
+                chunkLength = n;
             }
 
             // (2) Strip embedded XML log blocks: some UFS programmers emit
@@ -238,11 +248,16 @@ public sealed partial class FirehoseProtocol
             // land in the partition data.
             // (2) 剥离嵌入式 XML 日志块：部分 UFS programmer 会在原始流中输出
             // <data><log/></data>——不剥离的话 XML 会落入分区数据。
-            var remaining = StripEmbeddedXmlLogs(chunk, pendingXml);
+            var remaining = StripEmbeddedXmlLogs(chunkBuffer, chunkLength, pendingXml);
             if (remaining.Length > 0)
             {
                 await destination.WriteAsync(remaining, 0, remaining.Length, cancellationToken);
                 bytesRead += remaining.Length;
+            }
+
+            if (chunkBuffer == _rxBuffer)
+            {
+                ShiftRxBufferLeft(chunkLength);
             }
         }
 
@@ -259,19 +274,20 @@ public sealed partial class FirehoseProtocol
     /// <para>从原始数据块中剥离嵌入式 XML 日志块。累积缓冲跨块拼接可能不完整的 XML 前缀；
     /// 一旦确认前缀不是 XML，全部作为原始数据返回。</para>
     /// </summary>
-    /// <param name="chunk">The raw chunk. 原始数据块。</param>
+    /// <param name="chunk">The raw chunk buffer. 原始数据缓冲。</param>
+    /// <param name="chunkLength">The valid byte count in the buffer. 缓冲中的有效字节数。</param>
     /// <param name="pendingXml">The cross-chunk XML accumulation buffer. 跨块 XML 累积缓冲。</param>
     /// <returns>The remaining raw bytes. 剥离后的有效原始字节。</returns>
-    private byte[] StripEmbeddedXmlLogs(byte[] chunk, List<byte> pendingXml)
+    private byte[] StripEmbeddedXmlLogs(byte[] chunk, int chunkLength, List<byte> pendingXml)
     {
         // Fast path: no pending XML prefix and this chunk does not start with "<?xml".
         // 快速路径：无待定 XML 前缀且本块不以 "<?xml" 开头。
-        if (pendingXml.Count == 0 && !LooksLikeXmlHeader(chunk, chunk.Length))
+        if (pendingXml.Count == 0 && !LooksLikeXmlHeader(chunk, chunkLength))
         {
-            return chunk;
+            return chunk.AsSpan(0, chunkLength).ToArray();
         }
 
-        pendingXml.AddRange(chunk);
+        pendingXml.AddRange(chunk.AsSpan(0, chunkLength).ToArray());
 
         // While the accumulated buffer starts with "<?xml", locate and skip complete log
         // blocks.
