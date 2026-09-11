@@ -1,13 +1,11 @@
-﻿using UotanStudio.Services.Delivery;
+using UotanStudio.Services.Delivery;
 using UotanStudio.ViewModels.Shell;
-using UotanStudio.Services;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Input;
-using Avalonia.Platform.Storage;
-using UotanStudio.Services.Projects;
 using AvaloniaEdit.Document;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -43,32 +41,10 @@ public partial class DeliveryOutputView : UserControl
     internal bool RecoveryRequested => RecoveryScriptBox.IsChecked == true;
     private readonly ObservableCollection<DeliveryScriptDocument> _documents = [];
     private DeliveryScriptDocument? _activeDocument;
-    private int _documentNumber;
     private bool? _stacked;
     private Border? _editorHost;
-    private bool _pickingArtifact;
 
-    private async void OnBrowseArtifactClick(object? sender, RoutedEventArgs e)
-    {
-        if (_pickingArtifact || sender is not Button { Tag: string name } || this.FindControl<TextBox>(name) is not { } field
-            || TopLevel.GetTopLevel(this) is not { StorageProvider.CanOpen: true } owner) return;
-        _pickingArtifact = true;
-        var project = ProjectContextService.Instance.ActiveSubProject?.RootPath;
-        try
-        {
-            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = field.PlaceholderText ?? "选择文件 / Select file", AllowMultiple = false });
-            using var file = files.FirstOrDefault();
-            if (project == ProjectContextService.Instance.ActiveSubProject?.RootPath && field.IsEffectivelyEnabled && file?.TryGetLocalPath() is { } path)
-                field.Text = path;
-        }
-        catch (Exception ex)
-        {
-            if (owner is Window window) await DialogService.ShowAsync(window, "Delivery", ex.Message, Ursa.Controls.MessageBoxIcon.Error);
-        }
-        finally { _pickingArtifact = false; }
-    }
-
-    /// <summary><para>初始化输出表单和第一份空白草稿。</para>Initializes the output form and first empty draft.</summary>
+    /// <summary><para>初始化输出表单和无文档的编辑区域。</para>Initializes the output form and empty editor pane.</summary>
     public DeliveryOutputView()
     {
         InitializeComponent();
@@ -83,10 +59,8 @@ public partial class DeliveryOutputView : UserControl
             OutputImagesExpander.IsExpanded = false;
         };
         StartOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
-        foreach (var box in new[] { TxtScriptBox, BatchShellScriptBox, LinuxScriptBox, MacScriptBox, AskWipeBox, RebootBox, OtaZipBox, RecoveryScriptBox })
+        foreach (var box in new[] { TxtScriptBox, BatchShellScriptBox, RecoveryScriptBox })
             box.IsCheckedChanged += (_, _) => NotifyChanged();
-        FlashSlotBox.SelectionChanged += (_, _) => NotifyChanged();
-        foreach (var box in new[] { WindowsZstdBox, LinuxZstdBox, MacZstdBox, PackageCertificateBox, PackageKeyBox, BuildFingerprintBox, IncrementalBox, SdkLevelBox }) box.TextChanged += (_, _) => NotifyChanged();
         DeviceCodenameBox.TextChanged += (_, _) => NotifyChanged();
         AuthorInfoBox.TextChanged += (_, _) => NotifyChanged();
         ScriptEditor.TextChanged += (_, _) => NotifyChanged();
@@ -98,7 +72,6 @@ public partial class DeliveryOutputView : UserControl
             _documents.Add(closed); DocumentTabs.SelectedItem = closed;
             e.Handled = true; NotifyChanged();
         };
-        AddDocument();
     }
 
     internal void SetInteractionState(bool outputEnabled, bool editorEnabled)
@@ -109,11 +82,40 @@ public partial class DeliveryOutputView : UserControl
     }
 
     private void NotifyChanged() { if (!_syncing) Changed?.Invoke(this, EventArgs.Empty); }
-    internal void SetModel(DeliveryViewModel model) { _model = model; OutputImages.ItemsSource = model.Output; }
+    internal void SetModel(DeliveryViewModel model)
+    {
+        if (_model is not null) _model.PropertyChanged -= OnModelPropertyChanged;
+        _model = model;
+        _model.PropertyChanged += OnModelPropertyChanged;
+        OutputImages.ItemsSource = model.Output;
+        ResetScriptOptions();
+    }
+
+    private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DeliveryViewModel.PackPayload)) ResetScriptOptions();
+    }
+
+    private void ResetScriptOptions()
+    {
+        var payload = _model?.PackPayload == true;
+        var previous = _syncing;
+        _syncing = true;
+        try
+        {
+            TxtScriptBox.IsEnabled = !payload;
+            BatchShellScriptBox.IsEnabled = !payload;
+            TxtScriptBox.IsChecked = !payload;
+            BatchShellScriptBox.IsChecked = false;
+            RecoveryScriptBox.IsChecked = payload;
+        }
+        finally { _syncing = previous; }
+        NotifyChanged();
+    }
     internal void SetRunning(bool running, double progress)
     {
         OutputProgress.Value = progress;
-        StartOutputButton.Content = running ? "取消 / Cancel" : LanguageService.Instance.GetString("Delivery_StartOutput");
+        StartOutputButton.Classes.Set("running", running);
         OutputImages.IsEnabled = !running; ScriptSettingsExpander.IsEnabled = !running; DocumentPane.IsEnabled = !running;
     }
     internal DeliveryPlan Capture(DeliveryPlan plan)
@@ -123,14 +125,12 @@ public partial class DeliveryOutputView : UserControl
         var files = _model!.Output.Select(i => i.Snapshot()).ToList();
         return plan with
         {
-            Package = new() { Ota = OtaZipBox.IsChecked == true, CertificatePath = PackageCertificateBox.Text?.Trim() ?? "",
-                SigningKeyPath = PackageKeyBox.Text?.Trim() ?? "", BuildFingerprint = BuildFingerprintBox.Text?.Trim() ?? "",
-                Incremental = IncrementalBox.Text?.Trim() ?? "", SdkLevel = uint.TryParse(SdkLevelBox.Text, out var sdk) ? sdk : 0 },
+            Package = new(),
             Files = files, Recovery = RecoveryScriptBox.IsChecked == true, Txt = TxtScriptBox.IsChecked == true, TxtVariants = true,
-            Windows = BatchShellScriptBox.IsChecked == true, Linux = LinuxScriptBox.IsChecked == true, MacOS = MacScriptBox.IsChecked == true,
-            AskWipe = AskWipeBox.IsChecked == true, Reboot = RebootBox.IsChecked == true,
-            Slot = FlashSlotBox.SelectedIndex switch { 1 => "a", 2 => "b", 3 => "all", _ => "" },
-            LocalZstd = new() { ["Windows"] = WindowsZstdBox.Text?.Trim() ?? "", ["Linux"] = LinuxZstdBox.Text?.Trim() ?? "", ["macOS"] = MacZstdBox.Text?.Trim() ?? "" },
+            Windows = BatchShellScriptBox.IsChecked == true, Linux = BatchShellScriptBox.IsChecked == true, MacOS = BatchShellScriptBox.IsChecked == true,
+            AskWipe = false, Reboot = false,
+            Slot = "",
+            LocalZstd = [],
             DeviceCodename = DeviceCodenameBox.Text?.Trim() ?? "", Information = AuthorInfoBox.Text ?? "",
             Scripts = _allDocuments.ToDictionary(p => p.Key, p => p.Value.Document.Text),
             ScriptFingerprint = _fingerprint,
@@ -161,7 +161,7 @@ public partial class DeliveryOutputView : UserControl
             {
                 _activeDocument = null;
                 if (_documents.Count > 0) DocumentTabs.SelectedItem = _documents[0];
-                else ScriptEditor.Document = new();
+                else ClearEditor();
             }
             _fingerprint = fingerprint;
             return true;
@@ -174,29 +174,23 @@ public partial class DeliveryOutputView : UserControl
         try
         {
             Reset();
-            RecoveryScriptBox.IsChecked = plan.Recovery;
-            OtaZipBox.IsChecked = plan.Package.Ota; PackageCertificateBox.Text = plan.Package.CertificatePath;
-            PackageKeyBox.Text = plan.Package.SigningKeyPath; BuildFingerprintBox.Text = plan.Package.BuildFingerprint;
-            IncrementalBox.Text = plan.Package.Incremental; SdkLevelBox.Text = plan.Package.SdkLevel.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            TxtScriptBox.IsChecked = plan.Txt; BatchShellScriptBox.IsChecked = plan.Windows;
-            LinuxScriptBox.IsChecked = plan.Linux; MacScriptBox.IsChecked = plan.MacOS;
-            AskWipeBox.IsChecked = plan.AskWipe; RebootBox.IsChecked = plan.Reboot;
-            FlashSlotBox.SelectedIndex = plan.Slot switch { "a" => 1, "b" => 2, "all" => 3, _ => 0 };
-            WindowsZstdBox.Text = plan.LocalZstd.GetValueOrDefault("Windows", "");
-            LinuxZstdBox.Text = plan.LocalZstd.GetValueOrDefault("Linux", "");
-            MacZstdBox.Text = plan.LocalZstd.GetValueOrDefault("macOS", "");
+            RecoveryScriptBox.IsChecked = plan.PackPayload || plan.Recovery;
+            TxtScriptBox.IsChecked = !plan.PackPayload && plan.Txt;
+            BatchShellScriptBox.IsChecked = !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS);
             DeviceCodenameBox.Text = plan.DeviceCodename; AuthorInfoBox.Text = plan.Information;
             _documents.Clear(); _allDocuments.Clear(); _activeDocument = null;
             foreach (var (name, text) in plan.Scripts)
             {
+                // Drop only the untouched placeholder created by older versions; retain saved edits.
+                // 仅忽略旧版自动创建且未编辑的占位文档，保留已保存的编辑内容。
+                if (name == "script.txt" && text.Length == 0 && !plan.GeneratedScripts.ContainsKey(name)) continue;
                 var doc = new DeliveryScriptDocument(name) { Baseline = plan.GeneratedScripts.GetValueOrDefault(name), CaretOffset = Math.Max(0, plan.ScriptCarets.GetValueOrDefault(name)) };
                 doc.Document.Text = text; _allDocuments.Add(name, doc);
                 if (plan.OpenScripts.Contains(name)) _documents.Add(doc);
             }
             _fingerprint = plan.ScriptFingerprint;
-            if (_allDocuments.Count == 0) AddDocument();
-            else if (_documents.Count > 0) DocumentTabs.SelectedItem = _documents[0];
-            else ScriptEditor.Document = new();
+            if (_documents.Count > 0) DocumentTabs.SelectedItem = _documents[0];
+            else ClearEditor();
         }
         finally { _syncing = false; }
     }
@@ -205,14 +199,7 @@ public partial class DeliveryOutputView : UserControl
     {
         OutputImages.CancelEdit();
         _allDocuments.Clear(); _fingerprint = "";
-        TxtScriptBox.IsChecked = true;
-        BatchShellScriptBox.IsChecked = false;
-        LinuxScriptBox.IsChecked = false; MacScriptBox.IsChecked = false;
-        AskWipeBox.IsChecked = false; RebootBox.IsChecked = false; FlashSlotBox.SelectedIndex = 0;
-        WindowsZstdBox.Text = ""; LinuxZstdBox.Text = ""; MacZstdBox.Text = "";
-        RecoveryScriptBox.IsChecked = false;
-        OtaZipBox.IsChecked = false; PackageCertificateBox.Text = ""; PackageKeyBox.Text = "";
-        BuildFingerprintBox.Text = ""; IncrementalBox.Text = ""; SdkLevelBox.Text = "0";
+        ResetScriptOptions();
         DeviceCodenameBox.Text = string.Empty;
         AuthorInfoBox.Text = string.Empty;
         OutputImagesExpander.IsExpanded = true;
@@ -220,23 +207,15 @@ public partial class DeliveryOutputView : UserControl
         OutputProgress.Value = 0;
         _activeDocument = null;
         _documents.Clear();
-        _documentNumber = 0;
-        AddDocument();
+        ClearEditor();
     }
 
-    private void AddDocument()
+    private void ClearEditor()
     {
-        var number = ++_documentNumber;
-        while (_allDocuments.ContainsKey(number == 1 ? "script.txt" : $"script-{number}.txt")) number = ++_documentNumber;
-        var document = new DeliveryScriptDocument(number == 1 ? "script.txt" : $"script-{number}.txt");
-        _allDocuments.Add(document.Title, document);
-        document.Document.TextChanged += (_, _) => NotifyChanged();
-        _documents.Add(document);
-        DocumentTabs.SelectedItem = document;
-        DocumentTabs.ScrollIntoView(document);
+        _activeDocument = null;
+        ScriptEditor.Document = new();
+        ScriptEditor.IsReadOnly = true;
     }
-
-    private void OnAddDocumentClick(object? sender, RoutedEventArgs e) => AddDocument();
 
     private void OnCloseDocumentClick(object? sender, RoutedEventArgs e)
     {
@@ -245,7 +224,7 @@ public partial class DeliveryOutputView : UserControl
         if (index < 0) return;
         var wasActive = ReferenceEquals(document, _activeDocument);
         _documents.RemoveAt(index);
-        if (_documents.Count == 0) { _activeDocument = null; ScriptEditor.Document = new(); }
+        if (_documents.Count == 0) ClearEditor();
         else if (wasActive) DocumentTabs.SelectedItem = _documents[Math.Min(index, _documents.Count - 1)];
         e.Handled = true;
         NotifyChanged();
@@ -259,6 +238,7 @@ public partial class DeliveryOutputView : UserControl
         // Swap documents rather than their text so each draft retains its own undo history.
         // 切换文档对象，保留各草稿独立的撤销历史。
         ScriptEditor.Document = document.Document;
+        ScriptEditor.IsReadOnly = false;
         ScriptEditor.CaretOffset = Math.Min(document.CaretOffset, document.Document.TextLength);
     }
 
@@ -279,6 +259,7 @@ public partial class DeliveryOutputView : UserControl
         if (_editorHost is not null) _editorHost.Child = null;
         else OutputLayout.Children.Remove(DocumentPane);
         _editorHost = host;
+        DocumentTabs.Classes.Set("inline-editor", host is null);
         _stacked = null;
         if (host is not null)
         {

@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Firmware;
 using UotanStudio.ViewModels.Workspace;
@@ -21,6 +22,9 @@ public partial class DeliveryView : UserControl
     private bool _attached;
     private string? _solutionPath;
     private string? _appliedSourceSettings;
+    // Preserve source and saved group metadata without exposing a second layout editor.
+    // 原包和已保存的分组元数据继续保留，不再提供第二组布局编辑框。
+    private List<DeliveryGroup> _deliveryGroups = [];
     private bool? _stacked;
     private double _defaultSidebarWidth = MinimumSidebarWidth;
     private double? _customSidebarWidth;
@@ -96,7 +100,7 @@ public partial class DeliveryView : UserControl
         SuperSettings.IsVisible = packSuper || packPayload;
         SuperFormatOptions.IsVisible = packSuper;
         SuperMetadataSizeField.IsVisible = packSuper;
-        SuperBlockSizeField.IsVisible = packSuper;
+        SuperBlockSizeField.IsVisible = packSuper || packPayload;
         SuperMetadataSlotsField.IsVisible = packSuper;
         SuperImageOptions.IsVisible = packSuper;
         PayloadSettings.IsVisible = packPayload;
@@ -115,12 +119,8 @@ public partial class DeliveryView : UserControl
         Composition.SetImages(ImageSelection.GetSelectedImages());
         if (UseProjectSuperSettingsBox.IsChecked == true && PackPayloadBox.IsChecked == true)
         {
-            try
-            {
-                var members = UotanStudio.Services.Delivery.DeliveryGroups.Parse(DeliveryGroupsBox.Text ?? "").SelectMany(g => g.Partitions).ToHashSet(StringComparer.Ordinal);
-                foreach (var row in Composition.Model.Container.Where(row => !previous.Contains(row))) row.IncludeInSuper = members.Contains(row.PartitionName);
-            }
-            catch (InvalidDataException) { /* Incomplete text remains editable; publication validates it. */ }
+            var members = _deliveryGroups.SelectMany(g => g.Partitions).ToHashSet(StringComparer.Ordinal);
+            foreach (var row in Composition.Model.Container.Where(row => !previous.Contains(row))) row.IncludeInSuper = members.Contains(row.PartitionName);
         }
     }
 
@@ -209,8 +209,8 @@ public partial class DeliveryView : UserControl
         _payloadSigningFingerprint = "";
         _payloadSigningIdentityPath = "";
         PayloadPostinstallBox.Text = string.Empty;
-        PayloadBlockSizeBox.Text = "4096"; PayloadTimestampBox.Text = "0"; PayloadSecurityPatchBox.Text = "";
-        PayloadCompressionBox.SelectedIndex = 0; SuperZstdBox.IsChecked = false; DeliveryGroupsBox.Text = "";
+        PayloadTimestampBox.Text = "0"; PayloadSecurityPatchBox.Text = "";
+        SuperZstdBox.IsChecked = false; _deliveryGroups = [];
     }
 
     private void OnSuperDeviceTypeChanged(object? sender, RoutedEventArgs e)
@@ -264,8 +264,8 @@ public partial class DeliveryView : UserControl
         if (_appliedSourceSettings == identity) return;
         try
         {
-            var groups = UotanStudio.Services.Delivery.DeliveryGroups.FromSource(settings);
-            DeliveryGroupsBox.Text = UotanStudio.Services.Delivery.DeliveryGroups.Format(groups);
+            var groups = DeliveryGroups.FromSource(settings);
+            _deliveryGroups = groups;
             if (settings.Kind == "payload")
             {
                 var members = groups.SelectMany(g => g.Partitions).ToHashSet(StringComparer.Ordinal);
@@ -291,7 +291,7 @@ public partial class DeliveryView : UserControl
         {
             PayloadVersionBox.Text = "2";
             PayloadMinorVersionBox.Text = "0";
-            PayloadBlockSizeBox.Text = settings.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SuperBlockSizeBox.Text = settings.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
             PayloadTimestampBox.Text = settings.MaxTimestamp.ToString(System.Globalization.CultureInfo.InvariantCulture);
             PayloadSecurityPatchBox.Text = settings.SecurityPatchLevel;
         }
@@ -410,6 +410,9 @@ public partial class DeliveryView : UserControl
         _attached = true;
         WeakReferenceMessenger.Default.Register<DeliveryView, ProjectContextChangedMessage>(this, static (view, _) =>
             Dispatcher.UIThread.Post(() => { if (view._attached) view.Refresh(); }));
+        WeakReferenceMessenger.Default.Register<DeliveryView, LanguageStateChangedMessage>(this, static (view, _) =>
+            Dispatcher.UIThread.Post(() => { if (view._attached) view.RefreshImageLanguage(); }));
+        RefreshImageLanguage();
         _ = RefreshDeliveryAsync();
         UpdateResponsiveLayout();
     }
@@ -420,7 +423,13 @@ public partial class DeliveryView : UserControl
         _ = SaveDeliveryAsync(false);
         _attached = false;
         WeakReferenceMessenger.Default.Unregister<ProjectContextChangedMessage>(this);
+        WeakReferenceMessenger.Default.Unregister<LanguageStateChangedMessage>(this);
         base.OnDetachedFromVisualTree(e);
+    }
+
+    private void RefreshImageLanguage()
+    {
+        foreach (var image in Composition.Model.Container.Concat(Composition.Model.Output)) image.RefreshLanguage();
     }
 
     private void OnOutputOptionSizeChanged(object? sender, SizeChangedEventArgs e)

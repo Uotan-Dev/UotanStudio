@@ -5,7 +5,7 @@
     <!-- Tabs -->
     <x:String x:Key="Tab_Workspace">Workspace</x:String>
     <x:String x:Key="Tab_Delivery">Delivery</x:String>
-    <x:String x:Key="Delivery_DirectOutput">Output to directory</x:String>
+    <x:String x:Key="Delivery_DirectOutput">Export as ROM</x:String>
     <x:String x:Key="Delivery_OutputDirectory">Output directory</x:String>
     <x:String x:Key="Delivery_LoadFailed">Unable to load image lists:</x:String>
     <x:String x:Key="Delivery_PackSettingsTitle">Packaging settings</x:String>
@@ -17,6 +17,24 @@
     <x:String x:Key="Delivery_SuperDeviceName">Name</x:String>
     <x:String x:Key="Delivery_MetadataSize">Metadata size</x:String>
     <x:String x:Key="Delivery_BlockSize">Block size</x:String>
+    <x:String x:Key="Delivery_ZstdCompression">Compress to ZST</x:String>
+    <x:String x:Key="Delivery_FullPayloadUpdate">Full update · payload.bin</x:String>
+    <x:String x:Key="Delivery_MaxTimestamp">Maximum timestamp</x:String>
+    <x:String x:Key="Delivery_SecurityPatch">Security patch date</x:String>
+    <x:String x:Key="Delivery_SelectSuperImageType">Select a full Super or Super_Empty image.</x:String>
+    <x:String x:Key="Delivery_InvalidParameter">Invalid parameter: {0}</x:String>
+    <x:String x:Key="Delivery_InvalidSuperSize">Invalid Super size.</x:String>
+    <x:String x:Key="Delivery_InvalidPayloadVersion">Invalid Payload version.</x:String>
+    <x:String x:Key="Delivery_EditedScriptsNeedReview">Configuration changed. Review edited scripts before output.</x:String>
+    <x:String x:Key="Delivery_OpenProjectToSave">Open a project to save the delivery plan.</x:String>
+    <x:String x:Key="Delivery_PlanSaved">Delivery plan and drafts saved.</x:String>
+    <x:String x:Key="Delivery_ProjectTransition">Project transition in progress. Please try again shortly.</x:String>
+    <x:String x:Key="Delivery_ReplaceEditedScripts">Configuration changed and the scripts contain manual edits. Regenerate them with the new configuration? Cancel preserves drafts and stops output.</x:String>
+    <x:String x:Key="Delivery_OutputComplete">Output complete: {0} files in {1}</x:String>
+    <x:String x:Key="Delivery_OutputCancelled">Output cancelled.</x:String>
+    <x:String x:Key="Delivery_PendingImage">Pending</x:String>
+    <x:String x:Key="Delivery_AddPartitionsFirst">Add partition images first.</x:String>
+    <x:String x:Key="Delivery_InvalidPartition">Invalid or duplicate partition name.</x:String>
     <x:String x:Key="Delivery_MetadataSlots">Metadata slots</x:String>
     <x:String x:Key="Delivery_ForceFullImage">Force full image generation</x:String>
     <x:String x:Key="Delivery_PackSuper">Pack Super</x:String>
@@ -53,7 +71,6 @@
     <x:String x:Key="Delivery_AuthorInfoWatermark" xml:space="preserve">==================&#10;ROM information&#10;Target device: liuqin&#10;Source device: sheng&#10;Android version: 16&#10;Author: 暮间雾&#10;==================</x:String>
     <x:String x:Key="Delivery_StartOutput">Start output</x:String>
     <x:String x:Key="Delivery_OutputProgress">Output progress</x:String>
-    <x:String x:Key="Delivery_NewText">New text</x:String>
     <x:String x:Key="Delivery_CloseText">Close text</x:String>
     <x:String x:Key="Delivery_TxtScript">TXT script</x:String>
     <x:String x:Key="Delivery_BatchShellScript">Bat&amp;SH scripts</x:String>

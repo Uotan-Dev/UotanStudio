@@ -74,9 +74,12 @@ public partial class KeyManagerViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private Task DeleteAsync() => RunAsync(async () =>
+    private Task DeleteAsync() => ConfirmDeletion && SelectedKey is { } key ? DeleteKeyAsync(key) : Task.CompletedTask;
+
+    // The caller confirms this specific row before deletion, independently of the current selection.
+    // 调用方先确认具体条目，删除目标不随当前选中项变化。
+    internal Task DeleteKeyAsync(ManagedKey key) => RunAsync(async () =>
     {
-        if (!ConfirmDeletion || SelectedKey is not { } key) return;
         await Task.Run(() => _library.Delete(key));
         _all = await Task.Run(_library.List);
         Filter();

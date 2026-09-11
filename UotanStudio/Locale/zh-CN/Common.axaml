@@ -5,7 +5,7 @@
     <!-- 选项卡 -->
     <x:String x:Key="Tab_Workspace">工作区</x:String>
     <x:String x:Key="Tab_Delivery">交付</x:String>
-    <x:String x:Key="Delivery_DirectOutput">输出至目录</x:String>
+    <x:String x:Key="Delivery_DirectOutput">导出为ROM</x:String>
     <x:String x:Key="Delivery_OutputDirectory">输出目录</x:String>
     <x:String x:Key="Delivery_LoadFailed">无法加载镜像列表：</x:String>
     <x:String x:Key="Delivery_PackSettingsTitle">打包设置</x:String>
@@ -17,6 +17,24 @@
     <x:String x:Key="Delivery_SuperDeviceName">名称</x:String>
     <x:String x:Key="Delivery_MetadataSize">元数据大小</x:String>
     <x:String x:Key="Delivery_BlockSize">块大小</x:String>
+    <x:String x:Key="Delivery_ZstdCompression">压缩为ZST</x:String>
+    <x:String x:Key="Delivery_FullPayloadUpdate">完整更新 · payload.bin</x:String>
+    <x:String x:Key="Delivery_MaxTimestamp">最大时间戳</x:String>
+    <x:String x:Key="Delivery_SecurityPatch">安全补丁日期</x:String>
+    <x:String x:Key="Delivery_SelectSuperImageType">请选择完整 Super 或 Super_Empty 镜像。</x:String>
+    <x:String x:Key="Delivery_InvalidParameter">参数无效：{0}</x:String>
+    <x:String x:Key="Delivery_InvalidSuperSize">Super 大小无效。</x:String>
+    <x:String x:Key="Delivery_InvalidPayloadVersion">Payload 版本无效。</x:String>
+    <x:String x:Key="Delivery_EditedScriptsNeedReview">配置已变化，输出前需处理已修改的脚本。</x:String>
+    <x:String x:Key="Delivery_OpenProjectToSave">请先打开工程再保存交付计划。</x:String>
+    <x:String x:Key="Delivery_PlanSaved">交付计划和文本已保存。</x:String>
+    <x:String x:Key="Delivery_ProjectTransition">正在切换工程，请稍后重试。</x:String>
+    <x:String x:Key="Delivery_ReplaceEditedScripts">配置已变化，现有脚本含手动修改。是否用新配置重新生成？取消将保留草稿并停止输出。</x:String>
+    <x:String x:Key="Delivery_OutputComplete">已输出 {0} 个文件：{1}</x:String>
+    <x:String x:Key="Delivery_OutputCancelled">输出已取消。</x:String>
+    <x:String x:Key="Delivery_PendingImage">待生成</x:String>
+    <x:String x:Key="Delivery_AddPartitionsFirst">请先添加分区镜像。</x:String>
+    <x:String x:Key="Delivery_InvalidPartition">分区名无效或重复。</x:String>
     <x:String x:Key="Delivery_MetadataSlots">元数据槽位</x:String>
     <x:String x:Key="Delivery_ForceFullImage">强制生成完整镜像</x:String>
     <x:String x:Key="Delivery_PackSuper">打包 Super</x:String>
@@ -53,7 +71,6 @@
     <x:String x:Key="Delivery_AuthorInfoWatermark" xml:space="preserve">==================&#10;              刷机包信息              &#10;适配机型:liuqin&#10;移植原包的机型:sheng&#10;移植包安卓版本:16&#10;作者：暮间雾&#10;==================</x:String>
     <x:String x:Key="Delivery_StartOutput">开始输出</x:String>
     <x:String x:Key="Delivery_OutputProgress">输出进度</x:String>
-    <x:String x:Key="Delivery_NewText">新建文本</x:String>
     <x:String x:Key="Delivery_CloseText">关闭文本</x:String>
     <x:String x:Key="Delivery_TxtScript">TXT脚本</x:String>
     <x:String x:Key="Delivery_BatchShellScript">Bat&amp;SH脚本</x:String>

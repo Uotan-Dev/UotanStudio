@@ -5,6 +5,12 @@
              xmlns:icons="using:Material.Icons.Avalonia"
              x:Class="UotanStudio.Views.Controls.DeliveryCompositionView">
     <UserControl.Styles>
+        <Style Selector="Button#StartCompositionOutputButton">
+            <Setter Property="Content" Value="{DynamicResource Delivery_StartOutput}" />
+        </Style>
+        <Style Selector="Button#StartCompositionOutputButton.running">
+            <Setter Property="Content" Value="{DynamicResource Editor_Cancel}" />
+        </Style>
         <Style Selector="TextBlock.list-title">
             <Setter Property="Text" Value="{DynamicResource Delivery_SuperImageList}" />
         </Style>
@@ -141,7 +147,7 @@
                     <ProgressBar Name="CompositionOutputProgress" Minimum="0" Maximum="100" Value="0" Height="20" MinWidth="0"
                                  ShowProgressText="True" VerticalAlignment="Center"
                                  AutomationProperties.Name="{DynamicResource Delivery_OutputProgress}" />
-                    <Button Name="StartCompositionOutputButton" Grid.Column="1" Content="{DynamicResource Delivery_StartOutput}"
+                    <Button Name="StartCompositionOutputButton" Grid.Column="1"
                             Height="32" MinWidth="96" Padding="12,0" />
                 </Grid>
             </Grid>

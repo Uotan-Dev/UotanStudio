@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 
 namespace UotanStudio.ViewModels.Shell;
@@ -28,8 +29,13 @@ internal sealed partial class DeliveryImage : ObservableObject
     public bool IsZeroSize => FilePath is null && !Generated;
     [ObservableProperty] private bool _showSuperChoice;
     public string Name => FileName.Length > 0 ? FileName : PartitionName;
-    public string Description => Generated ? "待生成 / To be generated" : FilePath ?? "0 B";
-    public string DisplaySize => Generated ? "待生成 / Pending" : SizeBytes is { } size ? $"{size:N0} B" : IsZeroSize ? "0 B" : "—";
+    public string Description => Generated ? LanguageService.Instance.GetString("Delivery_PendingImage") : FilePath ?? "0 B";
+    public string DisplaySize => Generated ? LanguageService.Instance.GetString("Delivery_PendingImage") : SizeBytes is { } size ? $"{size:N0} B" : IsZeroSize ? "0 B" : "—";
+    internal void RefreshLanguage()
+    {
+        OnPropertyChanged(nameof(Description));
+        OnPropertyChanged(nameof(DisplaySize));
+    }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _fileName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _partitionName = "";
     [ObservableProperty] private bool _isOptional;
@@ -118,7 +124,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
 
     internal void Confirm(DeliverySuperOptions options)
     {
-        if ((!PackSuper && !PackPayload) || Container.Count == 0) throw new InvalidDataException("请先添加 Super 分区 / Add Super partitions first.");
+        if ((!PackSuper && !PackPayload) || Container.Count == 0) throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_AddPartitionsFirst"));
         if (PackSuper) _ = DeliverySuperBuilder.ExpandPartitions(Container.Select(i => i.Snapshot()).ToArray(), options);
         foreach (var row in Output.Where(i => i.Generated).ToArray()) Output.Remove(row);
         Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
@@ -138,7 +144,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
     internal void AddZero(string partition)
     {
         if (!DeliveryValidation.IsPartition(partition) || Container.Any(i => i.PartitionName == partition))
-            throw new InvalidDataException("分区名无效或重复 / Invalid or duplicate partition.");
+            throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_InvalidPartition"));
         Container.Add(Observe(new DeliveryImage(new DeliveryFile { Partition = partition, SourceLength = 0 })));
     }
 
