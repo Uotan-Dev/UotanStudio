@@ -15,6 +15,15 @@ public sealed partial class PayloadBuilder : IDisposable
     private readonly List<PartitionBuildInfo> _partitions = [];
     private long _maxTimestamp;
     private bool _disposed;
+    private DynamicPartitionMetadata? _dynamicPartitions;
+
+    /// <summary>Copies the dynamic partition layout into the unsigned payload manifest.</summary>
+    public PayloadBuilder WithDynamicPartitions(DynamicPartitionMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _dynamicPartitions = metadata.Clone();
+        return this;
+    }
 
     public uint BlockSize { get; private set; } = 4096;
 
@@ -267,7 +276,8 @@ public sealed partial class PayloadBuilder : IDisposable
         if (_partitions.Count > maximumOperations) throw new PayloadGenerationException("Payload exceeds the supported 65536 partitions.");
         var chunkSize = checked((int)(maximumOperationBytes / BlockSize * BlockSize));
         var buffer = new byte[chunkSize];
-        var manifest = new DeltaArchiveManifest { BlockSize = BlockSize, MinorVersion = MinorVersion, MaxTimestamp = _maxTimestamp };
+        var manifest = new DeltaArchiveManifest { BlockSize = BlockSize, MinorVersion = MinorVersion, MaxTimestamp = _maxTimestamp,
+            DynamicPartitionMetadata = _dynamicPartitions?.Clone() };
         var names = new HashSet<string>(StringComparer.Ordinal);
         var operationCount = 0;
         foreach (var partition in _partitions)

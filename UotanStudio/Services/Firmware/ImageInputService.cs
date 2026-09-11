@@ -91,6 +91,7 @@ internal sealed class ImageInputService
     /// </summary>
     internal static string DetectFormat(string filePath)
     {
+        if (new UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp.LpFormatHandler().CanHandle(filePath)) return "super";
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         switch (extension)
         {

@@ -7,7 +7,7 @@ public sealed class LpFormatHandler : IFormatHandler
 {
     public string FormatName => "Android Logical Partition (super)";
 
-    public IReadOnlyList<string> FileExtensions => ["img", "super"];
+    public IReadOnlyList<string> FileExtensions => ["img", "super", "simg", "sparse", "raw"];
 
     /// <summary>
     /// Determines whether the file matches this format.
@@ -16,16 +16,11 @@ public sealed class LpFormatHandler : IFormatHandler
     public bool CanHandle(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return false;
-        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-        if (ext == "super" || Path.GetFileName(filePath).StartsWith("super", StringComparison.OrdinalIgnoreCase)) return true;
         try
         {
-            using var stream = File.OpenRead(filePath);
-            if (stream.Length < MetadataFormat.LP_PARTITION_RESERVED_BYTES + MetadataFormat.Sizes.Geometry) return false;
-            var buffer = new byte[MetadataFormat.Sizes.Geometry];
-            stream.Position = MetadataFormat.LP_PARTITION_RESERVED_BYTES;
-            stream.ReadExactly(buffer);
-            return LpMetadataGeometry.FromBytes(buffer).Magic == MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
+            using var stream = MetadataReader.OpenImage(filePath);
+            _ = MetadataReader.ReadFromImageStream(stream);
+            return true;
         }
         catch { return false; }
     }
@@ -64,8 +59,7 @@ public sealed class LpFormatHandler : IFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             options ??= new UnpackOptions();
             ArgumentOutOfRangeException.ThrowIfNegative(options.MaximumOutputBytes);
-            await using var image = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
-                81920, FileOptions.Asynchronous);
+            await using var image = MetadataReader.OpenImage(filePath);
             var metadata = MetadataReader.ReadFromImageStream(image);
             var targets = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
             var plans = new List<(string Path, long Length, LpMetadataExtent[] Extents)>();

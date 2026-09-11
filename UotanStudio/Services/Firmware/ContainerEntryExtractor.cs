@@ -17,8 +17,8 @@ public sealed record ContainerExtractionResult(IReadOnlyList<string> Entries, IR
 }
 
 /// <summary>
-/// <para>新建项目定向提取器：把已复制进子项目 <c>images/</c> 的容器按勾选条目提取为独立 img 文件，
-/// 输出与容器同目录（images/）。super 按 LP 分区流式裁剪；payload 经
+/// <para>新建项目定向提取器：从外部原包或项目内原包按勾选条目提取到显式输出目录，
+/// 不指定目录时保留输出到原包旁的兼容行为。super 按 LP 分区流式裁剪；payload 经
 /// <c>PayloadParser.ExtractAsync</c> 按分区名提取；ZIP 按条目路径流式解出。
 /// 全部有界流式、AOT 安全（无反射），失败时抛出异常由调用方统一处理。</para>
 /// New-project targeted extractor: extracts selected entries from a container already copied into
@@ -48,7 +48,7 @@ public static class ContainerEntryExtractor
         string containerPath,
         IReadOnlyList<string> selectedNames,
         bool fromPayloadOnly = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? outputDirectory = null, IProgress<double>? progress = null)
     {
         if (string.IsNullOrWhiteSpace(containerPath) || !File.Exists(containerPath)
             || selectedNames is null || selectedNames.Count == 0)
@@ -56,12 +56,14 @@ public static class ContainerEntryExtractor
             return ContainerExtractionResult.Empty;
         }
 
+        outputDirectory ??= Path.GetDirectoryName(containerPath) ?? ".";
+        Directory.CreateDirectory(outputDirectory);
         var kind = ContainerStructureAnalyzer.Analyze(containerPath).Kind;
         return kind switch
         {
-            ContainerKind.Super => await ExtractSuperAsync(containerPath, selectedNames, cancellationToken).ConfigureAwait(false),
-            ContainerKind.Payload => await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken).ConfigureAwait(false),
-            ContainerKind.Zip => await ExtractZipAsync(containerPath, selectedNames, fromPayloadOnly, cancellationToken).ConfigureAwait(false),
+            ContainerKind.Super => await ExtractSuperAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress).ConfigureAwait(false),
+            ContainerKind.Payload => await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress).ConfigureAwait(false),
+            ContainerKind.Zip => await ExtractZipAsync(containerPath, selectedNames, fromPayloadOnly, cancellationToken, outputDirectory, progress).ConfigureAwait(false),
             _ => ContainerExtractionResult.Empty
         };
     }
@@ -72,7 +74,7 @@ public static class ContainerEntryExtractor
     /// copied segment by segment).
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractSuperAsync(
-        string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken)
+        string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress)
     {
         var metadata = MetadataReader.ReadFromImageFile(containerPath);
         var sectorSize = (long)MetadataFormat.LP_SECTOR_SIZE;
@@ -80,7 +82,16 @@ public static class ContainerEntryExtractor
         var outputNames = new List<string>();
         var outputPaths = new List<string>();
 
-        await using var container = new FileStream(containerPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
+        var selectedPartitions = metadata.Partitions.Where(partition => names.Contains(partition.NameString)).ToArray();
+        if (selectedPartitions.Length != names.Count) throw new InvalidDataException("A selected LP partition is missing.");
+        long totalBytes = 0;
+        foreach (var partition in selectedPartitions)
+            foreach (var extent in metadata.Extents.GetRange(checked((int)partition.FirstExtentIndex), checked((int)partition.NumExtents)))
+                totalBytes = checked(totalBytes + checked((long)extent.NumSectors * sectorSize));
+        if (totalBytes > 64L * 1024 * 1024 * 1024) throw new InvalidDataException("Selected LP partitions exceed the extraction budget.");
+        long copiedBytes = 0;
+        progress?.Report(0);
+        await using var container = MetadataReader.OpenImage(containerPath);
         foreach (var partition in metadata.Partitions)
         {
             if (!names.Contains(partition.NameString))
@@ -89,35 +100,51 @@ public static class ContainerEntryExtractor
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var outputPath = BuildOutputPath(containerPath, partition.NameString);
-            await using var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 64 * 1024, FileOptions.SequentialScan);
-
-            // 线性 extent 段逐段复制为连续分区镜像；缺失段按规范补零。
-            // Linear extents are copied segment by segment into a contiguous partition image;
-            // gaps between extents are zero-filled per the format semantics.
-            ulong sectors = 0;
-            for (var i = 0; i < partition.NumExtents; i++)
+            var outputPath = BuildOutputPath(Path.Combine(outputDirectory, Path.GetFileName(containerPath)), partition.NameString);
+            var temporary = outputPath + ".extract-" + Guid.NewGuid().ToString("N");
+            try
             {
-                var extent = metadata.Extents[(int)partition.FirstExtentIndex + i];
-                var extentBytes = checked((long)extent.NumSectors * sectorSize);
-                if (extent.TargetType == MetadataFormat.LP_TARGET_TYPE_ZERO)
+                await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, FileOptions.Asynchronous))
                 {
-                    output.Seek(extentBytes, SeekOrigin.Current);
-                }
-                else
-                {
-                    container.Seek(checked((long)extent.TargetData * sectorSize), SeekOrigin.Begin);
-                    await StreamCopy.CopyExactlyAsync(container, output, extentBytes, cancellationToken).ConfigureAwait(false);
-                }
 
-                sectors += extent.NumSectors;
+                    // 线性 extent 段逐段复制为连续分区镜像；缺失段按规范补零。
+                    // Linear extents are copied segment by segment into a contiguous partition image;
+                    // gaps between extents are zero-filled per the format semantics.
+                    ulong sectors = 0;
+                    for (var i = 0; i < partition.NumExtents; i++)
+                    {
+                        var extent = metadata.Extents[(int)partition.FirstExtentIndex + i];
+                        var extentBytes = checked((long)extent.NumSectors * sectorSize);
+                        if (extent.TargetType == MetadataFormat.LP_TARGET_TYPE_ZERO)
+                        {
+                            output.Seek(extentBytes, SeekOrigin.Current);
+                        }
+                        else
+                        {
+                            if (extent.TargetType != MetadataFormat.LP_TARGET_TYPE_LINEAR || extent.TargetSource != 0)
+                                throw new InvalidDataException("Missing backing device or unsupported LP extent.");
+                            var offset = checked((long)extent.TargetData * sectorSize);
+                            if (offset > container.Length || extentBytes > container.Length - offset)
+                                throw new InvalidDataException("LP extent exceeds the source image.");
+                            container.Seek(offset, SeekOrigin.Begin);
+                            await CopyWithProgressAsync(container, output, extentBytes, copiedBytes, totalBytes, progress, cancellationToken).ConfigureAwait(false);
+                        }
+
+                        copiedBytes = checked(copiedBytes + extentBytes);
+                        sectors = checked(sectors + extent.NumSectors);
+                    }
+
+                    output.SetLength(checked((long)sectors * sectorSize));
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                File.Move(temporary, outputPath);
             }
-
-            output.SetLength(checked((long)sectors * sectorSize));
+            finally { File.Delete(temporary); }
             outputNames.Add(partition.NameString);
             outputPaths.Add(outputPath);
         }
 
+        progress?.Report(100);
         return new ContainerExtractionResult(outputNames, outputPaths);
     }
 
@@ -127,11 +154,11 @@ public static class ContainerEntryExtractor
     /// (output next to the container).
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractPayloadAsync(
-        string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken)
+        string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress)
     {
-        var outputDir = Path.GetDirectoryName(containerPath) ?? ".";
-        UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.Extract(
-            containerPath, [.. partitionNames], outputDir);
+        var outputDir = outputDirectory;
+        await UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.ExtractAsync(
+            containerPath, [.. partitionNames], outputDir, cancellationToken).ConfigureAwait(false);
 
         // PayloadParser 以 <分区名>.img 命名输出；逐一确认存在后回填结果。
         // PayloadParser names outputs "<partition>.img"; confirm each exists before reporting.
@@ -162,23 +189,28 @@ public static class ContainerEntryExtractor
     /// true, instead extracts payload partitions from the contained payload.bin.
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractZipAsync(
-        string containerPath, IReadOnlyList<string> selectedNames, bool fromPayloadOnly, CancellationToken cancellationToken)
+        string containerPath, IReadOnlyList<string> selectedNames, bool fromPayloadOnly, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress)
     {
         if (fromPayloadOnly)
         {
             // 只勾选了 payload 分区：直接走 ZIP 包裹 payload 的提取路径。
             // Only payload partitions are selected: extract through the ZIP-wrapped payload path.
-            return await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken).ConfigureAwait(false);
+            return await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress).ConfigureAwait(false);
         }
 
-        var outputDir = Path.GetDirectoryName(containerPath) ?? ".";
+        var outputDir = outputDirectory;
         var names = new HashSet<string>(selectedNames, StringComparer.OrdinalIgnoreCase);
         var outputNames = new List<string>();
         var outputPaths = new List<string>();
 
         await using var stream = new FileStream(containerPath, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
-        foreach (var entry in archive.Entries)
+        var selectedEntries = archive.Entries.Where(entry => names.Contains(entry.FullName) && !string.IsNullOrEmpty(entry.Name)).ToArray();
+        if (selectedEntries.Length != names.Count) throw new InvalidDataException("A selected ZIP entry is missing or duplicated.");
+        var totalBytes = selectedEntries.Sum(entry => entry.Length);
+        if (totalBytes > 64L * 1024 * 1024 * 1024) throw new InvalidDataException("Selected ZIP entries exceed the extraction budget.");
+        long copiedBytes = 0;
+        foreach (var entry in selectedEntries)
         {
             if (!names.Contains(entry.FullName) || string.IsNullOrEmpty(entry.Name))
             {
@@ -186,12 +218,22 @@ public static class ContainerEntryExtractor
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var outputPath = BuildOutputPath(containerPath, entry.Name);
-            await using var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, 64 * 1024, FileOptions.SequentialScan);
-            await using var entryStream = entry.Open();
-            // 有界复制：以条目声明长度为准，提前 EOF 抛错。
-            // Bounded copy: the declared entry length is authoritative; early EOF throws.
-            await StreamCopy.CopyExactlyAsync(entryStream, output, entry.Length, cancellationToken).ConfigureAwait(false);
+            var outputPath = BuildOutputPath(Path.Combine(outputDirectory, Path.GetFileName(containerPath)), entry.Name);
+            var temporary = outputPath + ".extract-" + Guid.NewGuid().ToString("N");
+            try
+            {
+                await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, FileOptions.Asynchronous))
+                {
+                    await using var entryStream = entry.Open();
+                    // 有界复制：以条目声明长度为准，提前 EOF 抛错。
+                    // Bounded copy: the declared entry length is authoritative; early EOF throws.
+                    await CopyWithProgressAsync(entryStream, output, entry.Length, copiedBytes, totalBytes, progress, cancellationToken).ConfigureAwait(false);
+                    copiedBytes += entry.Length;
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                File.Move(temporary, outputPath);
+            }
+            finally { File.Delete(temporary); }
             outputNames.Add(entry.FullName);
             outputPaths.Add(outputPath);
         }
@@ -229,11 +271,28 @@ public static class ContainerEntryExtractor
         return candidate;
     }
 
-    /// <summary>
-    /// <para>把内部条目名净化为安全文件名：替换路径分隔与非法字符，保留可读性。</para>
-    /// Sanitizes an inner entry name into a safe file name: path separators and illegal characters
-    /// are replaced while readability is kept.
-    /// </summary>
+    /// <summary>Copies an exact byte range with throttled progress and bounded memory.</summary>
+    private static async Task CopyWithProgressAsync(Stream source, Stream output, long length,
+        long completed, long total, IProgress<double>? progress, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[65536];
+        var lastReport = Environment.TickCount64;
+        while (length > 0)
+        {
+            var read = await source.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, length)), cancellationToken).ConfigureAwait(false);
+            if (read == 0) throw new EndOfStreamException("Container entry was truncated.");
+            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            length -= read;
+            completed += read;
+            if (Environment.TickCount64 - lastReport >= 100 || length == 0)
+            {
+                progress?.Report(total > 0 ? completed * 100.0 / total : 100);
+                lastReport = Environment.TickCount64;
+            }
+        }
+    }
+
+    /// <summary>Replaces invalid filename characters in an internal entry name.</summary>
     private static string SanitizeFileName(string name)
     {
         var invalid = Path.GetInvalidFileNameChars();

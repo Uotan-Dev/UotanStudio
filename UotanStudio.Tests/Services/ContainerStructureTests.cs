@@ -19,6 +19,85 @@ public sealed class ContainerStructureTests
 {
     private static readonly SuperImageBuilder SuperBuilder = new();
 
+    [Fact]
+    public async Task SparseSuper_UsesLogicalPartitionsAndExtractsWithoutCopyingOriginal()
+    {
+        using var temp = new TempDirectory();
+        var raw = Path.Combine(temp.Path, "source.raw");
+        var image = SuperBuilder.Build([new SuperBuildPartition("vendor_a", "default", 8192),
+            new SuperBuildPartition("vendor_b", "default", 4096)], 8 * 1024 * 1024, 65536, 2, 4096);
+        File.WriteAllBytes(raw, image);
+        var metadata = MetadataReader.ReadFromImageFile(raw);
+        var extent = metadata.Extents[(int)metadata.Partitions[0].FirstExtentIndex];
+        var expected = Enumerable.Range(0, 8192).Select(i => (byte)(i % 251)).ToArray();
+        expected.CopyTo(image, checked((int)extent.TargetData * 512));
+        File.WriteAllBytes(raw, image);
+        var sparse = Path.Combine(temp.Path, "renamed.img");
+        UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseImageConverter.ConvertRawToSparse(raw, sparse);
+
+        UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
+        Assert.IsType<LpFormatHandler>(UotanStudio.Firmware.SharedKernel.FormatDetector.Detect(sparse));
+        Assert.Equal("super", ImageInputService.DetectFormat(sparse));
+        Assert.Equal(ContainerKind.Super, ContainerStructureAnalyzer.Analyze(sparse).Kind);
+        var sourceSettings = SourceContainerMetadataService.Capture(sparse, ContainerKind.Super);
+        Assert.Equal("SPARSE", sourceSettings.Storage);
+        Assert.Equal("AB", sourceSettings.DeviceType);
+        Assert.Equal((uint)2, sourceSettings.MetadataSlots);
+
+        var output = Path.Combine(temp.Path, "project", "images");
+        var extracted = await ContainerEntryExtractor.ExtractAsync(sparse, ["vendor_a"],
+            cancellationToken: TestContext.Current.CancellationToken, outputDirectory: output);
+        Assert.Equal(expected, File.ReadAllBytes(Assert.Single(extracted.OutputPaths)));
+        Assert.Single(Directory.GetFiles(output));
+        Assert.False(File.Exists(Path.Combine(output, "renamed.img")));
+        Assert.False(File.Exists(Path.Combine(temp.Path, "vendor_a.img")));
+    }
+
+    [Fact]
+    public void SuperNameWithoutLpMetadata_IsNotSuper()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.WriteBytes("super.img", new byte[8192]);
+        Assert.False(new LpFormatHandler().CanHandle(path));
+        Assert.Equal("raw", ImageInputService.DetectFormat(path));
+    }
+
+    [Fact]
+    public async Task CopyCancellation_DoesNotPublishPartialFileAndReportsStart()
+    {
+        using var temp = new TempDirectory();
+        var source = temp.WriteBytes("source.img", new byte[1024 * 1024]);
+        var destination = Path.Combine(temp.Path, "destination.img");
+        using var cancelled = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var reports = new List<double>();
+        var progress = new InlineProgress(value => { reports.Add(value); cancelled.Cancel(); });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            UotanStudio.Services.Projects.ProjectFiles.CopyAsync(source, destination,
+                cancellationToken: cancelled.Token, progress: progress));
+        Assert.Equal([0d], reports);
+        Assert.False(File.Exists(destination));
+        Assert.Empty(Directory.GetFiles(temp.Path, "*.copy-*"));
+    }
+
+    private sealed class InlineProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
+    }
+
+    [Fact]
+    public async Task TruncatedSuper_DoesNotPublishPartialPartition()
+    {
+        using var temp = new TempDirectory();
+        var path = temp.WriteBytes("super.img", SuperBuilder.Build(
+            [new SuperBuildPartition("vendor", "default", 2 * 1024 * 1024)],
+            8 * 1024 * 1024, 65536, 2, 4096));
+        using (var file = File.OpenWrite(path)) file.SetLength(1024 * 1024);
+        var output = Path.Combine(temp.Path, "output");
+        await Assert.ThrowsAsync<InvalidDataException>(() => ContainerEntryExtractor.ExtractAsync(path, ["vendor"],
+            cancellationToken: TestContext.Current.CancellationToken, outputDirectory: output));
+        Assert.Empty(Directory.GetFiles(output));
+    }
+
     // ============== IsDirectoryEmptyOrMissing ==============
 
     [Fact]
@@ -98,6 +177,17 @@ public sealed class ContainerStructureTests
         Assert.Equal(ContainerKind.Payload, structure.Kind);
         var entry = Assert.Single(structure.Entries);
         Assert.Equal("boot", entry.Name);
+        var settings = SourceContainerMetadataService.Capture(payload, ContainerKind.Payload);
+        Assert.Equal((uint)4096, settings.BlockSize);
+        Assert.Equal(["boot"], settings.PartitionNames);
+        Assert.Equal([4096UL], settings.PartitionSizes);
+        var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(settings,
+            SourceContainerJsonContext.Default.SourceContainerSettings);
+        var restored = System.Text.Json.JsonSerializer.Deserialize(json,
+            SourceContainerJsonContext.Default.SourceContainerSettings);
+        Assert.NotNull(restored);
+        Assert.Equal(settings.PartitionNames, restored.PartitionNames);
+        Assert.Equal(settings.PartitionSizes, restored.PartitionSizes);
         Assert.True(entry.FromPayload);
         Assert.Equal(4096, entry.SizeBytes);
     }
@@ -131,8 +221,10 @@ public sealed class ContainerStructureTests
         Assert.False(entry.FromPayload);
     }
 
-    [Fact]
-    public async Task Analyze_ZipWithPayload_AppendsPayloadPartitions()
+    [Theory]
+    [InlineData("payload.bin")]
+    [InlineData("ota/PAYLOAD.BIN")]
+    public async Task Analyze_ZipWithPayload_AppendsPayloadPartitions(string memberName)
     {
         using var temp = new TempDirectory();
         var source = temp.WriteBytes("boot.img", new byte[4096]);
@@ -145,7 +237,7 @@ public sealed class ContainerStructureTests
         var zipPath = Path.Combine(temp.Path, "ota.zip");
         using (var archive = System.IO.Compression.ZipFile.Open(zipPath, System.IO.Compression.ZipArchiveMode.Create))
         {
-            archive.CreateEntryFromFile(payload, "payload.bin");
+            archive.CreateEntryFromFile(payload, memberName);
             var image = archive.CreateEntry("vendor.img");
             using var stream = image.Open();
             stream.Write(new byte[2048]);
@@ -158,6 +250,21 @@ public sealed class ContainerStructureTests
         Assert.False(structure.Entries[0].FromPayload);
         Assert.Equal("boot", structure.Entries[1].Name);
         Assert.True(structure.Entries[1].FromPayload);
+    }
+
+    [Fact]
+    public void Analyze_ZipWithPayloadSuffix_DoesNotHideImageMembers()
+    {
+        using var temp = new TempDirectory();
+        var zip = Path.Combine(temp.Path, "images.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("other-payload.bin");
+            archive.CreateEntry("images/boot.img");
+        }
+        var structure = ContainerStructureAnalyzer.Analyze(zip);
+        Assert.Equal(ContainerKind.Zip, structure.Kind);
+        Assert.Equal("images/boot.img", Assert.Single(structure.Entries).Name);
     }
 
     [Fact]

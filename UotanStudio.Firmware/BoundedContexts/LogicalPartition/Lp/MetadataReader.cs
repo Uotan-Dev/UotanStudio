@@ -1,9 +1,19 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 
 namespace UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 
 public static class MetadataReader
 {
+    /// <summary>Opens the logical bytes of a raw or sparse image without expanding it to disk.</summary>
+    public static Stream OpenImage(string path)
+    {
+        var header = UotanStudio.Firmware.SharedKernel.FormatDetector.ReadHeader(path, 4);
+        return header.AsSpan().SequenceEqual(new byte[] { 0x3a, 0xff, 0x26, 0xed })
+            ? new SparseReadStream(SparseReader.FromImageFile(path))
+            : new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous);
+    }
+
     internal const int MaximumMetadataBytes = 64 * 1024 * 1024;
     /// <summary>
     /// Reads LP metadata from an image file (uses slot 0 primary metadata).
@@ -11,7 +21,7 @@ public static class MetadataReader
     /// </summary>
     public static LpMetadata ReadFromImageFile(string path)
     {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
+        using var stream = OpenImage(path);
         return ReadFromImageStream(stream);
     }
 

@@ -19,7 +19,7 @@ public enum ContainerKind
     /// <summary><para>Android OTA payload（payload.bin 或 ZIP 包裹）。</para>Android OTA payload (payload.bin or ZIP-wrapped).</summary>
     Payload,
 
-    /// <summary><para>ZIP 归档（不含 payload.bin）。</para>ZIP archive (without payload.bin).</summary>
+    /// <summary><para>ZIP 归档，可包含 Payload 分区。</para>ZIP archive, optionally containing Payload partitions.</summary>
     Zip
 }
 
@@ -47,7 +47,11 @@ public sealed record ContainerEntry(
     string Name,
     string Format,
     long SizeBytes,
-    bool FromPayload);
+    bool FromPayload)
+{
+    /// <summary>Full member path of the containing Payload inside a ZIP, when present.</summary>
+    public string? PayloadMemberPath { get; init; }
+}
 
 /// <summary>
 /// <para>容器结构分析结果。</para>
@@ -115,6 +119,7 @@ public static class ContainerStructureAnalyzer
             return false;
         }
 
+        if (File.Exists(path)) return false;
         if (!Directory.Exists(path))
         {
             return true;
@@ -193,9 +198,7 @@ public static class ContainerStructureAnalyzer
                 return AnalyzePayload(filePath);
             }
 
-            if (header.Length >= 4100
-                && System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(4096, 4))
-                    == MetadataFormat.LP_METADATA_GEOMETRY_MAGIC)
+            if (new LpFormatHandler().CanHandle(filePath))
             {
                 return AnalyzeSuper(filePath);
             }
@@ -261,6 +264,7 @@ public static class ContainerStructureAnalyzer
         using var archive = new ZipArchive(File.OpenRead(filePath), ZipArchiveMode.Read, leaveOpen: false);
         var entries = new List<ContainerEntry>();
         var hasPayload = false;
+        string? payloadMemberPath = null;
 
         foreach (var entry in archive.Entries)
         {
@@ -269,9 +273,10 @@ public static class ContainerStructureAnalyzer
                 continue;
             }
 
-            if (entry.FullName.EndsWith(PayloadMarker, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(entry.Name, PayloadMarker, StringComparison.OrdinalIgnoreCase))
             {
                 hasPayload = true;
+                if (payloadMemberPath is null || entry.FullName == PayloadMarker) payloadMemberPath = entry.FullName;
                 continue;
             }
 
@@ -288,7 +293,8 @@ public static class ContainerStructureAnalyzer
             // GetPartitionInfo 支持 ZIP 包裹的 payload（内部自动定位 payload.bin）。
             // GetPartitionInfo accepts a ZIP-wrapped payload (locates payload.bin internally).
             var info = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.GetPartitionInfo(filePath);
-            entries.AddRange(info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true)));
+            entries.AddRange(info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true)
+                { PayloadMemberPath = payloadMemberPath }));
         }
 
         return new ContainerStructure(ContainerKind.Zip, entries);

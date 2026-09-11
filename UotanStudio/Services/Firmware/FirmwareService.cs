@@ -777,105 +777,9 @@ public sealed class FirmwareService
 
     private async Task<FirmwareOpResult> UnpackSuperCoreAsync(string superPath, string outputDirectory, CancellationToken cancellationToken = default)
     {
-        return await Task.Run<FirmwareOpResult>(() =>
-        {
-            string? tempRaw = null;
-            try
-            {
-                if (string.IsNullOrWhiteSpace(superPath) || !File.Exists(superPath))
-                {
-                    return FirmwareOpResult.Fail($"Super image not found: {superPath ?? "<empty>"}  找不到 super 镜像。");
-                }
-
-                // Android super 镜像通常是 sparse 格式，需先展开为 raw 临时文件以便随机读取分区。
-                // Android super images are usually sparse; expand to a temporary raw file for random-access partition reads.
-                var sourcePath = superPath;
-                if (IsSparseImage(superPath))
-                {
-                    tempRaw = Path.Combine(Path.GetTempPath(), $"uotan_super_{Guid.NewGuid():N}.raw");
-                    using (var sparse = SparseReader.FromImageFile(superPath))
-                    using (var raw = new FileStream(tempRaw, FileMode.Create, FileAccess.Write, FileShare.None))
-                    {
-                        sparse.WriteRawToStream(raw);
-                    }
-                    sourcePath = tempRaw;
-                }
-
-                Directory.CreateDirectory(outputDirectory);
-                using var stream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                var metadata = MetadataReader.ReadFromImageStream(stream);
-                var firstLogicalSector = metadata.BlockDevices.Count > 0 ? metadata.BlockDevices[0].FirstLogicalSector : 0UL;
-
-                var extracted = new List<string>();
-                foreach (var partition in metadata.Partitions)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var name = partition.NameString;
-                    if (string.IsNullOrEmpty(name))
-                    {
-                        continue;
-                    }
-
-                    // 取第一个线性 extent；不支持零填充或多 extent 布局时给出清晰错误而非崩溃。
-                    // Use the first linear extent; return a clear error (rather than crash) for unsupported layouts.
-                    LpMetadataExtent linear = default;
-                    var foundLinear = false;
-                    for (uint i = 0; i < partition.NumExtents; i++)
-                    {
-                        var extent = metadata.Extents[(int)(partition.FirstExtentIndex + i)];
-                        if (extent.TargetType == MetadataFormat.LP_TARGET_TYPE_LINEAR)
-                        {
-                            linear = extent;
-                            foundLinear = true;
-                            break;
-                        }
-                    }
-
-                    if (!foundLinear)
-                    {
-                        return FirmwareOpResult.Fail($"Partition '{name}' has no linear extent; unsupported super layout.  分区 '{name}' 无线性 extent，不支持该 super 布局。");
-                    }
-
-                    var offset = (long)((firstLogicalSector + linear.TargetData) * MetadataFormat.LP_SECTOR_SIZE);
-                    var length = (long)linear.NumSectors * MetadataFormat.LP_SECTOR_SIZE;
-                    if (offset < 0 || length <= 0 || offset + length > stream.Length)
-                    {
-                        return FirmwareOpResult.Fail($"Partition '{name}' extent out of range (offset={offset}, length={length}).  分区 '{name}' extent 超出镜像范围。");
-                    }
-
-                    var outputPath = Path.Combine(outputDirectory, name);
-                    using (var output = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None))
-                    {
-                        stream.Position = offset;
-                        CopyRange(stream, output, length, cancellationToken);
-                    }
-
-                    extracted.Add(name);
-                }
-
-                return new FirmwareOpResult
-                {
-                    Success = true,
-                    Summary = $"Extracted {extracted.Count} partition(s) from super to {outputDirectory}  已从 super 解出 {extracted.Count} 个分区。",
-                    Entries = extracted
-                };
-            }
-            catch (OperationCanceledException)
-            {
-                return FirmwareOpResult.Fail("Super unpack cancelled.  解包 super 已取消。");
-            }
-            catch (Exception ex)
-            {
-                return FirmwareOpResult.Fail(ex.Message);
-            }
-            finally
-            {
-                if (tempRaw != null && File.Exists(tempRaw))
-                {
-                    File.Delete(tempRaw);
-                }
-            }
-        }, cancellationToken);
+        var result = await Task.Run(() => new LpFormatHandler().UnpackAsync(superPath, outputDirectory,
+            cancellationToken: cancellationToken), cancellationToken).ConfigureAwait(false);
+        return new FirmwareOpResult { Success = result.Success, Summary = result.Summary, Entries = result.Entries };
     }
 
     /// <summary>
@@ -1093,69 +997,22 @@ public sealed class FirmwareService
         string groupName,
         CancellationToken cancellationToken = default)
     {
-        return await Task.Run<FirmwareOpResult>(() =>
+        cancellationToken.ThrowIfCancellationRequested();
+        try
         {
-            try
+            if (partitions is null || partitions.Count == 0)
+                return FirmwareOpResult.Fail("No partitions supplied. 未提供任何分区。");
+            var files = partitions.Select(p => new UotanStudio.Services.Delivery.DeliveryFile
+            { Partition = p.Name, SourcePath = p.Path }).ToArray();
+            await UotanStudio.Services.Delivery.DeliverySuperBuilder.BuildAsync(files, new()
             {
-                if (partitions is null || partitions.Count == 0)
-                {
-                    return FirmwareOpResult.Fail("No partitions supplied. 未提供任何分区。");
-                }
-
-                var group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName;
-                var builder = MetadataBuilder.New(deviceSize, 64 * 1024, 2);
-                builder.AddGroup(group, deviceSize);
-                foreach (var partition in partitions)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    builder.AddPartition(partition.Name, group, (ulong)new FileInfo(partition.Path).Length);
-                }
-
-                var metadata = builder.Build();
-                var firstLogicalSector = metadata.BlockDevices.Count > 0 ? metadata.BlockDevices[0].FirstLogicalSector : 0UL;
-
-                var tempRaw = Path.Combine(Path.GetDirectoryName(outputPath) ?? ".", Path.GetFileNameWithoutExtension(outputPath) + ".raw");
-                try
-                {
-                    using (var stream = new FileStream(tempRaw, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
-                    {
-                        stream.SetLength((long)deviceSize);
-                        MetadataWriter.WriteToImageStream(stream, metadata);
-                        for (var i = 0; i < metadata.Partitions.Count; i++)
-                        {
-                            cancellationToken.ThrowIfCancellationRequested();
-                            var extent = metadata.Extents[(int)metadata.Partitions[i].FirstExtentIndex];
-                            var offset = (long)((firstLogicalSector + extent.TargetData) * MetadataFormat.LP_SECTOR_SIZE);
-                            stream.Position = offset;
-                            using var source = SparseReader.ImportAuto(partitions[i].Path);
-                            source.WriteRawToStream(stream);
-                        }
-                    }
-
-                    SparseImageConverter.ConvertRawToSparse(tempRaw, outputPath);
-                    return new FirmwareOpResult
-                    {
-                        Success = true,
-                        Summary = $"Synthesized super image with {partitions.Count} partition(s) -> {outputPath}  已合成 super 镜像（{partitions.Count} 个分区）。"
-                    };
-                }
-                finally
-                {
-                    if (File.Exists(tempRaw))
-                    {
-                        File.Delete(tempRaw);
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                return FirmwareOpResult.Fail("Super synthesis cancelled. 合成 super 已取消。");
-            }
-            catch (Exception ex)
-            {
-                return FirmwareOpResult.Fail(ex.Message);
-            }
-        }, cancellationToken);
+                DeviceSize = deviceSize, Group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName,
+                MetadataSize = 65536, Slots = 2, Sparse = true
+            }, outputPath, token: cancellationToken).ConfigureAwait(false);
+            return new FirmwareOpResult { Success = true, Summary = $"Synthesized super image with {partitions.Count} partition(s) -> {outputPath}" };
+        }
+        catch (OperationCanceledException) { return FirmwareOpResult.Fail("Super synthesis cancelled. 合成 super 已取消。"); }
+        catch (Exception ex) { return FirmwareOpResult.Fail(ex.Message); }
     }
 }
 

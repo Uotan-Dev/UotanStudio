@@ -1,4 +1,4 @@
-﻿namespace UotanStudio.Firmware.SharedKernel;
+namespace UotanStudio.Firmware.SharedKernel;
 
 public static class FirmwareFormatRegistry
 {
@@ -26,6 +26,9 @@ public static class FirmwareFormatRegistry
             Register(new BoundedContexts.OtaDelta.Dat.DatFormatHandler());
             Register(new BoundedContexts.OtaDelta.Diff.DiffFormatHandler());
 
+            // Identify logical partitions before their sparse storage wrapper.
+            Register(new BoundedContexts.LogicalPartition.Lp.LpFormatHandler());
+
             // FileSystem
             Register(new BoundedContexts.FileSystem.Sparse.SparseFormatHandler());
             Register(new BoundedContexts.FileSystem.Ext4.Ext4FormatHandler());
@@ -36,8 +39,6 @@ public static class FirmwareFormatRegistry
             Register(new BoundedContexts.BootSecurity.Avb.AvbFormatHandler());
             Register(new BoundedContexts.BootSecurity.BootImage.BootImageFormatHandler());
 
-            // LogicalPartition
-            Register(new BoundedContexts.LogicalPartition.Lp.LpFormatHandler());
 
             // AndroidMeta
             Register(new BoundedContexts.AndroidMeta.Dex.DexFormatHandler());
