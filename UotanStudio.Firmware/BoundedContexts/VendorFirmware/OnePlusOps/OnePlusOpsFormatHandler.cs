@@ -1,6 +1,7 @@
 ﻿using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Streams;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps.Logging;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps;
@@ -171,19 +172,22 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
                 }
 
 
-                var entries = new List<OpsEntry>();
-                using (var fs = File.OpenRead(inputPath))
+                // 流式重打包：条目数据直接从源 OPS 复制到输出，不再整包驻留内存。
+                // Streaming repack: entry payloads are copied straight from the
+                // source OPS into the output instead of being resident in memory.
+                var source = File.OpenRead(inputPath);
+                try
                 {
-                    var decryptor = new OpsDecryptor(fs, _logger);
+                    var decryptor = new OpsDecryptor(source, _logger);
                     var header = decryptor.ParseHeader();
-                    entries = ReadEntries(decryptor, header);
-                    foreach (var e in entries)
-                    {
-                        e.Data = decryptor.ReadEntryData(e.Offset, e.Size);
-                    }
+                    var entries = ReadEntries(decryptor, header);
+                    WriteOps(outputPath, entries, source);
+                }
+                finally
+                {
+                    source.Dispose();
                 }
 
-                WriteOps(outputPath, entries);
                 return FirmwareOpResult.Ok($"Repacked OPS firmware to {outputPath}");
             }
             catch (Exception ex)
@@ -195,7 +199,10 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
 
     /// <summary>
     /// Tries to decrypt partition data with every key in the OnePlusKeyTable.
-    /// <para>尝试使用 OnePlusKeyTable 的全部密钥解密分区数据。</para>
+    /// Wrong keys are rejected on a small probe window instead of a full-image
+    /// decryption; only the winning key triggers a full pass.
+    /// <para>尝试使用 OnePlusKeyTable 的全部密钥解密分区数据。错误密钥在小试探窗口上
+    /// 即被拒绝，不再整镜像解密；只有命中的密钥才做全量解密。</para>
     /// </summary>
     public static byte[]? TryDecrypt(byte[] data)
     {
@@ -209,7 +216,66 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             return null;
         }
 
+        if (data.Length <= DecryptProbeLength)
+        {
+            return TryDecryptSmall(data);
+        }
 
+        // 试探窗口覆盖 LooksLikeDecrypted 检查的全部偏移（最大 0x404+4）。
+        // The probe window covers every offset inspected by LooksLikeDecrypted.
+        var probeLength = DecryptProbeLength;
+        foreach (var key in OnePlusKeyTable.GetAllKeys())
+        {
+            try
+            {
+                var head = DecryptAesEcbSegment(data, 0, probeLength, key);
+                if (LooksLikeDecrypted(head))
+                {
+                    return DecryptAesEcbStatic(data, key);
+                }
+
+                var tail = DecryptAesEcbSegment(data, data.Length - probeLength, probeLength, key, reverseOutput: true);
+                if (LooksLikeDecrypted(tail))
+                {
+                    return Reverse(DecryptAesEcbStatic(data, key));
+                }
+            }
+            catch
+            {
+
+            }
+        }
+
+
+        try
+        {
+            if (LooksLikeDecrypted(SBoxDecryptSegment(data, 0, probeLength)))
+            {
+                return SBoxDecryptStatic(data);
+            }
+        }
+        catch
+        {
+
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Probe window in bytes; covers every magic offset checked by
+    /// <see cref="LooksLikeDecrypted"/> (the largest is 0x404 + 4).
+    /// <para>试探窗口（字节），覆盖 <see cref="LooksLikeDecrypted"/> 检查的全部魔数偏移（最大 0x404+4）。</para>
+    /// </summary>
+    private const int DecryptProbeLength = 0x440;
+
+    /// <summary>
+    /// Legacy path for small payloads: the probe would cover the entire buffer
+    /// anyway, so the original full-decrypt flow is kept verbatim.
+    /// <para>小数据的原有路径：试探窗口已覆盖整个缓冲，保留原全量解密流程。</para>
+    /// </summary>
+    private static byte[]? TryDecryptSmall(byte[] data)
+    {
         foreach (var key in OnePlusKeyTable.GetAllKeys())
         {
             try
@@ -273,22 +339,41 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             .OrderBy(f => f, StringComparer.Ordinal)
             .ToList();
 
+        // 条目数据保留在磁盘上，写出时按文件流式复制，不再整包读入内存。
+        // Entry payloads stay on disk and are streamed into the output instead
+        // of being fully read into memory.
         var entries = new List<OpsEntry>();
+        var dataFiles = new string[files.Count];
         for (var i = 0; i < files.Count; i++)
         {
             var name = Path.GetFileName(files[i]);
+            var length = new FileInfo(files[i]).Length;
+            if (length > uint.MaxValue)
+            {
+                throw new InvalidDataException($"Entry '{name}' exceeds the OPS 32-bit entry size limit.");
+            }
+
             entries.Add(new OpsEntry
             {
                 Id = (uint)i,
                 Name = name.Length > OpsConstants.ENTRY_NAME_SIZE ? name[..OpsConstants.ENTRY_NAME_SIZE] : name,
-                Data = File.ReadAllBytes(files[i])
+                Size = (uint)length
             });
+            dataFiles[i] = files[i];
         }
 
-        WriteOps(outputPath, entries);
+        WriteOps(outputPath, entries, dataFiles: dataFiles);
     }
 
-    private static void WriteOps(string outputPath, List<OpsEntry> entries)
+    /// <summary>
+    /// Writes an OPS file. Payload bytes come from, in priority order: the per-entry
+    /// files in <paramref name="dataFiles"/>, the matching offsets of
+    /// <paramref name="source"/>, or the in-memory <see cref="OpsEntry.Data"/>.
+    /// <para>写出 OPS 文件。条目数据按优先级取自：<paramref name="dataFiles"/> 中的
+    /// 逐条目文件、<paramref name="source"/> 的对应偏移，或内存中的
+    /// <see cref="OpsEntry.Data"/>。</para>
+    /// </summary>
+    private static void WriteOps(string outputPath, List<OpsEntry> entries, Stream? source = null, string[]? dataFiles = null)
     {
         using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
         using var writer = new BinaryWriter(fs, Encoding.ASCII, leaveOpen: false);
@@ -314,7 +399,10 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
             dataOffsets[i] = -1;
             writer.Write(entry.Id);
             writer.Write(0u);
-            writer.Write(entry.Data?.Length ?? 0);
+            // 流式来源（dataFiles/source）下 Data 为空，长度取 Size；内存路径两者一致。
+            // For streamed sources (dataFiles/source) Data is empty, so Size carries
+            // the length; the in-memory path keeps both in sync.
+            writer.Write(entry.Data is { Length: > 0 } data ? (uint)data.Length : entry.Size);
             var nameBytes = new byte[OpsConstants.ENTRY_NAME_SIZE];
             var nameSrc = Encoding.ASCII.GetBytes(entry.Name ?? string.Empty);
             Array.Copy(nameSrc, nameBytes, Math.Min(nameSrc.Length, nameBytes.Length));
@@ -326,7 +414,21 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         {
             Align(writer, OpsConstants.SECTOR_SIZE);
             dataOffsets[i] = writer.BaseStream.Position;
-            writer.Write(entries[i].Data ?? []);
+            var entry = entries[i];
+            if (dataFiles is not null && dataFiles[i] is { } dataFile)
+            {
+                using var dataStream = File.OpenRead(dataFile);
+                StreamCopy.CopyExactly(dataStream, writer.BaseStream, entry.Size);
+            }
+            else if (source is not null)
+            {
+                source.Seek(entry.Offset, SeekOrigin.Begin);
+                StreamCopy.CopyExactly(source, writer.BaseStream, entry.Size);
+            }
+            else
+            {
+                writer.Write(entry.Data ?? []);
+            }
         }
 
         Align(writer, OpsConstants.SECTOR_SIZE);
@@ -370,6 +472,89 @@ public sealed class OnePlusOpsFormatHandler(IOnePlusLogger? logger = null) : IFo
         aes.Key = key;
         using var decryptor = aes.CreateDecryptor();
         return decryptor.TransformFinalBlock(data, 0, data.Length);
+    }
+
+    /// <summary>
+    /// Decrypts a single AES block-aligned segment of <paramref name="data"/> without
+    /// allocating a full-image plaintext; used by the probe path of
+    /// <see cref="TryDecrypt"/>. Optionally reverses the decrypted segment so tail
+    /// probes match the reversed-data convention.
+    /// <para>仅解密 <paramref name="data"/> 的一个块对齐分段，不为整镜像分配明文；
+    /// 供 <see cref="TryDecrypt"/> 的试探路径使用。可选地在解密后反转分段，
+    /// 以匹配尾部试探的反转数据约定。</para>
+    /// </summary>
+    private static byte[] DecryptAesEcbSegment(byte[] data, int start, int length, byte[] key, bool reverseOutput = false)
+    {
+        if (start < 0 || length < 0 || start > data.Length - length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(start));
+        }
+
+        using var aes = System.Security.Cryptography.Aes.Create();
+        aes.Mode = System.Security.Cryptography.CipherMode.ECB;
+        aes.Padding = System.Security.Cryptography.PaddingMode.None;
+        aes.Key = key;
+        using var decryptor = aes.CreateDecryptor();
+        var output = new byte[length];
+        decryptor.TransformBlock(data, start, length, output, 0);
+        if (reverseOutput)
+        {
+            Array.Reverse(output);
+        }
+
+        return output;
+    }
+
+    /// <summary>
+    /// Decrypts a single 256-byte-period-aligned segment with the SBox stream cipher
+    /// without allocating a full-image plaintext; used by the probe path of
+    /// <see cref="TryDecrypt"/>.
+    /// <para>仅用 SBox 流密码解密一个按 256 字节周期对齐的分段，不为整镜像分配明文；
+    /// 供 <see cref="TryDecrypt"/> 的试探路径使用。</para>
+    /// </summary>
+    private static byte[] SBoxDecryptSegment(byte[] data, int start, int length)
+    {
+        if (start < 0 || length < 0 || start > data.Length - length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(start));
+        }
+
+        // 试探起点按 256 字节密钥周期对齐，保证与全量解密在同一周期相位上。
+        // Align the probe start to the 256-byte key period so the probe sees the
+        // same phase as a full decryption.
+        var alignedStart = start - (start % 256);
+        length = start + length - alignedStart;
+        var segment = new byte[length];
+        Array.Copy(data, alignedStart, segment, 0, length);
+        var sbox = SBoxTable();
+        for (var i = 0; i < length; i++)
+        {
+            segment[i] ^= sbox[(alignedStart + i) % 256];
+        }
+
+        return segment;
+    }
+
+    /// <summary>
+    /// Builds the default SBox table shared by the static decrypt paths.
+    /// <para>构建静态解密路径共用的默认 SBox 表。</para>
+    /// </summary>
+    private static byte[] SBoxTable()
+    {
+        var key = Encoding.UTF8.GetBytes("OnePlus#@!$^&*()_+");
+        var sbox = new byte[256];
+        for (var i = 0; i < 256; i++)
+        {
+            sbox[i] = (byte)i;
+        }
+
+        for (int i = 255, j = 0; i > 0; i--)
+        {
+            j = (j + key[i % key.Length] + sbox[i]) & 0xFF;
+            (sbox[i], sbox[j]) = (sbox[j], sbox[i]);
+        }
+
+        return sbox;
     }
 
     private static byte[] SBoxDecryptStatic(byte[] data)
