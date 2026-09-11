@@ -94,6 +94,8 @@
                                     </TextBox.IsEnabled>
                                 </TextBox>
                             </StackPanel>
+                            <Button Name="GenerateScriptButton" Content="{DynamicResource Delivery_GenerateScript}"
+                                    Height="32" MinWidth="96" Padding="12,0" HorizontalAlignment="Right" />
                         </StackPanel>
                     </ScrollViewer>
                 </Expander>

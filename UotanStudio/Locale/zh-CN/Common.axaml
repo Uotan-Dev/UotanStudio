@@ -41,6 +41,7 @@
     <x:String x:Key="Delivery_AddPartition">添加</x:String>
     <x:String x:Key="Delivery_SelectImagesBelow">从下方列表选择镜像</x:String>
     <x:String x:Key="Delivery_ScriptGenerator">脚本生成器</x:String>
+    <x:String x:Key="Delivery_GenerateScript">生成</x:String>
     <x:String x:Key="Delivery_OutputImages">输出镜像</x:String>
     <x:String x:Key="Delivery_OutputImageList">输出镜像列表</x:String>
     <x:String x:Key="Delivery_OptionalImage">可选</x:String>

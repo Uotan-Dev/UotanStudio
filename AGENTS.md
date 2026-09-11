@@ -1,5 +1,12 @@
 # UotanStudio 项目指令
 
+## 交付页面合并约定（2026-09-11）
+
+- 镜像归属、确认与返回编辑统一沿用 `ViewModels/Shell/DeliveryViewModel`；视图通过 `Model.SelectSources`、`Model.Confirm`、`Model.ReturnToContainer` 接入，源列表通过 `SetAssignedPaths` / `RestoreAssignedSources` 同步。合并时移除重复的视图内选择投影、锁定状态及输出集合维护逻辑，不并存两套实现。
+- 保留 `DeliveryView.Operations.cs` 的实际输出、脚本同步及交付计划持久化。下文交付页面旧版“仅界面、不执行输出或持久化”的描述属于历史布局说明。
+- 保留 Super / Payload 列表中位于镜像名称前的可编辑“分区名”列，直接绑定已有 `DeliveryImage.PartitionName`，编辑与拖动排序互不干扰；脚本生成器底部保留“生成”按钮及中英文文案，该按钮本身仍未绑定动作。
+- 源列表的只读状态由现有 `DeliveryViewModel` 的非编辑列表归属派生，经 `SetAssignedPaths` / `RestoreAssignedSources` 同步；确认后编排输入行只读，返回编排后这些行恢复可选，独立输出镜像改为只读。全选状态与全选/取消全选只计算当前可编辑的可见行，整组无可编辑行时禁用全选，避免固定勾选项使全选反复停在部分选中状态；刷新及恢复计划沿用同一规则，不增加第二套镜像归属或确认状态。
+
 ## 新建子项目交互更新（2026-09-11）
 
 - 新建窗口的原包行可勾选，控制是否复制；内部条目独立选择，并与 ZIP 条目共用自适应多列布局。下文旧版“分组头不可勾选”“提交即关闭”“容器必须先复制”的描述已被替代。窗口等待创建、复制和解包完成再关闭，期间显示进度并禁止重复提交。

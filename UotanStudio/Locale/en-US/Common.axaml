@@ -41,6 +41,7 @@
     <x:String x:Key="Delivery_AddPartition">Add</x:String>
     <x:String x:Key="Delivery_SelectImagesBelow">Select images from the lists below</x:String>
     <x:String x:Key="Delivery_ScriptGenerator">Script generator</x:String>
+    <x:String x:Key="Delivery_GenerateScript">Generate</x:String>
     <x:String x:Key="Delivery_OutputImages">Output images</x:String>
     <x:String x:Key="Delivery_OutputImageList">Output image list</x:String>
     <x:String x:Key="Delivery_OptionalImage">Optional</x:String>

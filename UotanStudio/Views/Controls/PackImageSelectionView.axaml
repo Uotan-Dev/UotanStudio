@@ -10,7 +10,7 @@
                 <Grid RowDefinitions="Auto,*">
                     <Grid ColumnDefinitions="Auto,*,Auto" Margin="8,6" ColumnSpacing="8">
                         <CheckBox Content="{DynamicResource Menu_SelectAll}" IsChecked="{Binding AllSelected, Mode=TwoWay}"
-                                  IsEnabled="{Binding HasImages}" MinWidth="0" MinHeight="24" Padding="0" />
+                                  IsEnabled="{Binding HasSelectableImages}" MinWidth="0" MinHeight="24" Padding="0" />
                         <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="Medium" VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Name}" />
                         <Button Grid.Column="2" Classes="Small" Padding="2" IsVisible="{Binding IsExternal}"
@@ -95,7 +95,8 @@
             <Setter Property="HorizontalAlignment" Value="Center" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
-        <Style Selector="ListBox.pack-image-list > ListBoxItem">
+        <Style Selector="ListBox.pack-image-list > ListBoxItem" x:DataType="local:PackImageEntry">
+            <Setter Property="IsEnabled" Value="{Binding !IsSelectionReadOnly}" />
             <Setter Property="Padding" Value="0" />
             <Setter Property="Margin" Value="0" />
             <Setter Property="MinHeight" Value="30" />

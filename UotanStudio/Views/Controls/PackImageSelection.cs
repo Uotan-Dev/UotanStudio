@@ -18,6 +18,7 @@ internal sealed partial class PackImageEntry(string filePath, bool isOriginal = 
     public bool IsOriginal { get; } = isOriginal;
 
     [ObservableProperty] private bool _isSelected;
+    [ObservableProperty] private bool _isSelectionReadOnly;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DisplaySize))] private long? _sizeBytes;
     public string DisplaySize => SizeBytes is { } bytes ? PackImageFileInfo.FormatSize(bytes) : "—";
 
@@ -36,19 +37,20 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
     public bool IsExternal { get; }
     public ObservableCollection<PackImageEntry> Images { get; } = [];
     public bool HasImages => Images.Count > 0;
+    public bool HasSelectableImages => Images.Any(entry => !entry.IsSelectionReadOnly);
     public IEnumerable<string> FilePaths => _entries.Select(entry => entry.FilePath);
     internal IReadOnlyList<PackImageEntry> Entries => _entries;
     internal event EventHandler? SelectionChanged;
 
     public bool? AllSelected
     {
-        get => Images.Count == 0 || Images.All(entry => !entry.IsSelected) ? false
-            : Images.All(entry => entry.IsSelected) ? true : null;
+        get => !HasSelectableImages || Images.Where(entry => !entry.IsSelectionReadOnly).All(entry => !entry.IsSelected) ? false
+            : Images.Where(entry => !entry.IsSelectionReadOnly).All(entry => entry.IsSelected) ? true : null;
         set
         {
-            if (_updatingSelection || value is null) return;
+            if (_updatingSelection || value is null || !HasSelectableImages) return;
             _updatingSelection = true;
-            try { foreach (var entry in Images) entry.IsSelected = value.Value; }
+            try { foreach (var entry in Images.Where(entry => !entry.IsSelectionReadOnly)) entry.IsSelected = value.Value; }
             finally { _updatingSelection = false; }
             OnPropertyChanged();
             SelectionChanged?.Invoke(this, EventArgs.Empty);
@@ -70,12 +72,18 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
         foreach (var entry in _entries)
             if (showOriginal || !entry.IsOriginal) Images.Add(entry);
         OnPropertyChanged(nameof(HasImages));
+        OnPropertyChanged(nameof(HasSelectableImages));
         OnPropertyChanged(nameof(AllSelected));
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSelectionChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(PackImageEntry.IsSelectionReadOnly))
+        {
+            OnPropertyChanged(nameof(HasSelectableImages));
+            OnPropertyChanged(nameof(AllSelected));
+        }
         if (!_updatingSelection && e.PropertyName == nameof(PackImageEntry.IsSelected))
         {
             OnPropertyChanged(nameof(AllSelected));

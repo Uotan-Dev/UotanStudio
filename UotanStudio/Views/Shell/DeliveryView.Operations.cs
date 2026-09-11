@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Net.Http;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -111,6 +111,12 @@ public partial class DeliveryView
         Container = Composition.Model.Container.Select(i => i.Snapshot()).ToList()
     });
 
+    // The inactive list still owns its sources; expose that ownership to the picker without another selection state.
+    // 非编辑列表继续持有其镜像，只向选择器同步只读状态，不额外维护镜像归属。
+    private IEnumerable<string> GetReadOnlyDeliverySources() =>
+        (Composition.Model.EditingContainer ? Composition.Model.Output : Composition.Model.Container)
+        .Where(image => image.FilePath is not null).Select(image => image.FilePath!);
+
     private void QueueDeliveryChange()
     {
         if (_restoringDelivery || _deliveryChangePending) return;
@@ -120,7 +126,7 @@ public partial class DeliveryView
             _deliveryChangePending = false;
             if (_restoringDelivery || Composition.Model.IsRunning) return;
             ImageSelection.SetAssignedPaths(Composition.Model.Container.Concat(Composition.Model.Output)
-                .Where(i => i.FilePath is not null).Select(i => i.FilePath!));
+                .Where(i => i.FilePath is not null).Select(i => i.FilePath!), GetReadOnlyDeliverySources());
             try
             {
                 if (!Composition.OutputView.RecoveryRequested)
@@ -198,7 +204,7 @@ public partial class DeliveryView
             }
             await ImageSelection.RefreshAsync();
             ImageSelection.RestoreAssignedSources(Composition.Model.Container.Concat(Composition.Model.Output)
-                .Where(i => i.FilePath is not null).Select(i => i.FilePath!));
+                .Where(i => i.FilePath is not null).Select(i => i.FilePath!), GetReadOnlyDeliverySources());
         }
         catch (Exception ex) { await ShowDeliveryMessageAsync(ex.Message, true); }
         finally { _restoringDelivery = false; _deliveryRefreshGate.Release(); }

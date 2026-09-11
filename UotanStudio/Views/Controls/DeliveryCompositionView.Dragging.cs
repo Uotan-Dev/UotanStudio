@@ -32,7 +32,7 @@ public partial class DeliveryCompositionView
     {
         if (!e.GetCurrentPoint(OrderedImages).Properties.IsLeftButtonPressed || e.Source is not Visual source) return;
         var ancestors = source.GetVisualAncestors().Prepend(source).TakeWhile(visual => visual != OrderedImages).ToArray();
-        if (ancestors.Any(visual => visual is Button or CheckBox) ||
+        if (ancestors.Any(visual => visual is Button or CheckBox or TextBox) ||
             ancestors.OfType<ListBoxItem>().FirstOrDefault()?.DataContext is not DeliveryImageItem item) return;
         CancelImageDrag();
         _draggedImage = item;
@@ -113,6 +113,8 @@ public partial class DeliveryCompositionView
 
     private void OnImageKeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.Source is Visual source && source.GetVisualAncestors().Prepend(source)
+            .TakeWhile(visual => visual != OrderedImages).Any(visual => visual is TextBox)) return;
         if (e.Key == Key.Escape && _draggedImage is not null)
         {
             CancelImageDrag();

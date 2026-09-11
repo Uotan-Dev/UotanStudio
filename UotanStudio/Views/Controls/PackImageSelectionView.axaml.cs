@@ -310,13 +310,18 @@ public partial class PackImageSelectionView : UserControl
         RenderGroups();
     }
 
-    internal void SetAssignedPaths(IEnumerable<string> assigned)
+    internal void SetAssignedPaths(IEnumerable<string> assigned, IEnumerable<string>? readOnlyPaths = null)
     {
         var paths = assigned.ToHashSet(PathComparer);
-        foreach (var entry in _groups.SelectMany(g => g.Entries)) entry.IsSelected = paths.Contains(entry.FilePath);
+        var readOnly = readOnlyPaths?.ToHashSet(PathComparer);
+        foreach (var entry in _groups.SelectMany(g => g.Entries))
+        {
+            entry.IsSelectionReadOnly = readOnly?.Contains(entry.FilePath) == true;
+            entry.IsSelected = paths.Contains(entry.FilePath);
+        }
     }
 
-    internal void RestoreAssignedSources(IEnumerable<string> assigned)
+    internal void RestoreAssignedSources(IEnumerable<string> assigned, IEnumerable<string>? readOnlyPaths = null)
     {
         var paths = assigned.Distinct(PathComparer).ToArray();
         var existing = _groups.SelectMany(g => g.FilePaths).ToHashSet(PathComparer);
@@ -332,7 +337,7 @@ public partial class PackImageSelectionView : UserControl
             }), isExternal: true)));
             ApplyGroupOptions(); UpdatePageSize(); RenderGroups();
         }
-        SetAssignedPaths(paths);
+        SetAssignedPaths(paths, readOnlyPaths);
     }
 
     internal PackImageSelection[] GetSelectedImages() => _groups.SelectMany(group =>
