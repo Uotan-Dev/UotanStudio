@@ -35,9 +35,22 @@ internal sealed class ExtentReadStream : Stream
     public override int Read(Span<byte> buffer)
     {
         if (_position == _length || buffer.IsEmpty) return 0;
-        foreach (var range in _ranges)
+        // Find the first range whose logical end exceeds the position. Empty
+        // extents can share a start with the next range and must be skipped.
+        var low = 0;
+        var high = _ranges.Length;
+        while (low < high)
         {
-            if (_position < range.LogicalStart || _position - range.LogicalStart >= range.Length) continue;
+            var middle = low + (high - low) / 2;
+            var candidate = _ranges[middle];
+            if (_position >= candidate.LogicalStart && _position - candidate.LogicalStart >= candidate.Length)
+                low = middle + 1;
+            else
+                high = middle;
+        }
+        if (low < _ranges.Length)
+        {
+            var range = _ranges[low];
             var inside = _position - range.LogicalStart;
             var count = (int)Math.Min(buffer.Length, range.Length - inside);
             if (range.Offset < 0) buffer[..count].Clear();
