@@ -80,6 +80,30 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
     }
 
     /// <summary>
+    /// Extracts archive entries to a destination directory and collects the entry
+    /// names during the same single pass, so callers do not need to re-read the
+    /// archive just to list its contents.
+    /// <para>将归档条目解包到目标目录，并在同一次遍历中收集条目名，调用方无需
+    /// 为获取清单而重新读取归档。</para>
+    /// </summary>
+    public IReadOnlyList<string> ExtractToDirectory(Stream stream, string destinationDirectory, ExtractOptions? options, ArchiveFormat? formatHint, out IReadOnlyList<string> entryNames)
+    {
+        var names = new List<string>();
+        IEnumerable<ArchiveEntry> Tap()
+        {
+            foreach (var entry in ReadEntriesStreaming(stream, formatHint))
+            {
+                names.Add(entry.Name);
+                yield return entry;
+            }
+        }
+
+        _extractor.ExtractToDirectory(Tap(), destinationDirectory, options);
+        entryNames = names;
+        return names;
+    }
+
+    /// <summary>
     /// Saves all entries to an archive stream.
     /// <para>将全部条目保存到归档流。</para>
     /// </summary>

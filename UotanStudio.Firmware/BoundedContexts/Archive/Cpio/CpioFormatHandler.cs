@@ -140,19 +140,13 @@ public sealed class CpioFormatHandler : IFormatHandler
             try
             {
                 var extractOptions = new ExtractOptions { Overwrite = options?.Overwrite ?? true };
+                IReadOnlyList<string> entries;
                 using (var fs = File.OpenRead(filePath))
                 {
-                    _archive.ExtractToDirectory(fs, outputDirectory, extractOptions);
-                }
-
-                var entries = new List<string>();
-                using (var listing = File.OpenRead(filePath))
-                {
-                    foreach (var summary in _archive.ListEntries(listing))
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        entries.Add(summary.Name);
-                    }
+                    // 单次遍历同时提取并收集清单，不再为列表重读归档。
+                    // Collect the entry names during the same extraction pass
+                    // instead of re-reading the archive just to list them.
+                    _archive.ExtractToDirectory(fs, outputDirectory, extractOptions, null, out entries);
                 }
 
                 return FirmwareOpResult.Ok(
