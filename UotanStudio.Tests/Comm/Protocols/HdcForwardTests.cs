@@ -8,8 +8,15 @@ namespace UotanStudio.Tests.Comm.Protocols;
 
 public sealed class HdcForwardTests
 {
-    [Fact]
-    public async Task Forward_UsesContextEnvelope_TransfersData_AndReleasesListener()
+    [Theory]
+    [InlineData("tcp:12345")]
+    [InlineData("localabstract:debug")]
+    [InlineData("localreserved:debug")]
+    [InlineData("localfilesystem:debug")]
+    [InlineData("dev:/dev/test")]
+    [InlineData("jdwp:123")]
+    [InlineData("ark:123@456@Debugger")]
+    public async Task Forward_UsesContextEnvelope_TransfersData_AndReleasesListener(string endpoint)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(15));
@@ -23,7 +30,7 @@ public sealed class HdcForwardTests
             {
                 case HdcCommand.ForwardCheck:
                     Assert.Equal(new byte[] { 0, 0, 0, 1 }, payload[..4]);
-                    Assert.Equal("tcp:12345\0", System.Text.Encoding.UTF8.GetString(payload[12..]));
+                    Assert.Equal(endpoint + "\0", System.Text.Encoding.UTF8.GetString(payload[12..]));
                     command = HdcCommand.ForwardCheckResult; reply = [.. payload[..4], 0]; break;
                 case HdcCommand.ForwardActiveSlave:
                     command = HdcCommand.ForwardActiveMaster; reply = payload[..4]; break;
@@ -33,7 +40,7 @@ public sealed class HdcForwardTests
             }
             return [HdcDaemonCodec.Encode(new(command, message.ChannelId, 0, reply))];
         });
-        session.Connection.Forwards.Add(port, 12345, cancellationToken: timeout.Token);
+        session.Connection.Forwards.Add(port, endpoint, cancellationToken: timeout.Token);
         Assert.Contains($"tcp:{port}", session.Connection.Forwards.List());
         using var client = new TcpClient();
         await client.ConnectAsync(IPAddress.Loopback, port, timeout.Token);

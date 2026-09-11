@@ -34,7 +34,10 @@ public sealed class HdcDeviceServices
     public string GetProp(string key)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
-        return RunCommand("param get " + QuoteShellArgument(key)).Trim();
+        var response = RunCommand("param get " + QuoteShellArgument(key)).Trim();
+        if (response.StartsWith($"Get parameter \"{key}\" fail!", StringComparison.Ordinal))
+            throw new IOException(response);
+        return response;
     }
     /// <summary>Maps supported UI reboot modes to upstream target boot arguments.
     /// <para>将界面支持的重启模式映射为上游 target boot 参数。</para></summary>
@@ -55,7 +58,10 @@ public sealed class HdcDeviceServices
     public void Remount() => ExecuteService("target mount", HdcCommand.UnityRemount, "", 10000);
 
     /// <summary>Lists processes exposed by the device's debug service.</summary>
-    public string ListDebugProcesses() => ExecuteService("jpid", HdcCommand.JdwpList, "", 10000);
+    public string ListDebugProcesses() => ListDebugProcesses(10000);
+
+    /// <summary>Lists debug processes within an overall response deadline in milliseconds.</summary>
+    public string ListDebugProcesses(int timeoutMs) => ExecuteService("jpid", HdcCommand.JdwpList, "", timeoutMs);
 
     /// <summary>Opens a native interactive shell; callers own its lifetime and terminal input.</summary>
     public HdcStream OpenInteractiveShell() => (_connection ?? throw new NotSupportedException("Interactive byte streams require a direct connection."))
@@ -72,6 +78,9 @@ public sealed class HdcDeviceServices
     /// <summary>Streams a device diagnostic report to a caller-owned destination without whole-report buffering.</summary>
     public void Bugreport(Stream destination, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(destination);
+        if (!destination.CanWrite) throw new ArgumentException("Destination must be writable.", nameof(destination));
+        cancellationToken.ThrowIfCancellationRequested();
         using var channel = (_connection ?? throw new NotSupportedException("Native report streaming requires a direct connection."))
             .OpenChannel(HdcCommand.UnityBugreportInit, []);
         var deadline = Environment.TickCount64 + 300000;
@@ -99,6 +108,7 @@ public sealed class HdcDeviceServices
     }
     private string ExecuteService(string command, HdcCommand nativeCommand, string argument, int timeoutMs)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(timeoutMs);
         if (_server is not null)
         {
             var response = Encoding.UTF8.GetString(_server.ExecuteOnDevice(_connectKey!, command, timeoutMs));
@@ -107,8 +117,13 @@ public sealed class HdcDeviceServices
         }
         using var channel = _connection!.OpenChannel(nativeCommand, Encoding.UTF8.GetBytes(argument));
         using var output = new MemoryStream();
-        while (channel.Read(timeoutMs) is { } bytes)
+        var deadline = Environment.TickCount64 + timeoutMs;
+        while (true)
         {
+            var remaining = deadline - Environment.TickCount64;
+            if (remaining <= 0) throw new TimeoutException("HDC service did not complete.");
+            var bytes = channel.Read((int)remaining);
+            if (bytes is null) break;
             if (output.Length + bytes.Length > HdcServerClient.MaximumOutputBytes)
                 throw new InvalidDataException("HDC service output limit exceeded.");
             output.Write(bytes);

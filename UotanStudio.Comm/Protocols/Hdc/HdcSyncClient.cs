@@ -62,8 +62,65 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable
     /// <summary>Sends one regular file. Device operations are cancellable between bounded packets.</summary>
     public void Send(string localPath, string remotePath, bool holdTimestamp = true, CancellationToken cancellationToken = default)
     {
+        if (Directory.Exists(localPath))
+        {
+            SendDirectory(localPath, remotePath, holdTimestamp, cancellationToken: cancellationToken);
+            return;
+        }
         using var input = File.OpenRead(localPath);
         SendStream(input, remotePath, input.Length, holdTimestamp, cancellationToken);
+    }
+
+    /// <summary>Sends a bounded regular-file tree using one daemon task. Like official HDC, empty trees are rejected and empty directories are omitted.</summary>
+    public void SendDirectory(string localPath, string remotePath, bool holdTimestamp = true,
+        long maximumBytes = 64L * 1024 * 1024 * 1024, int maximumFiles = 100000, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidatePath(remotePath);
+        ArgumentOutOfRangeException.ThrowIfNegative(maximumBytes);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maximumFiles, 1);
+        var root = new DirectoryInfo(localPath);
+        if (!root.Exists) throw new DirectoryNotFoundException(localPath);
+        var files = new List<FileInfo>();
+        var pending = new Stack<DirectoryInfo>();
+        pending.Push(root);
+        long total = 0;
+        var entries = 0;
+        while (pending.TryPop(out var directory))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((directory.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("HDC directory send does not follow links.");
+            foreach (var item in directory.EnumerateFileSystemInfos())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (++entries > 100000) throw new IOException("HDC directory entry limit exceeded.");
+                if ((item.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("HDC directory send does not follow links.");
+                if (item is DirectoryInfo child) pending.Push(child);
+                else if (item is FileInfo file)
+                {
+                    total = checked(total + file.Length);
+                    if (total > maximumBytes || files.Count >= maximumFiles) throw new IOException("HDC directory transfer budget exceeded.");
+                    files.Add(file);
+                }
+            }
+        }
+        if (files.Count == 0) throw new IOException("HDC cannot send an empty directory.");
+        using var channel = connection.OpenChannel(HdcCommand.WakeupSlaveTask, []);
+        foreach (var file in files.OrderBy(f => f.FullName, StringComparer.Ordinal))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var input = file.OpenRead();
+            if (input.Length != file.Length) throw new IOException("HDC source file changed during directory preparation.");
+            var config = CreateSendConfig(input, remotePath, input.Length, holdTimestamp);
+            config.OptionalName = root.Name + "/" + Path.GetRelativePath(root.FullName, file.FullName).Replace('\\', '/');
+            channel.SendCommand(HdcCommand.FileCheck, SerializeTransferConfig(config));
+            Expect(channel, HdcCommand.FileBegin, cancellationToken);
+            SendData(channel, input, input.Length, HdcCommand.FileData, cancellationToken);
+            if (Expect(channel, HdcCommand.FileFinish, cancellationToken).Payload is not [1])
+                throw new InvalidDataException("Invalid HDC directory file completion.");
+        }
+        channel.SendCommand(HdcCommand.FileFinish, [0]);
     }
 
     /// <summary>Sends the declared number of bytes without buffering the whole file.</summary>
@@ -73,6 +130,17 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentOutOfRangeException.ThrowIfNegative(fileSize);
         ValidatePath(remotePath);
+        var config = CreateSendConfig(source, remotePath, fileSize, holdTimestamp);
+        using var channel = connection.OpenChannel(HdcCommand.FileCheck, SerializeTransferConfig(config));
+        Expect(channel, HdcCommand.FileBegin, cancellationToken);
+        SendData(channel, source, fileSize, HdcCommand.FileData, cancellationToken);
+        var finish = Expect(channel, HdcCommand.FileFinish, cancellationToken);
+        if (finish.Payload is not [1]) throw new InvalidDataException("Invalid HDC file completion.");
+        channel.SendCommand(HdcCommand.FileFinish, [0]);
+    }
+
+    private TransferConfig CreateSendConfig(Stream source, string remotePath, long fileSize, bool holdTimestamp)
+    {
         var config = new TransferConfig { FileSize = fileSize, Path = remotePath,
             OptionalName = source is FileStream named ? Path.GetFileName(named.Name) : remotePath.TrimEnd('/').Split('/')[^1],
             CompressType = Compress ? 1 : 0, HoldTimestamp = holdTimestamp && source is FileStream };
@@ -81,12 +149,7 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable
             config.Atime = checked((File.GetLastAccessTimeUtc(file.Name).Ticks - DateTime.UnixEpoch.Ticks) * 100);
             config.Mtime = checked((File.GetLastWriteTimeUtc(file.Name).Ticks - DateTime.UnixEpoch.Ticks) * 100);
         }
-        using var channel = connection.OpenChannel(HdcCommand.FileCheck, SerializeTransferConfig(config));
-        Expect(channel, HdcCommand.FileBegin, cancellationToken);
-        SendData(channel, source, fileSize, HdcCommand.FileData, cancellationToken);
-        var finish = Expect(channel, HdcCommand.FileFinish, cancellationToken);
-        if (finish.Payload is not [1]) throw new InvalidDataException("Invalid HDC file completion.");
-        channel.SendCommand(HdcCommand.FileFinish, [0]);
+        return config;
     }
 
     /// <summary>Receives to a unique sibling staging file, publishing only after full protocol completion.</summary>

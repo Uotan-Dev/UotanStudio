@@ -195,15 +195,46 @@ public sealed class HdcTransferTests
     internal static HdcSession Session(Func<HdcMessage, byte[][]> handler)
     {
         var transport = new FakeCommTransport();
+        var slaveTasks = new HashSet<uint>();
         transport.OnWrite = packet =>
         {
             var message = HdcDaemonCodec.Decode(packet);
+            if (message.Command == HdcCommand.WakeupSlaveTask) slaveTasks.Add(message.ChannelId);
+            if (message.Command is HdcCommand.AppCheck or HdcCommand.FileCheck or HdcCommand.ForwardCheck)
+                Assert.Contains(message.ChannelId, slaveTasks);
+            if (message.Command == HdcCommand.ChannelClose) slaveTasks.Remove(message.ChannelId);
             return message.Command == HdcCommand.Handshake
                 ? [HdcDaemonCodec.Encode(new(HdcCommand.Handshake, 0, 0, HdcDaemonCodec.Handshake(4, 0, "", [], "test")))]
                 : handler(message);
         };
         var session = new HdcSession(transport, new HdcAuthentication(RSA.Create(3072)));
         session.Connect(); return session;
+    }
+
+    [Theory]
+    [InlineData(0, "install bundle successfully. ", true)]
+    [InlineData(1, "installed", true)]
+    [InlineData(0, "error: install bundle successfully. expected but failed", false)]
+    [InlineData(0, "error: no signature file.", false)]
+    [InlineData(1, "error: failed to install bundle.", false)]
+    [InlineData(2, "install bundle successfully.", false)]
+    public void Install_HandlesUpstreamAndHarmonyResultConventions(byte status, string text, bool success)
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".hap");
+        File.WriteAllBytes(path, [1]);
+        try
+        {
+            using var session = Session(message => message.Command switch
+            {
+                HdcCommand.AppCheck => [Reply(message, HdcCommand.AppBegin, [])],
+                HdcCommand.AppData => [Reply(message, HdcCommand.AppFinish, [1, status, .. System.Text.Encoding.UTF8.GetBytes(text)])],
+                _ => [],
+            });
+            var client = new HdcAppClient(session.Connection);
+            if (success) Assert.Equal(text, client.Install(path, "-r", TestContext.Current.CancellationToken));
+            else Assert.Throws<IOException>(() => client.Install(path, TestContext.Current.CancellationToken));
+        }
+        finally { File.Delete(path); }
     }
 
     [Fact]

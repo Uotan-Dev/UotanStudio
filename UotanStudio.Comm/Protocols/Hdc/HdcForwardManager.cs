@@ -11,25 +11,29 @@ namespace UotanStudio.Comm.Protocols.Hdc;
 public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
 {
     private readonly Lock _gate = new();
-    private readonly Dictionary<(bool Reverse, int Listen), Mapping> _mappings = [];
+    private readonly Dictionary<(bool Reverse, string Listen), Mapping> _mappings = [];
     private bool _disposed;
 
     /// <summary>Creates a loopback TCP mapping, awaiting the upstream endpoint check.</summary>
     public void Add(int localPort, int remotePort, bool reverse = false, CancellationToken cancellationToken = default)
+        => Add(localPort, $"tcp:{remotePort}", reverse, cancellationToken);
+
+    /// <summary>Maps a host TCP port to an upstream TCP, Unix socket, device, JDWP or Ark endpoint.</summary>
+    public void Add(int localPort, string remoteEndpoint, bool reverse = false, CancellationToken cancellationToken = default)
     {
-        if (localPort is < 1 or > 65535 || remotePort is < 1 or > 65535)
-            throw new ArgumentOutOfRangeException(nameof(localPort));
+        if (localPort is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(localPort));
+        ValidateRemoteEndpoint(remoteEndpoint, reverse);
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            var key = (reverse, reverse ? remotePort : localPort);
+            var key = (reverse, reverse ? remoteEndpoint : $"tcp:{localPort}");
             if (_mappings.TryGetValue(key, out var existing))
             {
-                if (existing.LocalPort == localPort && existing.RemotePort == remotePort && !existing.IsClosed) return;
+                if (existing.LocalPort == localPort && existing.RemoteEndpoint == remoteEndpoint && !existing.IsClosed) return;
                 if (!existing.IsClosed) throw new IOException("HDC listen port already has a different mapping.");
                 existing.Dispose(); _mappings.Remove(key);
             }
-            var mapping = new Mapping(connection, localPort, remotePort, reverse);
+            var mapping = new Mapping(connection, localPort, remoteEndpoint, reverse);
             try { mapping.Start(cancellationToken); _mappings.Add(key, mapping); }
             catch { mapping.Dispose(); throw; }
         }
@@ -39,15 +43,18 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
     public string List()
     {
         lock (_gate) return string.Join('\n', _mappings.Values.Where(m => !m.IsClosed)
-            .Select(m => $"{(m.Reverse ? "rport" : "fport")} tcp:{m.LocalPort} tcp:{m.RemotePort}"));
+            .Select(m => $"{(m.Reverse ? "rport" : "fport")} tcp:{m.LocalPort} {m.RemoteEndpoint}"));
     }
 
     /// <summary>Removes a mapping and all its sockets by the listening port.</summary>
-    public bool Remove(int listenPort, bool reverse = false)
+    public bool Remove(int listenPort, bool reverse = false) => Remove($"tcp:{listenPort}", reverse);
+
+    /// <summary>Removes a mapping by its exact listening endpoint.</summary>
+    public bool Remove(string listenEndpoint, bool reverse = false)
     {
         lock (_gate)
         {
-            if (!_mappings.Remove((reverse, listenPort), out var mapping)) return false;
+            if (!_mappings.Remove((reverse, listenEndpoint), out var mapping)) return false;
             mapping.Dispose(); return true;
         }
     }
@@ -64,7 +71,36 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
         }
     }
 
-    private sealed class Mapping(HdcConnection connection, int localPort, int remotePort, bool reverse) : IDisposable
+    internal static void ValidateRemoteEndpoint(string endpoint, bool reverse)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(endpoint);
+        if (endpoint.Length > 1024 || endpoint.Any(c => char.IsControl(c) || char.IsWhiteSpace(c) || c is '\'' or '"'))
+            throw new ArgumentException("Invalid HDC endpoint.", nameof(endpoint));
+        var split = endpoint.IndexOf(':');
+        if (split <= 0 || split == endpoint.Length - 1) throw new ArgumentException("Expected schema:content.", nameof(endpoint));
+        var schema = endpoint[..split];
+        var content = endpoint[(split + 1)..];
+        switch (schema)
+        {
+            case "tcp":
+                if (!int.TryParse(content, out var port) || port is < 1 or > 65535) throw new ArgumentException("Invalid TCP port.", nameof(endpoint));
+                break;
+            case "jdwp":
+                if (reverse || !int.TryParse(content, out var pid) || pid <= 0) throw new ArgumentException("JDWP requires a remote process ID and a forward mapping.", nameof(endpoint));
+                break;
+            case "ark":
+                var parts = content.Split('@');
+                if (reverse || parts.Length != 3 || !int.TryParse(parts[0], out var process) || process <= 0 ||
+                    !int.TryParse(parts[1], out var thread) || thread <= 0 || parts[2] is not ("Debugger" or "ArkCompiler"))
+                    throw new ArgumentException("Invalid Ark debug endpoint.", nameof(endpoint));
+                break;
+            case "localabstract": case "localfilesystem": case "localreserved": case "dev":
+                break;
+            default: throw new NotSupportedException("Unsupported HDC endpoint schema: " + schema);
+        }
+    }
+
+    private sealed class Mapping(HdcConnection connection, int localPort, string remoteEndpoint, bool reverse) : IDisposable
     {
         private readonly CancellationTokenSource _stop = new();
         private readonly ConcurrentDictionary<uint, Context> _contexts = new();
@@ -73,7 +109,7 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
         private int _nextId = 1;
         private int _disposed;
         internal int LocalPort => localPort;
-        internal int RemotePort => remotePort;
+        internal string RemoteEndpoint => remoteEndpoint;
         internal bool Reverse => reverse;
         internal bool IsClosed => _stop.IsCancellationRequested || _channel?.IsClosed == true;
 
@@ -83,7 +119,7 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
             if (reverse)
             {
                 _channel = connection.OpenChannel(HdcCommand.ForwardInit,
-                    Encoding.UTF8.GetBytes($"tcp:{remotePort} tcp:{localPort}"));
+                    Encoding.UTF8.GetBytes($"{remoteEndpoint} tcp:{localPort}"));
                 var check = HdcSyncClient.Expect(_channel, HdcCommand.ForwardCheck, ct);
                 var id = ValidateEndpoint(check.Payload ?? []);
                 Send(HdcCommand.ForwardCheckResult, id, [1]);
@@ -94,7 +130,7 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
             {
                 _listener = new TcpListener(IPAddress.Loopback, localPort);
                 _listener.Start(32);
-                _channel = connection.OpenChannel(HdcCommand.ForwardCheck, Endpoint(1, $"tcp:{remotePort}"));
+                _channel = connection.OpenChannel(HdcCommand.ForwardCheck, Endpoint(1, remoteEndpoint));
                 var result = HdcSyncClient.Expect(_channel, HdcCommand.ForwardCheckResult, ct).Payload ?? [];
                 if (result.Length != 5 || BinaryPrimitives.ReadUInt32BigEndian(result) != 1)
                     throw new InvalidDataException("Invalid HDC forwarding check response.");
@@ -113,7 +149,7 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
                     var socket = await _listener!.AcceptTcpClientAsync(_stop.Token).ConfigureAwait(false);
                     var id = checked((uint)Interlocked.Increment(ref _nextId));
                     if (!AddContext(id, socket)) continue;
-                    _channel!.SendCommand(HdcCommand.ForwardActiveSlave, Endpoint(id, $"tcp:{remotePort}"));
+                    _channel!.SendCommand(HdcCommand.ForwardActiveSlave, Endpoint(id, remoteEndpoint));
                     _ = ExpireUnactivated(id);
                 }
             }

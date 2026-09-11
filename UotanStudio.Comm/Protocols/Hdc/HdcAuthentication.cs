@@ -1,5 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using Org.BouncyCastle.Crypto.Encodings;
+using Org.BouncyCastle.Crypto.Engines;
+using Org.BouncyCastle.Security;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
 
@@ -54,15 +57,14 @@ public sealed class HdcAuthentication : IDisposable
     private readonly HdcAuthVerifyType _verifyType;
 
     /// <summary>
-    /// Gets the default key directory (~/.harmony), matching the OpenHarmony HDC key location.
-    /// <para>获取默认密钥目录（~/.harmony），与 OpenHarmony HDC 密钥位置一致。</para>
+    /// Gets the default key directory (the per-user UotanStudio data directory), independent of the official HDC identity.
+    /// <para>获取 UotanStudio 独立身份的用户数据目录，不读取官方 HDC 密钥。</para>
     /// </summary>
-    public static string DefaultKeyDirectory => Path.Combine(GetHomeDirectory(), ".harmony");
+    public static string DefaultKeyDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "Hdc");
 
     /// <summary>
-    /// Gets the default private key file path (~/.harmony/hdckey), matching the OpenHarmony HDC
-    /// key location.
-    /// <para>获取默认私钥文件路径（~/.harmony/hdckey），与 OpenHarmony HDC 密钥位置一致。</para>
+    /// Gets the default private key file path (UotanStudio/Hdc/hdckey), independent of the official HDC identity.
+    /// <para>获取 UotanStudio 独立身份的私钥文件路径。</para>
     /// </summary>
     public static string DefaultKeyFilePath => Path.Combine(DefaultKeyDirectory, "hdckey");
 
@@ -140,21 +142,29 @@ public sealed class HdcAuthentication : IDisposable
             return LoadPrivateKey(path);
         }
 
-        var created = CreateNew();
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrEmpty(directory))
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        Directory.CreateDirectory(directory);
+        var temporaryPath = Path.Combine(directory, ".hdckey-" + Guid.NewGuid().ToString("N"));
+        using var created = CreateNew();
+        try
         {
-            Directory.CreateDirectory(directory);
+            WriteKeyFile(temporaryPath, created._rsa.ExportRSAPrivateKeyPem());
+            try { File.Move(temporaryPath, path, overwrite: false); }
+            catch (IOException) when (File.Exists(path))
+            {
+                // Another process published its complete identity first. Never
+                // overwrite it or expose a partially written private key.
+            }
+            var loaded = LoadPrivateKey(path);
+            try
+            {
+                WriteKeyFile(temporaryPath, loaded._rsa.ExportSubjectPublicKeyInfoPem() + "\n");
+                File.Move(temporaryPath, path + ".pub", overwrite: true);
+                return loaded;
+            }
+            catch { loaded.Dispose(); throw; }
         }
-
-        // Write the private key with restrictive permissions from the moment of
-        // creation.  On Unix we use .NET 10's FileStreamOptions.UnixCreateMode to
-        // open the file with 0600 (user read/write only) atomically, avoiding the
-        // "create 0644 then chmod" exposure window.  On Windows the ACL inherits
-        // from the parent directory, which is the standard behaviour for %USERPROFILE%.
-        WriteKeyFile(path, created._rsa.ExportRSAPrivateKeyPem());
-        WriteKeyFile(path + ".pub", created._rsa.ExportSubjectPublicKeyInfoPem() + "\n");
-        return created;
+        finally { File.Delete(temporaryPath); }
     }
 
     /// <summary>
@@ -173,22 +183,30 @@ public sealed class HdcAuthentication : IDisposable
     /// <returns>The signed payload. 签名后的负载。</returns>
     /// <exception cref="ArgumentException"><paramref name="token"/> is empty. 令牌为空。</exception>
     public byte[] SignToken(byte[] token)
+        => SignToken(token, _verifyType);
+
+    /// <summary>Signs a daemon challenge with the negotiated upstream RSA algorithm.</summary>
+    public byte[] SignToken(byte[] token, HdcAuthVerifyType verifyType)
     {
         if (token is null || token.Length == 0)
         {
             throw new ArgumentException("Token must not be empty.", nameof(token));
         }
 
-        if (_verifyType == HdcAuthVerifyType.Rsa3072Sha512)
+        if (verifyType == HdcAuthVerifyType.Rsa3072Sha512)
         {
             // RSA-PSS SHA-512 signature (primary HDC authentication mode).
             return _rsa.SignData(token, HashAlgorithmName.SHA512, RSASignaturePadding.Pss);
         }
-        else
+        if (verifyType == HdcAuthVerifyType.RsaEncrypt)
         {
-            // Legacy mode: RSA PKCS#1 v1.5 encryption.
-            return _rsa.Encrypt(token, RSAEncryptionPadding.Pkcs1);
+            // Upstream RSA_private_encrypt uses block type 1 with the raw
+            // challenge, not public-key encryption and not a DigestInfo hash.
+            var signer = new Pkcs1Encoding(new RsaBlindedEngine());
+            signer.Init(true, DotNetUtilities.GetRsaKeyPair(_rsa).Private);
+            return signer.ProcessBlock(token, 0, token.Length);
         }
+        throw new NotSupportedException($"HDC authentication algorithm {verifyType} is not implemented.");
     }
 
     /// <summary>
@@ -200,7 +218,7 @@ public sealed class HdcAuthentication : IDisposable
     /// </summary>
     /// <returns>The Base64-encoded public key payload bytes.
     /// Base64 编码的公钥负载字节。</returns>
-    public byte[] BuildDaemonPublicKeyPayload() => Encoding.UTF8.GetBytes(Environment.MachineName + "\f" + _rsa.ExportSubjectPublicKeyInfoPem() + "\n");
+    public byte[] BuildDaemonPublicKeyPayload() => Encoding.UTF8.GetBytes("UotanStudio@" + Environment.MachineName + "\f" + _rsa.ExportSubjectPublicKeyInfoPem() + "\n");
 
     public byte[] BuildPublicKeyPayload()
     {
@@ -291,38 +309,18 @@ public sealed class HdcAuthentication : IDisposable
     }
 
     /// <summary>
-    /// Gets the default private key path (~/.harmony/hdckey).
-    /// <para>获取默认私钥路径（~/.harmony/hdckey）。</para>
+    /// Gets the default private key path (UotanStudio/Hdc/hdckey).
+    /// <para>获取默认私钥路径（UotanStudio/Hdc/hdckey）。</para>
     /// </summary>
     /// <returns>The default private key path. 默认私钥路径。</returns>
     public static string GetKeyPath() => DefaultKeyFilePath;
 
     /// <summary>
-    /// Gets the default public key path (~/.harmony/hdckey.pub).
-    /// <para>获取默认公钥路径（~/.harmony/hdckey.pub）。</para>
+    /// Gets the default public key path (UotanStudio/Hdc/hdckey.pub).
+    /// <para>获取默认公钥路径（UotanStudio/Hdc/hdckey.pub）。</para>
     /// </summary>
     /// <returns>The default public key path. 默认公钥路径。</returns>
     public static string GetPublicKeyPath() => DefaultKeyFilePath + ".pub";
-
-    /// <summary>
-    /// Resolves the user home directory across platforms.
-    /// <para>跨平台解析用户主目录。</para>
-    /// </summary>
-    /// <returns>The user home directory path. 用户主目录路径。</returns>
-    private static string GetHomeDirectory()
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (!string.IsNullOrEmpty(home))
-        {
-            return home;
-        }
-
-        home = Environment.GetEnvironmentVariable("USERPROFILE")
-            ?? Environment.GetEnvironmentVariable("HOME")
-            ?? string.Empty;
-
-        return string.IsNullOrEmpty(home) ? "." : home;
-    }
 
     /// <summary>
     /// Writes key text to <paramref name="path"/> with restrictive permissions from

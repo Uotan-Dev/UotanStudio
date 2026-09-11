@@ -27,7 +27,16 @@ public sealed class HdcConnection : IDisposable
     private string? _peerBanner;
     private bool _connected;
     private bool _disposed;
+    private string _peerVersionString = "";
+    private IReadOnlyDictionary<string, string> _peerCapabilities = new Dictionary<string, string>();
     private HdcForwardManager? _forwards;
+
+    /// <summary>
+    /// Cached USB OUT endpoint max packet size, resolved once per connection.
+    /// <para>USB OUT 端点的最大包大小，连接建立时解析一次并缓存，
+    /// 避免每条消息重复枚举接口/端点。</para>
+    /// </summary>
+    private int _usbOutPacketSize;
 
     /// <summary>Persistent native TCP mappings owned by this connection.</summary>
     public HdcForwardManager Forwards
@@ -70,6 +79,12 @@ public sealed class HdcConnection : IDisposable
     /// </summary>
     public string? PeerBanner => _peerBanner;
 
+    /// <summary>The version string reported by the daemon, without substituting our own protocol version.</summary>
+    public string PeerVersionString => _peerVersionString;
+
+    /// <summary>Capabilities reported in the daemon's successful authentication response.</summary>
+    public IReadOnlyDictionary<string, string> PeerCapabilities => _peerCapabilities;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="HdcConnection"/> class.
     /// <para>初始化 <see cref="HdcConnection"/> 类的新实例。</para>
@@ -105,15 +120,37 @@ public sealed class HdcConnection : IDisposable
         // <para>生成随机会话 ID。</para>
         _sessionId = (uint)Random.Shared.Next();
 
+        if (_transport is UsbDeviceTransport usbTransport)
+        {
+            // Cache the OUT endpoint packet size once per connection instead of
+            // re-enumerating interfaces/endpoints on every message send.
+            _usbOutPacketSize = usbTransport.Session.DeviceInfo.Interfaces.SelectMany(i => i.Endpoints)
+                .FirstOrDefault(e => e.EndpointAddress == usbTransport.Session.EndpointOut)?.MaxPacketSize ?? 0;
+
+            // Official host_usb ClearUsbChannel: reset only the HDC session,
+            // then drain old USB replies before starting a fresh handshake.
+            WriteExact([(byte)'U', (byte)'B', 2, 0, 0, 0, 0, 0, 0, 0, 0]);
+            var discard = new byte[513 * 1024];
+            var deadline = Environment.TickCount64 + 3000;
+            while (_transport.Read(discard, 0, discard.Length, 160) != 0)
+                if (Environment.TickCount64 >= deadline) throw new IOException("HDC USB session did not become idle.");
+        }
+
         // session.h auth states: NONE=0, SIGNATURE=2, PUBLICKEY=3, OK=4.
         Send(new HdcMessage(HdcCommand.Handshake, 0, _sessionId,
             HdcDaemonCodec.Handshake(0, _sessionId, string.Empty, System.Text.Encoding.ASCII.GetBytes("authtype        1               1"), "Ver: 3.2.0f")));
         var authenticated = false;
-        var authDeadline = Environment.TickCount64 + 30000;
-        for (var round = 0; round < 8; round++)
+        var verifyType = _authentication.VerifyType;
+        var authDeadline = Environment.TickCount64 + 120000;
+        for (var round = 0; round < 8;)
         {
             if (Environment.TickCount64 >= authDeadline) throw new TimeoutException("HDC authentication deadline exceeded.");
-            var response = ReadMessage();
+            HdcMessage response;
+            try { response = ReadMessage(); }
+            catch (TimeoutException) { continue; } // Allow time for the device's host trust dialog.
+            if (response.ChannelId == 0 && response.Command is HdcCommand.Echo or HdcCommand.ChannelClose)
+                continue;
+            round++;
             if (response.Command != HdcCommand.Handshake || response.ChannelId != 0)
                 throw new InvalidDataException("Expected HDC authentication handshake.");
             var handshake = HdcDaemonCodec.ReadHandshake(response.Payload ?? []);
@@ -121,17 +158,37 @@ public sealed class HdcConnection : IDisposable
                 throw new InvalidDataException("HDC authentication session mismatch.");
             _peerBanner = HdcConstants.HandshakeMessage;
             _peerVersion = HdcConstants.ProtocolVersion;
+            _peerVersionString = handshake.Version;
+            if (handshake.State == 3)
+            {
+                var capabilities = handshake.Buffer.AsSpan().StartsWith("authtype        "u8)
+                    ? HdcCapabilities.Decode(handshake.Buffer) : new Dictionary<string, string>();
+                verifyType = capabilities.TryGetValue("authtype", out var algorithm) ? algorithm switch
+                {
+                    "1" => HdcAuthVerifyType.Rsa3072Sha512,
+                    "0" => HdcAuthVerifyType.RsaEncrypt,
+                    _ => throw new NotSupportedException("Unsupported HDC authentication algorithm: " + algorithm),
+                } : HdcAuthVerifyType.RsaEncrypt;
+            }
             if (handshake.State == 4)
             {
                 var status = System.Text.Encoding.UTF8.GetString(handshake.Buffer);
-                if (status.Contains("DAEMON_UNAUTH", StringComparison.Ordinal))
-                    throw new UnauthorizedAccessException("HDC device did not authorize this host.");
+                var capabilities = handshake.Buffer.AsSpan().StartsWith("emgmsg          "u8) || handshake.Buffer.AsSpan().StartsWith("daemonauthstatus "u8)
+                    ? HdcCapabilities.Decode(handshake.Buffer) : new Dictionary<string, string>();
+                var diagnostic = capabilities.GetValueOrDefault("emgmsg", "");
+                // The daemon emits AUTH_OK/DAEMON_UNAUTH as a progress notice
+                // before opening the trust dialog, then sends the real challenge.
+                if (diagnostic.StartsWith("[E000002]", StringComparison.Ordinal)) continue;
+                if (capabilities.GetValueOrDefault("daemonauthstatus") == "DAEMON_UNAUTH" || status == "DAEMON_UNAUTH")
+                    throw new UnauthorizedAccessException("HDC device did not authorize this host: " + diagnostic);
+                _peerCapabilities = new System.Collections.ObjectModel.ReadOnlyDictionary<string, string>(capabilities);
+                _peerBanner = capabilities.GetValueOrDefault("devname", status);
                 authenticated = true; break;
             }
             byte[] buffer = handshake.State switch
             {
                 3 => _authentication.BuildDaemonPublicKeyPayload(),
-                2 => System.Text.Encoding.ASCII.GetBytes(Convert.ToBase64String(_authentication.SignToken(handshake.Buffer))),
+                2 => System.Text.Encoding.ASCII.GetBytes(Convert.ToBase64String(_authentication.SignToken(handshake.Buffer, verifyType))),
                 5 => throw new UnauthorizedAccessException("HDC device rejected host authorization."),
                 _ => throw new NotSupportedException($"HDC authentication state {handshake.State} is not supported."),
             };
@@ -197,7 +254,14 @@ public sealed class HdcConnection : IDisposable
             stream.SetRemoteId(id);
             _streams.Add(id, stream);
         }
-        try { Send(new HdcMessage(command, stream.ChannelId, _sessionId, initialPayload)); }
+        try
+        {
+            // These checks start a host-master task. The daemon only allocates
+            // its slave task on WAKEUP; CHECK alone is silently discarded.
+            if (command is HdcCommand.FileCheck or HdcCommand.AppCheck or HdcCommand.ForwardCheck)
+                Send(new HdcMessage(HdcCommand.WakeupSlaveTask, stream.ChannelId, _sessionId, []));
+            Send(new HdcMessage(command, stream.ChannelId, _sessionId, initialPayload));
+        }
         catch { lock (_streamsLock) _streams.Remove(stream.ChannelId); stream.MarkClosed(); throw; }
         return stream;
     }
@@ -255,8 +319,7 @@ public sealed class HdcConnection : IDisposable
             {
                 WriteUsbHeader(1, (uint)packet.Length);
                 WriteExact(packet);
-                var packetSize = usb.Session.DeviceInfo.Interfaces.SelectMany(i => i.Endpoints)
-                    .FirstOrDefault(e => e.EndpointAddress == usb.Session.EndpointOut)?.MaxPacketSize ?? 0;
+                var packetSize = _usbOutPacketSize;
                 if (packetSize == 0 || packet.Length % packetSize == 0) WriteUsbHeader(0, 0);
             }
             else WriteExact(packet);
@@ -304,8 +367,18 @@ public sealed class HdcConnection : IDisposable
             while (true)
             {
                 var usb = HdcUsbHead.Parse(ReadExact(11, DefaultTimeoutMs));
-                if (usb.Flag0 != 'U' || usb.Flag1 != 'B' || usb.SessionId != _sessionId)
+                if (usb.Flag0 != 'U' || usb.Flag1 != 'B')
                     throw new InvalidDataException("Invalid HDC USB identity.");
+                if (!_connected && usb.SessionId != _sessionId)
+                {
+                    // A prior host can close during authorization with complete
+                    // replies still queued. Drain bounded old-session blocks.
+                    if (usb.DataSize > HdcConstants.MaxPayloadSize + 1035)
+                        throw new InvalidDataException("Invalid stale HDC USB block.");
+                    if (usb.DataSize != 0) _ = ReadBody((int)usb.DataSize);
+                    continue;
+                }
+                if (usb.SessionId != _sessionId) throw new InvalidDataException("Unexpected HDC USB session.");
                 if ((usb.Option & 2) != 0) throw new IOException("HDC USB session reset by peer.");
                 if (usb.Option == 0 && usb.DataSize == 0) continue;
                 if (usb.Option != 1 || usb.DataSize < 11 || usb.DataSize > HdcConstants.MaxPayloadSize + 1035)

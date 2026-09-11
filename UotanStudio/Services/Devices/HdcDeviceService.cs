@@ -64,7 +64,7 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
                         throw new InvalidDataException("HDC shell output limit exceeded.");
                     output.Write(bytes);
                 }, null, timeout.Token);
-                return Encoding.UTF8.GetString(output.ToArray());
+                return Encoding.UTF8.GetString(output.GetBuffer().AsSpan(0, checked((int)output.Length)));
             }, ct).ConfigureAwait(false);
         }
         else
@@ -110,12 +110,12 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
         return HdcCommandClient.RunAsync(executable, ["-s", $"{host}:{_port}", "-t", device.Serial, .. arguments], ct);
     }
 
-    /// <summary>Sends a local file using official streaming transfer. 经官方流式传输发送文件。</summary>
+    /// <summary>Sends a local file or directory through the selected HDC connection.</summary>
     public Task<string> SendFileAsync(DetectedDevice device, string localPath, string remotePath, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(remotePath);
         var path = Path.GetFullPath(localPath);
-        if (!File.Exists(path)) throw new FileNotFoundException("Local file not found.", path);
+        if (!File.Exists(path) && !Directory.Exists(path)) throw new FileNotFoundException("Local file or directory not found.", path);
         if (IsDirect(device)) return DirectTaskAsync(device, session =>
         {
             using var transfer = new HdcSyncClient(session.Connection);
@@ -157,8 +157,8 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
     public async Task<string> InstallAsync(DetectedDevice device, string localPath, CancellationToken ct = default)
     {
         var path = Path.GetFullPath(localPath);
-        if (!File.Exists(path)) throw new FileNotFoundException("Package not found.", path);
-        if (Path.GetExtension(path).ToLowerInvariant() is not (".hap" or ".hsp" or ".app"))
+        if (!File.Exists(path) && !Directory.Exists(path)) throw new FileNotFoundException("Package not found.", path);
+        if (!Directory.Exists(path) && Path.GetExtension(path).ToLowerInvariant() is not (".hap" or ".hsp" or ".app"))
             throw new ArgumentException("HDC installation requires a HAP, HSP or APP package.", nameof(localPath));
         if (IsDirect(device)) return await DirectTaskAsync(device,
             session => new HdcAppClient(session.Connection).Install(path, ct), ct).ConfigureAwait(false);
