@@ -78,7 +78,7 @@ public partial class DeviceViewModel
         }
 
         var target = client.GetDevices()
-            .FirstOrDefault(d => string.Equals(d.Serial, device.Serial, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(d => string.Equals(d.Serial, device.Serial, StringComparison.Ordinal));
         return target is null
             ? null
             : DevicePropertyReader.ReadAdbProperties(cmd =>

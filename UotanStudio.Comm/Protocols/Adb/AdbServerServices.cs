@@ -1,4 +1,4 @@
-﻿using System.Net.Sockets;
+using System.Net.Sockets;
 using System.Text;
 using System.Globalization;
 using System.Buffers.Binary;
@@ -11,17 +11,29 @@ public sealed class AdbServerServices(string serial, string host = "127.0.0.1", 
     /// <summary>Opens an owned byte stream to a service on the explicitly selected device.</summary>
     public Stream Open(string service)
     {
+        var stream = OpenTransport();
+        try { Request(stream, service); return stream; }
+        catch { stream.Dispose(); throw; }
+    }
+
+    /// <summary>Checks the selected target without opening a device service.</summary>
+    public void ValidateTarget()
+    {
+        using var stream = OpenTransport();
+    }
+
+    private Stream OpenTransport()
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(serial);
         var client = new TcpClient { NoDelay = true };
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
             client.ConnectAsync(host, port, timeout.Token).AsTask().GetAwaiter().GetResult();
-            NetworkStream stream = client.GetStream();
+            var stream = client.GetStream();
             stream.ReadTimeout = 10000;
             stream.WriteTimeout = 10000;
             Request(stream, "host:transport:" + serial);
-            Request(stream, service);
             return stream;
         }
         catch { client.Dispose(); throw; }

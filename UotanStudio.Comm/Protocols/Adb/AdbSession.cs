@@ -11,6 +11,14 @@ public sealed class AdbSession : IProtocolSession
 {
     private bool _disposed;
 
+    /// <summary>Creates a session whose services are opened through the selected server target.</summary>
+    public AdbSession(AdbServerServices server)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        Connection = new AdbConnection(server);
+    }
+
+
     /// <summary>
     /// Gets the protocol name.
     /// <para>获取协议名称。</para>

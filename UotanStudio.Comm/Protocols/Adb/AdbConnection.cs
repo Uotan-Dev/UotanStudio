@@ -14,6 +14,18 @@ public sealed class AdbConnection : IDisposable
     // <para>有序认证身份列表；AUTH 令牌依次用每个密钥应答（AOSP NextKey 语义，
     // 见构造函数文档与 HandleAuth）。</para>
     private readonly IReadOnlyList<AdbAuthentication> _authentications;
+    private readonly AdbServerServices? _server;
+    private readonly ICommTransport? _transport;
+
+    internal AdbConnection(AdbServerServices server)
+    {
+        _server = server;
+        _authentications = [];
+    }
+
+    /// <summary>Whether services are owned by an external ADB server.</summary>
+    public bool UsesServer => _server is not null;
+
     private int _authKeyIndex;
     private readonly Lock _lock = new();
     private readonly Dictionary<uint, AdbStream> _streams = [];
@@ -58,7 +70,7 @@ public sealed class AdbConnection : IDisposable
     /// Gets the underlying transport.
     /// <para>获取底层传输。</para>
     /// </summary>
-    public ICommTransport Transport { get; }
+    public ICommTransport Transport => _transport ?? throw new NotSupportedException("Server services do not expose a raw daemon transport.");
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AdbConnection"/> class with a
@@ -88,7 +100,7 @@ public sealed class AdbConnection : IDisposable
     /// <param name="authentications">The ordered RSA authentication identities. 有序 RSA 认证身份列表。</param>
     public AdbConnection(ICommTransport transport, IReadOnlyList<AdbAuthentication> authentications)
     {
-        Transport = transport ?? throw new ArgumentNullException(nameof(transport));
+        _transport = transport ?? throw new ArgumentNullException(nameof(transport));
         _authentications = authentications ?? throw new ArgumentNullException(nameof(authentications));
         if (_authentications.Count == 0)
         {
@@ -109,12 +121,26 @@ public sealed class AdbConnection : IDisposable
                 throw new ObjectDisposedException(nameof(AdbConnection));
             }
 
-            if (_connected)
+            if (_connected && _server is null)
             {
                 return;
             }
         }
 
+        if (_server is not null)
+        {
+            try { _server.ValidateTarget(); }
+            catch { lock (_lock) _connected = false; throw; }
+            lock (_lock)
+            {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                _connected = true;
+                _peerReady.Set();
+            }
+            return;
+        }
+        if (_transport is UsbDeviceTransport)
+            UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.RequireDirectUsb(0xff, 0x42, 1);
         Send(AdbMessaging.BuildConnect());
         _connected = true;
         _authKeyIndex = 0;
@@ -145,6 +171,18 @@ public sealed class AdbConnection : IDisposable
 
         EnsureConnected();
 
+        if (_server is not null)
+        {
+            var serviceStream = _server.Open(service);
+            lock (_lock)
+            {
+                if (_disposed) { serviceStream.Dispose(); throw new ObjectDisposedException(nameof(AdbConnection)); }
+                var id = _nextLocalId++;
+                var serverStream = new AdbStream(this, id, serviceStream);
+                _streams.Add(id, serverStream);
+                return serverStream;
+            }
+        }
         uint localId;
         AdbStream stream;
         lock (_lock)
@@ -197,7 +235,7 @@ public sealed class AdbConnection : IDisposable
     internal void CloseStream(AdbStream stream)
     {
         lock (_lock) { _streams.Remove(stream.LocalId); }
-        Send(AdbMessaging.BuildClose(stream.LocalId, stream.RemoteId));
+        if (_server is null) Send(AdbMessaging.BuildClose(stream.LocalId, stream.RemoteId));
     }
 
     /// <summary>
@@ -225,7 +263,7 @@ public sealed class AdbConnection : IDisposable
     /// </summary>
     private AdbMessage ReadMessage()
     {
-        var header = ReadExact(AdbConstants.HeaderSize, 5000);
+        var header = ReadExact(AdbConstants.HeaderSize, 5000, allowIdle: true);
         (var command, var arg0, var arg1, var payloadLength, var payloadCrc) = AdbMessaging.ParseHeader(header);
 
         if (payloadLength > AdbConstants.MaxPayload)
@@ -457,15 +495,25 @@ public sealed class AdbConnection : IDisposable
     /// </summary>
     /// <param name="length">The number of bytes to read. 要读取的字节数。</param>
     /// <param name="timeoutMs">Timeout in milliseconds. 超时（毫秒）。</param>
-    private byte[] ReadExact(int length, int timeoutMs)
+    /// <param name="allowIdle">Keep waiting between packets; incomplete packets still time out.</param>
+    private byte[] ReadExact(int length, int timeoutMs, bool allowIdle = false)
     {
         var buffer = new byte[length];
         var totalRead = 0;
         while (totalRead < length)
         {
-            var n = Transport.Read(buffer, totalRead, length - totalRead, timeoutMs);
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            int n;
+            try { n = Transport.Read(buffer, totalRead, length - totalRead, timeoutMs); }
+            catch (TimeoutException) when (allowIdle && totalRead == 0 && !_disposed && Transport.IsConnected)
+            {
+                continue;
+            }
             if (n == 0)
             {
+                // A static scrcpy screen (or quiet shell) need not send any packets.
+                // Do not tear down every multiplexed service for an idle USB read.
+                if (allowIdle && totalRead == 0 && !_disposed && Transport.IsConnected) continue;
                 throw new TimeoutException("ADB read timeout");
             }
 
@@ -510,7 +558,7 @@ public sealed class AdbConnection : IDisposable
             _streams.Clear();
         }
 
-        Transport.Dispose();
+        _transport?.Dispose();
         foreach (var auth in _authentications)
         {
             auth.Dispose();

@@ -1013,7 +1013,7 @@ public sealed class FlashService : IFlashService
             try
             {
                 await session.ConnectAsync(ct).ConfigureAwait(false);
-                if (session.IsConnected && session.Connection.PeerVersion > 0)
+                if (session.IsConnected && (session.Connection.UsesServer || session.Connection.PeerVersion > 0))
                 {
                     return;
                 }

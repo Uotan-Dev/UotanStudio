@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Transports.Usb.Backend;
 
@@ -18,36 +19,42 @@ internal static class UsbProviderProjection
     /// <param name="devices">The list of backend devices. <para>后端设备列表。</para></param>
     /// <param name="filter">An optional filter to apply. <para>可选的过滤器。</para></param>
     /// <returns>A read-only list of sessions that match the filter. <para>匹配过滤器的会话只读列表。</para></returns>
+    /// <param name="ensureDirect">Checks server ownership before opening the matching USB device.</param>
     public static IReadOnlyList<IUsbDeviceSession> ToSessions(
         string apiName,
         UsbApiKind apiKind,
         IReadOnlyList<UsbDevice> devices,
-        UsbDeviceFilter? filter)
+        UsbDeviceFilter? filter,
+        Action<UsbDeviceInfo>? ensureDirect = null)
     {
+        ensureDirect ??= info => DebugBridgeRoute.RequireDirectUsb(info.InterfaceClass, info.InterfaceSubClass, info.InterfaceProtocol);
         var sessions = new List<IUsbDeviceSession>(devices.Count);
-        foreach (var device in devices)
+        for (var index = 0; index < devices.Count; index++)
         {
-            // Enumeration does not open handles (metadata discovery); open on demand
-            // here so the session path pays the open cost only when sessions are
-            // actually requested. A device that cannot be opened (e.g. interface
-            // claimed by another session or process) is skipped.
-            // <para>枚举不打开句柄（元数据发现）；此处按需打开，使会话路径仅在真正
-            // 需要会话时承担打开成本。无法打开的设备（例如接口已被其他会话或进程
-            // 声明）被跳过。</para>
-            if (!device.IsHandleOpen && device.CreateHandle() != 0)
+            var device = devices[index];
+            try
             {
-                device.Dispose();
-                continue;
+                var info = UsbDeviceInfoFactory.FromBackendDevice(apiName, apiKind, device);
+                if (filter is not null && !filter.MatchesBeforeOpen(info))
+                {
+                    device.Dispose();
+                    continue;
+                }
+                ensureDirect(info);
+                if (!device.IsHandleOpen && device.CreateHandle() != 0)
+                {
+                    device.Dispose();
+                    continue;
+                }
+                var session = new UsbDeviceSession(apiName, apiKind, device);
+                if (filter is null || filter.Matches(session.DeviceInfo)) sessions.Add(session);
+                else session.Dispose();
             }
-
-            var session = new UsbDeviceSession(apiName, apiKind, device);
-            if (filter == null || filter.Matches(session.DeviceInfo))
+            catch
             {
-                sessions.Add(session);
-            }
-            else
-            {
-                session.Dispose();
+                foreach (var opened in sessions) opened.Dispose();
+                for (var remaining = index; remaining < devices.Count; remaining++) devices[remaining].Dispose();
+                throw;
             }
         }
 

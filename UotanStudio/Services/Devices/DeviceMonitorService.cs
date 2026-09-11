@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Common;
 using AdvancedSharpAdbClient;
 using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Adb;
@@ -114,7 +115,6 @@ public sealed class DeviceMonitorService : IDisposable
                 lock (_sync)
                 {
                     if (ct.IsCancellationRequested) return;
-                    _hdcProbeTicks = 0;
                     ScheduleChange();
                 }
             }
@@ -274,57 +274,11 @@ public sealed class DeviceMonitorService : IDisposable
     private IReadOnlyList<DetectedDevice> ScanCore()
     {
         var devices = new List<DetectedDevice>();
-
-        // 参考 adb devices:adb server 对 USB 设备会返回真实序列号(来自设备实例 ID),
-        // 而本库枚举阶段(仅元数据发现)读不到 USB 字符串描述符序列号。此处预先取回
-        // adb server 的 USB 设备序列号列表,供下方按枚举顺序补全,使设备管理器能
-        // 区分多台相同 VID/PID 的设备。
-        // Reference the adb devices implementation: the adb server reports the real
-        // serial (from the device instance ID) for USB devices, whereas this library's
-        // enumeration is metadata-only and cannot read the USB string-descriptor serial.
-        // Pre-fetch the adb server's USB serials here and backfill them in enumeration
-        // order below, so the device manager can tell apart multiple devices sharing
-        // the same VID/PID.
-        var adbUsbSerials = new List<string>();
-        var adbStates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // Server identities are authoritative; never join unrelated enumeration orders.
         var adbClient = AdbServerClient;
-        // 一次取回 adb 设备列表，USB 序列号补全与网络设备合并两处复用，避免每次扫描
-        // 对 adb server 做两次 host:devices 往返。
-        // Fetch the adb device list once and reuse it for both USB serial backfill and the
-        // network-device merge, halving the adb server round-trips per scan.
         var adbDevices = adbClient?.GetDevices().ToList();
-        if (adbDevices is not null)
-        {
-            foreach (var d in adbDevices)
-            {
-                if (d.Serial.Contains(':'))
-                {
-                    continue; // 网络设备(host:port)在下方单独合并
-                }
-
-                adbUsbSerials.Add(d.Serial);
-                adbStates[d.Serial] = d.State.ToString().ToLowerInvariant();
-            }
-        }
-
-        // Auto 模式下 winusb 原生与 libusb 两个后端会同时枚举同一物理设备;libusb
-        // 以"首个 bulk 接口"(如 FF|FF|30)报告接口三元组,与 winusb 的 ADB 接口
-        // (FF|42|01)不同,物理去重键不合并 → 同一台设备出现两条 ADB 条目,而 adb
-        // server 的序列号只有一份,第二条补不到序列号便回退成 VID:PID。此处对 ADB
-        // 条目合并:已补全真实序列号的条目以其序列号去重;回退成 VID:PID 的条目若
-        // 其 VID/PID 已有带序列号的条目(后端重复),直接丢弃。
-        // In Auto mode both the native (winusb) and libusb backends enumerate the same
-        // physical device; libusb reports the first bulk interface (e.g. FF|FF|30) which
-        // differs from winusb's ADB interface (FF|42|01), so the physical dedup key does
-        // not merge them — the same device then shows up as two ADB entries, and since
-        // the adb server has only one serial, the second entry cannot be backfilled and
-        // degrades to a VID:PID string. Merge ADB entries here: entries backfilled with a
-        // real serial are deduplicated by that serial; an entry degraded to VID:PID whose
-        // VID/PID already has a serial-bearing entry (backend duplicate) is dropped.
-        var seenAdbSerials = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var seenVidPidWithSerial = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var usbSerialCursor = 0;
+        using var hdcServer = ProbeHdcServer();
+        var hdcTargets = hdcServer?.ListTargetDetails();
         foreach (var info in _comm.EnumerateUsbDevices())
         {
             var protocol = Classify(info);
@@ -333,53 +287,14 @@ public sealed class DeviceMonitorService : IDisposable
                 continue;
             }
 
-            // adb server 报告的 USB 序列号(与设备路径中的实例号一致)优先于
-            // VID:PID 回退;adb server 未运行时(列表为空)保持原有回退行为。
-            // While we own an exclusive USB handle, discovery may only recover its path.
-            // Reuse identity only for that exact still-present path, never by VID/PID.
+            if (protocol == DeviceProtocolKind.Adb && adbClient is not null) continue;
+            if (protocol == DeviceProtocolKind.Hdc && hdcServer is not null) continue;
             if (protocol == DeviceProtocolKind.Hdc && HdcDirectSessionPool.FindOwnedDevice(info.DevicePath) is { } owned)
             {
                 if (!devices.Any(d => d.Key == owned.Key)) devices.Add(owned);
                 continue;
             }
             var serial = info.SerialNumber;
-            if (string.IsNullOrEmpty(serial) &&
-                protocol == DeviceProtocolKind.Adb &&
-                usbSerialCursor < adbUsbSerials.Count)
-            {
-                serial = adbUsbSerials[usbSerialCursor++];
-            }
-
-            if (protocol == DeviceProtocolKind.Adb)
-            {
-                var vidPid = $"{info.VendorId:X4}:{info.ProductId:X4}";
-                if (!string.IsNullOrEmpty(serial))
-                {
-                    if (!seenAdbSerials.Add(serial))
-                    {
-                        continue; // 同一序列号已有条目(跨后端重复),丢弃
-                    }
-
-                    seenVidPidWithSerial.Add(vidPid);
-                }
-                else
-                {
-                    // 未补到序列号:若该 VID/PID 已有带序列号的条目,这是 libusb
-                    // 后端的重复枚举,丢弃;否则保留(adb server 未运行的场景)。
-                    if (seenVidPidWithSerial.Contains(vidPid))
-                    {
-                        continue;
-                    }
-
-                    seenVidPidWithSerial.Add(vidPid);
-                }
-            }
-
-            // Ignore duplicate Windows interface aliases without usable endpoint descriptors.
-            if (protocol == DeviceProtocolKind.Hdc && !info.Interfaces.Any(i => i.Class == 0xff && i.SubClass == 0x50 && i.Protocol == 1 && i.Endpoints.Count >= 2))
-                continue;
-            if (protocol == DeviceProtocolKind.Hdc && !string.IsNullOrEmpty(serial) && devices.Any(d => d.Protocol == DeviceProtocolKind.Hdc && d.Serial == serial))
-                continue;
             devices.Add(new DetectedDevice
             {
                 Key = info.DeviceKey,
@@ -388,8 +303,6 @@ public sealed class DeviceMonitorService : IDisposable
                 Transport = DeviceTransportKind.Usb,
                 State = protocol.Value switch
                 {
-                    DeviceProtocolKind.Adb when !string.IsNullOrEmpty(serial) &&
-                        adbStates.TryGetValue(serial, out var adbState) => adbState,
                     DeviceProtocolKind.Adb => "device",
                     DeviceProtocolKind.Fastboot => "fastboot",
                     DeviceProtocolKind.Edl => "edl",
@@ -405,57 +318,36 @@ public sealed class DeviceMonitorService : IDisposable
         // hdc server 通道（系统内存在 hdc server 时，作为 client 列举其管理的全部目标，
         // 与 adb server 网络设备合并方式一致）。USB 直连枚举命中同一物理设备时以
         // The host server owns HDC target identity and physical transport metadata.
-        var hdcServer = ProbeHdcServer();
-        if (hdcServer is not null)
+        if (hdcTargets is not null)
         {
-            try
-            {
-                var targets = hdcServer.ListTargetDetails();
-                // Host targets are authoritative: raw USB descriptors may have no serial
-                // and cannot be addressed through the server. Never guess by VID/PID.
-                devices.RemoveAll(d => d.Protocol == DeviceProtocolKind.Hdc);
-                foreach (var target in targets)
+            foreach (var target in hdcTargets)
+                devices.Add(new DetectedDevice
                 {
-                    devices.Add(new DetectedDevice
+                    Key = "hdc:" + target.ConnectKey,
+                    Serial = target.ConnectKey,
+                    Protocol = DeviceProtocolKind.Hdc,
+                    Transport = target.Transport switch
                     {
-                        Key = "hdc:" + target.ConnectKey,
-                        Serial = target.ConnectKey,
-                        Protocol = DeviceProtocolKind.Hdc,
-                        Transport = target.Transport switch
-                        {
-                            "USB" => DeviceTransportKind.Usb,
-                            "TCP" => DeviceTransportKind.Tcp,
-                            "UART" => DeviceTransportKind.Serial,
-                            _ => DeviceTransportKind.Unknown,
-                        },
-                        State = target.State.Equals("Connected", StringComparison.OrdinalIgnoreCase)
-                            ? "device" : target.State.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase)
-                                ? "unauthorized" : "offline",
-                    });
-                }
-            }
-            catch
-            {
-                // server 列举失败（连接被断开等）不影响 USB 直连结果。
-            }
+                        "USB" => DeviceTransportKind.Usb,
+                        "TCP" => DeviceTransportKind.Tcp,
+                        "UART" => DeviceTransportKind.Serial,
+                        _ => DeviceTransportKind.Unknown,
+                    },
+                    State = target.State.Equals("Connected", StringComparison.OrdinalIgnoreCase) ? "device"
+                        : target.State.Equals("Unauthorized", StringComparison.OrdinalIgnoreCase) ? "unauthorized" : "offline",
+                });
         }
 
-        // adb server 中的网络设备（host:port 序列号）。
         if (adbDevices is not null)
         {
             foreach (var d in adbDevices)
             {
-                if (!d.Serial.Contains(':'))
-                {
-                    continue; // USB 设备已由 Comm 枚举
-                }
-
                 devices.Add(new DetectedDevice
                 {
-                    Key = "tcp:" + d.Serial,
+                    Key = "adb:" + d.Serial,
                     Serial = d.Serial,
                     Protocol = DeviceProtocolKind.Adb,
-                    Transport = DeviceTransportKind.Tcp,
+                    Transport = d.Serial.Contains(':') ? DeviceTransportKind.Tcp : DeviceTransportKind.Usb,
                     State = d.State.ToString().ToLowerInvariant(),
                 });
 
@@ -463,7 +355,7 @@ public sealed class DeviceMonitorService : IDisposable
                 // Network devices come from the adb server channel (not direct USB); log them
                 // explicitly so the transport is obvious.
                 LogService.Instance.Write(LogLevel.Info, "DeviceMonitor",
-                    $"adb server channel device: {d.Serial} (TCP)");
+                    $"adb server channel device: {d.Serial}");
             }
         }
 
@@ -486,7 +378,11 @@ public sealed class DeviceMonitorService : IDisposable
     /// Finds a device from the current scan result by serial; returns <c>null</c> when absent.
     /// </summary>
     public DetectedDevice? FindDeviceBySerial(string serial)
-        => Scan().FirstOrDefault(d => d.Serial == serial);
+    {
+        var matches = Scan().Where(d => d.Serial == serial).Take(2).ToArray();
+        if (matches.Length > 1) throw new InvalidOperationException("Device serial is ambiguous; select a physical device explicitly.");
+        return matches.FirstOrDefault();
+    }
 
     /// <summary>
     /// <para>为设备打开 USB 设备会话（按键重开，支持模式切换后 VID/PID 变化）。</para>
@@ -498,15 +394,16 @@ public sealed class DeviceMonitorService : IDisposable
             ? _comm.OpenUsbDeviceSessionByKey(device.Key)
             : null;
 
-    /// <summary>
-    /// <para>为设备打开 ADB 协议会话（USB 直连；网络设备请使用 <see cref="AdbServerClient"/>）。</para>
-    /// Opens an ADB protocol session for the device (direct USB; use <see cref="AdbServerClient"/>
-    /// for network devices).
-    /// </summary>
+    /// <summary>Opens a server service session when a server exists, otherwise the exact USB device.</summary>
     public AdbSession? OpenAdbSession(DetectedDevice device)
     {
-        var usb = OpenUsbSession(device);
-        return usb is null ? null : new AdbSession(new UsbDeviceTransport(usb));
+        if (device.Protocol != DeviceProtocolKind.Adb) return null;
+        return DebugBridgeRoute.OpenAdb(device.Serial, () =>
+        {
+            var usb = OpenUsbSession(device) ?? throw new IOException("Selected ADB USB device is unavailable.");
+            try { return new AdbSession(new UsbDeviceTransport(usb)); }
+            catch { usb.Dispose(); throw; }
+        });
     }
 
     /// <summary>
@@ -551,9 +448,7 @@ public sealed class DeviceMonitorService : IDisposable
         if (device.Protocol != DeviceProtocolKind.Hdc) return null;
         // A host channel is required even for USB targets managed by the official server.
         // Do not feed host frames into the legacy direct-device session transport.
-        return device.Key.StartsWith("hdc:", StringComparison.Ordinal)
-            ? ProbeHdcServer()?.CreateSession(device.Serial)
-            : HdcDirectSessionPool.Acquire(device);
+        return DebugBridgeRoute.OpenHdc(device.Serial, () => HdcDirectSessionPool.Acquire(device));
     }
 
     /// <summary>
@@ -562,129 +457,25 @@ public sealed class DeviceMonitorService : IDisposable
     /// </summary>
     public AdbClient? AdbServerClient => ProbeAdbServer();
 
-    /// <summary>
-    /// <para>缓存的 adb server 探测结果与探测时间。</para>
-    /// Cached adb-server probe result and probe timestamp.
-    /// </summary>
-    private AdbClient? _cachedAdbClient;
-    private long _adbProbeTicks;
-
-    /// <summary>
-    /// <para>缓存的 hdc server 客户端与探测时间。</para>
-    /// Cached hdc-server client and probe timestamp.
-    /// </summary>
-    private HdcServerClient? _cachedHdcClient;
-    private long _hdcProbeTicks;
-
-    /// <summary>
-    /// <para>探测官方 adb server（127.0.0.1:5037），结果缓存 3 秒——避免每次扫描/重启
-    /// 都建立新连接，也减少 server 未运行时调试器中的 SocketException 噪音。</para>
-    /// Probes the official adb server (127.0.0.1:5037) with a 3-second result cache —
-    /// avoids a new connection per scan/reboot and reduces SocketException noise in the
-    /// debugger when the server is not running.
-    /// </summary>
+    /// <summary>Probes on demand; server errors never grant direct USB access.</summary>
     private AdbClient? ProbeAdbServer()
     {
-        var now = Environment.TickCount64;
-        lock (_sync)
-        {
-            if (now - _adbProbeTicks < 3000)
-            {
-                return _cachedAdbClient;
-            }
-
-            _adbProbeTicks = now;
-            // 端口未被监听时直接返回 null：避免连接被拒时抛 SocketException
-            //（调试器中的首异常噪音）。
-            // Skip the probe when nothing is listening on 5037, avoiding a
-            // SocketException (first-chance noise in the debugger) on a refused connection.
-            if (!IsAdbPortListening())
-            {
-                _cachedAdbClient = null;
-                return null;
-            }
-
-            try
-            {
-                var client = new AdbClient();
-                _ = client.GetAdbVersion();
-                _cachedAdbClient = client;
-            }
-            catch
-            {
-                _cachedAdbClient = null;
-            }
-            return _cachedAdbClient;
-        }
+        if (!DebugBridgeRoute.UseAdbServer()) return null;
+        var client = new AdbClient();
+        _ = client.GetAdbVersion();
+        return client;
     }
 
-    /// <summary>
-    /// <para>探测本机 hdc server（127.0.0.1:8710），结果缓存 3 秒（与 adb server 探测一致）。
-    /// server 未运行时返回 <c>null</c>，调用方回退 USB 直连通道。</para>
-    /// Probes the local hdc server (127.0.0.1:8710) with a 3-second result cache (mirroring
-    /// the adb-server probe). Returns <c>null</c> when the server is not running; callers
-    /// fall back to the USB-direct channel.
-    /// </summary>
+    /// <summary>Checks the current HDC server and propagates handshake errors.</summary>
     private HdcServerClient? ProbeHdcServer()
     {
-        var now = Environment.TickCount64;
-        lock (_sync)
-        {
-            if (now - _hdcProbeTicks < 3000)
-            {
-                return _cachedHdcClient;
-            }
-
-            _hdcProbeTicks = now;
-            _cachedHdcClient = null;
-            try
-            {
-                var client = new HdcServerClient();
-                if (client.DetectServer())
-                {
-                    client.Connect();
-                    _cachedHdcClient = client;
-                }
-                else
-                {
-                    client.Dispose();
-                }
-            }
-            catch
-            {
-                // 探测/握手失败视为无 server，USB 直连不受影响。
-            }
-            return _cachedHdcClient;
-        }
+        if (!DebugBridgeRoute.UseHdcServer()) return null;
+        var client = new HdcServerClient();
+        try { client.Connect(); return client; }
+        catch { client.Dispose(); throw; }
     }
 
-    /// <summary>
-    /// <para>非抛异常地检查 127.0.0.1:5037 是否有进程在监听（adb server 通常绑定此端口）。</para>
-    /// Non-throwing check whether anything listens on 127.0.0.1:5037 (the adb server's usual port).
-    /// </summary>
-    private static bool IsAdbPortListening()
-    {
-        try
-        {
-            var listeners = System.Net.NetworkInformation.IPGlobalProperties
-                .GetIPGlobalProperties()
-                .GetActiveTcpListeners();
-            return listeners.Any(ep => ep.Port == 5037);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// <para>将设备重启到指定模式（system/bootloader/recovery/edl）。
-    /// ADB 设备：优先 USB 直连会话，失败或为网络设备时回退 adb server；
-    /// Fastboot 设备：使用 fastboot reboot。</para>
-    /// Reboots the device into the given mode (system/bootloader/recovery/edl). ADB
-    /// devices prefer a direct USB session, falling back to the adb server for network
-    /// devices; Fastboot devices use fastboot reboot.
-    /// </summary>
+    /// <summary>Reboots through the routed debug bridge session or the Fastboot transport.</summary>
     public async Task<bool> RebootAsync(DetectedDevice device, string mode, CancellationToken cancellationToken = default)
     {
         // 目标模式即 reboot:<mode> 服务中冒号之后的部分（不带 "reboot " 前缀）。
@@ -723,33 +514,16 @@ public sealed class DeviceMonitorService : IDisposable
             return true;
         }
 
-        // USB 直连优先：使用 reboot:<mode> 设备服务（不经 adb server，也不走 shell）。
-        // Direct USB first: use the reboot:<mode> device service (no adb server, no shell).
-        if (device.Protocol == DeviceProtocolKind.Adb && device.Transport == DeviceTransportKind.Usb)
+        // Resolve ownership before sending a reboot; never retry on another transport.
+        if (device.Protocol == DeviceProtocolKind.Adb)
         {
-            var session = OpenAdbSession(device);
-            if (session is not null)
-            {
-                try
-                {
-                    await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
-                    session.CreateDeviceServices().Reboot(adbTarget);
-                    return true;
-                }
-                catch
-                {
-                    // 直连失败（未授权等），回退 adb server。
-                }
-                finally
-                {
-                    session.Dispose();
-                }
-            }
+            using var session = OpenAdbSession(device);
+            if (session is null) return false;
+            await session.ConnectAsync(cancellationToken).ConfigureAwait(false);
+            session.CreateDeviceServices().Reboot(adbTarget);
+            return true;
         }
 
-        // HDC 设备：经 HDC 会话的 UnityReboot 服务重启（USB 直连或 hdc server 通道均可）。
-        // HDC devices: reboot via the HDC session's UnityReboot service (USB direct or
-        // the hdc-server channel).
         if (device.Protocol == DeviceProtocolKind.Hdc)
         {
             using var hdc = OpenHdcSession(device);
@@ -816,7 +590,7 @@ public sealed class DeviceMonitorService : IDisposable
             var decoder = new AdbLogcatLineDecoder(line => onEntry(AdbLogcatEntry.Parse(line)));
             try
             {
-                if (device.Key.StartsWith("hdc:", StringComparison.Ordinal))
+                if (DebugBridgeRoute.UseHdcServer())
                     await hdc.ExecuteStreamingAsync(device.Serial, "shell hilog -v year",
                         bytes => decoder.Feed(bytes), cancellationToken).ConfigureAwait(false);
                 else
@@ -1067,8 +841,6 @@ public sealed class DeviceMonitorService : IDisposable
             _hdcMonitorLifetime?.Dispose();
             _hdcMonitorLifetime = null;
             HdcDirectSessionPool.Clear();
-            _cachedHdcClient?.Dispose();
-            _cachedHdcClient = null;
             _started = false;
         }
     }

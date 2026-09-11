@@ -182,24 +182,11 @@ internal static class LinuxUsbFinder
                         ClaimedInterfaceIds = filter?.InterfaceNumbers?.ToArray() ?? [],
                         ISerialNumber = info.ISerialNumber,
                         UsbDeviceType = UsbDeviceType.Linux,
-                        SerialNumber = info.ISerialNumber == 0 ? null : "UNKNOWN"
+                        SerialNumber = null
                     };
 
-                    // Keep the device even when the handle cannot be opened (e.g. the
-                    // interface is claimed by another session or process, EBUSY).
-                    // Enumeration must reflect the current device state: the metadata was
-                    // already parsed from the descriptors above, and a busy device must not
-                    // silently disappear from the list. Sessions over a non-open device are
-                    // skipped later by UsbProviderProjection.ToSessions.
-                    // <para>即使句柄无法打开（例如接口已被其他会话或进程声明，EBUSY）也保留
-                    // 该设备。枚举必须反映当前设备状态：元数据已在上方从描述符解析，被占用的
-                    // 设备不应静默地从列表中消失。基于未打开设备的会话稍后由
-                    // UsbProviderProjection.ToSessions 跳过。</para>
-                    if (dev.CreateHandle() != 0)
-                    {
-                        UsbTrace.Log($"LinuxUsbFinder: device {dev_path} busy or unopenable - reported with metadata only.");
-                    }
-
+                    // Discovery must not claim a debug interface owned by another host.
+                    // UsbProviderProjection opens only the selected, permitted session.
                     devices.Add(dev);
                 }
                 catch (Exception ex)

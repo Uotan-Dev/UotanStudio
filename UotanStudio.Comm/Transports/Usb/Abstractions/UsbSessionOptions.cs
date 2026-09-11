@@ -10,6 +10,8 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// </summary>
 public sealed class UsbSessionOptions
 {
+    internal bool MetadataOnly { get; init; }
+
     /// <summary>
     /// Gets or sets the session-level default timeout in milliseconds, replacing the
     /// backend's hardcoded default (WinUSB currently 60000).

@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Common;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using UotanStudio.Comm.Diagnostics;
@@ -436,6 +437,12 @@ internal static class WinUSBFinder
                         continue;
                     }
 
+                    // Check the bound interface before opening any candidate handle.
+                    var identity = CreateMetadataOnlyDevice(path, TryParseVidPid(path).vid ?? 0, TryParseVidPid(path).pid ?? 0);
+                    if (filter?.InterfaceClass is byte cls && identity.InterfaceClass != cls ||
+                        filter?.InterfaceSubClass is byte sub && identity.InterfaceSubClass != sub ||
+                        filter?.InterfaceProtocol is byte protocol && identity.InterfaceProtocol != protocol)
+                        continue;
                     // Prefer WinUSB for Google devices
                     var isGoogleWinUsb = lowerPath.Contains(PreferWinUsbVidPid);
 
@@ -483,6 +490,8 @@ internal static class WinUSBFinder
             return true;
         }
 
+        if (!string.IsNullOrEmpty(filter.DevicePathEquals) &&
+            !string.Equals(path, filter.DevicePathEquals, StringComparison.OrdinalIgnoreCase)) return false;
         if (!string.IsNullOrWhiteSpace(filter.DevicePathContains) &&
             path.IndexOf(filter.DevicePathContains, StringComparison.OrdinalIgnoreCase) < 0)
         {
@@ -523,6 +532,10 @@ internal static class WinUSBFinder
     private static UsbDevice? ProbeDevice(string path, UsbSessionOptions? options)
     {
         (var vid, var pid) = TryParseVidPid(path);
+        var metadata = CreateMetadataOnlyDevice(path, vid ?? 0, pid ?? 0);
+        if (options?.MetadataOnly == true) return metadata;
+        DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol);
+
 
         // winusb.sys allows only one open handle per interface: when the interface is
         // claimed by another session/process, CreateFile fails with access denied. Keep
@@ -595,6 +608,10 @@ internal static class WinUSBFinder
     private static UsbDevice? TryOpenWinUSB(string path, UsbSessionOptions? options)
     {
         (var vid, var pid) = TryParseVidPid(path);
+        var metadata = CreateMetadataOnlyDevice(path, vid ?? 0, pid ?? 0);
+        if (options?.MetadataOnly == true) return metadata;
+        DebugBridgeRoute.RequireDirectUsb(metadata.InterfaceClass, metadata.InterfaceSubClass, metadata.InterfaceProtocol);
+
         var dev = new WinUSBDevice
         {
             DevicePath = path,

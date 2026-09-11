@@ -30,6 +30,9 @@ public sealed class UsbDeviceFilter
     /// </summary>
     public string? DevicePathContains { get; set; }
 
+    /// <summary>Exact physical path for opening a selected device without opening its peers.</summary>
+    public string? DevicePathEquals { get; set; }
+
     /// <summary>
     /// Gets or sets the backend family filter.
     /// <para>获取或设置后端类型过滤条件。</para>
@@ -100,8 +103,14 @@ public sealed class UsbDeviceFilter
     /// </summary>
     /// <param name="info">The device metadata to test. <para>待匹配的设备元数据。</para></param>
     /// <returns><c>true</c> if the device matches; otherwise, <c>false</c>. <para>匹配返回 <c>true</c>，否则返回 <c>false</c>。</para></returns>
-    public bool Matches(UsbDeviceInfo info)
+    public bool Matches(UsbDeviceInfo info) => MatchesCore(info, false);
+
+    internal bool MatchesBeforeOpen(UsbDeviceInfo info) => MatchesCore(info, true);
+
+    private bool MatchesCore(UsbDeviceInfo info, bool beforeOpen)
     {
+        if (!string.IsNullOrEmpty(DevicePathEquals) &&
+            !string.Equals(DevicePathEquals, info.DevicePath, StringComparison.OrdinalIgnoreCase)) return false;
         if (VendorId.HasValue && info.VendorId != VendorId.Value)
         {
             return false;
@@ -113,6 +122,7 @@ public sealed class UsbDeviceFilter
         }
 
         if (!string.IsNullOrWhiteSpace(SerialNumber) &&
+            !(beforeOpen && !string.IsNullOrEmpty(DevicePathEquals) && string.IsNullOrEmpty(info.SerialNumber)) &&
             !string.Equals(info.SerialNumber, SerialNumber, StringComparison.OrdinalIgnoreCase))
         {
             return false;

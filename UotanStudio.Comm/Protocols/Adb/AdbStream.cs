@@ -12,6 +12,19 @@ public sealed class AdbStream : IDisposable
     private readonly ManualResetEventSlim _dataAvailable = new(false);
     private readonly ManualResetEventSlim _ready = new(false);
     private bool _closed;
+    private readonly Stream? _serverStream;
+    private readonly byte[]? _serverReadBuffer;
+    private readonly Lock _readLock = new();
+    private readonly Lock _writeLock = new();
+    private bool _disposed;
+
+    internal AdbStream(AdbConnection connection, uint localId, Stream serverStream) : this(connection, localId)
+    {
+        _serverStream = serverStream;
+        _serverReadBuffer = new byte[64 * 1024];
+        _ready.Set();
+    }
+
 
     /// <summary>
     /// Gets the local stream identifier.
@@ -96,7 +109,7 @@ public sealed class AdbStream : IDisposable
     /// Marks the stream as closed and releases waiting threads.
     /// <para>将流标记为已关闭并释放等待线程。</para>
     /// </summary>
-    internal void MarkClosed() { lock (_lock) { _closed = true; } _ready.Set(); _dataAvailable.Set(); }
+    internal void MarkClosed() { _serverStream?.Dispose(); lock (_lock) { _closed = true; } _ready.Set(); _dataAvailable.Set(); }
 
     /// <summary>
     /// Marks the stream as faulted, stores the exception, and releases waiting threads.
@@ -132,6 +145,11 @@ public sealed class AdbStream : IDisposable
             throw new InvalidOperationException("Stream is closed.");
         }
 
+        if (_serverStream is not null)
+        {
+            lock (_writeLock) _serverStream.Write(data);
+            return;
+        }
         _connection.WriteToStream(this, data);
     }
 
@@ -143,6 +161,24 @@ public sealed class AdbStream : IDisposable
     /// <returns>The data chunk, or <c>null</c> if the stream is closed. 数据块，流关闭时返回 null。</returns>
     public byte[]? Read(int timeoutMs = Timeout.Infinite)
     {
+        if (_serverStream is not null)
+        {
+            lock (_readLock)
+            {
+                if (IsClosed) return null;
+                try
+                {
+                    _serverStream.ReadTimeout = timeoutMs == 0 ? 1 : timeoutMs;
+                    var buffer = _serverReadBuffer!;
+                    int count = _serverStream.Read(buffer);
+                    if (count == 0) { MarkClosed(); return null; }
+                    return buffer.AsSpan(0, count).ToArray();
+                }
+                catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketException socket &&
+                    socket.SocketErrorCode is System.Net.Sockets.SocketError.TimedOut or System.Net.Sockets.SocketError.WouldBlock) { return null; }
+                catch (Exception ex) { MarkFaulted(ex); throw; }
+            }
+        }
         while (true)
         {
             lock (_lock)
@@ -174,7 +210,8 @@ public sealed class AdbStream : IDisposable
     {
         bool shouldNotify;
         lock (_lock) { shouldNotify = !_closed; _closed = true; }
-        if (shouldNotify) { try { _connection.CloseStream(this); } catch { } }
+        _serverStream?.Dispose();
+        if (shouldNotify || _serverStream is not null) { try { _connection.CloseStream(this); } catch { } }
         _dataAvailable.Set();
     }
 
@@ -182,5 +219,5 @@ public sealed class AdbStream : IDisposable
     /// Releases all resources used by the stream.
     /// <para>释放流使用的所有资源。</para>
     /// </summary>
-    public void Dispose() { Close(); _dataAvailable.Dispose(); GC.SuppressFinalize(this); }
+    public void Dispose() { if (_disposed) return; _disposed = true; Close(); if (_serverStream is null) _dataAvailable.Dispose(); GC.SuppressFinalize(this); }
 }

@@ -30,6 +30,7 @@ public class UsbProviderProjectionTests
     {
         public bool HandleCreationSucceeds { get; set; } = true;
         public int DisposeCount { get; private set; }
+        public int OpenCount { get; private set; }
 
         protected override string BackendName => "fake";
         protected override bool IsOpen => false;
@@ -40,7 +41,7 @@ public class UsbProviderProjectionTests
         public override byte[] Read(int length) => [];
         public override long Write(byte[] data, int length) => 0;
         public override int GetSerialNumber() => 0;
-        public override int CreateHandle() => HandleCreationSucceeds ? 0 : 1;
+        public override int CreateHandle() { OpenCount++; return HandleCreationSucceeds ? 0 : 1; }
         public override void Reset() { }
         public override void Dispose() => DisposeCount++;
     }
@@ -140,7 +141,7 @@ public class UsbProviderProjectionTests
         var filter = new UsbDeviceFilter { InterfaceClass = 0xFF };
 
         var sessions = UsbProviderProjection.ToSessions("fake-api", UsbApiKind.Custom,
-            [matching, filterMismatch, openFailure], filter);
+            [matching, filterMismatch, openFailure], filter, _ => { });
 
         var session = Assert.Single(sessions);
         Assert.Equal("usb:1-1", session.DeviceInfo.DevicePath);
@@ -159,6 +160,36 @@ public class UsbProviderProjectionTests
         {
             s.Dispose();
         }
+    }
+
+    [Fact]
+    public void ExactPath_IsFilteredBeforeOpeningSameModelPeers()
+    {
+        var selected = Device("usb:1", 1, 1);
+        var other = Device("usb:10", 1, 1);
+        var filter = new UsbDeviceFilter { DevicePathEquals = "usb:1" };
+        var sessions = UsbProviderProjection.ToSessions("fake", UsbApiKind.Custom, [other, selected], filter, _ => { });
+        Assert.Single(sessions).Dispose();
+        Assert.Equal(1, selected.OpenCount);
+        Assert.Equal(0, other.OpenCount);
+    }
+
+    [Fact]
+    public void ServerOwnership_RejectsBeforeAnyUsbOpen()
+    {
+        var selected = Device("usb:1", 1, 1);
+        Assert.Throws<IOException>(() => UsbProviderProjection.ToSessions("fake", UsbApiKind.Custom, [selected], null,
+            _ => throw new IOException("Server owns target")));
+        Assert.Equal(0, selected.OpenCount);
+        Assert.Equal(1, selected.DisposeCount);
+    }
+
+    [Fact]
+    public void UnlabelledDevices_KeepDistinctPhysicalIdentities()
+    {
+        var first = new UsbDeviceInfo { DevicePath = "usb:1", ApiName = "native", VendorId = 1, ProductId = 1 };
+        var second = new UsbDeviceInfo { DevicePath = "usb:2", ApiName = "native", VendorId = 1, ProductId = 1 };
+        Assert.NotEqual(UsbDeviceIdentity.BuildPhysicalKey(first), UsbDeviceIdentity.BuildPhysicalKey(second));
     }
 
     [Fact]

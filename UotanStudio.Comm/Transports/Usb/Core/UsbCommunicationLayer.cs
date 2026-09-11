@@ -465,26 +465,30 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
                 continue;
             }
 
-            // Forward the session options through the internal provider overload so the
-            // WinUSB backend can apply timeouts/RAW_IO before creating the handle; custom
-            // (third-party) providers keep the plain contract and ignore the options.
-            // <para>通过内部提供器重载透传会话选项，使 WinUSB 后端可在创建句柄前应用
-            // 超时/RAW_IO；自定义（第三方）提供器保持普通契约并忽略选项。</para>
-            var sessions = provider is UsbApiProviderBase baseProvider
-                ? baseProvider.EnumerateDeviceSessions(filter, options)
-                : provider.EnumerateDeviceSessions(filter);
-            if (sessions.Count == 0)
+            // Select metadata first, then constrain the backend to that exact physical path.
+            foreach (var info in provider.EnumerateDeviceInfos(filter))
             {
-                continue;
+                var selectedFilter = UsbDeviceIdentity.TryParseKeyFilter(info.DeviceKey);
+                if (selectedFilter is null || string.IsNullOrEmpty(selectedFilter.DevicePathEquals)) continue;
+                selectedFilter.InterfaceNumber = filter?.InterfaceNumber;
+                selectedFilter.InterfaceNumbers = filter?.InterfaceNumbers;
+                selectedFilter.EndpointAddressIn = filter?.EndpointAddressIn;
+                selectedFilter.EndpointAddressOut = filter?.EndpointAddressOut;
+                var sessions = provider is UsbApiProviderBase baseProvider
+                    ? baseProvider.EnumerateDeviceSessions(selectedFilter, options)
+                    : provider.EnumerateDeviceSessions(selectedFilter);
+                IUsbDeviceSession? selected = null;
+                try
+                {
+                    selected = sessions.FirstOrDefault(candidate => UsbDeviceIdentity.MatchesOpenedKey(info.DeviceKey, candidate.DeviceInfo.DeviceKey));
+                    if (selected is not null) return selected;
+                }
+                finally
+                {
+                    foreach (var session in sessions)
+                        if (!ReferenceEquals(session, selected)) session.Dispose();
+                }
             }
-
-            var firstSession = sessions[0];
-            for (var index = 1; index < sessions.Count; index++)
-            {
-                sessions[index].Dispose();
-            }
-
-            return firstSession;
         }
 
         return null;
@@ -517,6 +521,8 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
         // 接口。否则，接口过滤器产生的键（如 ADB FF|42|01）会被拿去与无接口约束打开的会话
         // 比较，而无约束打开会绑定复合设备第一个 bulk 接口（FF|FF|00），永远不等于所请求的键。</para>
         var keyFilter = UsbDeviceIdentity.TryParseKeyFilter(deviceKey);
+        if (keyFilter is null || string.IsNullOrEmpty(keyFilter.DevicePathEquals))
+            throw new ArgumentException("A physical USB key with an exact path is required.", nameof(deviceKey));
 
         // Auto 下按 key 内嵌的后端名（首段，如 "native"/"libusb"）解析，使带后端限定的
         // 键按其生成后端重开，而非被 Auto 的单一默认后端（WinUSB）拒绝匹配。

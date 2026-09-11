@@ -59,10 +59,8 @@ internal static class UsbDeviceIdentity
     /// <para>构建与后端和设备路径无关的物理身份键，使同一物理设备在监控中可跨后端
     /// （native + libusb）去重。仅基于 VID/PID/接口类+子类/序列号——有意排除接口协议号，
     /// 使同一接口上的模式/协议变化被上报为元数据变化（Changed）而非移除+新增。</para>
-    /// Devices without a serial number fall back to VID/PID/interface, which collapses
-    /// identical unlabeled devices onto one key (documented limitation).
-    /// <para>无序列号的设备退化为 VID/PID/接口，多个相同无标签设备会合并到同一个键
-    /// （已知限制）。</para>
+    /// Devices without a reliable serial retain their backend and physical path so
+    /// two identical unlabelled devices cannot collapse onto a single identity.
     /// </summary>
     /// <param name="info">The device metadata. <para>设备元数据。</para></param>
     /// <returns>A backend-independent physical identity string. <para>与后端无关的物理标识字符串。</para></returns>
@@ -70,7 +68,8 @@ internal static class UsbDeviceIdentity
     {
         ArgumentNullException.ThrowIfNull(info);
 
-        var serial = info.SerialNumber ?? string.Empty;
+        var serial = string.IsNullOrEmpty(info.SerialNumber) || info.SerialNumber == "UNKNOWN"
+            ? info.ApiName + ":" + info.DevicePath : info.SerialNumber;
         var interfaceClass = info.InterfaceClass?.ToString("X2") ?? string.Empty;
         var interfaceSubClass = info.InterfaceSubClass?.ToString("X2") ?? string.Empty;
 
@@ -107,7 +106,7 @@ internal static class UsbDeviceIdentity
 
         // Split into at most 9 segments; VID/PID/interface triple are segments 2..6.
         // <para>最多拆为 9 段；VID/PID/接口三元组为第 2..6 段。</para>
-        var parts = deviceKey.Split('|');
+        var parts = deviceKey.Split('|', 9);
         if (parts.Length < 7)
         {
             return null;
@@ -139,6 +138,13 @@ internal static class UsbDeviceIdentity
             filter.InterfaceProtocol = ifProtocol;
         }
 
+        if (parts.Length == 9)
+        {
+            filter.DevicePathEquals = parts[8];
+            filter.DevicePathContains = parts[8];
+            // Opening may enrich an absent serial; the physical path remains mandatory.
+            if (!string.IsNullOrEmpty(parts[7]) && parts[7] != "UNKNOWN") filter.SerialNumber = parts[7];
+        }
         return filter;
     }
 }

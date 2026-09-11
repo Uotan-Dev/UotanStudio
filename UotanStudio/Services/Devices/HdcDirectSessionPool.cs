@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Abstractions;
@@ -23,6 +24,8 @@ internal static class HdcDirectSessionPool
     {
         lock (Sync)
         {
+            if (DebugBridgeRoute.UseHdcServer())
+                throw new IOException("HDC server appeared; direct USB access is prohibited. Retry through the server.");
             if (Sessions.TryGetValue(device.Key, out var existing) && existing.IsConnected)
                 return existing.CreateLease();
             if (existing is not null) { Sessions.Remove(device.Key); existing.Dispose(); }

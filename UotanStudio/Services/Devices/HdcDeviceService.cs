@@ -1,3 +1,4 @@
+using UotanStudio.Comm.Protocols.Common;
 using System.Globalization;
 using System.Text;
 using UotanStudio.Comm.Protocols.Hdc;
@@ -49,7 +50,7 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
         var wrapped = "shell sh -c " + HdcDeviceServices.QuoteShellArgument(command)
             + "; printf '\\n" + marker + "%s\\n' \"$?\"";
         string text;
-        if (device.Transport == DeviceTransportKind.Usb && !device.Key.StartsWith("hdc:", StringComparison.Ordinal))
+        if (IsDirect(device))
         {
             text = await Task.Run(() =>
             {
@@ -89,8 +90,14 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
         return ShellAsync(device, "param get " + HdcDeviceServices.QuoteShellArgument(name), ct);
     }
 
-    private static bool IsDirect(DetectedDevice device) => device.Transport == DeviceTransportKind.Usb
-        && !device.Key.StartsWith("hdc:", StringComparison.Ordinal);
+    private bool IsDirect(DetectedDevice device)
+    {
+        ValidateDevice(device);
+        if (DebugBridgeRoute.UseHdcServer(host, _port)) return false;
+        if (device.Transport != DeviceTransportKind.Usb || device.Key.StartsWith("hdc:", StringComparison.Ordinal))
+            throw new IOException("HDC server is unavailable; refresh discovery before opening direct USB.");
+        return true;
+    }
 
     private static Task<string> DirectTaskAsync(DetectedDevice device, Func<HdcSession, string> operation, CancellationToken ct)
         => Task.Run(() =>
@@ -105,7 +112,7 @@ public sealed class HdcDeviceService(string executable = "hdc", string host = "1
     public Task<string> RunTaskAsync(DetectedDevice device, IEnumerable<string> arguments, CancellationToken ct = default)
     {
         ValidateDevice(device);
-        if (!device.Key.StartsWith("hdc:", StringComparison.Ordinal))
+        if (!DebugBridgeRoute.UseHdcServer(host, _port))
             throw new NotSupportedException("This operation requires an official HDC server target; it cannot take over an active direct USB session.");
         return HdcCommandClient.RunAsync(executable, ["-s", $"{host}:{_port}", "-t", device.Serial, .. arguments], ct);
     }

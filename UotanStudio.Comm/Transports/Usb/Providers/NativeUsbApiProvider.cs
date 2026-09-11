@@ -71,7 +71,7 @@ internal sealed class NativeUsbApiProvider : UsbApiProviderBase
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            return WinUSBFinder.FindDevice(filter);
+            return WinUSBFinder.FindDevice(filter, new UsbSessionOptions { MetadataOnly = true });
         }
 
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))

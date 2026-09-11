@@ -103,6 +103,8 @@ public sealed class HdcConnection : IDisposable
     /// </summary>
     public void Connect()
     {
+        if (_transport is UsbDeviceTransport)
+            UotanStudio.Comm.Protocols.Common.DebugBridgeRoute.RequireDirectUsb(0xff, 0x50, 1);
         lock (_streamsLock)
         {
             if (_disposed)
