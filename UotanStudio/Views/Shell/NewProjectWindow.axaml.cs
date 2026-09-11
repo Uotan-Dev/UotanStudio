@@ -58,11 +58,12 @@ public sealed record NewProjectFormResult(
     string[] SelectedZipMembers,
     string[] SelectedPartitions,
     bool UnpackImages,
-    bool UnpackFully);
+    bool UnpackFully,
+    bool CopyOriginal = true);
 
 /// <summary>
-/// <para>新建项目配置窗口；维护表单与文件选择，点击创建时输出 <see cref="Result"/> 并关闭，
-/// 由调用方创建工程与执行解包。位置显示组合后的完整目录（<c>基础目录/名称</c>）并随名称联动；
+/// <para>新建项目配置窗口；维护表单与文件选择，通过 <see cref="CreateAsync"/> 等待调用方完成创建和解包后关闭。
+/// 操作期间保留模态窗口并显示进度。位置显示组合后的完整目录（<c>基础目录/名称</c>）并随名称联动；
 /// 单个 super / payload.bin / zip 选中时在后台分析内部结构并把分区/镜像条目加入勾选列表。</para>
 /// New project form; holds local selections, outputs <see cref="Result"/> on create so the caller
 /// creates the project and runs unpacking. The location shows the combined full directory
@@ -82,6 +83,23 @@ public partial class NewProjectWindow : Window
     private bool _locationEdited;
     private string _baseDirectory;
     private int _analysisGeneration;
+    private ContainerKind _containerKind;
+    private string? _containerPath;
+    private bool _isAnalyzing;
+    private bool _isCreating;
+
+    /// <summary>Runs creation while the modal form displays progress.</summary>
+    public Func<NewProjectFormResult, Task>? CreateAsync { get; set; }
+
+    /// <summary>Updates operation status on the UI thread.</summary>
+    public void ReportProgress(string status, double? percent = null)
+    {
+        ProgressPanel.IsVisible = true;
+        OperationStatus.Text = status;
+        OperationProgress.IsIndeterminate = percent is null;
+        OperationProgress.Value = percent ?? 0;
+    }
+
 
     /// <summary><para>表单提交结果；取消或关闭时保持为空。</para>Form result; stays null on cancel/close.</summary>
     public NewProjectFormResult? Result { get; private set; }
@@ -134,7 +152,8 @@ public partial class NewProjectWindow : Window
         ProjectNameBox.TextChanged += OnProjectNameChanged;
         ProjectLocationBox.TextChanged += OnLocationTextChanged;
         Opened += (_, _) => ProjectNameBox.Focus();
-        Closed += (_, _) => DetachImageHandlers();
+        Closing += (_, e) => e.Cancel = _isCreating;
+        Closed += (_, _) => { _analysisGeneration++; DetachImageHandlers(); };
 
         ProjectNameBox.Text = ContainerStructureAnalyzer.GetNextDefaultName(_baseDirectory, ReservedNames);
         UpdateLocationText();
@@ -185,7 +204,7 @@ public partial class NewProjectWindow : Window
                 [
                     new FilePickerFileType(LanguageService.Instance.GetString("NewProject_ImageFiles"))
                     {
-                        Patterns = ["*.img", "*.zip", "*.bin", "*.raw", "*.ext4", "*.erofs", "*.f2fs", "*.dat", "*.br", "*.ozip", "*.ofp", "*.ops", "*.pac", "*.super"]
+                        Patterns = ["*.img", "*.zip", "*.bin", "*.raw", "*.ext4", "*.erofs", "*.f2fs", "*.dat", "*.br", "*.ozip", "*.ofp", "*.ops", "*.pac", "*.super", "*.app", "*.simg", "*.sparse"]
                     },
                     FilePickerFileTypes.All
                 ]
@@ -217,7 +236,7 @@ public partial class NewProjectWindow : Window
     /// structure is analyzed in the background and, on success, the list is rebuilt with grouped
     /// entries (a previous in-flight analysis is cancelled by generation).
     /// </summary>
-    private void SetImages(NewProjectImageEntry[] images)
+    private async void SetImages(NewProjectImageEntry[] images)
     {
         DetachImageHandlers();
         _images = images;
@@ -230,37 +249,64 @@ public partial class NewProjectWindow : Window
         ClearImagesButton.IsVisible = images.Length > 0;
         UpdateSelectAll();
 
+        _containerKind = ContainerKind.None;
+        _containerPath = null;
         var generation = ++_analysisGeneration;
-        var single = images.Length == 1 && images[0].FilePath is not null ? images[0].FilePath! : null;
-        if (single is null)
+        var single = images.Length == 1 ? images[0].FilePath : null;
+        _isAnalyzing = single is not null;
+        CreateButton.IsEnabled = !_isAnalyzing;
+        ProgressPanel.IsVisible = _isAnalyzing;
+        if (single is null) return;
+        ReportProgress(LanguageService.Instance.GetString("NewProject_Analyzing"));
+        try
         {
-            return;
+            var structure = await Task.Run(() => ContainerStructureAnalyzer.Analyze(single));
+            if (generation != _analysisGeneration || !IsVisible) return;
+            if (structure.Kind != ContainerKind.None) ApplyContainerStructure(single, structure);
         }
-
-        // 容器结构分析在后台执行；完成后若仍是当前一代结果则重建为分组列表。
-        // Structure analysis runs in the background; the list is rebuilt only when the result
-        // still belongs to the latest generation.
-        Task.Run(() => (single, ContainerStructureAnalyzer.Analyze(single)))
-            .ContinueWith(t =>
+        catch (Exception ex)
+        {
+            if (generation == _analysisGeneration && IsVisible) await ShowPickerErrorAsync(ex);
+        }
+        finally
+        {
+            if (generation == _analysisGeneration)
             {
-                if (t.IsFaulted || generation != _analysisGeneration) return;
-                var (path, structure) = t.Result;
-                if (structure.Kind == ContainerKind.None || structure.Entries.Count == 0) return;
-                Dispatcher.UIThread.Post(() => ApplyContainerStructure(path, structure));
-            });
+                _isAnalyzing = false;
+                CreateButton.IsEnabled = true;
+                ProgressPanel.IsVisible = false;
+            }
+        }
     }
 
     /// <summary>
-    /// <para>以容器结构重建列表：分组头 + 内部条目（ZIP 成员与 payload/super 分区），单列展示。</para>
-    /// Rebuilds the list from a container structure: group headers + inner entries (ZIP members and
-    /// payload/super partitions), displayed in a single column.
+    /// <para>以原包复制选项和内部条目重建列表，复用自适应多列布局。</para>
+    /// Rebuilds the adaptive columns with an original-file copy option and selectable inner entries.
     /// </summary>
     private void ApplyContainerStructure(string containerPath, ContainerStructure structure)
     {
-        var entries = new List<NewProjectImageEntry> { NewProjectImageEntry.GroupHeader(GroupLabelFor(structure.Kind, containerPath)) };
-        entries.AddRange(structure.Entries.Select(entry => new NewProjectImageEntry(
-            entry.Name, entry.Format, containerPath, entry.FromPayload)));
-        SetImages([.. entries]);
+        DetachImageHandlers();
+        _containerKind = structure.Kind;
+        _containerPath = containerPath;
+        var duplicateZipNames = structure.Kind == ContainerKind.Zip
+            ? structure.Entries.Where(entry => !entry.FromPayload)
+                .GroupBy(entry => Path.GetFileName(entry.Name.Replace('\\', '/')), StringComparer.OrdinalIgnoreCase)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : [];
+        var entries = new List<NewProjectImageEntry> { new(containerPath, structure.Kind.ToString().ToLowerInvariant()) };
+        entries.AddRange(structure.Entries.Select(entry =>
+        {
+            var fileName = Path.GetFileName(entry.Name.Replace('\\', '/'));
+            var displayName = structure.Kind == ContainerKind.Zip && !entry.FromPayload && !duplicateZipNames.Contains(fileName)
+                ? fileName : entry.Name;
+            return new NewProjectImageEntry(entry.Name, entry.Format, containerPath, entry.FromPayload, displayName, entry.PayloadMemberPath);
+        }));
+        _images = [.. entries];
+        foreach (var image in _images) image.PropertyChanged += OnImageSelectionChanged;
+        _imageColumnCount = 0;
+        UpdateImageColumns();
+        UpdateSelectAll();
     }
 
     /// <summary><para>分组头的本地化标题。</para>Localized group-header label.</summary>
@@ -278,18 +324,6 @@ public partial class NewProjectWindow : Window
 
     private void UpdateImageColumns()
     {
-        // 容器分组列表固定单列；普通多选按可用高度/宽度自适应一至三列。
-        // Container group lists are single-column; plain multi-select adapts one to three columns.
-        var isGrouped = _images.Any(image => image.IsGroupHeader || image.FilePath is null);
-        if (isGrouped)
-        {
-            if (_imageColumnCount == 1) return;
-            _imageColumnCount = 1;
-            ImageHeaders.ItemsSource = new[] { 0 };
-            ImageList.ItemsSource = _images.Select(image => new NewProjectImageRow([image], 1)).ToArray();
-            return;
-        }
-
         // Use the fewest columns that fit the available height, while keeping each column readable.
         // 根据列表可用高度选择最少列数，并限制每列的最小宽度；窗口增高时自动合并列。
         var rowsPerColumn = Math.Max(1, (int)Math.Floor(ImageList.Bounds.Height / ImageRowHeight));
@@ -342,6 +376,7 @@ public partial class NewProjectWindow : Window
     /// </summary>
     private void OnProjectNameChanged(object? sender, TextChangedEventArgs e)
     {
+        UpdateValidation();
         if (_locationEdited) return;
         UpdateLocationText();
     }
@@ -373,21 +408,20 @@ public partial class NewProjectWindow : Window
         }
     }
 
-    private void OnCreateClick(object? sender, RoutedEventArgs e)
+    private async void OnCreateClick(object? sender, RoutedEventArgs e)
     {
+        if (_isAnalyzing || _isCreating) return;
         _validationRequested = true;
         UpdateValidation();
         if (ProjectNameError.IsVisible) ProjectNameBox.Focus();
         else if (ProjectLocationError.IsVisible) ProjectLocationBox.Focus();
         else
         {
-            // Output the form result and close; the caller creates the project and runs unpacking.
-            // 输出表单结果并关闭；由调用方创建工程并执行解包。
+            // Preserve analyzed identity; never repeat metadata I/O on the UI thread at submission.
+            // 提交时保留分析结果，避免在 UI 线程重新读取原包元数据。
             var selected = _images.Where(image => image.IsSelectable && image.IsSelected).ToArray();
-            var containerPath = _images.Length > 0 && _images[0].FilePath is null ? _images[0].ContainerPath : null;
-            var kind = containerPath is null
-                ? ContainerKind.None
-                : ContainerStructureAnalyzer.Analyze(containerPath).Kind;
+            var containerPath = _containerPath;
+            var kind = _containerKind;
             Result = new NewProjectFormResult(
                 ProjectNameBox.Text?.Trim() ?? string.Empty,
                 ProjectLocationBox.Text?.Trim() ?? string.Empty,
@@ -398,8 +432,29 @@ public partial class NewProjectWindow : Window
                 selected.Where(image => image.FilePath is null && (kind != ContainerKind.Zip || image.FromPayload))
                     .Select(image => image.Name).ToArray(),
                 UnpackImagesBox.IsChecked == true,
-                UnpackFullyBox.IsChecked == true);
-            Close();
+                UnpackFullyBox.IsChecked == true,
+                selected.Any(image => image.FilePath == containerPath));
+            if (CreateAsync is null) { Close(); return; }
+            _isCreating = true;
+            FormContent.IsEnabled = false;
+            CreateButton.IsEnabled = false;
+            CancelButton.IsEnabled = false;
+            ReportProgress(LanguageService.Instance.GetString("NewProject_Creating"));
+            try
+            {
+                await CreateAsync(Result);
+                _isCreating = false;
+                Close();
+            }
+            catch (Exception ex)
+            {
+                Result = null;
+                _isCreating = false;
+                CancelButton.IsEnabled = true;
+                ReportProgress(ex.Message, 0);
+                await DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_CreateFailed"),
+                    ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+            }
         }
     }
 
@@ -408,6 +463,14 @@ public partial class NewProjectWindow : Window
         if (!_validationRequested) return;
         SetRequiredError(ProjectNameBox, ProjectNameError, "NewProject_NameRequired");
         SetRequiredError(ProjectLocationBox, ProjectLocationError, "NewProject_LocationRequired");
+        var name = ProjectNameBox.Text?.Trim() ?? "";
+        if (!ProjectNameError.IsVisible && (name is "." or ".." || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || name.IndexOfAny(['/', '\\']) >= 0 || ReservedNames.Contains(name, StringComparer.OrdinalIgnoreCase)))
+        {
+            ProjectNameBox.SetValue(DataValidationErrors.HasErrorsProperty, true);
+            ProjectNameError.Text = LanguageService.Instance.GetString("NewProject_NameInvalid");
+            ProjectNameError.IsVisible = true;
+        }
         if (!ProjectLocationError.IsVisible && ProjectLocationBox.Text is { } location
             && !ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(location))
         {
@@ -438,28 +501,32 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
     public static NewProjectImageEntry GroupHeader(string label) => new(label, isGroupHeader: true);
 
     /// <summary><para>普通镜像文件条目。</para>Plain image-file entry.</summary>
-    public NewProjectImageEntry(string filePath)
+    public NewProjectImageEntry(string filePath, string format = "—")
     {
         FilePath = filePath;
         Name = Path.GetFileName(filePath);
+        DisplayName = Name;
         ContainerPath = filePath;
-        Format = "—";
+        Format = format;
     }
 
     /// <summary><para>容器内部条目（分区名或 ZIP 内路径）。</para>Container inner entry (partition name or ZIP path).</summary>
-    public NewProjectImageEntry(string innerName, string format, string containerPath, bool fromPayload)
+    public NewProjectImageEntry(string innerName, string format, string containerPath, bool fromPayload, string? displayName = null, string? payloadMemberPath = null)
     {
         FilePath = null;
         Name = innerName;
+        DisplayName = displayName ?? innerName;
         ContainerPath = containerPath;
         Format = format;
         FromPayload = fromPayload;
+        PayloadMemberPath = payloadMemberPath;
     }
 
     private NewProjectImageEntry(string label, bool isGroupHeader)
     {
         FilePath = null;
         Name = label;
+        DisplayName = label;
         ContainerPath = string.Empty;
         Format = string.Empty;
         IsGroupHeader = isGroupHeader;
@@ -468,8 +535,11 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
     /// <summary><para>普通镜像的完整路径；内部条目与分组头为 null。</para>Full path of a plain image; null for inner entries and group headers.</summary>
     public string? FilePath { get; }
 
-    /// <summary><para>显示名称：文件名、分区名、ZIP 内路径或分组标题。</para>Display name: file name, partition name, ZIP path, or group title.</summary>
+    /// <summary><para>条目标识：ZIP 条目始终保留完整内部路径用于提取。</para>Entry identity; ZIP members retain their full archive paths for extraction.</summary>
     public string Name { get; }
+
+    /// <summary><para>ZIP 条目默认显示文件名，重名时显示完整内部路径。</para>ZIP filename, expanded to the full member path when filenames collide.</summary>
+    public string DisplayName { get; }
 
     /// <summary><para>所属容器路径（悬停提示用）。</para>Owning container path (used for tooltips).</summary>
     public string ContainerPath { get; }
@@ -487,7 +557,10 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
     public bool IsSelectable => !IsGroupHeader;
 
     /// <summary><para>悬停提示：普通文件显示完整路径，内部条目显示容器路径。</para>Tooltip: full path for plain files, container path for inner entries.</summary>
-    public string Tip => FilePath ?? ContainerPath;
+    public string Tip => FilePath ?? ContainerPath + "!/" + (PayloadMemberPath is null ? "" : PayloadMemberPath + "!/") + Name;
+
+    /// <summary>Containing Payload member path for the full nested location tooltip.</summary>
+    public string? PayloadMemberPath { get; }
 
     [ObservableProperty]
     private bool _isSelected = true;

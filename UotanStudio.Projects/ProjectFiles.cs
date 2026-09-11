@@ -17,7 +17,7 @@ public static class ProjectFiles
 
     /// <summary>Copies through a temporary file; cancellation or failure leaves the destination untouched.</summary>
     public static async Task CopyAsync(string sourcePath, string destinationPath, bool overwrite = false,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IProgress<double>? progress = null)
     {
         var destination = Path.GetFullPath(destinationPath);
         var temporary = destination + ".copy-" + Guid.NewGuid().ToString("N");
@@ -25,9 +25,28 @@ public static class ProjectFiles
         {
             await using (var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true))
             await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
-                await ProjectStreamCopy.CopyExactlyAsync(source, output, source.Length, cancellationToken);
+            {
+                var length = source.Length;
+                var buffer = new byte[65536];
+                long copied = 0;
+                var lastReport = Environment.TickCount64;
+                progress?.Report(0);
+                while (copied < length)
+                {
+                    var read = await source.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, length - copied)), cancellationToken).ConfigureAwait(false);
+                    if (read == 0) throw new EndOfStreamException("Source was truncated during copy.");
+                    await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                    copied += read;
+                    if (Environment.TickCount64 - lastReport >= 100)
+                    {
+                        progress?.Report(copied * 100.0 / length);
+                        lastReport = Environment.TickCount64;
+                    }
+                }
+            }
             cancellationToken.ThrowIfCancellationRequested();
             File.Move(temporary, destination, overwrite);
+            progress?.Report(100);
         }
         finally { File.Delete(temporary); }
     }

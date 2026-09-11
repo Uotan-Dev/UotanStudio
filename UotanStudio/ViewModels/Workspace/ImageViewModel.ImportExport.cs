@@ -15,7 +15,7 @@ internal partial class ImageViewModel
     /// <para>要导入的源文件路径列表。</para>
     /// Source file paths to import.
     /// </param>
-    public async Task ImportAsync(string[] paths)
+    public async Task ImportAsync(string[] paths, IProgress<double>? progress = null)
     {
         if (paths is null || paths.Length == 0)
         {
@@ -41,7 +41,7 @@ internal partial class ImageViewModel
                 }
 
                 var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(path)));
-                await ProjectFiles.CopyAsync(path, destination);
+                await ProjectFiles.CopyAsync(path, destination, progress: progress);
                 var relative = context.RelativePath(destination);
                 if (relative is null)
                 {
@@ -49,7 +49,7 @@ internal partial class ImageViewModel
                     continue;
                 }
 
-                var format = ImageInputService.DetectFormat(destination);
+                var format = await Task.Run(() => ImageInputService.DetectFormat(destination));
                 if (format is "raw")
                 {
                     File.Delete(destination);
@@ -111,6 +111,7 @@ internal partial class ImageViewModel
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Images", $"Import failed: {ex.Message}  导入失败：{ex.Message}");
+            if (progress is not null) throw;
         }
     }
 
@@ -124,7 +125,7 @@ internal partial class ImageViewModel
     /// <param name="sourcePath"><para>容器源文件路径。</para>Source container path.</param>
     /// <param name="formatLabel"><para>格式列显示文本（super / payload / zip）。</para>Format column text (super / payload / zip).</param>
     /// <returns><para>登记的镜像条目；未打开工程或源不存在时为 null。</para>The registered entry; null when no project is open or the source is missing.</returns>
-    public async Task<ImageEntryViewModel?> ImportContainerAsync(string sourcePath, string formatLabel)
+    public async Task<ImageEntryViewModel?> ImportContainerAsync(string sourcePath, string formatLabel, IProgress<double>? progress = null)
     {
         var context = ProjectContextService.Instance;
         if (!context.IsProjectOpen || context.ActiveSubProject is null || !File.Exists(sourcePath))
@@ -134,7 +135,7 @@ internal partial class ImageViewModel
 
         var imagesDir = context.EnsureImagesDirectory();
         var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(sourcePath)));
-        await ProjectFiles.CopyAsync(sourcePath, destination).ConfigureAwait(true);
+        await ProjectFiles.CopyAsync(sourcePath, destination, progress: progress).ConfigureAwait(true);
         var relative = context.RelativePath(destination);
         if (relative is null)
         {

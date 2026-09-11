@@ -249,6 +249,7 @@ internal partial class ImageViewModel
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, 0);
         }
         finally { IsOperating = false; }
+        if (failed > 0) throw new IOException(StatusText);
     }
 
     /// <summary>

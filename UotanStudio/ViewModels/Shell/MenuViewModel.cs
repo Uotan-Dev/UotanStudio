@@ -201,25 +201,24 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var owner = DialogService.GetOwnerWindow();
         if (owner is null) return;
         var window = new NewProjectWindow(NewProjectWindowMode.Solution, null, null);
-        await window.ShowDialog(owner);
-        var form = window.Result;
-        if (form is null) return;
-        try
+        window.CreateAsync = async form =>
         {
             // 位置已是组合后的完整目录（基础目录/解决方案名），直接作为解决方案目录使用。
             // The location is already the combined directory (base/solution name); use it directly.
             var solutionPath = Path.Combine(form.Location, form.ProjectName + ".uotan");
             await _projectOps.CreateNewSolutionAsync(solutionPath);
+            if (!string.Equals(_projectOps.CurrentProjectPath, solutionPath, StringComparison.OrdinalIgnoreCase))
+                throw new OperationCanceledException("Project creation was cancelled.");
             RecordRecentProject(solutionPath);
 
             var images = ImageViewModel.EnsureInstance();
             if (form.ContainerPath is not null)
             {
-                await ImportContainerWithSelectionAsync(form, images);
+                await ImportContainerWithSelectionAsync(form, images, window);
             }
             else if (form.SelectedImagePaths.Length > 0)
             {
-                await images.ImportAsync(form.SelectedImagePaths);
+                await images.ImportAsync(form.SelectedImagePaths, new Progress<double>(p => window.ReportProgress(LanguageService.Instance.GetString("NewProject_Copying"), p)));
             }
 
             WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
@@ -227,14 +226,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
             if (form.ContainerPath is null)
             {
-                await UnpackSelectedPlainImagesAsync(form, images);
+                await UnpackSelectedPlainImagesAsync(form, images, window);
             }
-        }
-        catch (Exception ex)
-        {
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("NewProject_CreateFailed"),
-                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
-        }
+            if (!await _projectOps.SaveAsync(saveActiveDocument: false))
+                throw new IOException("Could not save the imported project.");
+        };
+        await window.ShowDialog(owner);
     }
 
     /// <summary>
@@ -243,7 +240,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// Unpacking for plain multi-selected images (shared by new solution and new sub-project): only
     /// imported entries are unpacked; with full unpack checked nested images are unpacked recursively.
     /// </summary>
-    private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images)
+    private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window)
     {
         if (!form.UnpackImages || form.SelectedImagePaths.Length == 0) return;
         // 只解包导入成功的镜像条目；导入失败（格式未知等）的文件不在列表中。
@@ -254,7 +251,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                     OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
             .ToList();
         if (entries.Count == 0) return;
-        await images.UnpackFromProjectCreationAsync(entries, form.UnpackFully);
+        await UnpackWithCreationProgressAsync(images, entries, form.UnpackFully, window);
     }
 
     /// <summary>
@@ -265,33 +262,53 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// unpack checked the extracted images are recursively unpacked. Extraction runs on a background
     /// thread and writes to the log.
     /// </summary>
-    private async Task ImportContainerWithSelectionAsync(NewProjectFormResult form, ImageViewModel images)
+    private static async Task UnpackWithCreationProgressAsync(ImageViewModel images,
+        IReadOnlyList<ImageEntryViewModel> entries, bool fully, NewProjectWindow window)
+    {
+        void Update(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
+        {
+            if (args.PropertyName is nameof(images.StatusText) or nameof(images.ProgressPercent))
+                window.ReportProgress(images.StatusText, images.ProgressPercent);
+        }
+        images.PropertyChanged += Update;
+        try { await images.UnpackFromProjectCreationAsync(entries, fully); }
+        finally { images.PropertyChanged -= Update; }
+    }
+
+    private async Task ImportContainerWithSelectionAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window)
     {
         var source = form.ContainerPath;
         if (source is null) return;
-        var container = await images.ImportContainerAsync(source, form.ContainerKind switch
+        var outputDirectory = ProjectContextService.Instance.EnsureImagesDirectory();
+        await SourceContainerMetadataService.SaveAsync(source, form.ContainerKind);
+        var containerPath = source;
+        if (form.CopyOriginal)
         {
-            ContainerKind.Super => "super",
-            ContainerKind.Payload => "payload",
-            ContainerKind.Zip => "zip",
-            _ => "raw"
-        });
-        if (container is null) return;
-
-        var containerPath = ProjectContextService.Instance.ResolvePath(container.RelativePath) ?? source;
+            var container = await images.ImportContainerAsync(source, form.ContainerKind switch
+            {
+                ContainerKind.Super => "super",
+                ContainerKind.Payload => "payload",
+                ContainerKind.Zip => "zip",
+                _ => "raw"
+            }, new Progress<double>(p => window.ReportProgress(LanguageService.Instance.GetString("NewProject_Copying"), p)));
+            if (container is null) throw new IOException("Container import failed.");
+            containerPath = ProjectContextService.Instance.ResolvePath(container.RelativePath) ?? source;
+        }
+        window.ReportProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
         if (!form.UnpackImages
             || (form.SelectedZipMembers.Length == 0 && form.SelectedPartitions.Length == 0))
         {
             return;
         }
 
+        var extractionProgress = new Progress<double>(p => window.ReportProgress(LanguageService.Instance.GetString("NewProject_Extracting"), p));
         var extractedPaths = new List<string>();
         try
         {
             if (form.ContainerKind == ContainerKind.Zip && form.SelectedZipMembers.Length > 0)
             {
                 var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
-                    containerPath, form.SelectedZipMembers, fromPayloadOnly: false)).ConfigureAwait(true);
+                    containerPath, form.SelectedZipMembers, fromPayloadOnly: false, outputDirectory: outputDirectory, progress: extractionProgress)).ConfigureAwait(true);
                 extractedPaths.AddRange(result.OutputPaths);
             }
 
@@ -299,7 +316,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             {
                 var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
                     containerPath, form.SelectedPartitions,
-                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip)).ConfigureAwait(true);
+                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, progress: extractionProgress)).ConfigureAwait(true);
                 extractedPaths.AddRange(result.OutputPaths);
             }
 
@@ -310,6 +327,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         {
             LogService.Instance.Write(LogLevel.Error, "Images",
                 $"Container extraction failed: {ex.Message}  容器提取失败：{ex.Message}");
+            throw;
         }
 
         if (extractedPaths.Count == 0) return;
@@ -320,10 +338,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var extractedEntries = extractedPaths
             .Select(images.AddExtractedImage)
             .OfType<ImageEntryViewModel>()
+            .Where(entry => entry.SizeBytes > 0 && entry.Format is not ("raw" or "unknown"))
             .ToList();
         if (form.UnpackFully && extractedEntries.Count > 0)
         {
-            await images.UnpackFromProjectCreationAsync(extractedEntries, unpackFully: false);
+            await UnpackWithCreationProgressAsync(images, extractedEntries, true, window);
         }
     }
 
@@ -487,10 +506,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             NewProjectWindowMode.SubProject,
             context.RootDirectory,
             context.SubProjects.Select(sp => sp.Name));
-        await window.ShowDialog(owner);
-        var form = window.Result;
-        if (form is null) return;
-        try
+        window.CreateAsync = async form =>
         {
             // 位置已是组合后的完整目录（解决方案根/子项目名），.uotanfw 与目录同名。
             // The location is the combined directory (solution root/sub-project name); the .uotanfw
@@ -505,19 +521,17 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             var images = ImageViewModel.EnsureInstance();
             if (form.ContainerPath is not null)
             {
-                await ImportContainerWithSelectionAsync(form, images);
+                await ImportContainerWithSelectionAsync(form, images, window);
             }
             else if (form.SelectedImagePaths.Length > 0)
             {
-                await images.ImportAsync(form.SelectedImagePaths);
-                await UnpackSelectedPlainImagesAsync(form, images);
+                await images.ImportAsync(form.SelectedImagePaths, new Progress<double>(p => window.ReportProgress(LanguageService.Instance.GetString("NewProject_Copying"), p)));
+                await UnpackSelectedPlainImagesAsync(form, images, window);
             }
-        }
-        catch (Exception ex)
-        {
-            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("NewProject_CreateFailed"),
-                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
-        }
+            if (!await _projectOps.SaveAsync(saveActiveDocument: false))
+                throw new IOException("Could not save the imported project.");
+        };
+        await window.ShowDialog(owner);
     }
 
     /// <summary>

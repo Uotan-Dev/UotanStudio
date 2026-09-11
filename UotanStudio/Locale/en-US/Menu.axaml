@@ -21,6 +21,11 @@
     <x:String x:Key="NewProject_ImageName">Image name</x:String>
     <x:String x:Key="NewProject_ImageFormat">Image format</x:String>
     <x:String x:Key="NewProject_Create">Create</x:String>
+    <x:String x:Key="NewProject_Analyzing">Reading source contents…</x:String>
+    <x:String x:Key="NewProject_NameInvalid">Enter a valid, unused project name</x:String>
+    <x:String x:Key="NewProject_Creating">Creating project…</x:String>
+    <x:String x:Key="NewProject_Copying">Copying original files…</x:String>
+    <x:String x:Key="NewProject_Extracting">Extracting and unpacking selected images…</x:String>
     <x:String x:Key="NewProject_NameRequired">Enter a project name</x:String>
     <x:String x:Key="NewProject_LocationRequired">Select or enter a project location</x:String>
     <x:String x:Key="NewProject_LocationNotEmpty">The target folder must be empty or not exist yet</x:String>

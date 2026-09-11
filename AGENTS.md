@@ -1,5 +1,11 @@
 # UotanStudio 项目指令
 
+## 新建子项目交互更新（2026-09-11）
+
+- 新建窗口的原包行可勾选，控制是否复制；内部条目独立选择，并与 ZIP 条目共用自适应多列布局。下文旧版“分组头不可勾选”“提交即关闭”“容器必须先复制”的描述已被替代。窗口等待创建、复制和解包完成再关闭，期间显示进度并禁止重复提交。
+- RAW/Sparse Super 均按 LP 内容识别为 `super`，不能仅靠文件名推断；通过 Sparse 逻辑流读取和提取，不先展开完整 RAW 临时文件。原始 Super/Payload 配置独立于复制选项，保存在子项目 `.uotan/source-super.json` / `source-payload.json`，交付页面按对应配置筛选项目并回填。
+- 修复范围、配置语义及真实样本/窗口验证见 `docs/new-subproject-interaction.md`；窗口验证工具为 `tools/NewProjectSmoke`。
+
 ## 当前功能边界（2026-09-10）
 
 - 文件管理视图新增 CPIO/TAR 与压缩文件浏览：`ArchiveBrowser` 统一目录枚举和所选条目提取；支持 `.cpio/.tar/.xz/.gz/.tgz/.txz/.tbz/.tbz2/.tlz/.tzst` 及压缩库登记的其他扩展名。压缩层在可取消、64 GiB 上限的临时文件中展开，关闭文档释放；内部是 CPIO/TAR 时显示目录，否则显示单个文件，不递归展开嵌套压缩。目录索引上限 100000 条、名称总量 8 Mi 字符。自动打开和强制文件管理视图共用后端，显式文本／十六进制打开不受影响。回归测试见 `ArchiveBrowserTests`。
