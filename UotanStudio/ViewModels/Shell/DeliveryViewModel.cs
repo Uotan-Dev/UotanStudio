@@ -19,6 +19,7 @@ internal sealed partial class DeliveryImage : ObservableObject
         IsDefault = file.Default;
         Generated = file.Generated;
         IncludeInSuper = file.IncludeInSuper;
+        Fastbootd = file.Fastbootd;
     }
 
     public string? FilePath { get; }
@@ -33,13 +34,14 @@ internal sealed partial class DeliveryImage : ObservableObject
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _partitionName = "";
     [ObservableProperty] private bool _isOptional;
     [ObservableProperty] private bool _isDefault;
+    [ObservableProperty] private bool _fastbootd;
     [ObservableProperty] private bool _includeInSuper;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DisplaySize))] private long? _sizeBytes;
 
     internal DeliveryFile Snapshot() => new()
     {
         SourcePath = FilePath ?? "", FileName = FileName, Partition = PartitionName, SourceGroup = GroupName,
-        SourceLength = SizeBytes, IncludeInSuper = IncludeInSuper, Optional = IsOptional, Default = IsDefault, Generated = Generated
+        SourceLength = SizeBytes, IncludeInSuper = IncludeInSuper, Optional = IsOptional, Default = IsDefault, Generated = Generated, Fastbootd = Fastbootd
     };
 }
 

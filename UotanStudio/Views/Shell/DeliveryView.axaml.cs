@@ -20,6 +20,7 @@ public partial class DeliveryView : UserControl
     private bool _updatingOptions;
     private bool _attached;
     private string? _solutionPath;
+    private string? _appliedSourceSettings;
     private bool? _stacked;
     private double _defaultSidebarWidth = MinimumSidebarWidth;
     private double? _customSidebarWidth;
@@ -34,13 +35,20 @@ public partial class DeliveryView : UserControl
     private double _rightImagesHeightRatio = 0.6;
 
     /// <summary><para>初始化交付配置与共用 SUPER 设置。</para>Initializes delivery options and shared SUPER settings.</summary>
-    public DeliveryView()
+    public DeliveryView() : this(new UotanStudio.Services.Keys.KeyLibraryService()) { }
+
+    internal DeliveryView(UotanStudio.Services.Keys.KeyLibraryService keyLibrary)
     {
+        _payloadKeyLibrary = keyLibrary;
         InitializeComponent();
         DirectOutputBox.IsCheckedChanged += OnOutputOptionChanged;
         PackSuperBox.IsCheckedChanged += OnOutputOptionChanged;
         PackPayloadBox.IsCheckedChanged += OnOutputOptionChanged;
-        UseProjectSuperSettingsBox.IsCheckedChanged += (_, _) => UpdateProjectSuperSelector();
+        UseProjectSuperSettingsBox.IsCheckedChanged += (_, _) =>
+        {
+            if (UseProjectSuperSettingsBox.IsChecked != true) _appliedSourceSettings = null;
+            UpdateProjectSuperSelector();
+        };
         SuperVabBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         SuperAbBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         SuperSettingsProjectBox.SelectionChanged += (_, _) => ApplySourceSettings();
@@ -92,6 +100,8 @@ public partial class DeliveryView : UserControl
         SuperMetadataSlotsField.IsVisible = packSuper;
         SuperImageOptions.IsVisible = packSuper;
         PayloadSettings.IsVisible = packPayload;
+        SuperDeviceNameBox.IsReadOnly = packPayload;
+        if (packPayload) SuperDeviceNameBox.Text = "payload.bin";
         UseProjectSuperSettingsBox.Classes.Set("payload", packPayload);
         UpdateSuperProjectChoices(ProjectContextService.Instance, resetSelection: false);
         Composition.SetOutputOptions(DirectOutputBox.IsChecked == true, packSuper, packPayload);
@@ -100,7 +110,18 @@ public partial class DeliveryView : UserControl
 
     private void UpdateCompositionImages()
     {
-        if (!_restoringDelivery) Composition.SetImages(ImageSelection.GetSelectedImages());
+        if (_restoringDelivery) return;
+        var previous = Composition.Model.Container.ToHashSet();
+        Composition.SetImages(ImageSelection.GetSelectedImages());
+        if (UseProjectSuperSettingsBox.IsChecked == true && PackPayloadBox.IsChecked == true)
+        {
+            try
+            {
+                var members = UotanStudio.Services.Delivery.DeliveryGroups.Parse(DeliveryGroupsBox.Text ?? "").SelectMany(g => g.Partitions).ToHashSet(StringComparer.Ordinal);
+                foreach (var row in Composition.Model.Container.Where(row => !previous.Contains(row))) row.IncludeInSuper = members.Contains(row.PartitionName);
+            }
+            catch (InvalidDataException) { /* Incomplete text remains editable; publication validates it. */ }
+        }
     }
 
     private void UpdateImagesLayout()
@@ -184,7 +205,12 @@ public partial class DeliveryView : UserControl
         PayloadMinorVersionBox.Text = "0";
         DynamicPartitionsFileBox.Text = string.Empty;
         PayloadSignatureBox.Text = string.Empty;
+        _legacyPayloadSignatureFile = "";
+        _payloadSigningFingerprint = "";
+        _payloadSigningIdentityPath = "";
         PayloadPostinstallBox.Text = string.Empty;
+        PayloadBlockSizeBox.Text = "4096"; PayloadTimestampBox.Text = "0"; PayloadSecurityPatchBox.Text = "";
+        PayloadCompressionBox.SelectedIndex = 0; SuperZstdBox.IsChecked = false; DeliveryGroupsBox.Text = "";
     }
 
     private void OnSuperDeviceTypeChanged(object? sender, RoutedEventArgs e)
@@ -233,6 +259,21 @@ public partial class DeliveryView : UserControl
         if (UseProjectSuperSettingsBox.IsChecked != true) return;
         var project = ProjectContextService.Instance.SubProjects.FirstOrDefault(p => p.Name == SuperSettingsProjectBox.SelectedItem as string);
         if (project is null || ReadSourceSettings(project.RootPath) is not { } settings) return;
+        var sourcePath = SourceContainerMetadataService.GetPath(project.RootPath, settings.Kind);
+        var identity = sourcePath + "|" + File.GetLastWriteTimeUtc(sourcePath).Ticks;
+        if (_appliedSourceSettings == identity) return;
+        try
+        {
+            var groups = UotanStudio.Services.Delivery.DeliveryGroups.FromSource(settings);
+            DeliveryGroupsBox.Text = UotanStudio.Services.Delivery.DeliveryGroups.Format(groups);
+            if (settings.Kind == "payload")
+            {
+                var members = groups.SelectMany(g => g.Partitions).ToHashSet(StringComparer.Ordinal);
+                foreach (var row in Composition.Model.Container) row.IncludeInSuper = members.Contains(row.PartitionName);
+            }
+        }
+        catch (Exception ex) { UseProjectSuperSettingsBox.IsChecked = false; _ = ShowDeliveryMessageAsync(ex.Message, true); return; }
+        _appliedSourceSettings = identity;
         SuperVabBox.IsChecked = settings.DeviceType == "VAB";
         SuperAbBox.IsChecked = settings.DeviceType == "AB";
         SuperAOnlyBox.IsChecked = settings.DeviceType == "AOnly";
@@ -249,7 +290,10 @@ public partial class DeliveryView : UserControl
         else
         {
             PayloadVersionBox.Text = "2";
-            PayloadMinorVersionBox.Text = settings.MinorVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            PayloadMinorVersionBox.Text = "0";
+            PayloadBlockSizeBox.Text = settings.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            PayloadTimestampBox.Text = settings.MaxTimestamp.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            PayloadSecurityPatchBox.Text = settings.SecurityPatchLevel;
         }
     }
 

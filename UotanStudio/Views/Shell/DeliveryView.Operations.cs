@@ -26,6 +26,7 @@ public partial class DeliveryView
 
     private void InitializeDelivery()
     {
+        InitializePayloadSigningKeys();
         Composition.ReadOptions = ReadDeliverySuperOptions;
         Composition.Changed += (_, _) => QueueDeliveryChange();
         Composition.OutputView.Changed += (_, _) => QueueDeliveryChange();
@@ -37,11 +38,12 @@ public partial class DeliveryView
         };
         foreach (var box in new[] { OutputDirectoryBox, SuperSizeBox, SuperGroupNameBox, SuperDeviceNameBox,
                      SuperMetadataSizeBox, SuperBlockSizeBox, SuperMetadataSlotsBox, PayloadVersionBox, PayloadMinorVersionBox,
-                     DynamicPartitionsFileBox, PayloadSignatureBox, PayloadPostinstallBox })
+                     DynamicPartitionsFileBox, PayloadSignatureBox, PayloadPostinstallBox, PayloadBlockSizeBox, PayloadTimestampBox, PayloadSecurityPatchBox, DeliveryGroupsBox })
             box.TextChanged += (_, _) => QueueDeliveryChange();
         foreach (var box in new ToggleButton[] { DirectOutputBox, PackSuperBox, PackPayloadBox, SuperRawBox, SuperSparseBox,
-                     SuperVabBox, SuperAbBox, SuperAOnlyBox, ForceFullSuperImageBox, GenerateSuperEmptyBox })
+                     SuperZstdBox, SuperVabBox, SuperAbBox, SuperAOnlyBox, ForceFullSuperImageBox, GenerateSuperEmptyBox })
             box.IsCheckedChanged += (_, _) => QueueDeliveryChange();
+        PayloadCompressionBox.SelectionChanged += (_, _) => QueueDeliveryChange();
         GenerateDynamicPartitionsButton.IsEnabled = true;
         GenerateDynamicPartitionsButton.Click += async (_, _) => await GenerateDynamicPartitionsAsync();
         _deliverySaveTimer.Tick += async (_, _) => { _deliverySaveTimer.Stop(); await SaveDeliveryAsync(false); };
@@ -62,11 +64,18 @@ public partial class DeliveryView
             throw new InvalidDataException("Super 大小无效 / Invalid Super size.");
         return new()
         {
-            DeviceSize = size, Group = SuperGroupNameBox.Text?.Trim() ?? "default", DeviceName = SuperDeviceNameBox.Text?.Trim() ?? "super",
-            MetadataSize = Number(SuperMetadataSizeBox.Text, "metadata size"), Slots = Number(SuperMetadataSlotsBox.Text, "metadata slots"),
-            BlockSize = Number(SuperBlockSizeBox.Text, "block size"), Sparse = SuperSparseBox.IsChecked == true,
-            VirtualAb = SuperVabBox.IsChecked == true, AutoZero = Composition.AutoZero && SuperAOnlyBox.IsChecked != true,
+            Groups = DeliveryGroups.Parse(DeliveryGroupsBox.Text ?? ""),
+            DeviceSize = size,
+            Group = SuperGroupNameBox.Text?.Trim() ?? "default",
+            DeviceName = SuperDeviceNameBox.Text?.Trim() ?? "super",
+            MetadataSize = Number(SuperMetadataSizeBox.Text, "metadata size"),
+            Slots = Number(SuperMetadataSlotsBox.Text, "metadata slots"),
+            BlockSize = Number(SuperBlockSizeBox.Text, "block size"),
+            Sparse = SuperSparseBox.IsChecked == true,
+            VirtualAb = SuperVabBox.IsChecked == true,
+            AutoZero = Composition.AutoZero && SuperAOnlyBox.IsChecked != true,
             DeviceType = SuperVabBox.IsChecked == true ? "VAB" : SuperAbBox.IsChecked == true ? "AB" : "AOnly",
+            Zstd = SuperZstdBox.IsChecked == true,
             Empty = GenerateSuperEmptyBox.IsChecked == true
         };
     }
@@ -75,8 +84,20 @@ public partial class DeliveryView
     {
         if (!uint.TryParse(PayloadVersionBox.Text, out var version) || !uint.TryParse(PayloadMinorVersionBox.Text, out var minor))
             throw new InvalidDataException("Payload 版本无效 / Invalid Payload version.");
-        return new() { Version = version, MinorVersion = minor, DynamicPartitionsFile = DynamicPartitionsFileBox.Text?.Trim() ?? "",
-            SignatureFile = PayloadSignatureBox.Text?.Trim() ?? "", PostinstallFile = PayloadPostinstallBox.Text?.Trim() ?? "" };
+        return new()
+        {
+            BlockSize = uint.TryParse(PayloadBlockSizeBox.Text, out var block) ? block : 0,
+            MaxTimestamp = long.TryParse(PayloadTimestampBox.Text, out var timestamp) ? timestamp : -1,
+            SecurityPatchLevel = PayloadSecurityPatchBox.Text?.Trim() ?? "",
+            Compression = PayloadCompressionBox.SelectedIndex switch { 1 => "BZip2", 2 => "Xz", _ => "None" },
+            Version = version,
+            MinorVersion = minor,
+            DynamicPartitionsFile = DynamicPartitionsFileBox.Text?.Trim() ?? "",
+            SignatureFile = _legacyPayloadSignatureFile,
+            SigningKeyPath = PayloadSignatureBox.Text?.Trim() ?? "",
+            SigningKeyFingerprint = _payloadSigningFingerprint,
+            PostinstallFile = PayloadPostinstallBox.Text?.Trim() ?? ""
+        };
     }
 
     private bool _generatingDynamicPartitions;
@@ -104,10 +125,13 @@ public partial class DeliveryView
 
     internal DeliveryPlan CaptureDeliveryPlan() => Composition.OutputView.Capture(new()
     {
-        OutputDirectory = OutputDirectoryBox.Text?.Trim() ?? "", OrganizeDirectory = DirectOutputBox.IsChecked == true,
-        PackPayload = PackPayloadBox.IsChecked == true, Payload = ReadDeliveryPayloadOptions(),
-        PackSuper = PackSuperBox.IsChecked == true, ContainerConfirmed = Composition.Model.Confirmed,
-        Super = PackSuperBox.IsChecked == true || PackPayloadBox.IsChecked == true ? ReadDeliverySuperOptions() : new(),
+        OutputDirectory = OutputDirectoryBox.Text?.Trim() ?? "",
+        OrganizeDirectory = DirectOutputBox.IsChecked == true,
+        PackPayload = PackPayloadBox.IsChecked == true,
+        Payload = ReadDeliveryPayloadOptions(),
+        PackSuper = PackSuperBox.IsChecked == true,
+        ContainerConfirmed = Composition.Model.Confirmed,
+        Super = ReadDeliverySuperOptions(),
         Container = Composition.Model.Container.Select(i => i.Snapshot()).ToList()
     });
 
@@ -218,13 +242,23 @@ public partial class DeliveryView
         {
             UseProjectSuperSettingsBox.IsChecked = false;
             DirectOutputBox.IsChecked = plan.OrganizeDirectory; PackSuperBox.IsChecked = plan.PackSuper; PackPayloadBox.IsChecked = plan.PackPayload;
-            PayloadVersionBox.Text = plan.Payload.Version.ToString(CultureInfo.InvariantCulture);
-            PayloadMinorVersionBox.Text = plan.Payload.MinorVersion.ToString(CultureInfo.InvariantCulture);
+            PayloadVersionBox.Text = "2";
+            PayloadMinorVersionBox.Text = "0";
             DynamicPartitionsFileBox.Text = plan.Payload.DynamicPartitionsFile;
-            PayloadSignatureBox.Text = plan.Payload.SignatureFile;
+            _legacyPayloadSignatureFile = plan.Payload.SignatureFile;
+            PayloadSignatureBox.Text = plan.Payload.SigningKeyPath;
+            _payloadSigningIdentityPath = plan.Payload.SigningKeyPath;
+            _payloadSigningFingerprint = plan.Payload.SigningKeyFingerprint;
+            RefreshPayloadSigningKeys();
             PayloadPostinstallBox.Text = plan.Payload.PostinstallFile;
+            PayloadBlockSizeBox.Text = plan.Payload.BlockSize.ToString(CultureInfo.InvariantCulture);
+            PayloadTimestampBox.Text = plan.Payload.MaxTimestamp.ToString(CultureInfo.InvariantCulture);
+            PayloadSecurityPatchBox.Text = plan.Payload.SecurityPatchLevel;
+            PayloadCompressionBox.SelectedIndex = plan.Payload.Compression switch { "BZip2" => 1, "Xz" => 2, _ => 0 };
+            SuperZstdBox.IsChecked = plan.Super.Zstd;
+            DeliveryGroupsBox.Text = DeliveryGroups.Format(plan.Super.Groups);
             OutputDirectoryBox.Text = plan.OutputDirectory;
-            SuperDeviceNameBox.Text = plan.Super.DeviceName; SuperGroupNameBox.Text = plan.Super.Group;
+            SuperDeviceNameBox.Text = plan.PackPayload ? "payload.bin" : plan.Super.DeviceName; SuperGroupNameBox.Text = plan.Super.Group;
             SuperSizeBox.Text = plan.Super.DeviceSize.ToString(CultureInfo.InvariantCulture);
             SuperMetadataSizeBox.Text = plan.Super.MetadataSize.ToString(CultureInfo.InvariantCulture);
             SuperBlockSizeBox.Text = plan.Super.BlockSize.ToString(CultureInfo.InvariantCulture);

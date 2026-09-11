@@ -6,6 +6,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Platform.Storage;
+using UotanStudio.Services.Projects;
 using AvaloniaEdit.Document;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -44,6 +46,27 @@ public partial class DeliveryOutputView : UserControl
     private int _documentNumber;
     private bool? _stacked;
     private Border? _editorHost;
+    private bool _pickingArtifact;
+
+    private async void OnBrowseArtifactClick(object? sender, RoutedEventArgs e)
+    {
+        if (_pickingArtifact || sender is not Button { Tag: string name } || this.FindControl<TextBox>(name) is not { } field
+            || TopLevel.GetTopLevel(this) is not { StorageProvider.CanOpen: true } owner) return;
+        _pickingArtifact = true;
+        var project = ProjectContextService.Instance.ActiveSubProject?.RootPath;
+        try
+        {
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = field.PlaceholderText ?? "选择文件 / Select file", AllowMultiple = false });
+            using var file = files.FirstOrDefault();
+            if (project == ProjectContextService.Instance.ActiveSubProject?.RootPath && field.IsEffectivelyEnabled && file?.TryGetLocalPath() is { } path)
+                field.Text = path;
+        }
+        catch (Exception ex)
+        {
+            if (owner is Window window) await DialogService.ShowAsync(window, "Delivery", ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+        finally { _pickingArtifact = false; }
+    }
 
     /// <summary><para>初始化输出表单和第一份空白草稿。</para>Initializes the output form and first empty draft.</summary>
     public DeliveryOutputView()
@@ -60,8 +83,10 @@ public partial class DeliveryOutputView : UserControl
             OutputImagesExpander.IsExpanded = false;
         };
         StartOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
-        foreach (var box in new[] { TxtScriptBox, BatchShellScriptBox, RecoveryScriptBox })
+        foreach (var box in new[] { TxtScriptBox, BatchShellScriptBox, LinuxScriptBox, MacScriptBox, AskWipeBox, RebootBox, OtaZipBox, RecoveryScriptBox })
             box.IsCheckedChanged += (_, _) => NotifyChanged();
+        FlashSlotBox.SelectionChanged += (_, _) => NotifyChanged();
+        foreach (var box in new[] { WindowsZstdBox, LinuxZstdBox, MacZstdBox, PackageCertificateBox, PackageKeyBox, BuildFingerprintBox, IncrementalBox, SdkLevelBox }) box.TextChanged += (_, _) => NotifyChanged();
         DeviceCodenameBox.TextChanged += (_, _) => NotifyChanged();
         AuthorInfoBox.TextChanged += (_, _) => NotifyChanged();
         ScriptEditor.TextChanged += (_, _) => NotifyChanged();
@@ -96,16 +121,16 @@ public partial class DeliveryOutputView : UserControl
         OutputImages.CommitEdit();
         if (_activeDocument is not null) _activeDocument.CaretOffset = ScriptEditor.CaretOffset;
         var files = _model!.Output.Select(i => i.Snapshot()).ToList();
-        // Existing UI exposes Optional, not a separate default selector. First row is the default for a replacement group.
-        foreach (var group in files.GroupBy(f => f.Partition).Where(g => g.Count() > 1))
-        {
-            var first = group.First();
-            foreach (var row in group.ToArray()) files[files.IndexOf(row)] = row with { Default = row == first };
-        }
         return plan with
         {
+            Package = new() { Ota = OtaZipBox.IsChecked == true, CertificatePath = PackageCertificateBox.Text?.Trim() ?? "",
+                SigningKeyPath = PackageKeyBox.Text?.Trim() ?? "", BuildFingerprint = BuildFingerprintBox.Text?.Trim() ?? "",
+                Incremental = IncrementalBox.Text?.Trim() ?? "", SdkLevel = uint.TryParse(SdkLevelBox.Text, out var sdk) ? sdk : 0 },
             Files = files, Recovery = RecoveryScriptBox.IsChecked == true, Txt = TxtScriptBox.IsChecked == true, TxtVariants = true,
-            Windows = BatchShellScriptBox.IsChecked == true, Linux = BatchShellScriptBox.IsChecked == true, MacOS = BatchShellScriptBox.IsChecked == true,
+            Windows = BatchShellScriptBox.IsChecked == true, Linux = LinuxScriptBox.IsChecked == true, MacOS = MacScriptBox.IsChecked == true,
+            AskWipe = AskWipeBox.IsChecked == true, Reboot = RebootBox.IsChecked == true,
+            Slot = FlashSlotBox.SelectedIndex switch { 1 => "a", 2 => "b", 3 => "all", _ => "" },
+            LocalZstd = new() { ["Windows"] = WindowsZstdBox.Text?.Trim() ?? "", ["Linux"] = LinuxZstdBox.Text?.Trim() ?? "", ["macOS"] = MacZstdBox.Text?.Trim() ?? "" },
             DeviceCodename = DeviceCodenameBox.Text?.Trim() ?? "", Information = AuthorInfoBox.Text ?? "",
             Scripts = _allDocuments.ToDictionary(p => p.Key, p => p.Value.Document.Text),
             ScriptFingerprint = _fingerprint,
@@ -150,7 +175,16 @@ public partial class DeliveryOutputView : UserControl
         {
             Reset();
             RecoveryScriptBox.IsChecked = plan.Recovery;
-            TxtScriptBox.IsChecked = plan.Txt; BatchShellScriptBox.IsChecked = plan.Windows || plan.Linux || plan.MacOS;
+            OtaZipBox.IsChecked = plan.Package.Ota; PackageCertificateBox.Text = plan.Package.CertificatePath;
+            PackageKeyBox.Text = plan.Package.SigningKeyPath; BuildFingerprintBox.Text = plan.Package.BuildFingerprint;
+            IncrementalBox.Text = plan.Package.Incremental; SdkLevelBox.Text = plan.Package.SdkLevel.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            TxtScriptBox.IsChecked = plan.Txt; BatchShellScriptBox.IsChecked = plan.Windows;
+            LinuxScriptBox.IsChecked = plan.Linux; MacScriptBox.IsChecked = plan.MacOS;
+            AskWipeBox.IsChecked = plan.AskWipe; RebootBox.IsChecked = plan.Reboot;
+            FlashSlotBox.SelectedIndex = plan.Slot switch { "a" => 1, "b" => 2, "all" => 3, _ => 0 };
+            WindowsZstdBox.Text = plan.LocalZstd.GetValueOrDefault("Windows", "");
+            LinuxZstdBox.Text = plan.LocalZstd.GetValueOrDefault("Linux", "");
+            MacZstdBox.Text = plan.LocalZstd.GetValueOrDefault("macOS", "");
             DeviceCodenameBox.Text = plan.DeviceCodename; AuthorInfoBox.Text = plan.Information;
             _documents.Clear(); _allDocuments.Clear(); _activeDocument = null;
             foreach (var (name, text) in plan.Scripts)
@@ -173,7 +207,12 @@ public partial class DeliveryOutputView : UserControl
         _allDocuments.Clear(); _fingerprint = "";
         TxtScriptBox.IsChecked = true;
         BatchShellScriptBox.IsChecked = false;
+        LinuxScriptBox.IsChecked = false; MacScriptBox.IsChecked = false;
+        AskWipeBox.IsChecked = false; RebootBox.IsChecked = false; FlashSlotBox.SelectedIndex = 0;
+        WindowsZstdBox.Text = ""; LinuxZstdBox.Text = ""; MacZstdBox.Text = "";
         RecoveryScriptBox.IsChecked = false;
+        OtaZipBox.IsChecked = false; PackageCertificateBox.Text = ""; PackageKeyBox.Text = "";
+        BuildFingerprintBox.Text = ""; IncrementalBox.Text = ""; SdkLevelBox.Text = "0";
         DeviceCodenameBox.Text = string.Empty;
         AuthorInfoBox.Text = string.Empty;
         OutputImagesExpander.IsExpanded = true;
