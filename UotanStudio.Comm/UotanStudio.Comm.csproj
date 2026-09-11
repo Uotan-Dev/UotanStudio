@@ -4,9 +4,39 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Native content depends on the consuming application's RID. -->
+    <IsRidAgnostic>false</IsRidAgnostic>
+  </PropertyGroup>
+
+  <!-- Explicit RID wins for cross-publishing; ordinary builds use the SDK host RID.
+       Content items propagate through ProjectReference to the application's root. -->
+  <PropertyGroup>
+    <LibUsbRuntimeIdentifier>$(RuntimeIdentifier)</LibUsbRuntimeIdentifier>
+    <LibUsbRuntimeIdentifier Condition="'$(LibUsbRuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</LibUsbRuntimeIdentifier>
+    <LibUsbRuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(PlatformTarget)' != '' and '$(PlatformTarget)' != 'AnyCPU'">$([System.Text.RegularExpressions.Regex]::Replace('$(NETCoreSdkRuntimeIdentifier)', '-[^-]+$', '-$(PlatformTarget)'))</LibUsbRuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Native\LibUsb\**\*" />
+    <Content Include="Native\LibUsb\$(LibUsbRuntimeIdentifier)\*"
+             Link="%(Filename)%(Extension)"
+             TargetPath="%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Native\LibUsb\COPYING"
+             Link="libusb-LICENSE.txt"
+             TargetPath="libusb-LICENSE.txt"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="ValidateLibUsbRuntime" BeforeTargets="PrepareForBuild">
+    <Warning Condition="!Exists('$(MSBuildProjectDirectory)/Native/LibUsb/$(LibUsbRuntimeIdentifier)')"
+             Text="No bundled libusb runtime for '$(LibUsbRuntimeIdentifier)'. Supply a compatible system library or configure CommKit.SetLibusbLibraryPath." />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" />
     <PackageReference Include="LibUsbDotNet" />
     <PackageReference Include="K4os.Compression.LZ4" />
     <PackageReference Include="Makaretu.Dns.Multicast" />

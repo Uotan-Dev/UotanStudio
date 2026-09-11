@@ -2,6 +2,8 @@
   <PropertyGroup>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- Preserve the Desktop RID through this reference to Comm's native assets. -->
+    <IsRidAgnostic>false</IsRidAgnostic>
   </PropertyGroup>
   
   <ItemGroup>
