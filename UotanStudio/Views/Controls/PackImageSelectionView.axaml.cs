@@ -41,6 +41,11 @@ public partial class PackImageSelectionView : UserControl
     /// <summary><para>所选镜像集合更新，包括全选、原包开关及项目刷新。</para>Selected images changed, including select-all, originals and project refresh.</summary>
     public event EventHandler? SelectedImagesChanged;
 
+    internal event EventHandler? LayoutChanged;
+    internal bool ImagesOnRight => LayoutToggle.IsChecked == true;
+
+    private void OnLayoutToggleChanged(object? sender, RoutedEventArgs e) => LayoutChanged?.Invoke(this, EventArgs.Empty);
+
     /// <summary><para>初始化虚拟化镜像列表。</para>Initializes the virtualized image lists.</summary>
     public PackImageSelectionView()
     {

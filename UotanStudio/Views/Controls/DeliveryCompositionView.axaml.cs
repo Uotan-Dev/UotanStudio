@@ -33,6 +33,7 @@ public partial class DeliveryCompositionView : UserControl
     private bool _outputToDirectory = true;
     private bool _packImages;
     private bool _compositionConfirmed;
+    private bool _editorExternal;
     private ObservableCollection<DeliveryImageItem> ActiveImages => IsPayload ? _payloadImages : _superImages;
     private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
@@ -195,15 +196,27 @@ public partial class DeliveryCompositionView : UserControl
         }
     }
 
+    internal Rect? GetInlineEditorBounds(Visual relativeTo) =>
+        _stacked == false ? ScriptPane.GetInlineEditorBounds(relativeTo) : null;
+
+    internal void SetEditorHost(Border? host)
+    {
+        _editorExternal = host is not null;
+        CompositionLayout.Margin = _editorExternal ? default : new Thickness(0, 0, 12, 0);
+        ScriptPane.SetEditorHost(host);
+        _stacked = null;
+        UpdateCompositionLayout();
+    }
+
     private void UpdateCompositionLayout()
     {
         if (Bounds.Width <= 0) return;
-        var stacked = Bounds.Width < 460;
+        var stacked = Bounds.Width < (_editorExternal ? 385 : 460);
         var imageMinimum = ZeroPartitionForm.IsVisible ? 372 : 252;
-        var contentWidth = Math.Max(0, Bounds.Width - 12);
-        var imageWidth = stacked ? contentWidth : Math.Max(180, (contentWidth - 25) / 4);
+        var contentWidth = Math.Max(0, Bounds.Width - CompositionLayout.Margin.Right);
+        var imageWidth = stacked ? contentWidth : Math.Max(180, (contentWidth - 25) / (_editorExternal ? 2 : 4));
         var outputWidth = stacked ? contentWidth : contentWidth - 25 - imageWidth;
-        var outputMinimum = DeliveryOutputView.MinimumHeight(outputWidth, imageWidth);
+        var outputMinimum = ScriptPane.MinimumHeight(outputWidth, imageWidth);
         CompositionLayout.Height = Math.Max(Bounds.Height,
             stacked ? imageMinimum + 25 + outputMinimum : Math.Max(imageMinimum, outputMinimum));
         if (_stacked != stacked)
@@ -211,7 +224,8 @@ public partial class DeliveryCompositionView : UserControl
             _stacked = stacked;
             CompositionLayout.ColumnDefinitions = stacked ? new ColumnDefinitions("*") :
                 [new ColumnDefinition(GridLength.Star) { MinWidth = 180 }, new ColumnDefinition(new GridLength(25)),
-                    new ColumnDefinition(new GridLength(3, GridUnitType.Star)) { MinWidth = 220 }];
+                    new ColumnDefinition(new GridLength(_editorExternal ? 1 : 3, GridUnitType.Star))
+                    { MinWidth = _editorExternal ? 180 : 220 }];
             CompositionLayout.RowDefinitions = new RowDefinitions(stacked ? "*,25,*" : "*");
             Grid.SetColumn(CompositionDivider, stacked ? 0 : 1);
             Grid.SetRow(CompositionDivider, stacked ? 1 : 0);

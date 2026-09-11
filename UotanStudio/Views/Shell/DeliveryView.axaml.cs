@@ -28,6 +28,9 @@ public partial class DeliveryView : UserControl
     private bool? _outputDirectoryStacked;
     private bool _pickingOutput;
     private bool _pickingPayloadFile;
+    private ColumnDefinitions? _rightImagesColumns;
+    private double _bottomImagesHeightRatio = 0.6;
+    private double _rightImagesHeightRatio = 0.6;
 
     /// <summary><para>初始化交付配置与共用 SUPER 设置。</para>Initializes delivery options and shared SUPER settings.</summary>
     public DeliveryView()
@@ -43,6 +46,8 @@ public partial class DeliveryView : UserControl
         ForceFullSuperImageBox.IsCheckedChanged += OnSuperImageOptionChanged;
         GenerateSuperEmptyBox.IsCheckedChanged += OnSuperImageOptionChanged;
         ImageSelection.SelectedImagesChanged += (_, _) => UpdateCompositionImages();
+        ImageSelection.LayoutChanged += (_, _) => UpdateImagesLayout();
+        DeliveryContent.SizeChanged += (_, _) => UpdateImagesColumnMinimums();
         foreach (var option in OutputOptions.Children)
             option.SizeChanged += OnOutputOptionSizeChanged;
         SizeChanged += (_, _) => UpdateResponsiveLayout();
@@ -90,6 +95,62 @@ public partial class DeliveryView : UserControl
     }
 
     private void UpdateCompositionImages() => Composition.SetImages(ImageSelection.GetSelectedImages());
+
+    private void UpdateImagesLayout()
+    {
+        var onRight = ImageSelection.ImagesOnRight;
+        // The new divider occupies the middle of the existing 12 DIP gap before the editor.
+        // 新分隔线放在编辑器前方原有的 12 DIP 间距中，避免额外留白挤压相邻两栏。
+        const double gapBeforeDivider = 6;
+        const double gapAfterDivider = 5;
+        var rows = DeliveryContent.RowDefinitions;
+        var heightRatio = rows[0].Height.Value / (rows[0].Height.Value + rows[2].Height.Value);
+        if (onRight)
+        {
+            _bottomImagesHeightRatio = heightRatio;
+            var editorBounds = Composition.GetInlineEditorBounds(DeliveryContent);
+            var availableWidth = Math.Max(0, DeliveryContent.Bounds.Width - 1);
+            var minimum = Math.Min(220, availableWidth / 2);
+            var centerWidth = Math.Clamp(editorBounds?.X - gapAfterDivider - 1 ?? availableWidth / 2,
+                minimum, availableWidth - minimum);
+            var rightInset = editorBounds is { } editor ? Math.Max(0, DeliveryContent.Bounds.Width - editor.Right) : 12;
+            _rightImagesColumns =
+            [
+                new ColumnDefinition(new GridLength(centerWidth, GridUnitType.Star)),
+                new ColumnDefinition(new GridLength(1)),
+                new ColumnDefinition(new GridLength(availableWidth - centerWidth, GridUnitType.Star))
+            ];
+            DeliveryContent.ColumnDefinitions = _rightImagesColumns;
+            UpperArea.Padding = new Thickness(12, 12, gapBeforeDivider, 12);
+            ImageSelection.Margin = new Thickness(gapAfterDivider, 12, rightInset, 12);
+        }
+        else
+        {
+            _rightImagesHeightRatio = heightRatio;
+            DeliveryContent.ColumnDefinitions = new ColumnDefinitions("*");
+            UpperArea.Padding = new Thickness(12);
+            ImageSelection.Margin = new Thickness(12);
+        }
+        var restoredHeightRatio = onRight ? _rightImagesHeightRatio : _bottomImagesHeightRatio;
+        rows[0].Height = new GridLength(restoredHeightRatio, GridUnitType.Star);
+        rows[2].Height = new GridLength(1 - restoredHeightRatio, GridUnitType.Star);
+        Grid.SetColumn(ImageSelection, onRight ? 2 : 0);
+        Grid.SetRow(ImageSelection, onRight ? 0 : 2);
+        Grid.SetRowSpan(ImageSelection, onRight ? 3 : 1);
+        LowerEditorHost.IsVisible = onRight;
+        RightImagesDivider.IsVisible = onRight;
+        RightImagesSplitter.IsVisible = onRight;
+        Composition.SetEditorHost(onRight ? LowerEditorHost : null);
+        UpdateImagesColumnMinimums();
+    }
+
+    private void UpdateImagesColumnMinimums()
+    {
+        if (!ImageSelection.ImagesOnRight || _rightImagesColumns is null) return;
+        var minimum = Math.Min(220, Math.Max(0, (DeliveryContent.Bounds.Width - 1) / 2));
+        _rightImagesColumns[0].MinWidth = minimum;
+        _rightImagesColumns[2].MinWidth = minimum;
+    }
 
     private void UpdateProjectDefaults()
     {

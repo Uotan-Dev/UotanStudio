@@ -28,7 +28,7 @@
                 <Expander Name="OutputImagesExpander" Classes="output-section" IsExpanded="True"
                           Header="{DynamicResource Delivery_OutputImageList}">
                     <DataGrid Name="OutputImages" AutoGenerateColumns="False" IsReadOnly="False"
-                              x:DataType="local:DeliveryOutputImage" HeadersVisibility="Column" RowHeight="30"
+                              x:DataType="local:DeliveryOutputImage" HeadersVisibility="Column" RowHeight="30" MinHeight="152"
                               GridLinesVisibility="None" CanUserSortColumns="False" CanUserReorderColumns="False"
                               Background="Transparent" BorderThickness="0" SelectionMode="Single">
                         <DataGrid.Columns>
@@ -78,13 +78,20 @@
                                          AutomationProperties.Name="{DynamicResource Delivery_DeviceCodename}" />
                             </StackPanel>
                             <StackPanel Spacing="6">
-                                <TextBlock Text="{DynamicResource Delivery_AuthorInfo}" />
+                                <TextBlock Text="{DynamicResource Delivery_AuthorInfo}" TextWrapping="Wrap" />
                                 <TextBox Name="AuthorInfoBox" AcceptsReturn="True" TextWrapping="Wrap" Height="NaN" Padding="6"
-                                         IsEnabled="{Binding !IsChecked, ElementName=TxtScriptBox}"
                                          MinLines="9" MaxLines="9" VerticalContentAlignment="Center"
                                          PlaceholderText="{DynamicResource Delivery_AuthorInfoWatermark}"
                                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                                         AutomationProperties.Name="{DynamicResource Delivery_AuthorInfo}" />
+                                         AutomationProperties.Name="{DynamicResource Delivery_AuthorInfo}">
+                                    <TextBox.IsEnabled>
+                                        <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                                            <Binding Path="!IsChecked" ElementName="TxtScriptBox" />
+                                            <Binding Path="IsChecked" ElementName="BatchShellScriptBox" />
+                                            <Binding Path="IsChecked" ElementName="RecoveryScriptBox" />
+                                        </MultiBinding>
+                                    </TextBox.IsEnabled>
+                                </TextBox>
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>

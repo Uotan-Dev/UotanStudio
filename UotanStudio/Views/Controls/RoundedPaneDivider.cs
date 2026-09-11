@@ -25,6 +25,9 @@ public sealed class RoundedPaneDivider : Control
     /// <summary><para>横向边缘是否向上投影的属性。</para>Whether a horizontal edge casts its shadow upward.</summary>
     public static readonly StyledProperty<bool> ShadowUpProperty =
         AvaloniaProperty.Register<RoundedPaneDivider, bool>(nameof(ShadowUp));
+    /// <summary><para>竖向边缘是否向左投影的属性。</para>Whether a vertical edge casts its shadow leftward.</summary>
+    public static readonly StyledProperty<bool> ShadowLeftProperty =
+        AvaloniaProperty.Register<RoundedPaneDivider, bool>(nameof(ShadowLeft));
 
     /// <summary><para>分隔线画刷。</para>The divider brush.</summary>
     public IBrush? EdgeBrush { get => GetValue(EdgeBrushProperty); set => SetValue(EdgeBrushProperty, value); }
@@ -32,9 +35,11 @@ public sealed class RoundedPaneDivider : Control
     public bool IsVertical { get => GetValue(IsVerticalProperty); set => SetValue(IsVerticalProperty, value); }
     /// <summary><para>横向边缘是否向上投影。</para>Whether the horizontal edge casts its shadow upward.</summary>
     public bool ShadowUp { get => GetValue(ShadowUpProperty); set => SetValue(ShadowUpProperty, value); }
+    /// <summary><para>竖向边缘是否向左投影。</para>Whether the vertical edge casts its shadow leftward.</summary>
+    public bool ShadowLeft { get => GetValue(ShadowLeftProperty); set => SetValue(ShadowLeftProperty, value); }
 
     static RoundedPaneDivider() =>
-        AffectsRender<RoundedPaneDivider>(EdgeBrushProperty, IsVerticalProperty, ShadowUpProperty);
+        AffectsRender<RoundedPaneDivider>(EdgeBrushProperty, IsVerticalProperty, ShadowUpProperty, ShadowLeftProperty);
 
     /// <summary><para>绘制圆角边缘及其 3 DIP 单侧渐隐投影。</para>Draws the rounded edge and its 3 DIP fading shadow on one side.</summary>
     public override void Render(DrawingContext context)
@@ -51,10 +56,12 @@ public sealed class RoundedPaneDivider : Control
             var arc = new Size(radius, radius);
             if (IsVertical)
             {
-                path.BeginFigure(new Point(axis - radius, first), false);
-                path.ArcTo(new Point(axis, first + radius), arc, 0, false, SweepDirection.Clockwise);
+                var returnOffset = ShadowLeft ? radius : -radius;
+                var sweep = ShadowLeft ? SweepDirection.CounterClockwise : SweepDirection.Clockwise;
+                path.BeginFigure(new Point(axis + returnOffset, first), false);
+                path.ArcTo(new Point(axis, first + radius), arc, 0, false, sweep);
                 path.LineTo(new Point(axis, last - radius));
-                path.ArcTo(new Point(axis - radius, last), arc, 0, false, SweepDirection.Clockwise);
+                path.ArcTo(new Point(axis + returnOffset, last), arc, 0, false, sweep);
             }
             else
             {
@@ -73,7 +80,7 @@ public sealed class RoundedPaneDivider : Control
         for (var i = 0; i < ShadowPens.Length; i++)
         {
             var offset = EdgeThickness / 2 + (i + 0.5) * ShadowStep;
-            var translation = IsVertical ? Matrix.CreateTranslation(offset, 0)
+            var translation = IsVertical ? Matrix.CreateTranslation(ShadowLeft ? -offset : offset, 0)
                 : Matrix.CreateTranslation(0, ShadowUp ? -offset : offset);
             using (context.PushTransform(translation))
                 context.DrawGeometry(null, ShadowPens[i], geometry);

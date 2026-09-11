@@ -46,7 +46,7 @@
     <x:String x:Key="Delivery_OptionalImage">可选</x:String>
     <x:String x:Key="Delivery_OptionalImageHint">设置为用户可选镜像</x:String>
     <x:String x:Key="Delivery_ImageFileName">镜像文件名</x:String>
-    <x:String x:Key="Delivery_AuthorInfo">作者信息</x:String>
+    <x:String x:Key="Delivery_AuthorInfo">作者信息（不支持TXT脚本）</x:String>
     <x:String x:Key="Delivery_SelectScripts">选择脚本</x:String>
     <x:String x:Key="Delivery_DeviceCodename">机型代号</x:String>
     <x:String x:Key="Delivery_AuthorInfoWatermark" xml:space="preserve">==================&#10;              刷机包信息              &#10;适配机型:liuqin&#10;移植原包的机型:sheng&#10;移植包安卓版本:16&#10;作者：暮间雾&#10;==================</x:String>
@@ -58,6 +58,7 @@
     <x:String x:Key="Delivery_BatchShellScript">Bat&amp;SH脚本</x:String>
     <x:String x:Key="Delivery_RecoveryScript">卡刷脚本</x:String>
     <x:String x:Key="Delivery_ScriptEditor">脚本预览与编辑</x:String>
+    <x:String x:Key="Delivery_ToggleLayout">切换镜像列表布局（底部 / 右侧）</x:String>
     <x:String x:Key="Tab_Node">节点</x:String>
     <x:String x:Key="Tab_Log">日志</x:String>
     <x:String x:Key="Tab_Settings">设置</x:String>

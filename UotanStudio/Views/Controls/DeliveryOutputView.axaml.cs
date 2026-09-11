@@ -25,6 +25,8 @@ internal sealed class DeliveryScriptDocument(string title)
 /// <summary><para>交付输出选项与多文档草稿编辑，仅保存界面状态。</para>Delivery output options and multiple editable drafts, held only in UI state.</summary>
 public partial class DeliveryOutputView : UserControl
 {
+    private const double MinimumSettingsHeight = 340;
+
     /// <summary><para>输出设置栏与相邻镜像列表共用的宽度。</para>Width shared by the output settings and the neighboring image list.</summary>
     public static readonly StyledProperty<double> SettingsWidthProperty =
         AvaloniaProperty.Register<DeliveryOutputView, double>(nameof(SettingsWidth), 180);
@@ -39,6 +41,7 @@ public partial class DeliveryOutputView : UserControl
     private DeliveryScriptDocument? _activeDocument;
     private int _documentNumber;
     private bool? _stacked;
+    private Border? _editorHost;
 
     /// <summary><para>初始化输出表单和第一份空白草稿。</para>Initializes the output form and first empty draft.</summary>
     public DeliveryOutputView()
@@ -138,11 +141,36 @@ public partial class DeliveryOutputView : UserControl
         if (change.Property == SettingsWidthProperty && OutputLayout is not null) UpdateOutputLayout();
     }
 
-    internal static double MinimumHeight(double width, double settingsWidth) => width < settingsWidth + 12 + 220 ? 492 : 260;
+    internal Rect? GetInlineEditorBounds(Visual relativeTo) =>
+        _editorHost is null && _stacked == false && DocumentPane.TranslatePoint(default, relativeTo) is { } position
+            ? new Rect(position, DocumentPane.Bounds.Size) : null;
+
+    internal void SetEditorHost(Border? host)
+    {
+        if (ReferenceEquals(host, _editorHost)) return;
+        OutputImages.CommitEdit();
+        if (_editorHost is not null) _editorHost.Child = null;
+        else OutputLayout.Children.Remove(DocumentPane);
+        _editorHost = host;
+        _stacked = null;
+        if (host is not null)
+        {
+            Grid.SetColumn(DocumentPane, 0);
+            Grid.SetRow(DocumentPane, 0);
+            host.Child = DocumentPane;
+            OutputLayout.ColumnDefinitions = new ColumnDefinitions("*");
+            OutputLayout.RowDefinitions = new RowDefinitions("*");
+        }
+        else OutputLayout.Children.Add(DocumentPane);
+        UpdateOutputLayout();
+    }
+
+    internal double MinimumHeight(double width, double settingsWidth) =>
+        _editorHost is null && width < settingsWidth + 12 + 220 ? MinimumSettingsHeight + 12 + 220 : MinimumSettingsHeight;
 
     private void UpdateOutputLayout()
     {
-        if (Bounds.Width <= 0) return;
+        if (Bounds.Width <= 0 || _editorHost is not null) return;
         var settingsWidth = Math.Max(180, SettingsWidth);
         var stacked = Bounds.Width < settingsWidth + 12 + 220;
         if (!stacked && _stacked == false)
@@ -153,7 +181,7 @@ public partial class DeliveryOutputView : UserControl
             [new ColumnDefinition(new GridLength(settingsWidth)), new ColumnDefinition(new GridLength(12)),
                 new ColumnDefinition(GridLength.Star) { MinWidth = 220 }];
         OutputLayout.RowDefinitions = stacked ?
-            [new RowDefinition(GridLength.Star) { MinHeight = 260 }, new RowDefinition(new GridLength(12)),
+            [new RowDefinition(GridLength.Star) { MinHeight = MinimumSettingsHeight }, new RowDefinition(new GridLength(12)),
                 new RowDefinition(GridLength.Star) { MinHeight = 220 }] : new RowDefinitions("*");
         Grid.SetColumn(DocumentPane, stacked ? 0 : 2);
         Grid.SetRow(DocumentPane, stacked ? 2 : 0);

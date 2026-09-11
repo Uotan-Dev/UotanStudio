@@ -217,7 +217,7 @@
                 Background="{DynamicResource TabControlSeparatorBorderBrush}" IsHitTestVisible="False" />
         <controls:RoundedPaneDivider Name="SidebarDivider" Grid.Column="1" Classes="pane-edge vertical" />
         <GridSplitter Name="SidebarSplitter" Grid.Column="1" Classes="pane-splitter vertical" />
-        <Grid Name="DeliveryContent" Grid.Column="2">
+        <Grid Name="DeliveryContent" Grid.Column="2" ColumnDefinitions="*">
             <Grid.RowDefinitions>
                 <RowDefinition Height="3*" MinHeight="48" />
                 <RowDefinition Height="1" />
@@ -229,6 +229,14 @@
             <controls:RoundedPaneDivider Name="ImagesDivider" Grid.Row="1" Classes="pane-edge horizontal" ShadowUp="True" />
             <GridSplitter Name="ImagesSplitter" Grid.Row="1" Classes="pane-splitter horizontal" />
             <controls:PackImageSelectionView Name="ImageSelection" Grid.Row="2" Margin="12" ShowEmptyList="True" />
+            <Border Name="LowerEditorHost" Grid.Row="2" Margin="12" IsVisible="False" />
+            <Border Name="RightImagesTopDivider" Grid.Column="2" Grid.RowSpan="3" Height="1"
+                    VerticalAlignment="Top" Margin="6,0,0,0" IsVisible="{Binding #RightImagesDivider.IsVisible}"
+                    Background="{DynamicResource TabControlSeparatorBorderBrush}" IsHitTestVisible="False" />
+            <controls:RoundedPaneDivider Name="RightImagesDivider" Grid.Column="1" Grid.RowSpan="3"
+                                          Classes="pane-edge vertical" ShadowLeft="True" IsVisible="False" />
+            <GridSplitter Name="RightImagesSplitter" Grid.Column="1" Grid.RowSpan="3"
+                          Classes="pane-splitter vertical" IsVisible="False" />
         </Grid>
     </Grid>
 </UserControl>

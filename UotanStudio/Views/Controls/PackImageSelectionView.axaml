@@ -106,8 +106,16 @@
         </Style>
     </UserControl.Styles>
     <Grid RowDefinitions="Auto,*,Auto" RowSpacing="8">
-        <CheckBox Name="ShowOriginalBox" HorizontalAlignment="Left" Margin="8,0,0,0"
-                  Content="{DynamicResource PackDialog_ShowOriginal}" />
+        <StackPanel Orientation="Horizontal" Spacing="8" Margin="8,0,0,0">
+            <ToggleButton Name="LayoutToggle" Width="24" Height="24" MinWidth="0" MinHeight="0" Padding="0"
+                          VerticalAlignment="Center" IsCheckedChanged="OnLayoutToggleChanged"
+                          ToolTip.Tip="{DynamicResource Delivery_ToggleLayout}"
+                          AutomationProperties.Name="{DynamicResource Delivery_ToggleLayout}">
+                <icons:MaterialIcon Kind="ViewSplitVertical" Width="16" Height="16" />
+            </ToggleButton>
+            <CheckBox Name="ShowOriginalBox" VerticalAlignment="Center" VerticalContentAlignment="Center"
+                      Content="{DynamicResource PackDialog_ShowOriginal}" />
+        </StackPanel>
         <Grid Grid.Row="1" RowDefinitions="*,Auto" RowSpacing="8">
             <Grid Name="ImageColumns" ColumnDefinitions="*,Auto" ColumnSpacing="12">
                 <Grid Name="ImageGroupsHost" ColumnSpacing="10" />

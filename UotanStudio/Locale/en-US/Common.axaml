@@ -46,7 +46,7 @@
     <x:String x:Key="Delivery_OptionalImage">Optional</x:String>
     <x:String x:Key="Delivery_OptionalImageHint">Let users choose whether to include this image</x:String>
     <x:String x:Key="Delivery_ImageFileName">Image file name</x:String>
-    <x:String x:Key="Delivery_AuthorInfo">Author information</x:String>
+    <x:String x:Key="Delivery_AuthorInfo">Author information (not supported in TXT scripts)</x:String>
     <x:String x:Key="Delivery_SelectScripts">Select scripts</x:String>
     <x:String x:Key="Delivery_DeviceCodename">Device codename</x:String>
     <x:String x:Key="Delivery_AuthorInfoWatermark" xml:space="preserve">==================&#10;ROM information&#10;Target device: liuqin&#10;Source device: sheng&#10;Android version: 16&#10;Author: 暮间雾&#10;==================</x:String>
@@ -58,6 +58,7 @@
     <x:String x:Key="Delivery_BatchShellScript">Bat&amp;SH scripts</x:String>
     <x:String x:Key="Delivery_RecoveryScript">Recovery script</x:String>
     <x:String x:Key="Delivery_ScriptEditor">Script preview and editor</x:String>
+    <x:String x:Key="Delivery_ToggleLayout">Switch image list layout (bottom / right)</x:String>
     <x:String x:Key="Tab_Node">Node</x:String>
     <x:String x:Key="Tab_Log">Log</x:String>
     <x:String x:Key="Tab_Settings">Settings</x:String>
