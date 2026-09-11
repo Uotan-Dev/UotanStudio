@@ -26,6 +26,15 @@ internal static class TextSearchService
         if (start < 0 || start > text.Length || count < 0 || count > text.Length - start)
             throw new ArgumentOutOfRangeException(nameof(start));
         if (options.Pattern.Length == 0) return [];
+        var end = start + count;
+        if (!options.UseRegex && !options.WholeWord)
+        {
+            // 字面量搜索快路径：IndexOf(Ordinal) 比解释型 Regex 快一个量级，
+            // 且省去每次 new Regex 的构造开销（项目搜索按文件反复调用）。
+            // Literal fast path: IndexOf(Ordinal) is an order of magnitude faster
+            // than an interpreted Regex and avoids per-file Regex construction.
+            return FindLiteral(text, options, start, end, cancellationToken);
+        }
         var pattern = options.UseRegex ? options.Pattern : Regex.Escape(options.Pattern);
         if (options.WholeWord) pattern = @"(?<![\p{L}\p{N}\p{M}_])(?:" + pattern + @")(?![\p{L}\p{N}\p{M}_])";
         var flags = RegexOptions.CultureInvariant | RegexOptions.Multiline;
@@ -33,7 +42,6 @@ internal static class TextSearchService
         var regex = new Regex(pattern, flags, TimeSpan.FromMilliseconds(250));
         var clock = Stopwatch.StartNew();
         var matches = new List<TextSearchMatch>();
-        var end = start + count;
         long replacementLength = 0;
         for (var match = regex.Match(text, start); match.Success && match.Index <= end; match = match.NextMatch())
         {
@@ -47,6 +55,47 @@ internal static class TextSearchService
             if (replacementLength > MaximumTextLength) throw new IOException("Replacement exceeds the 8 MiB text limit.");
             matches.Add(new(match.Index, match.Length, match.Value, replacement));
         }
+        return matches;
+    }
+
+    /// <summary>
+    /// Literal (non-regex, non-whole-word) search fast path. Matches the Regex path's
+    /// boundary, limit and timeout semantics via IndexOf instead of an interpreted Regex.
+    /// <para>字面量（非正则、非整词）搜索快路径：用 IndexOf 保持与 Regex 路径一致的
+    /// 边界、限额与超时语义。</para>
+    /// </summary>
+    private static List<TextSearchMatch> FindLiteral(string text, TextSearchOptions options,
+        int start, int end, CancellationToken cancellationToken)
+    {
+        var clock = Stopwatch.StartNew();
+        var matches = new List<TextSearchMatch>();
+        long replacementLength = 0;
+        var comparison = options.MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var index = start;
+        while (index <= end)
+        {
+            var found = text.IndexOf(options.Pattern, index, comparison);
+            if (found < 0 || found > end)
+            {
+                break;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (clock.Elapsed > TimeSpan.FromSeconds(2)) throw new TimeoutException("Search exceeded its time limit.");
+            if (found + options.Pattern.Length > end)
+            {
+                break;
+            }
+
+            if (matches.Count == MaximumMatches) throw new IOException("Search exceeds the 10000 match limit. Narrow the scope.");
+            var replacement = options.Replacement;
+            if (options.PreserveCase) replacement = PreserveCase(text.Substring(found, options.Pattern.Length), replacement);
+            replacementLength += replacement.Length;
+            if (replacementLength > MaximumTextLength) throw new IOException("Replacement exceeds the 8 MiB text limit.");
+            matches.Add(new(found, options.Pattern.Length, text.Substring(found, options.Pattern.Length), replacement));
+            index = found + options.Pattern.Length;
+        }
+
         return matches;
     }
 
@@ -71,11 +120,24 @@ internal static class TextSearchService
 
     private static string PreserveCase(string source, string replacement)
     {
-        var letters = source.Where(char.IsLetter).ToArray();
-        if (letters.Length == 0) return replacement;
-        if (letters.All(char.IsUpper)) return replacement.ToUpperInvariant();
-        if (letters.All(char.IsLower)) return replacement.ToLowerInvariant();
-        if (char.IsUpper(letters[0]) && letters.Skip(1).All(char.IsLower))
+        var hasLetters = false;
+        var allUpper = true;
+        var allLower = true;
+        var titleCase = true;
+        foreach (var letter in source)
+        {
+            if (!char.IsLetter(letter)) continue;
+            var upper = char.IsUpper(letter);
+            var lower = char.IsLower(letter);
+            titleCase &= hasLetters ? lower : upper;
+            allUpper &= upper;
+            allLower &= lower;
+            hasLetters = true;
+        }
+        if (!hasLetters) return replacement;
+        if (allUpper) return replacement.ToUpperInvariant();
+        if (allLower) return replacement.ToLowerInvariant();
+        if (titleCase)
         {
             var chars = replacement.ToLowerInvariant().ToCharArray();
             var first = Array.FindIndex(chars, char.IsLetter);

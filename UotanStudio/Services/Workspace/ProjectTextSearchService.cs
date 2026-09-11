@@ -66,18 +66,18 @@ internal static class ProjectTextSearchService
         else if (headerLength >= 3 && header[0] == 0xef && header[1] == 0xbb && header[2] == 0xbf) preamble = 3;
         file.Position = preamble;
         using var reader = new StreamReader(file, encoding, detectEncodingFromByteOrderMarks: false);
-        var buffer = new char[4096];
+        Span<char> buffer = stackalloc char[4096];
         var text = new StringBuilder();
         try
         {
             int count;
-            while ((count = reader.Read(buffer, 0, buffer.Length)) != 0)
+            while ((count = reader.Read(buffer)) != 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (text.Length > TextSearchService.MaximumTextLength - count) return null;
                 for (var i = 0; i < count; i++)
                     if (char.IsControl(buffer[i]) && buffer[i] is not ('\r' or '\n' or '\t' or '\f')) return null;
-                text.Append(buffer, 0, count);
+                text.Append(buffer[..count]);
             }
             return text.ToString();
         }

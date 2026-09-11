@@ -56,6 +56,32 @@ public class TextSearchServiceTests
         Assert.Equal(expected, TextSearchService.Apply(input, matches));
     }
 
+    [Theory]
+    [InlineData("123-", "dOg", "dOg")]
+    [InlineData("A", "dOg", "DOG")]
+    [InlineData("A-b", "1dOG", "1Dog")]
+    [InlineData("a-B", "dOg", "dOg")]
+    [InlineData("中文", "dOg", "dOg")]
+    [InlineData("ǅ", "dOg", "dOg")]
+    [InlineData("É-cole", "éCOLE", "École")]
+    [InlineData("Áb", "dOG", "Dog")]
+    public void PreserveCaseRetainsUnicodeAndNonletterRules(string input, string replacement, string expected)
+    {
+        var matches = Find(input, new(input, replacement, MatchCase: true, PreserveCase: true));
+        Assert.Equal(expected, TextSearchService.Apply(input, matches));
+    }
+
+    [Fact]
+    public void ProjectTextReadRetainsContentsAcrossBufferBoundaries()
+    {
+        using var temp = new TempDirectory();
+        var text = new string('a', 4095) + "😀\r\n" + new string('中', 5000);
+        var path = temp.WriteBytes("large.txt", Encoding.UTF8.GetBytes(text));
+        Assert.Equal(text, ProjectTextSearchService.ReadText(path, TestContext.Current.CancellationToken));
+        File.AppendAllText(path, "\0");
+        Assert.Null(ProjectTextSearchService.ReadText(path, TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public void InvalidRegexAndStaleContentAreRejected()
     {
