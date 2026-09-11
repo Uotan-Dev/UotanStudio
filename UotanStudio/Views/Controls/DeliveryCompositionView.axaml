@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:UotanStudio.Views.Controls"
+             xmlns:delivery="using:UotanStudio.ViewModels.Shell"
              xmlns:icons="using:Material.Icons.Avalonia"
              x:Class="UotanStudio.Views.Controls.DeliveryCompositionView">
     <UserControl.Styles>
@@ -62,7 +63,7 @@
                                         <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
                                     </ListBox.ItemsPanel>
                                     <ListBox.ItemTemplate>
-                                        <DataTemplate x:DataType="local:DeliveryImageItem">
+                                        <DataTemplate x:DataType="delivery:DeliveryImage">
                                             <Grid ColumnSpacing="4" ToolTip.Tip="{Binding Description}">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="12" />

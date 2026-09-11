@@ -123,13 +123,14 @@
                         <StackPanel Name="SuperFormatOptions" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
                             <TextBlock Name="SuperFormatLabel" Classes="field-label" Text="{DynamicResource Delivery_SuperFormat}" />
                             <RadioButton Name="SuperRawBox" GroupName="DeliverySuperFormat"
-                                         Content="RAW" IsChecked="{Binding SUPERRAW, Mode=TwoWay}" />
+                                         Content="RAW" IsChecked="True" />
                             <RadioButton Name="SuperSparseBox" GroupName="DeliverySuperFormat"
-                                         Content="SPARSE" IsChecked="{Binding SUPERSPARSE, Mode=TwoWay}" />
+                                         Content="SPARSE" IsChecked="False" />
                         </StackPanel>
                         <StackPanel Name="SuperDeviceTypeOptions" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_DeviceType}" />
                             <RadioButton Name="SuperVabBox" GroupName="DeliverySuperDeviceType" Content="VAB" IsChecked="True" />
+                            <RadioButton Name="SuperAbBox" GroupName="DeliverySuperDeviceType" Content="AB" />
                             <RadioButton Name="SuperAOnlyBox" GroupName="DeliverySuperDeviceType" Content="A-Only" />
                         </StackPanel>
                         <StackPanel Spacing="6">
@@ -149,12 +150,12 @@
                         </StackPanel>
                         <StackPanel Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperSize}" />
-                            <TextBox Name="SuperSizeBox" Text="{Binding SUPERSize, Mode=TwoWay}"
+                            <TextBox Name="SuperSizeBox" Text="9126805504"
                                      AutomationProperties.Name="{DynamicResource Delivery_SuperSize}" />
                         </StackPanel>
                         <StackPanel Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperGroupName}" />
-                            <TextBox Name="SuperGroupNameBox" Text="{Binding SUPERName, Mode=TwoWay}"
+                            <TextBox Name="SuperGroupNameBox" Text="qti_dynamic_partitions"
                                      AutomationProperties.Name="{DynamicResource Delivery_SuperGroupName}" />
                         </StackPanel>
                         <StackPanel Name="SuperMetadataSlotsField" Spacing="6">

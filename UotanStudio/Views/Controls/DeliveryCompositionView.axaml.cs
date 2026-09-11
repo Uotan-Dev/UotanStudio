@@ -1,3 +1,6 @@
+using UotanStudio.Services.Delivery;
+using UotanStudio.ViewModels.Shell;
+using DeliveryImageItem = UotanStudio.ViewModels.Shell.DeliveryImage;
 using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
@@ -7,34 +10,26 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace UotanStudio.Views.Controls;
 
-internal sealed partial class DeliveryImageItem(string name, string groupName, string? filePath, bool showSuperChoice = false) : ObservableObject
-{
-    public string Name { get; } = name;
-    public string GroupName { get; } = groupName;
-    public string? FilePath { get; } = filePath;
-    public bool ShowSuperChoice { get; } = showSuperChoice;
-    [ObservableProperty] private bool _includeInSuper;
-    [ObservableProperty, NotifyPropertyChangedFor(nameof(DisplaySize))] private long? _sizeBytes = filePath is null ? 0 : null;
-    public string DisplaySize => SizeBytes is { } bytes ? PackImageFileInfo.FormatSize(bytes) : "—";
-    public bool IsZeroSize => FilePath is null;
-    public string Description => FilePath is null ? Name + " (0 B)" : GroupName + "\n" + FilePath;
-}
-
-/// <summary><para>交付镜像顺序与脚本草稿界面，不执行打包或生成脚本。</para>Local delivery ordering and script draft UI; does not package or generate scripts.</summary>
+/// <summary><para>交付镜像编排，通过现有按钮连接交付服务。</para>Delivery composition wired to application services through the existing controls.</summary>
 public partial class DeliveryCompositionView : UserControl
 {
     /// <summary><para>是否显示 Payload 编排。</para>Whether to display Payload composition.</summary>
     public static readonly StyledProperty<bool> IsPayloadProperty =
         AvaloniaProperty.Register<DeliveryCompositionView, bool>(nameof(IsPayload));
 
-    private readonly ObservableCollection<DeliveryImageItem> _superImages = [];
-    private readonly ObservableCollection<DeliveryImageItem> _payloadImages = [];
+    internal DeliveryViewModel Model { get; } = new();
+    internal DeliveryOutputView OutputView => ScriptPane;
+    internal Func<DeliverySuperOptions> ReadOptions { get; set; } = () => new();
+    internal event EventHandler? Changed;
+    internal event EventHandler? OutputRequested;
+    internal event EventHandler<Exception>? OperationFailed;
+    internal bool AutoZero { get => AutoZeroPartitionsBox.IsChecked == true; set => AutoZeroPartitionsBox.IsChecked = value; }
     private bool? _stacked;
     private bool _outputToDirectory = true;
     private bool _packImages;
     private bool _compositionConfirmed;
     private bool _editorExternal;
-    private ObservableCollection<DeliveryImageItem> ActiveImages => IsPayload ? _payloadImages : _superImages;
+    private ObservableCollection<DeliveryImageItem> ActiveImages => Model.Container;
     private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     /// <summary><para>在 Super 与 Payload 镜像编排之间切换。</para>Switches between Super and Payload composition.</summary>
@@ -44,7 +39,11 @@ public partial class DeliveryCompositionView : UserControl
     public DeliveryCompositionView()
     {
         InitializeComponent();
-        AutoZeroPartitionsBox.IsCheckedChanged += (_, _) => UpdateMode();
+        ScriptPane.SetModel(Model);
+        Model.Changed += (_, _) => { _compositionConfirmed = Model.Confirmed; UpdateInteractionState(); UpdateEmptyState(); Changed?.Invoke(this, EventArgs.Empty); };
+        StartCompositionOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
+        ScriptPane.OutputRequested += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
+        AutoZeroPartitionsBox.IsCheckedChanged += (_, _) => { UpdateMode(); Changed?.Invoke(this, EventArgs.Empty); };
         ZeroPartitionNameBox.TextChanged += (_, _) => UpdateAddPartitionButton();
         SizeChanged += (_, _) => UpdateCompositionLayout();
         InitializeImageDragging();
@@ -78,6 +77,7 @@ public partial class DeliveryCompositionView : UserControl
         _outputToDirectory = outputToDirectory;
         _packImages = packImages;
         IsPayload = packPayload;
+        Model.SetMode(outputToDirectory, packSuper, packPayload);
         UpdateInteractionState();
     }
 
@@ -85,13 +85,13 @@ public partial class DeliveryCompositionView : UserControl
     {
         var editingComposition = _packImages && !_compositionConfirmed;
         if (!editingComposition) CancelImageDrag();
-        ImageCompositionContent.IsEnabled = editingComposition;
+        ImageCompositionContent.IsEnabled = editingComposition && !Model.IsRunning;
         var confirmBeforeOutput = _packImages && _outputToDirectory;
         CompositionFooter.IsVisible = !(_packImages && !_outputToDirectory);
-        ConfirmCompositionButton.IsEnabled = confirmBeforeOutput && !_compositionConfirmed;
+        ConfirmCompositionButton.IsEnabled = confirmBeforeOutput && !_compositionConfirmed && !Model.IsRunning;
         // Keep Cancel outside the locked content so a confirmed list can be edited again.
         // 取消按钮不随列表内容锁定，确认后仍可返回编辑。
-        CancelCompositionButton.IsEnabled = confirmBeforeOutput && _compositionConfirmed;
+        CancelCompositionButton.IsEnabled = confirmBeforeOutput && _compositionConfirmed && !Model.IsRunning;
         CompositionOutputFooter.IsVisible = _packImages && !_outputToDirectory;
         ScriptPane.SetInteractionState(_outputToDirectory && (!_packImages || _compositionConfirmed),
             _outputToDirectory || _packImages);
@@ -100,56 +100,34 @@ public partial class DeliveryCompositionView : UserControl
     private void OnConfirmCompositionClick(object? sender, RoutedEventArgs e)
     {
         if (!_packImages || !_outputToDirectory || _compositionConfirmed) return;
-        _compositionConfirmed = true;
+        try { Model.Confirm(ReadOptions()); }
+        catch (Exception ex) { Model.Status = ex.Message; OperationFailed?.Invoke(this, ex); }
         UpdateInteractionState();
     }
 
     private void OnCancelCompositionClick(object? sender, RoutedEventArgs e)
     {
         if (!_packImages || !_outputToDirectory || !_compositionConfirmed) return;
-        _compositionConfirmed = false;
+        Model.ReturnToContainer();
         UpdateInteractionState();
     }
 
-    internal void SetImages(IReadOnlyList<PackImageSelection> images)
+    internal void SetImages(IReadOnlyList<PackImageSelection> images) => Model.SelectSources(images.Select(i => new DeliveryFile
+    { SourcePath = i.FilePath, FileName = Path.GetFileName(i.FilePath), Partition = Path.GetFileNameWithoutExtension(i.FilePath), SourceGroup = i.GroupName, SourceLength = i.SizeBytes }).ToArray());
+
+    internal void SetRunning(bool running, double progress)
     {
-        var selected = images.DistinctBy(image => image.FilePath, PathComparer).ToArray();
-        ScriptPane.SetImages(selected);
-        var paths = selected.Select(image => image.FilePath).ToHashSet(PathComparer);
-        var rows = ActiveImages;
-        var selectionChanged = false;
-        for (var index = rows.Count - 1; index >= 0; index--)
-            if (rows[index].FilePath is { } path && !paths.Contains(path))
-            {
-                rows.RemoveAt(index);
-                selectionChanged = true;
-            }
-        var existing = rows.Where(row => row.FilePath is not null).ToDictionary(row => row.FilePath!, PathComparer);
-        foreach (var image in selected)
-        {
-            if (!existing.TryGetValue(image.FilePath, out var row))
-            {
-                row = new DeliveryImageItem(Path.GetFileName(image.FilePath), image.GroupName, image.FilePath, IsPayload);
-                rows.Add(row);
-                selectionChanged = true;
-            }
-            selectionChanged |= row.SizeBytes != image.SizeBytes;
-            row.SizeBytes = image.SizeBytes;
-        }
-        if (selectionChanged && _compositionConfirmed)
-        {
-            _compositionConfirmed = false;
-            UpdateInteractionState();
-        }
-        if (_draggedImage is not null && !rows.Contains(_draggedImage)) CancelImageDrag();
-        UpdateEmptyState();
+        Model.IsRunning = running; Model.Progress = progress;
+        CompositionOutputProgress.Value = progress;
+        StartCompositionOutputButton.Content = running ? "取消 / Cancel" : UotanStudio.Services.LanguageService.Instance.GetString("Delivery_StartOutput");
+        UpdateInteractionState();
+        ScriptPane.SetRunning(running, progress);
     }
 
     internal void Reset()
     {
         CancelImageDrag();
-        _superImages.Clear();
-        _payloadImages.Clear();
+        Model.Reset();
         AutoZeroPartitionsBox.IsChecked = true;
         ZeroPartitionNameBox.Text = string.Empty;
         ScriptPane.Reset();
@@ -167,10 +145,7 @@ public partial class DeliveryCompositionView : UserControl
         UpdateAddPartitionButton();
     }
 
-    private bool CanAddPartition(string name) => name.Length is > 0 and <= 64 && name is not "." and not ".." &&
-        name.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.') &&
-        !_superImages.Any(image => string.Equals(image.IsZeroSize ? image.Name : Path.GetFileNameWithoutExtension(image.Name),
-            name, StringComparison.OrdinalIgnoreCase));
+    private bool CanAddPartition(string name) => DeliveryValidation.IsPartition(name) && !Model.Container.Any(i => i.PartitionName == name);
 
     private void UpdateAddPartitionButton() => AddZeroPartitionButton.IsEnabled =
         !IsPayload && AutoZeroPartitionsBox.IsChecked != true && CanAddPartition(ZeroPartitionNameBox.Text?.Trim() ?? string.Empty);
@@ -179,8 +154,8 @@ public partial class DeliveryCompositionView : UserControl
     {
         var name = ZeroPartitionNameBox.Text?.Trim() ?? string.Empty;
         if (IsPayload || AutoZeroPartitionsBox.IsChecked == true || !CanAddPartition(name)) return;
-        var item = new DeliveryImageItem(name, string.Empty, null);
-        _superImages.Add(item);
+        Model.AddZero(name);
+        var item = Model.Container.Last();
         ZeroPartitionNameBox.Text = string.Empty;
         OrderedImages.SelectedItem = item;
         OrderedImages.ScrollIntoView(item);
@@ -191,7 +166,7 @@ public partial class DeliveryCompositionView : UserControl
     {
         if (sender is Control { DataContext: DeliveryImageItem { IsZeroSize: true } item })
         {
-            _superImages.Remove(item);
+            Model.Remove(item);
             UpdateEmptyState();
         }
     }

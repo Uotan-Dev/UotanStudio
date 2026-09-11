@@ -1,28 +1,26 @@
+﻿using UotanStudio.Services.Delivery;
+using UotanStudio.ViewModels.Shell;
+using UotanStudio.Services;
 using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using AvaloniaEdit.Document;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace UotanStudio.Views.Controls;
-
-internal sealed partial class DeliveryOutputImage(string filePath) : ObservableObject
-{
-    public string FilePath { get; } = filePath;
-    public string FileName { get; } = Path.GetFileName(filePath);
-    [ObservableProperty] private string _partitionName = Path.GetFileNameWithoutExtension(filePath);
-    [ObservableProperty] private bool _isOptional;
-}
 
 internal sealed class DeliveryScriptDocument(string title)
 {
     public string Title { get; } = title;
     public TextDocument Document { get; } = new();
     public int CaretOffset { get; set; }
+    internal string? Baseline { get; set; }
+    internal bool Modified => Baseline is not null && Baseline != Document.Text;
 }
 
-/// <summary><para>交付输出选项与多文档草稿编辑，仅保存界面状态。</para>Delivery output options and multiple editable drafts, held only in UI state.</summary>
+/// <summary><para>使用现有控件维护交付选项、生成文本和持久化草稿。</para>Delivery options, generated scripts and persistent drafts using the existing controls.</summary>
 public partial class DeliveryOutputView : UserControl
 {
     private const double MinimumSettingsHeight = 340;
@@ -34,9 +32,13 @@ public partial class DeliveryOutputView : UserControl
     /// <summary><para>获取或设置输出设置栏的宽度。</para>Gets or sets the width of the output settings pane.</summary>
     public double SettingsWidth { get => GetValue(SettingsWidthProperty); set => SetValue(SettingsWidthProperty, value); }
 
-    private readonly ObservableCollection<DeliveryOutputImage> _images = [];
-    private readonly Dictionary<string, DeliveryOutputImage> _imageOptions = new(
-        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private DeliveryViewModel? _model;
+    private readonly Dictionary<string, DeliveryScriptDocument> _allDocuments = [];
+    private bool _syncing;
+    private string _fingerprint = "";
+    internal event EventHandler? Changed;
+    internal event EventHandler? OutputRequested;
+    internal bool RecoveryRequested => RecoveryScriptBox.IsChecked == true;
     private readonly ObservableCollection<DeliveryScriptDocument> _documents = [];
     private DeliveryScriptDocument? _activeDocument;
     private int _documentNumber;
@@ -47,7 +49,7 @@ public partial class DeliveryOutputView : UserControl
     public DeliveryOutputView()
     {
         InitializeComponent();
-        OutputImages.ItemsSource = _images;
+
         DocumentTabs.ItemsSource = _documents;
         ScriptEditor.Options.AllowScrollBelowDocument = false;
         SizeChanged += (_, _) => UpdateOutputLayout();
@@ -56,6 +58,20 @@ public partial class DeliveryOutputView : UserControl
             if (e.Property != Expander.IsExpandedProperty || !ScriptSettingsExpander.IsExpanded) return;
             OutputImages.CommitEdit();
             OutputImagesExpander.IsExpanded = false;
+        };
+        StartOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
+        foreach (var box in new[] { TxtScriptBox, BatchShellScriptBox, RecoveryScriptBox })
+            box.IsCheckedChanged += (_, _) => NotifyChanged();
+        DeviceCodenameBox.TextChanged += (_, _) => NotifyChanged();
+        AuthorInfoBox.TextChanged += (_, _) => NotifyChanged();
+        ScriptEditor.TextChanged += (_, _) => NotifyChanged();
+        KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.T || !e.KeyModifiers.HasFlag(KeyModifiers.Shift)
+                || !(e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta))) return;
+            if (_allDocuments.Values.LastOrDefault(d => !_documents.Contains(d)) is not { } closed) return;
+            _documents.Add(closed); DocumentTabs.SelectedItem = closed;
+            e.Handled = true; NotifyChanged();
         };
         AddDocument();
     }
@@ -67,26 +83,94 @@ public partial class DeliveryOutputView : UserControl
         DocumentPane.IsEnabled = editorEnabled;
     }
 
-    internal void SetImages(IReadOnlyList<PackImageSelection> images)
+    private void NotifyChanged() { if (!_syncing) Changed?.Invoke(this, EventArgs.Empty); }
+    internal void SetModel(DeliveryViewModel model) { _model = model; OutputImages.ItemsSource = model.Output; }
+    internal void SetRunning(bool running, double progress)
     {
-        var paths = images.Select(image => image.FilePath).ToHashSet(_imageOptions.Comparer);
-        for (var index = _images.Count - 1; index >= 0; index--)
-            if (!paths.Contains(_images[index].FilePath)) _images.RemoveAt(index);
-        var existing = _images.Select(image => image.FilePath).ToHashSet(_imageOptions.Comparer);
-        foreach (var image in images)
+        OutputProgress.Value = progress;
+        StartOutputButton.Content = running ? "取消 / Cancel" : LanguageService.Instance.GetString("Delivery_StartOutput");
+        OutputImages.IsEnabled = !running; ScriptSettingsExpander.IsEnabled = !running; DocumentPane.IsEnabled = !running;
+    }
+    internal DeliveryPlan Capture(DeliveryPlan plan)
+    {
+        OutputImages.CommitEdit();
+        if (_activeDocument is not null) _activeDocument.CaretOffset = ScriptEditor.CaretOffset;
+        var files = _model!.Output.Select(i => i.Snapshot()).ToList();
+        // Existing UI exposes Optional, not a separate default selector. First row is the default for a replacement group.
+        foreach (var group in files.GroupBy(f => f.Partition).Where(g => g.Count() > 1))
         {
-            if (!existing.Add(image.FilePath)) continue;
-            if (!_imageOptions.TryGetValue(image.FilePath, out var row))
-                _imageOptions.Add(image.FilePath, row = new DeliveryOutputImage(image.FilePath));
-            _images.Add(row);
+            var first = group.First();
+            foreach (var row in group.ToArray()) files[files.IndexOf(row)] = row with { Default = row == first };
         }
+        return plan with
+        {
+            Files = files, Recovery = RecoveryScriptBox.IsChecked == true, Txt = TxtScriptBox.IsChecked == true, TxtVariants = true,
+            Windows = BatchShellScriptBox.IsChecked == true, Linux = BatchShellScriptBox.IsChecked == true, MacOS = BatchShellScriptBox.IsChecked == true,
+            DeviceCodename = DeviceCodenameBox.Text?.Trim() ?? "", Information = AuthorInfoBox.Text ?? "",
+            Scripts = _allDocuments.ToDictionary(p => p.Key, p => p.Value.Document.Text),
+            ScriptFingerprint = _fingerprint,
+            GeneratedScripts = _allDocuments.Where(p => p.Value.Baseline is not null).ToDictionary(p => p.Key, p => p.Value.Baseline!),
+            OpenScripts = _documents.Select(d => d.Title).ToList(),
+            ScriptCarets = _allDocuments.ToDictionary(p => p.Key, p => p.Value.CaretOffset)
+        };
+    }
+    internal bool SynchronizeScripts(DeliveryPlan plan, bool replaceModified = false)
+    {
+        var fingerprint = DeliveryScriptGenerator.Fingerprint(plan);
+        if (_fingerprint == fingerprint) return true;
+        var generated = DeliveryScriptGenerator.Generate(plan);
+        if (!replaceModified && (_allDocuments.Values.Any(d => d.Modified)
+            || generated.Keys.Any(name => _allDocuments.TryGetValue(name, out var doc) && doc.Baseline is null && doc.Document.TextLength > 0))) return false;
+        _syncing = true;
+        try
+        {
+            foreach (var doc in _allDocuments.Values.Where(d => d.Baseline is not null && !generated.ContainsKey(d.Title)).ToArray())
+            { _documents.Remove(doc); _allDocuments.Remove(doc.Title); }
+            foreach (var (name, text) in generated)
+            {
+                if (!_allDocuments.TryGetValue(name, out var doc))
+                { doc = new(name); _allDocuments.Add(name, doc); _documents.Add(doc); }
+                doc.Document.Text = text; doc.Baseline = text;
+            }
+            if (_activeDocument is null || !_allDocuments.ContainsKey(_activeDocument.Title))
+            {
+                _activeDocument = null;
+                if (_documents.Count > 0) DocumentTabs.SelectedItem = _documents[0];
+                else ScriptEditor.Document = new();
+            }
+            _fingerprint = fingerprint;
+            return true;
+        }
+        finally { _syncing = false; }
+    }
+    internal void Restore(DeliveryPlan plan)
+    {
+        _syncing = true;
+        try
+        {
+            Reset();
+            RecoveryScriptBox.IsChecked = plan.Recovery;
+            TxtScriptBox.IsChecked = plan.Txt; BatchShellScriptBox.IsChecked = plan.Windows || plan.Linux || plan.MacOS;
+            DeviceCodenameBox.Text = plan.DeviceCodename; AuthorInfoBox.Text = plan.Information;
+            _documents.Clear(); _allDocuments.Clear(); _activeDocument = null;
+            foreach (var (name, text) in plan.Scripts)
+            {
+                var doc = new DeliveryScriptDocument(name) { Baseline = plan.GeneratedScripts.GetValueOrDefault(name), CaretOffset = Math.Max(0, plan.ScriptCarets.GetValueOrDefault(name)) };
+                doc.Document.Text = text; _allDocuments.Add(name, doc);
+                if (plan.OpenScripts.Contains(name)) _documents.Add(doc);
+            }
+            _fingerprint = plan.ScriptFingerprint;
+            if (_allDocuments.Count == 0) AddDocument();
+            else if (_documents.Count > 0) DocumentTabs.SelectedItem = _documents[0];
+            else ScriptEditor.Document = new();
+        }
+        finally { _syncing = false; }
     }
 
     internal void Reset()
     {
         OutputImages.CancelEdit();
-        _images.Clear();
-        _imageOptions.Clear();
+        _allDocuments.Clear(); _fingerprint = "";
         TxtScriptBox.IsChecked = true;
         BatchShellScriptBox.IsChecked = false;
         RecoveryScriptBox.IsChecked = false;
@@ -104,7 +188,10 @@ public partial class DeliveryOutputView : UserControl
     private void AddDocument()
     {
         var number = ++_documentNumber;
+        while (_allDocuments.ContainsKey(number == 1 ? "script.txt" : $"script-{number}.txt")) number = ++_documentNumber;
         var document = new DeliveryScriptDocument(number == 1 ? "script.txt" : $"script-{number}.txt");
+        _allDocuments.Add(document.Title, document);
+        document.Document.TextChanged += (_, _) => NotifyChanged();
         _documents.Add(document);
         DocumentTabs.SelectedItem = document;
         DocumentTabs.ScrollIntoView(document);
@@ -119,9 +206,10 @@ public partial class DeliveryOutputView : UserControl
         if (index < 0) return;
         var wasActive = ReferenceEquals(document, _activeDocument);
         _documents.RemoveAt(index);
-        if (_documents.Count == 0) AddDocument();
+        if (_documents.Count == 0) { _activeDocument = null; ScriptEditor.Document = new(); }
         else if (wasActive) DocumentTabs.SelectedItem = _documents[Math.Min(index, _documents.Count - 1)];
         e.Handled = true;
+        NotifyChanged();
     }
 
     private void OnDocumentSelectionChanged(object? sender, SelectionChangedEventArgs e)

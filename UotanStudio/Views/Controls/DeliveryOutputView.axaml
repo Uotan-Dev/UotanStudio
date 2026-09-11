@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="using:UotanStudio.Views.Controls"
+             xmlns:delivery="using:UotanStudio.ViewModels.Shell"
              xmlns:icons="using:Material.Icons.Avalonia"
              x:Class="UotanStudio.Views.Controls.DeliveryOutputView">
     <UserControl.Styles>
@@ -28,7 +29,7 @@
                 <Expander Name="OutputImagesExpander" Classes="output-section" IsExpanded="True"
                           Header="{DynamicResource Delivery_OutputImageList}">
                     <DataGrid Name="OutputImages" AutoGenerateColumns="False" IsReadOnly="False"
-                              x:DataType="local:DeliveryOutputImage" HeadersVisibility="Column" RowHeight="30" MinHeight="152"
+                              x:DataType="delivery:DeliveryImage" HeadersVisibility="Column" RowHeight="30" MinHeight="152"
                               GridLinesVisibility="None" CanUserSortColumns="False" CanUserReorderColumns="False"
                               Background="Transparent" BorderThickness="0" SelectionMode="Single">
                         <DataGrid.Columns>
@@ -38,7 +39,7 @@
                                                ToolTip.Tip="{DynamicResource Delivery_OptionalImageHint}" />
                                 </DataGridTemplateColumn.Header>
                                 <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate x:DataType="local:DeliveryOutputImage">
+                                    <DataTemplate x:DataType="delivery:DeliveryImage">
                                         <CheckBox IsChecked="{Binding IsOptional, Mode=TwoWay}" MinHeight="24" Padding="0"
                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
                                                   ToolTip.Tip="{DynamicResource Delivery_OptionalImageHint}"
@@ -51,7 +52,7 @@
                             <DataGridTemplateColumn Header="{DynamicResource Delivery_ImageFileName}" Width="Auto"
                                                     MinWidth="96" IsReadOnly="True">
                                 <DataGridTemplateColumn.CellTemplate>
-                                    <DataTemplate x:DataType="local:DeliveryOutputImage">
+                                    <DataTemplate x:DataType="delivery:DeliveryImage">
                                         <TextBlock Text="{Binding FileName}" Margin="6,0" VerticalAlignment="Center"
                                                    ToolTip.Tip="{Binding FilePath}" />
                                     </DataTemplate>

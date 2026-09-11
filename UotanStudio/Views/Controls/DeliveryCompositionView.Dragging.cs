@@ -1,3 +1,4 @@
+using DeliveryImageItem = UotanStudio.ViewModels.Shell.DeliveryImage;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;

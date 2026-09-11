@@ -7,11 +7,12 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Firmware;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary><para>ROM 交付配置页面，只维护选项和镜像选择，不执行打包。</para>ROM delivery form; maintains options and image selections without packaging.</summary>
+/// <summary><para>ROM 交付页面，协调原有表单、方案保存和文件输出。</para>Coordinates the existing delivery form, plan persistence and file output.</summary>
 public partial class DeliveryView : UserControl
 {
     private const double MinimumSidebarWidth = 268;
@@ -36,12 +37,13 @@ public partial class DeliveryView : UserControl
     public DeliveryView()
     {
         InitializeComponent();
-        SuperSettings.DataContext = ProjectSettingViewModel.EnsureInstance();
         DirectOutputBox.IsCheckedChanged += OnOutputOptionChanged;
         PackSuperBox.IsCheckedChanged += OnOutputOptionChanged;
         PackPayloadBox.IsCheckedChanged += OnOutputOptionChanged;
         UseProjectSuperSettingsBox.IsCheckedChanged += (_, _) => UpdateProjectSuperSelector();
         SuperVabBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
+        SuperAbBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
+        SuperSettingsProjectBox.SelectionChanged += (_, _) => ApplySourceSettings();
         SuperAOnlyBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         ForceFullSuperImageBox.IsCheckedChanged += OnSuperImageOptionChanged;
         GenerateSuperEmptyBox.IsCheckedChanged += OnSuperImageOptionChanged;
@@ -53,6 +55,7 @@ public partial class DeliveryView : UserControl
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         UpdateProjectDefaults();
         UpdatePackingFields();
+        InitializeDelivery();
     }
 
     private void OnOutputOptionChanged(object? sender, RoutedEventArgs e)
@@ -90,11 +93,15 @@ public partial class DeliveryView : UserControl
         SuperImageOptions.IsVisible = packSuper;
         PayloadSettings.IsVisible = packPayload;
         UseProjectSuperSettingsBox.Classes.Set("payload", packPayload);
+        UpdateSuperProjectChoices(ProjectContextService.Instance, resetSelection: false);
         Composition.SetOutputOptions(DirectOutputBox.IsChecked == true, packSuper, packPayload);
         UpdateCompositionImages();
     }
 
-    private void UpdateCompositionImages() => Composition.SetImages(ImageSelection.GetSelectedImages());
+    private void UpdateCompositionImages()
+    {
+        if (!_restoringDelivery) Composition.SetImages(ImageSelection.GetSelectedImages());
+    }
 
     private void UpdateImagesLayout()
     {
@@ -193,20 +200,57 @@ public partial class DeliveryView : UserControl
         else if (ReferenceEquals(sender, GenerateSuperEmptyBox)) ForceFullSuperImageBox.IsChecked = false;
     }
 
-    private void UpdateProjectSuperSelector() => SuperSettingsProjectBox.IsEnabled =
-        UseProjectSuperSettingsBox.IsChecked == true && SuperSettingsProjectBox.Items.Count > 0;
+    private void UpdateProjectSuperSelector()
+    {
+        SuperSettingsProjectBox.IsEnabled = UseProjectSuperSettingsBox.IsChecked == true && SuperSettingsProjectBox.Items.Count > 0;
+        ApplySourceSettings();
+    }
+
+    private SourceContainerSettings? ReadSourceSettings(string root)
+    {
+        try { return SourceContainerMetadataService.Read(root, PackPayloadBox.IsChecked == true ? "payload" : "super"); }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Delivery", ex.Message);
+            return null;
+        }
+    }
 
     private void UpdateSuperProjectChoices(ProjectContextService context, bool resetSelection)
     {
-        // Only populate local form choices; selecting a project does not load or apply its SUPER settings.
-        // 仅维护表单选项，选择项目不会加载或应用该项目的 SUPER 配置。
         var selected = resetSelection ? null : SuperSettingsProjectBox.SelectedItem as string;
-        var names = context.SubProjects.Select(project => project.Name).ToArray();
+        var names = context.SubProjects.Where(project => ReadSourceSettings(project.RootPath) is not null)
+            .Select(project => project.Name).ToArray();
         if (SuperSettingsProjectBox.ItemsSource is not string[] previous || !previous.SequenceEqual(names))
             SuperSettingsProjectBox.ItemsSource = names;
         SuperSettingsProjectBox.SelectedItem = names.FirstOrDefault(name => name == selected)
             ?? names.FirstOrDefault(name => name == context.ActiveSubProject?.Name) ?? names.FirstOrDefault();
         UpdateProjectSuperSelector();
+    }
+
+    private void ApplySourceSettings()
+    {
+        if (UseProjectSuperSettingsBox.IsChecked != true) return;
+        var project = ProjectContextService.Instance.SubProjects.FirstOrDefault(p => p.Name == SuperSettingsProjectBox.SelectedItem as string);
+        if (project is null || ReadSourceSettings(project.RootPath) is not { } settings) return;
+        SuperVabBox.IsChecked = settings.DeviceType == "VAB";
+        SuperAbBox.IsChecked = settings.DeviceType == "AB";
+        SuperAOnlyBox.IsChecked = settings.DeviceType == "AOnly";
+        SuperGroupNameBox.Text = settings.GroupNames.FirstOrDefault(name => name != "default") ?? settings.GroupNames.FirstOrDefault() ?? "";
+        if (settings.Kind == "super")
+        {
+            SuperRawBox.IsChecked = settings.Storage == "RAW";
+            SuperSparseBox.IsChecked = settings.Storage == "SPARSE";
+            SuperSizeBox.Text = settings.Size.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SuperMetadataSlotsBox.Text = settings.MetadataSlots.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SuperMetadataSizeBox.Text = settings.MetadataMaxSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            SuperBlockSizeBox.Text = settings.BlockSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        else
+        {
+            PayloadVersionBox.Text = "2";
+            PayloadMinorVersionBox.Text = settings.MinorVersion.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
     }
 
     private void OnOutputDirectoryRowSizeChanged(object? sender, SizeChangedEventArgs e)
@@ -313,8 +357,7 @@ public partial class DeliveryView : UserControl
     /// <summary><para>进入交付页面时刷新项目镜像，并保留当前项目的表单选择。</para>Refreshes images on entry, retaining the current project's form choices.</summary>
     public void Refresh()
     {
-        UpdateProjectDefaults();
-        _ = ImageSelection.RefreshAsync();
+        _ = RefreshDeliveryAsync();
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -323,12 +366,14 @@ public partial class DeliveryView : UserControl
         _attached = true;
         WeakReferenceMessenger.Default.Register<DeliveryView, ProjectContextChangedMessage>(this, static (view, _) =>
             Dispatcher.UIThread.Post(() => { if (view._attached) view.Refresh(); }));
-        UpdateProjectDefaults();
+        _ = RefreshDeliveryAsync();
         UpdateResponsiveLayout();
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
+        _deliverySaveTimer.Stop();
+        _ = SaveDeliveryAsync(false);
         _attached = false;
         WeakReferenceMessenger.Default.Unregister<ProjectContextChangedMessage>(this);
         base.OnDetachedFromVisualTree(e);

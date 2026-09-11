@@ -310,7 +310,32 @@ public partial class PackImageSelectionView : UserControl
         RenderGroups();
     }
 
+    internal void SetAssignedPaths(IEnumerable<string> assigned)
+    {
+        var paths = assigned.ToHashSet(PathComparer);
+        foreach (var entry in _groups.SelectMany(g => g.Entries)) entry.IsSelected = paths.Contains(entry.FilePath);
+    }
+
+    internal void RestoreAssignedSources(IEnumerable<string> assigned)
+    {
+        var paths = assigned.Distinct(PathComparer).ToArray();
+        var existing = _groups.SelectMany(g => g.FilePaths).ToHashSet(PathComparer);
+        var missing = paths.Where(p => !existing.Contains(p)).ToArray();
+        if (missing.Length > 0)
+        {
+            var name = string.Format(LanguageService.Instance.GetString("PackDialog_ExtraImages"), ++_externalGroupNumber);
+            _groups.Add(ObserveGroup(new PackImageGroup(name, missing.Select(path =>
+            {
+                var entry = new PackImageEntry(path);
+                entry.UpdateFileInfo(PackImageFileInfo.Read(path, CancellationToken.None));
+                return entry;
+            }), isExternal: true)));
+            ApplyGroupOptions(); UpdatePageSize(); RenderGroups();
+        }
+        SetAssignedPaths(paths);
+    }
+
     internal PackImageSelection[] GetSelectedImages() => _groups.SelectMany(group =>
-        group.Images.Where(image => image.IsSelected).Select(image => new PackImageSelection(group.Name, image.FilePath)
+        group.Entries.Where(image => image.IsSelected).Select(image => new PackImageSelection(group.Name, image.FilePath)
             { SizeBytes = image.SizeBytes })).ToArray();
 }
