@@ -55,7 +55,7 @@ internal partial class PropertiesViewModel
         if (_mirror is not { } mirror || ContentType != PropertiesContentType.ScreenMirror) return;
         var options = mirror.StreamOptions;
         var meta = mirror.StreamMetadata;
-        var size = mirror.Frame?.PixelSize;
+        Avalonia.PixelSize? size = mirror.VideoPixelSize is { Width: > 0 } pixels ? pixels : null;
         var svc = LanguageService.Instance;
         string unknown = svc.GetString("MirrorProperty_Unknown");
         string waiting = "—";

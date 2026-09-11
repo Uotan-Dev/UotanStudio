@@ -15,36 +15,31 @@ using UotanStudio.Media.Audio;
 namespace UotanStudio.ViewModels.Editors;
 
 /// <summary>
-/// <para>scrcpy 投屏文档：部署服务端、解码 H.264/H.265 视频流并渲染到 <see cref="Frame"/>。</para>
+/// <para>scrcpy 投屏文档：部署服务端、解码视频流，并交接到 GPU 呈现器或位图回退。</para>
 /// scrcpy screen-mirror document: deploys the server, decodes the H.264/H.265
-/// video stream and renders it into <see cref="Frame"/>.
+/// video stream and hands frames to GPU presentation or the bitmap fallback.
 /// </summary>
 /// <remarks>
 /// <para>
 /// 解码循环运行在专用线程：scrcpy 帧解包 → <see cref="IVideoDecoder"/> 平台解码 →
-/// NV12→BGRA 转换 → 经 Dispatcher 在 UI 线程写入 <see cref="WriteableBitmap"/>。
-/// 回调契约要求在解码回调内完成转换（帧随后被解码器释放）。
+/// 紧凑平面交接 → GPU 颜色转换与显示；无 GPU 呈现器时回退到 CPU 转换与位图写入。
+/// 回调契约要求在解码回调内完成复制（帧随后被解码器释放）。
 /// </para>
 /// <para>
 /// The decode loop runs on a dedicated thread: scrcpy frame demux →
-/// <see cref="IVideoDecoder"/> platform decode → NV12→BGRA conversion →
-/// WriteableBitmap update on the UI thread via the Dispatcher. The decoder
-/// callback contract requires the conversion to happen inside the callback
+/// <see cref="IVideoDecoder"/> platform decode → compact plane handoff → GPU
+/// presentation, or CPU conversion and a bitmap fallback. The decoder
+/// callback contract requires the copy to happen inside the callback
 /// (the frame is disposed right after it returns).
 /// </para>
 /// </remarks>
 public partial class ScreenMirrorViewModel : Document
 {
     /// <summary>Reuses the server's selected USB target without competing for its interface.</summary>
-    internal static bool ShouldUseAdbServer(Services.Devices.DeviceTransportKind transport, string serial,
-        Func<IEnumerable<string>> getServerSerials)
+    internal static bool ShouldUseAdbServer(Services.Devices.DeviceTransportKind transport, Func<bool> serverPresent)
     {
         if (transport == Services.Devices.DeviceTransportKind.Tcp) return true;
-        if (transport != Services.Devices.DeviceTransportKind.Usb || string.IsNullOrWhiteSpace(serial))
-            return false;
-        // Offline/unauthorized targets are still owned by the server. Surface its
-        // service error instead of competing for the same physical USB interface.
-        return getServerSerials().Contains(serial, StringComparer.Ordinal);
+        return transport == Services.Devices.DeviceTransportKind.Usb && serverPresent();
     }
 
     private const int ConnectRetryCount = 20;
@@ -59,6 +54,8 @@ public partial class ScreenMirrorViewModel : Document
     private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
     private Views.Editors.ScreenMirrorPixelBuffer? _spareFrame;
     private bool _renderScheduled;
+    internal Views.Editors.ScreenMirrorGpuPresenter GpuPresenter { get; private set; } = new();
+    internal PixelSize VideoPixelSize => GpuPresenter.IsAvailable && GpuPresenter.PixelSize is { Width: > 0 } size ? size : Frame?.PixelSize ?? default;
     // At most two session-owned buffers: reuse the pending frame before writing
     // its replacement, while the UI may own the other buffer. Only exchange
     // ownership under the lock; bitmap.Lock() must never hold up the decoder.
@@ -86,7 +83,7 @@ public partial class ScreenMirrorViewModel : Document
     /// <summary>获取本会话是否请求了音频流。</summary>
     public bool AudioEnabled => StreamOptions?.Audio ?? false;
 
-    /// <summary>Raised on the UI thread after the mutable bitmap has been unlocked.</summary>
+    /// <summary>Raised on the UI thread when a GPU frame is available or the fallback bitmap is updated; not a display-present timestamp.</summary>
     public event EventHandler? FramePresented;
 
     private long _receivedFrames, _decodedFrames, _uploadedFrames, _receivedBytes;
@@ -97,7 +94,7 @@ public partial class ScreenMirrorViewModel : Document
     /// <summary>Session parameters and counters; frame rates are calculated from counter deltas.</summary>
     internal (long Received, long Decoded, long Uploaded, long Bytes) ReadCounters()
         => (Interlocked.Read(ref _receivedFrames), Interlocked.Read(ref _decodedFrames),
-            Interlocked.Read(ref _uploadedFrames), Interlocked.Read(ref _receivedBytes));
+            Interlocked.Read(ref _uploadedFrames) + GpuPresenter.Draws, Interlocked.Read(ref _receivedBytes));
     internal string DecoderBackend => _decoderBackend;
     internal ScrcpyServerOptions? StreamOptions => _streamOptions;
     internal ScrcpyVideoMetadata? StreamMetadata => _client?.VideoMetadata;
@@ -134,9 +131,7 @@ public partial class ScreenMirrorViewModel : Document
                     ?? throw new InvalidOperationException($"Device {serial} is not connected. 设备 {serial} 未连接。");
                 var options = CreateOptionsFromSettings();
                 _streamOptions = options;
-                if (ShouldUseAdbServer(device.Transport, serial,
-                    () => UotanStudio.Services.Devices.DeviceMonitorService.Instance.AdbServerClient?
-                        .GetDevices().Select(target => target.Serial) ?? []))
+                if (ShouldUseAdbServer(device.Transport, Comm.Protocols.Common.DebugBridgeRoute.UseAdbServer))
                 {
                     var server = new AdbServerServices(serial);
                     server.Push(ResolveServerJarPath(), ScrcpyConstants.ServerDevicePath);
@@ -294,6 +289,7 @@ public partial class ScreenMirrorViewModel : Document
         }
 
         _disposed = true;
+        GpuPresenter.Dispose();
         _cts?.Cancel();
         _client?.Dispose(); // Unblock socket reads before waiting; decoder disposal stays on its owner thread.
         lock (_frameLock)
@@ -336,6 +332,7 @@ public partial class ScreenMirrorViewModel : Document
         {
             if (ReferenceEquals(Frame, oldFrame)) Frame = null;
             oldFrame?.Dispose();
+            FramePresented?.Invoke(this, EventArgs.Empty);
         }
         if (Dispatcher.UIThread.CheckAccess()) ReleaseBitmap();
         else Dispatcher.UIThread.Post(ReleaseBitmap);
@@ -521,6 +518,18 @@ public partial class ScreenMirrorViewModel : Document
     {
         Interlocked.Increment(ref _decodedFrames);
         if (_disposed) return;
+        if (GpuPresenter.IsAvailable && GpuPresenter.Publish(frame, _activeSettings.ScreenMirrorColorMatrix, _activeSettings.ScreenMirrorColorRange))
+        {
+            lock (_frameLock)
+            {
+                if (!_renderScheduled && !_disposed)
+                {
+                    _renderScheduled = true;
+                    Dispatcher.UIThread.Post(RenderPendingFrame, DispatcherPriority.Render);
+                }
+            }
+            return;
+        }
         Views.Editors.ScreenMirrorPixelBuffer next;
         lock (_frameLock)
         {
@@ -552,8 +561,22 @@ public partial class ScreenMirrorViewModel : Document
             _renderScheduled = false;
             pending = _pendingFrame;
             _pendingFrame = null;
+            if (GpuPresenter.IsAvailable && GpuPresenter.PixelSize.Width > 0)
+            {
+                pending = null;
+                _spareFrame = null;
+            }
         }
-        if (pending is null) return;
+        if (pending is null)
+        {
+            if (GpuPresenter.IsAvailable && GpuPresenter.PixelSize.Width > 0 && Frame is { } oldBitmap)
+            {
+                Frame = null;
+                oldBitmap.Dispose();
+            }
+            if (!_disposed) FramePresented?.Invoke(this, EventArgs.Empty);
+            return;
+        }
         try
         {
             if (!_disposed)

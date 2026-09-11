@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:UotanStudio.ViewModels.Editors"
+             xmlns:local="using:UotanStudio.Views.Editors"
              mc:Ignorable="d"
              d:DesignWidth="800"
              d:DesignHeight="600"
@@ -19,12 +20,10 @@
     </Border>
 
     <Panel Grid.Row="1" Background="Black">
-      <Image x:Name="FrameImage"
-             Source="{Binding Frame}"
-             HorizontalAlignment="Center"
-             VerticalAlignment="Center"
-             Stretch="Uniform" />
-      <TextBlock IsVisible="{Binding Frame, Converter={x:Static ObjectConverters.IsNull}}"
+      <local:ScreenMirrorVideoControl x:Name="FrameImage"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch" />
+      <TextBlock x:Name="WaitingLabel"
                  HorizontalAlignment="Center"
                  VerticalAlignment="Center"
                  Foreground="White"

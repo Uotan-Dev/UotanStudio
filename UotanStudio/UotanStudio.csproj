@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="Avalonia.AvaloniaEdit" />
     <PackageReference Include="Iciclecreek.Avalonia.Terminal" />
     <PackageReference Include="Porta.Pty" />

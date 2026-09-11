@@ -35,6 +35,7 @@ public partial class ScreenMirrorView : UserControl
         {
             _subscribed = viewModel;
             viewModel.FramePresented += OnFramePresented;
+            OnFramePresented(viewModel, EventArgs.Empty);
         }
     }
 
@@ -46,7 +47,10 @@ public partial class ScreenMirrorView : UserControl
     }
 
     private void OnFramePresented(object? sender, EventArgs e)
-        => FrameImage.InvalidateVisual();
+    {
+        WaitingLabel.IsVisible = ViewModel?.VideoPixelSize.Width is not > 0;
+        FrameImage.InvalidateVisual();
+    }
 
     private ScreenMirrorViewModel? ViewModel => DataContext as ScreenMirrorViewModel;
 
@@ -140,8 +144,8 @@ public partial class ScreenMirrorView : UserControl
     private bool TranslateTouch(PointerEventArgs e, bool clamp, out (int X, int Y, int Width, int Height) point)
     {
         point = default;
-        if (ViewModel?.Frame is not { } frame) return false;
-        int width = frame.PixelSize.Width, height = frame.PixelSize.Height;
+        if (ViewModel?.VideoPixelSize is not { Width: > 0, Height: > 0 } size) return false;
+        int width = size.Width, height = size.Height;
         // GetPosition applies the complete visual transform, including status row,
         // dock offsets and DPI. Both inputs below are image-local logical units.
         if (!ScreenMirrorCoordinates.TryMap(e.GetPosition(FrameImage), FrameImage.Bounds.Size,

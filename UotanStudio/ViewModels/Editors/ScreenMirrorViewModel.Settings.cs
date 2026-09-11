@@ -17,6 +17,7 @@ public partial class ScreenMirrorViewModel
         Backend = _activeSettings.ScreenMirrorDecoderBackend,
         ColorMatrix = _activeSettings.ScreenMirrorColorMatrix,
         ColorRange = _activeSettings.ScreenMirrorColorRange,
+        PreferNv12Output = GpuPresenter.IsAvailable,
     };
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ApplyMirrorSettingsCommand))]
@@ -44,7 +45,9 @@ public partial class ScreenMirrorViewModel
             });
             if (_disposed) return;
             Cleanup();
+            GpuPresenter = new();
             _disposed = false;
+            FramePresented?.Invoke(this, EventArgs.Empty);
             _decodeThread = _audioThread = null;
             _decoderBackend = string.Empty;
             _receivedFrames = _decodedFrames = _uploadedFrames = _receivedBytes = _audioDecodedFrames = 0;

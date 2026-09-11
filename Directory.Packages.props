@@ -7,6 +7,7 @@
     <!-- Avalonia packages -->
     <!-- Important: keep version in sync! -->
     <PackageVersion Include="Avalonia" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Skia" Version="12.1.2" />
     <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
     <PackageVersion Include="Iciclecreek.Avalonia.Terminal" Version="4.0.2" />
     <PackageVersion Include="Porta.Pty" Version="2.2.2" />
