@@ -1,5 +1,18 @@
 # UotanStudio 项目指令
 
+## 投屏内存优化（2026-09-11）
+
+- Windows 投屏保留 GPU 解码及 GPU NV12→BGRA 转换，默认不启用 `VideoDecoderOptions.PreferNv12Output`。此前将颜色转换移到 CPU 的默认优化造成帧率回退，已撤回；媒体库的 NV12 选项仅保留给显式选择的调用方。
+- `ScreenMirrorPixelBuffer` 由会话最多复用三份：解码写入、最新待显示、UI 读取。锁内只交换归属，整帧复制、颜色转换及位图锁定必须在锁外执行，避免 UI 等待反压解码；仍只调度最新画面。关闭后丢弃会话缓冲区，并在 UI 线程清空／释放所捕获的旧 `WriteableBitmap`，不得释放重连后的新位图。
+- 真实窗口内存测量工具为 `tools/ScreenMirrorMemorySmoke`；数据和验证边界见 `docs/screen-mirror-memory.md`。工具的最终强制 GC 仅用于诊断残留，生产投屏流程不强制 GC。
+- 帧率回归使用 `tools/ScreenMirrorFrameRateSmoke`，以固定 1440×2880、60 fps H.264 动态码流验证完整解码帧数和 UI 更新；对照数据见 `docs/screen-mirror-frame-rate.md`，UI 更新次数不得当成显示器实际 present FPS。
+
+## scrcpy USB 连接修复（2026-09-11）
+
+- 所有桌面平台的 USB 投屏先按所选序列号精确查询现有 ADB server；目标存在时，复用 `AdbServerServices` 的 sync/shell/localabstract 服务，包括离线／未授权目标的错误报告，避免再次独占申请同一 USB 接口。无对应 server 目标时保留直连，TCP 沿用 server；下文“USB 路径显式建立原生 ADB 会话”对这一情形不再适用。此规则也适用于 Windows，不能仅限制为 macOS，否则本机已由 server 管理的 USB 设备会出现 `ADB session unavailable`。
+- libusb 接口申请失败立即终止打开，保留原始 claim 错误日志；释放时仅清理本会话已申请的接口，自动发现的端点同步到会话属性。投屏 ADB 握手失败须释放尚未移交的会话。
+- 回归测试与 macOS 真机验证边界见 `docs/macos-scrcpy-usb.md`。
+
 ## 交付页面合并约定（2026-09-11）
 
 - 镜像归属、确认与返回编辑统一沿用 `ViewModels/Shell/DeliveryViewModel`；视图通过 `Model.SelectSources`、`Model.Confirm`、`Model.ReturnToContainer` 接入，源列表通过 `SetAssignedPaths` / `RestoreAssignedSources` 同步。合并时移除重复的视图内选择投影、锁定状态及输出集合维护逻辑，不并存两套实现。
@@ -315,7 +328,7 @@ APK 签名入口：APK 文档页提供自定义私钥、证书、输出路径、
 - 模拟器/TCP 投屏通过 `AdbServerServices` 使用既有 ADB server（默认 127.0.0.1:5037），按序列号打开 sync/shell/localabstract 服务；USB 路径显式建立原生 ADB 会话。`AdbServiceStream` 保留 ADB 数据块未读尾部。scrcpy 使用 `tunnel_forward=true` 与非负有符号 32 位 SCID；先读视频 dummy，再打开音频/控制，最后读取元数据，避免上游等待连接时死锁。无数据超时返回空，EOF/部分读取失败抛错；连接失败释放全部已开流。
 
 - scrcpy 2.7 视频头使用小写 `h264/h265` fourcc；配置位为 bit 63，关键帧位为 bit 62，余下位为微秒 PTS。`ScrcpyVideoFrame` 按位解析配置/关键帧并提供去标志时间戳；投屏将配置包与下一帧合并，按微秒 ×10 传递 ticks。
-- `ScreenMirrorViewModel` 在专用线程创建、使用并释放解码器，关闭时先打断 socket 读取；显示只保留最新待处理帧，替换与渲染后均归还池化缓冲区。解码错误进入日志/状态。Windows GPU 输出 BGRA 并复制到 UI 所有的缓冲区；其他后端将 NV12 按所选或已报告的矩阵/范围转换，再上传 WriteableBitmap。不是 GPU 零拷贝显示。
+- `ScreenMirrorViewModel` 在专用线程创建、使用并释放解码器，关闭时先打断 socket 读取；显示只保留最新画面，并复用会话拥有的最多三份 BGRA 缓冲区，关闭时释放显示位图。解码错误进入日志/状态。Windows GPU 投屏使用 GPU BGRA 输出；其他 NV12 后端按所选或已报告的矩阵/范围转换。不是 GPU 零拷贝显示。
 - Windows 同步路径通过 H.264 固定 I_PCM 黑帧逐像素验证、上游 CABAC 30 帧完整排空、多实例与 Reset。设置低延迟属性不保证无排队：CABAC 样本 30 次输入先输出 14 帧，Drain 后共 30 帧。2026-09-10 已补充 Windows 三种格式的 GPU 码流验证与桌面进程视频引擎计数器；Mac 硬件和 Linux VA/EGL 仍不得用编译或枚举代替运行证明。
 - Mac 新增硬件编码→解码回环测试，非 Mac 显式跳过；Linux VA 测试通过 `UOTAN_TEST_VA_RENDER_NODE` 选择已有节点，缺环境跳过。测试夹具来源和哈希在 `UotanStudio.Tests/TestInfrastructure/Media/README.md`。
 

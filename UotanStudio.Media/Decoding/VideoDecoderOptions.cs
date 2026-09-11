@@ -44,6 +44,8 @@ public enum VideoColorRange
 /// <summary>Immutable per-session decoding choices. 每次会话的不可变解码选项。</summary>
 public sealed record VideoDecoderOptions
 {
+    /// <summary>Prefer NV12 readback from the Windows GPU decoder, avoiding BGRA video-processor surfaces. The consumer converts pixels for display.</summary>
+    public bool PreferNv12Output { get; init; }
     /// <summary>Selected backend. 后端。</summary>
     public VideoDecoderBackend Backend { get; init; }
     /// <summary>Source YUV matrix override. 源 YUV 矩阵覆盖。</summary>

@@ -11,19 +11,22 @@ namespace UotanStudio.Tests.Media;
 public class MediaCodecRegressionTests
 {
     [Theory]
-    [InlineData(VideoCodecId.H265, "testsrc-128x96.h265")]
-    [InlineData(VideoCodecId.Av1, "testsrc-128x96.obu")]
-    public void WindowsGpu_DecodesIndependentDynamicFixture(VideoCodecId codec, string fixture)
+    [InlineData(VideoCodecId.H265, "testsrc-128x96.h265", false)]
+    [InlineData(VideoCodecId.H265, "testsrc-128x96.h265", true)]
+    [InlineData(VideoCodecId.Av1, "testsrc-128x96.obu", false)]
+    [InlineData(VideoCodecId.Av1, "testsrc-128x96.obu", true)]
+    public void WindowsGpu_DecodesIndependentDynamicFixture(VideoCodecId codec, string fixture, bool nv12)
     {
         if (!OperatingSystem.IsWindows()) { Assert.Skip("Windows GPU test."); return; }
         Assert.SkipUnless(VideoDecoderFactory.HasGpuDecoder(codec), "Codec unavailable on this GPU.");
-        using var decoder = new MediaFoundationGpuVideoDecoder();
+        using var decoder = new MediaFoundationGpuVideoDecoder(new VideoDecoderOptions { PreferNv12Output = nv12 });
         byte[] stream = File.ReadAllBytes(Fixture(fixture));
         var hashes = new HashSet<string>();
         int count = 0;
         decoder.Initialize(codec, 128, 96, frame =>
         {
-            Assert.IsType<GpuDecodedVideoFrame>(frame);
+            if (nv12) Assert.IsType<DecodedVideoFrame>(frame);
+            else Assert.IsType<GpuDecodedVideoFrame>(frame);
             Assert.Equal(128, frame.Width);
             Assert.Equal(96, frame.Height);
             hashes.Add(Convert.ToHexString(SHA256.HashData(frame.Span)));

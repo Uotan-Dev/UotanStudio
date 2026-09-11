@@ -4,8 +4,8 @@ namespace UotanStudio.Media.Decoding;
 
 /// <summary>
 /// A decoded video frame in NV12 pixel format, with the luma and chroma planes
-/// stored contiguously in a single pooled buffer.
-/// <para>NV12 像素格式的解码帧：亮度与色度平面连续存放于单个池化缓冲区中。</para>
+/// stored contiguously in one buffer, pooled or borrowed from the decoder.
+/// <para>NV12 像素格式的解码帧：亮度与色度平面连续存放于单个池化或解码器借用缓冲区中。</para>
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,13 +18,13 @@ namespace UotanStudio.Media.Decoding;
 /// 两个平面共用同一 stride；即使宽度为奇数，UV 平面也按完整 stride 宽度存储。
 /// </para>
 /// <para>
-/// Instances own the pooled buffer and must be disposed exactly once by the
-/// consumer. Call <see cref="Dispose"/> promptly after converting or copying
-/// the pixels, because a decode loop may allocate tens of buffers per second.
+/// Public constructors take ownership of pooled buffers. Decoder callbacks may
+/// borrow session storage; the decoder disposes each frame when the callback
+/// returns. Copy or convert pixels within that callback. Dispose is idempotent.
 /// </para>
 /// <para>
-/// 实例持有池化缓冲区，必须由消费方恰好释放一次。由于解码循环每秒可能分配
-/// 数十个缓冲区，转换或复制像素后应立即调用 <see cref="Dispose"/>。
+/// 公共构造函数接管池化缓冲区。解码回调可借用会话存储；解码器在回调返回后
+/// 释放帧，消费方须在回调内复制或转换像素。Dispose 可重复调用。
 /// </para>
 /// </remarks>
 public class DecodedVideoFrame : IDisposable
@@ -34,6 +34,9 @@ public class DecodedVideoFrame : IDisposable
     /// <summary>Reported/effective YUV range, or Auto when unreported. 已报告或实际采用的色彩范围。</summary>
     public VideoColorRange ColorRange { get; init; }
     private byte[]? _buffer;
+
+    /// <summary>False only for decoder-owned storage borrowed until the callback returns.</summary>
+    internal bool ReturnBufferToPool { get; init; } = true;
 
     /// <summary>Creates a frame that takes ownership of an existing pooled buffer.</summary>
     /// <summary>创建一个接管现有池化缓冲区所有权的帧。</summary>
@@ -152,7 +155,7 @@ public class DecodedVideoFrame : IDisposable
     public void Dispose()
     {
         var buffer = Interlocked.Exchange(ref _buffer, null);
-        if (buffer is not null)
+        if (buffer is not null && ReturnBufferToPool)
         {
             ArrayPool<byte>.Shared.Return(buffer);
         }

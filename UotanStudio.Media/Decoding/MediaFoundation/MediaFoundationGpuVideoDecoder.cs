@@ -1,11 +1,10 @@
-using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
 namespace UotanStudio.Media.Decoding.MediaFoundation;
 
 /// <summary>
-/// D3D11-aware H.264/H.265 decoding with GPU NV12-to-BGRA processing and pooled staging readback.
+/// D3D11-aware decoding with pooled NV12 readback or GPU NV12-to-BGRA processing.
 /// Supports synchronous system transforms and asynchronous hardware transforms sharing one D3D11 device.
 /// </summary>
 /// <remarks>Direct instances never fall back to CPU. The platform factory owns initialization fallback.</remarks>
@@ -31,6 +30,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private nint _outputTexture;
     private nint _outputView;
     private nint _stagingTexture;
+    private uint _stagingWidth, _stagingHeight;
     private nint _inputType;
     private Action<DecodedVideoFrame>? _callback;
     private bool _inCallback;
@@ -43,6 +43,9 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private int _inputRequests;
     private bool _drainComplete;
     private uint _inputColorSpace;
+    // Callbacks are synchronous and cannot reenter this decoder. Reuse exact-size
+    // session storage without retaining rounded-up arrays in the global pool.
+    private byte[]? _readbackBuffer;
 
     /// <inheritdoc />
     public bool IsInitialized => _transform != 0;
@@ -334,6 +337,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
     private void BuildVideoProcessor()
     {
         ReleaseVideoProcessor();
+        if (_options.PreferNv12Output) return;
         var content = new D3D11VideoProcessorContentDesc
         {
             InputFrameFormat = D3D11Interop.VideoFrameFormatProgressive,
@@ -491,14 +495,67 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
                 try
                 {
                     Check(MfCom.DxgiSubresourceIndex(dxgiBuffer, out uint subresource), "GetSubresourceIndex");
-                    BlitToOutput(sourceTexture, subresource);
-                    ReadBack(timestamp);
+                    if (_options.PreferNv12Output) ReadBackNv12(sourceTexture, subresource, timestamp);
+                    else
+                    {
+                        BlitToOutput(sourceTexture, subresource);
+                        ReadBack(timestamp);
+                    }
                 }
                 finally { MfCom.Release(sourceTexture); }
             }
             finally { MfCom.Release(dxgiBuffer); }
         }
         finally { MfCom.Release(buffer); }
+    }
+
+    private void ReadBackNv12(nint sourceTexture, uint subresource, long timestampTicks)
+    {
+        var desc = MfCom.D3DGetTexture2DDesc(sourceTexture);
+        if (desc.Format != 103 /* DXGI_FORMAT_NV12 */ || desc.Width < _width || desc.Height < _height
+            || desc.SampleDescCount != 1 || desc.MipLevels != 1 || subresource >= desc.ArraySize)
+            throw new InvalidDataException("Unexpected NV12 decoder texture layout.");
+        VideoFrameLimits.ValidateDimensions(checked((int)desc.Width), checked((int)desc.Height));
+        if (_stagingTexture == 0 || _stagingWidth != desc.Width || _stagingHeight != desc.Height)
+        {
+            ReleaseVideoProcessor();
+            var staging = desc;
+            staging.ArraySize = 1;
+            staging.Usage = D3D11Interop.UsageStaging;
+            staging.BindFlags = 0;
+            staging.MiscFlags = 0;
+            staging.CPUAccessFlags = D3D11Interop.CpuAccessRead;
+            Check(MfCom.D3DCreateTexture2D(_device, staging, 0, out _stagingTexture), "CreateTexture2D(NV12 staging)");
+            _stagingWidth = desc.Width;
+            _stagingHeight = desc.Height;
+        }
+        MfCom.D3DCopySubresourceRegion(_context, _stagingTexture, 0, 0, 0, 0, sourceTexture, subresource, 0);
+        Check(MfCom.D3DMap(_context, _stagingTexture, 0, 1, 0, out var mapped), "Map(NV12 staging)");
+        try
+        {
+            int rowBytes = checked((_width + 1) & ~1);
+            int sourceStride = checked((int)mapped.RowPitch);
+            if (sourceStride < rowBytes) throw new InvalidDataException("NV12 staging row is truncated.");
+            int length = VideoFrameLimits.Nv12Length(_width, _height, rowBytes);
+            byte[] pixels = GetReadbackBuffer(length);
+            using var frame = new DecodedVideoFrame(pixels, length, _width, _height, rowBytes, timestampTicks)
+            {
+                ReturnBufferToPool = false,
+                ColorMatrix = (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,
+                ColorRange = (_inputColorSpace & 0x30) == 0x20 ? VideoColorRange.Full : VideoColorRange.Limited,
+            };
+            for (int row = 0; row < _height; row++)
+                new ReadOnlySpan<byte>((byte*)mapped.pData + (nint)row * sourceStride, rowBytes)
+                    .CopyTo(pixels.AsSpan(row * rowBytes, rowBytes));
+            // UV starts after the texture's padded height, not the visible height.
+            byte* uv = (byte*)mapped.pData + checked((nint)desc.Height * sourceStride);
+            for (int row = 0; row < (_height + 1) / 2; row++)
+                new ReadOnlySpan<byte>(uv + (nint)row * sourceStride, rowBytes)
+                    .CopyTo(pixels.AsSpan((_height + row) * rowBytes, rowBytes));
+            _inCallback = true;
+            try { _callback!(frame); } finally { _inCallback = false; }
+        }
+        finally { MfCom.D3DUnmap(_context, _stagingTexture, 0); }
     }
 
     private void BlitToOutput(nint sourceTexture, uint subresource)
@@ -536,7 +593,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             int rowBytes = checked(_width * 4);
             int required = checked(rowBytes * _height);
             if (stride < rowBytes) throw new InvalidDataException("Staging readback is truncated.");
-            byte[] pooled = ArrayPool<byte>.Shared.Rent(required);
+            byte[] pooled = GetReadbackBuffer(required);
             fixed (byte* target = pooled.AsSpan(0, required))
             {
                 Span<byte> destination = new(target, required);
@@ -548,6 +605,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             }
             using var frame = new GpuDecodedVideoFrame(pooled, required, _width, _height, rowBytes, timestampTicks)
             {
+                ReturnBufferToPool = false,
                 ColorMatrix = (_inputColorSpace & 4) != 0 ? VideoColorMatrix.Bt709 : VideoColorMatrix.Bt601,
                 ColorRange = (_inputColorSpace & 0x30) == 0x20 ? VideoColorRange.Full : VideoColorRange.Limited,
             };
@@ -555,6 +613,13 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
             try { _callback!(frame); } finally { _inCallback = false; }
         }
         finally { MfCom.D3DUnmap(_context, _stagingTexture, 0); }
+    }
+
+    private byte[] GetReadbackBuffer(int length)
+    {
+        if (_readbackBuffer is null || _readbackBuffer.Length != length)
+            _readbackBuffer = GC.AllocateUninitializedArray<byte>(length);
+        return _readbackBuffer;
     }
 
     private static nint CreateSample(ReadOnlySpan<byte> data)
@@ -579,6 +644,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void ReleaseAll()
     {
+        _readbackBuffer = null;
         ReleaseTransformOnly();
         ReleaseVideoProcessor();
         _callback = null;
@@ -590,6 +656,7 @@ public sealed unsafe class MediaFoundationGpuVideoDecoder : IVideoDecoder
 
     private void ReleaseVideoProcessor()
     {
+        _stagingWidth = _stagingHeight = 0;
         if (_stagingTexture != 0) { MfCom.Release(_stagingTexture); _stagingTexture = 0; }
         if (_outputView != 0) { MfCom.Release(_outputView); _outputView = 0; }
         if (_outputTexture != 0) { MfCom.Release(_outputTexture); _outputTexture = 0; }

@@ -446,8 +446,15 @@ internal static unsafe class MfCom
 
     // --- D3D11 vtable calls ----------------------------------------------------
 
+    /// <summary>ID3D11Texture2D.GetDesc (slot 10), including padded texture dimensions.</summary>
+    public static D3D11Interop.Texture2DDesc D3DGetTexture2DDesc(nint texture)
+    {
+        D3D11Interop.Texture2DDesc desc = default;
+        ((delegate* unmanaged[Stdcall]<nint, D3D11Interop.Texture2DDesc*, void>)Slot(texture, 10))(texture, &desc);
+        return desc;
+    }
+
     /// <summary>ID3D11Device.CreateTexture2D (slot 5).</summary>
-    /// <summary>ID3D11Device.CreateTexture2D（槽位 5）。</summary>
     public static int D3DCreateTexture2D(nint device, in D3D11Interop.Texture2DDesc desc, nint initialData, out nint texture)
     {
         fixed (D3D11Interop.Texture2DDesc* d = &desc) fixed (nint* t = &texture)

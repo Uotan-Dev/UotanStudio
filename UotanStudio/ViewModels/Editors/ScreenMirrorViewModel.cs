@@ -10,7 +10,6 @@ using Dock.Model.Mvvm.Controls;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Scrcpy;
 using UotanStudio.Media.Decoding;
-using UotanStudio.Media.Decoding.MediaFoundation;
 using UotanStudio.Media.Audio;
 
 namespace UotanStudio.ViewModels.Editors;
@@ -36,6 +35,18 @@ namespace UotanStudio.ViewModels.Editors;
 /// </remarks>
 public partial class ScreenMirrorViewModel : Document
 {
+    /// <summary>Reuses the server's selected USB target without competing for its interface.</summary>
+    internal static bool ShouldUseAdbServer(Services.Devices.DeviceTransportKind transport, string serial,
+        Func<IEnumerable<string>> getServerSerials)
+    {
+        if (transport == Services.Devices.DeviceTransportKind.Tcp) return true;
+        if (transport != Services.Devices.DeviceTransportKind.Usb || string.IsNullOrWhiteSpace(serial))
+            return false;
+        // Offline/unauthorized targets are still owned by the server. Surface its
+        // service error instead of competing for the same physical USB interface.
+        return getServerSerials().Contains(serial, StringComparer.Ordinal);
+    }
+
     private const int ConnectRetryCount = 20;
     private const int ConnectRetryDelayMs = 250;
     private const int ReadTimeoutMs = 3000;
@@ -45,9 +56,12 @@ public partial class ScreenMirrorViewModel : Document
     private Stream? _shellStream;
     private int _starting;
     private readonly object _frameLock = new();
-    private PendingFrame? _pendingFrame;
+    private Views.Editors.ScreenMirrorPixelBuffer? _pendingFrame;
+    private Views.Editors.ScreenMirrorPixelBuffer? _spareFrame;
     private bool _renderScheduled;
-    private sealed record PendingFrame(byte[] Pixels, int Length, int Width, int Height, int Stride);
+    // At most two session-owned buffers: reuse the pending frame before writing
+    // its replacement, while the UI may own the other buffer. Only exchange
+    // ownership under the lock; bitmap.Lock() must never hold up the decoder.
     private CancellationTokenSource? _cts;
     private Thread? _decodeThread;
     private Thread? _audioThread;
@@ -120,7 +134,9 @@ public partial class ScreenMirrorViewModel : Document
                     ?? throw new InvalidOperationException($"Device {serial} is not connected. 设备 {serial} 未连接。");
                 var options = CreateOptionsFromSettings();
                 _streamOptions = options;
-                if (device.Transport == UotanStudio.Services.Devices.DeviceTransportKind.Tcp)
+                if (ShouldUseAdbServer(device.Transport, serial,
+                    () => UotanStudio.Services.Devices.DeviceMonitorService.Instance.AdbServerClient?
+                        .GetDevices().Select(target => target.Serial) ?? []))
                 {
                     var server = new AdbServerServices(serial);
                     server.Push(ResolveServerJarPath(), ScrcpyConstants.ServerDevicePath);
@@ -133,8 +149,18 @@ public partial class ScreenMirrorViewModel : Document
                 {
                     var session = UotanStudio.Services.Devices.DeviceMonitorService.Instance.OpenAdbSession(device)
                         ?? throw new InvalidOperationException($"ADB session unavailable: {serial}.");
-                    session.Connect();
-                    Start(session, options);
+                    try
+                    {
+                        session.Connect();
+                        Start(session, options);
+                    }
+                    catch
+                    {
+                        // Start takes ownership before deployment. A failed handshake
+                        // happens earlier and must release its USB handle here.
+                        if (!ReferenceEquals(_session, session)) session.Dispose();
+                        throw;
+                    }
                 }
             }
             catch (Exception ex)
@@ -272,8 +298,8 @@ public partial class ScreenMirrorViewModel : Document
         _client?.Dispose(); // Unblock socket reads before waiting; decoder disposal stays on its owner thread.
         lock (_frameLock)
         {
-            if (_pendingFrame is { } pending) ArrayPool<byte>.Shared.Return(pending.Pixels);
             _pendingFrame = null;
+            _spareFrame = null;
         }
         try
         {
@@ -302,6 +328,17 @@ public partial class ScreenMirrorViewModel : Document
         _cts = null;
         _session?.Dispose();
         _session = null;
+
+        // Clear on the owning UI thread; capture the old bitmap so a queued cleanup
+        // cannot dispose a replacement created by a subsequent reconnect.
+        var oldFrame = Frame;
+        void ReleaseBitmap()
+        {
+            if (ReferenceEquals(Frame, oldFrame)) Frame = null;
+            oldFrame?.Dispose();
+        }
+        if (Dispatcher.UIThread.CheckAccess()) ReleaseBitmap();
+        else Dispatcher.UIThread.Post(ReleaseBitmap);
 
         StatusText = GetLocalizedString("ScreenMirror_Stopped");
     }
@@ -484,37 +521,21 @@ public partial class ScreenMirrorViewModel : Document
     {
         Interlocked.Increment(ref _decodedFrames);
         if (_disposed) return;
-        // The GPU decoder delivers BGRA directly (stride ≥ width × 4); the CPU
-        // path delivers NV12 and is converted here with a tight stride.
-        // GPU 解码器直接输出 BGRA（行距 ≥ 宽度 × 4）；CPU 路径输出 NV12，
-        // 在此按紧凑行距转换。
-        if (frame is GpuDecodedVideoFrame bgraFrame)
-        {
-            // Decoder owns its pooled buffer until this callback returns. The UI queue needs its own copy.
-            byte[] pixels = ArrayPool<byte>.Shared.Rent(bgraFrame.Length);
-            bgraFrame.Span.CopyTo(pixels);
-            PublishBgra(pixels, bgraFrame.Length, bgraFrame.Width, bgraFrame.Height, bgraFrame.Stride);
-            return;
-        }
-        int bgraSize = Nv12ToBgraConverter.GetBgraBufferSize(frame.Width, frame.Height);
-        byte[]? bgra = ArrayPool<byte>.Shared.Rent(bgraSize);
-        try
-        {
-            Nv12ToBgraConverter.Convert(frame.Span, frame.Width, frame.Height, frame.Stride, bgra.AsSpan(0, bgraSize),
-                matrix: _activeSettings.ScreenMirrorColorMatrix == VideoColorMatrix.Auto ? frame.ColorMatrix : _activeSettings.ScreenMirrorColorMatrix, range: _activeSettings.ScreenMirrorColorRange == VideoColorRange.Auto ? frame.ColorRange : _activeSettings.ScreenMirrorColorRange);
-            PublishBgra(bgra, bgraSize, frame.Width, frame.Height, frame.Width * 4);
-            bgra = null; // Ownership passes to the bounded, latest-frame slot.
-        }
-        finally { if (bgra is not null) ArrayPool<byte>.Shared.Return(bgra); }
-    }
-
-    private void PublishBgra(byte[] pixels, int length, int width, int height, int stride)
-    {
+        Views.Editors.ScreenMirrorPixelBuffer next;
         lock (_frameLock)
         {
-            if (_disposed) { ArrayPool<byte>.Shared.Return(pixels); return; }
-            if (_pendingFrame is { } previous) ArrayPool<byte>.Shared.Return(previous.Pixels);
-            _pendingFrame = new(pixels, length, width, height, stride);
+            if (_disposed) return;
+            // A pending frame has not reached the UI and can be replaced safely.
+            // Take it before conversion so a third full-size buffer is unnecessary.
+            next = _pendingFrame ?? _spareFrame ?? new Views.Editors.ScreenMirrorPixelBuffer();
+            if (_pendingFrame is not null) _pendingFrame = null;
+            else _spareFrame = null;
+        }
+        next.Update(frame, _activeSettings.ScreenMirrorColorMatrix, _activeSettings.ScreenMirrorColorRange);
+        lock (_frameLock)
+        {
+            if (_disposed) return;
+            _pendingFrame = next;
             if (!_renderScheduled)
             {
                 _renderScheduled = true;
@@ -525,27 +546,33 @@ public partial class ScreenMirrorViewModel : Document
 
     private void RenderPendingFrame()
     {
-        PendingFrame? pending;
+        Views.Editors.ScreenMirrorPixelBuffer? pending;
         lock (_frameLock)
         {
+            _renderScheduled = false;
             pending = _pendingFrame;
             _pendingFrame = null;
-            _renderScheduled = false;
         }
         if (pending is null) return;
         try
         {
             if (!_disposed)
             {
-                RenderBgra(pending.Pixels, pending.Length, pending.Width, pending.Height, pending.Stride);
+                RenderBgra(pending.Pixels, pending.Width, pending.Height, pending.Width * 4);
                 Interlocked.Increment(ref _uploadedFrames);
                 FramePresented?.Invoke(this, EventArgs.Empty);
             }
         }
-        finally { ArrayPool<byte>.Shared.Return(pending.Pixels); }
+        finally
+        {
+            lock (_frameLock)
+            {
+                if (!_disposed) _spareFrame = pending;
+            }
+        }
     }
 
-    private void RenderBgra(byte[] bgra, int bgraSize, int width, int height, int sourceStride)
+    private void RenderBgra(byte[] bgra, int width, int height, int sourceStride)
     {
         var bitmap = Frame;
         if (bitmap is null || bitmap.PixelSize.Width != width || bitmap.PixelSize.Height != height)

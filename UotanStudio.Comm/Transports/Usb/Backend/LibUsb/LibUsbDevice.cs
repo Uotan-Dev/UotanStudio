@@ -29,6 +29,7 @@ internal partial class LibUsbDevice : UsbDevice
 
     private UsbContext? _context;
     private IUsbDevice? _usbDevice;
+    private bool _interfaceClaimed;
     private UsbEndpointReader? _reader;
     private UsbEndpointWriter? _writer;
     // Vid/Pid delegate to the base UsbDevice.VendorId/ProductId so that both the
@@ -270,49 +271,22 @@ internal partial class LibUsbDevice : UsbDevice
         // usbhid (and other kernel drivers) bind HID interrupt devices immediately, and
         // udev may rebind right after a detach; retry detach+claim a few times instead of
         // failing on the first contention (mirrors libusb's auto-detach behaviour).
-        Exception? claimError = null;
-        var claimed = false;
-        try
-        {
-            _usbDevice.ClaimInterface(targetInterfaceId);
-            claimed = true;
-        }
-        catch (Exception ex)
-        {
-            claimError = ex;
-        }
-
-        if (!claimed && _usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice)
-        {
-            for (var attempt = 0; attempt < 3; attempt++)
-            {
-                try
-                {
-                    libusbDevice.DetachKernelDriver(targetInterfaceId);
-                }
-                catch (Exception detachEx)
-                {
-                    claimError = detachEx;
-                }
-
-                try
-                {
-                    _usbDevice.ClaimInterface(targetInterfaceId);
-                    claimed = true;
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    claimError = ex;
-                    Thread.Sleep(50);
-                }
-            }
-        }
-
+        var claimed = LibUsbInterfaceClaim.TryClaim(
+            () => _usbDevice.ClaimInterface(targetInterfaceId),
+            _usbDevice is LibUsbDotNet.LibUsb.UsbDevice libusbDevice
+                ? () => libusbDevice.DetachKernelDriver(targetInterfaceId)
+                : null,
+            out var claimError);
         if (!claimed)
         {
-            UsbTrace.LogFormatted($"LibUsbDevice.ClaimInterface failed: {claimError?.GetType().Name}: {claimError?.Message}");
+            UsbTrace.LogErrorFormatted($"LibUsbDevice.ClaimInterface {targetInterfaceId} failed: {claimError?.Message}");
+            Dispose();
+            return -1;
         }
+
+        _interfaceClaimed = true;
+        ReadEndpointId = inEndpoint;
+        WriteEndpointId = outEndpoint;
 
         _reader = null;
         _writer = null;
@@ -359,15 +333,18 @@ internal partial class LibUsbDevice : UsbDevice
             // opens/enumeration fail until a replug.
             // <para>释放接口前清除停滞的管道；Windows winusb 上停滞的管道会使接口在驱动层
             // 保持占用，导致后续打开/枚举失败直到重新拔插。</para>
-            RestoreEndpointHalt(ReadEndpointId);
-            RestoreEndpointHalt(WriteEndpointId);
+            if (_interfaceClaimed)
+            {
+                RestoreEndpointHalt(ReadEndpointId);
+                RestoreEndpointHalt(WriteEndpointId);
+            }
 
             // Release the claimed interface before closing the handle: winusb.sys allows
             // only one open handle per interface, so a leftover claim blocks later opens.
             // <para>关闭句柄前显式释放已 claim 的接口：winusb.sys 每接口仅允许一个句柄。</para>
             try
             {
-                if (_usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice)
+                if (_interfaceClaimed && _usbDevice is LibUsbDotNet.LibUsb.UsbDevice wholeUsbDevice)
                 {
                     wholeUsbDevice.ReleaseInterface(InterfaceId);
                 }
@@ -389,6 +366,9 @@ internal partial class LibUsbDevice : UsbDevice
             _usbDevice = null;
         }
 
+        _interfaceClaimed = false;
+        _reader = null;
+        _writer = null;
         _context?.Dispose();
         _context = null;
     }
