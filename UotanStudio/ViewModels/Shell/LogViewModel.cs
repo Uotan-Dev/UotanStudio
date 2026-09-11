@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
+using UotanStudio.Services.Logging;
 namespace UotanStudio.ViewModels.Shell;
 
 /// <summary>
@@ -85,7 +86,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// Collection of entries currently displayed in the log panel (filtered by level, source, channel and message),
     /// bound by the UI.
     /// </summary>
-    public ObservableCollection<LogEntryViewModel> Entries { get; } = [];
+    public LogEntryCollection<LogEntryViewModel> Entries { get; } = [];
 
     /// <summary>
     /// <para>全部日志条目的原始缓冲（未筛选），超出上限时丢弃最旧条目。</para>
@@ -242,8 +243,12 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         _flushTimer.Start();
         foreach (var e in LogService.Instance.Entries)
         {
-            AppendEntry(e);
+            TrackEntry(e);
         }
+
+        // 历史回填走整体重建（单次 Reset），不走逐条 Add。
+        // History backfill goes through one bulk rebuild (single Reset) instead of per-item Adds.
+        ReapplyFilter();
     }
 
     /// <summary>
@@ -280,10 +285,20 @@ public partial class LogViewModel : ViewModelBase, IDisposable
             _pendingEntries.Clear();
         }
 
+        // 一批日志先统一登记，再按命中筛选一次性追加（最多两次集合事件）。
+        // Track the whole batch first, then append all filter hits in one Apply
+        // (at most two collection events).
+        var added = new List<LogEntryViewModel>(batch.Count);
         foreach (var entry in batch)
         {
-            AppendEntry(entry);
+            var vm = TrackEntry(entry);
+            if (MatchesFilter(vm))
+            {
+                added.Add(vm);
+            }
         }
+
+        Entries.Apply(0, added);
 
         // 批量裁剪：一次移除全部超限条目，替代逐条 RemoveAt(0) 的 O(n) 搬移。
         // Bulk trim: remove all over-limit entries in one pass instead of per-entry RemoveAt(0).
@@ -292,19 +307,16 @@ public partial class LogViewModel : ViewModelBase, IDisposable
         {
             return;
         }
-        for (var i = 0; i < overflow; i++)
-        {
-            Entries.Remove(_allEntries[i]);
-        }
+        var removed = _allEntries.Take(overflow).ToArray();
+        Entries.Apply(removed.Length, Array.Empty<LogEntryViewModel>());
         _allEntries.RemoveRange(0, overflow);
     }
 
     /// <summary>
-    /// <para>追加一条日志到原始缓冲；命中当前筛选时同步加入展示集合，并登记组件名。</para>
-    /// Appends a log entry to the raw buffer; adds it to the display collection when it matches the
-    /// current filters, and records the source name.
+    /// <para>登记一条日志到原始缓冲与组件名集合，不触碰展示集合。</para>
+    /// Tracks a log entry in the raw buffer and source names without touching the display collection.
     /// </summary>
-    private void AppendEntry(LogEntry entry)
+    private LogEntryViewModel TrackEntry(LogEntry entry)
     {
         var ts = entry.Timestamp.ToString("HH:mm:ss");
         var vm = new LogEntryViewModel(ts, entry.Level, entry.Source, entry.Message);
@@ -315,10 +327,7 @@ public partial class LogViewModel : ViewModelBase, IDisposable
             Sources.Add(entry.Source);
         }
 
-        if (MatchesFilter(vm))
-        {
-            Entries.Add(vm);
-        }
+        return vm;
     }
 
     /// <summary>
@@ -337,14 +346,27 @@ public partial class LogViewModel : ViewModelBase, IDisposable
     /// </summary>
     private void ReapplyFilter()
     {
-        Entries.Clear();
-        foreach (var vm in _allEntries)
+        // 整体重建（单次 Reset），替代 Clear + 逐条 Add 的 5000 次集合事件。
+        // One bulk rebuild (single Reset) instead of Clear plus 5000 per-item Adds.
+        List<LogEntryViewModel> hits;
+        if (LevelFilter is null && string.IsNullOrEmpty(SourceFilter) && string.IsNullOrEmpty(SearchText)
+            && SelectedChannel?.Value is null)
         {
-            if (MatchesFilter(vm))
+            hits = _allEntries;
+        }
+        else
+        {
+            hits = [];
+            foreach (var vm in _allEntries)
             {
-                Entries.Add(vm);
+                if (MatchesFilter(vm))
+                {
+                    hits.Add(vm);
+                }
             }
         }
+
+        Entries.Replace(hits);
     }
 
     /// <summary>
