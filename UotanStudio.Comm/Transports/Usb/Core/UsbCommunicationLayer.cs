@@ -543,14 +543,18 @@ public sealed class UsbCommunicationLayer(UsbApiRegistry? registry = null)
             }
 
             var sessions = provider.EnumerateDeviceSessions(keyFilter);
-            foreach (var session in sessions)
+            IUsbDeviceSession? selected = null;
+            try
             {
-                if (string.Equals(session.DeviceInfo.DeviceKey, deviceKey, StringComparison.Ordinal))
-                {
-                    return session;
-                }
-
-                session.Dispose();
+                selected = sessions.FirstOrDefault(session => UsbDeviceIdentity.MatchesOpenedKey(deviceKey, session.DeviceInfo.DeviceKey));
+                if (selected is not null) return selected;
+            }
+            finally
+            {
+                // Providers return an eagerly opened list, including sessions
+                // after the match. The returned session is the only survivor.
+                foreach (var session in sessions)
+                    if (!ReferenceEquals(session, selected)) session.Dispose();
             }
         }
 

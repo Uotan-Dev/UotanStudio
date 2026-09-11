@@ -433,48 +433,7 @@ internal partial class LibUsbDevice : UsbDevice
     }
 
     public override int ControlTransfer(Abstractions.UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs)
-    {
-        if (_usbDevice == null)
-        {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
-
-        if (buffer == null)
-        {
-            ArgumentOutOfRangeException.ThrowIfNotEqual(length, 0);
-        }
-        else
-        {
-            ValidateBufferRange(buffer, offset, length);
-        }
-
-        var libUsbSetup = new LibUsbDotNet.Main.UsbSetupPacket(setupPacket.RequestType, setupPacket.Request, setupPacket.Value, setupPacket.Index, setupPacket.Length);
-
-        if (length == 0)
-        {
-            return _usbDevice.ControlTransfer(libUsbSetup, null, 0, 0);
-        }
-
-        if (buffer != null && offset == 0 && length == buffer.Length)
-        {
-            return _usbDevice.ControlTransfer(libUsbSetup, buffer, 0, length);
-        }
-
-        var transferBuffer = new byte[length];
-        var isInDirection = (setupPacket.RequestType & 0x80) != 0;
-        if (!isInDirection && buffer != null)
-        {
-            Buffer.BlockCopy(buffer, offset, transferBuffer, 0, length);
-        }
-
-        var transferred = _usbDevice.ControlTransfer(libUsbSetup, transferBuffer, 0, length);
-        if (isInDirection && buffer != null)
-        {
-            Buffer.BlockCopy(transferBuffer, 0, buffer, offset, Math.Min(transferred, length));
-        }
-
-        return transferred;
-    }
+        => ControlTransferAsync(setupPacket, buffer, offset, length, timeoutMs).GetAwaiter().GetResult();
 
     public override byte[] Read(int length) => Read(length, PlatformDefaultTimeoutMs);
 
@@ -577,47 +536,28 @@ internal partial class LibUsbDevice : UsbDevice
 
         var chunkBuffer = _readChunkBuffer;
         var error = _reader.Read(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var readLen);
-        if (error == Error.NoDevice)
-        {
-            return UsbChunkResult.Fatal((int)error);
-        }
-        if (error != Error.Success)
-        {
-            RestoreEndpointHalt(ReadEndpointId);
-        }
-        if (readLen > 0)
-        {
-            Marshal.Copy(chunkBuffer, 0, buffer, readLen);
-        }
-        return readLen <= 0 ? UsbChunkResult.Timeout((int)error) : UsbChunkResult.Success(readLen);
+        var result = ClassifyBulkResult(error, readLen);
+        if (readLen > 0) Marshal.Copy(chunkBuffer, 0, buffer, readLen);
+        return result;
     }
 
     protected override UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        if (_writer == null)
-        {
-            throw new NotSupportedException("The session has no bound OUT endpoint for bulk writes (interrupt-only device?).");
-        }
+        if (_writer == null) throw new NotSupportedException("The session has no bound OUT endpoint.");
+        if (_writeChunkBuffer == null || _writeChunkBuffer.Length < length) _writeChunkBuffer = new byte[length];
+        Marshal.Copy(buffer, _writeChunkBuffer, 0, length);
+        var error = _writer.Write(_writeChunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var transferred);
+        return ClassifyBulkResult(error, transferred);
+    }
 
-        if (_writeChunkBuffer == null || _writeChunkBuffer.Length < length)
-        {
-            _writeChunkBuffer = new byte[length];
-        }
-
-        var chunkBuffer = _writeChunkBuffer;
-        Marshal.Copy(buffer, chunkBuffer, 0, length);
-
-        var errorCode = _writer.Write(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var transferred);
-        if (errorCode == Error.NoDevice)
-        {
-            return UsbChunkResult.Fatal((int)errorCode);
-        }
-        if (errorCode != 0)
-        {
-            RestoreEndpointHalt(WriteEndpointId);
-            return UsbChunkResult.Error((int)errorCode);
-        }
-        return transferred <= 0 ? UsbChunkResult.Timeout((int)errorCode) : UsbChunkResult.Success(transferred);
+    private static UsbChunkResult ClassifyBulkResult(Error error, int transferred)
+    {
+        if (error == Error.NoDevice) return UsbChunkResult.Fatal((int)error);
+        if (error is not (Error.Success or Error.Timeout))
+            throw new UsbTransferException($"libusb bulk transfer failed: {error}.")
+                { Backend = "libusb", NativeErrorCode = (int)error };
+        if (transferred > 0 || error == Error.Success) return UsbChunkResult.Success(transferred);
+        return UsbChunkResult.Timeout((int)error);
     }
 
     public override long Write(byte[] data, int length) => Write(data, length, PlatformDefaultTimeoutMs);
@@ -643,190 +583,117 @@ internal partial class LibUsbDevice : UsbDevice
     }
 
     public override UsbReadResult ReadInterrupt(byte endpointAddress, byte[] buffer, int offset, int length, int timeoutMs)
-    {
-        if (_usbDevice == null)
-        {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
-        if (length <= 0)
-        {
-            return new UsbReadResult(0, false, false);
-        }
-
-        ValidateBufferRange(buffer, offset, length);
-
-        // libusb's bulk transfer API is also valid for interrupt endpoints; open a
-        // temporary _reader on the requested endpoint for the single transfer.
-        // (LibUsbDotNet 3.x endpoint objects do not implement IDisposable; they are
-        // reclaimed with the owning UsbDevice, matching the session _reader/_writer fields.)
-        var interruptReader = _usbDevice.OpenEndpointReader((ReadEndpointID)endpointAddress);
-        if (interruptReader == null)
-        {
-            return new UsbReadResult(0, isTimeout: true, isShortPacket: false);
-        }
-        var error = interruptReader.Read(buffer, offset, length, ToLibusbTimeout(timeoutMs), out var readLen);
-        if (error == Error.NoDevice)
-        {
-            throw new UsbDeviceDisconnectedException("USB interrupt read failed: device disconnected (Error.NoDevice).", (int)error);
-        }
-        if (error != Error.Success)
-        {
-            RestoreEndpointHalt(endpointAddress);
-        }
-        return readLen <= 0
-            ? new UsbReadResult(0, isTimeout: true, isShortPacket: false)
-            : new UsbReadResult(readLen, isTimeout: false, isShortPacket: readLen < length);
-    }
+        => ReadInterruptAsync(endpointAddress, buffer, offset, length, timeoutMs).GetAwaiter().GetResult();
 
     public override long WriteInterrupt(byte endpointAddress, byte[] data, int offset, int length, int timeoutMs)
+        => WriteInterruptAsync(endpointAddress, data, offset, length, timeoutMs).GetAwaiter().GetResult();
+
+    public override async Task<UsbReadResult> ReadInterruptAsync(byte endpointAddress, byte[] buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
-        if (_usbDevice == null)
-        {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
+        ValidateBufferRange(buffer, offset, length);
+        cancellationToken.ThrowIfCancellationRequested();
+        var device = RequireInterruptEndpoint(endpointAddress, read: true);
+        if (length == 0) return new(0, false, false);
+        var data = new byte[length];
+        var result = await LibUsbTransfer.ExecuteAsync(device.DeviceHandle, endpointAddress, TransferType.Interrupt,
+            data, timeoutMs, cancellationToken).ConfigureAwait(false);
+        var read = LibUsbTransfer.ReadResult(result.Error, result.Count, length);
+        data.AsSpan(0, read.Count).CopyTo(buffer.AsSpan(offset, read.Count));
+        return read;
+    }
+
+    public override async Task<long> WriteInterruptAsync(byte endpointAddress, byte[] data, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
+    {
         ValidateWriteData(data, offset, length);
-        if (length == 0)
-        {
-            return 0;
-        }
-
-        var interruptWriter = _usbDevice.OpenEndpointWriter((WriteEndpointID)endpointAddress);
-        if (interruptWriter == null)
-        {
-            return 0;
-        }
-        var error = interruptWriter.Write(data, offset, length, ToLibusbTimeout(timeoutMs), out var transferred);
-        if (error == Error.NoDevice)
-        {
-            throw new UsbDeviceDisconnectedException("USB interrupt write failed: device disconnected (Error.NoDevice).", (int)error);
-        }
-        if (error != Error.Success)
-        {
-            RestoreEndpointHalt(endpointAddress);
-        }
-        return transferred <= 0 ? 0 : transferred;
+        cancellationToken.ThrowIfCancellationRequested();
+        var device = RequireInterruptEndpoint(endpointAddress, read: false);
+        if (length == 0) return 0;
+        var result = await LibUsbTransfer.ExecuteAsync(device.DeviceHandle, endpointAddress, TransferType.Interrupt,
+            data.AsSpan(offset, length).ToArray(), timeoutMs, cancellationToken).ConfigureAwait(false);
+        // The write API exposes a count only; return partial progress on timeout,
+        // but never silently classify STALL, overflow or disconnection as zero bytes.
+        return LibUsbTransfer.ReadResult(result.Error, result.Count, length).Count;
     }
 
-    protected override async Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
+    private IUsbDevice RequireInterruptEndpoint(byte endpoint, bool read)
     {
-        if (_reader == null)
-        {
-            // IN-only session bound without an OUT pipe is valid for interrupt reads;
-            // bulk reads in a direction that never opened must not NRE.
-            // <para>未绑定 IN 管道的 IN-only 会话对中断读有效；未打开方向的批量读不能 NRE。</para>
-            throw new NotSupportedException("The session has no bound IN endpoint for bulk reads (interrupt-only device?).");
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-
-        if (_readChunkBuffer == null || _readChunkBuffer.Length < length)
-        {
-            _readChunkBuffer = new byte[length];
-        }
-
-        var chunkBuffer = _readChunkBuffer;
-        (var error, var readLen) = await _reader.ReadAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
-        if (error == Error.NoDevice)
-        {
-            return UsbChunkResult.Fatal((int)error);
-        }
-        if (error != Error.Success)
-        {
-            RestoreEndpointHalt(ReadEndpointId);
-        }
-        if (readLen > 0)
-        {
-            Marshal.Copy(chunkBuffer, 0, buffer, readLen);
-        }
-        return readLen <= 0 ? UsbChunkResult.Timeout((int)error) : UsbChunkResult.Success(readLen);
+        var device = _usbDevice ?? throw new UsbDeviceHandleClosedException("Device handle is closed.");
+        if ((endpoint & 0x0f) == 0 || (endpoint & 0x70) != 0 || ((endpoint & 0x80) != 0) != read)
+            throw new ArgumentException("Invalid interrupt endpoint address or direction.", nameof(endpoint));
+        if (!device.Configs.SelectMany(c => c.Interfaces).Where(i => i.Number == InterfaceId)
+            .SelectMany(i => i.Endpoints).Any(e => e.EndpointAddress == endpoint && (e.Attributes & 3) == 3))
+            throw new NotSupportedException($"Endpoint 0x{endpoint:X2} is not an interrupt endpoint of the claimed interface.");
+        return device;
     }
 
-    protected override async Task<UsbChunkResult> WriteChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
+    protected override Task<UsbChunkResult> ReadChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
+        => TransferBulkAsync(buffer, length, timeoutMs, read: true, cancellationToken);
+
+    protected override Task<UsbChunkResult> WriteChunkAsync(IntPtr buffer, int length, int timeoutMs, CancellationToken cancellationToken)
+        => TransferBulkAsync(buffer, length, timeoutMs, read: false, cancellationToken);
+
+    private async Task<UsbChunkResult> TransferBulkAsync(IntPtr buffer, int length, int timeoutMs, bool read, CancellationToken cancellationToken)
     {
-        if (_writer == null)
-        {
-            // OUT-only session bound without an IN pipe is valid for interrupt writes;
-            // bulk writes in a direction that never opened must not NRE.
-            // <para>未绑定 OUT 管道的 OUT-only 会话对中断写有效；未打开方向的批量写不能 NRE。</para>
-            throw new NotSupportedException("The session has no bound OUT endpoint for bulk writes (interrupt-only device?).");
-        }
-
+        if (read ? _reader == null : _writer == null) throw new NotSupportedException("USB bulk endpoint is not bound.");
         cancellationToken.ThrowIfCancellationRequested();
-
-        if (_writeChunkBuffer == null || _writeChunkBuffer.Length < length)
+        var data = new byte[length];
+        if (!read) Marshal.Copy(buffer, data, 0, length);
+        var nativeTimeout = ToLibusbTimeout(timeoutMs);
+        var deadline = nativeTimeout == 0 ? long.MaxValue : Environment.TickCount64 + nativeTimeout;
+        // LibUsbDotNet 3.x exposes no cancellation handle for ReadAsync/WriteAsync.
+        // Use bounded native transfers and await their actual completion before
+        // observing cancellation, so no transfer outlives the caller's buffer.
+        while (true)
         {
-            _writeChunkBuffer = new byte[length];
+            cancellationToken.ThrowIfCancellationRequested();
+            var remaining = deadline - Environment.TickCount64;
+            if (remaining <= 0) return UsbChunkResult.Timeout((int)Error.Timeout);
+            var slice = cancellationToken.CanBeCanceled ? (int)Math.Min(100, remaining) : nativeTimeout;
+            var (error, transferred) = read
+                ? await _reader!.ReadAsync(data, 0, length, slice).ConfigureAwait(false)
+                : await _writer!.WriteAsync(data, 0, length, slice).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (error == Error.Timeout && transferred == 0 && cancellationToken.CanBeCanceled) continue;
+            var result = ClassifyBulkResult(error, transferred);
+            if (read && transferred > 0) Marshal.Copy(data, 0, buffer, transferred);
+            return result;
         }
-
-        var chunkBuffer = _writeChunkBuffer;
-        Marshal.Copy(buffer, chunkBuffer, 0, length);
-
-        (var errorCode, var transferred) = await _writer.WriteAsync(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs)).ConfigureAwait(false);
-        if (errorCode == Error.NoDevice)
-        {
-            return UsbChunkResult.Fatal((int)errorCode);
-        }
-        if (errorCode != 0) // Error.Success is 0; libusb write errors are reported without throwing.
-        {
-            RestoreEndpointHalt(WriteEndpointId);
-            return UsbChunkResult.Error((int)errorCode);
-        }
-        return transferred <= 0 ? UsbChunkResult.Timeout((int)errorCode) : UsbChunkResult.Success(transferred);
     }
 
     public override async Task<int> ControlTransferAsync(Abstractions.UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length, int timeoutMs, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var device = _usbDevice ?? throw new UsbDeviceHandleClosedException("Device handle is closed.");
+        var data = BuildControlBuffer(setupPacket, buffer, offset, length);
+        // A control request is submitted exactly once: even a zero-data timeout
+        // does not prove that the device has not already performed the request.
+        var result = await LibUsbTransfer.ExecuteAsync(device.DeviceHandle, 0, TransferType.Control,
+            data, timeoutMs, cancellationToken).ConfigureAwait(false);
+        LibUsbTransfer.ThrowOnError(result.Error);
+        if ((uint)result.Count > (uint)length) throw new InvalidDataException("libusb returned an invalid control transfer length.");
+        if ((setupPacket.RequestType & 0x80) != 0 && result.Count > 0)
+            data.AsSpan(8, result.Count).CopyTo(buffer!.AsSpan(offset, result.Count));
+        return result.Count;
+    }
 
-        if (_usbDevice == null)
-        {
-            throw new UsbDeviceHandleClosedException("Device handle is closed.");
-        }
-
-        if (buffer == null)
+    internal static byte[] BuildControlBuffer(Abstractions.UsbSetupPacket setupPacket, byte[]? buffer, int offset, int length)
+    {
+        if (buffer is null)
         {
             ArgumentOutOfRangeException.ThrowIfNotEqual(length, 0);
+            ArgumentOutOfRangeException.ThrowIfNotEqual(offset, 0);
         }
-        else
-        {
-            ValidateBufferRange(buffer, offset, length);
-        }
-
-        var libUsbSetup = new LibUsbDotNet.Main.UsbSetupPacket(setupPacket.RequestType, setupPacket.Request, setupPacket.Value, setupPacket.Index, setupPacket.Length);
-
-        if (length == 0)
-        {
-            return await _usbDevice.ControlTransferAsync(libUsbSetup).ConfigureAwait(false);
-        }
-
-        if (timeoutMs is > 0 and not PlatformDefaultTimeoutMs)
-        {
-            return await Task.Run(() => ControlTransfer(setupPacket, buffer, offset, length, timeoutMs), cancellationToken).ConfigureAwait(false);
-        }
-
-        if (buffer == null)
-        {
-            return await _usbDevice.ControlTransferAsync(libUsbSetup).ConfigureAwait(false);
-        }
-
-        if (offset == 0 && length == buffer.Length)
-        {
-            return await _usbDevice.ControlTransferAsync(libUsbSetup, buffer, 0, length).ConfigureAwait(false);
-        }
-
-        var transferBuffer = new byte[length];
-        var isInDirection = (setupPacket.RequestType & 0x80) != 0;
-        if (!isInDirection)
-        {
-            Buffer.BlockCopy(buffer, offset, transferBuffer, 0, length);
-        }
-
-        var transferred = await _usbDevice.ControlTransferAsync(libUsbSetup, transferBuffer, 0, length).ConfigureAwait(false);
-        if (isInDirection)
-        {
-            Buffer.BlockCopy(transferBuffer, 0, buffer, offset, Math.Min(transferred, length));
-        }
-
-        return transferred;
+        else ValidateBufferRange(buffer, offset, length);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(length, ushort.MaxValue);
+        if (setupPacket.Length != length)
+            throw new ArgumentException("Control setup wLength must match the supplied data length.", nameof(setupPacket));
+        var data = new byte[8 + length];
+        data[0] = setupPacket.RequestType; data[1] = setupPacket.Request;
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(2), setupPacket.Value);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(4), setupPacket.Index);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(6), setupPacket.Length);
+        if ((setupPacket.RequestType & 0x80) == 0 && length > 0)
+            buffer!.AsSpan(offset, length).CopyTo(data.AsSpan(8));
+        return data;
     }
 }

@@ -458,16 +458,22 @@ internal sealed class UsbDeviceSession(string apiName, UsbApiKind kind, UsbDevic
     public async Task ResetAsync(CancellationToken cancellationToken = default)
     {
         await _readGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        await _controlGate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            await _device.ResetAsync(cancellationToken).ConfigureAwait(false);
+            await _writeGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await _controlGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    await _device.ResetAsync(cancellationToken).ConfigureAwait(false);
+                }
+                finally { _controlGate.Release(); }
+            }
+            finally { _writeGate.Release(); }
         }
         finally
         {
-            _controlGate.Release();
-            _writeGate.Release();
             _readGate.Release();
         }
     }

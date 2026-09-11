@@ -14,6 +14,18 @@ namespace UotanStudio.Tests.Comm.Transports.Usb;
 /// </summary>
 public class UsbProviderProjectionTests
 {
+    [Theory]
+    [InlineData("", "serial", "path1", "path1", "01", true)]
+    [InlineData("serial", "other", "path1", "path1", "01", false)]
+    [InlineData("", "serial", "path1", "path2", "01", false)]
+    [InlineData("", "serial", "path1", "path1", "02", false)]
+    [InlineData("", "serial", "", "", "01", false)]
+    public void OpenIdentity_AllowsSerialEnrichmentOnlyOnSamePhysicalInterface(string beforeSerial, string afterSerial,
+        string beforePath, string afterPath, string protocol, bool matches)
+        => Assert.Equal(matches, UsbDeviceIdentity.MatchesOpenedKey(
+            $"libusb|LibUsbDotNet|12D1|5000|FF|50|01|{beforeSerial}|{beforePath}",
+            $"libusb|LibUsbDotNet|12D1|5000|FF|50|{protocol}|{afterSerial}|{afterPath}"));
+
     private sealed class FakeUsbDevice : UsbDevice
     {
         public bool HandleCreationSucceeds { get; set; } = true;
@@ -31,6 +43,31 @@ public class UsbProviderProjectionTests
         public override int CreateHandle() => HandleCreationSucceeds ? 0 : 1;
         public override void Reset() { }
         public override void Dispose() => DisposeCount++;
+    }
+
+    private sealed class SessionProvider(IReadOnlyList<IUsbDeviceSession> sessions) : IUsbApiProvider
+    {
+        public string ApiName => "test-provider";
+        public UsbApiKind ApiKind => UsbApiKind.Custom;
+        public bool IsSupportedOnCurrentPlatform => true;
+        public IReadOnlyList<UsbDeviceInfo> EnumerateDeviceInfos(UsbDeviceFilter? filter = null) => [];
+        public IReadOnlyList<IUsbDeviceSession> EnumerateDeviceSessions(UsbDeviceFilter? filter = null) => sessions;
+        public UsbApiCapabilities GetCapabilities() => new() { ApiName = ApiName, ApiKind = ApiKind, IsSupportedOnCurrentPlatform = true };
+    }
+
+    [Fact]
+    public void OpenByKey_EnrichesSerial_AndDisposesAllOtherEagerSessions()
+    {
+        var first = Device("path1", 0x12d1, 0x5000, "one", 0xff, 0x50, 1);
+        var middle = Device("path2", 0x12d1, 0x5000, "two", 0xff, 0x50, 1);
+        var last = Device("path3", 0x12d1, 0x5000, "three", 0xff, 0x50, 1);
+        var sessions = new[] { first, middle, last }.Select(device => new UsbDeviceSession("test-provider", UsbApiKind.Custom, device)).ToArray();
+        var registry = new UsbApiRegistry(); registry.Register("test-provider", () => new SessionProvider(sessions));
+        using var selected = new UsbCommunicationLayer(registry).OpenDeviceSessionByKey(sessions[1].DeviceInfo.DeviceKey.Replace("|two|", "||", StringComparison.Ordinal));
+        Assert.Same(sessions[1], selected);
+        Assert.Equal(1, first.DisposeCount);
+        Assert.Equal(0, middle.DisposeCount);
+        Assert.Equal(1, last.DisposeCount);
     }
 
     private static FakeUsbDevice Device(

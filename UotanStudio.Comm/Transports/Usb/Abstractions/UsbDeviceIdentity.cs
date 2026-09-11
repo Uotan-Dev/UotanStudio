@@ -8,6 +8,18 @@ namespace UotanStudio.Comm.Transports.Usb.Abstractions;
 /// </summary>
 internal static class UsbDeviceIdentity
 {
+    /// <summary>Matches a discovery key after opening enriches an initially unavailable serial.</summary>
+    internal static bool MatchesOpenedKey(string requested, string opened)
+    {
+        if (string.Equals(requested, opened, StringComparison.Ordinal)) return true;
+        var before = requested.Split('|', 9);
+        var after = opened.Split('|', 9);
+        // Never weaken a known serial or a physical path/interface constraint.
+        return before.Length == 9 && after.Length == 9 && before[7].Length == 0 &&
+            before[8].Length != 0 && before[8] == after[8] &&
+            before.AsSpan(0, 7).SequenceEqual(after.AsSpan(0, 7));
+    }
+
     /// <summary>
     /// Creates a stable key that can be used for reopen, monitoring, or deduplication.
     /// <para>创建可用于重连、监视或去重的稳定键。</para>

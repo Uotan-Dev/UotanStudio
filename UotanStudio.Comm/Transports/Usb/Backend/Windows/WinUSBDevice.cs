@@ -668,168 +668,68 @@ internal class WinUSBDevice : UsbDevice
     /// </summary>
     private async Task<uint> OverlappedTransferAsync(IntPtr buffer, int length, byte pipeId, int timeoutMs, CancellationToken cancellationToken)
     {
-        // The OVERLAPPED must stay pinned until the pending operation completes.
-        var evt = new EventWaitHandle(false, EventResetMode.AutoReset);
-        var overlapped = new OVERLAPPED
-        {
-            OffsetLow = 0,
-            OffsetHigh = 0,
-            HEvent = evt.SafeWaitHandle.DangerousGetHandle()
-        };
-
-        var ovHandle = GCHandle.Alloc(overlapped, GCHandleType.Pinned);
-        var ownershipTransferred = false;
+        cancellationToken.ThrowIfCancellationRequested();
+        using var evt = new EventWaitHandle(false, EventResetMode.ManualReset);
+        var ovHandle = GCHandle.Alloc(new OVERLAPPED { HEvent = evt.SafeWaitHandle.DangerousGetHandle() }, GCHandleType.Pinned);
+        var fileHeld = false;
+        var usbHeld = false;
+        RegisteredWaitHandle? waiter = null;
         try
         {
+            // Keep both handles, the OVERLAPPED and the caller's pinned buffer
+            // alive until the kernel has completed, including after cancellation.
+            _fileHandle.DangerousAddRef(ref fileHeld);
+            _winUsbHandle.DangerousAddRef(ref usbHeld);
+            var file = _fileHandle.DangerousGetHandle();
+            var usb = _winUsbHandle.DangerousGetHandle();
+            var pointer = ovHandle.AddrOfPinnedObject();
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            waiter = ThreadPool.RegisterWaitForSingleObject(evt,
+                (_, _) => completed.TrySetResult(), null, Timeout.Infinite, executeOnlyOnce: true);
             var ok = pipeId == _readBulkID
-                ? WinUsb_ReadPipe(_winUsbHandle.DangerousGetHandle(), pipeId, buffer, (uint)length, out var transferred, ovHandle.AddrOfPinnedObject())
-                : WinUsb_WritePipe(_winUsbHandle.DangerousGetHandle(), pipeId, buffer, (uint)length, out transferred, ovHandle.AddrOfPinnedObject());
-
+                ? WinUsb_ReadPipe(usb, pipeId, buffer, (uint)length, out var transferred, pointer)
+                : WinUsb_WritePipe(usb, pipeId, buffer, (uint)length, out transferred, pointer);
             if (ok)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 return transferred;
             }
-
-            var err = Marshal.GetLastWin32Error();
-            if (err != ERROR_IO_PENDING)
+            var error = Marshal.GetLastWin32Error();
+            if (error != ERROR_IO_PENDING)
             {
-                if (err == ERROR_SEM_TIMEOUT)
-                {
-                    return 0;
-                }
-                // RAW_IO empty read: the driver fails immediately with ERROR_NO_DATA when
-                // no data is buffered — return 0 instead of surfacing a Win32Exception.
-                // <para>RAW_IO 空读：无缓冲数据时驱动立即以 ERROR_NO_DATA 失败——
-                // 返回 0 而非抛出 Win32Exception。</para>
-                return err == ERROR_NO_DATA && RawIoEnabled ? (uint)0 : throw new Win32Exception(err);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (error == ERROR_SEM_TIMEOUT || (error == ERROR_NO_DATA && RawIoEnabled)) return 0;
+                throw new Win32Exception(error);
             }
 
-            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var waitHandle = ThreadPool.RegisterWaitForSingleObject(
-                evt, (_, timedOut) => tcs.TrySetResult(timedOut), null, timeoutMs, executeOnlyOnce: true);
+            var timedOut = false;
             try
             {
-                using var registration = cancellationToken.Register(() =>
-                {
-                    _ = CancelIoEx(_winUsbHandle.DangerousGetHandle(), ovHandle.AddrOfPinnedObject());
-                    tcs.TrySetCanceled(cancellationToken);
-                });
-
-                bool timedOut;
-                try
-                {
-                    timedOut = await tcs.Task.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    // The cancellation handler already called CancelIoEx; wait for the aborted
-                    // operation to complete so the pinned OVERLAPPED stays valid until freed.
-                    // <para>取消处理器已调用 CancelIoEx；等待被中止的操作完成，
-                    // 使固定的 OVERLAPPED 在释放前保持有效。</para>
-                    if (evt.WaitOne(OverlappedAbortAckTimeoutMs))
-                    {
-                        return 0; // abort acknowledged; finally frees the OVERLAPPED safely
-                    }
-
-                    // The driver did not acknowledge the abort in Time (device stalled or
-                    // detached); never free a kernel-referenced OVERLAPPED — hand ownership
-                    // to a background releaser (UAF guard).
-                    // <para>驱动未及时确认中止（设备卡死或已拔出）；绝不释放仍被内核引用的
-                    // OVERLAPPED——将所有权交给后台释放器（UAF 防护）。</para>
-                    ScheduleDelayedOverlappedRelease(ovHandle, evt);
-                    ownershipTransferred = true;
-                    throw;
-                }
-
-                if (timedOut)
-                {
-                    _ = CancelIoEx(_winUsbHandle.DangerousGetHandle(), ovHandle.AddrOfPinnedObject());
-                    if (evt.WaitOne(OverlappedAbortAckTimeoutMs))
-                    {
-                        return 0;
-                    }
-
-                    // Same UAF guard as above: do not free a kernel-referenced OVERLAPPED.
-                    // <para>同上 UAF 防护：不释放内核仍引用的 OVERLAPPED。</para>
-                    ScheduleDelayedOverlappedRelease(ovHandle, evt);
-                    ownershipTransferred = true;
-                    return 0;
-                }
-
-                // InternalHigh holds the transferred byte count on completion.
-                var bytesDone = Marshal.ReadIntPtr(ovHandle.AddrOfPinnedObject(), (int)Marshal.OffsetOf<OVERLAPPED>("InternalHigh")).ToInt64();
-                return (uint)bytesDone;
+                await completed.Task.WaitAsync(timeoutMs < 0 ? Timeout.InfiniteTimeSpan : TimeSpan.FromMilliseconds(timeoutMs),
+                    cancellationToken).ConfigureAwait(false);
             }
-            finally
+            catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
             {
-                waitHandle.Unregister(null);
+                timedOut = ex is TimeoutException;
+                // CancelIoEx takes the CreateFile handle, NOT the WinUSB interface.
+                // Cancellation is only a request; it does not release I/O ownership.
+                _ = CancelIoEx(file, pointer);
+                await completed.Task.ConfigureAwait(false);
             }
+            ok = WinUsb_GetOverlappedResult(usb, pointer, out transferred, false);
+            error = ok ? 0 : Marshal.GetLastWin32Error();
+            cancellationToken.ThrowIfCancellationRequested();
+            if (ok) return transferred;
+            if (error == ERROR_SEM_TIMEOUT || (timedOut && error == 995)) return 0;
+            throw new Win32Exception(error);
         }
         finally
         {
-            if (!ownershipTransferred)
-            {
-                ovHandle.Free();
-                evt.Dispose();
-            }
+            waiter?.Unregister(null);
+            ovHandle.Free();
+            if (usbHeld) _winUsbHandle.DangerousRelease();
+            if (fileHeld) _fileHandle.DangerousRelease();
         }
-    }
-
-    /// <summary>
-    /// The window (ms) allowed for the driver to acknowledge a CancelIoEx abort before the
-    /// OVERLAPPED ownership is handed to the delayed releaser.
-    /// <para>等待驱动确认 CancelIoEx 中止的窗口期（毫秒）；超时后 OVERLAPPED 所有权
-    /// 交给延迟释放器。</para>
-    /// </summary>
-    private const int OverlappedAbortAckTimeoutMs = 5000;
-
-    /// <summary>
-    /// The window (ms) the background releaser waits for the kernel to finish an aborted
-    /// transfer before giving up. On timeout the pinned OVERLAPPED is deliberately leaked
-    /// (a bounded, single-chunk leak) rather than freed while the kernel still references it.
-    /// <para>后台释放器等待内核完成被中止传输的窗口期（毫秒）。超时后刻意泄漏该固定的
-    /// OVERLAPPED（有界、单分块泄漏），而非在仍被内核引用时释放。</para>
-    /// </summary>
-    private const int DelayedOverlappedReleaseWaitMs = 30000;
-
-    /// <summary>
-    /// Hands an aborted OVERLAPPED and its completion event to a background releaser that
-    /// waits for the kernel to finish before freeing the pinned memory. If the device is
-    /// truly unresponsive the pin is leaked rather than freed while the kernel still holds a
-    /// reference — a bounded leak is safer than use-after-free.
-    /// <para>将被中止的 OVERLAPPED 及其完成事件交给后台释放器：等待内核完成后才释放固定内存。
-    /// 若设备完全无响应，宁可泄漏该固定内存也不在仍被内核引用时释放——
-    /// 有界泄漏比悬垂释放（use-after-free）安全。</para>
-    /// </summary>
-    /// <param name="ovHandle">The pinned OVERLAPPED handle. <para>固定的 OVERLAPPED 句柄。</para></param>
-    /// <param name="evt">The completion event (ownership transfers to the releaser). <para>完成事件（所有权转移给释放器）。</para></param>
-    private static void ScheduleDelayedOverlappedRelease(GCHandle ovHandle, EventWaitHandle evt)
-    {
-        _ = Task.Run(() =>
-        {
-            try
-            {
-                // A detached device's driver typically completes pending I/O with an error,
-                // signaling the event; a truly stuck device never does.
-                // <para>已拔出设备的驱动通常以错误完成挂起的 I/O 并触发事件；真正卡死的设备永远不会。</para>
-                if (!evt.WaitOne(DelayedOverlappedReleaseWaitMs))
-                {
-                    UsbTrace.Log("WinUSB overlapped transfer was not acknowledged after cancellation; the device may be unresponsive. Leaking the pinned OVERLAPPED to avoid use-after-free.");
-                }
-            }
-            finally
-            {
-                // In the acknowledged case this is safe; in the unresponsive case the leak is
-                // bounded to one chunk per stuck call.
-                // <para>已确认时释放安全；未响应时泄漏被限制为每次卡死调用一个分块。</para>
-                if (ovHandle.IsAllocated)
-                {
-                    ovHandle.Free();
-                }
-
-                evt.Dispose();
-            }
-        });
     }
 
     public override void Dispose()

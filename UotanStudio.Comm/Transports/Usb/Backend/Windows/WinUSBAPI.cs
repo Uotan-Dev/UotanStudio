@@ -4,6 +4,11 @@ namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;
 
 internal static partial class WinUSBAPI
 {
+    [LibraryImport("Winusb.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool WinUsb_GetOverlappedResult(IntPtr interfaceHandle, IntPtr overlapped,
+        out uint transferred, [MarshalAs(UnmanagedType.Bool)] bool wait);
+
     [StructLayout(LayoutKind.Sequential)]
     public struct WinUSBPipeInfo
     {
