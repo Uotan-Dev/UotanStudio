@@ -30,7 +30,9 @@ internal static class DeliverySuperBuilder
         if (options.DeviceSize > long.MaxValue) throw new InvalidDataException("Super size exceeds stream limits.");
         var partitions = ExpandPartitions(files, options);
         var builder = MetadataBuilder.New(options.DeviceSize, options.MetadataSize, options.Slots, options.BlockSize);
-        if (options.Group != "default") builder.AddGroup(options.Group, 0);
+        var groups = DeliveryGroups.Parse(DeliveryGroups.Format(options.Groups));
+        if (groups.Count == 0) groups.Add(new() { Name = options.Group, Partitions = partitions.Select(p => p.Partition).ToList() });
+        foreach (var group in groups) builder.AddGroup(group.Name, group.Size);
         var lengths = new List<long>();
         foreach (var file in partitions)
         {
@@ -43,7 +45,9 @@ internal static class DeliverySuperBuilder
                 length = checked((long)source.Header.TotalBlocks * source.Header.BlockSize);
             }
             lengths.Add(length);
-            builder.AddPartition(file.Partition, options.Group, (ulong)length, 1);
+            var group = groups.SingleOrDefault(g => g.Partitions.Contains(file.Partition))
+                ?? throw new InvalidDataException("请在分组配置中指定分区归属：" + file.Partition);
+            builder.AddPartition(file.Partition, group.Name, (ulong)length, 1);
         }
         var metadata = builder.Build();
         metadata.Header = metadata.Header with { Flags = options.VirtualAb ? 1u : 0u, MinorVersion = options.VirtualAb ? (ushort)2 : (ushort)0 };

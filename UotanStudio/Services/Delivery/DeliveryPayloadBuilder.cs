@@ -2,21 +2,29 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Services.Keys;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
 namespace UotanStudio.Services.Delivery;
 
-/// <summary>Builds a full unsigned payload and standard update_engine property hashes.</summary>
+/// <summary>Builds a full payload, optionally signed with the selected private key, and standard update_engine property hashes.</summary>
 internal static class DeliveryPayloadBuilder
 {
     internal static void Validate(DeliveryPlan plan)
     {
         if (plan.Payload.Version != 2 || plan.Payload.MinorVersion != 0)
             throw new NotSupportedException("完整 Payload 目前支持主版本 2、次版本 0 / Full Payload requires version 2, minor 0.");
-        if (plan.Payload.SignatureFile.Length > 0 || plan.Payload.PostinstallFile.Length > 0)
-            throw new NotSupportedException("Payload 签名与 Postinstall 尚未实现，不能忽略这些输入 / Signature and Postinstall inputs are not supported yet.");
+        if (plan.Payload.SignatureFile.Length > 0)
+            throw new NotSupportedException("旧版预制签名文件不受支持；请使用签名密钥选项。");
+        if (plan.Payload.BlockSize is < 512 or > 1048576 || (plan.Payload.BlockSize & (plan.Payload.BlockSize - 1)) != 0
+            || plan.Payload.MaxTimestamp < 0 || plan.Payload.Compression is not ("None" or "BZip2" or "Xz")
+            || plan.Payload.SecurityPatchLevel.Length > 0 && !DateOnly.TryParseExact(plan.Payload.SecurityPatchLevel, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            throw new InvalidDataException("Payload 块大小、时间戳、安全补丁日期或压缩方式无效。");
+        _ = DeliveryPostinstall.Read(plan.Payload.PostinstallFile, plan.Container.Select(f => f.Partition));
+        if (plan.Payload.SigningKeyPath.Length == 0 && plan.Payload.SigningKeyFingerprint.Length > 0)
+            throw new InvalidDataException("签名密钥路径缺失 / Signing key path is missing.");
         if (plan.Container.Count == 0 || plan.Container.Any(f => !DeliveryValidation.IsPartition(f.Partition) || f.SourcePath.Length == 0)
             || plan.Container.Select(f => f.Partition).Distinct(StringComparer.Ordinal).Count() != plan.Container.Count)
             throw new InvalidDataException("Payload 需要名称唯一的实际分区镜像 / Payload requires unique source partitions.");
@@ -82,6 +90,21 @@ internal static class DeliveryPayloadBuilder
         if (selected.Length == 0 || !DeliveryValidation.IsPartition(plan.Super.Group) || plan.Super.DeviceSize == 0)
             throw new InvalidDataException("请勾选动态分区并填写有效簇名及大小 / Select Super members and a valid group name and size.");
         if (selected.Any(f => !DeliveryValidation.IsPartition(f.Partition))) throw new InvalidDataException("Invalid partition name.");
+        if (plan.Super.Groups.Count > 0)
+        {
+            var groups = DeliveryGroups.Parse(DeliveryGroups.Format(plan.Super.Groups));
+            var names = selected.Select(f => f.Partition).ToHashSet(StringComparer.Ordinal);
+            if (names.Any(n => !groups.Any(g => g.Partitions.Contains(n)))) throw new InvalidDataException("动态分区缺少原组归属，请编辑分组配置。");
+            var text = new StringBuilder("super_partition_groups=" + string.Join(' ', groups.Where(g => g.Partitions.Any(names.Contains)).Select(g => g.Name)) + "\n");
+            foreach (var group in groups.Where(g => g.Partitions.Any(names.Contains)))
+            {
+                if (group.Size == 0) throw new InvalidDataException("Payload 动态组需要明确容量：" + group.Name);
+                text.AppendLine($"super_{group.Name}_group_size={group.Size}");
+                text.AppendLine($"super_{group.Name}_partition_list={string.Join(' ', group.Partitions.Where(names.Contains))}");
+            }
+            text.AppendLine("virtual_ab=" + plan.Super.VirtualAb.ToString().ToLowerInvariant());
+            return text.ToString();
+        }
         return $"super_partition_groups={plan.Super.Group}\nsuper_{plan.Super.Group}_group_size={plan.Super.DeviceSize}\nsuper_{plan.Super.Group}_partition_list={string.Join(' ', selected.Select(f => f.Partition))}\nvirtual_ab={plan.Super.VirtualAb.ToString().ToLowerInvariant()}\n";
     }
 
@@ -94,17 +117,23 @@ internal static class DeliveryPayloadBuilder
             try
             {
                 using var builder = new PayloadBuilder();
+                builder.WithBlockSize(plan.Payload.BlockSize).WithMaxTimestamp(plan.Payload.MaxTimestamp)
+                    .WithSecurityPatchLevel(plan.Payload.SecurityPatchLevel);
+                foreach (var config in DeliveryPostinstall.Read(plan.Payload.PostinstallFile, plan.Container.Select(f => f.Partition)).Values)
+                    builder.WithPostinstall(config);
+                using var signingKey = LoadSigningKey(plan.Payload);
+                if (signingKey is not null) builder.WithSigningKey(signingKey);
                 var lengths = new Dictionary<string, long>(StringComparer.Ordinal);
                 foreach (var file in plan.Container)
                 {
                     token.ThrowIfCancellationRequested(); DeliveryValidation.CheckSource(file);
                     var input = MetadataReader.OpenImage(file.SourcePath); inputs.Add(input);
-                    if (input.Length == 0 || input.Length % 4096 != 0) throw new InvalidDataException("Payload image must be aligned to 4096 bytes: " + file.Partition);
-                    lengths.Add(file.Partition, input.Length); builder.AddPartition(file.Partition, input);
+                    if (input.Length == 0 || input.Length % plan.Payload.BlockSize != 0) throw new InvalidDataException("Payload image must be block-aligned: " + file.Partition);
+                    lengths.Add(file.Partition, input.Length); builder.AddPartitionCompressed(file.Partition, input, Enum.Parse<CompressionType>(plan.Payload.Compression));
                 }
                 var layout = ReadDynamicLayout(plan, lengths);
                 if (layout is not null) builder.WithDynamicPartitions(layout);
-                progress?.Report(new(10, "构建未签名 Payload / Building unsigned Payload"));
+                progress?.Report(new(10, signingKey is null ? "构建未签名 Payload / Building unsigned Payload" : "构建并签名 Payload / Building and signing Payload"));
                 using var destination = new FileStream(output, FileMode.CreateNew, FileAccess.Write);
                 using var tracked = new DeliveryWriteProgressStream(destination, _ => progress?.Report(new(35, "写入 Payload / Writing Payload")), token);
                 await builder.BuildAsync(tracked, token).ConfigureAwait(false);
@@ -112,6 +141,22 @@ internal static class DeliveryPayloadBuilder
             finally { foreach (var input in inputs) input.Dispose(); }
         }, token).ConfigureAwait(false);
         await WritePropertiesAsync(output, Path.Combine(Path.GetDirectoryName(output)!, "payload_properties.txt"), token).ConfigureAwait(false);
+    }
+
+    internal static RSA? LoadSigningKey(DeliveryPayloadOptions options)
+    {
+        if (options.SigningKeyPath.Length == 0) return null;
+        if (!File.Exists(options.SigningKeyPath)) throw new FileNotFoundException("所选签名密钥不存在，请重新选择 / Selected signing key is missing; select it again.", options.SigningKeyPath);
+        var key = KeyLibraryService.LoadPrivateKey(options.SigningKeyPath);
+        try
+        {
+            if (key.KeySize is not (2048 or 4096)) throw new InvalidDataException("Payload 签名需要 RSA 2048 或 4096 / Payload requires RSA 2048 or 4096.");
+            var fingerprint = "SHA256:" + Convert.ToHexString(SHA256.HashData(key.ExportSubjectPublicKeyInfo()));
+            if (options.SigningKeyFingerprint.Length > 0 && fingerprint != options.SigningKeyFingerprint)
+                throw new InvalidDataException("所选密钥已被替换，请重新选择 / The selected key has changed; select it again.");
+            return key;
+        }
+        catch { key.Dispose(); throw; }
     }
 
     private static async Task WritePropertiesAsync(string image, string properties, CancellationToken token)

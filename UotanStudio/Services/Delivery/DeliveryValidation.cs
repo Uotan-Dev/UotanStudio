@@ -29,7 +29,7 @@ internal static class DeliveryValidation
         if (plan.DeviceCodename.Length > 0 && !IsName(plan.DeviceCodename, 64)) throw new InvalidDataException("机型代号无效 / Invalid device codename.");
         if (plan.PackPayload && plan.PackSuper) throw new InvalidDataException("Choose one container format.");
         if (plan.PackPayload) DeliveryPayloadBuilder.Validate(plan);
-        if (plan.Recovery) throw new NotSupportedException("Recovery 模板尚未完成环境适配 / Recovery output is not yet supported.");
+        DeliveryPackageBuilder.Validate(plan);
         var generated = plan.Files.Where(f => f.Generated).ToArray();
         if (generated.Any(f => !(plan.PackSuper || plan.PackPayload) || f.SourcePath.Length != 0 || f.Optional
             || f.FileName != DeliveryOutputService.ContainerFileName(plan)

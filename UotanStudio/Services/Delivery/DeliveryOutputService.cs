@@ -22,9 +22,9 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
         CheckDirectory(output);
         foreach (var file in plan.Files.Concat(plan.Container).Where(f => f.SourcePath.Length > 0))
             if (IsUnder(file.SourcePath, output)) throw new InvalidDataException("输出目录不能包含源镜像 / Output must not contain source images.");
-        foreach (var source in new[] { plan.Payload.DynamicPartitionsFile, plan.Payload.SignatureFile, plan.Payload.PostinstallFile }.Where(p => p.Length > 0))
-            if (plan.PackPayload && IsUnder(source, output)) throw new InvalidDataException("Output must not contain Payload configuration inputs.");
-        if (plan.OrganizeDirectory && (plan.Windows || plan.Linux || plan.MacOS || plan.Txt)
+        foreach (var source in new[] { plan.Payload.DynamicPartitionsFile, plan.Payload.SignatureFile, plan.Payload.SigningKeyPath, plan.Payload.PostinstallFile, plan.Package.SigningKeyPath, plan.Package.CertificatePath }.Where(p => p.Length > 0))
+            if (IsUnder(source, output)) throw new InvalidDataException("Output must not contain Payload configuration inputs.");
+        if (plan.OrganizeDirectory && (plan.Windows || plan.Linux || plan.MacOS || plan.Txt || plan.Recovery && plan.Scripts.ContainsKey("Recovery.sh"))
             && plan.ScriptFingerprint != DeliveryScriptGenerator.Fingerprint(plan))
             throw new InvalidDataException("脚本已过期，请重新生成 / Scripts are stale; generate them again.");
         var parent = Path.GetDirectoryName(output) ?? throw new InvalidDataException("Invalid output directory.");
@@ -32,6 +32,8 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
             ? plan.Files.Select(f => Path.Combine("images", f.FileName)).Concat(plan.Scripts.Keys).Concat(["README.txt", "checksums.sha256"])
             : [ContainerFileName(plan)];
         if (plan.PackPayload) plannedNames = plannedNames.Append(plan.OrganizeDirectory ? "images/payload_properties.txt" : "payload_properties.txt");
+        if (plan.Package.Ota) plannedNames = plannedNames.Append("ota.zip");
+        if (plan.Recovery) plannedNames = plannedNames.Append("recovery.zip");
         foreach (var name in plannedNames)
         {
             var destination = Path.Combine(output, name);
@@ -89,13 +91,15 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
                         File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
                             | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
                 }
-                var readme = (plan.PackPayload ? "Unsigned full payload. Flash scripts cover only standalone images, never payload.bin. Device OTA acceptance requires separate signing and integration.\n\n" : "") + "UotanStudio delivery\n\n" + plan.Information + "\n\nImages: images/\nTools: bin/\n"
+                var payloadNotice = plan.Payload.SigningKeyPath.Length == 0 ? "Unsigned full payload. " : "RSA SHA-256 signed full payload. ";
+                var readme = (plan.PackPayload ? payloadNotice + "Flash scripts cover only standalone images, never payload.bin. Device OTA acceptance requires a matching trusted public key and OTA integration.\n\n" : "") + "UotanStudio delivery\n\n" + plan.Information + "\n\nImages: images/\nTools: bin/\n"
                     + "Linux/macOS: chmod +x Flash*.sh bin/Linux/* bin/macOS/* before running when ZIP extraction loses executable permissions.\n"
                     + "TXT: select the intended complete variant. The legacy toolbox does not enforce alternative groups or device checks.\n"
                     + "Legacy TXT paths containing spaces may not work in the old toolbox.\n"
                     + "Scripts target the partition names and slot policy selected by the author.\n";
                 await File.WriteAllTextAsync(Path.Combine(stage, "README.txt"), readme, token).ConfigureAwait(false);
             }
+            await DeliveryPackageBuilder.BuildAsync(plan, stage, imageDirectory, token).ConfigureAwait(false);
             var stagedFiles = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
             var hashes = new StringBuilder();
             for (var i = 0; i < stagedFiles.Length; i++)

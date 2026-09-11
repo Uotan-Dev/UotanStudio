@@ -15,15 +15,22 @@ internal sealed record DeliveryFile
     public bool Generated { get; init; }
     public long? SourceLength { get; init; }
     public bool IncludeInSuper { get; init; }
+    public bool Fastbootd { get; init; }
 }
 
-/// <summary>Existing Payload form fields, preserved even when a value is not yet supported.</summary>
+/// <summary>Payload options and selected signing identity; legacy unsupported inputs remain explicit.</summary>
 internal sealed record DeliveryPayloadOptions
 {
     public uint Version { get; init; } = 2;
     public uint MinorVersion { get; init; }
     public string DynamicPartitionsFile { get; init; } = "";
     public string SignatureFile { get; init; } = "";
+    public string SigningKeyPath { get; init; } = "";
+    public string SigningKeyFingerprint { get; init; } = "";
+    public uint BlockSize { get; init; } = 4096;
+    public long MaxTimestamp { get; init; }
+    public string SecurityPatchLevel { get; init; } = "";
+    public string Compression { get; init; } = "None";
     public string PostinstallFile { get; init; } = "";
 }
 
@@ -42,6 +49,7 @@ internal sealed record DeliverySuperOptions
     public bool AutoZero { get; init; }
     public bool Empty { get; init; }
     public bool Zstd { get; init; }
+    public List<DeliveryGroup> Groups { get; init; } = [];
 }
 
 /// <summary>A complete output snapshot, separate from mutable controls and project globals.</summary>
@@ -53,6 +61,7 @@ internal sealed record DeliveryPlan
     public bool PackSuper { get; init; }
     public bool PackPayload { get; init; }
     public DeliveryPayloadOptions Payload { get; init; } = new();
+    public DeliveryPackageOptions Package { get; init; } = new();
     public bool Recovery { get; init; }
     public bool ContainerConfirmed { get; init; }
     public DeliverySuperOptions Super { get; init; } = new();
@@ -106,11 +115,15 @@ internal static class DeliveryPlanStore
         if (input.Length > 8 * 1024 * 1024) throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
         var plan = await JsonSerializer.DeserializeAsync(input, DeliveryJsonContext.Default.DeliveryPlan, token).ConfigureAwait(false);
         if (plan is null || plan.Version != 1 || plan.Files is null || plan.Container is null || plan.Super is null
+            || plan.Package is null || plan.Package.CertificatePath is null || plan.Package.SigningKeyPath is null || plan.Package.BuildFingerprint is null || plan.Package.Incremental is null
             || plan.Payload is null || plan.Payload.DynamicPartitionsFile is null || plan.Payload.SignatureFile is null || plan.Payload.PostinstallFile is null
+            || plan.Payload.SecurityPatchLevel is null || plan.Payload.Compression is null
+            || plan.Payload.SigningKeyPath is null || plan.Payload.SigningKeyFingerprint is null
             || plan.Scripts is null || plan.LocalZstd is null || plan.OutputDirectory is null || plan.DeviceCodename is null
             || plan.GeneratedScripts is null || plan.OpenScripts is null || plan.ScriptCarets is null
             || plan.GeneratedScripts.Any(p => p.Value is null) || plan.OpenScripts.Any(p => p is null)
             || plan.Information is null || plan.Slot is null || plan.ScriptFingerprint is null
+            || plan.Super.Groups is null || plan.Super.Groups.Any(g => g is null || g.Name is null || g.Partitions is null || g.Partitions.Any(p => p is null))
             || plan.Super.DeviceName is null || plan.Super.Group is null || plan.Super.DeviceType is null
             || plan.Scripts.Any(p => p.Value is null) || plan.LocalZstd.Any(p => p.Value is null)
             || plan.Files.Concat(plan.Container).Any(f => f is null || f.SourcePath is null || f.FileName is null || f.Partition is null || f.SourceGroup is null))
@@ -121,9 +134,15 @@ internal static class DeliveryPlanStore
     private static DeliveryPlan Rebase(DeliveryPlan plan, Func<string, string> path) => plan with
     {
         OutputDirectory = string.IsNullOrWhiteSpace(plan.OutputDirectory) ? "" : path(plan.OutputDirectory),
-        Payload = plan.Payload with { DynamicPartitionsFile = string.IsNullOrEmpty(plan.Payload.DynamicPartitionsFile) ? "" : path(plan.Payload.DynamicPartitionsFile),
+        Package = plan.Package with { CertificatePath = string.IsNullOrEmpty(plan.Package.CertificatePath) ? "" : path(plan.Package.CertificatePath), SigningKeyPath = string.IsNullOrEmpty(plan.Package.SigningKeyPath) ? "" : path(plan.Package.SigningKeyPath) },
+        Payload = plan.Payload with
+        {
+            DynamicPartitionsFile = string.IsNullOrEmpty(plan.Payload.DynamicPartitionsFile) ? "" : path(plan.Payload.DynamicPartitionsFile),
             SignatureFile = string.IsNullOrEmpty(plan.Payload.SignatureFile) ? "" : path(plan.Payload.SignatureFile),
-            PostinstallFile = string.IsNullOrEmpty(plan.Payload.PostinstallFile) ? "" : path(plan.Payload.PostinstallFile) },
+            SigningKeyPath = string.IsNullOrEmpty(plan.Payload.SigningKeyPath) ? "" : path(plan.Payload.SigningKeyPath),
+            PostinstallFile = string.IsNullOrEmpty(plan.Payload.PostinstallFile) ? "" : path(plan.Payload.PostinstallFile)
+        },
+        LocalZstd = plan.LocalZstd.ToDictionary(p => p.Key, p => string.IsNullOrEmpty(p.Value) ? "" : path(p.Value)),
         Container = plan.Container.Select(f => f with { SourcePath = string.IsNullOrEmpty(f.SourcePath) ? "" : path(f.SourcePath) }).ToList(),
         Files = plan.Files.Select(f => f with { SourcePath = string.IsNullOrEmpty(f.SourcePath) ? "" : path(f.SourcePath) }).ToList()
     };
