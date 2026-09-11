@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
@@ -7,8 +7,8 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 
 /// <summary>
-/// Builds unsigned payloads from block-aligned partitions using at most 65536 operations of up to 1 MiB each.
-/// <para>从块对齐分区构建未签名 payload，最多使用 65536 个操作，每个操作不超过 1 MiB。</para>
+/// Builds optionally signed payloads from block-aligned partitions using at most 65536 operations of up to 1 MiB each.
+/// <para>从块对齐分区构建 payload，可选择 RSA 签名，最多使用 65536 个操作，每个操作不超过 1 MiB。</para>
 /// </summary>
 public sealed partial class PayloadBuilder : IDisposable
 {
@@ -16,8 +16,57 @@ public sealed partial class PayloadBuilder : IDisposable
     private long _maxTimestamp;
     private bool _disposed;
     private DynamicPartitionMetadata? _dynamicPartitions;
+    private RSA? _signingKey;
+    private string _securityPatchLevel = "";
+    private readonly Dictionary<string, PartitionUpdate> _postinstall = new(StringComparer.Ordinal);
 
-    /// <summary>Copies the dynamic partition layout into the unsigned payload manifest.</summary>
+    /// <summary>Sets the target Android security patch level.</summary>
+    public PayloadBuilder WithSecurityPatchLevel(string value)
+    {
+        _securityPatchLevel = value ?? throw new ArgumentNullException(nameof(value));
+        return this;
+    }
+
+    /// <summary>Copies only the postinstall fields for the named partition.</summary>
+    public PayloadBuilder WithPostinstall(PartitionUpdate config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        _postinstall[config.PartitionName] = new PartitionUpdate
+        {
+            PartitionName = config.PartitionName, RunPostinstall = config.RunPostinstall,
+            PostinstallPath = config.PostinstallPath, FilesystemType = config.FilesystemType,
+            PostinstallOptional = config.PostinstallOptional
+        };
+        return this;
+    }
+
+    /// <summary>Adds a logical image stream with bounded REPLACE compression. The caller owns the stream.</summary>
+    public PayloadBuilder AddPartitionCompressed(string name, Stream stream, CompressionType compression)
+    {
+        var operation = compression switch
+        {
+            CompressionType.None => InstallOperation.Types.Type.Replace,
+            CompressionType.BZip2 => InstallOperation.Types.Type.ReplaceBz,
+            CompressionType.Xz => InstallOperation.Types.Type.ReplaceXz,
+            _ => throw new ArgumentOutOfRangeException(nameof(compression))
+        };
+        AddPartition(name, stream);
+        _partitions[^1].OperationType = operation;
+        _partitions[^1].CompressionType = compression;
+        return this;
+    }
+
+
+    /// <summary>Signs metadata and payload with RSA SHA-256 PKCS#1 v1.5. The caller owns the key and must keep it alive throughout the build.</summary>
+    public PayloadBuilder WithSigningKey(RSA key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        if (key.KeySize is not (2048 or 4096)) throw new ArgumentException("Payload signing requires RSA 2048 or 4096.", nameof(key));
+        _signingKey = key;
+        return this;
+    }
+
+    /// <summary>Copies the dynamic partition layout into the payload manifest.</summary>
     public PayloadBuilder WithDynamicPartitions(DynamicPartitionMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -209,20 +258,20 @@ public sealed partial class PayloadBuilder : IDisposable
         return this;
     }
 
-    /// <summary>Builds an unsigned payload using bounded operations and disk-backed layout. <para>通过有界操作和磁盘临时布局构建未签名 payload。</para></summary>
+    /// <summary>Builds a payload with optional signing using bounded operations and disk-backed layout. <para>通过有界操作和磁盘临时布局构建payload（按配置签名）。</para></summary>
     /// <remarks>Inputs must be block-aligned. At most 65536 operations, each at most 1 MiB, are accepted. <para>输入必须块对齐；最多接受 65536 个操作，每个操作不超过 1 MiB。</para></remarks>
     public void Build(Stream outputStream) => BuildCore(outputStream, CancellationToken.None);
 
-    /// <summary>Builds an unsigned payload with cancellation between bounded operations. <para>构建未签名 payload，并在有界操作之间响应取消。</para></summary>
+    /// <summary>Builds a payload with optional signing with cancellation between bounded operations. <para>构建payload（按配置签名），并在有界操作之间响应取消。</para></summary>
     /// <remarks>Inputs must be block-aligned. At most 65536 operations, each at most 1 MiB, are accepted. <para>输入必须块对齐；最多接受 65536 个操作，每个操作不超过 1 MiB。</para></remarks>
     public Task BuildAsync(Stream outputStream, CancellationToken cancellationToken = default)
         => Task.Run(() => BuildCore(outputStream, cancellationToken), cancellationToken);
 
-    /// <summary>Atomically builds an unsigned payload from block-aligned partitions. <para>从块对齐分区原子构建未签名 payload。</para></summary>
+    /// <summary>Atomically builds a payload with optional signing from block-aligned partitions. <para>从块对齐分区原子构建payload（按配置签名）。</para></summary>
     /// <remarks>Unaligned inputs and more than 65536 operations of up to 1 MiB are rejected. <para>拒绝非块对齐输入，以及超过 65536 个、单个不大于 1 MiB 的操作。</para></remarks>
     public void Build(string outputPath) => BuildFile(outputPath, CancellationToken.None);
 
-    /// <summary>Atomically builds an unsigned payload with cancellation support. <para>以支持取消的方式原子构建未签名 payload。</para></summary>
+    /// <summary>Atomically builds a payload with optional signing with cancellation support. <para>以支持取消的方式原子构建payload（按配置签名）。</para></summary>
     /// <remarks>Inputs must be block-aligned. At most 65536 operations, each at most 1 MiB, are accepted. <para>输入必须块对齐；最多接受 65536 个操作，每个操作不超过 1 MiB。</para></remarks>
     public Task BuildAsync(string outputPath, CancellationToken cancellationToken = default)
         => Task.Run(() => BuildFile(outputPath, cancellationToken), cancellationToken);
@@ -254,6 +303,11 @@ public sealed partial class PayloadBuilder : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             using var data = UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.BinaryDeltaPatch.CreateTemporaryStream();
             var manifest = BuildManifest(data, cancellationToken);
+            if (_signingKey is not null)
+            {
+                WriteSignedPayload(output, data, manifest, _signingKey, cancellationToken);
+                return;
+            }
             if (manifest.CalculateSize() > 64 * 1024 * 1024) throw new PayloadGenerationException("Payload manifest exceeds 64 MiB.");
             var manifestBytes = manifest.ToByteArray();
             // An unsigned v2 payload has a zero-sized metadata signature, not a dummy blob.
@@ -276,15 +330,23 @@ public sealed partial class PayloadBuilder : IDisposable
         if (_partitions.Count > maximumOperations) throw new PayloadGenerationException("Payload exceeds the supported 65536 partitions.");
         var chunkSize = checked((int)(maximumOperationBytes / BlockSize * BlockSize));
         var buffer = new byte[chunkSize];
-        var manifest = new DeltaArchiveManifest { BlockSize = BlockSize, MinorVersion = MinorVersion, MaxTimestamp = _maxTimestamp,
-            DynamicPartitionMetadata = _dynamicPartitions?.Clone() };
+        var manifest = new DeltaArchiveManifest
+        {
+            BlockSize = BlockSize,
+            MinorVersion = MinorVersion,
+            MaxTimestamp = _maxTimestamp,
+            SecurityPatchLevel = _securityPatchLevel,
+            DynamicPartitionMetadata = _dynamicPartitions?.Clone()
+        };
+        if (_postinstall.Keys.Any(n => !_partitions.Any(p => p.PartitionName == n)))
+            throw new PayloadGenerationException("Postinstall refers to an absent partition.");
         var names = new HashSet<string>(StringComparer.Ordinal);
         var operationCount = 0;
         foreach (var partition in _partitions)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!names.Add(partition.PartitionName)) throw new PayloadGenerationException("Duplicate payload partition name.");
-            var update = new PartitionUpdate { PartitionName = partition.PartitionName };
+            var update = _postinstall.TryGetValue(partition.PartitionName, out var config) ? config.Clone() : new PartitionUpdate { PartitionName = partition.PartitionName };
             using var partitionHash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             if (partition.OperationType == InstallOperation.Types.Type.Zero)
             {

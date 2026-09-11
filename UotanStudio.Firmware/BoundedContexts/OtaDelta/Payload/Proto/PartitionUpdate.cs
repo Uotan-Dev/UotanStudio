@@ -24,6 +24,11 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     public PartitionUpdate(PartitionUpdate other) : this()
     {
         _partitionName = other._partitionName;
+        RunPostinstall = other.RunPostinstall;
+        PostinstallPath = other.PostinstallPath;
+        FilesystemType = other.FilesystemType;
+        PostinstallOptional = other.PostinstallOptional;
+
         OldPartitionInfo = other.OldPartitionInfo?.Clone();
         NewPartitionInfo = other.NewPartitionInfo?.Clone();
         Operations = other.Operations.Clone();
@@ -39,6 +44,18 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
         get => _partitionName;
         set => _partitionName = value ?? string.Empty;
     }
+
+    /// <summary>Gets or sets the optional update_engine RunPostinstall field, preserving protobuf presence.</summary>
+    public bool? RunPostinstall { get; set; }
+
+    /// <summary>Gets or sets the optional update_engine PostinstallPath field, preserving protobuf presence.</summary>
+    public string? PostinstallPath { get; set; }
+
+    /// <summary>Gets or sets the optional update_engine FilesystemType field, preserving protobuf presence.</summary>
+    public string? FilesystemType { get; set; }
+
+    /// <summary>Gets or sets the optional update_engine PostinstallOptional field, preserving protobuf presence.</summary>
+    public bool? PostinstallOptional { get; set; }
 
     public const int NewPartitionInfoFieldNumber = 7;
 
@@ -57,7 +74,7 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     public override bool Equals(object? obj) => Equals(obj as PartitionUpdate);
 
     public bool Equals(PartitionUpdate? other)
-        => other is not null && (ReferenceEquals(other, this) || (PartitionName == other.PartitionName && Equals(OldPartitionInfo, other.OldPartitionInfo) && Equals(NewPartitionInfo, other.NewPartitionInfo) && Operations.Equals(other.Operations) && Equals(_unknownFields, other._unknownFields)));
+        => other is not null && (ReferenceEquals(other, this) || (PartitionName == other.PartitionName && RunPostinstall == other.RunPostinstall && PostinstallPath == other.PostinstallPath && FilesystemType == other.FilesystemType && PostinstallOptional == other.PostinstallOptional &&  Equals(OldPartitionInfo, other.OldPartitionInfo) && Equals(NewPartitionInfo, other.NewPartitionInfo) && Operations.Equals(other.Operations) && Equals(_unknownFields, other._unknownFields)));
 
     public override int GetHashCode()
     {
@@ -79,6 +96,10 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
             hash ^= _unknownFields.GetHashCode();
         }
 
+        hash ^= RunPostinstall?.GetHashCode() ?? 0;
+        hash ^= PostinstallPath?.GetHashCode() ?? 0;
+        hash ^= FilesystemType?.GetHashCode() ?? 0;
+        hash ^= PostinstallOptional?.GetHashCode() ?? 0;
         return hash;
     }
 
@@ -86,6 +107,11 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
 
     public void WriteTo(CodedOutputStream output)
     {
+        if (RunPostinstall is { } value16) { output.WriteRawTag(16); output.WriteBool(value16); }
+        if (PostinstallPath is { } value26) { output.WriteRawTag(26); output.WriteString(value26); }
+        if (FilesystemType is { } value34) { output.WriteRawTag(34); output.WriteString(value34); }
+        if (PostinstallOptional is { } value72) { output.WriteRawTag(72); output.WriteBool(value72); }
+
         if (OldPartitionInfo is not null) { output.WriteRawTag(50); output.WriteMessage(OldPartitionInfo); }
         if (_partitionName.Length != 0)
         {
@@ -106,6 +132,11 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     public int CalculateSize()
     {
         var size = 0;
+        if (RunPostinstall is { } value16) size += 2;
+        if (PostinstallPath is { } value26) size += 1 + CodedOutputStream.ComputeStringSize(value26);
+        if (FilesystemType is { } value34) size += 1 + CodedOutputStream.ComputeStringSize(value34);
+        if (PostinstallOptional is { } value72) size += 2;
+
         if (OldPartitionInfo is not null) size += 1 + CodedOutputStream.ComputeMessageSize(OldPartitionInfo);
         if (_partitionName.Length != 0)
         {
@@ -133,6 +164,10 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
             return;
         }
 
+        if (other.RunPostinstall is not null) RunPostinstall = other.RunPostinstall;
+        if (other.PostinstallPath is not null) PostinstallPath = other.PostinstallPath;
+        if (other.FilesystemType is not null) FilesystemType = other.FilesystemType;
+        if (other.PostinstallOptional is not null) PostinstallOptional = other.PostinstallOptional;
         if (other._partitionName.Length != 0)
         {
             PartitionName = other._partitionName;
@@ -158,6 +193,10 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
                 default:
                     _unknownFields = UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
                     break;
+                case 16: RunPostinstall = input.ReadBool(); break;
+                case 26: PostinstallPath = input.ReadString(); break;
+                case 34: FilesystemType = input.ReadString(); break;
+                case 72: PostinstallOptional = input.ReadBool(); break;
                 case 10:
                     PartitionName = input.ReadString();
                     break;
