@@ -53,28 +53,64 @@ public sealed partial class ErofsBuilder
 
             var acceptedLen = 0;
             var acceptedOut = 0;
-            for (var take = 1; clusterIndex + take <= totalClusters && take <= 64; take++)
+            var buffered = 0;
+            var maxTake = (int)Math.Min(64, totalClusters - clusterIndex);
+
+            // Compresses the leading `take` clusters of this group. The window is
+            // extended incrementally: each probe only reads the newly added cluster
+            // instead of re-reading the shared prefix from disk.
+            bool TryTake(int take, out int candidateLen, out int outLen)
             {
-                var candidateLen = (int)Math.Min(node.Size - pos, (long)take * clusterSize);
-                fs.Position = pos;
-                fs.ReadExactly(raw, 0, candidateLen);
-                var outLen = ErofsCompression.AlgorithmCompress(
+                candidateLen = (int)Math.Min(node.Size - pos, (long)take * clusterSize);
+                if (candidateLen > buffered)
+                {
+                    fs.Position = pos + buffered;
+                    fs.ReadExactly(raw, buffered, candidateLen - buffered);
+                    buffered = candidateLen;
+                }
+
+                outLen = ErofsCompression.AlgorithmCompress(
                     (ErofsAlgorithm)options.Algorithm,
                     raw, 0, candidateLen, compressed, 0, compressed.Length,
                     Math.Max(1, options.CompressionLevel), 0,
                     options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : 0);
-                if (outLen <= 0 || outLen >= blockSize - 8)
+                return outLen > 0 && outLen < blockSize - 8;
+            }
+
+            // The largest mergeable take is located with an exponential probe plus a
+            // binary search instead of a linear sweep: one-shot compression of a
+            // longer prefix practically never produces less output, so the accepted
+            // take keeps the same semantics as the linear scan while the probe count
+            // drops from up to 64 compressions per group to about 12. Every accepted
+            // take is still verified by an actual compression.
+            var lo = 0;
+            var hi = maxTake + 1;
+            for (var probe = 1; probe < hi;)
+            {
+                if (!TryTake(probe, out var probeLen, out var probeOut))
                 {
-
-
+                    hi = probe;
                     break;
                 }
 
-                acceptedLen = candidateLen;
-                acceptedOut = outLen;
-                if (candidateLen == node.Size - pos)
+                lo = probe;
+                acceptedLen = probeLen;
+                acceptedOut = probeOut;
+                probe = probe == 1 ? 2 : probe * 2;
+            }
+
+            while (lo + 1 < hi)
+            {
+                var mid = lo + (hi - lo) / 2;
+                if (TryTake(mid, out var midLen, out var midOut))
                 {
-                    break;
+                    lo = mid;
+                    acceptedLen = midLen;
+                    acceptedOut = midOut;
+                }
+                else
+                {
+                    hi = mid;
                 }
             }
 
