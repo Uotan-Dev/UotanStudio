@@ -53,6 +53,13 @@
     <x:String x:Key="Menu_Export">Export...</x:String>
     <x:String x:Key="Menu_Exit">Exit</x:String>
 
+    <!-- macOS application menu -->
+    <x:String x:Key="Menu_MacServices">Services</x:String>
+    <x:String x:Key="Menu_MacHide">Hide UotanStudio</x:String>
+    <x:String x:Key="Menu_MacHideOthers">Hide Others</x:String>
+    <x:String x:Key="Menu_MacShowAll">Show All</x:String>
+    <x:String x:Key="Menu_MacQuit">Quit UotanStudio</x:String>
+
     <!-- Edit menu -->
     <x:String x:Key="Menu_Undo">Undo</x:String>
     <x:String x:Key="Menu_Redo">Redo</x:String>

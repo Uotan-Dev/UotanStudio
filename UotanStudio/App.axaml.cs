@@ -18,6 +18,7 @@ namespace UotanStudio;
 public partial class App : Application
 {
     private DesktopApplicationServices? _desktopServices;
+    private MacOSApplicationMenu? _macApplicationMenu;
     /// <summary>Existing files passed by desktop file associations, opened after window creation.</summary>
     public static string[] StartupFiles { get; set; } = [];
 
@@ -62,6 +63,9 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            if (OperatingSystem.IsMacOS())
+                _macApplicationMenu = new MacOSApplicationMenu(this,
+                    () => GetDesktopMainViewModel()?.MenuVM.AboutCommand.Execute(null));
             _desktopServices = new DesktopApplicationServices();
             desktop.Exit += OnDesktopExit;
             // 桌面端：立即显示 Ursa 主题启动窗，启动序列（应用设置 + 首次全局 USB 扫描
@@ -170,6 +174,8 @@ public partial class App : Application
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Lifecycle", ex.Message); }
         finally
         {
+            _macApplicationMenu?.Dispose();
+            _macApplicationMenu = null;
             _desktopServices = null;
             WeakReferenceMessenger.Default.UnregisterAll(this);
         }

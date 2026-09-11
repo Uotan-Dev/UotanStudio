@@ -53,6 +53,13 @@
     <x:String x:Key="Menu_Export">导出...</x:String>
     <x:String x:Key="Menu_Exit">退出</x:String>
 
+    <!-- macOS 应用菜单 -->
+    <x:String x:Key="Menu_MacServices">服务</x:String>
+    <x:String x:Key="Menu_MacHide">隐藏 UotanStudio</x:String>
+    <x:String x:Key="Menu_MacHideOthers">隐藏其他</x:String>
+    <x:String x:Key="Menu_MacShowAll">显示全部</x:String>
+    <x:String x:Key="Menu_MacQuit">退出 UotanStudio</x:String>
+
     <!-- 编辑菜单 -->
     <x:String x:Key="Menu_Undo">撤销</x:String>
     <x:String x:Key="Menu_Redo">重做</x:String>
