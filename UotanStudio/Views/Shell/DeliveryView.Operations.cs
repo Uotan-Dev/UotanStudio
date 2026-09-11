@@ -38,12 +38,11 @@ public partial class DeliveryView
         };
         foreach (var box in new[] { OutputDirectoryBox, SuperSizeBox, SuperGroupNameBox, SuperDeviceNameBox,
                      SuperMetadataSizeBox, SuperBlockSizeBox, SuperMetadataSlotsBox, PayloadVersionBox, PayloadMinorVersionBox,
-                     DynamicPartitionsFileBox, PayloadSignatureBox, PayloadPostinstallBox, PayloadBlockSizeBox, PayloadTimestampBox, PayloadSecurityPatchBox, DeliveryGroupsBox })
+                     DynamicPartitionsFileBox, PayloadSignatureBox, PayloadPostinstallBox, PayloadTimestampBox, PayloadSecurityPatchBox })
             box.TextChanged += (_, _) => QueueDeliveryChange();
         foreach (var box in new ToggleButton[] { DirectOutputBox, PackSuperBox, PackPayloadBox, SuperRawBox, SuperSparseBox,
                      SuperZstdBox, SuperVabBox, SuperAbBox, SuperAOnlyBox, ForceFullSuperImageBox, GenerateSuperEmptyBox })
             box.IsCheckedChanged += (_, _) => QueueDeliveryChange();
-        PayloadCompressionBox.SelectionChanged += (_, _) => QueueDeliveryChange();
         GenerateDynamicPartitionsButton.IsEnabled = true;
         GenerateDynamicPartitionsButton.Click += async (_, _) => await GenerateDynamicPartitionsAsync();
         _deliverySaveTimer.Tick += async (_, _) => { _deliverySaveTimer.Stop(); await SaveDeliveryAsync(false); };
@@ -57,20 +56,20 @@ public partial class DeliveryView
     private DeliverySuperOptions ReadDeliverySuperOptions()
     {
         if (PackSuperBox.IsChecked == true && ForceFullSuperImageBox.IsChecked != true && GenerateSuperEmptyBox.IsChecked != true)
-            throw new InvalidDataException("请选择完整 Super 或 Super_Empty / Select a full Super or Super_Empty image.");
+            throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_SelectSuperImageType"));
         static uint Number(string? text, string name) => uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
-            ? value : throw new InvalidDataException("参数无效 / Invalid " + name);
+            ? value : throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_InvalidParameter", LanguageService.Instance.GetString(name)));
         if (!ulong.TryParse(SuperSizeBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var size))
-            throw new InvalidDataException("Super 大小无效 / Invalid Super size.");
+            throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_InvalidSuperSize"));
         return new()
         {
-            Groups = DeliveryGroups.Parse(DeliveryGroupsBox.Text ?? ""),
+            Groups = _deliveryGroups,
             DeviceSize = size,
             Group = SuperGroupNameBox.Text?.Trim() ?? "default",
             DeviceName = SuperDeviceNameBox.Text?.Trim() ?? "super",
-            MetadataSize = Number(SuperMetadataSizeBox.Text, "metadata size"),
-            Slots = Number(SuperMetadataSlotsBox.Text, "metadata slots"),
-            BlockSize = Number(SuperBlockSizeBox.Text, "block size"),
+            MetadataSize = Number(SuperMetadataSizeBox.Text, "Delivery_MetadataSize"),
+            Slots = Number(SuperMetadataSlotsBox.Text, "Delivery_MetadataSlots"),
+            BlockSize = Number(SuperBlockSizeBox.Text, "Delivery_BlockSize"),
             Sparse = SuperSparseBox.IsChecked == true,
             VirtualAb = SuperVabBox.IsChecked == true,
             AutoZero = Composition.AutoZero && SuperAOnlyBox.IsChecked != true,
@@ -83,13 +82,12 @@ public partial class DeliveryView
     private DeliveryPayloadOptions ReadDeliveryPayloadOptions()
     {
         if (!uint.TryParse(PayloadVersionBox.Text, out var version) || !uint.TryParse(PayloadMinorVersionBox.Text, out var minor))
-            throw new InvalidDataException("Payload 版本无效 / Invalid Payload version.");
+            throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_InvalidPayloadVersion"));
         return new()
         {
-            BlockSize = uint.TryParse(PayloadBlockSizeBox.Text, out var block) ? block : 0,
+            BlockSize = uint.TryParse(SuperBlockSizeBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var block) ? block : 0,
             MaxTimestamp = long.TryParse(PayloadTimestampBox.Text, out var timestamp) ? timestamp : -1,
             SecurityPatchLevel = PayloadSecurityPatchBox.Text?.Trim() ?? "",
-            Compression = PayloadCompressionBox.SelectedIndex switch { 1 => "BZip2", 2 => "Xz", _ => "None" },
             Version = version,
             MinorVersion = minor,
             DynamicPartitionsFile = DynamicPartitionsFileBox.Text?.Trim() ?? "",
@@ -112,7 +110,7 @@ public partial class DeliveryView
             var root = _deliveryRoot;
             if (TopLevel.GetTopLevel(this) is not { StorageProvider.CanSave: true } owner) return;
             using var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-            { Title = "动态分区配置 / Dynamic partition configuration", SuggestedFileName = "dynamic_partitions_info.txt", DefaultExtension = "txt" });
+            { Title = LanguageService.Instance.GetString("Delivery_DynamicPartitionsFile"), SuggestedFileName = "dynamic_partitions_info.txt", DefaultExtension = "txt" });
             if (root != _deliveryRoot || _deliveryCancellation is not null || PackPayloadBox.IsChecked != true || file?.TryGetLocalPath() is not { } path) return;
             var temporary = path + "." + Guid.NewGuid().ToString("N");
             try { await File.WriteAllTextAsync(temporary, text); File.Move(temporary, path, true); }
@@ -164,7 +162,7 @@ public partial class DeliveryView
                     }
                     if (plan.OrganizeDirectory && (!(plan.PackSuper || plan.PackPayload) || plan.ContainerConfirmed) && plan.Files.Count > 0)
                         if (!Composition.OutputView.SynchronizeScripts(plan))
-                            Composition.Model.Status = "配置已变化，输出前需处理已修改脚本 / Edited scripts need review before output.";
+                            Composition.Model.Status = LanguageService.Instance.GetString("Delivery_EditedScriptsNeedReview");
                 }
             }
             catch (Exception ex) { Composition.Model.Status = ex.Message; }
@@ -191,11 +189,11 @@ public partial class DeliveryView
             var root = _deliveryRoot;
             if (root is null)
             {
-                if (report) await ShowDeliveryMessageAsync("请先打开工程再保存交付计划 / Open a project to save the delivery plan.", false);
+                if (report) await ShowDeliveryMessageAsync(LanguageService.Instance.GetString("Delivery_OpenProjectToSave"), false);
                 return;
             }
             await PersistDeliveryAsync(root, CaptureDeliveryPlan());
-            if (report) LogService.Instance.Write(LogLevel.Info, "Delivery", "交付计划和文本已保存 / Delivery plan and drafts saved.");
+            if (report) LogService.Instance.Write(LogLevel.Info, "Delivery", LanguageService.Instance.GetString("Delivery_PlanSaved"));
         }
         catch (Exception ex)
         {
@@ -251,17 +249,15 @@ public partial class DeliveryView
             _payloadSigningFingerprint = plan.Payload.SigningKeyFingerprint;
             RefreshPayloadSigningKeys();
             PayloadPostinstallBox.Text = plan.Payload.PostinstallFile;
-            PayloadBlockSizeBox.Text = plan.Payload.BlockSize.ToString(CultureInfo.InvariantCulture);
             PayloadTimestampBox.Text = plan.Payload.MaxTimestamp.ToString(CultureInfo.InvariantCulture);
             PayloadSecurityPatchBox.Text = plan.Payload.SecurityPatchLevel;
-            PayloadCompressionBox.SelectedIndex = plan.Payload.Compression switch { "BZip2" => 1, "Xz" => 2, _ => 0 };
             SuperZstdBox.IsChecked = plan.Super.Zstd;
-            DeliveryGroupsBox.Text = DeliveryGroups.Format(plan.Super.Groups);
+            _deliveryGroups = plan.Super.Groups;
             OutputDirectoryBox.Text = plan.OutputDirectory;
             SuperDeviceNameBox.Text = plan.PackPayload ? "payload.bin" : plan.Super.DeviceName; SuperGroupNameBox.Text = plan.Super.Group;
             SuperSizeBox.Text = plan.Super.DeviceSize.ToString(CultureInfo.InvariantCulture);
             SuperMetadataSizeBox.Text = plan.Super.MetadataSize.ToString(CultureInfo.InvariantCulture);
-            SuperBlockSizeBox.Text = plan.Super.BlockSize.ToString(CultureInfo.InvariantCulture);
+            SuperBlockSizeBox.Text = (plan.PackPayload ? plan.Payload.BlockSize : plan.Super.BlockSize).ToString(CultureInfo.InvariantCulture);
             var deviceType = plan.Super.DeviceType.Length > 0 ? plan.Super.DeviceType : plan.Super.VirtualAb ? "VAB" : plan.Super.AutoZero ? "AB" : "AOnly";
             SuperVabBox.IsChecked = deviceType == "VAB"; SuperAbBox.IsChecked = deviceType == "AB";
             SuperAOnlyBox.IsChecked = deviceType == "AOnly";
@@ -283,13 +279,13 @@ public partial class DeliveryView
         try
         {
             if (_restoringDelivery || !_deliveryLoaded || root != ProjectContextService.Instance.RootDirectory)
-                throw new InvalidOperationException("正在切换工程，请稍后重试 / Project transition in progress.");
+                throw new InvalidOperationException(LanguageService.Instance.GetString("Delivery_ProjectTransition"));
             var plan = CaptureDeliveryPlan();
             DeliveryValidation.Validate(plan);
             if (plan.OrganizeDirectory && !Composition.OutputView.SynchronizeScripts(plan))
             {
-                if (TopLevel.GetTopLevel(this) is not Window owner || !await DialogService.ConfirmAsync(owner, "Delivery",
-                        "配置已变化，现有脚本含手动修改。是否用新配置重新生成？取消将保留草稿并停止输出。\nConfiguration changed. Replace edited scripts? Cancel preserves drafts and stops output.")) return;
+                if (TopLevel.GetTopLevel(this) is not Window owner || !await DialogService.ConfirmAsync(owner, LanguageService.Instance.GetString("Tab_Delivery"),
+                        LanguageService.Instance.GetString("Delivery_ReplaceEditedScripts"))) return;
                 // A project transition may have cancelled the operation while the dialog was open.
                 cancellation.Token.ThrowIfCancellationRequested();
                 if (root != _deliveryRoot) return;
@@ -306,14 +302,14 @@ public partial class DeliveryView
             var service = new DeliveryOutputService(new DeliveryToolService(DeliveryHttp,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "delivery-tools")));
             var outputs = await service.ExportAsync(plan, progress, cancellation.Token);
-            Composition.Model.Status = $"已输出 {outputs.Length} 个文件 / Output complete: {plan.OutputDirectory}";
+            Composition.Model.Status = LanguageService.Instance.GetString("Delivery_OutputComplete", outputs.Length, plan.OutputDirectory);
             LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
             if (showCompletion && _attached && root == ProjectContextService.Instance.RootDirectory)
                 await ShowDeliveryMessageAsync(Composition.Model.Status, false);
         }
         catch (OperationCanceledException)
         {
-            Composition.Model.Status = "输出已取消 / Output cancelled.";
+            Composition.Model.Status = LanguageService.Instance.GetString("Delivery_OutputCancelled");
             LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
         }
         catch (Exception ex) { await ShowDeliveryMessageAsync(ex.Message, true); }
@@ -331,6 +327,6 @@ public partial class DeliveryView
         Composition.Model.Status = message;
         LogService.Instance.Write(error ? LogLevel.Error : LogLevel.Info, "Delivery", message);
         if (_attached && TopLevel.GetTopLevel(this) is Window owner)
-            await DialogService.ShowAsync(owner, "Delivery", message, error ? Ursa.Controls.MessageBoxIcon.Error : Ursa.Controls.MessageBoxIcon.Information);
+            await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Tab_Delivery"), message, error ? Ursa.Controls.MessageBoxIcon.Error : Ursa.Controls.MessageBoxIcon.Information);
     }
 }

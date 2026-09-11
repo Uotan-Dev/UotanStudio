@@ -138,15 +138,15 @@
                             <TextBox Name="SuperDeviceNameBox" Text="super"
                                      AutomationProperties.Name="{DynamicResource Delivery_SuperDeviceName}" />
                         </StackPanel>
-                        <StackPanel Name="SuperMetadataSizeField" Spacing="6">
-                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_MetadataSize}" />
-                            <TextBox Name="SuperMetadataSizeBox" Text="65536"
-                                     AutomationProperties.Name="{DynamicResource Delivery_MetadataSize}" />
-                        </StackPanel>
                         <StackPanel Name="SuperBlockSizeField" Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_BlockSize}" />
                             <TextBox Name="SuperBlockSizeBox" Text="4096"
                                      AutomationProperties.Name="{DynamicResource Delivery_BlockSize}" />
+                        </StackPanel>
+                        <StackPanel Name="SuperMetadataSizeField" Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_MetadataSize}" />
+                            <TextBox Name="SuperMetadataSizeBox" Text="65536"
+                                     AutomationProperties.Name="{DynamicResource Delivery_MetadataSize}" />
                         </StackPanel>
                         <StackPanel Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperSize}" />
@@ -163,8 +163,8 @@
                             <TextBox Name="SuperMetadataSlotsBox" Text="3"
                                      AutomationProperties.Name="{DynamicResource Delivery_MetadataSlots}" />
                         </StackPanel>
-                        <WrapPanel Name="SuperImageOptions" Orientation="Horizontal" ItemSpacing="12" LineSpacing="6">
-                            <CheckBox Name="SuperZstdBox" Content="Zstd 压缩 / Compress" />
+                        <WrapPanel Name="SuperImageOptions" Orientation="Horizontal" ItemsAlignment="Center" ItemSpacing="12" LineSpacing="6">
+                            <CheckBox Name="SuperZstdBox" Content="{DynamicResource Delivery_ZstdCompression}" />
                             <CheckBox Name="ForceFullSuperImageBox" Content="{DynamicResource Delivery_ForceFullImage}" IsChecked="True" />
                             <CheckBox Name="GenerateSuperEmptyBox" IsChecked="False"
                                       AutomationProperties.Name="{DynamicResource Delivery_GenerateSuperEmpty}">
@@ -172,20 +172,18 @@
                             </CheckBox>
                         </WrapPanel>
                     </StackPanel>
-                    <StackPanel Spacing="6" IsVisible="{Binding #SuperSettings.IsVisible}">
-                        <TextBlock Text="多组布局：组名 容量字节 分区列表" TextWrapping="Wrap" />
-                        <TextBox Name="DeliveryGroupsBox" AcceptsReturn="True" MinHeight="90" TextWrapping="Wrap"
-                                 PlaceholderText="留空使用上方单组 / Empty: single group" />
-                    </StackPanel>
                     <StackPanel Name="PayloadSettings" Spacing="12" IsVisible="False">
-                        <TextBlock Text="完整更新 · payload.bin / Full update" TextWrapping="Wrap" />
-                        <TextBlock Text="块大小 / Block size" /><TextBox Name="PayloadBlockSizeBox" Text="4096" />
-                        <TextBlock Text="最大时间戳 / Maximum timestamp" /><TextBox Name="PayloadTimestampBox" Text="0" />
-                        <TextBlock Text="安全补丁日期 / Security patch" /><TextBox Name="PayloadSecurityPatchBox" PlaceholderText="yyyy-MM-dd" />
-                        <TextBlock Text="镜像压缩 / Compression" />
-                        <ComboBox Name="PayloadCompressionBox" SelectedIndex="0" HorizontalAlignment="Stretch">
-                            <ComboBoxItem Content="None" /><ComboBoxItem Content="BZip2" /><ComboBoxItem Content="Xz" />
-                        </ComboBox>
+                        <TextBlock Text="{DynamicResource Delivery_FullPayloadUpdate}" TextWrapping="Wrap" />
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_MaxTimestamp}" />
+                            <TextBox Name="PayloadTimestampBox" Text="0"
+                                     AutomationProperties.Name="{DynamicResource Delivery_MaxTimestamp}" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SecurityPatch}" />
+                            <TextBox Name="PayloadSecurityPatchBox" PlaceholderText="yyyy-MM-dd"
+                                     AutomationProperties.Name="{DynamicResource Delivery_SecurityPatch}" />
+                        </StackPanel>
                         <StackPanel Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_PayloadVersion}" />
                             <TextBox Name="PayloadVersionBox" Text="2" IsReadOnly="True"
@@ -200,7 +198,7 @@
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_DynamicPartitionsFile}" />
                             <TextBox Name="DynamicPartitionsFileBox"
                                      AutomationProperties.Name="{DynamicResource Delivery_DynamicPartitionsFile}" />
-                            <WrapPanel ItemSpacing="8" LineSpacing="6">
+                            <WrapPanel ItemSpacing="8" LineSpacing="6" ItemsAlignment="End">
                                 <Button Name="BrowseDynamicPartitionsButton" Classes="file-action"
                                         Content="{DynamicResource Delivery_SelectFile}" Click="OnBrowsePayloadFileClick" />
                                 <Button Name="GenerateDynamicPartitionsButton" Classes="file-action" IsEnabled="False"
@@ -209,9 +207,12 @@
                         </StackPanel>
                         <StackPanel Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Keys_PayloadSigning}" />
-                            <ComboBox Name="PayloadSigningKeyBox" HorizontalAlignment="Stretch"
-                                      PlaceholderText="{DynamicResource Keys_ChoosePayload}" />
-                            <Button Name="ManagePayloadKeysButton" Content="{DynamicResource Menu_KeyManager}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <ComboBox Name="PayloadSigningKeyBox" HorizontalAlignment="Stretch" MinWidth="0"
+                                          PlaceholderText="{DynamicResource Keys_ChoosePayload}" />
+                                <Button Name="ManagePayloadKeysButton" Grid.Column="1" Classes="file-action"
+                                        Content="{DynamicResource Menu_KeyManager}" />
+                            </Grid>
                             <Grid ColumnDefinitions="*,8,Auto" SizeChanged="OnPayloadFileRowSizeChanged">
                                 <TextBox Name="PayloadSignatureBox"
                                          PlaceholderText="{DynamicResource Keys_ExternalPrivate}"

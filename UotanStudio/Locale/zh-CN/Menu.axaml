@@ -120,6 +120,8 @@
     <x:String x:Key="Keys_Refresh">刷新</x:String>
     <x:String x:Key="Keys_Create">生成与导入</x:String>
     <x:String x:Key="Keys_Name">密钥名称</x:String>
+    <x:String x:Key="Keys_Purpose">用途</x:String>
+    <x:String x:Key="Keys_Bits">位数</x:String>
     <x:String x:Key="Keys_Formats">ADB：RSA 2048 · HDC：RSA 3072 · Payload：RSA 2048 / 4096。私钥保存在本机密钥库；不会自动替换设备认证密钥或签名镜像。</x:String>
     <x:String x:Key="Keys_Generate">生成密钥对</x:String>
     <x:String x:Key="Keys_Import">导入私钥…</x:String>
@@ -135,6 +137,7 @@
     <x:String x:Key="Keys_New">新增密钥</x:String>
     <x:String x:Key="Keys_Delete">永久删除</x:String>
     <x:String x:Key="Keys_DeleteHint">确认永久删除所选密钥（不可恢复）</x:String>
+    <x:String x:Key="Keys_DeleteConfirm">确定永久删除密钥“{0}”吗？此操作不可恢复，已导出的副本不受影响。</x:String>
     <x:String x:Key="Keys_PayloadSigning">Payload 发布签名密钥</x:String>
     <x:String x:Key="Keys_ChoosePayload">从密钥库选择 Payload 密钥</x:String>
     <x:String x:Key="Keys_ExternalPrivate">或选择外部 PEM / DER 私钥</x:String>

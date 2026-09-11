@@ -119,7 +119,7 @@ public partial class DeliveryCompositionView : UserControl
     {
         Model.IsRunning = running; Model.Progress = progress;
         CompositionOutputProgress.Value = progress;
-        StartCompositionOutputButton.Content = running ? "取消 / Cancel" : UotanStudio.Services.LanguageService.Instance.GetString("Delivery_StartOutput");
+        StartCompositionOutputButton.Classes.Set("running", running);
         UpdateInteractionState();
         ScriptPane.SetRunning(running, progress);
     }

@@ -120,6 +120,8 @@
     <x:String x:Key="Keys_Refresh">Refresh</x:String>
     <x:String x:Key="Keys_Create">Generate and import</x:String>
     <x:String x:Key="Keys_Name">Key name</x:String>
+    <x:String x:Key="Keys_Purpose">Purpose</x:String>
+    <x:String x:Key="Keys_Bits">Bits</x:String>
     <x:String x:Key="Keys_Formats">ADB: RSA 2048 · HDC: RSA 3072 · Payload: RSA 2048 / 4096. Private keys stay in your local library. Generating keys does not replace device identities or sign images.</x:String>
     <x:String x:Key="Keys_Generate">Generate key pair</x:String>
     <x:String x:Key="Keys_Import">Import private key…</x:String>
@@ -135,6 +137,7 @@
     <x:String x:Key="Keys_New">New key</x:String>
     <x:String x:Key="Keys_Delete">Delete permanently</x:String>
     <x:String x:Key="Keys_DeleteHint">Confirm permanent deletion of the selected key</x:String>
+    <x:String x:Key="Keys_DeleteConfirm">Permanently delete the key “{0}”? This cannot be undone. Exported copies are unaffected.</x:String>
     <x:String x:Key="Keys_PayloadSigning">Payload signing key</x:String>
     <x:String x:Key="Keys_ChoosePayload">Choose a Payload key from your library</x:String>
     <x:String x:Key="Keys_ExternalPrivate">Or select an external PEM / DER private key</x:String>
