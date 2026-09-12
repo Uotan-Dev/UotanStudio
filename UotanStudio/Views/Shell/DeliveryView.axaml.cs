@@ -108,8 +108,19 @@ public partial class DeliveryView : UserControl
         if (packPayload) SuperDeviceNameBox.Text = "payload.bin";
         UseProjectSuperSettingsBox.Classes.Set("payload", packPayload);
         UpdateSuperProjectChoices(ProjectContextService.Instance, resetSelection: false);
-        Composition.SetOutputOptions(DirectOutputBox.IsChecked == true, packSuper, packPayload);
+        UpdateDeviceTypeOptions();
+        var modeChanged = Composition.SetOutputOptions(DirectOutputBox.IsChecked == true, packSuper, packPayload);
+        if (modeChanged && !_restoringDelivery) ImageSelection.SetAssignedPaths([]);
         UpdateCompositionImages();
+    }
+
+    private void UpdateDeviceTypeOptions()
+    {
+        SuperAbBox.IsVisible = PackSuperBox.IsChecked != true;
+        SuperAOnlyBox.IsVisible = PackPayloadBox.IsChecked != true;
+        if ((!SuperAbBox.IsVisible && SuperAbBox.IsChecked == true)
+            || (!SuperAOnlyBox.IsVisible && SuperAOnlyBox.IsChecked == true))
+            SuperVabBox.IsChecked = true;
     }
 
     private void UpdateCompositionImages()
@@ -203,6 +214,9 @@ public partial class DeliveryView : UserControl
         GenerateSuperEmptyBox.IsChecked = false;
         PayloadVersionBox.Text = "2";
         PayloadMinorVersionBox.Text = "0";
+        PayloadBuildFingerprintBox.Text = string.Empty;
+        PayloadIncrementalBox.Text = string.Empty;
+        PayloadSdkLevelBox.Text = string.Empty;
         DynamicPartitionsFileBox.Text = string.Empty;
         PayloadSignatureBox.Text = string.Empty;
         _legacyPayloadSignatureFile = "";
@@ -295,6 +309,7 @@ public partial class DeliveryView : UserControl
             PayloadTimestampBox.Text = settings.MaxTimestamp.ToString(System.Globalization.CultureInfo.InvariantCulture);
             PayloadSecurityPatchBox.Text = settings.SecurityPatchLevel;
         }
+        UpdateDeviceTypeOptions();
     }
 
     private void OnOutputDirectoryRowSizeChanged(object? sender, SizeChangedEventArgs e)

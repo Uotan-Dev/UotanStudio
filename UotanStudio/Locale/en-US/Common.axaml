@@ -18,7 +18,9 @@
     <x:String x:Key="Delivery_MetadataSize">Metadata size</x:String>
     <x:String x:Key="Delivery_BlockSize">Block size</x:String>
     <x:String x:Key="Delivery_ZstdCompression">Compress to ZST</x:String>
-    <x:String x:Key="Delivery_FullPayloadUpdate">Full update · payload.bin</x:String>
+    <x:String x:Key="Delivery_BuildFingerprint">Build fingerprint</x:String>
+    <x:String x:Key="Delivery_Incremental">Incremental number</x:String>
+    <x:String x:Key="Delivery_SdkLevel">SDK level</x:String>
     <x:String x:Key="Delivery_MaxTimestamp">Maximum timestamp</x:String>
     <x:String x:Key="Delivery_SecurityPatch">Security patch date</x:String>
     <x:String x:Key="Delivery_SelectSuperImageType">Select a full Super or Super_Empty image.</x:String>

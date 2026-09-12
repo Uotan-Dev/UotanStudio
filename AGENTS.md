@@ -10,6 +10,12 @@
 
 - 交付页脚本选项跟随 `DeliveryViewModel.PackPayload`：进入 Payload 模式取消并禁用 TXT 与 Bat&SH，默认仅选卡刷；退出 Payload（包括切换 Super）解除这两项禁用并恢复默认仅选 TXT。同模式下刷新或切换导出为ROM不重置脚本选择，恢复 Payload 计划时也不重新启用旧计划中的 TXT 或平台脚本。选项变化继续遵循输出区原有的确认/取消禁用状态，不扩展打包或脚本生成后端。
 
+## 交付页 Payload 表单与模式切换（2026-09-12）
+
+- 左栏移除“完整更新 · payload.bin”说明，动态分区文件及其操作按钮移到最大时间戳上方；Payload 次版本下依次显示构建指纹、增量编号、SDK 等级输入框，使用 `Delivery_BuildFingerprint` / `Delivery_Incremental` / `Delivery_SdkLevel` 中英资源。三个值复用 `DeliveryPlan.Package` 现有字段保存和恢复，不重新启用 OTA ZIP 或外层签名选项。
+- 打包 Super 时隐藏 AB，打包 Payload 时隐藏 A-Only；切换模式、恢复计划或应用原包设置后，已选中但被隐藏的类型改选 VAB。
+- 导出为ROM、打包 Super、打包 Payload 任一实际变化时，由 `DeliveryViewModel.SetMode` 清空编排与输出镜像列表、选择历史及确认状态，源列表通过 `SetAssignedPaths` 同步取消勾选和只读归属。相同模式刷新不清空列表，恢复交付计划保留计划中的镜像；脚本选择仍遵循上节规则。
+
 ## 交付表单精简（2026-09-11）
 
 - 镜像列表位于底部时隐藏右侧文本标签栏的主题分隔线；列表移至右侧时保留该侧顶部的独立分隔线。Payload 动态分区文件下方的“选择文件”和“自动生成”按行右对齐，窄栏继续支持换行。

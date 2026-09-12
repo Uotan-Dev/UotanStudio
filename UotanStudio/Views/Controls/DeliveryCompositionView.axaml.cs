@@ -69,7 +69,7 @@ public partial class DeliveryCompositionView : UserControl
         UpdateCompositionLayout();
     }
 
-    internal void SetOutputOptions(bool outputToDirectory, bool packSuper, bool packPayload)
+    internal bool SetOutputOptions(bool outputToDirectory, bool packSuper, bool packPayload)
     {
         var packImages = packSuper || packPayload;
         if (_outputToDirectory != outputToDirectory || _packImages != packImages || IsPayload != packPayload)
@@ -77,8 +77,9 @@ public partial class DeliveryCompositionView : UserControl
         _outputToDirectory = outputToDirectory;
         _packImages = packImages;
         IsPayload = packPayload;
-        Model.SetMode(outputToDirectory, packSuper, packPayload);
+        var changed = Model.SetMode(outputToDirectory, packSuper, packPayload);
         UpdateInteractionState();
+        return changed;
     }
 
     private void UpdateInteractionState()

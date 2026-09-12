@@ -38,6 +38,7 @@ public partial class DeliveryView
         };
         foreach (var box in new[] { OutputDirectoryBox, SuperSizeBox, SuperGroupNameBox, SuperDeviceNameBox,
                      SuperMetadataSizeBox, SuperBlockSizeBox, SuperMetadataSlotsBox, PayloadVersionBox, PayloadMinorVersionBox,
+                     PayloadBuildFingerprintBox, PayloadIncrementalBox, PayloadSdkLevelBox,
                      DynamicPartitionsFileBox, PayloadSignatureBox, PayloadPostinstallBox, PayloadTimestampBox, PayloadSecurityPatchBox })
             box.TextChanged += (_, _) => QueueDeliveryChange();
         foreach (var box in new ToggleButton[] { DirectOutputBox, PackSuperBox, PackPayloadBox, SuperRawBox, SuperSparseBox,
@@ -131,7 +132,15 @@ public partial class DeliveryView
         ContainerConfirmed = Composition.Model.Confirmed,
         Super = ReadDeliverySuperOptions(),
         Container = Composition.Model.Container.Select(i => i.Snapshot()).ToList()
-    });
+    }) with
+    {
+        Package = new()
+        {
+            BuildFingerprint = PayloadBuildFingerprintBox.Text?.Trim() ?? "",
+            Incremental = PayloadIncrementalBox.Text?.Trim() ?? "",
+            SdkLevel = uint.TryParse(PayloadSdkLevelBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var sdk) ? sdk : 0
+        }
+    };
 
     // The inactive list still owns its sources; expose that ownership to the picker without another selection state.
     // 非编辑列表继续持有其镜像，只向选择器同步只读状态，不额外维护镜像归属。
@@ -242,6 +251,9 @@ public partial class DeliveryView
             DirectOutputBox.IsChecked = plan.OrganizeDirectory; PackSuperBox.IsChecked = plan.PackSuper; PackPayloadBox.IsChecked = plan.PackPayload;
             PayloadVersionBox.Text = "2";
             PayloadMinorVersionBox.Text = "0";
+            PayloadBuildFingerprintBox.Text = plan.Package.BuildFingerprint;
+            PayloadIncrementalBox.Text = plan.Package.Incremental;
+            PayloadSdkLevelBox.Text = plan.Package.SdkLevel == 0 ? "" : plan.Package.SdkLevel.ToString(CultureInfo.InvariantCulture);
             DynamicPartitionsFileBox.Text = plan.Payload.DynamicPartitionsFile;
             _legacyPayloadSignatureFile = plan.Payload.SignatureFile;
             PayloadSignatureBox.Text = plan.Payload.SigningKeyPath;
@@ -262,6 +274,7 @@ public partial class DeliveryView
             SuperVabBox.IsChecked = deviceType == "VAB"; SuperAbBox.IsChecked = deviceType == "AB";
             SuperAOnlyBox.IsChecked = deviceType == "AOnly";
             SuperMetadataSlotsBox.Text = plan.Super.Slots.ToString(CultureInfo.InvariantCulture);
+            UpdateDeviceTypeOptions();
             SuperRawBox.IsChecked = !plan.Super.Sparse; SuperSparseBox.IsChecked = plan.Super.Sparse;
             GenerateSuperEmptyBox.IsChecked = plan.Super.Empty; ForceFullSuperImageBox.IsChecked = !plan.Super.Empty;
             Composition.AutoZero = plan.Super.AutoZero;

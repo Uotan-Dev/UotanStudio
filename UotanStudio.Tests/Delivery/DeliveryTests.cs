@@ -109,6 +109,69 @@ public sealed class DeliveryTests : IDisposable
     }
 
     [Theory]
+    [InlineData(true, true, false, false, true, false)]
+    [InlineData(false, true, false, true, true, false)]
+    [InlineData(true, true, false, true, false, true)]
+    [InlineData(true, false, true, true, true, false)]
+    [InlineData(true, true, false, true, false, false)]
+    [InlineData(true, false, true, true, false, false)]
+    [InlineData(true, false, true, false, false, true)]
+    [InlineData(false, false, true, true, false, true)]
+    [InlineData(true, false, false, true, true, false)]
+    [InlineData(true, false, false, true, false, true)]
+    [InlineData(true, false, false, false, false, false)]
+    [InlineData(false, false, false, true, false, false)]
+    public void ModeChangesClearMembershipAndAllowReselectingSources(
+        bool directory, bool super, bool payload, bool nextDirectory, bool nextSuper, bool nextPayload)
+    {
+        var system = Input("system"); var boot = Input();
+        var model = new DeliveryViewModel();
+        model.SetMode(directory, super, payload);
+        model.SelectSources([system]);
+        if (super || payload)
+        {
+            model.AddZero("vendor");
+            model.Confirm(new());
+        }
+        model.SelectSources([system, boot]);
+        var original = model.Container.Concat(model.Output).First(i => i.FilePath == system.SourcePath);
+        original.PartitionName = "edited_system";
+
+        Assert.True(model.SetMode(nextDirectory, nextSuper, nextPayload));
+        Assert.False(model.Confirmed);
+        Assert.Empty(model.Container);
+        Assert.Empty(model.Output);
+        Assert.True(File.Exists(system.SourcePath));
+        Assert.True(File.Exists(boot.SourcePath));
+
+        model.SelectSources([system]);
+        var selected = Assert.Single(nextSuper || nextPayload ? model.Container : model.Output);
+        Assert.Equal(system.Partition, selected.PartitionName);
+        Assert.NotSame(original, selected);
+    }
+
+    [Fact]
+    public void SameModeRefreshPreservesRestoredMembershipAndConfirmation()
+    {
+        var plan = new DeliveryPlan
+        {
+            PackPayload = true, ContainerConfirmed = true, Container = [Input("system")],
+            Files = [new() { Generated = true, Partition = "payload", FileName = "payload.bin" }, Input()]
+        };
+        var model = new DeliveryViewModel();
+        model.Reset(plan);
+        var container = model.Container.ToArray();
+        var output = model.Output.ToArray();
+
+        Assert.False(model.SetMode(true, false, true));
+        model.SelectSources(plan.Container.Concat(plan.Files.Where(f => !f.Generated)).ToArray());
+
+        Assert.True(model.Confirmed);
+        Assert.Equal(container, model.Container);
+        Assert.Equal(output, model.Output);
+    }
+
+    [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]
     [InlineData(false, true)]

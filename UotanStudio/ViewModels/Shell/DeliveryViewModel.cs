@@ -76,14 +76,20 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         Output.CollectionChanged += (_, _) => Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    internal void SetMode(bool directory, bool super, bool payload = false)
+    internal bool SetMode(bool directory, bool super, bool payload = false)
     {
-        if (PackSuper != super || PackPayload != payload || OrganizeDirectory != directory) Confirmed = false;
+        var changed = PackSuper != super || PackPayload != payload || OrganizeDirectory != directory;
+        if (changed)
+        {
+            Confirmed = false;
+            ClearImages();
+        }
         PackSuper = super; PackPayload = payload;
         foreach (var item in Container) item.ShowSuperChoice = payload;
         OrganizeDirectory = directory;
         if (!Confirmed) foreach (var item in Output.Where(i => i.Generated).ToArray()) Output.Remove(item);
         Changed?.Invoke(this, EventArgs.Empty);
+        return changed;
     }
 
     internal void SelectSources(IReadOnlyList<DeliveryFile> selected)
@@ -158,10 +164,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
 
     internal void Reset(DeliveryPlan? plan = null)
     {
-        foreach (var item in _known.Values.Concat(Container).Concat(Output).Distinct()) item.PropertyChanged -= OnItemChanged;
-        _known.Clear();
-        _previousSelection.Clear();
-        Container.Clear(); Output.Clear();
+        ClearImages();
         if (plan is not null)
         {
             foreach (var file in plan.Container) Container.Add(Observe(new DeliveryImage(file)));
@@ -174,6 +177,14 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         else { PackPayload = false; PackSuper = false; OrganizeDirectory = true; Confirmed = false; }
         Status = ""; Progress = 0;
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ClearImages()
+    {
+        foreach (var item in _known.Values.Concat(Container).Concat(Output).Distinct()) item.PropertyChanged -= OnItemChanged;
+        _known.Clear();
+        _previousSelection.Clear();
+        Container.Clear(); Output.Clear();
     }
 
     private DeliveryImage Observe(DeliveryImage image) { image.PropertyChanged += OnItemChanged; return image; }

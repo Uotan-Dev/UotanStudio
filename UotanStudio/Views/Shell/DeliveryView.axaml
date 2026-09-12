@@ -173,7 +173,17 @@
                         </WrapPanel>
                     </StackPanel>
                     <StackPanel Name="PayloadSettings" Spacing="12" IsVisible="False">
-                        <TextBlock Text="{DynamicResource Delivery_FullPayloadUpdate}" TextWrapping="Wrap" />
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_DynamicPartitionsFile}" />
+                            <TextBox Name="DynamicPartitionsFileBox"
+                                     AutomationProperties.Name="{DynamicResource Delivery_DynamicPartitionsFile}" />
+                            <WrapPanel ItemSpacing="8" LineSpacing="6" ItemsAlignment="End">
+                                <Button Name="BrowseDynamicPartitionsButton" Classes="file-action"
+                                        Content="{DynamicResource Delivery_SelectFile}" Click="OnBrowsePayloadFileClick" />
+                                <Button Name="GenerateDynamicPartitionsButton" Classes="file-action" IsEnabled="False"
+                                        Content="{DynamicResource Delivery_AutoGenerate}" />
+                            </WrapPanel>
+                        </StackPanel>
                         <StackPanel Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_MaxTimestamp}" />
                             <TextBox Name="PayloadTimestampBox" Text="0"
@@ -195,15 +205,19 @@
                                      AutomationProperties.Name="{DynamicResource Delivery_PayloadMinorVersion}" />
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_DynamicPartitionsFile}" />
-                            <TextBox Name="DynamicPartitionsFileBox"
-                                     AutomationProperties.Name="{DynamicResource Delivery_DynamicPartitionsFile}" />
-                            <WrapPanel ItemSpacing="8" LineSpacing="6" ItemsAlignment="End">
-                                <Button Name="BrowseDynamicPartitionsButton" Classes="file-action"
-                                        Content="{DynamicResource Delivery_SelectFile}" Click="OnBrowsePayloadFileClick" />
-                                <Button Name="GenerateDynamicPartitionsButton" Classes="file-action" IsEnabled="False"
-                                        Content="{DynamicResource Delivery_AutoGenerate}" />
-                            </WrapPanel>
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_BuildFingerprint}" />
+                            <TextBox Name="PayloadBuildFingerprintBox"
+                                     AutomationProperties.Name="{DynamicResource Delivery_BuildFingerprint}" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_Incremental}" />
+                            <TextBox Name="PayloadIncrementalBox"
+                                     AutomationProperties.Name="{DynamicResource Delivery_Incremental}" />
+                        </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SdkLevel}" />
+                            <TextBox Name="PayloadSdkLevelBox"
+                                     AutomationProperties.Name="{DynamicResource Delivery_SdkLevel}" />
                         </StackPanel>
                         <StackPanel Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Keys_PayloadSigning}" />
