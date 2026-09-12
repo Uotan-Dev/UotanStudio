@@ -63,9 +63,9 @@ public sealed partial class ProjectSession
         }, SolutionJsonContext.Default.FirmwareProjectSnapshot, cancellationToken);
         await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(transaction.StagingRoot, name + ".uotannode"), node,
             SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);
-        await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(transaction.StagingRoot, ".uotan", "settings.json"), settings,
+        await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(activeRoot, ".uotan", "settings.json"), settings,
             SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
-        await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(transaction.StagingRoot, ".uotan", "history.json"), history,
+        await AtomicJsonFile.WriteIfChangedAsync(Path.Combine(activeRoot, ".uotan", "history.json"), history,
             HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken);
         var solution = new SolutionSnapshot
         {

@@ -107,7 +107,7 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         var nested = Path.Combine(context.EnsureImagesDirectory(), "nested", "system.img");
         Directory.CreateDirectory(Path.GetDirectoryName(nested)!);
         File.WriteAllBytes(nested, [7, 8, 9]);
-        var metadata = Path.Combine(oldRoot, ".uotan", "metadata", "system", ".uotanstudio-repack.json");
+        var metadata = Path.Combine(context.GetMetadataRoot()!, "system", ".uotanstudio-repack.json");
         Directory.CreateDirectory(Path.GetDirectoryName(metadata)!);
         File.WriteAllText(metadata, "metadata-marker");
         var first = Path.Combine(oldRoot, "original", "original.uotanfw");

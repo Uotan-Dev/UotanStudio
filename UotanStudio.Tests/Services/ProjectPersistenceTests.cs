@@ -19,9 +19,9 @@ public sealed class SolutionPersistenceTests
         var path = Path.Combine(temp.Path, "proj.uotan");
         var solution = new SolutionSnapshot
         {
-            FormatVersion = 1,
+            FormatVersion = 2,
             SolutionName = "TestProj",
-            FirmwareProjectPath = "TestProj/TestProj.uotanfw",
+            SubProjects = [new() { Name = "TestProj", RelativePath = "TestProj/TestProj.uotanfw" }],
             NodeProjectPath = "TestProj/TestProj.uotannode"
         };
 
@@ -30,9 +30,9 @@ public sealed class SolutionPersistenceTests
 
         var loaded = await SolutionPersistenceService.LoadSolutionAsync(path, TestContext.Current.CancellationToken);
         Assert.NotNull(loaded);
-        Assert.Equal(1, loaded!.FormatVersion);
+        Assert.Equal(2, loaded!.FormatVersion);
         Assert.Equal("TestProj", loaded.SolutionName);
-        Assert.Equal("TestProj/TestProj.uotanfw", loaded.FirmwareProjectPath);
+        Assert.Equal("TestProj/TestProj.uotanfw", Assert.Single(loaded.SubProjects!).RelativePath);
         Assert.Equal("TestProj/TestProj.uotannode", loaded.NodeProjectPath);
     }
 

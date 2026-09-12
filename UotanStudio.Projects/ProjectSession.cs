@@ -87,10 +87,8 @@ public sealed partial class ProjectSession
             ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
         var nodePath = target.NodeProjectPath
             ?? Path.Combine(rootDir, solutionName + ".uotannode");
-        var stateDir = target.StateDirectory
-            ?? Path.Combine(rootDir, ".uotan");
-
         var subProjectDir = Path.Combine(rootDir, solutionName);
+        var stateDir = Path.Combine(subProjectDir, ".uotan");
         var subImagesDir = Path.Combine(subProjectDir, "images");
         var subOutputDir = Path.Combine(subProjectDir, "output");
         Directory.CreateDirectory(subImagesDir);
@@ -172,8 +170,11 @@ public sealed partial class ProjectSession
         var node = await SolutionPersistenceService.LoadNodeProjectAsync(target.NodeProjectPath!, cancellationToken);
         // Read descriptors before publication; bind host actions only after the new context is active.
         var history = new ProjectHistory();
-        await history.LoadAsync(Path.Combine(target.StateDirectory!, "history.json"), cancellationToken);
-        await SolutionSettingsService.LoadAsync(Path.Combine(target.StateDirectory!, "settings.json"), cancellationToken);
+        if (target.StateDirectory is { } stateDirectory)
+        {
+            await history.LoadAsync(Path.Combine(stateDirectory, "history.json"), cancellationToken);
+            await SolutionSettingsService.LoadAsync(Path.Combine(stateDirectory, "settings.json"), cancellationToken);
+        }
         cancellationToken.ThrowIfCancellationRequested();
         Context.OpenSolution(path, solution);
         CurrentProjectPath = Path.GetFullPath(path);
@@ -273,6 +274,7 @@ public sealed partial class ProjectSession
         fwPath = Path.GetFullPath(fwPath);
         if (File.Exists(fwPath)) throw new IOException("The sub-project file already exists; import its directory instead.");
         var subProjectDir = Path.GetDirectoryName(fwPath)!;
+        if (!ProjectValidation.IsSubProjectDirectory(context.RootDirectory!, subProjectDir)) return;
         var subName = Path.GetFileNameWithoutExtension(fwPath);
 
         if (context.SubProjects.Any(sp => string.Equals(sp.Name, subName, StringComparison.OrdinalIgnoreCase)))
@@ -316,6 +318,7 @@ public sealed partial class ProjectSession
     {
         using var transaction = new ProjectFileTransaction();
         var context = Context;
+        if (context.RootDirectory is { } solutionRoot && !ProjectValidation.IsSubProjectDirectory(solutionRoot, dirPath)) return;
         if (!context.IsProjectOpen || context.RootDirectory is null)
         {
             ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Menu", "Import sub-project aborted: no solution is open  导入子项目中止：尚未打开解决方案");
@@ -446,8 +449,7 @@ public sealed partial class ProjectSession
 
         var nodePath = context.NodeProjectPath
             ?? Path.Combine(rootDir, solutionName + ".uotannode");
-        var stateDir = context.StateDirectory
-            ?? Path.Combine(rootDir, ".uotan");
+        var stateDir = context.StateDirectory;
 
         var solution = new SolutionSnapshot
         {
@@ -459,12 +461,15 @@ public sealed partial class ProjectSession
 
         await transaction.StageAsync(nodePath, node, SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);
         await transaction.StageAsync(path, solution, SolutionJsonContext.Default.SolutionSnapshot, cancellationToken);
-        await transaction.StageAsync(Path.Combine(stateDir, "history.json"), History.CaptureSnapshot(), HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken);
-        var settingsPath = Path.Combine(stateDir, "settings.json");
-        var solutionSettings = await SolutionSettingsService.LoadAsync(settingsPath, cancellationToken) ?? new SolutionSettings();
-        if (persistPageState)
-            solutionSettings.RecentDocuments = openDocs.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
-        await transaction.StageAsync(settingsPath, solutionSettings, SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
+        if (stateDir is not null)
+        {
+            await transaction.StageAsync(Path.Combine(stateDir, "history.json"), History.CaptureSnapshot(), HistoryJsonContext.Default.ListHistoryOperationDto, cancellationToken);
+            var settingsPath = Path.Combine(stateDir, "settings.json");
+            var solutionSettings = await SolutionSettingsService.LoadAsync(settingsPath, cancellationToken) ?? new SolutionSettings();
+            if (persistPageState)
+                solutionSettings.RecentDocuments = openDocs.Select(d => d.RelativePath).Where(p => p.Length > 0).ToList();
+            await transaction.StageAsync(settingsPath, solutionSettings, SolutionSettingsJsonContext.Default.SolutionSettings, cancellationToken);
+        }
         transaction.Commit(cancellationToken);
     }
 

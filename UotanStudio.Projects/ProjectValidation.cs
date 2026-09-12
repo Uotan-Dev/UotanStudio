@@ -3,11 +3,20 @@ namespace UotanStudio.Services.Projects;
 /// <summary>Shared validation for persisted solution references, without restricting editor document paths.</summary>
 public static class ProjectValidation
 {
+    /// <summary>State-owning directories must be distinct from the solution root and outside reserved data folders.</summary>
+    public static bool IsSubProjectDirectory(string solutionRoot, string directory)
+    {
+        var relative = Path.GetRelativePath(Path.GetFullPath(solutionRoot), Path.GetFullPath(directory));
+        if (relative == ".") return false;
+        var reserved = new[] { "images", "output", ".uotan", ".deleted", ".git" };
+        return !relative.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar])
+            .Any(part => reserved.Contains(part, StringComparer.OrdinalIgnoreCase));
+    }
     /// <summary>Rejects unsupported versions and ambiguous sub-project identities before context publication.</summary>
     public static void ValidateSolution(SolutionSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        if (snapshot.FormatVersion is < 1 or > 2) throw new InvalidDataException("Unsupported solution format version.");
+        if (snapshot.FormatVersion != 2) throw new InvalidDataException("Unsupported solution format version.");
         if (snapshot.SubProjects is not { } projects) return;
         if (projects.Count > 10000) throw new InvalidDataException("Too many sub-projects.");
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

@@ -110,23 +110,6 @@ public sealed class ProjectLifecycleTests : IDisposable
     }
 
     [Fact]
-    public async Task LegacySolution_LoadsAndSavesAsVersionTwo()
-    {
-        var path = Path.Combine(_root, "legacy.uotan");
-        var root = Path.ChangeExtension(path, null);
-        Directory.CreateDirectory(root);
-        await File.WriteAllTextAsync(path, """{"FormatVersion":1,"SolutionName":"legacy","FirmwareProjectPath":"legacy.uotanfw","NodeProjectPath":"legacy.uotannode"}""", Token);
-        await File.WriteAllTextAsync(Path.Combine(root, "legacy.uotanfw"), """{"FormatVersion":1,"ProjectName":"legacy","Images":[],"Settings":{"ErofsCompLevel":6}}""", Token);
-        var session = new ProjectSession();
-        Assert.True(await session.OpenProjectFromPathAsync(path, Token));
-        Assert.Equal(6, Assert.IsType<ProjectDataWorkspace>(session.Workspace).Settings.ErofsCompLevel);
-        Assert.True(await session.SaveAsync(cancellationToken: Token));
-        var saved = await SolutionPersistenceService.LoadSolutionAsync(path, Token);
-        Assert.Equal(2, saved!.FormatVersion);
-        Assert.Single(saved.SubProjects!);
-    }
-
-    [Fact]
     public async Task NoNodeEditor_SaveStillPersistsProvidedSnapshots()
     {
         var workspace = new WaitingWorkspace(new(), new());

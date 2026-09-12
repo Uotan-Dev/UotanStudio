@@ -406,6 +406,8 @@ public sealed class FlashService : IFlashService
         DeviceInfo device, string partition, string imagePath,
         IProgress<FlashProgress>? progress, CancellationToken ct)
     {
+        var stateDir = ProjectContextService.Instance.Core.FindSubProject(imagePath)?.StateDirectory
+            ?? ProjectContextService.Instance.StateDirectory;
         Report(progress, partition, 0, "Opening fastboot session... 正在打开 fastboot 会话...");
         return await Task.Run(() =>
         {
@@ -427,7 +429,7 @@ public sealed class FlashService : IFlashService
                 throw new InvalidOperationException("Fastboot session is not connected. fastboot 会话未连接。");
             }
 
-            TryBackupBeforeFlash(session, partition, progress, ct);
+            TryBackupBeforeFlash(session, partition, progress, ct, stateDir);
 
             var summary = FlashImageChunked(session, partition, imagePath, progress, ct);
             Report(progress, partition, 100, "Flash complete. 刷写完成。");
@@ -521,17 +523,17 @@ public sealed class FlashService : IFlashService
 
     /// <summary>
     /// <para>若设置「刷写前自动备份」已启用，在刷写前把 fastboot 目标分区备份到
-    /// 工程会话目录 <c>.uotan/backup/</c>（未打开工程时退化到临时目录）。
+    /// 子项目状态目录 <c>.uotan/backup/</c>（未打开工程时退化到临时目录）。
     /// 备份进度并入现有刷写进度通道；备份失败仅记录警告日志，绝不中断刷写。</para>
     /// If the "auto-backup before flash" setting is enabled, backs up the fastboot target
-    /// partition to the solution session directory <c>.uotan/backup/</c> before flashing
+    /// partition to the captured sub-project state directory <c>.uotan/backup/</c> before flashing
     /// (falls back to the temp directory when no solution is open). Backup progress is
     /// merged into the existing flash progress channel; a failed backup only logs a warning
     /// and never aborts the flash.
     /// </summary>
     private static void TryBackupBeforeFlash(
         FastbootSession session, string partition,
-        IProgress<FlashProgress>? progress, CancellationToken ct)
+        IProgress<FlashProgress>? progress, CancellationToken ct, string? stateDir)
     {
         try
         {
@@ -540,7 +542,6 @@ public sealed class FlashService : IFlashService
                 return;
             }
 
-            var stateDir = ProjectContextService.Instance.StateDirectory;
             var backupDir = Path.Combine(stateDir ?? Path.GetTempPath(), "backup");
             Directory.CreateDirectory(backupDir);
 

@@ -17,17 +17,20 @@ public static class ProjectArchiveService
         root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
         outputPath = Path.GetFullPath(outputPath);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
+        var excludedHistory = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         if (solutionPath is not null)
         {
             var solution = await SolutionPersistenceService.LoadSolutionAsync(solutionPath, cancellationToken)
                 ?? throw new InvalidDataException("Cannot read the solution to package.");
             var references = solution.SubProjects?.Select(p => p.RelativePath).ToList() ?? [];
-            if (solution.FirmwareProjectPath is { Length: > 0 } legacy) references.Add(legacy);
             foreach (var reference in references)
             {
                 var path = Path.GetFullPath(Path.Combine(root, reference));
                 if (!ProjectSaveAsTransaction.IsWithin(root, path) || !File.Exists(path))
                     throw new IOException("A package requires all sub-projects to exist inside its data directory.");
+                if (!ProjectValidation.IsSubProjectDirectory(root, Path.GetDirectoryName(path)!))
+                    throw new IOException("A packaged sub-project requires its own directory.");
+                excludedHistory.Add(Path.Combine(Path.GetDirectoryName(path)!, ".uotan", "history.json"));
             }
         }
         if ((File.GetAttributes(root) & FileAttributes.ReparsePoint) != 0) throw new IOException("Cannot archive a linked root.");
@@ -62,7 +65,7 @@ public static class ProjectArchiveService
                         if ((attributes & FileAttributes.ReparsePoint) != 0) throw new IOException($"Cannot archive a linked entry: {path}");
                         var name = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
                         // Executable history contains machine-local absolute paths and deleted files are excluded.
-                        if (solutionPath is not null && name == ".uotan/history.json") continue;
+                        if (solutionPath is not null && excludedHistory.Contains(Path.GetFullPath(path))) continue;
                         if (solutionPath is not null) name = Path.GetFileName(root) + "/" + name;
                         if ((attributes & FileAttributes.Directory) != 0)
                         {

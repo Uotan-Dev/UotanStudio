@@ -21,6 +21,13 @@ public sealed class ProjectContextService
     public string EnsureImagesDirectory() => Core.EnsureImagesDirectory();
     public string EnsureOutputDirectory() => Core.EnsureOutputDirectory();
     public string? GetMetadataRoot() => Core.GetMetadataRoot();
+    /// <summary>Finds metadata by the owning path, independent of which sub-project is selected.</summary>
+    public string? GetMetadataRoot(string path) => Core.GetMetadataRoot(path);
+    /// <summary>Captures a fixed metadata context for one source or extraction directory.</summary>
+    public UotanStudio.Firmware.SharedKernel.RepackMetadataContext CaptureMetadataContext(string path)
+        => GetMetadataRoot(path) is { } root
+            ? UotanStudio.Firmware.SharedKernel.RepackMetadataContext.FromProjectRoot(root)
+            : UotanStudio.Firmware.SharedKernel.RepackMetadataContext.LocalDirectory;
     public string? ResolvePath(string path) => Core.ResolvePath(path);
     public string? RelativePath(string path) => Core.RelativePath(path);
 }

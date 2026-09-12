@@ -59,20 +59,20 @@ public static class ProjectPackage
                 var path = Path.GetFullPath(Path.Combine(root, reference.RelativePath));
                 if (!ProjectSaveAsTransaction.IsWithin(root, path) || !File.Exists(path))
                     throw new InvalidDataException("Packaged sub-project is missing or outside the data root.");
+                if (!ProjectValidation.IsSubProjectDirectory(root, Path.GetDirectoryName(path)!))
+                    throw new InvalidDataException("A packaged sub-project requires its own directory.");
                 if (await SolutionPersistenceService.LoadFirmwareProjectAsync(path, cancellationToken) is null)
                     throw new InvalidDataException("Invalid packaged sub-project.");
-            }
-            if (snapshot.FirmwareProjectPath is { Length: > 0 } legacy)
-            {
-                var path = Path.GetFullPath(Path.Combine(root, legacy));
-                if (!ProjectSaveAsTransaction.IsWithin(root, path) || !File.Exists(path))
-                    throw new InvalidDataException("Invalid legacy project reference.");
             }
             var nodePath = Path.Combine(root, Path.GetFileName(root) + ".uotannode");
             if (await SolutionPersistenceService.LoadNodeProjectAsync(nodePath, cancellationToken) is null)
                 throw new InvalidDataException("Missing or invalid packaged workflow.");
             // Never reconstruct source-machine absolute undo paths in the imported workspace.
-            await new ProjectHistory().SaveAsync(Path.Combine(root, ".uotan", "history.json"), cancellationToken);
+            foreach (var project in snapshot.SubProjects ?? [])
+            {
+                var subRoot = Path.GetDirectoryName(Path.GetFullPath(Path.Combine(root, project.RelativePath)))!;
+                await new ProjectHistory().SaveAsync(Path.Combine(subRoot, ".uotan", "history.json"), cancellationToken);
+            }
             cancellationToken.ThrowIfCancellationRequested();
             Directory.Move(temporary, destination);
             return Path.Combine(destination, Path.GetFileName(solutionPath));

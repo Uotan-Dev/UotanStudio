@@ -26,8 +26,11 @@ public sealed partial class ProjectSession
             var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(target.FwProjectPath, cancellationToken)
                 ?? throw new InvalidDataException("Cannot read the target sub-project.");
             if (persistCurrent && CurrentProjectPath is { } path) await PersistCoreAsync(path, false, cancellationToken);
+            var history = new ProjectHistory();
+            await history.LoadAsync(Path.Combine(target.StateDirectory, "history.json"), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             Context.SetActiveSubProject(name);
+            History.CopyFrom(history);
             _workspace.ClearImages();
             _workspace.ApplySettings(firmware.Settings ?? new());
             _workspace.RestoreImages(firmware.Images.Where(dto => _workspace.PreserveMissingImages || Context.ResolvePath(dto.RelativePath) is { } absolute && File.Exists(absolute)));

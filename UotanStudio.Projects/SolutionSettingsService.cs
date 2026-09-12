@@ -15,8 +15,8 @@ namespace UotanStudio.Services.Projects;
 internal partial class SolutionSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>
-/// Per-solution settings persisted to <c>RootDirectory/.uotan/settings.json</c> (like VS's <c>.vs/</c> state).
-/// <para>持久化到 <c>RootDirectory/.uotan/settings.json</c> 的解决方案级设置（类似 VS 的 <c>.vs/</c> 状态）。</para>
+/// Per-sub-project settings persisted to <c>SubProjectRoot/.uotan/settings.json</c>; the public type name is retained for compatibility.
+/// <para>持久化到子项目 <c>.uotan/settings.json</c> 的设置；保留公共类型名以兼容调用方。</para>
 /// </summary>
 public sealed class SolutionSettings
 {
@@ -34,9 +34,9 @@ public sealed class SolutionSettings
 }
 
 /// <summary>
-/// Persistence service for per-solution settings, reading/writing <c>settings.json</c> under the solution
+/// Persistence service for per-sub-project settings, reading/writing <c>settings.json</c> under the sub-project
 /// state directory. AOT-friendly: uses the <see cref="SolutionSettingsJsonContext"/> source-generated JSON.
-/// <para>解决方案级设置持久化服务，读写解决方案状态目录下的 <c>settings.json</c>。AOT 友好：
+/// <para>子项目设置持久化服务，读写所属子项目状态目录下的 <c>settings.json</c>。AOT 友好：
 /// 使用 <see cref="SolutionSettingsJsonContext"/> 源生成 JSON。</para>
 /// </summary>
 public static class SolutionSettingsService

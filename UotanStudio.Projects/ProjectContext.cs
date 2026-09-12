@@ -14,14 +14,21 @@ public sealed record SubProjectContext(
     string RootPath,
     string FwProjectPath,
     string ImagesDir,
-    string OutputDir);
+    string OutputDir)
+{
+    /// <summary>State owned by this sub-project, independent of the active selection.</summary>
+    public string StateDirectory => Path.Combine(RootPath, ".uotan");
+
+    /// <summary>Filesystem and firmware metadata owned by this sub-project.</summary>
+    public string MetadataRoot => Path.Combine(StateDirectory, "metadata");
+}
 
 /// <summary>
 /// Independent solution context, holding the state and directory layout of the opened
-/// <c>.uotan</c> solution: data root, sub-projects, node project file, session state directory
+/// <c>.uotan</c> solution: data root, sub-projects, node project file, active sub-project state directory
 /// <c>.uotan/</c>, and relative/absolute path conversion.
 /// <para>独立解决方案上下文，承载已打开 <c>.uotan</c> 解决方案的状态与目录布局：
-/// 数据根目录、子项目列表、节点项目文件、会话状态目录 <c>.uotan/</c> 及相对/绝对路径转换。</para>
+/// 数据根目录、子项目列表、节点项目文件、活动子项目状态目录 <c>.uotan/</c> 及相对/绝对路径转换。</para>
 /// </summary>
 public sealed class ProjectContext
 {
@@ -53,13 +60,12 @@ public sealed class ProjectContext
 
     /// <summary>
     /// Firmware project file path — resolves to <see cref="ActiveSubProject"/>.<c>FwProjectPath</c>
-    /// when available; falls back to legacy single-project path. <c>null</c> when no solution is open.
+    /// when available; <c>null</c> when no sub-project is active.
     /// <para>固件项目文件路径——优先取 <see cref="ActiveSubProject"/> 的 <c>FwProjectPath</c>；
-    /// 回退到旧版单项目路径。未打开解决方案时为 <c>null</c>。</para>
+    /// 没有活动子项目时为 <c>null</c>。</para>
     /// </summary>
-    public string? FirmwareProjectPath => ActiveSubProject?.FwProjectPath ?? LegacyFirmwareProjectPath;
+    public string? FirmwareProjectPath => ActiveSubProject?.FwProjectPath;
 
-    private string? LegacyFirmwareProjectPath { get; set; }
 
     /// <summary>
     /// Node project file path (<c>RootDirectory/&lt;SolutionName&gt;.uotannode</c>); <c>null</c> when no solution is open.
@@ -68,10 +74,10 @@ public sealed class ProjectContext
     public string? NodeProjectPath { get; private set; }
 
     /// <summary>
-    /// Session state directory (<c>RootDirectory/.uotan</c>, like VS's <c>.vs/</c>); <c>null</c> when no solution is open.
-    /// <para>会话状态目录（<c>RootDirectory/.uotan</c>，类似 VS 的 <c>.vs/</c>）；未打开解决方案时为 <c>null</c>。</para>
+    /// State directory of the active sub-project; null when no sub-project is active.
+    /// <para>当前活动子项目的 .uotan 目录；没有活动子项目时为 null。</para>
     /// </summary>
-    public string? StateDirectory { get; private set; }
+    public string? StateDirectory => ActiveSubProject?.StateDirectory;
 
     /// <summary>
     /// All sub-projects discovered in the current solution.
@@ -109,9 +115,9 @@ public sealed class ProjectContext
 
     /// <summary>
     /// Opens the specified solution: sets the solution path/name and directory layout, scans for
-    /// sub-projects (<c>*.uotanfw</c> files), and ensures the <c>.uotan/</c> state directory exists.
+    /// sub-projects (<c>*.uotanfw</c> files). State belongs to each sub-project.
     /// <para>打开指定解决方案：设置解决方案路径/名称与目录布局，扫描子项目（<c>*.uotanfw</c> 文件），
-    /// 并确保 <c>.uotan/</c> 会话状态目录存在。</para>
+    /// 状态目录由各子项目独立持有。</para>
     /// </summary>
     /// <param name="solutionPath">
     /// Full path of the solution file (<c>.uotan</c>). <para>解决方案文件（<c>.uotan</c>）全路径。</para>
@@ -126,9 +132,7 @@ public sealed class ProjectContext
         CurrentSolutionPath = candidate.CurrentSolutionPath;
         SolutionName = candidate.SolutionName;
         RootDirectory = candidate.RootDirectory;
-        LegacyFirmwareProjectPath = candidate.LegacyFirmwareProjectPath;
         NodeProjectPath = candidate.NodeProjectPath;
-        StateDirectory = candidate.StateDirectory;
         SubProjects = Array.AsReadOnly(candidate.SubProjects.ToArray());
         ActiveSubProject = candidate.ActiveSubProject;
         Changed?.Invoke();
@@ -142,13 +146,11 @@ public sealed class ProjectContext
             throw new ArgumentException("Solution path must not be empty.  解决方案路径不能为空。", nameof(solutionPath));
         }
 
-        LegacyFirmwareProjectPath = null;
         CurrentSolutionPath = Path.GetFullPath(solutionPath);
         RootDirectory = Path.ChangeExtension(CurrentSolutionPath, null);
         SolutionName = Path.GetFileName(RootDirectory);
         NodeProjectPath = Path.Combine(RootDirectory, SolutionName + ".uotannode");
-        StateDirectory = Path.Combine(RootDirectory, ".uotan");
-        Directory.CreateDirectory(StateDirectory);
+        Directory.CreateDirectory(RootDirectory);
 
         // Build sub-project list from snapshot or by scanning the root directory
         var subProjects = new List<SubProjectContext>();
@@ -160,7 +162,8 @@ public sealed class ProjectContext
             {
                 var fwPath = Path.Combine(RootDirectory, dto.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                 if (!File.Exists(fwPath)) continue;
-                var subRoot = Path.GetDirectoryName(fwPath)!;
+                var subRoot = Path.GetDirectoryName(Path.GetFullPath(fwPath))!;
+                if (!ProjectValidation.IsSubProjectDirectory(RootDirectory, subRoot)) continue;
                 subProjects.Add(new SubProjectContext(
                     dto.Name,
                     subRoot,
@@ -169,36 +172,14 @@ public sealed class ProjectContext
                     Path.Combine(subRoot, "output")));
             }
         }
-        else if (snapshot is not null && !string.IsNullOrEmpty(snapshot.FirmwareProjectPath))
+        else if (snapshot is null)
         {
-            // v1 legacy: single firmware project — auto-migrate to sub-project
-            var fwPath = Path.Combine(RootDirectory, snapshot.FirmwareProjectPath.Replace('/', Path.DirectorySeparatorChar));
-            if (File.Exists(fwPath))
+            foreach (var directory in Directory.EnumerateDirectories(RootDirectory))
             {
-                LegacyFirmwareProjectPath = fwPath;
-                var subRoot = Path.GetDirectoryName(fwPath)!;
-                var subName = Path.GetFileName(subRoot);
-                subProjects.Add(new SubProjectContext(
-                    subName,
-                    subRoot,
-                    fwPath,
-                    Path.Combine(subRoot, "images"),
-                    Path.Combine(subRoot, "output")));
-            }
-        }
-        else
-        {
-            // Fallback: scan root directory for *.uotanfw files
-            foreach (var fwFile in Directory.EnumerateFiles(RootDirectory, "*.uotanfw"))
-            {
-                var subRoot = Path.GetDirectoryName(fwFile)!;
-                var subName = Path.GetFileName(subRoot);
-                subProjects.Add(new SubProjectContext(
-                    subName,
-                    subRoot,
-                    fwFile,
-                    Path.Combine(subRoot, "images"),
-                    Path.Combine(subRoot, "output")));
+                if (IsReservedDirectory(directory) || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) continue;
+                foreach (var fwFile in Directory.EnumerateFiles(directory, "*.uotanfw"))
+                    subProjects.Add(new(Path.GetFileNameWithoutExtension(fwFile), directory, fwFile,
+                        Path.Combine(directory, "images"), Path.Combine(directory, "output")));
             }
         }
 
@@ -206,6 +187,9 @@ public sealed class ProjectContext
         ActiveSubProject = subProjects.FirstOrDefault();
         Changed?.Invoke();
     }
+
+    private static bool IsReservedDirectory(string path)
+        => new[] { "images", "output", ".uotan", ".deleted", ".git" }.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Closes the current solution, clearing all state.
@@ -216,9 +200,7 @@ public sealed class ProjectContext
         CurrentSolutionPath = null;
         SolutionName = null;
         RootDirectory = null;
-        LegacyFirmwareProjectPath = null;
         NodeProjectPath = null;
-        StateDirectory = null;
         SubProjects = [];
         ActiveSubProject = null;
         Changed?.Invoke();
@@ -255,17 +237,36 @@ public sealed class ProjectContext
     }
 
     /// <summary>
-    /// Returns the consolidated metadata root directory (<c>.uotan/metadata/</c>) for the current project,
-    /// or <c>null</c> when no solution is open. Callers should pass this to <c>RepackMetadata.WriteAsync</c>.
-    /// <para>返回当前项目的统一元数据根目录（<c>.uotan/metadata/</c>），未打开解决方案时返回 <c>null</c>。
+    /// Returns the active sub-project's metadata root, or null when no sub-project is active.
+    /// <para>返回当前活动子项目的元数据根目录（<c>.uotan/metadata/</c>），无活动子项目时返回 <c>null</c>。
     /// 调用方应将其传递给 <c>RepackMetadata.WriteAsync</c>。</para>
     /// </summary>
     public string? GetMetadataRoot()
     {
-        if (StateDirectory is null) return null;
-        var root = Path.Combine(StateDirectory, "metadata");
-        Directory.CreateDirectory(root);
-        return root;
+        return EnsureMetadataRoot(ActiveSubProject);
+    }
+
+    /// <summary>Finds the owner of a path without consulting the active selection.</summary>
+    public SubProjectContext? FindSubProject(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var full = Path.GetFullPath(path);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return SubProjects.Where(project =>
+        {
+            var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(project.RootPath));
+            return string.Equals(full, root, comparison) || full.StartsWith(root + Path.DirectorySeparatorChar, comparison);
+        }).OrderByDescending(project => project.RootPath.Length).FirstOrDefault();
+    }
+
+    /// <summary>Returns the metadata root of the path's owning sub-project; unrelated paths have no project root.</summary>
+    public string? GetMetadataRoot(string path) => EnsureMetadataRoot(FindSubProject(path));
+
+    private static string? EnsureMetadataRoot(SubProjectContext? project)
+    {
+        if (project is null) return null;
+        Directory.CreateDirectory(project.MetadataRoot);
+        return project.MetadataRoot;
     }
 
     /// <summary>

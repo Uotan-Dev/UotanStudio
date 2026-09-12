@@ -161,8 +161,8 @@ public static class SolutionPersistenceService
 public sealed class SolutionSnapshot
 {
     /// <summary>
-    /// Solution file format version (currently 2; v1 is auto-migrated on load).
-    /// <para>解决方案文件格式版本（当前为 2；加载时自动迁移 v1）。</para>
+    /// Solution file format version (currently 2).
+    /// <para>解决方案文件格式版本（当前为 2）。</para>
     /// </summary>
     public int FormatVersion { get; set; } = 2;
 
@@ -173,22 +173,12 @@ public sealed class SolutionSnapshot
     public string SolutionName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Firmware project file path relative to the solution file's directory (v1 legacy; ignored when
-    /// <see cref="SubProjects"/> is non-empty).
-    /// <para>固件项目文件路径（相对解决方案文件目录，v1 遗留字段；<see cref="SubProjects"/> 非空时忽略）。</para>
-    /// </summary>
-    public string FirmwareProjectPath { get; set; } = string.Empty;
-
-    /// <summary>
     /// Node project file path relative to the solution file's directory.
     /// <para>节点项目文件路径（相对解决方案文件目录）。</para>
     /// </summary>
     public string NodeProjectPath { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Sub-project references (v2+). When this list is non-empty, <see cref="FirmwareProjectPath"/> is ignored.
-    /// <para>子项目引用列表（v2+）。此列表非空时，<see cref="FirmwareProjectPath"/> 被忽略。</para>
-    /// </summary>
+    /// <summary>References to independently stored sub-projects.</summary>
     public List<SubProjectDto>? SubProjects { get; set; }
 }
 
