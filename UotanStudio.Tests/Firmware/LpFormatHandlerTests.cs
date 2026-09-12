@@ -162,6 +162,43 @@ public class LpFormatHandlerTests
         Assert.Single(Directory.EnumerateFiles(output.Path));
     }
 
+    [Fact]
+    public void StandaloneEmptyImage_LiblpLayoutIsHandledAndReadable()
+    {
+        // liblp 独立空镜像（super_empty）布局：geometry@0 + 单个 metadata blob，无保留区/备份副本。
+        // liblp standalone empty-image layout (super_empty): geometry at offset zero plus one metadata
+        // blob; no reserved area or backup copies — mirrors DeliverySuperBuilder's Empty branch.
+        using var temp = new TempDirectory();
+        var device = new LpMetadataBlockDevice { Size = 1024 * 1024, FirstLogicalSector = 536, Alignment = 4096, PartitionName = "super"u8.ToArray() };
+        var metadata = new LpMetadata
+        {
+            Geometry = new LpMetadataGeometry { MetadataMaxSize = 65536, MetadataSlotCount = 2, LogicalBlockSize = 4096 },
+            Partitions =
+            [
+                new() { Name = "my_bigball_a"u8.ToArray(), NumExtents = 0 },
+                new() { Name = "my_carrier_a"u8.ToArray(), NumExtents = 0 }
+            ],
+            Extents = [],
+            Groups = [new() { Name = "default"u8.ToArray() }],
+            BlockDevices = [device]
+        };
+        var image = Path.Combine(temp.Path, "super_empty.img");
+        using (var stream = new FileStream(image, FileMode.CreateNew, FileAccess.Write))
+        {
+            stream.Write(MetadataWriter.SerializeGeometry(metadata.Geometry));
+            stream.Write(MetadataWriter.SerializeMetadata(metadata));
+        }
+
+        var handler = new LpFormatHandler();
+        Assert.True(handler.CanHandle(image));
+        var read = MetadataReader.ReadFromImageFile(image);
+        Assert.Equal(["my_bigball_a", "my_carrier_a"], read.Partitions.Select(p => p.NameString));
+        var result = handler.ReadMetadataAsync(image).GetAwaiter().GetResult();
+        Assert.True(result.Success, result.Summary);
+        Assert.Contains("2 partitions", result.Summary);
+        Assert.Contains("my_bigball_a", result.Entries);
+    }
+
     private static LpMetadataExtent Linear(ulong sectors) => new()
     {
         NumSectors = sectors,

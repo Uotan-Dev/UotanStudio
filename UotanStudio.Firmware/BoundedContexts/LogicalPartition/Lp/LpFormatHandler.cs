@@ -91,28 +91,37 @@ public sealed class LpFormatHandler : IFormatHandler
             }
 
             var written = 0;
-            foreach (var plan in plans)
+            var readGate = new object();
+            var progressGate = new object();
+            var parallelOptions = new ParallelOptions
             {
-                options.Progress?.Report(100.0 * written / plans.Count, $"Extracting {Path.GetFileName(plan.Path)}");
+                MaxDegreeOfParallelism = FirmwareParallelism.Workers,
+                CancellationToken = cancellationToken
+            };
+            await Parallel.ForEachAsync(plans, parallelOptions, async (plan, token) =>
+            {
+                using var source = new IndependentReadStream(image, readGate);
+                lock (progressGate)
+                    options.Progress?.Report(100.0 * written / plans.Count, $"Extracting {Path.GetFileName(plan.Path)}");
                 await FileExtraction.WriteAtomicAsync(plan.Path, async output =>
                 {
                     output.SetLength(plan.Length);
                     foreach (var extent in plan.Extents)
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
+                        token.ThrowIfCancellationRequested();
                         var length = checked((long)extent.NumSectors * MetadataFormat.LP_SECTOR_SIZE);
                         if (extent.TargetType == MetadataFormat.LP_TARGET_TYPE_ZERO)
                         {
                             output.Position = checked(output.Position + length);
                             continue;
                         }
-                        image.Position = checked((long)extent.TargetData * MetadataFormat.LP_SECTOR_SIZE);
-                        await StreamCopy.CopyExactlyAsync(image, output, length, cancellationToken).ConfigureAwait(false);
+                        source.Position = checked((long)extent.TargetData * MetadataFormat.LP_SECTOR_SIZE);
+                        await StreamCopy.CopyExactlyAsync(source, output, length, token, 256 * 1024).ConfigureAwait(false);
                     }
                     if (output.Position != plan.Length) throw new InvalidDataException("LP partition length mismatch.");
-                }, options.Overwrite, cancellationToken).ConfigureAwait(false);
-                written++;
-            }
+                }, options.Overwrite, token).ConfigureAwait(false);
+                lock (progressGate) written++;
+            }).ConfigureAwait(false);
             options.Progress?.Report(100, $"Extracted {written} partitions");
             return FirmwareOpResult.Ok($"Extracted {written} partitions to {outputDirectory}");
         }
@@ -163,14 +172,21 @@ public sealed class LpFormatHandler : IFormatHandler
             {
                 image.SetLength(imageLength);
                 MetadataWriter.WriteToImageStream(image, metadata);
-                foreach (var partition in metadata.Partitions)
+                await image.FlushAsync(cancellationToken).ConfigureAwait(false);
+                var handle = image.SafeFileHandle;
+                var parallelOptions = new ParallelOptions
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    MaxDegreeOfParallelism = FirmwareParallelism.Workers,
+                    CancellationToken = cancellationToken
+                };
+                await Parallel.ForEachAsync(metadata.Partitions, parallelOptions, async (partition, token) =>
+                {
+                    token.ThrowIfCancellationRequested();
                     var source = sources[partition.NameString];
                     await using var part = new FileStream(source.Path, FileMode.Open, FileAccess.Read, FileShare.Read,
                         81920, FileOptions.Asynchronous);
                     if (part.Length != source.Length) throw new IOException($"Partition image changed during packing: '{source.Path}'.");
-                    if (source.Length == 0) continue;
+                    if (source.Length == 0) return;
                     if (partition.NumExtents != 1) throw new InvalidDataException("The LP builder returned an unexpected extent layout.");
                     var extent = metadata.Extents[checked((int)partition.FirstExtentIndex)];
                     var offset = checked((long)extent.TargetData * MetadataFormat.LP_SECTOR_SIZE);
@@ -178,10 +194,10 @@ public sealed class LpFormatHandler : IFormatHandler
                     FileExtraction.ValidateRange(offset, extentLength, imageLength, "Packed LP extent");
                     if (extent.TargetType != MetadataFormat.LP_TARGET_TYPE_LINEAR || extent.TargetSource != 0 || source.Length > extentLength)
                         throw new InvalidDataException("The LP builder returned an invalid linear extent.");
-                    image.Position = offset;
-                    await StreamCopy.CopyExactlyAsync(part, image, source.Length, cancellationToken).ConfigureAwait(false);
+                    using var target = new PositionedWriteStream(handle, offset, source.Length);
+                    await StreamCopy.CopyExactlyAsync(part, target, source.Length, token, 256 * 1024).ConfigureAwait(false);
                     if (part.Length != source.Length) throw new IOException($"Partition image changed during packing: '{source.Path}'.");
-                }
+                }).ConfigureAwait(false);
             }, cancellationToken: cancellationToken).ConfigureAwait(false);
             return FirmwareOpResult.Ok($"Packed {files.Count} partitions into super image {outputPath}");
         }

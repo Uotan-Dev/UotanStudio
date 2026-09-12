@@ -35,7 +35,17 @@ public static class MetadataReader
         try { ReadPrimaryGeometry(stream, out geometry); }
         catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
         {
-            ReadBackupGeometry(stream, out geometry);
+            try { ReadBackupGeometry(stream, out geometry); }
+            catch (Exception ex2) when (ex2 is InvalidDataException or EndOfStreamException)
+            {
+                // liblp standalone empty-image 布局（super_empty）：几何结构位于偏移 0，
+                // 其后紧跟单个 metadata blob，无保留区与备份副本。
+                // liblp standalone empty-image layout (super_empty): geometry at offset zero
+                // followed directly by one metadata blob; no reserved area or backup copies.
+                ReadGeometry(stream, 0, out geometry);
+                stream.Position = MetadataFormat.LP_METADATA_GEOMETRY_SIZE;
+                return ParseMetadata(geometry, stream);
+            }
         }
         try { return ReadPrimaryMetadata(stream, geometry, 0); }
         catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
