@@ -6,6 +6,8 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Projects;
+using UotanStudio.Services.Delivery;
 
 namespace UotanStudio.Views.Shell;
 
@@ -87,18 +89,84 @@ public partial class NewProjectWindow : Window
     private string? _containerPath;
     private bool _isAnalyzing;
     private bool _isCreating;
+    private IReadOnlyList<ContainerEntry> _containerEntries = [];
+
+    /// <summary>Queries available bytes; replaceable by window validation without filling a real disk.</summary>
+    internal Func<string, long> AvailableSpace { get; set; } = DiskSpaceEstimator.GetFreeBytes;
 
     /// <summary>Runs creation while the modal form displays progress.</summary>
     public Func<NewProjectFormResult, Task>? CreateAsync { get; set; }
 
+    /// <summary><para>滑动窗口计量器：统计「已处理/总量 · 速度 · 剩余时间」。</para>
+    /// Sliding-window meter for the "processed/total · speed · eta" stats line.</summary>
+    private readonly ProgressMeter _meter = new();
+    private int _progressGeneration;
+
     /// <summary>Updates operation status on the UI thread.</summary>
-    public void ReportProgress(string status, double? percent = null)
+    public void ReportProgress(string status, double? percent = null, (long Processed, long Total)? bytes = null, string? statistics = null)
     {
         ProgressPanel.IsVisible = true;
-        OperationStatus.Text = status;
+        if (bytes is { Total: > 0 } measured) percent = measured.Processed * 100.0 / measured.Total;
+        percent = percent is { } value && double.IsFinite(value) && value >= 0 ? Math.Clamp(value, 0, 100) : null;
+        OperationStatus.Text = percent is { } number
+            ? string.Format(LanguageService.Instance.GetString("Progress_StatusPercent"), status, number) : status;
         OperationProgress.IsIndeterminate = percent is null;
         OperationProgress.Value = percent ?? 0;
+        OperationStats.Text = statistics ?? string.Empty;
+        if (bytes is { } sample)
+        {
+            _meter.Report(sample.Processed, sample.Total);
+            // 剩余时间不可估（FormatEta 为 "—"）时去掉尾巴，避免孤立的破折号。
+            // Drop the eta tail when it is not estimable ("—") to avoid a dangling dash.
+            OperationStats.Text = _meter.FormatStats(_meter.EstimatedRemaining is null
+                ? LanguageService.Instance.GetString("Progress_StatsNoEta")
+                : LanguageService.Instance.GetString("Progress_Stats"));
+        }
     }
+
+    /// <summary><para>阶段切换时清空样本与统计文本。</para>Clears samples and the stats text on stage transitions.</summary>
+    public void ResetProgressStats()
+    {
+        _progressGeneration++;
+        _meter.Reset();
+        OperationStats.Text = string.Empty;
+    }
+
+    /// <summary>Begins one byte-counted stage; late callbacks from earlier stages are discarded.</summary>
+    public IProgress<(long Processed, long Total)> BeginByteProgress(string status)
+    {
+        ResetProgressStats();
+        ReportProgress(status);
+        var generation = _progressGeneration;
+        return new StageProgress(sample =>
+        {
+            if (generation == _progressGeneration) ReportProgress(status, bytes: sample);
+        });
+    }
+
+    private sealed class StageProgress(Action<(long Processed, long Total)> report) : IProgress<(long Processed, long Total)>
+    {
+        private readonly object _gate = new();
+        private (long Processed, long Total) _latest;
+        private bool _queued;
+
+        public void Report((long Processed, long Total) value)
+        {
+            lock (_gate)
+            {
+                _latest = value;
+                if (_queued) return;
+                _queued = true;
+            }
+            Dispatcher.UIThread.Post(() =>
+            {
+                (long Processed, long Total) sample;
+                lock (_gate) { sample = _latest; _queued = false; }
+                report(sample);
+            });
+        }
+    }
+
 
 
     /// <summary><para>表单提交结果；取消或关闭时保持为空。</para>Form result; stays null on cancel/close.</summary>
@@ -133,6 +201,7 @@ public partial class NewProjectWindow : Window
         IEnumerable<string>? reservedNames)
     {
         InitializeComponent();
+        Closed += (_, _) => ResetProgressStats();
         Mode = mode;
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory)
             ? AppContext.BaseDirectory
@@ -251,12 +320,14 @@ public partial class NewProjectWindow : Window
 
         _containerKind = ContainerKind.None;
         _containerPath = null;
+        _containerEntries = [];
         var generation = ++_analysisGeneration;
         var single = images.Length == 1 ? images[0].FilePath : null;
         _isAnalyzing = single is not null;
         CreateButton.IsEnabled = !_isAnalyzing;
         ProgressPanel.IsVisible = _isAnalyzing;
         if (single is null) return;
+        ResetProgressStats();
         ReportProgress(LanguageService.Instance.GetString("NewProject_Analyzing"));
         try
         {
@@ -288,6 +359,7 @@ public partial class NewProjectWindow : Window
         DetachImageHandlers();
         _containerKind = structure.Kind;
         _containerPath = containerPath;
+        _containerEntries = structure.Entries;
         var duplicateZipNames = structure.Kind == ContainerKind.Zip
             ? structure.Entries.Where(entry => !entry.FromPayload)
                 .GroupBy(entry => Path.GetFileName(entry.Name.Replace('\\', '/')), StringComparer.OrdinalIgnoreCase)
@@ -434,15 +506,23 @@ public partial class NewProjectWindow : Window
                 UnpackImagesBox.IsChecked == true,
                 UnpackFullyBox.IsChecked == true,
                 selected.Any(image => image.FilePath == containerPath));
-            if (CreateAsync is null) { Close(); return; }
             _isCreating = true;
             FormContent.IsEnabled = false;
             CreateButton.IsEnabled = false;
             CancelButton.IsEnabled = false;
-            ReportProgress(LanguageService.Instance.GetString("NewProject_Creating"));
+            ReportProgress(LanguageService.Instance.GetString("NewProject_CheckingSpace"));
+            ResetProgressStats();
             try
             {
-                await CreateAsync(Result);
+                if (!await ConfirmCreationSpaceAsync(Result))
+                {
+                    Result = null;
+                    ProgressPanel.IsVisible = false;
+                    return;
+                }
+                ReportProgress(LanguageService.Instance.GetString("NewProject_Creating"));
+                if (CreateAsync is not null) await CreateAsync(Result);
+                ResetProgressStats();
                 _isCreating = false;
                 Close();
             }
@@ -451,11 +531,45 @@ public partial class NewProjectWindow : Window
                 Result = null;
                 _isCreating = false;
                 CancelButton.IsEnabled = true;
+                ResetProgressStats();
                 ReportProgress(ex.Message, 0);
                 await DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_CreateFailed"),
                     ex.Message, Ursa.Controls.MessageBoxIcon.Error);
             }
+            finally
+            {
+                _isCreating = false;
+                FormContent.IsEnabled = true;
+                CreateButton.IsEnabled = true;
+                CancelButton.IsEnabled = true;
+            }
         }
+    }
+
+    private async Task<bool> ConfirmCreationSpaceAsync(NewProjectFormResult form)
+    {
+        var plainImages = form.ContainerKind == ContainerKind.None;
+        var copyPaths = plainImages ? form.SelectedImagePaths
+            : form.CopyOriginal && form.ContainerPath is not null ? new[] { form.ContainerPath } : [];
+        var selected = form.UnpackImages ? _containerEntries.Where(entry =>
+            (entry.FromPayload || form.ContainerKind != ContainerKind.Zip
+                ? form.SelectedPartitions : form.SelectedZipMembers).Contains(entry.Name, StringComparer.Ordinal)).ToArray() : [];
+        var payloadZip = form.UnpackImages && form.ContainerKind == ContainerKind.Zip
+            && form.SelectedPartitions.Length > 0 ? form.ContainerPath : null;
+        var shortages = await Task.Run(() =>
+        {
+            var estimate = ProjectCreationSpaceEstimator.Estimate(copyPaths, selected,
+                plainImages && form.UnpackImages, form.UnpackImages && form.UnpackFully, payloadZip);
+            return ProjectCreationSpaceEstimator.FindShortages(form.Location, estimate, AvailableSpace);
+        });
+        if (shortages.Count == 0) return true;
+        var language = LanguageService.Instance;
+        var details = string.Join(Environment.NewLine + Environment.NewLine, shortages.Select(shortage =>
+            string.Format(language.GetString("NewProject_SpaceDetails"), shortage.Directory,
+                ProgressMeter.FormatSize(shortage.AvailableBytes), ProgressMeter.FormatSize(shortage.RequiredBytes))));
+        return await DialogService.ConfirmAsync(this, language.GetString("NewProject_SpaceTitle"),
+            string.Format(language.GetString("NewProject_SpaceWarning"), details),
+            language.GetString("NewProject_SpaceContinue"), language.GetString("NewProject_SpaceCancel"));
     }
 
     private void UpdateValidation()

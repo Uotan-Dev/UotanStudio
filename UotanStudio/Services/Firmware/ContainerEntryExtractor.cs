@@ -48,7 +48,8 @@ public static class ContainerEntryExtractor
         string containerPath,
         IReadOnlyList<string> selectedNames,
         bool fromPayloadOnly = false,
-        CancellationToken cancellationToken = default, string? outputDirectory = null, IProgress<double>? progress = null)
+        CancellationToken cancellationToken = default, string? outputDirectory = null, IProgress<double>? progress = null,
+        IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         if (string.IsNullOrWhiteSpace(containerPath) || !File.Exists(containerPath)
             || selectedNames is null || selectedNames.Count == 0)
@@ -61,9 +62,9 @@ public static class ContainerEntryExtractor
         var kind = ContainerStructureAnalyzer.Analyze(containerPath).Kind;
         return kind switch
         {
-            ContainerKind.Super => await ExtractSuperAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress).ConfigureAwait(false),
-            ContainerKind.Payload => await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress).ConfigureAwait(false),
-            ContainerKind.Zip => await ExtractZipAsync(containerPath, selectedNames, fromPayloadOnly, cancellationToken, outputDirectory, progress).ConfigureAwait(false),
+            ContainerKind.Super => await ExtractSuperAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress).ConfigureAwait(false),
+            ContainerKind.Payload => await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress).ConfigureAwait(false),
+            ContainerKind.Zip => await ExtractZipAsync(containerPath, selectedNames, fromPayloadOnly, cancellationToken, outputDirectory, progress, byteProgress).ConfigureAwait(false),
             _ => ContainerExtractionResult.Empty
         };
     }
@@ -74,7 +75,7 @@ public static class ContainerEntryExtractor
     /// copied segment by segment).
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractSuperAsync(
-        string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress)
+        string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress, IProgress<(long Processed, long Total)>? byteProgress)
     {
         var metadata = MetadataReader.ReadFromImageFile(containerPath);
         var sectorSize = (long)MetadataFormat.LP_SECTOR_SIZE;
@@ -91,6 +92,7 @@ public static class ContainerEntryExtractor
         if (totalBytes > 64L * 1024 * 1024 * 1024) throw new InvalidDataException("Selected LP partitions exceed the extraction budget.");
         long copiedBytes = 0;
         progress?.Report(0);
+        byteProgress?.Report((0, totalBytes));
         await using var container = MetadataReader.OpenImage(containerPath);
         foreach (var partition in metadata.Partitions)
         {
@@ -127,10 +129,12 @@ public static class ContainerEntryExtractor
                             if (offset > container.Length || extentBytes > container.Length - offset)
                                 throw new InvalidDataException("LP extent exceeds the source image.");
                             container.Seek(offset, SeekOrigin.Begin);
-                            await CopyWithProgressAsync(container, output, extentBytes, copiedBytes, totalBytes, progress, cancellationToken).ConfigureAwait(false);
+                            await CopyWithProgressAsync(container, output, extentBytes, copiedBytes, totalBytes, progress, cancellationToken, byteProgress).ConfigureAwait(false);
                         }
 
                         copiedBytes = checked(copiedBytes + extentBytes);
+                        progress?.Report(totalBytes > 0 ? copiedBytes * 100.0 / totalBytes : 100);
+                        byteProgress?.Report((copiedBytes, totalBytes));
                         sectors = checked(sectors + extent.NumSectors);
                     }
 
@@ -145,6 +149,7 @@ public static class ContainerEntryExtractor
         }
 
         progress?.Report(100);
+        byteProgress?.Report((totalBytes, totalBytes));
         return new ContainerExtractionResult(outputNames, outputPaths);
     }
 
@@ -154,11 +159,18 @@ public static class ContainerEntryExtractor
     /// (output next to the container).
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractPayloadAsync(
-        string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress)
+        string containerPath, IReadOnlyList<string> partitionNames, CancellationToken cancellationToken, string outputDirectory,
+        IProgress<double>? progress, IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         var outputDir = outputDirectory;
+        // Use one aggregate byte sample for both the bar and the textual statistics.
         await UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.ExtractAsync(
-            containerPath, [.. partitionNames], outputDir, cancellationToken).ConfigureAwait(false);
+            containerPath, [.. partitionNames], outputDir, cancellationToken, byteProgress: new CallbackProgress<(long Processed, long Total)>(sample =>
+            {
+                progress?.Report(sample.Total > 0 ? sample.Processed * 100.0 / sample.Total : 0);
+                byteProgress?.Report(sample);
+            })).ConfigureAwait(false);
+        progress?.Report(100);
 
         // PayloadParser 以 <分区名>.img 命名输出；逐一确认存在后回填结果。
         // PayloadParser names outputs "<partition>.img"; confirm each exists before reporting.
@@ -189,13 +201,13 @@ public static class ContainerEntryExtractor
     /// true, instead extracts payload partitions from the contained payload.bin.
     /// </summary>
     private static async Task<ContainerExtractionResult> ExtractZipAsync(
-        string containerPath, IReadOnlyList<string> selectedNames, bool fromPayloadOnly, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress)
+        string containerPath, IReadOnlyList<string> selectedNames, bool fromPayloadOnly, CancellationToken cancellationToken, string outputDirectory, IProgress<double>? progress, IProgress<(long Processed, long Total)>? byteProgress)
     {
         if (fromPayloadOnly)
         {
             // 只勾选了 payload 分区：直接走 ZIP 包裹 payload 的提取路径。
             // Only payload partitions are selected: extract through the ZIP-wrapped payload path.
-            return await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress).ConfigureAwait(false);
+            return await ExtractPayloadAsync(containerPath, selectedNames, cancellationToken, outputDirectory, progress, byteProgress).ConfigureAwait(false);
         }
 
         var outputDir = outputDirectory;
@@ -210,6 +222,8 @@ public static class ContainerEntryExtractor
         var totalBytes = selectedEntries.Sum(entry => entry.Length);
         if (totalBytes > 64L * 1024 * 1024 * 1024) throw new InvalidDataException("Selected ZIP entries exceed the extraction budget.");
         long copiedBytes = 0;
+        progress?.Report(0);
+        byteProgress?.Report((0, totalBytes));
         foreach (var entry in selectedEntries)
         {
             if (!names.Contains(entry.FullName) || string.IsNullOrEmpty(entry.Name))
@@ -227,7 +241,7 @@ public static class ContainerEntryExtractor
                     await using var entryStream = entry.Open();
                     // 有界复制：以条目声明长度为准，提前 EOF 抛错。
                     // Bounded copy: the declared entry length is authoritative; early EOF throws.
-                    await CopyWithProgressAsync(entryStream, output, entry.Length, copiedBytes, totalBytes, progress, cancellationToken).ConfigureAwait(false);
+                    await CopyWithProgressAsync(entryStream, output, entry.Length, copiedBytes, totalBytes, progress, cancellationToken, byteProgress).ConfigureAwait(false);
                     copiedBytes += entry.Length;
                 }
                 cancellationToken.ThrowIfCancellationRequested();
@@ -238,6 +252,8 @@ public static class ContainerEntryExtractor
             outputPaths.Add(outputPath);
         }
 
+        progress?.Report(100);
+        byteProgress?.Report((totalBytes, totalBytes));
         return new ContainerExtractionResult(outputNames, outputPaths);
     }
 
@@ -273,7 +289,7 @@ public static class ContainerEntryExtractor
 
     /// <summary>Copies an exact byte range with throttled progress and bounded memory.</summary>
     private static async Task CopyWithProgressAsync(Stream source, Stream output, long length,
-        long completed, long total, IProgress<double>? progress, CancellationToken cancellationToken)
+        long completed, long total, IProgress<double>? progress, CancellationToken cancellationToken, IProgress<(long Processed, long Total)>? byteProgress)
     {
         var buffer = new byte[65536];
         var lastReport = Environment.TickCount64;
@@ -287,9 +303,15 @@ public static class ContainerEntryExtractor
             if (Environment.TickCount64 - lastReport >= 100 || length == 0)
             {
                 progress?.Report(total > 0 ? completed * 100.0 / total : 100);
+                byteProgress?.Report((completed, total));
                 lastReport = Environment.TickCount64;
             }
         }
+    }
+
+    private sealed class CallbackProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 
     /// <summary>Replaces invalid filename characters in an internal entry name.</summary>
