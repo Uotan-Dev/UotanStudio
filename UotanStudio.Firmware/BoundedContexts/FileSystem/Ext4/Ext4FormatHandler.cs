@@ -1,4 +1,4 @@
-﻿using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 
@@ -84,8 +84,8 @@ public sealed class Ext4FormatHandler : IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
-            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+        => UotanStudio.Firmware.SharedKernel.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -98,7 +98,7 @@ public sealed class Ext4FormatHandler : IFormatHandler
             }
 
             using var parser = new Ext4Parser(filePath);
-            parser.ExtractToDirectory(outputDirectory, options?.Overwrite ?? true);
+            parser.ExtractToDirectory(outputDirectory, overwrite: options?.Overwrite ?? true, byteProgress: FileSystemByteProgress.ForStage(options?.FileSystemProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
             var entries = parser.ListFiles();
             return Task.FromResult(FirmwareOpResult.Ok(
                 $"Extracted {entries.Count} entries from '{filePath}' to '{outputDirectory}'.",
@@ -122,6 +122,8 @@ public sealed class Ext4FormatHandler : IFormatHandler
     {
         try
         {
+                if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+                    return Task.FromResult(FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes."));
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(outputPath))
             {

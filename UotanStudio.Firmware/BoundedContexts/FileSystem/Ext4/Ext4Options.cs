@@ -10,6 +10,9 @@ public sealed class Ext4Options
 
     public bool EnableSparse { get; set; } = false;
 
+    /// <summary>Filesystem volume label, limited to 16 UTF-8 bytes.</summary>
+    public string VolumeName { get; init; } = "UOTANSTUDIO";
+
     public byte[]? Uuid { get; init; }
 
     public bool PreservePermissions { get; set; } = true;

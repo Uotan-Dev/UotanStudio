@@ -11,4 +11,7 @@ public sealed class UnpackOptions
     public bool Overwrite { get; set; } = true;
 
     public IFirmwareProgress? Progress { get; set; }
+
+    /// <summary>Receives measured bytes for filesystem extraction and preservation phases.</summary>
+    public IProgress<FileSystemByteProgress>? FileSystemProgress { get; set; }
 }

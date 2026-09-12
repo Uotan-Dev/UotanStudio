@@ -49,6 +49,8 @@ public sealed partial class ErofsBuilder
             var type = node.DeviceMode & ErofsInode.ModeTypeMask;
             if (type == ErofsInode.ModeCharacterDevice) return ErofsInode.FileTypeCharacterDevice;
             if (type == ErofsInode.ModeBlockDevice) return ErofsInode.FileTypeBlockDevice;
+            if (type == ErofsInode.ModeFifo) return ErofsInode.FileTypeFifo;
+            if (type == ErofsInode.ModeSocket) return ErofsInode.FileTypeSocket;
         }
 
         return ErofsInode.FileTypeRegularFile;
@@ -239,6 +241,7 @@ public sealed partial class ErofsBuilder
 
     private static long GetInodeHeaderSize(BuildNode node)
     {
+        if (node.Uid > ushort.MaxValue || node.Gid > ushort.MaxValue) return ErofsInode.ExtendedSize;
 
 
         if (node.IsDirectory)
@@ -255,7 +258,7 @@ public sealed partial class ErofsBuilder
     private static ErofsInode BuildInode(BuildNode node, int blockSize, ulong now)
     {
         var inode = new ErofsInode();
-        if (node.Size > uint.MaxValue)
+        if (GetInodeHeaderSize(node) == ErofsInode.ExtendedSize)
         {
             inode.Advise |= ErofsInode.FlagExtended;
         }
@@ -277,8 +280,8 @@ public sealed partial class ErofsBuilder
 
         if (node.IsSymlink)
         {
-            inode.Mode = (ushort)(ErofsInode.ModeSymlink | (node.ModeOverride != 0 ? (node.ModeOverride & 0xFFF) : 0x1FF));
-            inode.Nlink = 1;
+            inode.Mode = (ushort)(ErofsInode.ModeSymlink | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1FF));
+            inode.Nlink = node.LinkCount;
             inode.Size = (ulong)node.Size;
             inode.Advise |= ErofsInode.DataLayoutInline;
             inode.U = uint.MaxValue;
@@ -290,7 +293,7 @@ public sealed partial class ErofsBuilder
         if (node.IsDevice)
         {
             inode.Mode = node.DeviceMode;
-            inode.Nlink = 1;
+            inode.Nlink = node.LinkCount;
             inode.Size = 0;
             inode.Advise |= ErofsInode.DataLayoutFlat;
             inode.U = node.DeviceRdev;
@@ -299,7 +302,7 @@ public sealed partial class ErofsBuilder
 
         if (node.IsDirectory)
         {
-            inode.Mode = (ushort)(ErofsInode.ModeDirectory | (node.ModeOverride != 0 ? (node.ModeOverride & 0xFFF) : 0x1ED));
+            inode.Mode = (ushort)(ErofsInode.ModeDirectory | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1ED));
             inode.Nlink = (ulong)(2 + node.Children.Count(child => child.IsDirectory));
             inode.Size = node.DirBlocks <= 1
                 ? (ulong)EstimateDirPayloadLength(node)
@@ -318,8 +321,8 @@ public sealed partial class ErofsBuilder
         }
         else
         {
-            inode.Mode = (ushort)(ErofsInode.ModeRegularFile | (node.ModeOverride != 0 ? (node.ModeOverride & 0xFFF) : 0x1A4));
-            inode.Nlink = 1;
+            inode.Mode = (ushort)(ErofsInode.ModeRegularFile | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1A4));
+            inode.Nlink = node.LinkCount;
             inode.Size = (ulong)node.Size;
             if (node.Pclusters is not null)
             {

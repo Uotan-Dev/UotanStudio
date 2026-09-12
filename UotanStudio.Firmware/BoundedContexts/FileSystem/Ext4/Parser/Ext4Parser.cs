@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Core;
 
@@ -15,7 +15,7 @@ public sealed class Ext4Parser : IDisposable
         Symlink,
     }
 
-    public sealed record Ext4FileEntry(string Path, long Size, uint Inode, Ext4EntryKind Kind, string? SymlinkTarget = null, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0);
+    public sealed record Ext4FileEntry(string Path, long Size, uint Inode, Ext4EntryKind Kind, string? SymlinkTarget = null, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, uint DeviceId = 0, uint Flags = 0);
 
     private const int SuperblockReadLength = 1024 + 1024;
     private const uint RootInodeNumber = 2;
@@ -98,6 +98,9 @@ public sealed class Ext4Parser : IDisposable
 
     public long PartitionSize => checked((long)_superblock.BlocksCount * _blockSize);
 
+    internal byte[] SourceUuid => _superblock.Uuid;
+    internal string SourceVolumeName => _superblock.VolumeName;
+
     public long BlockSize => _blockSize;
 
     public ulong BlockCount => _superblock.BlocksCount;
@@ -177,7 +180,6 @@ public sealed class Ext4Parser : IDisposable
             throw new InvalidDataException("ext4 image has no block groups.");
         }
 
-        _groups = new Ext4BlockGroup[groupCount];
         var gdtLength = checked((long)groupCount * descSize);
 
 
@@ -186,12 +188,17 @@ public sealed class Ext4Parser : IDisposable
         {
             throw new InvalidDataException("ext4 group descriptor table exceeds the image bounds or supported metadata limit.");
         }
-        var gdtBytes = new byte[checked((int)gdtLength)];
+        _groups = new Ext4BlockGroup[groupCount];
+        // Keep the parsed table, but never materialize a second image-sized descriptor table.
+        var descriptorsPerRead = Math.Min(groupCount, Math.Max(1, 65536 / descSize));
+        var gdtBytes = new byte[checked(descriptorsPerRead * descSize)];
         _stream.Position = gdtOffset;
-        _stream.ReadExactly(gdtBytes);
-        for (var i = 0; i < groupCount; i++)
+        for (var first = 0; first < groupCount; first += descriptorsPerRead)
         {
-            _groups[i] = Ext4BlockGroup.FromBytes(gdtBytes.AsSpan(i * descSize, descSize), descSize);
+            var count = Math.Min(descriptorsPerRead, groupCount - first);
+            _stream.ReadExactly(gdtBytes.AsSpan(0, count * descSize));
+            for (var i = 0; i < count; i++)
+                _groups[first + i] = Ext4BlockGroup.FromBytes(gdtBytes.AsSpan(i * descSize, descSize), descSize);
         }
 
         _inodeTableOffset = checked((long)_groups[0].InodeTable * _blockSize);
@@ -229,6 +236,15 @@ public sealed class Ext4Parser : IDisposable
         }
 
         return [.. _entries.Values];
+    }
+
+    /// <summary>Includes root inode metadata without changing the file-browser listing contract.</summary>
+    public IReadOnlyList<Ext4FileEntry> ListEntriesWithRoot()
+    {
+        var entries = ListFiles();
+        var root = ReadInode(RootInodeNumber);
+        var xattrs = MergeXattrs(ParseInlineXattrs(_inodeBuffer, _inodeSize), ReadExternalXattrBlock(root));
+        return [new(".", root.Size, RootInodeNumber, Ext4EntryKind.Directory, Xattrs: xattrs, Uid: root.Uid, Gid: root.Gid, Mode: root.Mode, Flags: root.Flags), .. entries];
     }
 
     /// <summary>
@@ -270,22 +286,7 @@ public sealed class Ext4Parser : IDisposable
             return;
         }
 
-        var blockCount = (uint)((entry.Size + _blockSize - 1) / _blockSize);
-        var buffer = new byte[_blockSize];
-        var remaining = entry.Size;
-        for (var logical = 0u; logical < blockCount; logical++)
-        {
-            var physical = MapBlock(inode, logical);
-            buffer.AsSpan().Clear();
-            if (physical is not null)
-            {
-                ReadBlockTo((ulong)physical, buffer);
-            }
-
-            var writeLength = (int)Math.Min(remaining, _blockSize);
-            output.Write(buffer, 0, writeLength);
-            remaining -= writeLength;
-        }
+        ReadInodeContent(inode, entry.Size, output);
     }
 
     /// <summary>
@@ -293,16 +294,28 @@ public sealed class Ext4Parser : IDisposable
     /// <para>将整个文件系统树提取到 outputDirectory。</para>
     /// </summary>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
+        => ExtractToDirectory(outputDirectory, null, CancellationToken.None, overwrite, progress);
+
+    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.</summary>
+    public void ExtractToDirectory(string outputDirectory, IProgress<(long Processed, long Total)>? byteProgress,
+        CancellationToken cancellationToken, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
 
         var entries = ListFiles();
         var totalCount = entries.Count;
+        var hostPaths = new SharedKernel.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
+        var totalBytes = entries.Where(e => e.Kind != Ext4EntryKind.Directory
+                && (e.Kind == Ext4EntryKind.Symlink || overwrite || !File.Exists(hostPaths.Resolve(e.Path))))
+            .Sum(e => e.Kind == Ext4EntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
+                : (e.Mode & 0xF000) == 0x8000 ? e.Size : 0L);
+        var bytes = new SharedKernel.ExtractionByteCounter(totalBytes, byteProgress, cancellationToken);
         var processedCount = 0;
         foreach (var entry in entries)
         {
-            var targetPath = SharedKernel.FileExtraction.ResolvePath(outputDirectory, entry.Path);
+            cancellationToken.ThrowIfCancellationRequested();
+            var targetPath = hostPaths.Resolve(entry.Path);
             if (entry.Kind == Ext4EntryKind.Directory)
             {
                 Directory.CreateDirectory(targetPath);
@@ -319,22 +332,9 @@ public sealed class Ext4Parser : IDisposable
 
             if (entry.Kind == Ext4EntryKind.Symlink)
             {
-                if (overwrite && (File.Exists(targetPath) || Directory.Exists(targetPath)))
-                {
-                    File.Delete(targetPath);
-                }
-
-                if (!File.Exists(targetPath) && !Directory.Exists(targetPath))
-                {
-                    try
-                    {
-                        File.CreateSymbolicLink(targetPath, entry.SymlinkTarget ?? string.Empty);
-                    }
-                    catch
-                    {
-                        SharedKernel.FileExtraction.WriteAtomic(targetPath, output => output.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)), overwrite);
-                    }
-                }
+                // The host file is a portable projection; the inode type and original image remain authoritative.
+                SharedKernel.FileExtraction.WriteAtomic(targetPath,
+                    output => { using var counted = bytes.Wrap(output); counted.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)); }, overwrite);
 
                 processedCount++;
                 progress?.Report((processedCount, totalCount));
@@ -348,11 +348,12 @@ public sealed class Ext4Parser : IDisposable
                 continue;
             }
 
-            SharedKernel.FileExtraction.WriteAtomic(targetPath, output => ReadFile(entry.Path, output), overwrite);
+            SharedKernel.FileExtraction.WriteAtomic(targetPath, output => { using var counted = bytes.Wrap(output); ReadFile(entry.Path, counted); }, overwrite);
 
             processedCount++;
             progress?.Report((processedCount, totalCount));
         }
+        bytes.Complete();
     }
 
     /// <summary>
@@ -433,7 +434,7 @@ public sealed class Ext4Parser : IDisposable
                 var kind = ClassifyKind(entry.FileType, child);
                 var symlinkTarget = kind == Ext4EntryKind.Symlink ? ReadSymlinkTarget(child) : null;
 
-                _entries[childPath] = new Ext4FileEntry(childPath, child.Size, entry.Inode, kind, symlinkTarget, childXattrs, (uint)child.UidLo, (uint)child.GidLo, child.Mode);
+                _entries[childPath] = new Ext4FileEntry(childPath, child.Size, entry.Inode, kind, symlinkTarget, childXattrs, child.Uid, child.Gid, child.Mode, child.BlockPointers[0] != 0 ? child.BlockPointers[0] : child.BlockPointers[1], child.Flags);
                 if (kind == Ext4EntryKind.Directory)
                 {
                     WalkDirectory(entry.Inode, childPath, visitedDirectories, depth + 1);
@@ -452,7 +453,7 @@ public sealed class Ext4Parser : IDisposable
         };
 
     private static bool IsSafeName(string name)
-        => !name.Contains('/') && !name.Contains('\\') && !name.Contains('\0') && name != "." && name != "..";
+        => !name.Contains('/') && !name.Contains('\0') && name != "." && name != "..";
 
     /// <summary>
     /// Parses inline extended attributes (xattrs) from an inode's extra space.
@@ -700,6 +701,13 @@ public sealed class Ext4Parser : IDisposable
             return;
         }
 
+        if (!_journalOverlay.HasOverlay)
+        {
+            SharedKernel.Streams.MappedBlockCopy.Copy(_stream, output, size, _blockSize, logical => MapBlock(inode, logical));
+            return;
+        }
+
+        // Replayed journal blocks override the disk image and must retain their blockwise path.
         var blockCount = (uint)((size + _blockSize - 1) / _blockSize);
         var buffer = new byte[_blockSize];
         var remaining = size;

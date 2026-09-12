@@ -5,7 +5,7 @@ namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 
 public sealed partial class F2fsBuilder
 {
-    private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles)
+    private static F2fsSuperblock CreateSuperblock(Layout layout, F2fsOptions options, bool hasCompressedFiles, bool hasXattrs)
     {
         return new F2fsSuperblock
         {
@@ -39,12 +39,12 @@ public sealed partial class F2fsBuilder
             NodeIno = NodeIno,
             MetaIno = MetaIno,
             Uuid = (options.Uuid ?? Guid.NewGuid()).ToByteArray(),
-            VolumeName = string.IsNullOrEmpty(options.VolumeName) ? "f2fs" : options.VolumeName,
+            VolumeName = string.IsNullOrEmpty(options.VolumeName) && SharedKernel.FileSystemEditPlan.Current is null ? "f2fs" : options.VolumeName,
             CpPayload = 0,
             Version = new byte[256],
 
 
-            Feature = hasCompressedFiles ? FeatureCompression | 0x0008u : 0,
+            Feature = (hasCompressedFiles ? FeatureCompression | 0x0008u : 0) | (hasXattrs ? 0x48u : 0),
         };
     }
 
@@ -264,6 +264,13 @@ public sealed partial class F2fsBuilder
         foreach (var node in ordered)
         {
             WriteInodeNode(output, baseOffset, node, blockSize);
+            if (node.XattrNid != 0)
+            {
+                var block = new byte[blockSize];
+                node.XattrBytes.AsSpan(512).CopyTo(block);
+                F2fsNodeFooter.WriteTo(block, node.XattrNid, node.Ino, 0xFFFF_FFF8, 1, node.XattrBlock + 1);
+                WriteAt(output, baseOffset + node.XattrBlock * blockSize, block);
+            }
             if (!node.IsDirectory && !node.InlineData)
             {
                 foreach (var dnode in node.Dnodes)
@@ -329,22 +336,22 @@ public sealed partial class F2fsBuilder
                 : node.IsDirectory ? ModeDirectory
                 : node.IsSymlink ? ModeSymbolicLink
                 : ModeRegularFile,
-            Inline = (byte)(inline | (node.IsCompressedFile ? F2fsInode.ExtraAttrFlag : 0)),
+            Inline = (byte)(inline | (node.ExtraWords > 0 ? F2fsInode.ExtraAttrFlag : 0) | (node.XattrWords > 0 ? F2fsInode.InlineXattrFlag : 0)),
             Uid = node.Uid,
             Gid = node.Gid,
-            Links = node.IsDirectory ? (uint)(2 + node.Children.Count(static c => c.IsDirectory)) : 1u,
+            Links = node.IsDirectory ? (uint)(2 + node.Children.Count(static c => c.IsDirectory)) : node.LinkCount,
             Size = node.IsDirectory ? (ulong)node.Size : (ulong)(node.IsSymlink ? Encoding.UTF8.GetByteCount(node.SymlinkTarget ?? string.Empty) : node.Size),
 
 
-            Blocks = node.IsDirectory
+            Blocks = (node.XattrNid != 0 ? 1UL : 0UL) + (node.IsDirectory
                 ? 1UL + (ulong)node.DirBlocks.Count
                 : node.InlineData
                     ? 1UL
-                    : 1UL + (ulong)((node.IsCompressedFile ? node.DataBlockCount : node.AllocatedDataBlockCount) + node.Dnodes.Count),
-            XattrNid = 0,
+                    : 1UL + (ulong)((node.IsCompressedFile ? node.DataBlockCount : node.AllocatedDataBlockCount) + node.Dnodes.Count)),
+            XattrNid = node.XattrNid,
 
 
-            Flags = node.IsCompressedFile ? F2fsInode.ComprFlag : 0,
+            Flags = (node.IsCompressedFile ? F2fsInode.ComprFlag : 0) | node.SemanticFlags,
             CompressAlgorithm = node.IsCompressedFile
                 ? KernelCompressionAlgorithmId(node.CompressedAlgorithm)
                 : (byte)0,
@@ -364,9 +371,9 @@ public sealed partial class F2fsBuilder
             MtimeNsec = node.MtimeNsec,
             Ctime = node.Ctime > 0 ? (ulong)node.Ctime : 0,
             CtimeNsec = node.CtimeNsec,
-            ExtraIsize = node.IsCompressedFile ? (ushort)36 : (ushort)0,
+            ExtraIsize = (ushort)(node.ExtraWords * 4),
             CompressedBlocks = node.IsCompressedFile ? (ulong)(node.DataBlockCount - node.AllocatedDataBlockCount) : 0,
-            InlineXattrSize = 0,
+            InlineXattrSize = (ushort)node.XattrWords,
         };
         inode.WriteTo(block);
         if (node.InlineData)
@@ -376,6 +383,8 @@ public sealed partial class F2fsBuilder
                 .CopyTo(block.AsSpan(inlineOffset));
         }
 
+        if (node.XattrBytes.Length > 0)
+            node.XattrBytes.AsSpan(0, Math.Min(512, node.XattrBytes.Length)).CopyTo(block.AsSpan(F2fsNode.AddrArrayOffset + (F2fsNode.DefAddrsPerInode - node.XattrWords) * 4));
         F2fsNodeFooter.WriteTo(block, node.Ino, node.Ino, 0, 1, node.InodeBlockAddr + 1);
         WriteAt(output, baseOffset + node.InodeBlockAddr * blockSize, block);
     }
@@ -518,18 +527,22 @@ public sealed partial class F2fsBuilder
     private static uint[] BuildInodeAddrs(BuildNode node)
     {
         var addrs = new uint[F2fsNode.DefAddrsPerInode];
-        if (node.IsDirectory)
+        if (node.IsSpecial)
+        {
+            if ((node.Mode & 0xF000) is 0x2000 or 0x6000) addrs[node.ExtraWords + 1] = node.DeviceId;
+        }
+        else if (node.IsDirectory)
         {
             for (var i = 0; i < node.DirBlockAddrs.Count; i++)
             {
-                addrs[i] = node.DirBlockAddrs[i];
+                addrs[i + node.ExtraWords] = node.DirBlockAddrs[i];
             }
         }
         else if (!node.InlineData)
         {
             for (var i = 0; i < node.DataBlockAddrs.Count && i < node.InodeAddressCount; i++)
             {
-                addrs[i + (node.IsCompressedFile ? 9 : 0)] = node.DataBlockAddrs[i];
+                addrs[i + node.ExtraWords] = node.DataBlockAddrs[i];
             }
         }
 
@@ -551,7 +564,7 @@ public sealed partial class F2fsBuilder
     }
 
     private static bool IsSafeName(string name)
-        => !name.Contains('/') && !name.Contains('\\') && !name.Contains('\0') && name != "." && name != "..";
+        => !name.Contains('/') && !name.Contains('\0') && name != "." && name != "..";
 
     private static byte[] ReadFileBytes(string fullPath, long size)
     {

@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
@@ -8,6 +8,8 @@ public sealed record ErofsFileEntry(
     long Size,
     ulong Nid)
 {
+    public uint DeviceId { get; init; }
+
     public ushort Mode { get; init; }
 
     public uint Uid { get; init; }
@@ -57,6 +59,7 @@ public sealed partial class ErofsParser : IDisposable
     private bool _flatDevice;
     private List<ErofsFileEntry>? _fileTable;
     private List<string> _directoryPaths = [];
+    private readonly List<ErofsFileEntry> _directoryEntries = [];
     private ErofsInode? _packedInode;
 
     /// <summary>
@@ -242,6 +245,9 @@ public sealed partial class ErofsParser : IDisposable
     /// </summary>
     public static bool CanHandle(byte[] image) => image is not null && ErofsSuperblock.HasMagic(image);
 
+    internal byte[] SourceUuid => _superblock.Uuid;
+    internal string SourceVolumeName => _superblock.VolumeName;
+
     public int BlockSize => _blockSize;
 
     public long BlockCount => (long)_superblock.BlockCount64;
@@ -260,6 +266,13 @@ public sealed partial class ErofsParser : IDisposable
     /// Walks the directory tree and returns the file listing (paths use '/').
     /// <para>遍历目录树并返回文件清单（路径使用 '/' 分隔）。</para>
     /// </summary>
+    /// <summary>Returns all inode entries, including the root and empty directories.</summary>
+    public IReadOnlyList<ErofsFileEntry> EnumerateEntries()
+    {
+        var files = EnumerateFiles();
+        return [.. _directoryEntries, .. files];
+    }
+
     public IReadOnlyList<ErofsFileEntry> EnumerateFiles()
     {
         _fileTable ??= EnumerateFilesCore();
@@ -303,46 +316,60 @@ public sealed partial class ErofsParser : IDisposable
     /// <para>将镜像中全部文件解包到输出目录。</para>
     /// </summary>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
+        => ExtractToDirectory(outputDirectory, null, CancellationToken.None, overwrite, progress);
+
+    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.</summary>
+    public void ExtractToDirectory(string outputDirectory, IProgress<(long Processed, long Total)>? byteProgress,
+        CancellationToken cancellationToken, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
-        var entries = EnumerateFiles().ToList();
+        var entries = EnumerateFiles();
+        // Preserve ReadFile's first-match rule even for duplicate paths in malformed images.
+        // 即使畸形镜像含重复路径，也保持 ReadFile 的首次命中语义。
+        var firstNids = new Dictionary<string, ulong>(StringComparer.Ordinal);
+        foreach (var entry in entries) firstNids.TryAdd(entry.Path, entry.Nid);
+        var hostPaths = new SharedKernel.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path).Concat(_directoryPaths));
         foreach (var directory in _directoryPaths)
-            Directory.CreateDirectory(SharedKernel.FileExtraction.ResolvePath(outputDirectory, directory));
+            Directory.CreateDirectory(hostPaths.Resolve(directory));
+        var firstSizes = entries.GroupBy(e => e.Path, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Size, StringComparer.Ordinal);
+        var totalBytes = entries.Where(e => overwrite || !File.Exists(hostPaths.Resolve(e.Path)))
+            .Sum(e => e.IsSymlink ? System.Text.Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
+                : e.IsSpecialFile ? 0L : firstSizes[e.Path]);
+        var bytes = new SharedKernel.ExtractionByteCounter(totalBytes, byteProgress, cancellationToken);
         var totalCount = entries.Count;
         var processedCount = 0;
-        foreach (var entry in entries)
+        var progressGate = new object();
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        // Alias paths stay ordered within one worker, preserving first-nid and overwrite behavior.
+        var groups = entries.GroupBy(entry => hostPaths.Resolve(entry.Path), comparer).ToArray();
+        SharedKernel.FirmwareParallelism.ForEach(groups, group =>
         {
-            var target = SharedKernel.FileExtraction.ResolvePath(outputDirectory, entry.Path);
-            var parent = Path.GetDirectoryName(target);
-            if (!string.IsNullOrEmpty(parent))
+            foreach (var entry in group)
             {
-                Directory.CreateDirectory(parent);
+                cancellationToken.ThrowIfCancellationRequested();
+                var target = hostPaths.Resolve(entry.Path);
+                var parent = Path.GetDirectoryName(target);
+                if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                if (overwrite || !File.Exists(target))
+                {
+                    if (entry.IsSymlink)
+                    {
+                        File.WriteAllText(target, entry.SymlinkTarget ?? string.Empty);
+                        bytes.Add(System.Text.Encoding.UTF8.GetByteCount(entry.SymlinkTarget ?? string.Empty));
+                    }
+                    else if (entry.IsSpecialFile) SharedKernel.FileExtraction.WriteAtomic(target, _ => { }, overwrite);
+                    else ExtractFileAtomic(target, firstNids[entry.Path], overwrite, bytes);
+                }
+                lock (progressGate)
+                {
+                    processedCount++;
+                    progress?.Report((processedCount, totalCount));
+                }
             }
-
-            if (!overwrite && File.Exists(target))
-            {
-                processedCount++;
-                progress?.Report((processedCount, totalCount));
-                continue;
-            }
-
-            if (entry.IsSymlink)
-            {
-
-
-                File.WriteAllText(target, entry.SymlinkTarget ?? string.Empty);
-                processedCount++;
-                progress?.Report((processedCount, totalCount));
-                continue;
-            }
-
-            ExtractFileAtomic(target, entry.Path, overwrite);
-            processedCount++;
-            progress?.Report((processedCount, totalCount));
-        }
+        });
+        bytes.Complete();
     }
-
     /// <summary>
     /// Disposes the source held by the parser (only when the parser opened the file itself).
     /// <para>释放解析器持有的源（仅当解析器自己打开的文件流）。</para>
@@ -475,16 +502,17 @@ public sealed partial class ErofsParser : IDisposable
         var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
         try
         {
-            lock (_streamLock)
+            while (length > 0)
             {
-                device.Position = offset;
-                while (length > 0)
+                var count = (int)Math.Min(CopyBufferSize, length);
+                lock (_streamLock)
                 {
-                    var count = (int)Math.Min(CopyBufferSize, length);
+                    device.Position = offset;
                     device.ReadExactly(buffer, 0, count);
-                    output.Write(buffer, 0, count);
-                    length -= count;
                 }
+                output.Write(buffer, 0, count);
+                offset += count;
+                length -= count;
             }
         }
         finally
@@ -519,16 +547,17 @@ public sealed partial class ErofsParser : IDisposable
         var buffer = ArrayPool<byte>.Shared.Rent(CopyBufferSize);
         try
         {
-            lock (_streamLock)
+            while (length > 0)
             {
-                _stream.Position = checked(_baseOffset + offset);
-                while (length > 0)
+                var count = (int)Math.Min(CopyBufferSize, length);
+                lock (_streamLock)
                 {
-                    var count = (int)Math.Min(CopyBufferSize, length);
+                    _stream.Position = checked(_baseOffset + offset);
                     _stream.ReadExactly(buffer, 0, count);
-                    output.Write(buffer, 0, count);
-                    length -= count;
                 }
+                output.Write(buffer, 0, count);
+                offset += count;
+                length -= count;
             }
         }
         finally
@@ -537,14 +566,15 @@ public sealed partial class ErofsParser : IDisposable
         }
     }
 
-    private void ExtractFileAtomic(string target, string entryPath, bool overwrite)
+    private void ExtractFileAtomic(string target, ulong nid, bool overwrite, SharedKernel.ExtractionByteCounter bytes)
     {
         var tempPath = target + ".tmp-" + Guid.NewGuid().ToString("N");
         try
         {
             using (var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                ReadFile(entryPath, output);
+                using var counted = bytes.Wrap(output);
+                WriteFileData(nid, ReadInode(nid), counted);
                 output.Flush(flushToDisk: true);
             }
 
@@ -567,6 +597,7 @@ public sealed partial class ErofsParser : IDisposable
 
     private List<ErofsFileEntry> EnumerateFilesCore()
     {
+        _directoryEntries.Clear();
         var result = new List<ErofsFileEntry>();
         var visitedDirectories = new HashSet<ulong>();
         var directories = new List<string>();
@@ -589,6 +620,12 @@ public sealed partial class ErofsParser : IDisposable
         {
             return;
         }
+
+        _directoryEntries.Add(new(prefix.Length == 0 ? "." : prefix, (long)inode.Size, nid)
+        {
+            Mode = inode.Mode, Uid = inode.Uid, Gid = inode.Gid, MTime = inode.CTime,
+            Xattrs = ReadXattrs(nid, inode)
+        });
 
         foreach (var entry in ReadDirectory(nid, inode))
         {
@@ -619,6 +656,7 @@ public sealed partial class ErofsParser : IDisposable
                 var fileEntry = new ErofsFileEntry(path, (long)fileInode.Size, entry.Nid)
                 {
                     Mode = fileInode.Mode,
+                    DeviceId = fileInode.U,
                     Uid = fileInode.Uid,
                     Gid = fileInode.Gid,
                     MTime = fileInode.CTime,
@@ -698,7 +736,7 @@ public sealed partial class ErofsParser : IDisposable
 
 
             var sharedIds = ErofsXattr.ParseSharedXattrIds(ibody, inode.XattrICount);
-            if (sharedIds.Length > 0 && _superblock.XattrBlkAddr != 0)
+            if (sharedIds.Length > 0)
             {
 
 
@@ -706,10 +744,21 @@ public sealed partial class ErofsParser : IDisposable
                 var sharedLength = Math.Min(_imageSize - sharedStart, MaxMetadataComponentSize);
                 if (sharedLength > 0)
                 {
-                    var sharedArea = ReadBytes(sharedStart, checked((int)sharedLength), "shared xattr area");
                     foreach (var id in sharedIds)
                     {
-                        if (ErofsXattr.TryParseSharedEntry(sharedArea, id, prefixTable, out var sharedEntry))
+                        // Shared IDs are offsets in four-byte units, not block numbers.
+                        // 共享 ID 是以四字节为单位的偏移，不是块号。
+                        var relativeOffset = ErofsXattr.GetSharedXattrByteOffset(id);
+                        if (relativeOffset > sharedLength - ErofsXattr.EntryHeaderSize)
+                            continue;
+                        var entryOffset = checked(sharedStart + relativeOffset);
+                        var header = ReadBytes(entryOffset, ErofsXattr.EntryHeaderSize, "shared xattr header");
+                        var size = ErofsXattr.EntryHeaderSize + header[0] +
+                            BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(2));
+                        if (size > sharedLength - relativeOffset)
+                            continue;
+                        var entryBytes = ReadBytes(entryOffset, size, "shared xattr entry");
+                        if (ErofsXattr.TryReadEntry(entryBytes, 0, prefixTable, out var sharedEntry, out _))
                         {
                             result.Add(sharedEntry);
                         }

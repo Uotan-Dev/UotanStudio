@@ -94,7 +94,7 @@ internal static class ErofsXattr
             {
                 nameIndex = i;
                 shortName = fullName.Substring(prefix.Length);
-                return shortName.Length > 0;
+                return shortName.Length > 0 || i is NameIndexPosixAclAccess or NameIndexPosixAclDefault;
             }
         }
 

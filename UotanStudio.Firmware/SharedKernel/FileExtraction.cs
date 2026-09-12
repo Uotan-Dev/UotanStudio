@@ -82,13 +82,11 @@ internal static class FileExtraction
     {
         for (string? current = target; current is not null; current = Path.GetDirectoryName(current))
         {
-            try
-            {
-                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                    throw new InvalidDataException($"Extraction through a symbolic link or reparse point is not allowed: '{current}'.");
-            }
-            catch (FileNotFoundException) { }
-            catch (DirectoryNotFoundException) { }
+            // FileSystemInfo returns -1 for missing paths without throwing. Unlike Exists,
+            // attributes still identify dangling links; continue checking every ancestor.
+            var attributes = new FileInfo(current).Attributes;
+            if (attributes != (FileAttributes)(-1) && (attributes & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException($"Extraction through a symbolic link or reparse point is not allowed: '{current}'.");
         }
     }
 }

@@ -12,6 +12,9 @@ public sealed class ErofsOptions
 
     public bool UseCompactedIndexes { get; set; } = true;
 
+    /// <summary>Optional filesystem UUID; extracted images retain their original identity.</summary>
+    public byte[]? Uuid { get; set; }
+
     public string VolumeName { get; set; } = "erofs";
 
     public IReadOnlyDictionary<string, IReadOnlyList<ErofsXattrEntry>>? FileXattrs { get; set; }
@@ -62,7 +65,7 @@ public sealed class ErofsOptions
                 "Unknown EROFS compression algorithm.");
         }
 
-        if (string.IsNullOrEmpty(VolumeName))
+        if (string.IsNullOrEmpty(VolumeName) && SharedKernel.FileSystemEditPlan.Current is null)
         {
             VolumeName = "erofs";
         }

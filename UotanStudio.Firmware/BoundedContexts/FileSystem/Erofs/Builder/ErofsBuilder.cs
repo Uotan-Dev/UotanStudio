@@ -170,6 +170,7 @@ public sealed partial class ErofsBuilder
         ErofsOptions? options,
         params string[] excludedPaths)
     {
+        SharedKernel.FileSystemPreservation.RejectLossyDirectoryRebuild(directoryPath);
         ArgumentNullException.ThrowIfNull(directoryPath);
         if (!Directory.Exists(directoryPath))
         {
@@ -209,6 +210,7 @@ public sealed partial class ErofsBuilder
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
                 node.ModeOverride = entry.Mode;
+                node.HasModeOverride = true;
             }
 
             if (options.FileContextsPath is not null && node.XattrIbody.Length == 0 &&
@@ -344,7 +346,7 @@ public sealed partial class ErofsBuilder
             };
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
-                if (SharedKernel.RepackMetadata.IsMetadataFile(childPath)) continue;
+                if (SharedKernel.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : SharedKernel.RepackMetadata.IsMetadataFile(childPath)) continue;
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
                 {
@@ -393,13 +395,6 @@ public sealed partial class ErofsBuilder
 
         foreach (var node in ordered)
         {
-            if (node.IsDirectory || node.Parent is null)
-            {
-
-
-                continue;
-            }
-
             if (!options.FileXattrs.TryGetValue(BuildImagePath(node), out var entries) ||
                 entries is not { Count: > 0 })
             {
@@ -434,6 +429,8 @@ public sealed partial class ErofsBuilder
         public long Size;
         public List<BuildNode> Children = [];
         public BuildNode? Parent;
+        public ulong OriginalInode;
+        public ulong LinkCount = 1;
         public ulong Nid;
         public long MetaOffset;
         public byte[] InlineData = [];
@@ -458,6 +455,7 @@ public sealed partial class ErofsBuilder
         public uint Uid;
         public uint Gid;
         public ushort ModeOverride;
+        public bool HasModeOverride;
         public long Mtime;
 
 
@@ -530,14 +528,53 @@ public sealed partial class ErofsBuilder
         var ordered = new List<BuildNode>();
         CollectPreOrder(root, ordered);
         BindXattrs(ordered, options);
+        if (SharedKernel.FileSystemEditPlan.Current is { } editPlan)
+            foreach (var node in ordered)
+            {
+                var entry = editPlan.Get(node.FullPath);
+                node.OriginalInode = entry.Inode;
+                if ((entry.Mode & 0xF000) == 0x8000) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
+                node.Name = SharedKernel.FileSystemEditPlan.Name(entry.Path);
+                node.Uid = entry.Uid;
+                node.Gid = entry.Gid;
+                node.ModeOverride = entry.Mode;
+                node.HasModeOverride = true;
+                node.IsSymlink = (entry.Mode & 0xF000) == 0xA000;
+                if (node.IsSymlink) { node.SymlinkTarget = entry.SymlinkTarget ?? ""; node.Size = Encoding.UTF8.GetByteCount(node.SymlinkTarget); }
+                node.IsDevice = (entry.Mode & 0xF000) is 0x1000 or 0x2000 or 0x6000 or 0xC000;
+                node.DeviceMode = entry.Mode;
+                node.DeviceRdev = entry.DeviceId;
+                if (node.IsDevice) node.Size = 0;
+                node.XattrIbody = entry.Xattrs is { Count: > 0 } ? ErofsXattr.EncodeInline(entry.Xattrs.Select(p => new ErofsXattrEntry { Name = p.Key, Value = p.Value }).ToList()) : [];
+            }
 
 
+        var hardlinks = new List<(BuildNode Alias, BuildNode Canonical)>();
+        var canonicalInodes = new Dictionary<ulong, BuildNode>();
+        ordered.RemoveAll(node =>
+        {
+            if (node.IsDirectory || node.OriginalInode == 0) return false;
+            if (canonicalInodes.TryAdd(node.OriginalInode, node)) return false;
+            var canonical = canonicalInodes[node.OriginalInode];
+            canonical.LinkCount++;
+            hardlinks.Add((node, canonical));
+            return true;
+        });
         var packedFragments = new List<PackedFragment>();
         long packedEnd = 0;
 
 
         var dedupFlat = new Dictionary<string, BuildNode>();
         var dedupFragments = new Dictionary<string, BuildNode>();
+
+        SharedKernel.FirmwareParallelism.ForEach(ordered, node =>
+        {
+            if (node.IsDirectory || node.Size <= 0) return;
+            if (!node.IsSymlink && !node.IsDevice && options.Dedup)
+                node.ContentHash = HashFile(node);
+            if (options.Compress)
+                node.Pclusters = TryPlanCompressed(node, blockSize, options);
+        });
 
         foreach (var node in ordered)
         {
@@ -559,15 +596,10 @@ public sealed partial class ErofsBuilder
                 continue;
             }
 
-            if (isDataFile && options.Dedup)
-            {
-                node.ContentHash = HashFile(node);
-            }
 
 
             if (options.Compress)
             {
-                node.Pclusters = TryPlanCompressed(node, blockSize, options);
                 if (node.Pclusters is not null)
                 {
                     node.CompressedBlocks = (uint)node.Pclusters.Sum(p => CeilDiv(p.CompressedLength, blockSize));
@@ -757,6 +789,7 @@ public sealed partial class ErofsBuilder
             throw new InvalidOperationException($"Image block count {totalBlocks} exceeds the 32-bit superblock field.");
         }
 
+        foreach (var (alias, canonical) in hardlinks) alias.Nid = canonical.Nid;
         if (root.Nid > ushort.MaxValue)
         {
             throw new InvalidOperationException($"Root nid {root.Nid} exceeds the 16-bit superblock field.");
@@ -814,7 +847,7 @@ public sealed partial class ErofsBuilder
             PackedNid = packedNode?.Nid ?? 0,
             SbExtSlots = metaboxNode is not null ? (byte)1 : (byte)0,
             MetaBoxNid = metaboxNode?.Nid ?? 0,
-            Uuid = Guid.NewGuid().ToByteArray(),
+            Uuid = options.Uuid is { Length: 16 } ? options.Uuid : Guid.NewGuid().ToByteArray(),
             VolumeName = options.VolumeName,
 
 

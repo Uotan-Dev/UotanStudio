@@ -1,4 +1,4 @@
-﻿namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 
 public sealed class SparseFile : IDisposable
 {
@@ -147,7 +147,8 @@ public sealed class SparseFile : IDisposable
     public void WriteRawToStream(Stream stream)
     {
         var blockSize = Header.BlockSize;
-        var zeros = new byte[blockSize];
+        var zeros = new byte[64 * 1024];
+        byte[]? fillBuffer = null;
         var written = 0L;
         var logicalLength = (long)Header.TotalBlocks * blockSize;
 
@@ -164,16 +165,9 @@ public sealed class SparseFile : IDisposable
                         // 预建一块填充缓冲循环填满后按大块写出，消除每 4 字节一次 stream.Write 的热点。
                         // Prebuild one fill buffer and write it in large blocks, avoiding a
                         // stream.Write call per 4-byte pattern.
-                        var fill = BitConverter.GetBytes(chunk.FillValue);
                         var total = (long)chunk.Header.ChunkSize * blockSize;
-                        var fillBuffer = new byte[Math.Min(Math.Max(blockSize, 64 * 1024), 4 * 1024 * 1024)];
-                        for (var i = 0; i < fillBuffer.Length; i += 4)
-                        {
-                            fillBuffer[i] = fill[0];
-                            if (i + 1 < fillBuffer.Length) fillBuffer[i + 1] = fill[1];
-                            if (i + 2 < fillBuffer.Length) fillBuffer[i + 2] = fill[2];
-                            if (i + 3 < fillBuffer.Length) fillBuffer[i + 3] = fill[3];
-                        }
+                        fillBuffer ??= new byte[64 * 1024];
+                        SparseFill.Fill(fillBuffer, chunk.FillValue);
                         while (total > 0)
                         {
                             var n = (int)Math.Min(fillBuffer.Length, total);
@@ -193,7 +187,7 @@ public sealed class SparseFile : IDisposable
                         var total = (long)chunk.Header.ChunkSize * blockSize;
                         while (total > 0)
                         {
-                            var n = (int)Math.Min(blockSize, total);
+                            var n = (int)Math.Min(zeros.Length, total);
                             stream.Write(zeros, 0, n);
                             total -= n;
                         }
@@ -209,7 +203,7 @@ public sealed class SparseFile : IDisposable
                         var total = (long)chunk.Header.ChunkSize * blockSize;
                         while (total > 0)
                         {
-                            var n = (int)Math.Min(blockSize, total);
+                            var n = (int)Math.Min(zeros.Length, total);
                             stream.Write(zeros, 0, n);
                             total -= n;
                         }
@@ -222,7 +216,7 @@ public sealed class SparseFile : IDisposable
 
         while (written < logicalLength)
         {
-            var n = (int)Math.Min(blockSize, logicalLength - written);
+            var n = (int)Math.Min(zeros.Length, logicalLength - written);
             stream.Write(zeros, 0, n);
             written += n;
         }

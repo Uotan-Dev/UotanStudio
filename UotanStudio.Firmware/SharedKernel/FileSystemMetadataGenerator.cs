@@ -24,7 +24,7 @@ public static class FileSystemMetadataGenerator
     {
         ArgumentNullException.ThrowIfNull(parser);
         Directory.CreateDirectory(metadataDirectory);
-        var entries = parser.ListFiles();
+        var entries = parser.ListEntriesWithRoot();
         WriteFsConfig(metadataDirectory, partitionName, entries.Select(e => (
             e.Path,
             e.Uid,
@@ -45,7 +45,7 @@ public static class FileSystemMetadataGenerator
     {
         ArgumentNullException.ThrowIfNull(parser);
         Directory.CreateDirectory(metadataDirectory);
-        var entries = parser.EnumerateFiles().ToList();
+        var entries = parser.EnumerateEntries().ToList();
         WriteFsConfig(metadataDirectory, partitionName, entries.Select(e => (
             e.Path,
             e.Uid,
@@ -64,15 +64,14 @@ public static class FileSystemMetadataGenerator
     {
         ArgumentNullException.ThrowIfNull(parser);
         Directory.CreateDirectory(metadataDirectory);
-        var entries = parser.ListFiles();
+        var entries = parser.ListEntriesWithRoot();
         WriteFsConfig(metadataDirectory, partitionName, entries.Select(e => (
             e.Path,
             e.Uid,
             e.Gid,
             e.Mode,
             e.Kind == F2fsParser.F2fsEntryKind.Directory)));
-        // F2FS xattr reading is not yet implemented; write default labels.
-        WriteFileContextsWithDefaults(metadataDirectory, partitionName, entries.Select(e => e.Path));
+        WriteFileContextsFromXattrs(metadataDirectory, partitionName, entries.Select(e => (e.Path, e.Xattrs)));
         WritePartitionInfo(metadataDirectory, partitionName, superblockConfig);
     }
 
@@ -134,7 +133,7 @@ public static class FileSystemMetadataGenerator
         {
             // Normalize path: remove leading "./", ensure root is "/"
             var normalized = NormalizePath(entryPath);
-            var permBits = mode != 0 ? (mode & 0xFFF) : (isDir ? 0755 : 0644);
+            var permBits = mode != 0 ? (mode & 0xFFF) : (isDir ? 0x1ED : 0x1A4);
             var capabilities = 0;
             sb.Append(normalized);
             sb.Append(' ');
@@ -159,7 +158,7 @@ public static class FileSystemMetadataGenerator
         foreach (var (entryPath, xattrs) in entries)
         {
             var normalized = NormalizePath(entryPath);
-            var label = DefaultSelinuxLabel;
+            string? label = null;
             if (xattrs is not null && xattrs.TryGetValue("security.selinux", out var selinuxValue))
             {
                 var decoded = Encoding.UTF8.GetString(selinuxValue).TrimEnd('\0');
@@ -167,9 +166,12 @@ public static class FileSystemMetadataGenerator
                     label = decoded;
             }
 
-            sb.Append(normalized);
-            sb.Append("    ");
-            sb.AppendLine(label);
+            if (label is not null)
+            {
+                sb.Append(normalized);
+                sb.Append("    ");
+                sb.AppendLine(label);
+            }
         }
 
         WriteAtomic(path, sb.ToString());
@@ -184,7 +186,7 @@ public static class FileSystemMetadataGenerator
         foreach (var entry in entries)
         {
             var normalized = NormalizePath(entry.Path);
-            var label = DefaultSelinuxLabel;
+            string? label = null;
             if (entry.Xattrs is not null)
             {
                 var selinux = entry.Xattrs.FirstOrDefault(x => x.Name == "security.selinux");
@@ -196,9 +198,12 @@ public static class FileSystemMetadataGenerator
                 }
             }
 
-            sb.Append(normalized);
-            sb.Append("    ");
-            sb.AppendLine(label);
+            if (label is not null)
+            {
+                sb.Append(normalized);
+                sb.Append("    ");
+                sb.AppendLine(label);
+            }
         }
 
         WriteAtomic(path, sb.ToString());

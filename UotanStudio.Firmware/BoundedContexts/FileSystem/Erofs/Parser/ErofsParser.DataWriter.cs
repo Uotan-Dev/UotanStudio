@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
@@ -241,21 +241,13 @@ public sealed partial class ErofsParser
 
         var interlaced = (advise & ZErofsMapHeader.AdviseInterlacedPcluster) != 0;
 
-        // 预读紧凑索引表：同一 inode 的所有 LoadLcluster 调用复用缓存，避免 O(N×H) 次重复磁盘 I/O。
-        // Pre-read compact index table: all LoadLcluster calls for the same inode reuse the cache,
-        // avoiding O(N×H) repeated disk I/O.
-        byte[]? cachedIndex = null;
-        if (inode.DataLayout == ErofsInode.DataLayoutCompactIndexes)
-        {
-            var ebase = headerOffset + ZErofsMapHeader.Size;
-            var indexLength = checked((long)totalIdx * 4 + 64);
-            if (indexLength <= MaxMetadataComponentSize)
-                cachedIndex = ReadBytes(ebase, checked((int)Math.Min(indexLength, _imageSize - ebase)), "compact index table");
-        }
-
-        // 一次性预扫描全部 lcluster，建立 head → nextHead 映射，消除内层 while(true) 线性搜索。
-        // Pre-scan all lclusters once to build head → nextHead mapping, eliminating the inner while(true) linear search.
-        var headMap = PreScanLclusterHeads(nid, inode, headerOffset, advise, lclusterBits, totalIdx, cachedIndex);
+        // A per-file fixed window serves both index layouts. No whole-index copy or
+        // per-logical-block next-head array grows with the extracted file size.
+        var indexBase = headerOffset + ZErofsMapHeader.Size;
+        var indexLength = inode.DataLayout == ErofsInode.DataLayoutCompactIndexes
+            ? checked((long)totalIdx * 4 + 64)
+            : checked((long)totalIdx * ZErofsLclusterIndex.Size + FullIndexStartPad);
+        var cachedIndex = new IndexReadWindow(this, indexBase, Math.Min(indexLength, _imageSize - indexBase));
 
         var compressed = ArrayPool<byte>.Shared.Rent(_blockSize * 2);
         var decoded = ArrayPool<byte>.Shared.Rent(Math.Max(lclusterSize, _blockSize));
@@ -282,7 +274,16 @@ public sealed partial class ErofsParser
                 }
 
 
-                var nextLcn = headMap[lcn];
+                // The outer loop jumps to this next head, so each intervening entry
+                // is visited once; lookahead stays linear without a full-file map.
+                var nextLcn = lcn + 1;
+                while (nextLcn < totalIdx)
+                {
+                    var candidate = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits,
+                        totalIdx, nextLcn, out _, out _, out _, cachedIndex);
+                    if (candidate.Type != LclusterTypeNonHead) break;
+                    nextLcn++;
+                }
                 long nextMLa;
                 if (nextLcn < 0)
                 {
@@ -478,41 +479,6 @@ public sealed partial class ErofsParser
     }
 
     /// <summary>
-    /// One-pass pre-scan of all lcluster entries for a compressed inode: builds a head → nextHead
-    /// index array so the main decompression loop can jump directly instead of linearly scanning.
-    /// <para>一次性预扫描压缩 inode 的全部 lcluster 条目，建立 head → nextHead 索引数组，
-    /// 使主解压循环可直接跳转而无需线性搜索。</para>
-    /// </summary>
-    private long[] PreScanLclusterHeads(
-        ulong nid,
-        ErofsInode inode,
-        long headerOffset,
-        ushort advise,
-        int lclusterBits,
-        int totalIdx,
-        byte[]? cachedIndex)
-    {
-        var heads = new long[totalIdx];
-        Array.Fill(heads, -1L);
-        long lastHead = -1;
-        for (long i = 0; i < totalIdx; i++)
-        {
-            var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, i,
-                out _, out _, out _, cachedIndex);
-            if (lc.Type != LclusterTypeNonHead)
-            {
-                if (lastHead >= 0)
-                    heads[lastHead] = i;
-                lastHead = i;
-            }
-        }
-
-        if (lastHead >= 0)
-            heads[lastHead] = totalIdx;
-        return heads;
-    }
-
-    /// <summary>
     /// Shared zero buffer for zero-fill writes, avoiding a fresh allocation per call.
     /// <para>补零写入的共享零缓冲，避免每次调用新分配。</para>
     /// </summary>
@@ -542,8 +508,12 @@ public sealed partial class ErofsParser
             throw new InvalidDataException("Fragment inode without a packed inode (s_packed_nid == 0).");
         }
 
-        _packedInode ??= ReadInode(packedNid);
-        var packed = _packedInode;
+        ErofsInode packed;
+        lock (_streamLock)
+        {
+            _packedInode ??= ReadInode(packedNid);
+            packed = _packedInode;
+        }
         if (!packed.IsRegularFile && !packed.IsDirectory)
         {
             throw new InvalidDataException($"Packed inode nid {packedNid} is not a regular file.");

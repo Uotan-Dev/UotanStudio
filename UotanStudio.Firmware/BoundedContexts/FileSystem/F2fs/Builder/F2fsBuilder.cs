@@ -80,6 +80,7 @@ public sealed partial class F2fsBuilder
     /// </summary>
     public static void Build(string sourceDirectory, string outputPath, F2fsOptions? options = null)
     {
+        FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceDirectory);
         ArgumentNullException.ThrowIfNull(outputPath);
         var fullOutputPath = Path.GetFullPath(outputPath);
@@ -112,6 +113,7 @@ public sealed partial class F2fsBuilder
     /// </summary>
     public static void Build(string sourceDirectory, Stream output, F2fsOptions? options = null)
     {
+        FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
         ArgumentNullException.ThrowIfNull(output);
         if (!output.CanWrite)
         {
@@ -165,22 +167,20 @@ public sealed partial class F2fsBuilder
         }
     }
 
-    /// <summary>
-    /// Applies fs_config (uid/gid/mode) overrides from the Android-style metadata file onto the
-    /// collected tree. Permission bits from fs_config (mode &amp; 0xFFF, no type bits) replace the
-    /// node's permission bits while the file-type bits (directory/symlink/regular) are preserved.
-    /// F2FS SELinux xattr writing is not yet implemented; file_contexts is intentionally not consumed.
-    /// <para>将 Android 风格 fs_config（uid/gid/mode）覆盖应用到收集完成的目录树。
-    /// fs_config 的权限位（mode &amp; 0xFFF，不含类型位）替换节点权限位，同时保留文件类型位
-    /// （目录/符号链接/普通文件）。F2FS SELinux xattr 写入尚未实现，暂不消费 file_contexts。</para>
-    /// </summary>
+    /// <summary>Applies owner, mode and binary xattr overrides, including SELinux labels, before data/node allocation.</summary>
     private static void ApplyFsConfigOverrides(List<BuildNode> ordered, F2fsOptions options)
     {
-        if (options.FsConfigPath is null) return;
+        if (options.FsConfigPath is null && options.FileContextsPath is null && options.FileXattrs is null) return;
         var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
+        var contexts = FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
         foreach (var node in ordered)
         {
             var relative = node.Parent is null ? string.Empty : BuildRelativePath(node);
+            var xattrs = options.FileXattrs?.TryGetValue(relative, out var originalXattrs) == true
+                ? new Dictionary<string, byte[]>(originalXattrs, StringComparer.Ordinal) : new(StringComparer.Ordinal);
+            if (FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
+                xattrs["security.selinux"] = FileSystemMetadataOverrides.ToSelinuxXattrValue(label);
+            node.XattrBytes = F2fsXattrs.Encode(xattrs);
             if (!FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry)) continue;
             node.Uid = entry.Uid;
             node.Gid = entry.Gid;
@@ -214,9 +214,39 @@ public sealed partial class F2fsBuilder
 
 
         var ordered = CollectPreOrder(root!);
-        AssignInodeNumbers(ordered);
+
         ApplyFsConfigOverrides(ordered, effective);
-        foreach (var node in ordered)
+        if (FileSystemEditPlan.Current is { } editPlan)
+            foreach (var node in ordered)
+            {
+                var entry = editPlan.Get(node.FullPath);
+                node.OriginalInode = entry.Inode;
+                node.SemanticFlags = entry.Flags & 0x100F8u;
+                if ((entry.Mode & 0xF000) == 0x8000) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
+                node.Name = FileSystemEditPlan.Name(entry.Path);
+                node.Mode = entry.Mode;
+                node.Uid = entry.Uid;
+                node.Gid = entry.Gid;
+                node.IsSymlink = (entry.Mode & 0xF000) == 0xA000;
+                if (node.IsSymlink) { node.SymlinkTarget = entry.SymlinkTarget ?? ""; node.Size = Encoding.UTF8.GetByteCount(node.SymlinkTarget); }
+                node.DeviceId = entry.DeviceId;
+                if (node.IsSpecial) node.Size = 0;
+                node.XattrBytes = F2fsXattrs.Encode(entry.Xattrs);
+            }
+        var hardlinks = new List<(BuildNode Alias, BuildNode Canonical)>();
+        var canonicalInodes = new Dictionary<ulong, BuildNode>();
+        ordered.RemoveAll(node =>
+        {
+            if (node.IsDirectory || node.OriginalInode == 0) return false;
+            if (canonicalInodes.TryAdd(node.OriginalInode, node)) return false;
+            var canonical = canonicalInodes[node.OriginalInode];
+            canonical.LinkCount++;
+            hardlinks.Add((node, canonical));
+            return true;
+        });
+        AssignInodeNumbers(ordered);
+        foreach (var (alias, canonical) in hardlinks) alias.Ino = canonical.Ino;
+        SharedKernel.FirmwareParallelism.ForEach(ordered, node =>
         {
             if (!node.IsDirectory)
             {
@@ -226,7 +256,7 @@ public sealed partial class F2fsBuilder
             {
                 PlanDirectoryBlocks(node);
             }
-        }
+        });
 
         var layout = ComputeLayout(ordered, effective);
         var plan = AllocateBlocks(ordered, layout);
@@ -244,7 +274,7 @@ public sealed partial class F2fsBuilder
         CollectNatEntries(ordered, nat);
 
         layout.ReservedCompressionBlocks = ordered.Where(static n => n.IsCompressedFile).Sum(static n => (long)n.DataBlockCount - n.AllocatedDataBlockCount);
-        var superblock = CreateSuperblock(layout, effective, hasCompressedFiles: ordered.Exists(static n => n.IsCompressedFile));
+        var superblock = CreateSuperblock(layout, effective, hasCompressedFiles: ordered.Exists(static n => n.IsCompressedFile), hasXattrs: ordered.Exists(static n => n.XattrWords > 0));
         WriteSuperblock(output, baseOffset, superblock, blockSize);
         var inodeCount = (uint)ordered.Count;
         var validNodeCount = (uint)layout.NodeBlocks;
@@ -296,7 +326,7 @@ public sealed partial class F2fsBuilder
             SetFilePermissions(node, fullPath, isDir: true, isSymlink: false);
             foreach (var childPath in Directory.EnumerateFileSystemEntries(fullPath))
             {
-                if (SharedKernel.RepackMetadata.IsMetadataFile(childPath)) continue;
+                if (SharedKernel.FileSystemEditPlan.Current is { } plan ? !plan.Includes(childPath) : SharedKernel.RepackMetadata.IsMetadataFile(childPath)) continue;
                 var childFullPath = Path.GetFullPath(childPath);
                 if (excludedPaths?.Contains(childFullPath) == true)
                 {
@@ -433,7 +463,7 @@ public sealed partial class F2fsBuilder
     {
         var content = node.IsSymlink ? Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty) : null;
         var size = node.Size;
-        var maxInlineData = (F2fsNode.DefAddrsPerInode - F2fsNode.DefInlineReservedSize) * 4;
+        var maxInlineData = (F2fsNode.DefAddrsPerInode - node.XattrWords - node.ExtraWords - F2fsNode.DefInlineReservedSize) * 4;
         if (size == 0)
         {
             return;
@@ -460,7 +490,7 @@ public sealed partial class F2fsBuilder
 
         var dataBlocks = (int)((size + options.BlockSize - 1) / options.BlockSize);
         node.DataBlockCount = dataBlocks;
-        node.DataBlockAddrs = new List<uint>(new uint[dataBlocks]);
+        node.DataBlockAddrs = CreateBlockAddressTable(dataBlocks);
 
 
         var holes = options.EnableSparse ? DetectHoles(node, dataBlocks, options.BlockSize) : null;
@@ -497,7 +527,7 @@ public sealed partial class F2fsBuilder
         var clusterCount = (dataBlocks + clusterPages - 1) / clusterPages;
 
         node.DataBlockCount = dataBlocks;
-        node.DataBlockAddrs = new List<uint>(new uint[dataBlocks]);
+        node.DataBlockAddrs = CreateBlockAddressTable(dataBlocks);
         node.AllocatedDataBlockCount = 0;
         node.IsCompressedFile = false;
         node.CompressedClusterSizes = null;
@@ -589,6 +619,14 @@ public sealed partial class F2fsBuilder
         CompressionAlgorithm.Lzo => 0,
         _ => throw new ArgumentOutOfRangeException(nameof(algorithm)),
     };
+
+    private static List<uint> CreateBlockAddressTable(int count)
+    {
+        // A fresh backing array is already zeroed; avoid copying another full block-address array.
+        var addresses = new List<uint>(count);
+        System.Runtime.InteropServices.CollectionsMarshal.SetCount(addresses, count);
+        return addresses;
+    }
 
     /// <summary>
     /// Log cluster size: cluster bytes = 1 &lt;&lt; (log_cluster_size + 12) = 65536.
@@ -733,7 +771,7 @@ public sealed partial class F2fsBuilder
 
             var type = child.IsDirectory ? F2fsDirectoryEntry.TypeDirectory
                 : child.IsSymlink ? F2fsDirectoryEntry.TypeSymlink
-                : F2fsDirectoryEntry.TypeRegularFile;
+                : (byte)((child.Mode & 0xF000) switch { 0x2000 => 3, 0x6000 => 4, 0x1000 => 5, 0xC000 => 6, _ => 1 });
             var entry = new F2fsDirectoryEntry
             {
                 HashCode = ComputeDentryHash(child.Name),
@@ -776,7 +814,7 @@ public sealed partial class F2fsBuilder
             }
         }
 
-        if (blocks.Count > F2fsNode.DefAddrsPerInode)
+        if (blocks.Count > node.InodeAddressCount)
         {
             throw new InvalidOperationException(
                 $"Directory '{node.Name}' exceeds the supported size ({blocks.Count} dentry blocks, max {F2fsNode.DefAddrsPerInode}).");
@@ -832,7 +870,7 @@ public sealed partial class F2fsBuilder
         long count = 0;
         foreach (var node in ordered)
         {
-            count += 1;
+            count += node.XattrBytes.Length > 512 ? 2 : 1;
             if (!node.IsDirectory && !node.InlineData)
             {
                 count += node.Dnodes.Count;
@@ -858,6 +896,11 @@ public sealed partial class F2fsBuilder
         foreach (var node in ordered)
         {
             maxNid = Math.Max(maxNid, node.Ino);
+            if (node.XattrBytes.Length > 512)
+            {
+                node.XattrNid = nextDnodeNid++;
+                maxNid = Math.Max(maxNid, node.XattrNid);
+            }
             foreach (var dnode in node.Dnodes)
             {
                 dnode.Nid = nextDnodeNid++;
@@ -872,7 +915,7 @@ public sealed partial class F2fsBuilder
         long dataBlocks = 0;
         foreach (var node in ordered)
         {
-            nodeBlocks++;
+            nodeBlocks += node.XattrBytes.Length > 512 ? 2 : 1;
             if (node.IsDirectory)
             {
                 dataBlocks += node.DirBlocks.Count;
@@ -1022,6 +1065,11 @@ public sealed partial class F2fsBuilder
         {
             node.InodeBlockAddr = checked((uint)nodeCursor);
             AssignBlock(nodeCursor++, node.Ino, 0);
+            if (node.XattrNid != 0)
+            {
+                node.XattrBlock = checked((uint)nodeCursor);
+                AssignBlock(nodeCursor++, node.XattrNid, 0);
+            }
             if (!node.IsDirectory && !node.InlineData)
             {
                 foreach (var dnode in node.Dnodes)
@@ -1225,6 +1273,7 @@ public sealed partial class F2fsBuilder
         foreach (var node in ordered)
         {
             nat[node.Ino] = (node.Ino, node.InodeBlockAddr);
+            if (node.XattrNid != 0) nat[node.XattrNid] = (node.Ino, node.XattrBlock);
             if (!node.IsDirectory && !node.InlineData)
             {
                 foreach (var dnode in node.Dnodes)
@@ -1258,7 +1307,17 @@ public sealed partial class F2fsBuilder
         public int CompressionLevel;
         public List<DnodePlan> Dnodes = [];
         public DnodePlan?[] RootDnodes = new DnodePlan?[5];
-        public int InodeAddressCount => IsCompressedFile ? (F2fsNode.DefAddrsPerInode - 9) & ~(F2fsCompression.ClusterPages - 1) : F2fsNode.DefAddrsPerInode;
+        public ulong OriginalInode;
+        public uint LinkCount = 1;
+        public uint SemanticFlags;
+        public uint DeviceId;
+        public bool IsSpecial => (Mode & 0xF000) is 0x1000 or 0x2000 or 0x6000 or 0xC000;
+        public uint XattrNid;
+        public uint XattrBlock;
+        public byte[] XattrBytes = [];
+        public int ExtraWords => IsCompressedFile ? 9 : XattrBytes.Length > 0 ? 1 : 0;
+        public int XattrWords => XattrBytes.Length == 0 ? 0 : 128;
+        public int InodeAddressCount => IsCompressedFile ? (F2fsNode.DefAddrsPerInode - ExtraWords - XattrWords) & ~(F2fsCompression.ClusterPages - 1) : F2fsNode.DefAddrsPerInode - ExtraWords - XattrWords;
         public int DataAddressesPerNode => IsCompressedFile ? F2fsNode.AddrsPerBlock & ~(F2fsCompression.ClusterPages - 1) : F2fsNode.AddrsPerBlock;
         public List<byte[]> DirBlocks = [];
         public List<uint> DirBlockAddrs = [];

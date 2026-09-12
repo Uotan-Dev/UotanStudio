@@ -1,10 +1,10 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 
 using System.Text;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 
-public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0);
+public sealed record F2fsFileEntry(string Path, long Size, uint Inode, F2fsParser.F2fsEntryKind Kind, string? SymlinkTarget = null, uint Uid = 0, uint Gid = 0, ushort Mode = 0, IReadOnlyDictionary<string, byte[]>? Xattrs = null, uint DeviceId = 0, uint Flags = 0);
 
 public sealed class F2fsParser : IDisposable
 {
@@ -99,6 +99,9 @@ public sealed class F2fsParser : IDisposable
     }
 
     public long ImageSize => _imageSize;
+
+    internal byte[] SourceUuid => _superblock.Uuid;
+    internal string SourceVolumeName => _superblock.VolumeName;
 
     public long BlockSize => _blockSize;
 
@@ -218,6 +221,14 @@ public sealed class F2fsParser : IDisposable
         return [.. _entries.Values];
     }
 
+    /// <summary>Includes root inode metadata without changing the file-browser listing contract.</summary>
+    public IReadOnlyList<F2fsFileEntry> ListEntriesWithRoot()
+    {
+        var entries = ListFiles();
+        var root = ReadInode(_superblock.RootIno);
+        return [new(".", (long)root.Size, _superblock.RootIno, F2fsEntryKind.Directory, Uid: root.Uid, Gid: root.Gid, Mode: root.Mode, Xattrs: ReadXattrs(_superblock.RootIno, root), Flags: root.Flags), .. entries];
+    }
+
     /// <summary>
     /// Writes the full content of the file at path to output, zero-filling sparse holes.
     /// <para>将 path 处文件的完整内容写入 output， 稀疏洞补零；符号链接输出其目标字节。</para>
@@ -240,16 +251,28 @@ public sealed class F2fsParser : IDisposable
     /// <para>将整个文件系统树提取到 outputDirectory。</para>
     /// </summary>
     public void ExtractToDirectory(string outputDirectory, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
+        => ExtractToDirectory(outputDirectory, null, CancellationToken.None, overwrite, progress);
+
+    /// <summary>Extracts with measured output bytes and cancellation, including writes within a large file.</summary>
+    public void ExtractToDirectory(string outputDirectory, IProgress<(long Processed, long Total)>? byteProgress,
+        CancellationToken cancellationToken, bool overwrite = true, IProgress<(int processed, int total)>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
         Directory.CreateDirectory(outputDirectory);
 
         var entries = ListFiles();
         var totalCount = entries.Count;
+        var hostPaths = new SharedKernel.PortableExtractionPaths(outputDirectory, entries.Select(entry => entry.Path));
+        var totalBytes = entries.Where(e => e.Kind != F2fsEntryKind.Directory
+                && (e.Kind == F2fsEntryKind.Symlink || overwrite || !File.Exists(hostPaths.Resolve(e.Path))))
+            .Sum(e => e.Kind == F2fsEntryKind.Symlink ? Encoding.UTF8.GetByteCount(e.SymlinkTarget ?? string.Empty)
+                : (e.Mode & 0xF000) == 0x8000 ? e.Size : 0L);
+        var bytes = new SharedKernel.ExtractionByteCounter(totalBytes, byteProgress, cancellationToken);
         var processedCount = 0;
         foreach (var entry in entries)
         {
-            var targetPath = SharedKernel.FileExtraction.ResolvePath(outputDirectory, entry.Path);
+            cancellationToken.ThrowIfCancellationRequested();
+            var targetPath = hostPaths.Resolve(entry.Path);
             if (entry.Kind == F2fsEntryKind.Directory)
             {
                 Directory.CreateDirectory(targetPath);
@@ -266,22 +289,9 @@ public sealed class F2fsParser : IDisposable
 
             if (entry.Kind == F2fsEntryKind.Symlink)
             {
-                if (overwrite && (File.Exists(targetPath) || Directory.Exists(targetPath)))
-                {
-                    File.Delete(targetPath);
-                }
-
-                if (!File.Exists(targetPath) && !Directory.Exists(targetPath))
-                {
-                    try
-                    {
-                        File.CreateSymbolicLink(targetPath, entry.SymlinkTarget ?? string.Empty);
-                    }
-                    catch
-                    {
-                        SharedKernel.FileExtraction.WriteAtomic(targetPath, output => output.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)), overwrite);
-                    }
-                }
+                // The host file is a portable projection; the inode type and original image remain authoritative.
+                SharedKernel.FileExtraction.WriteAtomic(targetPath,
+                    output => { using var counted = bytes.Wrap(output); counted.Write(Encoding.UTF8.GetBytes(entry.SymlinkTarget ?? string.Empty)); }, overwrite);
 
                 processedCount++;
                 progress?.Report((processedCount, totalCount));
@@ -295,11 +305,12 @@ public sealed class F2fsParser : IDisposable
                 continue;
             }
 
-            SharedKernel.FileExtraction.WriteAtomic(targetPath, output => ReadFile(entry.Path, output), overwrite);
+            SharedKernel.FileExtraction.WriteAtomic(targetPath, output => { using var counted = bytes.Wrap(output); ReadFile(entry.Path, counted); }, overwrite);
 
             processedCount++;
             progress?.Report((processedCount, totalCount));
         }
+        bytes.Complete();
     }
 
     /// <summary>
@@ -355,7 +366,7 @@ public sealed class F2fsParser : IDisposable
             var childPath = prefix.Length == 0 ? entry.Name : prefix + "/" + entry.Name;
             var kind = ClassifyKind(entry.FileType, childInode);
             var symlinkTarget = kind == F2fsEntryKind.Symlink ? ReadSymlinkTarget(entry.Ino, childInode) : null;
-            _entries[childPath] = new F2fsFileEntry(childPath, (long)childInode.Size, entry.Ino, kind, symlinkTarget, childInode.Uid, childInode.Gid, childInode.Mode);
+            _entries[childPath] = new F2fsFileEntry(childPath, (long)childInode.Size, entry.Ino, kind, symlinkTarget, childInode.Uid, childInode.Gid, childInode.Mode, ReadXattrs(entry.Ino, childInode), childInode.Addr[childInode.ExtraIsizeWords] != 0 ? childInode.Addr[childInode.ExtraIsizeWords] : childInode.Addr[childInode.ExtraIsizeWords + 1], childInode.Flags);
             if (kind == F2fsEntryKind.Directory)
             {
                 WalkDirectory(entry.Ino, childPath, visited);
@@ -375,7 +386,7 @@ public sealed class F2fsParser : IDisposable
         };
 
     private static bool IsSafeName(string name)
-        => !name.Contains('/') && !name.Contains('\\') && !name.Contains('\0') && name != "." && name != "..";
+        => !name.Contains('/') && !name.Contains('\0') && name != "." && name != "..";
 
     private string? ReadSymlinkTarget(uint nid, F2fsInode inode)
     {
@@ -496,6 +507,24 @@ public sealed class F2fsParser : IDisposable
         var crc = ComputeCrc32(F2fsSuperblock.Magic, block[..(int)offset]);
         if (offset < 4092) crc = ComputeCrc32(crc, block[((int)offset + 4)..]);
         return crc == BinaryPrimitives.ReadUInt32LittleEndian(block[(int)offset..]);
+    }
+
+    private Dictionary<string, byte[]> ReadXattrs(uint nid, F2fsInode inode)
+    {
+        using var attributes = new MemoryStream();
+        if (inode.InlineXattrAddrs > 0)
+        {
+            var node = ReadInodeNode(nid);
+            attributes.Write(node.AsSpan(F2fsNode.AddrArrayOffset + (F2fsNode.DefAddrsPerInode - inode.InlineXattrAddrs) * 4, inode.InlineXattrAddrs * 4));
+        }
+        if (inode.XattrNid != 0)
+        {
+            var node = ReadNodeBlockCached(inode.XattrNid, "xattr node");
+            var footer = F2fsNodeFooter.FromBytes(node);
+            if (footer.Nid != inode.XattrNid || footer.Ino != nid) throw new InvalidDataException("Invalid F2FS xattr owner.");
+            attributes.Write(node.AsSpan(0, F2fsNode.NodeSize - 24));
+        }
+        return F2fsXattrs.Decode(attributes.GetBuffer().AsSpan(0, (int)attributes.Length));
     }
 
     private F2fsInode ReadInode(uint nid)
@@ -732,22 +761,8 @@ public sealed class F2fsParser : IDisposable
             throw new InvalidDataException("F2FS file data exceeds the supported block-mapping depth.");
         }
 
-        var blockCount = (uint)(((long)inode.Size + _blockSize - 1) / _blockSize);
-        var buffer = new byte[_blockSize];
-        var remaining = (long)inode.Size;
-        for (var logical = 0u; logical < blockCount; logical++)
-        {
-            var physical = MapBlock(inode, logical);
-            buffer.AsSpan().Clear();
-            if (physical is not null)
-            {
-                ReadBlockTo((ulong)physical, buffer);
-            }
-
-            var writeLength = (int)Math.Min(remaining, _blockSize);
-            output.Write(buffer, 0, writeLength);
-            remaining -= writeLength;
-        }
+        SharedKernel.Streams.MappedBlockCopy.Copy(_stream, output, checked((long)inode.Size), _blockSize,
+            logical => MapBlock(inode, logical));
     }
 
     /// <summary>

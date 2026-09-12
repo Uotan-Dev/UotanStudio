@@ -1,5 +1,6 @@
 ﻿using K4os.Compression.LZ4;
 using UotanStudio.Firmware.CrossCutting.Lzo;
+using System.Buffers;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 
@@ -130,14 +131,15 @@ internal static class F2fsCompression
         };
 
         var maxOutput = LZ4Codec.MaximumOutputSize(data.Length);
-        var target = new byte[maxOutput];
-        var written = LZ4Codec.Encode(data, target, lz4Level);
-        if (written <= 0)
+        var target = ArrayPool<byte>.Shared.Rent(maxOutput);
+        try
         {
-            throw new InvalidOperationException("LZ4 compression produced no output.");
+            var written = LZ4Codec.Encode(data, target.AsSpan(0, maxOutput), lz4Level);
+            if (written <= 0)
+                throw new InvalidOperationException("LZ4 compression produced no output.");
+            return target.AsSpan(0, written).ToArray();
         }
-
-        return target.AsSpan(0, written).ToArray();
+        finally { ArrayPool<byte>.Shared.Return(target); }
     }
 
     private static byte[] DecompressLz4(ReadOnlySpan<byte> compressed, int expectedSize)
@@ -149,7 +151,7 @@ internal static class F2fsCompression
             throw new InvalidDataException("LZ4 decompression failed.  LZ4 解压失败。");
         }
 
-        return result.AsSpan(0, Math.Min(decoded, expectedSize)).ToArray();
+        return decoded == expectedSize ? result : result.AsSpan(0, Math.Min(decoded, expectedSize)).ToArray();
     }
 
     private static byte[] CompressZstd(ReadOnlySpan<byte> data, int level)

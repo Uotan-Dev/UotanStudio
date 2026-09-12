@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
@@ -23,8 +23,8 @@ public sealed partial class ErofsParser
         => LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out ebase, out compacted4bInitial, out compacted2b, cachedIndex: null);
 
     /// <summary>
-    /// Loads a logical cluster entry from compact or full indexes, with an optional pre-read
-    /// compact index cache to avoid repeated disk I/O for the same inode.
+    /// Loads a logical cluster entry from compact or full indexes, with an optional bounded
+    /// index window to avoid repeated disk I/O for the same inode.
     /// <para>从紧凑或完整索引加载逻辑簇条目，支持传入预读的紧凑索引缓存以避免同一 inode 的重复磁盘 I/O。</para>
     /// </summary>
     private LclusterEntry LoadLcluster(
@@ -38,7 +38,7 @@ public sealed partial class ErofsParser
         out long ebase,
         out int compacted4bInitial,
         out int compacted2b,
-        byte[]? cachedIndex)
+        IndexReadWindow? cachedIndex)
     {
 
         ebase = headerOffset + ZErofsMapHeader.Size;
@@ -56,7 +56,7 @@ public sealed partial class ErofsParser
 
         compacted4bInitial = 0;
         compacted2b = 0;
-        return LoadFullLcluster(inode, headerOffset, lclusterBits, lcn);
+        return LoadFullLcluster(inode, headerOffset, lclusterBits, lcn, cachedIndex);
     }
 
     /// <summary>
@@ -73,7 +73,7 @@ public sealed partial class ErofsParser
         int compacted4bInitial,
         int compacted2b,
         long lcn,
-        byte[]? cachedIndex = null)
+        IndexReadWindow? cachedIndex = null)
     {
         var bigPcluster = (advise & (ZErofsMapHeader.AdviseBigPcluster1 | ZErofsMapHeader.AdviseBigPcluster2)) != 0;
         var amortizedShift = 2;
@@ -124,23 +124,13 @@ public sealed partial class ErofsParser
         byte[] index;
         if (cachedIndex is not null)
         {
-            index = cachedIndex;
+            index = cachedIndex.Get(packStartRel, packSize, out packStartRel);
         }
         else
         {
-            var indexLength = checked((long)totalIdx * 4 + 64);
-            if (indexLength > MaxMetadataComponentSize)
-            {
-                throw new InvalidDataException(
-                    $"Compact index table size {indexLength} exceeds the limit of {MaxMetadataComponentSize} bytes.");
-            }
-
-            index = ReadBytes(ebase, checked((int)Math.Min(indexLength, _imageSize - ebase)), "compact index table");
-        }
-
-        if (packStartRel + packSize > index.Length)
-        {
-            throw new InvalidDataException("Compact index pack exceeds the image bounds.");
+            // Random callers need only the containing 8/32-byte pack.
+            index = ReadBytes(checked(ebase + packStartRel), packSize, "compact index pack");
+            packStartRel = 0;
         }
 
         var lobits = Math.Max(lclusterBits, 12);
@@ -241,7 +231,7 @@ public sealed partial class ErofsParser
     /// Decodes a full (8-byte) compressed index entry, ported from the kernel z_erofs_load_full_lcluster.
     /// <para>解码完整（8 字节）压缩索引条目，移植自内核 z_erofs_load_full_lcluster。</para>
     /// </summary>
-    private LclusterEntry LoadFullLcluster(ErofsInode inode, long headerOffset, int lclusterBits, long lcn)
+    private LclusterEntry LoadFullLcluster(ErofsInode inode, long headerOffset, int lclusterBits, long lcn, IndexReadWindow? cachedIndex = null)
     {
         var indexOffset = headerOffset + ZErofsMapHeader.Size + FullIndexStartPad + lcn * ZErofsLclusterIndex.Size;
         if (indexOffset < 0 || indexOffset > _imageSize - ZErofsLclusterIndex.Size)
@@ -249,7 +239,11 @@ public sealed partial class ErofsParser
             throw new InvalidDataException($"Full index entry {lcn} exceeds the image bounds.");
         }
 
-        var entry = ZErofsLclusterIndex.FromBytes(ReadBytes(indexOffset, ZErofsLclusterIndex.Size, "full index entry"));
+        var relative = 0;
+        var bytes = cachedIndex is null
+            ? ReadBytes(indexOffset, ZErofsLclusterIndex.Size, "full index entry")
+            : cachedIndex.Get(indexOffset - headerOffset - ZErofsMapHeader.Size, ZErofsLclusterIndex.Size, out relative);
+        var entry = ZErofsLclusterIndex.FromBytes(bytes.AsSpan(relative, ZErofsLclusterIndex.Size));
         if (entry.IsNonHead)
         {
 

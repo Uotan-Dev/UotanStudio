@@ -123,7 +123,7 @@ internal sealed record F2fsDirectoryEntry
             }
 
             var nameLength = Math.Min(nameLen, slots * SlotLength);
-            var name = Encoding.UTF8.GetString(filenames.Slice(position * SlotLength, nameLength));
+            var name = SharedKernel.PortableExtractionPaths.NameEncoding.GetString(filenames.Slice(position * SlotLength, nameLength));
             if (ino != 0)
             {
                 result.Add(new F2fsDirectoryEntry

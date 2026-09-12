@@ -36,6 +36,9 @@ public sealed class F2fsOptions
     /// </summary>
     public string? FileContextsPath { get; init; }
 
+    /// <summary>Binary Linux xattrs keyed by image-relative path; root uses an empty path.</summary>
+    public IReadOnlyDictionary<string, Dictionary<string, byte[]>>? FileXattrs { get; init; }
+
     /// <summary>
     /// Validates and normalizes the options.
     /// <para>校验并规整选项。</para>

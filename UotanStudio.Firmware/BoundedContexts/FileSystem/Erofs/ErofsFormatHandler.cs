@@ -90,8 +90,8 @@ public sealed class ErofsFormatHandler : IFormatHandler
     /// <para>将 erofs 镜像解包到输出目录。</para>
     /// </summary>
     public Task<FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
-            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+        => UotanStudio.Firmware.SharedKernel.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private Task<FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -101,7 +101,7 @@ public sealed class ErofsFormatHandler : IFormatHandler
             try
             {
                 using var parser = new ErofsParser(filePath);
-                parser.ExtractToDirectory(outputDirectory, options?.Overwrite ?? true);
+                parser.ExtractToDirectory(outputDirectory, overwrite: options?.Overwrite ?? true, byteProgress: FileSystemByteProgress.ForStage(options?.FileSystemProgress, FileSystemWorkStage.Extracting), cancellationToken: cancellationToken);
                 var files = parser.EnumerateFiles();
                 return FirmwareOpResult.Ok(
                     $"Extracted {files.Count} files from '{filePath}' to '{outputDirectory}'.",
@@ -129,6 +129,8 @@ public sealed class ErofsFormatHandler : IFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
+                if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+                    return FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.");
                 if (!Directory.Exists(inputPath))
                 {
                     return FirmwareOpResult.Fail($"Input path is not a directory: '{inputPath}'.");

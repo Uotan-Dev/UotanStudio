@@ -225,8 +225,12 @@ public sealed class RepackMetadataTests : IDisposable
         File.WriteAllText(Path.Combine(Source, RepackMetadata.FileName), "ordinary payload file");
         new ErofsBuilder().Build(Source, Image);
         var result = await new ErofsFormatHandler().UnpackAsync(Image, Extracted, cancellationToken: Cancellation);
-        Assert.False(result.Success);
-        Assert.Equal("ordinary payload file", File.ReadAllText(Path.Combine(Extracted, RepackMetadata.FileName)));
+        Assert.True(result.Success, result.Summary);
+        var payload = Assert.Single(Directory.GetFiles(Extracted, "uotan-name-*"));
+        Assert.Equal("ordinary payload file", File.ReadAllText(payload));
+        Assert.NotNull(RepackMetadata.Read(Extracted));
+        Assert.True((await new ErofsFormatHandler().PackAsync(Extracted, Output, Cancellation)).Success);
+        Assert.Equal(File.ReadAllBytes(Image), File.ReadAllBytes(Output));
     }
 
     private void EditMetadata(Action<JsonObject> edit)

@@ -7,12 +7,13 @@ public sealed class CountingWriteStream : Stream
     private readonly bool _leaveOpen;
     private readonly CancellationToken _cancellationToken;
     private bool _disposed;
+    private readonly Action<int>? _bytesWritten;
 
     /// <summary>
     /// Creates a limited counting write stream.
     /// <para>创建受限计数写入流。</para>
     /// </summary>
-    public CountingWriteStream(Stream inner, long maximumBytes, bool leaveOpen = false, CancellationToken cancellationToken = default)
+    public CountingWriteStream(Stream inner, long maximumBytes, bool leaveOpen = false, CancellationToken cancellationToken = default, Action<int>? bytesWritten = null)
     {
         ArgumentNullException.ThrowIfNull(inner);
         if (!inner.CanWrite) throw new ArgumentException("The stream must be writable.", nameof(inner));
@@ -21,6 +22,7 @@ public sealed class CountingWriteStream : Stream
         _maximumBytes = maximumBytes;
         _leaveOpen = leaveOpen;
         _cancellationToken = cancellationToken;
+        _bytesWritten = bytesWritten;
     }
 
     public long BytesWritten { get; private set; }
@@ -55,6 +57,7 @@ public sealed class CountingWriteStream : Stream
         EnsureAllowed(buffer.Length);
         _inner.Write(buffer);
         BytesWritten = checked(BytesWritten + buffer.Length);
+        _bytesWritten?.Invoke(buffer.Length);
     }
 
     /// <summary>
@@ -68,6 +71,7 @@ public sealed class CountingWriteStream : Stream
         EnsureAllowed(buffer.Length);
         await _inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
         BytesWritten = checked(BytesWritten + buffer.Length);
+        _bytesWritten?.Invoke(buffer.Length);
     }
 
     /// <summary>

@@ -7,11 +7,9 @@ using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 namespace UotanStudio.Firmware.SharedKernel;
 
 /// <summary>
-/// Records the source format and available packing configuration of an extraction directory.
-/// Metadata is stored in a consolidated directory (<c>.uotan/metadata/&lt;partition&gt;/</c>); a
-/// lightweight pointer file is left in the extraction directory for discovery and backward compatibility.
-/// <para>记录解包目录的来源格式和可用打包配置。元数据存放在统一目录（<c>.uotan/metadata/&lt;partition&gt;/</c>）；
-/// 解包目录中保留轻量级指针文件用于发现和向后兼容。</para>
+/// Records the source format and packing configuration of an extraction directory.
+/// Project operations store metadata in the owning sub-project's .uotan/metadata directory;
+/// explicit local operations store it in the extraction directory, without cross-fallback.
 /// </summary>
 public sealed class RepackMetadata
 {
@@ -24,14 +22,40 @@ public sealed class RepackMetadata
     private const long MaximumBytes = 32 * 1024 * 1024;
     private const string DefaultPartitionName = "unknown";
 
-    /// <summary>
-    /// Ambient metadata root directory set by the application layer before unpacking.
-    /// Format handlers in the Firmware layer use this when no explicit <c>metadataRoot</c>
-    /// is passed to <see cref="WriteAsync"/>. Thread-safe for sequential desktop usage.
-    /// <para>应用层在解包前设置的环境元数据根目录。固件层格式处理器在未显式传递
-    /// <c>metadataRoot</c> 时使用此值。桌面顺序使用场景下线程安全。</para>
-    /// </summary>
-    public static string? DefaultMetadataRoot { get; set; }
+    private static string? _defaultMetadataRoot;
+    private static readonly AsyncLocal<MetadataScope?> CurrentScope = new();
+
+    /// <summary>Legacy default metadata root. An operation scope takes precedence across awaits and background work.</summary>
+    public static string? DefaultMetadataRoot
+    {
+        get => CurrentScope.Value is { } scope ? scope.Root : _defaultMetadataRoot;
+        set => _defaultMetadataRoot = value;
+    }
+
+    /// <summary>Fixes metadata ownership for nested legacy handlers and background work in this operation.</summary>
+    public static IDisposable UseContext(RepackMetadataContext context)
+        => new MetadataScope(context.Capture().ResolveWriteRoot(null));
+
+    /// <summary>Indicates that this asynchronous operation has already fixed its metadata ownership.</summary>
+    public static bool HasContext => CurrentScope.Value is not null;
+
+    private sealed class MetadataScope : IDisposable
+    {
+        private readonly MetadataScope? _previous;
+        public string? Root { get; }
+
+        public MetadataScope(string? root)
+        {
+            Root = root;
+            _previous = CurrentScope.Value;
+            CurrentScope.Value = this;
+        }
+
+        public void Dispose()
+        {
+            if (ReferenceEquals(CurrentScope.Value, this)) CurrentScope.Value = _previous;
+        }
+    }
 
     /// <summary>Identifies this metadata schema.<para>标识元数据模式。</para></summary>
     public string Schema { get; set; } = SchemaName;
@@ -53,6 +77,10 @@ public sealed class RepackMetadata
     public bool CanPackDirectory { get; set; }
     /// <summary>Describes the limits of the available packer.<para>描述现有打包器的限制。</para></summary>
     public string PackingNotes { get; set; } = string.Empty;
+    /// <summary>Identifies the private filesystem image and verified host projection retained for exact recovery.</summary>
+    public string? FileSystemPreservationId { get; set; }
+    /// <summary>Integrity checksum of the preservation manifest; editing its parsed snapshot is not an implicit rebuild instruction.</summary>
+    public string? FileSystemPreservationHash { get; set; }
 
     /// <summary>
     /// Detects the partition name from a source image filename (strips extension).
@@ -187,13 +215,18 @@ public sealed class RepackMetadata
     /// <para>在解包目录对应的统一元数据目录中查找生成的元数据附属文件
     /// （如 <c>&lt;partition&gt;_fs_config</c>）。不存在时返回 <c>null</c>。</para>
     /// </summary>
-    internal static string? DiscoverMetadataFile(string directory, string suffix)
+    internal static string? DiscoverMetadataFile(string directory, string suffix, string? sourceFileName = null)
     {
         try
         {
-            var metadataDir = Path.GetDirectoryName(Path.GetFullPath(ResolveActualMetadataPath(directory) ?? directory));
+            var metadataPath = ResolveActualMetadataPath(directory);
+            if (metadataPath is null) return null;
+            var metadataDir = Path.GetDirectoryName(Path.GetFullPath(metadataPath));
             if (metadataDir is null || !Directory.Exists(metadataDir)) return null;
-            return Directory.EnumerateFiles(metadataDir, "*" + suffix).FirstOrDefault();
+            sourceFileName ??= ReadFromAbsolute(metadataPath)?.SourceFileName;
+            if (string.IsNullOrWhiteSpace(sourceFileName)) return null;
+            var path = Path.Combine(metadataDir, DetectPartitionName(sourceFileName) + suffix);
+            return File.Exists(path) ? path : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -212,7 +245,7 @@ public sealed class RepackMetadata
         // packingOptions 优先，发现的文件仅补缺。
         try
         {
-            var infoPath = DiscoverMetadataFile(directory, "_info");
+            var infoPath = DiscoverMetadataFile(directory, "_info", metadata.SourceFileName);
             if (infoPath is not null)
             {
                 foreach (var (key, value) in FileSystemMetadataOverrides.LoadPartitionInfo(infoPath))
@@ -222,9 +255,9 @@ public sealed class RepackMetadata
             }
 
             if (!options.ContainsKey("FsConfigPath"))
-                options["FsConfigPath"] = DiscoverMetadataFile(directory, "_fs_config") ?? string.Empty;
+                options["FsConfigPath"] = DiscoverMetadataFile(directory, "_fs_config", metadata.SourceFileName) ?? string.Empty;
             if (!options.ContainsKey("FileContextsPath"))
-                options["FileContextsPath"] = DiscoverMetadataFile(directory, "_file_contexts") ?? string.Empty;
+                options["FileContextsPath"] = DiscoverMetadataFile(directory, "_file_contexts", metadata.SourceFileName) ?? string.Empty;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -415,6 +448,22 @@ public sealed class RepackMetadata
             metadata.PackingNotes += " configuration.superblock records the original filesystem metadata for inspection; only packingOptions are applied when rebuilding the filesystem.";
         if (!source.Success) metadata.PackingNotes += " Source metadata could not be read: " + source.Summary;
 
+        if (handler is BoundedContexts.FileSystem.Ext4.Ext4FormatHandler
+            or BoundedContexts.FileSystem.Erofs.ErofsFormatHandler
+            or BoundedContexts.FileSystem.F2fs.F2fsFormatHandler
+            or BoundedContexts.FileSystem.Sparse.SparseFormatHandler)
+        {
+            var partition = DetectPartitionName(Path.GetFileName(sourcePath));
+            var directory = string.IsNullOrWhiteSpace(effectiveRoot) ? outputDirectory : Path.Combine(effectiveRoot, partition);
+            Directory.CreateDirectory(directory);
+            GenerateFileSystemMetadata(directory, partition, handler, sourcePath, metadata.Configuration);
+            metadata.CanPackDirectory = true;
+            metadata.PackingNotes = "Retains the original image and verifies the extracted projection. Unmodified images restore exactly; unsupported semantic edits fail before output publication.";
+            await FileSystemPreservation.CaptureAsync(sourcePath, outputDirectory, directory, metadata, cancellationToken).ConfigureAwait(false);
+            await metadata.SaveAsync(directory, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(effectiveRoot))
         {
             var partitionName = DetectPartitionName(Path.GetFileName(sourcePath));
@@ -463,11 +512,25 @@ public sealed class RepackMetadata
         try
         {
             var superblock = configuration.ContainsKey("superblock") ? configuration["superblock"] as JsonObject : null;
-            // For sparse images, we need to open the raw file inside the extraction directory
             if (handler.FormatName == "Android Sparse Image (simg)")
             {
-                // Sparse: use directory-based fallback since we don't have a parser here
-                FileSystemMetadataGenerator.GenerateFromDirectory(metadataDirectory, partitionName, metadataDirectory);
+                using var image = BoundedContexts.FileSystem.Sparse.SparseReader.FromImageFile(sourcePath);
+                using var logical = new BoundedContexts.FileSystem.Sparse.SparseReadStream(image);
+                switch (configuration["fileSystem"]?.GetValue<string>())
+                {
+                    case "EXT4":
+                        using (var parser = new BoundedContexts.FileSystem.Ext4.Ext4Parser(logical))
+                            FileSystemMetadataGenerator.GenerateForExt4(metadataDirectory, partitionName, parser, superblock);
+                        break;
+                    case "EROFS":
+                        using (var parser = new BoundedContexts.FileSystem.Erofs.ErofsParser(logical))
+                            FileSystemMetadataGenerator.GenerateForErofs(metadataDirectory, partitionName, parser, superblock);
+                        break;
+                    case "F2FS":
+                        using (var parser = new BoundedContexts.FileSystem.F2fs.F2fsParser(logical))
+                            FileSystemMetadataGenerator.GenerateForF2fs(metadataDirectory, partitionName, parser, superblock);
+                        break;
+                }
                 return;
             }
 

@@ -55,15 +55,20 @@ public sealed partial class Ext4Builder
 
     private sealed class Node
     {
-        public required string Name { get; init; }
-        public required string RelativePath { get; init; }
-        public required string FullPath { get; init; }
+        public required string Name { get; set; }
+        public required string RelativePath { get; set; }
+        public required string FullPath { get; set; }
         public required bool IsDirectory { get; init; }
-        public required bool IsSymlink { get; init; }
+        public required bool IsSymlink { get; set; }
         public string? SymlinkTarget { get; set; }
         public Node? Parent { get; init; }
         public List<Node> Children { get; } = [];
         public long Size { get; set; }
+        public ulong OriginalInode;
+        public ushort LinkCount = 1;
+        public uint SemanticFlags;
+        public uint DeviceId;
+        public bool IsSpecial => (Mode & 0xF000) is 0x1000 or 0x2000 or 0x6000 or 0xC000;
         public uint Inode { get; set; }
         public ushort Mode { get; set; }
         public uint Uid { get; set; }
@@ -195,6 +200,7 @@ public sealed partial class Ext4Builder
 
     private static Ext4Options Validate(string sourceDirectory, Ext4Options? options)
     {
+        FileSystemPreservation.RejectLossyDirectoryRebuild(sourceDirectory);
         options ??= new Ext4Options();
         var blockSize = options.BlockSize;
         var inodeSize = options.InodeSize;
@@ -234,7 +240,7 @@ public sealed partial class Ext4Builder
             {
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
-                node.Mode = entry.Mode;
+                node.Mode = (ushort)((node.IsDirectory ? 0x4000 : node.IsSymlink ? 0xA000 : 0x8000) | (entry.Mode & 0x0FFF));
             }
 
             if (options.FileContextsPath is not null && FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
@@ -445,7 +451,7 @@ public sealed partial class Ext4Builder
 
         WriteSuperblock(superblock, blockSize, inodeSize, (uint)inodesPerGroup, totalBlocks, usedBlocks,
             (int)Math.Max(0, totalInodes - totalFreeInodes), uuid, blocksPerGroup, options.EnableMetadataCsum,
-            includeJournal ? JournalInodeNumber : 0u, includeJournal, reservedGdtBlocks, journalIBlock, journalSize);
+            includeJournal ? JournalInodeNumber : 0u, includeJournal, reservedGdtBlocks, journalIBlock, journalSize, options.VolumeName);
         WriteAt(output, baseOffset, 1024, superblock, superblock.Length);
 
         foreach (var bg in BackupSuperblockGroups(groupCount))
@@ -618,6 +624,7 @@ public sealed partial class Ext4Builder
             IsDirectory = true,
             IsSymlink = false,
         };
+        ApplyPreservedAttributes(root);
         Populate(root, excludedFiles);
         return root;
     }
@@ -625,7 +632,7 @@ public sealed partial class Ext4Builder
     private static void Populate(Node node, IReadOnlyCollection<string> excludedFiles)
     {
         var children = Directory.EnumerateFileSystemEntries(node.FullPath)
-            .Where(path => !SharedKernel.RepackMetadata.IsMetadataFile(path))
+            .Where(path => (SharedKernel.FileSystemEditPlan.Current is { } plan ? plan.Includes(path) : !SharedKernel.RepackMetadata.IsMetadataFile(path)))
             .OrderBy(static p => Path.GetFileName(p), StringComparer.Ordinal);
         // 排除表构建为 HashSet（对齐 ErofsBuilder/F2fsBuilder 做法），把每子路径的
         // O(排除数) 线性扫描降为 O(1)。
@@ -678,6 +685,7 @@ public sealed partial class Ext4Builder
                 child.Mode = (ushort)(child.Mode | 0x8000);
             }
 
+            ApplyPreservedAttributes(child);
             node.Children.Add(child);
             if (isDirectory)
             {
@@ -686,8 +694,36 @@ public sealed partial class Ext4Builder
         }
     }
 
+    private static void ApplyPreservedAttributes(Node node)
+    {
+        if (SharedKernel.FileSystemEditPlan.Current is not { } plan) return;
+        var entry = plan.Get(node.FullPath);
+        node.Name = SharedKernel.FileSystemEditPlan.Name(entry.Path);
+        node.RelativePath = entry.Path;
+        node.Mode = entry.Mode;
+        node.Uid = entry.Uid;
+        node.Gid = entry.Gid;
+        node.Xattrs = entry.Xattrs;
+        node.IsSymlink = (entry.Mode & 0xF000) == 0xA000;
+        if (node.IsSymlink)
+        {
+            node.SymlinkTarget = entry.SymlinkTarget ?? "";
+            node.Size = Encoding.UTF8.GetByteCount(node.SymlinkTarget);
+        }
+        node.OriginalInode = entry.Inode;
+        node.SemanticFlags = entry.Flags & 0x100F8u;
+        if ((entry.Mode & 0xF000) == 0x8000)
+        {
+            node.FullPath = plan.ContentSource(node.FullPath);
+            node.Size = new FileInfo(node.FullPath).Length;
+        }
+        node.DeviceId = entry.DeviceId;
+        if (node.IsSpecial) node.Size = 0;
+    }
+
     private static uint AssignInodes(Node root, List<Node> nodes)
     {
+        var links = new Dictionary<ulong, Node>();
         root.Inode = RootInodeNumber;
         nodes.Add(root);
         var nextInode = FirstUsableInode;
@@ -696,6 +732,13 @@ public sealed partial class Ext4Builder
         {
             foreach (var child in nodes[i].Children)
             {
+                if (!child.IsDirectory && child.OriginalInode != 0 && links.TryGetValue(child.OriginalInode, out var canonical))
+                {
+                    child.Inode = canonical.Inode;
+                    canonical.LinkCount = checked((ushort)(canonical.LinkCount + 1));
+                    continue;
+                }
+                if (!child.IsDirectory && child.OriginalInode != 0) links.Add(child.OriginalInode, child);
                 child.Inode = nextInode;
                 maxInode = nextInode;
                 nextInode++;
@@ -1006,11 +1049,11 @@ public sealed partial class Ext4Builder
     }
 
     private static byte FileTypeOf(Node node)
-        => node.IsDirectory ? Ext4DirectoryEntry.TypeDirectory : node.IsSymlink ? Ext4DirectoryEntry.TypeSymlink : Ext4DirectoryEntry.TypeRegular;
+        => node.IsDirectory ? Ext4DirectoryEntry.TypeDirectory : node.IsSymlink ? Ext4DirectoryEntry.TypeSymlink : (byte)((node.Mode & 0xF000) switch { 0x2000 => 3, 0x6000 => 4, 0x1000 => 5, 0xC000 => 6, _ => Ext4DirectoryEntry.TypeRegular });
 
     private static void WriteSuperblock(
         Span<byte> block, int blockSize, int inodeSize, uint inodesPerGroup, long totalBlocks, long usedBlocks, int usedInodes, byte[] uuid, int blocksPerGroup, bool enableMetadataCsum, uint journalInum, bool hasJournal,
-        int reservedGdtBlocks, ReadOnlySpan<byte> journalIBlock, long journalSize)
+        int reservedGdtBlocks, ReadOnlySpan<byte> journalIBlock, long journalSize, string volumeName)
     {
         block.Clear();
         var totalInodes = inodesPerGroup * ((totalBlocks + blocksPerGroup - 1) / blocksPerGroup);
@@ -1052,7 +1095,7 @@ public sealed partial class Ext4Builder
         WriteU32(block, 0x5C, 0x0038u | (hasJournal ? FeatureCompatHasJournal : 0u));
         WriteU32(block, 0x60, 0x02C2);
         WriteU32(block, 0x64, 0x006Bu | (enableMetadataCsum ? 0x0400u : 0u));
-        Encoding.ASCII.GetBytes("UOTANSTUDIO", block[0x78..0x88]);
+        Encoding.UTF8.GetBytes(volumeName, block[0x78..0x88]);
         uuid.AsSpan().CopyTo(block[0x68..0x78]);
 
 

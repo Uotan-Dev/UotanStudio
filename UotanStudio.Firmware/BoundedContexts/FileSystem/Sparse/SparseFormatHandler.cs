@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
@@ -68,8 +68,8 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
     /// <para>异步提取固件内容。</para>
     /// </summary>
     public Task<SharedKernel.FirmwareOpResult> UnpackAsync(string filePath, string outputDirectory, SharedKernel.UnpackOptions? options = null, CancellationToken cancellationToken = default)
-        => UotanStudio.Firmware.SharedKernel.RepackMetadata.UnpackAsync(this, filePath, outputDirectory, options,
-            cancellationToken, () => UnpackCoreAsync(filePath, outputDirectory, options, cancellationToken));
+        => SharedKernel.FileSystemPreservation.UnpackAsync(this, filePath, outputDirectory, options,
+            cancellationToken, frozen => UnpackCoreAsync(frozen, outputDirectory, options, cancellationToken));
 
     private Task<SharedKernel.FirmwareOpResult> UnpackCoreAsync(string filePath, string outputDirectory, SharedKernel.UnpackOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -78,7 +78,7 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
             Directory.CreateDirectory(outputDirectory);
 
 
-            var filesystemResult = TryUnpackFilesystem(filePath, outputDirectory, options?.Overwrite ?? true);
+            var filesystemResult = TryUnpackFilesystem(filePath, outputDirectory, options?.Overwrite ?? true, options?.FileSystemProgress, cancellationToken);
             if (filesystemResult != null)
             {
                 return Task.FromResult(filesystemResult);
@@ -106,7 +106,7 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
     /// Probes the inner filesystem magic of a sparse image (logical offsets, bounded 1082-byte read) and, when matched, cascade-unpacks the inner filesystem through the corresponding streaming parser (Ext4Parser, ErofsParser or F2fsParser).
     /// <para>探测 sparse 镜像的内部文件系统魔数（逻辑偏移，有界 1082 字节读取），命中时通过对应的流式解析器 （Ext4Parser、ErofsParser 或 F2fsParser）级联解包内部文件系统。</para>
     /// </summary>
-    private static SharedKernel.FirmwareOpResult? TryUnpackFilesystem(string filePath, string outputDirectory, bool overwrite)
+    private static SharedKernel.FirmwareOpResult? TryUnpackFilesystem(string filePath, string outputDirectory, bool overwrite, IProgress<SharedKernel.FileSystemByteProgress>? byteProgress, CancellationToken cancellationToken)
     {
         byte[] probe;
         try
@@ -125,7 +125,7 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
             using var sparseFile = SparseReader.FromImageFile(filePath);
             using var stream = new SparseReadStream(sparseFile);
             using var parser = new Ext4Parser(stream);
-            parser.ExtractToDirectory(outputDirectory, overwrite);
+            parser.ExtractToDirectory(outputDirectory, SharedKernel.FileSystemByteProgress.ForStage(byteProgress, SharedKernel.FileSystemWorkStage.Extracting), cancellationToken, overwrite);
             var entries = parser.ListFiles();
             return SharedKernel.FirmwareOpResult.Ok(
                 $"Extracted {entries.Count} entries from '{filePath}' to '{outputDirectory}'.",
@@ -140,7 +140,7 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
             using var sparseFile = SparseReader.FromImageFile(filePath);
             using var stream = new SparseReadStream(sparseFile);
             using var parser = new ErofsParser(stream);
-            parser.ExtractToDirectory(outputDirectory, overwrite);
+            parser.ExtractToDirectory(outputDirectory, SharedKernel.FileSystemByteProgress.ForStage(byteProgress, SharedKernel.FileSystemWorkStage.Extracting), cancellationToken, overwrite);
             var files = parser.EnumerateFiles();
             return SharedKernel.FirmwareOpResult.Ok(
                 $"Extracted {files.Count} entries from '{filePath}' to '{outputDirectory}'.",
@@ -156,7 +156,7 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
             using var sparseFile = SparseReader.FromImageFile(filePath);
             using var stream = new SparseReadStream(sparseFile);
             using var parser = new F2fsParser(stream);
-            parser.ExtractToDirectory(outputDirectory, overwrite);
+            parser.ExtractToDirectory(outputDirectory, SharedKernel.FileSystemByteProgress.ForStage(byteProgress, SharedKernel.FileSystemWorkStage.Extracting), cancellationToken, overwrite);
             var files = parser.ListFiles();
             return SharedKernel.FirmwareOpResult.Ok(
                 $"Extracted {files.Count} entries from '{filePath}' to '{outputDirectory}'.",
@@ -178,6 +178,8 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
     {
         try
         {
+            if (Directory.Exists(inputPath) && SharedKernel.FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+                return Task.FromResult(SharedKernel.FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes."));
             if (Directory.Exists(inputPath))
             {
 

@@ -106,7 +106,7 @@ internal sealed class ErofsDirectoryEntry
                 NameOff = nameOff,
                 FileType = block[position + 10],
                 Reserved = block[position + 11],
-                Name = Encoding.UTF8.GetString(block.Slice(nameOff, nameLength)),
+                Name = SharedKernel.PortableExtractionPaths.NameEncoding.GetString(block.Slice(nameOff, nameLength)),
             });
 
             position += DirentSize;
@@ -243,7 +243,7 @@ internal sealed class ErofsDirectoryEntry
                     NameOff = raw,
                     FileType = block[entryOffset + 10],
                     Reserved = block[entryOffset + 11],
-                    Name = Encoding.UTF8.GetString(nameBytes),
+                    Name = SharedKernel.PortableExtractionPaths.NameEncoding.GetString(nameBytes),
                 });
             }
             else
@@ -256,7 +256,7 @@ internal sealed class ErofsDirectoryEntry
                     NameOff = raw,
                     FileType = block[entryOffset + 10],
                     Reserved = block[entryOffset + 11],
-                    Name = Encoding.UTF8.GetString(block.Slice(contributionStart, end - contributionStart)),
+                    Name = SharedKernel.PortableExtractionPaths.NameEncoding.GetString(block.Slice(contributionStart, end - contributionStart)),
                 });
             }
 

@@ -18,6 +18,10 @@ internal sealed record Ext4Inode
     public ushort UidLo { get; init; }
 
     public ushort GidLo { get; init; }
+    public ushort UidHigh { get; init; }
+    public ushort GidHigh { get; init; }
+    public uint Uid => UidLo | ((uint)UidHigh << 16);
+    public uint Gid => GidLo | ((uint)GidHigh << 16);
 
     public uint SizeLo { get; init; }
 
@@ -96,6 +100,8 @@ internal sealed record Ext4Inode
             Mode = BinaryPrimitives.ReadUInt16LittleEndian(data[0..2]),
             UidLo = BinaryPrimitives.ReadUInt16LittleEndian(data[2..4]),
             GidLo = BinaryPrimitives.ReadUInt16LittleEndian(data[24..26]),
+            UidHigh = BinaryPrimitives.ReadUInt16LittleEndian(data[120..122]),
+            GidHigh = BinaryPrimitives.ReadUInt16LittleEndian(data[122..124]),
             SizeLo = BinaryPrimitives.ReadUInt32LittleEndian(data[4..8]),
             SizeHigh = BinaryPrimitives.ReadUInt32LittleEndian(data[108..112]),
             BlocksLo = BinaryPrimitives.ReadUInt32LittleEndian(data[28..32]),

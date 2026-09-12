@@ -92,7 +92,12 @@ public sealed partial class Ext4Builder
         var mode = node.Mode != 0 ? node.Mode : (node.IsDirectory ? ModeDirectory : node.IsSymlink ? ModeSymbolicLink : ModeRegularFile);
         var metaBlocks = new List<(long BlockAddress, byte[] Data)>();
         var flags = 0u;
-        if (isFastSymlink)
+        if (node.IsSpecial)
+        {
+            flags = 0;
+            if ((node.Mode & 0xF000) is 0x2000 or 0x6000) WriteU32(inode, 44, node.DeviceId);
+        }
+        else if (isFastSymlink)
         {
             var target = Encoding.UTF8.GetBytes(node.SymlinkTarget ?? string.Empty);
             target.AsSpan().CopyTo(inode.AsSpan(40, Math.Min(target.Length, 60)));
@@ -151,10 +156,12 @@ public sealed partial class Ext4Builder
         WriteU32(inode, 16, node.Mtime != 0 ? node.Mtime : FixedTimestamp);
         WriteU32(inode, 20, 0);
         WriteU16(inode, 24, (ushort)(node.Gid & 0xFFFF));
-        WriteU16(inode, 26, node.IsDirectory ? (ushort)(2 + node.Children.Count(static c => c.IsDirectory)) : (ushort)1);
+        WriteU16(inode, 120, (ushort)(node.Uid >> 16));
+        WriteU16(inode, 122, (ushort)(node.Gid >> 16));
+        WriteU16(inode, 26, node.IsDirectory ? (ushort)(2 + node.Children.Count(static c => c.IsDirectory)) : node.LinkCount);
         var allocatedBlocks = isFastSymlink || node.IsInlineData ? 0 : node.DataBlockCount + node.LeafBlocks.Length + node.IndexBlocks.Length;
         WriteU32(inode, 28, (uint)(allocatedBlocks * (blockSize / 512)));
-        WriteU32(inode, 32, flags);
+        WriteU32(inode, 32, flags | node.SemanticFlags);
         if (inodeSize >= 256)
         {
             WriteU32(inode, 108, (uint)(node.Size >> 32));
@@ -167,7 +174,7 @@ public sealed partial class Ext4Builder
         }
 
 
-        if (node.Xattrs is { Count: > 0 } && !node.IsInlineData && !isFastSymlink && inodeSize > 160)
+        if (node.Xattrs is { Count: > 0 } && !node.IsInlineData && inodeSize > 160)
         {
             WriteInodeXattrs(inode, inodeSize, node.Xattrs);
         }
@@ -256,6 +263,7 @@ public sealed partial class Ext4Builder
             {
                 entries.Add((shortName, nameIndex, kv.Value));
             }
+            else throw new InvalidDataException($"Unsupported EXT4 xattr namespace: {kv.Key}");
         }
 
         if (entries.Count == 0)
@@ -274,9 +282,7 @@ public sealed partial class Ext4Builder
         }
 
         if (entrySectionSize + totalValueSize > available)
-        {
-            return;
-        }
+            throw new InvalidDataException("EXT4 inode xattrs exceed available capacity; no attributes were discarded.");
 
 
         WriteU16(inode, 128, extraIsiz);

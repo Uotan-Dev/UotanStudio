@@ -15,11 +15,9 @@ public sealed class MetadataConsolidationTests : IDisposable
     private readonly string _metadataRoot;
     private CancellationToken Cancellation => TestContext.Current.CancellationToken;
 
-    // 解包目录与应用层布局一致：intermediate/<源文件名>/，使统一位置解析能按目录名匹配分区键。
-    // Extraction layout mirrors the app: intermediate/<source file name>/ so the consolidated
-    // location resolution can match the partition key from the directory name.
+    // The sub-project owns both its extraction directory and metadata root.
     private string Image => Path.Combine(_root, "system.img");
-    private string Extracted => Path.Combine(_root, "intermediate", "system.img");
+    private string Extracted => Path.Combine(_root, "system.img.unpacked", "system.img");
 
     public MetadataConsolidationTests()
     {
@@ -79,7 +77,7 @@ public sealed class MetadataConsolidationTests : IDisposable
         var fsConfig = File.ReadAllText(Path.Combine(metaDir, "system_fs_config"));
         Assert.Contains("/hello.txt 0 0 420 0", fsConfig.ReplaceLineEndings());
         var contexts = File.ReadAllText(Path.Combine(metaDir, "system_file_contexts"));
-        Assert.Contains("/hello.txt", contexts);
+        Assert.Empty(contexts); // The source has no security.selinux xattr; do not invent one.
         var info = File.ReadAllText(Path.Combine(metaDir, "system_info"));
         Assert.Contains("system.", info);
     }
@@ -183,18 +181,19 @@ public sealed class MetadataConsolidationTests : IDisposable
 
         using var parser = new Ext4Parser(Image);
         var entries = parser.ListFiles();
-        // 解析器路径无前导 "/"，Mode 为纯权限位（不含类型位）。
-        // Parser paths have no leading "/" and Mode holds permission bits only (no type bits).
+        // Parser mode preserves both the inode type and the permission bits.
         var sh = Assert.Single(entries, e => e.Path == "bin/sh");
         Assert.Equal(1000u, sh.Uid);
         Assert.Equal(1001u, sh.Gid);
-        Assert.Equal((ushort)493, sh.Mode);
+        Assert.Equal(493, sh.Mode & 0x0FFF);
+        Assert.Equal(0x8000, sh.Mode & 0xF000);
         Assert.NotNull(sh.Xattrs);
         Assert.True(sh.Xattrs!.TryGetValue("security.selinux", out var value));
         Assert.Equal("u:object_r:shell_exec:s0", System.Text.Encoding.UTF8.GetString(value).TrimEnd('\0'));
         var bin = Assert.Single(entries, e => e.Path == "bin");
         Assert.Equal(2000u, bin.Gid);
-        Assert.Equal((ushort)488, bin.Mode);
+        Assert.Equal(488, bin.Mode & 0x0FFF);
+        Assert.Equal(0x4000, bin.Mode & 0xF000);
     }
 
     [Fact]

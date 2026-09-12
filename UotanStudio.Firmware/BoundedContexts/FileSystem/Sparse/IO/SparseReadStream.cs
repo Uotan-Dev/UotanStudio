@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 
@@ -245,27 +245,7 @@ public sealed class SparseReadStream : Stream
 
             case ChunkType.Fill:
                 {
-                    // 按 4 字节对齐段复制替代逐字节取模写。
-                    // Copy in 4-byte aligned segments instead of per-byte modulo writes.
-                    Span<byte> pattern = stackalloc byte[4];
-                    BinaryPrimitives.WriteUInt32LittleEndian(pattern, chunk.FillValue);
-                    var offset = (int)(chunkLocal % 4);
-                    var i = 0;
-                    if (offset != 0)
-                    {
-                        var head = Math.Min(4 - offset, destination.Length);
-                        pattern.Slice(offset, head).CopyTo(destination);
-                        i = head;
-                    }
-                    while (i + 4 <= destination.Length)
-                    {
-                        pattern.CopyTo(destination.Slice(i));
-                        i += 4;
-                    }
-                    if (i < destination.Length)
-                    {
-                        pattern[..(destination.Length - i)].CopyTo(destination[i..]);
-                    }
+                    SparseFill.Fill(destination, chunk.FillValue, (int)(chunkLocal % 4));
                     break;
                 }
 
