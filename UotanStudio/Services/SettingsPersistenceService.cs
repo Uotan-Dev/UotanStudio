@@ -12,6 +12,15 @@ namespace UotanStudio.Services;
 /// </summary>
 public class AppSettings
 {
+    /// <summary>Maximum concurrent firmware workers. Missing or invalid persisted values use four.</summary>
+    [JsonPropertyName("firmwareParallelism")]
+    public int FirmwareParallelism
+    {
+        get;
+        set => field = value is >= 1 and <= global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.MaximumWorkers
+            ? value : global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.DefaultWorkers;
+    } = global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.DefaultWorkers;
+
     /// <summary>Copies settings with independently editable collections.<para>复制设置，隔离可编辑集合。</para></summary>
     internal AppSettings Copy()
     {

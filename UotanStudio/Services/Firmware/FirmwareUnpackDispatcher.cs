@@ -9,6 +9,8 @@ internal static class FirmwareUnpackDispatcher
         bool allowSparse = false, bool runInBackground = false,
         string? partition = null, CancellationToken cancellationToken = default)
     {
+        using var metadataScope = UotanStudio.Firmware.SharedKernel.RepackMetadata.UseContext(
+            Projects.ProjectContextService.Instance.CaptureMetadataContext(output));
         var service = FirmwareService.Instance;
         Func<Task<FirmwareOpResult>>? unpack = format switch
         {

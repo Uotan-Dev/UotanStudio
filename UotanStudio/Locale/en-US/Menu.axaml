@@ -24,6 +24,12 @@
     <x:String x:Key="NewProject_Analyzing">Reading source contents…</x:String>
     <x:String x:Key="NewProject_NameInvalid">Enter a valid, unused project name</x:String>
     <x:String x:Key="NewProject_Creating">Creating project…</x:String>
+    <x:String x:Key="NewProject_CheckingSpace">Checking available space…</x:String>
+    <x:String x:Key="NewProject_SpaceTitle">Project creation may run out of space</x:String>
+    <x:String x:Key="NewProject_SpaceDetails">Location: {0}&#10;Available: {1}&#10;Estimated requirement: {2}</x:String>
+    <x:String x:Key="NewProject_SpaceWarning">{0}&#10;&#10;This estimate covers the selected original copies, image extraction and unpacking options, with temporary workspace reserved. Full unpacking may need more space. Continuing may fail if the disk fills up.&#10;&#10;Continue creating the project?</x:String>
+    <x:String x:Key="NewProject_SpaceContinue">Continue creating</x:String>
+    <x:String x:Key="NewProject_SpaceCancel">Review options</x:String>
     <x:String x:Key="NewProject_Copying">Copying original files…</x:String>
     <x:String x:Key="NewProject_Extracting">Extracting and unpacking selected images…</x:String>
     <x:String x:Key="NewProject_NameRequired">Enter a project name</x:String>
@@ -132,6 +138,7 @@
     <x:String x:Key="Keys_CopyPublic">Copy public key</x:String>
     <x:String x:Key="Keys_ExportPublic">Export public key…</x:String>
     <x:String x:Key="Keys_ExportPair">Export key pair…</x:String>
+    <x:String x:Key="Keys_ExportCertificate">Export certificate…</x:String>
     <x:String x:Key="Keys_RemoveHint">Remove from the list; keep files in the library’s .deleted folder</x:String>
     <x:String x:Key="Keys_Remove">Remove key</x:String>
     <x:String x:Key="Keys_New">New key</x:String>

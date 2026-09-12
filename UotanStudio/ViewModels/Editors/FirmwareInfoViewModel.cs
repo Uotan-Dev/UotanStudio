@@ -480,11 +480,11 @@ public partial class FirmwareInfoViewModel : Document
 
     /// <summary>
     /// <para>解包命令：按当前格式名分派 <see cref="FirmwareService"/> 的解包方法（CPIO/Payload/Boot/Oppo/Super），
-    /// 将当前固件文件解包到工程 <c>intermediate/&lt;文件名&gt;/</c> 子目录（路径经
+    /// 将当前固件文件解包到工程 <c>&lt;文件名&gt;/</c> 子目录（路径经
     /// <see cref="ProjectContextService.Instance"/> 获取）；失败时给出清晰错误信息。</para>
     /// Unpack command: dispatches a <see cref="FirmwareService"/> unpack method (CPIO/Payload/Boot/Oppo/Super)
     /// by the current format name, unpacking the firmware file into the project
-    /// <c>intermediate/&lt;file-name&gt;/</c> sub-directory (path obtained via
+    /// <c>&lt;file-name&gt;/</c> sub-directory (path obtained via
     /// <see cref="ProjectContextService.Instance"/>); failures produce a clear error message.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanUnpack))]

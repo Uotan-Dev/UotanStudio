@@ -180,19 +180,26 @@
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
             <StackPanel>
                 <StackPanel Spacing="5">
-                    <ProgressBar Minimum="0"
+                    <ProgressBar Name="ImageProgressBar" Minimum="0"
                                  Maximum="100"
                                  FontSize="12"
-                                 ShowProgressText="True"
+                                 ShowProgressText="False"
                                  Value="{Binding ProgressPercent}"
+                                 IsIndeterminate="{Binding IsProgressIndeterminate}"
+                                 IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                  Height="20"
                                  HorizontalAlignment="Stretch"
                                  CornerRadius="4" />
-                    <TextBlock Text="{Binding StatusText}"
+                    <TextBlock Name="ImageProgressStatus" Text="{Binding ProgressStatus}"
                                FontSize="11"
                                Margin="0,2,0,0"
                                TextTrimming="CharacterEllipsis"
                                IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <TextBlock Name="ImageProgressStats" Text="{Binding ProgressStats}"
+                               FontSize="11"
+                               Opacity="0.75"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding ProgressStats, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <Grid IsEnabled="{Binding CanOperate}">
                         <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
                                                        IsVisible="{Binding IsUnpackMode}">

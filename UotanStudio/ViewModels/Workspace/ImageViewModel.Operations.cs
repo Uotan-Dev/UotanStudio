@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
@@ -8,6 +9,13 @@ namespace UotanStudio.ViewModels.Workspace;
 
 internal partial class ImageViewModel
 {
+    private readonly ProgressMeter _meter = new();
+
+    /// <summary><para>解包统计行：已处理/总量 · 速度 · 剩余时间。</para>
+    /// Unpack stats line: processed/total · speed · eta.</summary>
+    [ObservableProperty]
+    private string _progressStats = string.Empty;
+
     /// <summary>Extracts the clicked entry or checked entries. 提取右键条目或勾选条目。</summary>
     [RelayCommand]
     private Task ExtractSelectedAsync(ImageEntryViewModel? image = null) => RunImagesAsync("extract", image);
@@ -73,6 +81,7 @@ internal partial class ImageViewModel
         var failed = 0;
         var skipped = 0;
         ProgressPercent = 0;
+        ReportItemStatistics(0, requests.Length);
         try
         {
             for (var index = 0; index < requests.Length; index++)
@@ -110,7 +119,15 @@ internal partial class ImageViewModel
                     failed++;
                     LogService.Instance.Write(LogLevel.Error, "Images", $"{entry.DisplayName}: {ex.Message}");
                 }
-                finally { ProgressPercent = (double)(index + 1) / requests.Length * 100; }
+                finally
+                {
+                    _progressGeneration++;
+                    if (_fileSystemStage is null)
+                    {
+                        ProgressPercent = (double)(index + 1) / requests.Length * 100;
+                        ReportItemStatistics(index + 1, requests.Length);
+                    }
+                }
             }
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, skipped);
         }
@@ -123,8 +140,10 @@ internal partial class ImageViewModel
         var denominator = growingQueue ? Math.Max(1, total) : total;
         var itemBase = (double)completed / denominator * 100;
         var itemSlice = 100.0 / denominator;
+        var generation = _progressGeneration;
         return new Progress<double>(percent =>
         {
+            if (generation != _progressGeneration || !IsOperating || !double.IsFinite(percent)) return;
             var value = itemBase + Math.Clamp(percent, 0, 99.9) / 100 * itemSlice;
             if (growingQueue) value = Math.Min(99.9, value);
             ProgressPercent = Math.Max(ProgressPercent, value);
@@ -144,6 +163,8 @@ internal partial class ImageViewModel
     private async Task<(bool Success, bool Skipped)> ExtractEntryAsync(ImageEntryViewModel entry, ImageOperationPaths paths, IProgress<double>? itemProgress = null)
     {
         paths.ValidateExtraction();
+        using var metadataScope = UotanStudio.Firmware.SharedKernel.RepackMetadata.UseContext(
+            ProjectContextService.Instance.CaptureMetadataContext(paths.UnpackedDirectory));
         UotanStudio.Firmware.SharedKernel.FirmwareFormatRegistry.RegisterAll();
         var handler = FormatDetector.Detect(paths.Source)
             ?? throw new IOException("Unsupported firmware format.");
@@ -153,20 +174,16 @@ internal partial class ImageViewModel
             return (false, true);
         }
 
-        // 文件系统解析器的 (已处理, 总数) 回调换算为条目内百分比。
-        // Convert the filesystem parsers' (processed, total) callbacks into an in-item percentage.
-        var fileProgress = itemProgress is null
-            ? null
-            : new Progress<(int processed, int total)>(t => itemProgress.Report(t.total > 0 ? t.processed * 100.0 / t.total : 0));
+        var byteProgress = CreateFileSystemProgress(entry.DisplayName);
 
         var result = await ExtractionDirectory.ReplaceAsync(paths.UnpackedDirectory, async () => entry.Format switch
         {
             "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, paths.UnpackedDirectory)),
-            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, paths.UnpackedDirectory)),
-            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, paths.UnpackedDirectory, paths.Name, fileProgress),
+            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, paths.UnpackedDirectory, byteProgress: byteProgress)),
+            "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, paths.UnpackedDirectory, paths.Name, byteProgress: byteProgress),
             _ => await Task.Run(async () =>
             {
-                var options = new UotanStudio.Firmware.SharedKernel.UnpackOptions();
+                var options = new UotanStudio.Firmware.SharedKernel.UnpackOptions { FileSystemProgress = byteProgress };
                 if (itemProgress is not null) options.Progress = new FirmwareItemProgress(itemProgress);
                 var unpacked = await handler.UnpackAsync(paths.Source, paths.UnpackedDirectory, options, CancellationToken.None);
                 return new FirmwareOpResult { Success = unpacked.Success, Summary = unpacked.Summary };
@@ -198,6 +215,8 @@ internal partial class ImageViewModel
         var succeeded = 0;
         var failed = 0;
         ProgressPercent = 0;
+        _meter.Reset();
+        ProgressStats = string.Empty;
         try
         {
             var queue = new Queue<ImageEntryViewModel>(entries);
@@ -209,7 +228,8 @@ internal partial class ImageViewModel
                 var entry = queue.Dequeue();
                 var source = context.ResolvePath(entry.RelativePath) ?? string.Empty;
                 if (!processed.Add(source)) continue;
-                StatusText = $"[{done + 1}/{total}] extract: {entry.DisplayName}";
+                StatusText = string.Format(LanguageService.Instance.GetString("Image_FsStageFile"),
+                    LanguageService.Instance.GetString("Image_FsExtracting"), entry.DisplayName);
                 // 条目内进度换算为总进度：队列可能动态增长，按已完成数近似分片。
                 // Scale in-item progress into overall progress; the queue may grow, so slices
                 // are approximated by the completed count.
@@ -242,8 +262,9 @@ internal partial class ImageViewModel
                 }
                 finally
                 {
+                    _progressGeneration++;
                     done++;
-                    ProgressPercent = (double)done / total * 100;
+                    if (_fileSystemStage is null) ProgressPercent = (double)done / total * 100;
                 }
             }
             StatusText = string.Format(LanguageService.Instance.GetString("Image_OperationSummary"), succeeded, failed, 0);

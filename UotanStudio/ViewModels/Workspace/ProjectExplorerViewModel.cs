@@ -10,10 +10,10 @@ using UotanStudio.Services.Projects;
 namespace UotanStudio.ViewModels.Workspace;
 
 /// <summary>
-/// <para>项目资源管理器视图模型，以当前工程的 <c>images/</c> 与 <c>intermediate/</c> 目录为根展示真实目录树，
+/// <para>项目资源管理器视图模型，以当前工程的 <c>images/</c> 与 <c>output/</c> 目录为根展示真实目录树，
 /// 订阅工程上下文变更消息并在打开/关闭工程时重建树。</para>
 /// Project explorer view model, showing the real directory tree rooted at the current project's
-/// <c>images/</c> and <c>intermediate/</c> folders, rebuilding on project open/close via the
+/// <c>images/</c> and <c>output/</c> folders, rebuilding on project open/close via the
 /// project-context-changed message.
 /// </summary>
 internal partial class ProjectExplorerViewModel : Tool, IDisposable
@@ -68,9 +68,9 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
     }
 
     /// <summary>
-    /// <para>监听工程 <c>images/</c> 与 <c>intermediate/</c> 目录的文件系统变更，
+    /// <para>监听工程 <c>images/</c> 与 <c>output/</c> 目录的文件系统变更，
     /// 在外部增删改后自动同步树结构。</para>
-    /// Watches the project <c>images/</c> and <c>intermediate/</c> directories so the tree
+    /// Watches the project <c>images/</c> and <c>output/</c> directories so the tree
     /// auto-syncs after external file changes.
     /// </summary>
     private FileSystemWatcher? _watcher;
@@ -197,10 +197,10 @@ internal partial class ProjectExplorerViewModel : Tool, IDisposable
     }
 
     /// <summary>
-    /// <para>重启文件系统监听：监听工程根目录下所有变更（<c>images/</c>、<c>intermediate/</c> 等），
+    /// <para>重启文件系统监听：监听工程根目录下所有变更（<c>images/</c>、<c>output/</c> 等），
     /// 递归包含子目录；未打开工程时停止监听。</para>
     /// Restarts the file-system watcher on the project root (covering <c>images/</c>,
-    /// <c>intermediate/</c> etc.) with recursive subdirectories; stops watching when no project is open.
+    /// <c>output/</c> etc.) with recursive subdirectories; stops watching when no project is open.
     /// </summary>
     private void RestartWatcher(ProjectContextService svc)
     {
@@ -378,21 +378,20 @@ public sealed partial class ExplorerNode : ObservableObject
         get
         {
             if (!IsDirectory || IsPlaceholder) return null;
-            var localPath = System.IO.Path.Combine(Path, UotanStudio.Firmware.SharedKernel.RepackMetadata.FileName);
             try
             {
                 // ResolveActualMetadataPath applies the single-location rule: the consolidated
                 // .uotan/metadata/<partition>/ when a project is open, the local file otherwise.
-                var resolved = UotanStudio.Firmware.SharedKernel.RepackMetadata.ResolveActualMetadataPath(Path);
+                var resolved = UotanStudio.Firmware.SharedKernel.RepackMetadata.ResolveActualMetadataPath(Path,
+                    UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(Path));
                 if (resolved is not null && File.Exists(resolved)) return resolved;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
             {
-                // Local file unreadable (e.g. unfinished JSON edit) — fall through so an
-                // existing local file can still be opened for repair.
+                // An unavailable owner must not redirect the editor into another metadata location.
             }
 
-            return File.Exists(localPath) ? localPath : null;
+            return null;
         }
     }
 

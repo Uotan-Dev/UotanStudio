@@ -4,6 +4,8 @@
 
     <x:String x:Key="Settings_General">General</x:String>
     <x:String x:Key="Settings_Firmware">Firmware Tools</x:String>
+    <x:String x:Key="Settings_FirmwareParallelism">Parallel workers</x:String>
+    <x:String x:Key="Settings_FirmwareParallelismHint">Default: 4. Range: 1–8. Applies to new firmware packing and extraction tasks that support parallel processing. More workers generally use more memory.</x:String>
     <x:String x:Key="Settings_Flash">Flash</x:String>
     <x:String x:Key="Settings_NodeEditor">Node Editor</x:String>
     <x:String x:Key="Settings_Language">Language</x:String>

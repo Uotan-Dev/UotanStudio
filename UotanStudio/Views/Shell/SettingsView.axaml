@@ -79,6 +79,19 @@
                     </Grid>
                 </StackPanel>
 
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{DynamicResource Settings_Firmware}" FontWeight="SemiBold" FontSize="16" />
+                    <Border Height="1" Background="{DynamicResource BorderBrush}" />
+                    <Grid ColumnDefinitions="160,*" RowDefinitions="Auto,Auto" Margin="0,4">
+                        <TextBlock Text="{DynamicResource Settings_FirmwareParallelism}" VerticalAlignment="Center" FontSize="13" />
+                        <NumericUpDown x:Name="FirmwareParallelismInput" Grid.Column="1"
+                                       Value="{Binding FirmwareParallelism, Mode=TwoWay}" Minimum="1" Maximum="8"
+                                       Increment="1" FormatString="0" Width="120" HorizontalAlignment="Left" />
+                        <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0" FontSize="12" Opacity="0.7"
+                                   Text="{DynamicResource Settings_FirmwareParallelismHint}" TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+
                 <views:AiSettingsView DataContext="{Binding Ai}"
                                       IsVisible="{x:Static app:AppFeatures.AiAssistantEnabled}" />
 

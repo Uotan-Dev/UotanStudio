@@ -218,7 +218,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             }
             else if (form.SelectedImagePaths.Length > 0)
             {
-                await images.ImportAsync(form.SelectedImagePaths, new Progress<double>(p => window.ReportProgress(LanguageService.Instance.GetString("NewProject_Copying"), p)));
+                await images.ImportAsync(form.SelectedImagePaths,
+                    byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")));
             }
 
             WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
@@ -267,9 +268,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     {
         void Update(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
         {
-            if (args.PropertyName is nameof(images.StatusText) or nameof(images.ProgressPercent))
-                window.ReportProgress(images.StatusText, images.ProgressPercent);
+            if (args.PropertyName is nameof(images.StatusText) or nameof(images.ProgressPercent) or nameof(images.ProgressStats))
+                window.ReportProgress(images.StatusText, images.ProgressPercent, statistics: images.ProgressStats);
         }
+        window.ResetProgressStats();
         images.PropertyChanged += Update;
         try { await images.UnpackFromProjectCreationAsync(entries, fully); }
         finally { images.PropertyChanged -= Update; }
@@ -290,10 +292,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 ContainerKind.Payload => "payload",
                 ContainerKind.Zip => "zip",
                 _ => "raw"
-            }, new Progress<double>(p => window.ReportProgress(LanguageService.Instance.GetString("NewProject_Copying"), p)));
+            }, byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")));
             if (container is null) throw new IOException("Container import failed.");
             containerPath = ProjectContextService.Instance.ResolvePath(container.RelativePath) ?? source;
         }
+        window.ResetProgressStats();
         window.ReportProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
         if (!form.UnpackImages
             || (form.SelectedZipMembers.Length == 0 && form.SelectedPartitions.Length == 0))
@@ -301,22 +304,23 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             return;
         }
 
-        var extractionProgress = new Progress<double>(p => window.ReportProgress(LanguageService.Instance.GetString("NewProject_Extracting"), p));
         var extractedPaths = new List<string>();
         try
         {
             if (form.ContainerKind == ContainerKind.Zip && form.SelectedZipMembers.Length > 0)
             {
+                var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
                 var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
-                    containerPath, form.SelectedZipMembers, fromPayloadOnly: false, outputDirectory: outputDirectory, progress: extractionProgress)).ConfigureAwait(true);
+                    containerPath, form.SelectedZipMembers, fromPayloadOnly: false, outputDirectory: outputDirectory, byteProgress: byteProgress)).ConfigureAwait(true);
                 extractedPaths.AddRange(result.OutputPaths);
             }
 
             if (form.SelectedPartitions.Length > 0)
             {
+                var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
                 var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
                     containerPath, form.SelectedPartitions,
-                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, progress: extractionProgress)).ConfigureAwait(true);
+                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, byteProgress: byteProgress)).ConfigureAwait(true);
                 extractedPaths.AddRange(result.OutputPaths);
             }
 
@@ -525,7 +529,8 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             }
             else if (form.SelectedImagePaths.Length > 0)
             {
-                await images.ImportAsync(form.SelectedImagePaths, new Progress<double>(p => window.ReportProgress(LanguageService.Instance.GetString("NewProject_Copying"), p)));
+                await images.ImportAsync(form.SelectedImagePaths,
+                    byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")));
                 await UnpackSelectedPlainImagesAsync(form, images, window);
             }
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))

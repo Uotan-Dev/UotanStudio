@@ -15,7 +15,16 @@ internal partial class ImageViewModel
     /// <para>要导入的源文件路径列表。</para>
     /// Source file paths to import.
     /// </param>
-    public async Task ImportAsync(string[] paths, IProgress<double>? progress = null)
+    /// <param name="progress">
+    /// <para>整体加权百分比（0–100）：按所有待复制文件总字节数折算，跨文件单调递增，不会回跳。</para>
+    /// Overall weighted percentage (0–100) computed against the total bytes of all files; monotonic
+    /// across files so the progress bar never jumps back.</param>
+    /// <param name="byteProgress">
+    /// <para>整体字节进度：<c>Processed</c> 为累计已完成字节数，<c>Total</c> 为所有待复制文件总字节数。</para>
+    /// Overall byte progress: <c>Processed</c> is accumulated completed bytes, <c>Total</c> is the
+    /// total bytes of all files to copy.</param>
+    public async Task ImportAsync(string[] paths, IProgress<double>? progress = null,
+        IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         if (paths is null || paths.Length == 0)
         {
@@ -29,19 +38,55 @@ internal partial class ImageViewModel
             return;
         }
 
+        if (IsOperating) return;
+        IsOperating = true;
+        StatusText = LanguageService.Instance.GetString("NewProject_Copying");
+        var generation = _progressGeneration;
         try
         {
             var imagesDir = context.EnsureImagesDirectory();
             var imported = new List<ImageEntryViewModel>();
-            foreach (var path in paths)
+
+            // 预先汇总所有待复制文件的总字节数，用于跨文件加权进度；totalBytes=0 时不上报。
+            // Pre-compute total bytes of all files to copy for weighted cross-file progress;
+            // reporting is skipped when totalBytes is 0.
+            var existingPaths = paths.Where(File.Exists).ToList();
+            var totalBytes = existingPaths.Sum(p => new FileInfo(p).Length);
+            var completedBytes = 0L;
+            ReportByteStatistics(0, totalBytes);
+            if (totalBytes > 0)
             {
-                if (!File.Exists(path))
-                {
-                    continue;
-                }
+                progress?.Report(0);
+                byteProgress?.Report((0, totalBytes));
+            }
+
+            foreach (var path in existingPaths)
+            {
+                var fileSize = new FileInfo(path).Length;
 
                 var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(path)));
-                await ProjectFiles.CopyAsync(path, destination, progress: progress);
+                var completedBeforeFile = completedBytes;
+                await ProjectFiles.CopyAsync(path, destination, progress: new Progress<double>(fraction =>
+                {
+                    if (generation != _progressGeneration || !double.IsFinite(fraction)) return;
+                    if (totalBytes > 0)
+                    {
+                        // 单文件百分比折算为整体加权百分比：completedBytes + fraction * fileSize。
+                        // Convert per-file percentage into a weighted overall figure.
+                        var overallBytes = completedBeforeFile + fraction / 100.0 * fileSize;
+                        var reportedBytes = Math.Max(completedBytes, (long)overallBytes);
+                        ReportByteStatistics(reportedBytes, totalBytes);
+                        progress?.Report(reportedBytes * 100.0 / totalBytes);
+                        byteProgress?.Report((reportedBytes, totalBytes));
+                    }
+                }));
+                // 文件复制完成后累计已完成字节数，供后续文件加权计算。
+                // Accumulate completed bytes once this file finishes copying.
+                completedBytes += fileSize;
+                ReportByteStatistics(completedBytes, totalBytes);
+                progress?.Report(totalBytes > 0 ? completedBytes * 100.0 / totalBytes : 100);
+                byteProgress?.Report((completedBytes, totalBytes));
+
                 var relative = context.RelativePath(destination);
                 if (relative is null)
                 {
@@ -67,6 +112,7 @@ internal partial class ImageViewModel
 
             if (imported.Count == 0)
             {
+                StatusText = LanguageService.Instance.GetString("ImageView_NoSelection");
                 return;
             }
 
@@ -84,6 +130,7 @@ internal partial class ImageViewModel
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images", $"Imported {imported.Count} image(s)  已导入 {imported.Count} 个镜像");
+            StatusText = LanguageService.Instance.GetString("ImageView_OperationDone");
             OperationHistoryService.Instance.Record(
                 $"Import {imported.Count} image(s)",
                 new HistoryOperationDto
@@ -110,9 +157,11 @@ internal partial class ImageViewModel
         }
         catch (Exception ex)
         {
+            StatusText = ex.Message;
             LogService.Instance.Write(LogLevel.Error, "Images", $"Import failed: {ex.Message}  导入失败：{ex.Message}");
-            if (progress is not null) throw;
+            if (progress is not null || byteProgress is not null) throw;
         }
+        finally { IsOperating = false; }
     }
 
     /// <summary>
@@ -125,7 +174,8 @@ internal partial class ImageViewModel
     /// <param name="sourcePath"><para>容器源文件路径。</para>Source container path.</param>
     /// <param name="formatLabel"><para>格式列显示文本（super / payload / zip）。</para>Format column text (super / payload / zip).</param>
     /// <returns><para>登记的镜像条目；未打开工程或源不存在时为 null。</para>The registered entry; null when no project is open or the source is missing.</returns>
-    public async Task<ImageEntryViewModel?> ImportContainerAsync(string sourcePath, string formatLabel, IProgress<double>? progress = null)
+    public async Task<ImageEntryViewModel?> ImportContainerAsync(string sourcePath, string formatLabel, IProgress<double>? progress = null,
+        IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         var context = ProjectContextService.Instance;
         if (!context.IsProjectOpen || context.ActiveSubProject is null || !File.Exists(sourcePath))
@@ -133,25 +183,51 @@ internal partial class ImageViewModel
             return null;
         }
 
-        var imagesDir = context.EnsureImagesDirectory();
-        var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(sourcePath)));
-        await ProjectFiles.CopyAsync(sourcePath, destination, progress: progress).ConfigureAwait(true);
-        var relative = context.RelativePath(destination);
-        if (relative is null)
+        if (IsOperating) return null;
+        IsOperating = true;
+        StatusText = LanguageService.Instance.GetString("NewProject_Copying");
+        var generation = _progressGeneration;
+        try
         {
-            File.Delete(destination);
-            return null;
-        }
+            var imagesDir = context.EnsureImagesDirectory();
+            var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(sourcePath)));
+            var totalBytes = new FileInfo(sourcePath).Length;
+            ReportByteStatistics(0, totalBytes);
+            byteProgress?.Report((0, totalBytes));
+            await ProjectFiles.CopyAsync(sourcePath, destination, progress: new Progress<double>(percent =>
+            {
+                if (generation != _progressGeneration || !double.IsFinite(percent)) return;
+                ReportByteStatistics((long)(totalBytes * Math.Clamp(percent, 0, 100) / 100), totalBytes);
+                progress?.Report(percent);
+                byteProgress?.Report(((long)(totalBytes * percent / 100), totalBytes));
+            })).ConfigureAwait(true);
+            ReportByteStatistics(totalBytes, totalBytes);
+            progress?.Report(100);
+            byteProgress?.Report((totalBytes, totalBytes));
+            StatusText = LanguageService.Instance.GetString("ImageView_OperationDone");
+            var relative = context.RelativePath(destination);
+            if (relative is null)
+            {
+                File.Delete(destination);
+                return null;
+            }
 
-        var entry = new ImageEntryViewModel
+            var entry = new ImageEntryViewModel
+            {
+                DisplayName = Path.GetFileName(destination),
+                RelativePath = relative,
+                SizeBytes = new FileInfo(destination).Length,
+                Format = formatLabel
+            };
+            Images.Add(entry);
+            return entry;
+        }
+        catch (Exception ex)
         {
-            DisplayName = Path.GetFileName(destination),
-            RelativePath = relative,
-            SizeBytes = new FileInfo(destination).Length,
-            Format = formatLabel
-        };
-        Images.Add(entry);
-        return entry;
+            StatusText = ex.Message;
+            throw;
+        }
+        finally { IsOperating = false; }
     }
 
     /// <summary>
@@ -207,14 +283,28 @@ internal partial class ImageViewModel
             return;
         }
 
+        if (IsOperating) return;
+        IsOperating = true;
+        StatusText = image.DisplayName;
+        var generation = _progressGeneration;
         try
         {
-            await ProjectFiles.CopyAsync(source, targetPath, overwrite: true);
+            var total = new FileInfo(source).Length;
+            ReportByteStatistics(0, total);
+            await ProjectFiles.CopyAsync(source, targetPath, overwrite: true, progress: new Progress<double>(percent =>
+            {
+                if (generation == _progressGeneration && double.IsFinite(percent))
+                    ReportByteStatistics((long)(total * Math.Clamp(percent, 0, 100) / 100), total);
+            }));
+            ReportByteStatistics(total, total);
+            StatusText = LanguageService.Instance.GetString("ImageView_OperationDone");
             LogService.Instance.Write(LogLevel.Info, "Images", $"Exported {image.DisplayName} -> {targetPath}  已导出 {image.DisplayName}");
         }
         catch (Exception ex)
         {
+            StatusText = ex.Message;
             LogService.Instance.Write(LogLevel.Error, "Images", $"Export failed: {ex.Message}  导出失败：{ex.Message}");
         }
+        finally { IsOperating = false; }
     }
 }

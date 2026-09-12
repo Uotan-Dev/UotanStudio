@@ -153,6 +153,8 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
         }
 
         var outputDir = DeriveOutputDir(path);
+        using var metadataScope = RepackMetadata.UseContext(
+            UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(outputDir));
         var dt = new DtFormatHandler();
         if (dt.CanHandle(path))
         {
@@ -205,6 +207,8 @@ public class FirmwareNodeViewModel : FlowNodeViewModel
 
         var service = FirmwareService.Instance;
         FirmwareOpResult result;
+        using var metadataScope = RepackMetadata.UseContext(
+            UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(inputDir));
         var repack = RepackMetadata.Read(inputDir);
         if (repack is not null)
         {

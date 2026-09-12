@@ -120,6 +120,7 @@ public partial class App : Application
     {
         // 1) 后台读取持久化设置（文件 I/O 不应阻塞 UI 线程）。
         var settings = await Task.Run(() => SettingsPersistenceService.Instance.LoadSettings()).ConfigureAwait(true);
+        global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
 
         // 2) 应用持久化主题与语言（须在主窗口创建前完成，使主窗口拿到正确的语言/主题；
         //    此时启动窗已显示，DynamicResource 会自动刷新启动窗文案）。

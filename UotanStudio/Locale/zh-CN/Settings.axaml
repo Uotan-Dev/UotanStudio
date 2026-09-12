@@ -4,6 +4,8 @@
 
     <x:String x:Key="Settings_General">通用设置</x:String>
     <x:String x:Key="Settings_Firmware">固件工具</x:String>
+    <x:String x:Key="Settings_FirmwareParallelism">并行数量</x:String>
+    <x:String x:Key="Settings_FirmwareParallelismHint">默认 4，可设置为 1–8。用于支持并行的固件打包和解包，修改后对新任务生效。数量越大，内存占用通常越高。</x:String>
     <x:String x:Key="Settings_Flash">烧录设置</x:String>
     <x:String x:Key="Settings_NodeEditor">节点编辑器</x:String>
     <x:String x:Key="Settings_Language">语言</x:String>

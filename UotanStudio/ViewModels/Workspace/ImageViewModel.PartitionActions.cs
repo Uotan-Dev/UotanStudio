@@ -10,9 +10,9 @@ namespace UotanStudio.ViewModels.Workspace;
 internal partial class ImageViewModel
 {
     /// <summary>
-    /// <para>将选中镜像从列表移除并把项目内文件移动到 <c>intermediate/deleted/</c>，登记可撤销历史（撤销移回）。</para>
+    /// <para>将选中镜像从列表移除并把项目内文件移动到 <c>.deleted/</c>，登记可撤销历史（撤销移回）。</para>
     /// Removes the selected image from the list and moves its project file to
-    /// <c>intermediate/deleted/</c>, recording reversible history (undo moves it back).
+    /// <c>.deleted/</c>, recording reversible history (undo moves it back).
     /// </summary>
     [RelayCommand]
     private Task DeleteSelectedAsync() => RunExclusiveAsync(DeleteSelectedCoreAsync);
@@ -41,12 +41,14 @@ internal partial class ImageViewModel
         }
 
         ProgressPercent = 0;
+        ReportItemStatistics(0, selectedImages.Count);
         for (var i = 0; i < selectedImages.Count; i++)
         {
             var image = selectedImages[i];
             StatusText = $"[{i + 1}/{selectedImages.Count}] Deleting {image.DisplayName}  正在删除 {image.DisplayName}";
             await DeleteImageAsync(image);
             ProgressPercent = (double)(i + 1) / selectedImages.Count * 100;
+            ReportItemStatistics(i + 1, selectedImages.Count);
         }
 
         if (SelectedImage is not null && !Images.Contains(SelectedImage))
@@ -84,7 +86,7 @@ internal partial class ImageViewModel
             await ProjectFiles.MoveAsync(source, destination);
             Images.Remove(image);
             if (ReferenceEquals(SelectedImage, image)) SelectedImage = null;
-            LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted {image.DisplayName} -> intermediate/deleted  已删除 {image.DisplayName}");
+            LogService.Instance.Write(LogLevel.Info, "Images", $"Deleted {image.DisplayName} -> .deleted  已删除 {image.DisplayName}");
             OperationHistoryService.Instance.Record(
                 $"Delete {image.DisplayName}",
                 new HistoryOperationDto
@@ -161,9 +163,9 @@ internal partial class ImageViewModel
 
     /// <summary>
     /// <para>使用 LP 元数据构建器与 sparse 写入器将项目内 raw/sparse 镜像合成为 super 镜像，输出到
-    /// <c>intermediate/super/</c> 并登记历史。</para>
+    /// <c>output/</c> 并登记历史。</para>
     /// Builds a super image from the project's raw/sparse images using the LP metadata builder and the
-    /// sparse writer, outputting to <c>intermediate/super/</c> and recording history.
+    /// sparse writer, outputting to <c>output/</c> and recording history.
     /// </summary>
     [RelayCommand]
     private Task SynthesizeSuperAsync() => RunExclusiveAsync(SynthesizeSuperCoreAsync);

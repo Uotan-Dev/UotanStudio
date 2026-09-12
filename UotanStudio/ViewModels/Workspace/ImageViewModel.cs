@@ -281,10 +281,20 @@ internal partial class ImageViewModel : Tool
                 }
 
                 var relative = Path.GetRelativePath(root, file).Replace(Path.DirectorySeparatorChar, '/');
-                if (relative is not null)
+                if (relative is null)
                 {
-                    list.Add((relative, new FileInfo(file).Length, format));
+                    continue;
                 }
+
+                var size = new FileInfo(file).Length;
+                // 自动扫描跳过 0 字节占位镜像（如 VAB 的 b 槽位空分区），无法解包或刷写。
+                // Auto-scan skips 0-byte placeholder images (e.g. empty VAB b-slot partitions): nothing to unpack or flash.
+                if (size == 0)
+                {
+                    continue;
+                }
+
+                list.Add((relative, size, format));
             }
             return list;
         }).ConfigureAwait(true);

@@ -26,6 +26,8 @@ internal static class PackingService
 
         try
         {
+            using var metadataScope = RepackMetadata.UseContext(
+                UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(sourceDirectory));
             var metadata = RepackMetadata.Read(sourceDirectory);
             if (metadata is not null)
             {

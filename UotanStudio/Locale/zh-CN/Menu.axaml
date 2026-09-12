@@ -24,6 +24,12 @@
     <x:String x:Key="NewProject_Analyzing">正在读取原包内部结构…</x:String>
     <x:String x:Key="NewProject_NameInvalid">请输入有效且未被占用的项目名称</x:String>
     <x:String x:Key="NewProject_Creating">正在创建项目…</x:String>
+    <x:String x:Key="NewProject_CheckingSpace">正在检查可用空间…</x:String>
+    <x:String x:Key="NewProject_SpaceTitle">创建项目可能空间不足</x:String>
+    <x:String x:Key="NewProject_SpaceDetails">位置：{0}&#10;可用空间：{1}&#10;预计需要：{2}</x:String>
+    <x:String x:Key="NewProject_SpaceWarning">{0}&#10;&#10;以上按所选原包复制、镜像提取及解包选项估算，并预留临时空间。完全解包后的实际占用可能更大；继续后可能因空间不足而失败。&#10;&#10;是否仍要继续创建？</x:String>
+    <x:String x:Key="NewProject_SpaceContinue">继续创建</x:String>
+    <x:String x:Key="NewProject_SpaceCancel">返回调整</x:String>
     <x:String x:Key="NewProject_Copying">正在复制原始文件…</x:String>
     <x:String x:Key="NewProject_Extracting">正在提取和解包所选镜像…</x:String>
     <x:String x:Key="NewProject_NameRequired">请输入项目名称</x:String>
@@ -132,6 +138,7 @@
     <x:String x:Key="Keys_CopyPublic">复制公钥</x:String>
     <x:String x:Key="Keys_ExportPublic">导出公钥…</x:String>
     <x:String x:Key="Keys_ExportPair">导出公私钥…</x:String>
+    <x:String x:Key="Keys_ExportCertificate">导出证书…</x:String>
     <x:String x:Key="Keys_RemoveHint">确认从列表移除，文件保留在密钥库 .deleted 目录</x:String>
     <x:String x:Key="Keys_Remove">移除密钥</x:String>
     <x:String x:Key="Keys_New">新增密钥</x:String>

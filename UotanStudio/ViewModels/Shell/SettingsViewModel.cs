@@ -18,6 +18,21 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
 
     private AppSettings _appSettings;
 
+    /// <summary>Maximum concurrent firmware workers, applied to newly started operations.</summary>
+    public int FirmwareParallelism
+    {
+        get => _appSettings.FirmwareParallelism;
+        set
+        {
+            var workers = Math.Clamp(value, 1, global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.MaximumWorkers);
+            if (_appSettings.FirmwareParallelism == workers) return;
+            _appSettings.FirmwareParallelism = workers;
+            global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = workers;
+            OnPropertyChanged();
+            DebouncedSaveSettings();
+        }
+    }
+
     /// <summary>Official HDC executable path.</summary>
     public string HdcPath
     {
@@ -477,6 +492,7 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
     /// </param>
     private void InitializeFromAppSettings(AppSettings settings)
     {
+        global::UotanStudio.Firmware.SharedKernel.FirmwareParallelism.Workers = settings.FirmwareParallelism;
         // 根据 CultureName 查找或创建 LanguageInfo
         _selectedLanguage = string.IsNullOrEmpty(settings.CultureName)
             ? LanguageInfo.SystemLanguage

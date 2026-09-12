@@ -1,4 +1,6 @@
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Keys;
+using UotanStudio.Services;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Composition;
@@ -53,6 +55,12 @@ internal sealed class DesktopApplicationServices : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _initialScan ??= Task.Run(() =>
         {
+            try { DebugBridgeIdentityService.EnsureDefaults(); }
+            catch (AggregateException ex)
+            {
+                foreach (var failure in ex.InnerExceptions)
+                    LogService.Instance.Write(LogLevel.Error, "Authentication", failure.ToString());
+            }
             _monitor.Start();
             return _monitor.Scan();
         });
