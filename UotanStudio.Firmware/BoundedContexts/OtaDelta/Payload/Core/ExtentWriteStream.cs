@@ -10,6 +10,7 @@ internal sealed class ExtentWriteStream : Stream
     private readonly bool _requireExactLength;
     private readonly object _syncRoot;
     private readonly long _length;
+    private readonly PartitionByteProgress? _byteProgress;
     private int _extentIndex;
     private long _extentPosition;
     private long _position;
@@ -18,7 +19,7 @@ internal sealed class ExtentWriteStream : Stream
     /// Initializes an extent-mapped, strictly bounded write stream.
     /// <para>初始化按区间映射且严格有界的写入流。</para>
     /// </summary>
-    internal ExtentWriteStream(Stream output, IEnumerable<Extent> extents, uint blockSize, bool requireExactLength = false, object? syncRoot = null)
+    internal ExtentWriteStream(Stream output, IEnumerable<Extent> extents, uint blockSize, bool requireExactLength = false, object? syncRoot = null, PartitionByteProgress? byteProgress = null)
     {
         ArgumentNullException.ThrowIfNull(output);
         ArgumentNullException.ThrowIfNull(extents);
@@ -30,6 +31,7 @@ internal sealed class ExtentWriteStream : Stream
         _output = output;
         _requireExactLength = requireExactLength;
         _syncRoot = syncRoot ?? new object();
+        _byteProgress = byteProgress;
         try
         {
             _extents = extents.Select(extent =>
@@ -124,6 +126,7 @@ internal sealed class ExtentWriteStream : Stream
                 _output.Seek(checked(extent.Offset + _extentPosition), SeekOrigin.Begin);
                 _output.Write(buffer[..count]);
             }
+            _byteProgress?.Add(count);
             buffer = buffer[count..];
             _extentPosition = checked(_extentPosition + count);
             _position = checked(_position + count);

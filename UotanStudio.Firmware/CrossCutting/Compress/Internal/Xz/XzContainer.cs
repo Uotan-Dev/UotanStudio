@@ -34,6 +34,18 @@ internal static class XzContainer
     public static void WriteContainer(Stream output, byte[] lzma2Data, ulong uncompressedSize,
         byte[] check, uint dictionarySize, byte checkType = CheckTypeCrc32)
     {
+        using var source = new MemoryStream(lzma2Data, writable: false);
+        WriteContainer(output, source, lzma2Data.LongLength, uncompressedSize, check, dictionarySize, checkType);
+    }
+
+    /// <summary>
+    /// Writes a sized LZMA2 source without materializing its compressed payload.
+    /// <para>写入已知长度的 LZMA2 源流，不将压缩载荷整体物化。</para>
+    /// </summary>
+    internal static void WriteContainer(Stream output, Stream lzma2Data, long compressedSize, ulong uncompressedSize,
+        byte[] check, uint dictionarySize, byte checkType = CheckTypeCrc32)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(compressedSize);
 
         output.Write(HeaderMagic, 0, HeaderMagic.Length);
         byte[] streamFlags = [0x00, checkType];
@@ -42,13 +54,13 @@ internal static class XzContainer
 
 
         var dictIndex = DictionarySizeToIndex(dictionarySize);
-        var blockHeader = BuildBlockHeader(lzma2Data.Length, uncompressedSize, dictIndex);
+        var blockHeader = BuildBlockHeader(compressedSize, uncompressedSize, dictIndex);
 
 
-        var blockPadding = (4 - ((blockHeader.Length + lzma2Data.Length) % 4)) % 4;
+        var blockPadding = (4 - ((blockHeader.Length + compressedSize % 4) % 4)) % 4;
 
         output.Write(blockHeader, 0, blockHeader.Length);
-        output.Write(lzma2Data, 0, lzma2Data.Length);
+        SharedKernel.Streams.StreamCopy.CopyExactly(lzma2Data, output, compressedSize);
         for (var i = 0; i < blockPadding; i++)
         {
             output.WriteByte(0);
@@ -58,7 +70,7 @@ internal static class XzContainer
         output.Write(check, 0, check.Length);
 
 
-        var unpaddedSize = (ulong)(blockHeader.Length + lzma2Data.Length + check.Length);
+        var unpaddedSize = checked((ulong)compressedSize + (ulong)blockHeader.Length + (ulong)check.Length);
 
 
         var index = BuildIndex(unpaddedSize, uncompressedSize);

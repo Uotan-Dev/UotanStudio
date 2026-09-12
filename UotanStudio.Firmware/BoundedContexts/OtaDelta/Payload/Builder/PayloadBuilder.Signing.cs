@@ -12,6 +12,7 @@ public sealed partial class PayloadBuilder
     // header + manifest + operation blobs, excluding both serialized signature messages.
     private static void WriteSignedPayload(Stream output, FileStream data, DeltaArchiveManifest manifest, RSA key, CancellationToken token)
     {
+        var hashAlgorithm = HashAlgorithmName.SHA256;
         var signatureSize = SerializeSignature(new byte[key.KeySize / 8]).Length;
         manifest.SignaturesOffset = checked((ulong)data.Length);
         manifest.SignaturesSize = checked((ulong)signatureSize);
@@ -26,10 +27,10 @@ public sealed partial class PayloadBuilder
             manifestBytes = encoded.ToArray();
         }
         var header = PayloadHeaderBuilder.BuildHeader((ulong)manifestBytes.Length, checked((uint)signatureSize));
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var hash = IncrementalHash.CreateHash(hashAlgorithm);
         hash.AppendData(header);
         hash.AppendData(manifestBytes);
-        var metadataSignature = SerializeSignature(key.SignHash(hash.GetCurrentHash(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+        var metadataSignature = SerializeSignature(key.SignHash(hash.GetCurrentHash(), hashAlgorithm, RSASignaturePadding.Pkcs1));
         token.ThrowIfCancellationRequested();
         output.Write(header);
         output.Write(manifestBytes);
@@ -46,7 +47,7 @@ public sealed partial class PayloadBuilder
             output.Write(buffer, 0, count);
             remaining -= count;
         }
-        var payloadSignature = SerializeSignature(key.SignHash(hash.GetHashAndReset(), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+        var payloadSignature = SerializeSignature(key.SignHash(hash.GetHashAndReset(), hashAlgorithm, RSASignaturePadding.Pkcs1));
         token.ThrowIfCancellationRequested();
         output.Write(payloadSignature);
     }

@@ -381,7 +381,14 @@ public static partial class PayloadParser
     /// Asynchronously extracts partitions from a local payload file.
     /// <para>从本地载荷文件中异步提取分区。</para>
     /// </summary>
-    public static async Task ExtractAsync(string filepath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
+    /// <param name="byteProgress">
+    /// Optional byte-level progress callback receiving (Processed, Total) tuples for the current
+    /// partition; reports are throttled to at most one per 100 ms plus one forced report at stage
+    /// boundaries and a final (total, total) flush. Total is 0 when no reliable estimate exists.
+    /// <para>可选的字节级进度回调，上报 (Processed, Total) 元组；上报节流为每 100ms 至多一次，
+    /// 阶段结束时强制上报一次，最终上报 (total, total)。无可靠总量时 Total 为 0。</para>
+    /// </param>
+    public static async Task ExtractAsync(string filepath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         Guard.ThrowIfNull(filepath);
         Guard.ThrowIfNullOrWhiteSpace(filepath);
@@ -401,7 +408,7 @@ public static partial class PayloadParser
             var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
             var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
             var extractor = new PayloadExtractor();
-            await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages).ConfigureAwait(false);
+            await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages, byteProgress).ConfigureAwait(false);
         }
         finally
         {
@@ -445,7 +452,14 @@ public static partial class PayloadParser
     /// Asynchronously extracts partitions from a payload stream.
     /// <para>从载荷流中异步提取分区。</para>
     /// </summary>
-    public static async Task ExtractAsync(Stream stream, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
+    /// <param name="byteProgress">
+    /// Optional byte-level progress callback receiving (Processed, Total) tuples for the current
+    /// partition; reports are throttled to at most one per 100 ms plus one forced report at stage
+    /// boundaries and a final (total, total) flush. Total is 0 when no reliable estimate exists.
+    /// <para>可选的字节级进度回调，上报 (Processed, Total) 元组；上报节流为每 100ms 至多一次，
+    /// 阶段结束时强制上报一次，最终上报 (total, total)。无可靠总量时 Total 为 0。</para>
+    /// </param>
+    public static async Task ExtractAsync(Stream stream, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null)
     {
         Guard.ThrowIfNull(stream, nameof(stream));
         extractFiles ??= [];
@@ -455,7 +469,7 @@ public static partial class PayloadParser
             var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
             var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
             var extractor = new PayloadExtractor();
-            await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages).ConfigureAwait(false);
+            await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages, byteProgress).ConfigureAwait(false);
         }
         finally
         {

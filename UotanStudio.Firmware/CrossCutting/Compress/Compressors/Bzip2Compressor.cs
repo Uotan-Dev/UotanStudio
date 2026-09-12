@@ -1,6 +1,7 @@
 ﻿using SharpCompress.Compressors;
 using SharpCompress.Compressors.BZip2;
 using UotanStudio.Firmware.CrossCutting.Compress.Internal;
+using ICSharpCode.SharpZipLib.BZip2;
 
 namespace UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 
@@ -28,10 +29,9 @@ public static class Bzip2Compressor
             }
 
             using var output = new MemoryStream();
-            using (var bzip2 = BZip2Stream.Create(output, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: false))
+            using (var bzip2 = new BZip2OutputStream(output, 9) { IsStreamOwner = false })
             {
                 bzip2.Write(data, 0, data.Length);
-                bzip2.Finish();
             }
             return output.ToArray();
         }
@@ -48,10 +48,9 @@ public static class Bzip2Compressor
     private static byte[] CompressChunk(byte[] data, int start, int count)
     {
         using var output = new MemoryStream();
-        using (var bzip2 = BZip2Stream.Create(output, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: false))
+        using (var bzip2 = new BZip2OutputStream(output, 9) { IsStreamOwner = false })
         {
             bzip2.Write(data, start, count);
-            bzip2.Finish();
         }
         return output.ToArray();
     }
@@ -99,9 +98,10 @@ public static class Bzip2Compressor
 
         try
         {
-            using var bzip2 = BZip2Stream.Create(output, CompressionMode.Compress, decompressConcatenated: false, leaveOpen: true);
+            // The codec emits individual bytes. Batch them before bounded/hash/file wrappers.
+            using var buffered = new BufferedStream(new NonDisposingStream(output), 64 * 1024);
+            using var bzip2 = new BZip2OutputStream(buffered, 9) { IsStreamOwner = false };
             input.CopyTo(bzip2);
-            bzip2.Finish();
         }
         catch (Exception ex)
         {
@@ -129,7 +129,9 @@ public static class Bzip2Compressor
         {
 
 
-            using var bzip2 = BZip2Stream.Create(input, CompressionMode.Decompress, decompressConcatenated: true, leaveOpen: true);
+            // Bit decoding otherwise performs a virtual read and hash update for every byte.
+            using var buffered = new BufferedStream(new NonDisposingStream(input), 64 * 1024);
+            using var bzip2 = BZip2Stream.Create(buffered, CompressionMode.Decompress, decompressConcatenated: true, leaveOpen: true);
             bzip2.CopyTo(output);
         }
         catch (Exception ex)

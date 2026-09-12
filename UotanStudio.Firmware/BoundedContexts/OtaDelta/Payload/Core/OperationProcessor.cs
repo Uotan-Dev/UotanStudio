@@ -10,7 +10,7 @@ namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 internal static class OperationProcessor
 {
     internal static void ProcessDeltaOperation(InstallOperation op, Stream source, FileStream target,
-        Stream payload, ulong baseOffset, uint blockSize, CancellationToken ct)
+        Stream payload, ulong baseOffset, uint blockSize, CancellationToken ct, PartitionByteProgress? byteProgress = null)
     {
         using var oldData = new ExtentReadStream(source, op.SrcExtents, blockSize);
         using (var hash = new VerifyingReadStream(oldData, op.SrcSha256Hash.ToByteArray()))
@@ -19,7 +19,7 @@ internal static class OperationProcessor
             hash.Complete();
         }
         oldData.Position = 0;
-        using var output = new ExtentWriteStream(target, op.DstExtents, blockSize, requireExactLength: true);
+        using var output = new ExtentWriteStream(target, op.DstExtents, blockSize, requireExactLength: true, byteProgress: byteProgress);
         if (op.Type is InstallOperation.Types.Type.SourceCopy or InstallOperation.Types.Type.Move)
         {
             UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(oldData, output, oldData.Length, ct);
@@ -117,7 +117,8 @@ internal static class OperationProcessor
         uint blockSize,
         object writeLock,
         object streamLock,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        PartitionByteProgress? byteProgress = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         long dataPos;
@@ -155,7 +156,7 @@ internal static class OperationProcessor
                 using var bounded = new SharedKernel.Streams.BoundedReadStream(stream, dataPos, dataLength, leaveOpen: true, syncRoot: streamLock);
                 using var hashing = new VerifyingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
                 cancellationToken.ThrowIfCancellationRequested();
-                ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken);
+                ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken, byteProgress);
                 hashing.Complete();
             }
             return;
@@ -171,16 +172,16 @@ internal static class OperationProcessor
         lock (writeLock)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (op.Type == InstallOperation.Types.Type.Zero) ProcessZero(op, outFile, blockSize, cancellationToken);
+            if (op.Type == InstallOperation.Types.Type.Zero) ProcessZero(op, outFile, blockSize, cancellationToken, byteProgress);
             else if (op.Type != InstallOperation.Types.Type.Discard)
                 throw new PayloadUnsupportedOperationException($"Unsupported parallel operation type: {op.Type}", op.Type.ToString());
         }
     }
 
-    private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken)
+    private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken, PartitionByteProgress? byteProgress = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var output = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: true, syncRoot: writeLock);
+        using var output = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: true, syncRoot: writeLock, byteProgress: byteProgress);
         switch (op.Type)
         {
             case InstallOperation.Types.Type.Replace:
@@ -215,7 +216,7 @@ internal static class OperationProcessor
 
     private static readonly byte[] ZeroBuffer = new byte[65536];
 
-    private static void ProcessZero(InstallOperation op, FileStream outFile, uint blockSize, CancellationToken cancellationToken)
+    private static void ProcessZero(InstallOperation op, FileStream outFile, uint blockSize, CancellationToken cancellationToken, PartitionByteProgress? byteProgress = null)
     {
         foreach (var ext in op.DstExtents)
         {
@@ -231,6 +232,7 @@ internal static class OperationProcessor
                 throw new PartitionExtractionException("ZERO extent size or offset exceeds Int64 range", string.Empty, ex);
             }
             outFile.Seek(pos, SeekOrigin.Begin);
+            byteProgress?.Add(remaining);
             while (remaining > 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();

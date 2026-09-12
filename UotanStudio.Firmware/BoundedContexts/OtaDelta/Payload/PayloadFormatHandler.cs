@@ -106,7 +106,24 @@ public sealed class PayloadFormatHandler : IFormatHandler
                 cancellationToken.ThrowIfCancellationRequested();
 
                 options?.Progress?.Report(5, "Reading payload manifest...");
-                await PayloadParser.ExtractAsync(filePath, null, outputDirectory, cancellationToken).ConfigureAwait(false);
+                // 将百分比进度适配为字节进度回调，按提取实际字节量换算并映射到 5%–100% 区间。
+                // Adapts the percent progress into a byte callback, scaling reported bytes
+                // (per-partition) into the 5%-100% range.
+                var partitionCount = Math.Max(1, metadata.PartitionNames.Count);
+                var byteProgressAdapter = options?.Progress is null
+                    ? null
+                    : new Progress<(long Processed, long Total)>(tuple =>
+                    {
+                        var (processed, total) = tuple;
+                        if (total <= 0)
+                        {
+                            return;
+                        }
+                        var span = 100.0 - 5.0;
+                        var percent = 5.0 + (processed * span) / (total * partitionCount);
+                        options.Progress.Report(Math.Clamp(percent, 5.0, 100.0), "Extracting payload partitions...");
+                    });
+                await PayloadParser.ExtractAsync(filePath, null, outputDirectory, cancellationToken, byteProgress: byteProgressAdapter).ConfigureAwait(false);
                 options?.Progress?.Report(100, "Extraction complete.");
 
                 return FirmwareOpResult.Ok(

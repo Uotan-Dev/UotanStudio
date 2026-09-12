@@ -36,8 +36,8 @@ public static class XzCompressor
     }
 
     /// <summary>
-    /// Streaming XZ compression: reads the input in bounded 2 MiB windows and writes the result directly to the output stream.
-    /// <para>流式 XZ 压缩：从输入流按 2 MiB 窗口边读边压（有界内存），直接写入输出流。</para>
+    /// Compresses bounded 2 MiB input windows, spooling compressed data to a temporary file before writing the container.
+    /// <para>按有界 2 MiB 窗口压缩输入，将压缩数据暂存到自动清理的文件后写出容器。</para>
     /// </summary>
     public static void Compress(Stream input, Stream output, uint dictionarySize = Lzma2Encoder.DefaultDictionarySize,
         byte checkType = XzContainer.CheckTypeCrc32, int? maxDegreeOfParallelism = null)
@@ -54,7 +54,9 @@ public static class XzCompressor
 
         try
         {
-            using var lzma2 = new MemoryStream();
+            using var lzma2 = new FileStream(Path.Combine(Path.GetTempPath(), $"uotan-xz-{Guid.NewGuid():N}.tmp"),
+                FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536,
+                FileOptions.DeleteOnClose | FileOptions.SequentialScan);
 
             var crc64 = new System.IO.Hashing.Crc64();
             var crc32 = new System.IO.Hashing.Crc32();
@@ -92,7 +94,9 @@ public static class XzCompressor
                 }
             }
 
-            XzContainer.WriteContainer(output, lzma2.ToArray(), (ulong)total, check, dictionarySize, checkType);
+            var compressedSize = lzma2.Length;
+            lzma2.Position = 0;
+            XzContainer.WriteContainer(output, lzma2, compressedSize, (ulong)total, check, dictionarySize, checkType);
         }
         catch (Exception ex)
         {

@@ -33,8 +33,10 @@ public sealed partial class PayloadBuilder : IDisposable
         ArgumentNullException.ThrowIfNull(config);
         _postinstall[config.PartitionName] = new PartitionUpdate
         {
-            PartitionName = config.PartitionName, RunPostinstall = config.RunPostinstall,
-            PostinstallPath = config.PostinstallPath, FilesystemType = config.FilesystemType,
+            PartitionName = config.PartitionName,
+            RunPostinstall = config.RunPostinstall,
+            PostinstallPath = config.PostinstallPath,
+            FilesystemType = config.FilesystemType,
             PostinstallOptional = config.PostinstallOptional
         };
         return this;
@@ -318,18 +320,23 @@ public sealed partial class PayloadBuilder : IDisposable
             UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(data, output, data.Length, cancellationToken);
         }
         catch (OperationCanceledException) { throw; }
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            throw;
+        }
         catch (PayloadGenerationException) { throw; }
         catch (Exception ex) { throw new PayloadGenerationException($"Failed to build payload: {ex.Message}", ex); }
     }
 
     private DeltaArchiveManifest BuildManifest(FileStream data, CancellationToken cancellationToken)
     {
+        var compressionWorkers = _compressionWorkers ?? SharedKernel.FirmwareParallelism.Workers;
         const int maximumOperationBytes = 1024 * 1024;
         const int maximumOperations = 65536;
         if (BlockSize > maximumOperationBytes) throw new PayloadGenerationException("Payload block size exceeds the 1 MiB operation limit.");
         if (_partitions.Count > maximumOperations) throw new PayloadGenerationException("Payload exceeds the supported 65536 partitions.");
         var chunkSize = checked((int)(maximumOperationBytes / BlockSize * BlockSize));
-        var buffer = new byte[chunkSize];
         var manifest = new DeltaArchiveManifest
         {
             BlockSize = BlockSize,
@@ -354,7 +361,7 @@ public sealed partial class PayloadBuilder : IDisposable
                 var zeroOperationCount = partition.SizeBytes / (ulong)chunkSize + (partition.SizeBytes % (ulong)chunkSize == 0 ? 0UL : 1UL);
                 if (zeroOperationCount > (ulong)(maximumOperations - operationCount))
                     throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
-                Array.Clear(buffer);
+                var buffer = new byte[chunkSize];
                 var remaining = partition.SizeBytes;
                 while (remaining > 0)
                 {
@@ -377,30 +384,8 @@ public sealed partial class PayloadBuilder : IDisposable
                 var declaredLength = input.CanSeek ? checked(input.Length - input.Position) : (long?)null;
                 if (declaredLength is { } knownLength && (knownLength < 0 || knownLength % BlockSize != 0))
                     throw new PayloadGenerationException("Partition size must be block-aligned.");
-                ulong position = 0;
-                while (true)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    int count;
-                    if (declaredLength is { } length)
-                    {
-                        var remaining = checked(length - (long)position);
-                        if (remaining == 0) break;
-                        count = (int)Math.Min(buffer.Length, remaining);
-                        input.ReadExactly(buffer.AsSpan(0, count));
-                    }
-                    else
-                    {
-                        count = input.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
-                        if (count == 0) break;
-                    }
-                    if (count % BlockSize != 0) throw new PayloadGenerationException("Partition size must be block-aligned.");
-                    if (++operationCount > maximumOperations) throw new PayloadGenerationException("Payload exceeds the supported 65536 operations.");
-                    partitionHash.AppendData(buffer, 0, count);
-                    var operation = WriteReplaceOperation(data, buffer, count, partition.OperationType, partition.CompressionType, cancellationToken);
-                    operation.DstExtents.Add(new Extent { StartBlock = position / BlockSize, NumBlocks = (ulong)count / BlockSize });
-                    update.Operations.Add(operation); position = checked(position + (ulong)count);
-                }
+                var position = WritePartitionOperations(input, declaredLength, data, partition, update, partitionHash,
+                    chunkSize, ref operationCount, compressionWorkers, cancellationToken);
                 update.NewPartitionInfo = new PartitionInfo { Size = position, Hash = ByteString.CopyFrom(partitionHash.GetHashAndReset()) };
             }
             manifest.Partitions.Add(update);
@@ -412,14 +397,12 @@ public sealed partial class PayloadBuilder : IDisposable
         InstallOperation.Types.Type operationType, CompressionType compressionType, CancellationToken cancellationToken)
     {
         var offset = data.Position;
+        using var hashing = new UotanStudio.Firmware.SharedKernel.Streams.HashingWriteStream(data, leaveOpen: true);
         using (var source = new MemoryStream(buffer, 0, count, writable: false))
-        using (var bounded = new UotanStudio.Firmware.SharedKernel.Streams.CountingWriteStream(data, count * 2L + 65536, leaveOpen: true, cancellationToken: cancellationToken))
+        using (var bounded = new UotanStudio.Firmware.SharedKernel.Streams.CountingWriteStream(hashing, count * 2L + 65536, leaveOpen: true, cancellationToken: cancellationToken))
             CompressStream(source, bounded, compressionType);
-        var storedLength = data.Position - offset;
-        byte[] digest;
-        using (var stored = new UotanStudio.Firmware.SharedKernel.Streams.BoundedReadStream(data, offset, storedLength, leaveOpen: true))
-            digest = SHA256.HashData(stored);
-        data.Position = offset + storedLength;
+        var storedLength = hashing.BytesWritten;
+        var digest = hashing.GetHashAndReset();
         return new InstallOperation
         {
             Type = operationType,
