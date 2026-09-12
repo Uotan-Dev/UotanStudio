@@ -130,6 +130,9 @@
                             <Button Classes="key-action" Content="{DynamicResource Keys_CopyPublic}" Click="CopyClick" />
                             <Button Classes="key-action" Content="{DynamicResource Keys_ExportPublic}" Click="ExportPublicClick" />
                             <Button Classes="key-action" Content="{DynamicResource Keys_ExportPair}" Click="ExportPairClick" />
+                            <Button Classes="key-action" Content="{DynamicResource Keys_ExportCertificate}" Click="ExportCertificateClick"
+                                    IsVisible="{Binding HasCertificate}" ToolTip.Tip="{DynamicResource Keys_ExportCertificate}"
+                                    AutomationProperties.Name="{DynamicResource Keys_ExportCertificate}" />
                         </WrapPanel>
                     </StackPanel>
                 </StackPanel>

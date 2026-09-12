@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Services.Keys;
 using Xunit;
@@ -10,6 +11,35 @@ public sealed class KeyLibraryTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-keys-test-" + Guid.NewGuid().ToString("N"));
     private KeyLibraryService Library => new(Path.Combine(_root, "library"));
+
+    [Fact]
+    public async Task PayloadCertificateSharesIdentityAndLegacyExportPreservesKey()
+    {
+        var library = Library;
+        var key = library.Generate("Name, with + special=characters\"", ManagedKeyKind.Payload, 2048);
+        var original = File.ReadAllBytes(library.PrivatePath(key));
+        using (var cert = X509Certificate2.CreateFromPem(File.ReadAllText(library.CertificatePath(key))))
+        using (var publicKey = cert.GetRSAPublicKey())
+        using (var privateKey = KeyLibraryService.LoadPrivateKey(library.PrivatePath(key)))
+            Assert.Equal(privateKey.ExportSubjectPublicKeyInfo(), publicKey!.ExportSubjectPublicKeyInfo());
+        File.Delete(library.CertificatePath(key));
+        var model = new UotanStudio.ViewModels.Shell.KeyManagerViewModel(library);
+        var changed = new List<string?>();
+        model.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        model.SelectedKey = key;
+        Assert.True(model.HasCertificate);
+        Assert.Contains(nameof(model.HasCertificate), changed);
+        await model.ExportCertificateAsync(_root);
+        var exported = Path.Combine(_root, "payload-" + key.Id + ".crt");
+        Assert.True(File.Exists(exported), model.Status);
+        Assert.Equal(original, File.ReadAllBytes(library.PrivatePath(key)));
+        var certificate = File.ReadAllBytes(exported);
+        Assert.Equal(certificate, File.ReadAllBytes(library.EnsureCertificate(key)));
+        await model.ExportCertificateAsync(_root);
+        Assert.Equal(certificate, File.ReadAllBytes(exported));
+        model.SelectedKey = library.Generate("adb", ManagedKeyKind.Adb, 2048);
+        Assert.False(model.HasCertificate);
+    }
 
     [Theory]
     [InlineData(ManagedKeyKind.Adb, 2048)]

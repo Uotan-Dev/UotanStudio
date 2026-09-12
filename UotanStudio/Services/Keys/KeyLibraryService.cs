@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -80,6 +81,39 @@ public sealed class KeyLibraryService
     public string PrivatePath(ManagedKey key) => Path.Combine(KeyDirectory(key.Id), PrivateName(key.Kind));
     public string PublicText(ManagedKey key) => Encoding.UTF8.GetString(ReadBounded(PrivatePath(key) + ".pub"));
 
+    /// <summary>Certificate file path for a Payload key; the file may not exist for keys created before certificates.</summary>
+    public string CertificatePath(ManagedKey key) => PrivatePath(key) + ".crt";
+
+    /// <summary>Returns the certificate path, generating the self-signed certificate for a legacy Payload key on first use.</summary>
+    public string EnsureCertificate(ManagedKey key)
+    {
+        if (key.Kind != ManagedKeyKind.Payload) throw new InvalidOperationException("Only Payload keys carry certificates.");
+        var path = CertificatePath(key);
+        if (File.Exists(path)) return path;
+        var directory = KeyDirectory(key.Id);
+        var temporary = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            using var rsa = LoadPrivateKey(PrivatePath(key));
+            Write(temporary, CreateCertificate(key.Name, rsa));
+            try { File.Move(temporary, path, overwrite: false); }
+            catch (IOException) when (File.Exists(path)) { }
+        }
+        finally { File.Delete(temporary); }
+        return path;
+    }
+
+    // Self-signed RSA SHA-256 certificate sharing the private key's SPKI, for OTA zip
+    // outer signatures (signapk -w) and the otacert entry.
+    private static string CreateCertificate(string name, RSA rsa)
+    {
+        var subject = new X500DistinguishedNameBuilder();
+        subject.AddCommonName(name);
+        var request = new CertificateRequest(subject.Build(), rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(10));
+        return certificate.ExportCertificatePem();
+    }
+
     public ManagedKey Rename(ManagedKey key, string name)
     {
         Validate(name, key.Kind, key.Bits);
@@ -126,6 +160,8 @@ public sealed class KeyLibraryService
         {
             var fileName = PrivateName(key.Kind);
             Write(Path.Combine(staging, fileName + ".pub"), PublicText(key));
+            var certificate = Path.Combine(KeyDirectory(key.Id), fileName + ".crt");
+            if (File.Exists(certificate)) File.Copy(certificate, Path.Combine(staging, fileName + ".crt"));
             if (includePrivate)
             {
                 var bytes = ReadBounded(PrivatePath(key));
@@ -159,6 +195,7 @@ public sealed class KeyLibraryService
             }
             else publicText = rsa.ExportSubjectPublicKeyInfoPem() + "\n";
             Write(path + ".pub", publicText);
+            if (kind == ManagedKeyKind.Payload) Write(Path.Combine(staging, PrivateName(kind) + ".crt"), CreateCertificate(name, rsa));
             Write(Path.Combine(staging, "key.json"), JsonSerializer.Serialize(key, KeyLibraryJsonContext.Default.ManagedKey));
             Directory.Move(staging, KeyDirectory(key.Id));
             return key;

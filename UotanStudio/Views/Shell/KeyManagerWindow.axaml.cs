@@ -78,6 +78,17 @@ public partial class KeyManagerWindow : Window
     private async void ExportPublicClick(object? sender, RoutedEventArgs e) => await ExportAsync(false);
     private async void ExportPairClick(object? sender, RoutedEventArgs e) => await ExportAsync(true);
 
+    private async void ExportCertificateClick(object? sender, RoutedEventArgs e)
+    {
+        string? path = null;
+        await Model.RunAsync(async () =>
+        {
+            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false });
+            path = folders.Count == 1 ? folders[0].TryGetLocalPath() : null;
+        });
+        if (path is not null) await Model.ExportCertificateAsync(path);
+    }
+
     private async Task ExportAsync(bool includePrivate)
     {
         string? path = null;

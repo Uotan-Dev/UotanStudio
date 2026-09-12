@@ -29,6 +29,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     public bool IsPayload => KindIndex == 2;
     public bool HasSelection => SelectedKey is not null;
     public string SelectedPath => SelectedKey is { } key ? _library.PrivatePath(key) : "";
+    public bool HasCertificate => SelectedKey is { Kind: ManagedKeyKind.Payload };
     private IReadOnlyList<ManagedKey> _all = [];
 
     public KeyManagerViewModel() : this(new KeyLibraryService()) { }
@@ -50,6 +51,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         try { if (value is not null) PublicKey = _library.PublicText(value); }
         catch (Exception ex) { Status = ex.Message; }
         OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(HasCertificate));
         OnPropertyChanged(nameof(SelectedPath));
     }
 
@@ -142,6 +144,19 @@ public partial class KeyManagerViewModel : ViewModelBase
     {
         if (SelectedKey is not { } key) return;
         var path = await Task.Run(() => _library.Export(key, destination, includePrivate));
+        Status = path;
+    });
+
+    public Task ExportCertificateAsync(string destination) => RunAsync(async () =>
+    {
+        if (SelectedKey is not { } key) return;
+        var path = await Task.Run(() =>
+        {
+            var certificate = _library.EnsureCertificate(key);
+            var target = Path.Combine(Path.GetFullPath(destination), key.Kind.ToString().ToLowerInvariant() + "-" + key.Id + ".crt");
+            File.Copy(certificate, target, false);
+            return target;
+        });
         Status = path;
     });
 
