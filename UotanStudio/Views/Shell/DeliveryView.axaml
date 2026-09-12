@@ -133,7 +133,7 @@
                             <RadioButton Name="SuperAbBox" GroupName="DeliverySuperDeviceType" Content="AB" />
                             <RadioButton Name="SuperAOnlyBox" GroupName="DeliverySuperDeviceType" Content="A-Only" />
                         </StackPanel>
-                        <StackPanel Spacing="6">
+                        <StackPanel Name="SuperDeviceNameField" Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperDeviceName}" />
                             <TextBox Name="SuperDeviceNameBox" Text="super"
                                      AutomationProperties.Name="{DynamicResource Delivery_SuperDeviceName}" />
@@ -148,12 +148,12 @@
                             <TextBox Name="SuperMetadataSizeBox" Text="65536"
                                      AutomationProperties.Name="{DynamicResource Delivery_MetadataSize}" />
                         </StackPanel>
-                        <StackPanel Spacing="6">
+                        <StackPanel Name="SuperSizeField" Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperSize}" />
                             <TextBox Name="SuperSizeBox" Text="9126805504"
                                      AutomationProperties.Name="{DynamicResource Delivery_SuperSize}" />
                         </StackPanel>
-                        <StackPanel Spacing="6">
+                        <StackPanel Name="SuperGroupNameField" Spacing="6">
                             <TextBlock Classes="field-label" Text="{DynamicResource Delivery_SuperGroupName}" />
                             <TextBox Name="SuperGroupNameBox" Text="qti_dynamic_partitions"
                                      AutomationProperties.Name="{DynamicResource Delivery_SuperGroupName}" />
@@ -165,7 +165,6 @@
                         </StackPanel>
                         <WrapPanel Name="SuperImageOptions" Orientation="Horizontal" ItemsAlignment="Center" ItemSpacing="12" LineSpacing="6">
                             <CheckBox Name="SuperZstdBox" Content="{DynamicResource Delivery_ZstdCompression}" />
-                            <CheckBox Name="ForceFullSuperImageBox" Content="{DynamicResource Delivery_ForceFullImage}" IsChecked="True" />
                             <CheckBox Name="GenerateSuperEmptyBox" IsChecked="False"
                                       AutomationProperties.Name="{DynamicResource Delivery_GenerateSuperEmpty}">
                                 <TextBlock Text="{DynamicResource Delivery_GenerateSuperEmpty}" />

@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
@@ -74,13 +75,15 @@ public sealed class PayloadSigningTests : IDisposable
         var persisted = File.ReadAllText(DeliveryPlanStore.PathFor(_root));
         Assert.DoesNotContain("PRIVATE KEY", persisted);
         await new DeliveryOutputService(new NoTools()).ExportAsync(restored, token: TestContext.Current.CancellationToken);
-        var bytes = File.ReadAllBytes(Path.Combine(plan.OutputDirectory, "payload.bin"));
+        var unpacked = Path.Combine(_root, "ota-content");
+        ZipFile.ExtractToDirectory(Path.Combine(plan.OutputDirectory, "ota.zip"), unpacked);
+        var bytes = File.ReadAllBytes(Path.Combine(unpacked, "payload.bin"));
         using var key = KeyLibraryService.LoadPrivateKey(library.PrivatePath(chosen));
         AssertSignatures(bytes, key);
         using var wrong = KeyLibraryService.LoadPrivateKey(library.PrivatePath(first));
         var (metadata, _, signature, _) = Decode(bytes);
         Assert.False(wrong.VerifyData(metadata, signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
-        var properties = File.ReadAllLines(Path.Combine(plan.OutputDirectory, "payload_properties.txt")).Select(l => l.Split('=', 2)).ToDictionary(p => p[0], p => p[1]);
+        var properties = File.ReadAllLines(Path.Combine(unpacked, "payload_properties.txt")).Select(l => l.Split('=', 2)).ToDictionary(p => p[0], p => p[1]);
         Assert.Equal(Convert.ToBase64String(SHA256.HashData(bytes)), properties["FILE_HASH"]);
         Assert.Equal(bytes.Length.ToString(), properties["FILE_SIZE"]);
         Assert.Equal(Convert.ToBase64String(SHA256.HashData(metadata)), properties["METADATA_HASH"]);

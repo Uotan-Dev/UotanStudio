@@ -26,39 +26,47 @@ internal static class DeliveryPackageBuilder
     internal static void Validate(DeliveryPlan plan)
     {
         var options = plan.Package;
-        if (!options.Ota && !plan.Recovery) return;
+        if (!plan.PackPayload && !options.Ota && !plan.Recovery) return;
         if ((options.CertificatePath.Length == 0) != (options.SigningKeyPath.Length == 0))
             throw new InvalidDataException("外层签名需要同时指定证书与私钥。");
-        if (options.Ota && (!plan.PackPayload || plan.Payload.SigningKeyPath.Length == 0 || options.CertificatePath.Length == 0
-            || plan.DeviceCodename.Length == 0 || options.BuildFingerprint.Length == 0 || options.Incremental.Length == 0
-            || options.SdkLevel == 0 || plan.Payload.MaxTimestamp == 0 || plan.Payload.SecurityPatchLevel.Length == 0))
-            throw new InvalidDataException("OTA ZIP 需要已签名 Payload、外层证书和私钥、机型、构建指纹、增量编号、SDK、时间戳与安全补丁日期。");
+        if (options.Ota && !plan.PackPayload)
+            throw new InvalidDataException("OTA ZIP requires Payload mode.");
         foreach (var value in new[] { options.BuildFingerprint, options.Incremental })
             if (value.Length > 1024 || value.Any(char.IsControl)) throw new InvalidDataException("OTA 元数据包含无效字符。");
-        if (plan.Recovery && (!plan.OrganizeDirectory || plan.PackPayload || plan.PackSuper || plan.AskWipe || plan.Reboot
+        if (plan.Recovery && !plan.PackPayload && (!plan.OrganizeDirectory || plan.PackPayload || plan.PackSuper || plan.AskWipe || plan.Reboot
             || plan.Slot == "all" || plan.Files.Any(f => f.Generated || f.IncludeInSuper || f.Fastbootd || f.Partition is "super" or "super_empty"
                 || !f.FileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase))))
             throw new NotSupportedException("Recovery ZIP 面向提供 shell/unzip/sha256sum/blockdev 的自定义 Recovery，仅支持物理 IMG 分区；不支持动态分区、容器、双槽同时刷写、自动清除或重启。");
-        if (plan.Recovery && Selected(plan).Length == 0) throw new InvalidDataException("Recovery 包没有默认选中的镜像。");
+        if (plan.Recovery && !plan.PackPayload && Selected(plan).Length == 0) throw new InvalidDataException("Recovery 包没有默认选中的镜像。");
     }
 
-    internal static async Task BuildAsync(DeliveryPlan plan, string stage, string images, CancellationToken token)
+    internal static async Task BuildAsync(DeliveryPlan plan, string stage, string images, CancellationToken token,
+        IProgress<DeliveryProgress>? progress = null)
     {
         Validate(plan);
-        if (plan.Package.Ota)
+        if (plan.PackPayload)
         {
             var path = Path.Combine(stage, "ota.zip");
-            var metadata = $"ota-type=AB\npre-device={plan.DeviceCodename}\npost-build={plan.Package.BuildFingerprint}\npost-build-incremental={plan.Package.Incremental}\npost-sdk-level={plan.Package.SdkLevel}\npost-security-patch-level={plan.Payload.SecurityPatchLevel}\npost-timestamp={plan.Payload.MaxTimestamp}\n";
+            var metadata = "ota-type=AB\n";
+            if (plan.DeviceCodename.Length > 0) metadata += $"pre-device={plan.DeviceCodename}\n";
+            if (plan.Package.BuildFingerprint.Length > 0) metadata += $"post-build={plan.Package.BuildFingerprint}\n";
+            if (plan.Package.Incremental.Length > 0) metadata += $"post-build-incremental={plan.Package.Incremental}\n";
+            if (plan.Package.SdkLevel > 0) metadata += $"post-sdk-level={plan.Package.SdkLevel}\n";
+            if (plan.Payload.SecurityPatchLevel.Length > 0) metadata += $"post-security-patch-level={plan.Payload.SecurityPatchLevel}\n";
+            if (plan.Payload.MaxTimestamp > 0) metadata += $"post-timestamp={plan.Payload.MaxTimestamp}\n";
             string Properties(string streaming, string all) => "ota-streaming-property-files=" + streaming.PadRight(512) + "\nota-property-files=" + all.PadRight(512) + "\n";
             async Task WriteZip(string text)
             {
                 await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite);
                 using var zip = new ZipArchive(output, ZipArchiveMode.Create, true);
-                await AddFileAsync(zip, "payload.bin", Path.Combine(images, "payload.bin"), token);
-                await AddFileAsync(zip, "payload_properties.txt", Path.Combine(images, "payload_properties.txt"), token);
+                await AddFileAsync(zip, "payload.bin", Path.Combine(images, "payload.bin"), token, progress);
+                await AddFileAsync(zip, "payload_properties.txt", Path.Combine(images, "payload_properties.txt"), token, progress);
                 await AddTextAsync(zip, "META-INF/com/android/metadata", text, token);
-                using var cert = LoadCertificate(plan.Package.CertificatePath);
-                await AddTextAsync(zip, "META-INF/com/android/otacert", cert.ExportCertificatePem(), token);
+                if (plan.Package.CertificatePath.Length > 0)
+                {
+                    using var cert = LoadCertificate(plan.Package.CertificatePath);
+                    await AddTextAsync(zip, "META-INF/com/android/otacert", cert.ExportCertificatePem(), token);
+                }
             }
             await WriteZip(metadata + Properties("", ""));
             var ranges = ReadStoredRanges(path);
@@ -75,9 +83,9 @@ internal static class DeliveryPackageBuilder
             await WriteZip(metadata + Properties(streaming, all));
             var actual = ReadStoredRanges(path);
             if (ranges.Any(p => actual[p.Key] != p.Value)) throw new InvalidDataException("OTA ZIP entry offsets changed while finalizing metadata.");
-            await SignAsync(path, plan.Package, token);
+            if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token);
         }
-        if (plan.Recovery)
+        if (plan.Recovery && !plan.PackPayload)
         {
             var path = Path.Combine(stage, "recovery.zip");
             await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite))
@@ -91,7 +99,7 @@ internal static class DeliveryPackageBuilder
                     var hash = await SHA256.HashDataAsync(input, token); input.Position = 0;
                     hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  images/").Append(file.FileName).Append('\n');
                     await using var entry = Entry(zip, "images/" + file.FileName).Open();
-                    await input.CopyToAsync(entry, 65536, token);
+                    await CopyPackageMemberAsync(input, entry, file.FileName, token, progress);
                 }
                 await AddTextAsync(zip, "checksums.sha256", hashes.ToString(), token);
                 var updater = Entry(zip, "META-INF/com/google/android/update-binary");
@@ -109,10 +117,12 @@ internal static class DeliveryPackageBuilder
         using var input = File.OpenRead(path);
         var result = new Dictionary<string, (long, ulong)>(StringComparer.Ordinal);
         var header = new byte[30];
-        while (result.Count < 4)
+        while (input.Position < input.Length)
         {
             input.ReadExactly(header);
-            if (BinaryPrimitives.ReadUInt32LittleEndian(header) != 0x04034b50
+            var signature = BinaryPrimitives.ReadUInt32LittleEndian(header);
+            if (signature == 0x02014b50) break;
+            if (signature != 0x04034b50
                 || (BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(6)) & 8) != 0
                 || BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(8)) != 0)
                 throw new InvalidDataException("OTA requires seekable, stored ZIP entries.");
@@ -145,11 +155,24 @@ internal static class DeliveryPackageBuilder
         entry.LastWriteTime = new DateTimeOffset(2009, 1, 1, 0, 0, 0, TimeSpan.Zero);
         return entry;
     }
-    private static async Task AddFileAsync(ZipArchive zip, string name, string source, CancellationToken token)
+    private static async Task AddFileAsync(ZipArchive zip, string name, string source, CancellationToken token,
+        IProgress<DeliveryProgress>? progress = null)
     {
         await using var input = File.OpenRead(source);
         await using var output = Entry(zip, name).Open();
-        await input.CopyToAsync(output, 65536, token);
+        await CopyPackageMemberAsync(input, output, name, token, progress);
+    }
+
+    private static async Task CopyPackageMemberAsync(Stream input, Stream output, string name,
+        CancellationToken token, IProgress<DeliveryProgress>? progress)
+    {
+        var length = input.Length;
+        void Report(long count) => progress?.Report(new(85 + count * 4.0 / Math.Max(1, length), "Packaging ZIP",
+            (count, length), "Delivery_ProgressPackage", Detail: name));
+        Report(0);
+        using var tracked = new DeliveryWriteProgressStream(output, Report, token);
+        await input.CopyToAsync(tracked, 65536, token);
+        Report(tracked.Length);
     }
     private static async Task AddTextAsync(ZipArchive zip, string name, string text, CancellationToken token)
     {

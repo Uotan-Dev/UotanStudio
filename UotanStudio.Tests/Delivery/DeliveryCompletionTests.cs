@@ -41,7 +41,9 @@ public sealed class DeliveryCompletionTests : IDisposable
         var plan = new DeliveryPlan { OrganizeDirectory = false, PackPayload = true, Container = [image], OutputDirectory = Path.Combine(_root, "out"),
             Payload = new() { PostinstallFile = config, BlockSize = 8192, MaxTimestamp = 1800000000, SecurityPatchLevel = "2026-09-05", Compression = compression } };
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
-        var payload = Path.Combine(plan.OutputDirectory, "payload.bin");
+        var unpacked = Path.Combine(_root, "ota-content");
+        ZipFile.ExtractToDirectory(Path.Combine(plan.OutputDirectory, "ota.zip"), unpacked);
+        var payload = Path.Combine(unpacked, "payload.bin");
         var manifest = PayloadParser.GetPayloadMetadata(payload).Manifest;
         Assert.Equal(8192u, manifest.BlockSize); Assert.Equal(1800000000L, manifest.MaxTimestamp);
         Assert.Equal("2026-09-05", manifest.SecurityPatchLevel);

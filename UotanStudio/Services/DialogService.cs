@@ -39,6 +39,20 @@ internal static class DialogService
         return await dialog.ShowDialog<MessageBoxResult>(owner) == MessageBoxResult.OK;
     }
 
+    /// <summary>
+    /// Shows a localized yes/no confirmation window without an overlay or owner mask.
+    /// <para>显示本地化的是/否确认窗口，无遮罩；返回 <c>true</c> 表示选择「是」。</para>
+    /// </summary>
+    internal static async Task<bool> ConfirmYesNoAsync(
+        Window owner, string title, string message, string? yesText = null, string? noText = null)
+    {
+        var language = LanguageService.Instance;
+        var dialog = CreateWindow(title, message, MessageBoxIcon.Warning, MessageBoxButton.YesNo);
+        dialog.Resources["STRING_MENU_DIALOG_YES"] = yesText ?? language.GetString("Editor_Yes");
+        dialog.Resources["STRING_MENU_DIALOG_NO"] = noText ?? language.GetString("Editor_Cancel");
+        return await dialog.ShowDialog<MessageBoxResult>(owner) == MessageBoxResult.Yes;
+    }
+
     internal static async Task<string?> InputAsync(
         Window owner, string title, string defaultText = "")
     {

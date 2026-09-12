@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -44,9 +44,11 @@ public sealed class DeliveryTests : IDisposable
             Payload = new() { DynamicPartitionsFile = config }, OutputDirectory = Path.Combine(_root, "payload-out") };
         File.WriteAllText(config, DeliveryPayloadBuilder.GenerateDynamicLayout(plan));
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken);
-        var payload = Path.Combine(plan.OutputDirectory, "payload.bin");
+        var unpacked = Path.Combine(_root, "ota-content");
+        ZipFile.ExtractToDirectory(Path.Combine(plan.OutputDirectory, "ota.zip"), unpacked);
+        var payload = Path.Combine(unpacked, "payload.bin");
         var bytes = File.ReadAllBytes(payload);
-        var properties = File.ReadAllLines(Path.Combine(plan.OutputDirectory, "payload_properties.txt"))
+        var properties = File.ReadAllLines(Path.Combine(unpacked, "payload_properties.txt"))
             .Select(l => l.Split('=', 2)).ToDictionary(p => p[0], p => p[1]);
         Assert.Equal(Convert.ToBase64String(SHA256.HashData(bytes)), properties["FILE_HASH"]);
         Assert.Equal(bytes.Length.ToString(), properties["FILE_SIZE"]);
@@ -82,7 +84,7 @@ public sealed class DeliveryTests : IDisposable
         model.SelectSources([Input("system")]); model.Confirm(new());
         Assert.Equal("payload", Assert.Single(model.Output).PartitionName);
         var plan = new DeliveryPlan { PackPayload = true, ContainerConfirmed = true, Container = [Input("vendor")],
-            Files = [new() { Generated = true, FileName = "payload.bin", Partition = "payload" }] };
+            Files = [new() { Generated = true, FileName = "ota.zip", Partition = "payload" }] };
         Assert.Empty(DeliveryScriptGenerator.Generate(plan));
         var scripts = DeliveryScriptGenerator.Generate(plan with { Files = [.. plan.Files, Input()] });
         Assert.Equal("boot images/boot.img\r\n", scripts["flash.txt"]);
@@ -198,6 +200,23 @@ public sealed class DeliveryTests : IDisposable
         var actual = new byte[expected.Length];
         raw.ReadExactly(actual);
         Assert.Equal(expected, actual);
+        Assert.Equal(0u, metadata.Partitions[1].NumExtents);
+    }
+
+    [Fact]
+    public async Task BuildSuperAcceptsEmptyBSlotImageWithAutoZero()
+    {
+        // The empty B-slot image selected from the source list is matched by file name and becomes a zero-size partition.
+        // 勾选的空 B 槽镜像按文件名匹配并作为零大小分区参与打包。
+        var a = Input("my_bigball_a");
+        var b = Input("my_bigball_b", 0);
+        var output = Path.Combine(_root, "super.img");
+        await DeliverySuperBuilder.BuildAsync([a, b], new() { DeviceSize = 8 * 1024 * 1024, AutoZero = true }, output, token: TestContext.Current.CancellationToken);
+        using var raw = new MemoryStream();
+        using (var source = SparseReader.ImportAuto(output)) source.WriteRawToStream(raw);
+        raw.Position = 0;
+        var metadata = MetadataReader.ReadFromImageStream(raw);
+        Assert.Equal(2, metadata.Partitions.Count);
         Assert.Equal(0u, metadata.Partitions[1].NumExtents);
     }
 

@@ -52,7 +52,8 @@ internal static class DeliveryValidation
         foreach (var file in plan.Container)
         {
             if (!IsPartition(file.Partition)) throw new InvalidDataException($"分区名无效 / Invalid partition: {file.Partition}");
-            if (sources && file.SourcePath.Length > 0 && (!plan.Super.Empty || plan.PackPayload)) CheckSource(file);
+            if (sources && file.SourcePath.Length > 0 && (!plan.Super.Empty || plan.PackPayload))
+                CheckSource(file, plan.Super.AutoZero && file.Partition.EndsWith("_b", StringComparison.Ordinal));
         }
         if (plan.PackSuper && (!IsPartition(plan.Super.DeviceName) || !IsPartition(plan.Super.Group)))
             throw new InvalidDataException("Super 设备名或分组名无效 / Invalid Super device or group.");
@@ -65,7 +66,7 @@ internal static class DeliveryValidation
             }
     }
 
-    internal static void CheckSource(DeliveryFile file)
+    internal static void CheckSource(DeliveryFile file, bool allowEmpty = false)
     {
         var info = new FileInfo(file.SourcePath);
         if (!info.Exists) throw new FileNotFoundException("源文件不存在 / Source is missing", file.SourcePath);
@@ -73,6 +74,6 @@ internal static class DeliveryValidation
         if ((info.Attributes & FileAttributes.ReparsePoint) != 0) throw new InvalidDataException("Linked source files are not supported: " + file.SourcePath);
         if (file.SourceLength is { } length && info.Length != length)
             throw new InvalidDataException("源文件已变化，请刷新 / Source changed; refresh: " + file.SourcePath);
-        if (info.Length == 0) throw new InvalidDataException("源镜像为空 / Empty image: " + file.SourcePath);
+        if (info.Length == 0 && !allowEmpty) throw new InvalidDataException("源镜像为空 / Empty image: " + file.SourcePath);
     }
 }

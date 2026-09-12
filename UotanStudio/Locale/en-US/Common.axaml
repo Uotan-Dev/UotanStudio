@@ -23,7 +23,6 @@
     <x:String x:Key="Delivery_SdkLevel">SDK level</x:String>
     <x:String x:Key="Delivery_MaxTimestamp">Maximum timestamp</x:String>
     <x:String x:Key="Delivery_SecurityPatch">Security patch date</x:String>
-    <x:String x:Key="Delivery_SelectSuperImageType">Select a full Super or Super_Empty image.</x:String>
     <x:String x:Key="Delivery_InvalidParameter">Invalid parameter: {0}</x:String>
     <x:String x:Key="Delivery_InvalidSuperSize">Invalid Super size.</x:String>
     <x:String x:Key="Delivery_InvalidPayloadVersion">Invalid Payload version.</x:String>
@@ -38,12 +37,11 @@
     <x:String x:Key="Delivery_AddPartitionsFirst">Add partition images first.</x:String>
     <x:String x:Key="Delivery_InvalidPartition">Invalid or duplicate partition name.</x:String>
     <x:String x:Key="Delivery_MetadataSlots">Metadata slots</x:String>
-    <x:String x:Key="Delivery_ForceFullImage">Force full image generation</x:String>
     <x:String x:Key="Delivery_PackSuper">Pack Super</x:String>
     <x:String x:Key="Delivery_SuperFormat">Super Format</x:String>
     <x:String x:Key="Delivery_SuperSize">Super Size</x:String>
     <x:String x:Key="Delivery_SuperGroupName">Super Cluster</x:String>
-    <x:String x:Key="Delivery_GenerateSuperEmpty">Generate Super_Empty</x:String>
+    <x:String x:Key="Delivery_GenerateSuperEmpty">Only generate Super_Empty</x:String>
     <x:String x:Key="Delivery_PayloadVersion">Payload version</x:String>
     <x:String x:Key="Delivery_PayloadMinorVersion">Minor version</x:String>
     <x:String x:Key="Delivery_DynamicPartitionsFile">Dynamic partition file</x:String>
@@ -131,7 +129,7 @@
     <x:String x:Key="PackDialog_Confirm">Confirm</x:String>
     <x:String x:Key="ImageView_ImportHint">Import images into the project images/ folder</x:String>
     <x:String x:Key="ImageView_ExportHint">Export the selected image to an external path</x:String>
-    <x:String x:Key="ImageView_ExtractHint">Unpack the selected image to intermediate/</x:String>
+    <x:String x:Key="ImageView_ExtractHint">Unpack the selected image to its corresponding directory</x:String>
     <x:String x:Key="ImageView_SuperHint">Build a super image from the project's raw/sparse images</x:String>
     <x:String x:Key="ImageView_DatHint">Generate .new.dat + .transfer.list (Android v4)</x:String>
     <x:String x:Key="ImageView_NoSelection">No image selected</x:String>
@@ -275,5 +273,38 @@
     <x:String x:Key="Compare_HexRaw">Raw Hex Data</x:String>
     <x:String x:Key="Compare_Metadata">Metadata</x:String>
     <x:String x:Key="Compare_Unrecognized">Unrecognized firmware format</x:String>
+
+    <x:String x:Key="Progress_ItemsStats">{0} / {1} items · {2} · {3} left</x:String>
+    <x:String x:Key="Progress_ItemsStatsNoEta">{0} / {1} items · {2}</x:String>
+    <x:String x:Key="Progress_StatusPercent">{0} · {1:0.#}%</x:String>
+    <x:String x:Key="Image_FsStageFile">{0}: {1}</x:String>
+    <x:String x:Key="Image_FsPreparing">Preparing source image</x:String>
+    <x:String x:Key="Image_FsExtracting">Extracting</x:String>
+    <x:String x:Key="Image_FsPreserving">Saving original image</x:String>
+    <x:String x:Key="Image_FsVerifyingImage">Verifying original image</x:String>
+    <x:String x:Key="Image_FsVerifyingFiles">Verifying extracted files</x:String>
+    <x:String x:Key="Image_FsReadingMetadata">Reading file attributes</x:String>
+    <x:String x:Key="Progress_ProcessedStats">Processed {0} · {2}</x:String>
+    <x:String x:Key="Delivery_ProgressChecking">Checking inputs</x:String>
+    <x:String x:Key="Delivery_ProgressSuper">Building Super</x:String>
+    <x:String x:Key="Delivery_ProgressSparse">Converting Sparse</x:String>
+    <x:String x:Key="Delivery_ProgressCompress">Compressing Super</x:String>
+    <x:String x:Key="Delivery_ProgressCopy">Copying images</x:String>
+    <x:String x:Key="Delivery_ProgressPayloadPrepare">Preparing Payload partitions</x:String>
+    <x:String x:Key="Delivery_ProgressPayloadWrite">Writing Payload</x:String>
+    <x:String x:Key="Delivery_ProgressTools">Preparing flashing tools</x:String>
+    <x:String x:Key="Delivery_ProgressDownload">Downloading flashing tools</x:String>
+    <x:String x:Key="Delivery_ProgressPackage">Packaging ZIP</x:String>
+    <x:String x:Key="Delivery_ProgressVerify">Verifying output</x:String>
+    <x:String x:Key="Delivery_ProgressDone">Output complete</x:String>
+    <x:String x:Key="Progress_Stats">{0} / {1} · {2} · {3} left</x:String>
+    <x:String x:Key="Progress_StatsNoEta">{0} / {1} · {2}</x:String>
+    <x:String x:Key="Delivery_DiskSpaceWarning">Insufficient disk space: {0} free on the output drive, {1} estimated for this output. Continue anyway?</x:String>
+    <x:String x:Key="Delivery_DiskSpaceTitle">Insufficient disk space</x:String>
+    <x:String x:Key="Delivery_DiskSpaceContinue">Continue</x:String>
+    <x:String x:Key="Delivery_DiskSpaceCancel">Cancel</x:String>
+    <x:String x:Key="Delivery_OverwriteTitle">Output files already exist</x:String>
+    <x:String x:Key="Delivery_OverwritePrompt">The following output files already exist. Overwrite all?</x:String>
+    <x:String x:Key="Delivery_OverwriteMore">...and {0} more</x:String>
 
 </ResourceDictionary>

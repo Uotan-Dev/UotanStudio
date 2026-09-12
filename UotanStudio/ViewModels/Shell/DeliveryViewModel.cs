@@ -21,12 +21,14 @@ internal sealed partial class DeliveryImage : ObservableObject
         Generated = file.Generated;
         IncludeInSuper = file.IncludeInSuper;
         Fastbootd = file.Fastbootd;
+        IsAutoZero = file.AutoZero;
     }
 
     public string? FilePath { get; }
     public string GroupName { get; }
     public bool Generated { get; }
-    public bool IsZeroSize => FilePath is null && !Generated;
+    public bool IsZeroSize => FilePath is null && !Generated && !IsAutoZero;
+    internal IReadOnlySet<string>? SourceDynamicPartitions { get; set; }
     [ObservableProperty] private bool _showSuperChoice;
     public string Name => FileName.Length > 0 ? FileName : PartitionName;
     public string Description => Generated ? LanguageService.Instance.GetString("Delivery_PendingImage") : FilePath ?? "0 B";
@@ -42,12 +44,13 @@ internal sealed partial class DeliveryImage : ObservableObject
     [ObservableProperty] private bool _isDefault;
     [ObservableProperty] private bool _fastbootd;
     [ObservableProperty] private bool _includeInSuper;
+    [ObservableProperty] private bool _isAutoZero;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DisplaySize))] private long? _sizeBytes;
 
     internal DeliveryFile Snapshot() => new()
     {
         SourcePath = FilePath ?? "", FileName = FileName, Partition = PartitionName, SourceGroup = GroupName,
-        SourceLength = SizeBytes, IncludeInSuper = IncludeInSuper, Optional = IsOptional, Default = IsDefault, Generated = Generated, Fastbootd = Fastbootd
+        SourceLength = SizeBytes, IncludeInSuper = IncludeInSuper, Optional = IsOptional, Default = IsDefault, Generated = Generated, Fastbootd = Fastbootd, AutoZero = IsAutoZero
     };
 }
 
@@ -66,6 +69,8 @@ internal sealed partial class DeliveryViewModel : ObservableObject
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string _status = "";
+    [ObservableProperty] private bool _autoZero;
+    partial void OnAutoZeroChanged(bool value) => RefreshAutoZero();
     internal event EventHandler? Changed;
     internal bool EditingContainer => (PackSuper || PackPayload) && !Confirmed;
     internal static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -125,6 +130,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
             target.Add(row);
         }
         _previousSelection = paths;
+        RefreshAutoZero();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -135,7 +141,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         foreach (var row in Output.Where(i => i.Generated).ToArray()) Output.Remove(row);
         Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
         {
-            Generated = true, FileName = PackPayload ? "payload.bin" : DeliveryOutputService.SuperFileName(options), Partition = PackPayload ? "payload" : options.Empty ? "super_empty" : "super"
+            Generated = true, FileName = PackPayload ? "ota.zip" : DeliveryOutputService.SuperFileName(options), Partition = PackPayload ? "payload" : options.Empty ? "super_empty" : "super"
         })));
         Confirmed = true;
         Changed?.Invoke(this, EventArgs.Empty);
@@ -159,22 +165,46 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         Container.Remove(image);
         Output.Remove(image);
         if (image.FilePath is { } path) _previousSelection.Remove(path);
+        RefreshAutoZero();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary><para>按自动零分区开关物化 VAB B 槽伴随条目；关闭时移除自动生成条目，文件驱动的 0 字节 _b 行派生只读状态。</para>
+    /// Materializes VAB B-slot zero-size companions per the auto-zero toggle; removes generated rows when off and derives read-only state for file-backed empty _b rows.</summary>
+    internal void RefreshAutoZero()
+    {
+        if (IsRunning) return;
+        var autoZero = AutoZero;
+        foreach (var row in Container.Where(i => i.IsAutoZero && i.FilePath is null).ToArray()) Container.Remove(row);
+        if (autoZero)
+            foreach (var source in Container.Where(i => i.PartitionName.EndsWith("_a", StringComparison.Ordinal)).ToArray())
+            {
+                var name = source.PartitionName[..^2] + "_b";
+                if (Container.Any(i => i.PartitionName == name)) continue;
+                Container.Insert(Math.Min(Container.IndexOf(source) + 1, Container.Count),
+                    Observe(new DeliveryImage(new DeliveryFile { Partition = name, SourceLength = 0, AutoZero = true })));
+            }
+        foreach (var row in Container.Where(i => i.FilePath is not null && i.PartitionName.EndsWith("_b", StringComparison.Ordinal)))
+            row.IsAutoZero = autoZero && row.SizeBytes == 0;
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     internal void Reset(DeliveryPlan? plan = null)
     {
+        ResetProgressStatistics();
         ClearImages();
         if (plan is not null)
         {
             foreach (var file in plan.Container) Container.Add(Observe(new DeliveryImage(file)));
-            foreach (var file in plan.Files) Output.Add(Observe(new DeliveryImage(file)));
+            foreach (var file in plan.Files) Output.Add(Observe(new DeliveryImage(plan.PackPayload && file.Generated && file.Partition == "payload"
+                ? file with { FileName = "ota.zip" } : file)));
             foreach (var item in Container.Concat(Output).Where(i => i.FilePath is not null)) _known.TryAdd(item.FilePath!, item);
             PackSuper = plan.PackSuper; PackPayload = plan.PackPayload;
             foreach (var item in Container) item.ShowSuperChoice = PackPayload;
             OrganizeDirectory = plan.OrganizeDirectory; Confirmed = plan.ContainerConfirmed;
+            AutoZero = plan.Super.AutoZero;
         }
-        else { PackPayload = false; PackSuper = false; OrganizeDirectory = true; Confirmed = false; }
+        else { PackPayload = false; PackSuper = false; OrganizeDirectory = true; Confirmed = false; AutoZero = false; }
         Status = ""; Progress = 0;
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -188,9 +218,24 @@ internal sealed partial class DeliveryViewModel : ObservableObject
     }
 
     private DeliveryImage Observe(DeliveryImage image) { image.PropertyChanged += OnItemChanged; return image; }
+    internal void ApplySourcePartitions(string sourcePath, IReadOnlySet<string>? partitions)
+    {
+        foreach (var row in Container.Concat(Output).Where(row => row.FilePath is { } path && PathComparer.Equals(path, sourcePath)))
+        {
+            row.SourceDynamicPartitions = partitions;
+            if (partitions is not null) row.Fastbootd = DeliveryDynamicPartitions.Contains(partitions, row.PartitionName);
+        }
+    }
+
     private void OnItemChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (_updating) return;
+        if (e.PropertyName == nameof(DeliveryImage.PartitionName))
+        {
+            if (sender is DeliveryImage { SourceDynamicPartitions: { } partitions } changed)
+                changed.Fastbootd = DeliveryDynamicPartitions.Contains(partitions, changed.PartitionName);
+            RefreshAutoZero();
+        }
         if (sender is DeliveryImage { IsDefault: true } row && e.PropertyName == nameof(DeliveryImage.IsDefault))
         {
             _updating = true;

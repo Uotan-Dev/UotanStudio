@@ -40,10 +40,17 @@ public partial class DeliveryCompositionView : UserControl
     {
         InitializeComponent();
         ScriptPane.SetModel(Model);
+        Model.PropertyChanged += (_, _) =>
+        {
+            CompositionStatusText.Text = Model.ProgressText;
+            CompositionStatusText.IsVisible = Model.ProgressText.Length > 0;
+            CompositionStatsText.Text = Model.ProgressStats;
+            CompositionStatsText.IsVisible = Model.ProgressStats.Length > 0;
+        };
         Model.Changed += (_, _) => { _compositionConfirmed = Model.Confirmed; UpdateInteractionState(); UpdateEmptyState(); Changed?.Invoke(this, EventArgs.Empty); };
         StartCompositionOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
         ScriptPane.OutputRequested += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
-        AutoZeroPartitionsBox.IsCheckedChanged += (_, _) => { UpdateMode(); Changed?.Invoke(this, EventArgs.Empty); };
+        AutoZeroPartitionsBox.IsCheckedChanged += (_, _) => { Model.AutoZero = AutoZeroPartitionsBox.IsChecked == true; UpdateMode(); Changed?.Invoke(this, EventArgs.Empty); };
         ZeroPartitionNameBox.TextChanged += (_, _) => UpdateAddPartitionButton();
         SizeChanged += (_, _) => UpdateCompositionLayout();
         InitializeImageDragging();
@@ -113,8 +120,12 @@ public partial class DeliveryCompositionView : UserControl
         UpdateInteractionState();
     }
 
-    internal void SetImages(IReadOnlyList<PackImageSelection> images) => Model.SelectSources(images.Select(i => new DeliveryFile
-    { SourcePath = i.FilePath, FileName = Path.GetFileName(i.FilePath), Partition = Path.GetFileNameWithoutExtension(i.FilePath), SourceGroup = i.GroupName, SourceLength = i.SizeBytes }).ToArray());
+    internal void SetImages(IReadOnlyList<PackImageSelection> images)
+    {
+        Model.SelectSources(images.Select(i => new DeliveryFile
+        { SourcePath = i.FilePath, FileName = Path.GetFileName(i.FilePath), Partition = Path.GetFileNameWithoutExtension(i.FilePath), SourceGroup = i.GroupName, SourceLength = i.SizeBytes }).ToArray());
+        foreach (var image in images) Model.ApplySourcePartitions(image.FilePath, image.DynamicPartitions);
+    }
 
     internal void SetRunning(bool running, double progress)
     {

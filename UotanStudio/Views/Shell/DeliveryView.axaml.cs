@@ -57,8 +57,6 @@ public partial class DeliveryView : UserControl
         SuperAbBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         SuperSettingsProjectBox.SelectionChanged += (_, _) => ApplySourceSettings();
         SuperAOnlyBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
-        ForceFullSuperImageBox.IsCheckedChanged += OnSuperImageOptionChanged;
-        GenerateSuperEmptyBox.IsCheckedChanged += OnSuperImageOptionChanged;
         ImageSelection.SelectedImagesChanged += (_, _) => UpdateCompositionImages();
         ImageSelection.LayoutChanged += (_, _) => UpdateImagesLayout();
         DeliveryContent.SizeChanged += (_, _) => UpdateImagesColumnMinimums();
@@ -210,7 +208,6 @@ public partial class DeliveryView : UserControl
         SuperMetadataSizeBox.Text = "65536";
         SuperBlockSizeBox.Text = "4096";
         SuperMetadataSlotsBox.Text = "3";
-        ForceFullSuperImageBox.IsChecked = true;
         GenerateSuperEmptyBox.IsChecked = false;
         PayloadVersionBox.Text = "2";
         PayloadMinorVersionBox.Text = "0";
@@ -233,16 +230,24 @@ public partial class DeliveryView : UserControl
             SuperMetadataSlotsBox.Text = ReferenceEquals(sender, SuperVabBox) ? "3" : "2";
     }
 
-    private void OnSuperImageOptionChanged(object? sender, RoutedEventArgs e)
-    {
-        if (sender is not CheckBox { IsChecked: true }) return;
-        if (ReferenceEquals(sender, ForceFullSuperImageBox)) GenerateSuperEmptyBox.IsChecked = false;
-        else if (ReferenceEquals(sender, GenerateSuperEmptyBox)) ForceFullSuperImageBox.IsChecked = false;
-    }
-
     private void UpdateProjectSuperSelector()
     {
-        SuperSettingsProjectBox.IsEnabled = UseProjectSuperSettingsBox.IsChecked == true && SuperSettingsProjectBox.Items.Count > 0;
+        // 勾选使用项目 Super/Payload 设置且存在可选项目时，仅禁用由项目配置驱动的表单字段，避免用户覆盖项目值；
+        // 底部镜像选项（压缩为ZST、生成Super_Empty）不属于项目配置驱动字段，保持可交互。
+        // While a source configuration is applied, only the fields it drives are disabled so the project values
+        // cannot be overridden; the image options (ZST, Super_Empty) are not project-driven and stay interactive.
+        var applied = UseProjectSuperSettingsBox.IsChecked == true && SuperSettingsProjectBox.Items.Count > 0;
+        SuperSettingsProjectBox.IsEnabled = applied;
+        SuperFormatOptions.IsEnabled = !applied;
+        SuperDeviceTypeOptions.IsEnabled = !applied;
+        SuperDeviceNameField.IsEnabled = !applied;
+        SuperBlockSizeField.IsEnabled = !applied;
+        SuperMetadataSizeField.IsEnabled = !applied;
+        SuperSizeField.IsEnabled = !applied;
+        SuperGroupNameField.IsEnabled = !applied;
+        SuperMetadataSlotsField.IsEnabled = !applied;
+        PayloadTimestampBox.IsEnabled = !applied;
+        PayloadSecurityPatchBox.IsEnabled = !applied;
         ApplySourceSettings();
     }
 

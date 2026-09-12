@@ -25,7 +25,8 @@ internal static class DeliverySuperBuilder
     }
 
     internal static Task BuildAsync(IReadOnlyList<DeliveryFile> files, DeliverySuperOptions options, string output,
-        IProgress<double>? progress = null, CancellationToken token = default) => Task.Run(() =>
+        IProgress<double>? progress = null, CancellationToken token = default,
+        IProgress<DeliveryProgress>? detailProgress = null) => Task.Run(() =>
     {
         if (options.DeviceSize > long.MaxValue) throw new InvalidDataException("Super size exceeds stream limits.");
         var partitions = ExpandPartitions(files, options);
@@ -40,7 +41,7 @@ internal static class DeliverySuperBuilder
             long length = 0;
             if (file.SourcePath.Length > 0 && !options.Empty)
             {
-                DeliveryValidation.CheckSource(file);
+                DeliveryValidation.CheckSource(file, options.AutoZero && file.Partition.EndsWith("_b", StringComparison.Ordinal));
                 using var source = SparseReader.ImportAuto(file.SourcePath);
                 length = checked((long)source.Header.TotalBlocks * source.Header.BlockSize);
             }
@@ -72,6 +73,7 @@ internal static class DeliverySuperBuilder
                     MetadataWriter.WriteToImageStream(stream, metadata);
                     long done = 0;
                     var total = lengths.Sum();
+                    detailProgress?.Report(new(0, "Building Super", (0, total), "Delivery_ProgressSuper"));
                     for (var i = 0; i < partitions.Count; i++)
                     {
                         token.ThrowIfCancellationRequested();
@@ -81,10 +83,16 @@ internal static class DeliverySuperBuilder
                         stream.Position = checked((long)extent.TargetData * 512);
                         using var source = SparseReader.ImportAuto(partitions[i].SourcePath);
                         using var bounded = new CountingWriteStream(stream, lengths[i], true, token);
-                        using var tracked = new DeliveryWriteProgressStream(bounded, value => progress?.Report((done + value) * 75.0 / Math.Max(1, total)), token);
+                        using var tracked = new DeliveryWriteProgressStream(bounded, value =>
+                        {
+                            var percent = (done + value) * 75.0 / Math.Max(1, total);
+                            progress?.Report(percent);
+                            detailProgress?.Report(new(percent, "Building Super", (done + value, total), "Delivery_ProgressSuper"));
+                        }, token);
                         source.WriteRawToStream(tracked);
                         if (bounded.BytesWritten != lengths[i]) throw new InvalidDataException("Partition size changed during build.");
                         done += lengths[i];
+                        detailProgress?.Report(new(done * 75.0 / Math.Max(1, total), "Building Super", (done, total), "Delivery_ProgressSuper"));
                     }
                 }
                 if (options.Sparse)
@@ -92,7 +100,12 @@ internal static class DeliverySuperBuilder
                     using var input = File.OpenRead(raw);
                     using var destination = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write);
                     using var tracked = new DeliveryWriteProgressStream(destination,
-                        value => progress?.Report(75 + Math.Min(24, value * 24.0 / (double)options.DeviceSize)), token);
+                        value =>
+                        {
+                            var percent = 75 + input.Position * 24.0 / Math.Max(1, input.Length);
+                            progress?.Report(percent);
+                            detailProgress?.Report(new(percent, "Converting Sparse", (input.Position, input.Length), "Delivery_ProgressSparse"));
+                        }, token);
                     SparseImageConverter.ConvertRawToSparse(input, tracked, options.BlockSize, input.Length);
                 }
                 else File.Move(raw, temporary);
@@ -100,6 +113,7 @@ internal static class DeliverySuperBuilder
             token.ThrowIfCancellationRequested();
             File.Move(temporary, output, false);
             progress?.Report(100);
+            detailProgress?.Report(new(100, "Building Super", Stage: "Delivery_ProgressSuper"));
         }
         finally { File.Delete(raw); File.Delete(temporary); }
     }, token);

@@ -16,6 +16,8 @@ internal sealed record DeliveryFile
     public long? SourceLength { get; init; }
     public bool IncludeInSuper { get; init; }
     public bool Fastbootd { get; init; }
+    /// <summary><para>自动添加的零大小分区条目（VAB B 槽伴随），不可编辑且豁免空镜像检查。</para>Auto-added zero-size partition (VAB B-slot companion); read-only and exempt from the empty-image check.</summary>
+    public bool AutoZero { get; init; }
 }
 
 /// <summary>Payload options and selected signing identity; legacy unsupported inputs remain explicit.</summary>
@@ -128,6 +130,9 @@ internal static class DeliveryPlanStore
             || plan.Scripts.Any(p => p.Value is null) || plan.LocalZstd.Any(p => p.Value is null)
             || plan.Files.Concat(plan.Container).Any(f => f is null || f.SourcePath is null || f.FileName is null || f.Partition is null || f.SourceGroup is null))
             throw new InvalidDataException("Invalid delivery plan.");
+        if (plan.PackPayload)
+            plan = plan with { Files = plan.Files.Select(f => f.Generated && f.Partition == "payload"
+                ? f with { FileName = "ota.zip" } : f).ToList() };
         return Rebase(plan, path => Path.GetFullPath(path, root));
     }
 

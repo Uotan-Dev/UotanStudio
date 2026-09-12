@@ -34,7 +34,7 @@ internal static partial class DeliveryScriptGenerator
                         result.Add("flash-" + Path.GetFileNameWithoutExtension(alternative.FileName) + ".txt", Txt(variant));
                     }
         }
-        if (plan.Recovery) result.Add("Recovery.sh", DeliveryPackageBuilder.RecoveryScript(plan));
+        if (plan.Recovery && !plan.PackPayload) result.Add("Recovery.sh", DeliveryPackageBuilder.RecoveryScript(plan));
         if (plan.Windows) result.Add("FlashWindows.bat", Batch(plan, groups));
         if (plan.Linux) result.Add("FlashLinux.sh", Shell(plan, groups, "Linux"));
         if (plan.MacOS) result.Add("FlashMacOS.sh", Shell(plan, groups, "macOS"));

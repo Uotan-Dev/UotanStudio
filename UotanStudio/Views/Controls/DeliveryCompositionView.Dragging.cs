@@ -33,7 +33,7 @@ public partial class DeliveryCompositionView
         if (!e.GetCurrentPoint(OrderedImages).Properties.IsLeftButtonPressed || e.Source is not Visual source) return;
         var ancestors = source.GetVisualAncestors().Prepend(source).TakeWhile(visual => visual != OrderedImages).ToArray();
         if (ancestors.Any(visual => visual is Button or CheckBox or TextBox) ||
-            ancestors.OfType<ListBoxItem>().FirstOrDefault()?.DataContext is not DeliveryImageItem item) return;
+            ancestors.OfType<ListBoxItem>().FirstOrDefault()?.DataContext is not DeliveryImageItem item || item.IsAutoZero) return;
         CancelImageDrag();
         _draggedImage = item;
         _dragStart = _dragPosition = e.GetPosition(OrderedImages);
@@ -121,7 +121,7 @@ public partial class DeliveryCompositionView
             e.Handled = true;
         }
         else if (e.KeyModifiers == KeyModifiers.Alt && e.Key is Key.Up or Key.Down &&
-                 OrderedImages.SelectedItem is DeliveryImageItem selected)
+                 OrderedImages.SelectedItem is DeliveryImageItem { IsAutoZero: false } selected)
         {
             var from = ActiveImages.IndexOf(selected);
             var to = from + (e.Key == Key.Up ? -1 : 1);

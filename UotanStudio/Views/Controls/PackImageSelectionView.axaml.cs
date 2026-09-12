@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
+using UotanStudio.Services.Delivery;
 
 namespace UotanStudio.Views.Controls;
 
@@ -109,10 +110,12 @@ public partial class PackImageSelectionView : UserControl
             var externalEntries = _groups.Where(group => group.IsExternal).SelectMany(group => group.Entries).ToArray();
             var discovered = await Task.Run(() => (Projects: projects.Select(project =>
             {
-                token.ThrowIfCancellationRequested();
+                // 取消作为常规流程（切换页面）应提前终止而非抛异常，避免产生 OperationCanceledException。
+                // Cancellation stops the refresh early instead of throwing, since page switching cancels it routinely.
+                if (token.IsCancellationRequested) return default;
                 return (project.Name, Output: EnumerateImages(project.OutputDir, token),
-                    Original: EnumerateImages(project.ImagesDir, token));
-            }).ToArray(), External: externalEntries.Select(entry => PackImageFileInfo.Read(entry.FilePath, token)).ToArray()), token);
+                    Original: EnumerateImages(project.ImagesDir, token), DynamicPartitions: DeliveryDynamicPartitions.Read(project.RootPath));
+            }).ToArray(), External: externalEntries.Select(entry => PackImageFileInfo.Read(entry.FilePath)).ToArray()), token);
             if (!_attached || token.IsCancellationRequested) return;
             var previous = _groups.Where(group => !group.IsExternal).ToArray();
             var entries = previous.SelectMany(group => group.Entries)
@@ -122,7 +125,7 @@ public partial class PackImageSelectionView : UserControl
             foreach (var project in discovered.Projects)
                 _groups.Insert(index++, ObserveGroup(new PackImageGroup(project.Name,
                     project.Output.Select(path => GetEntry(path, false))
-                        .Concat(project.Original.Select(path => GetEntry(path, true))))));
+                        .Concat(project.Original.Select(path => GetEntry(path, true)))) { DynamicPartitions = project.DynamicPartitions }));
             for (var externalIndex = 0; externalIndex < externalEntries.Length; externalIndex++)
                 externalEntries[externalIndex].UpdateFileInfo(discovered.External[externalIndex]);
             ApplyGroupOptions();
@@ -162,14 +165,14 @@ public partial class PackImageSelectionView : UserControl
     private static PackImageFileInfo[] EnumerateImages(string directory, CancellationToken token)
     {
         if (!Directory.Exists(directory)) return [];
-        return Directory.EnumerateFiles(directory).Where(path =>
-        {
-            token.ThrowIfCancellationRequested();
-            return Path.GetExtension(path).ToLowerInvariant() is
+        // 页面切换取消枚举时提前终止，不抛取消异常；过期结果由调用方按 token 状态丢弃。
+        // Cancellation stops the enumeration early without throwing; stale results are discarded by the caller.
+        return Directory.EnumerateFiles(directory).TakeWhile(_ => !token.IsCancellationRequested)
+            .Where(path => Path.GetExtension(path).ToLowerInvariant() is
                 ".img" or ".bin" or ".raw" or ".simg" or ".sparse" or ".ext4" or ".erofs" or ".f2fs"
-                or ".dat" or ".br" or ".zst" or ".dtb" or ".dtbo";
-        }).OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-            .Select(path => PackImageFileInfo.Read(path, token)).ToArray();
+                or ".dat" or ".br" or ".zst" or ".dtb" or ".dtbo")
+            .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+            .Select(PackImageFileInfo.Read).ToArray();
     }
 
     private void ApplyGroupOptions()
@@ -279,7 +282,7 @@ public partial class PackImageSelectionView : UserControl
             var paths = files.Select(file => file.TryGetLocalPath()).OfType<string>()
                 .Distinct(PathComparer).Where(path => !existing.Contains(path)).ToArray();
             if (paths.Length == 0) return;
-            var fileInfo = await Task.Run(() => paths.Select(path => PackImageFileInfo.Read(path, CancellationToken.None)).ToArray());
+            var fileInfo = await Task.Run(() => paths.Select(PackImageFileInfo.Read).ToArray());
             if (!_attached || solutionPath != ProjectContextService.Instance.CurrentSolutionPath || _groups.Count >= 3) return;
             var name = string.Format(LanguageService.Instance.GetString("PackDialog_ExtraImages"), ++_externalGroupNumber);
             _groups.Add(ObserveGroup(new PackImageGroup(name, fileInfo.Select(info =>
@@ -332,7 +335,7 @@ public partial class PackImageSelectionView : UserControl
             _groups.Add(ObserveGroup(new PackImageGroup(name, missing.Select(path =>
             {
                 var entry = new PackImageEntry(path);
-                entry.UpdateFileInfo(PackImageFileInfo.Read(path, CancellationToken.None));
+                entry.UpdateFileInfo(PackImageFileInfo.Read(path));
                 return entry;
             }), isExternal: true)));
             ApplyGroupOptions(); UpdatePageSize(); RenderGroups();
@@ -342,5 +345,5 @@ public partial class PackImageSelectionView : UserControl
 
     internal PackImageSelection[] GetSelectedImages() => _groups.SelectMany(group =>
         group.Entries.Where(image => image.IsSelected).Select(image => new PackImageSelection(group.Name, image.FilePath)
-            { SizeBytes = image.SizeBytes })).ToArray();
+            { SizeBytes = image.SizeBytes, DynamicPartitions = group.DynamicPartitions })).ToArray();
 }

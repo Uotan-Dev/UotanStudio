@@ -8,6 +8,7 @@ using Avalonia.Platform.Storage;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Shell;
 
@@ -30,6 +31,11 @@ public partial class DeliveryView
         Composition.ReadOptions = ReadDeliverySuperOptions;
         Composition.Changed += (_, _) => QueueDeliveryChange();
         Composition.OutputView.Changed += (_, _) => QueueDeliveryChange();
+        Composition.OutputView.GenerateRequested += async (_, _) => await GenerateScriptsAsync();
+        Composition.OutputView.SaveRequested += async (_, _) =>
+        {
+            if (_deliveryCancellation is null) await SaveDeliveryAsync(true);
+        };
         Composition.OutputRequested += async (_, _) => await RunDeliveryAsync();
         Composition.OperationFailed += async (_, error) => await ShowDeliveryMessageAsync(error.Message, true);
         Composition.Model.PropertyChanged += (_, e) =>
@@ -42,8 +48,18 @@ public partial class DeliveryView
                      DynamicPartitionsFileBox, PayloadSignatureBox, PayloadPostinstallBox, PayloadTimestampBox, PayloadSecurityPatchBox })
             box.TextChanged += (_, _) => QueueDeliveryChange();
         foreach (var box in new ToggleButton[] { DirectOutputBox, PackSuperBox, PackPayloadBox, SuperRawBox, SuperSparseBox,
-                     SuperZstdBox, SuperVabBox, SuperAbBox, SuperAOnlyBox, ForceFullSuperImageBox, GenerateSuperEmptyBox })
+                     SuperZstdBox, SuperVabBox, SuperAbBox, SuperAOnlyBox, GenerateSuperEmptyBox })
             box.IsCheckedChanged += (_, _) => QueueDeliveryChange();
+        // 压缩为ZST 与 仅生成Super_Empty 互斥：勾选其一自动取消另一项。
+        // ZST compression and Super_Empty-only are mutually exclusive; checking one clears the other.
+        SuperZstdBox.IsCheckedChanged += (_, _) =>
+        {
+            if (SuperZstdBox.IsChecked == true && GenerateSuperEmptyBox.IsChecked == true) GenerateSuperEmptyBox.IsChecked = false;
+        };
+        GenerateSuperEmptyBox.IsCheckedChanged += (_, _) =>
+        {
+            if (GenerateSuperEmptyBox.IsChecked == true && SuperZstdBox.IsChecked == true) SuperZstdBox.IsChecked = false;
+        };
         GenerateDynamicPartitionsButton.IsEnabled = true;
         GenerateDynamicPartitionsButton.Click += async (_, _) => await GenerateDynamicPartitionsAsync();
         _deliverySaveTimer.Tick += async (_, _) => { _deliverySaveTimer.Stop(); await SaveDeliveryAsync(false); };
@@ -54,10 +70,33 @@ public partial class DeliveryView
         };
     }
 
+    private bool _generatingScripts;
+
+    internal async Task GenerateScriptsAsync()
+    {
+        if (_generatingScripts || _deliveryCancellation is not null || _restoringDelivery) return;
+        _generatingScripts = true;
+        var root = _deliveryRoot;
+        try
+        {
+            var plan = CaptureDeliveryPlan();
+            if (!Composition.OutputView.SynchronizeScripts(plan, force: true))
+            {
+                if (TopLevel.GetTopLevel(this) is not Window owner || !await DialogService.ConfirmAsync(owner,
+                        LanguageService.Instance.GetString("Tab_Delivery"),
+                        LanguageService.Instance.GetString("Delivery_ReplaceEditedScripts"))) return;
+                if (root != _deliveryRoot || _restoringDelivery || _deliveryCancellation is not null) return;
+                Composition.OutputView.SynchronizeScripts(CaptureDeliveryPlan(), replaceModified: true, force: true);
+            }
+            QueueDeliveryChange();
+            await SaveDeliveryAsync(false);
+        }
+        catch (Exception ex) { await ShowDeliveryMessageAsync(ex.Message, true); }
+        finally { _generatingScripts = false; }
+    }
+
     private DeliverySuperOptions ReadDeliverySuperOptions()
     {
-        if (PackSuperBox.IsChecked == true && ForceFullSuperImageBox.IsChecked != true && GenerateSuperEmptyBox.IsChecked != true)
-            throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_SelectSuperImageType"));
         static uint Number(string? text, string name) => uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
             ? value : throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_InvalidParameter", LanguageService.Instance.GetString(name)));
         if (!ulong.TryParse(SuperSizeBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var size))
@@ -202,7 +241,11 @@ public partial class DeliveryView
                 return;
             }
             await PersistDeliveryAsync(root, CaptureDeliveryPlan());
-            if (report) LogService.Instance.Write(LogLevel.Info, "Delivery", LanguageService.Instance.GetString("Delivery_PlanSaved"));
+            if (report)
+            {
+                Composition.Model.Status = LanguageService.Instance.GetString("Delivery_PlanSaved");
+                LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
+            }
         }
         catch (Exception ex)
         {
@@ -276,7 +319,7 @@ public partial class DeliveryView
             SuperMetadataSlotsBox.Text = plan.Super.Slots.ToString(CultureInfo.InvariantCulture);
             UpdateDeviceTypeOptions();
             SuperRawBox.IsChecked = !plan.Super.Sparse; SuperSparseBox.IsChecked = plan.Super.Sparse;
-            GenerateSuperEmptyBox.IsChecked = plan.Super.Empty; ForceFullSuperImageBox.IsChecked = !plan.Super.Empty;
+            GenerateSuperEmptyBox.IsChecked = plan.Super.Empty;
             Composition.AutoZero = plan.Super.AutoZero;
             Composition.Model.Reset(plan); Composition.OutputView.Restore(plan);
         }
@@ -288,6 +331,8 @@ public partial class DeliveryView
         if (_deliveryCancellation is not null) { _deliveryCancellation.Cancel(); return; }
         using var cancellation = new CancellationTokenSource();
         _deliveryCancellation = cancellation; _deliveryCompletion = new();
+        Composition.Model.ResetProgressStatistics();
+        var acceptingProgress = true;
         var root = _deliveryRoot;
         try
         {
@@ -305,16 +350,48 @@ public partial class DeliveryView
                 Composition.OutputView.SynchronizeScripts(CaptureDeliveryPlan(), true);
             }
             plan = CaptureDeliveryPlan();
+            // 输出前的磁盘剩余空间预估；估算本身出错不阻塞输出。
+            // Disk space pre-check before exporting; an estimation failure never blocks the export.
+            await CheckDeliveryDiskSpaceAsync(plan);
+            // 提前分析已存在的输出文件，弹窗提示冲突并列出文件名（过多时只报数量）；
+            // 是=覆盖全部冲突文件，否=保留原文件。
+            // Scan existing output files in advance and ask via a yes/no dialog whether to overwrite them
+            // all; the message lists the conflicting names, or just the count when there are too many.
+            IReadOnlySet<string>? overwrite = null;
+            if (!string.IsNullOrWhiteSpace(plan.OutputDirectory))
+            {
+                var existing = DeliveryOutputService.FindExistingOutputs(plan);
+                if (existing.Length > 0 && TopLevel.GetTopLevel(this) is Window owner)
+                {
+                    var language = LanguageService.Instance;
+                    const int maxListed = 10;
+                    var listed = existing.Take(maxListed).Select(path => Path.GetRelativePath(plan.OutputDirectory, path)).ToArray();
+                    var message = language.GetString("Delivery_OverwritePrompt") + "\n" + string.Join("\n", listed);
+                    if (existing.Length > maxListed)
+                        message += "\n" + string.Format(language.GetString("Delivery_OverwriteMore"), existing.Length - maxListed);
+                    var overwriteAll = await DialogService.ConfirmYesNoAsync(owner, language.GetString("Delivery_OverwriteTitle"), message,
+                        language.GetString("Explorer_Yes"), language.GetString("Explorer_No"));
+                    // A project transition may have cancelled the operation while the dialog was open.
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    if (root != _deliveryRoot) return;
+                    var comparison = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+                    overwrite = overwriteAll ? existing.ToHashSet(comparison) : new HashSet<string>(comparison);
+                }
+            }
             if (root is not null) await PersistDeliveryAsync(root, plan);
             Composition.SetRunning(true, 0); SidebarForm.IsEnabled = false; ImageSelection.IsEnabled = false;
             var progress = new Progress<DeliveryProgress>(value =>
             {
-                if (!ReferenceEquals(_deliveryCancellation, cancellation) || root != _deliveryRoot) return;
-                Composition.Model.Status = value.Message; Composition.SetRunning(true, value.Percent);
+                if (!acceptingProgress || !ReferenceEquals(_deliveryCancellation, cancellation) || root != _deliveryRoot) return;
+                Composition.Model.ReportProgress(value);
+                Composition.SetRunning(true, Composition.Model.Progress);
             });
             var service = new DeliveryOutputService(new DeliveryToolService(DeliveryHttp,
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "delivery-tools")));
-            var outputs = await service.ExportAsync(plan, progress, cancellation.Token);
+            var outputs = await service.ExportAsync(plan, progress, cancellation.Token, overwrite);
+            acceptingProgress = false;
+            Composition.Model.ResetProgressStatistics();
+            Composition.SetRunning(true, 100);
             Composition.Model.Status = LanguageService.Instance.GetString("Delivery_OutputComplete", outputs.Length, plan.OutputDirectory);
             LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
             if (showCompletion && _attached && root == ProjectContextService.Instance.RootDirectory)
@@ -322,16 +399,52 @@ public partial class DeliveryView
         }
         catch (OperationCanceledException)
         {
+            acceptingProgress = false;
             Composition.Model.Status = LanguageService.Instance.GetString("Delivery_OutputCancelled");
             LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
         }
-        catch (Exception ex) { await ShowDeliveryMessageAsync(ex.Message, true); }
+        catch (Exception ex)
+        {
+            acceptingProgress = false;
+            await ShowDeliveryMessageAsync(ex.Message, true);
+        }
         finally
         {
             _deliveryCancellation = null;
+            Composition.Model.ResetProgressStatistics();
             Composition.SetRunning(false, Composition.Model.Progress);
             SidebarForm.IsEnabled = true; ImageSelection.IsEnabled = true;
             _deliveryCompletion!.TrySetResult(); _deliveryCompletion = null;
+        }
+    }
+
+    /// <summary><para>输出前预估磁盘需求并对比剩余空间；不足时弹确认框，用户取消则中断输出。</para>
+    /// Estimates disk demand before the export and compares it with free space; on shortage the user is
+    /// asked to confirm, and declining aborts the export.</summary>
+    private async Task CheckDeliveryDiskSpaceAsync(DeliveryPlan plan)
+    {
+        try
+        {
+            var outputDirectory = plan.OutputDirectory;
+            if (string.IsNullOrWhiteSpace(outputDirectory)) return;
+            // 需求按交付计划估算：源镜像 + 生成的 Super/Payload + 工具，乘安全系数。
+            // Demand is estimated from the plan: source images + generated Super/Payload + tools, times the safety factor.
+            var required = DiskSpaceEstimator.EstimateExportDemand(plan);
+            if (required <= 0) return;
+            var free = DiskSpaceEstimator.GetFreeBytes(outputDirectory);
+            if (free < 0 || free >= required) return;
+            var language = LanguageService.Instance;
+            var message = string.Format(language.GetString("Delivery_DiskSpaceWarning"),
+                ProgressMeter.FormatSize(free), ProgressMeter.FormatSize(required));
+            if (TopLevel.GetTopLevel(this) is not Window owner || !await DialogService.ConfirmAsync(owner,
+                    language.GetString("Delivery_DiskSpaceTitle"), message,
+                    language.GetString("Delivery_DiskSpaceContinue"), language.GetString("Delivery_DiskSpaceCancel")))
+                throw new OperationCanceledException(language.GetString("Delivery_OutputCancelled"));
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Delivery", $"Disk space estimation failed: {ex.Message}");
         }
     }
 

@@ -37,6 +37,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         if (plan.MacOS) platforms.Add(("macOS", MacOS));
         foreach (var (name, package) in platforms)
         {
+            progress?.Report(new(75, "Preparing tools", Stage: "Delivery_ProgressTools", Detail: name));
             var target = Path.Combine(directory, "bin", name);
             var archive = await AcquireAsync(package, progress, token).ConfigureAwait(false);
             await ExtractAsync(archive, package.Prefix, target, token).ConfigureAwait(false);
@@ -87,7 +88,7 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
                             await output.WriteAsync(buffer.AsMemory(0, count), timeout.Token).ConfigureAwait(false);
                             if (Environment.TickCount64 - last >= 100)
                             {
-                                progress?.Report(new(80, $"下载工具 / Downloading {package.Name}: {readTotal / 1024:N0} KiB"));
+                                progress?.Report(new(80, "Downloading tools", (readTotal, length ?? 0), "Delivery_ProgressDownload", Detail: package.Name));
                                 last = Environment.TickCount64;
                             }
                         }

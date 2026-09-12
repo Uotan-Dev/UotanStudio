@@ -9,6 +9,8 @@ public sealed record PackImageSelection(string GroupName, string FilePath)
 {
     /// <summary><para>实际文件大小；无法读取时为空。</para>Actual file size, or null when unavailable.</summary>
     public long? SizeBytes { get; init; }
+    /// <summary>Logical partition names from this source project; null when no source metadata exists.</summary>
+    public IReadOnlySet<string>? DynamicPartitions { get; init; }
 }
 
 internal sealed partial class PackImageEntry(string filePath, bool isOriginal = false) : ObservableObject
@@ -35,6 +37,7 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
 
     public string Name { get; }
     public bool IsExternal { get; }
+    internal IReadOnlySet<string>? DynamicPartitions { get; init; }
     public ObservableCollection<PackImageEntry> Images { get; } = [];
     public bool HasImages => Images.Count > 0;
     public bool HasSelectableImages => Images.Any(entry => !entry.IsSelectionReadOnly);

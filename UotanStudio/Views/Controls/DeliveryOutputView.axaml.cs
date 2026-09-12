@@ -38,6 +38,8 @@ public partial class DeliveryOutputView : UserControl
     private string _fingerprint = "";
     internal event EventHandler? Changed;
     internal event EventHandler? OutputRequested;
+    internal event EventHandler? GenerateRequested;
+    internal event EventHandler? SaveRequested;
     internal bool RecoveryRequested => RecoveryScriptBox.IsChecked == true;
     private readonly ObservableCollection<DeliveryScriptDocument> _documents = [];
     private DeliveryScriptDocument? _activeDocument;
@@ -59,6 +61,8 @@ public partial class DeliveryOutputView : UserControl
             OutputImagesExpander.IsExpanded = false;
         };
         StartOutputButton.Click += (_, _) => OutputRequested?.Invoke(this, EventArgs.Empty);
+        GenerateScriptButton.Click += (_, _) => GenerateRequested?.Invoke(this, EventArgs.Empty);
+        SaveDocumentButton.Click += (_, _) => SaveRequested?.Invoke(this, EventArgs.Empty);
         foreach (var box in new[] { TxtScriptBox, BatchShellScriptBox, RecoveryScriptBox })
             box.IsCheckedChanged += (_, _) => NotifyChanged();
         DeviceCodenameBox.TextChanged += (_, _) => NotifyChanged();
@@ -94,6 +98,10 @@ public partial class DeliveryOutputView : UserControl
     private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DeliveryViewModel.PackPayload)) ResetScriptOptions();
+        OutputStatusText.Text = _model?.ProgressText;
+        OutputStatusText.IsVisible = !string.IsNullOrEmpty(OutputStatusText.Text);
+        OutputStatsText.Text = _model?.ProgressStats;
+        OutputStatsText.IsVisible = !string.IsNullOrEmpty(OutputStatsText.Text);
     }
 
     private void ResetScriptOptions()
@@ -125,7 +133,7 @@ public partial class DeliveryOutputView : UserControl
         var files = _model!.Output.Select(i => i.Snapshot()).ToList();
         return plan with
         {
-            Package = new(),
+            Package = new() { Ota = plan.PackPayload },
             Files = files, Recovery = RecoveryScriptBox.IsChecked == true, Txt = TxtScriptBox.IsChecked == true, TxtVariants = true,
             Windows = BatchShellScriptBox.IsChecked == true, Linux = BatchShellScriptBox.IsChecked == true, MacOS = BatchShellScriptBox.IsChecked == true,
             AskWipe = false, Reboot = false,
@@ -139,10 +147,10 @@ public partial class DeliveryOutputView : UserControl
             ScriptCarets = _allDocuments.ToDictionary(p => p.Key, p => p.Value.CaretOffset)
         };
     }
-    internal bool SynchronizeScripts(DeliveryPlan plan, bool replaceModified = false)
+    internal bool SynchronizeScripts(DeliveryPlan plan, bool replaceModified = false, bool force = false)
     {
         var fingerprint = DeliveryScriptGenerator.Fingerprint(plan);
-        if (_fingerprint == fingerprint) return true;
+        if (_fingerprint == fingerprint && !force) return true;
         var generated = DeliveryScriptGenerator.Generate(plan);
         if (!replaceModified && (_allDocuments.Values.Any(d => d.Modified)
             || generated.Keys.Any(name => _allDocuments.TryGetValue(name, out var doc) && doc.Baseline is null && doc.Document.TextLength > 0))) return false;

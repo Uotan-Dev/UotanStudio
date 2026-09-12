@@ -23,7 +23,6 @@
     <x:String x:Key="Delivery_SdkLevel">SDK等级</x:String>
     <x:String x:Key="Delivery_MaxTimestamp">最大时间戳</x:String>
     <x:String x:Key="Delivery_SecurityPatch">安全补丁日期</x:String>
-    <x:String x:Key="Delivery_SelectSuperImageType">请选择完整 Super 或 Super_Empty 镜像。</x:String>
     <x:String x:Key="Delivery_InvalidParameter">参数无效：{0}</x:String>
     <x:String x:Key="Delivery_InvalidSuperSize">Super 大小无效。</x:String>
     <x:String x:Key="Delivery_InvalidPayloadVersion">Payload 版本无效。</x:String>
@@ -38,12 +37,11 @@
     <x:String x:Key="Delivery_AddPartitionsFirst">请先添加分区镜像。</x:String>
     <x:String x:Key="Delivery_InvalidPartition">分区名无效或重复。</x:String>
     <x:String x:Key="Delivery_MetadataSlots">元数据槽位</x:String>
-    <x:String x:Key="Delivery_ForceFullImage">强制生成完整镜像</x:String>
     <x:String x:Key="Delivery_PackSuper">打包 Super</x:String>
     <x:String x:Key="Delivery_SuperFormat">Super格式</x:String>
     <x:String x:Key="Delivery_SuperSize">Super大小</x:String>
     <x:String x:Key="Delivery_SuperGroupName">Super簇名</x:String>
-    <x:String x:Key="Delivery_GenerateSuperEmpty">生成Super_Empty</x:String>
+    <x:String x:Key="Delivery_GenerateSuperEmpty">仅生成Super_Empty</x:String>
     <x:String x:Key="Delivery_PayloadVersion">Payload版本</x:String>
     <x:String x:Key="Delivery_PayloadMinorVersion">次版本</x:String>
     <x:String x:Key="Delivery_DynamicPartitionsFile">动态分区文件</x:String>
@@ -131,7 +129,7 @@
     <x:String x:Key="PackDialog_Confirm">确认</x:String>
     <x:String x:Key="ImageView_ImportHint">将镜像导入项目 images/ 目录</x:String>
     <x:String x:Key="ImageView_ExportHint">将选中镜像导出到外部路径</x:String>
-    <x:String x:Key="ImageView_ExtractHint">将选中镜像分解到 intermediate/</x:String>
+    <x:String x:Key="ImageView_ExtractHint">将选中镜像解包到对应目录</x:String>
     <x:String x:Key="ImageView_SuperHint">由项目内 raw/sparse 镜像合成 super 镜像</x:String>
     <x:String x:Key="ImageView_DatHint">生成 .new.dat 与 .transfer.list（Android v4）</x:String>
     <x:String x:Key="ImageView_NoSelection">未选中镜像</x:String>
@@ -275,5 +273,38 @@
     <x:String x:Key="Compare_HexRaw">十六进制原始数据</x:String>
     <x:String x:Key="Compare_Metadata">元数据</x:String>
     <x:String x:Key="Compare_Unrecognized">无法识别的固件格式</x:String>
+
+    <x:String x:Key="Progress_ItemsStats">{0} / {1} 项 · {2} · 剩余 {3}</x:String>
+    <x:String x:Key="Progress_ItemsStatsNoEta">{0} / {1} 项 · {2}</x:String>
+    <x:String x:Key="Progress_StatusPercent">{0} · {1:0.#}%</x:String>
+    <x:String x:Key="Image_FsStageFile">{0}：{1}</x:String>
+    <x:String x:Key="Image_FsPreparing">正在准备源镜像</x:String>
+    <x:String x:Key="Image_FsExtracting">正在解包</x:String>
+    <x:String x:Key="Image_FsPreserving">正在保存原始镜像</x:String>
+    <x:String x:Key="Image_FsVerifyingImage">正在校验原始镜像</x:String>
+    <x:String x:Key="Image_FsVerifyingFiles">正在校验解包文件</x:String>
+    <x:String x:Key="Image_FsReadingMetadata">正在读取文件属性</x:String>
+    <x:String x:Key="Progress_ProcessedStats">已处理 {0} · {2}</x:String>
+    <x:String x:Key="Delivery_ProgressChecking">正在检查输入</x:String>
+    <x:String x:Key="Delivery_ProgressSuper">正在构建 Super</x:String>
+    <x:String x:Key="Delivery_ProgressSparse">正在转换 Sparse</x:String>
+    <x:String x:Key="Delivery_ProgressCompress">正在压缩 Super</x:String>
+    <x:String x:Key="Delivery_ProgressCopy">正在复制镜像</x:String>
+    <x:String x:Key="Delivery_ProgressPayloadPrepare">正在准备 Payload 分区</x:String>
+    <x:String x:Key="Delivery_ProgressPayloadWrite">正在写入 Payload</x:String>
+    <x:String x:Key="Delivery_ProgressTools">正在准备刷写工具</x:String>
+    <x:String x:Key="Delivery_ProgressDownload">正在下载刷写工具</x:String>
+    <x:String x:Key="Delivery_ProgressPackage">正在打包 ZIP</x:String>
+    <x:String x:Key="Delivery_ProgressVerify">正在校验输出</x:String>
+    <x:String x:Key="Delivery_ProgressDone">输出完成</x:String>
+    <x:String x:Key="Progress_Stats">{0} / {1} · {2} · 剩余 {3}</x:String>
+    <x:String x:Key="Progress_StatsNoEta">{0} / {1} · {2}</x:String>
+    <x:String x:Key="Delivery_DiskSpaceWarning">磁盘剩余空间不足：输出目录所在分区剩余 {0}，预计需要 {1}。是否继续输出？</x:String>
+    <x:String x:Key="Delivery_DiskSpaceTitle">磁盘空间不足</x:String>
+    <x:String x:Key="Delivery_DiskSpaceContinue">继续</x:String>
+    <x:String x:Key="Delivery_DiskSpaceCancel">取消</x:String>
+    <x:String x:Key="Delivery_OverwriteTitle">目标文件已存在</x:String>
+    <x:String x:Key="Delivery_OverwritePrompt">以下输出文件已存在，是否全部覆盖</x:String>
+    <x:String x:Key="Delivery_OverwriteMore">…及另外 {0} 个文件</x:String>
 
 </ResourceDictionary>

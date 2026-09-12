@@ -124,19 +124,24 @@ internal static class DeliveryPayloadBuilder
                 using var signingKey = LoadSigningKey(plan.Payload);
                 if (signingKey is not null) builder.WithSigningKey(signingKey);
                 var lengths = new Dictionary<string, long>(StringComparer.Ordinal);
+                progress?.Report(new(0, "Preparing Payload", Stage: "Delivery_ProgressPayloadPrepare", Items: (0, plan.Container.Count)));
                 foreach (var file in plan.Container)
                 {
                     token.ThrowIfCancellationRequested(); DeliveryValidation.CheckSource(file);
                     var input = MetadataReader.OpenImage(file.SourcePath); inputs.Add(input);
                     if (input.Length == 0 || input.Length % plan.Payload.BlockSize != 0) throw new InvalidDataException("Payload image must be block-aligned: " + file.Partition);
                     lengths.Add(file.Partition, input.Length); builder.AddPartitionCompressed(file.Partition, input, Enum.Parse<CompressionType>(plan.Payload.Compression));
+                    progress?.Report(new(10.0 * lengths.Count / plan.Container.Count, "Preparing Payload",
+                        Stage: "Delivery_ProgressPayloadPrepare", Items: (lengths.Count, plan.Container.Count), Detail: file.Partition));
                 }
                 var layout = ReadDynamicLayout(plan, lengths);
                 if (layout is not null) builder.WithDynamicPartitions(layout);
-                progress?.Report(new(10, signingKey is null ? "构建未签名 Payload / Building unsigned Payload" : "构建并签名 Payload / Building and signing Payload"));
+                progress?.Report(new(10, "Writing Payload", (0, 0), "Delivery_ProgressPayloadWrite"));
                 using var destination = new FileStream(output, FileMode.CreateNew, FileAccess.Write);
-                using var tracked = new DeliveryWriteProgressStream(destination, _ => progress?.Report(new(35, "写入 Payload / Writing Payload")), token);
+                using var tracked = new DeliveryWriteProgressStream(destination, written => progress?.Report(new(35, "Writing Payload",
+                    (written, 0), "Delivery_ProgressPayloadWrite")), token);
                 await builder.BuildAsync(tracked, token).ConfigureAwait(false);
+                progress?.Report(new(45, "Writing Payload", (tracked.Length, tracked.Length), "Delivery_ProgressPayloadWrite"));
             }
             finally { foreach (var input in inputs) input.Dispose(); }
         }, token).ConfigureAwait(false);

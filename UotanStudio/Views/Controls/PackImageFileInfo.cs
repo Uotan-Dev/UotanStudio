@@ -2,9 +2,8 @@ namespace UotanStudio.Views.Controls;
 
 internal sealed record PackImageFileInfo(string FilePath, long? SizeBytes)
 {
-    internal static PackImageFileInfo Read(string path, CancellationToken token)
+    internal static PackImageFileInfo Read(string path)
     {
-        token.ThrowIfCancellationRequested();
         long? size = null;
         try
         {
@@ -12,7 +11,6 @@ internal sealed record PackImageFileInfo(string FilePath, long? SizeBytes)
         }
         catch (IOException) { }
         catch (UnauthorizedAccessException) { }
-        token.ThrowIfCancellationRequested();
         return new PackImageFileInfo(path, size);
     }
 
