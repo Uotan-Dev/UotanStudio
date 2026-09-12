@@ -32,10 +32,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
     private const uint PropertyRenderCallback = 11;       // kAudioUnitProperty_SetRenderCallback
     private const uint FormatIdPcm = 0x6C70636D;          // 'lpcm'
     private nint _unit;
-    private readonly object _stageLock = new();
-    private byte[] _staged = [];
-    private int _stagedFrames;
-    private int _stagedRead;
+    private AudioPcmRingBuffer? _staging;
     private int _channels = 2, _sampleRate;
     private int _thread = Environment.CurrentManagedThreadId;
     private float _volumeValue = 1f;
@@ -105,6 +102,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
                 &callback, (uint)sizeof(AURenderCallbackStruct)), "set render callback");
             _channels = channels;
             _sampleRate = sampleRate;
+            _staging = new AudioPcmRingBuffer(channels);
             Check(AudioUnitInitialize(_unit), "AudioUnitInitialize");
             Check(AudioOutputUnitStart(_unit), "AudioOutputUnitStart");
         }
@@ -122,46 +120,10 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
         if (pcm.IsEmpty) return;
 
         // Convert int16 → interleaved float32 and stage it; the render callback
-        // consumes on the HAL thread. Volume is applied by the unit itself.
-        // int16 → 交错 float32 转换后暂存；渲染回调在 HAL 线程消费。音量由单元自身应用。
+        // consumes on the HAL thread. Volume applies during conversion of new samples.
+        // int16 → 交错 float32 转换后暂存；渲染回调在 HAL 线程消费。音量在转换新样本时应用。
         if (pcm.Length > AudioFormatLimits.MaximumPacketBytes) throw new ArgumentException("Excessive PCM packet.", nameof(pcm));
-        const int maxStagedFrames = 19200;
-        int frames = pcm.Length / blockAlign;
-        if (frames > maxStagedFrames)
-        {
-            pcm = pcm[^checked(maxStagedFrames * blockAlign)..];
-            frames = maxStagedFrames;
-        }
-        byte[] staged = new byte[frames * _channels * 4];
-        for (int frame = 0; frame < frames; frame++)
-        {
-            for (int channel = 0; channel < _channels; channel++)
-            {
-                short sample = System.Buffers.Binary.BinaryPrimitives.ReadInt16LittleEndian(
-                    pcm.Slice((frame * _channels + channel) * 2));
-                System.Buffers.Binary.BinaryPrimitives.WriteSingleLittleEndian(
-                    staged.AsSpan((frame * _channels + channel) * 4), sample / 32768f * _volumeValue);
-            }
-        }
-        lock (_stageLock)
-        {
-            // Bounded staging: drop stale data if the producer runs far ahead.
-            // 有界暂存：生产者超前过多时丢弃旧数据。
-
-            int pendingFrames = _stagedFrames - _stagedRead;
-            if (pendingFrames + frames > maxStagedFrames)
-            {
-                int drop = pendingFrames + frames - maxStagedFrames;
-                _stagedRead += drop;
-            }
-            int keep = _stagedFrames - _stagedRead;
-            byte[] merged = new byte[(keep + frames) * _channels * 4];
-            if (keep > 0) _staged.AsSpan(_stagedRead * _channels * 4, keep * _channels * 4).CopyTo(merged);
-            staged.CopyTo(merged, keep * _channels * 4);
-            _staged = merged;
-            _stagedFrames = keep + frames;
-            _stagedRead = 0;
-        }
+        _staging!.Write(pcm, _volumeValue);
     }
 
     [UnmanagedCallersOnly]
@@ -176,14 +138,9 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
             uint required = checked(frames * (uint)sink._channels * 4);
             if (required > buffer->Buffer0.DataByteSize || required > AudioFormatLimits.MaximumPacketBytes) return -50;
             var destination = new Span<byte>((void*)buffer->Buffer0.Data, checked((int)required));
-            destination.Clear();
-            lock (sink._stageLock)
-            {
-                int availableBytes = (sink._stagedFrames - sink._stagedRead) * sink._channels * 4;
-                int copyBytes = Math.Min(destination.Length, availableBytes);
-                sink._staged.AsSpan(sink._stagedRead * sink._channels * 4, copyBytes).CopyTo(destination);
-                sink._stagedRead += copyBytes / (sink._channels * 4);
-            }
+            var staging = sink._staging;
+            if (staging is null) destination.Clear();
+            else staging.Read(destination);
             return 0;
         }
         catch { return -50; } // Never unwind managed exceptions across the native audio callback.
@@ -213,7 +170,7 @@ public sealed unsafe partial class AudioUnitSink : IAudioSink
             _unit = 0;
         }
         if (_self.IsAllocated) _self.Free();
-        lock (_stageLock) { _staged = []; _stagedFrames = _stagedRead = 0; }
+        _staging = null;
     }
 
     private static void Check(int status, string operation)
