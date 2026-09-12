@@ -123,41 +123,15 @@ public sealed partial class FirehoseProtocol
 
         Log($"Starting read-back verification for {filename}, sectors={numSectors}");
 
-        (var response, var readBackData) = await ReadAsync(startSector, numSectors, filename, physicalPartition, cancellationToken);
+        using var comparison = new ReadBackComparisonStream(dataStream, filename);
+        var response = await ReadToStreamAsync(comparison, startSector, numSectors, filename, physicalPartition, cancellationToken).ConfigureAwait(false);
         if (!response.IsAck)
         {
             throw new EdlException(EdlErrorCode.OnTargetVerificationFailed,
                 $"Read-back verification read failed for {filename}. Response: {response.RawValue}");
         }
 
-        dataStream.Position = 0;
-        var originalData = new byte[dataStream.Length];
-        var totalRead = 0;
-        while (totalRead < originalData.Length)
-        {
-            var n = await dataStream.ReadAsync(originalData.AsMemory(totalRead), cancellationToken);
-            if (n == 0)
-            {
-                break;
-            }
-
-            totalRead += n;
-        }
-
-        if (readBackData.Length != totalRead)
-        {
-            throw new EdlException(EdlErrorCode.OnTargetVerificationFailed,
-                $"Read-back verification size mismatch for {filename}: expected {totalRead}, got {readBackData.Length}");
-        }
-
-        for (var i = 0; i < totalRead; i++)
-        {
-            if (originalData[i] != readBackData[i])
-            {
-                throw new EdlException(EdlErrorCode.OnTargetVerificationFailed,
-                    $"Read-back verification mismatch for {filename} at byte {i}: expected 0x{originalData[i]:X2}, got 0x{readBackData[i]:X2}");
-            }
-        }
+        await comparison.CompleteAsync(cancellationToken).ConfigureAwait(false);
 
         Log($"Read-back verification passed for {filename}");
     }

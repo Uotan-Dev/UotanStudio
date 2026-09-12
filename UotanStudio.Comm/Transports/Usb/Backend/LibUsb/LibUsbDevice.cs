@@ -12,12 +12,13 @@ internal partial class LibUsbDevice : UsbDevice
     private const int PlatformDefaultTimeoutMs = UsbTransferPolicies.DefaultTimeoutMs;
 
     // Reusable chunk buffers avoid a per-chunk allocation during large transfers. The
-    // session serializes same-direction transfers (read gate / write gate), and reads and
-    // writes use separate buffers, so no additional locking is required.
-    // <para>可复用的分块缓冲避免大传输时每次分块分配；会话串行化同向传输
-    // （读/写门闩）且读/写缓冲分离，无需额外加锁。</para>
+    // read/write gates cover both synchronous and asynchronous native completion.
+    // <para>可复用的分块缓冲避免大传输时每次分块分配；读写缓冲与门闩分离，
+    // 每个方向的门闩覆盖同步和异步原生传输完成，防止在飞缓冲被覆盖。</para>
     private byte[]? _readChunkBuffer;
     private byte[]? _writeChunkBuffer;
+    private readonly SemaphoreSlim _readChunkGate = new(1, 1);
+    private readonly SemaphoreSlim _writeChunkGate = new(1, 1);
 
     // P/Invoke to libusb_clear_halt (LibUsbDotNet's NativeMethods is internal).
     // On Windows winusb this maps to WinUsb_ResetPipe, aborting pending transfers
@@ -371,6 +372,8 @@ internal partial class LibUsbDevice : UsbDevice
         _writer = null;
         _context?.Dispose();
         _context = null;
+        _readChunkBuffer = null;
+        _writeChunkBuffer = null;
     }
 
     public override int GetSerialNumber()
@@ -504,30 +507,46 @@ internal partial class LibUsbDevice : UsbDevice
 
     protected override UsbChunkResult ReadChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        if (_reader == null)
+        _readChunkGate.Wait();
+        try
         {
-            throw new NotSupportedException("The session has no bound IN endpoint for bulk reads (interrupt-only device?).");
-        }
+            if (_reader == null)
+            {
+                throw new NotSupportedException("The session has no bound IN endpoint for bulk reads (interrupt-only device?).");
+            }
 
-        if (_readChunkBuffer == null || _readChunkBuffer.Length < length)
+            if (_readChunkBuffer == null || _readChunkBuffer.Length < length)
+            {
+                _readChunkBuffer = new byte[length];
+            }
+
+            var chunkBuffer = _readChunkBuffer;
+            var error = _reader.Read(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var readLen);
+            var result = ClassifyBulkResult(error, readLen);
+            if (readLen > 0) Marshal.Copy(chunkBuffer, 0, buffer, readLen);
+            return result;
+        }
+        finally
         {
-            _readChunkBuffer = new byte[length];
+            _readChunkGate.Release();
         }
-
-        var chunkBuffer = _readChunkBuffer;
-        var error = _reader.Read(chunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var readLen);
-        var result = ClassifyBulkResult(error, readLen);
-        if (readLen > 0) Marshal.Copy(chunkBuffer, 0, buffer, readLen);
-        return result;
     }
 
     protected override UsbChunkResult WriteChunk(IntPtr buffer, int length, int timeoutMs)
     {
-        if (_writer == null) throw new NotSupportedException("The session has no bound OUT endpoint.");
-        if (_writeChunkBuffer == null || _writeChunkBuffer.Length < length) _writeChunkBuffer = new byte[length];
-        Marshal.Copy(buffer, _writeChunkBuffer, 0, length);
-        var error = _writer.Write(_writeChunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var transferred);
-        return ClassifyBulkResult(error, transferred);
+        _writeChunkGate.Wait();
+        try
+        {
+            if (_writer == null) throw new NotSupportedException("The session has no bound OUT endpoint.");
+            if (_writeChunkBuffer == null || _writeChunkBuffer.Length < length) _writeChunkBuffer = new byte[length];
+            Marshal.Copy(buffer, _writeChunkBuffer, 0, length);
+            var error = _writer.Write(_writeChunkBuffer, 0, length, ToLibusbTimeout(timeoutMs), out var transferred);
+            return ClassifyBulkResult(error, transferred);
+        }
+        finally
+        {
+            _writeChunkGate.Release();
+        }
     }
 
     private static UsbChunkResult ClassifyBulkResult(Error error, int transferred)
@@ -535,7 +554,7 @@ internal partial class LibUsbDevice : UsbDevice
         if (error == Error.NoDevice) return UsbChunkResult.Fatal((int)error);
         if (error is not (Error.Success or Error.Timeout))
             throw new UsbTransferException($"libusb bulk transfer failed: {error}.")
-                { Backend = "libusb", NativeErrorCode = (int)error };
+            { Backend = "libusb", NativeErrorCode = (int)error };
         if (transferred > 0 || error == Error.Success) return UsbChunkResult.Success(transferred);
         return UsbChunkResult.Timeout((int)error);
     }
@@ -614,29 +633,40 @@ internal partial class LibUsbDevice : UsbDevice
 
     private async Task<UsbChunkResult> TransferBulkAsync(IntPtr buffer, int length, int timeoutMs, bool read, CancellationToken cancellationToken)
     {
-        if (read ? _reader == null : _writer == null) throw new NotSupportedException("USB bulk endpoint is not bound.");
-        cancellationToken.ThrowIfCancellationRequested();
-        var data = new byte[length];
-        if (!read) Marshal.Copy(buffer, data, 0, length);
-        var nativeTimeout = ToLibusbTimeout(timeoutMs);
-        var deadline = nativeTimeout == 0 ? long.MaxValue : Environment.TickCount64 + nativeTimeout;
-        // LibUsbDotNet 3.x exposes no cancellation handle for ReadAsync/WriteAsync.
-        // Use bounded native transfers and await their actual completion before
-        // observing cancellation, so no transfer outlives the caller's buffer.
-        while (true)
+        var gate = read ? _readChunkGate : _writeChunkGate;
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
+            if (read ? _reader == null : _writer == null) throw new NotSupportedException("USB bulk endpoint is not bound.");
             cancellationToken.ThrowIfCancellationRequested();
-            var remaining = deadline - Environment.TickCount64;
-            if (remaining <= 0) return UsbChunkResult.Timeout((int)Error.Timeout);
-            var slice = cancellationToken.CanBeCanceled ? (int)Math.Min(100, remaining) : nativeTimeout;
-            var (error, transferred) = read
-                ? await _reader!.ReadAsync(data, 0, length, slice).ConfigureAwait(false)
-                : await _writer!.WriteAsync(data, 0, length, slice).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (error == Error.Timeout && transferred == 0 && cancellationToken.CanBeCanceled) continue;
-            var result = ClassifyBulkResult(error, transferred);
-            if (read && transferred > 0) Marshal.Copy(data, 0, buffer, transferred);
-            return result;
+            var data = read
+                ? (_readChunkBuffer is { } input && input.Length >= length ? input : _readChunkBuffer = new byte[length])
+                : (_writeChunkBuffer is { } output && output.Length >= length ? output : _writeChunkBuffer = new byte[length]);
+            if (!read) Marshal.Copy(buffer, data, 0, length);
+            var nativeTimeout = ToLibusbTimeout(timeoutMs);
+            var deadline = nativeTimeout == 0 ? long.MaxValue : Environment.TickCount64 + nativeTimeout;
+            // LibUsbDotNet 3.x exposes no cancellation handle for ReadAsync/WriteAsync.
+            // Use bounded native transfers and await their actual completion before
+            // observing cancellation, so no transfer outlives the caller's buffer.
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var remaining = deadline - Environment.TickCount64;
+                if (remaining <= 0) return UsbChunkResult.Timeout((int)Error.Timeout);
+                var slice = cancellationToken.CanBeCanceled ? (int)Math.Min(100, remaining) : nativeTimeout;
+                var (error, transferred) = read
+                    ? await _reader!.ReadAsync(data, 0, length, slice).ConfigureAwait(false)
+                    : await _writer!.WriteAsync(data, 0, length, slice).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (error == Error.Timeout && transferred == 0 && cancellationToken.CanBeCanceled) continue;
+                var result = ClassifyBulkResult(error, transferred);
+                if (read && transferred > 0) Marshal.Copy(data, 0, buffer, transferred);
+                return result;
+            }
+        }
+        finally
+        {
+            gate.Release();
         }
     }
 

@@ -139,7 +139,9 @@ public sealed class HdcAuthentication : IDisposable
 
         if (File.Exists(path))
         {
-            return LoadPrivateKey(path);
+            var existing = LoadPrivateKey(path);
+            try { EnsurePublicKey(path, existing); return existing; }
+            catch { existing.Dispose(); throw; }
         }
 
         var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
@@ -158,13 +160,25 @@ public sealed class HdcAuthentication : IDisposable
             var loaded = LoadPrivateKey(path);
             try
             {
-                WriteKeyFile(temporaryPath, loaded._rsa.ExportSubjectPublicKeyInfoPem() + "\n");
-                File.Move(temporaryPath, path + ".pub", overwrite: true);
+                EnsurePublicKey(path, loaded);
                 return loaded;
             }
             catch { loaded.Dispose(); throw; }
         }
         finally { File.Delete(temporaryPath); }
+    }
+
+    private static void EnsurePublicKey(string path, HdcAuthentication authentication)
+    {
+        if (File.Exists(path + ".pub")) return;
+        var temporary = path + ".pub-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            WriteKeyFile(temporary, authentication._rsa.ExportSubjectPublicKeyInfoPem() + "\n");
+            try { File.Move(temporary, path + ".pub", overwrite: false); }
+            catch (IOException) when (File.Exists(path + ".pub")) { }
+        }
+        finally { File.Delete(temporary); }
     }
 
     /// <summary>

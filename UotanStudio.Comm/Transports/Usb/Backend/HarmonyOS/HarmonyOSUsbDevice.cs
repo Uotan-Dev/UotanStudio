@@ -252,9 +252,10 @@ internal class HarmonyOSUsbDevice : UsbDevice
             var copyLen = Math.Min(transferred, length);
             if (copyLen > 0)
             {
-                var tmp = new byte[copyLen];
-                Marshal.Copy(_devMmapBuffer, tmp, 0, copyLen);
-                Marshal.Copy(tmp, 0, buffer, copyLen);
+                unsafe
+                {
+                    Buffer.MemoryCopy((void*)_devMmapBuffer, (void*)buffer, length, copyLen);
+                }
             }
 
             // 报告实际拷贝到调用方缓冲区的字节数：transferred 可能因驱动行为超过 length，
@@ -274,9 +275,10 @@ internal class HarmonyOSUsbDevice : UsbDevice
         {
             return UsbChunkResult.Fatal(USB_DDK_INVALID_OPERATION);
         }
-        var tmp = new byte[length];
-        Marshal.Copy(buffer, tmp, 0, length);
-        Marshal.Copy(tmp, 0, _devMmapBuffer, length);
+        unsafe
+        {
+            Buffer.MemoryCopy((void*)buffer, (void*)_devMmapBuffer, _devMmapSize, length);
+        }
 
         var pipe = new UsbRequestPipe
         {

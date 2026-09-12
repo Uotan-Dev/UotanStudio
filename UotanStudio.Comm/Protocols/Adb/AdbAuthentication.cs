@@ -79,34 +79,42 @@ public sealed class AdbAuthentication : IDisposable
 
         if (File.Exists(path))
         {
-            var pem = File.ReadAllText(path);
             var rsa = RSA.Create();
-            rsa.ImportFromPem(pem);
-            if (rsa.KeySize != 2048)
+            try
             {
-                var keySize = rsa.KeySize;
-                rsa.Dispose();
-                throw new InvalidOperationException($"The ADB key at '{path}' is {keySize} bits; 2048 bits are required.");
+                rsa.ImportFromPem(File.ReadAllText(path));
+                var loaded = new AdbAuthentication(rsa);
+                EnsurePublicKey(path, loaded);
+                return loaded;
             }
-
-            return new AdbAuthentication(rsa);
+            catch { rsa.Dispose(); throw; }
         }
 
-        var created = CreateNew();
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrEmpty(directory))
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path))!;
+        Directory.CreateDirectory(directory);
+        var temporary = Path.Combine(directory, ".adbkey-" + Guid.NewGuid().ToString("N"));
+        using var created = CreateNew();
+        try
         {
-            Directory.CreateDirectory(directory);
+            WriteKeyFile(temporary, created._rsa.ExportRSAPrivateKeyPem());
+            try { File.Move(temporary, path, overwrite: false); }
+            catch (IOException) when (File.Exists(path)) { }
+            return LoadOrCreate(path);
         }
+        finally { File.Delete(temporary); }
+    }
 
-        // Write the private key with restrictive permissions from the moment of
-        // creation.  On Unix we use .NET 10's FileStreamOptions.UnixCreateMode to
-        // open the file with 0600 (user read/write only) atomically, avoiding the
-        // "create 0644 then chmod" exposure window.  On Windows the ACL inherits
-        // from the parent directory, which is the standard behaviour for %USERPROFILE%.
-        WriteKeyFile(path, created._rsa.ExportRSAPrivateKeyPem());
-        WriteKeyFile(path + ".pub", Encoding.UTF8.GetString(created.BuildPublicKeyPayload()));
-        return created;
+    private static void EnsurePublicKey(string path, AdbAuthentication authentication)
+    {
+        if (File.Exists(path + ".pub")) return;
+        var temporary = path + ".pub-" + Guid.NewGuid().ToString("N");
+        try
+        {
+            WriteKeyFile(temporary, Encoding.UTF8.GetString(authentication.BuildPublicKeyPayload()).TrimEnd('\0') + "\n");
+            try { File.Move(temporary, path + ".pub", overwrite: false); }
+            catch (IOException) when (File.Exists(path + ".pub")) { }
+        }
+        finally { File.Delete(temporary); }
     }
 
     /// <summary>
