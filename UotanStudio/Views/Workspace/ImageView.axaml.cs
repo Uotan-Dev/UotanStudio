@@ -1,6 +1,9 @@
+using System.Collections.Specialized;
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Services;
@@ -18,6 +21,10 @@ namespace UotanStudio.Views.Workspace;
 /// </summary>
 public partial class ImageView : UserControl
 {
+    private readonly HashSet<ImageEntryViewModel> _observedImages = [];
+    private ImageViewModel? _observedModel;
+    private bool _isAttached;
+    private bool _columnResizeQueued;
 
     /// <summary>
     /// <para>创建镜像管理面板视图并初始化组件。</para>
@@ -26,6 +33,97 @@ public partial class ImageView : UserControl
     public ImageView()
     {
         InitializeComponent();
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _isAttached = true;
+        ObserveImages(DataContext as ImageViewModel);
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        _isAttached = false;
+        ObserveImages(null);
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    protected override void OnDataContextChanged(EventArgs e)
+    {
+        base.OnDataContextChanged(e);
+        if (_isAttached) ObserveImages(DataContext as ImageViewModel);
+    }
+
+    private void ObserveImages(ImageViewModel? model)
+    {
+        if (ReferenceEquals(_observedModel, model)) return;
+        if (_observedModel is not null) _observedModel.Images.CollectionChanged -= OnImagesChanged;
+        foreach (var image in _observedImages) image.PropertyChanged -= OnImageTextChanged;
+        _observedImages.Clear();
+        _observedModel = model;
+        if (model is not null)
+        {
+            model.Images.CollectionChanged += OnImagesChanged;
+            foreach (var image in model.Images) ObserveImage(image);
+        }
+        QueueColumnResize();
+    }
+
+    private void ObserveImage(ImageEntryViewModel image)
+    {
+        if (_observedImages.Add(image)) image.PropertyChanged += OnImageTextChanged;
+    }
+
+    private void OnImagesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var image in _observedImages) image.PropertyChanged -= OnImageTextChanged;
+            _observedImages.Clear();
+            if (_observedModel is not null)
+                foreach (var image in _observedModel.Images) ObserveImage(image);
+        }
+        else
+        {
+            if (e.OldItems is not null)
+                foreach (ImageEntryViewModel image in e.OldItems)
+                    if (_observedImages.Remove(image)) image.PropertyChanged -= OnImageTextChanged;
+            if (e.NewItems is not null)
+                foreach (ImageEntryViewModel image in e.NewItems) ObserveImage(image);
+        }
+        QueueColumnResize();
+    }
+
+    private void OnImageTextChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is null or "" or nameof(ImageEntryViewModel.DisplayName)
+            or nameof(ImageEntryViewModel.Format) or nameof(ImageEntryViewModel.DisplaySize)
+            or nameof(ImageEntryViewModel.IsVisible))
+            QueueColumnResize();
+    }
+
+    private void QueueColumnResize()
+    {
+        if (!_isAttached || _columnResizeQueued) return;
+        _columnResizeQueued = true;
+        // 合并一次刷新中的变更，等文字布局完成，避免旧 DesiredSize 再次撑宽列。
+        // Wait for text layout so stale DesiredSize values cannot grow the columns again.
+        Dispatcher.UIThread.Post(() =>
+        {
+            _columnResizeQueued = false;
+            if (!_isAttached) return;
+
+            foreach (var column in ImagesGrid.Columns)
+            {
+                // Auto 会保留历史最大宽度；显式清除测量值，同时保留用户手动设置的宽度。
+                // Auto retains its largest measurement; reset it without overriding manual widths.
+                if (column.Width.IsAuto)
+                    column.Width = new DataGridLength(1, DataGridLengthUnitType.Auto, 0, 0);
+            }
+            foreach (var cell in ImagesGrid.GetVisualDescendants().OfType<DataGridCell>())
+                cell.InvalidateMeasure();
+        }, DispatcherPriority.Loaded);
     }
 
     private void OnImageMenuOpening(object? sender, CancelEventArgs e)
