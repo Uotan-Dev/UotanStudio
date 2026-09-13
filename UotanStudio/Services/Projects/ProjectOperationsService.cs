@@ -1,5 +1,7 @@
+using System.Text.Json;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
+using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
@@ -54,7 +56,49 @@ public sealed class ProjectOperationsService
     {
         _workspace = workspace;
         _session = new(workspace, ProjectContextService.Instance.Core, OperationHistoryService.Instance.Core);
-        _session.Changed += () => WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
+        // 交付计划与面板可见性随解决方案文件持久化：保存前捕获，打开后恢复。
+        // Delivery plan and panel visibility persist inside the solution file: capture before saves, restore after opens.
+        _session.CaptureState = CaptureSolutionState;
+        _session.Changed += OnSessionChanged;
+    }
+
+    private const string PanelStateKey = "panels";
+    /// <summary>Host hook (delivery page) that captures the delivery plan element before solution saves.</summary>
+    internal Func<JsonElement?>? CaptureDeliveryState { get; set; }
+    /// <summary>Delivery plan element carried by the most recently opened/saved solution; null when absent.</summary>
+    internal JsonElement? PendingDeliveryState => _session.SolutionState is { } state
+        && state.TryGetValue(DeliveryPlanStore.StateKey, out var delivery) ? delivery : null;
+    /// <summary>Persists the delivery plan and panel visibility by rewriting only the solution file.</summary>
+    public Task PersistSolutionStateAsync() => _session.PersistSolutionStateAsync();
+
+    private Dictionary<string, JsonElement>? CaptureSolutionState()
+    {
+        var state = new Dictionary<string, JsonElement>();
+        if (CaptureDeliveryState?.Invoke() is { ValueKind: JsonValueKind.Object } delivery)
+            state[DeliveryPlanStore.StateKey] = delivery;
+        // 交付页尚未加载时保留解决方案文件中原有的交付计划，避免被空捕获覆盖。
+        // Keep the previously stored delivery plan until the delivery page has loaded and captures.
+        else if (_session.SolutionState is { } previous && previous.TryGetValue(DeliveryPlanStore.StateKey, out var kept))
+            state[DeliveryPlanStore.StateKey] = kept;
+        var panels = WorkspacePanelService.Instance.CaptureVisibility();
+        state[PanelStateKey] = JsonSerializer.SerializeToElement(panels, AppSettingsJsonContext.Default.DictionaryStringBoolean);
+        return state;
+    }
+
+    private Dictionary<string, JsonElement>? _restoredState;
+
+    private void OnSessionChanged()
+    {
+        // 仅在解决方案状态更换（打开/另存）时恢复面板可见性，不覆盖用户随后的手动开关。
+        // Restore panel visibility only when the solution state is replaced (open/save-as), never over later manual toggles.
+        if (!ReferenceEquals(_restoredState, _session.SolutionState))
+        {
+            _restoredState = _session.SolutionState;
+            if (_session.SolutionState is { } state && state.TryGetValue(PanelStateKey, out var panels)
+                && panels.Deserialize(AppSettingsJsonContext.Default.DictionaryStringBoolean) is { Count: > 0 } visibility)
+                WorkspacePanelService.Instance.RestoreVisibility(visibility);
+        }
+        WeakReferenceMessenger.Default.Send(new ProjectContextChangedMessage());
     }
 
     private ProjectWorkspaceCoordinator DesktopWorkspace => _workspace as ProjectWorkspaceCoordinator

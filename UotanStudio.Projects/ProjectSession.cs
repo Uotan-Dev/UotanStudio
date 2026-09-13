@@ -1,5 +1,7 @@
 namespace UotanStudio.Services.Projects;
 
+using System.Text.Json;
+
 /// <summary>Coordinates project creation, loading and persistence through a workspace data boundary.</summary>
 public sealed partial class ProjectSession
 {
@@ -11,6 +13,44 @@ public sealed partial class ProjectSession
         _workspace = workspace ?? new ProjectDataWorkspace();
         Context = context ?? new();
         History = history ?? new();
+    }
+
+    /// <summary>
+    /// <para>宿主钩子：持久化解决方案前捕获扩展状态（如交付计划、面板可见性）。返回 null 表示无状态。</para>
+    /// Host hook: captures the extension state (e.g. delivery plan, panel visibility) before the
+    /// solution file is persisted. Returning null means there is no state to store.
+    /// </summary>
+    public Func<Dictionary<string, JsonElement>?>? CaptureState { get; set; }
+
+    /// <summary>
+    /// <para>最近一次打开/另存的解决方案文件携带的扩展状态；未打开或解决方案未包含状态时为 null。</para>
+    /// Extension state carried by the most recently opened/saved solution file; null when no solution
+    /// is open or the file contains no state.
+    /// </summary>
+    public Dictionary<string, JsonElement>? SolutionState { get; private set; }
+
+    /// <summary>
+    /// <para>仅重写解决方案文件以保存扩展状态（不动 <c>.uotanfw</c>/<c>.uotannode</c>）；经既有会话操作门串行化。</para>
+    /// Rewrites only the solution file to persist extension state (leaving <c>.uotanfw</c>/<c>.uotannode</c>
+    /// untouched); serialized through the existing session operation gate.
+    /// </summary>
+    public async Task PersistSolutionStateAsync(CancellationToken cancellationToken = default)
+    {
+        await RunOperationAsync(async () =>
+        {
+            var path = CurrentProjectPath;
+            if (string.IsNullOrEmpty(path)) return;
+            var solution = await SolutionPersistenceService.LoadSolutionAsync(path, cancellationToken);
+            if (solution is null)
+            {
+                ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Projects", $"State save skipped: cannot read solution '{path}'");
+                return;
+            }
+            solution.State = CaptureState?.Invoke();
+            SolutionState = solution.State;
+            if (!await SolutionPersistenceService.SaveSolutionAsync(path, solution, cancellationToken))
+                ProjectDiagnostics.Write(ProjectLogLevel.Error, "Projects", $"State save failed: {path}");
+        }, cancellationToken: cancellationToken);
     }
 
     private readonly SemaphoreSlim _operationGate = new(1, 1);
@@ -165,6 +205,7 @@ public sealed partial class ProjectSession
 
         var target = new ProjectContext();
         target.OpenSolution(path, solution);
+        SolutionState = solution.State;
         var firmware = target.FirmwareProjectPath is { } firmwarePath
             ? await SolutionPersistenceService.LoadFirmwareProjectAsync(firmwarePath, cancellationToken) : null;
         var node = await SolutionPersistenceService.LoadNodeProjectAsync(target.NodeProjectPath!, cancellationToken);
@@ -456,7 +497,8 @@ public sealed partial class ProjectSession
             FormatVersion = 2,
             SolutionName = solutionName,
             NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
-            SubProjects = subProjectDtos.Count > 0 ? subProjectDtos : null
+            SubProjects = subProjectDtos.Count > 0 ? subProjectDtos : null,
+            State = CaptureState?.Invoke()
         };
 
         await transaction.StageAsync(nodePath, node, SolutionJsonContext.Default.NodeProjectSnapshot, cancellationToken);

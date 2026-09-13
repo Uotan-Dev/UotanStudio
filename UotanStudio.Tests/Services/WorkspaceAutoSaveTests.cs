@@ -105,9 +105,9 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
         var path = Path.Combine(_root, "state", "workspace-session.json");
         var snapshot = new WorkspaceSessionSnapshot
         {
-            Panels = new() { [WorkspacePanelService.ProjectExplorer] = false, [WorkspacePanelService.Device] = true },
+            Panels = new() { [WorkspacePanelService.ProjectExplorer] = false, [WorkspacePanelService.ImagesView] = true },
             Documents = [new() { Kind = "Text", RelativePath = Path.Combine(_root, "outside.json"), OpenMode = (int)EditorOpenMode.Text, IsActive = true }],
-            Docks = [new() { Id = "LeftPane", Proportion = 0.3, ActiveId = "Device" }],
+            Docks = [new() { Id = "LeftPane", Proportion = 0.3, ActiveId = "ImagesView" }],
             DraftWorkflow = new() { Nodes = [new() { InstanceId = "test", TypeKey = "Data.ReadFile", InputInitialValues = new() { ["Path"] = "boot.img" } }] }
         };
         Assert.True(await AtomicJsonFile.WriteIfChangedAsync(path, snapshot, AppSettingsJsonContext.Default.WorkspaceSessionSnapshot, Cancellation));
@@ -118,7 +118,7 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
         var loaded = await JsonSerializer.DeserializeAsync(input, AppSettingsJsonContext.Default.WorkspaceSessionSnapshot, Cancellation);
         Assert.NotNull(loaded);
         Assert.False(loaded.Panels[WorkspacePanelService.ProjectExplorer]);
-        Assert.True(loaded.Panels[WorkspacePanelService.Device]);
+        Assert.True(loaded.Panels[WorkspacePanelService.ImagesView]);
         Assert.True(Assert.Single(loaded.Documents).IsActive);
         Assert.Equal((int)EditorOpenMode.Text, loaded.Documents[0].OpenMode);
         Assert.Equal(0.3, Assert.Single(loaded.Docks).Proportion);
@@ -142,23 +142,23 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
     public void PanelVisibility_RestoresClosedAndOpenedPanels_AndTracksMovedOwner()
     {
         var panels = new WorkspacePanelService();
-        var tool = new Tool { Id = WorkspacePanelService.Device };
+        var tool = new Tool { Id = WorkspacePanelService.ImagesView };
         var original = new ToolDock { VisibleDockables = new ObservableCollection<IDockable> { tool } };
         var moved = new ToolDock { VisibleDockables = new ObservableCollection<IDockable>() };
         tool.Owner = original;
-        panels.Register(WorkspacePanelService.Device, tool, original, true);
+        panels.Register(WorkspacePanelService.ImagesView, tool, original, true);
         var snapshot = panels.CaptureVisibility();
-        panels.Hide(WorkspacePanelService.Device);
-        Assert.False(panels.IsPanelVisible(WorkspacePanelService.Device));
+        panels.Hide(WorkspacePanelService.ImagesView);
+        Assert.False(panels.IsPanelVisible(WorkspacePanelService.ImagesView));
         panels.RestoreVisibility(snapshot);
-        Assert.True(panels.IsPanelVisible(WorkspacePanelService.Device));
+        Assert.True(panels.IsPanelVisible(WorkspacePanelService.ImagesView));
         original.VisibleDockables.Clear();
         moved.VisibleDockables.Add(tool);
         tool.Owner = moved;
-        Assert.True(panels.CaptureVisibility()[WorkspacePanelService.Device]);
-        panels.Hide(WorkspacePanelService.Device);
+        Assert.True(panels.CaptureVisibility()[WorkspacePanelService.ImagesView]);
+        panels.Hide(WorkspacePanelService.ImagesView);
         Assert.Empty(moved.VisibleDockables);
-        Assert.False(panels.CaptureVisibility()[WorkspacePanelService.Device]);
+        Assert.False(panels.CaptureVisibility()[WorkspacePanelService.ImagesView]);
     }
 
     [Fact]

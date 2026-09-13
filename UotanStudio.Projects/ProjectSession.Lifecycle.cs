@@ -55,6 +55,7 @@ public sealed partial class ProjectSession
             History.Clear();
             Context.CloseProject();
             CurrentProjectPath = null;
+            SolutionState = null;
             closed = true;
             Changed?.Invoke();
         }, changingProject: confirmChange, cancellationToken: cancellationToken);

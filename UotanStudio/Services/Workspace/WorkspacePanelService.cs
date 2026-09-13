@@ -19,9 +19,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// <summary>打包设置面板键。 Packing settings panel key.</summary>
     public const string ProjectSetting = "ProjectSetting";
 
-    /// <summary>设备面板键。 Device panel key.</summary>
-    public const string Device = "Device";
-
     /// <summary>镜像管理面板键。 Image manager panel key.</summary>
     public const string ImagesView = "ImagesView";
 
@@ -96,13 +93,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// </summary>
     [ObservableProperty]
     private bool _projectSettingVisible;
-
-    /// <summary>
-    /// <para>设备面板当前是否可见。</para>
-    /// Whether the device panel is currently visible.
-    /// </summary>
-    [ObservableProperty]
-    private bool _deviceVisible = true;
 
     /// <summary>
     /// <para>镜像管理面板当前是否可见。</para>
@@ -298,9 +288,6 @@ public sealed partial class WorkspacePanelService : ObservableObject
                 break;
             case ProjectSetting:
                 ProjectSettingVisible = value;
-                break;
-            case Device:
-                DeviceVisible = value;
                 break;
             case ImagesView:
                 ImagesViewVisible = value;

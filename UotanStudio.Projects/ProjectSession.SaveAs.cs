@@ -71,7 +71,8 @@ public sealed partial class ProjectSession
         {
             SolutionName = name,
             NodeProjectPath = $"{name}/{name}.uotannode",
-            SubProjects = references
+            SubProjects = references,
+            State = CaptureState?.Invoke()
         };
         await AtomicJsonFile.WriteIfChangedAsync(transaction.StagingSolution, solution, SolutionJsonContext.Default.SolutionSnapshot, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
