@@ -83,7 +83,12 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                     if (_projects.CurrentProjectPath is not null && !hasStartupDocuments && string.Equals(_projects.CurrentProjectPath, snapshot.ProjectPath,
                         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                         await _workspace.RestoreDocumentsAsync(snapshot.Documents, string.Empty);
-                    WorkspacePanelService.Instance.RestoreVisibility(snapshot.Panels);
+                    // 仅无工程时用全局 workspace-session.json 兜底面板可见性；有工程时以解决方案 State 的 panels 为准，
+                    // 避免启动恢复覆盖打开解决方案时已按解决方案状态恢复的面板（如打包设置、终端）。
+                    // The global workspace-session.json only falls back for panel visibility when no project is open;
+                    // with a project open, the solution State's panels are authoritative so startup restore must not override them.
+                    if (_projects.CurrentProjectPath is null)
+                        WorkspacePanelService.Instance.RestoreVisibility(snapshot.Panels);
                     if (_projects.NodeEditorVM is { } nodes)
                     {
                         if (double.IsFinite(snapshot.NodeZoom)) nodes.Zoom = Math.Clamp(snapshot.NodeZoom, 0.2, 3);
@@ -99,7 +104,12 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                         var dock = docks.FirstOrDefault(d => d.Id == state.Id);
                         if (dock is null) continue;
                         if (state.Proportion is > 0 and <= 1) dock.Proportion = state.Proportion.Value;
-                        if (!string.IsNullOrEmpty(state.ActiveId)
+                        // 仅无工程时恢复活动面板：有工程时解决方案打开已恢复面板可见性，
+                        // 活动面板保持用户当前所处位置，不让全局会话把左侧切到打包设置等面板上。
+                        // Only restore the active panel when no project is open: with a project open the
+                        // solution open already restored panel visibility, so the active panel must keep
+                        // the user's current position instead of being switched by the global session.
+                        if (_projects.CurrentProjectPath is null && !string.IsNullOrEmpty(state.ActiveId)
                             && dock.VisibleDockables?.FirstOrDefault(d => d.Id == state.ActiveId) is { } active)
                             dock.ActiveDockable = active;
                     }

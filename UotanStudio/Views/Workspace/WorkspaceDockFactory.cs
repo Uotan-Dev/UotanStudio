@@ -132,7 +132,10 @@ public class WorkspaceDockFactory : Factory
             Title = "LeftPane",
             Proportion = 0.15,
             ActiveDockable = projectExplorer,
-            VisibleDockables = CreateList<IDockable>(projectExplorer, projectSetting)
+            // 打包设置面板默认隐藏，经「窗口」菜单唤出，不进入初始可见列表。
+            // The packing settings panel is hidden by default (invoked from the Window menu), so it
+            // starts outside the visible list.
+            VisibleDockables = CreateList<IDockable>(projectExplorer)
         };
 
         var bottomTools = new ToolDock
@@ -188,7 +191,7 @@ public class WorkspaceDockFactory : Factory
         // Register each workspace panel with the panel service for the Window menu.
         var panels = WorkspacePanelService.Instance;
         panels.Register(WorkspacePanelService.ProjectExplorer, projectExplorer, leftTools, visible: true);
-        panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: true);
+        panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: false);
         panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
         if (aiAssistant is not null)
             panels.Register(WorkspacePanelService.AiAssistant, aiAssistant, rightToolsTop, visible: true);

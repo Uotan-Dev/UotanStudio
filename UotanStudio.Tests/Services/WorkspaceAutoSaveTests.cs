@@ -162,6 +162,33 @@ public sealed class WorkspaceAutoSaveTests : IDisposable
     }
 
     [Fact]
+    public void RestoreVisibility_ReaddsHiddenPanel_WithoutChangingActivePanel()
+    {
+        var panels = new WorkspacePanelService();
+        var explorer = new Tool { Id = WorkspacePanelService.ProjectExplorer };
+        var setting = new Tool { Id = WorkspacePanelService.ProjectSetting };
+        var left = new ToolDock
+        {
+            VisibleDockables = new ObservableCollection<IDockable> { explorer },
+            ActiveDockable = explorer
+        };
+        explorer.Owner = left;
+        panels.Register(WorkspacePanelService.ProjectExplorer, explorer, left, true);
+        panels.Register(WorkspacePanelService.ProjectSetting, setting, left, false);
+        Assert.False(panels.IsPanelVisible(WorkspacePanelService.ProjectSetting));
+        Assert.Same(explorer, left.ActiveDockable);
+        panels.RestoreVisibility(new Dictionary<string, bool>
+        {
+            [WorkspacePanelService.ProjectSetting] = true,
+            [WorkspacePanelService.ProjectExplorer] = true
+        });
+        Assert.True(panels.IsPanelVisible(WorkspacePanelService.ProjectSetting));
+        Assert.Same(explorer, left.ActiveDockable);
+        Assert.Equal([WorkspacePanelService.ProjectExplorer, WorkspacePanelService.ProjectSetting],
+            left.VisibleDockables.Select(d => d.Id).ToArray());
+    }
+
+    [Fact]
     public void Capture_IncludesExternalDocumentsAndExplicitEditorMode_InTabOrder()
     {
         var text = new FileViewModel { FilePath = Path.Combine(_root, "external.json"), OpenMode = EditorOpenMode.Text };

@@ -75,7 +75,11 @@ public sealed partial class WorkspacePanelService : ObservableObject
     {
         foreach (var (key, visible) in panels)
         {
-            if (visible) Show(key);
+            // 恢复可见性不改变当前激活面板：有工程时以解决方案状态恢复，活动面板保持用户
+            // 当前所处位置；仅加回可见列表/从可见列表移除。
+            // Restoring visibility must not change the active panel (e.g. after opening a solution the
+            // left pane should stay on the project explorer): only add back / remove from visible lists.
+            if (visible) Show(key, activate: false);
             else Hide(key);
         }
     }
@@ -155,11 +159,23 @@ public sealed partial class WorkspacePanelService : ObservableObject
     /// Shows the specified panel: adds it back to the host dock's visible list and makes it active.
     /// </summary>
     /// <param name="key"><para>面板键。</para>The panel key.</param>
-    public void Show(string key)
+    public void Show(string key) => Show(key, activate: true);
+
+    /// <summary>
+    /// <para>显示指定面板；<paramref name="activate"/> 为 false 时仅加回宿主停靠区可见列表，
+    /// 不改变当前激活面板（供会话恢复使用，避免把活动面板切到被恢复的面板上）。</para>
+    /// Shows the specified panel; with <paramref name="activate"/> false it only re-adds the panel
+    /// to the host dock's visible list without changing the active panel (used by session restore so
+    /// restoring visibility never switches the active panel to a restored panel).
+    /// </summary>
+    /// <param name="key"><para>面板键。</para>The panel key.</param>
+    /// <param name="activate"><para>是否同时设为激活面板。</para>Whether to also make it the active panel.</param>
+    public void Show(string key, bool activate)
     {
         if (key == Terminal)
         {
-            _terminals?.Show();
+            if (activate) _terminals?.Show();
+            else _terminals?.ShowWithoutActivate();
             RefreshTerminalVisibility();
             return;
         }
@@ -175,7 +191,7 @@ public sealed partial class WorkspacePanelService : ObservableObject
             list.Add(entry.Dockable);
         }
 
-        if (!ReferenceEquals(host.ActiveDockable, entry.Dockable))
+        if (activate && !ReferenceEquals(host.ActiveDockable, entry.Dockable))
         {
             host.ActiveDockable = entry.Dockable;
         }

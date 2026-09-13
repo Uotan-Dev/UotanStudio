@@ -48,6 +48,29 @@ internal sealed class TerminalDockService(IFactory factory, IDock defaultHost) :
         Activate(_entries[^1].Model);
     }
 
+    /// <summary>
+    /// <para>仅把终端加回宿主可见列表，不激活任何终端（供会话恢复使用，避免恢复可见性时
+    /// 把活动面板切到终端上）。无条目时创建但不激活。</para>
+    /// Re-adds the terminals to their hosts without activating any (used by session restore so
+    /// restoring visibility never switches the active panel to a terminal). Creates one without
+    /// activation when there are no entries.
+    /// </summary>
+    internal void ShowWithoutActivate()
+    {
+        if (_disposed) return;
+        if (_entries.Count == 0)
+        {
+            CreateTerminal(activate: false);
+            return;
+        }
+        foreach (var entry in _entries)
+        {
+            var host = GetHost(entry);
+            if (host.VisibleDockables?.Contains(entry.Model) != true) factory.AddDockable(host, entry.Model);
+        }
+        WorkspacePanelService.Instance.RefreshTerminalVisibility();
+    }
+
     internal void Hide()
     {
         foreach (var entry in _entries)
