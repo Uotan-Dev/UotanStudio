@@ -108,8 +108,8 @@ public partial class NewProjectWindow : Window
         ProgressPanel.IsVisible = true;
         if (bytes is { Total: > 0 } measured) percent = measured.Processed * 100.0 / measured.Total;
         percent = percent is { } value && double.IsFinite(value) && value >= 0 ? Math.Clamp(value, 0, 100) : null;
-        OperationStatus.Text = percent is { } number
-            ? string.Format(LanguageService.Instance.GetString("Progress_StatusPercent"), status, number) : status;
+        MainBusyContainer.LoadingMessage = status;
+        MainBusyContainer.IsLoading = true;
         OperationProgress.IsIndeterminate = percent is null;
         OperationProgress.Value = percent ?? 0;
         OperationStats.Text = statistics ?? string.Empty;
@@ -326,6 +326,7 @@ public partial class NewProjectWindow : Window
         _isAnalyzing = single is not null;
         CreateButton.IsEnabled = !_isAnalyzing;
         ProgressPanel.IsVisible = _isAnalyzing;
+        MainBusyContainer.IsLoading = _isAnalyzing;
         if (single is null) return;
         ResetProgressStats();
         ReportProgress(LanguageService.Instance.GetString("NewProject_Analyzing"));
@@ -346,6 +347,7 @@ public partial class NewProjectWindow : Window
                 _isAnalyzing = false;
                 CreateButton.IsEnabled = true;
                 ProgressPanel.IsVisible = false;
+                MainBusyContainer.IsLoading = false;
             }
         }
     }
@@ -510,6 +512,7 @@ public partial class NewProjectWindow : Window
             FormContent.IsEnabled = false;
             CreateButton.IsEnabled = false;
             CancelButton.IsEnabled = false;
+            MainBusyContainer.IsLoading = true;
             ReportProgress(LanguageService.Instance.GetString("NewProject_CheckingSpace"));
             ResetProgressStats();
             try
@@ -518,6 +521,7 @@ public partial class NewProjectWindow : Window
                 {
                     Result = null;
                     ProgressPanel.IsVisible = false;
+                    MainBusyContainer.IsLoading = false;
                     return;
                 }
                 ReportProgress(LanguageService.Instance.GetString("NewProject_Creating"));
@@ -542,6 +546,7 @@ public partial class NewProjectWindow : Window
                 FormContent.IsEnabled = true;
                 CreateButton.IsEnabled = true;
                 CancelButton.IsEnabled = true;
+                MainBusyContainer.IsLoading = false;
             }
         }
     }

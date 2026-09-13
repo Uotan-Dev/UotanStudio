@@ -13,6 +13,15 @@
         <ursa:LoadingContainer Grid.Row="0" Name="ImageBusyContainer"
                                IsLoading="{Binding IsOperating}"
                                LoadingMessage="{DynamicResource ImageView_Processing}">
+            <ursa:LoadingContainer.Indicator>
+                <ursa:LoadingIcon Classes="Large"
+                                  IsLoading="{Binding $parent[ursa:LoadingContainer].IsLoading, Mode=TwoWay}" />
+            </ursa:LoadingContainer.Indicator>
+            <ursa:LoadingContainer.LoadingMessageTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" />
+                </DataTemplate>
+            </ursa:LoadingContainer.LoadingMessageTemplate>
             <Grid RowDefinitions="Auto,Auto,*" IsEnabled="{Binding CanOperate}">
                 <Grid Grid.Row="0" Margin="5,5" ColumnDefinitions="28,*,28">
                     <Button Grid.Column="0"
@@ -180,26 +189,18 @@
                 BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
             <StackPanel>
                 <StackPanel Spacing="5">
-                    <ProgressBar Name="ImageProgressBar" Minimum="0"
+                    <TextBlock Text="{Binding StatusText}"
+                               FontSize="11"
+                               Margin="0,2,0,0"
+                               TextTrimming="CharacterEllipsis" />
+                    <ProgressBar Minimum="0"
                                  Maximum="100"
                                  FontSize="12"
-                                 ShowProgressText="False"
+                                 ShowProgressText="True"
                                  Value="{Binding ProgressPercent}"
-                                 IsIndeterminate="{Binding IsProgressIndeterminate}"
-                                 IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                  Height="20"
                                  HorizontalAlignment="Stretch"
                                  CornerRadius="4" />
-                    <TextBlock Name="ImageProgressStatus" Text="{Binding ProgressStatus}"
-                               FontSize="11"
-                               Margin="0,2,0,0"
-                               TextTrimming="CharacterEllipsis"
-                               IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                    <TextBlock Name="ImageProgressStats" Text="{Binding ProgressStats}"
-                               FontSize="11"
-                               Opacity="0.75"
-                               TextWrapping="Wrap"
-                               IsVisible="{Binding ProgressStats, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <Grid IsEnabled="{Binding CanOperate}">
                         <controls:JustifiedWrapPanel MinItemWidth="110" ItemSpacing="6" LineSpacing="6"
                                                        IsVisible="{Binding IsUnpackMode}">
