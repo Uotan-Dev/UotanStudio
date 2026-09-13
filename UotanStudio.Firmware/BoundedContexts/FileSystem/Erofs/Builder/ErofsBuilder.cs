@@ -435,14 +435,19 @@ public sealed partial class ErofsBuilder
         public long MetaOffset;
         public byte[] InlineData = [];
         public long DirBlocks;
+        public bool DirectoryInline;
         public long DirBlockAddr = -1;
         public long FlatBlockAddr = -1;
         public long FlatBlocks;
         public PclusterPlan[]? Pclusters;
         public uint CompressedBlocks;
         public uint ClusterCount;
+        public int LogicalClusterSize;
         public bool CompactedIndexes;
         public bool BigPcluster;
+        public bool InlineCompressedTail;
+        public ErofsOptions? CompressionOptions;
+        public ErofsSourceInode? SourceInode;
 
         public byte[] XattrIbody = [];
 
@@ -457,6 +462,7 @@ public sealed partial class ErofsBuilder
         public ushort ModeOverride;
         public bool HasModeOverride;
         public long Mtime;
+        public bool RequiresExtendedTime;
 
 
         public bool IsFragment;
@@ -487,15 +493,18 @@ public sealed partial class ErofsBuilder
         public int SourceLength;
         public int CompressedLength;
         public uint BlockAddress;
+        public bool Plain;
     }
 
     private static void BuildImage(BuildNode root, ErofsOptions options, Stream destination, long baseOffset, bool freshDestination)
     {
         using var output = new OffsetStream(destination, baseOffset);
         var blockSize = options.BlockSize;
+        var now = options.BuildTime ?? (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
 
-        output.CaptureWindow(ErofsSuperblock.SuperblockOffset, blockSize - ErofsSuperblock.SuperblockOffset);
+        output.CaptureWindow(ErofsSuperblock.SuperblockOffset,
+            blockSize > ErofsSuperblock.SuperblockOffset ? blockSize - ErofsSuperblock.SuperblockOffset : blockSize);
 
 
         var extraDevices = options.ExtraDeviceCount;
@@ -533,6 +542,7 @@ public sealed partial class ErofsBuilder
             {
                 var entry = editPlan.Get(node.FullPath);
                 node.OriginalInode = entry.Inode;
+                node.SourceInode = options.SourceInodes?.GetValueOrDefault(entry.Inode);
                 if ((entry.Mode & 0xF000) == 0x8000) { node.FullPath = editPlan.ContentSource(node.FullPath); node.Size = new FileInfo(node.FullPath).Length; }
                 node.Name = SharedKernel.FileSystemEditPlan.Name(entry.Path);
                 node.Uid = entry.Uid;
@@ -547,6 +557,12 @@ public sealed partial class ErofsBuilder
                 if (node.IsDevice) node.Size = 0;
                 node.XattrIbody = entry.Xattrs is { Count: > 0 } ? ErofsXattr.EncodeInline(entry.Xattrs.Select(p => new ErofsXattrEntry { Name = p.Key, Value = p.Value }).ToList()) : [];
             }
+
+        foreach (var node in ordered)
+        {
+            var timestamp = node.SourceInode?.Mtime ?? (node.Mtime > 0 ? (ulong)node.Mtime : now);
+            node.RequiresExtendedTime = timestamp < now || timestamp - now > uint.MaxValue;
+        }
 
 
         var hardlinks = new List<(BuildNode Alias, BuildNode Canonical)>();
@@ -569,11 +585,14 @@ public sealed partial class ErofsBuilder
 
         SharedKernel.FirmwareParallelism.ForEach(ordered, node =>
         {
-            if (node.IsDirectory || node.Size <= 0) return;
+            if (node.IsDirectory || node.IsSymlink || node.IsDevice || node.Size <= 0) return;
             if (!node.IsSymlink && !node.IsDevice && options.Dedup)
                 node.ContentHash = HashFile(node);
-            if (options.Compress)
-                node.Pclusters = TryPlanCompressed(node, blockSize, options);
+            node.CompressionOptions = node.SourceInode is { Compressed: true } original
+                ? options.SourceCompressionOptions?.GetValueOrDefault(original.Algorithm) ?? options : options;
+            node.LogicalClusterSize = node.SourceInode?.LogicalClusterSize ?? blockSize;
+            if (node.SourceInode?.Compressed ?? options.Compress)
+                node.Pclusters = TryPlanCompressed(node, blockSize, node.CompressionOptions);
         });
 
         foreach (var node in ordered)
@@ -586,11 +605,17 @@ public sealed partial class ErofsBuilder
                 node.DirBlocks = payloadLength <= blockSize
                     ? 1
                     : CountDirBlocks(BuildDirEntries(node), blockSize);
+                node.DirectoryInline = payloadLength + GetInodeHeaderSize(node) + node.XattrIbody.Length <= blockSize;
                 continue;
             }
 
 
             var isDataFile = !node.IsSymlink && !node.IsDevice;
+            if (node.IsSymlink)
+            {
+                node.InlineData = Encoding.UTF8.GetBytes(node.SymlinkTarget);
+                continue;
+            }
             if (node.Size <= 0)
             {
                 continue;
@@ -598,16 +623,24 @@ public sealed partial class ErofsBuilder
 
 
 
-            if (options.Compress)
+            if (node.SourceInode?.Compressed ?? options.Compress)
             {
                 if (node.Pclusters is not null)
                 {
                     node.CompressedBlocks = (uint)node.Pclusters.Sum(p => CeilDiv(p.CompressedLength, blockSize));
-                    node.ClusterCount = (uint)CeilDiv(node.Size, blockSize);
-                    node.CompactedIndexes = options.UseCompactedIndexes;
+                    node.ClusterCount = (uint)CeilDiv(node.Size, node.LogicalClusterSize);
+                    node.CompactedIndexes = node.SourceInode?.CompactIndexes ?? options.UseCompactedIndexes;
 
 
-                    node.BigPcluster = options.Algorithm != ErofsCompressionAlgorithm.Lz4;
+                    node.BigPcluster = node.CompressionOptions!.Algorithm != ErofsCompressionAlgorithm.Lz4
+                        || node.Pclusters.Any(p => p.CompressedLength > blockSize);
+                    var tailLength = node.Pclusters[^1].CompressedLength;
+                    if (options.CompressedTailPacking && !node.Pclusters[^1].Plain && tailLength < blockSize
+                        && GetInodeRecordSize(node, blockSize) % blockSize + tailLength <= blockSize)
+                    {
+                        node.InlineCompressedTail = true;
+                        node.CompressedBlocks--;
+                    }
                     continue;
                 }
             }
@@ -643,7 +676,7 @@ public sealed partial class ErofsBuilder
 
 
             var remainder = node.Size % blockSize;
-            if (options.TailPacking)
+            if (node.SourceInode?.InlineData ?? options.TailPacking)
             {
 
 
@@ -655,6 +688,11 @@ public sealed partial class ErofsBuilder
                     var tail = new byte[remainder];
                     fs.ReadExactly(tail);
                     node.InlineData = tail;
+                    if (GetInodeHeaderSize(node) + node.XattrIbody.Length + tail.Length > blockSize)
+                    {
+                        node.FlatBlocks++;
+                        node.InlineData = [];
+                    }
                 }
             }
             else
@@ -668,7 +706,7 @@ public sealed partial class ErofsBuilder
             if (isDataFile && options.Dedup && node.ContentHash is not null && node.FlatBlocks > 0)
             {
                 var hashKey = Convert.ToHexString(node.ContentHash);
-                if (dedupFlat.TryGetValue(hashKey, out var source))
+                if (dedupFlat.TryGetValue(hashKey, out var source) && source.FlatBlocks == node.FlatBlocks)
                 {
                     node.DedupSource = source;
                     node.FlatBlocks = source.FlatBlocks;
@@ -754,7 +792,7 @@ public sealed partial class ErofsBuilder
         {
             if (node.IsDirectory)
             {
-                if (node.DirBlocks > 1)
+                if (!node.DirectoryInline)
                 {
                     node.DirBlockAddr = dataBlock;
                     dataBlock += node.DirBlocks;
@@ -765,7 +803,8 @@ public sealed partial class ErofsBuilder
                 foreach (var p in node.Pclusters)
                 {
                     p.BlockAddress = (uint)dataBlock;
-                    dataBlock += CeilDiv(p.CompressedLength, blockSize);
+                    if (!node.InlineCompressedTail || !ReferenceEquals(p, node.Pclusters[^1]))
+                        dataBlock += CeilDiv(p.CompressedLength, blockSize);
                 }
             }
             else if (node.FlatBlocks > 0)
@@ -805,11 +844,8 @@ public sealed partial class ErofsBuilder
             ZeroImage(output, Math.Min(oldLength, finalSize));
         }
 
-        var now = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var featureIncompat = options.Compress
-            ? (options.Algorithm == ErofsCompressionAlgorithm.Lz4
-                ? ErofsSuperblock.IncompatLz4_0Padding
-                : ErofsSuperblock.IncompatBigPcluster)
+            ? ErofsSuperblock.IncompatLz4_0Padding | ErofsSuperblock.IncompatBigPcluster
             : 0;
 
 
@@ -823,6 +859,7 @@ public sealed partial class ErofsBuilder
         {
             featureIncompat |= ErofsSuperblock.IncompatFragments;
         }
+        if (options.CompressedTailPacking) featureIncompat |= ErofsSuperblock.IncompatZtailpacking;
 
 
         if (metaboxNode is not null)
@@ -837,10 +874,13 @@ public sealed partial class ErofsBuilder
             RootNid = (ushort)root.Nid,
             Inos = (ulong)ordered.Count,
             BuildTime = now,
+            BuildTimeNsec = options.BuildTimeNanoseconds,
+            BuildTime32 = options.BuildTimeOffset,
             Blocks = (uint)totalBlocks,
             MetaBlkAddr = 0,
-            AvailableComprAlgs = options.Compress ? (ushort)(1 << (int)options.Algorithm) : (ushort)0,
-            FeatureCompat = ErofsSuperblock.CompatSbChecksum,
+            AvailableComprAlgs = options.Compress ? (ushort)(options.SourceCompressionOptions?.Keys.Aggregate(0, (mask, algorithm) => mask | (1 << (int)algorithm)) ?? (1 << (int)options.Algorithm)) : (ushort)0,
+            FeatureCompat = (options.SuperblockChecksum ? ErofsSuperblock.CompatSbChecksum : 0u)
+                | (options.SourceMtimeFeature ? ErofsSuperblock.CompatMtime : 0u),
             FeatureIncompat = featureIncompat,
             ExtraDevices = (ushort)extraDevices,
             DevtSlotoff = devtSlotOff,
@@ -849,6 +889,7 @@ public sealed partial class ErofsBuilder
             MetaBoxNid = metaboxNode?.Nid ?? 0,
             Uuid = options.Uuid is { Length: 16 } ? options.Uuid : Guid.NewGuid().ToByteArray(),
             VolumeName = options.VolumeName,
+            VolumeNameBytes = options.SourceVolumeNameBytes ?? [],
 
 
             DirBlkBits = 0,
@@ -899,7 +940,7 @@ public sealed partial class ErofsBuilder
             }
             else if (node.Pclusters is not null)
             {
-                WriteCompressedData(output, node, blockSize, options);
+                WriteCompressedData(output, node, blockSize, node.CompressionOptions!);
             }
             else if (node.IsMetaboxContainer)
             {
@@ -940,7 +981,7 @@ public sealed partial class ErofsBuilder
             if (node.IsDirectory)
             {
 
-                if (node.DirBlocks <= 1)
+                if (node.DirectoryInline)
                 {
                     WriteAt(output, cursor, BuildDirPayload(node), (int)EstimateDirPayloadLength(node));
                 }
@@ -953,7 +994,7 @@ public sealed partial class ErofsBuilder
             }
             else if (node.Pclusters is not null)
             {
-                WriteCompressedIndexes(output, cursor, node, blockSize, options);
+                WriteCompressedIndexes(output, AlignUp(cursor, 8), node, blockSize, node.CompressionOptions!);
             }
             else if (node.InlineData.Length > 0)
             {
@@ -964,6 +1005,7 @@ public sealed partial class ErofsBuilder
         }
 
 
+        if (options.SuperblockChecksum)
         {
             var crcRegion = output.CapturedWindow ?? throw new InvalidOperationException("Superblock checksum window was not captured.");
             crcRegion[4] = 0;

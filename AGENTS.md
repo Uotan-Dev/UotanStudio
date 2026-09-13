@@ -1,5 +1,11 @@
 # UotanStudio 项目指令
 
+## EROFS 参数继承与原生验证（2026-09-13）
+
+- EROFS 修改后重建经 `ErofsParser.ReadRebuildOptions` 从经过校验的原镜像继承压缩算法、逐文件压缩策略、字典/窗口、LZ4 最大距离与物理簇上限、索引类型、UUID、原始卷名字节、超级块和 inode 时间。未修改目录仍精确恢复。`configuration.compression` 记录可读配置；压缩等级及 LZ4/LZ4HC 编码器选择不在 EROFS 盘上记录，不得声称已经恢复。
+- 修复小块 checksum、紧凑 inode 相对时间、big-pcluster 索引地址、压缩头对齐、压缩尾部内联、63 位 fragment 偏移和压缩 packed inode 读取；packed 数据使用有上限的自动删除临时文件。重建允许普通块与压缩簇混合，xattr 导致内联尾部跨块时改用外部块。
+- 真实 `D:\Firmware\odm.img` 的修改重建通过 Alpine WSL2 原生 fsck、只读 mount 和 74 个条目的内容/属性比较。WSL2 当前仅原生支持 EROFS LZ4；其他算法另经上游 FUSE 与独立 QEMU Linux 内核验证，不能混称 WSL2 原生支持。压缩率、块数、最终大小及物理布局允许重新计算，不保证修改后仍适合原分区容量。上游依据、完整矩阵与复现命令见 `docs/erofs-rebuild-conformance.md`。
+
 ## 新建项目文档清理与镜像列表刷新（2026-09-13）
 
 - 桌面宿主 `ProjectWorkspaceCoordinator` 现已实现 `ChangeProjectRoot`：`preserveDocuments: false`（新建解决方案、打开工程、关闭工程）时经 `WorkspaceDockFactory.CloseAllDocuments(layout)` 关闭工作区全部文档型面板（文本/Hex/DTB/Dex/Manifest/ARSC/APK/固件信息/文件管理/分区/对比，与 `WorkspaceSessionCapture.IsDocument` 快照口径一致），复用 `SafeRemoveDockable` 的释放逻辑且不再逐一确认——脏文档已在会话操作门 `BeforeProjectChangeAsync`（`WorkspaceAutoSaveService.FlushAsync` → `ConfirmAllAsync`）阶段确认完毕。`preserveDocuments: true`（另存为）保持文档打开，页面记录按新根重算相对路径。`WorkspaceViewModel` 新增 `DockFactory` 内部访问器。
@@ -383,7 +389,7 @@ ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口�
 
 项目资源管理器在目录变动时按路径增量同步已加载子节点，保留仍存在的节点实例和展开状态；同一工程上下文刷新不重建根节点。文件监听只订阅名称和目录变动，文件内容保存不触发整树刷新；目录暂时不可读时保留现有显示。
 
-EXT4、EROFS、F2FS 解包的统一元数据在 `configuration.fileSystem` / `configuration.superblock` 保存已有解析器支持的原始超级块字段，UUID 为十六进制字符串；Sparse 包装镜像也通过有界逻辑流记录内部超级块。这些字段用于原始信息查看，文件系统重建仍只消费 `packingOptions`，不直接恢复物理布局或分配状态。格式处理器和应用文件系统解包服务共用该输出。
+EXT4、EROFS、F2FS 解包的统一元数据在 `configuration.fileSystem` / `configuration.superblock` 保存已有解析器支持的原始超级块字段，UUID 为十六进制字符串；Sparse 包装镜像也通过有界逻辑流记录内部超级块。EROFS 另记录 `configuration.compression`，修改后重建从校验通过的原镜像恢复可解释的压缩与 inode 参数；描述性超级块字段不直接恢复物理布局或分配状态。格式处理器和应用文件系统解包服务共用该输出。
 
 资源管理器不再隐藏 `.uotanstudio-repack.json`，其与普通文件一样显示；双击解包文件夹以文本方式打开配置（`RepackConfigurationPath` 按单一位置规则解析：有项目时映射到 `.uotan/metadata/<分区名>/` 下的实际元数据 JSON，无项目时打开本地文件）。目录双击处理接收树控件已处理的事件，普通文件夹继续使用原有展开行为。根节点在项目打开时立即加载子目录（`EnsureChildrenLoaded`），确保 FileSystemWatcher 触发的后续刷新能生效。
 

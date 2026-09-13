@@ -64,6 +64,16 @@ the same inner superblock through a bounded logical stream; the outer format
 identity and its packing limitations remain unchanged. Superblock observations
 are not applied as packing options; physical layout and allocation are rebuilt.
 
+EROFS also records `configuration.compression`, including algorithm-specific
+dictionary/window and LZ4 distance/cluster limits. Edited EROFS builds derive
+these settings and per-file inode attributes from the hash-verified retained
+image. They preserve UUID, raw volume bytes and source timestamps. The on-disk
+format does not identify encoder level or distinguish LZ4 from LZ4HC, so
+`compressionLevel` is explicitly null. Compressed data boundaries, physical
+layout and final image size can change. Unedited directories still restore the
+retained image exactly. See [EROFS conformance](../../docs/erofs-rebuild-conformance.md)
+for native-tool and kernel validation and the tested feature boundaries.
+
 | Format | Options |
 | --- | --- |
 | EXT4 | `BlockSize`, `FsConfigPath`, `FileContextsPath` |

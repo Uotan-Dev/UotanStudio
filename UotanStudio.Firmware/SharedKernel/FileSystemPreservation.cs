@@ -251,7 +251,12 @@ public static class FileSystemPreservation
                 break;
             case "EROFS":
                 using (var parser = new ErofsParser(original))
-                new ErofsBuilder().Build(inputDirectory, output, new ErofsOptions { BlockSize = parser.BlockSize, Uuid = parser.SourceUuid, VolumeName = options.GetValueOrDefault("VolumeName", parser.SourceVolumeName) });
+                {
+                    var erofsOptions = parser.ReadRebuildOptions();
+                    erofsOptions.VolumeName = options.GetValueOrDefault("VolumeName", parser.SourceVolumeName);
+                    if (erofsOptions.VolumeName != parser.SourceVolumeName) erofsOptions.SourceVolumeNameBytes = null;
+                    new ErofsBuilder().Build(inputDirectory, output, erofsOptions);
+                }
                 break;
             case "F2FS":
                 using (var parser = new F2fsParser(original))
@@ -285,7 +290,7 @@ public static class FileSystemPreservation
             var modified = JsonSerializer.Deserialize(JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata), RepackJsonContext.Default.RepackMetadata)!;
             if (modified.PackingOptions.TryGetValue("VolumeName", out var requested)
                 && original.PackingOptions.TryGetValue("VolumeName", out var previous)
-                && requested.Length <= 16 && requested.All(c => c is > '\0' and <= '\x7f'))
+                && Encoding.UTF8.GetByteCount(requested) <= 16 && !requested.Contains('\0'))
             {
                 modified.PackingOptions["VolumeName"] = previous;
                 if (HashConfiguration(modified) == manifest.ConfigurationHash) return requested;
@@ -300,14 +305,15 @@ public static class FileSystemPreservation
         var header = new byte[128];
         image.ReadExactly(header);
         var superblock = ErofsSuperblock.FromBytes(header);
-        if (superblock.BlockSize is < 2048 or > 65536
+        if (superblock.BlockSize is < 512 or > 65536
             || checked((ulong)image.Length) != checked(superblock.BlockCount64 * (ulong)superblock.BlockSize))
             throw new InvalidDataException("Cannot change an EROFS volume with additional image tails or unsupported block geometry.");
-        var region = new byte[superblock.BlockSize - ErofsSuperblock.SuperblockOffset];
+        var region = new byte[superblock.BlockSize > ErofsSuperblock.SuperblockOffset
+            ? superblock.BlockSize - ErofsSuperblock.SuperblockOffset : superblock.BlockSize];
         image.Position = ErofsSuperblock.SuperblockOffset;
         image.ReadExactly(region);
         region.AsSpan(64, 16).Clear();
-        Encoding.ASCII.GetBytes(volume, region.AsSpan(64, 16));
+        Encoding.UTF8.GetBytes(volume, region.AsSpan(64, 16));
         if (superblock.HasCompatChecksum)
         {
             region.AsSpan(4, 4).Clear();

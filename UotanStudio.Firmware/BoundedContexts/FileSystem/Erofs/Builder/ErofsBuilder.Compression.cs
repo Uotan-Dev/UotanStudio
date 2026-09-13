@@ -9,12 +9,24 @@ public sealed partial class ErofsBuilder
 {
     private static byte[] BuildCompressionConfiguration(ErofsOptions options)
     {
-        if (!options.Compress || options.Algorithm == ErofsCompressionAlgorithm.Lz4) return [];
+        if (!options.Compress) return [];
+        if (options.SourceCompressionOptions is { } codecs)
+        {
+            using var output = new MemoryStream();
+            foreach (var codec in codecs.OrderBy(pair => pair.Key))
+                output.Write(BuildSingleCompressionConfiguration(codec.Value));
+            return output.ToArray();
+        }
+        return BuildSingleCompressionConfiguration(options);
+    }
+
+    private static byte[] BuildSingleCompressionConfiguration(ErofsOptions options)
+    {
 
         // Linux fs/erofs/erofs_fs.h: each algorithm has its own length-prefixed record.
         var length = options.Algorithm switch
         {
-            ErofsCompressionAlgorithm.Lzma => 14,
+            ErofsCompressionAlgorithm.Lz4 or ErofsCompressionAlgorithm.Lzma => 14,
             ErofsCompressionAlgorithm.Deflate or ErofsCompressionAlgorithm.Zstd => 6,
             _ => throw new ArgumentOutOfRangeException(nameof(options.Algorithm))
         };
@@ -23,14 +35,18 @@ public sealed partial class ErofsBuilder
 
         switch (options.Algorithm)
         {
+            case ErofsCompressionAlgorithm.Lz4:
+                BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(2), options.Lz4MaxDistance);
+                BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(4), checked((ushort)(options.MaxPclusterSize / options.BlockSize)));
+                break;
             case ErofsCompressionAlgorithm.Lzma:
-                BinaryPrimitives.WriteUInt32LittleEndian(configuration.AsSpan(2), 8 << 20);
+                BinaryPrimitives.WriteUInt32LittleEndian(configuration.AsSpan(2), (uint)options.DictionarySize);
                 break;
             case ErofsCompressionAlgorithm.Deflate:
-                configuration[2] = 15;
+                configuration[2] = (byte)(options.WindowBits == 0 ? 15 : options.WindowBits);
                 break;
             case ErofsCompressionAlgorithm.Zstd:
-                configuration[3] = 20 - 10; // windowLog minus ZSTD_WINDOWLOG_ABSOLUTEMIN.
+                configuration[3] = (byte)((options.WindowBits == 0 ? 20 : options.WindowBits) - 10);
                 break;
         }
         return configuration;
@@ -41,7 +57,9 @@ public sealed partial class ErofsBuilder
 
 
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var clusterSize = blockSize;
+        var clusterSize = node.LogicalClusterSize;
+        if (options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4MaxDistance != 0
+            && options.Lz4MaxDistance < clusterSize) return null;
         var totalClusters = CeilDiv(node.Size, clusterSize);
         var raw = new byte[clusterSize * 64];
         var compressed = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
@@ -55,6 +73,8 @@ public sealed partial class ErofsBuilder
             var acceptedOut = 0;
             var buffered = 0;
             var maxTake = (int)Math.Min(64, totalClusters - clusterIndex);
+            if (options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4MaxDistance != 0)
+                maxTake = Math.Min(maxTake, options.Lz4MaxDistance / clusterSize);
 
             // Compresses the leading `take` clusters of this group. The window is
             // extended incrementally: each probe only reads the newly added cluster
@@ -72,9 +92,9 @@ public sealed partial class ErofsBuilder
                 outLen = ErofsCompression.AlgorithmCompress(
                     (ErofsAlgorithm)options.Algorithm,
                     raw, 0, candidateLen, compressed, 0, compressed.Length,
-                    Math.Max(1, options.CompressionLevel), 0,
-                    options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : 0);
-                return outLen > 0 && outLen < blockSize - 8;
+                    Math.Max(1, options.CompressionLevel), options.DictionarySize,
+                    options.WindowBits == 0 && options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : options.WindowBits);
+                return outLen > 0 && outLen < options.MaxPclusterSize - 8;
             }
 
             // The largest mergeable take is located with an exponential probe plus a
@@ -114,14 +134,16 @@ public sealed partial class ErofsBuilder
                 }
             }
 
-            if (acceptedLen <= 0 || acceptedOut >= acceptedLen && clusterIndex + 1 == totalClusters && acceptedOut == 0)
+            if (acceptedLen <= 0 || acceptedOut <= 0)
             {
-                return null;
-            }
-
-            if (acceptedOut <= 0)
-            {
-                return null;
+                // A file may mix incompressible logical blocks with compressed extents.
+                // Keep the plain block and continue looking for compressible data.
+                if (clusterSize != blockSize) return null;
+                var length = (int)Math.Min(node.Size - pos, clusterSize);
+                plans.Add(new PclusterPlan { SourceOffset = pos, SourceLength = length, CompressedLength = length, Plain = true });
+                pos += length;
+                clusterIndex++;
+                continue;
             }
 
             plans.Add(new PclusterPlan { SourceOffset = pos, SourceLength = acceptedLen, CompressedLength = acceptedOut });
@@ -141,21 +163,35 @@ public sealed partial class ErofsBuilder
     private static void WriteCompressedData(Stream output, BuildNode node, int blockSize, ErofsOptions options)
     {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var raw = new byte[blockSize * 64];
+        var raw = new byte[node.LogicalClusterSize * 64];
         var compressed = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
         foreach (var p in node.Pclusters!)
         {
             fs.Position = p.SourceOffset;
             fs.ReadExactly(raw, 0, p.SourceLength);
+            if (p.Plain)
+            {
+                var offset = checked((long)p.BlockAddress * blockSize);
+                WriteAt(output, offset, raw, p.SourceLength);
+                WriteZeroes(output, offset + p.SourceLength, blockSize - p.SourceLength);
+                continue;
+            }
             var outLen = ErofsCompression.AlgorithmCompress(
                 (ErofsAlgorithm)options.Algorithm,
                 raw, 0, p.SourceLength, compressed, 0, compressed.Length,
-                Math.Max(1, options.CompressionLevel), 0,
-                options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : 0);
+                Math.Max(1, options.CompressionLevel), options.DictionarySize,
+                options.WindowBits == 0 && options.Algorithm == ErofsCompressionAlgorithm.Zstd ? 20 : options.WindowBits);
             if (outLen != p.CompressedLength)
             {
                 throw new InvalidDataException(
                     $"Compressed length mismatch for '{node.FullPath}': {outLen} != {p.CompressedLength}.");
+            }
+
+            if (node.InlineCompressedTail && ReferenceEquals(p, node.Pclusters![^1]))
+            {
+                var tailStart = node.MetaOffset + GetInodeRecordSize(node, blockSize) - outLen;
+                WriteAt(output, tailStart, compressed, outLen);
+                continue;
             }
 
 
@@ -182,9 +218,14 @@ public sealed partial class ErofsBuilder
         }
 
         var header = new byte[ZErofsMapHeader.Size];
+        if (node.InlineCompressedTail)
+        {
+            advise |= ZErofsMapHeader.AdviseInlinePcluster;
+            BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(2), checked((ushort)node.Pclusters![^1].CompressedLength));
+        }
         BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(4), advise);
         header[6] = (byte)options.Algorithm;
-        header[7] = 0;
+        header[7] = (byte)(BitOperations.Log2((uint)node.LogicalClusterSize) - BitOperations.Log2((uint)blockSize));
         WriteAt(output, indexOffset, header, header.Length);
 
         if (node.CompactedIndexes)
@@ -203,14 +244,14 @@ public sealed partial class ErofsBuilder
         for (var c = 0L; c < clusters; c++)
         {
             var plan = pclusters[pclusterIndex];
-            var headCluster = plan.SourceOffset / blockSize;
-            var coveredClusters = CeilDiv(plan.SourceLength, blockSize);
+            var headCluster = plan.SourceOffset / node.LogicalClusterSize;
+            var coveredClusters = CeilDiv(plan.SourceLength, node.LogicalClusterSize);
             var entry = new byte[ZErofsLclusterIndex.Size];
             if (c == headCluster)
             {
 
 
-                BinaryPrimitives.WriteUInt16LittleEndian(entry, ZErofsLclusterIndex.LclusterTypeHead1);
+                BinaryPrimitives.WriteUInt16LittleEndian(entry, plan.Plain ? ZErofsLclusterIndex.LclusterTypePlain : ZErofsLclusterIndex.LclusterTypeHead1);
                 BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), 0);
                 BinaryPrimitives.WriteUInt32LittleEndian(entry.AsSpan(4), plan.BlockAddress);
             }
@@ -263,7 +304,7 @@ public sealed partial class ErofsBuilder
     {
         const int destsize = 4;
         const int vcnt = 2;
-        var lclusterBits = BitOperations.Log2((uint)blockSize);
+        var lclusterBits = BitOperations.Log2((uint)node.LogicalClusterSize);
         var lobits = Math.Max(lclusterBits, 12);
         var encodebits = (vcnt * destsize * 8 - 32) / vcnt;
         var packSize = vcnt * destsize;
@@ -286,7 +327,7 @@ public sealed partial class ErofsBuilder
         {
 
 
-            var packStartBlkaddr = blkaddr;
+            var packStartBlkaddr = blkaddr + (bigPcluster && dummyHead ? 1 : 0);
             var bits = 0;
             for (var i = 0; i < vcnt; i++)
             {
@@ -295,13 +336,13 @@ public sealed partial class ErofsBuilder
                 if (entryIndex < clusters)
                 {
                     var plan = pclusters[pclusterIndex];
-                    var headCluster = plan.SourceOffset / blockSize;
-                    var coveredClusters = CeilDiv(plan.SourceLength, blockSize);
+                    var headCluster = plan.SourceOffset / node.LogicalClusterSize;
+                    var coveredClusters = CeilDiv(plan.SourceLength, node.LogicalClusterSize);
                     if (entryIndex == headCluster)
                     {
 
 
-                        type = 1;
+                        type = plan.Plain ? (byte)0 : (byte)1;
                         offset = 0;
                         if (dummyHead)
                         {
@@ -427,7 +468,8 @@ public sealed partial class ErofsBuilder
            && node.Size <= uint.MaxValue
            && node.Pclusters is null
            && !node.IsFragment
-           && node.XattrIbody.Length == 0;
+           && node.XattrIbody.Length == 0
+           && GetInodeHeaderSize(node) == ErofsInode.CompactSize;
 
     /// <summary>
     /// Writes the metabox inode's container data area: each resident file's 32-byte compact inode record is streamed to its slot (the metabox inode's i_u points at this data area and its i_size is slotCount × 32).
@@ -453,10 +495,7 @@ public sealed partial class ErofsBuilder
     {
         var headerOffset = node.MetaOffset + AlignUp(inode.OnDiskSize + inode.XattrTotalSize, 8);
         var header = new byte[ZErofsMapHeader.Size];
-        BinaryPrimitives.WriteUInt32LittleEndian(header, checked((uint)node.FragmentOffset));
-        BinaryPrimitives.WriteUInt16LittleEndian(header.AsSpan(4), 0);
-        header[6] = (byte)options.Algorithm;
-        header[7] = ZErofsMapHeader.FragmentInodeMask;
+        BinaryPrimitives.WriteUInt64LittleEndian(header, checked((ulong)node.FragmentOffset) | (1UL << 63));
         WriteAt(output, headerOffset, header, header.Length);
     }
 
@@ -482,11 +521,10 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Picks the next fragment start so bit 7 of h_fragmentoff never collides with the reader's fragment-flag mask (the reader clears that bit, so real offsets must leave it zero); starts landing in [128..255] modulo 256 are rounded up to the next 256 boundary.
-    /// <para>选择下一碎片起点：避免 h_fragmentoff 的 bit7 与 read-side 的 fragment 标记掩码冲突 （读端清除该位后仍应还原真实偏移）。</para>
+    /// Whole-file fragment offsets occupy the low 63 bits of the map header and need no alignment.
     /// </summary>
     private static long AlignFragmentStart(long cursor)
-        => (cursor & 0x80) == 0 ? cursor : (cursor & ~0xFFL) + 0x100L;
+        => cursor;
 
     private static void CopyFileRange(Stream output, BuildNode node, long sourceOffset, long length, long targetOffset)
     {

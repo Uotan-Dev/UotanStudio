@@ -330,10 +330,10 @@ internal static class ErofsCompression
     {
         if (dictSize > 0)
         {
-            if (!IsPowerOfTwo(dictSize))
+            if (dictSize is < 4096 or > 8 << 20)
             {
                 throw new ArgumentOutOfRangeException(nameof(dictSize), dictSize,
-                    "LZMA dictionary size must be a power of two.");
+                    "EROFS MicroLZMA dictionaries must be between 4096 and 8388608 bytes.");
             }
 
             return dictSize;
@@ -374,6 +374,9 @@ internal static class ErofsCompression
         }
 
         var deflater = new Deflater(Math.Clamp(compressionLevel, 0, 9), noZlibHeaderOrFooter: true);
+        // SharpZipLib's match finder has a fixed 32 KiB window. Literal/Huffman-only
+        // output contains no back references and therefore satisfies smaller source windows.
+        if (windowBits is > 0 and < 15) deflater.SetStrategy(DeflateStrategy.HuffmanOnly);
         deflater.SetInput(source, sourceIndex, sourceLength);
         deflater.Finish();
 
@@ -466,10 +469,9 @@ internal static class ErofsCompression
 
     private static void ValidateDeflateWindowBits(int windowBits)
     {
-        if (windowBits != 0 && windowBits != 15)
+        if (windowBits != 0 && windowBits is < 8 or > 15)
         {
-            throw new NotSupportedException(
-                "SharpZipLib only supports a 15-bit DEFLATE window; windowBits must be 0 (default) or 15.");
+            throw new ArgumentOutOfRangeException(nameof(windowBits), "DEFLATE windows must be between 8 and 15 bits, or zero for the default.");
         }
     }
 

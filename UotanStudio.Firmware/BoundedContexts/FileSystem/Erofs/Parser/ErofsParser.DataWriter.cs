@@ -210,8 +210,8 @@ public sealed partial class ErofsParser
 
         if (header.IsFragmentInode)
         {
-            var fragmentOff = header.FragmentOff & ~(1u << ZErofsMapHeader.FragmentInodeBit);
-            WritePackedData(inode, fragmentOff, output);
+            var fragmentOff = BinaryPrimitives.ReadUInt64LittleEndian(headerBytes) & ~(1UL << 63);
+            WritePackedData(fragmentOff, checked((long)inode.Size), output);
             return;
         }
 
@@ -307,39 +307,20 @@ public sealed partial class ErofsParser
                     continue;
                 }
 
-                if (llen > MaxMetadataComponentSize)
+                if (llen > ErofsCompression.MaxPclusterDecompressedSize)
                 {
                     throw new InvalidDataException(
-                        $"Pcluster decompressed size {llen} exceeds the limit of {MaxMetadataComponentSize} bytes.");
+                        $"Pcluster decompressed size {llen} exceeds the limit of {ErofsCompression.MaxPclusterDecompressedSize} bytes.");
                 }
 
 
-                var isTailPacked = tailPacking && nextLcn >= totalIdx;
-                if (isTailPacked)
+                var isLastExtent = nextMLa >= (long)inode.Size;
+                var isTailPacked = tailPacking && isLastExtent;
+                if (fragmentPcluster && isLastExtent)
                 {
-                    var idataSize = (int)header.IdataSize;
-                    if (idataSize < 0 || idataSize > llen)
-                    {
-                        throw new InvalidDataException($"Invalid tailpacking idata size {idataSize} for nid {nid}.");
-                    }
-
-                    if (idataSize == 0)
-                    {
-
-                        WriteZeroes(output, llen);
-                        lcn = nextLcn;
-                        continue;
-                    }
-
-                    var tailStart = headerOffset + ZErofsMapHeader.Size;
-                    CheckRange(tailStart, idataSize, "Tailpacked data");
-                    CopyFromSource(output, tailStart, idataSize);
-
-                    if (llen > idataSize)
-                    {
-                        WriteZeroes(output, llen - idataSize);
-                    }
-
+                    var fragmentOffset = (ulong)header.FragmentOff;
+                    if (inode.DataLayout == ErofsInode.DataLayoutCompressed) fragmentOffset |= (ulong)lc.Pblk << 32;
+                    WritePackedData(fragmentOffset, llen, output);
                     lcn = nextLcn;
                     continue;
                 }
@@ -348,7 +329,7 @@ public sealed partial class ErofsParser
                 {
 
 
-                    var dataStart = checked(lc.Pblk * _blockSize);
+                    var dataStart = isTailPacked ? CompressedIndexEnd(inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
                     if (!interlaced)
                     {
                         CheckRange(dataStart, llen, "Plain lcluster data");
@@ -384,7 +365,7 @@ public sealed partial class ErofsParser
                 var head1NotBig = headType == LclusterTypeHead1 && !bigPcluster1;
                 var plainOrHead2NotBig = (headType == LclusterTypePlain || headType == LclusterTypeHead2) && !bigPcluster2;
                 var atEof = (lcn << lclusterBits) >= (long)inode.Size;
-                if (!head1NotBig && !plainOrHead2NotBig && !atEof)
+                if (!isTailPacked && !head1NotBig && !plainOrHead2NotBig && !atEof && lcn + 1 < totalIdx)
                 {
 
 
@@ -409,13 +390,13 @@ public sealed partial class ErofsParser
                     }
                 }
 
-                var compressedByteLen = checked(compressedBlocks * _blockSize);
-                if (compressedByteLen <= 0 || lc.Pblk < 0)
+                var compressedByteLen = isTailPacked ? header.IdataSize : checked(compressedBlocks * _blockSize);
+                if (compressedByteLen <= 0 || !isTailPacked && lc.Pblk < 0 || compressedByteLen > ErofsCompression.MaxPclusterSize)
                 {
                     throw new InvalidDataException("Invalid compressed pcluster for nid {nid}.");
                 }
 
-                var pblkStart = checked(lc.Pblk * _blockSize);
+                var pblkStart = isTailPacked ? CompressedIndexEnd(inode, headerOffset, totalIdx, lclusterBits) : checked(lc.Pblk * _blockSize);
                 CheckRange(pblkStart, compressedByteLen, "Compressed pcluster data");
                 if (compressedByteLen > compressed.Length)
                 {
@@ -437,7 +418,7 @@ public sealed partial class ErofsParser
 
 
                 var inputMargin = 0;
-                while (inputMargin < compressedByteLen && compressed[inputMargin] == 0)
+                while (!isTailPacked && inputMargin < compressedByteLen && compressed[inputMargin] == 0)
                 {
                     inputMargin++;
                 }
@@ -500,7 +481,7 @@ public sealed partial class ErofsParser
     /// Reads fragment data at the specified logical offset in the packed inode.
     /// <para>从 packed inode 的指定逻辑偏移读取片段数据。</para>
     /// </summary>
-    private void WritePackedData(ErofsInode fragmentInode, uint fragmentOff, Stream output)
+    private void WritePackedData(ulong fragmentOff, long length, Stream output)
     {
         var packedNid = _superblock.PackedNid;
         if (packedNid == 0)
@@ -519,7 +500,6 @@ public sealed partial class ErofsParser
             throw new InvalidDataException($"Packed inode nid {packedNid} is not a regular file.");
         }
 
-        var length = (long)fragmentInode.Size;
         if (length == 0)
         {
             return;
@@ -527,10 +507,16 @@ public sealed partial class ErofsParser
 
 
         var packedSize = (long)packed.Size;
-        if (fragmentOff >= packedSize || length > packedSize - fragmentOff)
+        if (fragmentOff >= (ulong)packedSize || length > packedSize - (long)fragmentOff)
         {
             throw new InvalidDataException(
-                $"Packed fragment range [{fragmentOff}..{fragmentOff + length}) exceeds the packed inode size {packedSize}.");
+                $"Packed fragment offset {fragmentOff} and length {length} exceed the packed inode size {packedSize}.");
+        }
+
+        if (packed.IsCompressed)
+        {
+            CopyCompressedPackedRange(packedNid, packed, (long)fragmentOff, length, output);
+            return;
         }
 
         var inlineAll = packed.DataLayout == ErofsInode.DataLayoutInline &&
@@ -540,14 +526,14 @@ public sealed partial class ErofsParser
 
 
             var flatLength = packedSize / _blockSize * _blockSize;
-            WritePackedRange(fragmentOff, length, flatLength, packed, packedNid, inlineStartIsFlat: false, output);
+            WritePackedRange((long)fragmentOff, length, flatLength, packed, packedNid, inlineStartIsFlat: false, output);
             return;
         }
 
         if (packed.DataLayout == ErofsInode.DataLayoutInline)
         {
 
-            var start = _superblock.GetInodeOffset(packedNid) + packed.InlineDataOffset + fragmentOff;
+            var start = checked(_superblock.GetInodeOffset(packedNid) + packed.InlineDataOffset + (long)fragmentOff);
             CheckRange(start, length, "Packed fragment data");
             CopyFromSource(output, start, length);
             return;
@@ -559,7 +545,68 @@ public sealed partial class ErofsParser
         }
 
 
-        WritePackedRange(fragmentOff, length, packedSize, packed, packedNid, inlineStartIsFlat: true, output);
+        WritePackedRange((long)fragmentOff, length, packedSize, packed, packedNid, inlineStartIsFlat: true, output);
+    }
+
+    private long CompressedIndexEnd(ErofsInode inode, long headerOffset, int count, int clusterBits)
+    {
+        if (inode.DataLayout == ErofsInode.DataLayoutCompressed)
+            return checked(headerOffset + ZErofsMapHeader.Size + FullIndexStartPad + (long)count * 8);
+        var header = ZErofsMapHeader.FromBytes(ReadBytes(headerOffset, ZErofsMapHeader.Size, "inline index header"));
+        var start = headerOffset + ZErofsMapHeader.Size;
+        var initial = (int)(((32 - start % 32) / 4) & 7);
+        var compact = header.HasCompacted2B && initial < count ? (count - initial) / 16 * 16 : 0;
+        var last = count - 1;
+        var width = 4;
+        if (last >= initial)
+        {
+            start += initial * 4;
+            last -= initial;
+            if (last < compact) width = 2;
+            else { start += compact * 2; last -= compact; }
+        }
+        var position = checked(start + (long)last * width);
+        var packSize = width == 2 ? 32 : 8;
+        return AlignUp(position + 1, packSize);
+    }
+
+    private FileStream? _packedData;
+    private bool _loadingPackedData;
+
+    private void CopyCompressedPackedRange(ulong nid, ErofsInode inode, long offset, long length, Stream output)
+    {
+        lock (_streamLock)
+        {
+            if (_loadingPackedData) throw new InvalidDataException("Recursive EROFS packed inode reference.");
+            if (_packedData is null)
+            {
+                if (inode.Size > 64UL << 30) throw new InvalidDataException("EROFS packed inode exceeds the 64 GiB staging limit.");
+                var temporary = new FileStream(Path.Combine(Path.GetTempPath(), "uotan-erofs-packed-" + Guid.NewGuid().ToString("N")),
+                    FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
+                _loadingPackedData = true;
+                try
+                {
+                    WriteCompressedData(nid, inode, temporary);
+                    if (temporary.Length != (long)inode.Size) throw new InvalidDataException("EROFS packed inode length mismatch.");
+                    _packedData = temporary;
+                }
+                catch { temporary.Dispose(); throw; }
+                finally { _loadingPackedData = false; }
+            }
+            _packedData.Position = offset;
+            var buffer = ArrayPool<byte>.Shared.Rent(65536);
+            try
+            {
+                while (length > 0)
+                {
+                    var take = (int)Math.Min(length, buffer.Length);
+                    _packedData.ReadExactly(buffer, 0, take);
+                    output.Write(buffer, 0, take);
+                    length -= take;
+                }
+            }
+            finally { ArrayPool<byte>.Shared.Return(buffer); }
+        }
     }
 
     /// <summary>

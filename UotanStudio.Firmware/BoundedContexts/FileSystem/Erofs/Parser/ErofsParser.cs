@@ -18,6 +18,9 @@ public sealed record ErofsFileEntry(
 
     public ulong MTime { get; init; }
 
+    /// <summary>Nanosecond component of the inode modification time.</summary>
+    public uint MTimeNanoseconds { get; init; }
+
     public bool IsSymlink => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeSymlink;
 
     public bool IsDirectory => (Mode & ErofsInode.ModeTypeMask) == ErofsInode.ModeDirectory;
@@ -376,6 +379,7 @@ public sealed partial class ErofsParser : IDisposable
     /// </summary>
     public void Dispose()
     {
+        _packedData?.Dispose();
         if (_deviceStreams is not null)
         {
             for (var i = 1; i < _deviceStreams.Length; i++)
@@ -623,7 +627,7 @@ public sealed partial class ErofsParser : IDisposable
 
         _directoryEntries.Add(new(prefix.Length == 0 ? "." : prefix, (long)inode.Size, nid)
         {
-            Mode = inode.Mode, Uid = inode.Uid, Gid = inode.Gid, MTime = inode.CTime,
+            Mode = inode.Mode, Uid = inode.Uid, Gid = inode.Gid, MTime = inode.CTime, MTimeNanoseconds = inode.CTimeNsec,
             Xattrs = ReadXattrs(nid, inode)
         });
 
@@ -660,6 +664,7 @@ public sealed partial class ErofsParser : IDisposable
                     Uid = fileInode.Uid,
                     Gid = fileInode.Gid,
                     MTime = fileInode.CTime,
+                    MTimeNanoseconds = fileInode.CTimeNsec,
                 };
                 if (fileInode.IsSymlink)
                 {
@@ -844,8 +849,8 @@ public sealed partial class ErofsParser : IDisposable
                 throw new InvalidDataException(
                     $"METABOX slot index {slotIndex} (offset {slotOffset}) is out of range (metabox data size {_metaboxData.Length}).");
 
-            return ErofsInode.FromBytes(
-                _metaboxData.AsSpan((int)slotOffset, ErofsSuperblock.CompactInodeSize));
+            return ResolveTimestamp(ErofsInode.FromBytes(
+                _metaboxData.AsSpan((int)slotOffset, ErofsSuperblock.CompactInodeSize)));
         }
 
         var offset = _superblock.GetInodeOffset(nid);
@@ -867,7 +872,7 @@ public sealed partial class ErofsParser : IDisposable
             throw new InvalidDataException($"Inode nid {nid} exceeds the image bounds.");
         }
 
-        return ErofsInode.FromBytes(data.AsSpan(0, inodeSize));
+        return ResolveTimestamp(ErofsInode.FromBytes(data.AsSpan(0, inodeSize)));
     }
 
     private int DirectoryBlockSize => _superblock.DirBlkBits == 0 ? _blockSize : 1 << _superblock.DirBlkBits;

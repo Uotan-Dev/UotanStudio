@@ -445,7 +445,9 @@ public sealed class RepackMetadata
         if (handler.FormatName == "Android OTA Payload (payload.bin)") metadata.PackingNotes += " The directory packer creates an unsigned full payload.";
         if (handler.FormatName == "Android Logical Partition (super)") metadata.PackingNotes += " The directory packer creates new default LP groups and geometry.";
         if (metadata.Configuration.ContainsKey("superblock"))
-            metadata.PackingNotes += " configuration.superblock records the original filesystem metadata for inspection; only packingOptions are applied when rebuilding the filesystem.";
+            metadata.PackingNotes += metadata.Configuration["fileSystem"]?.GetValue<string>() == "EROFS"
+                ? " EROFS edits inherit codec parameters, UUID, volume and inode attributes from the verified original image; compression level is not recorded on disk. Physical layout is regenerated."
+                : " configuration.superblock records the original filesystem metadata for inspection; only packingOptions are applied when rebuilding the filesystem.";
         if (!source.Success) metadata.PackingNotes += " Source metadata could not be read: " + source.Summary;
 
         if (handler is BoundedContexts.FileSystem.Ext4.Ext4FormatHandler

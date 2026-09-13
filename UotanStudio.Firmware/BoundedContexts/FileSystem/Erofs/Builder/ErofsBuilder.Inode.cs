@@ -212,20 +212,21 @@ public sealed partial class ErofsBuilder
 
         if (node.IsDirectory)
         {
-            return node.DirBlocks <= 1 ? header + EstimateDirPayloadLength(node) : header;
+            return node.DirectoryInline ? header + EstimateDirPayloadLength(node) : header;
         }
 
         if (node.Pclusters is not null)
         {
+            var tailSize = node.InlineCompressedTail ? node.Pclusters[^1].CompressedLength : 0;
             if (node.CompactedIndexes)
             {
 
 
-                return header + ZErofsMapHeader.Size + 8L * CeilDiv(node.ClusterCount, 2L);
+                return AlignUp(header, 8) + ZErofsMapHeader.Size + 8L * CeilDiv(node.ClusterCount, 2L) + tailSize;
             }
 
 
-            return header + ZErofsMapHeader.Size + 8L + node.ClusterCount * ZErofsLclusterIndex.Size;
+            return AlignUp(header, 8) + ZErofsMapHeader.Size + 8L + node.ClusterCount * ZErofsLclusterIndex.Size + tailSize;
         }
 
         if (node.IsFragment)
@@ -241,7 +242,8 @@ public sealed partial class ErofsBuilder
 
     private static long GetInodeHeaderSize(BuildNode node)
     {
-        if (node.Uid > ushort.MaxValue || node.Gid > ushort.MaxValue) return ErofsInode.ExtendedSize;
+        if (node.SourceInode is { Extended: true } || node.RequiresExtendedTime) return ErofsInode.ExtendedSize;
+        if (node.Uid > ushort.MaxValue || node.Gid > ushort.MaxValue || node.LinkCount > ushort.MaxValue) return ErofsInode.ExtendedSize;
 
 
         if (node.IsDirectory)
@@ -264,12 +266,13 @@ public sealed partial class ErofsBuilder
         }
 
 
-        var effectiveTime = node.Mtime > 0 ? (ulong)node.Mtime : now;
+        var effectiveTime = node.SourceInode?.Mtime ?? (node.Mtime > 0 ? (ulong)node.Mtime : now);
         inode.CTime = effectiveTime;
-        inode.CTimeNsec = 0;
+        inode.CTimeNsec = node.SourceInode?.MtimeNanoseconds ?? 0;
         inode.Uid = node.Uid;
         inode.Gid = node.Gid;
-        inode.Generation = (uint)effectiveTime;
+        // Compact i_mtime is relative to the superblock epoch. Offset 12 is not a generation number.
+        inode.Generation = inode.IsExtended ? 0 : checked((uint)(effectiveTime - now));
 
 
         if (node.XattrIbody.Length > 0)
@@ -304,10 +307,10 @@ public sealed partial class ErofsBuilder
         {
             inode.Mode = (ushort)(ErofsInode.ModeDirectory | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1ED));
             inode.Nlink = (ulong)(2 + node.Children.Count(child => child.IsDirectory));
-            inode.Size = node.DirBlocks <= 1
+            inode.Size = node.DirectoryInline
                 ? (ulong)EstimateDirPayloadLength(node)
                 : (ulong)(node.DirBlocks * blockSize);
-            if (node.DirBlocks <= 1)
+            if (node.DirectoryInline)
             {
 
                 inode.Advise |= ErofsInode.DataLayoutInline;

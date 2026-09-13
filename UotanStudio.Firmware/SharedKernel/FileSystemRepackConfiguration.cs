@@ -29,6 +29,7 @@ internal static class FileSystemRepackConfiguration
         var prefix = new byte[1082];
         input.ReadExactly(prefix);
         JsonObject superblock;
+        JsonObject? compression = null;
         string format;
         if (BinaryPrimitives.ReadUInt16LittleEndian(prefix.AsSpan(1080)) == Ext4Superblock.MagicValue)
         {
@@ -56,6 +57,9 @@ internal static class FileSystemRepackConfiguration
             superblock = JsonSerializer.SerializeToNode(block, FileSystemRepackJsonContext.Default.ErofsSuperblock)!.AsObject();
             superblock["uuid"] = Convert.ToHexStringLower(block.Uuid);
             format = "EROFS";
+            input.Position = 0;
+            using var parser = new ErofsParser(input);
+            compression = parser.ReadCompressionMetadata();
         }
         else if (BinaryPrimitives.ReadUInt32LittleEndian(prefix.AsSpan(1024)) == F2fsSuperblock.Magic)
         {
@@ -69,7 +73,9 @@ internal static class FileSystemRepackConfiguration
         }
         else return [];
 
-        return new JsonObject { ["fileSystem"] = format, ["superblock"] = superblock };
+        var configuration = new JsonObject { ["fileSystem"] = format, ["superblock"] = superblock };
+        if (compression is not null) configuration["compression"] = compression;
+        return configuration;
     }
 }
 

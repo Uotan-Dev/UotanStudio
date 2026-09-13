@@ -10,6 +10,35 @@ public sealed class ErofsOptions
 
     public int CompressionLevel { get; set; } = 1;
 
+    /// <summary>Maximum physical compressed cluster size in bytes; zero uses one filesystem block.</summary>
+    public int MaxPclusterSize { get; set; }
+
+    /// <summary>MicroLZMA dictionary size in bytes, as declared in the compression configuration.</summary>
+    public int DictionarySize { get; set; } = 8 << 20;
+
+    /// <summary>DEFLATE or Zstandard window bits; zero selects the codec default.</summary>
+    public int WindowBits { get; set; }
+
+    /// <summary>LZ4 maximum match distance; zero denotes the upstream 65535-byte default.</summary>
+    public ushort Lz4MaxDistance { get; set; }
+
+    /// <summary>Optional source epoch and nanoseconds used by compact inodes.</summary>
+    public ulong? BuildTime { get; set; }
+
+    /// <summary>Nanoseconds associated with the filesystem epoch.</summary>
+    public uint BuildTimeNanoseconds { get; set; }
+
+    /// <summary>Build time offset from the epoch in the current EROFS superblock layout.</summary>
+    public uint BuildTimeOffset { get; set; }
+
+    /// <summary>Whether to write the upstream superblock checksum feature.</summary>
+    public bool SuperblockChecksum { get; set; } = true;
+
+    internal Dictionary<ulong, ErofsSourceInode>? SourceInodes { get; set; }
+    internal Dictionary<ErofsCompressionAlgorithm, ErofsOptions>? SourceCompressionOptions { get; set; }
+    internal bool SourceMtimeFeature { get; set; }
+    internal byte[]? SourceVolumeNameBytes { get; set; }
+
     public bool UseCompactedIndexes { get; set; } = true;
 
     /// <summary>Optional filesystem UUID; extracted images retain their original identity.</summary>
@@ -20,6 +49,9 @@ public sealed class ErofsOptions
     public IReadOnlyDictionary<string, IReadOnlyList<ErofsXattrEntry>>? FileXattrs { get; set; }
 
     public bool TailPacking { get; set; } = true;
+
+    /// <summary>Stores the final compressed cluster beside its indexes when it fits in a metadata block.</summary>
+    public bool CompressedTailPacking { get; set; }
 
     public bool Fragments { get; set; }
 
@@ -51,11 +83,11 @@ public sealed class ErofsOptions
     /// </summary>
     internal void Validate()
     {
-        if (BlockSize < 512 || (BlockSize & (BlockSize - 1)) != 0)
+        if (BlockSize is < 512 or > 65536 || (BlockSize & (BlockSize - 1)) != 0)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(BlockSize),
-                "BlockSize must be a power of two of at least 512 bytes.");
+                "BlockSize must be a power of two between 512 and 65536 bytes.");
         }
 
         CompressionLevel = Math.Clamp(CompressionLevel, 1, 9);
@@ -64,6 +96,19 @@ public sealed class ErofsOptions
             throw new ArgumentOutOfRangeException(nameof(Algorithm), Algorithm,
                 "Unknown EROFS compression algorithm.");
         }
+
+        if (MaxPclusterSize == 0) MaxPclusterSize = BlockSize;
+        if (MaxPclusterSize < BlockSize || MaxPclusterSize > ErofsCompression.MaxPclusterSize || MaxPclusterSize % BlockSize != 0)
+            throw new ArgumentOutOfRangeException(nameof(MaxPclusterSize));
+        if (DictionarySize is < 4096 or > 8 << 20)
+            throw new ArgumentOutOfRangeException(nameof(DictionarySize));
+        if (BuildTimeNanoseconds >= 1_000_000_000) throw new ArgumentOutOfRangeException(nameof(BuildTimeNanoseconds));
+        if (Algorithm == ErofsCompressionAlgorithm.Deflate && WindowBits != 0 && WindowBits is < 8 or > 15)
+            throw new ArgumentOutOfRangeException(nameof(WindowBits));
+        if (Algorithm == ErofsCompressionAlgorithm.Zstd && WindowBits != 0 && WindowBits is < 10 or > 20)
+            throw new ArgumentOutOfRangeException(nameof(WindowBits));
+        if (Compress && UseCompactedIndexes && BlockSize > 16384)
+            throw new NotSupportedException("Compacted EROFS indexes require logical clusters no larger than 16384 bytes.");
 
         if (string.IsNullOrEmpty(VolumeName) && SharedKernel.FileSystemEditPlan.Current is null)
         {
@@ -89,3 +134,6 @@ public sealed class ErofsOptions
         }
     }
 }
+
+internal sealed record ErofsSourceInode(ulong Mtime, uint MtimeNanoseconds, bool Extended,
+    bool Compressed, ErofsCompressionAlgorithm Algorithm, bool CompactIndexes, bool InlineData, int LogicalClusterSize);

@@ -100,6 +100,8 @@ internal sealed class ErofsSuperblock
 
     public string VolumeName { get; init; } = string.Empty;
 
+    internal byte[] VolumeNameBytes { get; init; } = [];
+
     public uint FeatureIncompat { get; init; }
 
     public ushort AvailableComprAlgs { get; init; }
@@ -152,7 +154,7 @@ internal sealed class ErofsSuperblock
 
     public ushort BlocksHi { get; init; }
 
-    public ushort EffectiveComprAlgs => AvailableComprAlgs == 0 ? (ushort)0x0F : AvailableComprAlgs;
+    public ushort EffectiveComprAlgs => HasBigPcluster ? AvailableComprAlgs : (ushort)1;
 
     /// <summary>
     /// Computes the absolute byte offset of an inode from its nid: (meta_blkaddr &lt;&lt; s_blkszbits) + nid.
@@ -220,7 +222,8 @@ internal sealed class ErofsSuperblock
             MetaBlkAddr = BinaryPrimitives.ReadUInt32LittleEndian(data[OffsetMetaBlkAddr..]),
             XattrBlkAddr = BinaryPrimitives.ReadUInt32LittleEndian(data[OffsetXattrBlkAddr..]),
             Uuid = data.Slice(OffsetUuid, 16).ToArray(),
-            VolumeName = ReadFixedAscii(data.Slice(OffsetVolumeName, 16)),
+            VolumeName = ReadFixedUtf8(data.Slice(OffsetVolumeName, 16)),
+            VolumeNameBytes = data.Slice(OffsetVolumeName, 16).ToArray(),
             FeatureIncompat = BinaryPrimitives.ReadUInt32LittleEndian(data[OffsetFeatureIncompat..]),
             AvailableComprAlgs = BinaryPrimitives.ReadUInt16LittleEndian(data[OffsetAvailableComprAlgs..]),
             ExtraDevices = BinaryPrimitives.ReadUInt16LittleEndian(data[OffsetExtraDevices..]),
@@ -290,7 +293,8 @@ internal sealed class ErofsSuperblock
         BinaryPrimitives.WriteUInt32LittleEndian(destination[OffsetMetaBlkAddr..], MetaBlkAddr);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[OffsetXattrBlkAddr..], XattrBlkAddr);
         Uuid.AsSpan(0, Math.Min(16, Uuid.Length)).CopyTo(destination[OffsetUuid..]);
-        WriteFixedAscii(destination.Slice(OffsetVolumeName, 16), VolumeName);
+        if (VolumeNameBytes.Length == 16) VolumeNameBytes.CopyTo(destination.Slice(OffsetVolumeName, 16));
+        else WriteFixedUtf8(destination.Slice(OffsetVolumeName, 16), VolumeName);
         BinaryPrimitives.WriteUInt32LittleEndian(destination[OffsetFeatureIncompat..], FeatureIncompat);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[OffsetAvailableComprAlgs..], AvailableComprAlgs);
         BinaryPrimitives.WriteUInt16LittleEndian(destination[OffsetExtraDevices..], ExtraDevices);
@@ -316,7 +320,7 @@ internal sealed class ErofsSuperblock
         }
     }
 
-    private static string ReadFixedAscii(ReadOnlySpan<byte> bytes)
+    private static string ReadFixedUtf8(ReadOnlySpan<byte> bytes)
     {
         var end = bytes.IndexOf((byte)0);
         if (end < 0)
@@ -324,13 +328,14 @@ internal sealed class ErofsSuperblock
             end = bytes.Length;
         }
 
-        return Encoding.ASCII.GetString(bytes[..end]);
+        return Encoding.UTF8.GetString(bytes[..end]);
     }
 
-    private static void WriteFixedAscii(Span<byte> destination, string value)
+    private static void WriteFixedUtf8(Span<byte> destination, string value)
     {
         destination.Clear();
-        var count = Math.Min(destination.Length, value.Length);
-        Encoding.ASCII.GetBytes(value.AsSpan(0, count), destination);
+        if (Encoding.UTF8.GetByteCount(value) > destination.Length)
+            throw new ArgumentException("The EROFS volume label exceeds its 16-byte field.", nameof(value));
+        Encoding.UTF8.GetBytes(value, destination);
     }
 }
