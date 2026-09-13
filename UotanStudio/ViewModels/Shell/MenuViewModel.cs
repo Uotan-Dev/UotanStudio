@@ -1008,12 +1008,18 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private static Window? _logWindow;
 
     private static Window? _keyManagerWindow;
+    private static Window? _apkSigningWindow;
 
     /// <summary>Opens or activates the independent key library.</summary>
     [RelayCommand]
     private void OpenKeyManager() => ShowKeyManagerWindow();
 
     internal static void ShowKeyManagerWindow() => ShowWindow(ref _keyManagerWindow, () => new KeyManagerWindow());
+
+    [RelayCommand]
+    private void OpenApkSigner() => ShowApkSigningWindow();
+
+    internal static void ShowApkSigningWindow() => ShowWindow(ref _apkSigningWindow, () => new ApkSigningWindow());
 
     /// <summary>
     /// <para>显示辅助工具窗口：若尚未打开则创建并显示，否则前置并恢复正常窗口状态。</para>

@@ -21,6 +21,7 @@ public partial class KeyManagerWindow : Window
         InitializeComponent();
         DataContext = new KeyManagerViewModel();
         KeyCreationActions.SizeChanged += (_, _) => UpdateCreationActionsLayout();
+        ImportKeyControls.SizeChanged += (_, _) => UpdateCreationActionsLayout();
         ImportKeyButton.SizeChanged += (_, _) => UpdateCreationActionsLayout();
         GenerateKeyButton.SizeChanged += (_, _) => UpdateCreationActionsLayout();
         Opened += async (_, _) => await Model.RefreshCommand.ExecuteAsync(null);
@@ -56,7 +57,9 @@ public partial class KeyManagerWindow : Window
     private void UpdateCreationActionsLayout()
     {
         if (KeyCreationActions.Bounds.Width <= 0) return;
-        var stacked = KeyCreationActions.Bounds.Width < ImportKeyButton.DesiredSize.Width + GenerateKeyButton.DesiredSize.Width + 226;
+        var importWidth = ImportKeyControls.IsVisible ? ImportKeyControls.DesiredSize.Width : 0;
+        var requiredWidth = importWidth + GenerateKeyButton.DesiredSize.Width + (importWidth > 0 ? 8 : 0);
+        var stacked = importWidth > 0 && KeyCreationActions.Bounds.Width < requiredWidth;
         if (_creationActionsStacked == stacked) return;
         _creationActionsStacked = stacked;
         KeyCreationActions.ColumnDefinitions = new ColumnDefinitions(stacked ? "Auto,*" : "Auto,*,Auto");

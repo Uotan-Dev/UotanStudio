@@ -36,6 +36,7 @@ public partial class ApkEditorViewModel
                 SigningKeyPassword, SigningCertificatePassword, SigningV1, SigningV2, SigningV3,
                 cancellationToken);
             SigningStatus = result.Summary;
+            SigningStateDisplay = result.Summary;
         }
         catch (OperationCanceledException)
         {

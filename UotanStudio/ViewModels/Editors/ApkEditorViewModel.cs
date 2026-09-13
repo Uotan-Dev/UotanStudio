@@ -53,6 +53,8 @@ public partial class ApkEditorViewModel : Document
     /// </summary>
     [ObservableProperty] private string _packageName = string.Empty;
 
+    [ObservableProperty] private string _applicationName = string.Empty;
+
     /// <summary>
     /// <para>版本名（versionName）。</para>
     /// The version name.
@@ -65,11 +67,21 @@ public partial class ApkEditorViewModel : Document
     /// </summary>
     [ObservableProperty] private string _versionCodeDisplay = string.Empty;
 
+    [ObservableProperty] private string _versionDisplay = string.Empty;
+
     /// <summary>
     /// <para>SDK 信息文本（min/target/compile）。</para>
     /// The SDK info text (min/target/compile).
     /// </summary>
     [ObservableProperty] private string _sdkDisplay = string.Empty;
+
+    [ObservableProperty] private string _targetSystemDisplay = "-";
+
+    [ObservableProperty] private string _minimumSystemDisplay = "-";
+
+    [ObservableProperty] private string _signingStateDisplay = "-";
+
+    [ObservableProperty] private string _hardeningStateDisplay = "-";
 
     /// <summary>
     /// <para>ABI 列表文本。</para>
@@ -134,14 +146,21 @@ public partial class ApkEditorViewModel : Document
         IsBusy = true;
         try
         {
-            var info = await Task.Run(() => ApkParser.Analyze(path), default).ConfigureAwait(true);
+            var info = await Task.Run(() => ApkParser.Analyze(path, LanguageService.Instance.CurrentLanguage), default).ConfigureAwait(true);
 
             _info = info;
             PackageName = info.PackageName;
+            ApplicationName = string.IsNullOrWhiteSpace(info.ApplicationName) || info.ApplicationName.StartsWith("@", StringComparison.Ordinal)
+                ? info.PackageName : info.ApplicationName;
             VersionName = info.VersionName;
             VersionCodeDisplay = info.VersionCode.ToString("N0");
+            VersionDisplay = string.IsNullOrWhiteSpace(VersionName)
+                ? VersionCodeDisplay
+                : string.IsNullOrWhiteSpace(VersionCodeDisplay) ? VersionName : $"{VersionName} ({VersionCodeDisplay})";
             SizeDisplay = string.Format(
-                LanguageService.Instance.GetString("Dock_File_SizeFormat"), info.FileSize);
+                LanguageService.Instance.GetString("Apk_SizeFormat"), info.FileSize);
+            TargetSystemDisplay = info.TargetSdkVersion > 0 ? info.TargetSdkVersion.ToString() : "-";
+            MinimumSystemDisplay = info.MinSdkVersion > 0 ? info.MinSdkVersion.ToString() : "-";
             SdkDisplay = $"min {info.MinSdkVersion} / target {info.TargetSdkVersion} / compile {info.CompileSdkVersion}";
             AbiDisplay = info.Abis.Count > 0 ? string.Join(", ", info.Abis) : "-";
             PermissionsDisplay = info.Permissions.Count > 0 ? string.Join(Environment.NewLine, info.Permissions) : "-";
@@ -153,7 +172,9 @@ public partial class ApkEditorViewModel : Document
         {
             CompileError = $"Failed to analyze APK: {ex.Message}";
             PackageName = string.Empty;
+            ApplicationName = string.Empty;
             VersionName = string.Empty;
+            VersionDisplay = string.Empty;
         }
         finally
         {
@@ -291,9 +312,15 @@ public partial class ApkEditorViewModel : Document
         IconBitmap = null;
         HasIcon = false;
         PackageName = string.Empty;
+        ApplicationName = string.Empty;
         VersionName = string.Empty;
         VersionCodeDisplay = string.Empty;
+        VersionDisplay = string.Empty;
         SdkDisplay = string.Empty;
+        TargetSystemDisplay = "-";
+        MinimumSystemDisplay = "-";
+        SigningStateDisplay = "-";
+        HardeningStateDisplay = "-";
         AbiDisplay = string.Empty;
         PermissionsDisplay = string.Empty;
         SizeDisplay = string.Empty;

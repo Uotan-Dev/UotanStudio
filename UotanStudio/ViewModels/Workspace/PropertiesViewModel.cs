@@ -702,7 +702,8 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_PackageName"), doc.PackageName));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_VersionName"), doc.VersionName));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_VersionCode"), doc.VersionCodeDisplay));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Sdk"), doc.SdkDisplay));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_TargetSystem"), doc.TargetSystemDisplay));
+        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_MinimumSystem"), doc.MinimumSystemDisplay));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Abis"), doc.AbiDisplay));
         Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Permissions"), doc.Info?.Permissions.Count.ToString("N0") ?? "0"));
 

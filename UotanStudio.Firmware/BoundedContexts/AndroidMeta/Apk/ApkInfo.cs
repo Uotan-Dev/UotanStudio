@@ -10,6 +10,10 @@ public sealed class ApkInfo
 
     public string PackageName { get; set; } = string.Empty;
 
+    public string ApplicationName { get; set; } = string.Empty;
+
+    internal uint ApplicationLabelReference { get; set; }
+
     public string VersionName { get; set; } = string.Empty;
 
     public long VersionCode { get; set; }

@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:UotanStudio.ViewModels.Editors"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:ursa="using:Ursa.Controls"
+        x:Class="UotanStudio.Views.Editors.ApkSigningWindow"
+        x:DataType="vm:ApkEditorViewModel"
+        Title="{DynamicResource ApkSign_Title}"
+        Width="560" Height="560" MinWidth="500" MinHeight="480"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        CanMinimize="False" CanMaximize="False"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+  <Window.Styles>
+    <Style Selector="TextBlock"><Setter Property="FontSize" Value="13" /></Style>
+    <Style Selector="Button"><Setter Property="FontSize" Value="13" /></Style>
+    <Style Selector="TextBox"><Setter Property="FontSize" Value="13" /><Setter Property="Height" Value="32" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
+    <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+      <Setter Property="MinWidth" Value="0" /><Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
+      <Setter Property="IsVisible" Value="False" /><Setter Property="IsEnabled" Value="False" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+      <Setter Property="Background"><ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" /></Setter>
+    </Style>
+    <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+      <Setter Property="Margin" Value="40,0,48,0" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+  </Window.Styles>
+  <Grid RowDefinitions="*,Auto" Margin="0,32,0,0">
+    <ursa:LoadingContainer Grid.Row="0" IsLoading="{Binding SignApkCommand.IsRunning}">
+      <ursa:LoadingContainer.Indicator>
+        <ursa:LoadingIcon Classes="Large" IsLoading="{Binding $parent[ursa:LoadingContainer].IsLoading, Mode=TwoWay}" />
+      </ursa:LoadingContainer.Indicator>
+      <ursa:LoadingContainer.LoadingMessageTemplate>
+        <DataTemplate><TextBlock Text="{DynamicResource ApkSign_Title}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" /></DataTemplate>
+      </ursa:LoadingContainer.LoadingMessageTemplate>
+      <ScrollViewer>
+        <StackPanel Margin="20" Spacing="10">
+          <StackPanel Spacing="8" IsEnabled="{Binding !SignApkCommand.IsRunning}">
+            <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding SigningKeyPath}" PlaceholderText="{DynamicResource ApkSign_Key}" /><Button Grid.Column="1" Content="{DynamicResource ApkSign_Browse}" Click="OnBrowseKey" Margin="8,0,0,0" /></Grid>
+            <TextBox Text="{Binding SigningKeyPassword}" PasswordChar="●" PlaceholderText="{DynamicResource ApkSign_KeyPassword}" />
+            <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding SigningCertificatePath}" PlaceholderText="{DynamicResource ApkSign_Certificate}" /><Button Grid.Column="1" Content="{DynamicResource ApkSign_Browse}" Click="OnBrowseCertificate" Margin="8,0,0,0" /></Grid>
+            <TextBox Text="{Binding SigningCertificatePassword}" PasswordChar="●" PlaceholderText="{DynamicResource ApkSign_CertificatePassword}" />
+            <Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding SigningOutputPath}" PlaceholderText="{DynamicResource ApkSign_Output}" /><Button Grid.Column="1" Content="{DynamicResource ApkSign_Browse}" Click="OnBrowseOutput" Margin="8,0,0,0" /></Grid>
+            <StackPanel Orientation="Horizontal" Spacing="16"><CheckBox Content="v1 (JAR)" IsChecked="{Binding SigningV1}" /><CheckBox Content="v2" IsChecked="{Binding SigningV2}" /><CheckBox Content="v3" IsChecked="{Binding SigningV3}" /></StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </ursa:LoadingContainer>
+    <Border Grid.Row="1" Padding="20,14" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource PageBackground}">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Name="ProgressPanel" IsVisible="{Binding SignApkCommand.IsRunning}" Width="280" Spacing="4" Margin="0,0,16,0" HorizontalAlignment="Left" VerticalAlignment="Center">
+          <ProgressBar Minimum="0" Maximum="100" IsIndeterminate="True" Height="20" CornerRadius="4" />
+          <TextBlock Text="{DynamicResource ApkSign_Title}" FontSize="11" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10">
+          <Button Content="{DynamicResource ApkSign_Cancel}" Command="{Binding SignApkCancelCommand}" IsVisible="{Binding SignApkCommand.IsRunning}" MinWidth="88" Height="32" IsCancel="True" />
+          <Button Content="{DynamicResource ApkSign_Execute}" Command="{Binding SignApkCommand}" MinWidth="110" Height="32" IsDefault="True" />
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

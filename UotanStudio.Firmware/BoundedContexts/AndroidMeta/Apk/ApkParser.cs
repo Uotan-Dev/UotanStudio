@@ -10,7 +10,7 @@ public static class ApkParser
     /// Analyzes an APK file and extracts its metadata.
     /// <para>分析 APK 文件并提取元数据。</para>
     /// </summary>
-    public static ApkInfo Analyze(string apkPath)
+    public static ApkInfo Analyze(string apkPath, string? preferredLanguage = null)
     {
         ArgumentNullException.ThrowIfNull(apkPath);
         var info = new ApkInfo { FilePath = apkPath };
@@ -52,6 +52,12 @@ public static class ApkParser
         if (arscEntry is not null)
         {
             var table = ArscParser.Parse(ReadMetadata(arscEntry, AndroidMetadataReader.MaximumBytes));
+            if (info.ApplicationLabelReference != 0
+                && (LookupLocalizedString(table, info.ApplicationLabelReference, preferredLanguage)
+                    ?? LookupEntryPath(table, info.ApplicationLabelReference)) is { } applicationName)
+            {
+                info.ApplicationName = applicationName;
+            }
             info.IconPath ??= ResolveIconPath(table, zip, info.IconReference);
         }
 
@@ -109,6 +115,7 @@ public static class ApkParser
         }
 
         info.PackageName = Attr("package") ?? string.Empty;
+        info.ApplicationName = Attr("label") ?? string.Empty;
         info.VersionName = Attr("versionName") ?? string.Empty;
         info.VersionCode = ParseLong(Attr("versionCode"));
 
@@ -120,6 +127,19 @@ public static class ApkParser
 
         void Walk(AXmlElement el)
         {
+            if (string.Equals(el.Name, "application", StringComparison.Ordinal)
+                && string.IsNullOrWhiteSpace(info.ApplicationName))
+            {
+                var label = el.Attributes.FirstOrDefault(a => string.Equals(a.Name, "label", StringComparison.Ordinal));
+                if (label is not null)
+                {
+                    info.ApplicationName = label.FormatValue(doc.StringPool, doc.ResourceMap);
+                    if (label.ValueType is AXmlValueType.Reference or AXmlValueType.DynamicReference)
+                    {
+                        info.ApplicationLabelReference = label.ValueData;
+                    }
+                }
+            }
             if (string.Equals(el.Name, "uses-permission", StringComparison.Ordinal))
             {
                 var name = el.Attributes.FirstOrDefault(a => string.Equals(a.Name, "name", StringComparison.Ordinal));
@@ -336,6 +356,57 @@ public static class ApkParser
             }
         }
         return null;
+    }
+
+    private static string? LookupLocalizedString(ResourceTable table, uint resId, string? preferredLanguage,
+        HashSet<uint>? visited = null)
+    {
+        visited ??= [];
+        if (resId == 0 || visited.Count >= 64 || !visited.Add(resId)) return null;
+
+        var pkgId = (byte)(resId >> 24);
+        var typeId = (byte)((resId >> 16) & 0xff);
+        var entryIndex = (int)(resId & 0xffff);
+        var candidates = new List<(ResValue Value, string Config)>();
+        foreach (var pkg in table.Packages)
+        {
+            if (pkg.Id != pkgId) continue;
+            foreach (var type in pkg.Types)
+            {
+                if (type.Id + pkg.TypeIdOffset != typeId || entryIndex >= type.Entries.Count
+                    || type.Entries[entryIndex] is not { Value: { } value } || value.IsComplex) continue;
+                candidates.Add((value, type.ConfigDescription));
+            }
+        }
+
+        var requested = NormalizeLocale(preferredLanguage);
+        var selected = candidates
+            .OrderByDescending(candidate => LocaleScore(NormalizeLocale(candidate.Config), requested))
+            .FirstOrDefault();
+        if (selected.Value is null) return null;
+        return selected.Value.Type switch
+        {
+            ResValueType.String => table.GlobalPool.GetString(checked((int)selected.Value.Data)),
+            ResValueType.Reference or ResValueType.DynamicReference =>
+                LookupLocalizedString(table, selected.Value.Data, preferredLanguage, visited),
+            _ => null
+        };
+    }
+
+    private static int LocaleScore(string config, string requested)
+    {
+        if (config.Length == 0 || config == "default") return 0;
+        if (requested.Length == 0) return 0;
+        if (string.Equals(config, requested, StringComparison.OrdinalIgnoreCase)) return 300;
+        var requestedLanguage = requested.Split('-')[0];
+        return string.Equals(config.Split('-')[0], requestedLanguage, StringComparison.OrdinalIgnoreCase) ? 200 : 0;
+    }
+
+    private static string NormalizeLocale(string? locale)
+    {
+        if (string.IsNullOrWhiteSpace(locale)) return string.Empty;
+        var value = locale.Trim().Replace('_', '-');
+        return value.Replace("-r", "-", StringComparison.OrdinalIgnoreCase).ToLowerInvariant();
     }
 
     /// <summary>

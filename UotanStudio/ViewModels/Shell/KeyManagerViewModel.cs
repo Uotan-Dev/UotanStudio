@@ -37,6 +37,18 @@ public partial class KeyManagerViewModel : ViewModelBase
     [ObservableProperty][NotifyPropertyChangedFor(nameof(IsSelectedDefault), nameof(CanSetCurrentDefault))] private string _defaultSignatureIds = "";
     public bool IsIdle => !IsBusy;
     public bool IsPayload => KindIndex == 2;
+    /// <summary>Whether the UI is showing the APK key purpose.</summary>
+    /// <summary>当前是否选择了 APK 密钥用途。</summary>
+    public bool IsApkKey => KindIndex == 3;
+    /// <summary>Whether the UI is showing the APK certificate purpose.</summary>
+    /// <summary>当前是否选择了 APK 证书用途。</summary>
+    public bool IsApkCertificate => KindIndex == 4;
+    /// <summary>Whether the selected purpose is backed by the managed key library.</summary>
+    /// <summary>当前用途是否由密钥库后端支持。</summary>
+    public bool IsLibraryPurpose => KindIndex is >= 0 and < 3;
+    /// <summary>Whether the key-size selector can be changed for the selected purpose.</summary>
+    /// <summary>当前用途是否允许调整密钥位数。</summary>
+    public bool IsBitsEditable => IsPayload || IsApkKey;
     public bool HasSelection => SelectedKey is not null;
     public string SelectedPath => SelectedKey is { } key ? _library.PrivatePath(key) : "";
     public bool HasCertificate => SelectedKey is { Kind: ManagedKeyKind.Payload };
@@ -93,6 +105,10 @@ public partial class KeyManagerViewModel : ViewModelBase
     partial void OnKindIndexChanged(int value)
     {
         OnPropertyChanged(nameof(IsPayload));
+        OnPropertyChanged(nameof(IsApkKey));
+        OnPropertyChanged(nameof(IsApkCertificate));
+        OnPropertyChanged(nameof(IsLibraryPurpose));
+        OnPropertyChanged(nameof(IsBitsEditable));
         OnPropertyChanged(nameof(PayloadSizes));
         PayloadBits = value == 1 ? 3072 : 2048;
     }
@@ -162,6 +178,9 @@ public partial class KeyManagerViewModel : ViewModelBase
     [RelayCommand]
     private Task GenerateAsync()
     {
+        // APK key and certificate entries are UI-only until their dedicated backend is added.
+        // APK 密钥和证书条目在专用后端接入前仅用于界面展示。
+        if (!IsLibraryPurpose) return Task.CompletedTask;
         var name = Name;
         var kind = (ManagedKeyKind)KindIndex;
         var bits = kind switch { ManagedKeyKind.Adb => 2048, ManagedKeyKind.Hdc => 3072, _ => PayloadBits };
@@ -170,6 +189,7 @@ public partial class KeyManagerViewModel : ViewModelBase
 
     public Task ImportAsync(string path)
     {
+        if (!IsLibraryPurpose) return Task.CompletedTask;
         var name = Name;
         var kind = (ManagedKeyKind)KindIndex;
         var password = Password;
