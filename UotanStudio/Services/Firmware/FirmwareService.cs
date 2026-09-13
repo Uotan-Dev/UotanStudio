@@ -16,6 +16,7 @@ using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -412,6 +413,35 @@ public sealed class FirmwareService
         {
             return FirmwareOpResult.Fail($"APK sign failed: {ex.Message}  APK 签名失败：{ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Generates a fresh APK signing key pair and self-signed certificate (optionally an
+    /// encrypted private key and a PFX bundle). Existing files are never overwritten; the
+    /// material is round-trip verified through the APK signer's key loader before commit.
+    /// <para>生成全新的 APK 签名密钥对与自签证书（可选加密私钥与 PFX 合并输出）。绝不覆盖已存在的文件；
+    /// 材料提交前先经 APK 签名器的密钥加载器回环自检。</para>
+    /// </summary>
+    /// <param name="options">Generation options (key type, subject, validity, password).
+    /// <para>生成选项（密钥类型、主题、有效期、密码）。</para></param>
+    /// <param name="outputDirectory">Target directory for the generated files.
+    /// <para>生成文件的目标目录。</para></param>
+    /// <param name="baseName">Optional base file name without extension.
+    /// <para>可选的不含扩展名的基础文件名。</para></param>
+    /// <param name="exportPfx">Also export a PFX containing the private key.
+    /// <para>是否额外导出含私钥的 PFX。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>Paths of the generated files. <para>生成文件的路径。</para></returns>
+    public async Task<ApkSigningKeyFiles> GenerateApkSigningKeyAsync(
+        ApkSigningKeyOptions options,
+        string outputDirectory,
+        string? baseName = null,
+        bool exportPfx = false,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return await Task.Run(() => ApkSigningKeyGenerator.Generate(options, outputDirectory, baseName, exportPfx), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>

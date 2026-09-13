@@ -5,16 +5,35 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 
 namespace UotanStudio.Services.Keys;
 
 /// <summary>Supported key purposes; purpose determines the exported public key format.</summary>
-public enum ManagedKeyKind { Adb, Hdc, Payload }
+public enum ManagedKeyKind { Adb, Hdc, Payload, Jar, Apk }
+
+/// <summary>Export bundle choices for a freshly generated APK signing certificate.</summary>
+/// <summary>新生成 APK 签名证书的导出格式组合。</summary>
+public enum ApkCertificateExportFormat
+{
+    /// <summary>JKS + PKCS12 + PEM files. <para>JKS + PKCS12 + PEM 全部格式。</para></summary>
+    All,
+    /// <summary>Java keystore only. <para>仅 JKS（.jks）。</para></summary>
+    Jks,
+    /// <summary>Pkcs12 only. <para>仅 PKCS12（.p12）。</para></summary>
+    Pkcs12,
+    /// <summary>PEM private key + certificate only. <para>仅 PEM（.pk8 + .pem）。</para></summary>
+    Pem,
+}
 
 /// <summary>Public metadata for a key pair. Private key contents are never stored in metadata.</summary>
 public sealed record ManagedKey(string Id, string Name, ManagedKeyKind Kind, int Bits, string Fingerprint, DateTimeOffset Created)
 {
-    public string Summary => $"{Kind.ToString().ToUpperInvariant()} · RSA {Bits}";
+    // EC curve sizes (256/384/521) never collide with RSA key sizes (2048+).
+    // EC 曲线位数（256/384/521）与 RSA 位数（2048+）不会重叠。
+    public string Summary => Bits is 256 or 384 or 521
+        ? $"{Kind.ToString().ToUpperInvariant()} · EC P-{Bits}"
+        : $"{Kind.ToString().ToUpperInvariant()} · RSA {Bits}";
 }
 
 [JsonSerializable(typeof(ManagedKey))]
@@ -40,43 +59,234 @@ public sealed class KeyLibraryService
     public ManagedKey Generate(string name, ManagedKeyKind kind, int bits)
     {
         Validate(name, kind, bits);
+        if (kind == ManagedKeyKind.Apk && bits is 256 or 384 or 521)
+        {
+            var curve = bits switch
+            {
+                256 => ECCurve.NamedCurves.nistP256,
+                384 => ECCurve.NamedCurves.nistP384,
+                _ => ECCurve.NamedCurves.nistP521,
+            };
+            using var ec = ECDsa.Create(curve);
+            return Publish(name, kind, ec);
+        }
         using var rsa = RSA.Create(bits);
         return Publish(name, kind, rsa);
     }
 
     public ManagedKey Import(string name, ManagedKeyKind kind, string path, string password)
     {
-        using var rsa = LoadPrivateKey(path, password);
-        Validate(name, kind, rsa.KeySize);
-        return Publish(name, kind, rsa);
+        using var key = LoadAnyPrivateKey(path, password);
+        Validate(name, kind, key.KeySize);
+        return Publish(name, kind, key);
+    }
+
+    /// <summary>Paths written for one generated APK signing certificate bundle.</summary>
+    /// <summary>一次生成的 APK 签名证书导出文件的路径集合。</summary>
+    public sealed record ApkCertificateBundle(ManagedKey Key, IReadOnlyList<string> ExportedFiles);
+
+    /// <summary>
+    /// Generates a fresh APK signing key pair + self-signed certificate, registers it in the
+    /// key library, and exports the requested file formats into the output directory using the
+    /// entry name as the file base. Existing files are never overwritten.
+    /// <para>生成全新的 APK 签名密钥对与自签证书，登记进密钥库，并按请求的格式以条目名为基础文件名
+    /// 导出到输出目录。绝不覆盖已存在的文件。</para>
+    /// </summary>
+    /// <param name="name">Library entry name and export base file name. <para>库条目名与导出基础文件名。</para></param>
+    /// <param name="keyPassword">Optional private-key password (also protects JKS/PKCS12 integrity via the keystore password when provided separately). <para>可选私钥密码。</para></param>
+    /// <param name="storePassword">Keystore password for JKS/PKCS12 integrity and encryption; required for JKS. <para>JKS/PKCS12 的密钥库密码；JKS 必填。</para></param>
+    /// <param name="validityYears">Certificate validity in years (1–100). <para>证书有效年数（1–100）。</para></param>
+    /// <param name="subject">Certificate subject fields (CN required; O/OU/L/ST/C optional). <para>证书主题字段（CN 必填，O/OU/L/ST/C 可选）。</para></param>
+    /// <param name="keyType">Key algorithm selection. <para>密钥算法选择。</para></param>
+    /// <param name="format">Export bundle choice. <para>导出格式组合。</para></param>
+    /// <param name="outputDirectory">Directory for the exported files (created when missing). <para>导出文件目录（缺失时创建）。</para></param>
+    /// <param name="cancellationToken">Cancellation token. <para>取消令牌。</para></param>
+    /// <returns>The registered library key and the exported file paths. <para>登记的库条目与导出文件路径。</para></returns>
+    public ApkCertificateBundle GenerateApkCertificate(
+        string name,
+        string? keyPassword,
+        string? storePassword,
+        int validityYears,
+        ApkSigningKeyOptions subject,
+        ApkSigningKeyType keyType,
+        ApkCertificateExportFormat format,
+        string outputDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        // Name validation only; key size is checked by the generator and re-checked on import.
+        // 仅校验名称；位数由生成器校验并在导入时复核。
+        Validate(name, ManagedKeyKind.Apk, 2048);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var trimmed = name.Trim();
+        if (format is ApkCertificateExportFormat.Jks or ApkCertificateExportFormat.All && string.IsNullOrEmpty(storePassword))
+            throw new ArgumentException("导出 JKS 必须提供密钥库密码。");
+
+        var options = subject with
+        {
+            KeyType = keyType,
+            KeyPassword = string.IsNullOrEmpty(keyPassword) ? null : keyPassword,
+            ValidityYears = validityYears,
+        };
+        var staging = Path.Combine(Path.GetTempPath(), "uotan-apk-cert-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staging);
+        try
+        {
+            var generated = ApkSigningKeyGenerator.Generate(options, staging, "entry");
+            var key = Import(name, ManagedKeyKind.Apk, generated.PrivateKeyPath, keyPassword ?? "");
+
+            Directory.CreateDirectory(Path.GetFullPath(outputDirectory));
+            var exported = new List<string>();
+            using var privateKey = LoadAnyPrivateKey(generated.PrivateKeyPath, keyPassword ?? "");
+            var pkcs8 = privateKey.ExportPkcs8PrivateKey();
+            try
+            {
+                var certificate = LoadPemCertificate(generated.CertificatePath);
+                using (certificate)
+                {
+                    var baseName = Path.Combine(Path.GetFullPath(outputDirectory), trimmed);
+                    if (format is ApkCertificateExportFormat.Jks or ApkCertificateExportFormat.All)
+                    {
+                        var jks = JksKeyStoreWriter.Build(trimmed, pkcs8, [certificate.RawData], storePassword!);
+                        var path = baseName + ".jks";
+                        Write(path, jks);
+                        CryptographicOperations.ZeroMemory(jks);
+                        exported.Add(path);
+                    }
+                    if (format is ApkCertificateExportFormat.Pkcs12 or ApkCertificateExportFormat.All)
+                    {
+                        using var withKey = privateKey switch
+                        {
+                            RSA rsa => certificate.CopyWithPrivateKey(rsa),
+                            ECDsa ec => certificate.CopyWithPrivateKey(ec),
+                            _ => throw new InvalidOperationException("APK 证书仅支持 RSA 或 EC 密钥。"),
+                        };
+                        var pfx = withKey.Export(X509ContentType.Pkcs12, string.IsNullOrEmpty(storePassword) ? keyPassword : storePassword);
+                        var path = baseName + ".p12";
+                        Write(path, pfx);
+                        CryptographicOperations.ZeroMemory(pfx);
+                        exported.Add(path);
+                    }
+                    if (format is ApkCertificateExportFormat.Pem or ApkCertificateExportFormat.All)
+                    {
+                        var keyPath = baseName + ".pk8";
+                        var certPath = baseName + ".pem";
+                        Write(keyPath, File.ReadAllBytes(generated.PrivateKeyPath));
+                        Write(certPath, File.ReadAllBytes(generated.CertificatePath));
+                        exported.Add(keyPath);
+                        exported.Add(certPath);
+                    }
+                }
+                return new ApkCertificateBundle(key, exported);
+            }
+            finally { CryptographicOperations.ZeroMemory(pkcs8); }
+        }
+        finally
+        {
+            foreach (var file in Directory.EnumerateFiles(staging)) File.Delete(file);
+            Directory.Delete(staging);
+        }
+    }
+
+    private static X509Certificate2 LoadPemCertificate(string pemPath)
+    {
+        var text = File.ReadAllText(pemPath);
+        var start = text.IndexOf("-----BEGIN CERTIFICATE-----", StringComparison.Ordinal);
+        var headerEnd = text.IndexOf('\n', start);
+        var end = text.IndexOf("-----END CERTIFICATE-----", start, StringComparison.Ordinal);
+        if (start < 0 || headerEnd < 0 || end < 0) throw new InvalidDataException("证书 PEM 格式错误。");
+        var base64 = string.Concat(text[(headerEnd + 1)..end].Where(static c => !char.IsWhiteSpace(c)));
+        return X509CertificateLoader.LoadCertificate(Convert.FromBase64String(base64));
     }
 
     /// <summary>Loads a bounded PEM/DER private key and verifies that private operations are available. The caller disposes the returned key.</summary>
     public static RSA LoadPrivateKey(string path, string password = "")
     {
+        var key = LoadAnyPrivateKey(path, password);
+        try
+        {
+            if (key is not RSA rsa) throw new InvalidDataException("此用途需要 RSA 私钥。");
+            // Exercise the private operation before returning.
+            rsa.SignData("UotanStudio key import"u8, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            return rsa;
+        }
+        catch { key.Dispose(); throw; }
+    }
+
+    /// <summary>Loads a bounded PEM/DER private key as RSA or EC (PKCS#8 plain/encrypted, PKCS#1, SEC1). The caller disposes the returned key.</summary>
+    /// <summary>以 RSA 或 EC 加载有界 PEM/DER 私钥（PKCS#8 明文/加密、PKCS#1、SEC1）。调用方负责释放返回的密钥。</summary>
+    public static AsymmetricAlgorithm LoadAnyPrivateKey(string path, string password = "")
+    {
         var bytes = ReadBounded(path);
-        var rsa = RSA.Create();
         try
         {
             var text = Encoding.UTF8.GetString(bytes);
             if (text.Contains("-----BEGIN", StringComparison.Ordinal))
             {
-                if (text.Contains("ENCRYPTED PRIVATE KEY", StringComparison.Ordinal)) rsa.ImportFromEncryptedPem(text, password);
-                else rsa.ImportFromPem(text);
+                if (text.Contains("ENCRYPTED PRIVATE KEY", StringComparison.Ordinal))
+                {
+                    var encryptedRsa = RSA.Create();
+                    if (TryImport(() => encryptedRsa.ImportFromEncryptedPem(text, password))) return VerifyPrivate(encryptedRsa);
+                    encryptedRsa.Dispose();
+                    var encryptedEc = ECDsa.Create();
+                    if (TryImport(() => encryptedEc.ImportFromEncryptedPem(text, password))) return VerifyPrivate(encryptedEc);
+                    encryptedEc.Dispose();
+                    throw new InvalidDataException("无法使用给定密码导入加密私钥。");
+                }
+
+                var plainRsa = RSA.Create();
+                if (TryImport(() => plainRsa.ImportFromPem(text))) return VerifyPrivate(plainRsa);
+                plainRsa.Dispose();
+                var plainEc = ECDsa.Create();
+                if (TryImport(() => plainEc.ImportFromPem(text))) return VerifyPrivate(plainEc);
+                plainEc.Dispose();
+                throw new InvalidDataException("不支持的私钥 PEM 格式。");
             }
-            else
+
+            // DER: RSA PKCS#8/PKCS#1, then EC PKCS#8/SEC1; trailing data is rejected.
+            // DER：先试 RSA PKCS#8/PKCS#1，再试 EC PKCS#8/SEC1；拒绝尾随数据。
+            int read = 0;
+            var derRsa = RSA.Create();
+            if (TryImport(() => derRsa.ImportPkcs8PrivateKey(bytes, out read))
+                || TryImport(() => derRsa.ImportRSAPrivateKey(bytes, out read)))
             {
-                int read;
-                try { rsa.ImportPkcs8PrivateKey(bytes, out read); }
-                catch (CryptographicException) { rsa.ImportRSAPrivateKey(bytes, out read); }
-                if (read != bytes.Length) throw new InvalidDataException("密钥文件包含多余数据。");
+                if (read != bytes.Length) { derRsa.Dispose(); throw new InvalidDataException("密钥文件包含多余数据。"); }
+                return VerifyPrivate(derRsa);
             }
-            // Reject public-only inputs and exercise the private operation before publication.
-            rsa.SignData("UotanStudio key import"u8, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-            return rsa;
+            derRsa.Dispose();
+            var derEc = ECDsa.Create();
+            if (TryImport(() => derEc.ImportPkcs8PrivateKey(bytes, out read))
+                || TryImport(() => derEc.ImportECPrivateKey(bytes, out read)))
+            {
+                if (read != bytes.Length) { derEc.Dispose(); throw new InvalidDataException("密钥文件包含多余数据。"); }
+                return VerifyPrivate(derEc);
+            }
+            derEc.Dispose();
+            throw new InvalidDataException("不支持的私钥 DER 格式。");
         }
-        catch { rsa.Dispose(); throw; }
         finally { CryptographicOperations.ZeroMemory(bytes); }
+    }
+
+    private static bool TryImport(Action import)
+    {
+        try { import(); return true; }
+        catch (Exception ex) when (ex is CryptographicException or ArgumentException) { return false; }
+    }
+
+    // Reject public-only inputs and exercise the private operation before publication.
+    // 拒绝仅含公钥的输入，发布前先执行一次私钥运算。
+    private static AsymmetricAlgorithm VerifyPrivate(AsymmetricAlgorithm key)
+    {
+        switch (key)
+        {
+            case RSA rsa:
+                rsa.SignData("UotanStudio key import"u8, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                break;
+            case ECDsa ec:
+                ec.SignData("UotanStudio key import"u8, HashAlgorithmName.SHA256);
+                break;
+        }
+        return key;
     }
 
     public string PrivatePath(ManagedKey key) => Path.Combine(KeyDirectory(key.Id), PrivateName(key.Kind));
@@ -85,18 +295,19 @@ public sealed class KeyLibraryService
     /// <summary>Certificate file path for a Payload key; the file may not exist for keys created before certificates.</summary>
     public string CertificatePath(ManagedKey key) => PrivatePath(key) + ".crt";
 
-    /// <summary>Returns the certificate path, generating the self-signed certificate for a legacy Payload key on first use.</summary>
+    /// <summary>Returns the certificate path, generating the self-signed certificate for a legacy Payload/JAR key on first use.</summary>
     public string EnsureCertificate(ManagedKey key)
     {
-        if (key.Kind != ManagedKeyKind.Payload) throw new InvalidOperationException("Only Payload keys carry certificates.");
+        if (key.Kind is not (ManagedKeyKind.Payload or ManagedKeyKind.Jar))
+            throw new InvalidOperationException("Only Payload and JAR keys carry certificates.");
         var path = CertificatePath(key);
         if (File.Exists(path)) return path;
         var directory = KeyDirectory(key.Id);
         var temporary = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".tmp");
         try
         {
-            using var rsa = LoadPrivateKey(PrivatePath(key));
-            Write(temporary, CreateCertificate(key.Name, rsa));
+            using var privateKey = LoadAnyPrivateKey(PrivatePath(key));
+            Write(temporary, CreateCertificate(key.Name, privateKey));
             try { File.Move(temporary, path, overwrite: false); }
             catch (IOException) when (File.Exists(path)) { }
         }
@@ -104,13 +315,21 @@ public sealed class KeyLibraryService
         return path;
     }
 
-    // Self-signed RSA SHA-256 certificate sharing the private key's SPKI, for OTA zip
-    // outer signatures (signapk -w) and the otacert entry.
-    private static string CreateCertificate(string name, RSA rsa)
+    // Self-signed certificate sharing the private key's SPKI (RSA PKCS#1 or ECDSA), for OTA zip
+    // outer signatures (signapk -w), the otacert entry and APK signing key entries.
+    private static string CreateCertificate(string name, AsymmetricAlgorithm key)
     {
         var subject = new X500DistinguishedNameBuilder();
         subject.AddCommonName(name);
-        var request = new CertificateRequest(subject.Build(), rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+        // SHA-256 for RSA ≤3072 / EC P-256, SHA-512 above — mirrors ApkSignatureAlgorithmSelector.
+        // RSA ≤3072 位与 EC P-256 用 SHA-256，更高位数用 SHA-512 —— 与 ApkSignatureAlgorithmSelector 一致。
+        var hash = key.KeySize > 3072 || (key is ECDsa && key.KeySize > 256) ? HashAlgorithmName.SHA512 : HashAlgorithmName.SHA256;
+        CertificateRequest request = key switch
+        {
+            RSA rsa => new CertificateRequest(subject.Build(), rsa, hash, RSASignaturePadding.Pkcs1),
+            ECDsa ec => new CertificateRequest(subject.Build(), ec, hash),
+            _ => throw new NotSupportedException("证书创建仅支持 RSA 或 EC 密钥。"),
+        };
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(10));
         return certificate.ExportCertificatePem();
     }
@@ -270,31 +489,39 @@ public sealed class KeyLibraryService
         }
     }
 
-    private ManagedKey Publish(string name, ManagedKeyKind kind, RSA rsa)
+    private ManagedKey Publish(string name, ManagedKeyKind kind, AsymmetricAlgorithm key)
     {
         Directory.CreateDirectory(Root);
-        var key = new ManagedKey(Guid.NewGuid().ToString("N"), name.Trim(), kind, rsa.KeySize,
-            "SHA256:" + Convert.ToHexString(SHA256.HashData(rsa.ExportSubjectPublicKeyInfo())), DateTimeOffset.UtcNow);
-        var staging = Path.Combine(Root, ".create-" + key.Id);
+        var key2 = new ManagedKey(Guid.NewGuid().ToString("N"), name.Trim(), kind, key.KeySize,
+            "SHA256:" + Convert.ToHexString(SHA256.HashData(key.ExportSubjectPublicKeyInfo())), DateTimeOffset.UtcNow);
+        var staging = Path.Combine(Root, ".create-" + key2.Id);
         Directory.CreateDirectory(staging);
         try
         {
             var path = Path.Combine(staging, PrivateName(kind));
-            Write(path, kind == ManagedKeyKind.Payload ? rsa.ExportPkcs8PrivateKeyPem() : rsa.ExportRSAPrivateKeyPem());
+            // APK keys keep PKCS#8 PEM so both RSA and EC material can be stored in one format;
+            // other purposes keep their legacy encodings.
+            // APK 密钥统一存 PKCS#8 PEM（兼容 RSA 与 EC）；其他用途保留旧编码。
+            var privateText = kind == ManagedKeyKind.Apk || kind == ManagedKeyKind.Payload
+                ? key.ExportPkcs8PrivateKeyPem()
+                : ((RSA)key).ExportRSAPrivateKeyPem();
+            Write(path, privateText);
             string publicText;
             if (kind == ManagedKeyKind.Adb)
             {
+                var rsa = (RSA)key;
                 using var publicRsa = RSA.Create();
                 publicRsa.ImportParameters(rsa.ExportParameters(false));
                 using var auth = new AdbAuthentication(publicRsa);
                 publicText = Encoding.UTF8.GetString(auth.BuildPublicKeyPayload()).TrimEnd('\0') + "\n";
             }
-            else publicText = rsa.ExportSubjectPublicKeyInfoPem() + "\n";
+            else publicText = key.ExportSubjectPublicKeyInfoPem() + "\n";
             Write(path + ".pub", publicText);
-            if (kind == ManagedKeyKind.Payload) Write(Path.Combine(staging, PrivateName(kind) + ".crt"), CreateCertificate(name, rsa));
-            Write(Path.Combine(staging, "key.json"), JsonSerializer.Serialize(key, KeyLibraryJsonContext.Default.ManagedKey));
-            Directory.Move(staging, KeyDirectory(key.Id));
-            return key;
+            if (kind is ManagedKeyKind.Payload or ManagedKeyKind.Jar or ManagedKeyKind.Apk)
+                Write(Path.Combine(staging, PrivateName(kind) + ".crt"), CreateCertificate(name, key));
+            Write(Path.Combine(staging, "key.json"), JsonSerializer.Serialize(key2, KeyLibraryJsonContext.Default.ManagedKey));
+            Directory.Move(staging, KeyDirectory(key2.Id));
+            return key2;
         }
         finally { if (Directory.Exists(staging)) Directory.Delete(staging, true); }
     }
@@ -304,6 +531,8 @@ public sealed class KeyLibraryService
         ManagedKeyKind.Adb => "adbkey",
         ManagedKeyKind.Hdc => "hdckey",
         ManagedKeyKind.Payload => "payload-key.pem",
+        ManagedKeyKind.Jar => "jar-key.pem",
+        ManagedKeyKind.Apk => "apk-key.pem",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -337,9 +566,13 @@ public sealed class KeyLibraryService
             ManagedKeyKind.Adb => bits == 2048,
             ManagedKeyKind.Hdc => bits == 3072,
             ManagedKeyKind.Payload => bits is 2048 or 4096,
+            ManagedKeyKind.Jar => bits is 2048 or 4096,
+            // APK signing accepts RSA 2048–4096 and EC curves P-256/P-384/P-521.
+            // APK 签名接受 RSA 2048–4096 与 EC 曲线 P-256/P-384/P-521。
+            ManagedKeyKind.Apk => bits is 2048 or 3072 or 4096 or 256 or 384 or 521,
             _ => false
         }))
-            throw new ArgumentException("密钥位数与用途不匹配：ADB 2048、HDC 3072、Payload 2048/4096。");
+            throw new ArgumentException("密钥位数与用途不匹配：ADB 2048、HDC 3072、Payload/JAR 2048/4096、APK RSA 2048–4096 或 EC 256/384/521。");
     }
 
     private static void Write(string path, string text)
