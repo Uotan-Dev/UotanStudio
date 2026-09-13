@@ -558,6 +558,22 @@ public sealed class DeliveryTests : IDisposable
     }
 
     [Fact]
+    public void ZstdSelectionDisablesTxtManifestGeneration()
+    {
+        var plan = new DeliveryPlan
+        {
+            Files = [Input("super") with { FileName = "super.zst", Partition = "super" }],
+            Super = new DeliverySuperOptions { Zstd = true },
+            Txt = true, Windows = true
+        };
+
+        var scripts = DeliveryScriptGenerator.Generate(plan);
+
+        Assert.DoesNotContain("flash.txt", scripts.Keys);
+        Assert.Contains("FlashWindows.bat", scripts.Keys);
+    }
+
+    [Fact]
     public void MacScriptSelectsZstdBinaryByArchitecture()
     {
         var plan = new DeliveryPlan { Files = [Input("super") with { FileName = "super.zst", Partition = "super" }], MacOS = true, Txt = false };

@@ -36,12 +36,15 @@ public partial class DeliveryOutputView : UserControl
     private DeliveryViewModel? _model;
     private readonly Dictionary<string, DeliveryScriptDocument> _allDocuments = [];
     private bool _syncing;
+    private bool _txtScriptBlockedByZstd;
+    private bool _txtScriptBeforeZstd = true;
     private string _fingerprint = "";
     internal event EventHandler? Changed;
     internal event EventHandler? OutputRequested;
     internal event EventHandler? GenerateRequested;
     internal event EventHandler? SaveRequested;
-    internal bool RecoveryRequested => RecoveryScriptBox.IsChecked == true;
+    internal bool RecoveryRequested => RecoveryScriptBox.IsChecked == true
+        && (_model?.PackPayload == true || IsRecoverySupported());
     private readonly ObservableCollection<DeliveryScriptDocument> _documents = [];
     private DeliveryScriptDocument? _activeDocument;
     private bool? _stacked;
@@ -94,9 +97,14 @@ public partial class DeliveryOutputView : UserControl
     private void NotifyChanged() { if (!_syncing) Changed?.Invoke(this, EventArgs.Empty); }
     internal void SetModel(DeliveryViewModel model)
     {
-        if (_model is not null) _model.PropertyChanged -= OnModelPropertyChanged;
+        if (_model is not null)
+        {
+            _model.PropertyChanged -= OnModelPropertyChanged;
+            _model.Changed -= OnModelChanged;
+        }
         _model = model;
         _model.PropertyChanged += OnModelPropertyChanged;
+        _model.Changed += OnModelChanged;
         OutputImages.ItemsSource = model.Output;
         ResetScriptOptions();
     }
@@ -104,11 +112,14 @@ public partial class DeliveryOutputView : UserControl
     private void OnModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(DeliveryViewModel.PackPayload)) ResetScriptOptions();
+        UpdateRecoveryAvailability();
         OutputStatusText.Text = _model?.ProgressText;
         OutputStatusText.IsVisible = !string.IsNullOrEmpty(OutputStatusText.Text);
         OutputStatsText.Text = _model?.ProgressStats;
         OutputStatsText.IsVisible = !string.IsNullOrEmpty(OutputStatsText.Text);
     }
+
+    private void OnModelChanged(object? sender, EventArgs e) => UpdateRecoveryAvailability();
 
     private void ResetScriptOptions()
     {
@@ -117,15 +128,73 @@ public partial class DeliveryOutputView : UserControl
         _syncing = true;
         try
         {
-            TxtScriptBox.IsEnabled = !payload;
+            TxtScriptBox.IsEnabled = !payload && !_txtScriptBlockedByZstd;
             BatchShellScriptBox.IsEnabled = !payload;
-            TxtScriptBox.IsChecked = !payload;
+            TxtScriptBox.IsChecked = !payload && !_txtScriptBlockedByZstd;
             BatchShellScriptBox.IsChecked = false;
             RecoveryScriptBox.IsChecked = payload;
             RecoveryScriptBox.IsEnabled = !payload;
         }
         finally { _syncing = previous; }
+        UpdateRecoveryAvailability();
         NotifyChanged();
+    }
+
+    /// <summary>Disables the legacy TXT manifest when an image requires ZST decompression.</summary>
+    internal void SetTxtScriptBlockedByZstd(bool blocked)
+    {
+        var changed = _txtScriptBlockedByZstd != blocked;
+        if (!changed) return;
+        if (blocked) _txtScriptBeforeZstd = TxtScriptBox.IsChecked == true;
+        _txtScriptBlockedByZstd = blocked;
+        var previous = _syncing;
+        _syncing = true;
+        try
+        {
+            if (blocked)
+            {
+                TxtScriptBox.IsChecked = false;
+                TxtScriptBox.IsEnabled = false;
+            }
+            else if (_model?.PackPayload != true)
+            {
+                TxtScriptBox.IsEnabled = true;
+                TxtScriptBox.IsChecked = _txtScriptBeforeZstd;
+            }
+        }
+        finally { _syncing = previous; }
+        NotifyChanged();
+    }
+
+    private bool IsRecoverySupported()
+    {
+        if (_model is null || _model.PackPayload || _model.PackSuper || !_model.OrganizeDirectory) return false;
+        var files = _model.Output.Where(i => !i.Generated).Select(i => i.Snapshot()).ToArray();
+        return files.Length > 0
+            && files.Any(file => !file.Optional || file.Default)
+            && files.All(file => !file.Generated && !file.IncludeInSuper && !file.Fastbootd
+                && file.Partition is not ("super" or "super_empty")
+                && file.FileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void UpdateRecoveryAvailability()
+    {
+        if (_model?.PackPayload == true)
+        {
+            RecoveryScriptBox.IsChecked = true;
+            RecoveryScriptBox.IsEnabled = false;
+            return;
+        }
+
+        var supported = IsRecoverySupported();
+        var previous = _syncing;
+        _syncing = true;
+        try
+        {
+            RecoveryScriptBox.IsEnabled = supported;
+            if (!supported) RecoveryScriptBox.IsChecked = false;
+        }
+        finally { _syncing = previous; }
     }
     internal void SetRunning(bool running, double progress)
     {
@@ -141,7 +210,7 @@ public partial class DeliveryOutputView : UserControl
         return plan with
         {
             Package = new() { Ota = plan.PackPayload },
-            Files = files, Recovery = RecoveryScriptBox.IsChecked == true, Txt = TxtScriptBox.IsChecked == true, TxtVariants = true,
+            Files = files, Recovery = RecoveryRequested, Txt = TxtScriptBox.IsChecked == true && !_txtScriptBlockedByZstd, TxtVariants = true,
             Windows = BatchShellScriptBox.IsChecked == true, Linux = BatchShellScriptBox.IsChecked == true, MacOS = BatchShellScriptBox.IsChecked == true,
             AskWipe = false, Reboot = false,
             Slot = "",
@@ -209,6 +278,7 @@ public partial class DeliveryOutputView : UserControl
             _fingerprint = plan.ScriptFingerprint;
             if (_documents.Count > 0) DocumentTabs.SelectedItem = _documents[0];
             else ClearEditor();
+            UpdateRecoveryAvailability();
         }
         finally { _syncing = false; }
     }

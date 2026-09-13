@@ -5,7 +5,7 @@
     <!-- 选项卡 -->
     <x:String x:Key="Tab_Workspace">工作区</x:String>
     <x:String x:Key="Tab_Delivery">交付</x:String>
-    <x:String x:Key="Delivery_DirectOutput">导出为ROM</x:String>
+    <x:String x:Key="Delivery_DirectOutput">打包成ZIP</x:String>
     <x:String x:Key="Delivery_OutputDirectory">输出目录</x:String>
     <x:String x:Key="Delivery_LoadFailed">无法加载镜像列表：</x:String>
     <x:String x:Key="Delivery_PackSettingsTitle">打包设置</x:String>
@@ -143,7 +143,7 @@
     <x:String x:Key="ImageView_SynthesizeDat">合成DAT</x:String>
     <x:String x:Key="ImageView_FlashSelected">刷入选中文件</x:String>
     <x:String x:Key="ImageView_FlashSelectedHint">将选中的可刷写镜像按顺序刷入当前设备</x:String>
-    <x:String x:Key="ImageView_PackRom">打包ROM</x:String>
+    <x:String x:Key="ImageView_PackRom">打包ZIP</x:String>
     <x:String x:Key="PackDialog_PackPayload">打包 Payload</x:String>
     <x:String x:Key="PackDialog_ShowOriginal">显示原包镜像</x:String>
     <x:String x:Key="PackDialog_BrowseOutput">选择输出位置</x:String>

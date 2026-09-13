@@ -25,6 +25,20 @@ public partial class DeliveryCompositionView : UserControl
     internal event EventHandler? OutputRequested;
     internal event EventHandler<Exception>? OperationFailed;
     internal bool AutoZero { get => AutoZeroPartitionsBox.IsChecked == true; set => AutoZeroPartitionsBox.IsChecked = value; }
+    private bool _isAOnly;
+    /// <summary><para>当前为 A-Only 设备类型时隐藏自动零分区选项；进入时移除已物化的自动 B 槽行，离开时按复选框勾选态恢复。</para>
+    /// Hides the auto-zero option for A-Only devices; entering clears materialized auto B-slot rows, leaving restores per the checkbox state.</summary>
+    internal bool IsAOnly
+    {
+        get => _isAOnly;
+        set
+        {
+            if (_isAOnly == value) return;
+            _isAOnly = value;
+            Model.AutoZero = !value && AutoZeroPartitionsBox.IsChecked == true;
+            UpdateMode();
+        }
+    }
     /// <summary><para>仅生成Super_Empty：输出设置禁用但开始输出按钮保持可用。</para>
     /// Super_Empty only: output settings disabled while the start-output button stays available.</summary>
     internal bool SuperEmptyOnly
@@ -43,6 +57,9 @@ public partial class DeliveryCompositionView : UserControl
     private bool _packImages;
     private bool _compositionConfirmed;
     private bool _editorExternal;
+    /// <summary><para>当前正在编排容器镜像（Super 或 Payload）。</para>
+    /// True while composing a Super or Payload container.</summary>
+    internal bool PackContainerMode => Model.PackSuper || Model.PackPayload;
     private ObservableCollection<DeliveryImageItem> ActiveImages => Model.Container;
     private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
@@ -82,9 +99,11 @@ public partial class DeliveryCompositionView : UserControl
     {
         CancelImageDrag();
         ImageListTitle.Classes.Set("payload", IsPayload);
-        AutoZeroPartitionsBox.IsVisible = !IsPayload;
+        // 容器编排（Super 或 Payload）均显示自动零分区选项，A-Only 仍隐藏；纯脚本交付隐藏。
+        // Show the auto-zero option for both Super and Payload composition, hide it for A-Only and script-only delivery.
+        AutoZeroPartitionsBox.IsVisible = PackContainerMode && !_isAOnly;
         SuperMembershipHeader.IsVisible = IsPayload;
-        ZeroPartitionForm.IsVisible = !IsPayload && AutoZeroPartitionsBox.IsChecked != true;
+        ZeroPartitionForm.IsVisible = !IsPayload && !_isAOnly && AutoZeroPartitionsBox.IsChecked != true;
         OrderedImages.ItemsSource = ActiveImages;
         UpdateEmptyState();
         UpdateCompositionLayout();
@@ -99,6 +118,10 @@ public partial class DeliveryCompositionView : UserControl
         _packImages = packImages;
         IsPayload = packPayload;
         var changed = Model.SetMode(outputToDirectory, packSuper, packPayload);
+        // SetMode changes PackSuper/PackPayload on the model, so refresh the
+        // composition visibility after the new mode is applied.
+        // SetMode 会更新模型中的打包模式，必须在更新完成后刷新组合面板的可见性。
+        UpdateMode();
         UpdateInteractionState();
         return changed;
     }
@@ -180,12 +203,12 @@ public partial class DeliveryCompositionView : UserControl
     private bool CanAddPartition(string name) => DeliveryValidation.IsPartition(name) && !Model.Container.Any(i => i.PartitionName == name);
 
     private void UpdateAddPartitionButton() => AddZeroPartitionButton.IsEnabled =
-        !IsPayload && AutoZeroPartitionsBox.IsChecked != true && CanAddPartition(ZeroPartitionNameBox.Text?.Trim() ?? string.Empty);
+        !IsPayload && !_isAOnly && AutoZeroPartitionsBox.IsChecked != true && CanAddPartition(ZeroPartitionNameBox.Text?.Trim() ?? string.Empty);
 
     private void OnAddZeroPartitionClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var name = ZeroPartitionNameBox.Text?.Trim() ?? string.Empty;
-        if (IsPayload || AutoZeroPartitionsBox.IsChecked == true || !CanAddPartition(name)) return;
+        if (IsPayload || _isAOnly || AutoZeroPartitionsBox.IsChecked == true || !CanAddPartition(name)) return;
         Model.AddZero(name);
         var item = Model.Container.Last();
         ZeroPartitionNameBox.Text = string.Empty;

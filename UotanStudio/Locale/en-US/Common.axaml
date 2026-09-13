@@ -5,7 +5,7 @@
     <!-- Tabs -->
     <x:String x:Key="Tab_Workspace">Workspace</x:String>
     <x:String x:Key="Tab_Delivery">Delivery</x:String>
-    <x:String x:Key="Delivery_DirectOutput">Export as ROM</x:String>
+    <x:String x:Key="Delivery_DirectOutput">Pack as ZIP</x:String>
     <x:String x:Key="Delivery_OutputDirectory">Output directory</x:String>
     <x:String x:Key="Delivery_LoadFailed">Unable to load image lists:</x:String>
     <x:String x:Key="Delivery_PackSettingsTitle">Packaging settings</x:String>
@@ -143,7 +143,7 @@
     <x:String x:Key="ImageView_SynthesizeDat">Build DAT</x:String>
     <x:String x:Key="ImageView_FlashSelected">Flash Selected</x:String>
     <x:String x:Key="ImageView_FlashSelectedHint">Flash the selected flashable images to the current device in order</x:String>
-    <x:String x:Key="ImageView_PackRom">Pack ROM</x:String>
+    <x:String x:Key="ImageView_PackRom">Pack ZIP</x:String>
     <x:String x:Key="PackDialog_PackPayload">Pack Payload</x:String>
     <x:String x:Key="PackDialog_ShowOriginal">Show original images</x:String>
     <x:String x:Key="PackDialog_BrowseOutput">Select output location</x:String>

@@ -130,6 +130,28 @@ public partial class DeliveryView : UserControl
         if ((!SuperAbBox.IsVisible && SuperAbBox.IsChecked == true)
             || (!SuperAOnlyBox.IsVisible && SuperAOnlyBox.IsChecked == true))
             SuperVabBox.IsChecked = true;
+        // A-Only 联动仅在实际打包 Super 时生效；其他模式下 IsAOnly 复位，避免隐藏残留。
+        // The A-Only linkage only applies while actually packing Super; IsAOnly resets otherwise so the hide state never lingers.
+        Composition.IsAOnly = PackSuperBox.IsChecked == true
+            && SuperAOnlyBox.IsChecked == true
+            && SuperVabBox.IsChecked != true
+            && SuperAbBox.IsChecked != true;
+        UpdateSuperFormatOptions();
+    }
+
+    private void UpdateSuperFormatOptions()
+    {
+        var zipOutput = DirectOutputBox.IsChecked == true;
+        if (zipOutput)
+        {
+            // ZIP delivery carries a complete RAW Super image; sparse output is not a
+            // valid selectable format for this mode.
+            // ZIP 交付必须携带完整 RAW Super 镜像，SPARSE 在此模式下不可选。
+            SuperRawBox.IsChecked = true;
+            SuperSparseBox.IsChecked = false;
+        }
+        SuperSparseBox.IsEnabled = !zipOutput;
+        Composition.OutputView.SetTxtScriptBlockedByZstd(PackSuperBox.IsChecked == true && SuperZstdBox.IsChecked == true);
     }
 
     private void UpdateCompositionImages()
@@ -238,7 +260,15 @@ public partial class DeliveryView : UserControl
     private void OnSuperDeviceTypeChanged(object? sender, RoutedEventArgs e)
     {
         if (sender is RadioButton { IsChecked: true })
+        {
             SuperMetadataSlotsBox.Text = ReferenceEquals(sender, SuperVabBox) ? "3" : "2";
+            // Keep the composition panel's A-Only visibility in sync immediately when
+            // switching between device types. Use the event source instead of reading
+            // the other radio button because Avalonia may clear the previous selection
+            // after this checked event. This prevents A-Only from lingering on VAB.
+            // 直接使用事件来源判断设备类型，避免旧 RadioButton 尚未取消选中时留下 A-Only 状态。
+            Composition.IsAOnly = PackSuperBox.IsChecked == true && ReferenceEquals(sender, SuperAOnlyBox);
+        }
     }
 
     private void UpdateProjectSuperSelector()

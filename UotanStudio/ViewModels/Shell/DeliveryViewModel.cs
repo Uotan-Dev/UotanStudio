@@ -40,6 +40,10 @@ internal sealed partial class DeliveryImage : ObservableObject
     }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _fileName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _partitionName = "";
+    // 最近一次合法的分区名；编辑校验失败时用于回退。仅在 VM 的编辑校验路径中消费。
+    // Last accepted partition name, used to roll back a rejected edit; consumed only by the VM edit validation path.
+    internal string PreviousPartitionName { get; private set; } = "";
+    partial void OnPartitionNameChanging(string value) => PreviousPartitionName = PartitionName;
     [ObservableProperty] private bool _isOptional;
     [ObservableProperty] private bool _isDefault;
     [ObservableProperty] private bool _fastbootd;
@@ -62,6 +66,9 @@ internal sealed partial class DeliveryViewModel : ObservableObject
     private HashSet<string> _previousSelection = new(PathComparer);
     private readonly Dictionary<string, DeliveryImage> _known = new(PathComparer);
     private bool _updating;
+    // 恢复计划期间抑制 AutoZero 切换的清空语义（OnAutoZeroChanged 用）；普通交互不受影响。
+    // Suppresses the auto-zero clearing semantics while restoring a plan (used by OnAutoZeroChanged); normal interaction is unaffected.
+    internal bool AutoZeroPartitionsRestoreGuard { get; set; }
     [ObservableProperty] private bool _packSuper;
     [ObservableProperty] private bool _packPayload;
     [ObservableProperty] private bool _organizeDirectory = true;
@@ -70,7 +77,28 @@ internal sealed partial class DeliveryViewModel : ObservableObject
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string _status = "";
     [ObservableProperty] private bool _autoZero;
-    partial void OnAutoZeroChanged(bool value) => RefreshAutoZero();
+    // 自动零分区开关切换会清空编排列表（勾选归属随 SetAssignedPaths 同步取消）并重置确认状态。
+    // Toggling auto-zero clears the composition list (assigned source checkboxes reset via SetAssignedPaths) and the confirmed state.
+    partial void OnAutoZeroChanged(bool value)
+    {
+        // 恢复计划期间抑制清空语义，仅做常规刷新；Reset 末尾会显式 RefreshAutoZero。
+        // During plan restore the clearing semantics are suppressed and only a plain refresh runs; Reset calls RefreshAutoZero explicitly at the end.
+        if (AutoZeroPartitionsRestoreGuard)
+        {
+            AutoZeroPartitionsRestoreGuard = false;
+            RefreshAutoZero();
+            return;
+        }
+        if (Container.Count == 0 && !Confirmed)
+        {
+            RefreshAutoZero();
+            return;
+        }
+        Confirmed = false;
+        ClearImages();
+        RefreshAutoZero();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
     internal event EventHandler? Changed;
     internal bool EditingContainer => (PackSuper || PackPayload) && !Confirmed;
     internal static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -187,6 +215,17 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         if (PackPayload) return;
         var autoZero = AutoZero;
         foreach (var row in Container.Where(i => i.IsAutoZero && i.FilePath is null).ToArray()) Container.Remove(row);
+        // 打包 Super 时，无 A/B 后缀的文件承载行在列表阶段即改名 _a 并物化 _b 伴随条目，与确认时 DeliverySuperBuilder.ExpandPartitions 的兜底行为一致。
+        // When packing Super, file-backed rows without an A/B suffix are renamed _a at list stage with a materialized _b companion, matching the confirm-time fallback in DeliverySuperBuilder.ExpandPartitions.
+        if (autoZero && PackSuper)
+            foreach (var row in Container.Where(i => i.FilePath is not null && !i.PartitionName.EndsWith("_a", StringComparison.Ordinal) && !i.PartitionName.EndsWith("_b", StringComparison.Ordinal)).ToArray())
+            {
+                var target = row.PartitionName + "_a";
+                if (Container.Any(i => i.PartitionName == target)) continue;
+                _updating = true;
+                try { row.PartitionName = target; }
+                finally { _updating = false; }
+            }
         if (autoZero)
             foreach (var source in Container.Where(i => i.PartitionName.EndsWith("_a", StringComparison.Ordinal)).ToArray())
             {
@@ -213,12 +252,19 @@ internal sealed partial class DeliveryViewModel : ObservableObject
             PackSuper = plan.PackSuper; PackPayload = plan.PackPayload;
             foreach (var item in Container) item.ShowSuperChoice = PackPayload;
             OrganizeDirectory = plan.OrganizeDirectory; Confirmed = plan.ContainerConfirmed && !plan.IsSuperEmptyOnly;
+            // 恢复计划期间设置 AutoZero，经恢复护栏仅做常规刷新，不触发清空语义。
+            // Setting AutoZero during plan restore runs the restore guard (plain refresh only) without the clearing semantics.
+            AutoZeroPartitionsRestoreGuard = true;
             AutoZero = plan.Super.AutoZero;
         }
-        else { PackPayload = false; PackSuper = false; OrganizeDirectory = true; Confirmed = false; AutoZero = false; }
-        // 还原值可能与当前值相同而不触发 OnAutoZeroChanged；显式刷新一次，确保还原后的容器物化 VAB B 槽伴随条目。
-        // A restored value can equal the current one and skip OnAutoZeroChanged; refresh explicitly so the restored
-        // container materializes its VAB B-slot companions.
+        else
+        {
+            PackPayload = false; PackSuper = false; OrganizeDirectory = true; Confirmed = false;
+            // 无计划重置同样走恢复护栏，避免 AutoZero=false 触发清空语义（此时列表已清空，仅需常规刷新）。
+            // Plan-less reset also uses the restore guard so AutoZero=false does not trigger the clearing semantics (the list is already empty; a plain refresh suffices).
+            AutoZeroPartitionsRestoreGuard = true;
+            AutoZero = false;
+        }
         if (plan is not null) RefreshAutoZero();
         Status = ""; Progress = 0;
         Changed?.Invoke(this, EventArgs.Empty);
@@ -249,6 +295,20 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         {
             if (sender is DeliveryImage { SourceDynamicPartitions: { } partitions } changed)
                 changed.Fastbootd = DeliveryDynamicPartitions.Contains(partitions, changed.PartitionName);
+            // 手动编辑分区名的即时校验：非法名或与其他行重复时回退到编辑前的名字并提示；包装在 _updating 中防止回退再次递归。
+            // Immediate validation for manual partition-name edits: an invalid or duplicate name rolls back to the pre-edit value with a status hint; wrapped in _updating so the rollback does not recurse.
+            if (sender is DeliveryImage changedRow && changedRow.PartitionName != changedRow.PreviousPartitionName
+                && (!DeliveryValidation.IsPartition(changedRow.PartitionName)
+                    || Container.Concat(Output).Any(i => i != changedRow && i.PartitionName == changedRow.PartitionName)))
+            {
+                _updating = true;
+                try
+                {
+                    changedRow.PartitionName = changedRow.PreviousPartitionName;
+                    Status = LanguageService.Instance.GetString("Delivery_InvalidPartition");
+                }
+                finally { _updating = false; }
+            }
             RefreshAutoZero();
         }
         if (sender is DeliveryImage { IsDefault: true } row && e.PropertyName == nameof(DeliveryImage.IsDefault))

@@ -166,18 +166,96 @@ public sealed class DeliveryInteractionTests : IDisposable
     }
 
     [Fact]
-    public void DisablingAutoZeroRemovesCompanionAndUnlocksEmptyRows()
+    public void AutoZeroWithSuperRenamesSuffixlessRowsAndMaterializesCompanion()
+    {
+        var vm = new DeliveryViewModel { AutoZero = true };
+        vm.SetMode(true, super: true);
+        var odm = Input("odm");
+        vm.SelectSources([odm]);
+        var row = Assert.Single(vm.Container, i => i.PartitionName == "odm_a");
+        Assert.Equal(odm.SourcePath, row.FilePath);
+        var companion = Assert.Single(vm.Container, i => i.PartitionName == "odm_b");
+        Assert.Null(companion.FilePath);
+        Assert.Equal(0L, companion.SizeBytes);
+        Assert.True(companion.IsAutoZero);
+    }
+
+    [Fact]
+    public void AutoZeroWithSuperKeepsSuffixlessRowWhenTargetExists()
+    {
+        var vm = new DeliveryViewModel { AutoZero = true };
+        vm.SetMode(true, super: true);
+        var existingA = Input("odm_a");
+        var odm = Input("odm");
+        vm.SelectSources([existingA, odm]);
+        var row = Assert.Single(vm.Container, i => i.PartitionName == "odm");
+        Assert.Equal(odm.SourcePath, row.FilePath);
+        Assert.Single(vm.Container, i => i.PartitionName == "odm_a");
+        // The pre-existing odm_a still yields its single odm_b; no duplicate companion is added.
+        // 既有的 odm_a 仍生成唯一的 odm_b；不会追加重复的伴随条目。
+        Assert.Single(vm.Container, i => i.PartitionName == "odm_b");
+        Assert.Equal(3, vm.Container.Count);
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void AutoZeroOrSuperOffLeavesSuffixlessRowsUntouched(bool autoZero, bool superPacked)
+    {
+        var vm = new DeliveryViewModel { AutoZero = autoZero };
+        vm.SetMode(true, super: superPacked);
+        var odm = Input("odm");
+        vm.SelectSources([odm]);
+        // Non-container mode keeps the row in Output; either way it is never renamed and never gains a companion.
+        // 非容器模式下该行留在 Output；无论哪种情况都不改名、不生成伴随条目。
+        var target = vm.EditingContainer ? vm.Container : vm.Output;
+        var row = Assert.Single(target, i => i.PartitionName == "odm");
+        Assert.Equal(odm.SourcePath, row.FilePath);
+        Assert.DoesNotContain(vm.Container.Concat(vm.Output), i => i.PartitionName == "odm_b");
+    }
+
+    [Fact]
+    public void TogglingAutoZeroClearsTheCompositionList()
     {
         var vm = new DeliveryViewModel { AutoZero = true };
         vm.SetMode(true, super: true);
         var big = Input("my_bigball_a");
         var empty = Input("my_bigball_b", 0);
         vm.SelectSources([big, empty]);
+        Assert.Contains(vm.Container, i => i.PartitionName == "my_bigball_a");
+        // Toggling auto-zero clears the whole composition list per the new interaction contract.
+        // 按新交互约定，切换自动零分区开关会清空整个编排列表。
         vm.AutoZero = false;
-        var row = Assert.Single(vm.Container, i => i.PartitionName == "my_bigball_b");
-        Assert.Equal(empty.SourcePath, row.FilePath);
-        Assert.False(row.IsAutoZero);
-        vm.SelectSources([big]);
-        Assert.DoesNotContain(vm.Container, i => i.PartitionName == "my_bigball_b");
+        Assert.Empty(vm.Container);
+        // Toggling back on keeps the list empty; rows must be re-selected from the source list.
+        // 重新打开后列表保持为空，需从源列表重新勾选。
+        vm.AutoZero = true;
+        Assert.Empty(vm.Container);
+    }
+
+    [Fact]
+    public void PartitionNameEditRejectsInvalidAndDuplicateNames()
+    {
+        var vm = new DeliveryViewModel { AutoZero = false };
+        vm.SetMode(true, super: true);
+        var first = Input("boot");
+        var second = Input("vendor");
+        vm.SelectSources([first, second]);
+        // Duplicate name rolls back to the previous value and reports a status hint.
+        // 重名编辑回退到原值并给出状态提示。
+        var vendorRow = Assert.Single(vm.Container, i => i.PartitionName == "vendor");
+        vendorRow.PartitionName = "boot";
+        Assert.Equal("vendor", vendorRow.PartitionName);
+        Assert.Equal("Delivery_InvalidPartition", vm.Status);
+        // Invalid characters roll back as well.
+        // 非法字符同样回退。
+        vendorRow.PartitionName = "bad name!";
+        Assert.Equal("vendor", vendorRow.PartitionName);
+        Assert.Equal("Delivery_InvalidPartition", vm.Status);
+        // A valid unique edit sticks and clears nothing.
+        // 合法且唯一的编辑正常生效。
+        vendorRow.PartitionName = "vendor_b";
+        Assert.Equal("vendor_b", vendorRow.PartitionName);
+        Assert.Equal(2, vm.Container.Count);
     }
 }

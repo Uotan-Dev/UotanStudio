@@ -60,6 +60,7 @@ public partial class DeliveryView
         SuperZstdBox.IsCheckedChanged += (_, _) =>
         {
             if (SuperZstdBox.IsChecked == true && GenerateSuperEmptyBox.IsChecked == true) GenerateSuperEmptyBox.IsChecked = false;
+            UpdateSuperFormatOptions();
         };
         GenerateSuperEmptyBox.IsCheckedChanged += (_, _) =>
         {
@@ -223,7 +224,7 @@ public partial class DeliveryView
                 .Where(i => i.FilePath is not null).Select(i => i.FilePath!), GetReadOnlyDeliverySources());
             try
             {
-                if (!Composition.OutputView.RecoveryRequested && !Composition.IsSuperEmptyOnly)
+                if (!Composition.IsSuperEmptyOnly)
                 {
                     var plan = CaptureDeliveryPlan();
                     if (plan.ContainerConfirmed && (plan.PackSuper || plan.PackPayload) && Composition.Model.Output.FirstOrDefault(i => i.Generated && i.FileName != "super_empty.img") is { } artifact)
@@ -339,12 +340,14 @@ public partial class DeliveryView
             SuperVabBox.IsChecked = deviceType == "VAB"; SuperAbBox.IsChecked = deviceType == "AB";
             SuperAOnlyBox.IsChecked = deviceType == "AOnly";
             SuperMetadataSlotsBox.Text = plan.Super.Slots.ToString(CultureInfo.InvariantCulture);
-            UpdateDeviceTypeOptions();
             SuperRawBox.IsChecked = !plan.Super.Sparse; SuperSparseBox.IsChecked = plan.Super.Sparse;
             GenerateSuperEmptyBox.IsChecked = plan.Super.Empty;
             Composition.SuperEmptyOnly = plan.Super.Empty;
             Composition.AutoZero = plan.Super.AutoZero;
             Composition.Model.Reset(plan); Composition.OutputView.Restore(plan);
+            // 设备类型联动（含 A-Only 清理自动 B 槽行）必须在 AutoZero/Reset 之后应用，确保还原后状态一致。
+            // Device-type linkage (incl. the A-Only cleanup of auto B-slot rows) must run after AutoZero/Reset so the restored state is consistent.
+            UpdateDeviceTypeOptions();
             UpdateSidebarLock();
         }
         finally { _restoringDelivery = previous; }

@@ -28,7 +28,9 @@ internal static partial class DeliveryScriptGenerator
         var groups = plan.Files.GroupBy(f => f.Partition, StringComparer.Ordinal).Select(g => g.ToArray()).ToArray();
         if (groups.Any(g => g.Length > 9)) throw new InvalidDataException("每个选择组最多 9 项 / At most 9 alternatives per partition.");
         var defaults = groups.Select(g => g.FirstOrDefault(f => f.Default) ?? g[0]).Where(f => !f.Optional || f.Default).ToArray();
-        if (plan.Txt)
+        // The legacy TXT flasher cannot decompress ZST images. When ZST is selected,
+        // suppress the TXT artifact entirely instead of leaving a misleading partial manifest.
+        if (plan.Txt && !plan.Super.Zstd)
         {
             // TXT 线刷（旧工具箱）没有 zstd 解压能力：压缩镜像（如 super.zst）不写入清单，避免被直接当
             // super 分区刷入压缩数据；Shell/Batch 脚本仍保留各自的解压步骤。
