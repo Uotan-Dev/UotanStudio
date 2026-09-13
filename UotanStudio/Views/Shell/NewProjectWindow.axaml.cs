@@ -82,7 +82,6 @@ public partial class NewProjectWindow : Window
     private bool _updatingSelection;
     private bool _validationRequested;
     private bool _updatingLocation;
-    private bool _locationEdited;
     private string _baseDirectory;
     private int _analysisGeneration;
     private ContainerKind _containerKind;
@@ -253,7 +252,6 @@ public partial class NewProjectWindow : Window
                 // “选择目录”选定的是基础目录，位置仍然拼接当前名称显示。
                 // The picker chooses the base directory; the location still shows base + current name.
                 _baseDirectory = path;
-                _locationEdited = false;
                 UpdateLocationText();
             }
         }
@@ -448,21 +446,34 @@ public partial class NewProjectWindow : Window
     private void OnCancelClick(object? sender, RoutedEventArgs e) => Close();
 
     /// <summary>
-    /// <para>名称变化时联动位置后缀；用户手动编辑位置后不再联动。</para>
-    /// Name changes re-sync the location suffix; after the user edits the location manually the
-    /// syncing stops.
+    /// <para>名称变化时始终联动位置后缀（基础目录 + 当前名称）。</para>
+    /// Name changes always re-sync the location as base directory + current name.
     /// </summary>
     private void OnProjectNameChanged(object? sender, TextChangingEventArgs e)
     {
         UpdateValidation();
-        if (_locationEdited) return;
         UpdateLocationText();
     }
 
     private void OnLocationTextChanged(object? sender, TextChangingEventArgs e)
     {
         if (_updatingLocation) return;
-        _locationEdited = true;
+        // 手动编辑位置视为修改基础目录：编辑结果仍以当前项目名结尾时去掉该段，其余作为
+        // 新基础目录；名称与路径的联动始终保持开启，后续改名仍会同步路径中的文件夹名。
+        // A manual location edit changes the base directory: when the edited text still ends
+        // with the current project name that segment is stripped and the rest becomes the new
+        // base; name-driven syncing stays enabled so later renames keep updating the folder
+        // name in the location.
+        var name = ProjectNameBox.Text?.Trim();
+        if (ProjectLocationBox.Text is { Length: > 0 } text)
+        {
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            var strip = !string.IsNullOrWhiteSpace(name)
+                && (text.EndsWith(Path.DirectorySeparatorChar + name, comparison)
+                    || (Path.AltDirectorySeparatorChar != Path.DirectorySeparatorChar
+                        && text.EndsWith(Path.AltDirectorySeparatorChar + name, comparison)));
+            _baseDirectory = strip ? text[..^name.Length] : text;
+        }
         UpdateValidation();
     }
 

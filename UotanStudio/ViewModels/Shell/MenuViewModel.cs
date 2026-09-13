@@ -205,7 +205,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         {
             // 位置已是组合后的完整目录（基础目录/解决方案名），直接作为解决方案目录使用。
             // The location is already the combined directory (base/solution name); use it directly.
-            var solutionPath = Path.Combine(form.Location, form.ProjectName + ".uotan");
+            // NewProjectWindow keeps Location as the complete project directory
+            // (base directory plus the entered project name). Appending the name
+            // again created <name>\<name> when creating a solution.
+            var solutionPath = Path.Combine(
+                Directory.GetParent(form.Location)?.FullName ?? form.Location,
+                form.ProjectName + ".uotan");
             await _projectOps.CreateNewSolutionAsync(solutionPath);
             if (!string.Equals(_projectOps.CurrentProjectPath, solutionPath, StringComparison.OrdinalIgnoreCase))
                 throw new OperationCanceledException("Project creation was cancelled.");
