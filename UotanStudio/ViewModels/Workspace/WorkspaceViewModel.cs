@@ -27,6 +27,8 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     private CompareViewModel? _compareDocument;
     private ScreenMirrorViewModel? _screenMirrorDocument;
     internal ProjectExplorerViewModel? ProjectExplorer => (_factory as WorkspaceDockFactory)?.ProjectExplorer;
+    /// <summary>Exposes the concrete workspace factory for project-lifecycle document cleanup. 供工程生命周期清理文档使用。</summary>
+    internal WorkspaceDockFactory? DockFactory => _factory as WorkspaceDockFactory;
 
     /// <summary>
     /// <para>获取或设置 Dock 根布局。</para>

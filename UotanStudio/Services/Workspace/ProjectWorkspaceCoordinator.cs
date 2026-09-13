@@ -17,6 +17,20 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
     public void ClearImages() => ImageViewModel.EnsureInstance().Images.Clear();
     public void ApplySettings(ProjectSettingsDto settings) => ProjectSettingViewModel.EnsureInstance().ApplyFromDto(settings);
 
+    /// <summary>
+    /// <para>工程根目录变更通知：<paramref name="preserveDocuments"/> 为 false 时（新建解决方案、
+    /// 打开工程、关闭工程）关闭工作区全部文档型面板，避免上一工程的编辑器残留；为 true 时
+    /// （另存为）保留已打开文档，页面记录按新根重算相对路径。</para>
+    /// Root-change notification: with <paramref name="preserveDocuments"/> false (new solution, open,
+    /// close) closes every document-kind panel so editors of the previous solution do not linger;
+    /// with true (save-as) documents stay open and page records re-resolve against the new root.
+    /// </summary>
+    public void ChangeProjectRoot(string? rootDirectory, bool preserveDocuments)
+    {
+        if (preserveDocuments || rootDirectory is null) return;
+        Workspace?.DockFactory?.CloseAllDocuments(Workspace.Layout);
+    }
+
     public void RestoreImages(IEnumerable<ImageEntryDto> images)
     {
         var target = ImageViewModel.EnsureInstance().Images;

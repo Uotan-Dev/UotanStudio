@@ -1,5 +1,10 @@
 # UotanStudio 项目指令
 
+## 新建项目文档清理与镜像列表刷新（2026-09-13）
+
+- 桌面宿主 `ProjectWorkspaceCoordinator` 现已实现 `ChangeProjectRoot`：`preserveDocuments: false`（新建解决方案、打开工程、关闭工程）时经 `WorkspaceDockFactory.CloseAllDocuments(layout)` 关闭工作区全部文档型面板（文本/Hex/DTB/Dex/Manifest/ARSC/APK/固件信息/文件管理/分区/对比，与 `WorkspaceSessionCapture.IsDocument` 快照口径一致），复用 `SafeRemoveDockable` 的释放逻辑且不再逐一确认——脏文档已在会话操作门 `BeforeProjectChangeAsync`（`WorkspaceAutoSaveService.FlushAsync` → `ConfirmAllAsync`）阶段确认完毕。`preserveDocuments: true`（另存为）保持文档打开，页面记录按新根重算相对路径。`WorkspaceViewModel` 新增 `DockFactory` 内部访问器。
+- 新建解决方案与新建子项目两条创建路径在 `_projectOps.SaveAsync` 之前调用 `ImageViewModel.RefreshAfterProjectCreationAsync()`（内部 `RefreshProjectImagesAsync` 重扫 images/）：手动登记的容器条目（zip 等被 `DetectFormat` 判为 unknown）从列表过滤移除，不再被 `CaptureImages()` 持久化进 `.uotanfw` 快照，提取产物与磁盘实际内容一致。此前容器条目会残留在镜像列表，直到切换页面触发 `SetMode` 刷新才消失。
+
 ## Payload 解压并行与 I/O 优化（2026-09-13）
 
 - 提取三层伪串行化已解除：`PayloadExtractor.ExtractPartitions`/`ExtractPartitionsAsync` 改为分区级有界并行（度快照自 `FirmwareParallelism.Workers`，同步路径 `Parallel.ForEach`、异步路径 `Parallel.ForEachAsync`，`AggregateException` 展平后重抛首个内部异常以保留原异常契约）；跨分区字节进度经 `CrossPartitionProgress`（Interlocked 累计 + 共享 100ms 节流）与每分区 `PartitionDeltaForwarder`（绝对读数折算增量）聚合，`AggregatePartitionProgress` 已删除。
