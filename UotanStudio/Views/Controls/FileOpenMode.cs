@@ -140,6 +140,14 @@ public static class FileOpenMode
             return EditorOpenMode.Dex;
         }
 
+        // JAR 容器：与 APK 同为 ZIP+DEX 容器，走 DEX 编辑器（多 DEX 条目 + 资源浏览）。
+        // JAR containers: like APK, a ZIP+DEX container, opening in the DEX editor
+        // (multi-DEX entries + resource browsing).
+        if (IsJarExtension(ext))
+        {
+            return EditorOpenMode.Dex;
+        }
+
         // ARSC 资源表：走 ARSC 编辑器（resources.arsc 等）。
         // ARSC resource tables open in the ARSC editor (resources.arsc etc.).
         if (IsArscExtension(ext))
@@ -407,6 +415,14 @@ public static class FileOpenMode
     /// </summary>
     public static bool IsDexExtension(string? ext) =>
         ext is not null && ext.Equals(".dex", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <para>是否为 JAR 容器扩展名（走 DEX 编辑器浏览内部 classes*.dex 与资源）。</para>
+    /// Whether the extension is a JAR container one (opens in the DEX editor to browse
+    /// classes*.dex entries and resources).
+    /// </summary>
+    public static bool IsJarExtension(string? ext) =>
+        ext is not null && ext.Equals(".jar", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// <para>是否为 ARSC 资源表扩展名。</para>

@@ -250,6 +250,13 @@
     <x:String x:Key="Dock_Dtb_CompileError">Compile Error</x:String>
     <x:String x:Key="Dock_Dex_Save">Rebuild &amp; Save</x:String>
     <x:String x:Key="Dock_Dex_Disassembling">Parsing and disassembling, please wait…</x:String>
+    <x:String x:Key="Dock_Dex_Entry">DEX entry</x:String>
+    <x:String x:Key="Dock_Dex_MergeView">Merged view</x:String>
+    <x:String x:Key="Dock_Dex_Resource">Resource</x:String>
+    <x:String x:Key="Dock_Dex_ResourceExport">Export resource</x:String>
+    <x:String x:Key="Dock_Dex_ResourceReplace">Replace resource</x:String>
+    <x:String x:Key="Dock_Dex_SignKey">Signing key</x:String>
+    <x:String x:Key="Dock_Dex_Sign">Sign</x:String>
     <x:String x:Key="Dock_Manifest_Save">Rebuild &amp; Save</x:String>
     <x:String x:Key="Dock_Manifest_Busy">Parsing manifest, please wait…</x:String>
     <x:String x:Key="Dock_Manifest_ToggleRightView">Switch right pane layout</x:String>

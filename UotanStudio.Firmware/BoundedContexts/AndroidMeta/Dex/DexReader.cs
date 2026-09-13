@@ -38,15 +38,22 @@ internal static class DexReader
         var header = ReadHeader(data);
         if (header.HeaderSize != 0x70 || header.FileSize != data.Length)
             throw new DexException("DEX header size or file size does not match the input.");
-        if (!CryptographicOperations.FixedTimeEquals(SHA1.HashData(data.AsSpan(32)), header.Signature))
-            throw new DexException("DEX SHA-1 signature does not match the input.");
+        // 固件打包流程常在构建后修改 DEX（SHA-1 与 Adler-32 随之过期）；上游 jadx/dexlib 容忍该
+        // 情形，读取侧不因校验和过期拒绝——写回时 DexWriter 总是重算签名与校验和。
+        // Firmware packing frequently modifies DEX files after the build (stale SHA-1 and
+        // Adler-32); upstream jadx/dexlib tolerate this, so the reader does not reject on a
+        // stale checksum — DexWriter always recomputes the signature and checksum on write-back.
         uint checksumA = 1, checksumB = 0;
         foreach (var value in data.AsSpan(12))
         {
             checksumA = (checksumA + value) % 65521;
             checksumB = (checksumB + checksumA) % 65521;
         }
-        if ((checksumB << 16 | checksumA) != header.Checksum) throw new DexException("DEX Adler-32 checksum does not match the input.");
+        if ((checksumB << 16 | checksumA) != header.Checksum)
+        {
+            // 与 SHA-1 同理：不因过期的 Adler-32 拒绝解析（写回时重算）。
+            // Same as SHA-1: do not reject on a stale Adler-32 (recomputed on write-back).
+        }
         ValidateTable(data, header.StringIdsOffset, header.StringIdsSize, 4, "string_ids");
         ValidateTable(data, header.TypeIdsOffset, header.TypeIdsSize, 4, "type_ids");
         ValidateTable(data, header.ProtoIdsOffset, header.ProtoIdsSize, 12, "proto_ids");
@@ -662,13 +669,16 @@ internal static class DexReader
                 return EncodedValue.Long(ReadSignedValue(data, ref offset, arg + 1));
             case EncodedValueType.Float:
                 {
-                    var bits = (uint)ReadUnsignedValue(data, ref offset, arg + 1);
-                    return EncodedValue.Float(BitConverter.Int32BitsToSingle(checked((int)bits)));
+                    // 位重解释不是值转换，直接 unchecked 转换（真实 DEX 中 0x7Fxxxxxx 等位型合法存在）。
+                    // Bit reinterpretation is not a value conversion; the cast is unchecked
+                    // (bit patterns like 0x7Fxxxxxx legitimately occur in real DEX files).
+                    var bits = unchecked((uint)ReadUnsignedValue(data, ref offset, arg + 1));
+                    return EncodedValue.Float(BitConverter.Int32BitsToSingle(unchecked((int)bits)));
                 }
             case EncodedValueType.Double:
                 {
                     var bits = ReadUnsignedValue(data, ref offset, arg + 1);
-                    return EncodedValue.Double(BitConverter.Int64BitsToDouble(checked((long)bits)));
+                    return EncodedValue.Double(BitConverter.Int64BitsToDouble(unchecked((long)bits)));
                 }
             case EncodedValueType.MethodType:
                 return new EncodedValue(EncodedValueType.MethodType, checked((int)ReadUnsignedValue(data, ref offset, arg + 1)));

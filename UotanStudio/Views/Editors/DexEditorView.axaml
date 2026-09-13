@@ -8,9 +8,13 @@
              x:Class="UotanStudio.Views.Editors.DexEditorView"
              x:DataType="viewmodels:DexEditorViewModel">
   <DockPanel>
-    <!-- 顶部工具栏：文件路径 + 解析错误状态 -->
+    <!-- 顶部工具栏：文件路径 + 容器条目/合并视图 + 解析错误状态 -->
     <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <DockPanel>
+        <Button DockPanel.Dock="Left" Height="24" Padding="8,0" FontSize="11"
+                Content="{x:Static viewmodels:DexEditorViewModel.SaveLabel}"
+                Command="{Binding SaveCommand}"
+                IsEnabled="{Binding IsDirty}" />
         <TextBlock DockPanel.Dock="Right"
                    Text="{Binding CompileError}"
                    MaxWidth="360"
@@ -19,9 +23,68 @@
                    Foreground="Red"
                    TextTrimming="CharacterEllipsis"
                    IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <TextBlock Text="{Binding FilePathDisplay}"
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6"
+                    IsVisible="{Binding IsContainer}">
+          <TextBlock Text="{DynamicResource Dock_Dex_Entry}"
+                     VerticalAlignment="Center" FontSize="11" Opacity="0.7" />
+          <ComboBox MinWidth="140" Height="24" FontSize="11"
+                    ItemsSource="{Binding DexEntryNames}"
+                    SelectedItem="{Binding SelectedEntry}"
+                    IsEnabled="{Binding !IsMergeView}"
+                    AutomationProperties.Name="{DynamicResource Dock_Dex_Entry}" />
+          <CheckBox Content="{DynamicResource Dock_Dex_MergeView}"
+                    IsChecked="{Binding IsMergeView}"
+                    VerticalAlignment="Center" FontSize="11" />
+          <Button Height="24" Padding="8,0" FontSize="11"
+                  Content="{DynamicResource Dock_Dex_ResourceExport}"
+                  Command="{Binding ExportResourceCommand}"
+                  IsEnabled="{Binding HasSelectedResource}" />
+          <Button Height="24" Padding="8,0" FontSize="11"
+                  Content="{DynamicResource Dock_Dex_ResourceReplace}"
+                  Command="{Binding ReplaceResourceCommand}"
+                  IsEnabled="{Binding HasSelectedResource}" />
+        </StackPanel>
+        <TextBlock Margin="12,0,0,0"
+                   Text="{Binding FilePathDisplay}"
                    FontSize="11" Opacity="0.7" VerticalAlignment="Center"
                    TextTrimming="CharacterEllipsis" />
+      </DockPanel>
+    </Border>
+
+    <!-- 底部状态栏：资源条目选择 + JAR 签名（仅容器显示） -->
+    <Border DockPanel.Dock="Bottom" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
+            IsVisible="{Binding IsContainer}">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Right"
+                   Text="{Binding SignStatus}"
+                   MaxWidth="360" Margin="12,0,0,0"
+                   VerticalAlignment="Center" FontSize="11" Opacity="0.8"
+                   TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding SignStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="{DynamicResource Dock_Dex_Resource}"
+                     VerticalAlignment="Center" FontSize="11" Opacity="0.7" />
+          <ComboBox MinWidth="180" Height="24" FontSize="11"
+                    ItemsSource="{Binding ResourceEntries}"
+                    SelectedItem="{Binding SelectedResource}"
+                    DisplayMemberBinding="{Binding Name}"
+                    AutomationProperties.Name="{DynamicResource Dock_Dex_Resource}" />
+          <TextBlock Text="{DynamicResource Dock_Dex_SignKey}"
+                     VerticalAlignment="Center" FontSize="11" Opacity="0.7" />
+          <ComboBox MinWidth="140" Height="24" FontSize="11"
+                    ItemsSource="{Binding JarKeys}"
+                    SelectedItem="{Binding SelectedJarKey}"
+                    AutomationProperties.Name="{DynamicResource Dock_Dex_SignKey}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding Name, Mode=OneWay}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button Height="24" Padding="8,0" FontSize="11"
+                  Content="{DynamicResource Dock_Dex_Sign}"
+                  Command="{Binding SignJarCommand}" />
+        </StackPanel>
       </DockPanel>
     </Border>
 
@@ -29,7 +92,8 @@
     <Grid>
       <controls:CodeEditor x:Name="SourceEditor"
                            Text="{Binding Source, Mode=TwoWay}"
-                           IsReadOnly="True" />
+                           IsReadOnly="{Binding IsMergeView}"
+                           Language="asm" />
 
       <Border IsVisible="{Binding IsBusy}" IsHitTestVisible="{Binding IsBusy}" ZIndex="1"
               Background="#A0000000">

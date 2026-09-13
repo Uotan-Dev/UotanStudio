@@ -148,7 +148,7 @@ public class DexNodeViewModel : FlowNodeViewModel
             return;
         }
 
-        var result = await DexService.Instance.ParseDexAsync(path, context.CancellationToken).ConfigureAwait(false);
+        var result = await DexService.Instance.ParseDexAsync(path, entryName: null, context.CancellationToken).ConfigureAwait(false);
         if (!result.Success)
         {
             context.Log.Write(LogLevel.Error, Title, $"Parse failed: {result.Summary}  解析失败。");
@@ -170,7 +170,7 @@ public class DexNodeViewModel : FlowNodeViewModel
 
         var outputDir = PathText(ReadInput("Output Dir"));
         var result = await DexService.Instance
-            .DisassembleDexAsync(path, outputDir, context.CancellationToken)
+            .DisassembleDexAsync(path, outputDir, entryName: null, context.CancellationToken)
             .ConfigureAwait(false);
         if (!result.Success)
         {
@@ -199,7 +199,7 @@ public class DexNodeViewModel : FlowNodeViewModel
         }
 
         var result = await DexService.Instance
-            .RebuildDexAsync(path, outputPath, context.CancellationToken)
+            .RebuildDexAsync(path, outputPath, entryName: null, context.CancellationToken)
             .ConfigureAwait(false);
         if (!result.Success)
         {
@@ -228,7 +228,7 @@ public class DexNodeViewModel : FlowNodeViewModel
         }
 
         var result = await DexService.Instance
-            .DecompileDexAsync(path, outputPath, options: null, context.CancellationToken)
+            .DecompileDexAsync(path, outputPath, entryName: null, options: null, context.CancellationToken)
             .ConfigureAwait(false);
         if (!result.Success)
         {

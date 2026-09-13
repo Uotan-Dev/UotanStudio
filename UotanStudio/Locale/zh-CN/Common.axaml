@@ -250,6 +250,13 @@
     <x:String x:Key="Dock_Dtb_CompileError">编译错误</x:String>
     <x:String x:Key="Dock_Dex_Save">重建并保存</x:String>
     <x:String x:Key="Dock_Dex_Disassembling">正在解析与反汇编，请稍候…</x:String>
+    <x:String x:Key="Dock_Dex_Entry">DEX 条目</x:String>
+    <x:String x:Key="Dock_Dex_MergeView">合并视图</x:String>
+    <x:String x:Key="Dock_Dex_Resource">资源条目</x:String>
+    <x:String x:Key="Dock_Dex_ResourceExport">导出资源</x:String>
+    <x:String x:Key="Dock_Dex_ResourceReplace">替换资源</x:String>
+    <x:String x:Key="Dock_Dex_SignKey">签名密钥</x:String>
+    <x:String x:Key="Dock_Dex_Sign">签名</x:String>
     <x:String x:Key="Dock_Manifest_Save">重建并保存</x:String>
     <x:String x:Key="Dock_Manifest_Busy">正在解析 Manifest，请稍候…</x:String>
     <x:String x:Key="Dock_Manifest_ToggleRightView">切换右侧视图</x:String>

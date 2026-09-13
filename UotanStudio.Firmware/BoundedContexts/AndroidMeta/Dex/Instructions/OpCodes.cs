@@ -56,6 +56,17 @@ public static class OpCodes
     /// </summary>
     public static OpCodeInfo? Get(byte opcode) => Table[opcode];
 
+    /// <summary>Resolves an opcode by its smali mnemonic.</summary>
+    public static (byte Opcode, OpCodeInfo Info)? Find(string mnemonic)
+    {
+        for (var i = 0; i < Table.Length; i++)
+        {
+            if (Table[i]?.Mnemonic.Equals(mnemonic, StringComparison.OrdinalIgnoreCase) == true)
+                return ((byte)i, Table[i]!);
+        }
+        return null;
+    }
+
     /// <summary>
     /// Gets the instruction size in 16-bit code units.
     /// <para>获取指令大小（16 位代码单元数）。</para>

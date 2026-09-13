@@ -141,8 +141,10 @@ internal static partial class DexWriter
         switch (value.Type)
         {
             case EncodedValueType.Byte:
+                // BinaryWriter.Write(int) 会写出 4 字节；encoded_value 的 Byte 载荷只有 1 字节。
+                // BinaryWriter.Write(int) emits 4 bytes; the Byte payload is exactly 1 byte.
                 w.Write((byte)EncodedValueType.Byte);
-                w.Write(value.AsInt());
+                w.Write((byte)value.AsInt());
                 break;
             case EncodedValueType.Short:
                 {
