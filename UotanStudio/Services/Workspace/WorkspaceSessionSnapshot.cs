@@ -28,6 +28,18 @@ internal sealed class WorkspaceDockState
 
 internal static class WorkspaceSessionCapture
 {
+    /// <summary>
+    /// <para>判定停靠项是否为文档型面板（与 <see cref="Documents"/> 的快照口径一致）。</para>
+    /// Whether the dockable is a document panel (same scope as <see cref="Documents"/>).
+    /// </summary>
+    internal static bool IsDocument(IDockable item) => item switch
+    {
+        FileViewModel or FirmwareInfoViewModel or FileManagerEditorViewModel or DtbEditorViewModel
+            or DexEditorViewModel or ManifestEditorViewModel or ArscEditorViewModel or HexEditorViewModel
+            or ApkEditorViewModel or PartitionEditorViewModel or CompareViewModel => true,
+        _ => false
+    };
+
     internal static IEnumerable<IDockable> Enumerate(IDockable? root)
     {
         var visited = new HashSet<IDockable>(ReferenceEqualityComparer.Instance);

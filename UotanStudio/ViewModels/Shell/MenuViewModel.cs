@@ -229,6 +229,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             {
                 await UnpackSelectedPlainImagesAsync(form, images, window);
             }
+            // 保存前刷新镜像列表：过滤手动登记的容器条目（zip 等 unknown 格式），避免持久化进工程快照。
+            // Refresh the image list before saving: filter manually registered container entries
+            // (zip and other unknown formats) so they are not persisted into the project snapshot.
+            await images.RefreshAfterProjectCreationAsync();
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))
                 throw new IOException("Could not save the imported project.");
         };
@@ -533,6 +537,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                     byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")));
                 await UnpackSelectedPlainImagesAsync(form, images, window);
             }
+            // 保存前刷新镜像列表：过滤手动登记的容器条目（zip 等 unknown 格式），避免持久化进工程快照。
+            // Refresh the image list before saving: filter manually registered container entries
+            // (zip and other unknown formats) so they are not persisted into the project snapshot.
+            await images.RefreshAfterProjectCreationAsync();
             if (!await _projectOps.SaveAsync(saveActiveDocument: false))
                 throw new IOException("Could not save the imported project.");
         };

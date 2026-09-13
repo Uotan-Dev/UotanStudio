@@ -436,4 +436,16 @@ internal partial class ImageViewModel : Tool
         ProgressPercent = 0;
     }
 
+    /// <summary>
+    /// <para>工程创建流程保存前的镜像列表刷新：重新扫描 images/ 目录，使手动登记的容器条目
+    /// （zip 等未知格式）被过滤，提取产物与磁盘实际内容一致，避免把容器条目持久化进工程快照。</para>
+    /// Image-list refresh before the project-creation flow saves: re-scans images/ so manually
+    /// registered container entries (zip and other unknown formats) are filtered and extracted
+    /// artifacts match the disk, keeping container entries out of the persisted project snapshot.
+    /// </summary>
+    internal async Task RefreshAfterProjectCreationAsync()
+    {
+        await RefreshProjectImagesAsync();
+    }
+
 }
