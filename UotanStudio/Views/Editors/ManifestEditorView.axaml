@@ -53,10 +53,7 @@
                   SelectionChanged="OnTreeSelectionChanged">
           <TreeView.ItemTemplate>
             <TreeDataTemplate x:DataType="viewmodels:ManifestTreeNodeViewModel" ItemsSource="{Binding Children}">
-              <StackPanel Orientation="Horizontal" Spacing="4">
-                <TextBlock Text="&lt;" FontSize="10" Opacity="0.5" FontFamily="Consolas" />
-                <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
-              </StackPanel>
+              <TextBlock Text="{Binding Name}" FontFamily="Consolas" />
             </TreeDataTemplate>
           </TreeView.ItemTemplate>
         </TreeView>
