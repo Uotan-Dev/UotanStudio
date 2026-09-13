@@ -107,7 +107,13 @@ internal static class OperationProcessor
     }
     /// <summary>
     /// Processes a parallelizable install operation by reading data from the payload stream and writing the result to the output file.
-    /// <para>通过从载荷流读取数据并将结果写入输出文件来处理可并行化的安装操作。</para>
+    /// Replace-family operations hash-verify while decoding (single pass, no outer write lock: decompression runs outside
+    /// <paramref name="writeLock"/>; only the underlying extent Seek+Write is serialized via <see cref="ExtentWriteStream"/>'s sync root).
+    /// ZERO writes zeros through an extent-mapped write stream; DISCARD is a no-op.
+    /// <para>通过从载荷流读取数据并将结果写入输出文件来处理可并行化的安装操作。
+    /// Replace 系操作边解码边校验哈希（单次读取，无外层写锁：解压在 <paramref name="writeLock"/> 之外自由运行，
+    /// 仅底层 extent 的 Seek+Write 通过 <see cref="ExtentWriteStream"/> 的 syncRoot 串行化）。
+    /// ZERO 通过按区间映射的写入流写零；DISCARD 为空操作。</para>
     /// </summary>
     internal static void ProcessOperation(
         InstallOperation op,
@@ -149,33 +155,40 @@ internal static class OperationProcessor
             or InstallOperation.Types.Type.ReplaceXz;
         if (isReplace)
         {
-
-
-            lock (writeLock)
-            {
-                using var bounded = new SharedKernel.Streams.BoundedReadStream(stream, dataPos, dataLength, leaveOpen: true, syncRoot: streamLock);
-                using var hashing = new VerifyingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
-                cancellationToken.ThrowIfCancellationRequested();
-                ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken, byteProgress);
-                hashing.Complete();
-            }
+            // No outer write lock: bounded read (shared payload stream guarded by streamLock) and
+            // decompression/hash verification run in parallel; only the output FileStream's Seek+Write
+            // is serialized through ExtentWriteStream's syncRoot (writeLock).
+            // 无外层写锁：有界读取（共享载荷流由 streamLock 保护）与解压/哈希校验并行进行；
+            // 仅输出 FileStream 的 Seek+Write 通过 ExtentWriteStream 的 syncRoot（writeLock）串行化。
+            using var bounded = new SharedKernel.Streams.BoundedReadStream(stream, dataPos, dataLength, leaveOpen: true, syncRoot: streamLock);
+            using var hashing = new VerifyingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
+            cancellationToken.ThrowIfCancellationRequested();
+            // Decode-and-verify in one pass: the hashing stream feeds the decoder, Complete() checks
+            // accumulated digest (throws on truncation or hash mismatch before the temp output is used).
+            // 边解码边校验：哈希流直接喂给解码器，Complete() 校验累计摘要
+            // （截断或哈希不符时在临时输出被使用前抛错）。
+            ProcessReplaceStream(op, hashing, outFile, blockSize, writeLock, cancellationToken, byteProgress);
+            hashing.Complete();
             return;
         }
 
         if (op.Type is not (InstallOperation.Types.Type.Zero or InstallOperation.Types.Type.Discard))
             throw new PayloadUnsupportedOperationException($"Source-dependent operation {op.Type} cannot run on the parallel path.", op.Type.ToString());
         if (dataLength != 0) throw new PartitionExtractionException("ZERO and DISCARD operations cannot carry a data blob.", string.Empty);
-        using var dataRange = new BoundedReadStream(stream, dataPos, dataLength, leaveOpen: true, syncRoot: streamLock);
-        using var dataHash = new VerifyingReadStream(dataRange, op.DataSha256Hash.ToByteArray());
-        UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff.BinaryDeltaPatch.CopyExactly(dataHash, Stream.Null, dataLength, cancellationToken);
-        dataHash.Complete();
-        lock (writeLock)
+        // No data blob is carried here (dataLength must be 0), so there is nothing to hash-verify.
+        // ZERO writes outside writeLock; only the underlying FileStream's Seek+Write is serialized
+        // inside ExtentWriteStream via its syncRoot. DISCARD writes nothing.
+        // 此处不携带数据 blob（dataLength 必为 0），无哈希校验需要执行。
+        // ZERO 在 writeLock 之外写零；仅底层 FileStream 的 Seek+Write 在 ExtentWriteStream
+        // 内部通过其 syncRoot 串行化。DISCARD 不写任何数据。
+        if (op.Type == InstallOperation.Types.Type.Zero)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (op.Type == InstallOperation.Types.Type.Zero) ProcessZero(op, outFile, blockSize, cancellationToken, byteProgress);
-            else if (op.Type != InstallOperation.Types.Type.Discard)
-                throw new PayloadUnsupportedOperationException($"Unsupported parallel operation type: {op.Type}", op.Type.ToString());
+            using var zeros = new ExtentWriteStream(outFile, op.DstExtents, blockSize, requireExactLength: false, syncRoot: writeLock, byteProgress: byteProgress);
+            ProcessZero(zeros, cancellationToken);
         }
+        else if (op.Type != InstallOperation.Types.Type.Discard)
+            throw new PayloadUnsupportedOperationException($"Unsupported parallel operation type: {op.Type}", op.Type.ToString());
     }
 
     private static void ProcessReplaceStream(InstallOperation op, Stream input, FileStream outFile, uint blockSize, object writeLock, CancellationToken cancellationToken, PartitionByteProgress? byteProgress = null)
@@ -216,31 +229,21 @@ internal static class OperationProcessor
 
     private static readonly byte[] ZeroBuffer = new byte[65536];
 
-    private static void ProcessZero(InstallOperation op, FileStream outFile, uint blockSize, CancellationToken cancellationToken, PartitionByteProgress? byteProgress = null)
+    /// <summary>
+    /// Writes zero bytes into the destination extents through the given extent-mapped write stream.
+    /// Extent boundary crossing is handled by the stream; byte progress is tracked by the stream itself.
+    /// <para>通过给定的按区间映射写入流向目标 extent 写入零字节。extent 跨界由流处理；
+    /// 字节进度由流自身统计。</para>
+    /// </summary>
+    private static void ProcessZero(ExtentWriteStream zeros, CancellationToken cancellationToken)
     {
-        foreach (var ext in op.DstExtents)
+        var remaining = zeros.Length;
+        while (remaining > 0)
         {
-            long pos;
-            long remaining;
-            try
-            {
-                pos = checked((long)ext.StartBlock * blockSize);
-                remaining = checked((long)ext.NumBlocks * blockSize);
-            }
-            catch (OverflowException ex)
-            {
-                throw new PartitionExtractionException("ZERO extent size or offset exceeds Int64 range", string.Empty, ex);
-            }
-            outFile.Seek(pos, SeekOrigin.Begin);
-            byteProgress?.Add(remaining);
-            while (remaining > 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var toWrite = (int)Math.Min(remaining, ZeroBuffer.Length);
-                outFile.Write(ZeroBuffer, 0, toWrite);
-                remaining -= toWrite;
-            }
+            cancellationToken.ThrowIfCancellationRequested();
+            var toWrite = (int)Math.Min(remaining, ZeroBuffer.Length);
+            zeros.Write(ZeroBuffer, 0, toWrite);
+            remaining -= toWrite;
         }
     }
-
 }

@@ -36,6 +36,18 @@ public sealed class BoundedReadStream : Stream
         _length = length;
         _leaveOpen = leaveOpen;
         _syncRoot = syncRoot;
+        // Position 设置必须与其它并发使用者的读写互斥（syncRoot 存在时），
+        // 否则构造期间的定位会破坏在飞读取的数据。
+        // The position set must be mutually exclusive with concurrent users' reads/writes
+        // (when a syncRoot exists); otherwise positioning during construction corrupts in-flight reads.
+        if (_syncRoot is not null)
+        {
+            lock (_syncRoot)
+            {
+                _inner.Position = offset;
+            }
+            return;
+        }
         _inner.Position = offset;
     }
 

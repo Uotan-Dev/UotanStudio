@@ -1,5 +1,14 @@
 # UotanStudio 项目指令
 
+## Payload 解压并行与 I/O 优化（2026-09-13）
+
+- 提取三层伪串行化已解除：`PayloadExtractor.ExtractPartitions`/`ExtractPartitionsAsync` 改为分区级有界并行（度快照自 `FirmwareParallelism.Workers`，同步路径 `Parallel.ForEach`、异步路径 `Parallel.ForEachAsync`，`AggregateException` 展平后重抛首个内部异常以保留原异常契约）；跨分区字节进度经 `CrossPartitionProgress`（Interlocked 累计 + 共享 100ms 节流）与每分区 `PartitionDeltaForwarder`（绝对读数折算增量）聚合，`AggregatePartitionProgress` 已删除。
+- `OperationProcessor.ProcessOperation` 的 Replace 系（Replace/ReplaceBz/ReplaceXz）不再在 `lock(writeLock)` 内执行整个解压——解码与哈希校验在锁外自由运行（校验改为"边解边验"单遍：`VerifyingReadStream` 直接喂解码器，`Complete()` 校验累计摘要），仅底层 extent 的 Seek+Write 经 `ExtentWriteStream` 的 syncRoot 串行化；ZERO 改经 `ExtentWriteStream` 写零（`ProcessZero` 不再手动 Seek/计进度，避免双计），删除了 ZERO/DISCARD 空数据的冗余流校验。原 `Replace_HoldsOutputLockUntilEntireStreamAndHashAreComplete` 测试改为 `Replace_DecodeRunsOutsideOutputLock` 断言新契约。
+- 消除双读：基座镜像 `VerifyPartition`+拷贝合并为 `VerifyingReadStream` 之上的单遍 `CopyExactly`（`OldPartitionInfo` 缺失时仅拷贝不校验，长度/哈希长度前置检查保留）；Replace 系 payload 数据从"先整读校验再重读解码"改为单遍。payload/基座读句柄加 `FileOptions.SequentialScan`。
+- 并发分区各开专属只读 payload 句柄：`PayloadExtractor` 的 `ExtractPartitions*`/`ExtractPartition*` 新增末位可选参数 `Func<Stream>? openPayloadStream`；`PayloadParser` 的文件路径 `Extract`/`ExtractAsync` 传入按路径打开的工厂（`FileShare.Read`），跨分区读不再共享单一 `FileStream` 串行化；`Stream` 重载与未传工厂时保持共享流+分区锁的原行为。
+- 修复 `BoundedReadStream` 构造竞态：带 `syncRoot` 时构造函数内的 `_inner.Position = offset` 现在与并发读写互斥——此前靠 Replace 全程持锁掩盖，解锁后会造成在飞读数据污染（表现为哈希不匹配/乱数据）。
+- 验证边界：126 项 Payload 过滤测试 125 通过（唯一失败 `RepackMetadataTests.ReservedFilenameCollision` 与 6 项 `FileSystemByteProgressTests` 经 stash 对照确认为工作区既有修改引入，与本次无关；全量 2128 项中同样仅这 7 项失败）。提速来源为解除伪串行锁与消除双读，XZ 等单流解码器单操作内仍单线程，不宣称各平台硬件性能通过。
+
 ## 交付计划与面板可见性改存解决方案文件（2026-09-13）
 
 - `SolutionSnapshot` 新增可选 `State`（`Dictionary<string, JsonElement>`）扩展段；交付计划（键 `delivery`）与工作区面板可见性（键 `panels`）随 `.uotan` 解决方案文件持久化，FormatVersion 保持 2。旧版交付页根级 `<解决方案根>/.uotan/delivery.json` 写入途径已整体移除，不做迁移读取：`DeliveryPlanStore` 仅提供 `CaptureElement`（序列化进 State、路径转相对解决方案根）与 `LoadFromState`（从 State 还原、路径转绝对），校验与 8 MiB 上限保持不变。解决方案根不得再出现 `.uotan` 目录；子项目 `.uotan/`（history/settings/metadata/backup/原包配置）语义不变。
