@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using UotanStudio.Services;
 using UotanStudio.Services.Keys;
 
 namespace UotanStudio.ViewModels.Shell;
@@ -9,6 +11,13 @@ namespace UotanStudio.ViewModels.Shell;
 public partial class KeyManagerViewModel : ViewModelBase
 {
     private readonly KeyLibraryService _library;
+    // Settings access seams; tests inject isolated delegates to avoid touching real user settings.
+    // 设置访问接缝；测试注入隔离委托以避免触碰真实用户设置。
+    private readonly Func<AppSettings> _loadSettings = () => SettingsPersistenceService.Instance.LoadSettings();
+    private readonly Func<string, string?, bool> _updateDefaultKeyId = SettingsPersistenceService.Instance.UpdateDefaultKeyId;
+    // Runtime-identity fingerprint seam; tests inject isolated keys to avoid touching real runtime files.
+    // 运行时身份指纹接缝；测试注入隔离密钥以避免触碰真实运行时文件。
+    private readonly Func<ManagedKeyKind, string?> _runtimeFingerprint = KeyLibraryService.GetRuntimeIdentityFingerprint;
     public ObservableCollection<ManagedKey> Keys { get; } = [];
     public string[] Kinds { get; } = ["ADB", "HDC", "Payload"];
     public int[] PayloadSizes => KindIndex switch { 0 => [2048], 1 => [3072], _ => [2048, 4096] };
@@ -25,15 +34,61 @@ public partial class KeyManagerViewModel : ViewModelBase
     [ObservableProperty][NotifyPropertyChangedFor(nameof(IsIdle))] private bool _isBusy;
     [ObservableProperty] private bool _confirmRemoval;
     [ObservableProperty] private bool _confirmDeletion;
+    [ObservableProperty][NotifyPropertyChangedFor(nameof(IsSelectedDefault), nameof(CanSetCurrentDefault))] private string _defaultSignatureIds = "";
     public bool IsIdle => !IsBusy;
     public bool IsPayload => KindIndex == 2;
     public bool HasSelection => SelectedKey is not null;
     public string SelectedPath => SelectedKey is { } key ? _library.PrivatePath(key) : "";
     public bool HasCertificate => SelectedKey is { Kind: ManagedKeyKind.Payload };
+    public bool IsSelectedDefault => SelectedKey is { } k && IsDefault(k);
+    public bool CanSetCurrentDefault => SelectedKey is { Kind: not ManagedKeyKind.Payload };
     private IReadOnlyList<ManagedKey> _all = [];
 
     public KeyManagerViewModel() : this(new KeyLibraryService()) { }
-    public KeyManagerViewModel(KeyLibraryService library) => _library = library;
+    public KeyManagerViewModel(KeyLibraryService library)
+    {
+        _library = library;
+        RebuildDefaultIds();
+    }
+
+    /// <summary>Test-only constructor with isolated settings delegates.</summary>
+    /// <summary>仅供测试的构造函数，注入隔离的设置委托。</summary>
+    internal KeyManagerViewModel(KeyLibraryService library, Func<AppSettings> loadSettings,
+        Func<string, string?, bool> updateDefaultKeyId, Func<ManagedKeyKind, string?>? runtimeFingerprint = null)
+    {
+        _library = library;
+        _loadSettings = loadSettings;
+        _updateDefaultKeyId = updateDefaultKeyId;
+        if (runtimeFingerprint is not null) _runtimeFingerprint = runtimeFingerprint;
+        RebuildDefaultIds();
+    }
+
+    /// <summary>Re-reads the persisted default key ids and refreshes the badge binding source. A persisted id that is empty or no longer exists in the library falls back to the runtime identity matched by fingerprint, so the auto-imported entry is shown as in use.</summary>
+    /// <summary>重新读取已持久化的默认密钥标识并刷新徽标绑定源。持久化 Id 为空或已不存在于库中时回退按指纹匹配运行时身份，使自动导入的条目显示为当前使用。</summary>
+    private void RebuildDefaultIds()
+    {
+        var settings = _loadSettings();
+        string? Resolve(string kind, string? savedId)
+        {
+            var managedKind = kind == "Adb" ? ManagedKeyKind.Adb : ManagedKeyKind.Hdc;
+            if (!string.IsNullOrEmpty(savedId) && _all.Any(k => k.Kind == managedKind && k.Id == savedId))
+                return kind + ":" + savedId;
+            var fingerprint = _runtimeFingerprint(managedKind);
+            if (fingerprint is null || _library.FindByFingerprint(managedKind, fingerprint) is not { } key) return null;
+            return kind + ":" + key.Id;
+        }
+        DefaultSignatureIds = string.Join(" ",
+            [.. new[] { Resolve("Adb", settings.AdbDefaultKeyId), Resolve("Hdc", settings.HdcDefaultKeyId) }.Where(part => part is not null)]);
+    }
+
+    /// <summary>True when the key is the current default signature for its ADB/HDC purpose.</summary>
+    /// <summary>当密钥是其 ADB/HDC 用途的当前默认签名时返回 true。</summary>
+    private bool IsDefault(ManagedKey key) =>
+        key.Kind is ManagedKeyKind.Adb or ManagedKeyKind.Hdc &&
+        DefaultSignatureIds.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Contains(key.Kind + ":" + key.Id, StringComparer.Ordinal);
+
+    partial void OnDefaultSignatureIdsChanged(string value) => OnPropertyChanged(nameof(IsSelectedDefault));
 
     partial void OnKindIndexChanged(int value)
     {
@@ -53,6 +108,8 @@ public partial class KeyManagerViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasCertificate));
         OnPropertyChanged(nameof(SelectedPath));
+        OnPropertyChanged(nameof(IsSelectedDefault));
+        OnPropertyChanged(nameof(CanSetCurrentDefault));
     }
 
     private void Filter()
@@ -82,9 +139,16 @@ public partial class KeyManagerViewModel : ViewModelBase
     // 调用方先确认具体条目，删除目标不随当前选中项变化。
     internal Task DeleteKeyAsync(ManagedKey key) => RunAsync(async () =>
     {
+        if (IsDefault(key))
+        {
+            var cleared = await Task.Run(() => _updateDefaultKeyId(
+                key.Kind == ManagedKeyKind.Adb ? "Adb" : "Hdc", null));
+            if (!cleared) Status = GetStringOrFallback("Keys_DefaultSaveFailed", "Failed to save the default key setting.");
+        }
         await Task.Run(() => _library.Delete(key));
         _all = await Task.Run(_library.List);
         Filter();
+        RebuildDefaultIds();
     });
 
     [RelayCommand]
@@ -92,6 +156,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     {
         _all = await Task.Run(_library.List);
         Filter();
+        RebuildDefaultIds();
     });
 
     [RelayCommand]
@@ -119,7 +184,32 @@ public partial class KeyManagerViewModel : ViewModelBase
         Search = "";
         Filter();
         SelectedKey = Keys.First(k => k.Id == key.Id);
+        RebuildDefaultIds();
     });
+
+    /// <summary>Publishes the selected ADB/HDC key as the current runtime default signature.</summary>
+    /// <summary>将选中的 ADB/HDC 密钥发布为当前运行时默认签名。</summary>
+    [RelayCommand]
+    private Task SetCurrentDefaultAsync()
+    {
+        if (IsBusy || SelectedKey is not { Kind: not ManagedKeyKind.Payload } key) return Task.CompletedTask;
+        return RunAsync(async () =>
+        {
+            await Task.Run(() => _library.PublishDefault(key));
+            var saved = await Task.Run(() => _updateDefaultKeyId(
+                key.Kind == ManagedKeyKind.Adb ? "Adb" : "Hdc", key.Id));
+            if (!saved) Status = GetStringOrFallback("Keys_DefaultSaveFailed", "Failed to save the default key setting.");
+            else RebuildDefaultIds();
+        });
+    }
+
+    /// <summary>Localized string with an English fallback when the resource key is missing.</summary>
+    /// <summary>本地化字符串；资源缺失时回退英文。</summary>
+    private static string GetStringOrFallback(string key, string fallback)
+    {
+        var value = LanguageService.Instance.GetString(key);
+        return value == key ? fallback : value;
+    }
 
     [RelayCommand]
     private Task RenameAsync() => RunAsync(async () =>

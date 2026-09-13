@@ -68,7 +68,6 @@
     <x:String x:Key="Dock_BRCompLevel">BR Level</x:String>
     <x:String x:Key="Dock_UTCTime">UTC Time</x:String>
     <x:String x:Key="Dock_DATSegments">DAT Segments</x:String>
-    <x:String x:Key="Dock_Device">Device</x:String>
     <x:String x:Key="Dock_NoDocumentOpen">No documents open</x:String>
     <x:String x:Key="Dock_NoDocumentOpenHint">Open or create a project file to get started</x:String>
     <x:String x:Key="Dock_Output">Output</x:String>

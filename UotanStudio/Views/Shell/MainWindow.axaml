@@ -240,10 +240,6 @@
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ProjectSettingVisible, Mode=OneWay}"
 							  Command="{Binding MenuVM.ToggleProjectSettingCommand}" />
-					<MenuItem Header="{DynamicResource Menu_WindowDevice}"
-							  ToggleType="CheckBox"
-							  IsChecked="{Binding MenuVM.WorkspacePanels.DeviceVisible, Mode=OneWay}"
-							  Command="{Binding MenuVM.ToggleDevicePanelCommand}" />
 					<MenuItem Header="{DynamicResource Menu_WindowImages}"
 							  ToggleType="CheckBox"
 							  IsChecked="{Binding MenuVM.WorkspacePanels.ImagesViewVisible, Mode=OneWay}"

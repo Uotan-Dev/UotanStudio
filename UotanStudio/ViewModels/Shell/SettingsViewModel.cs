@@ -501,6 +501,10 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         _selectedThemeMode = settings.ThemeMode;
         _autoSave = settings.AutoSave;
         _debugMode = settings.DebugMode;
+        // 启动恢复设置时同步应用调试模式，否则重启后 Debug 级别日志（含首次机会异常）被 Info 过滤。
+        // Apply debug mode when restoring settings at startup; otherwise Debug-level logs
+        // (including first-chance exceptions) stay filtered behind Info after a restart.
+        LogService.Instance.ApplyDebugMode(_debugMode);
 
         // Apply language based on loaded preference
         ApplyLanguageInfo(_selectedLanguage);

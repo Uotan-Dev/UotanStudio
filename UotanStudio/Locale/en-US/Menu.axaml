@@ -89,7 +89,6 @@
     <x:String x:Key="Menu_Window">Window</x:String>
     <x:String x:Key="Menu_WindowProjectExplorer">Project Explorer</x:String>
     <x:String x:Key="Menu_WindowProjectSetting">Packing Settings</x:String>
-    <x:String x:Key="Menu_WindowDevice">Device</x:String>
     <x:String x:Key="Menu_WindowImages">Images</x:String>
     <x:String x:Key="Menu_WindowProperties">Properties</x:String>
     <x:String x:Key="Menu_WindowWorkspaceLog">Output</x:String>
@@ -150,4 +149,14 @@
     <x:String x:Key="Keys_ExternalPrivate">Or select an external PEM / DER private key</x:String>
     <x:String x:Key="Keys_Unsigned">Unsigned</x:String>
     <x:String x:Key="Keys_PayloadSigningHint">Signs both metadata and Payload. External keys must be unencrypted RSA 2048/4096; import encrypted PEM keys into the library first.</x:String>
+    <x:String x:Key="Keys_SetCurrent">Set as current key</x:String>
+    <x:String x:Key="Keys_SetCurrentHint">Write this key to the runtime identity and restart to apply</x:String>
+    <x:String x:Key="Keys_CurrentDefault">Default</x:String>
+    <x:String x:Key="Keys_InUse">in use</x:String>
+    <x:String x:Key="Keys_AlreadyDefault">Already the current default signature</x:String>
+    <x:String x:Key="Keys_RestartConfirmTitle">Set current key</x:String>
+    <x:String x:Key="Keys_RestartConfirmMessage">Set '{0}' as the current {1} signature? The app will save all state and restart, reopening the previous solution.</x:String>
+    <x:String x:Key="Keys_DefaultSaveFailed">Failed to save the default key setting.</x:String>
+    <x:String x:Key="Keys_DefaultAutoName">Default ADB key</x:String>
+    <x:String x:Key="Keys_DefaultAutoNameHdc">Default HDC key</x:String>
 </ResourceDictionary>

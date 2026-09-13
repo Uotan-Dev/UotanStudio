@@ -1,4 +1,6 @@
+using System.Globalization;
 using Avalonia.Controls;
+using Avalonia.Data.Converters;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -34,6 +36,21 @@ public partial class KeyManagerWindow : Window
             path = files.Count == 1 ? files[0].TryGetLocalPath() : null;
         });
         if (path is not null) await Model.ImportAsync(path);
+    }
+
+    private async void SetCurrentClick(object? sender, RoutedEventArgs e)
+    {
+        var key = Model.SelectedKey;
+        if (key is null || Model.IsBusy || Model.IsSelectedDefault) return;
+        var language = LanguageService.Instance;
+        var confirmed = await DialogService.ConfirmAsync(this,
+            language.GetString("Keys_RestartConfirmTitle"),
+            string.Format(language.GetString("Keys_RestartConfirmMessage"), key.Name,
+                key.Kind == ManagedKeyKind.Adb ? "ADB" : "HDC"),
+            language.GetString("Keys_SetCurrent"));
+        if (!confirmed) return;
+        await Model.SetCurrentDefaultCommand.ExecuteAsync(null);
+        if (Model.Status == "") UotanStudio.Services.Keys.ApplicationRestartService.RestartWithSolution();
     }
 
     private void UpdateCreationActionsLayout()
@@ -99,4 +116,22 @@ public partial class KeyManagerWindow : Window
         });
         if (path is not null) await Model.ExportAsync(path, includePrivate);
     }
+}
+
+/// <summary>Shows the "in use" badge when the entry matches the current default signature list. A "Adb"/"Hdc" parameter additionally requires the kind to match, so each purpose shows its own badge.</summary>
+/// <summary>当条目命中当前默认签名列表时显示“当前使用”徽标；参数为 "Adb"/"Hdc" 时额外要求用途匹配，使每种用途显示各自徽标。</summary>
+internal class DefaultKeyBadgeConverter : IMultiValueConverter
+{
+    public object? Convert(IList<object?> values, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (values.Count < 2 || values[0] is not ManagedKey key || values[1] is not string ids) return false;
+        if (!ids.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Contains(key.Kind + ":" + key.Id, StringComparer.Ordinal)) return false;
+        // The optional third binding supplies the entry's kind; a mismatched value hides the badge.
+        // 可选的第三个绑定提供条目用途；值不匹配时隐藏徽标。
+        return values.Count < 3 || values[2] is not ManagedKeyKind kind || key.Kind == kind;
+    }
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
 }

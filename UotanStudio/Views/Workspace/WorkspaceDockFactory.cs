@@ -71,8 +71,6 @@ public class WorkspaceDockFactory : Factory
             Title = svc.GetString("Dock_AdbLog"),
             CanClose = true
         };
-        var device = new WorkspaceDeviceTool { Id = "Device", Title = LanguageService.Instance.GetString("Dock_Device"), CanClose = true };
-
         var documentDock = new DocumentDock
         {
             Id = "DocumentsPane",
@@ -191,7 +189,6 @@ public class WorkspaceDockFactory : Factory
         var panels = WorkspacePanelService.Instance;
         panels.Register(WorkspacePanelService.ProjectExplorer, projectExplorer, leftTools, visible: true);
         panels.Register(WorkspacePanelService.ProjectSetting, projectSetting, leftTools, visible: true);
-        panels.Register(WorkspacePanelService.Device, device, leftTools, visible: false);
         panels.Register(WorkspacePanelService.ImagesView, imagesView, rightToolsTop, visible: true);
         if (aiAssistant is not null)
             panels.Register(WorkspacePanelService.AiAssistant, aiAssistant, rightToolsTop, visible: true);

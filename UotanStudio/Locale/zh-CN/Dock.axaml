@@ -54,7 +54,6 @@
     <x:String x:Key="Dock_BRCompLevel">BR压缩等级</x:String>
     <x:String x:Key="Dock_UTCTime">UTC时间戳</x:String>
     <x:String x:Key="Dock_DATSegments">DAT分段数量</x:String>
-    <x:String x:Key="Dock_Device">设备</x:String>
     <x:String x:Key="Dock_NoDocumentOpen">未打开任何文档</x:String>
     <x:String x:Key="Dock_NoDocumentOpenHint">打开或创建一个工程文件以开始</x:String>
     <x:String x:Key="Dock_Output">输出</x:String>

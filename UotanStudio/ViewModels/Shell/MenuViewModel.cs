@@ -936,10 +936,6 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void ToggleProjectSetting() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ProjectSetting);
 
-    /// <summary><para>显示或隐藏设备面板。</para>Show or hide the device panel.</summary>
-    [RelayCommand]
-    private void ToggleDevicePanel() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.Device);
-
     /// <summary><para>显示或隐藏镜像管理面板。</para>Show or hide the image manager panel.</summary>
     [RelayCommand]
     private void ToggleImagesView() => WorkspacePanelService.Instance.Toggle(WorkspacePanelService.ImagesView);

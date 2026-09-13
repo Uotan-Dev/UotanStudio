@@ -9,6 +9,7 @@ using UotanStudio.Messages;
 using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
+using UotanStudio.Services.Logging;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
 using UotanStudio.Composition;
@@ -47,6 +48,10 @@ public partial class App : Application
     {
         // 将 Comm 层 USB 诊断桥接到统一日志服务。
         UsbLogBridge.Install();
+        // 挂接首次机会异常记录器：捕获调试器输出窗中「引发的异常」（Socket/取消/超时）到全局日志。
+        // Hook the first-chance exception logger: capture debugger-output "exception thrown"
+        // notices (socket / cancellation / timeout) into the global log.
+        FirstChanceExceptionLogger.Install();
         LogService.Instance.Write(LogLevel.Info, "App", "UotanStudio framework initialization completed.");
 
         // 幂等注册文件关联（后台执行，不阻塞启动；可用 --unregister-file-associations 注销）。
