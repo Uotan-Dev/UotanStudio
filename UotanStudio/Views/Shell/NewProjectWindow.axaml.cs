@@ -218,8 +218,12 @@ public partial class NewProjectWindow : Window
         {
             if (UnpackImagesBox.IsChecked != true) UnpackFullyBox.IsChecked = false;
         };
-        ProjectNameBox.TextChanged += OnProjectNameChanged;
-        ProjectLocationBox.TextChanged += OnLocationTextChanged;
+        // TextChanged 在 Avalonia 12 中异步派发，程序化设置文本的守卫标志先于事件复位；
+        // TextChanging 同步触发，守卫才能正确区分用户输入与联动写入。
+        // TextBox.TextChanged fires asynchronously in Avalonia 12 — the guard flag would reset
+        // before the event arrives; TextChanging is synchronous so the guard works.
+        ProjectNameBox.TextChanging += OnProjectNameChanged;
+        ProjectLocationBox.TextChanging += OnLocationTextChanged;
         Opened += (_, _) => ProjectNameBox.Focus();
         Closing += (_, e) => e.Cancel = _isCreating;
         Closed += (_, _) => { _analysisGeneration++; DetachImageHandlers(); };
@@ -448,14 +452,14 @@ public partial class NewProjectWindow : Window
     /// Name changes re-sync the location suffix; after the user edits the location manually the
     /// syncing stops.
     /// </summary>
-    private void OnProjectNameChanged(object? sender, TextChangedEventArgs e)
+    private void OnProjectNameChanged(object? sender, TextChangingEventArgs e)
     {
         UpdateValidation();
         if (_locationEdited) return;
         UpdateLocationText();
     }
 
-    private void OnLocationTextChanged(object? sender, TextChangedEventArgs e)
+    private void OnLocationTextChanged(object? sender, TextChangingEventArgs e)
     {
         if (_updatingLocation) return;
         _locationEdited = true;
