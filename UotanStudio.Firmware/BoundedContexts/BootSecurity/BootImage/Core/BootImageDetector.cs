@@ -22,7 +22,9 @@ public static class BootImageDetector
 
         TegraBlob = 7,
 
-        Payload = 8
+        Payload = 8,
+
+        ZImage = 9
     }
 
     public class DetectionResult
@@ -134,6 +136,15 @@ public static class BootImageDetector
             return result;
         }
 
+        if (ZImageTool.IsZImage(data))
+        {
+            result.Format = ImageFormat.ZImage;
+            result.Confidence = 100;
+            result.Description = "ARM Linux zImage";
+            result.Metadata["type"] = "zimage";
+            return result;
+        }
+
         if (IsSamsungPxa(data))
         {
             result.Format = ImageFormat.SamsungPxa;
@@ -218,8 +229,12 @@ public static class BootImageDetector
                 case ImageFormat.ChromeOs:
                     break;
                 case ImageFormat.TegraBlob:
+                    ParseTegraBlob(data, result);
                     break;
                 case ImageFormat.Payload:
+                    break;
+                case ImageFormat.ZImage:
+                    ParseZImage(data, result);
                     break;
                 default:
                     result.ErrorMessage = $"Format {detection.Format} is not parsed by the simplified detector.";
@@ -263,7 +278,8 @@ public static class BootImageDetector
             "DHTB",
             "ChromeOS",
             "TEGRA Blob",
-            "Payload.bin"
+            "Payload.bin",
+            "ARM Linux zImage"
         ];
     }
 
@@ -386,6 +402,38 @@ public static class BootImageDetector
         result.Kernel = parseResult.Kernel;
         result.Ramdisk = parseResult.Ramdisk;
         result.Second = parseResult.Second;
+    }
+
+    private static void ParseTegraBlob(byte[] data, UnifiedResult result)
+    {
+        var parsed = TegraBlobTool.Parse(data);
+        if (!parsed.IsValid)
+        {
+            throw new ImageParseException(parsed.ErrorMessage ?? "Failed to parse Tegra blob");
+        }
+
+        result.Kernel = parsed.Kernel;
+        result.Ramdisk = parsed.Ramdisk;
+        result.KernelCompression = parsed.Header!.CompressionType switch
+        {
+            1 => CompressionType.Gzip,
+            2 => CompressionType.Lz4,
+            3 => CompressionType.Lz4Legacy,
+            4 => CompressionType.Lzma,
+            _ => CompressionType.None
+        };
+    }
+
+    private static void ParseZImage(byte[] data, UnifiedResult result)
+    {
+        var parsed = ZImageTool.Parse(data);
+        if (!parsed.IsValid)
+        {
+            throw new ImageParseException(parsed.ErrorMessage ?? "Failed to parse zImage");
+        }
+
+        result.Kernel = parsed.CompressedPayload;
+        result.KernelCompression = parsed.CompressionType;
     }
 
     private const int DetectionPrefixBytes = 4096;

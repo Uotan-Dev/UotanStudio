@@ -26,7 +26,7 @@ public sealed class BootImageFormatHandler : IFormatHandler
         try
         {
             using var fs = File.OpenRead(filePath);
-            Span<byte> header = stackalloc byte[8];
+            Span<byte> header = stackalloc byte[64];
             var read = fs.Read(header);
 
             var isAndroid = header[0] == (byte)'A' && header[1] == (byte)'N' && header[2] == (byte)'D'
@@ -35,7 +35,8 @@ public sealed class BootImageFormatHandler : IFormatHandler
             var isVendor = header[0] == (byte)'V' && header[1] == (byte)'N' && header[2] == (byte)'D'
                 && header[3] == (byte)'R' && header[4] == (byte)'B' && header[5] == (byte)'O'
                 && header[6] == (byte)'O' && header[7] == (byte)'T';
-            return read >= 8 && (isAndroid || isVendor);
+            return read >= 8 && (isAndroid || isVendor || TegraBlobTool.IsTegraBlob(header[..read]) ||
+                ZImageTool.IsZImage(header[..read]));
         }
         catch
         {
@@ -102,6 +103,43 @@ public sealed class BootImageFormatHandler : IFormatHandler
                     });
                 }
 
+                var prefix = ReadPrefix(filePath, 4096);
+                if (TegraBlobTool.IsTegraBlob(prefix))
+                {
+                    var parsed = TegraBlobTool.Parse(File.ReadAllBytes(filePath));
+                    if (!parsed.IsValid)
+                        return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid Tegra blob.");
+                    return FirmwareOpResult.Ok($"Tegra blob v{parsed.Header!.Version} parsed.\n" +
+                        $"Kernel: {parsed.Header.KernelSize} bytes ({parsed.Header.CompressionType})\n" +
+                        $"Ramdisk: {parsed.Header.RamdiskSize} bytes", metadata: new Dictionary<string, string>
+                    {
+                        ["Type"] = "tegra",
+                        ["Version"] = parsed.Header.Version.ToString(),
+                        ["KernelSize"] = parsed.Header.KernelSize.ToString(),
+                        ["RamdiskSize"] = parsed.Header.RamdiskSize.ToString(),
+                        ["CompressionType"] = parsed.Header.CompressionType.ToString()
+                    }, components:
+                    [
+                        FirmwareComponent.Of("kernel", parsed.Header.KernelSize),
+                        FirmwareComponent.Of("ramdisk", parsed.Header.RamdiskSize)
+                    ]);
+                }
+
+                if (ZImageTool.IsZImage(prefix))
+                {
+                    var parsed = ZImageTool.Parse(File.ReadAllBytes(filePath));
+                    if (!parsed.IsValid)
+                        return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid zImage.");
+                    return FirmwareOpResult.Ok($"ARM zImage parsed.\nCompressed payload: {parsed.CompressedSize} bytes\n" +
+                        $"Compression: {parsed.CompressionType}", metadata: new Dictionary<string, string>
+                    {
+                        ["Type"] = "zimage",
+                        ["CompressedOffset"] = parsed.CompressedOffset.ToString(),
+                        ["CompressedSize"] = parsed.CompressedSize.ToString(),
+                        ["Compression"] = parsed.CompressionType.ToString()
+                    }, components: [FirmwareComponent.Of("kernel", parsed.CompressedSize)]);
+                }
+
                 return FirmwareOpResult.Fail($"Not a boot image (magic: {magic ?? "<none>"}).");
             }
             catch (Exception ex)
@@ -127,11 +165,36 @@ public sealed class BootImageFormatHandler : IFormatHandler
             try
             {
                 var magic = ReadMagic(filePath);
-                return magic == BootMagic
-                    ? UnpackBoot(filePath, outputDirectory)
-                    : magic == VendorBootMagic
-                    ? UnpackVendorBoot(filePath, outputDirectory)
-                    : FirmwareOpResult.Fail($"Not a boot image (magic: {magic ?? "<none>"}).");
+                if (magic == BootMagic)
+                    return UnpackBoot(filePath, outputDirectory);
+                if (magic == VendorBootMagic)
+                    return UnpackVendorBoot(filePath, outputDirectory);
+
+                var data = File.ReadAllBytes(filePath);
+                if (TegraBlobTool.IsTegraBlob(data))
+                {
+                    var parsed = TegraBlobTool.Parse(data);
+                    if (!parsed.IsValid)
+                        return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid Tegra blob.");
+                    Directory.CreateDirectory(outputDirectory);
+                    var entries = new List<string>();
+                    WriteIfNonEmpty(outputDirectory, "kernel", parsed.Kernel, entries);
+                    WriteIfNonEmpty(outputDirectory, "ramdisk", parsed.Ramdisk, entries);
+                    return FirmwareOpResult.Ok($"Unpacked Tegra blob ({entries.Count} files) to {outputDirectory}", entries: entries);
+                }
+
+                if (ZImageTool.IsZImage(data))
+                {
+                    var parsed = ZImageTool.Parse(data);
+                    if (!parsed.IsValid)
+                        return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid zImage.");
+                    Directory.CreateDirectory(outputDirectory);
+                    var kernelPath = Path.Combine(outputDirectory, "kernel");
+                    File.WriteAllBytes(kernelPath, parsed.CompressedPayload);
+                    return FirmwareOpResult.Ok($"Unpacked ARM zImage to {outputDirectory}", entries: [kernelPath]);
+                }
+
+                return FirmwareOpResult.Fail($"Not a boot image (magic: {magic ?? "<none>"}).");
             }
             catch (Exception ex)
             {
@@ -292,5 +355,15 @@ public sealed class BootImageFormatHandler : IFormatHandler
             read += n;
         }
         return read >= 8 ? Encoding.ASCII.GetString(buffer) : null;
+    }
+
+    private static byte[] ReadPrefix(string filePath, int maxBytes)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            bufferSize: 4096, FileOptions.SequentialScan);
+        var length = (int)Math.Min(fs.Length, maxBytes);
+        var buffer = new byte[length];
+        fs.ReadExactly(buffer);
+        return buffer;
     }
 }

@@ -3,6 +3,7 @@ using K4os.Compression.LZ4.Streams;
 using SharpCompress.Compressors.BZip2;
 using SharpCompress.Compressors.Xz;
 using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
+using UotanStudio.Firmware.CrossCutting.Compress;
 using ZstdSharp;
 
 namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
@@ -136,11 +137,12 @@ public static class BootCompressor
                 case CompressionType.None:
                     break;
                 case CompressionType.Lz4Legacy:
-                    break;
+                    return CompressionService.Decompress(data, CompressionFormat.Lz4Legacy);
                 case CompressionType.Lz4Lg:
-                    break;
+                    // lz4_lg uses the same legacy block framing in Android boot images.
+                    return CompressionService.Decompress(data, CompressionFormat.Lz4Legacy);
                 case CompressionType.Lzma:
-                    break;
+                    return CompressionService.Decompress(data, CompressionFormat.Lzma);
                 case CompressionType.Lzop:
                     return LzopCompressor.Decompress(data);
 
