@@ -31,10 +31,11 @@
         </Style>
     </UserControl.Styles>
     <Grid Name="OutputLayout" ColumnDefinitions="180,12,*">
-        <Grid Name="OutputSettings" RowDefinitions="Auto,*,Auto" RowSpacing="12">
-            <TextBlock Text="{DynamicResource Delivery_OutputImages}" FontWeight="SemiBold"
-                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
-            <local:DeliveryOutputSectionsPanel Name="OutputSections" Grid.Row="1" Spacing="10" Margin="0,0,8,0">
+        <Grid RowDefinitions="*,Auto" RowSpacing="12">
+            <Grid Name="OutputSettings" RowDefinitions="Auto,*" RowSpacing="12">
+                <TextBlock Text="{DynamicResource Delivery_OutputImages}" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+                <local:DeliveryOutputSectionsPanel Name="OutputSections" Grid.Row="1" Spacing="10" Margin="0,0,8,0">
                 <Expander Name="OutputImagesExpander" Classes="output-section" IsExpanded="True"
                           Header="{DynamicResource Delivery_OutputImageList}">
                     <DataGrid Name="OutputImages" AutoGenerateColumns="False" IsReadOnly="False"
@@ -109,7 +110,8 @@
                     </ScrollViewer>
                 </Expander>
             </local:DeliveryOutputSectionsPanel>
-            <Grid Name="OutputFooter" Grid.Row="2" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
+            </Grid>
+            <Grid Name="OutputFooter" Grid.Row="1" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="4">
                 <ProgressBar Name="OutputProgress" Minimum="0" Maximum="100" Value="0" Height="20" MinWidth="0"
                              ShowProgressText="False" VerticalAlignment="Center"
                              AutomationProperties.Name="{DynamicResource Delivery_OutputProgress}" />

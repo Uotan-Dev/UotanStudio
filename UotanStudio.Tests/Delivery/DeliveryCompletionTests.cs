@@ -151,8 +151,8 @@ public sealed class DeliveryCompletionTests : IDisposable
             Windows = true, Linux = true, MacOS = false, AskWipe = true, Reboot = true, Slot = "b",
             LocalZstd = new() { ["Linux"] = Path.Combine(_root, "zstd") }, Super = new() { Zstd = true },
             Package = new() { SigningKeyPath = Path.Combine(_root, "key.pem"), CertificatePath = Path.Combine(_root, "cert.pem") } };
-        await DeliveryPlanStore.SaveAsync(_root, plan, Token);
-        var restored = (await DeliveryPlanStore.LoadAsync(_root, Token))!;
+        var state = DeliveryPlanStore.CaptureElement(_root, plan);
+        var restored = DeliveryPlanStore.LoadFromState(state, _root)!;
         Assert.True(restored.AskWipe); Assert.True(restored.Reboot); Assert.Equal("b", restored.Slot);
         Assert.Equal(plan.LocalZstd["Linux"], restored.LocalZstd["Linux"]); Assert.True(restored.Super.Zstd);
         Assert.Equal(plan.Package, restored.Package); Assert.True(restored.Files[1].Fastbootd);

@@ -20,10 +20,24 @@ public partial class DeliveryCompositionView : UserControl
     internal DeliveryViewModel Model { get; } = new();
     internal DeliveryOutputView OutputView => ScriptPane;
     internal Func<DeliverySuperOptions> ReadOptions { get; set; } = () => new();
+    internal Func<DeliveryPlan> ReadPlan { get; set; } = () => new DeliveryPlan();
     internal event EventHandler? Changed;
     internal event EventHandler? OutputRequested;
     internal event EventHandler<Exception>? OperationFailed;
     internal bool AutoZero { get => AutoZeroPartitionsBox.IsChecked == true; set => AutoZeroPartitionsBox.IsChecked = value; }
+    /// <summary><para>仅生成Super_Empty：输出设置禁用但开始输出按钮保持可用。</para>
+    /// Super_Empty only: output settings disabled while the start-output button stays available.</summary>
+    internal bool SuperEmptyOnly
+    {
+        get;
+        set
+        {
+            if (field == value) return;
+            field = value;
+            UpdateInteractionState();
+        }
+    }
+    internal bool IsSuperEmptyOnly => Model.PackSuper && SuperEmptyOnly;
     private bool? _stacked;
     private bool _outputToDirectory = true;
     private bool _packImages;
@@ -89,26 +103,32 @@ public partial class DeliveryCompositionView : UserControl
         return changed;
     }
 
+    /// <summary><para>宿主视图据此把左侧打包设置面板随确认态整体禁用或恢复。</para>
+    /// Host views use this to disable or restore the whole sidebar pack-settings panel on confirmation.</summary>
+    internal bool IsCompositionConfirmed => _packImages && _outputToDirectory && _compositionConfirmed && !IsSuperEmptyOnly;
+
     private void UpdateInteractionState()
     {
-        var editingComposition = _packImages && !_compositionConfirmed;
+        var editingComposition = _packImages && (!_compositionConfirmed || IsSuperEmptyOnly);
         if (!editingComposition) CancelImageDrag();
         ImageCompositionContent.IsEnabled = editingComposition && !Model.IsRunning;
-        var confirmBeforeOutput = _packImages && _outputToDirectory;
+        var confirmBeforeOutput = _packImages && _outputToDirectory && !IsSuperEmptyOnly;
         CompositionFooter.IsVisible = !(_packImages && !_outputToDirectory);
         ConfirmCompositionButton.IsEnabled = confirmBeforeOutput && !_compositionConfirmed && !Model.IsRunning;
         // Keep Cancel outside the locked content so a confirmed list can be edited again.
         // 取消按钮不随列表内容锁定，确认后仍可返回编辑。
         CancelCompositionButton.IsEnabled = confirmBeforeOutput && _compositionConfirmed && !Model.IsRunning;
         CompositionOutputFooter.IsVisible = _packImages && !_outputToDirectory;
-        ScriptPane.SetInteractionState(_outputToDirectory && (!_packImages || _compositionConfirmed),
-            _outputToDirectory || _packImages);
+        // 仅生成Super_Empty：输出设置禁用但开始输出按钮（OutputFooter）保持可用。
+        // Super_Empty only: output settings disabled while the start-output button (OutputFooter) stays available.
+        ScriptPane.SetInteractionState(_outputToDirectory && (!_packImages || _compositionConfirmed) && !IsSuperEmptyOnly,
+            (_outputToDirectory || _packImages) && !IsSuperEmptyOnly, IsSuperEmptyOnly);
     }
 
     private void OnConfirmCompositionClick(object? sender, RoutedEventArgs e)
     {
         if (!_packImages || !_outputToDirectory || _compositionConfirmed) return;
-        try { Model.Confirm(ReadOptions()); }
+        try { Model.Confirm(ReadPlan()); }
         catch (Exception ex) { Model.Status = ex.Message; OperationFailed?.Invoke(this, ex); }
         UpdateInteractionState();
     }

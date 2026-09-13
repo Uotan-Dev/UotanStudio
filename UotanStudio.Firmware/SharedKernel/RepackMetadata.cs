@@ -451,7 +451,8 @@ public sealed class RepackMetadata
         if (handler is BoundedContexts.FileSystem.Ext4.Ext4FormatHandler
             or BoundedContexts.FileSystem.Erofs.ErofsFormatHandler
             or BoundedContexts.FileSystem.F2fs.F2fsFormatHandler
-            or BoundedContexts.FileSystem.Sparse.SparseFormatHandler)
+            || handler is BoundedContexts.FileSystem.Sparse.SparseFormatHandler
+                && metadata.Configuration["fileSystem"]?.GetValue<string>() is "EXT4" or "EROFS" or "F2FS")
         {
             var partition = DetectPartitionName(Path.GetFileName(sourcePath));
             var directory = string.IsNullOrWhiteSpace(effectiveRoot) ? outputDirectory : Path.Combine(effectiveRoot, partition);

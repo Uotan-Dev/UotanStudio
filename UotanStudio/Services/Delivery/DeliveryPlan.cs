@@ -57,6 +57,18 @@ internal sealed record DeliverySuperOptions
 /// <summary>A complete output snapshot, separate from mutable controls and project globals.</summary>
 internal sealed record DeliveryPlan
 {
+    internal bool IsSuperEmptyOnly => PackSuper && Super.Empty;
+
+    /// <summary>Projects metadata-only output without changing the saved image selections or script drafts.</summary>
+    internal DeliveryPlan ForOutput() => !IsSuperEmptyOnly ? this : this with
+    {
+        OrganizeDirectory = false,
+        Files = [],
+        Container = Container.Select(file => file with { SourcePath = "", SourceLength = null }).ToList(),
+        Txt = false, Windows = false, Linux = false, MacOS = false, Recovery = false,
+        Scripts = [], Payload = new(), Package = new(), DeviceCodename = "", Slot = ""
+    };
+
     public int Version { get; init; } = 1;
     public string OutputDirectory { get; init; } = "";
     public bool OrganizeDirectory { get; init; } = true;
@@ -87,35 +99,36 @@ internal sealed record DeliveryPlan
     public Dictionary<string, string> LocalZstd { get; init; } = [];
 }
 
-/// <summary>Bounded AOT-safe plan persistence, with project-relative source identities.</summary>
+/// <summary>Bounded AOT-safe plan persistence through the solution file state section; paths are stored relative to the solution root.</summary>
 internal static class DeliveryPlanStore
 {
-    internal static string PathFor(string root) => Path.Combine(root, ".uotan", "delivery.json");
+    /// <summary>Well-known key of the delivery plan inside the solution file's state section.</summary>
+    internal const string StateKey = "delivery";
 
-    internal static async Task SaveAsync(string root, DeliveryPlan plan, CancellationToken token = default)
+    /// <summary>
+    /// <para>把交付计划序列化为解决方案状态段中的 JSON 元素；路径转相对解决方案根，超过 8 MiB 抛错。</para>
+    /// Serializes the delivery plan into a JSON element for the solution state section; paths become
+    /// relative to the solution root, and sizes beyond 8 MiB are rejected.
+    /// </summary>
+    internal static JsonElement CaptureElement(string root, DeliveryPlan plan)
     {
         var stored = Rebase(plan, path => Path.IsPathRooted(path) ? Path.GetRelativePath(root, path) : path);
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(stored, DeliveryJsonContext.Default.DeliveryPlan);
-        if (bytes.Length > 8 * 1024 * 1024) throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
-        var path = PathFor(root);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var temporary = path + "." + Guid.NewGuid().ToString("N");
-        try
-        {
-            await File.WriteAllBytesAsync(temporary, bytes, token).ConfigureAwait(false);
-            token.ThrowIfCancellationRequested();
-            File.Move(temporary, path, true);
-        }
-        finally { File.Delete(temporary); }
+        var element = JsonSerializer.SerializeToElement(stored, DeliveryJsonContext.Default.DeliveryPlan);
+        if (element.ValueKind is not JsonValueKind.Object || element.GetRawText().Length > 8 * 1024 * 1024)
+            throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
+        return element;
     }
 
-    internal static async Task<DeliveryPlan?> LoadAsync(string root, CancellationToken token = default)
+    /// <summary>
+    /// <para>从解决方案状态段还原交付计划；空值返回 null，非法结构抛错，路径转绝对。</para>
+    /// Restores the delivery plan from the solution state section; null/empty values return null,
+    /// invalid structures throw, and paths become absolute.
+    /// </summary>
+    internal static DeliveryPlan? LoadFromState(JsonElement? state, string root)
     {
-        var path = PathFor(root);
-        if (!File.Exists(path)) return null;
-        await using var input = File.OpenRead(path);
-        if (input.Length > 8 * 1024 * 1024) throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
-        var plan = await JsonSerializer.DeserializeAsync(input, DeliveryJsonContext.Default.DeliveryPlan, token).ConfigureAwait(false);
+        if (state is not { } element || element.ValueKind is not (JsonValueKind.Object or JsonValueKind.String)) return null;
+        if (element.GetRawText().Length > 8 * 1024 * 1024) throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
+        var plan = element.Deserialize(DeliveryJsonContext.Default.DeliveryPlan);
         if (plan is null || plan.Version != 1 || plan.Files is null || plan.Container is null || plan.Super is null
             || plan.Package is null || plan.Package.CertificatePath is null || plan.Package.SigningKeyPath is null || plan.Package.BuildFingerprint is null || plan.Package.Incremental is null
             || plan.Payload is null || plan.Payload.DynamicPartitionsFile is null || plan.Payload.SignatureFile is null || plan.Payload.PostinstallFile is null

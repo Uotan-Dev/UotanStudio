@@ -106,9 +106,16 @@ public sealed class SparseWrappedFilesystemTests
             SparseImageConverter.ConvertRawToSparse(rawPath, sparsePath);
 
             var result = await new SparseFormatHandler().UnpackAsync(sparsePath, outDir, cancellationToken: TestContext.Current.CancellationToken);
-            Assert.True(result.Success);
+            Assert.True(result.Success, result.Summary);
             Assert.True(File.Exists(Path.Combine(outDir, "random.raw")));
             Assert.Equal(randomBytes, File.ReadAllBytes(Path.Combine(outDir, "random.raw")));
+            var rebuiltPath = Path.Combine(dir, "rebuilt.img");
+            var packed = await new SparseFormatHandler().PackAsync(outDir, rebuiltPath, TestContext.Current.CancellationToken);
+            Assert.True(packed.Success, packed.Summary);
+            using var rebuilt = SparseReader.FromImageFile(rebuiltPath);
+            using var decoded = new MemoryStream();
+            rebuilt.WriteRawToStream(decoded);
+            Assert.Equal(randomBytes, decoded.ToArray());
         }
         finally
         {

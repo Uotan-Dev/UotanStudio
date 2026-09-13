@@ -59,6 +59,9 @@ public partial class DeliveryView : UserControl
         SuperAOnlyBox.IsCheckedChanged += OnSuperDeviceTypeChanged;
         ImageSelection.SelectedImagesChanged += (_, _) => UpdateCompositionImages();
         ImageSelection.LayoutChanged += (_, _) => UpdateImagesLayout();
+        // Lock the whole sidebar pack-settings panel while the composition list is confirmed.
+        // 编排列表确认后，左侧打包设置面板整体禁用，取消确认后恢复。
+        Composition.Changed += (_, _) => UpdateSidebarLock();
         DeliveryContent.SizeChanged += (_, _) => UpdateImagesColumnMinimums();
         foreach (var option in OutputOptions.Children)
             option.SizeChanged += OnOutputOptionSizeChanged;
@@ -66,6 +69,13 @@ public partial class DeliveryView : UserControl
         UpdateProjectDefaults();
         UpdatePackingFields();
         InitializeDelivery();
+        UpdateSidebarLock();
+    }
+
+    private void UpdateSidebarLock()
+    {
+        SidebarForm.IsEnabled = !Composition.IsCompositionConfirmed && !Composition.Model.IsRunning;
+        ImageSelection.IsEnabled = !Composition.Model.IsRunning;
     }
 
     private void OnOutputOptionChanged(object? sender, RoutedEventArgs e)
@@ -110,6 +120,7 @@ public partial class DeliveryView : UserControl
         var modeChanged = Composition.SetOutputOptions(DirectOutputBox.IsChecked == true, packSuper, packPayload);
         if (modeChanged && !_restoringDelivery) ImageSelection.SetAssignedPaths([]);
         UpdateCompositionImages();
+        UpdateSidebarLock();
     }
 
     private void UpdateDeviceTypeOptions()

@@ -1,3 +1,4 @@
+using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.ViewModels.Shell;
 using System.Collections.ObjectModel;
@@ -45,6 +46,7 @@ public partial class DeliveryOutputView : UserControl
     private DeliveryScriptDocument? _activeDocument;
     private bool? _stacked;
     private Border? _editorHost;
+    private bool _editorEnabled = true;
 
     /// <summary><para>初始化输出表单和无文档的编辑区域。</para>Initializes the output form and empty editor pane.</summary>
     public DeliveryOutputView()
@@ -78,11 +80,15 @@ public partial class DeliveryOutputView : UserControl
         };
     }
 
-    internal void SetInteractionState(bool outputEnabled, bool editorEnabled)
+    internal void SetInteractionState(bool outputEnabled, bool editorEnabled, bool emptyOnly)
     {
         if (!outputEnabled && OutputSettings.IsEnabled) OutputImages.CommitEdit();
         OutputSettings.IsEnabled = outputEnabled;
-        DocumentPane.IsEnabled = editorEnabled;
+        _editorEnabled = editorEnabled;
+        DocumentPane.IsEnabled = editorEnabled && _model?.IsRunning != true;
+        // 仅生成Super_Empty 时输出设置禁用，但底部进度条与开始输出按钮保持可用；其余场景随输出设置启用。
+        // With Super_Empty only the output settings are disabled while the footer stays available; otherwise it follows the settings.
+        OutputFooter.IsEnabled = outputEnabled || emptyOnly;
     }
 
     private void NotifyChanged() { if (!_syncing) Changed?.Invoke(this, EventArgs.Empty); }
@@ -116,6 +122,7 @@ public partial class DeliveryOutputView : UserControl
             TxtScriptBox.IsChecked = !payload;
             BatchShellScriptBox.IsChecked = false;
             RecoveryScriptBox.IsChecked = payload;
+            RecoveryScriptBox.IsEnabled = !payload;
         }
         finally { _syncing = previous; }
         NotifyChanged();
@@ -124,7 +131,7 @@ public partial class DeliveryOutputView : UserControl
     {
         OutputProgress.Value = progress;
         StartOutputButton.Classes.Set("running", running);
-        OutputImages.IsEnabled = !running; ScriptSettingsExpander.IsEnabled = !running; DocumentPane.IsEnabled = !running;
+        OutputImages.IsEnabled = !running; ScriptSettingsExpander.IsEnabled = !running; DocumentPane.IsEnabled = _editorEnabled && !running;
     }
     internal DeliveryPlan Capture(DeliveryPlan plan)
     {
@@ -151,7 +158,9 @@ public partial class DeliveryOutputView : UserControl
     {
         var fingerprint = DeliveryScriptGenerator.Fingerprint(plan);
         if (_fingerprint == fingerprint && !force) return true;
-        var generated = DeliveryScriptGenerator.Generate(plan);
+        // 脚本提示文案随当前界面语言生成；切换语言不重写已生成的脚本正文（指纹不含语言）。
+        // Prompts are generated in the current UI language; switching language never rewrites existing script bodies (the fingerprint excludes language).
+        var generated = DeliveryScriptGenerator.Generate(plan, id => LanguageService.Instance.GetString("Delivery_Script_" + id));
         if (!replaceModified && (_allDocuments.Values.Any(d => d.Modified)
             || generated.Keys.Any(name => _allDocuments.TryGetValue(name, out var doc) && doc.Baseline is null && doc.Document.TextLength > 0))) return false;
         _syncing = true;
@@ -183,6 +192,7 @@ public partial class DeliveryOutputView : UserControl
         {
             Reset();
             RecoveryScriptBox.IsChecked = plan.PackPayload || plan.Recovery;
+            RecoveryScriptBox.IsEnabled = !plan.PackPayload;
             TxtScriptBox.IsChecked = !plan.PackPayload && plan.Txt;
             BatchShellScriptBox.IsChecked = !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS);
             DeviceCodenameBox.Text = plan.DeviceCodename; AuthorInfoBox.Text = plan.Information;

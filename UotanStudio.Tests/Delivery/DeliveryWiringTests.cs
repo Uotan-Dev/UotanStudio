@@ -49,8 +49,8 @@ public sealed class DeliveryWiringTests : IDisposable
         var scripts = DeliveryScriptGenerator.Generate(plan);
         Assert.Contains("ensure_mode yes; flash 'system'", scripts["FlashLinux.sh"]);
         Assert.Contains("call :ensure_mode yes", scripts["FlashWindows.bat"]);
-        await DeliveryPlanStore.SaveAsync(_root, plan, TestContext.Current.CancellationToken);
-        Assert.True((await DeliveryPlanStore.LoadAsync(_root, TestContext.Current.CancellationToken))!.Files[0].Fastbootd);
+        var state = DeliveryPlanStore.CaptureElement(_root, plan);
+        Assert.True(DeliveryPlanStore.LoadFromState(state, _root)!.Files[0].Fastbootd);
         row.PartitionName = "boot";
         Assert.False(row.Fastbootd);
         row.PartitionName = "system_b";
@@ -89,6 +89,23 @@ public sealed class DeliveryWiringTests : IDisposable
         Assert.Contains(reports, value => value.Stage == stage && value.Bytes is { Processed: > 0 });
         Assert.Equal(100, reports[^1].Percent);
         if (mode == "copy") Assert.Contains(reports, value => value.Bytes == (8192L, 8192L));
+    }
+
+    [Fact]
+    public async Task VerifyStageReportsProcessedBytes()
+    {
+        var source = Path.Combine(_root, "boot.img");
+        File.WriteAllBytes(source, new byte[8192]);
+        var file = new DeliveryFile { SourcePath = source, Partition = "boot", FileName = "boot.img" };
+        var plan = new DeliveryPlan { OutputDirectory = Path.Combine(_root, "out"), Txt = false, Files = [file] };
+        var reports = new List<DeliveryProgress>();
+        await new DeliveryOutputService(new NoTools()).ExportAsync(plan, new InlineProgress<DeliveryProgress>(reports.Add), TestContext.Current.CancellationToken);
+        var verify = reports.Where(value => value.Stage == "Delivery_ProgressVerify").ToArray();
+        Assert.NotEmpty(verify);
+        Assert.Equal(0L, verify[0].Bytes!.Value.Processed);
+        Assert.Equal(verify[^1].Bytes!.Value.Total, verify[^1].Bytes!.Value.Processed);
+        Assert.True(verify[^1].Bytes!.Value.Total > 0);
+        Assert.True(verify[^1].Percent >= verify[0].Percent);
     }
 
     private sealed class NoTools : IDeliveryTools

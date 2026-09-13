@@ -76,6 +76,26 @@ public sealed class DeliveryInteractionTests : IDisposable
     }
 
     [Fact]
+    public void ResetPlanMaterializesAutoZeroCompanions()
+    {
+        // Restoring a persisted plan can assign the same AutoZero value already held, which never fires
+        // OnAutoZeroChanged; Reset must still materialize the VAB B-slot companions.
+        // 还原持久化计划时 AutoZero 值可能与当前值相同而不触发属性变化；Reset 仍须物化 VAB B 槽伴随条目。
+        var vm = new DeliveryViewModel();
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = true, PackSuper = true,
+            Container = [Input("wind_a"), Input("vendor_a")],
+            Super = new() { AutoZero = true, DeviceType = "VAB" }
+        };
+        vm.SetMode(true, super: true);
+        vm.Reset(plan);
+        Assert.True(vm.AutoZero);
+        Assert.Contains(vm.Container, i => i.PartitionName == "wind_b" && i.SizeBytes == 0 && i.IsAutoZero);
+        Assert.Contains(vm.Container, i => i.PartitionName == "vendor_b" && i.SizeBytes == 0 && i.IsAutoZero);
+    }
+
+    [Fact]
     public void AOnlyKeepsOriginalPartitionName()
     {
         // The view disables AutoZero for A-only devices before passing options to the builder.

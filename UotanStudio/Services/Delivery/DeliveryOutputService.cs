@@ -19,6 +19,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
     internal async Task<string[]> ExportAsync(DeliveryPlan plan, IProgress<DeliveryProgress>? progress = null, CancellationToken token = default,
         IReadOnlySet<string>? overwrite = null)
     {
+        plan = plan.ForOutput();
         DeliveryValidation.Validate(plan);
         if (string.IsNullOrWhiteSpace(plan.OutputDirectory)) throw new InvalidDataException("Select an output directory.");
         var output = Path.GetFullPath(plan.OutputDirectory);
@@ -48,24 +49,32 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
             if (plan.PackPayload) await DeliveryPayloadBuilder.BuildAsync(plan, Path.Combine(imageDirectory, "payload.bin"), progress, token).ConfigureAwait(false);
             if (plan.PackSuper)
             {
-                var imageName = SuperFileName(plan.Super);
-                var rawName = plan.Super.Empty ? "super_empty.img" : "super.img";
-                var superOutput = Path.Combine(imageDirectory, rawName);
-                await DeliverySuperBuilder.BuildAsync(plan.Container, plan.Super, superOutput,
-                    null, token,
-                    new InlineProgress<DeliveryProgress>(p => progress?.Report(p with { Percent = p.Percent * .45 }))).ConfigureAwait(false);
-                if (plan.Super.Zstd)
+                // 仅生成Super_Empty：跳过完整 super，只产出独立的 super_empty.img（恒为未压缩原始镜像）。
+                // Super_Empty only: skip the full super and produce the standalone super_empty.img (always raw).
+                if (plan.Super.Empty)
+                    await DeliverySuperBuilder.BuildAsync(plan.Container, plan.Super,
+                        Path.Combine(imageDirectory, "super_empty.img"),
+                        null, token,
+                        new InlineProgress<DeliveryProgress>(p => progress?.Report(p with { Percent = p.Percent * .55 }))).ConfigureAwait(false);
+                else
                 {
-                    await Task.Run(() =>
+                    var superOutput = Path.Combine(imageDirectory, plan.Super.Zstd ? "super.img" : SuperFileName(plan.Super));
+                    await DeliverySuperBuilder.BuildAsync(plan.Container, plan.Super with { Empty = false }, superOutput,
+                        null, token,
+                        new InlineProgress<DeliveryProgress>(p => progress?.Report(p with { Percent = p.Percent * .40 }))).ConfigureAwait(false);
+                    if (plan.Super.Zstd)
                     {
-                        using var input = File.OpenRead(superOutput);
-                        using var destination = new FileStream(Path.Combine(imageDirectory, imageName), FileMode.CreateNew, FileAccess.Write);
-                        using var tracked = new DeliveryWriteProgressStream(destination,
-                            _ => progress?.Report(new(45 + input.Position * 10.0 / Math.Max(1, input.Length), "Compressing Super",
-                                (input.Position, input.Length), "Delivery_ProgressCompress")), token);
-                        ZstdCompressor.Compress(input, tracked);
-                    }, token).ConfigureAwait(false);
-                    File.Delete(superOutput);
+                        await Task.Run(() =>
+                        {
+                            using var input = File.OpenRead(superOutput);
+                            using var destination = new FileStream(Path.Combine(imageDirectory, SuperFileName(plan.Super)), FileMode.CreateNew, FileAccess.Write);
+                            using var tracked = new DeliveryWriteProgressStream(destination,
+                                _ => progress?.Report(new(45 + input.Position * 10.0 / Math.Max(1, input.Length), "Compressing Super",
+                                    (input.Position, input.Length), "Delivery_ProgressCompress")), token);
+                            ZstdCompressor.Compress(input, tracked);
+                        }, token).ConfigureAwait(false);
+                        File.Delete(superOutput);
+                    }
                 }
             }
             if (plan.OrganizeDirectory)
@@ -113,16 +122,20 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
             }
             var stagedFiles = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
             var hashes = new StringBuilder();
-            progress?.Report(new(90, "Verifying output", Stage: "Delivery_ProgressVerify", Items: (0, stagedFiles.Length)));
+            long totalBytes = 0;
+            foreach (var file in stagedFiles) totalBytes = checked(totalBytes + new FileInfo(file).Length);
+            long processedBytes = 0;
+            progress?.Report(new(90, "Verifying output", Stage: "Delivery_ProgressVerify", Bytes: (0, totalBytes)));
             for (var i = 0; i < stagedFiles.Length; i++)
             {
                 token.ThrowIfCancellationRequested();
                 await using var input = File.OpenRead(stagedFiles[i]);
                 var hash = await SHA256.HashDataAsync(input, token).ConfigureAwait(false);
+                processedBytes = checked(processedBytes + input.Length);
                 hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  ")
                     .AppendLine(Path.GetRelativePath(stage, stagedFiles[i]).Replace('\\', '/'));
-                progress?.Report(new(90 + (i + 1) * 9.0 / Math.Max(1, stagedFiles.Length), "Verifying output",
-                    Stage: "Delivery_ProgressVerify", Items: (i + 1, stagedFiles.Length)));
+                progress?.Report(new(90 + processedBytes * 9.0 / Math.Max(1, totalBytes), "Verifying output",
+                    Stage: "Delivery_ProgressVerify", Bytes: (processedBytes, totalBytes)));
             }
             if (plan.OrganizeDirectory)
                 await File.WriteAllTextAsync(Path.Combine(stage, "checksums.sha256"), hashes.ToString(), token).ConfigureAwait(false);
@@ -133,9 +146,10 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
         finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
     }
 
-    internal static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload ? "ota.zip" : SuperFileName(plan.Super);
+    internal static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload ? "ota.zip"
+        : plan.Super.Empty ? "super_empty.img" : SuperFileName(plan.Super);
 
-    internal static string SuperFileName(DeliverySuperOptions options) => options.Empty ? "super_empty.img" : options.Zstd ? "super.zst" : "super.img";
+    internal static string SuperFileName(DeliverySuperOptions options) => options.Zstd ? "super.zst" : "super.img";
 
     internal static async Task CopyFileAsync(string source, string destination, CancellationToken token, Action<double>? progress = null)
     {
@@ -160,6 +174,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
     /// Computes every destination file path this export would write: full absolute paths including the organized layout, scripts, and containers.</summary>
     internal static IEnumerable<string> PlannedOutputPaths(DeliveryPlan plan)
     {
+        plan = plan.ForOutput();
         var output = Path.GetFullPath(plan.OutputDirectory);
         var plannedNames = plan.OrganizeDirectory
             ? plan.Files.Select(f => f.Generated && plan.PackPayload ? "ota.zip" : Path.Combine("images", f.FileName)).Concat(plan.Scripts.Keys).Concat(["README.txt", "checksums.sha256"])

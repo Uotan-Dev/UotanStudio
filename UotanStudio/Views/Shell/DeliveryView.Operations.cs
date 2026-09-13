@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -27,8 +28,12 @@ public partial class DeliveryView
 
     private void InitializeDelivery()
     {
+        // 交付计划随解决方案文件持久化：保存解决方案前由钩子捕获当前表单状态。
+        // The delivery plan persists inside the solution file: a hook captures the form state before solution saves.
+        ProjectOperationsService.Instance.CaptureDeliveryState = CaptureDeliveryState;
         InitializePayloadSigningKeys();
         Composition.ReadOptions = ReadDeliverySuperOptions;
+        Composition.ReadPlan = CaptureDeliveryPlan;
         Composition.Changed += (_, _) => QueueDeliveryChange();
         Composition.OutputView.Changed += (_, _) => QueueDeliveryChange();
         Composition.OutputView.GenerateRequested += async (_, _) => await GenerateScriptsAsync();
@@ -58,9 +63,12 @@ public partial class DeliveryView
         };
         GenerateSuperEmptyBox.IsCheckedChanged += (_, _) =>
         {
+            // 仅生成Super_Empty：右栏输出设置（镜像列表与脚本生成器）禁用，开始输出按钮保持可用。
+            // Super_Empty only: right-pane output settings (image list and script generator) disabled; start output stays available.
+            Composition.SuperEmptyOnly = GenerateSuperEmptyBox.IsChecked == true;
             if (GenerateSuperEmptyBox.IsChecked == true && SuperZstdBox.IsChecked == true) SuperZstdBox.IsChecked = false;
+            UpdateSidebarLock();
         };
-        GenerateDynamicPartitionsButton.IsEnabled = true;
         GenerateDynamicPartitionsButton.Click += async (_, _) => await GenerateDynamicPartitionsAsync();
         _deliverySaveTimer.Tick += async (_, _) => { _deliverySaveTimer.Stop(); await SaveDeliveryAsync(false); };
         KeyDown += async (_, e) =>
@@ -74,7 +82,7 @@ public partial class DeliveryView
 
     internal async Task GenerateScriptsAsync()
     {
-        if (_generatingScripts || _deliveryCancellation is not null || _restoringDelivery) return;
+        if (_generatingScripts || _deliveryCancellation is not null || _restoringDelivery || Composition.IsSuperEmptyOnly) return;
         _generatingScripts = true;
         var root = _deliveryRoot;
         try
@@ -181,6 +189,21 @@ public partial class DeliveryView
         }
     };
 
+    /// <summary><para>解决方案保存前的捕获钩子：表单未加载或正在恢复时返回 null（保留原状态）。</para>
+    /// Capture hook invoked before solution saves; returns null (keeping the stored state) when the
+    /// form is not loaded or is being restored.</summary>
+    private JsonElement? CaptureDeliveryState()
+    {
+        var root = _deliveryRoot;
+        if (root is null || !_deliveryLoaded || _restoringDelivery) return null;
+        try { return DeliveryPlanStore.CaptureElement(root, CaptureDeliveryPlan()); }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Delivery", $"Delivery state capture skipped: {ex.Message}");
+            return null;
+        }
+    }
+
     // The inactive list still owns its sources; expose that ownership to the picker without another selection state.
     // 非编辑列表继续持有其镜像，只向选择器同步只读状态，不额外维护镜像归属。
     private IEnumerable<string> GetReadOnlyDeliverySources() =>
@@ -195,17 +218,18 @@ public partial class DeliveryView
         {
             _deliveryChangePending = false;
             if (_restoringDelivery || Composition.Model.IsRunning) return;
+            GenerateDynamicPartitionsButton.IsEnabled = PackPayloadBox.IsChecked == true && Composition.Model.Container.Any(i => i.IncludeInSuper);
             ImageSelection.SetAssignedPaths(Composition.Model.Container.Concat(Composition.Model.Output)
                 .Where(i => i.FilePath is not null).Select(i => i.FilePath!), GetReadOnlyDeliverySources());
             try
             {
-                if (!Composition.OutputView.RecoveryRequested)
+                if (!Composition.OutputView.RecoveryRequested && !Composition.IsSuperEmptyOnly)
                 {
                     var plan = CaptureDeliveryPlan();
-                    if (plan.ContainerConfirmed && (plan.PackSuper || plan.PackPayload) && Composition.Model.Output.FirstOrDefault(i => i.Generated) is { } artifact)
+                    if (plan.ContainerConfirmed && (plan.PackSuper || plan.PackPayload) && Composition.Model.Output.FirstOrDefault(i => i.Generated && i.FileName != "super_empty.img") is { } artifact)
                     {
                         artifact.FileName = DeliveryOutputService.ContainerFileName(plan);
-                        artifact.PartitionName = plan.PackPayload ? "payload" : plan.Super.Empty ? "super_empty" : "super";
+                        artifact.PartitionName = plan.PackPayload ? "payload" : "super";
                         plan = CaptureDeliveryPlan();
                     }
                     if (plan.OrganizeDirectory && (!(plan.PackSuper || plan.PackPayload) || plan.ContainerConfirmed) && plan.Files.Count > 0)
@@ -222,10 +246,10 @@ public partial class DeliveryView
         });
     }
 
-    private async Task PersistDeliveryAsync(string root, DeliveryPlan plan)
+    private async Task PersistDeliveryAsync()
     {
         await _deliverySaveGate.WaitAsync();
-        try { await DeliveryPlanStore.SaveAsync(root, plan); }
+        try { await ProjectOperationsService.Instance.PersistSolutionStateAsync(); }
         finally { _deliverySaveGate.Release(); }
     }
 
@@ -234,13 +258,12 @@ public partial class DeliveryView
         if (_restoringDelivery || !_deliveryLoaded) return;
         try
         {
-            var root = _deliveryRoot;
-            if (root is null)
+            if (_deliveryRoot is null)
             {
                 if (report) await ShowDeliveryMessageAsync(LanguageService.Instance.GetString("Delivery_OpenProjectToSave"), false);
                 return;
             }
-            await PersistDeliveryAsync(root, CaptureDeliveryPlan());
+            await PersistDeliveryAsync();
             if (report)
             {
                 Composition.Model.Status = LanguageService.Instance.GetString("Delivery_PlanSaved");
@@ -266,13 +289,12 @@ public partial class DeliveryView
                 _deliverySaveTimer.Stop();
                 _deliveryCancellation?.Cancel();
                 if (_deliveryCompletion is { } completion) await completion.Task;
-                if (_deliveryLoaded && _deliveryRoot is { } previous)
-                    await PersistDeliveryAsync(previous, CaptureDeliveryPlan());
+                if (_deliveryLoaded && _deliveryRoot is { } previous) await PersistDeliveryAsync();
                 if (root != ProjectContextService.Instance.RootDirectory) return;
                 _restoringDelivery = true;
                 _deliveryRoot = root;
                 UpdateProjectDefaults();
-                if (root is not null && await DeliveryPlanStore.LoadAsync(root) is { } plan)
+                if (root is not null && DeliveryPlanStore.LoadFromState(ProjectOperationsService.Instance.PendingDeliveryState, root) is { } plan)
                     RestoreDelivery(plan);
                 _deliveryLoaded = true;
             }
@@ -306,7 +328,7 @@ public partial class DeliveryView
             PayloadPostinstallBox.Text = plan.Payload.PostinstallFile;
             PayloadTimestampBox.Text = plan.Payload.MaxTimestamp.ToString(CultureInfo.InvariantCulture);
             PayloadSecurityPatchBox.Text = plan.Payload.SecurityPatchLevel;
-            SuperZstdBox.IsChecked = plan.Super.Zstd;
+            SuperZstdBox.IsChecked = plan.Super.Zstd && !plan.Super.Empty;
             _deliveryGroups = plan.Super.Groups;
             OutputDirectoryBox.Text = plan.OutputDirectory;
             SuperDeviceNameBox.Text = plan.PackPayload ? "payload.bin" : plan.Super.DeviceName; SuperGroupNameBox.Text = plan.Super.Group;
@@ -320,8 +342,10 @@ public partial class DeliveryView
             UpdateDeviceTypeOptions();
             SuperRawBox.IsChecked = !plan.Super.Sparse; SuperSparseBox.IsChecked = plan.Super.Sparse;
             GenerateSuperEmptyBox.IsChecked = plan.Super.Empty;
+            Composition.SuperEmptyOnly = plan.Super.Empty;
             Composition.AutoZero = plan.Super.AutoZero;
             Composition.Model.Reset(plan); Composition.OutputView.Restore(plan);
+            UpdateSidebarLock();
         }
         finally { _restoringDelivery = previous; }
     }
@@ -340,7 +364,7 @@ public partial class DeliveryView
                 throw new InvalidOperationException(LanguageService.Instance.GetString("Delivery_ProjectTransition"));
             var plan = CaptureDeliveryPlan();
             DeliveryValidation.Validate(plan);
-            if (plan.OrganizeDirectory && !Composition.OutputView.SynchronizeScripts(plan))
+            if (plan.OrganizeDirectory && !plan.IsSuperEmptyOnly && !Composition.OutputView.SynchronizeScripts(plan))
             {
                 if (TopLevel.GetTopLevel(this) is not Window owner || !await DialogService.ConfirmAsync(owner, LanguageService.Instance.GetString("Tab_Delivery"),
                         LanguageService.Instance.GetString("Delivery_ReplaceEditedScripts"))) return;
@@ -378,7 +402,7 @@ public partial class DeliveryView
                     overwrite = overwriteAll ? existing.ToHashSet(comparison) : new HashSet<string>(comparison);
                 }
             }
-            if (root is not null) await PersistDeliveryAsync(root, plan);
+            if (root is not null) await PersistDeliveryAsync();
             Composition.SetRunning(true, 0); SidebarForm.IsEnabled = false; ImageSelection.IsEnabled = false;
             var progress = new Progress<DeliveryProgress>(value =>
             {
@@ -413,7 +437,7 @@ public partial class DeliveryView
             _deliveryCancellation = null;
             Composition.Model.ResetProgressStatistics();
             Composition.SetRunning(false, Composition.Model.Progress);
-            SidebarForm.IsEnabled = true; ImageSelection.IsEnabled = true;
+            UpdateSidebarLock();
             _deliveryCompletion!.TrySetResult(); _deliveryCompletion = null;
         }
     }

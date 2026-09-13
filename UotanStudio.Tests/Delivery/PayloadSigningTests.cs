@@ -69,11 +69,10 @@ public sealed class PayloadSigningTests : IDisposable
             Container = [new() { Partition = "system", FileName = "system.img", SourcePath = source, SourceLength = 8192 }],
             Payload = new() { SigningKeyPath = library.PrivatePath(chosen), SigningKeyFingerprint = chosen.Fingerprint }
         };
-        await DeliveryPlanStore.SaveAsync(_root, plan, TestContext.Current.CancellationToken);
-        var restored = await DeliveryPlanStore.LoadAsync(_root, TestContext.Current.CancellationToken);
+        var state = DeliveryPlanStore.CaptureElement(_root, plan);
+        var restored = DeliveryPlanStore.LoadFromState(state, _root);
         Assert.Equal(plan.Payload, restored!.Payload);
-        var persisted = File.ReadAllText(DeliveryPlanStore.PathFor(_root));
-        Assert.DoesNotContain("PRIVATE KEY", persisted);
+        Assert.DoesNotContain("PRIVATE KEY", state.GetRawText());
         await new DeliveryOutputService(new NoTools()).ExportAsync(restored, token: TestContext.Current.CancellationToken);
         var unpacked = Path.Combine(_root, "ota-content");
         ZipFile.ExtractToDirectory(Path.Combine(plan.OutputDirectory, "ota.zip"), unpacked);

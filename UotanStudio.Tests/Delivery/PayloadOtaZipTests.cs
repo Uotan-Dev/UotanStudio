@@ -84,8 +84,8 @@ public sealed class PayloadOtaZipTests : IDisposable
         var plan = new DeliveryPlan { PackPayload = true, ContainerConfirmed = true,
             Container = [new() { Partition = "boot", FileName = "boot.img" }],
             Files = [new() { Generated = true, FileName = "payload.bin", Partition = "payload" }] };
-        await DeliveryPlanStore.SaveAsync(_root, plan, TestContext.Current.CancellationToken);
-        var restored = (await DeliveryPlanStore.LoadAsync(_root, TestContext.Current.CancellationToken))!;
+        var state = DeliveryPlanStore.CaptureElement(_root, plan);
+        var restored = DeliveryPlanStore.LoadFromState(state, _root)!;
         Assert.Equal("ota.zip", Assert.Single(restored.Files).FileName);
         var model = new DeliveryViewModel();
         model.Reset(plan);

@@ -141,6 +141,11 @@ public static class FileSystemPreservation
         var metadata = RepackMetadata.Read(inputDirectory);
         if (metadata is null) return false;
         if (metadata.FormatName != format) throw new InvalidDataException("Filesystem metadata format does not match the requested image format.");
+        // A non-filesystem Sparse extraction contains one RAW file and has no inode snapshot to restore.
+        if (format == "Android Sparse Image (simg)" && metadata.Configuration.Count == 0
+            && metadata.FileSystemPreservationId is null && metadata.FileSystemPreservationHash is null
+            && File.Exists(Path.Combine(inputDirectory, Path.GetFileNameWithoutExtension(metadata.SourceFileName) + ".raw")))
+            return false;
         if (metadata.FileSystemPreservationId is not { Length: 32 } id || !Guid.TryParseExact(id, "N", out _))
             throw new InvalidDataException("Filesystem preservation data is missing. Re-extract the source image before rebuilding it.");
         var metadataDirectory = Path.GetDirectoryName(RepackMetadata.ResolveActualMetadataPath(inputDirectory))!;

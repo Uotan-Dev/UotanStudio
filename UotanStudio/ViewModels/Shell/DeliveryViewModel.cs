@@ -134,15 +134,25 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    internal void Confirm(DeliverySuperOptions options)
+    internal void Confirm(DeliveryPlan plan)
     {
         if ((!PackSuper && !PackPayload) || Container.Count == 0) throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_AddPartitionsFirst"));
-        if (PackSuper) _ = DeliverySuperBuilder.ExpandPartitions(Container.Select(i => i.Snapshot()).ToArray(), options);
+        if (plan.PackPayload) DeliveryPayloadBuilder.Validate(plan);
+        if (plan.PackSuper) _ = DeliverySuperBuilder.ExpandPartitions(Container.Select(i => i.Snapshot()).ToArray(), plan.Super);
         foreach (var row in Output.Where(i => i.Generated).ToArray()) Output.Remove(row);
-        Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
-        {
-            Generated = true, FileName = PackPayload ? "ota.zip" : DeliveryOutputService.SuperFileName(options), Partition = PackPayload ? "payload" : options.Empty ? "super_empty" : "super"
-        })));
+        // 仅生成Super_Empty：Empty 时唯一生成条目是 super_empty.img；否则按打包类型生成容器。
+        // Super_Empty only: with Empty the single generated entry is super_empty.img; otherwise the container per pack mode.
+        if (plan.PackSuper && plan.Super.Empty)
+            Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
+            {
+                Generated = true, FileName = "super_empty.img", Partition = "super_empty"
+            })));
+        else
+            Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
+            {
+                Generated = true, FileName = plan.PackPayload ? "ota.zip" : DeliveryOutputService.SuperFileName(plan.Super),
+                Partition = plan.PackPayload ? "payload" : "super"
+            })));
         Confirmed = true;
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -174,6 +184,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
     internal void RefreshAutoZero()
     {
         if (IsRunning) return;
+        if (PackPayload) return;
         var autoZero = AutoZero;
         foreach (var row in Container.Where(i => i.IsAutoZero && i.FilePath is null).ToArray()) Container.Remove(row);
         if (autoZero)
@@ -201,10 +212,14 @@ internal sealed partial class DeliveryViewModel : ObservableObject
             foreach (var item in Container.Concat(Output).Where(i => i.FilePath is not null)) _known.TryAdd(item.FilePath!, item);
             PackSuper = plan.PackSuper; PackPayload = plan.PackPayload;
             foreach (var item in Container) item.ShowSuperChoice = PackPayload;
-            OrganizeDirectory = plan.OrganizeDirectory; Confirmed = plan.ContainerConfirmed;
+            OrganizeDirectory = plan.OrganizeDirectory; Confirmed = plan.ContainerConfirmed && !plan.IsSuperEmptyOnly;
             AutoZero = plan.Super.AutoZero;
         }
         else { PackPayload = false; PackSuper = false; OrganizeDirectory = true; Confirmed = false; AutoZero = false; }
+        // 还原值可能与当前值相同而不触发 OnAutoZeroChanged；显式刷新一次，确保还原后的容器物化 VAB B 槽伴随条目。
+        // A restored value can equal the current one and skip OnAutoZeroChanged; refresh explicitly so the restored
+        // container materializes its VAB B-slot companions.
+        if (plan is not null) RefreshAutoZero();
         Status = ""; Progress = 0;
         Changed?.Invoke(this, EventArgs.Empty);
     }

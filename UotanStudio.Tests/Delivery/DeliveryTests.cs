@@ -81,7 +81,8 @@ public sealed class DeliveryTests : IDisposable
     public void PayloadConfirmationDoesNotGenerateFastbootPayloadCommands()
     {
         var model = new DeliveryViewModel(); model.SetMode(true, false, true);
-        model.SelectSources([Input("system")]); model.Confirm(new());
+        var system = Input("system");
+        model.SelectSources([system]); model.Confirm(new DeliveryPlan { PackPayload = true, Container = [system] });
         Assert.Equal("payload", Assert.Single(model.Output).PartitionName);
         var plan = new DeliveryPlan { PackPayload = true, ContainerConfirmed = true, Container = [Input("vendor")],
             Files = [new() { Generated = true, FileName = "ota.zip", Partition = "payload" }] };
@@ -91,13 +92,68 @@ public sealed class DeliveryTests : IDisposable
     }
 
     [Fact]
+    public void PayloadConfirmValidatesContainerAndPublishesGeneratedOta()
+    {
+        // Payload 确认前先校验容器：真实临时镜像 + 唯一分区名 + 默认 Payload 选项 → 确认成功并生成 ota.zip 行。
+        // Confirm validates the container first: a real temporary image, a unique partition and default Payload options succeed.
+        var model = new DeliveryViewModel();
+        model.SetMode(true, false, true);
+        var path = Path.Combine(_root, "boot_a.img");
+        File.WriteAllBytes(path, new byte[4096]);
+        model.SelectSources([new DeliveryFile { SourcePath = path, FileName = "boot_a.img", Partition = "boot_a", SourceLength = 4096 }]);
+        var plan = new DeliveryPlan
+        {
+            PackPayload = true, Container = [.. model.Container.Select(i => i.Snapshot())],
+            Payload = new() { Version = 2, MinorVersion = 0, BlockSize = 4096, Compression = "None", DynamicPartitionsFile = "" }
+        };
+        model.Confirm(plan);
+        Assert.True(model.Confirmed);
+        var generated = Assert.Single(model.Output);
+        Assert.True(generated.Generated);
+        Assert.Equal("ota.zip", generated.FileName);
+        Assert.Equal("payload", generated.PartitionName);
+    }
+
+    [Fact]
+    public void PayloadConfirmRejectsDuplicatePartitionNames()
+    {
+        // 分区重名时 Confirm 抛 InvalidDataException：不确认、不生成 ota.zip 行。
+        // Duplicate partition names throw InvalidDataException: no confirmation and no generated ota.zip row.
+        var model = new DeliveryViewModel();
+        model.SetMode(true, false, true);
+        model.SelectSources([Input("boot_a"), Input("boot_a_copy") with { Partition = "boot_a" }]);
+        var plan = new DeliveryPlan { PackPayload = true, Container = [.. model.Container.Select(i => i.Snapshot())] };
+        Assert.ThrowsAny<InvalidDataException>(() => model.Confirm(plan));
+        Assert.False(model.Confirmed);
+        Assert.DoesNotContain(model.Output, i => i.Generated);
+    }
+
+    [Fact]
+    public void PayloadModeDoesNotMaterializeZeroPartitionsButSuperModeDoes()
+    {
+        // Payload 模式下自动零分区不物化 _b 行；对照组 Super 模式仍物化 system_b。
+        // Payload mode never materializes auto zero rows; the Super-mode control still adds system_b.
+        var payloadModel = new DeliveryViewModel();
+        payloadModel.SetMode(true, false, true);
+        payloadModel.AutoZero = true;
+        payloadModel.SelectSources([Input("system_a")]);
+        Assert.Single(payloadModel.Container);
+        Assert.DoesNotContain(payloadModel.Container, i => i.PartitionName == "system_b");
+        var superModel = new DeliveryViewModel();
+        superModel.SetMode(true, true, false);
+        superModel.AutoZero = true;
+        superModel.SelectSources([Input("system_a")]);
+        Assert.Contains(superModel.Container, i => i.PartitionName == "system_b" && i.IsAutoZero);
+    }
+
+    [Fact]
     public void ConfirmedContainerKeepsMembershipAndNewSelectionsGoToOutput()
     {
         var system = Input("system"); var boot = Input();
         var model = new DeliveryViewModel();
         model.SetMode(true, true);
         model.SelectSources([system]);
-        model.Confirm(new());
+        model.Confirm(new DeliveryPlan { PackSuper = true, Container = [.. model.Container.Select(i => i.Snapshot())] });
         model.SelectSources([system, boot]);
         Assert.Single(model.Container);
         Assert.Equal(2, model.Output.Count);
@@ -132,8 +188,8 @@ public sealed class DeliveryTests : IDisposable
         model.SelectSources([system]);
         if (super || payload)
         {
-            model.AddZero("vendor");
-            model.Confirm(new());
+            if (super) model.AddZero("vendor");
+            model.Confirm(new DeliveryPlan { PackSuper = super, PackPayload = payload, Container = [.. model.Container.Select(i => i.Snapshot())] });
         }
         model.SelectSources([system, boot]);
         var original = model.Container.Concat(model.Output).First(i => i.FilePath == system.SourcePath);
@@ -255,8 +311,8 @@ public sealed class DeliveryTests : IDisposable
             Files = [Input()], OutputDirectory = Path.Combine(_root, "out"), Scripts = new() { ["flash.txt"] = "manual edits\n" },
             GeneratedScripts = new() { ["flash.txt"] = "boot images/boot.img\r\n" }, OpenScripts = ["flash.txt"], ScriptCarets = new() { ["flash.txt"] = 5 }
         };
-        await DeliveryPlanStore.SaveAsync(_root, plan, TestContext.Current.CancellationToken);
-        var restored = Assert.IsType<DeliveryPlan>(await DeliveryPlanStore.LoadAsync(_root, TestContext.Current.CancellationToken));
+        var state = DeliveryPlanStore.CaptureElement(_root, plan);
+        var restored = Assert.IsType<DeliveryPlan>(DeliveryPlanStore.LoadFromState(state, _root));
         Assert.Equal(plan.Files[0], restored.Files[0]);
         Assert.Equal("manual edits\n", restored.Scripts["flash.txt"]);
         Assert.Equal(plan.OutputDirectory, restored.OutputDirectory);
@@ -341,5 +397,198 @@ public sealed class DeliveryTests : IDisposable
         using var decoded = new MemoryStream();
         UotanStudio.Firmware.CrossCutting.Compress.Compressors.ZstdCompressor.Decompress(compressed, decoded);
         Assert.Equal(SHA256.HashData(File.ReadAllBytes(raw)), SHA256.HashData(decoded.ToArray()));
+    }
+
+    [Fact]
+    public async Task EmptySuperGeneratesOnlySuperEmptyImage()
+    {
+        // 仅生成Super_Empty：Empty=true 时只产出 super_empty.img，不再生成完整 super。
+        var file = Input("system");
+        var options = new DeliverySuperOptions { DeviceSize = 8 * 1024 * 1024, Empty = true };
+        var output = Path.Combine(_root, "empty-out");
+        await new DeliveryOutputService(new NoTools()).ExportAsync(new()
+        {
+            OrganizeDirectory = false, PackSuper = true, Super = options, Container = [file], OutputDirectory = output
+        }, token: TestContext.Current.CancellationToken);
+        Assert.False(File.Exists(Path.Combine(output, "super.img")));
+        Assert.False(File.Exists(Path.Combine(output, "super.zst")));
+        var empty = Path.Combine(output, "super_empty.img");
+        Assert.Equal(0x616c4467u, BitConverter.ToUInt32(File.ReadAllBytes(empty)));
+        Assert.True(new FileInfo(empty).Length < 128 * 1024);
+    }
+
+    [Fact]
+    public void EmptySuperExcludesZstdCompression()
+    {
+        // 仅生成Super_Empty 与压缩为ZST 互斥：组合在确认前被校验拒绝。
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = false, PackSuper = true,
+            Super = new() { DeviceSize = 8 * 1024 * 1024, Empty = true, Zstd = true },
+            Container = [Input("system")], OutputDirectory = Path.Combine(_root, "empty-zstd-out")
+        };
+        Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task EmptySuperOutputsWithoutConfirmationSourcesOrScripts(bool organize, bool retainedImages)
+    {
+        var missing = new DeliveryFile { SourcePath = Path.Combine(_root, "missing.img"), Partition = "system", FileName = "system.img" };
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = organize, PackSuper = true,
+            Super = new() { Empty = true, DeviceSize = 8 * 1024 * 1024 },
+            Container = retainedImages ? [missing] : [], Files = [missing],
+            Windows = true, Linux = true, MacOS = true, Recovery = true,
+            Scripts = new() { ["FlashWindows.bat"] = "user draft" },
+            OutputDirectory = Path.Combine(_root, "empty-direct")
+        };
+        DeliveryValidation.Validate(plan);
+        Assert.Empty(DeliveryScriptGenerator.Generate(plan));
+        var expected = Path.Combine(plan.OutputDirectory, "super_empty.img");
+        Assert.Equal([expected], DeliveryOutputService.PlannedOutputPaths(plan));
+        var published = await new DeliveryOutputService(new RejectTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken);
+        Assert.Equal([expected], published);
+        Assert.Equal([expected], Directory.GetFiles(plan.OutputDirectory, "*", SearchOption.AllDirectories));
+        Assert.Equal(0x616c4467u, BitConverter.ToUInt32(File.ReadAllBytes(expected)));
+        Assert.Equal([expected], DeliveryOutputService.FindExistingOutputs(plan));
+        Assert.Equal("user draft", plan.Scripts["FlashWindows.bat"]);
+        Assert.Equal(missing, Assert.Single(plan.Files));
+    }
+
+    private sealed class RejectTools : IDeliveryTools
+    {
+        public Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token)
+            => throw new InvalidOperationException("Metadata-only output must not prepare tools.");
+    }
+
+    [Fact]
+    public void ScriptsNeverFlashSuperEmpty()
+    {
+        var file = Input("system");
+        var plan = new DeliveryPlan
+        {
+            PackSuper = true, OrganizeDirectory = true, ContainerConfirmed = true,
+            Super = new() { DeviceSize = 8 * 1024 * 1024, Empty = true },
+            Container = [file with { IncludeInSuper = true }],
+            Files = [new DeliveryFile { Generated = true, FileName = "super_empty.img", Partition = "super_empty" }],
+            OutputDirectory = Path.Combine(_root, "script-out")
+        };
+        DeliveryValidation.Validate(plan, false);
+        var scripts = DeliveryScriptGenerator.Generate(plan, key => key);
+        foreach (var (_, content) in scripts)
+            Assert.DoesNotContain("super_empty", content, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ScriptPromptsFollowLocalizeAndFallBackToEnglish()
+    {
+        var plan = new DeliveryPlan
+        {
+            Files = [Input(), Input("init_boot") with { Partition = "init_boot", Optional = true, Default = true },
+                Input("init_boot_ksu") with { Partition = "init_boot", Optional = true }],
+            Windows = true, Linux = true, Txt = false
+        };
+        var zh = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Delivery_Script_Completed"] = "已完成。",
+            ["Delivery_Script_AskStart"] = "是否开始刷写？[y/N]：",
+            ["Delivery_Script_Choose"] = "请选择 {0}",
+            ["Delivery_Script_MissingImage"] = "缺少镜像：{0}",
+        };
+        Func<string, string> localize = key => zh.GetValueOrDefault("Delivery_Script_" + key, "Delivery_Script_" + key);
+        var scripts = DeliveryScriptGenerator.Generate(plan, localize);
+        Assert.Contains("请选择 init_boot", scripts["FlashLinux.sh"]);
+        Assert.Contains("是否开始刷写？[y/N]：", scripts["FlashLinux.sh"]);
+        Assert.Contains("已完成。", scripts["FlashLinux.sh"]);
+        Assert.Contains("缺少镜像：boot.img", scripts["FlashLinux.sh"]);
+        // 本地化缺失时回退英文（资源缺失时 GetString 返回完整键名，T 亦回退英文）。
+        // A missing localized key falls back to English (GetString returns the full key name, which T treats as missing).
+        Assert.Contains("Invalid choice.", scripts["FlashLinux.sh"]);
+        Assert.Contains("请选择 init_boot", scripts["FlashWindows.bat"]);
+        // 未提供 localize 时保持英文。
+        // Without a localizer the scripts stay English.
+        var english = DeliveryScriptGenerator.Generate(plan);
+        Assert.Contains("Choose init_boot", english["FlashLinux.sh"]);
+        Assert.Contains("Completed.", english["FlashWindows.bat"]);
+    }
+
+    [Fact]
+    public void LocalizeReturningKeyNameFallsBackToEnglish()
+    {
+        var plan = new DeliveryPlan { Files = [Input()], Windows = true, Linux = true, Txt = false };
+        var scripts = DeliveryScriptGenerator.Generate(plan, key => "Delivery_Script_" + key);
+        Assert.Contains("Connect exactly one Fastboot device.", scripts["FlashLinux.sh"]);
+        Assert.Contains("Completed.", scripts["FlashLinux.sh"]);
+        Assert.Contains("Delivery failed. Check device, images and tools.", scripts["FlashWindows.bat"]);
+    }
+
+    [Fact]
+    public void ZstdFilesEmitDecompressionStepsInBothScripts()
+    {
+        var plan = new DeliveryPlan { Files = [Input("super") with { FileName = "super.zst", Partition = "super" }], Windows = true, Linux = true, Txt = false };
+        var scripts = DeliveryScriptGenerator.Generate(plan);
+        Assert.Contains("if not exist \"%TOOLS%\\zstd.exe\" goto failed", scripts["FlashWindows.bat"]);
+        Assert.Contains("\"%TOOLS%\\zstd.exe\" -d", scripts["FlashWindows.bat"]);
+        Assert.Contains("[ -x \"$ZSTD\" ] || die", scripts["FlashLinux.sh"]);
+        Assert.Contains("\"$ZSTD\" -d -o \"$file\"", scripts["FlashLinux.sh"]);
+    }
+
+    [Fact]
+    public void TxtManifestExcludesCompressedImages()
+    {
+        // TXT 线刷（旧工具箱）无法解压 zstd：super.zst 不得作为 super 分区写入 flash.txt 或其变体。
+        // The TXT flasher cannot decompress zstd, so super.zst must not be listed as the super partition.
+        var plan = new DeliveryPlan
+        {
+            Files = [Input() with { Optional = true, Default = true }, Input("super") with { FileName = "super.zst", Partition = "super" },
+                Input("boot_ksu") with { Partition = "boot", Optional = true }],
+            Txt = true, TxtVariants = true
+        };
+        var scripts = DeliveryScriptGenerator.Generate(plan);
+        Assert.Equal("boot images/boot.img\r\n", scripts["flash.txt"]);
+        Assert.DoesNotContain("super.zst", scripts["flash.txt"]);
+        // 变体同样排除压缩镜像：flash-boot_ksu.txt 只含 boot 备选。
+        // Variants exclude compressed images too: flash-boot_ksu.txt only carries the boot alternative.
+        Assert.Equal("boot images/boot_ksu.img\r\n", scripts["flash-boot_ksu.txt"]);
+        Assert.DoesNotContain("super.zst", scripts["flash-boot_ksu.txt"]);
+    }
+
+    [Fact]
+    public void MacScriptSelectsZstdBinaryByArchitecture()
+    {
+        var plan = new DeliveryPlan { Files = [Input("super") with { FileName = "super.zst", Partition = "super" }], MacOS = true, Txt = false };
+        var mac = DeliveryScriptGenerator.Generate(plan)["FlashMacOS.sh"];
+        Assert.Contains("uname -m", mac);
+        Assert.Contains("zstd-x86_64", mac);
+        Assert.Contains("ZSTD=\"$TOOLS/zstd\"", mac);
+        Assert.Contains("\"$ZSTD\" -d -o \"$file\"", mac);
+        var linux = DeliveryScriptGenerator.Generate(plan with { MacOS = false, Linux = true })["FlashLinux.sh"];
+        Assert.DoesNotContain("uname -m", linux);
+        Assert.DoesNotContain("zstd-x86_64", linux);
+    }
+
+    [Theory]
+    [InlineData("Windows", new[] { "fastboot.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll", "libwinpthread-1.dll", "NOTICE.txt", "source.properties", "zstd.exe" },
+        new[] { "adb.exe", "sqlite3.exe", "mke2fs.exe", "etc1tool.exe", "hprof-conv.exe", "make_f2fs.exe", "make_f2fs_casefold.exe", "mke2fs.conf" })]
+    [InlineData("Linux", new[] { "fastboot", "lib64/libc++.so", "NOTICE.txt", "source.properties", "zstd" },
+        new[] { "adb", "sqlite3", "mke2fs", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs.conf" })]
+    [InlineData("macOS", new[] { "fastboot", "lib64/libc++.dylib", "NOTICE.txt", "source.properties", "zstd", "zstd-x86_64" },
+        new[] { "adb", "sqlite3", "mke2fs", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs.conf" })]
+    public void TrimPlatformToolsKeepsFastbootAndRemovesDeadBinaries(string name, string[] keeps, string[] removes)
+    {
+        var target = Path.Combine(_root, "bin", name);
+        foreach (var file in keeps.Concat(removes))
+        {
+            var path = Path.Combine(target, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "x");
+        }
+        DeliveryToolService.TrimPlatformTools(name, target);
+        foreach (var file in keeps) Assert.True(File.Exists(Path.Combine(target, file)), $"{name}/{file} should be kept");
+        foreach (var file in removes) Assert.False(File.Exists(Path.Combine(target, file)), $"{name}/{file} should be removed");
     }
 }

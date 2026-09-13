@@ -14,15 +14,19 @@ internal static class DiskSpaceEstimator
     internal const long ToolAllowancePerPlatform = 64L * 1024 * 1024;
 
     /// <summary><para>按交付计划估算输出所需字节数：源镜像（Files + Container，去重）加上生成的
-    /// Super（<see cref="DeliverySuperOptions.DeviceSize"/>，空 Super 不计）、Payload 分区与工具预留，再乘安全系数。
+    /// 完整 Super（<see cref="DeliverySuperOptions.DeviceSize"/>，仅生成Super_Empty 时不计）、Payload
+    /// 分区与工具预留，再乘安全系数。
     /// 缺失、过大或不可读的源文件按 0 计；只做有界加法，不抛异常。</para>
     /// Estimates the bytes a delivery export needs from the plan: source images (Files + Container, deduplicated) plus the
-    /// generated Super (<see cref="DeliverySuperOptions.DeviceSize"/>; empty Super is excluded), Payload partitions and a tool
+    /// generated full Super (<see cref="DeliverySuperOptions.DeviceSize"/>, excluded for Super_Empty only), Payload partitions and a tool
     /// allowance, all multiplied by the safety factor. Missing, oversized, or unreadable sources count as zero; addition is
     /// bounded and never throws.</summary>
     internal static long EstimateExportDemand(DeliveryPlan plan)
     {
+        if (plan.IsSuperEmptyOnly) return (4096L + plan.Super.MetadataSize) * SafetyFactor;
         var total = Add(SumSourceLengths(plan.Files), SumSourceLengths(plan.Container));
+        // 仅生成Super_Empty 时不再构建完整 super，磁盘需求不计设备大小。
+        // With Super_Empty only, no full super is built, so the device size does not count toward demand.
         if (plan.PackSuper && !plan.Super.Empty) total = Add(total, checked((long)plan.Super.DeviceSize));
         if (plan.OrganizeDirectory)
         {
