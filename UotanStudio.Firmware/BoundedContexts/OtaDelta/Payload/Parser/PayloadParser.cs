@@ -361,7 +361,13 @@ public static partial class PayloadParser
             using var stream = File.OpenRead(tempPath ?? filepath);
             var (manifest, header) = ReadManifest(stream);
             var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
-            new PayloadExtractor().ExtractPartitions(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages);
+            // 与异步路径一致：并发分区各开专属只读句柄，跨分区读不再串行化。
+            // Mirroring the async path: concurrent partitions each open an exclusive read-only
+            // handle so cross-partition reads no longer serialize.
+            var payloadFilePath = tempPath ?? filepath;
+            new PayloadExtractor().ExtractPartitions(
+                manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages,
+                openPayloadStream: () => new FileStream(payloadFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan));
         }
         finally
         {
@@ -408,7 +414,16 @@ public static partial class PayloadParser
             var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
             var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
             var extractor = new PayloadExtractor();
-            await extractor.ExtractPartitionsAsync(manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken, resolvedSourceImages, byteProgress).ConfigureAwait(false);
+            // 并发分区各开专属只读句柄，跨分区读不再共享单一 FileStream 串行化；
+            // 外层 stream 仅用于清单读取与回退路径。
+            // Concurrent partitions each open an exclusive read-only handle so cross-partition
+            // reads no longer serialize on a single FileStream; the outer stream serves manifest
+            // reads and the fallback path.
+            var payloadFilePath = tempPath ?? filepath;
+            await extractor.ExtractPartitionsAsync(
+                manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken,
+                resolvedSourceImages, byteProgress,
+                openPayloadStream: () => new FileStream(payloadFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan)).ConfigureAwait(false);
         }
         finally
         {

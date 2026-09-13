@@ -59,8 +59,13 @@ public class PayloadStreamingTests
     }
 
     [Fact]
-    public async Task Replace_HoldsOutputLockUntilEntireStreamAndHashAreComplete()
+    public async Task Replace_DecodeRunsOutsideOutputLock()
     {
+        // 新契约：Replace 解码/哈希在 writeLock 之外运行——操作在读数据中途暂停时，
+        // 其它操作可以获取写锁；仅底层 extent 的 Seek+Write 经 ExtentWriteStream 串行化。
+        // New contract: Replace decoding/hashing runs outside the write lock — while an operation is
+        // paused mid-read, other operations can acquire the write lock; only the underlying extent
+        // Seek+Write is serialized through ExtentWriteStream.
         var payload = Enumerable.Range(0, 128 * 1024).Select(i => (byte)i).ToArray();
         using var secondReadReached = new ManualResetEventSlim();
         using var allowSecondRead = new ManualResetEventSlim();
@@ -75,7 +80,7 @@ public class PayloadStreamingTests
         var competingOperation = Task.CompletedTask;
         try
         {
-            // Both workers intentionally block; use dedicated threads to avoid thread-pool starvation.
+            // Both tasks intentionally block; use dedicated threads to avoid thread-pool starvation.
             replaceTask = Task.Factory.StartNew(() => OperationProcessor.ProcessOperation(
                 operation, output, payloadStream, 0, 4096, writeLock, new object(), TestContext.Current.CancellationToken),
                 TestContext.Current.CancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -91,11 +96,12 @@ public class PayloadStreamingTests
             }, TestContext.Current.CancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             Assert.True(lockAttempted.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
-            Assert.False(lockAcquired.Wait(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken));
+            // The paused replace no longer holds the write lock: the competitor must acquire it.
+            // 暂停中的 Replace 不再持有写锁：竞争者必须能获取它。
+            Assert.True(lockAcquired.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
             allowSecondRead.Set();
             await replaceTask;
-            Assert.True(lockAcquired.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             await competingOperation;
         }
         finally
