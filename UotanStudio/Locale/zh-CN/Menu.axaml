@@ -156,6 +156,8 @@
     <x:String x:Key="Keys_SelectOutputFormat">选择生成的证书格式</x:String>
     <x:String x:Key="Keys_FormatAll">全部格式（推荐）</x:String>
     <x:String x:Key="Keys_FormatJks">仅 JKS（.keystore）</x:String>
+    <x:String x:Key="Keys_OutputDirectory">输出目录</x:String>
+    <x:String x:Key="Keys_Browse">浏览</x:String>
     <x:String x:Key="Keys_FormatPkcs12">仅 PKCS12（.p12）</x:String>
     <x:String x:Key="Keys_FormatPem">仅 PEM（.key + .crt）</x:String>
     <x:String x:Key="Keys_FormatHint">生成 JKS、PKCS12 和 PEM 三种格式，兼容各种 Android 打包工具。</x:String>

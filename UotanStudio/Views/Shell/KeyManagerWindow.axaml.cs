@@ -39,6 +39,17 @@ public partial class KeyManagerWindow : Window
         if (path is not null) await Model.ImportAsync(path);
     }
 
+    private async void BrowseApkOutputDirectoryClick(object? sender, RoutedEventArgs e)
+    {
+        string? path = null;
+        await Model.RunAsync(async () =>
+        {
+            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false });
+            path = folders.Count == 1 ? folders[0].TryGetLocalPath() : null;
+        });
+        if (path is not null) Model.OutputDirectory = path;
+    }
+
     private async void SetCurrentClick(object? sender, RoutedEventArgs e)
     {
         var key = Model.SelectedKey;

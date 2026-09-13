@@ -146,6 +146,7 @@
                                 <ComboBoxItem Content="Payload" />
                                 <ComboBoxItem Content="{DynamicResource Keys_ApkKey}" />
                                 <ComboBoxItem Content="{DynamicResource Keys_ApkCertificate}" />
+                                <ComboBoxItem Content="JAR" />
                             </ComboBox>
                         </Grid>
                         <Grid ColumnSpacing="8" IsVisible="{Binding !IsApkCertificate}">
@@ -161,15 +162,15 @@
                             <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
                                 <StackPanel Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_KeystoreAlias}" />
-                                    <TextBox Classes="key-field" Text="my-release-key" AutomationProperties.Name="{DynamicResource Keys_KeystoreAlias}" />
+                                    <TextBox Classes="key-field" Text="{Binding CertificateAlias}" AutomationProperties.Name="{DynamicResource Keys_KeystoreAlias}" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_KeystorePassword}" />
-                                    <TextBox Classes="key-field" PasswordChar="●" AutomationProperties.Name="{DynamicResource Keys_KeystorePassword}" />
+                                    <TextBox Classes="key-field" PasswordChar="●" Text="{Binding KeystorePassword}" AutomationProperties.Name="{DynamicResource Keys_KeystorePassword}" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_ValidityYears}" />
-                                    <NumericUpDown Minimum="1" Maximum="100" Value="10" AutomationProperties.Name="{DynamicResource Keys_ValidityYears}" />
+                                    <NumericUpDown Minimum="1" Maximum="100" Value="{Binding ValidityYears}" AutomationProperties.Name="{DynamicResource Keys_ValidityYears}" />
                                 </StackPanel>
                             </Grid>
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -179,27 +180,27 @@
                             <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="8">
                                 <StackPanel Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_CommonName}" />
-                                    <TextBox Classes="key-field" Text="Memory" AutomationProperties.Name="{DynamicResource Keys_CommonName}" />
+                                    <TextBox Classes="key-field" Text="{Binding CommonName}" AutomationProperties.Name="{DynamicResource Keys_CommonName}" />
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_OrganizationUnit}" />
-                                    <TextBox Classes="key-field" Text="Android" AutomationProperties.Name="{DynamicResource Keys_OrganizationUnit}" />
+                                    <TextBox Classes="key-field" Text="{Binding OrganizationalUnit}" AutomationProperties.Name="{DynamicResource Keys_OrganizationUnit}" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="1" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_Organization}" />
-                                    <TextBox Classes="key-field" Text="Example" AutomationProperties.Name="{DynamicResource Keys_Organization}" />
+                                    <TextBox Classes="key-field" Text="{Binding Organization}" AutomationProperties.Name="{DynamicResource Keys_Organization}" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_Locality}" />
-                                    <TextBox Classes="key-field" Text="Shanghai" AutomationProperties.Name="{DynamicResource Keys_Locality}" />
+                                    <TextBox Classes="key-field" Text="{Binding Locality}" AutomationProperties.Name="{DynamicResource Keys_Locality}" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="2" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_State}" />
-                                    <TextBox Classes="key-field" Text="Shanghai" AutomationProperties.Name="{DynamicResource Keys_State}" />
+                                    <TextBox Classes="key-field" Text="{Binding State}" AutomationProperties.Name="{DynamicResource Keys_State}" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="2" Grid.Column="1" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_CountryCode}" />
-                                    <TextBox Classes="key-field" Text="CN" AutomationProperties.Name="{DynamicResource Keys_CountryCode}" />
+                                    <TextBox Classes="key-field" Text="{Binding CountryCode}" MaxLength="2" AutomationProperties.Name="{DynamicResource Keys_CountryCode}" />
                                 </StackPanel>
                             </Grid>
                             <StackPanel Orientation="Horizontal" Spacing="6">
@@ -210,15 +211,19 @@
                                 <StackPanel Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_Algorithm}" />
                                     <WrapPanel ItemSpacing="8" LineSpacing="6">
-                                        <RadioButton GroupName="ApkCertificateAlgorithm" Content="{DynamicResource Keys_Rsa}" IsChecked="True" />
-                                        <RadioButton GroupName="ApkCertificateAlgorithm" Content="{DynamicResource Keys_Ec}" />
+                                        <RadioButton GroupName="ApkCertificateAlgorithm" Content="{DynamicResource Keys_Rsa}" IsChecked="{Binding IsRsaAlgorithm, Mode=TwoWay}" />
+                                        <RadioButton GroupName="ApkCertificateAlgorithm" Content="{DynamicResource Keys_Ec}" IsChecked="{Binding IsEcAlgorithm, Mode=TwoWay}" />
                                     </WrapPanel>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1" Spacing="4">
                                     <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_KeySizeCurve}" />
                                     <WrapPanel ItemSpacing="8" LineSpacing="6">
-                                        <RadioButton GroupName="ApkCertificateSize" Content="{DynamicResource Keys_Rsa2048}" IsChecked="True" />
-                                        <RadioButton GroupName="ApkCertificateSize" Content="{DynamicResource Keys_Rsa4096}" />
+                                        <RadioButton GroupName="ApkCertificateSize" Content="{DynamicResource Keys_Rsa2048}" IsChecked="{Binding IsKeySize2048, Mode=TwoWay}" IsVisible="{Binding IsRsaAlgorithm}" />
+                                        <RadioButton GroupName="ApkCertificateSize" Content="RSA 3072" IsChecked="{Binding IsKeySize3072, Mode=TwoWay}" IsVisible="{Binding IsRsaAlgorithm}" />
+                                        <RadioButton GroupName="ApkCertificateSize" Content="{DynamicResource Keys_Rsa4096}" IsChecked="{Binding IsKeySize4096, Mode=TwoWay}" IsVisible="{Binding IsRsaAlgorithm}" />
+                                        <RadioButton GroupName="ApkCertificateSize" Content="P-256" IsChecked="{Binding IsKeySizeP256, Mode=TwoWay}" IsVisible="{Binding IsEcAlgorithm}" />
+                                        <RadioButton GroupName="ApkCertificateSize" Content="P-384" IsChecked="{Binding IsKeySizeP384, Mode=TwoWay}" IsVisible="{Binding IsEcAlgorithm}" />
+                                        <RadioButton GroupName="ApkCertificateSize" Content="P-521" IsChecked="{Binding IsKeySizeP521, Mode=TwoWay}" IsVisible="{Binding IsEcAlgorithm}" />
                                     </WrapPanel>
                                 </StackPanel>
                             </Grid>
@@ -229,13 +234,17 @@
                             <StackPanel Spacing="4">
                                 <TextBlock Classes="certificate-label" Text="{DynamicResource Keys_SelectOutputFormat}" />
                                 <WrapPanel ItemSpacing="8" LineSpacing="6">
-                                    <RadioButton GroupName="ApkCertificateFormat" Content="{DynamicResource Keys_FormatAll}" IsChecked="True" />
-                                    <RadioButton GroupName="ApkCertificateFormat" Content="{DynamicResource Keys_FormatJks}" />
-                                    <RadioButton GroupName="ApkCertificateFormat" Content="{DynamicResource Keys_FormatPkcs12}" />
-                                    <RadioButton GroupName="ApkCertificateFormat" Content="{DynamicResource Keys_FormatPem}" />
+                                    <RadioButton GroupName="ApkCertificateFormat" Content="{DynamicResource Keys_FormatAll}" IsChecked="{Binding IsFormatAll, Mode=TwoWay}" />
+                                    <RadioButton GroupName="ApkCertificateFormat" Content="{DynamicResource Keys_FormatJks}" IsChecked="{Binding IsFormatJks, Mode=TwoWay}" />
+                                    <RadioButton GroupName="ApkCertificateFormat" Content="{DynamicResource Keys_FormatPkcs12}" IsChecked="{Binding IsFormatPkcs12, Mode=TwoWay}" />
+                                    <RadioButton GroupName="ApkCertificateFormat" Content="{DynamicResource Keys_FormatPem}" IsChecked="{Binding IsFormatPem, Mode=TwoWay}" />
                                 </WrapPanel>
                                 <TextBlock Text="{DynamicResource Keys_FormatHint}" TextWrapping="Wrap" Opacity="0.65" FontSize="11" />
                             </StackPanel>
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsOutputDirectoryRequired}">
+                                <TextBox Classes="key-field" Text="{Binding OutputDirectory}" Watermark="{DynamicResource Keys_OutputDirectory}" AutomationProperties.Name="{DynamicResource Keys_OutputDirectory}" />
+                                <Button Grid.Column="1" Classes="key-action" Content="{DynamicResource Keys_Browse}" Click="BrowseApkOutputDirectoryClick" />
+                            </Grid>
                         </StackPanel>
                         <Grid Name="KeyCreationActions" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" RowSpacing="8">
                             <StackPanel Name="ImportKeyControls" Orientation="Horizontal" Spacing="8" Grid.ColumnSpan="2"

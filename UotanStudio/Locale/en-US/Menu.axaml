@@ -156,6 +156,8 @@
     <x:String x:Key="Keys_SelectOutputFormat">Choose certificate formats to generate</x:String>
     <x:String x:Key="Keys_FormatAll">All formats (recommended)</x:String>
     <x:String x:Key="Keys_FormatJks">JKS only (.keystore)</x:String>
+    <x:String x:Key="Keys_OutputDirectory">Output directory</x:String>
+    <x:String x:Key="Keys_Browse">Browse</x:String>
     <x:String x:Key="Keys_FormatPkcs12">PKCS12 only (.p12)</x:String>
     <x:String x:Key="Keys_FormatPem">PEM only (.key + .crt)</x:String>
     <x:String x:Key="Keys_FormatHint">Generates JKS, PKCS12 and PEM formats for common Android packaging tools.</x:String>
