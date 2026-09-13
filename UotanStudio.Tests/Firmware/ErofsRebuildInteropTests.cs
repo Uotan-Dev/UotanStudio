@@ -103,6 +103,11 @@ public sealed class ErofsRebuildInteropTests
             Directory.CreateDirectory(Path.Combine(extracted, "new-directory"));
             var rebuild = await handler.PackAsync(extracted, rebuiltImage, Token);
             Assert.True(rebuild.Success, rebuild.Summary);
+            Assert.Contains("SourceFilesystemSize", rebuild.Metadata.Keys);
+            Assert.Contains("RebuiltSize", rebuild.Metadata.Keys);
+            Assert.Contains("CompressionInference", rebuild.Metadata.Keys);
+            Assert.True(long.TryParse(rebuild.Metadata["RebuiltSize"], out var reportedSize));
+            Assert.Equal(new FileInfo(rebuiltImage).Length, reportedSize);
             using var before = new ErofsParser(originalImage);
             using var after = new ErofsParser(rebuiltImage);
             Assert.Equal(before.Superblock.BlockSize, after.Superblock.BlockSize);

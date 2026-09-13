@@ -136,7 +136,9 @@ public static class FileSystemPreservation
     }
 
     /// <summary>Restores an unchanged image exactly, or rebuilds edited files and directories using validated source metadata.</summary>
-    public static bool TryRestore(string inputDirectory, string outputPath, string format, CancellationToken cancellationToken = default)
+    public static bool TryRestore(string inputDirectory, string outputPath, string format,
+        CancellationToken cancellationToken = default,
+        Action<IReadOnlyDictionary<string, string>>? rebuildReport = null)
     {
         var metadata = RepackMetadata.Read(inputDirectory);
         if (metadata is null) return false;
@@ -187,7 +189,7 @@ public static class FileSystemPreservation
             using var editScope = plan.Enter();
             FileExtraction.WriteAtomic(fullOutput, output =>
             {
-                BuildEdited(inputDirectory, output, snapshot, format, metadata.PackingOptions, cancellationToken);
+                BuildEdited(inputDirectory, output, snapshot, format, metadata.PackingOptions, cancellationToken, rebuildReport: rebuildReport);
                 cancellationToken.ThrowIfCancellationRequested();
                 var current = RepackMetadata.Read(inputDirectory);
                 if (current is null || HashConfiguration(current) != HashConfiguration(metadata)
@@ -226,7 +228,8 @@ public static class FileSystemPreservation
     }
 
     private static void BuildEdited(string inputDirectory, Stream output, string snapshot, string format,
-        Dictionary<string, string> options, CancellationToken token, Stream? sourceFilesystem = null)
+        Dictionary<string, string> options, CancellationToken token, Stream? sourceFilesystem = null,
+        Action<IReadOnlyDictionary<string, string>>? rebuildReport = null)
     {
         token.ThrowIfCancellationRequested();
         if (format == "Android Sparse Image (simg)")
@@ -236,7 +239,7 @@ public static class FileSystemPreservation
             var inner = DetectFilesystem(logical);
             var temporary = Path.Combine(Path.GetTempPath(), "uotan-edited-raw-" + Guid.NewGuid().ToString("N"));
             using var raw = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
-            BuildEdited(inputDirectory, raw, snapshot, inner, options, token, logical);
+            BuildEdited(inputDirectory, raw, snapshot, inner, options, token, logical, rebuildReport);
             raw.Position = 0;
             SparseImageConverter.ConvertRawToSparse(raw, output, sparse.Header.BlockSize, raw.Length);
             return;
@@ -255,7 +258,12 @@ public static class FileSystemPreservation
                     var erofsOptions = parser.ReadRebuildOptions();
                     erofsOptions.VolumeName = options.GetValueOrDefault("VolumeName", parser.SourceVolumeName);
                     if (erofsOptions.VolumeName != parser.SourceVolumeName) erofsOptions.SourceVolumeNameBytes = null;
-                    new ErofsBuilder().Build(inputDirectory, output, erofsOptions);
+                    // Sparse logical streams are forward-only in the conversion pipeline. Keep the
+                    // established single-pass builder there; direct EROFS files use candidate sizing.
+                    if (sourceFilesystem is null)
+                        rebuildReport?.Invoke(ErofsRebuildOptimizer.Build(inputDirectory, output, parser, erofsOptions, token));
+                    else
+                        new ErofsBuilder().Build(inputDirectory, output, erofsOptions);
                 }
                 break;
             case "F2FS":

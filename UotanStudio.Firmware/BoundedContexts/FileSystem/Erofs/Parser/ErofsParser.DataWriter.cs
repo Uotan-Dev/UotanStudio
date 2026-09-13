@@ -198,7 +198,8 @@ public sealed partial class ErofsParser
     /// Reads compressed file data through compact or full EROFS cluster indexes.
     /// <para>通过紧凑或完整的 EROFS 簇索引读取压缩文件数据。</para>
     /// </summary>
-    private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output)
+    private void WriteCompressedData(ulong nid, ErofsInode inode, Stream output,
+        CompressionObserver? observer = null, CancellationToken cancellationToken = default)
     {
         var inodeLoc = _superblock.GetInodeOffset(nid);
 
@@ -210,6 +211,7 @@ public sealed partial class ErofsParser
 
         if (header.IsFragmentInode)
         {
+            if (observer is not null) return;
             var fragmentOff = BinaryPrimitives.ReadUInt64LittleEndian(headerBytes) & ~(1UL << 63);
             WritePackedData(fragmentOff, checked((long)inode.Size), output);
             return;
@@ -256,6 +258,9 @@ public sealed partial class ErofsParser
             long lcn = 0;
             while (lcn < totalIdx)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                // Inference inspects only a bounded prefix of each selected inode.
+                if (observer is not null && lcn >= 4096) return;
                 var lc = LoadLcluster(nid, inode, headerOffset, advise, lclusterBits, totalIdx, lcn, out var ebase, out var compacted4bInitial, out var compacted2b, cachedIndex);
                 if (lc.Type == LclusterTypeNonHead)
                 {
@@ -316,6 +321,11 @@ public sealed partial class ErofsParser
 
                 var isLastExtent = nextMLa >= (long)inode.Size;
                 var isTailPacked = tailPacking && isLastExtent;
+                if (observer is not null && (llen > 1 << 20 || lc.Type == LclusterTypePlain || fragmentPcluster && isLastExtent))
+                {
+                    lcn = nextLcn;
+                    continue;
+                }
                 if (fragmentPcluster && isLastExtent)
                 {
                     var fragmentOffset = (ulong)header.FragmentOff;
@@ -448,7 +458,12 @@ public sealed partial class ErofsParser
                         $"Pcluster {lcn} decoded to {decodedLen} bytes, expected {llen}.");
                 }
 
-                output.Write(decoded, 0, (int)llen);
+                if (observer is not null)
+                {
+                    if (!observer((ErofsCompressionAlgorithm)algorithm,
+                        compressed.AsSpan(inputMargin, compressedByteLen - inputMargin), decoded.AsSpan(0, (int)llen))) return;
+                }
+                else output.Write(decoded, 0, (int)llen);
                 lcn = nextLcn;
             }
         }

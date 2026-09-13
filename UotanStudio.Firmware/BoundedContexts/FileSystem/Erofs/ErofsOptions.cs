@@ -38,6 +38,8 @@ public sealed class ErofsOptions
     internal Dictionary<ErofsCompressionAlgorithm, ErofsOptions>? SourceCompressionOptions { get; set; }
     internal bool SourceMtimeFeature { get; set; }
     internal byte[]? SourceVolumeNameBytes { get; set; }
+    internal CancellationToken CancellationToken { get; set; }
+    internal bool OptimizeCompression { get; set; }
 
     public bool UseCompactedIndexes { get; set; } = true;
 

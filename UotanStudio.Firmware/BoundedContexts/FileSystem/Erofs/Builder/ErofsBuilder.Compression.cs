@@ -54,8 +54,11 @@ public sealed partial class ErofsBuilder
 
     private static PclusterPlan[]? TryPlanCompressed(BuildNode node, int blockSize, ErofsOptions options)
     {
-
-
+        // LZ4's upstream destSize API safely supports byte-granular clusters. The
+        // other codecs retain the established logical-cluster planner until their
+        // window-specific destSize encoders are available.
+        if (options.OptimizeCompression && options.Algorithm == ErofsCompressionAlgorithm.Lz4)
+            return TryPlanDenseCompressed(node, blockSize, options);
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
         var clusterSize = node.LogicalClusterSize;
         if (options.Algorithm == ErofsCompressionAlgorithm.Lz4 && options.Lz4MaxDistance != 0
@@ -68,6 +71,7 @@ public sealed partial class ErofsBuilder
         var clusterIndex = 0L;
         while (clusterIndex < totalClusters)
         {
+            options.CancellationToken.ThrowIfCancellationRequested();
 
             var acceptedLen = 0;
             var acceptedOut = 0;
@@ -163,10 +167,11 @@ public sealed partial class ErofsBuilder
     private static void WriteCompressedData(Stream output, BuildNode node, int blockSize, ErofsOptions options)
     {
         using var fs = new FileStream(node.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var raw = new byte[node.LogicalClusterSize * 64];
+        var raw = new byte[node.Pclusters!.Max(p => p.SourceLength)];
         var compressed = new byte[ErofsCompression.MaximumOutputSize((ErofsAlgorithm)options.Algorithm, raw.Length)];
         foreach (var p in node.Pclusters!)
         {
+            options.CancellationToken.ThrowIfCancellationRequested();
             fs.Position = p.SourceOffset;
             fs.ReadExactly(raw, 0, p.SourceLength);
             if (p.Plain)
@@ -245,14 +250,19 @@ public sealed partial class ErofsBuilder
         {
             var plan = pclusters[pclusterIndex];
             var headCluster = plan.SourceOffset / node.LogicalClusterSize;
-            var coveredClusters = CeilDiv(plan.SourceLength, node.LogicalClusterSize);
+            var coveredClusters = PlanEndCluster(node, pclusterIndex) - headCluster;
             var entry = new byte[ZErofsLclusterIndex.Size];
-            if (c == headCluster)
+            if (c >= PlanEndCluster(node, pclusterIndex))
+            {
+                // Upstream z_erofs_fini_full_indexes: a final PLAIN index marks EOF.
+                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), (ushort)(node.Size % node.LogicalClusterSize));
+            }
+            else if (c == headCluster)
             {
 
 
                 BinaryPrimitives.WriteUInt16LittleEndian(entry, plan.Plain ? ZErofsLclusterIndex.LclusterTypePlain : ZErofsLclusterIndex.LclusterTypeHead1);
-                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), 0);
+                BinaryPrimitives.WriteUInt16LittleEndian(entry.AsSpan(2), (ushort)(plan.SourceOffset % node.LogicalClusterSize));
                 BinaryPrimitives.WriteUInt32LittleEndian(entry.AsSpan(4), plan.BlockAddress);
             }
             else
@@ -337,13 +347,20 @@ public sealed partial class ErofsBuilder
                 {
                     var plan = pclusters[pclusterIndex];
                     var headCluster = plan.SourceOffset / node.LogicalClusterSize;
-                    var coveredClusters = CeilDiv(plan.SourceLength, node.LogicalClusterSize);
-                    if (entryIndex == headCluster)
+                    var coveredClusters = PlanEndCluster(node, pclusterIndex) - headCluster;
+                    if (entryIndex >= PlanEndCluster(node, pclusterIndex))
+                    {
+                        type = 0;
+                        offset = (uint)(node.Size % node.LogicalClusterSize);
+                        if (dummyHead) blkaddr++;
+                        dummyHead = true;
+                    }
+                    else if (entryIndex == headCluster)
                     {
 
 
                         type = plan.Plain ? (byte)0 : (byte)1;
-                        offset = 0;
+                        offset = (uint)(plan.SourceOffset % node.LogicalClusterSize);
                         if (dummyHead)
                         {
                             blkaddr++;

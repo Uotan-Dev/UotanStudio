@@ -129,8 +129,15 @@ public sealed class ErofsFormatHandler : IFormatHandler
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
-                    return FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes.");
+                IReadOnlyDictionary<string, string>? rebuildReport = null;
+                if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName,
+                    cancellationToken, report => rebuildReport = report))
+                {
+                    var summary = "Packed the filesystem using preserved source attributes.";
+                    if (rebuildReport is not null && rebuildReport.TryGetValue("FitsSourceFilesystemSize", out var fits))
+                        summary += $" Compression sizing fit: {fits}.";
+                    return FirmwareOpResult.Ok(summary, metadata: rebuildReport);
+                }
                 if (!Directory.Exists(inputPath))
                 {
                     return FirmwareOpResult.Fail($"Input path is not a directory: '{inputPath}'.");
