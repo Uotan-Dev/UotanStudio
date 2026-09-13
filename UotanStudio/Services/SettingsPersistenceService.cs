@@ -132,6 +132,18 @@ public class AppSettings
     [JsonPropertyName("recentProjects")]
     public List<string> RecentProjects { get; set; } = [];
 
+    /// <summary>
+    /// <para>获取或设置设为"当前签名"的 ADB 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>
+    /// Gets or sets the Id of the ADB key library entry set as the "current signature"; empty string means the runtime identity auto-generated at startup.
+    /// </summary>
+    public string AdbDefaultKeyId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// <para>获取或设置设为"当前签名"的 HDC 密钥库条目 Id；空字符串表示使用启动自动生成的运行时身份。</para>
+    /// Gets or sets the Id of the HDC key library entry set as the "current signature"; empty string means the runtime identity auto-generated at startup.
+    /// </summary>
+    public string HdcDefaultKeyId { get; set; } = string.Empty;
+
     /// <summary>Preserves settings from temporarily unavailable features without activating them.</summary>
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? AdditionalSettings { get; set; }
@@ -201,6 +213,7 @@ public class AppSettings
 [JsonSerializable(typeof(Workspace.WorkspaceSessionSnapshot))]
 [JsonSerializable(typeof(ThemeMode))]
 [JsonSerializable(typeof(UotanStudio.Services.Logging.LogFileRecord))]
+[JsonSerializable(typeof(Dictionary<string, bool>))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -339,6 +352,41 @@ public class SettingsPersistenceService
         var settings = LoadSettings();
         settings.RecentProjects = recentProjects ?? [];
         SaveSettings(settings);
+    }
+
+    /// <summary>
+    /// <para>更新设为"当前签名"的默认密钥 Id：以磁盘上最新设置为基础合并写入，避免覆盖其他设置项。</para>
+    /// Updates the default key Id set as the "current signature": merges on top of the latest settings on
+    /// disk so other settings are never overwritten.
+    /// </summary>
+    /// <param name="kind">
+    /// <para>密钥类型，"Adb" 写入 <see cref="AdbDefaultKeyId"/>，"Hdc" 写入 <see cref="HdcDefaultKeyId"/>。</para>
+    /// The key kind: "Adb" writes <see cref="AdbDefaultKeyId"/>, "Hdc" writes <see cref="HdcDefaultKeyId"/>.
+    /// </param>
+    /// <param name="keyId">
+    /// <para>默认密钥 Id；null 视为空字符串（恢复使用运行时身份）。</para>
+    /// The default key Id; null is treated as an empty string (fall back to the runtime identity).
+    /// </param>
+    /// <returns>
+    /// <para>是否保存成功。</para>
+    /// Whether the settings were saved successfully.
+    /// </returns>
+    public bool UpdateDefaultKeyId(string kind, string? keyId)
+    {
+        var settings = LoadSettings();
+        var value = keyId ?? string.Empty;
+        switch (kind)
+        {
+            case "Adb":
+                settings.AdbDefaultKeyId = value;
+                break;
+            case "Hdc":
+                settings.HdcDefaultKeyId = value;
+                break;
+            default:
+                return false;
+        }
+        return TrySaveSettings(settings, out _);
     }
 
     /// <summary>

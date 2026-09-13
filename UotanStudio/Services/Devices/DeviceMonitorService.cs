@@ -98,18 +98,43 @@ public sealed class DeviceMonitorService : IDisposable
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
         string? previous = null;
+        // server 不存在（连接被拒绝）时按退避拉长轮询间隔，避免每 3 秒固定产生
+        // 一组首次机会异常（SocketException + 取消超时）；探测到 server 后恢复 3 秒。
+        // When the server is absent (connection refused), back off the polling interval to
+        // avoid emitting a fixed batch of first-chance exceptions every 3 seconds
+        // (SocketException + cancellation timeout); restore 3 s once a server is seen.
+        var intervalMs = 3000;
         try
         {
-            while (await timer.WaitForNextTickAsync(ct).ConfigureAwait(false))
+            while (true)
             {
-                string snapshot;
-                try
+                var nextTick = timer.WaitForNextTickAsync(ct).AsTask();
+                if (intervalMs != 3000)
                 {
-                    using var server = new HdcServerClient();
-                    snapshot = System.Text.Encoding.UTF8.GetString(await server.ExecuteAsync(
-                        string.Empty, "list targets -v", 1500, ct).ConfigureAwait(false));
+                    var delay = Task.Delay(intervalMs, ct);
+                    await Task.WhenAny(nextTick, delay).ConfigureAwait(false);
+                    if (!nextTick.IsCompleted) continue;
                 }
-                catch (Exception) when (!ct.IsCancellationRequested) { snapshot = string.Empty; }
+                if (!await nextTick.ConfigureAwait(false)) return;
+
+                string snapshot;
+                var listening = DebugBridgeRoute.UseHdcServer();
+                if (listening)
+                {
+                    intervalMs = 3000;
+                    try
+                    {
+                        using var server = new HdcServerClient();
+                        snapshot = System.Text.Encoding.UTF8.GetString(await server.ExecuteAsync(
+                            string.Empty, "list targets -v", 1500, ct).ConfigureAwait(false));
+                    }
+                    catch (Exception) when (!ct.IsCancellationRequested) { snapshot = string.Empty; }
+                }
+                else
+                {
+                    intervalMs = Math.Min(intervalMs * 2, 60000);
+                    snapshot = string.Empty;
+                }
                 if (snapshot == previous) continue;
                 previous = snapshot;
                 lock (_sync)

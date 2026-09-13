@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using UotanStudio.Comm.Protocols.Adb;
+using UotanStudio.Comm.Protocols.Hdc;
 
 namespace UotanStudio.Services.Keys;
 
@@ -172,6 +173,101 @@ public sealed class KeyLibraryService
             return target;
         }
         finally { if (Directory.Exists(staging)) Directory.Delete(staging, true); }
+    }
+
+    /// <summary>按指纹查找库中已有的密钥。 Finds an existing library key by fingerprint.</summary>
+    /// <param name="kind">The key purpose to match. 要匹配的密钥用途。</param>
+    /// <param name="fingerprint">The fingerprint to match, compared ordinally ignoring case. 要匹配的指纹，忽略大小写的序数比较。</param>
+    /// <returns>The matching key, or null when not found. 匹配的密钥；未找到时为 null。</returns>
+    public ManagedKey? FindByFingerprint(ManagedKeyKind kind, string fingerprint)
+    {
+        if (string.IsNullOrEmpty(fingerprint)) return null;
+        return List().FirstOrDefault(k => k.Kind == kind &&
+            string.Equals(k.Fingerprint, fingerprint, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Computes the SPKI SHA-256 fingerprint of the current runtime identity private key for a purpose; null when the file is missing or unreadable.</summary>
+    /// <summary>计算指定用途当前运行时身份私钥的 SPKI SHA-256 指纹；文件缺失或不可读时为 null。</summary>
+    /// <param name="kind">The key purpose; must be Adb or Hdc. 密钥用途；必须为 Adb 或 Hdc。</param>
+    /// <returns>The fingerprint in the same "SHA256:" form as <see cref="ManagedKey.Fingerprint"/>, or null. 与 <see cref="ManagedKey.Fingerprint"/> 相同格式的 "SHA256:" 指纹；否则为 null。</returns>
+    public static string? GetRuntimeIdentityFingerprint(ManagedKeyKind kind)
+    {
+        if (kind is not (ManagedKeyKind.Adb or ManagedKeyKind.Hdc)) return null;
+        var path = kind == ManagedKeyKind.Adb ? AdbAuthentication.DefaultKeyFilePath : HdcAuthentication.DefaultKeyFilePath;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+        try
+        {
+            using var rsa = LoadPrivateKey(path);
+            return "SHA256:" + Convert.ToHexString(SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                or System.Security.Cryptography.CryptographicException or InvalidDataException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>导入运行时身份私钥；若库中已存在同指纹同用途的密钥则直接返回该条目（幂等）。 Imports a runtime identity private key; returns the existing entry when a same-kind, same-fingerprint key already exists (idempotent).</summary>
+    /// <param name="name">The display name for the imported key. 导入密钥的显示名称。</param>
+    /// <param name="kind">The key purpose; must be Adb or Hdc. 密钥用途；必须为 Adb 或 Hdc。</param>
+    /// <param name="sourcePrivateKeyPath">The runtime private key file to import. 要导入的运行时私钥文件路径。</param>
+    /// <returns>The newly imported or already existing key. 新导入或已存在的密钥。</returns>
+    public ManagedKey ImportIdentity(string name, ManagedKeyKind kind, string sourcePrivateKeyPath)
+    {
+        using var rsa = LoadPrivateKey(sourcePrivateKeyPath);
+        var fingerprint = "SHA256:" + Convert.ToHexString(SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()));
+        if (FindByFingerprint(kind, fingerprint) is { } existing) return existing;
+        return Publish(name, kind, rsa);
+    }
+
+    /// <summary>将库中的密钥发布为运行时身份（原子替换目标私钥与公钥文件）。 Publishes a library key as the runtime identity (atomically replaces the target private and public key files).</summary>
+    /// <param name="key">The library key to publish; must be an Adb or Hdc key. 要发布的库中密钥；必须为 Adb 或 Hdc 密钥。</param>
+    public void PublishDefault(ManagedKey key) => PublishDefault(key, key.Kind == ManagedKeyKind.Adb
+        ? AdbAuthentication.DefaultKeyFilePath : HdcAuthentication.DefaultKeyFilePath);
+
+    /// <summary>Publishes a library key to an explicit runtime identity path; used by tests and the default overload.</summary>
+    /// <summary>把库中密钥发布到显式指定的运行时身份路径；供测试与默认重载使用。</summary>
+    /// <param name="key">The library key to publish; must be an Adb or Hdc key. 要发布的库中密钥；必须为 ADB 或 HDC 密钥。</param>
+    /// <param name="target">The runtime private key file path to replace. 要替换的运行时私钥文件路径。</param>
+    internal void PublishDefault(ManagedKey key, string target)
+    {
+        if (key.Kind is not (ManagedKeyKind.Adb or ManagedKeyKind.Hdc))
+            throw new InvalidOperationException("仅 ADB/HDC 密钥可以发布为运行时身份。");
+        var requiredBits = key.Kind == ManagedKeyKind.Adb ? 2048 : 3072;
+        if (key.Bits != requiredBits) throw new InvalidDataException("密钥位数与用途不匹配。");
+        var source = PrivatePath(key);
+        var publicKey = source + ".pub";
+        if (!File.Exists(publicKey)) throw new InvalidDataException("缺少公钥文件，无法发布。");
+
+        var directory = Path.GetDirectoryName(target) ?? throw new InvalidDataException("无效的目标路径。");
+        Directory.CreateDirectory(directory);
+        var name = Path.GetFileName(target);
+        var privateTemporary = Path.Combine(directory, "." + name + "-" + Guid.NewGuid().ToString("N") + ".tmp");
+        var publicTemporary = Path.Combine(directory, "." + name + "-" + Guid.NewGuid().ToString("N") + ".tmp");
+        try
+        {
+            using (var rsa = LoadPrivateKey(source))
+            {
+                if (rsa.KeySize != requiredBits) throw new InvalidDataException("密钥位数与用途不匹配。");
+            }
+            var publicBytes = ReadBounded(publicKey);
+            try
+            {
+                Write(privateTemporary, ReadBounded(source));
+                Write(publicTemporary, publicBytes);
+                File.Move(privateTemporary, target, overwrite: true);
+                File.Move(publicTemporary, target + ".pub", overwrite: true);
+            }
+            finally { CryptographicOperations.ZeroMemory(publicBytes); }
+
+            if (key.Kind == ManagedKeyKind.Adb) { using var _ = AdbAuthentication.LoadOrCreate(target); }
+            else { using var _ = HdcAuthentication.LoadOrCreate(target); }
+        }
+        finally
+        {
+            File.Delete(privateTemporary);
+            File.Delete(publicTemporary);
+        }
     }
 
     private ManagedKey Publish(string name, ManagedKeyKind kind, RSA rsa)
