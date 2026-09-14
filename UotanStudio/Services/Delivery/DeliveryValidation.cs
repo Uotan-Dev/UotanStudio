@@ -10,8 +10,9 @@ internal static class DeliveryValidation
             "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9" }
             .Contains(value.Split('.')[0], StringComparer.OrdinalIgnoreCase);
 
-    internal static bool IsPartition(string value) => value is not null && value.Length is > 0 and <= 36
-        && value.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
+    internal static bool IsPartition(string value, bool payload = false) => value is not null && value.Length is > 0 and <= 36
+        && value[0] != '-'
+        && value.All(c => char.IsAsciiLetterOrDigit(c) || c == '_' || payload && c == '-');
 
     internal static void Validate(DeliveryPlan plan, bool sources = true)
     {
@@ -58,7 +59,7 @@ internal static class DeliveryValidation
         }
         foreach (var file in plan.Container)
         {
-            if (!IsPartition(file.Partition)) throw new InvalidDataException($"分区名无效 / Invalid partition: {file.Partition}");
+            if (!IsPartition(file.Partition, plan.PackPayload)) throw new InvalidDataException($"分区名无效 / Invalid partition: {file.Partition}");
             if (sources && file.SourcePath.Length > 0)
                 CheckSource(file, plan.Super.AutoZero && file.Partition.EndsWith("_b", StringComparison.Ordinal));
         }

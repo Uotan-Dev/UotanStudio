@@ -107,6 +107,12 @@ internal static class DeliverySuperBuilder
                             detailProgress?.Report(new(percent, "Converting Sparse", (input.Position, input.Length), "Delivery_ProgressSparse"));
                         }, token);
                     SparseImageConverter.ConvertRawToSparse(input, tracked, options.BlockSize, input.Length);
+                    var rawBytes = input.Length;
+                    var sparseBytes = destination.Length;
+                    var saved = rawBytes - sparseBytes;
+                    var ratio = rawBytes <= 0 ? 0d : saved * 100d / rawBytes;
+                    detailProgress?.Report(new(99, "Converting Sparse", (rawBytes, rawBytes), "Delivery_ProgressSparse",
+                        Detail: $"RAW {FormatSize(rawBytes)} → Sparse {FormatSize(sparseBytes)} ({(saved >= 0 ? "saved" : "larger")} {Math.Abs(ratio):0.##}%)"));
                 }
                 else File.Move(raw, temporary);
             }
@@ -117,6 +123,15 @@ internal static class DeliverySuperBuilder
         }
         finally { File.Delete(raw); File.Delete(temporary); }
     }, token);
+
+    private static string FormatSize(long bytes)
+    {
+        string[] units = ["B", "KiB", "MiB", "GiB", "TiB"];
+        var value = (double)bytes;
+        var index = 0;
+        while (Math.Abs(value) >= 1024 && index < units.Length - 1) { value /= 1024; index++; }
+        return $"{value:0.##} {units[index]}";
+    }
 }
 
 /// <summary>Non-owning write adapter providing bounded-frequency progress and cancellation for synchronous codecs.</summary>

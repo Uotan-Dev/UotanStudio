@@ -3,6 +3,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
+using UotanStudio.Services.Firmware;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -22,6 +23,7 @@ internal sealed partial class DeliveryImage : ObservableObject
         IncludeInSuper = file.IncludeInSuper;
         Fastbootd = file.Fastbootd;
         IsAutoZero = file.AutoZero;
+        SourceFormat = FilePath is null ? "generated" : DetectSourceFormat(FilePath);
     }
 
     public string? FilePath { get; }
@@ -30,13 +32,24 @@ internal sealed partial class DeliveryImage : ObservableObject
     public bool IsZeroSize => FilePath is null && !Generated && !IsAutoZero;
     internal IReadOnlySet<string>? SourceDynamicPartitions { get; set; }
     [ObservableProperty] private bool _showSuperChoice;
-    public string Name => FileName.Length > 0 ? FileName : PartitionName;
-    public string Description => Generated ? LanguageService.Instance.GetString("Delivery_PendingImage") : FilePath ?? "0 B";
+    public string Name => IsAutoZero
+        ? $"{(FileName.Length > 0 ? FileName : PartitionName)} (B 槽 · 只读)"
+        : FileName.Length > 0 ? FileName : PartitionName;
+    public string Description => Generated ? LanguageService.Instance.GetString("Delivery_PendingImage") :
+        $"{FilePath ?? "0 B"} · {SourceFormat.ToUpperInvariant()} · {(IsReadOnly ? "read-only" : "read-write")}";
+    public string SourceFormat { get; }
+    public bool IsReadOnly => !string.Equals(SourceFormat, "ext4", StringComparison.OrdinalIgnoreCase);
+    public string SourceDisplay => string.IsNullOrEmpty(GroupName) ? SourceFormat.ToUpperInvariant() : $"{GroupName} · {SourceFormat.ToUpperInvariant()}";
     public string DisplaySize => Generated ? LanguageService.Instance.GetString("Delivery_PendingImage") : SizeBytes is { } size ? $"{size:N0} B" : IsZeroSize ? "0 B" : "—";
     internal void RefreshLanguage()
     {
         OnPropertyChanged(nameof(Description));
         OnPropertyChanged(nameof(DisplaySize));
+    }
+    private static string DetectSourceFormat(string path)
+    {
+        try { return ImageInputService.DetectFormat(path); }
+        catch { return "unknown"; }
     }
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _fileName = "";
     [ObservableProperty, NotifyPropertyChangedFor(nameof(Name))] private string _partitionName = "";
@@ -48,7 +61,7 @@ internal sealed partial class DeliveryImage : ObservableObject
     [ObservableProperty] private bool _isDefault;
     [ObservableProperty] private bool _fastbootd;
     [ObservableProperty] private bool _includeInSuper;
-    [ObservableProperty] private bool _isAutoZero;
+    [ObservableProperty, NotifyPropertyChangedFor(nameof(Name)), NotifyPropertyChangedFor(nameof(Description))] private bool _isAutoZero;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(DisplaySize))] private long? _sizeBytes;
 
     internal DeliveryFile Snapshot() => new()
@@ -178,7 +191,8 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         else
             Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
             {
-                Generated = true, FileName = plan.PackPayload ? "ota.zip" : DeliveryOutputService.SuperFileName(plan.Super),
+                Generated = true,
+                FileName = plan.PackPayload ? "ota.zip" : DeliveryOutputService.ContainerFileName(plan),
                 Partition = plan.PackPayload ? "payload" : "super"
             })));
         Confirmed = true;
@@ -246,8 +260,8 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         if (plan is not null)
         {
             foreach (var file in plan.Container) Container.Add(Observe(new DeliveryImage(file)));
-            foreach (var file in plan.Files) Output.Add(Observe(new DeliveryImage(plan.PackPayload && file.Generated && file.Partition == "payload"
-                ? file with { FileName = "ota.zip" } : file)));
+            foreach (var file in plan.Files) Output.Add(Observe(new DeliveryImage(file.Generated && (file.Partition == "payload" || file.Partition == "super")
+                ? file with { FileName = DeliveryOutputService.ContainerFileName(plan) } : file)));
             foreach (var item in Container.Concat(Output).Where(i => i.FilePath is not null)) _known.TryAdd(item.FilePath!, item);
             PackSuper = plan.PackSuper; PackPayload = plan.PackPayload;
             foreach (var item in Container) item.ShowSuperChoice = PackPayload;
@@ -298,7 +312,7 @@ internal sealed partial class DeliveryViewModel : ObservableObject
             // 手动编辑分区名的即时校验：非法名或与其他行重复时回退到编辑前的名字并提示；包装在 _updating 中防止回退再次递归。
             // Immediate validation for manual partition-name edits: an invalid or duplicate name rolls back to the pre-edit value with a status hint; wrapped in _updating so the rollback does not recurse.
             if (sender is DeliveryImage changedRow && changedRow.PartitionName != changedRow.PreviousPartitionName
-                && (!DeliveryValidation.IsPartition(changedRow.PartitionName)
+                && (!DeliveryValidation.IsPartition(changedRow.PartitionName, PackPayload)
                     || Container.Concat(Output).Any(i => i != changedRow && i.PartitionName == changedRow.PartitionName)))
             {
                 _updating = true;

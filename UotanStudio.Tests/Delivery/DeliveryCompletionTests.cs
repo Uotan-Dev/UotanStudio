@@ -38,7 +38,8 @@ public sealed class DeliveryCompletionTests : IDisposable
     {
         var image = Image("system"); var config = Path.Combine(_root, "postinstall.txt");
         File.WriteAllText(config, "RUN_POSTINSTALL_system=true\nPOSTINSTALL_PATH_system=bin/otapreopt_script\nFILESYSTEM_TYPE_system=ext4\nPOSTINSTALL_OPTIONAL_system=false\n");
-        var plan = new DeliveryPlan { OrganizeDirectory = false, PackPayload = true, Container = [image], OutputDirectory = Path.Combine(_root, "out"),
+        var plan = new DeliveryPlan { OrganizeDirectory = true, PackPayload = true, ContainerConfirmed = true, Container = [image], Txt = false,
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }], OutputDirectory = Path.Combine(_root, "out"),
             Payload = new() { PostinstallFile = config, BlockSize = 8192, MaxTimestamp = 1800000000, SecurityPatchLevel = "2026-09-05", Compression = compression } };
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
         var unpacked = Path.Combine(_root, "ota-content");
@@ -94,7 +95,8 @@ public sealed class DeliveryCompletionTests : IDisposable
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
         var cert = Path.Combine(_root, "cert.pem"); File.WriteAllText(cert, certificate.ExportCertificatePem());
         var privateKey = Path.Combine(_root, "key.pem"); File.WriteAllText(privateKey, key.ExportPkcs8PrivateKeyPem());
-        var plan = new DeliveryPlan { OrganizeDirectory = false, PackPayload = true, Container = [Image("boot")],
+        var plan = new DeliveryPlan { OrganizeDirectory = true, PackPayload = true, ContainerConfirmed = true, Container = [Image("boot")], Txt = false,
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
             OutputDirectory = Path.Combine(_root, "out"), DeviceCodename = "test_device",
             Payload = new() { SigningKeyPath = privateKey, MaxTimestamp = 1800000000, SecurityPatchLevel = "2026-09-05" },
             Package = new() { Ota = true, SigningKeyPath = privateKey, CertificatePath = cert,
@@ -142,6 +144,108 @@ public sealed class DeliveryCompletionTests : IDisposable
         var text = await script.ReadToEndAsync(Token);
         Assert.True(text.IndexOf("sha256sum -c", StringComparison.Ordinal) < text.IndexOf("dd if=", StringComparison.Ordinal));
         Assert.Throws<NotSupportedException>(() => DeliveryPackageBuilder.Validate(plan with { Files = [image with { Fastbootd = true }] }));
+    }
+
+    [Fact]
+    public async Task OrganizedSuperUsesRecoveryScriptLayoutAndRootImageEntry()
+    {
+        var image = Image("system") with { IncludeInSuper = true };
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = true,
+            PackSuper = true,
+            ContainerConfirmed = true,
+            Container = [image],
+            Files = [new DeliveryFile { Generated = true, Partition = "super", FileName = "super.zip" }],
+            Super = new DeliverySuperOptions { DeviceSize = 8 * 1024 * 1024 },
+            Txt = false,
+            OutputDirectory = Path.Combine(_root, "super-zip-out")
+        };
+
+        await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
+
+        var archivePath = Path.Combine(plan.OutputDirectory, "super.zip");
+        Assert.True(File.Exists(archivePath));
+        using var archive = ZipFile.OpenRead(archivePath);
+        Assert.NotNull(archive.GetEntry("super.img"));
+        Assert.Null(archive.GetEntry("images/super.img"));
+        var text = await new StreamReader(archive.GetEntry("META-INF/com/google/android/update-binary")!.Open()).ReadToEndAsync(Token);
+        Assert.Contains("OUTFD=/proc/self/fd/$2", text);
+        Assert.Contains("ZIPFILE=\"$3\"", text);
+        Assert.Contains("ui_print", text);
+        Assert.Contains("package_extract_file", text);
+        Assert.Contains("unzip -p", text);
+        Assert.Contains("/dev/block/by-name", text);
+        Assert.Contains("/dev/block/bootdevice/by-name", text);
+        Assert.Contains("\"super.img\"", text);
+    }
+
+    [Fact]
+    public async Task OrganizedSuperZipUsesVendorLayoutAndFirmwareUpdateFolder()
+    {
+        var superMember = Image("system") with { IncludeInSuper = true };
+        var firmware = Image("abl");
+        var boot = Image("boot");
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = true,
+            PackSuper = true,
+            ContainerConfirmed = true,
+            Container = [superMember],
+            Files =
+            [
+                new DeliveryFile { Generated = true, Partition = "super", FileName = "super.zip" },
+                firmware,
+                boot
+            ],
+            Super = new DeliverySuperOptions { DeviceSize = 8 * 1024 * 1024 },
+            Windows = false,
+            Linux = false,
+            MacOS = false,
+            Txt = false,
+            Recovery = true,
+            OutputDirectory = Path.Combine(_root, "super-vendor-out")
+        };
+
+        await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
+
+        using var zip = ZipFile.OpenRead(Path.Combine(plan.OutputDirectory, "super.zip"));
+        Assert.NotNull(zip.GetEntry("super.img"));
+        Assert.NotNull(zip.GetEntry("firmware-update/abl.img"));
+        Assert.NotNull(zip.GetEntry("boot.img"));
+        Assert.NotNull(zip.GetEntry("META-INF/com/google/android/update-binary"));
+        Assert.NotNull(zip.GetEntry("META-INF/com/google/android/updater-script"));
+        Assert.NotNull(zip.GetEntry("README.txt"));
+        Assert.NotNull(zip.GetEntry("checksums.sha256"));
+        Assert.DoesNotContain(zip.Entries, e => e.FullName.StartsWith("images/", StringComparison.Ordinal));
+
+        var scripts = DeliveryScriptGenerator.Generate(plan with { Windows = true, Txt = false });
+        Assert.Contains("super.img", scripts["FlashWindows.bat"]);
+        Assert.DoesNotContain("super.zip", scripts["FlashWindows.bat"]);
+        Assert.DoesNotContain("\\\\\"IMAGE", scripts["FlashWindows.bat"]);
+    }
+
+    [Theory]
+    [InlineData(false, "super.img")]
+    [InlineData(true, "super.zst")]
+    public async Task UnorganizedSuperPublishesSingleRawContainer(bool zstd, string expectedName)
+    {
+        var member = Image("system") with { IncludeInSuper = true };
+        var plan = new DeliveryPlan
+        {
+            PackSuper = true,
+            ContainerConfirmed = true,
+            Container = [member],
+            Files = [new DeliveryFile { Generated = true, Partition = "super", FileName = expectedName }],
+            Super = new DeliverySuperOptions { DeviceSize = 8 * 1024 * 1024, Zstd = zstd },
+            OrganizeDirectory = false,
+            OutputDirectory = Path.Combine(_root, "super-raw-" + zstd)
+        };
+
+        var paths = await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
+        Assert.Equal([Path.Combine(plan.OutputDirectory, expectedName)], paths);
+        Assert.True(File.Exists(paths[0]));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(plan.OutputDirectory).Where(p => !p.EndsWith(expectedName, StringComparison.OrdinalIgnoreCase)));
     }
 
     [Fact]

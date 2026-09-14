@@ -32,6 +32,8 @@ public partial class DeliveryView
         // The delivery plan persists inside the solution file: a hook captures the form state before solution saves.
         ProjectOperationsService.Instance.CaptureDeliveryState = CaptureDeliveryState;
         InitializePayloadSigningKeys();
+        ManageZipKeysButton.Click += (_, _) => MenuViewModel.ShowKeyManagerWindow();
+        InitializeZipSigningKeys();
         Composition.ReadOptions = ReadDeliverySuperOptions;
         Composition.ReadPlan = CaptureDeliveryPlan;
         Composition.Changed += (_, _) => QueueDeliveryChange();
@@ -184,6 +186,9 @@ public partial class DeliveryView
     {
         Package = new()
         {
+            Ota = PackPayloadBox.IsChecked == true,
+            SigningKeyPath = DirectOutputBox.IsChecked == true ? _zipSigningIdentityPath.Trim() : "",
+            CertificatePath = DirectOutputBox.IsChecked == true ? _zipSigningCertificatePath.Trim() : "",
             BuildFingerprint = PayloadBuildFingerprintBox.Text?.Trim() ?? "",
             Incremental = PayloadIncrementalBox.Text?.Trim() ?? "",
             SdkLevel = uint.TryParse(PayloadSdkLevelBox.Text, NumberStyles.None, CultureInfo.InvariantCulture, out var sdk) ? sdk : 0
@@ -325,6 +330,9 @@ public partial class DeliveryView
             _payloadSigningIdentityPath = plan.Payload.SigningKeyPath;
             _payloadSigningFingerprint = plan.Payload.SigningKeyFingerprint;
             RefreshPayloadSigningKeys();
+            _zipSigningIdentityPath = plan.Package.SigningKeyPath;
+            _zipSigningCertificatePath = plan.Package.CertificatePath;
+            RefreshZipSigningKeys();
             PayloadPostinstallBox.Text = plan.Payload.PostinstallFile;
             PayloadTimestampBox.Text = plan.Payload.MaxTimestamp.ToString(CultureInfo.InvariantCulture);
             PayloadSecurityPatchBox.Text = plan.Payload.SecurityPatchLevel;

@@ -321,7 +321,7 @@
     <x:String x:Key="Image_FsVerifyingImage">Verifying original image</x:String>
     <x:String x:Key="Image_FsVerifyingFiles">Verifying extracted files</x:String>
     <x:String x:Key="Image_FsReadingMetadata">Reading file attributes</x:String>
-    <x:String x:Key="Progress_ProcessedStats">Processed {0} · {2}</x:String>
+    <x:String x:Key="Progress_ProcessedStats">Processed {0} · Speed {2}</x:String>
     <x:String x:Key="Delivery_ProgressChecking">Checking inputs</x:String>
     <x:String x:Key="Delivery_ProgressSuper">Building Super</x:String>
     <x:String x:Key="Delivery_ProgressSparse">Converting Sparse</x:String>
@@ -334,8 +334,8 @@
     <x:String x:Key="Delivery_ProgressPackage">Packaging ZIP</x:String>
     <x:String x:Key="Delivery_ProgressVerify">Verifying output</x:String>
     <x:String x:Key="Delivery_ProgressDone">Output complete</x:String>
-    <x:String x:Key="Progress_Stats">{0} / {1} · {2} · {3} left</x:String>
-    <x:String x:Key="Progress_StatsNoEta">{0} / {1} · {2}</x:String>
+    <x:String x:Key="Progress_Stats">{0} / {1} · Speed {2} · {3} left</x:String>
+    <x:String x:Key="Progress_StatsNoEta">{0} / {1} · Speed {2}</x:String>
     <x:String x:Key="Delivery_DiskSpaceWarning">Insufficient disk space: {0} free on the output drive, {1} estimated for this output. Continue anyway?</x:String>
     <x:String x:Key="Delivery_DiskSpaceTitle">Insufficient disk space</x:String>
     <x:String x:Key="Delivery_DiskSpaceContinue">Continue</x:String>

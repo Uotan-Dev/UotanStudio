@@ -37,6 +37,15 @@ public sealed class PayloadOtaZipTests : IDisposable
         Assert.Empty(DeliveryScriptGenerator.Generate(plan));
         var service = new DeliveryOutputService(new NoTools());
         var paths = await service.ExportAsync(plan, token: TestContext.Current.CancellationToken);
+        if (!organize)
+        {
+            var payloadPath = Path.Combine(plan.OutputDirectory, "payload.bin");
+            Assert.Contains(payloadPath, paths);
+            Assert.True(File.Exists(payloadPath));
+            Assert.DoesNotContain(paths, p => Path.GetFileName(p) is "ota.zip" or "payload_properties.txt" or "recovery.zip");
+            await Assert.ThrowsAsync<IOException>(() => service.ExportAsync(plan, token: TestContext.Current.CancellationToken));
+            return;
+        }
         Assert.Contains(Path.Combine(plan.OutputDirectory, "ota.zip"), paths);
         Assert.DoesNotContain(paths, p => Path.GetFileName(p) is "payload.bin" or "payload_properties.txt" or "recovery.zip");
         var zipPath = Path.Combine(plan.OutputDirectory, "ota.zip");

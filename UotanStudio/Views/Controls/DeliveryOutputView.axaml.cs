@@ -87,8 +87,12 @@ public partial class DeliveryOutputView : UserControl
     {
         if (!outputEnabled && OutputSettings.IsEnabled) OutputImages.CommitEdit();
         OutputSettings.IsEnabled = outputEnabled;
-        _editorEnabled = editorEnabled;
-        DocumentPane.IsEnabled = editorEnabled && _model?.IsRunning != true;
+        // The script editor follows the output-image panel. Before the image
+        // composition is confirmed both surfaces must be read-only together.
+        // 脚本编辑器必须与输出镜像面板保持同一交互状态；编排未确认时两者同时禁止操作。
+        _editorEnabled = outputEnabled && editorEnabled;
+        DocumentPane.IsEnabled = _editorEnabled && _model?.IsRunning != true;
+        ScriptSettingsExpander.IsEnabled = outputEnabled && _model?.PackPayload != true;
         // 仅生成Super_Empty 时输出设置禁用，但底部进度条与开始输出按钮保持可用；其余场景随输出设置启用。
         // With Super_Empty only the output settings are disabled while the footer stays available; otherwise it follows the settings.
         OutputFooter.IsEnabled = outputEnabled || emptyOnly;
@@ -136,6 +140,7 @@ public partial class DeliveryOutputView : UserControl
             RecoveryScriptBox.IsEnabled = !payload;
         }
         finally { _syncing = previous; }
+        ScriptSettingsExpander.IsEnabled = OutputSettings.IsEnabled && !payload;
         UpdateRecoveryAvailability();
         NotifyChanged();
     }
@@ -168,7 +173,8 @@ public partial class DeliveryOutputView : UserControl
 
     private bool IsRecoverySupported()
     {
-        if (_model is null || _model.PackPayload || _model.PackSuper || !_model.OrganizeDirectory) return false;
+        if (_model is null || _model.PackPayload || !_model.OrganizeDirectory) return false;
+        if (_model.PackSuper) return _model.Output.Any(i => i.Generated && i.PartitionName == "super");
         var files = _model.Output.Where(i => !i.Generated).Select(i => i.Snapshot()).ToArray();
         return files.Length > 0
             && files.Any(file => !file.Optional || file.Default)
@@ -209,7 +215,7 @@ public partial class DeliveryOutputView : UserControl
         var files = _model!.Output.Select(i => i.Snapshot()).ToList();
         return plan with
         {
-            Package = new() { Ota = plan.PackPayload },
+            Package = plan.Package with { Ota = plan.PackPayload },
             Files = files, Recovery = RecoveryRequested, Txt = TxtScriptBox.IsChecked == true && !_txtScriptBlockedByZstd, TxtVariants = true,
             Windows = BatchShellScriptBox.IsChecked == true, Linux = BatchShellScriptBox.IsChecked == true, MacOS = BatchShellScriptBox.IsChecked == true,
             AskWipe = false, Reboot = false,
@@ -266,18 +272,12 @@ public partial class DeliveryOutputView : UserControl
             BatchShellScriptBox.IsChecked = !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS);
             DeviceCodenameBox.Text = plan.DeviceCodename; AuthorInfoBox.Text = plan.Information;
             _documents.Clear(); _allDocuments.Clear(); _activeDocument = null;
-            foreach (var (name, text) in plan.Scripts)
-            {
-                // Drop only the untouched placeholder created by older versions; retain saved edits.
-                // 仅忽略旧版自动创建且未编辑的占位文档，保留已保存的编辑内容。
-                if (name == "script.txt" && text.Length == 0 && !plan.GeneratedScripts.ContainsKey(name)) continue;
-                var doc = new DeliveryScriptDocument(name) { Baseline = plan.GeneratedScripts.GetValueOrDefault(name), CaretOffset = Math.Max(0, plan.ScriptCarets.GetValueOrDefault(name)) };
-                doc.Document.Text = text; _allDocuments.Add(name, doc);
-                if (plan.OpenScripts.Contains(name)) _documents.Add(doc);
-            }
-            _fingerprint = plan.ScriptFingerprint;
-            if (_documents.Count > 0) DocumentTabs.SelectedItem = _documents[0];
-            else ClearEditor();
+            // Script bodies are derived artifacts. Do not restore persisted text
+            // or its fingerprint: QueueDeliveryChange will generate scripts from
+            // the current plan after the restored controls and image list settle.
+            // 脚本正文属于派生内容，还原时一律丢弃，待当前计划稳定后重新生成，避免沿用旧文件。
+            _fingerprint = "";
+            ClearEditor();
             UpdateRecoveryAvailability();
         }
         finally { _syncing = false; }

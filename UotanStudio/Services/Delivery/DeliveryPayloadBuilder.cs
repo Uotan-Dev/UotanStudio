@@ -25,7 +25,7 @@ internal static class DeliveryPayloadBuilder
         _ = DeliveryPostinstall.Read(plan.Payload.PostinstallFile, plan.Container.Select(f => f.Partition));
         if (plan.Payload.SigningKeyPath.Length == 0 && plan.Payload.SigningKeyFingerprint.Length > 0)
             throw new InvalidDataException("签名密钥路径缺失 / Signing key path is missing.");
-        if (plan.Container.Count == 0 || plan.Container.Any(f => !DeliveryValidation.IsPartition(f.Partition) || f.SourcePath.Length == 0)
+        if (plan.Container.Count == 0 || plan.Container.Any(f => !DeliveryValidation.IsPartition(f.Partition, payload: true) || f.SourcePath.Length == 0)
             || plan.Container.Select(f => f.Partition).Distinct(StringComparer.Ordinal).Count() != plan.Container.Count)
             throw new InvalidDataException("Payload 需要名称唯一的实际分区镜像 / Payload requires unique source partitions.");
     }

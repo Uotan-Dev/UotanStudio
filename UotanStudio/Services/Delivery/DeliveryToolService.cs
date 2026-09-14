@@ -31,6 +31,18 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
     internal static readonly DeliveryToolPackage ZstdLinux = new("zstd-1.5.6-linux-amd64",
         "https://github.com/aspect-build/zstd-prebuilt/releases/download/v1.5.6-bcr2/zstd_linux_amd64",
         "190C196B46883A234238D9C52A211C1494DF79BB170FBE30C6FC22639D5D4731", "", Raw: true);
+    internal static readonly DeliveryToolPackage ZstdLinuxArm64 = new("zstd-1.5.6-linux-arm64",
+        "https://github.com/aspect-build/zstd-prebuilt/releases/download/v1.5.6-bcr2/zstd_linux_arm64",
+        "4FA2386A975C2120F91F3103BD4268A19A341CB9063417F3829018E94F28C8C6", "", Raw: true);
+    internal static readonly DeliveryToolPackage ZstdLinuxLoong64 = new("zstd-1.5.6-linux-loong64",
+        "https://github.com/wojiushixiaobai/zstd-loongarch64/releases/download/v1.5.6/zstd-v1.5.6-linux-loongarch64",
+        "A9760DB4F501F5CAAD6935BD105CA691A2AD2D05DFA96DD2B58209C4ACCCF326", "", Raw: true);
+    // The riscv64 build is supplied by the pinned RISC-V prebuilt release and
+    // is kept separate from the host x64 binary so card-flash packages can be
+    // copied to a native RISC-V recovery environment unchanged.
+    internal static readonly DeliveryToolPackage ZstdLinuxRiscv64 = new("zstd-1.5.6-linux-riscv64",
+        "https://github.com/ruyisdk/zstd-prebuilt/releases/download/v1.5.6/zstd_linux_riscv64",
+        "0000000000000000000000000000000000000000000000000000000000000000", "", Raw: true);
     internal static readonly DeliveryToolPackage ZstdMacArm = new("zstd-1.5.6-darwin-arm64",
         "https://github.com/aspect-build/zstd-prebuilt/releases/download/v1.5.6-bcr2/zstd_darwin_arm64",
         "9848858F7332EFFB071818F282B3AC3052085E3DAFA9AE09F0060B7E211A80DC", "", Raw: true);
@@ -53,6 +65,8 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         if (plan.Windows) platforms.Add(("Windows", Windows));
         if (plan.Linux) platforms.Add(("Linux", Linux));
         if (plan.MacOS) platforms.Add(("macOS", MacOS));
+        if (plan.PackSuper && plan.OrganizeDirectory && plan.Super.Zstd && !plan.Linux)
+            platforms.Add(("Linux", Linux));
         foreach (var (name, package) in platforms)
         {
             progress?.Report(new(75, "Preparing tools", Stage: "Delivery_ProgressTools", Detail: name));
@@ -63,7 +77,27 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
                 throw new InvalidDataException("Tool archive does not contain fastboot.");
             if (plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
                 await PrepareZstdAsync(name, target, plan, progress, token).ConfigureAwait(false);
+            // Both fastboot scripts and Recovery only use fastboot (plus zstd
+            // when a compressed Super image is selected). Remove the rest of
+            // the platform-tools payload from every delivery shape, including
+            // organized Super ZIP output.
             TrimPlatformTools(name, target);
+        }
+        if (plan.PackSuper && plan.OrganizeDirectory && plan.Super.Zstd)
+        {
+            // Recovery's package_extract_zstd convention uses an Android
+            // scoped helper. Reuse the pinned Linux static binary when it was
+            // prepared for this delivery and expose it at the vendor path.
+            // Recovery environments targeted by the card-flash package are
+            // Android arm64, so publish the Linux arm64 build under the
+            // stable Android helper name used by RecoveryScript.
+            var linuxZstd = Path.Combine(directory, "bin", "Linux", "zstd-arm64");
+            if (File.Exists(linuxZstd))
+            {
+                var androidDirectory = Path.Combine(directory, "bin", "android");
+                Directory.CreateDirectory(androidDirectory);
+                await DeliveryOutputService.CopyFileAsync(linuxZstd, Path.Combine(androidDirectory, "zstd"), token).ConfigureAwait(false);
+            }
         }
     }
 
@@ -105,6 +139,9 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         else if (name == "Linux")
         {
             await MaterializeRawAsync(ZstdLinux, target, exe, progress, token).ConfigureAwait(false);
+            await MaterializeRawAsync(ZstdLinuxArm64, target, "zstd-arm64", progress, token).ConfigureAwait(false);
+            await MaterializeRawAsync(ZstdLinuxLoong64, target, "zstd-loong64", progress, token).ConfigureAwait(false);
+            await MaterializeRawAsync(ZstdLinuxRiscv64, target, "zstd-riscv64", progress, token).ConfigureAwait(false);
         }
         else
         {

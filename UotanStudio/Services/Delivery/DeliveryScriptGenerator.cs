@@ -7,6 +7,8 @@ namespace UotanStudio.Services.Delivery;
 /// <summary>Generates scripts from one validated plan; never executes device commands.</summary>
 internal static partial class DeliveryScriptGenerator
 {
+    private static string ImagePath(DeliveryPlan plan, DeliveryFile file)
+        => plan.PackSuper ? DeliveryOutputService.OrganizedImageRelativePath(file).Replace('\\', '/') : "images/" + file.FileName;
     internal static string Fingerprint(DeliveryPlan plan) => Convert.ToHexString(SHA256.HashData(
         JsonSerializer.SerializeToUtf8Bytes(plan with { Scripts = [], GeneratedScripts = [], OpenScripts = [], ScriptCarets = [], ScriptFingerprint = "", OutputDirectory = "" },
             DeliveryJsonContext.Default.DeliveryPlan)));
@@ -22,7 +24,11 @@ internal static partial class DeliveryScriptGenerator
         var flashFiles = plan.Files.Where(f => !f.FileName.Equals("payload.bin", StringComparison.OrdinalIgnoreCase) && f.Partition != "payload"
             // super_empty.img 是附加布局文件，不是可刷写的分区镜像，不进入任何刷写脚本与清单。
             // super_empty.img is an auxiliary layout file, not a flashable partition image; keep it out of scripts and manifests.
-            && f.Partition != "super_empty").ToList();
+            && f.Partition != "super_empty")
+            .Select(f => f.Generated && f.Partition == "super"
+                ? f with { Generated = false, FileName = DeliveryOutputService.SuperFileName(plan.Super) }
+                : f)
+            .ToList();
         if (flashFiles.Count == 0) return result;
         plan = plan with { Files = flashFiles };
         var groups = plan.Files.GroupBy(f => f.Partition, StringComparer.Ordinal).Select(g => g.ToArray()).ToArray();
@@ -37,7 +43,7 @@ internal static partial class DeliveryScriptGenerator
             // The TXT flasher cannot decompress zstd, so compressed images (e.g. super.zst) are excluded
             // from the manifest instead of being flashed as raw compressed data; Shell/Batch keep their steps.
             static bool IsZstd(DeliveryFile f) => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase);
-            result.Add("flash.txt", Txt(defaults.Where(f => !IsZstd(f))));
+            result.Add("flash.txt", Txt(plan, defaults.Where(f => !IsZstd(f))));
             if (plan.TxtVariants)
                 foreach (var group in groups)
                     foreach (var alternative in group.Where(f => f.Optional && !f.Default && !IsZstd(f)))
@@ -46,7 +52,7 @@ internal static partial class DeliveryScriptGenerator
                             : g.FirstOrDefault(f => f.Default) ?? g[0]).Where(f => f == alternative || !f.Optional || f.Default)
                             .Where(f => !IsZstd(f)).ToArray();
                         if (variant.Length > 0)
-                            result.Add("flash-" + Path.GetFileNameWithoutExtension(alternative.FileName) + ".txt", Txt(variant));
+                            result.Add("flash-" + Path.GetFileNameWithoutExtension(alternative.FileName) + ".txt", Txt(plan, variant));
                     }
         }
         if (plan.Recovery && !plan.PackPayload) result.Add("Recovery.sh", DeliveryPackageBuilder.RecoveryScript(plan));
@@ -67,7 +73,7 @@ internal static partial class DeliveryScriptGenerator
         catch (FormatException) { return fallback; }
     }
 
-    private static string Txt(IEnumerable<DeliveryFile> files) => string.Concat(files.Select(f => $"{f.Partition} images/{f.FileName}\r\n"));
+    private static string Txt(DeliveryPlan plan, IEnumerable<DeliveryFile> files) => string.Concat(files.Select(f => $"{f.Partition} {ImagePath(plan, f)}\r\n"));
     private static string Sh(string value) => "'" + value.Replace("'", "'\"'\"'") + "'";
 
     private static string Shell(DeliveryPlan plan, DeliveryFile[][] groups, string platform, Func<string, string>? localize)
@@ -84,18 +90,24 @@ internal static partial class DeliveryScriptGenerator
             b.AppendLine($"product=$(\"$TOOLS/fastboot\" getvar product 2>&1) || die {Sh(T(localize, "ReadProduct", "Unable to read device product."))}");
             b.AppendLine($"printf '%s\\n' \"$product\" | tr -d '\\r' | grep -Eq {Sh("^(\\(bootloader\\) )?product: *" + plan.DeviceCodename.Replace(".", @"\.") + "$")} || die {Sh(T(localize, "DeviceMismatch", "Device mismatch."))}");
         }
-        foreach (var f in plan.Files) b.AppendLine($"[ -f \"$ROOT/images/{f.FileName}\" ] || die {Sh(T(localize, "MissingImage", "Missing image: {0}", f.FileName))}");
+        foreach (var f in plan.Files) b.AppendLine($"[ -f \"$ROOT/{ImagePath(plan, f)}\" ] || die {Sh(T(localize, "MissingImage", "Missing image: {0}", f.FileName))}");
         if (plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
         {
             // macOS 随包包含 arm64（zstd）与 x86_64（zstd-x86_64）两个二进制，按运行架构选择。
             // The macOS bundle ships both arm64 (zstd) and x86_64 (zstd-x86_64) binaries; pick by runtime architecture.
-            b.AppendLine(platform == "macOS"
-                ? "ZSTD=\"$TOOLS/zstd\"\n[ \"$(uname -m)\" = arm64 ] || ZSTD=\"$TOOLS/zstd-x86_64\""
-                : "ZSTD=\"$TOOLS/zstd\"");
+            b.AppendLine(platform switch
+            {
+                "macOS" => "ZSTD=\"$TOOLS/zstd\"\n[ \"$(uname -m)\" = arm64 ] || ZSTD=\"$TOOLS/zstd-x86_64\"",
+                "Linux" => "case \"$(uname -m)\" in x86_64|amd64) ZSTD=\"$TOOLS/zstd\" ;; aarch64|arm64) ZSTD=\"$TOOLS/zstd-arm64\" ;; loongarch64) ZSTD=\"$TOOLS/zstd-loong64\" ;; riscv64) ZSTD=\"$TOOLS/zstd-riscv64\" ;; *) die \"Unsupported Linux architecture for zstd.\" ;; esac",
+                _ => "ZSTD=\"$TOOLS/zstd\""
+            });
             b.AppendLine($"[ -x \"$ZSTD\" ] || die {Sh(T(localize, "ZstdMissing", "zstd missing or not executable."))}");
         }
         foreach (var line in plan.Information.Replace("\r", "").Split('\n')) b.AppendLine($"printf '%s\\n' {Sh(line)}");
-        b.AppendLine($"flash() {{\n  local target=\"$1\" name=\"$2\" file=\"$ROOT/images/$2\"\n  case \"$name\" in\n    *.zst) file=\"$WORK/${{name%.zst}}.img\"; \"$ZSTD\" -d -o \"$file\" -- \"$ROOT/images/$name\" || die {Sh(T(localize, "DecompressionFailed", "Decompression failed."))} ;;\n  esac");
+        var flashRoot = plan.PackSuper ? string.Join("\n", plan.Files.Select(f => (f, path: ImagePath(plan, f)))
+            .Where(x => x.path.Contains('/'))
+            .Select(x => $"    {x.f.FileName}) file=\"$ROOT/{x.path}\" ;;")) : string.Empty;
+        b.AppendLine($"flash() {{\n  local target=\"$1\" name=\"$2\" file=\"$ROOT/{(plan.PackSuper ? "$2" : "images/$2")}\"\n  case \"$name\" in\n{flashRoot}\n    *.zst) file=\"$WORK/${{name%.zst}}.img\"; \"$ZSTD\" -d -o \"$file\" -- \"$ROOT/{(plan.PackSuper ? "$name" : "images/$name")}\" || die {Sh(T(localize, "DecompressionFailed", "Decompression failed."))} ;;\n  esac");
         b.AppendLine($"  if [ \"$target\" = super_empty ]; then\n    \"$TOOLS/fastboot\" wipe-super \"$file\" || die {Sh(T(localize, "WipeSuperFailed", "wipe-super failed."))}");
         b.AppendLine($"  elif [ \"$target\" = super ]; then\n    \"$TOOLS/fastboot\" flash \"$target\" \"$file\" || die {Sh(T(localize, "SuperFlashFailed", "Super flash failed."))}\n  else");
         b.AppendLine($"    \"$TOOLS/fastboot\" {(plan.Slot.Length > 0 ? "--slot=" + plan.Slot + " " : "")}flash \"$target\" \"$file\" || die {Sh(T(localize, "FlashFailed", "Flash failed."))}\n  fi\n}}");
@@ -139,7 +151,7 @@ internal static partial class DeliveryScriptGenerator
             b.AppendLine("\"%TOOLS%\\fastboot.exe\" getvar product >\"%WORK%\\product.txt\" 2>&1\nif errorlevel 1 goto failed");
             b.AppendLine($"findstr /r /x /c:\"product: *{plan.DeviceCodename.Replace(".", @"\.")}\" /c:\"(bootloader) product: *{plan.DeviceCodename.Replace(".", @"\.")}\" \"%WORK%\\product.txt\" >nul\nif errorlevel 1 goto failed");
         }
-        foreach (var f in plan.Files) b.AppendLine($"if not exist \"%ROOT%images\\{f.FileName}\" goto failed");
+        foreach (var f in plan.Files) b.AppendLine($"if not exist \"%ROOT%{ImagePath(plan, f).Replace('/', '\\')}\" goto failed");
         if (plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
             b.AppendLine("if not exist \"%TOOLS%\\zstd.exe\" goto failed");
         foreach (var line in plan.Information.Replace("\r", "").Split('\n'))
@@ -167,7 +179,10 @@ internal static partial class DeliveryScriptGenerator
         if (plan.AskWipe) b.AppendLine("if not \"%WIPE%\"==\"2\" goto no_wipe\n\"%TOOLS%\\fastboot.exe\" erase metadata\nif errorlevel 1 goto failed\n\"%TOOLS%\\fastboot.exe\" erase userdata\nif errorlevel 1 goto failed\n:no_wipe");
         if (plan.Reboot) b.AppendLine("\"%TOOLS%\\fastboot.exe\" reboot\nif errorlevel 1 goto failed");
         b.AppendLine($"echo {T(localize, "Completed", "Completed.")}\n:cancelled\nif defined WORK rmdir /s /q \"%WORK%\"\nexit /b 0\n:failed\necho {T(localize, "DeliveryFailed", "Delivery failed. Check device, images and tools.")}\nif defined WORK if exist \"%WORK%\" rmdir /s /q \"%WORK%\"\nexit /b 1");
-        b.AppendLine(":flash\nset \"IMAGE=%ROOT%images\\%~2\"\nif /i not \"%~x2\"==\".zst\" goto flash_ready\nset \"IMAGE=%WORK%\\%~n2.img\"\n\"%TOOLS%\\zstd.exe\" -d \"%ROOT%images\\%~2\" -o \"%IMAGE%\"\nif errorlevel 1 exit /b 1\n:flash_ready\nif \"%~1\"==\"super_empty\" goto wipe_super\nif \"%~1\"==\"super\" goto flash_super");
+        var batchCases = plan.PackSuper ? string.Join("\n", plan.Files.Select(f => (f, path: ImagePath(plan, f)))
+            .Where(x => x.path.Contains('/'))
+            .Select(x => $"if /i \"%~2\"==\"{x.f.FileName}\" set \"IMAGE=%ROOT%{x.path.Replace('/', '\\')}\"")) : string.Empty;
+        b.AppendLine($":flash\nset \"IMAGE=%ROOT%{(plan.PackSuper ? "%~2" : "images\\%~2")}\"\n{batchCases}\nif /i not \"%~x2\"==\".zst\" goto flash_ready\nset \"IMAGE=%WORK%\\%~n2.img\"\n\"%TOOLS%\\zstd.exe\" -d \"%ROOT%{(plan.PackSuper ? "%~2" : "images\\%~2")}\" -o \"%IMAGE%\"\nif errorlevel 1 exit /b 1\n:flash_ready\nif \"%~1\"==\"super_empty\" goto wipe_super\nif \"%~1\"==\"super\" goto flash_super");
         b.AppendLine($"\"%TOOLS%\\fastboot.exe\" {(plan.Slot.Length > 0 ? "--slot=" + plan.Slot + " " : "")}flash %~1 \"%IMAGE%\"\nexit /b %ERRORLEVEL%\n:flash_super\n\"%TOOLS%\\fastboot.exe\" flash super \"%IMAGE%\"\nexit /b %ERRORLEVEL%\n:wipe_super\n\"%TOOLS%\\fastboot.exe\" wipe-super \"%IMAGE%\"\nexit /b %ERRORLEVEL%");
         b.AppendLine(BatchMode());
         return b.ToString().Replace("\r\n", "\n").Replace("\n", "\r\n");

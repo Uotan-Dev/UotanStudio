@@ -45,7 +45,6 @@ public partial class DeliveryView : UserControl
     {
         _payloadKeyLibrary = keyLibrary;
         InitializeComponent();
-        ManageZipKeysButton.Click += (_, _) => UotanStudio.ViewModels.Shell.MenuViewModel.ShowKeyManagerWindow();
         DirectOutputBox.IsCheckedChanged += OnOutputOptionChanged;
         PackSuperBox.IsCheckedChanged += OnOutputOptionChanged;
         PackPayloadBox.IsCheckedChanged += OnOutputOptionChanged;
@@ -113,6 +112,7 @@ public partial class DeliveryView : UserControl
         SuperMetadataSlotsField.IsVisible = packSuper;
         SuperImageOptions.IsVisible = packSuper;
         PayloadSettings.IsVisible = packPayload;
+        ZipSigningSettings.IsVisible = DirectOutputBox.IsChecked == true;
         SuperDeviceNameBox.IsReadOnly = packPayload;
         if (packPayload) SuperDeviceNameBox.Text = "payload.bin";
         UseProjectSuperSettingsBox.Classes.Set("payload", packPayload);
@@ -252,6 +252,8 @@ public partial class DeliveryView : UserControl
         _legacyPayloadSignatureFile = "";
         _payloadSigningFingerprint = "";
         _payloadSigningIdentityPath = "";
+        _zipSigningIdentityPath = "";
+        _zipSigningCertificatePath = "";
         PayloadPostinstallBox.Text = string.Empty;
         PayloadTimestampBox.Text = "0"; PayloadSecurityPatchBox.Text = "";
         SuperZstdBox.IsChecked = false; _deliveryGroups = [];

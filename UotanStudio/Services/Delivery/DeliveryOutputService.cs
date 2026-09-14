@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
@@ -6,7 +7,8 @@ namespace UotanStudio.Services.Delivery;
 
 internal sealed record DeliveryProgress(double Percent, string Message,
     (long Processed, long Total)? Bytes = null, string? Stage = null,
-    (long Processed, long Total)? Items = null, string? Detail = null);
+    (long Processed, long Total)? Items = null, string? Detail = null,
+    IReadOnlyDictionary<string, string>? Metadata = null);
 
 internal interface IDeliveryTools
 {
@@ -16,6 +18,25 @@ internal interface IDeliveryTools
 /// <summary>Prepares every file privately, then publishes: overwrites caller-approved destinations and keeps the rest.</summary>
 internal sealed class DeliveryOutputService(IDeliveryTools tools)
 {
+    private static readonly HashSet<string> FirmwareUpdateImages = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "abl", "aop_config", "aop", "bluetooth", "cpucp", "devcfg", "dsp", "dtbo", "featenabler", "hyp",
+        "imagefv", "keymaster", "modem", "multiimgqti", "qupfw", "recovery", "shrm", "tz", "uefi",
+        "uefisecapp", "vbmeta_system", "vbmeta", "vendor_boot", "xbl_config", "xbl_ramdump", "xbl"
+    };
+
+    private static string OrganizedImagePath(DeliveryPlan plan, string stage, DeliveryFile file)
+    {
+        if (!plan.PackSuper) return Path.Combine(stage, "images", file.FileName);
+        return Path.Combine(stage, OrganizedImageRelativePath(file));
+    }
+
+    internal static string OrganizedImageRelativePath(DeliveryFile file)
+    {
+        var stem = Path.GetFileNameWithoutExtension(file.FileName);
+        return FirmwareUpdateImages.Contains(stem) ? Path.Combine("firmware-update", file.FileName) : file.FileName;
+    }
+
     internal async Task<string[]> ExportAsync(DeliveryPlan plan, IProgress<DeliveryProgress>? progress = null, CancellationToken token = default,
         IReadOnlySet<string>? overwrite = null)
     {
@@ -28,7 +49,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
             if (IsUnder(file.SourcePath, output)) throw new InvalidDataException("输出目录不能包含源镜像 / Output must not contain source images.");
         foreach (var source in new[] { plan.Payload.DynamicPartitionsFile, plan.Payload.SignatureFile, plan.Payload.SigningKeyPath, plan.Payload.PostinstallFile, plan.Package.SigningKeyPath, plan.Package.CertificatePath }.Where(p => p.Length > 0))
             if (IsUnder(source, output)) throw new InvalidDataException("Output must not contain Payload configuration inputs.");
-        if (plan.OrganizeDirectory && (plan.Windows || plan.Linux || plan.MacOS || plan.Txt || plan.Recovery && plan.Scripts.ContainsKey("Recovery.sh"))
+        if (plan.OrganizeDirectory && !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS || plan.Txt || plan.Recovery && plan.Scripts.ContainsKey("Recovery.sh"))
             && plan.ScriptFingerprint != DeliveryScriptGenerator.Fingerprint(plan))
             throw new InvalidDataException("脚本已过期，请重新生成 / Scripts are stale; generate them again.");
         var parent = Path.GetDirectoryName(output) ?? throw new InvalidDataException("Invalid output directory.");
@@ -41,7 +62,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
         Directory.CreateDirectory(parent);
         var stage = Path.Combine(parent, ".uotan-delivery-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stage);
-        var imageDirectory = plan.OrganizeDirectory ? Path.Combine(stage, "images") : stage;
+        var imageDirectory = plan.OrganizeDirectory && !plan.PackSuper ? Path.Combine(stage, "images") : stage;
         Directory.CreateDirectory(imageDirectory);
         try
         {
@@ -89,7 +110,9 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
                     DeliveryValidation.CheckSource(copy[i]);
                     var index = i;
                     var completed = copied;
-                    await CopyFileAsync(copy[i].SourcePath, Path.Combine(imageDirectory, copy[i].FileName), token,
+                    var destination = OrganizedImagePath(plan, stage, copy[i]);
+                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                    await CopyFileAsync(copy[i].SourcePath, destination, token,
                         p => progress?.Report(new(55 + (index + p / 100) * 20 / Math.Max(1, copy.Length), "Copying images",
                             (completed + (long)(copyLengths[index] * p / 100), copyTotal), "Delivery_ProgressCopy", Detail: copy[index].FileName))).ConfigureAwait(false);
                     copied += copyLengths[i];
@@ -107,7 +130,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
                             | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
                 }
                 var payloadNotice = plan.Payload.SigningKeyPath.Length == 0 ? "Unsigned full payload. " : "RSA SHA-256 signed full payload. ";
-                var readme = (plan.PackPayload ? payloadNotice + "ota.zip is an A/B OTA package, not a Fastboot package. Unzipping payload.bin does not make it flashable with fastboot. Recovery must support A/B OTA and trust the Payload signing key; disabling ZIP verification does not disable Payload verification. Missing device/build metadata may require target-specific OTA integration. Standalone images are separate from this OTA.\n\n" : "") + "UotanStudio delivery\n\n" + plan.Information + "\n\nImages: images/\nTools: bin/\n"
+                var readme = (plan.PackPayload ? payloadNotice + "ota.zip is an A/B OTA package, not a Fastboot package. Unzipping payload.bin does not make it flashable with fastboot. Recovery must support A/B OTA and trust the Payload signing key; disabling ZIP verification does not disable Payload verification. Missing device/build metadata may require target-specific OTA integration. Standalone images are separate from this OTA.\n\n" : "") + "UotanStudio delivery\n\n" + plan.Information + "\n\nImages: " + (plan.PackSuper ? "./" : "images/") + "\nTools: bin/\n"
                     + "Linux/macOS: chmod +x Flash*.sh bin/Linux/* bin/macOS/* before running when ZIP extraction loses executable permissions.\n"
                     + "TXT: select the intended complete variant. The legacy toolbox does not enforce alternative groups or device checks.\n"
                     + "Legacy TXT paths containing spaces may not work in the old toolbox.\n"
@@ -115,11 +138,13 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
                 await File.WriteAllTextAsync(Path.Combine(stage, "README.txt"), readme, token).ConfigureAwait(false);
             }
             await DeliveryPackageBuilder.BuildAsync(plan, stage, imageDirectory, token, progress).ConfigureAwait(false);
-            if (plan.PackPayload)
+            if (plan.PackPayload && plan.OrganizeDirectory)
             {
                 File.Delete(Path.Combine(imageDirectory, "payload.bin"));
                 File.Delete(Path.Combine(imageDirectory, "payload_properties.txt"));
             }
+            if (plan.PackPayload && !plan.OrganizeDirectory)
+                File.Delete(Path.Combine(imageDirectory, "payload_properties.txt"));
             var stagedFiles = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).ToArray();
             var hashes = new StringBuilder();
             long totalBytes = 0;
@@ -129,16 +154,40 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
             for (var i = 0; i < stagedFiles.Length; i++)
             {
                 token.ThrowIfCancellationRequested();
-                await using var input = File.OpenRead(stagedFiles[i]);
-                var hash = await SHA256.HashDataAsync(input, token).ConfigureAwait(false);
-                processedBytes = checked(processedBytes + input.Length);
+                await using var input = new FileStream(stagedFiles[i], FileMode.Open, FileAccess.Read, FileShare.Read,
+                    1024 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                var fileLength = input.Length;
+                var hashAlgorithm = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                var buffer = new byte[1024 * 1024];
+                int read;
+                while ((read = await input.ReadAsync(buffer.AsMemory(), token).ConfigureAwait(false)) != 0)
+                {
+                    hashAlgorithm.AppendData(buffer, 0, read);
+                    processedBytes = checked(processedBytes + read);
+                    progress?.Report(new(90 + processedBytes * 9.0 / Math.Max(1, totalBytes), "Verifying output",
+                        Stage: "Delivery_ProgressVerify", Bytes: (processedBytes, totalBytes), Detail: Path.GetFileName(stagedFiles[i])));
+                }
+                var hash = hashAlgorithm.GetHashAndReset();
+                hashAlgorithm.Dispose();
+                if (input.Length != fileLength) throw new IOException("Output changed while verifying.");
                 hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  ")
                     .AppendLine(Path.GetRelativePath(stage, stagedFiles[i]).Replace('\\', '/'));
-                progress?.Report(new(90 + processedBytes * 9.0 / Math.Max(1, totalBytes), "Verifying output",
-                    Stage: "Delivery_ProgressVerify", Bytes: (processedBytes, totalBytes)));
             }
             if (plan.OrganizeDirectory)
                 await File.WriteAllTextAsync(Path.Combine(stage, "checksums.sha256"), hashes.ToString(), token).ConfigureAwait(false);
+            if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
+            {
+                var archive = Path.Combine(stage, "super.zip");
+                await CreateSuperArchiveAsync(stage, archive, token).ConfigureAwait(false);
+                if (plan.Package.SigningKeyPath.Length > 0)
+                    await DeliveryPackageBuilder.SignAsync(archive, plan.Package, token).ConfigureAwait(false);
+                foreach (var file in Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories)
+                    .Where(path => !path.Equals(archive, StringComparison.OrdinalIgnoreCase)).ToArray())
+                    File.Delete(file);
+                foreach (var directory in Directory.EnumerateDirectories(stage, "*", SearchOption.AllDirectories)
+                    .OrderByDescending(path => path.Length).ToArray())
+                    if (!Directory.EnumerateFileSystemEntries(directory).Any()) Directory.Delete(directory);
+            }
             var result = Publish(stage, output, token, overwrite);
             progress?.Report(new(100, "Output complete", Stage: "Delivery_ProgressDone"));
             return result;
@@ -146,10 +195,35 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
         finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
     }
 
-    internal static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload ? "ota.zip"
-        : plan.Super.Empty ? "super_empty.img" : SuperFileName(plan.Super);
+    internal static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload
+        ? (plan.OrganizeDirectory ? "ota.zip" : "payload.bin")
+        : plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty
+            ? "super.zip"
+            : plan.Super.Empty ? "super_empty.img" : SuperFileName(plan.Super);
 
     internal static string SuperFileName(DeliverySuperOptions options) => options.Zstd ? "super.zst" : "super.img";
+
+    private static async Task CreateSuperArchiveAsync(string stage, string archivePath, CancellationToken token)
+    {
+        await using var output = new FileStream(archivePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, true);
+        using var zip = new ZipArchive(output, ZipArchiveMode.Create, leaveOpen: false);
+        foreach (var source in Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories)
+            .Where(path => !path.Equals(archivePath, StringComparison.OrdinalIgnoreCase))
+            .Order(StringComparer.Ordinal))
+        {
+            token.ThrowIfCancellationRequested();
+            var name = Path.GetRelativePath(stage, source).Replace('\\', '/');
+            var entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
+            entry.LastWriteTime = new DateTimeOffset(2009, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            if (name.EndsWith(".sh", StringComparison.OrdinalIgnoreCase)
+                || name.Equals("META-INF/com/google/android/update-binary", StringComparison.Ordinal))
+                entry.ExternalAttributes = 0x81ED << 16;
+            await using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            await using var destination = entry.Open();
+            await input.CopyToAsync(destination, 1024 * 1024, token).ConfigureAwait(false);
+        }
+    }
 
     internal static async Task CopyFileAsync(string source, string destination, CancellationToken token, Action<double>? progress = null)
     {
@@ -176,11 +250,15 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
     {
         plan = plan.ForOutput();
         var output = Path.GetFullPath(plan.OutputDirectory);
+        if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
+            return [Path.Combine(output, "super.zip")];
         var plannedNames = plan.OrganizeDirectory
-            ? plan.Files.Select(f => f.Generated && plan.PackPayload ? "ota.zip" : Path.Combine("images", f.FileName)).Concat(plan.Scripts.Keys).Concat(["README.txt", "checksums.sha256"])
+            ? plan.Files.Select(f => f.Generated && plan.PackPayload ? "ota.zip" : plan.PackSuper ? OrganizedImageRelativePath(f) : Path.Combine("images", f.FileName)).Concat(plan.Scripts.Keys).Concat(["README.txt", "checksums.sha256"])
             : [ContainerFileName(plan)];
-        if (plan.PackPayload) plannedNames = plannedNames.Append("ota.zip");
-        if (plan.Recovery && !plan.PackPayload) plannedNames = plannedNames.Append("recovery.zip");
+        if (plan.PackPayload && plan.OrganizeDirectory) plannedNames = plannedNames.Append("ota.zip");
+        if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
+            plannedNames = plannedNames.Concat(["META-INF/com/google/android/update-binary", "META-INF/com/google/android/updater-script"]);
+        if (plan.Recovery && !plan.PackPayload && !plan.PackSuper) plannedNames = plannedNames.Append("recovery.zip");
         return plannedNames.Select(name => Path.Combine(output, name));
     }
 

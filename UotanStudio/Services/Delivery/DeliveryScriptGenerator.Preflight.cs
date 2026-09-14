@@ -7,10 +7,10 @@ internal static partial class DeliveryScriptGenerator
     private static string ShellIntegrity(string platform, DeliveryPlan plan, Func<string, string>? localize) => "cd -- \"$ROOT\"\n[ -f checksums.sha256 ] || exit 1\n"
         + (platform == "macOS" ? "shasum -a 256 -c checksums.sha256" : "sha256sum --strict -c checksums.sha256")
         + $" || {{ printf '%s\\n' {Sh(T(localize, "ChecksumFailed", "Checksum verification failed. Nothing was flashed."))} >&2; exit 1; }}\n"
-        + string.Concat(plan.Files.Select(f => $"grep -Eq {Sh("^[0-9a-f]{64}  images/" + f.FileName.Replace(".", @"\.") + "$")} checksums.sha256 || exit 1\n"));
+        + string.Concat(plan.Files.Select(f => $"grep -Eq {Sh("^[0-9a-f]{64}  " + DeliveryScriptGenerator.ImagePath(plan, f).Replace(".", @"\.") + "$")} checksums.sha256 || exit 1\n"));
 
     private static string BatchIntegrity(DeliveryPlan plan) => "powershell.exe -NoProfile -NonInteractive -Command \"$ErrorActionPreference='Stop'; try { $root=$env:ROOT; $lines=Get-Content -LiteralPath (Join-Path $root 'checksums.sha256') -Encoding UTF8; if (!$lines) {throw 'Empty checksums'}; "
-        + string.Concat(plan.Files.Select(f => $"if (!($lines -match '^[0-9a-f]{{64}}  images/{f.FileName.Replace(".", @"\.")}$')) {{throw 'Missing image checksum'}}; "))
+        + string.Concat(plan.Files.Select(f => $"if (!($lines -match '^[0-9a-f]{{64}}  {DeliveryScriptGenerator.ImagePath(plan, f).Replace(".", @"\.")}$')) {{throw 'Missing image checksum'}}; "))
         + "foreach ($line in $lines) {if ($line -notmatch '^([0-9a-f]{64})  (.+)$') {throw 'Invalid checksums'}; $expected=$matches[1]; $path=Join-Path $root $matches[2]; if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ne $expected) {throw 'Checksum mismatch'}}; exit 0 } catch {Write-Error $_; exit 1}\"\nif errorlevel 1 goto failed";
 
     private static string ShellMode(Func<string, string>? localize) => """

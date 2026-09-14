@@ -100,8 +100,9 @@ public partial class DeliveryCompositionView : UserControl
         CancelImageDrag();
         ImageListTitle.Classes.Set("payload", IsPayload);
         // 容器编排（Super 或 Payload）均显示自动零分区选项，A-Only 仍隐藏；纯脚本交付隐藏。
-        // Show the auto-zero option for both Super and Payload composition, hide it for A-Only and script-only delivery.
-        AutoZeroPartitionsBox.IsVisible = PackContainerMode && !_isAOnly;
+        // Auto-zero companions are a Super-only layout aid. Payload has its own
+        // partition metadata and must never expose this Super option.
+        AutoZeroPartitionsBox.IsVisible = PackContainerMode && !IsPayload && !_isAOnly;
         SuperMembershipHeader.IsVisible = IsPayload;
         ZeroPartitionForm.IsVisible = !IsPayload && !_isAOnly && AutoZeroPartitionsBox.IsChecked != true;
         OrderedImages.ItemsSource = ActiveImages;
@@ -196,7 +197,8 @@ public partial class DeliveryCompositionView : UserControl
     {
         EmptyImagesHint.IsVisible = ActiveImages.Count == 0;
         var total = ActiveImages.Sum(image => (decimal)(image.SizeBytes ?? 0));
-        TotalImagesSize.Text = PackImageFileInfo.FormatSize(total) + (ActiveImages.Any(image => image.SizeBytes is null) ? " + ?" : string.Empty);
+        var unknown = ActiveImages.Any(image => image.SizeBytes is null);
+        TotalImagesSize.Text = $"{PackImageFileInfo.FormatSize(total)}{(unknown ? " + ?" : string.Empty)}";
         UpdateAddPartitionButton();
     }
 

@@ -64,9 +64,11 @@ public sealed class PayloadSigningTests : IDisposable
         var plan = new DeliveryPlan
         {
             PackPayload = true,
-            OrganizeDirectory = false,
+            OrganizeDirectory = true,
+            ContainerConfirmed = true,
             OutputDirectory = Path.Combine(_root, "output"),
             Container = [new() { Partition = "system", FileName = "system.img", SourcePath = source, SourceLength = 8192 }],
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
             Payload = new() { SigningKeyPath = library.PrivatePath(chosen), SigningKeyFingerprint = chosen.Fingerprint }
         };
         var state = DeliveryPlanStore.CaptureElement(_root, plan);

@@ -143,9 +143,9 @@ internal static class DeliveryPlanStore
             || plan.Scripts.Any(p => p.Value is null) || plan.LocalZstd.Any(p => p.Value is null)
             || plan.Files.Concat(plan.Container).Any(f => f is null || f.SourcePath is null || f.FileName is null || f.Partition is null || f.SourceGroup is null))
             throw new InvalidDataException("Invalid delivery plan.");
-        if (plan.PackPayload)
-            plan = plan with { Files = plan.Files.Select(f => f.Generated && f.Partition == "payload"
-                ? f with { FileName = "ota.zip" } : f).ToList() };
+        if (plan.PackPayload || plan.PackSuper)
+            plan = plan with { Files = plan.Files.Select(f => f.Generated && (f.Partition == "payload" || f.Partition == "super")
+                ? f with { FileName = DeliveryOutputService.ContainerFileName(plan) } : f).ToList() };
         return Rebase(plan, path => Path.GetFullPath(path, root));
     }
 

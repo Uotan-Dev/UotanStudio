@@ -6,6 +6,9 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using UotanStudio.Services.Keys;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using SharpCompress.Common;
+using SharpCompress.Writers;
+using SharpCompress.Writers.Zip;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -33,18 +36,18 @@ internal static class DeliveryPackageBuilder
             throw new InvalidDataException("OTA ZIP requires Payload mode.");
         foreach (var value in new[] { options.BuildFingerprint, options.Incremental })
             if (value.Length > 1024 || value.Any(char.IsControl)) throw new InvalidDataException("OTA 元数据包含无效字符。");
-        if (plan.Recovery && !plan.PackPayload && (!plan.OrganizeDirectory || plan.PackPayload || plan.PackSuper || plan.AskWipe || plan.Reboot
+        if (plan.Recovery && !plan.PackPayload && !plan.PackSuper && (!plan.OrganizeDirectory || plan.PackPayload || plan.AskWipe || plan.Reboot
             || plan.Slot == "all" || plan.Files.Any(f => f.Generated || f.IncludeInSuper || f.Fastbootd || f.Partition is "super" or "super_empty"
                 || !f.FileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase))))
             throw new NotSupportedException("Recovery ZIP 面向提供 shell/unzip/sha256sum/blockdev 的自定义 Recovery，仅支持物理 IMG 分区；不支持动态分区、容器、双槽同时刷写、自动清除或重启。");
-        if (plan.Recovery && !plan.PackPayload && Selected(plan).Length == 0) throw new InvalidDataException("Recovery 包没有默认选中的镜像。");
+        if (plan.Recovery && !plan.PackPayload && !plan.PackSuper && Selected(plan).Length == 0) throw new InvalidDataException("Recovery 包没有默认选中的镜像。");
     }
 
     internal static async Task BuildAsync(DeliveryPlan plan, string stage, string images, CancellationToken token,
         IProgress<DeliveryProgress>? progress = null)
     {
         Validate(plan);
-        if (plan.PackPayload)
+        if (plan.PackPayload && plan.OrganizeDirectory)
         {
             var path = Path.Combine(stage, "ota.zip");
             var metadata = "ota-type=AB\n";
@@ -57,15 +60,16 @@ internal static class DeliveryPackageBuilder
             string Properties(string streaming, string all) => "ota-streaming-property-files=" + streaming.PadRight(512) + "\nota-property-files=" + all.PadRight(512) + "\n";
             async Task WriteZip(string text)
             {
-                await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite);
-                using var zip = new ZipArchive(output, ZipArchiveMode.Create, true);
-                await AddFileAsync(zip, "payload.bin", Path.Combine(images, "payload.bin"), token, progress);
-                await AddFileAsync(zip, "payload_properties.txt", Path.Combine(images, "payload_properties.txt"), token, progress);
-                await AddTextAsync(zip, "META-INF/com/android/metadata", text, token);
+                token.ThrowIfCancellationRequested();
+                await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, true);
+                using var writer = WriterFactory.OpenWriter(output, ArchiveType.Zip, new ZipWriterOptions(CompressionType.None) { UseZip64 = true });
+                writer.Write("payload.bin", new FileInfo(Path.Combine(images, "payload.bin")));
+                writer.Write("payload_properties.txt", new FileInfo(Path.Combine(images, "payload_properties.txt")));
+                writer.Write("META-INF/com/android/metadata", new MemoryStream(Encoding.UTF8.GetBytes(text)));
                 if (plan.Package.CertificatePath.Length > 0)
                 {
                     using var cert = LoadCertificate(plan.Package.CertificatePath);
-                    await AddTextAsync(zip, "META-INF/com/android/otacert", cert.ExportCertificatePem(), token);
+                    writer.Write("META-INF/com/android/otacert", new MemoryStream(Encoding.UTF8.GetBytes(cert.ExportCertificatePem())));
                 }
             }
             await WriteZip(metadata + Properties("", ""));
@@ -85,7 +89,7 @@ internal static class DeliveryPackageBuilder
             if (ranges.Any(p => actual[p.Key] != p.Value)) throw new InvalidDataException("OTA ZIP entry offsets changed while finalizing metadata.");
             if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token);
         }
-        if (plan.Recovery && !plan.PackPayload)
+        if (plan.Recovery && !plan.PackPayload && !plan.PackSuper)
         {
             var path = Path.Combine(stage, "recovery.zip");
             await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite))
@@ -108,6 +112,19 @@ internal static class DeliveryPackageBuilder
                 await AddTextAsync(zip, "META-INF/com/google/android/updater-script", "# UotanStudio custom Recovery shell installer\n", token);
             }
             if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token);
+        }
+        if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
+        {
+            // A ZIP-organized Super delivery is a complete Recovery package
+            // directory. The host publishes the directory atomically; Recovery
+            // consumes META-INF/com/google/android/update-binary directly.
+            var meta = Path.Combine(stage, "META-INF", "com", "google", "android");
+            Directory.CreateDirectory(meta);
+            await File.WriteAllTextAsync(Path.Combine(meta, "update-binary"), RecoveryScript(plan), new UTF8Encoding(false), token);
+            await File.WriteAllTextAsync(Path.Combine(meta, "updater-script"), "#Powered by UotanStudio\n", new UTF8Encoding(false), token);
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(Path.Combine(meta, "update-binary"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                    | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
         }
     }
 
@@ -220,7 +237,7 @@ internal static class DeliveryPackageBuilder
         BinaryPrimitives.WriteUInt16LittleEndian(comment.AsSpan(total - 6), checked((ushort)(cms.Length + 6)));
         comment[total - 4] = 255; comment[total - 3] = 255;
         BinaryPrimitives.WriteUInt16LittleEndian(comment.AsSpan(total - 2), (ushort)total);
-        if (comment.AsSpan().IndexOf(new byte[] { 0x50, 0x4b, 0x05, 0x06 }) >= 0) throw new CryptographicException("Spurious ZIP end marker in signature.");
+        if (comment.AsSpan().IndexOf(new byte[] { 0x50, 0x4b, 0x05, 0x06 }) >= 0) throw new System.Security.Cryptography.CryptographicException("Spurious ZIP end marker in signature.");
         file.Position = file.Length - 2;
         var length = new byte[2]; BinaryPrimitives.WriteUInt16LittleEndian(length, (ushort)total);
         await file.WriteAsync(length, token); await file.WriteAsync(comment, token);
@@ -247,6 +264,15 @@ internal static class DeliveryPackageBuilder
 
     internal static string RecoveryScript(DeliveryPlan plan)
     {
+        if (plan.PackSuper)
+        {
+            var imageName = plan.Super.Zstd ? "super.zst" : "super.img";
+            var extraction = plan.Super.Zstd
+                ? $"package_extract_zstd() {{ ui_print '- Writing super'; mkdir -p /tmp/bin/android; unzip -p \"$ZIPFILE\" \"bin/android/zstd\" >/tmp/bin/android/zstd || return 1; chmod 755 /tmp/bin/android/zstd; unzip -p \"$ZIPFILE\" \"{imageName}\" | /tmp/bin/android/zstd -c -d >\"$1\"; }}"
+                : $"package_extract_file() {{ ui_print '- Writing super'; unzip -p \"$ZIPFILE\" \"{imageName}\" >\"$1\"; }}";
+            var invoke = plan.Super.Zstd ? "package_extract_zstd" : "package_extract_file";
+            return $"#!/sbin/bash\nOUTFD=/proc/self/fd/$2\nZIPFILE=\"$3\"\nui_print() {{ echo -e \"ui_print $1\\nui_print\" >>\"$OUTFD\"; }}\nui_print \"====================================\"\nui_print \"          UotanStudio Super package          \"\nui_print \"====================================\"\n{extraction}\nfor base in /dev/block/by-name /dev/block/bootdevice/by-name; do\n  if [ -b \"$base/super\" ]; then {invoke} \"$base/super\"; exit 0; fi\ndone\nui_print \"- super partition not found\"\nexit 1\n";
+        }
         var script = new StringBuilder("""
             #!/sbin/sh
             set -eu

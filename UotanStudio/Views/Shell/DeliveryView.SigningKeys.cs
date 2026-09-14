@@ -12,6 +12,10 @@ public partial class DeliveryView
     private string _payloadSigningFingerprint = "";
     private string _payloadSigningIdentityPath = "";
     private string _legacyPayloadSignatureFile = "";
+    private IReadOnlyList<ManagedKey> _zipSigningKeys = [];
+    private bool _selectingZipSigningKey;
+    private string _zipSigningIdentityPath = "";
+    private string _zipSigningCertificatePath = "";
 
     private void InitializePayloadSigningKeys()
     {
@@ -53,5 +57,49 @@ public partial class DeliveryView
         }
         catch (Exception ex) { Composition.Model.Status = ex.Message; }
         finally { _selectingPayloadKey = false; }
+    }
+
+    private void InitializeZipSigningKeys()
+    {
+        ZipSigningKeyBox.DropDownOpened += (_, _) => RefreshZipSigningKeys();
+        ZipSigningKeyBox.SelectionChanged += (_, _) =>
+        {
+            if (_selectingZipSigningKey) return;
+            var index = ZipSigningKeyBox.SelectedIndex;
+            if (index < 0 || index > _zipSigningKeys.Count) return;
+            _selectingZipSigningKey = true;
+            try
+            {
+                var key = index == 0 ? null : _zipSigningKeys[index - 1];
+                _zipSigningIdentityPath = key is null ? "" : _payloadKeyLibrary.PrivatePath(key);
+                _zipSigningCertificatePath = key is null ? "" : _payloadKeyLibrary.EnsureCertificate(key);
+                QueueDeliveryChange();
+            }
+            catch (Exception ex) { Composition.Model.Status = ex.Message; }
+            finally { _selectingZipSigningKey = false; }
+        };
+        RefreshZipSigningKeys();
+    }
+
+    private void RefreshZipSigningKeys()
+    {
+        _selectingZipSigningKey = true;
+        try
+        {
+            _zipSigningKeys = _payloadKeyLibrary.List()
+                .Where(k => k.Kind == ManagedKeyKind.Payload)
+                .ToArray();
+            ZipSigningKeyBox.ItemsSource = new[] { LanguageService.Instance.GetString("Keys_Unsigned") }
+                .Concat(_zipSigningKeys.Select(k => $"{k.Name} 路 RSA {k.Bits} 路 {k.Fingerprint[^12..]}"))
+                .ToArray();
+            var path = _zipSigningIdentityPath.Trim();
+            ZipSigningKeyBox.SelectedIndex = path.Length == 0 ? 0 :
+                _zipSigningKeys.Select((key, index) => new { key, index })
+                    .Where(p => string.Equals(_payloadKeyLibrary.PrivatePath(p.key), path,
+                        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    .Select(p => p.index + 1).DefaultIfEmpty(-1).First();
+        }
+        catch (Exception ex) { Composition.Model.Status = ex.Message; }
+        finally { _selectingZipSigningKey = false; }
     }
 }

@@ -133,8 +133,8 @@
     <x:String x:Key="Keys_GenerateCertificate">生成证书</x:String>
     <x:String x:Key="Keys_Import">导入私钥…</x:String>
     <x:String x:Key="Keys_Password">导入密码（如有）</x:String>
-    <x:String x:Key="Keys_ApkKey">APK 密钥</x:String>
-    <x:String x:Key="Keys_ApkCertificate">APK 证书</x:String>
+    <x:String x:Key="Keys_ApkKey">JAR</x:String>
+    <x:String x:Key="Keys_ApkCertificate">APK</x:String>
     <x:String x:Key="Keys_KeystoreAlias">密钥库别名</x:String>
     <x:String x:Key="Keys_KeystorePassword">密钥库密码</x:String>
     <x:String x:Key="Keys_ValidityYears">有效期（年）</x:String>

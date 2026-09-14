@@ -40,8 +40,9 @@ public sealed class DeliveryTests : IDisposable
             file = file with { SourcePath = path, SourceLength = new FileInfo(path).Length };
         }
         var config = Path.Combine(_root, "dynamic.txt");
-        var plan = new DeliveryPlan { PackPayload = true, OrganizeDirectory = false, Container = [file with { IncludeInSuper = true }],
-            Payload = new() { DynamicPartitionsFile = config }, OutputDirectory = Path.Combine(_root, "payload-out") };
+        var plan = new DeliveryPlan { PackPayload = true, OrganizeDirectory = true, ContainerConfirmed = true, Container = [file with { IncludeInSuper = true }],
+            Payload = new() { DynamicPartitionsFile = config }, OutputDirectory = Path.Combine(_root, "payload-out"),
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }], Txt = false };
         File.WriteAllText(config, DeliveryPayloadBuilder.GenerateDynamicLayout(plan));
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken);
         var unpacked = Path.Combine(_root, "ota-content");
@@ -63,13 +64,48 @@ public sealed class DeliveryTests : IDisposable
     }
 
     [Fact]
+    public async Task PayloadPreservesVendorPartitionNameWithHyphen()
+    {
+        var file = Input("vm-bootsys");
+        var model = new DeliveryViewModel();
+        model.SetMode(true, false, true);
+        model.SelectSources([file]);
+        var plan = new DeliveryPlan { PackPayload = true, OrganizeDirectory = true, ContainerConfirmed = true, Container = [file],
+            OutputDirectory = Path.Combine(_root, "vendor-name-output"),
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }], Txt = false };
+        model.Confirm(plan);
+        Assert.True(model.Confirmed);
+        await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken);
+        using var zip = ZipFile.OpenRead(Path.Combine(plan.OutputDirectory, "ota.zip"));
+        var payload = Path.Combine(_root, "payload.bin");
+        zip.GetEntry("payload.bin")!.ExtractToFile(payload);
+        var metadata = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.GetPayloadMetadata(payload);
+        var partition = Assert.Single(metadata.Manifest.Partitions);
+        Assert.Equal("vm-bootsys", partition.PartitionName);
+        Assert.Equal(SHA256.HashData(File.ReadAllBytes(file.SourcePath)), partition.NewPartitionInfo.Hash.ToByteArray());
+        Assert.False(DeliveryValidation.IsPartition("vm-bootsys"));
+    }
+
+    [Theory]
+    [InlineData("-boot")]
+    [InlineData("../boot")]
+    [InlineData("boot;reboot")]
+    [InlineData("boot\n")]
+    public void PayloadNameStillRejectsUnsafeValues(string name)
+    {
+        var file = Input() with { Partition = name };
+        Assert.Throws<InvalidDataException>(() => DeliveryPayloadBuilder.Validate(new() { PackPayload = true, Container = [file] }));
+    }
+
+    [Fact]
     public async Task InvalidPayloadConfigurationPublishesNothing()
     {
         var file = Input("system");
         var config = Path.Combine(_root, "dynamic.txt");
         File.WriteAllText(config, "super_partition_groups=main\nsuper_main_group_size=8192\nsuper_main_partition_list=unknown\n");
-        var plan = new DeliveryPlan { PackPayload = true, OrganizeDirectory = false, Container = [file],
-            Payload = new() { DynamicPartitionsFile = config }, OutputDirectory = Path.Combine(_root, "out") };
+        var plan = new DeliveryPlan { PackPayload = true, OrganizeDirectory = true, ContainerConfirmed = true, Container = [file],
+            Payload = new() { DynamicPartitionsFile = config }, OutputDirectory = Path.Combine(_root, "out"),
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }], Txt = false };
         await Assert.ThrowsAsync<InvalidDataException>(() => new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(plan.OutputDirectory));
         Assert.Empty(Directory.GetDirectories(_root, ".uotan-delivery-*"));
@@ -583,14 +619,17 @@ public sealed class DeliveryTests : IDisposable
         Assert.Contains("ZSTD=\"$TOOLS/zstd\"", mac);
         Assert.Contains("\"$ZSTD\" -d -o \"$file\"", mac);
         var linux = DeliveryScriptGenerator.Generate(plan with { MacOS = false, Linux = true })["FlashLinux.sh"];
-        Assert.DoesNotContain("uname -m", linux);
+        Assert.Contains("uname -m", linux);
+        Assert.Contains("zstd-arm64", linux);
+        Assert.Contains("zstd-loong64", linux);
+        Assert.Contains("zstd-riscv64", linux);
         Assert.DoesNotContain("zstd-x86_64", linux);
     }
 
     [Theory]
     [InlineData("Windows", new[] { "fastboot.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll", "libwinpthread-1.dll", "NOTICE.txt", "source.properties", "zstd.exe" },
         new[] { "adb.exe", "sqlite3.exe", "mke2fs.exe", "etc1tool.exe", "hprof-conv.exe", "make_f2fs.exe", "make_f2fs_casefold.exe", "mke2fs.conf" })]
-    [InlineData("Linux", new[] { "fastboot", "lib64/libc++.so", "NOTICE.txt", "source.properties", "zstd" },
+    [InlineData("Linux", new[] { "fastboot", "lib64/libc++.so", "NOTICE.txt", "source.properties", "zstd", "zstd-arm64", "zstd-loong64", "zstd-riscv64" },
         new[] { "adb", "sqlite3", "mke2fs", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs.conf" })]
     [InlineData("macOS", new[] { "fastboot", "lib64/libc++.dylib", "NOTICE.txt", "source.properties", "zstd", "zstd-x86_64" },
         new[] { "adb", "sqlite3", "mke2fs", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs.conf" })]
