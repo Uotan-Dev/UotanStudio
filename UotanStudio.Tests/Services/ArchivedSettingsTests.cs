@@ -8,6 +8,22 @@ namespace UotanStudio.Tests.Services;
 public sealed class ArchivedSettingsTests
 {
     [Fact]
+    public void LoadAndSave_DropRemovedHdcPathAndPreserveOtherSettings()
+    {
+        const string json = """
+            {"hdcPath":"obsolete-hdc","HdcPath":"legacy-hdc","autoSave":true,
+             "hdcDefaultKeyId":"my-hdc-key","mcpExposeEnabled":true}
+            """;
+        var settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings)!.Copy();
+        using var saved = JsonDocument.Parse(JsonSerializer.Serialize(settings, AppSettingsJsonContext.Default.AppSettings));
+        Assert.False(saved.RootElement.TryGetProperty("hdcPath", out _));
+        Assert.False(saved.RootElement.TryGetProperty("HdcPath", out _));
+        Assert.True(saved.RootElement.GetProperty("autoSave").GetBoolean());
+        Assert.Equal("my-hdc-key", saved.RootElement.GetProperty("hdcDefaultKeyId").GetString());
+        Assert.True(saved.RootElement.GetProperty("mcpExposeEnabled").GetBoolean());
+    }
+
+    [Fact]
     public void SaveAndClone_PreserveUnavailableFeatureSettings()
     {
         const string json = """

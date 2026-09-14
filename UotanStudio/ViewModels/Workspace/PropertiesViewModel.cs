@@ -723,7 +723,7 @@ internal partial class PropertiesViewModel : Tool
     /// <summary>
     /// <para>刷新 APK 文档的属性行（文件名、路径、大小、包名、版本、SDK、ABI、权限数）。</para>
     /// Refreshes property rows for an APK document (file name, path, size, package name, version,
-    /// SDK, ABIs, permission count).
+    /// SDK, minimum system, ABIs, permission count).
     /// </summary>
     public void RefreshForApkDocument(ApkEditorViewModel doc)
     {
@@ -744,10 +744,6 @@ internal partial class PropertiesViewModel : Tool
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_PackageName", doc.PackageName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_VersionName", doc.VersionName));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_VersionCode", doc.VersionCodeDisplay));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Sdk", doc.SdkDisplay));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_TargetSystem", doc.TargetSystemDisplay));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_MinimumSystem", doc.MinimumSystemDisplay));
-        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Abis", doc.AbiDisplay));
         Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Permissions", doc.Info?.Permissions.Count.ToString("N0") ?? "0"));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for APK document '{doc.FilePath}'");

@@ -160,7 +160,7 @@ internal partial class ImageViewModel
     /// <param name="paths"><para>操作路径（源文件与解包目录）。</para>Operation paths (source file and unpacked directory).</param>
     /// <param name="itemProgress"><para>条目内进度（0-100，可选），由调用方换算为总进度。</para>Optional in-item progress (0-100); the caller scales it into overall progress.</param>
     /// <returns>解包是否成功，以及是否被用户跳过。Whether extraction succeeded and whether the user skipped it.</returns>
-    private async Task<(bool Success, bool Skipped)> ExtractEntryAsync(ImageEntryViewModel entry, ImageOperationPaths paths, IProgress<double>? itemProgress = null)
+    private async Task<(bool Success, bool Skipped)> ExtractEntryAsync(ImageEntryViewModel entry, ImageOperationPaths paths, IProgress<double>? itemProgress = null, CancellationToken cancellationToken = default)
     {
         paths.ValidateExtraction();
         using var metadataScope = UotanStudio.Firmware.SharedKernel.RepackMetadata.UseContext(
@@ -178,14 +178,14 @@ internal partial class ImageViewModel
 
         var result = await ExtractionDirectory.ReplaceAsync(paths.UnpackedDirectory, async () => entry.Format switch
         {
-            "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, paths.UnpackedDirectory)),
-            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, paths.UnpackedDirectory, byteProgress: byteProgress)),
+            "boot" => await Task.Run(() => _firmware.UnpackBootAsync(paths.Source, paths.UnpackedDirectory), cancellationToken),
+            "sparse" => await Task.Run(() => _firmware.UnpackSparseImageAsync(paths.Source, paths.UnpackedDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken), cancellationToken),
             "ext4" or "erofs" or "f2fs" or "raw" => await ExtractRawAsync(paths.Source, paths.UnpackedDirectory, paths.Name, byteProgress: byteProgress),
             _ => await Task.Run(async () =>
             {
                 var options = new UotanStudio.Firmware.SharedKernel.UnpackOptions { FileSystemProgress = byteProgress };
                 if (itemProgress is not null) options.Progress = new FirmwareItemProgress(itemProgress);
-                var unpacked = await handler.UnpackAsync(paths.Source, paths.UnpackedDirectory, options, CancellationToken.None);
+                var unpacked = await handler.UnpackAsync(paths.Source, paths.UnpackedDirectory, options, cancellationToken);
                 return new FirmwareOpResult { Success = unpacked.Success, Summary = unpacked.Summary };
             })
         });
@@ -204,7 +204,7 @@ internal partial class ImageViewModel
     /// </summary>
     /// <param name="entries"><para>要解包的镜像条目。</para>The image entries to unpack.</param>
     /// <param name="unpackFully"><para>是否递归解包嵌套镜像。</para>Whether to unpack nested images recursively.</param>
-    public async Task UnpackFromProjectCreationAsync(IReadOnlyList<ImageEntryViewModel> entries, bool unpackFully)
+    public async Task UnpackFromProjectCreationAsync(IReadOnlyList<ImageEntryViewModel> entries, bool unpackFully, CancellationToken cancellationToken = default)
     {
         if (IsOperating || entries.Count == 0) return;
         var context = ProjectContextService.Instance;
@@ -225,6 +225,7 @@ internal partial class ImageViewModel
             var total = queue.Count;
             while (queue.Count > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var entry = queue.Dequeue();
                 var source = context.ResolvePath(entry.RelativePath) ?? string.Empty;
                 if (!processed.Add(source)) continue;
@@ -237,7 +238,7 @@ internal partial class ImageViewModel
                 try
                 {
                     var paths = new ImageOperationPaths(source, entry.IsDirectory, project.RootPath, project.OutputDir);
-                    var (success, skippedEntry) = await ExtractEntryAsync(entry, paths, itemProgress);
+                    var (success, skippedEntry) = await ExtractEntryAsync(entry, paths, itemProgress, cancellationToken);
                     if (skippedEntry) continue;
                     if (success)
                     {

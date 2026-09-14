@@ -1,6 +1,10 @@
 using System.ComponentModel;
 using System.Text.Json;
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
 using Dock.Model.Core;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Shell;
@@ -19,6 +23,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     private bool _initialized;
     private bool _disposed;
     private Task? _initialization;
+    private Window? _mainWindow;
 
     internal WorkspaceAutoSaveService(WorkspaceViewModel workspace, SettingsViewModel settings, ProjectOperationsService projects)
     {
@@ -30,6 +35,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         _settings.PropertyChanged += OnSettingsChanged;
         _timer.Tick += OnTick;
         _projects.BeforeProjectChangeAsync = FlushAsync;
+        WeakReferenceMessenger.Default.Register<ProjectContextChangedMessage>(this, OnProjectContextChanged);
     }
 
     /// <summary>
@@ -43,12 +49,13 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     /// <para>计算会话状态的轻量变更签名（文档路径集合、停靠比例/活动项、节点拓扑与缩放），
     /// 避免每轮定时器都全量重建 DTO 并序列化。</para>
     /// Computes a lightweight change signature of the session state (document path set, dock
-    /// proportions/active items, node topology and zoom) so the timer skips full DTO rebuilds
+    /// proportions/active items, panel visibility, main-window bounds, node topology and zoom) so the timer skips full DTO rebuilds
     /// and serialization when nothing changed.
     /// </summary>
     private string ComputeSessionSignature()
     {
         var sb = new System.Text.StringBuilder(64);
+        sb.Append("project:").Append(_projects.CurrentProjectPath ?? "<none>").Append('|');
         var documents = WorkspaceSessionCapture.Documents(_workspace.Layout, Environment.CurrentDirectory);
         sb.Append(documents.Count).Append('|');
         foreach (var document in documents)
@@ -57,6 +64,12 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         foreach (var dock in WorkspaceSessionCapture.Docks(_workspace.Layout))
             sb.Append(dock.Id).Append(':').Append(dock.Proportion?.ToString("R", System.Globalization.CultureInfo.InvariantCulture) ?? "-")
               .Append(':').Append(dock.ActiveId ?? "-").Append(';');
+        foreach (var panel in WorkspacePanelService.Instance.CaptureVisibility().OrderBy(p => p.Key, StringComparer.Ordinal))
+            sb.Append("p:").Append(panel.Key).Append('=').Append(panel.Value ? '1' : '0').Append(';');
+        if (_mainWindow is { } window)
+            sb.Append("w:").Append(window.Width.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append(':')
+                .Append(window.Height.ToString("R", System.Globalization.CultureInfo.InvariantCulture)).Append(':')
+                .Append(window.Position.X).Append(':').Append(window.Position.Y).Append(':').Append((int)window.WindowState);
         if (_projects.NodeEditorVM is { } nodes)
         {
             sb.Append('|').Append(nodes.Nodes.Count).Append(':').Append(nodes.Connections.Count)
@@ -67,6 +80,11 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
     }
 
     internal Task InitializeAsync() => _disposed ? Task.CompletedTask : _initialization ??= RestoreAsync();
+
+    internal void AttachMainWindow(Window window)
+    {
+        _mainWindow = window;
+    }
 
     private async Task RestoreAsync()
     {
@@ -98,6 +116,7 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                     }
                     if (_projects.CurrentProjectPath is null && snapshot.ProjectPath is null && snapshot.DraftPackingSettings is { } packing)
                         ProjectSettingViewModel.EnsureInstance().ApplyFromDto(packing);
+                    ApplyWindowState(snapshot);
                     var docks = WorkspaceSessionCapture.Enumerate(_workspace.Layout).OfType<IDock>().ToList();
                     foreach (var state in snapshot.Docks)
                     {
@@ -130,15 +149,57 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             _coordinator.Enabled = _settings.AutoSave;
     }
 
+    private void ApplyWindowState(WorkspaceSessionSnapshot snapshot)
+    {
+        var window = _mainWindow;
+        if (window is null) return;
+        if (snapshot.WindowWidth is > 100 and < 10000 && snapshot.WindowHeight is > 100 and < 10000)
+        {
+            window.Width = snapshot.WindowWidth.Value;
+            window.Height = snapshot.WindowHeight.Value;
+        }
+        if (snapshot.WindowX is { } x && snapshot.WindowY is { } y)
+            window.Position = new PixelPoint(x, y);
+        if (snapshot.WindowState is { } state && Enum.IsDefined(typeof(WindowState), state)
+            && (WindowState)state != WindowState.Minimized)
+            window.WindowState = (WindowState)state;
+    }
+
+    private async Task RestoreWindowForCurrentProjectAsync()
+    {
+        try
+        {
+            if (!_coordinator.Enabled || _mainWindow is null || !File.Exists(_sessionPath)) return;
+            await using var input = File.OpenRead(_sessionPath);
+            if (input.Length > 32 * 1024 * 1024) return;
+            var snapshot = await JsonSerializer.DeserializeAsync(input, AppSettingsJsonContext.Default.WorkspaceSessionSnapshot);
+            if (snapshot is { Version: 1 } && string.Equals(snapshot.ProjectPath, _projects.CurrentProjectPath,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                ApplyWindowState(snapshot);
+        }
+        catch (Exception ex) { LogService.Instance.Write(LogLevel.Warn, "AutoSave", $"Restore window state failed: {ex.Message}"); }
+    }
+
+    private void OnProjectContextChanged(object recipient, ProjectContextChangedMessage message)
+    {
+        if (_initialized) _ = RestoreWindowForCurrentProjectAsync();
+    }
+
     private async void OnTick(object? sender, EventArgs e)
     {
-        if (_initialized && !_projects.IsBusy) await _coordinator.TickAsync();
+        if (_initialized && !_projects.IsBusy && !_projects.IsImageOperationRunning) await _coordinator.TickAsync();
     }
 
     private async Task SaveEditedDocumentsAsync()
     {
-        if (!_initialized || _projects.IsBusy) return;
-        try { await _projects.AutoSaveAsync(persistProject: false); }
+        if (!_initialized || _projects.IsBusy || _projects.IsImageOperationRunning) return;
+        try
+        {
+            // The periodic save follows the same persistence boundary as the Save command:
+            // documents, project files, page state, solution extension state and session layout.
+            await _projects.AutoSaveAsync(persistProject: true, persistPageState: true);
+            await SaveSessionAsync();
+        }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", ex.Message); }
     }
 
@@ -164,6 +225,14 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
                 Documents = documents,
                 Docks = WorkspaceSessionCapture.Docks(_workspace.Layout)
             };
+            if (_mainWindow is { } window)
+            {
+                snapshot.WindowWidth = window.Width is > 0 and < 10000 ? window.Width : null;
+                snapshot.WindowHeight = window.Height is > 0 and < 10000 ? window.Height : null;
+                snapshot.WindowX = window.Position.X;
+                snapshot.WindowY = window.Position.Y;
+                snapshot.WindowState = (int)(window.WindowState == WindowState.Minimized ? WindowState.Normal : window.WindowState);
+            }
             if (_projects.NodeEditorVM is { } nodes)
             {
                 snapshot.NodeZoom = nodes.Zoom;
@@ -191,7 +260,8 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             if (!await WaitAndConfirmDocumentsAsync())
                 return false;
             if (_initialized && _coordinator.Enabled && _projects.CurrentProjectPath is { Length: > 0 } path)
-                await _projects.PersistToAsync(path, persistPageState: false);
+                await _projects.PersistToAsync(path, persistPageState: true);
+            await SaveSessionAsync();
             return true;
         }
         finally { Resume(); }
@@ -236,5 +306,6 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         _settings.PropertyChanged -= OnSettingsChanged;
         if (_projects.BeforeProjectChangeAsync == FlushAsync)
             _projects.BeforeProjectChangeAsync = null;
+        WeakReferenceMessenger.Default.Unregister<ProjectContextChangedMessage>(this);
     }
 }

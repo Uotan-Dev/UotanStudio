@@ -107,6 +107,7 @@ public sealed class ProjectOperationsService
     public WorkspaceViewModel? WorkspaceVM { get => DesktopWorkspace.Workspace; set => DesktopWorkspace.Workspace = value; }
     public string? CurrentProjectPath { get => _session.CurrentProjectPath; set => _session.CurrentProjectPath = value; }
     internal bool IsBusy => _session.IsBusy;
+    internal bool IsImageOperationRunning => DesktopWorkspace.IsImageOperationRunning;
     internal Func<Task<bool>>? BeforeProjectChangeAsync { get => _session.BeforeProjectChangeAsync; set => _session.BeforeProjectChangeAsync = value; }
     internal Task WaitForIdleAsync() => _session.WaitForIdleAsync();
     internal Task AutoSaveAsync(bool persistProject = true, bool persistPageState = true)

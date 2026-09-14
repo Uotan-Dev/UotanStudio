@@ -88,6 +88,7 @@ public partial class NewProjectWindow : Window
     private string? _containerPath;
     private bool _isAnalyzing;
     private bool _isCreating;
+    private CancellationTokenSource? _creationCancellation;
     private IReadOnlyList<ContainerEntry> _containerEntries = [];
 
     /// <summary>Queries available bytes; replaceable by window validation without filling a real disk.</summary>
@@ -95,6 +96,7 @@ public partial class NewProjectWindow : Window
 
     /// <summary>Runs creation while the modal form displays progress.</summary>
     public Func<NewProjectFormResult, Task>? CreateAsync { get; set; }
+    public Func<NewProjectFormResult, CancellationToken, Task>? CreateWithCancellationAsync { get; set; }
 
     /// <summary><para>滑动窗口计量器：统计「已处理/总量 · 速度 · 剩余时间」。</para>
     /// Sliding-window meter for the "processed/total · speed · eta" stats line.</summary>
@@ -443,7 +445,17 @@ public partial class NewProjectWindow : Window
         SetImages([]);
     }
 
-    private void OnCancelClick(object? sender, RoutedEventArgs e) => Close();
+    private void OnCancelClick(object? sender, RoutedEventArgs e)
+    {
+        if (_isCreating)
+        {
+            _creationCancellation?.Cancel();
+            CancelButton.Content = "正在取消…";
+            CancelButton.IsEnabled = false;
+            return;
+        }
+        Close();
+    }
 
     /// <summary>
     /// <para>名称变化时始终联动位置后缀（基础目录 + 当前名称）。</para>
@@ -524,9 +536,10 @@ public partial class NewProjectWindow : Window
                 UnpackFullyBox.IsChecked == true,
                 selected.Any(image => image.FilePath == containerPath));
             _isCreating = true;
+            _creationCancellation = new CancellationTokenSource();
             FormContent.IsEnabled = false;
             CreateButton.IsEnabled = false;
-            CancelButton.IsEnabled = false;
+            CancelButton.IsEnabled = true;
             MainBusyContainer.IsLoading = true;
             ReportProgress(LanguageService.Instance.GetString("NewProject_CheckingSpace"));
             ResetProgressStats();
@@ -540,16 +553,25 @@ public partial class NewProjectWindow : Window
                     return;
                 }
                 ReportProgress(LanguageService.Instance.GetString("NewProject_Creating"));
-                if (CreateAsync is not null) await CreateAsync(Result);
+                if (CreateWithCancellationAsync is not null) await CreateWithCancellationAsync(Result, _creationCancellation.Token);
+                else if (CreateAsync is not null) await CreateAsync(Result);
                 ResetProgressStats();
                 _isCreating = false;
                 Close();
             }
             catch (Exception ex)
             {
+                if (ex is OperationCanceledException || _creationCancellation?.IsCancellationRequested == true)
+                {
+                    Result = null;
+                    ResetProgressStats();
+                    Close();
+                    return;
+                }
                 Result = null;
                 _isCreating = false;
                 CancelButton.IsEnabled = true;
+                CancelButton.Content = "取消";
                 ResetProgressStats();
                 ReportProgress(ex.Message, 0);
                 await DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_CreateFailed"),
@@ -561,6 +583,9 @@ public partial class NewProjectWindow : Window
                 FormContent.IsEnabled = true;
                 CreateButton.IsEnabled = true;
                 CancelButton.IsEnabled = true;
+                CancelButton.Content = "取消";
+                _creationCancellation?.Dispose();
+                _creationCancellation = null;
                 MainBusyContainer.IsLoading = false;
             }
         }

@@ -17,6 +17,12 @@ internal sealed class WorkspaceSessionSnapshot
     public ProjectSettingsDto? DraftPackingSettings { get; set; }
     public double NodeZoom { get; set; } = 1;
     public bool NodeMinimap { get; set; } = true;
+    /// <summary>Last main-window bounds and state, when available.</summary>
+    public double? WindowWidth { get; set; }
+    public double? WindowHeight { get; set; }
+    public int? WindowX { get; set; }
+    public int? WindowY { get; set; }
+    public int? WindowState { get; set; }
 }
 
 internal sealed class WorkspaceDockState

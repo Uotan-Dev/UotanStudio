@@ -24,7 +24,7 @@ internal partial class ImageViewModel
     /// Overall byte progress: <c>Processed</c> is accumulated completed bytes, <c>Total</c> is the
     /// total bytes of all files to copy.</param>
     public async Task ImportAsync(string[] paths, IProgress<double>? progress = null,
-        IProgress<(long Processed, long Total)>? byteProgress = null)
+        IProgress<(long Processed, long Total)>? byteProgress = null, CancellationToken cancellationToken = default)
     {
         if (paths is null || paths.Length == 0)
         {
@@ -62,11 +62,12 @@ internal partial class ImageViewModel
 
             foreach (var path in existingPaths)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var fileSize = new FileInfo(path).Length;
 
                 var destination = Path.Combine(imagesDir, GetUniqueFileName(imagesDir, Path.GetFileName(path)));
                 var completedBeforeFile = completedBytes;
-                await ProjectFiles.CopyAsync(path, destination, progress: new Progress<double>(fraction =>
+                await ProjectFiles.CopyAsync(path, destination, cancellationToken: cancellationToken, progress: new Progress<double>(fraction =>
                 {
                     if (generation != _progressGeneration || !double.IsFinite(fraction)) return;
                     if (totalBytes > 0)
@@ -175,7 +176,7 @@ internal partial class ImageViewModel
     /// <param name="formatLabel"><para>格式列显示文本（super / payload / zip）。</para>Format column text (super / payload / zip).</param>
     /// <returns><para>登记的镜像条目；未打开工程或源不存在时为 null。</para>The registered entry; null when no project is open or the source is missing.</returns>
     public async Task<ImageEntryViewModel?> ImportContainerAsync(string sourcePath, string formatLabel, IProgress<double>? progress = null,
-        IProgress<(long Processed, long Total)>? byteProgress = null)
+        IProgress<(long Processed, long Total)>? byteProgress = null, CancellationToken cancellationToken = default)
     {
         var context = ProjectContextService.Instance;
         if (!context.IsProjectOpen || context.ActiveSubProject is null || !File.Exists(sourcePath))
@@ -194,7 +195,7 @@ internal partial class ImageViewModel
             var totalBytes = new FileInfo(sourcePath).Length;
             ReportByteStatistics(0, totalBytes);
             byteProgress?.Report((0, totalBytes));
-            await ProjectFiles.CopyAsync(sourcePath, destination, progress: new Progress<double>(percent =>
+            await ProjectFiles.CopyAsync(sourcePath, destination, cancellationToken: cancellationToken, progress: new Progress<double>(percent =>
             {
                 if (generation != _progressGeneration || !double.IsFinite(percent)) return;
                 ReportByteStatistics((long)(totalBytes * Math.Clamp(percent, 0, 100) / 100), totalBytes);

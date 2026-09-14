@@ -327,6 +327,8 @@
     <x:String x:Key="Dock_Properties_Apk_VersionName">Version Name</x:String>
     <x:String x:Key="Dock_Properties_Apk_VersionCode">Version Code</x:String>
     <x:String x:Key="Dock_Properties_Apk_Sdk">SDK</x:String>
+    <x:String x:Key="Dock_Properties_Apk_Signing">Signing status</x:String>
+    <x:String x:Key="Dock_Properties_Apk_Hardening">Hardening status</x:String>
     <x:String x:Key="Dock_Properties_Apk_TargetSystem">Target system</x:String>
     <x:String x:Key="Dock_Properties_Apk_MinimumSystem">Minimum system</x:String>
     <x:String x:Key="Dock_Properties_Apk_Abis">ABIs</x:String>
@@ -405,6 +407,10 @@
     <x:String x:Key="Apk_MinimumSystem">Minimum system</x:String>
     <x:String x:Key="Apk_SigningStatus">Signing status</x:String>
     <x:String x:Key="Apk_HardeningStatus">Hardening status</x:String>
+    <x:String x:Key="Apk_SigningUnsigned">Unsigned</x:String>
+    <x:String x:Key="Apk_SigningSchemes">Signed ({0})</x:String>
+    <x:String x:Key="Apk_HardeningDetected">Detected ({0})</x:String>
+    <x:String x:Key="Apk_HardeningNotDetected">Not detected</x:String>
     <x:String x:Key="MirrorProperty_Status">Session status</x:String>
     <x:String x:Key="MirrorProperty_Codec">Video codec</x:String>
     <x:String x:Key="MirrorProperty_Decoder">Decoder backend</x:String>

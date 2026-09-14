@@ -88,21 +88,12 @@ internal sealed class ProjectWorkspaceCoordinator : IProjectWorkspace
         {
             try
             {
-                switch (document)
-                {
-                    case FileViewModel { IsDirty: true, IsBinary: false } text:
-                        await text.SaveAsync();
-                        break;
-                    case DtbEditorViewModel { IsDirty: true } dtb when !dtb.SaveCommand.IsRunning:
-                        await dtb.SaveCommand.ExecuteAsync(null);
-                        break;
-                    case ManifestEditorViewModel { IsDirty: true, IsBusy: false } manifest when !manifest.SaveCommand.IsRunning:
-                        await manifest.SaveCommand.ExecuteAsync(null);
-                        break;
-                    case PartitionEditorViewModel { IsDirty: true, IsBusy: false } partition when !partition.SaveCommand.IsRunning:
-                        await partition.SaveCommand.ExecuteAsync(null);
-                        break;
-                }
+                // Use the same save contract as the Save command for every editor that exposes
+                // ISaveableDocument (including Hex, ARSC, DEX, APK and future editors). Binary
+                // text views remain excluded because their Save operation is intentionally a no-op.
+                if (!DocumentSaveService.IsDirty(document)
+                    || document is FileViewModel { IsBinary: true }) continue;
+                await DocumentSaveService.SaveAsync(document);
             }
             catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "AutoSave", ex.Message); }
         }
