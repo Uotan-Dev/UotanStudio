@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
 
@@ -24,6 +25,9 @@ public static class ApkParser
 
         using var zip = ZipFile.OpenRead(apkPath);
         info.EntryCount = zip.Entries.Count;
+
+        DetectSignatures(zip, apkPath, info);
+        info.HardeningProvider = DetectHardening(zip);
 
 
         foreach (var entry in zip.Entries)
@@ -75,6 +79,54 @@ public static class ApkParser
         info.IconReference = 0;
 
         return info;
+    }
+
+    private static void DetectSignatures(ZipArchive zip, string apkPath, ApkInfo info)
+    {
+        var v1Manifest = zip.Entries.Any(e => string.Equals(e.FullName, "META-INF/MANIFEST.MF", StringComparison.OrdinalIgnoreCase));
+        var v1Signature = zip.Entries.Any(e => e.FullName.StartsWith("META-INF/", StringComparison.OrdinalIgnoreCase)
+            && (e.FullName.EndsWith(".SF", StringComparison.OrdinalIgnoreCase)
+                || e.FullName.EndsWith(".RSA", StringComparison.OrdinalIgnoreCase)
+                || e.FullName.EndsWith(".DSA", StringComparison.OrdinalIgnoreCase)
+                || e.FullName.EndsWith(".EC", StringComparison.OrdinalIgnoreCase)));
+        if (v1Manifest && v1Signature) info.SigningSchemes.Add("v1");
+
+        try
+        {
+            using var stream = new FileStream(apkPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                81920, FileOptions.SequentialScan);
+            var sections = ApkZipSections.Locate(stream);
+            if (ApkSigningBlock.Find(stream, sections) is not { } found) return;
+            foreach (var (id, _) in ApkSigningBlock.ParsePairs(found.Contents))
+            {
+                if (id == ApkSignatureConstants.V2BlockId && !info.SigningSchemes.Contains("v2")) info.SigningSchemes.Add("v2");
+                if (id == ApkSignatureConstants.V3BlockId && !info.SigningSchemes.Contains("v3")) info.SigningSchemes.Add("v3");
+            }
+        }
+        catch (Exception ex) when (ex is InvalidDataException or OverflowException or EndOfStreamException or ArgumentOutOfRangeException)
+        {
+            // A malformed optional signing block must not prevent the metadata view from opening.
+        }
+        info.SigningSchemes.Sort(StringComparer.Ordinal);
+    }
+
+    private static string? DetectHardening(ZipArchive zip)
+    {
+        // These markers are intentionally conservative and only report a provider when a
+        // well-known loader/library name is present. Absence is not proof that an APK is plain.
+        var markers = new (string Marker, string Provider)[]
+        {
+            ("libjiagu", "360 Jiagu"), ("libsecexe", "SecNeo"), ("libshell", "Bangcle"),
+            ("libdexprotector", "DexProtector"), ("libDexHelper", "Tencent Legu"),
+            ("com.secneo.apkwrapper", "SecNeo"), ("com.tencent.StubShell", "Tencent Legu"),
+            ("com.baidu.protect", "Baidu Jiagu"), ("libstub", "Stub shell")
+        };
+        foreach (var entry in zip.Entries)
+        {
+            foreach (var (marker, provider) in markers)
+                if (entry.FullName.Contains(marker, StringComparison.OrdinalIgnoreCase)) return provider;
+        }
+        return null;
     }
 
     /// <summary>

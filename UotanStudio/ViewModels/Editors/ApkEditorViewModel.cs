@@ -4,7 +4,11 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 using UotanStudio.Services;
+using UotanStudio.Services.Devices;
+using UotanStudio.Services.Flash;
+using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -107,6 +111,9 @@ public partial class ApkEditorViewModel : Document
     /// </summary>
     [ObservableProperty] private bool _hasIcon;
 
+    /// <summary>Whether the APK can currently be installed to the selected online ADB device.</summary>
+    [ObservableProperty] private bool _isInstalling;
+
     /// <summary>
     /// <para>解析后的 APK 元数据（属性面板取值用）。</para>
     /// The parsed APK metadata (for the properties panel).
@@ -128,6 +135,70 @@ public partial class ApkEditorViewModel : Document
     }
 
     /// <summary>
+    /// Gets whether the install action has a valid APK and an online selected ADB device.
+    /// Fastboot, recovery and bootrom devices cannot receive an APK install command.
+    /// </summary>
+    public bool CanInstall => !IsInstalling
+        && !string.IsNullOrWhiteSpace(FilePath)
+        && File.Exists(FilePath)
+        && DeviceViewModel.Instance?.SelectedDevice is { Protocol: DeviceProtocolKind.Adb, State: var state }
+        && string.Equals(state, "device", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Refreshes the install button state after device selection or connection changes.</summary>
+    public void RefreshInstallAvailability() => OnPropertyChanged(nameof(CanInstall));
+
+    partial void OnIsInstallingChanged(bool value) => OnPropertyChanged(nameof(CanInstall));
+
+    /// <summary>
+    /// Extracts every APK entry into the directory containing the APK.
+    /// </summary>
+    public async Task ExtractToContainingDirectoryAsync(CancellationToken cancellationToken = default)
+    {
+        var path = FilePath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            throw new FileNotFoundException("APK file was not found.", path);
+        }
+
+        var destination = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (string.IsNullOrWhiteSpace(destination))
+        {
+            throw new InvalidOperationException("The APK has no containing directory.");
+        }
+
+        await Task.Run(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var browser = ArchiveBrowser.Open(path, cancellationToken);
+            // "\." normalizes to the archive root while satisfying the bounded path validator.
+            browser.Extract(".", destination, cancellationToken);
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Installs this APK on the currently selected online ADB device.</summary>
+    public async Task<FlashResult> InstallToSelectedDeviceAsync(CancellationToken cancellationToken = default)
+    {
+        var device = DeviceViewModel.Instance?.SelectedDevice;
+        var path = FilePath;
+        if (!CanInstall || device is null || string.IsNullOrWhiteSpace(path))
+        {
+            return new FlashResult { Success = false, Summary = "Select an online ADB device before installing the APK." };
+        }
+
+        IsInstalling = true;
+        try
+        {
+            return await FlashService.Default.FlashImageAsync(
+                device, "apk", path, null, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            IsInstalling = false;
+            RefreshInstallAvailability();
+        }
+    }
+
+    /// <summary>
     /// <para>异步分析 APK 文件并填充元数据展示属性。</para>
     /// Asynchronously analyzes an APK file and populates the metadata display properties.
     /// </summary>
@@ -140,6 +211,7 @@ public partial class ApkEditorViewModel : Document
         }
 
         FilePath = path;
+        RefreshInstallAvailability();
         SigningOutputPath = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path))!, Path.GetFileNameWithoutExtension(path) + "-signed.apk");
         Title = Path.GetFileName(path);
 
@@ -157,16 +229,22 @@ public partial class ApkEditorViewModel : Document
             VersionDisplay = string.IsNullOrWhiteSpace(VersionName)
                 ? VersionCodeDisplay
                 : string.IsNullOrWhiteSpace(VersionCodeDisplay) ? VersionName : $"{VersionName} ({VersionCodeDisplay})";
-            SizeDisplay = string.Format(
-                LanguageService.Instance.GetString("Apk_SizeFormat"), info.FileSize);
+            SizeDisplay = FormatFileSize(info.FileSize);
             TargetSystemDisplay = info.TargetSdkVersion > 0 ? info.TargetSdkVersion.ToString() : "-";
             MinimumSystemDisplay = info.MinSdkVersion > 0 ? info.MinSdkVersion.ToString() : "-";
             SdkDisplay = $"min {info.MinSdkVersion} / target {info.TargetSdkVersion} / compile {info.CompileSdkVersion}";
+            SigningStateDisplay = info.SigningSchemes.Count == 0
+                ? LanguageService.Instance.GetString("Apk_SigningUnsigned")
+                : string.Format(LanguageService.Instance.GetString("Apk_SigningSchemes"), string.Join(", ", info.SigningSchemes));
+            HardeningStateDisplay = info.HardeningProvider is { Length: > 0 } provider
+                ? string.Format(LanguageService.Instance.GetString("Apk_HardeningDetected"), provider)
+                : LanguageService.Instance.GetString("Apk_HardeningNotDetected");
             AbiDisplay = info.Abis.Count > 0 ? string.Join(", ", info.Abis) : "-";
             PermissionsDisplay = info.Permissions.Count > 0 ? string.Join(Environment.NewLine, info.Permissions) : "-";
 
             LoadIcon(info);
             CompileError = string.Empty;
+            RefreshInstallAvailability();
         }
         catch (Exception ex)
         {
@@ -175,11 +253,26 @@ public partial class ApkEditorViewModel : Document
             ApplicationName = string.Empty;
             VersionName = string.Empty;
             VersionDisplay = string.Empty;
+            RefreshInstallAvailability();
         }
         finally
         {
             IsBusy = false;
         }
+    }
+
+    internal static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes:N0} B";
+        var value = (double)bytes;
+        var units = new[] { "B", "KB", "MB", "GB", "TB" };
+        var index = 0;
+        while (value >= 1024 && index < units.Length - 1)
+        {
+            value /= 1024;
+            index++;
+        }
+        return $"{value:0.##} {units[index]}";
     }
 
     /// <summary>
@@ -326,5 +419,6 @@ public partial class ApkEditorViewModel : Document
         SizeDisplay = string.Empty;
         CompileError = string.Empty;
         FilePath = null;
+        RefreshInstallAvailability();
     }
 }

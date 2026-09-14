@@ -40,9 +40,10 @@
         </Border>
 
         <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Left">
-          <Button Content="{DynamicResource Apk_Extract}" MinWidth="88" HorizontalContentAlignment="Center" />
-          <Button Content="{DynamicResource Apk_View}" MinWidth="88" HorizontalContentAlignment="Center" />
-          <Button Content="{DynamicResource Apk_Install}" MinWidth="88" HorizontalContentAlignment="Center" />
+          <Button Content="{DynamicResource Apk_Extract}" MinWidth="88" Click="OnExtractClick" HorizontalContentAlignment="Center" />
+          <Button Content="{DynamicResource Apk_View}" MinWidth="88" Click="OnViewClick" HorizontalContentAlignment="Center" />
+          <Button Content="{DynamicResource Apk_Install}" MinWidth="88" Click="OnInstallClick"
+                  IsEnabled="{Binding CanInstall}" HorizontalContentAlignment="Center" />
           <Button Content="{DynamicResource Apk_Sign}" MinWidth="88" Click="OnSignClick" HorizontalContentAlignment="Center" />
         </StackPanel>
 

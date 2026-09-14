@@ -1,4 +1,5 @@
 using System.Formats.Tar;
+using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
 using UotanStudio.Firmware.CrossCutting.Compress;
@@ -11,6 +12,19 @@ namespace UotanStudio.Tests.Firmware;
 public sealed class ArchiveBrowserTests
 {
     private static CancellationToken Cancellation => TestContext.Current.CancellationToken;
+
+    [Theory]
+    [InlineData(".zip")]
+    [InlineData(".rar")]
+    [InlineData(".7z")]
+    [InlineData(".arj")]
+    public void SharpCompressArchiveExtensions_RouteToFileManager(string extension)
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "archive" + extension);
+        File.WriteAllBytes(path, []);
+        Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(path));
+    }
 
     [Theory]
     [InlineData(".tar", CompressionFormat.None)]
@@ -82,6 +96,44 @@ public sealed class ArchiveBrowserTests
             Assert.Equal("hello", File.ReadAllText(Path.Combine(temp.Path, "out", "hello.txt")));
         }
         File.Delete(path);
+    }
+
+    [Fact]
+    public void ZipArchive_ListsDirectoriesAndStreamsSelectedEntries()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "super.zip");
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            archive.CreateEntry("META-INF/");
+            var script = archive.CreateEntry("META-INF/com/google/android/updater-script");
+            using (var writer = new StreamWriter(script.Open())) writer.Write("ui_print('super');");
+            var image = archive.CreateEntry("super.img");
+            using (var stream = image.Open()) stream.Write([1, 2, 3, 4]);
+        }
+
+        Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(path));
+        using var browser = ArchiveBrowser.Open(path, Cancellation);
+        Assert.Contains(browser.Members, entry => entry.Path == "META-INF" && entry.Kind == CpioFileType.Directory);
+        Assert.Contains(browser.Members, entry => entry.Path == "META-INF/com/google/android/updater-script" && entry.Size > 0);
+        Assert.Contains(browser.Members, entry => entry.Path == "super.img" && entry.Size == 4);
+
+        var destination = Path.Combine(temp.Path, "out");
+        browser.Extract("META-INF", destination, Cancellation);
+        Assert.Equal("ui_print('super');", File.ReadAllText(Path.Combine(destination, "META-INF", "com", "google", "android", "updater-script")));
+        browser.Extract("super.img", destination, Cancellation);
+        Assert.Equal([1, 2, 3, 4], File.ReadAllBytes(Path.Combine(destination, "super.img")));
+    }
+
+    [Fact]
+    public void ZipArchive_RejectsTraversalMembers()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "unsafe.zip");
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        using (var stream = archive.CreateEntry("../escape").Open()) stream.WriteByte(1);
+
+        Assert.Throws<InvalidDataException>(() => ArchiveBrowser.Open(path, Cancellation));
     }
 
     [Fact]

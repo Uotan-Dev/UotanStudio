@@ -1,5 +1,6 @@
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
 using UotanStudio.Tests.Infrastructure;
+using System.IO.Compression;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -83,6 +84,29 @@ public class ApkParseTests
             // 无图标路径时，IconBytes 应为 null（不应有孤儿字节）。
             // Without an icon path, IconBytes must stay null (no orphan bytes).
             Assert.Null(info.IconBytes);
+        }
+    }
+
+    [Fact]
+    public void Analyze_DetectsSignatureSchemesAndKnownHardeningMarker()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "uotan-apk-detect-" + Guid.NewGuid().ToString("N") + ".apk");
+        try
+        {
+            using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+            {
+                archive.CreateEntry("META-INF/MANIFEST.MF");
+                archive.CreateEntry("META-INF/CERT.SF");
+                archive.CreateEntry("lib/armeabi-v7a/libjiagu.so");
+            }
+
+            var info = ApkParser.Analyze(path);
+            Assert.Contains("v1", info.SigningSchemes);
+            Assert.Equal("360 Jiagu", info.HardeningProvider);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
         }
     }
 }

@@ -8,6 +8,12 @@ public sealed class ApkInfo
 
     public int EntryCount { get; set; }
 
+    /// <summary>APK signature schemes detected in the container (v1, v2 and/or v3).</summary>
+    public List<string> SigningSchemes { get; } = [];
+
+    /// <summary>Known APK hardening marker, when one is detected.</summary>
+    public string? HardeningProvider { get; set; }
+
     public string PackageName { get; set; } = string.Empty;
 
     public string ApplicationName { get; set; } = string.Empty;

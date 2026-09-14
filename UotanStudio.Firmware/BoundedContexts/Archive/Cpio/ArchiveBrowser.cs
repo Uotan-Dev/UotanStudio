@@ -1,6 +1,8 @@
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
 using UotanStudio.Firmware.CrossCutting.Compress;
+using SharpCompress.Archives;
+using SharpCompress.Readers;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 
@@ -9,6 +11,7 @@ public sealed class ArchiveBrowser : IDisposable
 {
     private readonly FileStream _source;
     private readonly ArchiveFormat? _archiveFormat;
+    private readonly IArchive? _sharpArchive;
     private readonly string _memberName;
 
     /// <summary>Maximum decompressed scratch-file size; the file is deleted when the browser closes.</summary>
@@ -23,18 +26,26 @@ public sealed class ArchiveBrowser : IDisposable
     /// <summary>Validated members in archive order.</summary>
     public IReadOnlyList<Member> Members { get; }
 
-    private ArchiveBrowser(FileStream source, ArchiveFormat? archiveFormat, string memberName,
-        string formatName, CancellationToken cancellationToken)
+    private ArchiveBrowser(FileStream source, ArchiveFormat? archiveFormat, IArchive? sharpArchive,
+        string memberName, string formatName, CancellationToken cancellationToken, long maximumMemberBytes)
     {
         _source = source;
         _archiveFormat = archiveFormat;
+        _sharpArchive = sharpArchive;
         _memberName = memberName;
         FormatName = formatName;
         var members = new List<Member>();
         var nameCharacters = 0L;
+        var expandedBytes = 0L;
         foreach (var entry in ReadEntries(cancellationToken))
         {
             if (entry.Name.Length == 0) continue;
+            if (entry.DataLength > maximumMemberBytes)
+                throw new InvalidDataException($"Archive member '{entry.Name}' exceeds the browsing limit.");
+            try { expandedBytes = checked(expandedBytes + entry.DataLength); }
+            catch (OverflowException) { throw new InvalidDataException("Archive contents exceed the browsing limit."); }
+            if (expandedBytes > maximumMemberBytes)
+                throw new InvalidDataException("Archive contents exceed the browsing limit.");
             nameCharacters += entry.Name.Length;
             if (members.Count >= 100_000 || nameCharacters > 8 * 1024 * 1024)
                 throw new InvalidDataException("Archive directory exceeds the browsing limit.");
@@ -45,6 +56,8 @@ public sealed class ArchiveBrowser : IDisposable
 
     /// <summary>Recognizes archive extensions and compression extensions supported by the backend.</summary>
     public static bool SupportsPath(string path) => Path.GetExtension(path).ToLowerInvariant() is ".cpio" or ".tar"
+        or ".zip" or ".rar" or ".7z" or ".arj" or ".ace" or ".arc"
+        or ".lzw" or ".z"
         || CompressionForPath(path) != CompressionFormat.None;
 
     private static CompressionFormat CompressionForPath(string path) => Path.GetExtension(path).ToLowerInvariant() switch
@@ -82,6 +95,27 @@ public sealed class ArchiveBrowser : IDisposable
                 if (string.IsNullOrWhiteSpace(memberName)) memberName = "content";
             }
 
+            // Common SharpCompress archives (ZIP, RAR, 7z, ARC, ARJ, ACE and LZW) are kept
+            // open so individual entries can be streamed on demand instead of buffering them.
+            IArchive? sharpArchive = null;
+            if (IsSharpArchivePath(memberName))
+            {
+                source.Position = 0;
+                try { sharpArchive = ArchiveFactory.OpenArchive(source, new ReaderOptions { LeaveStreamOpen = true }); }
+                catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException or ArgumentException)
+                { throw new InvalidDataException("The archive is malformed or unsupported.", ex); }
+                try
+                {
+                    return new(source, archiveFormat: null, sharpArchive, memberName,
+                        sharpArchive.Type.ToString().ToUpperInvariant(), cancellationToken, maximumExpandedBytes);
+                }
+                catch
+                {
+                    sharpArchive.Dispose();
+                    throw;
+                }
+            }
+
             ArchiveFormat? format = null;
             try { format = new CpioArchive().DetectFormat(source); }
             catch (Exception ex) when (ex is InvalidDataException or EndOfStreamException)
@@ -92,7 +126,9 @@ public sealed class ArchiveBrowser : IDisposable
                     throw;
             }
             var container = format is ArchiveFormat.Tar or ArchiveFormat.Ustar ? "TAR" : format is not null ? "CPIO" : "File";
-            return new(source, format, memberName, compression == CompressionFormat.None ? container : $"{container} ({compression})", cancellationToken);
+            return new(source, format, sharpArchive: null, memberName,
+                compression == CompressionFormat.None ? container : $"{container} ({compression})",
+                cancellationToken, maximumExpandedBytes);
         }
         catch { source.Dispose(); throw; }
     }
@@ -112,6 +148,33 @@ public sealed class ArchiveBrowser : IDisposable
 
     private IEnumerable<ArchiveEntry> ReadEntries(CancellationToken cancellationToken)
     {
+        if (_sharpArchive is not null)
+        {
+            foreach (var entry in _sharpArchive.Entries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (string.IsNullOrEmpty(entry.Key)) continue;
+                var name = Normalize(entry.Key);
+                if (name.Length == 0) continue;
+                var isDirectory = entry.IsDirectory;
+                yield return new ArchiveEntry
+                {
+                    Name = name,
+                    Data = [],
+                    DataStreamFactory = isDirectory ? null : entry.OpenEntryStream,
+                    DeclaredDataLength = isDirectory ? 0 : entry.Size,
+                    Metadata = new ArchiveEntryMetadata
+                    {
+                        FileType = isDirectory ? CpioFileType.Directory : CpioFileType.Regular,
+                        Mode = isDirectory ? 0x41EDu : 0x81A4u,
+                        ModificationTimeUnixSeconds = entry.LastModifiedTime is { } modified
+                            ? new DateTimeOffset(modified.ToUniversalTime()).ToUnixTimeSeconds() : 0
+                    }
+                };
+            }
+            yield break;
+        }
+
         _source.Position = 0;
         if (_archiveFormat is null)
         {
@@ -131,6 +194,10 @@ public sealed class ArchiveBrowser : IDisposable
 
     private static string Normalize(string path)
     {
+        if (string.IsNullOrWhiteSpace(path) || path.StartsWith("/", StringComparison.Ordinal)
+            || path.StartsWith("\\", StringComparison.Ordinal)
+            || Path.IsPathFullyQualified(path))
+            throw new InvalidDataException($"Unsafe archive member path: '{path}'.");
         var parts = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Any(part => part == ".." || part.Contains(':') || part.Contains('\0')))
             throw new InvalidDataException($"Unsafe archive member path: '{path}'.");
@@ -138,5 +205,16 @@ public sealed class ArchiveBrowser : IDisposable
     }
 
     /// <summary>Releases the source and deletes any decompressed scratch file.</summary>
-    public void Dispose() => _source.Dispose();
+    public void Dispose()
+    {
+        _sharpArchive?.Dispose();
+        _source.Dispose();
+    }
+
+    private static bool IsSharpArchivePath(string path)
+    {
+        return Path.GetExtension(path).ToLowerInvariant() is
+            ".zip" or ".rar" or ".7z" or ".arj" or ".ace" or ".arc"
+            or ".lzw" or ".z";
+    }
 }
