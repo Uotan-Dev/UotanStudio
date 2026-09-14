@@ -5,8 +5,8 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using UotanStudio.Services;
-using UotanStudio.Services.Projects;
 using UotanStudio.Services.Delivery;
+using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Views.Controls;
 
@@ -125,7 +125,8 @@ public partial class PackImageSelectionView : UserControl
             foreach (var project in discovered.Projects)
                 _groups.Insert(index++, ObserveGroup(new PackImageGroup(project.Name,
                     project.Output.Select(path => GetEntry(path, false))
-                        .Concat(project.Original.Select(path => GetEntry(path, true)))) { DynamicPartitions = project.DynamicPartitions }));
+                        .Concat(project.Original.Select(path => GetEntry(path, true))))
+                { DynamicPartitions = project.DynamicPartitions }));
             for (var externalIndex = 0; externalIndex < externalEntries.Length; externalIndex++)
                 externalEntries[externalIndex].UpdateFileInfo(discovered.External[externalIndex]);
             ApplyGroupOptions();
@@ -162,7 +163,7 @@ public partial class PackImageSelectionView : UserControl
 
     private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    private static PackImageFileInfo[] EnumerateImages(string directory, CancellationToken token)
+    internal static PackImageFileInfo[] EnumerateImages(string directory, CancellationToken token)
     {
         if (!Directory.Exists(directory)) return [];
         // 页面切换取消枚举时提前终止，不抛取消异常；过期结果由调用方按 token 状态丢弃。
@@ -170,7 +171,8 @@ public partial class PackImageSelectionView : UserControl
         return Directory.EnumerateFiles(directory).TakeWhile(_ => !token.IsCancellationRequested)
             .Where(path => Path.GetExtension(path).ToLowerInvariant() is
                 ".img" or ".bin" or ".raw" or ".simg" or ".sparse" or ".ext4" or ".erofs" or ".f2fs"
-                or ".dat" or ".br" or ".zst" or ".dtb" or ".dtbo")
+                or ".dat" or ".br" or ".zst" or ".dtb" or ".dtbo"
+                || path.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase))
             .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
             .Select(PackImageFileInfo.Read).ToArray();
     }
@@ -207,7 +209,8 @@ public partial class PackImageSelectionView : UserControl
             ImageGroupsHost.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
             var content = new ContentControl
             {
-                Content = group, ContentTemplate = template,
+                Content = group,
+                ContentTemplate = template,
                 HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
                 VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Stretch
             };
@@ -269,11 +272,12 @@ public partial class PackImageSelectionView : UserControl
         {
             var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = LanguageService.Instance.GetString("PackDialog_AddImages"), AllowMultiple = true,
+                Title = LanguageService.Instance.GetString("PackDialog_AddImages"),
+                AllowMultiple = true,
                 FileTypeFilter =
                 [
                     new FilePickerFileType(LanguageService.Instance.GetString("NewProject_ImageFiles"))
-                    { Patterns = ["*.img", "*.bin", "*.raw", "*.simg", "*.sparse", "*.ext4", "*.erofs", "*.f2fs", "*.dat", "*.br", "*.zst", "*.dtb", "*.dtbo"] },
+                    { Patterns = ["*.img", "*.bin", "*.raw", "*.simg", "*.sparse", "*.ext4", "*.erofs", "*.f2fs", "*.dat", "*.br", "*.transfer.list", "*.zst", "*.dtb", "*.dtbo"] },
                     FilePickerFileTypes.All
                 ]
             });
@@ -345,5 +349,5 @@ public partial class PackImageSelectionView : UserControl
 
     internal PackImageSelection[] GetSelectedImages() => _groups.SelectMany(group =>
         group.Entries.Where(image => image.IsSelected).Select(image => new PackImageSelection(group.Name, image.FilePath)
-            { SizeBytes = image.SizeBytes, DynamicPartitions = group.DynamicPartitions })).ToArray();
+        { SizeBytes = image.SizeBytes, DynamicPartitions = group.DynamicPartitions })).ToArray();
 }

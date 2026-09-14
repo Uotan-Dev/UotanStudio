@@ -35,7 +35,11 @@
             <Setter Property="TextAlignment" Value="Left" />
         </Style>
         <Style Selector="Button.browse"><Setter Property="MinWidth" Value="108" /><Setter Property="Height" Value="32" /></Style>
-        <Style Selector="CheckBox.compact-check"><Setter Property="Margin" Value="0" /></Style>
+        <Style Selector="CheckBox.compact-check">
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
     </Window.Styles>
     <Grid RowDefinitions="*,Auto" Margin="0,32,0,0">
         <ursa:LoadingContainer Grid.Row="0" Name="MainBusyContainer" IsLoading="False">
@@ -77,18 +81,30 @@
                         <TextBox Grid.Column="1" Grid.ColumnSpan="2" Name="BootPathBox" Classes="path-field" IsReadOnly="True" />
                         <Button Grid.Column="3" Classes="browse" Content="{DynamicResource BootPatch_SelectFile}" Click="OnBrowseBootClick" />
                     </Grid>
-                    <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
-                        <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <Grid Name="PatchOptionsPanel" RowDefinitions="Auto,Auto" RowSpacing="8" IsVisible="False">
+                        <Grid Name="PatchInputRow" ColumnDefinitions="*,*" ColumnSpacing="10">
                             <TextBox Name="PrebootDeviceBox" PlaceholderText="{DynamicResource BootPatch_DevicePlaceholder}" />
-                            <ComboBox Grid.Column="1" Name="PrebootDeviceSelector" HorizontalAlignment="Stretch" SelectedIndex="-1" />
+                            <ComboBox Grid.Column="1" Name="ArchitectureBox" HorizontalAlignment="Stretch" SelectedIndex="-1" />
                         </Grid>
-                        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <CheckBox Classes="compact-check" Content="{DynamicResource BootPatch_ForceRootfs}" IsChecked="True" />
-                            <CheckBox Classes="compact-check" Content="{DynamicResource BootPatch_KeepEncryption}" IsChecked="True" />
-                            <CheckBox Classes="compact-check" Content="{DynamicResource BootPatch_InstallRecovery}" />
-                            <CheckBox Classes="compact-check" Content="{DynamicResource BootPatch_KeepAvb}" IsChecked="True" />
-                        </StackPanel>
+                        <WrapPanel Grid.Row="1" Name="MagiskOptionsRow" Orientation="Horizontal"
+                                   ItemWidth="220" ItemHeight="40" MaxHeight="200"
+                                   HorizontalAlignment="Center" VerticalAlignment="Top">
+                            <CheckBox Classes="compact-check" Name="ForceRootfsBox" IsChecked="True">
+                                <TextBlock Text="{DynamicResource BootPatch_ForceRootfs}" TextWrapping="Wrap" />
+                            </CheckBox>
+                            <CheckBox Classes="compact-check" Name="KeepEncryptionBox" IsChecked="True">
+                                <TextBlock Text="{DynamicResource BootPatch_KeepEncryption}" TextWrapping="Wrap" />
+                            </CheckBox>
+                            <CheckBox Classes="compact-check" Name="InstallRecoveryBox">
+                                <TextBlock Text="{DynamicResource BootPatch_InstallRecovery}" TextWrapping="Wrap" />
+                            </CheckBox>
+                            <CheckBox Classes="compact-check" Name="KeepAvbBox" IsChecked="True">
+                                <TextBlock Text="{DynamicResource BootPatch_KeepAvb}" TextWrapping="Wrap" />
+                            </CheckBox>
+                            <CheckBox Classes="compact-check" Name="PatchVbmetaBox">
+                                <TextBlock Text="{DynamicResource BootPatch_PatchVbmeta}" TextWrapping="Wrap" />
+                            </CheckBox>
+                        </WrapPanel>
                     </Grid>
                 </StackPanel>
             </ScrollViewer>
@@ -96,8 +112,8 @@
         <Border Grid.Row="1" Padding="20,14" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Background="{DynamicResource PageBackground}">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
                 <StackPanel Name="ProgressPanel" IsVisible="False" Width="280" Spacing="4" HorizontalAlignment="Left" VerticalAlignment="Center">
-                    <ProgressBar Minimum="0" Maximum="100" Value="0" ShowProgressText="True" Height="20" CornerRadius="4" />
-                    <TextBlock Text="{DynamicResource BootPatch_Progress}" FontSize="11" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+                    <ProgressBar Name="PatchProgressBar" Minimum="0" Maximum="100" Value="0" ShowProgressText="True" Height="20" CornerRadius="4" />
+                    <TextBlock Name="ProgressText" Text="{DynamicResource BootPatch_Progress}" FontSize="11" Opacity="0.75" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <Button Content="{DynamicResource Editor_Cancel}" MinWidth="88" Height="32" IsCancel="True" Click="OnCancelClick" />

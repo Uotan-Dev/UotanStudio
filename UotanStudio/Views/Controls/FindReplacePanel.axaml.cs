@@ -1,8 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
-using Avalonia.Input;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.Views.Controls;

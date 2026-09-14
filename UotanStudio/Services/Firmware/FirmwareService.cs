@@ -1,22 +1,23 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
-using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Avb;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage;
+using UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -67,6 +68,15 @@ public sealed class FirmwareService
     public static FirmwareService Instance => LazyInstance.Value;
 
     private FirmwareService() { }
+
+    /// <summary>Inspects a Magisk, KernelSU, APatch or LKM package using native parsers.</summary>
+    public Task<BootPatchDetection> DetectBootPatchAsync(string packagePath, CancellationToken cancellationToken = default)
+        => new BootPatchService().DetectAsync(packagePath, cancellationToken);
+
+    /// <summary>Applies a root package to a boot image without invoking an external magiskboot executable.</summary>
+    public Task<BootPatchResult> PatchBootAsync(string packagePath, string bootPath, string outputPath,
+        BootPatchOptions? options = null, CancellationToken cancellationToken = default)
+        => new BootPatchService().PatchAsync(packagePath, bootPath, outputPath, options, cancellationToken);
 
     private static RepackMetadataContext CaptureOperationContext(string path)
         => RepackMetadata.HasContext ? RepackMetadataContext.Unspecified.Capture()
@@ -1056,8 +1066,11 @@ public sealed class FirmwareService
             { Partition = p.Name, SourcePath = p.Path }).ToArray();
             await UotanStudio.Services.Delivery.DeliverySuperBuilder.BuildAsync(files, new()
             {
-                DeviceSize = deviceSize, Group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName,
-                MetadataSize = 65536, Slots = 2, Sparse = true
+                DeviceSize = deviceSize,
+                Group = string.IsNullOrWhiteSpace(groupName) ? "default" : groupName,
+                MetadataSize = 65536,
+                Slots = 2,
+                Sparse = true
             }, outputPath, token: cancellationToken).ConfigureAwait(false);
             return new FirmwareOpResult { Success = true, Summary = $"Synthesized super image with {partitions.Count} partition(s) -> {outputPath}" };
         }

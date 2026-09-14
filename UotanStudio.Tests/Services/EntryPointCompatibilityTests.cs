@@ -1,7 +1,7 @@
 using System.Reflection;
 using CommunityToolkit.Mvvm.Messaging;
-using Dock.Model.Core;
 using Dock.Model.Controls;
+using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Messages;

@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
-using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 using UotanStudio.Firmware;
-using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services.Logging;
 
 namespace UotanStudio.Views.Controls;

@@ -3,30 +3,10 @@ using System.Text.Json.Serialization;
 using Google.Protobuf;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
 
 namespace UotanStudio.Services.Firmware;
-
-/// <summary>Original container settings, independent of whether the source file is copied.</summary>
-internal sealed record SourceContainerSettings
-{
-    public string SourceName { get; init; } = "";
-    public string Kind { get; init; } = "";
-    public string Storage { get; init; } = "RAW";
-    public string DeviceType { get; init; } = "Unknown";
-    public ulong Size { get; init; }
-    public uint BlockSize { get; init; }
-    public uint MetadataSlots { get; init; }
-    public uint MetadataMaxSize { get; init; }
-    public uint MinorVersion { get; init; }
-    public long MaxTimestamp { get; init; }
-    public string SecurityPatchLevel { get; init; } = "";
-    public ulong[] PartitionSizes { get; init; } = [];
-    public string[] GroupNames { get; init; } = [];
-    public ulong[] GroupSizes { get; init; } = [];
-    public string[] PartitionNames { get; init; } = [];
-    public byte[][] OriginalStructures { get; init; } = [];
-}
 
 /// <summary>Bounded, source-generated project configuration storage for Super and Payload.</summary>
 internal static class SourceContainerMetadataService
@@ -36,22 +16,22 @@ internal static class SourceContainerMetadataService
     internal static string GetPath(string projectRoot, string kind) =>
         Path.Combine(projectRoot, ".uotan", "source-" + kind + ".json");
 
-    internal static SourceContainerSettings? Read(string projectRoot, string kind)
+    internal static DeliverySourceContainerSettings? Read(string projectRoot, string kind)
     {
         var path = GetPath(projectRoot, kind);
         if (!File.Exists(path)) return null;
         using var input = File.OpenRead(path);
         if (input.Length > MaximumBytes) throw new InvalidDataException("Source configuration exceeds its size limit.");
-        return JsonSerializer.Deserialize(input, SourceContainerJsonContext.Default.SourceContainerSettings);
+        return JsonSerializer.Deserialize(input, SourceContainerJsonContext.Default.DeliverySourceContainerSettings);
     }
 
-    internal static SourceContainerSettings Capture(string source, ContainerKind kind)
+    internal static DeliverySourceContainerSettings Capture(string source, ContainerKind kind)
     {
         if (kind == ContainerKind.Super)
         {
             var metadata = MetadataReader.ReadFromImageFile(source);
             var header = UotanStudio.Firmware.SharedKernel.FormatDetector.ReadHeader(source, 4);
-            return new SourceContainerSettings
+            return new DeliverySourceContainerSettings
             {
                 SourceName = Path.GetFileName(source),
                 Kind = "super",
@@ -76,7 +56,7 @@ internal static class SourceContainerMetadataService
 
         var payload = PayloadParser.GetPayloadMetadata(source);
         // Save configuration, not the potentially enormous per-operation delta manifest.
-        return new SourceContainerSettings
+        return new DeliverySourceContainerSettings
         {
             SourceName = Path.GetFileName(source),
             Kind = "payload",
@@ -102,7 +82,7 @@ internal static class SourceContainerMetadataService
         {
             if (kind == ContainerKind.Zip && !ContainerStructureAnalyzer.Analyze(source).Entries.Any(entry => entry.FromPayload)) return;
             var settings = Capture(source, kind);
-            var bytes = JsonSerializer.SerializeToUtf8Bytes(settings, SourceContainerJsonContext.Default.SourceContainerSettings);
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(settings, SourceContainerJsonContext.Default.DeliverySourceContainerSettings);
             if (bytes.Length > MaximumBytes) throw new InvalidDataException("Source configuration exceeds its size limit.");
             var path = GetPath(root, settings.Kind);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -118,5 +98,5 @@ internal static class SourceContainerMetadataService
 }
 
 [JsonSourceGenerationOptions(WriteIndented = true)]
-[JsonSerializable(typeof(SourceContainerSettings))]
+[JsonSerializable(typeof(DeliverySourceContainerSettings))]
 internal partial class SourceContainerJsonContext : JsonSerializerContext;

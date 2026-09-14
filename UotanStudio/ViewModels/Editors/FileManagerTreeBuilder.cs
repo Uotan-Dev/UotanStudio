@@ -25,11 +25,11 @@ internal static class FileManagerTreeBuilder
         foreach (var entry in entries)
         {
             byPath[entry.Path] = new FileManagerEntryViewModel(GetName(entry.Path), entry.Path, entry.Size, entry.Kind switch
-                {
-                    ImageBrowserEntryKind.Directory => FileEntryKind.Directory,
-                    ImageBrowserEntryKind.Symlink => FileEntryKind.Symlink,
-                    _ => FileEntryKind.File,
-                });
+            {
+                ImageBrowserEntryKind.Directory => FileEntryKind.Directory,
+                ImageBrowserEntryKind.Symlink => FileEntryKind.Symlink,
+                _ => FileEntryKind.File,
+            });
         }
 
         // 第二遍：挂载到父节点，缺失的中间目录按需合成。

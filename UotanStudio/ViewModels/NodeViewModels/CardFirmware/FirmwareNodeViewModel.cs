@@ -1,10 +1,10 @@
 using Avalonia;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 using UotanStudio.Firmware.SharedKernel;
-using FirmwareOpResult = UotanStudio.Services.Firmware.FirmwareOpResult;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
 using UotanStudio.Services.Firmware;
+using FirmwareOpResult = UotanStudio.Services.Firmware.FirmwareOpResult;
 
 namespace UotanStudio.ViewModels.NodeViewModels;
 

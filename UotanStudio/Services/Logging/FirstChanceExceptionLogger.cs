@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Net.Sockets;
 using System.Runtime.ExceptionServices;
 
@@ -160,28 +159,12 @@ public static class FirstChanceExceptionLogger
     {
         try
         {
-            var trace = new StackTrace(exception, fNeedFileInfo: true);
-            var frames = trace.GetFrames();
-            if (frames is null) return string.Empty;
-
-            var parts = new List<string>(MaxStackFrames);
-            foreach (var frame in frames)
-            {
-                var method = frame.GetMethod();
-                if (method is null) continue;
-                var declaring = method.DeclaringType;
-                if (declaring is not null && IsInfrastructureType(declaring.FullName)) continue;
-
-                var name = declaring is null ? method.Name : $"{declaring.FullName}.{method.Name}";
-                var file = frame.GetFileName();
-                if (!string.IsNullOrEmpty(file))
-                {
-                    name = $"{name} ({System.IO.Path.GetFileName(file)}:{frame.GetFileLineNumber()})";
-                }
-                parts.Add(name);
-                if (parts.Count >= MaxStackFrames) break;
-            }
-            return string.Join(" <- ", parts);
+            var lines = exception.StackTrace?
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(line => !IsInfrastructureLine(line))
+                .Take(MaxStackFrames)
+                .ToArray();
+            return lines is { Length: > 0 } ? string.Join(" <- ", lines) : string.Empty;
         }
         catch
         {
@@ -189,24 +172,22 @@ public static class FirstChanceExceptionLogger
         }
     }
 
-    private static bool IsInfrastructureType(string? fullName)
+    private static bool IsInfrastructureLine(string line)
     {
-        if (fullName is null) return false;
-        return fullName.StartsWith("System.Threading.Tasks.Task", StringComparison.Ordinal)
-            || fullName.StartsWith("System.Runtime.CompilerServices.", StringComparison.Ordinal)
-            || fullName.StartsWith("System.Threading.ExecutionContext", StringComparison.Ordinal)
-            || fullName.StartsWith("System.Threading.ThreadPoolWorkQueue", StringComparison.Ordinal);
+        return line.Contains("System.Threading.Tasks.Task", StringComparison.Ordinal)
+            || line.Contains("System.Runtime.CompilerServices.", StringComparison.Ordinal)
+            || line.Contains("System.Threading.ExecutionContext", StringComparison.Ordinal)
+            || line.Contains("System.Threading.ThreadPoolWorkQueue", StringComparison.Ordinal);
     }
 
     private static string DescribeTopFrame(Exception exception)
     {
         try
         {
-            var frame = new StackTrace(exception, fNeedFileInfo: false).GetFrame(0);
-            var method = frame?.GetMethod();
-            if (method is null) return "unknown";
-            var declaring = method.DeclaringType;
-            return declaring is null ? method.Name : $"{declaring.Name}.{method.Name}";
+            var line = exception.StackTrace?
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault(line => !IsInfrastructureLine(line));
+            return string.IsNullOrWhiteSpace(line) ? "unknown" : line;
         }
         catch
         {

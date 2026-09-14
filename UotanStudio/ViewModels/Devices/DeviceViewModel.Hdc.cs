@@ -79,7 +79,8 @@ public partial class DeviceViewModel
             {
                 var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
                 {
-                    Title = title, AllowMultiple = false,
+                    Title = title,
+                    AllowMultiple = false,
                     FileTypeFilter = operation == "Install"
                         ? [new FilePickerFileType("HarmonyOS") { Patterns = ["*.hap", "*.hsp", "*.app"] }]
                         : [FilePickerFileTypes.All]

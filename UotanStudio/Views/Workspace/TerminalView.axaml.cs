@@ -4,8 +4,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
 using Avalonia.Markup.Xaml.MarkupExtensions;
+using Avalonia.Media;
 using Avalonia.Threading;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Workspace;
@@ -82,7 +82,7 @@ public partial class TerminalView : UserControl
             FontSize = 13,
             BufferSize = 10000,
             Options = new XTerm.Options.TerminalOptions { MinimumContrastRatio = 4.5 },
-            Margin = new Thickness(8,4,0,4),
+            Margin = new Thickness(8, 4, 0, 4),
             AllowWindowOps = false
         };
         terminal.Bind(DockTerminal.BackgroundProperty, new DynamicResourceExtension("PageBackground"));

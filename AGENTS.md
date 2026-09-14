@@ -455,3 +455,9 @@ APK 签名入口：APK 文档页提供自定义私钥、证书、输出路径、
 - scrcpy 音频头 0/1 表示服务端禁用音频，不作为 codec fourcc 解码；视频仍继续。服务端启动失败附带最多 4096 字符的输出摘要，便于识别设备缺少编码器。音频解码失败保持传输排空。
 - GStreamer 使用稳定 C ABI、线程归属检查、有界输入与输出；NV12 通过 `GstVideoMeta` 映射读取真实平面行距，缺元数据才采用默认布局。原生 ABI 应对照目标平台头文件验证；Windows/WSL 构建使用不同 obj/bin 输出。
 - 本轮 Windows GPU 是同步 D3D11 感知系统 MFT；本机没有异步硬件候选。异步路径有实现及边界检查，但尚无厂商异步 MFT 运行证据。跨平台硬件支持受 GPU/profile/驱动/系统 codec 与原生插件制约。
+
+### 交付逻辑子项目（2026-09-15）
+
+- 交付计划、Payload/Super/Recovery 构建、脚本生成、工具准备、输出发布及校验逻辑位于 `UotanStudio.Delivery`，主项目通过项目引用使用，测试项目也直接引用该子项目。
+- `UotanStudio.Delivery` 只依赖 `UotanStudio.Firmware` 和必要的第三方压缩库，不得反向引用主项目的 UI、项目或密钥服务。主项目保留 `DeliveryDynamicPartitions`、`DeliveryKeyProvider` 等组合适配层，由宿主注入项目配置和密钥实现。
+- 签名通过 `IDeliverySigningKeyProvider` 依赖倒置；交付库不直接加载 `KeyLibraryService`。新增交付能力应优先复用现有类型和校验流程，避免在 UI 与后端各维护一套实现或引入难以阅读的多层抽象。

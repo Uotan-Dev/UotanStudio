@@ -1,6 +1,6 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Collections.Concurrent;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
@@ -13,7 +13,7 @@ public sealed class RemoteRomServiceTests
     public async Task AnalyzeAsync_UnknownRemoteFileKeepsDirectDownloadMode()
     {
         using var http = new HttpClient(new StaticHandler("plain rom"u8.ToArray()));
-        var result = await new RemoteRomService(http).AnalyzeAsync("https://example.test/firmware.bin");
+        var result = await new RemoteRomService(http).AnalyzeAsync("https://example.test/firmware.bin", TestContext.Current.CancellationToken);
         Assert.Equal(ContainerKind.None, result.Kind);
         Assert.False(result.SupportsPartitionSelection);
         Assert.Equal("firmware.bin", result.FileName);

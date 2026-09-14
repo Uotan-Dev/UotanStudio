@@ -1,6 +1,6 @@
+using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Keys;
-using UotanStudio.Services;
 using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.Composition;

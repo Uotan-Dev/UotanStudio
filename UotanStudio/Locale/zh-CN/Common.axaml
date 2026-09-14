@@ -81,6 +81,8 @@
     <x:String x:Key="Delivery_Script_ConnectOneDevice">请连接一台 Fastboot 设备。</x:String>
     <x:String x:Key="Delivery_Script_ReadProduct">无法读取设备型号。</x:String>
     <x:String x:Key="Delivery_Script_DeviceMismatch">设备型号不匹配。</x:String>
+    <x:String x:Key="Delivery_Script_Device">机型代号：{0}</x:String>
+    <x:String x:Key="Delivery_Script_AuthorInformation">作者信息：</x:String>
     <x:String x:Key="Delivery_Script_MissingImage">缺少镜像：{0}</x:String>
     <x:String x:Key="Delivery_Script_ZstdMissing">缺少 zstd 或不可执行。</x:String>
     <x:String x:Key="Delivery_Script_DecompressionFailed">解压失败。</x:String>
@@ -151,12 +153,17 @@
     <x:String x:Key="BootPatch_NoFile">不选择文件</x:String>
     <x:String x:Key="BootPatch_SelectFile">选择文件</x:String>
     <x:String x:Key="BootPatch_DevicePlaceholder">指定预启动设备</x:String>
-    <x:String x:Key="BootPatch_ForceRootfs">强开Rootfs</x:String>
+    <x:String x:Key="BootPatch_ForceRootfs">Legacy SAR：强制加载Rootfs</x:String>
     <x:String x:Key="BootPatch_KeepEncryption">保持强加密</x:String>
     <x:String x:Key="BootPatch_InstallRecovery">安装到Recovery</x:String>
     <x:String x:Key="BootPatch_KeepAvb">保留AVB2.0/dm-verity</x:String>
+    <x:String x:Key="BootPatch_PatchVbmeta">修补VBMeta标志</x:String>
+    <x:String x:Key="BootPatch_AutoDetect">自动检测</x:String>
+    <x:String x:Key="BootPatch_ArchitectureUnknown">未识别</x:String>
     <x:String x:Key="BootPatch_Progress">修补进度</x:String>
     <x:String x:Key="BootPatch_Start">开始修补</x:String>
+    <x:String x:Key="BootPatch_SuperPassword">超级密码（APatch）</x:String>
+    <x:String x:Key="BootPatch_ApatchPassword">请输入超级密码</x:String>
     <x:String x:Key="PackDialog_PackPayload">打包 Payload</x:String>
     <x:String x:Key="PackDialog_ShowOriginal">显示原包镜像</x:String>
     <x:String x:Key="PackDialog_BrowseOutput">选择输出位置</x:String>

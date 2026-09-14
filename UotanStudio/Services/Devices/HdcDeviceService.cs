@@ -1,6 +1,6 @@
-using UotanStudio.Comm.Protocols.Common;
 using System.Globalization;
 using System.Text;
+using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Hdc;
 
 namespace UotanStudio.Services.Devices;

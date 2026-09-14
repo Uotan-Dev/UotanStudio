@@ -33,6 +33,10 @@ public sealed class ImageInputServiceTests
     [InlineData(".ozip", "oppo")]
     [InlineData(".simg", "sparse")]
     [InlineData(".sparse", "sparse")]
+    [InlineData(".dat", "dat")]
+    [InlineData(".new.dat.br", "brotli")]
+    [InlineData(".BR", "brotli")]
+    [InlineData(".transfer.list", "dat")]
     public void DetectFormat_KnownExtension_ReturnsExtensionFormat(string extension, string expected)
     {
         using var temp = new TempDirectory();
@@ -42,6 +46,16 @@ public sealed class ImageInputServiceTests
     }
 
     // ---- 格式探测：魔数判定。 Format probing: magic-based detection. ----
+
+    [Theory]
+    [InlineData("system.new.dat", "dat")]
+    [InlineData("system.new.dat.br", "brotli")]
+    public void DetectFormat_BlockDataSuffixTakesPrecedenceOverFilesystemHeader(string name, string expected)
+    {
+        using var temp = new TempDirectory();
+        var bytes = new byte[4096]; bytes[1080] = 0x53; bytes[1081] = 0xef;
+        Assert.Equal(expected, ImageInputService.DetectFormat(temp.WriteBytes(name, bytes)));
+    }
 
     [Fact]
     public void DetectFormat_AndroidSparseMagic_ReturnsSparse()
@@ -122,7 +136,7 @@ public sealed class ImageInputServiceTests
     public void DetectFormat_UnrecognizedHeaderWithoutKnownExtension_ReturnsUnknown()
     {
         using var temp = new TempDirectory();
-        var file = temp.WriteBytes("mystery.dat", [0x01, 0x02, 0x03, 0x04, 0x05]);
+        var file = temp.WriteBytes("mystery.unknown", [0x01, 0x02, 0x03, 0x04, 0x05]);
 
         Assert.Equal("unknown", ImageInputService.DetectFormat(file));
     }

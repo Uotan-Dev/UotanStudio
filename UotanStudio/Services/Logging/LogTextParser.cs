@@ -86,8 +86,12 @@ internal sealed partial class LogTextParser
         var complete = $"{timestampText,-23} {ids,-13} {tag,-24} {"-",-32} {priority} {messageText}";
         var severity = priority switch
         {
-            'V' => LogLevel.Trace, 'D' => LogLevel.Debug, 'I' => LogLevel.Info,
-            'W' => LogLevel.Warn, 'E' => LogLevel.Error, _ => LogLevel.Fatal
+            'V' => LogLevel.Trace,
+            'D' => LogLevel.Debug,
+            'I' => LogLevel.Info,
+            'W' => LogLevel.Warn,
+            'E' => LogLevel.Error,
+            _ => LogLevel.Fatal
         };
         return new LogFileRecord(complete, severity,
         [

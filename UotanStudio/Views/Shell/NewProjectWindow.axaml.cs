@@ -5,9 +5,9 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using UotanStudio.Services;
+using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
-using UotanStudio.Services.Delivery;
 
 namespace UotanStudio.Views.Shell;
 
@@ -544,11 +544,12 @@ public partial class NewProjectWindow : Window
         if (ProjectLocationBox.Text is { Length: > 0 } text)
         {
             var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-            var strip = !string.IsNullOrWhiteSpace(name)
-                && (text.EndsWith(Path.DirectorySeparatorChar + name, comparison)
+            var currentName = name ?? string.Empty;
+            var strip = currentName.Length > 0
+                && (text.EndsWith(Path.DirectorySeparatorChar + currentName, comparison)
                     || (Path.AltDirectorySeparatorChar != Path.DirectorySeparatorChar
-                        && text.EndsWith(Path.AltDirectorySeparatorChar + name, comparison)));
-            _baseDirectory = strip ? text[..^name.Length] : text;
+                        && text.EndsWith(Path.AltDirectorySeparatorChar + currentName, comparison)));
+            _baseDirectory = strip ? text[..^currentName.Length] : text;
         }
         UpdateValidation();
     }

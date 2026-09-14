@@ -2,13 +2,13 @@ using Avalonia.Controls;
 using UotanStudio.ViewModels.Compare;
 using UotanStudio.ViewModels.Devices;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.ViewModels.Workspace;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Compare;
 using UotanStudio.Views.Devices;
 using UotanStudio.Views.Editors;
-using UotanStudio.Views.Workspace;
 using UotanStudio.Views.Shell;
+using UotanStudio.Views.Workspace;
 
 namespace UotanStudio;
 

@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using Avalonia.Threading;
+using UotanStudio.Media.Audio;
+using UotanStudio.Media.Decoding;
 using UotanStudio.Services;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.Media.Decoding;
-using UotanStudio.Media.Audio;
 
 namespace UotanStudio.ViewModels.Workspace;
 

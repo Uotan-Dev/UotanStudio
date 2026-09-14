@@ -81,6 +81,8 @@
     <x:String x:Key="Delivery_Script_ConnectOneDevice">Connect exactly one Fastboot device.</x:String>
     <x:String x:Key="Delivery_Script_ReadProduct">Unable to read device product.</x:String>
     <x:String x:Key="Delivery_Script_DeviceMismatch">Device mismatch.</x:String>
+    <x:String x:Key="Delivery_Script_Device">Device: {0}</x:String>
+    <x:String x:Key="Delivery_Script_AuthorInformation">Author information:</x:String>
     <x:String x:Key="Delivery_Script_MissingImage">Missing image: {0}</x:String>
     <x:String x:Key="Delivery_Script_ZstdMissing">zstd missing or not executable.</x:String>
     <x:String x:Key="Delivery_Script_DecompressionFailed">Decompression failed.</x:String>
@@ -151,12 +153,17 @@
     <x:String x:Key="BootPatch_NoFile">No file</x:String>
     <x:String x:Key="BootPatch_SelectFile">Select file</x:String>
     <x:String x:Key="BootPatch_DevicePlaceholder">Specify pre-boot device</x:String>
-    <x:String x:Key="BootPatch_ForceRootfs">Force Rootfs</x:String>
+    <x:String x:Key="BootPatch_ForceRootfs">Legacy SAR: force load rootfs</x:String>
     <x:String x:Key="BootPatch_KeepEncryption">Keep force encryption</x:String>
     <x:String x:Key="BootPatch_InstallRecovery">Install to Recovery</x:String>
     <x:String x:Key="BootPatch_KeepAvb">Keep AVB2.0/dm-verity</x:String>
+    <x:String x:Key="BootPatch_PatchVbmeta">Patch VBMeta flags</x:String>
+    <x:String x:Key="BootPatch_AutoDetect">Auto detect</x:String>
+    <x:String x:Key="BootPatch_ArchitectureUnknown">unknown</x:String>
     <x:String x:Key="BootPatch_Progress">Patch progress</x:String>
     <x:String x:Key="BootPatch_Start">Start patch</x:String>
+    <x:String x:Key="BootPatch_SuperPassword">Super password (APatch)</x:String>
+    <x:String x:Key="BootPatch_ApatchPassword">Enter SuperKey</x:String>
     <x:String x:Key="PackDialog_PackPayload">Pack Payload</x:String>
     <x:String x:Key="PackDialog_ShowOriginal">Show original images</x:String>
     <x:String x:Key="PackDialog_BrowseOutput">Select output location</x:String>

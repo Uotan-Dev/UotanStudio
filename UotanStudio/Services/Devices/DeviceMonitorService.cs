@@ -1,8 +1,8 @@
-using UotanStudio.Comm.Protocols.Common;
 using AdvancedSharpAdbClient;
 using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Bootrom;
+using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Edl;
 using UotanStudio.Comm.Protocols.Fastboot;
 using UotanStudio.Comm.Protocols.Hdc;

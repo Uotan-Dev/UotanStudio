@@ -101,7 +101,8 @@ internal static class WorkspaceSessionCapture
         .OfType<IDock>().Where(d => !string.IsNullOrEmpty(d.Id))
         .Select(d => new WorkspaceDockState
         {
-            Id = d.Id!, Proportion = double.IsFinite(d.Proportion) ? d.Proportion : null,
+            Id = d.Id!,
+            Proportion = double.IsFinite(d.Proportion) ? d.Proportion : null,
             ActiveId = d.ActiveDockable?.Id
         }).ToList();
 }

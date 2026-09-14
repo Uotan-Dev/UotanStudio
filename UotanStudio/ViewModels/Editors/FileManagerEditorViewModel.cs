@@ -4,8 +4,8 @@ using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
-using UotanStudio.Services.FileManagement;
 using UotanStudio.Services;
+using UotanStudio.Services.FileManagement;
 using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Editors;

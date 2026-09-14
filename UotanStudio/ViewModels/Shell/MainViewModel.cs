@@ -1,11 +1,11 @@
+using Avalonia.Controls;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Composition;
 using UotanStudio.Messages;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Composition;
-using Avalonia.Controls;
 
 namespace UotanStudio.ViewModels.Shell;
 

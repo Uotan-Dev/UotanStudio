@@ -294,7 +294,7 @@ public static class ContainerStructureAnalyzer
             // GetPartitionInfo accepts a ZIP-wrapped payload (locates payload.bin internally).
             var info = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.GetPartitionInfo(filePath);
             entries.AddRange(info.Select(p => new ContainerEntry(p.Name, "payload", (long)p.SizeBytes, FromPayload: true)
-                { PayloadMemberPath = payloadMemberPath }));
+            { PayloadMemberPath = payloadMemberPath }));
         }
 
         return new ContainerStructure(ContainerKind.Zip, entries);

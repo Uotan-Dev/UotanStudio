@@ -1,5 +1,5 @@
-using System.Text;
 using System.Security.Cryptography;
+using System.Text;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;

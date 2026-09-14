@@ -1,8 +1,8 @@
+using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Buffers.Binary;
-using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 
 namespace UotanStudio.Services.Firmware;

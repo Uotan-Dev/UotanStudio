@@ -1,16 +1,16 @@
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Text.Json;
-using Dock.Model.Core;
 using Dock.Model.Controls;
+using Dock.Model.Core;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Workspace;
 using UotanStudio.ViewModels.Editors;
-using UotanStudio.ViewModels.Workspace;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.NodeViewModels;
+using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 using Xunit;
 

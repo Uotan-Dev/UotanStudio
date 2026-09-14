@@ -9,8 +9,8 @@ using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
-using UotanStudio.ViewModels.Workspace;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Shell;
 using Ursa.Controls;
 

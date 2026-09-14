@@ -11,11 +11,11 @@ using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
 using UotanStudio.Services.Workspace;
-using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
-using UotanStudio.Views.Shell;
 using UotanStudio.Views.Controls;
+using UotanStudio.Views.Shell;
 
 namespace UotanStudio.ViewModels.Shell;
 

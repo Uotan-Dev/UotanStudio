@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Composition;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Messages;
 using UotanStudio.Models;
@@ -12,7 +13,6 @@ using UotanStudio.Services.Devices;
 using UotanStudio.Services.Logging;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
-using UotanStudio.Composition;
 
 namespace UotanStudio;
 

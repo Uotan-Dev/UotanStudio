@@ -1,5 +1,5 @@
-using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm;
+using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Hdc;
 using UotanStudio.Comm.Transports.Abstractions;
 

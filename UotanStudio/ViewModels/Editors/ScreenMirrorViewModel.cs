@@ -9,8 +9,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Comm.Protocols.Adb;
 using UotanStudio.Comm.Protocols.Scrcpy;
-using UotanStudio.Media.Decoding;
 using UotanStudio.Media.Audio;
+using UotanStudio.Media.Decoding;
 
 namespace UotanStudio.ViewModels.Editors;
 
