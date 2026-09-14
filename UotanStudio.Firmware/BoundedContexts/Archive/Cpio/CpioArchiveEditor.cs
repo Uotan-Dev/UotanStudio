@@ -82,6 +82,8 @@ public sealed class CpioArchiveEditor
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var normalized = path.Replace('\\', '/').TrimStart('/');
-        return normalized.StartsWith("./", StringComparison.Ordinal) ? normalized : "./" + normalized;
+        while (normalized.StartsWith("./", StringComparison.Ordinal))
+            normalized = normalized[2..];
+        return normalized;
     }
 }
