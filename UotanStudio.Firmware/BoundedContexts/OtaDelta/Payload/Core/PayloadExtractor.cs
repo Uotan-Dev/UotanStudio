@@ -3,6 +3,7 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 
@@ -169,7 +170,9 @@ internal class PayloadExtractor
                 // stream with a dedicated lock so partitions never block each other; the lock is still
                 // passed downstream to guard reads within this partition.
                 var ownPayload = openPayloadStream is not null;
-                object streamLock = new();
+                // Caller-supplied streams can be shared across partitions as well as operations.
+                // 调用方提供的流可能跨分区共享，回退读取必须使用同一把锁。
+                object streamLock = ownPayload ? new object() : stream!;
 
                 var parallelOps = new List<InstallOperation>();
                 var sequentialOps = new List<InstallOperation>();
@@ -223,10 +226,11 @@ internal class PayloadExtractor
                         },
                         op => OperationProcessor.ProcessOperation(op, outFile, stream!, baseOffset, blockSize, writeLock, streamLock, cancellationToken, progressTracker));
 
+                    using var deltaPayload = new IndependentReadStream(stream!, streamLock);
                     foreach (var op in sequentialOps)
                     {
                         cancellationToken.ThrowIfCancellationRequested();
-                        OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, stream!, baseOffset, blockSize, cancellationToken, progressTracker);
+                        OperationProcessor.ProcessDeltaOperation(op, baseStream!, outFile, deltaPayload, baseOffset, blockSize, cancellationToken, progressTracker);
                     }
                 }
 

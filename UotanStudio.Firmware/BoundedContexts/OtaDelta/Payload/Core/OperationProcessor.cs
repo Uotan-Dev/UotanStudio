@@ -160,7 +160,11 @@ internal static class OperationProcessor
             // is serialized through ExtentWriteStream's syncRoot (writeLock).
             // 无外层写锁：有界读取（共享载荷流由 streamLock 保护）与解压/哈希校验并行进行；
             // 仅输出 FileStream 的 Seek+Write 通过 ExtentWriteStream 的 syncRoot（writeLock）串行化。
-            using var bounded = new SharedKernel.Streams.BoundedReadStream(stream, dataPos, dataLength, leaveOpen: true, syncRoot: streamLock);
+            // Positional reads keep raw file cursors independent; transformed streams retain
+            // the shared lock around each bounded read instead of around decoding.
+            // 原始文件使用独立偏移读取，转换流仍按次读取加锁；解码不持有该锁。
+            using var cursor = new IndependentReadStream(stream, streamLock);
+            using var bounded = new BoundedReadStream(cursor, dataPos, dataLength, leaveOpen: true);
             using var hashing = new VerifyingReadStream(bounded, op.DataSha256Hash?.ToByteArray());
             cancellationToken.ThrowIfCancellationRequested();
             // Decode-and-verify in one pass: the hashing stream feeds the decoder, Complete() checks

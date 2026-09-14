@@ -93,7 +93,7 @@ public class StreamDataProvider(Stream stream, long offset, long length, bool le
             return 0;
         }
 
-        var toRead = Math.Min(buffer.Length, (int)(Length - inOffset));
+        var toRead = (int)Math.Min(buffer.Length, Length - inOffset);
         if (_stream.CanSeek)
         {
             _stream.Seek(_offset + inOffset, SeekOrigin.Begin);
