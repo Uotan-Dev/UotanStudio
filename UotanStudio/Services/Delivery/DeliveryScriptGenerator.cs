@@ -18,17 +18,23 @@ internal static partial class DeliveryScriptGenerator
     internal static Dictionary<string, string> Generate(DeliveryPlan plan, Func<string, string>? localize = null)
     {
         DeliveryValidation.Validate(plan, false);
+        if (plan.Files.Any(f => DeliveryPackageBuilder.IsDatArtifact(f.FileName))
+            && (!plan.Recovery || plan.PackPayload || plan.PackSuper))
+            throw new NotSupportedException("Android DAT 文件只能通过 Recovery 卡刷脚本处理，不能作为 fastboot 或 Super/Payload 镜像。");
         if (plan.IsSuperEmptyOnly) return [];
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!plan.OrganizeDirectory) return result;
         var flashFiles = plan.Files.Where(f => !f.FileName.Equals("payload.bin", StringComparison.OrdinalIgnoreCase) && f.Partition != "payload"
             // super_empty.img 是附加布局文件，不是可刷写的分区镜像，不进入任何刷写脚本与清单。
             // super_empty.img is an auxiliary layout file, not a flashable partition image; keep it out of scripts and manifests.
-            && f.Partition != "super_empty")
+            && f.Partition != "super_empty"
+            && !DeliveryPackageBuilder.IsDatArtifact(f.FileName))
             .Select(f => f.Generated && f.Partition == "super"
                 ? f with { Generated = false, FileName = DeliveryOutputService.SuperFileName(plan.Super) }
                 : f)
             .ToList();
+        if (plan.Recovery && !plan.PackPayload)
+            result.Add("Recovery.sh", DeliveryPackageBuilder.RecoveryScript(plan));
         if (flashFiles.Count == 0) return result;
         plan = plan with { Files = flashFiles };
         var groups = plan.Files.GroupBy(f => f.Partition, StringComparer.Ordinal).Select(g => g.ToArray()).ToArray();
@@ -55,7 +61,6 @@ internal static partial class DeliveryScriptGenerator
                             result.Add("flash-" + Path.GetFileNameWithoutExtension(alternative.FileName) + ".txt", Txt(plan, variant));
                     }
         }
-        if (plan.Recovery && !plan.PackPayload) result.Add("Recovery.sh", DeliveryPackageBuilder.RecoveryScript(plan));
         if (plan.Windows) result.Add("FlashWindows.bat", Batch(plan, groups, localize));
         if (plan.Linux) result.Add("FlashLinux.sh", Shell(plan, groups, "Linux", localize));
         if (plan.MacOS) result.Add("FlashMacOS.sh", Shell(plan, groups, "macOS", localize));

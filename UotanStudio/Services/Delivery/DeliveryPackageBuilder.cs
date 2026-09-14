@@ -38,8 +38,10 @@ internal static class DeliveryPackageBuilder
             if (value.Length > 1024 || value.Any(char.IsControl)) throw new InvalidDataException("OTA 元数据包含无效字符。");
         if (plan.Recovery && !plan.PackPayload && !plan.PackSuper && (!plan.OrganizeDirectory || plan.PackPayload || plan.AskWipe || plan.Reboot
             || plan.Slot == "all" || plan.Files.Any(f => f.Generated || f.IncludeInSuper || f.Fastbootd || f.Partition is "super" or "super_empty"
-                || !f.FileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase))))
-            throw new NotSupportedException("Recovery ZIP 面向提供 shell/unzip/sha256sum/blockdev 的自定义 Recovery，仅支持物理 IMG 分区；不支持动态分区、容器、双槽同时刷写、自动清除或重启。");
+                || !IsRecoveryArtifact(f.FileName))))
+            throw new NotSupportedException("Recovery ZIP 仅支持物理 IMG 分区或成组的 Android DAT 文件；不支持动态分区、容器、双槽同时刷写、自动清除或重启。");
+        if (plan.Recovery && !plan.PackPayload && !plan.PackSuper)
+            ValidateDatArtifacts(Selected(plan));
         if (plan.Recovery && !plan.PackPayload && !plan.PackSuper && Selected(plan).Length == 0) throw new InvalidDataException("Recovery 包没有默认选中的镜像。");
     }
 
@@ -99,7 +101,9 @@ internal static class DeliveryPackageBuilder
                 foreach (var file in Selected(plan))
                 {
                     token.ThrowIfCancellationRequested();
-                    using var input = MetadataReader.OpenImage(Path.Combine(images, file.FileName));
+                    await using var input = IsDatArtifact(file.FileName)
+                        ? new FileStream(Path.Combine(images, file.FileName), FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true)
+                        : MetadataReader.OpenImage(Path.Combine(images, file.FileName));
                     var hash = await SHA256.HashDataAsync(input, token); input.Position = 0;
                     hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  images/").Append(file.FileName).Append('\n');
                     await using var entry = Entry(zip, "images/" + file.FileName).Open();
@@ -109,7 +113,7 @@ internal static class DeliveryPackageBuilder
                 var updater = Entry(zip, "META-INF/com/google/android/update-binary");
                 updater.ExternalAttributes = 0x81ed << 16;
                 await using (var entry = updater.Open()) await entry.WriteAsync(Encoding.UTF8.GetBytes(plan.Scripts.GetValueOrDefault("Recovery.sh", RecoveryScript(plan))), token);
-                await AddTextAsync(zip, "META-INF/com/google/android/updater-script", "# UotanStudio custom Recovery shell installer\n", token);
+                await AddTextAsync(zip, "META-INF/com/google/android/updater-script", RecoveryUpdaterScript(plan), token);
             }
             if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token);
         }
@@ -166,6 +170,40 @@ internal static class DeliveryPackageBuilder
     }
 
     private static DeliveryFile[] Selected(DeliveryPlan plan) => plan.Files.Where(f => !f.Optional || f.Default).ToArray();
+
+    internal static bool IsDatArtifact(string fileName) =>
+        fileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase)
+        || fileName.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
+        || fileName.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase)
+        || fileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
+        || fileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsRecoveryArtifact(string fileName) =>
+        fileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase) || IsDatArtifact(fileName);
+
+    internal static string DatStem(string fileName)
+    {
+        foreach (var suffix in new[] { ".transfer.list", ".new.dat.br", ".new.dat", ".patch.dat.br", ".patch.dat" })
+            if (fileName.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return fileName[..^suffix.Length];
+        return fileName;
+    }
+
+    private static void ValidateDatArtifacts(IReadOnlyList<DeliveryFile> files)
+    {
+        foreach (var group in files.Where(f => IsDatArtifact(f.FileName)).GroupBy(f => DatStem(f.FileName), StringComparer.OrdinalIgnoreCase))
+        {
+            var names = group.Select(f => f.FileName).ToArray();
+            var transfers = names.Count(n => n.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase));
+            var newData = names.Count(n => n.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
+                || n.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase));
+            var patches = names.Count(n => n.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
+                || n.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase));
+            if (group.Select(f => f.Partition).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1
+                || transfers != 1 || newData != 1 || patches > 1)
+                throw new InvalidDataException($"DAT 文件组缺少 transfer.list 或 new.dat：{group.Key}");
+        }
+    }
     private static ZipArchiveEntry Entry(ZipArchive zip, string name)
     {
         var entry = zip.CreateEntry(name, CompressionLevel.NoCompression);
@@ -291,19 +329,74 @@ internal static class DeliveryPackageBuilder
         if (plan.DeviceCodename.Length > 0) script.AppendLine($"[ \"$(getprop ro.product.device)\" = '{plan.DeviceCodename}' ] || fail 'Device mismatch'");
         script.AppendLine(plan.Slot.Length > 0 ? $"SLOT='_{plan.Slot}'" : "SLOT=$(getprop ro.boot.slot_suffix)\ncase \"$SLOT\" in ''|_a|_b) ;; *) fail 'Invalid slot' ;; esac");
         var selected = Selected(plan);
-        for (var i = 0; i < selected.Length; i++)
+        var physical = selected.Where(f => !IsDatArtifact(f.FileName)).ToArray();
+        var datGroups = selected.Where(f => IsDatArtifact(f.FileName))
+            .GroupBy(f => DatStem(f.FileName), StringComparer.OrdinalIgnoreCase)
+            .Select(g => (Stem: g.Key, Files: g.ToArray(), Transfer: g.First(f => f.FileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase)),
+                NewData: g.First(f => f.FileName.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
+                    || f.FileName.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase)),
+                Patch: g.FirstOrDefault(f => f.FileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
+                    || f.FileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase))))
+            .ToArray();
+        for (var i = 0; i < physical.Length; i++)
         {
-            var f = selected[i];
+            var f = physical[i];
             script.AppendLine($"TARGET{i}=''\nfor base in /dev/block/by-name /dev/block/bootdevice/by-name; do\n  if [ -b \"$base/{f.Partition}$SLOT\" ]; then TARGET{i}=\"$base/{f.Partition}$SLOT\"; break; fi\n  if [ -b \"$base/{f.Partition}\" ]; then TARGET{i}=\"$base/{f.Partition}\"; break; fi\ndone");
             script.AppendLine($"[ -n \"$TARGET{i}\" ] || fail 'Partition missing: {f.Partition}'\n[ \"$(stat -c %s 'images/{f.FileName}')\" -le \"$(blockdev --getsize64 \"$TARGET{i}\")\" ] || fail 'Image too large: {f.Partition}'");
         }
+        for (var i = 0; i < datGroups.Length; i++)
+        {
+            var group = datGroups[i];
+            var partition = group.Transfer.Partition;
+            script.AppendLine($"DAT_TARGET{i}=''\nfor base in /dev/block/by-name /dev/block/bootdevice/by-name; do\n  if [ -b \"$base/{partition}$SLOT\" ]; then DAT_TARGET{i}=\"$base/{partition}$SLOT\"; break; fi\n  if [ -b \"$base/{partition}\" ]; then DAT_TARGET{i}=\"$base/{partition}\"; break; fi\ndone");
+            script.AppendLine($"[ -n \"$DAT_TARGET{i}\" ] || fail 'Partition missing: {partition}'");
+        }
         script.AppendLine("while read -r device mountpoint rest; do case \"$device\" in /dev/*) resolved=$(readlink -f \"$device\") || fail 'Cannot resolve mount';");
-        for (var i = 0; i < selected.Length; i++)
+        for (var i = 0; i < physical.Length; i++)
             script.AppendLine($"[ \"$resolved\" != \"$(readlink -f \"$TARGET{i}\")\" ] || fail 'Target partition is mounted'");
+        for (var i = 0; i < datGroups.Length; i++)
+            script.AppendLine($"[ \"$resolved\" != \"$(readlink -f \"$DAT_TARGET{i}\")\" ] || fail 'Target partition is mounted'");
         script.AppendLine(";; esac; done < /proc/mounts");
-        for (var i = 0; i < selected.Length; i++)
-            script.AppendLine($"ui_print 'Writing {selected[i].Partition}'\ndd if='images/{selected[i].FileName}' of=\"$TARGET{i}\" bs=1048576 conv=fsync || fail 'Write failed'");
+        if (datGroups.Length > 0)
+        {
+            script.AppendLine("command -v block_image_update >/dev/null || fail 'Missing block_image_update'");
+            foreach (var (group, i) in datGroups.Select((group, i) => (group, i)))
+            {
+                var patch = group.Patch is null ? "\"\"" : $"\"$WORK/images/{group.Patch.FileName}\"";
+                script.AppendLine($"ui_print 'Updating {group.Transfer.Partition}'\nblock_image_update \"$DAT_TARGET{i}\" \"$WORK/images/{group.Transfer.FileName}\" \"$WORK/images/{group.NewData.FileName}\" {patch} || fail 'DAT update failed: {group.Transfer.Partition}'");
+            }
+        }
+        for (var i = 0; i < physical.Length; i++)
+            script.AppendLine($"ui_print 'Writing {physical[i].Partition}'\ndd if='images/{physical[i].FileName}' of=\"$TARGET{i}\" bs=1048576 conv=fsync || fail 'Write failed'");
         script.AppendLine("sync\nui_print 'Completed'");
         return script.ToString().Replace("\r\n", "\n");
+    }
+
+    /// <summary>Generates the standard Edify companion script for DAT recovery entries.</summary>
+    internal static string RecoveryUpdaterScript(DeliveryPlan plan)
+    {
+        if (!Selected(plan).Any(f => IsDatArtifact(f.FileName)))
+            return "# UotanStudio custom Recovery shell installer\n";
+        var script = new StringBuilder("# UotanStudio Recovery updater-script\n");
+        foreach (var group in Selected(plan).Where(f => IsDatArtifact(f.FileName))
+                     .GroupBy(f => DatStem(f.FileName), StringComparer.OrdinalIgnoreCase))
+        {
+            var transfer = group.Single(f => f.FileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase));
+            var data = group.Single(f => f.FileName.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
+                || f.FileName.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase));
+            var patch = group.FirstOrDefault(f => f.FileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
+                || f.FileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase));
+            var patchName = patch is null ? string.Empty : patch.FileName;
+            script.Append("block_image_update(\"/dev/block/bootdevice/by-name/")
+                .Append(transfer.Partition)
+                .Append("\", package_extract_file(\"")
+                .Append(transfer.FileName)
+                .Append("\"), \"")
+                .Append(data.FileName)
+                .Append("\", \"")
+                .Append(patchName)
+                .AppendLine("\") || abort(\"E2001: Failed to update image.\");");
+        }
+        return script.ToString();
     }
 }

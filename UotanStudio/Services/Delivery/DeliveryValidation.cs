@@ -54,7 +54,9 @@ internal static class DeliveryValidation
         }
         foreach (var group in plan.Files.GroupBy(f => f.Partition, StringComparer.Ordinal))
         {
-            if (group.Count() > 1 && (group.Any(f => !f.Optional) || group.Count(f => f.Default) != 1))
+            var isDatBundle = group.All(f => DeliveryPackageBuilder.IsDatArtifact(f.FileName))
+                && group.Select(f => DeliveryPackageBuilder.DatStem(f.FileName)).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1;
+            if (group.Count() > 1 && !isDatBundle && (group.Any(f => !f.Optional) || group.Count(f => f.Default) != 1))
                 throw new InvalidDataException($"同分区镜像须设为可选，并指定一个默认项 / Set alternatives and one default: {group.Key}");
         }
         foreach (var file in plan.Container)

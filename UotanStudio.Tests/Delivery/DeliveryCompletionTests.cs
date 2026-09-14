@@ -147,6 +147,90 @@ public sealed class DeliveryCompletionTests : IDisposable
     }
 
     [Fact]
+    public async Task RecoverySupportsDatBrotliImageSet()
+    {
+        var transfer = Path.Combine(_root, "system.transfer.list");
+        var data = Path.Combine(_root, "system.new.dat.br");
+        var patch = Path.Combine(_root, "system.patch.dat");
+        File.WriteAllText(transfer, "4\n1\nnew 1,0,1\n");
+        File.WriteAllBytes(data, [1, 2, 3, 4]);
+        File.WriteAllBytes(patch, [5, 6]);
+        static DeliveryFile FileEntry(string path, string name) => new()
+        {
+            SourcePath = path, FileName = name, Partition = "system", SourceLength = new FileInfo(path).Length
+        };
+        var plan = new DeliveryPlan
+        {
+            Recovery = true, Txt = false, OutputDirectory = Path.Combine(_root, "dat-recovery-out"),
+            Files = [FileEntry(transfer, "system.transfer.list"), FileEntry(data, "system.new.dat.br"), FileEntry(patch, "system.patch.dat")]
+        };
+
+        await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
+
+        using var zip = ZipFile.OpenRead(Path.Combine(plan.OutputDirectory, "recovery.zip"));
+        Assert.NotNull(zip.GetEntry("images/system.transfer.list"));
+        Assert.NotNull(zip.GetEntry("images/system.new.dat.br"));
+        Assert.NotNull(zip.GetEntry("images/system.patch.dat"));
+        using var script = new StreamReader(zip.GetEntry("META-INF/com/google/android/update-binary")!.Open());
+        var text = await script.ReadToEndAsync(Token);
+        Assert.Contains("block_image_update", text);
+        Assert.Contains("system.transfer.list", text);
+        Assert.Contains("system.new.dat.br", text);
+        Assert.Contains("system.patch.dat", text);
+        Assert.DoesNotContain("dd if='images/system.new.dat.br'", text);
+        using var edify = new StreamReader(zip.GetEntry("META-INF/com/google/android/updater-script")!.Open());
+        var edifyText = await edify.ReadToEndAsync(Token);
+        Assert.Contains("block_image_update(\"/dev/block/bootdevice/by-name/system\"", edifyText);
+        Assert.Contains("package_extract_file(\"system.transfer.list\")", edifyText);
+        Assert.Contains("\"system.new.dat.br\", \"system.patch.dat\"", edifyText);
+    }
+
+    [Fact]
+    public void ScriptGeneratorKeepsDatInRecoveryAndOutOfFastbootScripts()
+    {
+        static DeliveryFile Entry(string name) => new()
+        {
+            FileName = name,
+            Partition = "system",
+            Optional = false,
+            Default = true
+        };
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = true,
+            Recovery = true,
+            Linux = true,
+            Windows = true,
+            Txt = true,
+            Files = [Entry("system.transfer.list"), Entry("system.new.dat.br")]
+        };
+
+        var scripts = DeliveryScriptGenerator.Generate(plan);
+
+        Assert.Contains("Recovery.sh", scripts.Keys);
+        Assert.DoesNotContain("FlashLinux.sh", scripts.Keys);
+        Assert.DoesNotContain("FlashWindows.bat", scripts.Keys);
+        Assert.DoesNotContain("flash.txt", scripts.Keys);
+        Assert.Contains("block_image_update", scripts["Recovery.sh"]);
+    }
+
+    [Fact]
+    public void RecoveryRejectsIncompleteDatImageSet()
+    {
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = true,
+            Recovery = true,
+            Files =
+            [
+                new DeliveryFile { FileName = "system.new.dat.br", Partition = "system", SourcePath = "placeholder" }
+            ]
+        };
+
+        Assert.Throws<InvalidDataException>(() => DeliveryPackageBuilder.Validate(plan));
+    }
+
+    [Fact]
     public async Task OrganizedSuperUsesRecoveryScriptLayoutAndRootImageEntry()
     {
         var image = Image("system") with { IncludeInSuper = true };
