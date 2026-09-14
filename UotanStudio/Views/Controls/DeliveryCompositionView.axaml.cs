@@ -1,12 +1,12 @@
-using UotanStudio.Services.Delivery;
-using UotanStudio.ViewModels.Shell;
-using DeliveryImageItem = UotanStudio.ViewModels.Shell.DeliveryImage;
 using System.Collections.ObjectModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Services.Delivery;
+using UotanStudio.ViewModels.Shell;
+using DeliveryImageItem = UotanStudio.ViewModels.Shell.DeliveryImage;
 
 namespace UotanStudio.Views.Controls;
 
@@ -167,7 +167,14 @@ public partial class DeliveryCompositionView : UserControl
     internal void SetImages(IReadOnlyList<PackImageSelection> images)
     {
         Model.SelectSources(images.Select(i => new DeliveryFile
-        { SourcePath = i.FilePath, FileName = Path.GetFileName(i.FilePath), Partition = Path.GetFileNameWithoutExtension(i.FilePath), SourceGroup = i.GroupName, SourceLength = i.SizeBytes }).ToArray());
+        {
+            SourcePath = i.FilePath,
+            FileName = Path.GetFileName(i.FilePath),
+            Partition = DeliveryPackageBuilder.IsDatArtifact(i.FilePath)
+                ? DeliveryPackageBuilder.DatStem(Path.GetFileName(i.FilePath)) : Path.GetFileNameWithoutExtension(i.FilePath),
+            SourceGroup = i.GroupName,
+            SourceLength = i.SizeBytes
+        }).ToArray());
         foreach (var image in images) Model.ApplySourcePartitions(image.FilePath, image.DynamicPartitions);
     }
 

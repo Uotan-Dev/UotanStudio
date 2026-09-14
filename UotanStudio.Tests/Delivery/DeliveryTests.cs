@@ -2,10 +2,10 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
-using UotanStudio.Services.Delivery;
-using UotanStudio.ViewModels.Shell;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Services.Delivery;
+using UotanStudio.ViewModels.Shell;
 using Xunit;
 
 namespace UotanStudio.Tests.Delivery;
@@ -40,9 +40,17 @@ public sealed class DeliveryTests : IDisposable
             file = file with { SourcePath = path, SourceLength = new FileInfo(path).Length };
         }
         var config = Path.Combine(_root, "dynamic.txt");
-        var plan = new DeliveryPlan { PackPayload = true, OrganizeDirectory = true, ContainerConfirmed = true, Container = [file with { IncludeInSuper = true }],
-            Payload = new() { DynamicPartitionsFile = config }, OutputDirectory = Path.Combine(_root, "payload-out"),
-            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }], Txt = false };
+        var plan = new DeliveryPlan
+        {
+            PackPayload = true,
+            OrganizeDirectory = true,
+            ContainerConfirmed = true,
+            Container = [file with { IncludeInSuper = true }],
+            Payload = new() { DynamicPartitionsFile = config },
+            OutputDirectory = Path.Combine(_root, "payload-out"),
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
+            Txt = false
+        };
         File.WriteAllText(config, DeliveryPayloadBuilder.GenerateDynamicLayout(plan));
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken);
         var unpacked = Path.Combine(_root, "ota-content");
@@ -70,9 +78,16 @@ public sealed class DeliveryTests : IDisposable
         var model = new DeliveryViewModel();
         model.SetMode(true, false, true);
         model.SelectSources([file]);
-        var plan = new DeliveryPlan { PackPayload = true, OrganizeDirectory = true, ContainerConfirmed = true, Container = [file],
+        var plan = new DeliveryPlan
+        {
+            PackPayload = true,
+            OrganizeDirectory = true,
+            ContainerConfirmed = true,
+            Container = [file],
             OutputDirectory = Path.Combine(_root, "vendor-name-output"),
-            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }], Txt = false };
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
+            Txt = false
+        };
         model.Confirm(plan);
         Assert.True(model.Confirmed);
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken);
@@ -82,7 +97,7 @@ public sealed class DeliveryTests : IDisposable
         var metadata = UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.PayloadParser.GetPayloadMetadata(payload);
         var partition = Assert.Single(metadata.Manifest.Partitions);
         Assert.Equal("vm-bootsys", partition.PartitionName);
-        Assert.Equal(SHA256.HashData(File.ReadAllBytes(file.SourcePath)), partition.NewPartitionInfo.Hash.ToByteArray());
+        Assert.Equal(SHA256.HashData(File.ReadAllBytes(file.SourcePath!)), partition.NewPartitionInfo!.Hash.ToByteArray());
         Assert.False(DeliveryValidation.IsPartition("vm-bootsys"));
     }
 
@@ -103,9 +118,17 @@ public sealed class DeliveryTests : IDisposable
         var file = Input("system");
         var config = Path.Combine(_root, "dynamic.txt");
         File.WriteAllText(config, "super_partition_groups=main\nsuper_main_group_size=8192\nsuper_main_partition_list=unknown\n");
-        var plan = new DeliveryPlan { PackPayload = true, OrganizeDirectory = true, ContainerConfirmed = true, Container = [file],
-            Payload = new() { DynamicPartitionsFile = config }, OutputDirectory = Path.Combine(_root, "out"),
-            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }], Txt = false };
+        var plan = new DeliveryPlan
+        {
+            PackPayload = true,
+            OrganizeDirectory = true,
+            ContainerConfirmed = true,
+            Container = [file],
+            Payload = new() { DynamicPartitionsFile = config },
+            OutputDirectory = Path.Combine(_root, "out"),
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
+            Txt = false
+        };
         await Assert.ThrowsAsync<InvalidDataException>(() => new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(plan.OutputDirectory));
         Assert.Empty(Directory.GetDirectories(_root, ".uotan-delivery-*"));
@@ -120,8 +143,13 @@ public sealed class DeliveryTests : IDisposable
         var system = Input("system");
         model.SelectSources([system]); model.Confirm(new DeliveryPlan { PackPayload = true, Container = [system] });
         Assert.Equal("payload", Assert.Single(model.Output).PartitionName);
-        var plan = new DeliveryPlan { PackPayload = true, ContainerConfirmed = true, Container = [Input("vendor")],
-            Files = [new() { Generated = true, FileName = "ota.zip", Partition = "payload" }] };
+        var plan = new DeliveryPlan
+        {
+            PackPayload = true,
+            ContainerConfirmed = true,
+            Container = [Input("vendor")],
+            Files = [new() { Generated = true, FileName = "ota.zip", Partition = "payload" }]
+        };
         Assert.Empty(DeliveryScriptGenerator.Generate(plan));
         var scripts = DeliveryScriptGenerator.Generate(plan with { Files = [.. plan.Files, Input()] });
         Assert.Equal("boot images/boot.img\r\n", scripts["flash.txt"]);
@@ -139,7 +167,8 @@ public sealed class DeliveryTests : IDisposable
         model.SelectSources([new DeliveryFile { SourcePath = path, FileName = "boot_a.img", Partition = "boot_a", SourceLength = 4096 }]);
         var plan = new DeliveryPlan
         {
-            PackPayload = true, Container = [.. model.Container.Select(i => i.Snapshot())],
+            PackPayload = true,
+            Container = [.. model.Container.Select(i => i.Snapshot())],
             Payload = new() { Version = 2, MinorVersion = 0, BlockSize = 4096, Compression = "None", DynamicPartitionsFile = "" }
         };
         model.Confirm(plan);
@@ -249,7 +278,9 @@ public sealed class DeliveryTests : IDisposable
     {
         var plan = new DeliveryPlan
         {
-            PackPayload = true, ContainerConfirmed = true, Container = [Input("system")],
+            PackPayload = true,
+            ContainerConfirmed = true,
+            Container = [Input("system")],
             Files = [new() { Generated = true, Partition = "payload", FileName = "payload.bin" }, Input()]
         };
         var model = new DeliveryViewModel();
@@ -344,8 +375,12 @@ public sealed class DeliveryTests : IDisposable
     {
         var plan = new DeliveryPlan
         {
-            Files = [Input()], OutputDirectory = Path.Combine(_root, "out"), Scripts = new() { ["flash.txt"] = "manual edits\n" },
-            GeneratedScripts = new() { ["flash.txt"] = "boot images/boot.img\r\n" }, OpenScripts = ["flash.txt"], ScriptCarets = new() { ["flash.txt"] = 5 }
+            Files = [Input()],
+            OutputDirectory = Path.Combine(_root, "out"),
+            Scripts = new() { ["flash.txt"] = "manual edits\n" },
+            GeneratedScripts = new() { ["flash.txt"] = "boot images/boot.img\r\n" },
+            OpenScripts = ["flash.txt"],
+            ScriptCarets = new() { ["flash.txt"] = 5 }
         };
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
         var restored = Assert.IsType<DeliveryPlan>(DeliveryPlanStore.LoadFromState(state, _root));
@@ -427,7 +462,11 @@ public sealed class DeliveryTests : IDisposable
         var output = Path.Combine(_root, "compressed");
         await new DeliveryOutputService(new NoTools()).ExportAsync(new()
         {
-            OrganizeDirectory = false, PackSuper = true, Super = options with { Zstd = true }, Container = [file], OutputDirectory = output
+            OrganizeDirectory = false,
+            PackSuper = true,
+            Super = options with { Zstd = true },
+            Container = [file],
+            OutputDirectory = output
         }, token: TestContext.Current.CancellationToken);
         using var compressed = File.OpenRead(Path.Combine(output, "super.zst"));
         using var decoded = new MemoryStream();
@@ -444,7 +483,11 @@ public sealed class DeliveryTests : IDisposable
         var output = Path.Combine(_root, "empty-out");
         await new DeliveryOutputService(new NoTools()).ExportAsync(new()
         {
-            OrganizeDirectory = false, PackSuper = true, Super = options, Container = [file], OutputDirectory = output
+            OrganizeDirectory = false,
+            PackSuper = true,
+            Super = options,
+            Container = [file],
+            OutputDirectory = output
         }, token: TestContext.Current.CancellationToken);
         Assert.False(File.Exists(Path.Combine(output, "super.img")));
         Assert.False(File.Exists(Path.Combine(output, "super.zst")));
@@ -459,9 +502,11 @@ public sealed class DeliveryTests : IDisposable
         // 仅生成Super_Empty 与压缩为ZST 互斥：组合在确认前被校验拒绝。
         var plan = new DeliveryPlan
         {
-            OrganizeDirectory = false, PackSuper = true,
+            OrganizeDirectory = false,
+            PackSuper = true,
             Super = new() { DeviceSize = 8 * 1024 * 1024, Empty = true, Zstd = true },
-            Container = [Input("system")], OutputDirectory = Path.Combine(_root, "empty-zstd-out")
+            Container = [Input("system")],
+            OutputDirectory = Path.Combine(_root, "empty-zstd-out")
         };
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
     }
@@ -475,10 +520,15 @@ public sealed class DeliveryTests : IDisposable
         var missing = new DeliveryFile { SourcePath = Path.Combine(_root, "missing.img"), Partition = "system", FileName = "system.img" };
         var plan = new DeliveryPlan
         {
-            OrganizeDirectory = organize, PackSuper = true,
+            OrganizeDirectory = organize,
+            PackSuper = true,
             Super = new() { Empty = true, DeviceSize = 8 * 1024 * 1024 },
-            Container = retainedImages ? [missing] : [], Files = [missing],
-            Windows = true, Linux = true, MacOS = true, Recovery = true,
+            Container = retainedImages ? [missing] : [],
+            Files = [missing],
+            Windows = true,
+            Linux = true,
+            MacOS = true,
+            Recovery = true,
             Scripts = new() { ["FlashWindows.bat"] = "user draft" },
             OutputDirectory = Path.Combine(_root, "empty-direct")
         };
@@ -507,7 +557,9 @@ public sealed class DeliveryTests : IDisposable
         var file = Input("system");
         var plan = new DeliveryPlan
         {
-            PackSuper = true, OrganizeDirectory = true, ContainerConfirmed = true,
+            PackSuper = true,
+            OrganizeDirectory = true,
+            ContainerConfirmed = true,
             Super = new() { DeviceSize = 8 * 1024 * 1024, Empty = true },
             Container = [file with { IncludeInSuper = true }],
             Files = [new DeliveryFile { Generated = true, FileName = "super_empty.img", Partition = "super_empty" }],
@@ -526,7 +578,9 @@ public sealed class DeliveryTests : IDisposable
         {
             Files = [Input(), Input("init_boot") with { Partition = "init_boot", Optional = true, Default = true },
                 Input("init_boot_ksu") with { Partition = "init_boot", Optional = true }],
-            Windows = true, Linux = true, Txt = false
+            Windows = true,
+            Linux = true,
+            Txt = false
         };
         var zh = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -582,7 +636,8 @@ public sealed class DeliveryTests : IDisposable
         {
             Files = [Input() with { Optional = true, Default = true }, Input("super") with { FileName = "super.zst", Partition = "super" },
                 Input("boot_ksu") with { Partition = "boot", Optional = true }],
-            Txt = true, TxtVariants = true
+            Txt = true,
+            TxtVariants = true
         };
         var scripts = DeliveryScriptGenerator.Generate(plan);
         Assert.Equal("boot images/boot.img\r\n", scripts["flash.txt"]);
@@ -600,7 +655,8 @@ public sealed class DeliveryTests : IDisposable
         {
             Files = [Input("super") with { FileName = "super.zst", Partition = "super" }],
             Super = new DeliverySuperOptions { Zstd = true },
-            Txt = true, Windows = true
+            Txt = true,
+            Windows = true
         };
 
         var scripts = DeliveryScriptGenerator.Generate(plan);
@@ -622,14 +678,13 @@ public sealed class DeliveryTests : IDisposable
         Assert.Contains("uname -m", linux);
         Assert.Contains("zstd-arm64", linux);
         Assert.Contains("zstd-loong64", linux);
-        Assert.Contains("zstd-riscv64", linux);
         Assert.DoesNotContain("zstd-x86_64", linux);
     }
 
     [Theory]
     [InlineData("Windows", new[] { "fastboot.exe", "AdbWinApi.dll", "AdbWinUsbApi.dll", "libwinpthread-1.dll", "NOTICE.txt", "source.properties", "zstd.exe" },
         new[] { "adb.exe", "sqlite3.exe", "mke2fs.exe", "etc1tool.exe", "hprof-conv.exe", "make_f2fs.exe", "make_f2fs_casefold.exe", "mke2fs.conf" })]
-    [InlineData("Linux", new[] { "fastboot", "lib64/libc++.so", "NOTICE.txt", "source.properties", "zstd", "zstd-arm64", "zstd-loong64", "zstd-riscv64" },
+    [InlineData("Linux", new[] { "fastboot", "lib64/libc++.so", "NOTICE.txt", "source.properties", "zstd", "zstd-arm64", "zstd-loong64" },
         new[] { "adb", "sqlite3", "mke2fs", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs.conf" })]
     [InlineData("macOS", new[] { "fastboot", "lib64/libc++.dylib", "NOTICE.txt", "source.properties", "zstd", "zstd-x86_64" },
         new[] { "adb", "sqlite3", "mke2fs", "etc1tool", "hprof-conv", "make_f2fs", "make_f2fs_casefold", "mke2fs.conf" })]

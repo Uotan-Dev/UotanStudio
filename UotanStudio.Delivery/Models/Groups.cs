@@ -1,5 +1,4 @@
 using System.Globalization;
-using UotanStudio.Services.Firmware;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 
@@ -37,7 +36,7 @@ internal static class DeliveryGroups
     internal static string Format(IEnumerable<DeliveryGroup> groups) => string.Join('\n', groups.Select(g =>
         $"{g.Name} {g.Size.ToString(CultureInfo.InvariantCulture)} {string.Join(' ', g.Partitions)}"));
 
-    internal static List<DeliveryGroup> FromSource(SourceContainerSettings settings)
+    internal static List<DeliveryGroup> FromSource(DeliverySourceContainerSettings settings)
     {
         if (settings.Kind == "payload")
         {
@@ -50,7 +49,7 @@ internal static class DeliveryGroups
         if (header.BlockDevices.NumEntries != 1)
             throw new NotSupportedException("原 Super 使用多个物理设备；当前单文件构建器无法保留该布局，请使用对应设备的专用构建流程。");
         var count = checked(2L + header.Partitions.NumEntries + header.Extents.NumEntries + header.Groups.NumEntries + header.BlockDevices.NumEntries);
-        if (count != settings.OriginalStructures.Length) throw new InvalidDataException("原 Super 配置结构不完整。");
+        if (count != settings.OriginalStructures.Length) throw new InvalidDataException("Original Super metadata is incomplete.");
         var offset = checked((int)(2 + header.Partitions.NumEntries + header.Extents.NumEntries));
         var groups = Enumerable.Range(offset, (int)header.Groups.NumEntries)
             .Select(i => LpMetadataPartitionGroup.FromBytes(settings.OriginalStructures[i]))
@@ -58,7 +57,7 @@ internal static class DeliveryGroups
         foreach (var bytes in settings.OriginalStructures.Skip(2).Take((int)header.Partitions.NumEntries))
         {
             var partition = LpMetadataPartition.FromBytes(bytes);
-            if (partition.GroupIndex >= groups.Count) throw new InvalidDataException("原 Super 分组索引无效。");
+            if (partition.GroupIndex >= groups.Count) throw new InvalidDataException("Original Super group index is invalid.");
             groups[(int)partition.GroupIndex].Partitions.Add(partition.NameString);
         }
         return groups;

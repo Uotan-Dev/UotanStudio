@@ -3,6 +3,9 @@ namespace UotanStudio.Services.Delivery;
 /// <summary>Validation shared by preview, script generation, and file publication.</summary>
 internal static class DeliveryValidation
 {
+    internal static bool IsScriptName(string name) => IsName(name) && (name == "updater-script"
+        || name.EndsWith(".sh", StringComparison.Ordinal) || name.EndsWith(".bat", StringComparison.Ordinal)
+        || name.EndsWith(".txt", StringComparison.Ordinal));
     internal static bool IsName(string value, int maximum = 100) => value is not null && value.Length is > 0 && value.Length <= maximum
         && value is not "." and not ".." && !value.StartsWith('.') && !value.EndsWith('.')
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.')
@@ -23,15 +26,28 @@ internal static class DeliveryValidation
         if ((plan.PackSuper || plan.PackPayload) && !plan.IsSuperEmptyOnly && plan.Container.Count == 0) throw new InvalidDataException("Super 分区列表为空 / No Super partitions.");
         if (plan.OrganizeDirectory && plan.Files.Count == 0) throw new InvalidDataException("没有交付文件 / No delivery files.");
         if (plan.Files.Count > 10000 || plan.Container.Count > 10000) throw new InvalidDataException("Too many delivery entries.");
-        if (plan.Scripts.Count > 10000 || plan.Scripts.Any(p => !IsName(p.Key)
-            || !(p.Key.EndsWith(".sh", StringComparison.Ordinal) || p.Key.EndsWith(".bat", StringComparison.Ordinal) || p.Key.EndsWith(".txt", StringComparison.Ordinal))
+        if (plan.Scripts.Count > 10000 || plan.Scripts.Any(p => !IsScriptName(p.Key)
             || p.Value.Length > 1024 * 1024)) throw new InvalidDataException("Invalid delivery scripts.");
         if (plan.Slot is not ("" or "a" or "b" or "all")) throw new InvalidDataException("Invalid slot policy.");
         if (plan.Super.DeviceType is not ("" or "VAB" or "AB" or "AOnly")) throw new InvalidDataException("Invalid device type.");
         if (plan.DeviceCodename.Length > 0 && !IsName(plan.DeviceCodename, 64)) throw new InvalidDataException("机型代号无效 / Invalid device codename.");
+        if (plan.Information.Length > 65536 || plan.Information.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))
+            || plan.Information.ReplaceLineEndings("\n").Split('\n').Any(line => line.Length > 1024))
+            throw new InvalidDataException("作者信息过长或含无效控制字符 / Author information is too long or contains control characters.");
         if (plan.PackPayload && plan.PackSuper) throw new InvalidDataException("Choose one container format.");
+        foreach (var file in plan.Files.Concat(plan.Container))
+            if (file.FileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase)
+                || file.FileName.EndsWith(".br", StringComparison.OrdinalIgnoreCase)
+                || file.FileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!DeliveryPackageBuilder.IsDatArtifact(file.FileName))
+                    throw new NotSupportedException("DAT/BR 刷写须使用同组的 <分区>.transfer.list 与 <分区>.new.dat[.br] 文件。");
+                if (!plan.Recovery || plan.PackSuper || plan.PackPayload)
+                    throw new NotSupportedException("Android DAT 文件须选择 Recovery 卡刷；转换为 IMG 后方可用于 fastboot、Super 或 Payload。");
+            }
         if (plan.PackPayload) DeliveryPayloadBuilder.Validate(plan);
         DeliveryPackageBuilder.Validate(plan);
+        if (sources && DeliveryPackageBuilder.HasDat(plan)) DeliveryRecoveryUpdater.Resolve(plan);
         // 仅生成Super_Empty：Empty 与 Zstd 互斥，且唯一生成条目是 super_empty.img。
         // Super_Empty only: Empty excludes Zstd, and the single generated entry must be super_empty.img.
         if (plan.PackSuper && plan.Super.Empty && plan.Super.Zstd)
@@ -50,7 +66,8 @@ internal static class DeliveryValidation
             if (!IsName(file.FileName) || !names.Add(file.FileName))
                 throw new InvalidDataException($"交付文件名无效或重名 / Invalid or duplicate output filename: {file.FileName}");
             if (!IsPartition(file.Partition)) throw new InvalidDataException($"分区名无效 / Invalid partition: {file.Partition}");
-            if (sources && !file.Generated) CheckSource(file);
+            if (sources && !file.Generated) CheckSource(file, DeliveryPackageBuilder.IsDatArtifact(file.FileName)
+                && file.FileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase));
         }
         foreach (var group in plan.Files.GroupBy(f => f.Partition, StringComparer.Ordinal))
         {

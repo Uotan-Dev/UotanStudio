@@ -6,6 +6,8 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>UotanStudio.Tests</RootNamespace>
+    <!-- Legacy in-memory builders remain covered by compatibility tests; production callers use streaming overloads. -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
     <!-- 启用 Microsoft.Testing.Platform 通道，使 dotnet test 可直接发现并运行 xunit.v3 测试 -->
     <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
@@ -14,6 +16,7 @@
     <ProjectReference Include="..\UotanStudio.Projects\UotanStudio.Projects.csproj" />
     <!-- Firmware library under test (AVB, boot image, CPIO, Sparse, compression, Payload) -->
     <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
     <!-- Media library under test (platform video decoder abstraction / NV12 conversion) -->

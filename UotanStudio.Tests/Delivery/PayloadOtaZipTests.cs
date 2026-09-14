@@ -29,8 +29,12 @@ public sealed class PayloadOtaZipTests : IDisposable
         File.WriteAllBytes(source, new byte[8192]);
         var plan = new DeliveryPlan
         {
-            PackPayload = true, OrganizeDirectory = organize, Recovery = recovery, Txt = false,
-            ContainerConfirmed = true, OutputDirectory = Path.Combine(_root, "output"),
+            PackPayload = true,
+            OrganizeDirectory = organize,
+            Recovery = recovery,
+            Txt = false,
+            ContainerConfirmed = true,
+            OutputDirectory = Path.Combine(_root, "output"),
             Container = [new() { SourcePath = source, FileName = "boot.img", Partition = "boot" }],
             Files = organize ? [new() { Generated = true, FileName = "ota.zip", Partition = "payload" }] : []
         };
@@ -90,9 +94,13 @@ public sealed class PayloadOtaZipTests : IDisposable
     [Fact]
     public async Task LegacyPayloadPlanRestoresZipArtifactWithoutChangingContainerMembership()
     {
-        var plan = new DeliveryPlan { PackPayload = true, ContainerConfirmed = true,
+        var plan = new DeliveryPlan
+        {
+            PackPayload = true,
+            ContainerConfirmed = true,
             Container = [new() { Partition = "boot", FileName = "boot.img" }],
-            Files = [new() { Generated = true, FileName = "payload.bin", Partition = "payload" }] };
+            Files = [new() { Generated = true, FileName = "payload.bin", Partition = "payload" }]
+        };
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
         var restored = DeliveryPlanStore.LoadFromState(state, _root)!;
         Assert.Equal("ota.zip", Assert.Single(restored.Files).FileName);

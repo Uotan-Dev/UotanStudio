@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Google.Protobuf;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Services.Delivery;
@@ -14,11 +14,11 @@ public sealed class DeliveryWiringTests : IDisposable
     public DeliveryWiringTests() => Directory.CreateDirectory(_root);
     public void Dispose() => Directory.Delete(_root, true);
 
-    private void SaveSource(string root, SourceContainerSettings settings)
+    private void SaveSource(string root, DeliverySourceContainerSettings settings)
     {
         var path = SourceContainerMetadataService.GetPath(root, settings.Kind);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(settings, SourceContainerJsonContext.Default.SourceContainerSettings));
+        File.WriteAllBytes(path, JsonSerializer.SerializeToUtf8Bytes(settings, SourceContainerJsonContext.Default.DeliverySourceContainerSettings));
     }
 
     [Fact]
@@ -79,10 +79,15 @@ public sealed class DeliveryWiringTests : IDisposable
         var file = new DeliveryFile { SourcePath = source, Partition = "boot", FileName = "boot.img" };
         var plan = new DeliveryPlan
         {
-            OutputDirectory = Path.Combine(_root, "out"), Txt = false,
-            OrganizeDirectory = mode is "copy" or "recovery", PackSuper = mode == "super", PackPayload = mode == "payload",
-            Recovery = mode == "recovery", Container = mode is "super" or "payload" ? [file] : [],
-            Files = mode is "copy" or "recovery" ? [file] : [], Super = new() { DeviceSize = 4 * 1024 * 1024 }
+            OutputDirectory = Path.Combine(_root, "out"),
+            Txt = false,
+            OrganizeDirectory = mode is "copy" or "recovery",
+            PackSuper = mode == "super",
+            PackPayload = mode == "payload",
+            Recovery = mode == "recovery",
+            Container = mode is "super" or "payload" ? [file] : [],
+            Files = mode is "copy" or "recovery" ? [file] : [],
+            Super = new() { DeviceSize = 4 * 1024 * 1024 }
         };
         var reports = new List<DeliveryProgress>();
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, new InlineProgress<DeliveryProgress>(reports.Add), TestContext.Current.CancellationToken);

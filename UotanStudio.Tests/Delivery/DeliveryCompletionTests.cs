@@ -13,7 +13,7 @@ using Xunit;
 
 namespace UotanStudio.Tests.Delivery;
 
-public sealed class DeliveryCompletionTests : IDisposable
+public sealed partial class DeliveryCompletionTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "delivery-completion-" + Guid.NewGuid().ToString("N"));
     public DeliveryCompletionTests() => Directory.CreateDirectory(_root);
@@ -30,6 +30,11 @@ public sealed class DeliveryCompletionTests : IDisposable
         public Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token) => Task.CompletedTask;
     }
 
+    private sealed class FixedSigningKeys(RSA key) : IDeliverySigningKeyProvider
+    {
+        public RSA LoadPrivateKey(string path) => RSA.Create(key.ExportParameters(includePrivateParameters: true));
+    }
+
     [Theory]
     [InlineData("None")]
     [InlineData("BZip2")]
@@ -38,9 +43,17 @@ public sealed class DeliveryCompletionTests : IDisposable
     {
         var image = Image("system"); var config = Path.Combine(_root, "postinstall.txt");
         File.WriteAllText(config, "RUN_POSTINSTALL_system=true\nPOSTINSTALL_PATH_system=bin/otapreopt_script\nFILESYSTEM_TYPE_system=ext4\nPOSTINSTALL_OPTIONAL_system=false\n");
-        var plan = new DeliveryPlan { OrganizeDirectory = true, PackPayload = true, ContainerConfirmed = true, Container = [image], Txt = false,
-            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }], OutputDirectory = Path.Combine(_root, "out"),
-            Payload = new() { PostinstallFile = config, BlockSize = 8192, MaxTimestamp = 1800000000, SecurityPatchLevel = "2026-09-05", Compression = compression } };
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = true,
+            PackPayload = true,
+            ContainerConfirmed = true,
+            Container = [image],
+            Txt = false,
+            Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
+            OutputDirectory = Path.Combine(_root, "out"),
+            Payload = new() { PostinstallFile = config, BlockSize = 8192, MaxTimestamp = 1800000000, SecurityPatchLevel = "2026-09-05", Compression = compression }
+        };
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
         var unpacked = Path.Combine(_root, "ota-content");
         ZipFile.ExtractToDirectory(Path.Combine(plan.OutputDirectory, "ota.zip"), unpacked);
@@ -95,13 +108,28 @@ public sealed class DeliveryCompletionTests : IDisposable
         using var certificate = request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
         var cert = Path.Combine(_root, "cert.pem"); File.WriteAllText(cert, certificate.ExportCertificatePem());
         var privateKey = Path.Combine(_root, "key.pem"); File.WriteAllText(privateKey, key.ExportPkcs8PrivateKeyPem());
-        var plan = new DeliveryPlan { OrganizeDirectory = true, PackPayload = true, ContainerConfirmed = true, Container = [Image("boot")], Txt = false,
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = true,
+            PackPayload = true,
+            ContainerConfirmed = true,
+            Container = [Image("boot")],
+            Txt = false,
             Files = [new() { Generated = true, Partition = "payload", FileName = "ota.zip" }],
-            OutputDirectory = Path.Combine(_root, "out"), DeviceCodename = "test_device",
+            OutputDirectory = Path.Combine(_root, "out"),
+            DeviceCodename = "test_device",
             Payload = new() { SigningKeyPath = privateKey, MaxTimestamp = 1800000000, SecurityPatchLevel = "2026-09-05" },
-            Package = new() { Ota = true, SigningKeyPath = privateKey, CertificatePath = cert,
-                BuildFingerprint = "brand/product/device:16/ABC/123:user/release-keys", Incremental = "123", SdkLevel = 36 } };
-        await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
+            Package = new()
+            {
+                Ota = true,
+                SigningKeyPath = privateKey,
+                CertificatePath = cert,
+                BuildFingerprint = "brand/product/device:16/ABC/123:user/release-keys",
+                Incremental = "123",
+                SdkLevel = 36
+            }
+        };
+        await new DeliveryOutputService(new NoTools(), new FixedSigningKeys(key)).ExportAsync(plan, token: Token);
         var path = Path.Combine(plan.OutputDirectory, "ota.zip");
         using (var zip = ZipFile.OpenRead(path))
         {
@@ -122,7 +150,7 @@ public sealed class DeliveryCompletionTests : IDisposable
         Assert.Throws<CryptographicException>(() => cms.CheckSignature(true));
         using var wrong = RSA.Create(2048); File.WriteAllText(privateKey, wrong.ExportPkcs8PrivateKeyPem());
         plan = plan with { OutputDirectory = Path.Combine(_root, "wrong-key") };
-        await Assert.ThrowsAsync<InvalidDataException>(() => new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token));
+        await Assert.ThrowsAsync<InvalidDataException>(() => new DeliveryOutputService(new NoTools(), new FixedSigningKeys(wrong)).ExportAsync(plan, token: Token));
         Assert.False(Directory.Exists(plan.OutputDirectory));
     }
 
@@ -133,8 +161,14 @@ public sealed class DeliveryCompletionTests : IDisposable
         var sparse = Path.Combine(_root, "boot-sparse.img");
         UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse.SparseImageConverter.ConvertRawToSparse(image.SourcePath, sparse);
         var alternate = Image("alternative") with { Partition = "boot", Optional = true };
-        var plan = new DeliveryPlan { Recovery = true, Txt = false, DeviceCodename = "test_device", OutputDirectory = Path.Combine(_root, "recovery-out"),
-            Files = [image with { SourcePath = sparse, SourceLength = new FileInfo(sparse).Length, Optional = true, Default = true }, alternate] };
+        var plan = new DeliveryPlan
+        {
+            Recovery = true,
+            Txt = false,
+            DeviceCodename = "test_device",
+            OutputDirectory = Path.Combine(_root, "recovery-out"),
+            Files = [image with { SourcePath = sparse, SourceLength = new FileInfo(sparse).Length, Optional = true, Default = true }, alternate]
+        };
         await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
         using var zip = ZipFile.OpenRead(Path.Combine(plan.OutputDirectory, "recovery.zip"));
         Assert.Null(zip.GetEntry("images/alternative.img"));
@@ -142,7 +176,9 @@ public sealed class DeliveryCompletionTests : IDisposable
         Assert.Equal(File.ReadAllBytes(image.SourcePath), expected.ToArray());
         using var script = new StreamReader(zip.GetEntry("META-INF/com/google/android/update-binary")!.Open());
         var text = await script.ReadToEndAsync(Token);
-        Assert.True(text.IndexOf("sha256sum -c", StringComparison.Ordinal) < text.IndexOf("dd if=", StringComparison.Ordinal));
+        var verify = text.IndexOf("verify_member 'images/boot.img'", StringComparison.Ordinal);
+        var write = text.IndexOf("stream_image 'images/boot.img' dd", StringComparison.Ordinal);
+        Assert.True(verify >= 0 && write > verify);
         Assert.Throws<NotSupportedException>(() => DeliveryPackageBuilder.Validate(plan with { Files = [image with { Fastbootd = true }] }));
     }
 
@@ -152,16 +188,23 @@ public sealed class DeliveryCompletionTests : IDisposable
         var transfer = Path.Combine(_root, "system.transfer.list");
         var data = Path.Combine(_root, "system.new.dat.br");
         var patch = Path.Combine(_root, "system.patch.dat");
-        File.WriteAllText(transfer, "4\n1\nnew 1,0,1\n");
-        File.WriteAllBytes(data, [1, 2, 3, 4]);
-        File.WriteAllBytes(patch, [5, 6]);
+        File.WriteAllText(transfer, "4\n1\n0\n0\nnew 2,0,1\n");
+        using (var output = File.Create(data))
+        using (var compressor = new BrotliStream(output, CompressionLevel.Optimal)) compressor.Write(new byte[4096]);
+        File.WriteAllBytes(patch, []);
         static DeliveryFile FileEntry(string path, string name) => new()
         {
-            SourcePath = path, FileName = name, Partition = "system", SourceLength = new FileInfo(path).Length
+            SourcePath = path,
+            FileName = name,
+            Partition = "system",
+            SourceLength = new FileInfo(path).Length
         };
         var plan = new DeliveryPlan
         {
-            Recovery = true, Txt = false, OutputDirectory = Path.Combine(_root, "dat-recovery-out"),
+            Recovery = true,
+            Txt = false,
+            OutputDirectory = Path.Combine(_root, "dat-recovery-out"),
+            Package = new() { RecoveryUpdaterPath = WriteUpdaterFixture() },
             Files = [FileEntry(transfer, "system.transfer.list"), FileEntry(data, "system.new.dat.br"), FileEntry(patch, "system.patch.dat")]
         };
 
@@ -173,16 +216,18 @@ public sealed class DeliveryCompletionTests : IDisposable
         Assert.NotNull(zip.GetEntry("images/system.patch.dat"));
         using var script = new StreamReader(zip.GetEntry("META-INF/com/google/android/update-binary")!.Open());
         var text = await script.ReadToEndAsync(Token);
-        Assert.Contains("block_image_update", text);
+        Assert.Contains("\"$WORK/updater\" \"$1\" \"$2\" \"$ZIPFILE\"", text);
+        Assert.DoesNotContain("block_image_update", text);
         Assert.Contains("system.transfer.list", text);
         Assert.Contains("system.new.dat.br", text);
         Assert.Contains("system.patch.dat", text);
         Assert.DoesNotContain("dd if='images/system.new.dat.br'", text);
         using var edify = new StreamReader(zip.GetEntry("META-INF/com/google/android/updater-script")!.Open());
         var edifyText = await edify.ReadToEndAsync(Token);
-        Assert.Contains("block_image_update(\"/dev/block/bootdevice/by-name/system\"", edifyText);
-        Assert.Contains("package_extract_file(\"system.transfer.list\")", edifyText);
-        Assert.Contains("\"system.new.dat.br\", \"system.patch.dat\"", edifyText);
+        Assert.Contains("block_image_update(file_getprop(\"targets.prop\", \"target0\")", edifyText);
+        Assert.Contains("package_extract_file(\"images/system.transfer.list\")", edifyText);
+        Assert.Contains("\"images/system.new.dat.br\", \"images/system.patch.dat\"", edifyText);
+        Assert.NotNull(zip.GetEntry(DeliveryRecoveryUpdater.ArchivePath));
     }
 
     [Fact]
@@ -211,7 +256,8 @@ public sealed class DeliveryCompletionTests : IDisposable
         Assert.DoesNotContain("FlashLinux.sh", scripts.Keys);
         Assert.DoesNotContain("FlashWindows.bat", scripts.Keys);
         Assert.DoesNotContain("flash.txt", scripts.Keys);
-        Assert.Contains("block_image_update", scripts["Recovery.sh"]);
+        Assert.Contains("block_image_update", scripts["updater-script"]);
+        Assert.DoesNotContain("block_image_update", scripts["Recovery.sh"]);
     }
 
     [Fact]
@@ -261,7 +307,7 @@ public sealed class DeliveryCompletionTests : IDisposable
         Assert.Contains("unzip -p", text);
         Assert.Contains("/dev/block/by-name", text);
         Assert.Contains("/dev/block/bootdevice/by-name", text);
-        Assert.Contains("\"super.img\"", text);
+        Assert.Contains("stream_image 'super.img' dd", text);
     }
 
     [Fact]
@@ -329,16 +375,25 @@ public sealed class DeliveryCompletionTests : IDisposable
         var paths = await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
         Assert.Equal([Path.Combine(plan.OutputDirectory, expectedName)], paths);
         Assert.True(File.Exists(paths[0]));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(plan.OutputDirectory).Where(p => !p.EndsWith(expectedName, StringComparison.OrdinalIgnoreCase)));
+        Assert.DoesNotContain(Directory.EnumerateFileSystemEntries(plan.OutputDirectory), p => !p.EndsWith(expectedName, StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
     public async Task AdvancedSettingsPersistAndScriptPreflightPrecedesWrites()
     {
-        var plan = new DeliveryPlan { Files = [Image("boot"), Image("system") with { Fastbootd = true }],
-            Windows = true, Linux = true, MacOS = false, AskWipe = true, Reboot = true, Slot = "b",
-            LocalZstd = new() { ["Linux"] = Path.Combine(_root, "zstd") }, Super = new() { Zstd = true },
-            Package = new() { SigningKeyPath = Path.Combine(_root, "key.pem"), CertificatePath = Path.Combine(_root, "cert.pem") } };
+        var plan = new DeliveryPlan
+        {
+            Files = [Image("boot"), Image("system") with { Fastbootd = true }],
+            Windows = true,
+            Linux = true,
+            MacOS = false,
+            AskWipe = true,
+            Reboot = true,
+            Slot = "b",
+            LocalZstd = new() { ["Linux"] = Path.Combine(_root, "zstd") },
+            Super = new() { Zstd = true },
+            Package = new() { SigningKeyPath = Path.Combine(_root, "key.pem"), CertificatePath = Path.Combine(_root, "cert.pem"), RecoveryUpdaterPath = Path.Combine(_root, "META-INF", "update-binary") }
+        };
         var state = DeliveryPlanStore.CaptureElement(_root, plan);
         var restored = DeliveryPlanStore.LoadFromState(state, _root)!;
         Assert.True(restored.AskWipe); Assert.True(restored.Reboot); Assert.Equal("b", restored.Slot);

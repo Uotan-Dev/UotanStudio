@@ -4,8 +4,8 @@ using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Threading;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
 using UotanStudio.Services.Projects;
@@ -25,6 +25,7 @@ public partial class DeliveryView
     private bool _deliveryLoaded;
     private bool _restoringDelivery;
     private bool _deliveryChangePending;
+    private string _recoveryUpdaterPath = "";
 
     private void InitializeDelivery()
     {
@@ -187,6 +188,7 @@ public partial class DeliveryView
         Package = new()
         {
             Ota = PackPayloadBox.IsChecked == true,
+            RecoveryUpdaterPath = _recoveryUpdaterPath,
             SigningKeyPath = DirectOutputBox.IsChecked == true ? _zipSigningIdentityPath.Trim() : "",
             CertificatePath = DirectOutputBox.IsChecked == true ? _zipSigningCertificatePath.Trim() : "",
             BuildFingerprint = PayloadBuildFingerprintBox.Text?.Trim() ?? "",
@@ -331,6 +333,7 @@ public partial class DeliveryView
             _payloadSigningFingerprint = plan.Payload.SigningKeyFingerprint;
             RefreshPayloadSigningKeys();
             _zipSigningIdentityPath = plan.Package.SigningKeyPath;
+            _recoveryUpdaterPath = plan.Package.RecoveryUpdaterPath;
             _zipSigningCertificatePath = plan.Package.CertificatePath;
             RefreshZipSigningKeys();
             PayloadPostinstallBox.Text = plan.Payload.PostinstallFile;
@@ -421,7 +424,8 @@ public partial class DeliveryView
                 Composition.SetRunning(true, Composition.Model.Progress);
             });
             var service = new DeliveryOutputService(new DeliveryToolService(DeliveryHttp,
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "delivery-tools")));
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "UotanStudio", "delivery-tools")),
+                new DeliveryKeyProvider());
             var outputs = await service.ExportAsync(plan, progress, cancellation.Token, overwrite);
             acceptingProgress = false;
             Composition.Model.ResetProgressStatistics();

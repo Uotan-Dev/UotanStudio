@@ -48,7 +48,8 @@ internal static class DeliveryPostinstall
 
     private static bool Boolean(string value) => value switch
     {
-        "true" => true, "false" => false,
+        "true" => true,
+        "false" => false,
         _ => throw new InvalidDataException("Postinstall 布尔值需要 true 或 false。")
     };
 }

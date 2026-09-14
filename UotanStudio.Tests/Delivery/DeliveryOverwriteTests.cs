@@ -15,7 +15,9 @@ public sealed class DeliveryOverwriteTests : IDisposable
         File.WriteAllBytes(source, new byte[8192]);
         return new DeliveryPlan
         {
-            OutputDirectory = Path.Combine(_root, "out"), Txt = false, OrganizeDirectory = true,
+            OutputDirectory = Path.Combine(_root, "out"),
+            Txt = false,
+            OrganizeDirectory = true,
             Files = [new DeliveryFile { SourcePath = source, Partition = "boot", FileName = "boot.img" }]
         };
     }
@@ -80,7 +82,8 @@ public sealed class DeliveryOverwriteTests : IDisposable
         File.WriteAllBytes(source, new byte[4096]);
         var plan = new DeliveryPlan
         {
-            OutputDirectory = Path.Combine(_root, "out"), PackSuper = true,
+            OutputDirectory = Path.Combine(_root, "out"),
+            PackSuper = true,
             Container = [new DeliveryFile { SourcePath = source, Partition = "boot", FileName = "boot.img" }],
             Super = new() { DeviceSize = 10_000_000, Empty = false }
         };
@@ -93,13 +96,18 @@ public sealed class DeliveryOverwriteTests : IDisposable
         // 仅生成Super_Empty：不构建完整 super，磁盘需求不再计入设备大小。
         var plan = new DeliveryPlan
         {
-            OutputDirectory = Path.Combine(_root, "out"), PackSuper = true, Super = new() { DeviceSize = 5_000_000, Empty = true }
+            OutputDirectory = Path.Combine(_root, "out"),
+            PackSuper = true,
+            Super = new() { DeviceSize = 5_000_000, Empty = true }
         };
         var demand = DiskSpaceEstimator.EstimateExportDemand(plan);
         Assert.InRange(demand, plan.Super.MetadataSize, 1024 * 1024);
         Assert.Equal(demand, DiskSpaceEstimator.EstimateExportDemand(plan with
         {
-            Super = plan.Super with { DeviceSize = 50_000_000 }, Windows = true, Linux = true, MacOS = true
+            Super = plan.Super with { DeviceSize = 50_000_000 },
+            Windows = true,
+            Linux = true,
+            MacOS = true
         }));
     }
 

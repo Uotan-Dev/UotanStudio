@@ -1,14 +1,14 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Formats.Asn1;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using UotanStudio.Services.Keys;
-using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using SharpCompress.Common;
 using SharpCompress.Writers;
 using SharpCompress.Writers.Zip;
+using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -21,10 +21,12 @@ internal sealed record DeliveryPackageOptions
     public string BuildFingerprint { get; init; } = "";
     public string Incremental { get; init; } = "";
     public uint SdkLevel { get; init; }
+    /// <summary>Original ROM's Edify updater; empty discovers META-INF alongside the selected DAT files.</summary>
+    public string RecoveryUpdaterPath { get; init; } = "";
 }
 
 /// <summary>Streams full A/B OTA and custom Recovery packages; signs ZIP comments using Android's whole-file format.</summary>
-internal static class DeliveryPackageBuilder
+internal static partial class DeliveryPackageBuilder
 {
     internal static void Validate(DeliveryPlan plan)
     {
@@ -46,7 +48,7 @@ internal static class DeliveryPackageBuilder
     }
 
     internal static async Task BuildAsync(DeliveryPlan plan, string stage, string images, CancellationToken token,
-        IProgress<DeliveryProgress>? progress = null)
+        IProgress<DeliveryProgress>? progress = null, IDeliverySigningKeyProvider? signingKeys = null)
     {
         Validate(plan);
         if (plan.PackPayload && plan.OrganizeDirectory)
@@ -89,7 +91,7 @@ internal static class DeliveryPackageBuilder
             await WriteZip(metadata + Properties(streaming, all));
             var actual = ReadStoredRanges(path);
             if (ranges.Any(p => actual[p.Key] != p.Value)) throw new InvalidDataException("OTA ZIP entry offsets changed while finalizing metadata.");
-            if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token);
+            if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token, signingKeys);
         }
         if (plan.Recovery && !plan.PackPayload && !plan.PackSuper)
         {
@@ -101,21 +103,47 @@ internal static class DeliveryPackageBuilder
                 foreach (var file in Selected(plan))
                 {
                     token.ThrowIfCancellationRequested();
-                    await using var input = IsDatArtifact(file.FileName)
-                        ? new FileStream(Path.Combine(images, file.FileName), FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true)
-                        : MetadataReader.OpenImage(Path.Combine(images, file.FileName));
-                    var hash = await SHA256.HashDataAsync(input, token); input.Position = 0;
-                    hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  images/").Append(file.FileName).Append('\n');
-                    await using var entry = Entry(zip, "images/" + file.FileName).Open();
-                    await CopyPackageMemberAsync(input, entry, file.FileName, token, progress);
+                    var source = Path.Combine(images, file.FileName);
+                    var compressedPatch = file.FileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase);
+                    string? temporary = null;
+                    try
+                    {
+                        if (compressedPatch) source = temporary = await ExpandPatchAsync(source, stage, token);
+                        await using var input = IsDatArtifact(file.FileName) ? File.OpenRead(source) : MetadataReader.OpenImage(source);
+                        var member = "images/" + (compressedPatch ? file.FileName[..^3]
+                            : file.FileName.EndsWith(".br", StringComparison.OrdinalIgnoreCase) ? file.FileName[..^3] + ".br" : file.FileName);
+                        await AddHashedMemberAsync(zip, member, input, hashes, token, progress);
+                    }
+                    finally { if (temporary is not null) File.Delete(temporary); }
                 }
+                if (HasDat(plan))
+                {
+                    foreach (var set in DatSets(plan).Where(s => s.Patch is null))
+                    {
+                        using var empty = new MemoryStream();
+                        await AddHashedMemberAsync(zip, "images/" + set.PatchName, empty, hashes, token, progress);
+                    }
+                    await using var engine = File.OpenRead(DeliveryRecoveryUpdater.Resolve(plan));
+                    await AddHashedMemberAsync(zip, DeliveryRecoveryUpdater.ArchivePath, engine, hashes, token, progress);
+                }
+                if (Selected(plan).Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
+                {
+                    foreach (var name in new[] { "zstd", "zstd-arm64", "zstd-x86_64", "zstd-loong64" })
+                    {
+                        var source = Path.Combine(stage, "bin", "android", name);
+                        if (!File.Exists(source)) continue;
+                        await using var input = File.OpenRead(source);
+                        await AddHashedMemberAsync(zip, "bin/android/" + name, input, hashes, token, progress);
+                    }
+                }
+                using var edify = new MemoryStream(Encoding.UTF8.GetBytes(plan.Scripts.GetValueOrDefault("updater-script", RecoveryUpdaterScript(plan))));
+                await AddHashedMemberAsync(zip, DeliveryRecoveryUpdater.ScriptPath, edify, hashes, token, progress);
                 await AddTextAsync(zip, "checksums.sha256", hashes.ToString(), token);
                 var updater = Entry(zip, "META-INF/com/google/android/update-binary");
                 updater.ExternalAttributes = 0x81ed << 16;
                 await using (var entry = updater.Open()) await entry.WriteAsync(Encoding.UTF8.GetBytes(plan.Scripts.GetValueOrDefault("Recovery.sh", RecoveryScript(plan))), token);
-                await AddTextAsync(zip, "META-INF/com/google/android/updater-script", RecoveryUpdaterScript(plan), token);
             }
-            if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token);
+            if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token, signingKeys);
         }
         if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
         {
@@ -124,7 +152,7 @@ internal static class DeliveryPackageBuilder
             // consumes META-INF/com/google/android/update-binary directly.
             var meta = Path.Combine(stage, "META-INF", "com", "google", "android");
             Directory.CreateDirectory(meta);
-            await File.WriteAllTextAsync(Path.Combine(meta, "update-binary"), RecoveryScript(plan), new UTF8Encoding(false), token);
+            await File.WriteAllTextAsync(Path.Combine(meta, "update-binary"), plan.Scripts.GetValueOrDefault("Recovery.sh", RecoveryScript(plan)), new UTF8Encoding(false), token);
             await File.WriteAllTextAsync(Path.Combine(meta, "updater-script"), "#Powered by UotanStudio\n", new UTF8Encoding(false), token);
             if (!OperatingSystem.IsWindows())
                 File.SetUnixFileMode(Path.Combine(meta, "update-binary"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
@@ -178,8 +206,11 @@ internal static class DeliveryPackageBuilder
         || fileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
         || fileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase);
 
-    private static bool IsRecoveryArtifact(string fileName) =>
+    internal static bool IsRecoveryArtifact(string fileName) =>
         fileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase) || IsDatArtifact(fileName);
+
+    internal static bool SameDatSet(string first, string second) => IsDatArtifact(first) && IsDatArtifact(second)
+        && DatStem(first).Equals(DatStem(second), StringComparison.OrdinalIgnoreCase);
 
     internal static string DatStem(string fileName)
     {
@@ -199,10 +230,59 @@ internal static class DeliveryPackageBuilder
                 || n.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase));
             var patches = names.Count(n => n.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
                 || n.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase));
-            if (group.Select(f => f.Partition).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1
+            if (group.Select(f => f.Partition).Distinct(StringComparer.Ordinal).Count() != 1
                 || transfers != 1 || newData != 1 || patches > 1)
-                throw new InvalidDataException($"DAT 文件组缺少 transfer.list 或 new.dat：{group.Key}");
+                throw new InvalidDataException($"DAT 文件组须包含唯一的 transfer.list 与 new.dat，最多一个 patch.dat，且分区名一致：{group.Key}");
         }
+    }
+
+    private static async Task AddHashedMemberAsync(ZipArchive zip, string member, Stream input, StringBuilder hashes,
+        CancellationToken token, IProgress<DeliveryProgress>? progress)
+    {
+        var hash = await SHA256.HashDataAsync(input, token);
+        input.Position = 0;
+        hashes.Append(Convert.ToHexString(hash).ToLowerInvariant()).Append("  ").Append(member).Append('\n');
+        await using var output = Entry(zip, member).Open();
+        await CopyPackageMemberAsync(input, output, member, token, progress);
+    }
+
+    // AOSP only decompresses new.dat.br. Patch offsets always address uncompressed, STORED patch bytes.
+    private static async Task<string> ExpandPatchAsync(string source, string stage, CancellationToken token)
+    {
+        var temporary = Path.Combine(stage, ".patch-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            await using var input = File.OpenRead(source);
+            using var decoder = new BrotliDecoder();
+            await using var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true);
+            var buffer = new byte[65536];
+            var decoded = new byte[65536];
+            long total = 0;
+            var available = 0;
+            var status = OperationStatus.NeedMoreData;
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                if (status == OperationStatus.NeedMoreData)
+                {
+                    var read = await input.ReadAsync(buffer.AsMemory(available), token);
+                    if (read == 0) throw new InvalidDataException("Truncated Brotli DAT patch.");
+                    available += read;
+                }
+                status = decoder.Decompress(buffer.AsSpan(0, available), decoded, out var consumed, out var written);
+                if (status == OperationStatus.InvalidData) throw new InvalidDataException("Invalid Brotli DAT patch.");
+                available -= consumed;
+                buffer.AsSpan(consumed, available).CopyTo(buffer);
+                total = checked(total + written);
+                if (total > 64L * 1024 * 1024 * 1024) throw new InvalidDataException("DAT patch exceeds 64 GiB.");
+                await output.WriteAsync(decoded.AsMemory(0, written), token);
+                if (status != OperationStatus.Done) continue;
+                if (available != 0 || await input.ReadAsync(buffer.AsMemory(0, 1), token) != 0)
+                    throw new InvalidDataException("Trailing data after Brotli DAT patch.");
+                return temporary;
+            }
+        }
+        catch { File.Delete(temporary); throw; }
     }
     private static ZipArchiveEntry Entry(ZipArchive zip, string name)
     {
@@ -244,10 +324,11 @@ internal static class DeliveryPackageBuilder
             ? X509Certificate2.CreateFromPem(Encoding.ASCII.GetString(bytes)) : X509CertificateLoader.LoadCertificate(bytes);
     }
 
-    internal static async Task SignAsync(string path, DeliveryPackageOptions options, CancellationToken token)
+    internal static async Task SignAsync(string path, DeliveryPackageOptions options, CancellationToken token,
+        IDeliverySigningKeyProvider? signingKeys = null)
     {
         using var cert = LoadCertificate(options.CertificatePath);
-        using var key = KeyLibraryService.LoadPrivateKey(options.SigningKeyPath);
+        using var key = DeliverySigning.Load(signingKeys, options.SigningKeyPath);
         using var publicKey = cert.GetRSAPublicKey() ?? throw new InvalidDataException("外层证书需要 RSA 公钥。");
         if (!key.ExportSubjectPublicKeyInfo().AsSpan().SequenceEqual(publicKey.ExportSubjectPublicKeyInfo()))
             throw new InvalidDataException("外层签名私钥与证书不匹配。");
@@ -300,103 +381,4 @@ internal static class DeliveryPackageBuilder
         return writer.Encode();
     }
 
-    internal static string RecoveryScript(DeliveryPlan plan)
-    {
-        if (plan.PackSuper)
-        {
-            var imageName = plan.Super.Zstd ? "super.zst" : "super.img";
-            var extraction = plan.Super.Zstd
-                ? $"package_extract_zstd() {{ ui_print '- Writing super'; mkdir -p /tmp/bin/android; unzip -p \"$ZIPFILE\" \"bin/android/zstd\" >/tmp/bin/android/zstd || return 1; chmod 755 /tmp/bin/android/zstd; unzip -p \"$ZIPFILE\" \"{imageName}\" | /tmp/bin/android/zstd -c -d >\"$1\"; }}"
-                : $"package_extract_file() {{ ui_print '- Writing super'; unzip -p \"$ZIPFILE\" \"{imageName}\" >\"$1\"; }}";
-            var invoke = plan.Super.Zstd ? "package_extract_zstd" : "package_extract_file";
-            return $"#!/sbin/bash\nOUTFD=/proc/self/fd/$2\nZIPFILE=\"$3\"\nui_print() {{ echo -e \"ui_print $1\\nui_print\" >>\"$OUTFD\"; }}\nui_print \"====================================\"\nui_print \"          UotanStudio Super package          \"\nui_print \"====================================\"\n{extraction}\nfor base in /dev/block/by-name /dev/block/bootdevice/by-name; do\n  if [ -b \"$base/super\" ]; then {invoke} \"$base/super\"; exit 0; fi\ndone\nui_print \"- super partition not found\"\nexit 1\n";
-        }
-        var script = new StringBuilder("""
-            #!/sbin/sh
-            set -eu
-            OUTFD="$2"
-            ZIP="$3"
-            ui_print() { printf 'ui_print %s\nui_print\n' "$*" >"/proc/self/fd/$OUTFD"; }
-            fail() { ui_print "$*"; exit 1; }
-            for tool in unzip sha256sum blockdev dd stat getprop readlink; do command -v "$tool" >/dev/null || fail "Missing $tool"; done
-            WORK=$(mktemp -d /tmp/uotan.XXXXXX)
-            trap 'rm -rf "$WORK"' EXIT
-            unzip -o "$ZIP" 'images/*' checksums.sha256 -d "$WORK" >/dev/null || fail 'Extraction failed'
-            cd "$WORK"
-            sha256sum -c checksums.sha256 || fail 'Checksum mismatch'
-            """);
-        script.Append('\n');
-        if (plan.DeviceCodename.Length > 0) script.AppendLine($"[ \"$(getprop ro.product.device)\" = '{plan.DeviceCodename}' ] || fail 'Device mismatch'");
-        script.AppendLine(plan.Slot.Length > 0 ? $"SLOT='_{plan.Slot}'" : "SLOT=$(getprop ro.boot.slot_suffix)\ncase \"$SLOT\" in ''|_a|_b) ;; *) fail 'Invalid slot' ;; esac");
-        var selected = Selected(plan);
-        var physical = selected.Where(f => !IsDatArtifact(f.FileName)).ToArray();
-        var datGroups = selected.Where(f => IsDatArtifact(f.FileName))
-            .GroupBy(f => DatStem(f.FileName), StringComparer.OrdinalIgnoreCase)
-            .Select(g => (Stem: g.Key, Files: g.ToArray(), Transfer: g.First(f => f.FileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase)),
-                NewData: g.First(f => f.FileName.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
-                    || f.FileName.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase)),
-                Patch: g.FirstOrDefault(f => f.FileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
-                    || f.FileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase))))
-            .ToArray();
-        for (var i = 0; i < physical.Length; i++)
-        {
-            var f = physical[i];
-            script.AppendLine($"TARGET{i}=''\nfor base in /dev/block/by-name /dev/block/bootdevice/by-name; do\n  if [ -b \"$base/{f.Partition}$SLOT\" ]; then TARGET{i}=\"$base/{f.Partition}$SLOT\"; break; fi\n  if [ -b \"$base/{f.Partition}\" ]; then TARGET{i}=\"$base/{f.Partition}\"; break; fi\ndone");
-            script.AppendLine($"[ -n \"$TARGET{i}\" ] || fail 'Partition missing: {f.Partition}'\n[ \"$(stat -c %s 'images/{f.FileName}')\" -le \"$(blockdev --getsize64 \"$TARGET{i}\")\" ] || fail 'Image too large: {f.Partition}'");
-        }
-        for (var i = 0; i < datGroups.Length; i++)
-        {
-            var group = datGroups[i];
-            var partition = group.Transfer.Partition;
-            script.AppendLine($"DAT_TARGET{i}=''\nfor base in /dev/block/by-name /dev/block/bootdevice/by-name; do\n  if [ -b \"$base/{partition}$SLOT\" ]; then DAT_TARGET{i}=\"$base/{partition}$SLOT\"; break; fi\n  if [ -b \"$base/{partition}\" ]; then DAT_TARGET{i}=\"$base/{partition}\"; break; fi\ndone");
-            script.AppendLine($"[ -n \"$DAT_TARGET{i}\" ] || fail 'Partition missing: {partition}'");
-        }
-        script.AppendLine("while read -r device mountpoint rest; do case \"$device\" in /dev/*) resolved=$(readlink -f \"$device\") || fail 'Cannot resolve mount';");
-        for (var i = 0; i < physical.Length; i++)
-            script.AppendLine($"[ \"$resolved\" != \"$(readlink -f \"$TARGET{i}\")\" ] || fail 'Target partition is mounted'");
-        for (var i = 0; i < datGroups.Length; i++)
-            script.AppendLine($"[ \"$resolved\" != \"$(readlink -f \"$DAT_TARGET{i}\")\" ] || fail 'Target partition is mounted'");
-        script.AppendLine(";; esac; done < /proc/mounts");
-        if (datGroups.Length > 0)
-        {
-            script.AppendLine("command -v block_image_update >/dev/null || fail 'Missing block_image_update'");
-            foreach (var (group, i) in datGroups.Select((group, i) => (group, i)))
-            {
-                var patch = group.Patch is null ? "\"\"" : $"\"$WORK/images/{group.Patch.FileName}\"";
-                script.AppendLine($"ui_print 'Updating {group.Transfer.Partition}'\nblock_image_update \"$DAT_TARGET{i}\" \"$WORK/images/{group.Transfer.FileName}\" \"$WORK/images/{group.NewData.FileName}\" {patch} || fail 'DAT update failed: {group.Transfer.Partition}'");
-            }
-        }
-        for (var i = 0; i < physical.Length; i++)
-            script.AppendLine($"ui_print 'Writing {physical[i].Partition}'\ndd if='images/{physical[i].FileName}' of=\"$TARGET{i}\" bs=1048576 conv=fsync || fail 'Write failed'");
-        script.AppendLine("sync\nui_print 'Completed'");
-        return script.ToString().Replace("\r\n", "\n");
-    }
-
-    /// <summary>Generates the standard Edify companion script for DAT recovery entries.</summary>
-    internal static string RecoveryUpdaterScript(DeliveryPlan plan)
-    {
-        if (!Selected(plan).Any(f => IsDatArtifact(f.FileName)))
-            return "# UotanStudio custom Recovery shell installer\n";
-        var script = new StringBuilder("# UotanStudio Recovery updater-script\n");
-        foreach (var group in Selected(plan).Where(f => IsDatArtifact(f.FileName))
-                     .GroupBy(f => DatStem(f.FileName), StringComparer.OrdinalIgnoreCase))
-        {
-            var transfer = group.Single(f => f.FileName.EndsWith(".transfer.list", StringComparison.OrdinalIgnoreCase));
-            var data = group.Single(f => f.FileName.EndsWith(".new.dat", StringComparison.OrdinalIgnoreCase)
-                || f.FileName.EndsWith(".new.dat.br", StringComparison.OrdinalIgnoreCase));
-            var patch = group.FirstOrDefault(f => f.FileName.EndsWith(".patch.dat", StringComparison.OrdinalIgnoreCase)
-                || f.FileName.EndsWith(".patch.dat.br", StringComparison.OrdinalIgnoreCase));
-            var patchName = patch is null ? string.Empty : patch.FileName;
-            script.Append("block_image_update(\"/dev/block/bootdevice/by-name/")
-                .Append(transfer.Partition)
-                .Append("\", package_extract_file(\"")
-                .Append(transfer.FileName)
-                .Append("\"), \"")
-                .Append(data.FileName)
-                .Append("\", \"")
-                .Append(patchName)
-                .AppendLine("\") || abort(\"E2001: Failed to update image.\");");
-        }
-        return script.ToString();
-    }
 }

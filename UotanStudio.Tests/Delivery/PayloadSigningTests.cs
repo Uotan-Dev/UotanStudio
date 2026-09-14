@@ -75,7 +75,7 @@ public sealed class PayloadSigningTests : IDisposable
         var restored = DeliveryPlanStore.LoadFromState(state, _root);
         Assert.Equal(plan.Payload, restored!.Payload);
         Assert.DoesNotContain("PRIVATE KEY", state.GetRawText());
-        await new DeliveryOutputService(new NoTools()).ExportAsync(restored, token: TestContext.Current.CancellationToken);
+        await new DeliveryOutputService(new NoTools(), new TestSigningKeys()).ExportAsync(restored, token: TestContext.Current.CancellationToken);
         var unpacked = Path.Combine(_root, "ota-content");
         ZipFile.ExtractToDirectory(Path.Combine(plan.OutputDirectory, "ota.zip"), unpacked);
         var bytes = File.ReadAllBytes(Path.Combine(unpacked, "payload.bin"));
@@ -92,7 +92,7 @@ public sealed class PayloadSigningTests : IDisposable
         Assert.DoesNotContain(Directory.GetFiles(plan.OutputDirectory, "*", SearchOption.AllDirectories), p => p.EndsWith(".pem"));
         var failurePlan = plan with { OutputDirectory = Path.Combine(_root, "failure") };
         File.Copy(library.PrivatePath(first), library.PrivatePath(chosen), true);
-        await Assert.ThrowsAsync<InvalidDataException>(() => new DeliveryOutputService(new NoTools()).ExportAsync(failurePlan, token: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<InvalidDataException>(() => new DeliveryOutputService(new NoTools(), new TestSigningKeys()).ExportAsync(failurePlan, token: TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(failurePlan.OutputDirectory));
         library.Delete(chosen);
         await Assert.ThrowsAsync<FileNotFoundException>(() => new DeliveryOutputService(new NoTools()).ExportAsync(failurePlan, token: TestContext.Current.CancellationToken));
@@ -140,5 +140,10 @@ public sealed class PayloadSigningTests : IDisposable
     private sealed class NoTools : IDeliveryTools
     {
         public Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token) => Task.CompletedTask;
+    }
+
+    private sealed class TestSigningKeys : IDeliverySigningKeyProvider
+    {
+        public RSA LoadPrivateKey(string path) => KeyLibraryService.LoadPrivateKey(path);
     }
 }

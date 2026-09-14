@@ -66,8 +66,17 @@ internal sealed partial class DeliveryImage : ObservableObject
 
     internal DeliveryFile Snapshot() => new()
     {
-        SourcePath = FilePath ?? "", FileName = FileName, Partition = PartitionName, SourceGroup = GroupName,
-        SourceLength = SizeBytes, IncludeInSuper = IncludeInSuper, Optional = IsOptional, Default = IsDefault, Generated = Generated, Fastbootd = Fastbootd, AutoZero = IsAutoZero
+        SourcePath = FilePath ?? "",
+        FileName = FileName,
+        Partition = PartitionName,
+        SourceGroup = GroupName,
+        SourceLength = SizeBytes,
+        IncludeInSuper = IncludeInSuper,
+        Optional = IsOptional,
+        Default = IsDefault,
+        Generated = Generated,
+        Fastbootd = Fastbootd,
+        AutoZero = IsAutoZero
     };
 }
 
@@ -186,7 +195,9 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         if (plan.PackSuper && plan.Super.Empty)
             Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
             {
-                Generated = true, FileName = "super_empty.img", Partition = "super_empty"
+                Generated = true,
+                FileName = "super_empty.img",
+                Partition = "super_empty"
             })));
         else
             Output.Insert(0, Observe(new DeliveryImage(new DeliveryFile
@@ -313,7 +324,9 @@ internal sealed partial class DeliveryViewModel : ObservableObject
             // Immediate validation for manual partition-name edits: an invalid or duplicate name rolls back to the pre-edit value with a status hint; wrapped in _updating so the rollback does not recurse.
             if (sender is DeliveryImage changedRow && changedRow.PartitionName != changedRow.PreviousPartitionName
                 && (!DeliveryValidation.IsPartition(changedRow.PartitionName, PackPayload)
-                    || Container.Concat(Output).Any(i => i != changedRow && i.PartitionName == changedRow.PartitionName)))
+                    || Container.Concat(Output).Any(i => i != changedRow && i.PartitionName == changedRow.PartitionName
+                        && !(Output.Contains(i) && Output.Contains(changedRow)
+                            && DeliveryPackageBuilder.SameDatSet(i.FileName, changedRow.FileName)))))
             {
                 _updating = true;
                 try
@@ -328,7 +341,11 @@ internal sealed partial class DeliveryViewModel : ObservableObject
         if (sender is DeliveryImage { IsDefault: true } row && e.PropertyName == nameof(DeliveryImage.IsDefault))
         {
             _updating = true;
-            try { foreach (var other in Output.Where(i => i != row && i.PartitionName == row.PartitionName)) other.IsDefault = false; }
+            try
+            {
+                foreach (var other in Output.Where(i => i != row && i.PartitionName == row.PartitionName
+                && !DeliveryPackageBuilder.SameDatSet(i.FileName, row.FileName))) other.IsDefault = false;
+            }
             finally { _updating = false; }
         }
         Changed?.Invoke(this, EventArgs.Empty);

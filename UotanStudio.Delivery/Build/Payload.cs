@@ -2,7 +2,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using UotanStudio.Services.Keys;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
@@ -108,7 +107,8 @@ internal static class DeliveryPayloadBuilder
         return $"super_partition_groups={plan.Super.Group}\nsuper_{plan.Super.Group}_group_size={plan.Super.DeviceSize}\nsuper_{plan.Super.Group}_partition_list={string.Join(' ', selected.Select(f => f.Partition))}\nvirtual_ab={plan.Super.VirtualAb.ToString().ToLowerInvariant()}\n";
     }
 
-    internal static async Task BuildAsync(DeliveryPlan plan, string output, IProgress<DeliveryProgress>? progress, CancellationToken token)
+    internal static async Task BuildAsync(DeliveryPlan plan, string output, IProgress<DeliveryProgress>? progress,
+        CancellationToken token, IDeliverySigningKeyProvider? signingKeys = null)
     {
         Validate(plan);
         await Task.Run(async () =>
@@ -121,7 +121,7 @@ internal static class DeliveryPayloadBuilder
                     .WithSecurityPatchLevel(plan.Payload.SecurityPatchLevel);
                 foreach (var config in DeliveryPostinstall.Read(plan.Payload.PostinstallFile, plan.Container.Select(f => f.Partition)).Values)
                     builder.WithPostinstall(config);
-                using var signingKey = LoadSigningKey(plan.Payload);
+                using var signingKey = LoadSigningKey(plan.Payload, signingKeys);
                 if (signingKey is not null) builder.WithSigningKey(signingKey);
                 var lengths = new Dictionary<string, long>(StringComparer.Ordinal);
                 progress?.Report(new(0, "Preparing Payload", Stage: "Delivery_ProgressPayloadPrepare", Items: (0, plan.Container.Count)));
@@ -148,11 +148,11 @@ internal static class DeliveryPayloadBuilder
         await WritePropertiesAsync(output, Path.Combine(Path.GetDirectoryName(output)!, "payload_properties.txt"), token).ConfigureAwait(false);
     }
 
-    internal static RSA? LoadSigningKey(DeliveryPayloadOptions options)
+    internal static RSA? LoadSigningKey(DeliveryPayloadOptions options, IDeliverySigningKeyProvider? signingKeys = null)
     {
         if (options.SigningKeyPath.Length == 0) return null;
         if (!File.Exists(options.SigningKeyPath)) throw new FileNotFoundException("所选签名密钥不存在，请重新选择 / Selected signing key is missing; select it again.", options.SigningKeyPath);
-        var key = KeyLibraryService.LoadPrivateKey(options.SigningKeyPath);
+        var key = DeliverySigning.Load(signingKeys, options.SigningKeyPath);
         try
         {
             if (key.KeySize is not (2048 or 4096)) throw new InvalidDataException("Payload 签名需要 RSA 2048 或 4096 / Payload requires RSA 2048 or 4096.");

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>UotanStudio.Services.Delivery</RootNamespace>
+    <AssemblyName>UotanStudio.Delivery</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <PackageReference Include="SharpCompress" />
+  </ItemGroup>
+</Project>

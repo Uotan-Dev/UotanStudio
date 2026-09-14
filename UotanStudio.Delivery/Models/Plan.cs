@@ -65,8 +65,16 @@ internal sealed record DeliveryPlan
         OrganizeDirectory = false,
         Files = [],
         Container = Container.Select(file => file with { SourcePath = "", SourceLength = null }).ToList(),
-        Txt = false, Windows = false, Linux = false, MacOS = false, Recovery = false,
-        Scripts = [], Payload = new(), Package = new(), DeviceCodename = "", Slot = ""
+        Txt = false,
+        Windows = false,
+        Linux = false,
+        MacOS = false,
+        Recovery = false,
+        Scripts = [],
+        Payload = new(),
+        Package = new(),
+        DeviceCodename = "",
+        Slot = ""
     };
 
     public int Version { get; init; } = 1;
@@ -130,7 +138,7 @@ internal static class DeliveryPlanStore
         if (element.GetRawText().Length > 8 * 1024 * 1024) throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
         var plan = element.Deserialize(DeliveryJsonContext.Default.DeliveryPlan);
         if (plan is null || plan.Version != 1 || plan.Files is null || plan.Container is null || plan.Super is null
-            || plan.Package is null || plan.Package.CertificatePath is null || plan.Package.SigningKeyPath is null || plan.Package.BuildFingerprint is null || plan.Package.Incremental is null
+            || plan.Package is null || plan.Package.CertificatePath is null || plan.Package.SigningKeyPath is null || plan.Package.BuildFingerprint is null || plan.Package.Incremental is null || plan.Package.RecoveryUpdaterPath is null
             || plan.Payload is null || plan.Payload.DynamicPartitionsFile is null || plan.Payload.SignatureFile is null || plan.Payload.PostinstallFile is null
             || plan.Payload.SecurityPatchLevel is null || plan.Payload.Compression is null
             || plan.Payload.SigningKeyPath is null || plan.Payload.SigningKeyFingerprint is null
@@ -144,15 +152,18 @@ internal static class DeliveryPlanStore
             || plan.Files.Concat(plan.Container).Any(f => f is null || f.SourcePath is null || f.FileName is null || f.Partition is null || f.SourceGroup is null))
             throw new InvalidDataException("Invalid delivery plan.");
         if (plan.PackPayload || plan.PackSuper)
-            plan = plan with { Files = plan.Files.Select(f => f.Generated && (f.Partition == "payload" || f.Partition == "super")
-                ? f with { FileName = DeliveryOutputService.ContainerFileName(plan) } : f).ToList() };
+            plan = plan with
+            {
+                Files = plan.Files.Select(f => f.Generated && (f.Partition == "payload" || f.Partition == "super")
+                ? f with { FileName = DeliveryOutputService.ContainerFileName(plan) } : f).ToList()
+            };
         return Rebase(plan, path => Path.GetFullPath(path, root));
     }
 
     private static DeliveryPlan Rebase(DeliveryPlan plan, Func<string, string> path) => plan with
     {
         OutputDirectory = string.IsNullOrWhiteSpace(plan.OutputDirectory) ? "" : path(plan.OutputDirectory),
-        Package = plan.Package with { CertificatePath = string.IsNullOrEmpty(plan.Package.CertificatePath) ? "" : path(plan.Package.CertificatePath), SigningKeyPath = string.IsNullOrEmpty(plan.Package.SigningKeyPath) ? "" : path(plan.Package.SigningKeyPath) },
+        Package = plan.Package with { CertificatePath = string.IsNullOrEmpty(plan.Package.CertificatePath) ? "" : path(plan.Package.CertificatePath), SigningKeyPath = string.IsNullOrEmpty(plan.Package.SigningKeyPath) ? "" : path(plan.Package.SigningKeyPath), RecoveryUpdaterPath = string.IsNullOrEmpty(plan.Package.RecoveryUpdaterPath) ? "" : path(plan.Package.RecoveryUpdaterPath) },
         Payload = plan.Payload with
         {
             DynamicPartitionsFile = string.IsNullOrEmpty(plan.Payload.DynamicPartitionsFile) ? "" : path(plan.Payload.DynamicPartitionsFile),

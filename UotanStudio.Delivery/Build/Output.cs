@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 
 namespace UotanStudio.Services.Delivery;
@@ -16,7 +17,7 @@ internal interface IDeliveryTools
 }
 
 /// <summary>Prepares every file privately, then publishes: overwrites caller-approved destinations and keeps the rest.</summary>
-internal sealed class DeliveryOutputService(IDeliveryTools tools)
+internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigningKeyProvider? signingKeys = null)
 {
     private static readonly HashSet<string> FirmwareUpdateImages = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -49,6 +50,8 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
             if (IsUnder(file.SourcePath, output)) throw new InvalidDataException("输出目录不能包含源镜像 / Output must not contain source images.");
         foreach (var source in new[] { plan.Payload.DynamicPartitionsFile, plan.Payload.SignatureFile, plan.Payload.SigningKeyPath, plan.Payload.PostinstallFile, plan.Package.SigningKeyPath, plan.Package.CertificatePath }.Where(p => p.Length > 0))
             if (IsUnder(source, output)) throw new InvalidDataException("Output must not contain Payload configuration inputs.");
+        if (DeliveryPackageBuilder.HasDat(plan) && IsUnder(DeliveryRecoveryUpdater.Resolve(plan), output))
+            throw new InvalidDataException("Output must not contain the source Recovery updater.");
         if (plan.OrganizeDirectory && !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS || plan.Txt || plan.Recovery && plan.Scripts.ContainsKey("Recovery.sh"))
             && plan.ScriptFingerprint != DeliveryScriptGenerator.Fingerprint(plan))
             throw new InvalidDataException("脚本已过期，请重新生成 / Scripts are stale; generate them again.");
@@ -67,7 +70,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
         try
         {
             progress?.Report(new(0, "Checking inputs", Stage: "Delivery_ProgressChecking"));
-            if (plan.PackPayload) await DeliveryPayloadBuilder.BuildAsync(plan, Path.Combine(imageDirectory, "payload.bin"), progress, token).ConfigureAwait(false);
+            if (plan.PackPayload) await DeliveryPayloadBuilder.BuildAsync(plan, Path.Combine(imageDirectory, "payload.bin"), progress, token, signingKeys).ConfigureAwait(false);
             if (plan.PackSuper)
             {
                 // 仅生成Super_Empty：跳过完整 super，只产出独立的 super_empty.img（恒为未压缩原始镜像）。
@@ -80,7 +83,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
                 else
                 {
                     var superOutput = Path.Combine(imageDirectory, plan.Super.Zstd ? "super.img" : SuperFileName(plan.Super));
-                    await DeliverySuperBuilder.BuildAsync(plan.Container, plan.Super with { Empty = false }, superOutput,
+                    await DeliverySuperBuilder.BuildAsync(plan.Container, plan.Super with { Empty = false, Sparse = plan.Super.Sparse && !plan.OrganizeDirectory }, superOutput,
                         null, token,
                         new InlineProgress<DeliveryProgress>(p => progress?.Report(p with { Percent = p.Percent * .40 }))).ConfigureAwait(false);
                     if (plan.Super.Zstd)
@@ -101,28 +104,36 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
             if (plan.OrganizeDirectory)
             {
                 var copy = plan.Files.Where(f => !f.Generated).ToArray();
-                var copyLengths = copy.Select(f => new FileInfo(f.SourcePath).Length).ToArray();
+                var copyLengths = copy.Select(f =>
+                {
+                    if (!plan.PackSuper) return new FileInfo(f.SourcePath).Length;
+                    using var image = MetadataReader.OpenImage(f.SourcePath);
+                    return image.Length;
+                }).ToArray();
                 var copyTotal = copyLengths.Sum();
                 long copied = 0;
                 if (copy.Length > 0) progress?.Report(new(55, "Copying images", (0, copyTotal), "Delivery_ProgressCopy"));
                 for (var i = 0; i < copy.Length; i++)
                 {
-                    DeliveryValidation.CheckSource(copy[i]);
+                    DeliveryValidation.CheckSource(copy[i], DeliveryPackageBuilder.IsDatArtifact(copy[i].FileName)
+                        && copy[i].FileName.EndsWith(".dat", StringComparison.OrdinalIgnoreCase));
                     var index = i;
                     var completed = copied;
                     var destination = OrganizedImagePath(plan, stage, copy[i]);
                     Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                     await CopyFileAsync(copy[i].SourcePath, destination, token,
                         p => progress?.Report(new(55 + (index + p / 100) * 20 / Math.Max(1, copy.Length), "Copying images",
-                            (completed + (long)(copyLengths[index] * p / 100), copyTotal), "Delivery_ProgressCopy", Detail: copy[index].FileName))).ConfigureAwait(false);
+                            (completed + (long)(copyLengths[index] * p / 100), copyTotal), "Delivery_ProgressCopy", Detail: copy[index].FileName)),
+                        expandSparse: plan.PackSuper).ConfigureAwait(false);
                     copied += copyLengths[i];
                 }
                 await tools.PrepareAsync(plan, stage, progress, token).ConfigureAwait(false);
                 foreach (var (name, contents) in plan.Scripts)
                 {
-                    if (!DeliveryValidation.IsName(name) || !(name.EndsWith(".sh") || name.EndsWith(".bat") || name.EndsWith(".txt")))
+                    if (!DeliveryValidation.IsScriptName(name))
                         throw new InvalidDataException("Invalid script filename: " + name);
                     if (Encoding.UTF8.GetByteCount(contents) > 1024 * 1024) throw new InvalidDataException("Script exceeds 1 MiB.");
+                    if (name == "updater-script") continue; // Published inside recovery.zip, with its native interpreter.
                     var path = Path.Combine(stage, name);
                     await File.WriteAllTextAsync(path, contents, new UTF8Encoding(false), token).ConfigureAwait(false);
                     if (!OperatingSystem.IsWindows() && name.EndsWith(".sh"))
@@ -137,7 +148,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
                     + "Scripts target the partition names and slot policy selected by the author.\n";
                 await File.WriteAllTextAsync(Path.Combine(stage, "README.txt"), readme, token).ConfigureAwait(false);
             }
-            await DeliveryPackageBuilder.BuildAsync(plan, stage, imageDirectory, token, progress).ConfigureAwait(false);
+            await DeliveryPackageBuilder.BuildAsync(plan, stage, imageDirectory, token, progress, signingKeys).ConfigureAwait(false);
             if (plan.PackPayload && plan.OrganizeDirectory)
             {
                 File.Delete(Path.Combine(imageDirectory, "payload.bin"));
@@ -225,9 +236,12 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
         }
     }
 
-    internal static async Task CopyFileAsync(string source, string destination, CancellationToken token, Action<double>? progress = null)
+    internal static async Task CopyFileAsync(string source, string destination, CancellationToken token, Action<double>? progress = null,
+        bool expandSparse = false)
     {
-        await using var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
+        // Recovery writes physical blocks. Expand sparse companions in the desktop staging directory.
+        await using var input = expandSparse ? MetadataReader.OpenImage(source)
+            : new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
         await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true);
         var length = input.Length;
         var buffer = new byte[65536];
@@ -253,7 +267,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools)
         if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
             return [Path.Combine(output, "super.zip")];
         var plannedNames = plan.OrganizeDirectory
-            ? plan.Files.Select(f => f.Generated && plan.PackPayload ? "ota.zip" : plan.PackSuper ? OrganizedImageRelativePath(f) : Path.Combine("images", f.FileName)).Concat(plan.Scripts.Keys).Concat(["README.txt", "checksums.sha256"])
+            ? plan.Files.Select(f => f.Generated && plan.PackPayload ? "ota.zip" : plan.PackSuper ? OrganizedImageRelativePath(f) : Path.Combine("images", f.FileName)).Concat(plan.Scripts.Keys.Where(name => name != "updater-script")).Concat(["README.txt", "checksums.sha256"])
             : [ContainerFileName(plan)];
         if (plan.PackPayload && plan.OrganizeDirectory) plannedNames = plannedNames.Append("ota.zip");
         if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)

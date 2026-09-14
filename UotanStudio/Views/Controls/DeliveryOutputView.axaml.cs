@@ -1,14 +1,14 @@
-using UotanStudio.Services;
-using UotanStudio.Services.Delivery;
-using UotanStudio.ViewModels.Shell;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using AvaloniaEdit.Document;
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Services;
+using UotanStudio.Services.Delivery;
+using UotanStudio.ViewModels.Shell;
 
 namespace UotanStudio.Views.Controls;
 
@@ -180,7 +180,7 @@ public partial class DeliveryOutputView : UserControl
             && files.Any(file => !file.Optional || file.Default)
             && files.All(file => !file.Generated && !file.IncludeInSuper && !file.Fastbootd
                 && file.Partition is not ("super" or "super_empty")
-                && file.FileName.EndsWith(".img", StringComparison.OrdinalIgnoreCase));
+                && DeliveryPackageBuilder.IsRecoveryArtifact(file.FileName));
     }
 
     private void UpdateRecoveryAvailability()
@@ -216,12 +216,19 @@ public partial class DeliveryOutputView : UserControl
         return plan with
         {
             Package = plan.Package with { Ota = plan.PackPayload },
-            Files = files, Recovery = RecoveryRequested, Txt = TxtScriptBox.IsChecked == true && !_txtScriptBlockedByZstd, TxtVariants = true,
-            Windows = BatchShellScriptBox.IsChecked == true, Linux = BatchShellScriptBox.IsChecked == true, MacOS = BatchShellScriptBox.IsChecked == true,
-            AskWipe = false, Reboot = false,
+            Files = files,
+            Recovery = RecoveryRequested,
+            Txt = TxtScriptBox.IsChecked == true && !_txtScriptBlockedByZstd,
+            TxtVariants = true,
+            Windows = BatchShellScriptBox.IsChecked == true,
+            Linux = BatchShellScriptBox.IsChecked == true,
+            MacOS = BatchShellScriptBox.IsChecked == true,
+            AskWipe = false,
+            Reboot = false,
             Slot = "",
             LocalZstd = [],
-            DeviceCodename = DeviceCodenameBox.Text?.Trim() ?? "", Information = AuthorInfoBox.Text ?? "",
+            DeviceCodename = DeviceCodenameBox.Text?.Trim() ?? "",
+            Information = AuthorInfoBox.Text ?? "",
             Scripts = _allDocuments.ToDictionary(p => p.Key, p => p.Value.Document.Text),
             ScriptFingerprint = _fingerprint,
             GeneratedScripts = _allDocuments.Where(p => p.Value.Baseline is not null).ToDictionary(p => p.Key, p => p.Value.Baseline!),

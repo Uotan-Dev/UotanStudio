@@ -9,18 +9,21 @@ internal static partial class DeliveryScriptGenerator
 {
     private static string ImagePath(DeliveryPlan plan, DeliveryFile file)
         => plan.PackSuper ? DeliveryOutputService.OrganizedImageRelativePath(file).Replace('\\', '/') : "images/" + file.FileName;
-    internal static string Fingerprint(DeliveryPlan plan) => Convert.ToHexString(SHA256.HashData(
-        JsonSerializer.SerializeToUtf8Bytes(plan with { Scripts = [], GeneratedScripts = [], OpenScripts = [], ScriptCarets = [], ScriptFingerprint = "", OutputDirectory = "" },
-            DeliveryJsonContext.Default.DeliveryPlan)));
+    internal static string Fingerprint(DeliveryPlan plan)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        // Invalidate saved generated scripts when the installer contract changes; edited drafts still use the host's conflict flow.
+        hash.AppendData("UotanStudio delivery scripts v2\n"u8);
+        hash.AppendData(JsonSerializer.SerializeToUtf8Bytes(plan with { Scripts = [], GeneratedScripts = [], OpenScripts = [], ScriptCarets = [], ScriptFingerprint = "", OutputDirectory = "" },
+            DeliveryJsonContext.Default.DeliveryPlan));
+        return Convert.ToHexString(hash.GetHashAndReset());
+    }
 
     /// <summary><para>按计划生成脚本；localize 非空时用其解析用户可见提示文案，否则回退英文。</para>
     /// Generates scripts from the plan; when localize is set its lookup resolves user-visible prompts, otherwise English falls back.</summary>
     internal static Dictionary<string, string> Generate(DeliveryPlan plan, Func<string, string>? localize = null)
     {
         DeliveryValidation.Validate(plan, false);
-        if (plan.Files.Any(f => DeliveryPackageBuilder.IsDatArtifact(f.FileName))
-            && (!plan.Recovery || plan.PackPayload || plan.PackSuper))
-            throw new NotSupportedException("Android DAT 文件只能通过 Recovery 卡刷脚本处理，不能作为 fastboot 或 Super/Payload 镜像。");
         if (plan.IsSuperEmptyOnly) return [];
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!plan.OrganizeDirectory) return result;
@@ -34,7 +37,11 @@ internal static partial class DeliveryScriptGenerator
                 : f)
             .ToList();
         if (plan.Recovery && !plan.PackPayload)
-            result.Add("Recovery.sh", DeliveryPackageBuilder.RecoveryScript(plan));
+        {
+            result.Add("Recovery.sh", DeliveryPackageBuilder.RecoveryScript(plan, localize));
+            if (DeliveryPackageBuilder.HasDat(plan))
+                result.Add("updater-script", DeliveryPackageBuilder.RecoveryUpdaterScript(plan, localize));
+        }
         if (flashFiles.Count == 0) return result;
         plan = plan with { Files = flashFiles };
         var groups = plan.Files.GroupBy(f => f.Partition, StringComparer.Ordinal).Select(g => g.ToArray()).ToArray();
@@ -84,6 +91,7 @@ internal static partial class DeliveryScriptGenerator
     private static string Shell(DeliveryPlan plan, DeliveryFile[][] groups, string platform, Func<string, string>? localize)
     {
         var b = new StringBuilder("#!/bin/bash\nset -eu\nROOT=\"$(cd -- \"$(dirname -- \"$0\")\" && pwd)\"\n");
+        foreach (var line in BannerLines(plan, localize)) b.AppendLine($"printf '%s\\n' {Sh(line)}");
         b.AppendLine($"TOOLS=\"$ROOT/bin/{platform}\"");
         b.AppendLine(ShellIntegrity(platform, plan, localize));
         b.AppendLine("die() { printf '%s\\n' \"$*\" >&2; exit 1; }");
@@ -103,12 +111,11 @@ internal static partial class DeliveryScriptGenerator
             b.AppendLine(platform switch
             {
                 "macOS" => "ZSTD=\"$TOOLS/zstd\"\n[ \"$(uname -m)\" = arm64 ] || ZSTD=\"$TOOLS/zstd-x86_64\"",
-                "Linux" => "case \"$(uname -m)\" in x86_64|amd64) ZSTD=\"$TOOLS/zstd\" ;; aarch64|arm64) ZSTD=\"$TOOLS/zstd-arm64\" ;; loongarch64) ZSTD=\"$TOOLS/zstd-loong64\" ;; riscv64) ZSTD=\"$TOOLS/zstd-riscv64\" ;; *) die \"Unsupported Linux architecture for zstd.\" ;; esac",
+                "Linux" => "case \"$(uname -m)\" in x86_64|amd64) ZSTD=\"$TOOLS/zstd\" ;; aarch64|arm64) ZSTD=\"$TOOLS/zstd-arm64\" ;; loongarch64) ZSTD=\"$TOOLS/zstd-loong64\" ;; *) die \"Unsupported Linux architecture for zstd.\" ;; esac",
                 _ => "ZSTD=\"$TOOLS/zstd\""
             });
             b.AppendLine($"[ -x \"$ZSTD\" ] || die {Sh(T(localize, "ZstdMissing", "zstd missing or not executable."))}");
         }
-        foreach (var line in plan.Information.Replace("\r", "").Split('\n')) b.AppendLine($"printf '%s\\n' {Sh(line)}");
         var flashRoot = plan.PackSuper ? string.Join("\n", plan.Files.Select(f => (f, path: ImagePath(plan, f)))
             .Where(x => x.path.Contains('/'))
             .Select(x => $"    {x.f.FileName}) file=\"$ROOT/{x.path}\" ;;")) : string.Empty;
@@ -148,6 +155,7 @@ internal static partial class DeliveryScriptGenerator
     private static string Batch(DeliveryPlan plan, DeliveryFile[][] groups, Func<string, string>? localize)
     {
         var b = new StringBuilder("@echo off\r\nsetlocal DisableDelayedExpansion\r\nset \"WORK=\"\r\nchcp 65001 >nul\r\nset \"ROOT=%~dp0\"\r\nset \"TOOLS=%~dp0bin\\Windows\"\r\n");
+        foreach (var line in BannerLines(plan, localize)) b.AppendLine(BatchEcho(line));
         b.AppendLine(BatchIntegrity(plan));
         b.AppendLine("if not exist \"%TOOLS%\\fastboot.exe\" goto failed\nset \"WORK=%TEMP%\\uotan-flash-%RANDOM%-%RANDOM%\"\nif exist \"%WORK%\" exit /b 1\nmkdir \"%WORK%\" || exit /b 1");
         b.AppendLine("\"%TOOLS%\\fastboot.exe\" devices >\"%WORK%\\devices.txt\" 2>&1\nif errorlevel 1 goto failed\nset COUNT=0\nfor /f \"usebackq tokens=1\" %%D in (\"%WORK%\\devices.txt\") do set /a COUNT+=1 >nul\nif not \"%COUNT%\"==\"1\" goto failed");
@@ -159,9 +167,6 @@ internal static partial class DeliveryScriptGenerator
         foreach (var f in plan.Files) b.AppendLine($"if not exist \"%ROOT%{ImagePath(plan, f).Replace('/', '\\')}\" goto failed");
         if (plan.Files.Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
             b.AppendLine("if not exist \"%TOOLS%\\zstd.exe\" goto failed");
-        foreach (var line in plan.Information.Replace("\r", "").Split('\n'))
-            b.AppendLine("echo(" + line.Replace("^", "^^").Replace("%", "%%").Replace("&", "^&").Replace("|", "^|")
-                .Replace("<", "^<").Replace(">", "^>").Replace("(", "^(").Replace(")", "^)"));
         for (var i = 0; i < groups.Length; i++)
         {
             var group = groups[i];

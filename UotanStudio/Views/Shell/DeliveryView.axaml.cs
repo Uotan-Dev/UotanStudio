@@ -1,4 +1,4 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -7,13 +7,13 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Delivery;
-using UotanStudio.Services.Projects;
 using UotanStudio.Services.Firmware;
+using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
 
 namespace UotanStudio.Views.Shell;
 
-/// <summary><para>ROM 交付页面，协调原有表单、方案保存和文件输出。</para>Coordinates the existing delivery form, plan persistence and file output.</summary>
+/// <summary><para>ROM 浜や粯椤甸潰锛屽崗璋冨師鏈夎〃鍗曘€佹柟妗堜繚瀛樺拰鏂囦欢杈撳嚭銆?/para>Coordinates the existing delivery form, plan persistence and file output.</summary>
 public partial class DeliveryView : UserControl
 {
     private const double MinimumSidebarWidth = 268;
@@ -23,7 +23,7 @@ public partial class DeliveryView : UserControl
     private string? _solutionPath;
     private string? _appliedSourceSettings;
     // Preserve source and saved group metadata without exposing a second layout editor.
-    // 原包和已保存的分组元数据继续保留，不再提供第二组布局编辑框。
+    // 鍘熷寘鍜屽凡淇濆瓨鐨勫垎缁勫厓鏁版嵁缁х画淇濈暀锛屼笉鍐嶆彁渚涚浜岀粍甯冨眬缂栬緫妗嗐€?
     private List<DeliveryGroup> _deliveryGroups = [];
     private bool? _stacked;
     private double _defaultSidebarWidth = MinimumSidebarWidth;
@@ -38,7 +38,7 @@ public partial class DeliveryView : UserControl
     private double _bottomImagesHeightRatio = 0.6;
     private double _rightImagesHeightRatio = 0.6;
 
-    /// <summary><para>初始化交付配置与共用 SUPER 设置。</para>Initializes delivery options and shared SUPER settings.</summary>
+    /// <summary><para>鍒濆鍖栦氦浠橀厤缃笌鍏辩敤 SUPER 璁剧疆銆?/para>Initializes delivery options and shared SUPER settings.</summary>
     public DeliveryView() : this(new UotanStudio.Services.Keys.KeyLibraryService()) { }
 
     internal DeliveryView(UotanStudio.Services.Keys.KeyLibraryService keyLibrary)
@@ -60,7 +60,7 @@ public partial class DeliveryView : UserControl
         ImageSelection.SelectedImagesChanged += (_, _) => UpdateCompositionImages();
         ImageSelection.LayoutChanged += (_, _) => UpdateImagesLayout();
         // Lock the whole sidebar pack-settings panel while the composition list is confirmed.
-        // 编排列表确认后，左侧打包设置面板整体禁用，取消确认后恢复。
+        // 缂栨帓鍒楄〃纭鍚庯紝宸︿晶鎵撳寘璁剧疆闈㈡澘鏁翠綋绂佺敤锛屽彇娑堢‘璁ゅ悗鎭㈠銆?
         Composition.Changed += (_, _) => UpdateSidebarLock();
         DeliveryContent.SizeChanged += (_, _) => UpdateImagesColumnMinimums();
         foreach (var option in OutputOptions.Children)
@@ -131,7 +131,7 @@ public partial class DeliveryView : UserControl
         if ((!SuperAbBox.IsVisible && SuperAbBox.IsChecked == true)
             || (!SuperAOnlyBox.IsVisible && SuperAOnlyBox.IsChecked == true))
             SuperVabBox.IsChecked = true;
-        // A-Only 联动仅在实际打包 Super 时生效；其他模式下 IsAOnly 复位，避免隐藏残留。
+        // A-Only 鑱斿姩浠呭湪瀹為檯鎵撳寘 Super 鏃剁敓鏁堬紱鍏朵粬妯″紡涓?IsAOnly 澶嶄綅锛岄伩鍏嶉殣钘忔畫鐣欍€?
         // The A-Only linkage only applies while actually packing Super; IsAOnly resets otherwise so the hide state never lingers.
         Composition.IsAOnly = PackSuperBox.IsChecked == true
             && SuperAOnlyBox.IsChecked == true
@@ -147,7 +147,7 @@ public partial class DeliveryView : UserControl
         {
             // ZIP delivery carries a complete RAW Super image; sparse output is not a
             // valid selectable format for this mode.
-            // ZIP 交付必须携带完整 RAW Super 镜像，SPARSE 在此模式下不可选。
+            // ZIP 浜や粯蹇呴』鎼哄甫瀹屾暣 RAW Super 闀滃儚锛孲PARSE 鍦ㄦ妯″紡涓嬩笉鍙€夈€?
             SuperRawBox.IsChecked = true;
             SuperSparseBox.IsChecked = false;
         }
@@ -171,7 +171,7 @@ public partial class DeliveryView : UserControl
     {
         var onRight = ImageSelection.ImagesOnRight;
         // The new divider occupies the middle of the existing 12 DIP gap before the editor.
-        // 新分隔线放在编辑器前方原有的 12 DIP 间距中，避免额外留白挤压相邻两栏。
+        // 鏂板垎闅旂嚎鏀惧湪缂栬緫鍣ㄥ墠鏂瑰師鏈夌殑 12 DIP 闂磋窛涓紝閬垮厤棰濆鐣欑櫧鎸ゅ帇鐩搁偦涓ゆ爮銆?
         const double gapBeforeDivider = 6;
         const double gapAfterDivider = 5;
         var rows = DeliveryContent.RowDefinitions;
@@ -268,15 +268,15 @@ public partial class DeliveryView : UserControl
             // switching between device types. Use the event source instead of reading
             // the other radio button because Avalonia may clear the previous selection
             // after this checked event. This prevents A-Only from lingering on VAB.
-            // 直接使用事件来源判断设备类型，避免旧 RadioButton 尚未取消选中时留下 A-Only 状态。
+            // 鐩存帴浣跨敤浜嬩欢鏉ユ簮鍒ゆ柇璁惧绫诲瀷锛岄伩鍏嶆棫 RadioButton 灏氭湭鍙栨秷閫変腑鏃剁暀涓?A-Only 鐘舵€併€?
             Composition.IsAOnly = PackSuperBox.IsChecked == true && ReferenceEquals(sender, SuperAOnlyBox);
         }
     }
 
     private void UpdateProjectSuperSelector()
     {
-        // 勾选使用项目 Super/Payload 设置且存在可选项目时，仅禁用由项目配置驱动的表单字段，避免用户覆盖项目值；
-        // 底部镜像选项（压缩为ZST、生成Super_Empty）不属于项目配置驱动字段，保持可交互。
+        // 鍕鹃€変娇鐢ㄩ」鐩?Super/Payload 璁剧疆涓斿瓨鍦ㄥ彲閫夐」鐩椂锛屼粎绂佺敤鐢遍」鐩厤缃┍鍔ㄧ殑琛ㄥ崟瀛楁锛岄伩鍏嶇敤鎴疯鐩栭」鐩€硷紱
+        // 搴曢儴闀滃儚閫夐」锛堝帇缂╀负ZST銆佺敓鎴怱uper_Empty锛変笉灞炰簬椤圭洰閰嶇疆椹卞姩瀛楁锛屼繚鎸佸彲浜や簰銆?
         // While a source configuration is applied, only the fields it drives are disabled so the project values
         // cannot be overridden; the image options (ZST, Super_Empty) are not project-driven and stay interactive.
         var applied = UseProjectSuperSettingsBox.IsChecked == true && SuperSettingsProjectBox.Items.Count > 0;
@@ -294,7 +294,7 @@ public partial class DeliveryView : UserControl
         ApplySourceSettings();
     }
 
-    private SourceContainerSettings? ReadSourceSettings(string root)
+    private DeliverySourceContainerSettings? ReadSourceSettings(string root)
     {
         try { return SourceContainerMetadataService.Read(root, PackPayloadBox.IsChecked == true ? "payload" : "super"); }
         catch (Exception ex)
@@ -459,7 +459,7 @@ public partial class DeliveryView : UserControl
         BrowsePayloadPostinstallButton.IsEnabled = enabled;
     }
 
-    /// <summary><para>进入交付页面时刷新项目镜像，并保留当前项目的表单选择。</para>Refreshes images on entry, retaining the current project's form choices.</summary>
+    /// <summary><para>杩涘叆浜や粯椤甸潰鏃跺埛鏂伴」鐩暅鍍忥紝骞朵繚鐣欏綋鍓嶉」鐩殑琛ㄥ崟閫夋嫨銆?/para>Refreshes images on entry, retaining the current project's form choices.</summary>
     public void Refresh()
     {
         _ = RefreshDeliveryAsync();
@@ -508,7 +508,7 @@ public partial class DeliveryView : UserControl
     private void OnSidebarColumnChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         // GridSplitter changes this property for both pointer and keyboard resizing.
-        // 鼠标拖动及键盘调整均由 GridSplitter 更新列宽；保留用户选择的固定宽度。
+        // 榧犳爣鎷栧姩鍙婇敭鐩樿皟鏁村潎鐢?GridSplitter 鏇存柊鍒楀锛涗繚鐣欑敤鎴烽€夋嫨鐨勫浐瀹氬搴︺€?
         if (!_updatingSidebarWidth && e.Property == ColumnDefinition.WidthProperty && _sidebarColumn is { } column)
             _customSidebarWidth = column.Width.Value;
     }
@@ -535,7 +535,7 @@ public partial class DeliveryView : UserControl
             return;
         }
         // Preserve the stacked layout's height ratio while keeping the sidebar width independent of window size.
-        // 上下布局保留高度比例，左右布局的侧栏使用独立于窗口大小的固定宽度。
+        // 涓婁笅甯冨眬淇濈暀楂樺害姣斾緥锛屽乏鍙冲竷灞€鐨勪晶鏍忎娇鐢ㄧ嫭绔嬩簬绐楀彛澶у皬鐨勫浐瀹氬搴︺€?
         if (_stacked == true)
             _stackedRatio = DeliveryLayout.RowDefinitions[0].Height.Value /
                 (DeliveryLayout.RowDefinitions[0].Height.Value + DeliveryLayout.RowDefinitions[2].Height.Value);

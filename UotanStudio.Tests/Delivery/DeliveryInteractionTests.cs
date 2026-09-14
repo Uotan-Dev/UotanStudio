@@ -84,7 +84,8 @@ public sealed class DeliveryInteractionTests : IDisposable
         var vm = new DeliveryViewModel();
         var plan = new DeliveryPlan
         {
-            OrganizeDirectory = true, PackSuper = true,
+            OrganizeDirectory = true,
+            PackSuper = true,
             Container = [Input("wind_a"), Input("vendor_a")],
             Super = new() { AutoZero = true, DeviceType = "VAB" }
         };
@@ -124,8 +125,14 @@ public sealed class DeliveryInteractionTests : IDisposable
         // VAB unpacking produces 0-byte B-slot images; with AutoZero they are legitimate zero-size partitions.
         // VAB 解包产生 0 字节 B 槽镜像；勾选自动零分区时它们是合法的零大小分区。
         var empty = Input("my_bigball_b", 0);
-        var plan = new DeliveryPlan { OrganizeDirectory = false, PackSuper = true, ContainerConfirmed = true,
-            Container = [empty], Super = new() { AutoZero = true, DeviceType = "VAB" } };
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = false,
+            PackSuper = true,
+            ContainerConfirmed = true,
+            Container = [empty],
+            Super = new() { AutoZero = true, DeviceType = "VAB" }
+        };
         DeliveryValidation.Validate(plan);
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan with { Super = plan.Super with { AutoZero = false } }));
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan with { Container = [Input("my_bigball_a", 0)] }));
