@@ -19,6 +19,8 @@
     <ProjectReference Include="..\UotanStudio.Delivery\UotanStudio.Delivery.csproj" />
     <!-- Comm library under test (AVB verification wiring / protocol tests) -->
     <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <ProjectReference Include="..\UotanStudio.Cli\UotanStudio.Cli.csproj" />
+    <ProjectReference Include="..\UotanStudio.Mcp\UotanStudio.Mcp.csproj" />
     <!-- Media library under test (platform video decoder abstraction / NV12 conversion) -->
     <ProjectReference Include="..\UotanStudio.Media\UotanStudio.Media.csproj" />
     <!-- Application backend services: CLI, flashing, persistence, comparison, and workflow execution. -->
@@ -30,6 +32,8 @@
          不再引用 VSTest 体系的 Microsoft.NET.Test.Sdk / xunit.runner.visualstudio，
          dotnet test 配合 TestingPlatformDotnetTestSupport=true 走 MTP 通道。 -->
     <PackageReference Include="xunit.v3" />
+    <!-- MCP 工具清单测试经由 UotanStudio.Mcp 暴露的 McpServerTool 元数据，需 Core 程序集参与重载解析。 -->
+    <PackageReference Include="ModelContextProtocol.Core" />
   </ItemGroup>
 
   <ItemGroup>

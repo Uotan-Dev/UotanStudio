@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PublishAot>true</PublishAot>
+    <!-- The shared format registry and compression adapters are runtime-discovered. Keep their
+         metadata intact while still using NativeAOT; this avoids unsafe reflection trimming and
+         remains valid when the project moves to a future .NET target. -->
+    <TrimMode>copy</TrimMode>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>UotanStudio.Cli</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UotanStudio.Comm\UotanStudio.Comm.csproj" />
+    <ProjectReference Include="..\UotanStudio.Firmware\UotanStudio.Firmware.csproj" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+</Project>

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Logging;
 using Dock.Settings;
+using UotanStudio.Cli;
 
 namespace UotanStudio.Desktop;
 
@@ -10,11 +11,49 @@ sealed class Program
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
-    public static void Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
-        // File association activation only; firmware and workflow command dispatch is archived.
+        // Headless MCP mode: serve the Model Context Protocol over stdio without any Avalonia
+        // lifetime or windows; exits when the client closes the connection or Ctrl+C cancels.
+        // 无头 MCP 模式：通过 stdio 提供 Model Context Protocol 服务，不启动 Avalonia 生命周期、
+        // 不创建窗口；客户端关闭连接或 Ctrl+C 取消后退出。
+        if (UotanStudio.Mcp.McpLauncher.IsHeadlessRequested(args))
+        {
+            using var cts = new CancellationTokenSource();
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+            try
+            {
+                await UotanStudio.Mcp.McpLauncher.RunHeadlessAsync(args, cts.Token);
+                return 0;
+            }
+            catch (OperationCanceledException)
+            {
+                return 0;
+            }
+        }
+
+        if (CliProgram.IsCommandLineMode(args))
+        {
+            return await CliProgram.RunAsync(CliProgram.StripModeSwitch(args));
+        }
+
+        // Companion MCP mode: serve MCP over stdio in the background while the desktop UI runs.
+        // The server lives until the process exits; stdin belongs to the desktop process, so the
+        // companion server is meant for long-lived client pipes rather than interactive stdio.
+        // 伴随 MCP 模式：桌面 UI 运行期间在后台提供 MCP 服务。服务器随进程退出而结束；
+        // stdin 属于桌面进程，伴随服务器面向长连接客户端管道而非交互式 stdio。
+        if (UotanStudio.Mcp.McpLauncher.IsCompanionRequested(args))
+        {
+            _ = Task.Run(() => UotanStudio.Mcp.McpLauncher.RunCompanionAsync(args));
+        }
+
         App.StartupFiles = args.Where(File.Exists).ToArray();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return 0;
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.

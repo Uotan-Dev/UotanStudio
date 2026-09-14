@@ -59,5 +59,10 @@
     <PackageVersion Include="SharpZipLib" Version="1.4.2" />
     <!-- Text diffing (line-level diff for the compare services) -->
     <PackageVersion Include="DiffPlex" Version="1.9.0" />
+    <!-- Official Model Context Protocol C# SDK for the embedded MCP server -->
+    <PackageVersion Include="ModelContextProtocol" Version="0.4.0-preview.3" />
+    <PackageVersion Include="ModelContextProtocol.Core" Version="0.4.0-preview.3" />
+    <!-- Source-compatible command parsing with trimming/AOT support. -->
+    <PackageVersion Include="System.CommandLine" Version="2.0.0" />
   </ItemGroup>
 </Project>

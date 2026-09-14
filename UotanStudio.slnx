@@ -8,6 +8,8 @@
   <Project Path="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
   <Project Path="UotanStudio.Delivery/UotanStudio.Delivery.csproj" />
   <Project Path="UotanStudio.Media/UotanStudio.Media.csproj" />
+  <Project Path="UotanStudio.Mcp/UotanStudio.Mcp.csproj" />
+  <Project Path="UotanStudio.Cli/UotanStudio.Cli.csproj" />
   <Project Path="UotanStudio/UotanStudio.csproj">
     <BuildDependency Project="UotanStudio.Comm/UotanStudio.Comm.csproj" />
     <BuildDependency Project="UotanStudio.Firmware/UotanStudio.Firmware.csproj" />
