@@ -1,7 +1,7 @@
 ﻿using System.Buffers.Binary;
 using System.Globalization;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 

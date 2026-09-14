@@ -1,6 +1,6 @@
-﻿using UotanStudio.Firmware.SharedKernel.Streams;
-using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
+﻿using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 using UotanStudio.Firmware.CrossCutting.Compress.Internal.Xz;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.CrossCutting.Compress;
 

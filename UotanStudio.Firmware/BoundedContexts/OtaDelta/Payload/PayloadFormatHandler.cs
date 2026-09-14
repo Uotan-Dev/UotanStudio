@@ -1,7 +1,7 @@
 using System.Text;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 

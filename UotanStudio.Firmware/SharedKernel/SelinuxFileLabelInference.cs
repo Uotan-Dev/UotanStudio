@@ -61,8 +61,13 @@ internal sealed class SelinuxFileLabelInference
                     throw new InvalidDataException($"Invalid SELinux rule in {path}.");
                 var kind = parts.Length == 2 ? 0 : parts[1] switch
                 {
-                    "--" => 0x8000, "-d" => 0x4000, "-l" => 0xA000, "-b" => 0x6000,
-                    "-c" => 0x2000, "-p" => 0x1000, "-s" => 0xC000,
+                    "--" => 0x8000,
+                    "-d" => 0x4000,
+                    "-l" => 0xA000,
+                    "-b" => 0x6000,
+                    "-c" => 0x2000,
+                    "-p" => 0x1000,
+                    "-s" => 0xC000,
                     _ => throw new InvalidDataException($"Invalid SELinux file kind in {path}.")
                 };
                 var label = parts[^1];

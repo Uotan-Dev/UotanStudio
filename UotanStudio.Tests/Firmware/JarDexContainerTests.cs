@@ -57,7 +57,7 @@ public class JarDexContainerTests : IDisposable
         var dexBytes = BuildMinimalDex().ToArray();
         var jar = BuildJar(["classes.dex"], [dexBytes]);
 
-        var loaded = DexFile.Load(JarDexContainer.LoadEntry(jar, "classes.dex"));
+        var loaded = DexFile.Load(JarDexContainer.LoadEntry(jar, "classes.dex", TestContext.Current.CancellationToken));
         Assert.Single(loaded.Classes);
     }
 
@@ -69,14 +69,14 @@ public class JarDexContainerTests : IDisposable
 
         var modified = BuildMinimalDex();
         modified.Strings.Add("modified-marker");
-        JarDexContainer.WriteBack(jar, "classes.dex", modified.ToArray());
+        JarDexContainer.WriteBack(jar, "classes.dex", modified.ToArray(), TestContext.Current.CancellationToken);
 
         // 目标条目已更新且仍是合法 DEX；其余条目字节保持不变。
         // The target entry is updated and still a valid DEX; other entries keep their bytes.
-        Assert.Equal(original, JarDexContainer.LoadEntry(jar, "classes2.dex"));
+        Assert.Equal(original, JarDexContainer.LoadEntry(jar, "classes2.dex", TestContext.Current.CancellationToken));
         // 原始 7 个字符串 + 新增标记 = 8。
         // 7 original strings + the new marker = 8.
-        var rebuilt = DexFile.Load(JarDexContainer.LoadEntry(jar, "classes.dex"));
+        var rebuilt = DexFile.Load(JarDexContainer.LoadEntry(jar, "classes.dex", TestContext.Current.CancellationToken));
         Assert.Equal(8, rebuilt.Strings.Count);
     }
 
@@ -85,7 +85,7 @@ public class JarDexContainerTests : IDisposable
     {
         var jar = BuildJar(["classes.dex"]);
         Assert.Throws<InvalidDataException>(
-            () => JarDexContainer.WriteBack(jar, "classes9.dex", BuildMinimalDex().ToArray()));
+            () => JarDexContainer.WriteBack(jar, "classes9.dex", BuildMinimalDex().ToArray(), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -93,11 +93,11 @@ public class JarDexContainerTests : IDisposable
     {
         var jar = BuildJar(["classes.dex"]);
         var output = Path.Combine(_root, "config.txt");
-        JarDexContainer.ExtractResource(jar, "assets/config.txt", output);
+        JarDexContainer.ExtractResource(jar, "assets/config.txt", output, TestContext.Current.CancellationToken);
         Assert.Equal("hello", File.ReadAllText(output));
 
         File.WriteAllText(output, "updated");
-        JarDexContainer.ReplaceResource(jar, "assets/config.txt", output);
+        JarDexContainer.ReplaceResource(jar, "assets/config.txt", output, TestContext.Current.CancellationToken);
         using var stream = File.OpenRead(jar);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         using var entry = archive.Entries.First(e => e.FullName == "assets/config.txt").Open();
@@ -111,9 +111,9 @@ public class JarDexContainerTests : IDisposable
         var jar = BuildJar(["classes.dex"]);
         var output = Path.Combine(_root, "manifest.mf");
         Assert.Throws<InvalidOperationException>(
-            () => JarDexContainer.ExtractResource(jar, "META-INF/MANIFEST.MF", output));
+            () => JarDexContainer.ExtractResource(jar, "META-INF/MANIFEST.MF", output, TestContext.Current.CancellationToken));
         Assert.Throws<InvalidOperationException>(
-            () => JarDexContainer.ReplaceResource(jar, "META-INF/MANIFEST.MF", output));
+            () => JarDexContainer.ReplaceResource(jar, "META-INF/MANIFEST.MF", output, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public class JarDexContainerTests : IDisposable
         }
 
         PatchCentralDirectoryUncompressedSize(jar, "big.bin", JarDexContainer.MaxEntryBytes + 1);
-        Assert.Throws<InvalidDataException>(() => JarDexContainer.LoadEntry(jar, "big.bin"));
+        Assert.Throws<InvalidDataException>(() => JarDexContainer.LoadEntry(jar, "big.bin", TestContext.Current.CancellationToken));
     }
 
     private static void PatchCentralDirectoryUncompressedSize(string jar, string entryName, long size)
@@ -178,16 +178,16 @@ public class JarDexContainerTests : IDisposable
     }
 
     [Fact]
-    public void Service_DisassembleAndRebuild_ContainerAware()
+    public async Task Service_DisassembleAndRebuild_ContainerAware()
     {
         var jar = BuildJar(["classes.dex", "classes2.dex"], [BuildMinimalDex().ToArray(), BuildMinimalDex().ToArray()]);
         var service = DexService.Instance;
 
-        var parse = service.ParseDexAsync(jar).GetAwaiter().GetResult();
+        var parse = await service.ParseDexAsync(jar, ct: TestContext.Current.CancellationToken);
         Assert.True(parse.Success, parse.Summary);
 
         var outDir = Path.Combine(_root, "smali");
-        var disasm = service.DisassembleDexAsync(jar, outDir).GetAwaiter().GetResult();
+        var disasm = await service.DisassembleDexAsync(jar, outDir, ct: TestContext.Current.CancellationToken);
         Assert.True(disasm.Success, disasm.Summary);
         // 输出文件名取自容器文件名去扩展名，断言目录内产出了 .smali 文件。
         // The output file name comes from the container file name without the extension;
@@ -195,24 +195,24 @@ public class JarDexContainerTests : IDisposable
         Assert.True(File.Exists(disasm.Entries[0]), disasm.Entries[0]);
         Assert.EndsWith(".smali", disasm.Entries[0], StringComparison.OrdinalIgnoreCase);
 
-        var rebuild = service.RebuildDexAsync(jar, Path.Combine(_root, "unused.dex")).GetAwaiter().GetResult();
+        var rebuild = await service.RebuildDexAsync(jar, Path.Combine(_root, "unused.dex"), ct: TestContext.Current.CancellationToken);
         Assert.True(rebuild.Success, rebuild.Summary);
     }
 
     [Fact]
-    public void Service_SignJar_ProducesV1Artifacts()
+    public async Task Service_SignJar_ProducesV1Artifacts()
     {
         var jar = BuildJar(["classes.dex"], [BuildMinimalDex().ToArray()]);
         var library = new KeyLibraryService(Path.Combine(_root, "keys"));
         var key = library.Generate("sign test", ManagedKeyKind.Jar, 2048);
 
         var output = Path.Combine(_root, "signed.jar");
-        var result = DexService.Instance.SignJarAsync(
-            jar, output, library.PrivatePath(key), library.EnsureCertificate(key),
-            new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningOptions
-            {
-                EnableV1 = true, EnableV2 = false, EnableV3 = false,
-            }).GetAwaiter().GetResult();
+        var result = await DexService.Instance.SignJarAsync(jar, output, library.PrivatePath(key), library.EnsureCertificate(key), new UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing.ApkSigningOptions
+        {
+            EnableV1 = true,
+            EnableV2 = false,
+            EnableV3 = false,
+        }, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
 
         using var stream = File.OpenRead(output);

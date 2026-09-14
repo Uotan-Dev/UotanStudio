@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 

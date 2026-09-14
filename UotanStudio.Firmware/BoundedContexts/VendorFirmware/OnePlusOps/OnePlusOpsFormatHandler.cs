@@ -1,8 +1,8 @@
 ﻿using System.Buffers.Binary;
 using System.Text;
+using UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps.Logging;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
-using UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps.Logging;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.OnePlusOps;
 

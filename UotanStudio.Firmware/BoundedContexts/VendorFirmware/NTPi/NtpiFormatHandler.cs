@@ -1,5 +1,5 @@
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Models;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi;
 

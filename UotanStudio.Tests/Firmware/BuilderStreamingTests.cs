@@ -187,7 +187,7 @@ public class BuilderStreamingTests
     }
 
     [Fact]
-    public void Ext4_TruncatedSourceFile_Throws()
+    public async Task Ext4_TruncatedSourceFile_Throws()
     {
         using var temp = new TempDirectory();
         const long size = 32L * 1024 * 1024;
@@ -224,8 +224,7 @@ public class BuilderStreamingTests
                 output.Resume.Set();
             }
 
-            var exception = Record.Exception(() => buildTask.GetAwaiter().GetResult());
-            Assert.IsType<EndOfStreamException>(exception);
+            await Assert.ThrowsAsync<EndOfStreamException>(() => buildTask);
         }
         finally
         {
@@ -313,7 +312,7 @@ public class BuilderStreamingTests
     }
 
     [Fact]
-    public void Erofs_TruncatedSourceFile_Throws()
+    public async Task Erofs_TruncatedSourceFile_Throws()
     {
         using var temp = new TempDirectory();
         const long size = 32L * 1024 * 1024;
@@ -348,8 +347,7 @@ public class BuilderStreamingTests
                 output.Resume.Set();
             }
 
-            var exception = Record.Exception(() => buildTask.GetAwaiter().GetResult());
-            Assert.IsType<EndOfStreamException>(exception);
+            await Assert.ThrowsAsync<EndOfStreamException>(() => buildTask);
         }
         finally
         {

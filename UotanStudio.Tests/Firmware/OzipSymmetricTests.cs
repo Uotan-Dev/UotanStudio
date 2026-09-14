@@ -1,10 +1,10 @@
 using System.Security.Cryptography;
 using System.Text;
 using UotanStudio.Firmware;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.KeyDatabase;
+using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

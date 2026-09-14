@@ -150,10 +150,16 @@ public sealed class ErofsRebuildInteropTests
             var hash = Hash(rebuiltImage);
             var expectedFiles = new Dictionary<string, byte[]>(StringComparer.Ordinal)
             {
-                ["data"] = System.Text.Encoding.UTF8.GetBytes(changedData), ["alias"] = System.Text.Encoding.UTF8.GetBytes(changedData),
-                ["other"] = System.Text.Encoding.UTF8.GetBytes(originalData), ["third"] = System.Text.Encoding.UTF8.GetBytes(originalData),
-                ["fourth"] = System.Text.Encoding.UTF8.GetBytes(originalData), ["random"] = random, ["moderate"] = moderate, ["empty"] = [],
-                ["nested/small"] = "small tail\n"u8.ToArray(), ["added"] = "new file\n"u8.ToArray()
+                ["data"] = System.Text.Encoding.UTF8.GetBytes(changedData),
+                ["alias"] = System.Text.Encoding.UTF8.GetBytes(changedData),
+                ["other"] = System.Text.Encoding.UTF8.GetBytes(originalData),
+                ["third"] = System.Text.Encoding.UTF8.GetBytes(originalData),
+                ["fourth"] = System.Text.Encoding.UTF8.GetBytes(originalData),
+                ["random"] = random,
+                ["moderate"] = moderate,
+                ["empty"] = [],
+                ["nested/small"] = "small tail\n"u8.ToArray(),
+                ["added"] = "new file\n"u8.ToArray()
             };
             var sums = Path.Combine(host.Path, "SHA256SUMS");
             File.WriteAllText(sums, string.Concat(expectedFiles.OrderBy(p => p.Key, StringComparer.Ordinal)

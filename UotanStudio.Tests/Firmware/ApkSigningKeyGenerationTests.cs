@@ -39,7 +39,7 @@ public class ApkSigningKeyGenerationTests : IDisposable
         var rsa = Assert.IsAssignableFrom<RSA>(material.Key);
         Assert.Equal(2048, rsa.KeySize);
 
-        var certificate = new X509Certificate2(files.CertificatePath);
+        var certificate = X509CertificateLoader.LoadCertificateFromFile(files.CertificatePath);
         using (certificate)
         {
             Assert.Equal("CN=Test RSA", certificate.Subject);
@@ -118,7 +118,7 @@ public class ApkSigningKeyGenerationTests : IDisposable
                 ValidityYears = 5,
             }, _root, "subject");
 
-        using var certificate = new X509Certificate2(files.CertificatePath);
+        using var certificate = X509CertificateLoader.LoadCertificateFromFile(files.CertificatePath);
         Assert.Contains("Uotan Studio", certificate.Subject, StringComparison.Ordinal);
         Assert.Contains("Firmware", certificate.Subject, StringComparison.Ordinal);
         Assert.Contains("CN=Subject Fields", certificate.Subject, StringComparison.Ordinal);

@@ -1,7 +1,7 @@
 ﻿using System.Xml;
 using System.Xml.Linq;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Parsers;
 

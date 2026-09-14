@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using Google.Protobuf;
-using UotanStudio.Firmware.SharedKernel.Streams;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 

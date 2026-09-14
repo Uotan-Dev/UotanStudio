@@ -2,8 +2,8 @@
 // LZ4 fillOutput corrections follow liblz4 v1.9.4. See Lz4DestinationCodec.LICENSE.
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using size_t = System.UInt32;
 using reg_t = System.UInt64;
+using size_t = System.UInt32;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 

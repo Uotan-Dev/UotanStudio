@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
+using UotanStudio.Firmware.CrossCutting.Compress;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
-using UotanStudio.Firmware.CrossCutting.Compress;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Dz;
 

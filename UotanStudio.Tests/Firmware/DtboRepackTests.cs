@@ -2,10 +2,10 @@ using System.Buffers.Binary;
 using System.Text.Json.Nodes;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 using UotanStudio.Firmware.SharedKernel;
-using UotanStudio.Services.Firmware;
-using UotanStudio.Tests.Infrastructure;
 using UotanStudio.Services;
 using UotanStudio.Services.Execution;
+using UotanStudio.Services.Firmware;
+using UotanStudio.Tests.Infrastructure;
 using UotanStudio.ViewModels.NodeViewModels;
 using Xunit;
 
@@ -35,8 +35,12 @@ public sealed class DtboRepackTests : IDisposable
         var image = DtboFormat.Pack([Dtb("original-0"), Dtb("original-1"), Dtb("original-2")],
             Enumerable.Range(0, 3).Select(i => new DtboEntry
             {
-                Id = (uint)(0x100 + i), Rev = (uint)(5 + i), Custom0 = (uint)(0xA0 + i),
-                Custom1 = 0x12345678, Custom2 = 0x89ABCDEF, Custom3 = 0xFEDCBA98
+                Id = (uint)(0x100 + i),
+                Rev = (uint)(5 + i),
+                Custom0 = (uint)(0xA0 + i),
+                Custom1 = 0x12345678,
+                Custom2 = 0x89ABCDEF,
+                Custom3 = 0xFEDCBA98
             }).ToArray(), pageSize: 4096, version: version);
         Array.Resize(ref image, image.Length + 32768);
         if (trailer) "AVBf"u8.CopyTo(image.AsSpan(image.Length - 64));

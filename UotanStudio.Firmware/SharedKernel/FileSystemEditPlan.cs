@@ -200,8 +200,15 @@ internal sealed class FileSystemEditPlan
     }
     private static PreservedInodeEntry Copy(PreservedInodeEntry source, string path, ushort mode) => new()
     {
-        Path = path, Inode = source.Inode, DeviceId = source.DeviceId, Flags = source.Flags, Mode = mode, Uid = source.Uid, Gid = source.Gid,
-        SymlinkTarget = source.SymlinkTarget, Xattrs = source.Xattrs?.ToDictionary(p => p.Key, p => p.Value.ToArray(), StringComparer.Ordinal)
+        Path = path,
+        Inode = source.Inode,
+        DeviceId = source.DeviceId,
+        Flags = source.Flags,
+        Mode = mode,
+        Uid = source.Uid,
+        Gid = source.Gid,
+        SymlinkTarget = source.SymlinkTarget,
+        Xattrs = source.Xattrs?.ToDictionary(p => p.Key, p => p.Value.ToArray(), StringComparer.Ordinal)
     };
     private sealed class Scope(Action release) : IDisposable { public void Dispose() => release(); }
 }

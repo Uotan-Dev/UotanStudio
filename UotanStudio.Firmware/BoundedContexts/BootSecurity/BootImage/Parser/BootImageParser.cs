@@ -34,7 +34,11 @@ public class BootImageParser : IDisposable
         var version = ReadUInt32LE(prefix, 40);
         var size = version switch
         {
-            0 => 1632, 1 => 1648, 2 => 1660, 3 => 1580, 4 => 1584,
+            0 => 1632,
+            1 => 1648,
+            2 => 1660,
+            3 => 1580,
+            4 => 1584,
             _ => throw new InvalidDataException("Unsupported boot image version.")
         };
         var bytes = new byte[size];

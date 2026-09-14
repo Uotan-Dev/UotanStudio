@@ -1,13 +1,13 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Nb0;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
+using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

@@ -111,7 +111,7 @@ public static class AvbSigner
             }
             catch
             {
-                try { File.Delete(tempPath); } catch {  }
+                try { File.Delete(tempPath); } catch { }
                 throw;
             }
 
@@ -420,7 +420,7 @@ public static class AvbSigner
             }
             catch
             {
-                try { File.Delete(tempPath); } catch {  }
+                try { File.Delete(tempPath); } catch { }
                 throw;
             }
 

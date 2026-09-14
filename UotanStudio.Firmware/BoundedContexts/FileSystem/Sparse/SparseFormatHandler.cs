@@ -131,7 +131,8 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
                 $"Extracted {entries.Count} entries from '{filePath}' to '{outputDirectory}'.",
                 [.. entries.Select(e => e.Path)], metadata: new Dictionary<string, string>
                 {
-                    ["InnerFormat"] = "EXT4", ["FilesystemBlockSize"] = parser.BlockSize.ToString()
+                    ["InnerFormat"] = "EXT4",
+                    ["FilesystemBlockSize"] = parser.BlockSize.ToString()
                 });
         }
 
@@ -146,7 +147,8 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
                 $"Extracted {files.Count} entries from '{filePath}' to '{outputDirectory}'.",
                 [.. files.Select(f => f.Path)], metadata: new Dictionary<string, string>
                 {
-                    ["InnerFormat"] = "EROFS", ["FilesystemBlockSize"] = parser.BlockSize.ToString(),
+                    ["InnerFormat"] = "EROFS",
+                    ["FilesystemBlockSize"] = parser.BlockSize.ToString(),
                     ["VolumeName"] = parser.VolumeName
                 });
         }
@@ -162,7 +164,8 @@ public sealed class SparseFormatHandler : SharedKernel.IFormatHandler
                 $"Extracted {files.Count} entries from '{filePath}' to '{outputDirectory}'.",
                 [.. files.Select(f => f.Path)], metadata: new Dictionary<string, string>
                 {
-                    ["InnerFormat"] = "F2FS", ["FilesystemBlockSize"] = parser.BlockSize.ToString(),
+                    ["InnerFormat"] = "F2FS",
+                    ["FilesystemBlockSize"] = parser.BlockSize.ToString(),
                     ["VolumeName"] = parser.VolumeName
                 });
         }

@@ -1,13 +1,13 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using UotanStudio.Firmware.SharedKernel.Streams;
-using System.Buffers.Binary;
-using System.Text;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.SharedKernel;
 
@@ -75,8 +75,11 @@ public static class FileSystemPreservation
                 }).ConfigureAwait(false);
             return new FirmwareOpResult
             {
-                Success = result.Success, Summary = result.Summary.Replace(frozen, sourcePath, StringComparison.Ordinal),
-                Entries = result.Entries, Metadata = result.Metadata, Components = result.Components
+                Success = result.Success,
+                Summary = result.Summary.Replace(frozen, sourcePath, StringComparison.Ordinal),
+                Entries = result.Entries,
+                Metadata = result.Metadata,
+                Components = result.Components
             };
         }
         catch (OperationCanceledException) { throw; }
@@ -250,7 +253,7 @@ public static class FileSystemPreservation
         {
             case "EXT4":
                 using (var parser = new Ext4Parser(original))
-                Ext4Builder.Build(inputDirectory, output, new Ext4Options { InodeSize = 4096, BlockSize = checked((int)parser.BlockSize), Uuid = parser.SourceUuid, VolumeName = parser.SourceVolumeName });
+                    Ext4Builder.Build(inputDirectory, output, new Ext4Options { InodeSize = 4096, BlockSize = checked((int)parser.BlockSize), Uuid = parser.SourceUuid, VolumeName = parser.SourceVolumeName });
                 break;
             case "EROFS":
                 using (var parser = new ErofsParser(original))
@@ -268,7 +271,7 @@ public static class FileSystemPreservation
                 break;
             case "F2FS":
                 using (var parser = new F2fsParser(original))
-                F2fsBuilder.Build(inputDirectory, output, new F2fsOptions { Uuid = new Guid(parser.SourceUuid), VolumeName = options.GetValueOrDefault("VolumeName", parser.SourceVolumeName) });
+                    F2fsBuilder.Build(inputDirectory, output, new F2fsOptions { Uuid = new Guid(parser.SourceUuid), VolumeName = options.GetValueOrDefault("VolumeName", parser.SourceVolumeName) });
                 break;
             default: throw new InvalidDataException("Editing this filesystem container is not supported.");
         }
@@ -283,7 +286,8 @@ public static class FileSystemPreservation
         if (BinaryPrimitives.ReadUInt16LittleEndian(probe.AsSpan(1080)) == 0xEF53) return "EXT4";
         return BinaryPrimitives.ReadUInt32LittleEndian(probe.AsSpan(1024)) switch
         {
-            0xE0F5E1E2 => "EROFS", 0xF2F52010 => "F2FS",
+            0xE0F5E1E2 => "EROFS",
+            0xF2F52010 => "F2FS",
             _ => throw new InvalidDataException("Sparse image does not contain a supported editable filesystem.")
         };
     }
@@ -461,8 +465,15 @@ public static class FileSystemPreservation
             using var parser = new Ext4Parser(source);
             return parser.ListEntriesWithRoot().Select(e => new PreservedInodeEntry
             {
-                Path = e.Path, Inode = e.Inode, Flags = e.Flags, DeviceId = e.DeviceId, Mode = e.Mode, Uid = e.Uid, Gid = e.Gid,
-                SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null, Xattrs = e.Xattrs?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
+                Path = e.Path,
+                Inode = e.Inode,
+                Flags = e.Flags,
+                DeviceId = e.DeviceId,
+                Mode = e.Mode,
+                Uid = e.Uid,
+                Gid = e.Gid,
+                SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
+                Xattrs = e.Xattrs?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
             }).ToList();
         }
         if (format == "EROFS")
@@ -470,8 +481,14 @@ public static class FileSystemPreservation
             using var parser = new ErofsParser(source);
             return parser.EnumerateEntries().Select(e => new PreservedInodeEntry
             {
-                Path = e.Path, Inode = e.Nid, DeviceId = e.DeviceId, Mode = e.Mode, Uid = e.Uid, Gid = e.Gid,
-                SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null, Xattrs = e.Xattrs?.GroupBy(x => x.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal)
+                Path = e.Path,
+                Inode = e.Nid,
+                DeviceId = e.DeviceId,
+                Mode = e.Mode,
+                Uid = e.Uid,
+                Gid = e.Gid,
+                SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
+                Xattrs = e.Xattrs?.GroupBy(x => x.Name, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First().Value, StringComparer.Ordinal)
             }).ToList();
         }
         if (format == "F2FS")
@@ -479,7 +496,15 @@ public static class FileSystemPreservation
             using var parser = new F2fsParser(source);
             return parser.ListEntriesWithRoot().Select(e => new PreservedInodeEntry
             {
-                Path = e.Path, Inode = e.Inode, Flags = e.Flags, DeviceId = e.DeviceId, Mode = e.Mode, Uid = e.Uid, Gid = e.Gid, SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null, Xattrs = e.Xattrs?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
+                Path = e.Path,
+                Inode = e.Inode,
+                Flags = e.Flags,
+                DeviceId = e.DeviceId,
+                Mode = e.Mode,
+                Uid = e.Uid,
+                Gid = e.Gid,
+                SymlinkTarget = (e.Mode & 0xF000) == 0xA000 ? ReadSymlink(output => parser.ReadFile(e.Path, output)) : null,
+                Xattrs = e.Xattrs?.ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal)
             }).ToList();
         }
         return [];

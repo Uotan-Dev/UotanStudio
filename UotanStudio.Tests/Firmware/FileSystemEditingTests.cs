@@ -1,8 +1,8 @@
 ﻿using System.Text;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 
@@ -234,4 +234,3 @@ public sealed class FileSystemEditingTests : IDisposable
     }
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }
 }
-

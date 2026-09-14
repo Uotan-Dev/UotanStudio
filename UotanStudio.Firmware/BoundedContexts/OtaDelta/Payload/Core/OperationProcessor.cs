@@ -1,9 +1,9 @@
 ﻿using System.Buffers;
-using UotanStudio.Firmware.SharedKernel.Streams;
-using UotanStudio.Firmware.CrossCutting.Compress;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Zucchini;
+using UotanStudio.Firmware.CrossCutting.Compress;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 

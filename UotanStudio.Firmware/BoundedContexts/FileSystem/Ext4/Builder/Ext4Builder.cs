@@ -135,7 +135,7 @@ public sealed partial class Ext4Builder
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch {  }
+            try { File.Delete(temporaryPath); } catch { }
         }
     }
 
@@ -175,7 +175,7 @@ public sealed partial class Ext4Builder
         }
         finally
         {
-            try { File.Delete(temporaryPath); } catch {  }
+            try { File.Delete(temporaryPath); } catch { }
         }
     }
 

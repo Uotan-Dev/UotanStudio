@@ -282,11 +282,14 @@ public class RepackMetadataContextTests : IDisposable
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var handler = new StubHandler { BeforeRead = async () =>
+        var handler = new StubHandler
+        {
+            BeforeRead = async () =>
         {
             entered.SetResult();
             await release.Task.WaitAsync(TestContext.Current.CancellationToken);
-        }};
+        }
+        };
         var write = RepackMetadata.WriteAsync(handler, source, temp.Path, RepackMetadataContext.LocalDirectory, cancellation.Token);
         await entered.Task.WaitAsync(TestContext.Current.CancellationToken);
         await cancellation.CancelAsync();

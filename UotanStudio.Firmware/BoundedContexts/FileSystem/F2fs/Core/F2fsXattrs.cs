@@ -8,8 +8,12 @@ internal static class F2fsXattrs
 {
     private static readonly Dictionary<byte, string> Prefixes = new()
     {
-        [1] = "user.", [2] = "system.posix_acl_access", [3] = "system.posix_acl_default",
-        [4] = "trusted.", [6] = "security.", [9] = "encryption."
+        [1] = "user.",
+        [2] = "system.posix_acl_access",
+        [3] = "system.posix_acl_default",
+        [4] = "trusted.",
+        [6] = "security.",
+        [9] = "encryption."
     };
 
     internal static Dictionary<string, byte[]> Decode(ReadOnlySpan<byte> data)

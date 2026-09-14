@@ -1,13 +1,12 @@
 ﻿using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
-using UotanStudio.Firmware.SharedKernel.Streams;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Diagnostics;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Parsers;
-
+using UotanStudio.Firmware.SharedKernel;
+using UotanStudio.Firmware.SharedKernel.Streams;
 using FileExtraction = UotanStudio.Firmware.SharedKernel.FileExtraction;
 using OppFormatDetector = UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Parsers.FormatDetector;
 

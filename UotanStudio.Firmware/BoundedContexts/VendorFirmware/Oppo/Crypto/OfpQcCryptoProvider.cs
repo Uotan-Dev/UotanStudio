@@ -2,8 +2,8 @@
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.Algorithms;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto.KeyDatabase;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Diagnostics;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Models;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo.Crypto;
 

@@ -627,7 +627,11 @@ public sealed partial class ErofsParser : IDisposable
 
         _directoryEntries.Add(new(prefix.Length == 0 ? "." : prefix, (long)inode.Size, nid)
         {
-            Mode = inode.Mode, Uid = inode.Uid, Gid = inode.Gid, MTime = inode.CTime, MTimeNanoseconds = inode.CTimeNsec,
+            Mode = inode.Mode,
+            Uid = inode.Uid,
+            Gid = inode.Gid,
+            MTime = inode.CTime,
+            MTimeNanoseconds = inode.CTimeNsec,
             Xattrs = ReadXattrs(nid, inode)
         });
 

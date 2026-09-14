@@ -1,7 +1,7 @@
 using System.IO.Compression;
+using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
-using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 
 namespace UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
 

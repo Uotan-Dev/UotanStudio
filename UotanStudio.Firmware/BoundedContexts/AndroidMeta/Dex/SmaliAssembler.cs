@@ -56,11 +56,25 @@ public static class SmaliAssembler
         var result = 0u;
         foreach (var value in values) result |= value switch
         {
-            "public" => AccessFlags.Public, "private" => AccessFlags.Private, "protected" => AccessFlags.Protected, "static" => AccessFlags.Static,
-            "final" => AccessFlags.Final, "synchronized" => AccessFlags.Synchronized, "volatile" => AccessFlags.Volatile, "bridge" => AccessFlags.Bridge,
-            "transient" => AccessFlags.Transient, "varargs" => AccessFlags.Varargs, "native" => AccessFlags.Native, "interface" => AccessFlags.Interface,
-            "abstract" => AccessFlags.Abstract, "strictfp" => AccessFlags.Strict, "synthetic" => AccessFlags.Synthetic, "annotation" => AccessFlags.Annotation,
-            "enum" => AccessFlags.Enum, "constructor" => AccessFlags.Constructor, _ => 0
+            "public" => AccessFlags.Public,
+            "private" => AccessFlags.Private,
+            "protected" => AccessFlags.Protected,
+            "static" => AccessFlags.Static,
+            "final" => AccessFlags.Final,
+            "synchronized" => AccessFlags.Synchronized,
+            "volatile" => AccessFlags.Volatile,
+            "bridge" => AccessFlags.Bridge,
+            "transient" => AccessFlags.Transient,
+            "varargs" => AccessFlags.Varargs,
+            "native" => AccessFlags.Native,
+            "interface" => AccessFlags.Interface,
+            "abstract" => AccessFlags.Abstract,
+            "strictfp" => AccessFlags.Strict,
+            "synthetic" => AccessFlags.Synthetic,
+            "annotation" => AccessFlags.Annotation,
+            "enum" => AccessFlags.Enum,
+            "constructor" => AccessFlags.Constructor,
+            _ => 0
         };
         return result;
     }
@@ -102,7 +116,8 @@ public static class SmaliAssembler
         private static void Encode(MethodState state)
         {
             var labels = new Dictionary<string, int>(); var pc = 0; foreach (var line in state.Lines) { if (line.StartsWith(':')) labels[line[1..]] = pc; else { var op = OpCodes.Find(line.Split(' ', 2)[0]) ?? throw new FormatException($"Unknown instruction: {line}"); pc += Size(op.Info.Format); } }
-            var raw = new List<ushort>(pc); pc = 0; foreach (var line in state.Lines) { if (line.StartsWith(':')) continue; var parts = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries); var op = OpCodes.Find(parts[0])!.Value; var args = parts.Length == 1 ? [] : parts[1].Split(',', StringSplitOptions.TrimEntries); Emit(raw, op.Opcode, op.Info.Format, args, labels, pc); pc += Size(op.Info.Format); } state.Encoded.Code!.RawInsns = [.. raw];
+            var raw = new List<ushort>(pc); pc = 0; foreach (var line in state.Lines) { if (line.StartsWith(':')) continue; var parts = line.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries); var op = OpCodes.Find(parts[0])!.Value; var args = parts.Length == 1 ? [] : parts[1].Split(',', StringSplitOptions.TrimEntries); Emit(raw, op.Opcode, op.Info.Format, args, labels, pc); pc += Size(op.Info.Format); }
+            state.Encoded.Code!.RawInsns = [.. raw];
         }
         private static int Size(InstructionFormat f) => f switch { InstructionFormat.Format10x or InstructionFormat.Format12x or InstructionFormat.Format11n or InstructionFormat.Format11x or InstructionFormat.Format10t => 1, InstructionFormat.Format21s or InstructionFormat.Format21c or InstructionFormat.Format22x or InstructionFormat.Format22t or InstructionFormat.Format22s or InstructionFormat.Format22c or InstructionFormat.Format23x => 2, InstructionFormat.Format31i or InstructionFormat.Format31c or InstructionFormat.Format31t or InstructionFormat.Format32x or InstructionFormat.Format35c or InstructionFormat.Format3rc or InstructionFormat.Format30t => 3, InstructionFormat.Format51l => 5, _ => 1 };
         private static void Emit(List<ushort> raw, byte op, InstructionFormat f, string[] a, Dictionary<string, int> labels, int pc)

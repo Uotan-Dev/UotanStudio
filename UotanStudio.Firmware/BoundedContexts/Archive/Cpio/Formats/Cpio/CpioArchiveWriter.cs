@@ -1,9 +1,9 @@
 ﻿using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
-using UotanStudio.Firmware.SharedKernel.Streams;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Writing;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Formats.Cpio;
 
@@ -221,7 +221,7 @@ public sealed class CpioArchiveWriter
                 }
                 finally
                 {
-                    try { File.Delete(path); } catch {  }
+                    try { File.Delete(path); } catch { }
                 }
             }
         }
@@ -475,7 +475,7 @@ public sealed class CpioArchiveWriter
         }
         catch (Exception ex)
         {
-            try { File.Delete(path); } catch {  }
+            try { File.Delete(path); } catch { }
             throw new InvalidDataException($"Unable to spool CRC payload for entry '{entryName}'.", ex);
         }
     }

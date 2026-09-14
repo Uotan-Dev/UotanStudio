@@ -1,6 +1,6 @@
 using System.Text;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
+using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
@@ -163,7 +163,7 @@ public class LpFormatHandlerTests
     }
 
     [Fact]
-    public void StandaloneEmptyImage_LiblpLayoutIsHandledAndReadable()
+    public async Task StandaloneEmptyImage_LiblpLayoutIsHandledAndReadable()
     {
         // liblp 独立空镜像（super_empty）布局：geometry@0 + 单个 metadata blob，无保留区/备份副本。
         // liblp standalone empty-image layout (super_empty): geometry at offset zero plus one metadata
@@ -193,7 +193,7 @@ public class LpFormatHandlerTests
         Assert.True(handler.CanHandle(image));
         var read = MetadataReader.ReadFromImageFile(image);
         Assert.Equal(["my_bigball_a", "my_carrier_a"], read.Partitions.Select(p => p.NameString));
-        var result = handler.ReadMetadataAsync(image).GetAwaiter().GetResult();
+        var result = await handler.ReadMetadataAsync(image, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
         Assert.Contains("2 partitions", result.Summary);
         Assert.Contains("my_bigball_a", result.Entries);

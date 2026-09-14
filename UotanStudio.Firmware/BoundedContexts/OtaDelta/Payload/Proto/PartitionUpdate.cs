@@ -74,7 +74,7 @@ public sealed class PartitionUpdate : IMessage<PartitionUpdate>
     public override bool Equals(object? obj) => Equals(obj as PartitionUpdate);
 
     public bool Equals(PartitionUpdate? other)
-        => other is not null && (ReferenceEquals(other, this) || (PartitionName == other.PartitionName && RunPostinstall == other.RunPostinstall && PostinstallPath == other.PostinstallPath && FilesystemType == other.FilesystemType && PostinstallOptional == other.PostinstallOptional &&  Equals(OldPartitionInfo, other.OldPartitionInfo) && Equals(NewPartitionInfo, other.NewPartitionInfo) && Operations.Equals(other.Operations) && Equals(_unknownFields, other._unknownFields)));
+        => other is not null && (ReferenceEquals(other, this) || (PartitionName == other.PartitionName && RunPostinstall == other.RunPostinstall && PostinstallPath == other.PostinstallPath && FilesystemType == other.FilesystemType && PostinstallOptional == other.PostinstallOptional && Equals(OldPartitionInfo, other.OldPartitionInfo) && Equals(NewPartitionInfo, other.NewPartitionInfo) && Operations.Equals(other.Operations) && Equals(_unknownFields, other._unknownFields)));
 
     public override int GetHashCode()
     {

@@ -74,16 +74,26 @@ public sealed class BootRepackMetadataTests : IDisposable
         {
             Header = new VendorBootHeader
             {
-                HeaderVersion = (uint)version, PageSize = 4096, VendorName = "test-device",
-                VendorCmdline = "vendor.test=1", KernelLoadAddress = 0x8000,
-                RamdiskLoadAddress = 0x1234, TagsLoadAddress = 0x5678, DtbAddress = 0x123456789abcdef
+                HeaderVersion = (uint)version,
+                PageSize = 4096,
+                VendorName = "test-device",
+                VendorCmdline = "vendor.test=1",
+                KernelLoadAddress = 0x8000,
+                RamdiskLoadAddress = 0x1234,
+                TagsLoadAddress = 0x5678,
+                DtbAddress = 0x123456789abcdef
             },
-            VendorRamdisk = [1, 2, 3, 4], Dtb = [5, 6], Bootconfig = version == 4 ? [7, 8] : []
+            VendorRamdisk = [1, 2, 3, 4],
+            Dtb = [5, 6],
+            Bootconfig = version == 4 ? [7, 8] : []
         };
         if (version == 4) packer.RamdiskTable.Add(new()
         {
-            RamdiskName = "platform", RamdiskOffset = 1, RamdiskSize = 3,
-            RamdiskType = 1, RamdiskBoardId = Enumerable.Range(0, 16).Select(i => (uint)(i + 5)).ToArray()
+            RamdiskName = "platform",
+            RamdiskOffset = 1,
+            RamdiskSize = 3,
+            RamdiskType = 1,
+            RamdiskBoardId = Enumerable.Range(0, 16).Select(i => (uint)(i + 5)).ToArray()
         });
         packer.PackToFile(Image);
         if (application)
@@ -197,16 +207,23 @@ public sealed class BootRepackMetadataTests : IDisposable
         {
             Header = new BootImageHeader
             {
-                HeaderVersion = (BootImageVersion)version, PageSize = version < 3 ? 2048u : 4096u,
+                HeaderVersion = (BootImageVersion)version,
+                PageSize = version < 3 ? 2048u : 4096u,
                 HeaderSize = version == 4 ? 1584u : version == 3 ? 1580u : 1664u,
-                CommandLine = "console=ttyS0", ImageName = "test", OsVersion = 0x123456,
-                KernelAddr = 0x8000, RamdiskAddr = 0x100000, TagsAddr = 0x100,
+                CommandLine = "console=ttyS0",
+                ImageName = "test",
+                OsVersion = 0x123456,
+                KernelAddr = 0x8000,
+                RamdiskAddr = 0x100000,
+                TagsAddr = 0x100,
                 KernelLoadAddr = 0x123456789abcdef
             },
-            Kernel = [1, 2, 3], Ramdisk = [4, 5, 6],
+            Kernel = [1, 2, 3],
+            Ramdisk = [4, 5, 6],
             Second = version < 3 ? [7, 8] : [],
             RecoveryDtbo = version is 1 or 2 ? [9, 10] : [],
-            Dtb = version == 2 ? [11, 12] : [], Signature = version == 4 ? [13, 14] : []
+            Dtb = version == 2 ? [11, 12] : [],
+            Signature = version == 4 ? [13, 14] : []
         }.PackToFile(Image);
     }
 

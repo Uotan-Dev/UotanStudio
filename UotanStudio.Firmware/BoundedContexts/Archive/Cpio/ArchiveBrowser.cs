@@ -1,8 +1,8 @@
+using SharpCompress.Archives;
+using SharpCompress.Readers;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
 using UotanStudio.Firmware.CrossCutting.Compress;
-using SharpCompress.Archives;
-using SharpCompress.Readers;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 
@@ -179,16 +179,29 @@ public sealed class ArchiveBrowser : IDisposable
         if (_archiveFormat is null)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            yield return new ArchiveEntry { Name = Normalize(_memberName), Data = [], DataStream = _source,
-                DeclaredDataLength = _source.Length, Metadata = new() { FileType = CpioFileType.Regular } };
+            yield return new ArchiveEntry
+            {
+                Name = Normalize(_memberName),
+                Data = [],
+                DataStream = _source,
+                DeclaredDataLength = _source.Length,
+                Metadata = new() { FileType = CpioFileType.Regular }
+            };
             yield break;
         }
         foreach (var entry in new CpioArchive().ReadEntriesStreaming(_source, _archiveFormat))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            yield return new ArchiveEntry { Name = Normalize(entry.Name), Metadata = entry.Metadata, Data = entry.Data,
-                DataStream = entry.DataStream, DataStreamFactory = entry.DataStreamFactory,
-                DeclaredDataLength = entry.DataLength, LinkName = entry.LinkName };
+            yield return new ArchiveEntry
+            {
+                Name = Normalize(entry.Name),
+                Metadata = entry.Metadata,
+                Data = entry.Data,
+                DataStream = entry.DataStream,
+                DataStreamFactory = entry.DataStreamFactory,
+                DeclaredDataLength = entry.DataLength,
+                LinkName = entry.LinkName
+            };
         }
     }
 

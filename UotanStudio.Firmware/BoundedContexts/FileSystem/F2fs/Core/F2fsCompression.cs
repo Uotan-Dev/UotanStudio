@@ -1,6 +1,6 @@
-﻿using K4os.Compression.LZ4;
+﻿using System.Buffers;
+using K4os.Compression.LZ4;
 using UotanStudio.Firmware.CrossCutting.Lzo;
-using System.Buffers;
 
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
 

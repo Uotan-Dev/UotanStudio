@@ -1,7 +1,7 @@
 using System.Text;
 using UotanStudio.Firmware;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.Oppo;
+using UotanStudio.Firmware.SharedKernel;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

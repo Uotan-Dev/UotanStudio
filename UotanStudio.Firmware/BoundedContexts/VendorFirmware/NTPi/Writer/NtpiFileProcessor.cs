@@ -1,10 +1,10 @@
 ﻿using System.Text;
-using UotanStudio.Firmware.SharedKernel.Streams;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Compression;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Crypto;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Helpers;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Models;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Writer;
 

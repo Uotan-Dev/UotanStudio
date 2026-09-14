@@ -26,7 +26,7 @@ internal sealed class BootRepackConfiguration
         {
             using var parser = new VendorBootParser();
             parser.ParseFile(path);
-            configuration = new() { Magic = "VNDRBOOT", VendorHeader = parser.Header, RamdiskTable = [..parser.RamdiskTable] };
+            configuration = new() { Magic = "VNDRBOOT", VendorHeader = parser.Header, RamdiskTable = [.. parser.RamdiskTable] };
         }
         else throw new InvalidDataException("Unsupported boot image magic.");
         return (JsonObject)JsonSerializer.SerializeToNode(configuration, BootRepackJsonContext.Default.BootRepackConfiguration)!;

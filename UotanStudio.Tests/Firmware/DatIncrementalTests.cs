@@ -1,5 +1,5 @@
-using BsDiff;
 using System.Security.Cryptography;
+using BsDiff;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;

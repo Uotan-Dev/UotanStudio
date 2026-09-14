@@ -1,9 +1,9 @@
 ﻿using System.Text;
 using SharpCompress.Compressors.LZMA;
-using UotanStudio.Firmware.SharedKernel.Streams;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Helpers;
 using UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Models;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.VendorFirmware.NTPi.Compression;
 
@@ -499,7 +499,7 @@ public sealed class Lzma2Compressor : ILzma2Compressor
         }
         finally
         {
-            try { File.Delete(spoolPath); } catch {  }
+            try { File.Delete(spoolPath); } catch { }
         }
     }
 

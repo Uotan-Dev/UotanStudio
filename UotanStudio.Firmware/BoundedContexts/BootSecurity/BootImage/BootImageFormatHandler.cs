@@ -112,13 +112,13 @@ public sealed class BootImageFormatHandler : IFormatHandler
                     return FirmwareOpResult.Ok($"Tegra blob v{parsed.Header!.Version} parsed.\n" +
                         $"Kernel: {parsed.Header.KernelSize} bytes ({parsed.Header.CompressionType})\n" +
                         $"Ramdisk: {parsed.Header.RamdiskSize} bytes", metadata: new Dictionary<string, string>
-                    {
-                        ["Type"] = "tegra",
-                        ["Version"] = parsed.Header.Version.ToString(),
-                        ["KernelSize"] = parsed.Header.KernelSize.ToString(),
-                        ["RamdiskSize"] = parsed.Header.RamdiskSize.ToString(),
-                        ["CompressionType"] = parsed.Header.CompressionType.ToString()
-                    }, components:
+                        {
+                            ["Type"] = "tegra",
+                            ["Version"] = parsed.Header.Version.ToString(),
+                            ["KernelSize"] = parsed.Header.KernelSize.ToString(),
+                            ["RamdiskSize"] = parsed.Header.RamdiskSize.ToString(),
+                            ["CompressionType"] = parsed.Header.CompressionType.ToString()
+                        }, components:
                     [
                         FirmwareComponent.Of("kernel", parsed.Header.KernelSize),
                         FirmwareComponent.Of("ramdisk", parsed.Header.RamdiskSize)
@@ -132,12 +132,12 @@ public sealed class BootImageFormatHandler : IFormatHandler
                         return FirmwareOpResult.Fail(parsed.ErrorMessage ?? "Invalid zImage.");
                     return FirmwareOpResult.Ok($"ARM zImage parsed.\nCompressed payload: {parsed.CompressedSize} bytes\n" +
                         $"Compression: {parsed.CompressionType}", metadata: new Dictionary<string, string>
-                    {
-                        ["Type"] = "zimage",
-                        ["CompressedOffset"] = parsed.CompressedOffset.ToString(),
-                        ["CompressedSize"] = parsed.CompressedSize.ToString(),
-                        ["Compression"] = parsed.CompressionType.ToString()
-                    }, components: [FirmwareComponent.Of("kernel", parsed.CompressedSize)]);
+                        {
+                            ["Type"] = "zimage",
+                            ["CompressedOffset"] = parsed.CompressedOffset.ToString(),
+                            ["CompressedSize"] = parsed.CompressedSize.ToString(),
+                            ["Compression"] = parsed.CompressionType.ToString()
+                        }, components: [FirmwareComponent.Of("kernel", parsed.CompressedSize)]);
                 }
 
                 return FirmwareOpResult.Fail($"Not a boot image (magic: {magic ?? "<none>"}).");

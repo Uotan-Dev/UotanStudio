@@ -1,5 +1,5 @@
-using System.IO.Compression;
 using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using UotanStudio.Firmware.SharedKernel;

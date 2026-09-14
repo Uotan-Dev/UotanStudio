@@ -161,7 +161,8 @@ public sealed class SelinuxFileLabelInferenceTests : IDisposable
     private static string Context(string type) => "u:object_r:" + type + ":s0";
     private static PreservedInodeEntry Entry(string path, string type, bool directory = false) => new()
     {
-        Path = path, Mode = (ushort)(directory ? 0x41ED : 0x81A4),
+        Path = path,
+        Mode = (ushort)(directory ? 0x41ED : 0x81A4),
         Xattrs = new() { ["security.selinux"] = Encoding.UTF8.GetBytes(Context(type) + '\0') }
     };
     public void Dispose() { if (Directory.Exists(root)) Directory.Delete(root, true); }

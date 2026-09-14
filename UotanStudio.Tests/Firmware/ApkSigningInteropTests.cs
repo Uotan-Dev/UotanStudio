@@ -55,7 +55,9 @@ public sealed class ApkSigningInteropTests
             }
             ApkSigner.Sign(input, output, material, new ApkSigningOptions
             {
-                EnableV1 = scheme is "v1" or "all", EnableV2 = scheme is "v2" or "all", EnableV3 = scheme is "v3" or "all"
+                EnableV1 = scheme is "v1" or "all",
+                EnableV2 = scheme is "v2" or "all",
+                EnableV3 = scheme is "v3" or "all"
             }, TestContext.Current.CancellationToken);
             // Platform SignedCms uses the ECDSA-with-SHA256 OID, supported by Android from API 21.
             var minimum = scheme == "v3" ? "28" : scheme == "all" ? "21" : "24";

@@ -71,7 +71,7 @@ public class JarRealCorpusTests
             return;
         }
 
-        var dex = DexFile.Load(JarDexContainer.LoadEntry(jar, dexEntries[0]));
+        var dex = DexFile.Load(JarDexContainer.LoadEntry(jar, dexEntries[0], TestContext.Current.CancellationToken));
         Assert.NotEmpty(dex.Classes);
 
         var smali = Disassembler.DisassembleAll(dex);
@@ -102,7 +102,7 @@ public class JarRealCorpusTests
         var merged = new System.Text.StringBuilder();
         foreach (var entry in dexEntries)
         {
-            var dex = DexFile.Load(JarDexContainer.LoadEntry(jar, entry));
+            var dex = DexFile.Load(JarDexContainer.LoadEntry(jar, entry, TestContext.Current.CancellationToken));
             Assert.NotEmpty(dex.Classes);
             total += dex.Classes.Count;
             merged.AppendLine(Disassembler.DisassembleAll(dex));
@@ -143,18 +143,18 @@ public class JarRealCorpusTests
             var target = dexEntries[0];
             var otherEntries = JarDexContainer.ListEntries(copy)
                 .Where(e => e.Name != target)
-                .Select(e => (e.Name, Content: JarDexContainer.LoadEntry(copy, e.Name)))
+                .Select(e => (e.Name, Content: JarDexContainer.LoadEntry(copy, e.Name, TestContext.Current.CancellationToken)))
                 .ToList();
 
-            var dex = DexFile.Load(JarDexContainer.LoadEntry(copy, target));
-            JarDexContainer.WriteBack(copy, target, dex.ToArray());
+            var dex = DexFile.Load(JarDexContainer.LoadEntry(copy, target, TestContext.Current.CancellationToken));
+            JarDexContainer.WriteBack(copy, target, dex.ToArray(), TestContext.Current.CancellationToken);
 
-            var rebuilt = DexFile.Load(JarDexContainer.LoadEntry(copy, target));
+            var rebuilt = DexFile.Load(JarDexContainer.LoadEntry(copy, target, TestContext.Current.CancellationToken));
             Assert.Equal(dex.Classes.Count, rebuilt.Classes.Count);
             Assert.Equal(dex.Strings.Count, rebuilt.Strings.Count);
             foreach (var (name, content) in otherEntries)
             {
-                Assert.Equal(content, JarDexContainer.LoadEntry(copy, name));
+                Assert.Equal(content, JarDexContainer.LoadEntry(copy, name, TestContext.Current.CancellationToken));
             }
         }
         finally
@@ -190,11 +190,11 @@ public class JarRealCorpusTests
         try
         {
             var exported = Path.Combine(work, "exported.bin");
-            JarDexContainer.ExtractResource(copy, resource.Name, exported);
+            JarDexContainer.ExtractResource(copy, resource.Name, exported, TestContext.Current.CancellationToken);
             Assert.Equal(resource.Length, new FileInfo(exported).Length);
 
-            JarDexContainer.ReplaceResource(copy, resource.Name, exported);
-            Assert.Equal(resource.Length, JarDexContainer.LoadEntry(copy, resource.Name).Length);
+            JarDexContainer.ReplaceResource(copy, resource.Name, exported, TestContext.Current.CancellationToken);
+            Assert.Equal(resource.Length, JarDexContainer.LoadEntry(copy, resource.Name, TestContext.Current.CancellationToken).Length);
         }
         finally
         {
@@ -258,7 +258,7 @@ public class JarRealCorpusTests
                 }
 
                 withDex++;
-                DexFile.Load(JarDexContainer.LoadEntry(jar, dexEntries[0]));
+                DexFile.Load(JarDexContainer.LoadEntry(jar, dexEntries[0], TestContext.Current.CancellationToken));
                 parsed++;
             }
             catch (Exception ex)

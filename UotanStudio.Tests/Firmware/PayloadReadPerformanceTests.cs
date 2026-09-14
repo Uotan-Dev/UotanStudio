@@ -25,7 +25,8 @@ public class PayloadReadPerformanceTests
         using var output = new FileStream(Path.Combine(directory.Path, "partition.img"), FileMode.CreateNew, FileAccess.ReadWrite);
         var operation = new InstallOperation
         {
-            Type = type, DataLength = (ulong)compressed.Length,
+            Type = type,
+            DataLength = (ulong)compressed.Length,
             DataSha256Hash = ByteString.CopyFrom(SHA256.HashData(compressed))
         };
         operation.DstExtents.Add(new Extent { NumBlocks = (ulong)expected.Length / 4096 });
@@ -94,10 +95,18 @@ public class PayloadReadPerformanceTests
         for (var i = 0; i < 8; i++)
         {
             var hash = ByteString.CopyFrom(SHA256.HashData(data.AsSpan(i * 256 * 1024, 256 * 1024)));
-            var partition = new PartitionUpdate { PartitionName = "part" + i,
-                NewPartitionInfo = new PartitionInfo { Size = 256 * 1024, Hash = hash } };
-            var operation = new InstallOperation { Type = InstallOperation.Types.Type.Replace,
-                DataOffset = (ulong)(i * 256 * 1024), DataLength = 256 * 1024, DataSha256Hash = hash };
+            var partition = new PartitionUpdate
+            {
+                PartitionName = "part" + i,
+                NewPartitionInfo = new PartitionInfo { Size = 256 * 1024, Hash = hash }
+            };
+            var operation = new InstallOperation
+            {
+                Type = InstallOperation.Types.Type.Replace,
+                DataOffset = (ulong)(i * 256 * 1024),
+                DataLength = 256 * 1024,
+                DataSha256Hash = hash
+            };
             operation.DstExtents.Add(new Extent { NumBlocks = 64 }); partition.Operations.Add(operation);
             manifest.Partitions.Add(partition);
         }
@@ -107,7 +116,7 @@ public class PayloadReadPerformanceTests
         for (var i = 0; i < 8; i++)
         {
             using var output = File.OpenRead(Path.Combine(directory.Path, "part" + i + ".img"));
-            Assert.Equal(manifest.Partitions[i].NewPartitionInfo.Hash.ToByteArray(), SHA256.HashData(output));
+            Assert.Equal(manifest.Partitions[i].NewPartitionInfo!.Hash.ToByteArray(), SHA256.HashData(output));
         }
     }
 

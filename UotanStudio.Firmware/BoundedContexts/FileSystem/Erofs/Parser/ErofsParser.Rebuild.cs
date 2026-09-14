@@ -103,7 +103,8 @@ public sealed partial class ErofsParser
         {
             result.Add(ErofsCompressionAlgorithm.Lz4, new ErofsOptions
             {
-                BlockSize = _blockSize, MaxPclusterSize = _blockSize,
+                BlockSize = _blockSize,
+                MaxPclusterSize = _blockSize,
                 Lz4MaxDistance = _superblock.AvailableComprAlgs
             });
             return result;

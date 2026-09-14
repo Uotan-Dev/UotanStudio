@@ -122,8 +122,8 @@ public sealed class Ext4FormatHandler : IFormatHandler
     {
         try
         {
-                if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
-                    return Task.FromResult(FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes."));
+            if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+                return Task.FromResult(FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes."));
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(outputPath))
             {

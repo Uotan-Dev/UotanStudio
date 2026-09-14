@@ -1,8 +1,8 @@
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
+using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;

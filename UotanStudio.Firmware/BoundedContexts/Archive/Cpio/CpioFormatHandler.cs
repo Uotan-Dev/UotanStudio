@@ -1,8 +1,8 @@
 ﻿using System.Text;
-using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Extraction;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Formats.Cpio;
 using UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Firmware.BoundedContexts.Archive.Cpio;
 

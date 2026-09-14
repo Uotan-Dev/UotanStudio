@@ -1,6 +1,6 @@
+using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk;
 using UotanStudio.Tests.Infrastructure;
-using System.IO.Compression;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;

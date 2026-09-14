@@ -1,7 +1,7 @@
-﻿using SharpCompress.Compressors;
+﻿using ICSharpCode.SharpZipLib.BZip2;
+using SharpCompress.Compressors;
 using SharpCompress.Compressors.BZip2;
 using UotanStudio.Firmware.CrossCutting.Compress.Internal;
-using ICSharpCode.SharpZipLib.BZip2;
 
 namespace UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 

@@ -1,10 +1,10 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using UotanStudio.Firmware.SharedKernel.Streams;
+using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Diff;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
-using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
+using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
 
