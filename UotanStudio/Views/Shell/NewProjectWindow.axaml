@@ -139,6 +139,7 @@
                         <ColumnDefinition Width="Auto" SharedSizeGroup="ProjectFieldLabel" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" SharedSizeGroup="ProjectBrowseButton" />
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="ProjectBrowseButton" />
                     </Grid.ColumnDefinitions>
                     <TextBlock Classes="field-label" Text="{DynamicResource NewProject_AddImages}" />
                     <TextBox Grid.Column="1" Name="ImagePathsBox" Classes="project-field" IsReadOnly="True"
@@ -160,7 +161,12 @@
                             <TextBlock Text="{DynamicResource NewProject_SelectImages}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                    <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="20">
+                    <Button Grid.Column="3" Classes="browse" HorizontalAlignment="Stretch"
+                            ToolTip.Tip="{DynamicResource NewProject_GetRom}"
+                            AutomationProperties.Name="{DynamicResource NewProject_GetRom}">
+                        <TextBlock Text="{DynamicResource NewProject_GetRom}" VerticalAlignment="Center" />
+                    </Button>
+                    <StackPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Orientation="Horizontal" Spacing="20">
                         <CheckBox Name="SelectAllBox" Content="{DynamicResource Menu_SelectAll}" IsChecked="True" />
                         <CheckBox Name="UnpackImagesBox" Content="{DynamicResource NewProject_UnpackImages}" IsChecked="True" />
                         <CheckBox Name="UnpackFullyBox" Content="{DynamicResource NewProject_UnpackFully}" IsChecked="True" />
