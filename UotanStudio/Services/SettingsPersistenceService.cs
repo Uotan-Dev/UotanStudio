@@ -10,8 +10,15 @@ namespace UotanStudio.Services;
 /// <para>应用程序设置数据模型，包含所有需要持久化的设置项。</para>
 /// Application settings data model, containing all settings that need to be persisted.
 /// </summary>
-public class AppSettings
+public class AppSettings : IJsonOnDeserialized
 {
+    /// <summary>Discards the removed executable override while preserving unrelated extension settings.</summary>
+    void IJsonOnDeserialized.OnDeserialized()
+    {
+        AdditionalSettings?.Remove("hdcPath");
+        AdditionalSettings?.Remove("HdcPath");
+    }
+
     /// <summary>Maximum concurrent firmware workers. Missing or invalid persisted values use four.</summary>
     [JsonPropertyName("firmwareParallelism")]
     public int FirmwareParallelism
@@ -79,9 +86,6 @@ public class AppSettings
     /// </summary>
     [JsonPropertyName("adbPath")]
     public string AdbPath { get; set; } = string.Empty;
-
-    /// <summary>Official HDC executable path; empty uses PATH or DevEco.</summary>
-    public string HdcPath { get; set; } = string.Empty;
 
     /// <summary>
     /// <para>获取或设置 Fastboot 路径。</para>

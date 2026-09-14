@@ -400,7 +400,7 @@ public sealed class FirmwareService
                 return new FirmwareOpResult
                 {
                     Success = true,
-                    Summary = $"APK signed ({string.Join(", ", schemes)}) -> {outputApk}  APK 已签名（{string.Join(", ", schemes)}）→ {outputApk}",
+                    Summary = $"APK signed ({string.Join(", ", schemes)})  APK 已签名（{string.Join(", ", schemes)}）",
                     Entries = [outputApk],
                 };
             }, cancellationToken).ConfigureAwait(false);

@@ -10,15 +10,13 @@ namespace UotanStudio.Services.Devices;
 public sealed class HdcDeviceService(string executable = "hdc", string host = "127.0.0.1", int? port = null)
 {
     private readonly int _port = port ?? HdcServerClient.DefaultServerPort;
-    /// <summary>Creates a service using the user's configured HDC path. 使用用户配置路径创建服务。</summary>
+    /// <summary>Creates a service using automatically located HDC. 使用自动查找的 HDC 创建服务。</summary>
     public static HdcDeviceService FromSettings() => new(ResolveExecutable());
 
-    /// <summary>Resolves configured HDC, PATH or the standard DevEco installation.
-    /// <para>解析配置路径、PATH 或 DevEco 标准安装位置。</para></summary>
+    /// <summary>Locates HDC in PATH or the standard DevEco installation.
+    /// <para>从 PATH 或 DevEco 标准安装位置自动查找 HDC。</para></summary>
     public static string ResolveExecutable()
     {
-        var configured = SettingsPersistenceService.Instance.LoadSettings().HdcPath;
-        if (!string.IsNullOrWhiteSpace(configured)) return configured;
         var name = OperatingSystem.IsWindows() ? "hdc.exe" : "hdc";
         foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator))
         {

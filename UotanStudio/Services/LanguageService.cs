@@ -116,16 +116,15 @@ public sealed class LanguageService
         var appResources = Application.Current!.Resources;
         var mergedDicts = appResources.MergedDictionaries;
 
-        // 移除所有旧的 Locale 资源（含早期 ResourceInclude 与当前类型实例）
+        // 找出所有旧的 Locale 资源（含早期 ResourceInclude 与当前类型实例）。
+        // 先构造完整的新字典列表，再按原槽位替换，避免在切换期间让
+        // DynamicResource 短暂解析到空值。逐个 Remove/Add 会触发控件树反复
+        // 重新套用主题，部分控件的字体等样式值会因此丢失。
         var oldLocaleDicts = mergedDicts
             .Where(d => d is ResourceDictionary rd
                 && (d is ResourceInclude ri && ri.Source?.OriginalString.Contains("Locale") == true
                     || rd.GetType().Namespace?.StartsWith("UotanStudio.Locale", StringComparison.Ordinal) == true))
             .ToList();
-        foreach (var old in oldLocaleDicts)
-        {
-            mergedDicts.Remove(old);
-        }
 
         // 获取该语言包的模块列表
         IReadOnlyList<string> modules;
@@ -139,25 +138,49 @@ public sealed class LanguageService
             modules = ["Common", "Menu", "Dock", "Node", "Settings", "Device"];
         }
 
-        // 按模块加载语言资源
+        // 按模块加载语言资源。先全部创建完成，确保替换时不会暴露半套语言资源。
+        var newLocaleDicts = new List<IResourceProvider>(modules.Count);
         foreach (var module in modules)
         {
             try
             {
-                mergedDicts.Add(CreateLocaleDictionary(language, module));
+                newLocaleDicts.Add(CreateLocaleDictionary(language, module));
             }
             catch (Exception ex) when (ex is ArgumentException)
             {
                 // 模块文件缺失，回退到默认语言
                 Debug.WriteLine($"[LanguageService] Module '{module}' not found for '{language}', falling back to '{FallbackCulture}'");
-                LoadFallbackModule(mergedDicts, module);
+                var fallback = CreateFallbackDictionary(module);
+                if (fallback is not null)
+                    newLocaleDicts.Add(fallback);
             }
         }
 
-        // Force refresh DynamicResource bindings
-        var temp = new ResourceDictionary();
-        mergedDicts.Add(temp);
-        mergedDicts.Remove(temp);
+        if (oldLocaleDicts.Count == newLocaleDicts.Count && oldLocaleDicts.Count > 0)
+        {
+            // 保持 MergedDictionaries 的数量、顺序和周边字典不变，只替换每个
+            // Locale 槽位。这样 Avalonia 不会因空窗期重建应用级样式。
+            for (var i = 0; i < oldLocaleDicts.Count; i++)
+            {
+                var index = mergedDicts.IndexOf(oldLocaleDicts[i]);
+                if (index >= 0)
+                    mergedDicts[index] = newLocaleDicts[i];
+            }
+        }
+        else
+        {
+            // 首次加载或模块数量改变时，仍保留第一个 Locale 槽位的位置，
+            // 并在一次变更中完成旧资源的移除和新资源的插入。
+            var insertIndex = oldLocaleDicts.Count > 0
+                ? mergedDicts.IndexOf(oldLocaleDicts[0])
+                : mergedDicts.Count;
+            foreach (var old in oldLocaleDicts)
+                mergedDicts.Remove(old);
+            if (insertIndex < 0 || insertIndex > mergedDicts.Count)
+                insertIndex = mergedDicts.Count;
+            for (var i = 0; i < newLocaleDicts.Count; i++)
+                mergedDicts.Insert(insertIndex + i, newLocaleDicts[i]);
+        }
 
         CurrentLanguage = language;
         LanguageChanged?.Invoke(this, EventArgs.Empty);
@@ -210,17 +233,16 @@ public sealed class LanguageService
     /// <para>模块名称。</para>
     /// The module name.
     /// </param>
-    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
-        Justification = "ResourceInclude loads XAML resources at runtime which requires reflection.")]
-    private static void LoadFallbackModule(IList<IResourceProvider> mergedDicts, string module)
+    private static IResourceProvider? CreateFallbackDictionary(string module)
     {
         try
         {
-            mergedDicts.Add(CreateLocaleDictionary(FallbackCulture, module));
+            return CreateLocaleDictionary(FallbackCulture, module);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[LanguageService] Fallback module '{module}' also not found: {ex.Message}");
+            return null;
         }
     }
 
