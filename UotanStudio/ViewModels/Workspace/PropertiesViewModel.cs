@@ -20,7 +20,54 @@ namespace UotanStudio.ViewModels.Workspace;
 internal partial class PropertiesViewModel : Tool
 {
     /// <summary>Stable setting value with a localized label. 稳定设置值与本地化标签。</summary>
-    public sealed record PropertyChoice(string Value, string Label);
+    public sealed class PropertyChoice : ObservableObject
+    {
+        private string _label;
+
+        public string Value { get; }
+
+        public string Label
+        {
+            get => _label;
+            private set => SetProperty(ref _label, value);
+        }
+
+        /// <summary>Resource key used to refresh this label after a language switch.</summary>
+        internal string? LabelResourceKey { get; }
+
+        private string FallbackLabel { get; }
+
+        public PropertyChoice(string value, string label, string? labelResourceKey = null, string? fallbackLabel = null)
+        {
+            Value = value;
+            LabelResourceKey = labelResourceKey;
+            FallbackLabel = fallbackLabel ?? label;
+            // LanguageService returns the key itself when a locale omits a resource. Resolve that
+            // case at construction time as well as during a later language switch, so a newly
+            // created selector never exposes an implementation key in the UI.
+            _label = !string.IsNullOrEmpty(labelResourceKey)
+                && string.Equals(label, labelResourceKey, StringComparison.Ordinal)
+                ? FallbackLabel
+                : label;
+        }
+
+        internal void RefreshLocalizedLabel()
+        {
+            if (string.IsNullOrEmpty(LabelResourceKey))
+            {
+                return;
+            }
+
+            var localized = LanguageService.Instance.GetString(LabelResourceKey);
+            var next = string.Equals(localized, LabelResourceKey, StringComparison.Ordinal)
+                ? FallbackLabel
+                : localized;
+            if (!string.Equals(Label, next, StringComparison.Ordinal))
+            {
+                Label = next;
+            }
+        }
+    }
     /// <summary>
     /// <para>单个属性行视图模型，承载名称-值对。</para>
     /// Single property row view model, carrying a name-value pair.
@@ -119,6 +166,9 @@ internal partial class PropertiesViewModel : Tool
     /// <c>null</c> when the active document is not a Hex document.
     /// </summary>
     private HexEditorViewModel? _currentHexDocument;
+
+    // Invalidates in-flight image metadata reads when the selected content changes.
+    private long _imageDetailsGeneration;
 
     /// <summary>
     /// <para>语言选择器是否可见（仅文本文档类型显示）。</para>
@@ -231,6 +281,8 @@ internal partial class PropertiesViewModel : Tool
         WeakReferenceMessenger.Default.Register<ManifestNodeSelectionChangedMessage>(this, OnManifestNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<ArscNodeSelectionChangedMessage>(this, OnArscNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<FileManagerSelectionChangedMessage>(this, OnFileManagerSelectionChanged);
+        WeakReferenceMessenger.Default.Register<PropertiesViewModel, LanguageStateChangedMessage>(this,
+            static (recipient, _) => recipient.RefreshLocalizedPropertyNamesOnUiThread());
     }
 
     /// <summary>
@@ -362,14 +414,14 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.Image);
         SelectedNodeTitle = image.DisplayName;
 
-        var svc = LanguageService.Instance;
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_ImageName"), image.DisplayName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Path"), image.RelativePath));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Format"), image.Format));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Size"), $"{image.SizeBytes:N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_ImageName", image.DisplayName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Path", image.RelativePath));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Format", image.Format));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Size", $"{image.SizeBytes:N0} bytes"));
 
         // 尝试读取固件详细参数
-        _ = RefreshImageDetailsAsync(image);
+        var imageDetailsGeneration = Volatile.Read(ref _imageDetailsGeneration);
+        _ = RefreshImageDetailsAsync(image, imageDetailsGeneration);
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for image '{image.DisplayName}'");
     }
@@ -391,31 +443,24 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.TextDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
-        var svc = LanguageService.Instance;
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FileName"), fileName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FilePath"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_LineCount"), doc.LineCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_CharCount"), doc.CharCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_FileName", fileName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_FilePath", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_LineCount", doc.LineCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_CharCount", doc.CharCount.ToString("N0")));
 
         // 编码选择器：位于语法语言选择行上方，当前项随文档检测/所选编码同步。
         // Encoding selector: placed above the language selector row, synced with the document's
         // detected/selected encoding.
         _currentTextDocument = doc;
         PopulateEncodingSelector(doc);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Encoding"), string.Empty)
-        {
-            IsEncodingSelector = true
-        });
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Encoding", string.Empty, isEncodingSelector: true));
 
         // 语言选择器：填充可用语言列表并根据当前 Language 选中对应项。
         // Language selector: populate available languages and select the one matching the current Language.
         PopulateLanguageSelector(doc.Language);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Language"), string.Empty)
-        {
-            IsLanguageSelector = true
-        });
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Language", string.Empty, isLanguageSelector: true));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for text document '{doc.FilePath}'");
     }
@@ -474,7 +519,7 @@ internal partial class PropertiesViewModel : Tool
         _suppressLanguageChange = true;
         try
         {
-            SelectedLanguage = string.IsNullOrEmpty(match.Id)
+            SelectedLanguage = match is not { Id.Length: > 0, DisplayName.Length: > 0 }
                 ? AvailableLanguages[0]
                 : match.DisplayName;
         }
@@ -567,6 +612,7 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     private void ClearProperties()
     {
+        Interlocked.Increment(ref _imageDetailsGeneration);
         StopMirrorUpdates();
         ClearLanguageSelector();
         Properties.Clear();
@@ -580,7 +626,7 @@ internal partial class PropertiesViewModel : Tool
     {
         ContentType = contentType;
         HasSelection = true;
-        Properties.Add(new PropertyRow(LanguageService.Instance.GetString("Dock_Properties_Type"), ContentTypeDisplay));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Type", ContentTypeDisplay));
     }
 
     /// <summary>
@@ -601,16 +647,15 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.DtbDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
-        var svc = LanguageService.Instance;
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_FileName"), fileName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_FilePath"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_NodeCount"), doc.NodeCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_RootCompatible"), doc.RootCompatible));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_RootAddressCells"), doc.RootAddressCells));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_RootSizeCells"), doc.RootSizeCells));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_MemReservations"), doc.MemoryReservationCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_FileName", fileName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_FilePath", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_NodeCount", doc.NodeCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_RootCompatible", doc.RootCompatible));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_RootAddressCells", doc.RootAddressCells));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_RootSizeCells", doc.RootSizeCells));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_MemReservations", doc.MemoryReservationCount.ToString("N0")));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB document '{doc.FilePath}'");
     }
@@ -632,13 +677,12 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.ManifestDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
-        var svc = LanguageService.Instance;
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_FileName"), fileName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_FilePath"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_ElementCount"), doc.ElementCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_AttributeCount"), doc.AttributeCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_FileName", fileName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_FilePath", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_ElementCount", doc.ElementCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_AttributeCount", doc.AttributeCount.ToString("N0")));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Manifest document '{doc.FilePath}'");
     }
@@ -660,18 +704,17 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.ManifestDocument);
         SelectedNodeTitle = node.Name;
 
-        var svc = LanguageService.Instance;
         var element = node.Element;
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNode"), node.Name));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_SelectedNode", node.Name));
         if (element.Namespace is { Length: > 0 })
         {
-            Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNodeNs"), element.Namespace));
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_SelectedNodeNs", element.Namespace));
         }
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNodeAttrs"), element.Attributes.Count.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNodeChildren"), element.Children.Count.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_SelectedNodeAttrs", element.Attributes.Count.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_SelectedNodeChildren", element.Children.Count.ToString("N0")));
         if (element.Text is { Length: > 0 })
         {
-            Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Manifest_SelectedNodeText"), element.Text));
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Manifest_SelectedNodeText", element.Text));
         }
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Manifest node '{node.Name}'");
@@ -694,18 +737,18 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.ApkDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
-        var svc = LanguageService.Instance;
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_FileName"), fileName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_FilePath"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_FileSize"), doc.SizeDisplay));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_PackageName"), doc.PackageName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_VersionName"), doc.VersionName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_VersionCode"), doc.VersionCodeDisplay));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_TargetSystem"), doc.TargetSystemDisplay));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_MinimumSystem"), doc.MinimumSystemDisplay));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Abis"), doc.AbiDisplay));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Apk_Permissions"), doc.Info?.Permissions.Count.ToString("N0") ?? "0"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_FileName", fileName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_FilePath", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_FileSize", doc.SizeDisplay));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_PackageName", doc.PackageName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_VersionName", doc.VersionName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_VersionCode", doc.VersionCodeDisplay));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Sdk", doc.SdkDisplay));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_TargetSystem", doc.TargetSystemDisplay));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_MinimumSystem", doc.MinimumSystemDisplay));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Abis", doc.AbiDisplay));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Apk_Permissions", doc.Info?.Permissions.Count.ToString("N0") ?? "0"));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for APK document '{doc.FilePath}'");
     }
@@ -727,21 +770,20 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.FirmwareDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
-        var svc = LanguageService.Instance;
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_FileName"), fileName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_FilePath"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_Format"), doc.FormatName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_FileName", fileName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_FilePath", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_Format", doc.FormatName));
         if (!string.IsNullOrEmpty(doc.Summary))
         {
-            Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_Summary"), doc.Summary));
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_Summary", doc.Summary));
         }
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_MetadataCount"), doc.Metadata.Count.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Fw_Components"), doc.Components.Count.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_MetadataCount", doc.Metadata.Count.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Fw_Components", doc.Components.Count.ToString("N0")));
 
         foreach (var row in doc.Metadata)
         {
-            Properties.Add(new PropertyRow(row.Name, row.Value));
+            Properties.Add(CreateDynamicRow(row.Name, row.Value));
         }
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for firmware document '{doc.FilePath}'");
@@ -763,22 +805,18 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.HexDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
-        var svc = LanguageService.Instance;
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_FileName"), fileName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_FilePath"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Hex_ByteCount"), doc.SizeDisplay));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_FileName", fileName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_FilePath", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Hex_ByteCount", doc.SizeDisplay));
 
         // 编码选择器：与文本文档同一下拉行样式，控制 HexViewer 文本列解码/输入编码。
         // Encoding selector: same dropdown-row style as text documents; controls the HexViewer
         // text-column decode/input encoding.
         _currentHexDocument = doc;
         PopulateHexEncodingSelector(doc.EncodingName);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Text_Encoding"), string.Empty)
-        {
-            IsEncodingSelector = true
-        });
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Text_Encoding", string.Empty, isEncodingSelector: true));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for Hex document '{doc.FilePath}'");
     }
@@ -824,13 +862,12 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.ArscDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
-        var svc = LanguageService.Instance;
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_FileName"), fileName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_FilePath"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_PackageCount"), doc.PackageCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_TypeCount"), doc.TypeCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_EntryCount"), doc.EntryCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_FileName", fileName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_FilePath", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_PackageCount", doc.PackageCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_TypeCount", doc.TypeCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_EntryCount", doc.EntryCount.ToString("N0")));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for ARSC document '{doc.FilePath}'");
     }
@@ -851,26 +888,25 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.ArscDocument);
         SelectedNodeTitle = node.Name;
 
-        var svc = LanguageService.Instance;
         switch (node.Payload)
         {
             case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ResPackage pkg:
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNode"), pkg.Name));
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeKind"), $"0x{pkg.Id:x2}"));
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeChildren"), pkg.Types.Count.ToString("N0")));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", pkg.Name));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", $"0x{pkg.Id:x2}"));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeChildren", pkg.Types.Count.ToString("N0")));
                 break;
 
             case UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc.ResType type:
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNode"), $"0x{type.Id:x2}"));
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeKind"), "type"));
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeDetail"), type.ConfigDescription));
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeChildren"), type.Entries.Count.ToString("N0")));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", $"0x{type.Id:x2}"));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", "type"));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeDetail", type.ConfigDescription));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeChildren", type.Entries.Count.ToString("N0")));
                 break;
 
             case UotanStudio.ViewModels.Editors.ResEntryEntry entry:
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNode"), entry.Key));
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeKind"), entry.Entry.Value?.Type.ToString() ?? "<null>"));
-                Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Arsc_SelectedNodeDetail"), entry.ValueText));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNode", entry.Key));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeKind", entry.Entry.Value?.Type.ToString() ?? "<null>"));
+                Properties.Add(CreateLocalizedRow("Dock_Properties_Arsc_SelectedNodeDetail", entry.ValueText));
                 break;
         }
 
@@ -935,11 +971,10 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.DtbDocument);
         SelectedNodeTitle = node.FullPath;
 
-        var svc = LanguageService.Instance;
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_SelectedNode"), node.Name));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_SelectedNodePath"), node.FullPath));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_SelectedNodeProps"), node.Node.Properties.Count.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dtb_SelectedNodeChildren"), node.Node.Children.Count.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_SelectedNode", node.Name));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_SelectedNodePath", node.FullPath));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_SelectedNodeProps", node.Node.Properties.Count.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dtb_SelectedNodeChildren", node.Node.Children.Count.ToString("N0")));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DTB node '{node.FullPath}'");
     }
@@ -961,17 +996,16 @@ internal partial class PropertiesViewModel : Tool
         ShowProperties(PropertiesContentType.DexDocument);
         SelectedNodeTitle = doc.FilePath ?? doc.Title;
 
-        var svc = LanguageService.Instance;
         var fileName = string.IsNullOrEmpty(doc.FilePath) ? doc.Title : Path.GetFileName(doc.FilePath);
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_FileName"), fileName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_FilePath"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_FileSize"), $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_Version"), doc.Version));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_ClassCount"), doc.ClassCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_MethodCount"), doc.MethodCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_FieldCount"), doc.FieldCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_StringCount"), doc.StringCount.ToString("N0")));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Dex_TypeCount"), doc.TypeCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FileName", fileName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FilePath", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FileSize", $"{(doc.RawBytes?.Length ?? 0):N0} bytes"));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_Version", doc.Version));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_ClassCount", doc.ClassCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_MethodCount", doc.MethodCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_FieldCount", doc.FieldCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_StringCount", doc.StringCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Dex_TypeCount", doc.TypeCount.ToString("N0")));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for DEX document '{doc.FilePath}'");
     }
@@ -982,18 +1016,20 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForFileManagerDocument(FileManagerEditorViewModel doc)
     {
-        Properties.Clear();
+        ClearProperties();
         ContentType = PropertiesContentType.FileManagerDocument;
         HasSelection = true;
         SelectedNodeTitle = doc.Title;
 
-        var svc = LanguageService.Instance;
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_FileName"), doc.Title));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Path"), doc.FilePath ?? string.Empty));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Format"), doc.FormatName));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Size"), doc.ImageSizeText));
-        Properties.Add(new PropertyRow(svc.GetString("FileManager_FileCount"), doc.FileCountText));
-        Properties.Add(new PropertyRow(svc.GetString("FileManager_DirectoryCount"), doc.DirectoryCountText));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_FileName", doc.Title));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Path", doc.FilePath ?? string.Empty));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Format", doc.FormatName));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Size", doc.ImageSizeText));
+        // FileCountText/DirectoryCountText already include their labels for the file-manager
+        // toolbar. The properties grid has a separate localized name column, so expose only the
+        // numeric values here to avoid rendering "Files | Files: 3".
+        Properties.Add(CreateLocalizedRow("Dock_Properties_FileCount", doc.FileCount.ToString("N0")));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_DirectoryCount", doc.DirectoryCount.ToString("N0")));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file-manager document '{doc.FilePath}'");
     }
@@ -1004,7 +1040,6 @@ internal partial class PropertiesViewModel : Tool
     /// </summary>
     public void RefreshForFileManagerEntry(FileManagerEntryViewModel? entry, FileManagerEditorViewModel doc)
     {
-        Properties.Clear();
         if (entry is null)
         {
             // 条目清空时回退到文档级属性。
@@ -1013,15 +1048,16 @@ internal partial class PropertiesViewModel : Tool
             return;
         }
 
+        ClearProperties();
+
         ContentType = PropertiesContentType.FileManagerEntry;
         HasSelection = true;
         SelectedNodeTitle = entry.Name;
 
-        var svc = LanguageService.Instance;
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_FileName"), entry.Name));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Path"), entry.Path));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_Size"), entry.SizeText));
-        Properties.Add(new PropertyRow(svc.GetString("Dock_Properties_ImageType"), entry.KindText));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_FileName", entry.Name));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Path", entry.Path));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Size", entry.SizeText));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_ImageType", entry.KindText));
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file-manager entry '{entry.Path}'");
     }
@@ -1047,7 +1083,7 @@ internal partial class PropertiesViewModel : Tool
         // so adding it again here would duplicate the entry.
         foreach (var row in analysis.Analysis)
         {
-            Properties.Add(new PropertyRow(row.Name, row.Value));
+            Properties.Add(CreateDynamicRow(row.Name, row.Value));
         }
 
         LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for file analysis '{analysis.FilePath}' ({analysis.Analysis.Count} entries)");
@@ -1057,7 +1093,7 @@ internal partial class PropertiesViewModel : Tool
     /// <para>异步读取固件详细参数并追加到属性行。</para>
     /// Asynchronously reads firmware detailed parameters and appends them to the property rows.
     /// </summary>
-    private async Task RefreshImageDetailsAsync(ImageEntryViewModel image)
+    private async Task RefreshImageDetailsAsync(ImageEntryViewModel image, long generation)
     {
         try
         {
@@ -1075,7 +1111,7 @@ internal partial class PropertiesViewModel : Tool
             }
 
             var result = await handler.ReadMetadataAsync(absolutePath).ConfigureAwait(true);
-            if (!result.Success)
+            if (!IsCurrentImageDetailsRequest(image, generation) || !result.Success)
             {
                 return;
             }
@@ -1084,7 +1120,12 @@ internal partial class PropertiesViewModel : Tool
             {
                 foreach (var kv in result.Metadata)
                 {
-                    Properties.Add(new PropertyRow(kv.Key, kv.Value));
+                    if (!IsCurrentImageDetailsRequest(image, generation))
+                    {
+                        return;
+                    }
+
+                    Properties.Add(CreateDynamicRow(kv.Key, kv.Value));
                 }
             }
         }
@@ -1093,6 +1134,10 @@ internal partial class PropertiesViewModel : Tool
             LogService.Instance.Write(LogLevel.Debug, "Properties", $"Failed to read image details: {ex.Message}");
         }
     }
+
+    private bool IsCurrentImageDetailsRequest(ImageEntryViewModel image, long generation) =>
+        Volatile.Read(ref _imageDetailsGeneration) == generation
+        && ContentType == PropertiesContentType.Image;
 }
 
 /// <summary>
