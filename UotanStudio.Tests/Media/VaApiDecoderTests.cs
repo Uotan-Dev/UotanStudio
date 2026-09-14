@@ -170,7 +170,13 @@ public class VaApiDecoderTests
 
     private static VaFrameInfo Frame(long pts) => new()
     {
-        Width = 4, Height = 4, Stride = 4, Length = 24, Matrix = 2, Range = 1, Timestamp = pts,
+        Width = 4,
+        Height = 4,
+        Stride = 4,
+        Length = 24,
+        Matrix = 2,
+        Range = 1,
+        Timestamp = pts,
     };
 
     private sealed class FakeSession : IVaCodecSession
