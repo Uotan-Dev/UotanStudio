@@ -241,7 +241,7 @@
                                 <TextBlock Text="{DynamicResource Keys_FormatHint}" TextWrapping="Wrap" Opacity="0.65" FontSize="11" />
                             </StackPanel>
                             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" IsVisible="{Binding IsOutputDirectoryRequired}">
-                                <TextBox Classes="key-field" Text="{Binding OutputDirectory}" Watermark="{DynamicResource Keys_OutputDirectory}" AutomationProperties.Name="{DynamicResource Keys_OutputDirectory}" />
+                                <TextBox Classes="key-field" Text="{Binding OutputDirectory}" PlaceholderText="{DynamicResource Keys_OutputDirectory}" AutomationProperties.Name="{DynamicResource Keys_OutputDirectory}" />
                                 <Button Grid.Column="1" Classes="key-action" Content="{DynamicResource Keys_Browse}" Click="BrowseApkOutputDirectoryClick" />
                             </Grid>
                         </StackPanel>

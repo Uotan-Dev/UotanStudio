@@ -81,10 +81,7 @@ public class ApkKeystoreAndCertificateTests : IDisposable
     {
         using var library = new KeyLibraryFixture(_root);
         var output = Path.Combine(_root, "out-rsa");
-        var bundle = library.Library.GenerateApkCertificate(
-            "release-key", keyPassword: null, storePassword: "store-pass", validityYears: 10,
-            new ApkSigningKeyOptions { CommonName = "Bundle RSA" },
-            ApkSigningKeyType.Rsa2048, ApkCertificateExportFormat.All, output);
+        var bundle = library.Library.GenerateApkCertificate("release-key", keyPassword: null, storePassword: "store-pass", validityYears: 10, new ApkSigningKeyOptions { CommonName = "Bundle RSA" }, ApkSigningKeyType.Rsa2048, ApkCertificateExportFormat.All, output, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(ManagedKeyKind.Apk, bundle.Key.Kind);
         Assert.Equal(2048, bundle.Key.Bits);
@@ -125,10 +122,7 @@ public class ApkKeystoreAndCertificateTests : IDisposable
     {
         using var library = new KeyLibraryFixture(_root);
         var output = Path.Combine(_root, "out-ec");
-        var bundle = library.Library.GenerateApkCertificate(
-            "ec-key", keyPassword: "key-pass", storePassword: "store-pass", validityYears: 5,
-            new ApkSigningKeyOptions { CommonName = "Bundle EC" },
-            ApkSigningKeyType.EcP384, ApkCertificateExportFormat.All, output);
+        var bundle = library.Library.GenerateApkCertificate("ec-key", keyPassword: "key-pass", storePassword: "store-pass", validityYears: 5, new ApkSigningKeyOptions { CommonName = "Bundle EC" }, ApkSigningKeyType.EcP384, ApkCertificateExportFormat.All, output, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(384, bundle.Key.Bits);
         Assert.Equal(ManagedKeyKind.Apk, bundle.Key.Kind);
@@ -137,7 +131,7 @@ public class ApkKeystoreAndCertificateTests : IDisposable
         Assert.Single(entries);
         using var material = ApkSignerKeyMaterial.Load(
             Path.Combine(output, "ec-key.pk8"), "key-pass", Path.Combine(output, "ec-key.pem"), null);
-        Assert.IsType<ECDsa>(material.Key);
+        Assert.IsType<ECDsa>(material.Key, exactMatch: false);
         Assert.Equal(384, ((ECDsa)material.Key).KeySize);
     }
 
@@ -149,10 +143,7 @@ public class ApkKeystoreAndCertificateTests : IDisposable
     {
         using var library = new KeyLibraryFixture(_root);
         var output = Path.Combine(_root, "out-" + format);
-        var bundle = library.Library.GenerateApkCertificate(
-            "fmt-key", null, "store-pass", 5,
-            new ApkSigningKeyOptions { CommonName = "Fmt" },
-            ApkSigningKeyType.Rsa2048, format, output);
+        var bundle = library.Library.GenerateApkCertificate("fmt-key", null, "store-pass", 5, new ApkSigningKeyOptions { CommonName = "Fmt" }, ApkSigningKeyType.Rsa2048, format, output, TestContext.Current.CancellationToken);
 
         Assert.Equal(extensions.OrderBy(e => e), bundle.ExportedFiles.Select(Path.GetExtension).Order().ToArray());
     }
@@ -161,10 +152,7 @@ public class ApkKeystoreAndCertificateTests : IDisposable
     public void GenerateApkCertificate_JksWithoutStorePassword_Throws()
     {
         using var library = new KeyLibraryFixture(_root);
-        Assert.Throws<ArgumentException>(() => library.Library.GenerateApkCertificate(
-            "no-store-pass", null, storePassword: null, 5,
-            new ApkSigningKeyOptions { CommonName = "X" },
-            ApkSigningKeyType.Rsa2048, ApkCertificateExportFormat.Jks, _root));
+        Assert.Throws<ArgumentException>(() => library.Library.GenerateApkCertificate("no-store-pass", null, storePassword: null, 5, new ApkSigningKeyOptions { CommonName = "X" }, ApkSigningKeyType.Rsa2048, ApkCertificateExportFormat.Jks, _root, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
