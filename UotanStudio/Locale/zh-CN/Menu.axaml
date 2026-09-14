@@ -121,6 +121,7 @@
 
     <x:String x:Key="Menu_KeyManager">密钥管理</x:String>
     <x:String x:Key="Menu_ApkSigner">应用签名器</x:String>
+    <x:String x:Key="Menu_BootPatch">修补Boot</x:String>
     <x:String x:Key="Keys_Subtitle">管理设备认证与 Payload 签名密钥，独立于当前工程。</x:String>
     <x:String x:Key="Keys_Search">搜索名称、用途或指纹</x:String>
     <x:String x:Key="Keys_Library">我的密钥</x:String>

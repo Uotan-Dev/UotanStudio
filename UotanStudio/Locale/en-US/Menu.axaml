@@ -121,6 +121,7 @@
 
     <x:String x:Key="Menu_KeyManager">Key manager</x:String>
     <x:String x:Key="Menu_ApkSigner">Application signer</x:String>
+    <x:String x:Key="Menu_BootPatch">Patch Boot</x:String>
     <x:String x:Key="Keys_Subtitle">Manage device authentication and Payload signing keys across projects.</x:String>
     <x:String x:Key="Keys_Search">Search name, purpose or fingerprint</x:String>
     <x:String x:Key="Keys_Library">My keys</x:String>

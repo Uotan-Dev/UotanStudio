@@ -102,7 +102,8 @@
                                       BasedOn="{StaticResource {x:Type DataGridRow}}">
                             <Setter Property="IsVisible" Value="{Binding IsVisible, DataType=viewmodels:ImageEntryViewModel}" />
                             <Setter Property="ContextMenu">
-                                <ContextMenu x:DataType="viewmodels:ImageEntryViewModel" Opening="OnImageMenuOpening">
+                                <ContextMenu x:DataType="viewmodels:ImageEntryViewModel"
+                                             Opening="OnImageMenuOpening">
                                     <MenuItem Classes="unpack-action" Header="{DynamicResource ImageView_ExtractSelected}" IsEnabled="{Binding !IsDirectory}" Click="OnExtractMenuClick">
                                         <MenuItem.Icon>
                                             <avalonia:MaterialIcon Kind="PackageDown" Width="16" Height="16" />
@@ -132,6 +133,11 @@
                                     <MenuItem Classes="flash-action" Header="{DynamicResource ImageView_Flash}" Click="OnFlashSelectedMenuClick">
                                         <MenuItem.Icon>
                                             <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
+                                        </MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Classes="boot-action" Header="{DynamicResource ImageView_BootPatch}" IsEnabled="False" Click="OnBootPatchMenuClick">
+                                        <MenuItem.Icon>
+                                            <avalonia:MaterialIcon Kind="Build" Width="16" Height="16" />
                                         </MenuItem.Icon>
                                     </MenuItem>
                                     <Separator />

@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -10,6 +11,7 @@ using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.ViewModels.Shell;
+using UotanStudio.Views.Shell;
 using Ursa.Controls;
 
 namespace UotanStudio.Views.Workspace;
@@ -25,6 +27,7 @@ public partial class ImageView : UserControl
     private ImageViewModel? _observedModel;
     private bool _isAttached;
     private bool _columnResizeQueued;
+    private ImageEntryViewModel? _contextMenuImage;
 
     /// <summary>
     /// <para>创建镜像管理面板视图并初始化组件。</para>
@@ -33,6 +36,9 @@ public partial class ImageView : UserControl
     public ImageView()
     {
         InitializeComponent();
+        // DataGrid updates SelectedItem after the context-menu request. Capture the row
+        // during tunneling so the menu can use the image under the pointer immediately.
+        ImagesGrid.AddHandler(PointerPressedEvent, OnImagesGridPointerPressed, RoutingStrategies.Tunnel);
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -130,12 +136,76 @@ public partial class ImageView : UserControl
     {
         if (sender is not ContextMenu menu || DataContext is not ImageViewModel vm) return;
 
+        // XAML event hookup is not available for ContextMenu.Opened in this template,
+        // so attach it when the generated menu instance is first used.
+        menu.Opened -= OnImageMenuOpened;
+        menu.Opened += OnImageMenuOpened;
+        menu.Closed -= OnImageMenuClosed;
+        menu.Closed += OnImageMenuClosed;
+        UpdateImageMenu(menu, vm);
+
+        // ContextMenu updates its placement target and inherited data context as the
+        // popup opens. Refresh once after that handoff as well, covering keyboard and
+        // first-click paths where Opening still sees the previous row.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (menu.IsOpen && DataContext is ImageViewModel current)
+                UpdateImageMenu(menu, current);
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void OnImageMenuOpened(object? sender, RoutedEventArgs e)
+    {
+        if (sender is ContextMenu menu && DataContext is ImageViewModel vm)
+            UpdateImageMenu(menu, vm);
+    }
+
+    private void OnImageMenuClosed(object? sender, RoutedEventArgs e)
+    {
+        // A later keyboard-opened menu may not have a pointer event to replace this
+        // value, so do not let a previously right-clicked row leak into it.
+        _contextMenuImage = null;
+    }
+
+    private void UpdateImageMenu(ContextMenu menu, ImageViewModel vm)
+    {
+
+        // Prefer the row captured during the pointer tunnel. If the menu was opened
+        // from the keyboard, PlacementTarget/DataContext provide the selected row.
+        var targetImage = _contextMenuImage
+            ?? menu.PlacementTarget?.DataContext as ImageEntryViewModel
+            ?? menu.DataContext as ImageEntryViewModel;
+
         foreach (var item in menu.Items.OfType<Control>())
         {
             if (item.Classes.Contains("unpack-action")) item.IsVisible = vm.IsUnpackMode;
             else if (item.Classes.Contains("pack-action")) item.IsVisible = vm.IsPackMode;
             else if (item.Classes.Contains("flash-action")) item.IsVisible = !vm.IsPackMode;
+            else if (item.Classes.Contains("boot-action"))
+            {
+                // Keep the action in the menu for both file-list modes. A non-Boot row
+                // gets a disabled action instead of a stale item disappearing on the
+                // next right-click.
+                item.IsVisible = vm.IsUnpackMode || vm.IsOutputMode;
+                item.IsEnabled = targetImage is { IsDirectory: false }
+                    && string.Equals(targetImage.Format, "boot", StringComparison.OrdinalIgnoreCase);
+            }
         }
+    }
+
+    private void OnImagesGridPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(ImagesGrid).Properties.IsRightButtonPressed)
+            return;
+
+        var source = e.Source as Visual;
+        var row = source as DataGridRow ?? source?.FindAncestorOfType<DataGridRow>();
+        if (row?.DataContext is not ImageEntryViewModel image || DataContext is not ImageViewModel vm)
+            return;
+
+        _contextMenuImage = image;
+        ImagesGrid.SelectedItem = image;
+        vm.SelectedImage = image;
     }
 
     /// <summary>
@@ -144,10 +214,9 @@ public partial class ImageView : UserControl
     /// </summary>
     private ImageEntryViewModel? SelectMenuImage(object? sender)
     {
-        if (sender is not MenuItem { DataContext: ImageEntryViewModel image })
-        {
-            return null;
-        }
+        var image = _contextMenuImage
+            ?? (sender as MenuItem)?.DataContext as ImageEntryViewModel;
+        if (image is null) return null;
 
         if (DataContext is ImageViewModel vm)
         {
@@ -205,6 +274,23 @@ public partial class ImageView : UserControl
     /// <summary><para>把右键条目的镜像刷入选中设备。</para>Flash the context-menu image to the selected device.</summary>
     private void OnFlashSelectedMenuClick(object? sender, RoutedEventArgs e)
         => ExecuteForMenuImage(sender, static vm => vm.FlashSelectedCommand);
+
+    private async void OnBootPatchMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (SelectMenuImage(sender) is not { IsDirectory: false } image
+            || TopLevel.GetTopLevel(this) is not Window owner)
+            return;
+
+        var imagePath = ProjectContextService.Instance.ResolvePath(image.RelativePath);
+        if (string.IsNullOrWhiteSpace(imagePath))
+        {
+            try { imagePath = Path.GetFullPath(image.RelativePath); }
+            catch (Exception) { imagePath = image.RelativePath; }
+        }
+
+        var window = new BootPatchWindow(imagePath);
+        await window.ShowDialog(owner);
+    }
 
     private void OnPackRomClick(object? sender, RoutedEventArgs e)
     {

@@ -1009,6 +1009,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
     private static Window? _keyManagerWindow;
     private static Window? _apkSigningWindow;
+    private static Window? _bootPatchWindow;
 
     /// <summary>Opens or activates the independent key library.</summary>
     [RelayCommand]
@@ -1020,6 +1021,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void OpenApkSigner() => ShowApkSigningWindow();
 
     internal static void ShowApkSigningWindow() => ShowWindow(ref _apkSigningWindow, () => new ApkSigningWindow());
+
+    /// <summary>打开 Boot 修补窗口；窗口已打开时前置聚焦。</summary>
+    [RelayCommand]
+    private void OpenBootPatch() => ShowBootPatchWindow();
+
+    internal static void ShowBootPatchWindow() => ShowWindow(ref _bootPatchWindow, () => new BootPatchWindow());
 
     /// <summary>
     /// <para>显示辅助工具窗口：若尚未打开则创建并显示，否则前置并恢复正常窗口状态。</para>

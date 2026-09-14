@@ -8,7 +8,7 @@
         x:DataType="vm:ApkEditorViewModel"
         Title="{DynamicResource Menu_ApkSigner}"
         Width="560" Height="360" MinWidth="500" MinHeight="360"
-        WindowStartupLocation="CenterOwner" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
         CanMinimize="False" CanMaximize="False"
         ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
         WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
