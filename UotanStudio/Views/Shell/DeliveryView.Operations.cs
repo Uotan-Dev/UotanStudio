@@ -50,7 +50,7 @@ public partial class DeliveryView
         foreach (var box in new[] { OutputDirectoryBox, SuperSizeBox, SuperGroupNameBox, SuperDeviceNameBox,
                      SuperMetadataSizeBox, SuperBlockSizeBox, SuperMetadataSlotsBox, PayloadVersionBox, PayloadMinorVersionBox,
                      PayloadBuildFingerprintBox, PayloadIncrementalBox, PayloadSdkLevelBox,
-                     DynamicPartitionsFileBox, PayloadSignatureBox, PayloadPostinstallBox, PayloadTimestampBox, PayloadSecurityPatchBox })
+                     DynamicPartitionsFileBox, PayloadPostinstallBox, PayloadTimestampBox, PayloadSecurityPatchBox })
             box.TextChanged += (_, _) => QueueDeliveryChange();
         foreach (var box in new ToggleButton[] { DirectOutputBox, PackSuperBox, PackPayloadBox, SuperRawBox, SuperSparseBox,
                      SuperZstdBox, SuperVabBox, SuperAbBox, SuperAOnlyBox, GenerateSuperEmptyBox })
@@ -141,7 +141,7 @@ public partial class DeliveryView
             MinorVersion = minor,
             DynamicPartitionsFile = DynamicPartitionsFileBox.Text?.Trim() ?? "",
             SignatureFile = _legacyPayloadSignatureFile,
-            SigningKeyPath = PayloadSignatureBox.Text?.Trim() ?? "",
+            SigningKeyPath = _payloadSigningIdentityPath.Trim(),
             SigningKeyFingerprint = _payloadSigningFingerprint,
             PostinstallFile = PayloadPostinstallBox.Text?.Trim() ?? ""
         };
@@ -322,7 +322,6 @@ public partial class DeliveryView
             PayloadSdkLevelBox.Text = plan.Package.SdkLevel == 0 ? "" : plan.Package.SdkLevel.ToString(CultureInfo.InvariantCulture);
             DynamicPartitionsFileBox.Text = plan.Payload.DynamicPartitionsFile;
             _legacyPayloadSignatureFile = plan.Payload.SignatureFile;
-            PayloadSignatureBox.Text = plan.Payload.SigningKeyPath;
             _payloadSigningIdentityPath = plan.Payload.SigningKeyPath;
             _payloadSigningFingerprint = plan.Payload.SigningKeyFingerprint;
             RefreshPayloadSigningKeys();

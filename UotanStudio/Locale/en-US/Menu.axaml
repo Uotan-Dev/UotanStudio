@@ -178,7 +178,9 @@
     <x:String x:Key="Keys_ChoosePayload">Choose a Payload key from your library</x:String>
     <x:String x:Key="Keys_ExternalPrivate">Or select an external PEM / DER private key</x:String>
     <x:String x:Key="Keys_Unsigned">Unsigned</x:String>
-    <x:String x:Key="Keys_PayloadSigningHint">Signs both metadata and Payload. External keys must be unencrypted RSA 2048/4096; import encrypted PEM keys into the library first.</x:String>
+    <x:String x:Key="Keys_PayloadSigningHint">Signs both metadata and Payload. Import external private keys into the library first.</x:String>
+    <x:String x:Key="Keys_ZipSigning">ZIP signing</x:String>
+    <x:String x:Key="Keys_ChooseZip">Choose a ZIP key from your library</x:String>
     <x:String x:Key="Keys_SetCurrent">Set as current key</x:String>
     <x:String x:Key="Keys_SetCurrentHint">Write this key to the runtime identity and restart to apply</x:String>
     <x:String x:Key="Keys_CurrentDefault">Default</x:String>

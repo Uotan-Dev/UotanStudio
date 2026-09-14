@@ -45,6 +45,7 @@ public partial class DeliveryView : UserControl
     {
         _payloadKeyLibrary = keyLibrary;
         InitializeComponent();
+        ManageZipKeysButton.Click += (_, _) => UotanStudio.ViewModels.Shell.MenuViewModel.ShowKeyManagerWindow();
         DirectOutputBox.IsCheckedChanged += OnOutputOptionChanged;
         PackSuperBox.IsCheckedChanged += OnOutputOptionChanged;
         PackPayloadBox.IsCheckedChanged += OnOutputOptionChanged;
@@ -248,7 +249,6 @@ public partial class DeliveryView : UserControl
         PayloadIncrementalBox.Text = string.Empty;
         PayloadSdkLevelBox.Text = string.Empty;
         DynamicPartitionsFileBox.Text = string.Empty;
-        PayloadSignatureBox.Text = string.Empty;
         _legacyPayloadSignatureFile = "";
         _payloadSigningFingerprint = "";
         _payloadSigningIdentityPath = "";
@@ -420,7 +420,6 @@ public partial class DeliveryView : UserControl
     {
         if (_pickingPayloadFile || TopLevel.GetTopLevel(this) is not { StorageProvider.CanOpen: true } owner) return;
         var editor = ReferenceEquals(sender, BrowseDynamicPartitionsButton) ? DynamicPartitionsFileBox
-            : ReferenceEquals(sender, BrowsePayloadSignatureButton) ? PayloadSignatureBox
             : ReferenceEquals(sender, BrowsePayloadPostinstallButton) ? PayloadPostinstallBox : null;
         if (editor is null) return;
         var solutionPath = ProjectContextService.Instance.CurrentSolutionPath;
@@ -455,7 +454,6 @@ public partial class DeliveryView : UserControl
     private void SetPayloadFileButtonsEnabled(bool enabled)
     {
         BrowseDynamicPartitionsButton.IsEnabled = enabled;
-        BrowsePayloadSignatureButton.IsEnabled = enabled;
         BrowsePayloadPostinstallButton.IsEnabled = enabled;
     }
 

@@ -25,27 +25,11 @@ public partial class DeliveryView
             try
             {
                 var key = index == 0 ? null : _payloadKeys[index - 1];
-                PayloadSignatureBox.Text = key is null ? "" : _payloadKeyLibrary.PrivatePath(key);
-                _payloadSigningIdentityPath = PayloadSignatureBox.Text ?? "";
+                _payloadSigningIdentityPath = key is null ? "" : _payloadKeyLibrary.PrivatePath(key);
                 _payloadSigningFingerprint = key?.Fingerprint ?? "";
                 _legacyPayloadSignatureFile = "";
                 QueueDeliveryChange();
             }
-            finally { _selectingPayloadKey = false; }
-        };
-        PayloadSignatureBox.TextChanged += (_, _) =>
-        {
-            if (_selectingPayloadKey || _restoringDelivery) return;
-            // Avalonia can deliver TextChanged after the selection handler has returned.
-            // Preserve restored identity even if the key has since disappeared from the library.
-            var path = PayloadSignatureBox.Text?.Trim() ?? "";
-            if (string.Equals(_payloadSigningIdentityPath, path,
-                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) return;
-            _payloadSigningIdentityPath = path;
-            _payloadSigningFingerprint = "";
-            _legacyPayloadSignatureFile = "";
-            _selectingPayloadKey = true;
-            try { PayloadSigningKeyBox.SelectedIndex = -1; }
             finally { _selectingPayloadKey = false; }
         };
         ManagePayloadKeysButton.Click += (_, _) => MenuViewModel.ShowKeyManagerWindow();
@@ -60,7 +44,7 @@ public partial class DeliveryView
             _payloadKeys = _payloadKeyLibrary.List().Where(k => k.Kind == ManagedKeyKind.Payload).ToArray();
             PayloadSigningKeyBox.ItemsSource = new[] { LanguageService.Instance.GetString("Keys_Unsigned") }
                 .Concat(_payloadKeys.Select(k => $"{k.Name} · RSA {k.Bits} · {k.Fingerprint[^12..]}")).ToArray();
-            var path = PayloadSignatureBox.Text?.Trim() ?? "";
+            var path = _payloadSigningIdentityPath.Trim();
             PayloadSigningKeyBox.SelectedIndex = path.Length == 0 ? 0 :
                 _payloadKeys.Select((key, index) => new { key, index })
                     .Where(p => string.Equals(_payloadKeyLibrary.PrivatePath(p.key), path,

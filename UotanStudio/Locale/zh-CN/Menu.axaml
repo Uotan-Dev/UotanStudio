@@ -178,7 +178,9 @@
     <x:String x:Key="Keys_ChoosePayload">从密钥库选择 Payload 密钥</x:String>
     <x:String x:Key="Keys_ExternalPrivate">或选择外部 PEM / DER 私钥</x:String>
     <x:String x:Key="Keys_Unsigned">不签名</x:String>
-    <x:String x:Key="Keys_PayloadSigningHint">选中密钥后同时签名元数据和 Payload。外部私钥须为未加密 RSA 2048/4096；加密 PEM 可先导入密钥库。</x:String>
+    <x:String x:Key="Keys_PayloadSigningHint">选中密钥后同时签名元数据和 Payload。外部私钥可先导入密钥库。</x:String>
+    <x:String x:Key="Keys_ZipSigning">ZIP签名</x:String>
+    <x:String x:Key="Keys_ChooseZip">从密钥库选择 ZIP 密钥</x:String>
     <x:String x:Key="Keys_SetCurrent">设为当前签名</x:String>
     <x:String x:Key="Keys_SetCurrentHint">写入运行时身份并重启后生效</x:String>
     <x:String x:Key="Keys_CurrentDefault">默认</x:String>

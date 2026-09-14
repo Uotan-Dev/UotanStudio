@@ -219,23 +219,6 @@
                                      AutomationProperties.Name="{DynamicResource Delivery_SdkLevel}" />
                         </StackPanel>
                         <StackPanel Spacing="6">
-                            <TextBlock Classes="field-label" Text="{DynamicResource Keys_PayloadSigning}" />
-                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                                <ComboBox Name="PayloadSigningKeyBox" HorizontalAlignment="Stretch" MinWidth="0"
-                                          PlaceholderText="{DynamicResource Keys_ChoosePayload}" />
-                                <Button Name="ManagePayloadKeysButton" Grid.Column="1" Classes="file-action"
-                                        Content="{DynamicResource Menu_KeyManager}" />
-                            </Grid>
-                            <Grid ColumnDefinitions="*,8,Auto" SizeChanged="OnPayloadFileRowSizeChanged">
-                                <TextBox Name="PayloadSignatureBox"
-                                         PlaceholderText="{DynamicResource Keys_ExternalPrivate}"
-                                         AutomationProperties.Name="{DynamicResource Keys_PayloadSigning}" />
-                                <Button Name="BrowsePayloadSignatureButton" Grid.Column="2" Classes="file-action"
-                                        HorizontalAlignment="Right" Content="{DynamicResource Delivery_SelectFile}" Click="OnBrowsePayloadFileClick" />
-                            </Grid>
-                            <TextBlock Text="{DynamicResource Keys_PayloadSigningHint}" TextWrapping="Wrap" Opacity="0.65" FontSize="11" />
-                        </StackPanel>
-                        <StackPanel Spacing="6">
                             <TextBlock Classes="field-label" Text="Postinstall" />
                             <Grid ColumnDefinitions="*,8,Auto" SizeChanged="OnPayloadFileRowSizeChanged">
                                 <TextBox Name="PayloadPostinstallBox" AutomationProperties.Name="Postinstall" />
@@ -243,6 +226,28 @@
                                         HorizontalAlignment="Right" Content="{DynamicResource Delivery_SelectFile}" Click="OnBrowsePayloadFileClick" />
                             </Grid>
                         </StackPanel>
+                        <StackPanel Spacing="6">
+                            <TextBlock Classes="field-label" Text="{DynamicResource Keys_PayloadSigning}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <ComboBox Name="PayloadSigningKeyBox" HorizontalAlignment="Stretch" MinWidth="0"
+                                          PlaceholderText="{DynamicResource Keys_ChoosePayload}" />
+                                <Button Name="ManagePayloadKeysButton" Grid.Column="1" Classes="file-action"
+                                        Content="{DynamicResource Menu_KeyManager}" />
+                            </Grid>
+                            <TextBlock Text="{DynamicResource Keys_PayloadSigningHint}" TextWrapping="Wrap" Opacity="0.65" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+                    <StackPanel Name="ZipSigningSettings" Spacing="6" IsVisible="{Binding #DirectOutputBox.IsChecked}">
+                        <TextBlock Classes="field-label" Text="{DynamicResource Keys_ZipSigning}" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <ComboBox Name="ZipSigningKeyBox" HorizontalAlignment="Stretch" MinWidth="0" SelectedIndex="0"
+                                      PlaceholderText="{DynamicResource Keys_ChooseZip}"
+                                      AutomationProperties.Name="{DynamicResource Keys_ZipSigning}">
+                                <ComboBoxItem Content="{DynamicResource Keys_Unsigned}" />
+                            </ComboBox>
+                            <Button Name="ManageZipKeysButton" Grid.Column="1" Classes="file-action"
+                                    Content="{DynamicResource Menu_KeyManager}" />
+                        </Grid>
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

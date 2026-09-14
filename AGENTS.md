@@ -1,5 +1,11 @@
 # UotanStudio 项目指令
 
+## 交付页 ZIP 签名表单（2026-09-14）
+
+- 左栏表单最底部新增“ZIP签名”，可见性直接绑定“打包成ZIP”（`DirectOutputBox.IsChecked`），不受 Super / Payload 模式影响；采用与 Payload 发布签名密钥相同的 32 DIP 下拉框、同行密钥管理按钮和 8 DIP 列间距。ZIP 下拉框当前仅含“不签名”界面占位，管理按钮复用现有密钥管理窗口，不接入 ZIP 密钥数据、签名输出或持久化；中英 `Keys_ZipSigning` / `Keys_ChooseZip` 位于 `Menu` 模块。
+- Payload 发布签名区域移除外部 PEM / DER 私钥 TextBox 与选择文件按钮；已有密钥库选择、计划保存和恢复直接使用 `_payloadSigningIdentityPath`，不再借助隐藏输入控件保存路径。提示改为引导先把外部私钥导入密钥库。本次仅调整界面及必要接线，不使用 Test 项目。
+- Payload 表单顺序为 Postinstall 在前、Payload 发布签名密钥在后；两者均保留原有控件和布局样式。
+
 ## DEX JAR 容器支持与 JAR 签名（2026-09-13）
 
 - `.jar` 经 `FileOpenMode.ResolveMode` 路由到 DEX 编辑器（`IsJarExtension`）；`JarDexContainer`（`UotanStudio.Firmware/BoundedContexts/AndroidMeta/Dex/`）提供 JAR/APK 容器内条目的枚举分类（DEX/签名/资源）、有界读取（单条目 256 MiB、条目数 65536 上限）、单条目写回（流式重建 ZIP + 同目录临时文件原子替换，STORED 条目保持无压缩复制）、资源导出/替换与 `WriteNew`。`META-INF/` 签名工件（MANIFEST.MF、SF、RSA/DSA/EC）只读，导出与替换均拒绝。
