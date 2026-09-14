@@ -61,7 +61,8 @@ public sealed record NewProjectFormResult(
     string[] SelectedPartitions,
     bool UnpackImages,
     bool UnpackFully,
-    bool CopyOriginal = true);
+    bool CopyOriginal = true,
+    string? RemoteUrl = null);
 
 /// <summary>
 /// <para>新建项目配置窗口；维护表单与文件选择，通过 <see cref="CreateAsync"/> 等待调用方完成创建和解包后关闭。
@@ -90,6 +91,7 @@ public partial class NewProjectWindow : Window
     private bool _isCreating;
     private CancellationTokenSource? _creationCancellation;
     private IReadOnlyList<ContainerEntry> _containerEntries = [];
+    private string? _remoteUrl;
 
     /// <summary>Queries available bytes; replaceable by window validation without filling a real disk.</summary>
     internal Func<string, long> AvailableSpace { get; set; } = DiskSpaceEstimator.GetFreeBytes;
@@ -302,6 +304,67 @@ public partial class NewProjectWindow : Window
             exception.Message, Ursa.Controls.MessageBoxIcon.Error)
         : Task.CompletedTask;
 
+    private async void OnGetRomClick(object? sender, RoutedEventArgs e)
+    {
+        var address = ImagePathsBox.Text?.Trim();
+        if (!Uri.TryCreate(address, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+        {
+            await DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_GetRom"),
+                LanguageService.Instance.GetString("NewProject_RemoteUrlRequired"), Ursa.Controls.MessageBoxIcon.Warning);
+            return;
+        }
+
+        ImagePicker.IsEnabled = false;
+        _isAnalyzing = true;
+        CreateButton.IsEnabled = false;
+        MainBusyContainer.IsLoading = true;
+        ProgressPanel.IsVisible = true;
+        ResetProgressStats();
+        ReportProgress(LanguageService.Instance.GetString("NewProject_Analyzing"));
+        var generation = ++_analysisGeneration;
+        try
+        {
+            using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
+            var analysis = await new RemoteRomService(client).AnalyzeAsync(uri.ToString());
+            if (generation != _analysisGeneration || !IsVisible) return;
+            _remoteUrl = analysis.Url.ToString();
+            _containerKind = analysis.Kind;
+            _containerPath = null;
+            _containerEntries = analysis.Entries;
+            DetachImageHandlers();
+            var entries = new List<NewProjectImageEntry> { new(uri.ToString(), "remote", isRemoteSource: true) };
+            entries.AddRange(analysis.Entries.Select(entry => new NewProjectImageEntry(entry.Name, entry.Format,
+                analysis.Url.ToString(), entry.FromPayload, entry.Name, entry.PayloadMemberPath)));
+            _images = [.. entries];
+            foreach (var image in _images) image.PropertyChanged += OnImageSelectionChanged;
+            _imageColumnCount = 0;
+            UpdateImageColumns();
+            ImageListPanel.IsVisible = true;
+            ClearImagesButton.IsVisible = true;
+            UpdateSelectAll();
+            ImagePathsBox.Text = analysis.Url.ToString();
+            ToolTip.SetTip(ImagePathsBox, analysis.Url.ToString());
+        }
+        catch (Exception ex)
+        {
+            _remoteUrl = null;
+            _containerKind = ContainerKind.None;
+            _containerEntries = [];
+            await ShowPickerErrorAsync(ex);
+        }
+        finally
+        {
+            if (generation == _analysisGeneration)
+            {
+                _isAnalyzing = false;
+                CreateButton.IsEnabled = true;
+                ProgressPanel.IsVisible = false;
+                MainBusyContainer.IsLoading = false;
+            }
+            ImagePicker.IsEnabled = true;
+        }
+    }
+
     /// <summary>
     /// <para>设置列表条目并刷新列布局；恰好一个普通文件时在后台分析容器结构，
     /// 分析成功后以分组条目重建列表（取消前一次未完成的分析）。</para>
@@ -325,6 +388,7 @@ public partial class NewProjectWindow : Window
         _containerKind = ContainerKind.None;
         _containerPath = null;
         _containerEntries = [];
+        _remoteUrl = null;
         var generation = ++_analysisGeneration;
         var single = images.Length == 1 ? images[0].FilePath : null;
         _isAnalyzing = single is not null;
@@ -534,7 +598,8 @@ public partial class NewProjectWindow : Window
                     .Select(image => image.Name).ToArray(),
                 UnpackImagesBox.IsChecked == true,
                 UnpackFullyBox.IsChecked == true,
-                selected.Any(image => image.FilePath == containerPath));
+                selected.Any(image => image.FilePath == containerPath || image.IsRemoteSource),
+                _remoteUrl);
             _isCreating = true;
             _creationCancellation = new CancellationTokenSource();
             FormContent.IsEnabled = false;
@@ -660,13 +725,14 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
     public static NewProjectImageEntry GroupHeader(string label) => new(label, isGroupHeader: true);
 
     /// <summary><para>普通镜像文件条目。</para>Plain image-file entry.</summary>
-    public NewProjectImageEntry(string filePath, string format = "—")
+    public NewProjectImageEntry(string filePath, string format = "—", bool isRemoteSource = false)
     {
         FilePath = filePath;
         Name = Path.GetFileName(filePath);
         DisplayName = Name;
         ContainerPath = filePath;
         Format = format;
+        IsRemoteSource = isRemoteSource;
     }
 
     /// <summary><para>容器内部条目（分区名或 ZIP 内路径）。</para>Container inner entry (partition name or ZIP path).</summary>
@@ -708,6 +774,9 @@ internal sealed partial class NewProjectImageEntry : ObservableObject
 
     /// <summary><para>是否来自 payload 的分区（ZIP 模式下区分 ZIP 成员与 payload 分区）。</para>Whether the entry is a payload partition (distinguishes ZIP members in zip mode).</summary>
     public bool FromPayload { get; }
+
+    /// <summary>Whether this row represents the complete remote source package.</summary>
+    public bool IsRemoteSource { get; }
 
     /// <summary><para>是否分组头行。</para>Whether this is a group-header row.</summary>
     public bool IsGroupHeader { get; }

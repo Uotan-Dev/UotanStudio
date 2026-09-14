@@ -217,7 +217,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             RecordRecentProject(solutionPath);
 
             var images = ImageViewModel.EnsureInstance();
-            if (form.ContainerPath is not null)
+            if (!string.IsNullOrWhiteSpace(form.RemoteUrl))
+            {
+                await ImportRemoteRomAsync(form, images, window, cancellationToken);
+            }
+            else if (form.ContainerPath is not null)
             {
                 await ImportContainerWithSelectionAsync(form, images, window, cancellationToken);
             }
@@ -242,6 +246,69 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 throw new IOException("Could not save the imported project.");
         };
         await window.ShowDialog(owner);
+    }
+
+    private async Task ImportRemoteRomAsync(NewProjectFormResult form, ImageViewModel images,
+        NewProjectWindow window, CancellationToken cancellationToken)
+    {
+        var uri = new Uri(form.RemoteUrl!, UriKind.Absolute);
+        using var client = new HttpClient { Timeout = TimeSpan.FromHours(2) };
+        var service = new RemoteRomService(client);
+        var outputDirectory = ProjectContextService.Instance.EnsureImagesDirectory();
+        var fileName = Path.GetFileName(uri.LocalPath);
+        if (string.IsNullOrWhiteSpace(fileName)) fileName = "remote-rom.bin";
+        fileName = string.Concat(fileName.Select(ch => Path.GetInvalidFileNameChars().Contains(ch) ? '_' : ch));
+
+        var temp = Path.Combine(Path.GetTempPath(), $"uotan-remote-{Guid.NewGuid():N}-{fileName}");
+        try
+        {
+            window.ResetProgressStats();
+            var progress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Downloading"));
+            if (form.ContainerKind == ContainerKind.Payload && form.SelectedPartitions.Length > 0 && !form.CopyOriginal)
+            {
+                try
+                {
+                    await service.ExtractPayloadPartitionsAsync(uri, form.SelectedPartitions, outputDirectory, progress: progress, cancellationToken: cancellationToken);
+                    return;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Servers without range support fall back to one bounded local package pass.
+                }
+            }
+            if (form.ContainerKind == ContainerKind.Zip && form.SelectedZipMembers.Length > 0 && !form.CopyOriginal)
+            {
+                await service.DownloadZipEntriesAsync(uri, form.SelectedZipMembers, outputDirectory, progress, cancellationToken);
+                return;
+            }
+            if (form.ContainerKind == ContainerKind.Zip && form.SelectedPartitions.Length > 0 && !form.CopyOriginal)
+            {
+                try
+                {
+                    await service.ExtractZipPayloadPartitionsAsync(uri, form.SelectedPartitions, outputDirectory, progress, cancellationToken);
+                    return;
+                }
+                catch (InvalidOperationException)
+                {
+                    // Compressed payload members fall back to one local package pass.
+                }
+            }
+            await service.DownloadAsync(uri, temp, progress, cancellationToken);
+            if (form.ContainerKind != ContainerKind.None && form.SelectedPartitions.Length + form.SelectedZipMembers.Length > 0)
+            {
+                await ImportContainerWithSelectionAsync(form with { ContainerPath = temp, CopyOriginal = form.CopyOriginal }, images, window, cancellationToken);
+            }
+            else
+            {
+                var destination = Path.Combine(outputDirectory, fileName);
+                File.Move(temp, destination, overwrite: true);
+                images.AddExtractedImage(destination);
+            }
+        }
+        finally
+        {
+            try { File.Delete(temp); } catch { }
+        }
     }
 
     /// <summary>
@@ -318,19 +385,25 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         {
             if (form.ContainerKind == ContainerKind.Zip && form.SelectedZipMembers.Length > 0)
             {
-                var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
-                var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
-                    containerPath, form.SelectedZipMembers, fromPayloadOnly: false, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
-                extractedPaths.AddRange(result.OutputPaths);
+                foreach (var member in form.SelectedZipMembers)
+                {
+                    var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
+                    var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
+                        containerPath, [member], fromPayloadOnly: false, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
+                    extractedPaths.AddRange(result.OutputPaths);
+                }
             }
 
             if (form.SelectedPartitions.Length > 0)
             {
-                var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
-                var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
-                    containerPath, form.SelectedPartitions,
-                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
-                extractedPaths.AddRange(result.OutputPaths);
+                foreach (var partition in form.SelectedPartitions)
+                {
+                    var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
+                    var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
+                        containerPath, [partition],
+                        fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
+                    extractedPaths.AddRange(result.OutputPaths);
+                }
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images",
