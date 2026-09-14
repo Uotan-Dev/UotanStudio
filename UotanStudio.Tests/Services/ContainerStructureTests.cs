@@ -13,8 +13,8 @@ namespace UotanStudio.Tests.Services;
 /// Container structure analysis and targeted entry extraction tests for the new-project flow:
 /// empty-directory validation, default-name probing, super/payload/zip structure enumeration, and
 /// per-selection extraction round-trips.
-/// <para>鏂板缓椤圭洰娴佺▼鐨勫鍣ㄧ粨鏋勫垎鏋愪笌瀹氬悜鎻愬彇娴嬭瘯锛氱┖鐩綍鏍￠獙銆侀粯璁ゅ悕鎺㈡祴銆?
-/// super/payload/zip 缁撴瀯鏋氫妇浠ュ強鎸夊嬀閫夋彁鍙栫殑鍥炵幆楠岃瘉銆?/para>
+/// <para>新建项目流程的容器结构分析与定向提取测试：空目录校验、默认名探测、
+/// super/payload/zip 结构枚举以及按勾选提取的回环验证。</para>
 /// </summary>
 public sealed class ContainerStructureTests
 {
@@ -128,10 +128,10 @@ public sealed class ContainerStructureTests
         Directory.CreateDirectory(Path.Combine(temp.Path, "NewProject1"));
         Assert.Equal("NewProject2", ContainerStructureAnalyzer.GetNextDefaultName(temp.Path));
         Assert.Equal("NewProject3", ContainerStructureAnalyzer.GetNextDefaultName(temp.Path, ["NewProject2"]));
-        // 绌虹洰褰曚笖鏃犲崰鐢細杩斿洖绗竴涓悕绉般€?
+        // 空目录且无占用：返回第一个名称。
         // Fresh directory with no reservations: the first name is returned.
         Assert.Equal("NewProject1", ContainerStructureAnalyzer.GetNextDefaultName(Path.Combine(temp.Path, "fresh")));
-        // 绌虹洰褰曚絾鍚嶇О琚樉寮忓崰鐢細璺冲埌涓嬩竴涓€?
+        // 空目录但名称被显式占用：跳到下一个。
         // Fresh directory but the name is explicitly reserved: skip to the next one.
         Assert.Equal("NewProject2", ContainerStructureAnalyzer.GetNextDefaultName(
             Path.Combine(temp.Path, "fresh2"), ["NewProject1"]));
@@ -291,7 +291,7 @@ public sealed class ContainerStructureTests
             new SuperBuildPartition("vendor", "default", 0x100000)
         ], 16 * 1024 * 1024, 64 * 1024, 2, 4096);
         File.WriteAllBytes(path, image);
-        // 鏋勫缓鍣ㄦ暟鎹尯鍏ㄩ浂锛涙寜 LP extent 鍚戝垎鍖烘暟鎹尯鍥炲～闅忔満鍐呭浠ラ獙璇佹彁鍙栨纭€с€?
+        // 构建器数据区全零；按 LP extent 向分区数据区回填随机内容以验证提取正确。
         // The builder leaves data areas zeroed; fill each partition's extents with random content
         // via LP metadata so the extracted bytes can be verified.
         var metadata = MetadataReader.ReadFromImageFile(path);

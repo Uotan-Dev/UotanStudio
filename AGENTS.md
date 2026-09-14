@@ -1,463 +1,114 @@
 # UotanStudio 项目指令
 
-## 交付页 ZIP 签名表单（2026-09-14）
+## 项目边界
 
-- 左栏表单最底部新增“ZIP签名”，可见性直接绑定“打包成ZIP”（`DirectOutputBox.IsChecked`），不受 Super / Payload 模式影响；采用与 Payload 发布签名密钥相同的 32 DIP 下拉框、同行密钥管理按钮和 8 DIP 列间距。ZIP 下拉框当前仅含“不签名”界面占位，管理按钮复用现有密钥管理窗口，不接入 ZIP 密钥数据、签名输出或持久化；中英 `Keys_ZipSigning` / `Keys_ChooseZip` 位于 `Menu` 模块。
-- Payload 发布签名区域移除外部 PEM / DER 私钥 TextBox 与选择文件按钮；已有密钥库选择、计划保存和恢复直接使用 `_payloadSigningIdentityPath`，不再借助隐藏输入控件保存路径。提示改为引导先把外部私钥导入密钥库。本次仅调整界面及必要接线，不使用 Test 项目。
-- Payload 表单顺序为 Postinstall 在前、Payload 发布签名密钥在后；两者均保留原有控件和布局样式。
+UotanStudio 是面向 Android 固件、卡刷包、线刷工具和设备通信的 .NET 10/C# 14 桌面应用。修改代码前先确认所属边界，避免把 UI、宿主服务和固件算法混在同一层。
 
-## DEX JAR 容器支持与 JAR 签名（2026-09-13）
+- `UotanStudio.Desktop` 是桌面应用入口，负责平台启动和进程级配置。
+- `UotanStudio` 是 Avalonia 宿主，包含界面、ViewModel、项目会话、设置、密钥库适配和应用服务。
+- `UotanStudio.Delivery` 是独立交付子项目，命名空间为 `UotanStudio.Services.Delivery`。它负责交付计划校验、Super/Payload/Recovery 构建、DAT/BR 兼容、脚本、ZIP 输出、工具准备和输出校验。
+- `UotanStudio.Firmware` 负责固件格式、文件系统、Payload、压缩、设备树、启动镜像和签名等底层能力。
+- `UotanStudio.Comm` 负责 ADB、HDC、Fastboot、USB/TCP 和 scrcpy 通信。
+- `UotanStudio.Media` 负责音视频解码、投屏呈现和平台媒体后端。
+- `UotanStudio.Projects` 负责项目文件、解决方案快照和项目生命周期模型。
+- `UotanStudio.Tests` 使用 xUnit v3 和 Microsoft.Testing.Platform，覆盖各库、宿主服务和交付流程。
 
-- `.jar` 经 `FileOpenMode.ResolveMode` 路由到 DEX 编辑器（`IsJarExtension`）；`JarDexContainer`（`UotanStudio.Firmware/BoundedContexts/AndroidMeta/Dex/`）提供 JAR/APK 容器内条目的枚举分类（DEX/签名/资源）、有界读取（单条目 256 MiB、条目数 65536 上限）、单条目写回（流式重建 ZIP + 同目录临时文件原子替换，STORED 条目保持无压缩复制）、资源导出/替换与 `WriteNew`。`META-INF/` 签名工件（MANIFEST.MF、SF、RSA/DSA/EC）只读，导出与替换均拒绝。
-- `DexService` 的 Parse/Disassemble/Rebuild/Decompile 全部容器感知（`entryName` 可选参数，为空取第一个 `classes*.dex`）；新增 `SignJarAsync` 复用 `ApkSigner`（v1/v2/v3 可选，输出到新文件）。`DexEditorViewModel` 支持多 DEX 合并视图（聚合反汇编与统计、只读、禁止保存）、单条目切换加载与重建写回、资源导出/替换（视图经系统文件选择器接线）及基于密钥库 JAR 用途密钥的签名面板；中英键 `Dock_Dex_Entry/MergeView/Resource/ResourceExport/ResourceReplace/SignKey/Sign` 在 `Common` 模块。
-- 密钥库新增 `ManagedKeyKind.Jar`（RSA 2048/4096，私钥 `jar-key.pem`，与 Payload 同享自签名证书生成与 `EnsureCertificate`）；签名管理器用途下拉追加 JAR 项（index 5，位于上游 APK 密钥/证书用途之后），`GenerateAsync`/`ImportAsync` 经 `IsLibraryPurpose` 映射 `ManagedKeyKind.Jar`，`IsJar`/`IsBitsEditable` 覆盖 JAR，`IsPayload`/`HasCertificate` 包含 Jar，"设为当前签名"仍仅限 ADB/HDC。`DexReader` 不再因过期 SHA-1/Adler-32 拒绝解析（固件打包常在构建后修改 DEX，jadx/dexlib 同样容忍；写回时 `DexWriter` 总是重算），并修复 encoded_value Float/Double 位重解释的 checked 溢出与 `DexWriter` Byte 载荷误写 4 字节的回环 bug。
-- 测试：`JarDexContainerTests` 11 项（枚举分类/根级 classes 排序/加载与写回回环/未知条目拒绝/资源回环/签名条目只读/超限拒绝/路由/DexService 容器感知/JAR 签名 v1 工件/密钥 Jar 用途）与 `JarRealCorpusTests`（默认语料 `C:\Users\28319\Desktop\新建文件夹\NewProject1\NewProject1`，209 个真实 JAR 全量解析成功，可用 `UOTAN_JAR_CORPUS` 覆盖，缺失跳过）。
+交付子项目可以引用 `UotanStudio.Firmware` 和必要的第三方库，但不得反向引用宿主 UI、项目服务或 `KeyLibraryService`。签名依赖通过 `IDeliverySigningKeyProvider` 注入；桌面宿主只负责适配、权限、资源和界面策略。
 
-## EROFS 参数继承与原生验证（2026-09-13）
+目录和文件名按职责分组且保持简短。交付代码放在 `Models/`、`Build/`、`Scripts/`、`Tools/` 下；不要把所有类型平铺在项目根目录，也不要为简单转发层创建多级无意义抽象。
 
-- EROFS 修改后重建经 `ErofsParser.ReadRebuildOptions` 从经过校验的原镜像继承压缩算法、逐文件压缩策略、字典/窗口、LZ4 最大距离与物理簇上限、索引类型、UUID、原始卷名字节、超级块和 inode 时间。未修改目录仍精确恢复。`configuration.compression` 记录可读配置；压缩等级及 LZ4/LZ4HC 编码器选择不在 EROFS 盘上记录，不得声称已经恢复。
-- 修改重建另对源压缩簇做有界抽样，比较多个 encoder 等级并最多生成三个完整候选镜像，以 `FirmwareOpResult.Metadata` 报告候选大小、源声明大小和超额字节；这是容量优化启发式，不得承诺固定分区必然容纳。真实 `odm.img` 追加一行后约超出 258 KiB，必须把 `FitsSourceFilesystemSize=false` 当作容量告警。
-- 修复小块 checksum、紧凑 inode 相对时间、big-pcluster 索引地址、压缩头对齐、压缩尾部内联、63 位 fragment 偏移和压缩 packed inode 读取；packed 数据使用有上限的自动删除临时文件。重建允许普通块与压缩簇混合，xattr 导致内联尾部跨块时改用外部块。
-- 真实 `D:\Firmware\odm.img` 的修改重建通过 Alpine WSL2 原生 fsck、只读 mount 和 74 个条目的内容/属性比较。WSL2 当前仅原生支持 EROFS LZ4；其他算法另经上游 FUSE 与独立 QEMU Linux 内核验证，不能混称 WSL2 原生支持。压缩率、块数、最终大小及物理布局允许重新计算，不保证修改后仍适合原分区容量。上游依据、完整矩阵与复现命令见 `docs/erofs-rebuild-conformance.md`。
+## 交付与脚本约定
 
-## 新建项目文档清理与镜像列表刷新（2026-09-13）
+- `DeliveryPlan` 是交付后端的输入契约。宿主负责采集和恢复界面状态，后端负责校验和生成输出。
+- Super、Payload、Recovery 和纯脚本模式的互斥关系必须由现有校验路径维护，不要在 View 和后端各实现一套规则。
+- DAT/BR 文件必须按分区与同组的 `<partition>.transfer.list`、`<partition>.new.dat`、`<partition>.new.dat.br` 或补丁文件关联。不能仅凭任意 `.dat` 或 `.br` 文件名推断分区。
+- 卡刷 `updater-script` 使用原包提供且经过校验的 Edify 能力；典型调用包括 `block_image_verify`、`block_image_update`、`package_extract_file` 和 `file_getprop`。不得把 shell 命令冒充成卡刷脚本。
+- Brotli 文件的卡刷更新调用应传递 `.new.dat.br` 和 `.patch.dat`，例如：
 
-- 桌面宿主 `ProjectWorkspaceCoordinator` 现已实现 `ChangeProjectRoot`：`preserveDocuments: false`（新建解决方案、打开工程、关闭工程）时经 `WorkspaceDockFactory.CloseAllDocuments(layout)` 关闭工作区全部文档型面板（文本/Hex/DTB/Dex/Manifest/ARSC/APK/固件信息/文件管理/分区/对比，与 `WorkspaceSessionCapture.IsDocument` 快照口径一致），复用 `SafeRemoveDockable` 的释放逻辑且不再逐一确认——脏文档已在会话操作门 `BeforeProjectChangeAsync`（`WorkspaceAutoSaveService.FlushAsync` → `ConfirmAllAsync`）阶段确认完毕。`preserveDocuments: true`（另存为）保持文档打开，页面记录按新根重算相对路径。`WorkspaceViewModel` 新增 `DockFactory` 内部访问器。
-- 新建解决方案与新建子项目两条创建路径在 `_projectOps.SaveAsync` 之前调用 `ImageViewModel.RefreshAfterProjectCreationAsync()`（内部 `RefreshProjectImagesAsync` 重扫 images/）：手动登记的容器条目（zip 等被 `DetectFormat` 判为 unknown）从列表过滤移除，不再被 `CaptureImages()` 持久化进 `.uotanfw` 快照，提取产物与磁盘实际内容一致。此前容器条目会残留在镜像列表，直到切换页面触发 `SetMode` 刷新才消失。
+  ```edify
+  block_image_update(
+      "/dev/block/bootdevice/by-name/system",
+      package_extract_file("system.transfer.list"),
+      "system.new.dat.br",
+      "system.patch.dat"
+  ) || abort("E2001: Failed to update system image.");
+  ```
 
-## Payload 解压并行与 I/O 优化（2026-09-13）
+- Bat、Linux/macOS shell 和卡刷脚本必须使用同一份文件编排结果。脚本中的机型代号、作者信息和生成元数据来自交付计划，不能在各脚本模板中重复硬编码。
+- 生成 ZST 时，工具服务按目标平台准备固定版本的 zstd 并校验 SHA-256。Windows、Linux、macOS 的工具名称和架构选择遵循现有实现；不再下载或生成 riscv64 二进制。
+- `TXT` 是清单格式，不得把压缩镜像直接作为可刷写镜像列出。压缩镜像必须由相应脚本先解压到临时路径，再交给 fastboot。
+- 输出发布使用临时目录、校验和原子替换。失败时保留既有输出，不能先删除用户已有文件。
+- ZIP 内部路径使用 `/`，镜像通常位于 `images/`，平台工具位于对应平台目录，具体成员以 `DeliveryOutputService` 和相关测试为准。
 
-- 提取三层伪串行化已解除：`PayloadExtractor.ExtractPartitions`/`ExtractPartitionsAsync` 改为分区级有界并行（度快照自 `FirmwareParallelism.Workers`，同步路径 `Parallel.ForEach`、异步路径 `Parallel.ForEachAsync`，`AggregateException` 展平后重抛首个内部异常以保留原异常契约）；跨分区字节进度经 `CrossPartitionProgress`（Interlocked 累计 + 共享 100ms 节流）与每分区 `PartitionDeltaForwarder`（绝对读数折算增量）聚合，`AggregatePartitionProgress` 已删除。
-- `OperationProcessor.ProcessOperation` 的 Replace 系（Replace/ReplaceBz/ReplaceXz）不再在 `lock(writeLock)` 内执行整个解压——解码与哈希校验在锁外自由运行（校验改为"边解边验"单遍：`VerifyingReadStream` 直接喂解码器，`Complete()` 校验累计摘要），仅底层 extent 的 Seek+Write 经 `ExtentWriteStream` 的 syncRoot 串行化；ZERO 改经 `ExtentWriteStream` 写零（`ProcessZero` 不再手动 Seek/计进度，避免双计），删除了 ZERO/DISCARD 空数据的冗余流校验。原 `Replace_HoldsOutputLockUntilEntireStreamAndHashAreComplete` 测试改为 `Replace_DecodeRunsOutsideOutputLock` 断言新契约。
-- 消除双读：基座镜像 `VerifyPartition`+拷贝合并为 `VerifyingReadStream` 之上的单遍 `CopyExactly`（`OldPartitionInfo` 缺失时仅拷贝不校验，长度/哈希长度前置检查保留）；Replace 系 payload 数据从"先整读校验再重读解码"改为单遍。payload/基座读句柄加 `FileOptions.SequentialScan`。
-- 并发分区各开专属只读 payload 句柄：`PayloadExtractor` 的 `ExtractPartitions*`/`ExtractPartition*` 新增末位可选参数 `Func<Stream>? openPayloadStream`；`PayloadParser` 的文件路径 `Extract`/`ExtractAsync` 传入按路径打开的工厂（`FileShare.Read`），跨分区读不再共享单一 `FileStream` 串行化；`Stream` 重载与未传工厂时保持共享流+分区锁的原行为。
-- 修复 `BoundedReadStream` 构造竞态：带 `syncRoot` 时构造函数内的 `_inner.Position = offset` 现在与并发读写互斥——此前靠 Replace 全程持锁掩盖，解锁后会造成在飞读数据污染（表现为哈希不匹配/乱数据）。
-- 验证边界：126 项 Payload 过滤测试 125 通过（唯一失败 `RepackMetadataTests.ReservedFilenameCollision` 与 6 项 `FileSystemByteProgressTests` 经 stash 对照确认为工作区既有修改引入，与本次无关；全量 2128 项中同样仅这 7 项失败）。提速来源为解除伪串行锁与消除双读，XZ 等单流解码器单操作内仍单线程，不宣称各平台硬件性能通过。
+## 固件和不可信输入
 
-## 交付计划与面板可见性改存解决方案文件（2026-09-13）
+固件、ZIP、Payload、文件系统镜像和设备返回数据都视为不可信输入。
 
-- `SolutionSnapshot` 新增可选 `State`（`Dictionary<string, JsonElement>`）扩展段；交付计划（键 `delivery`）与工作区面板可见性（键 `panels`）随 `.uotan` 解决方案文件持久化，FormatVersion 保持 2。旧版交付页根级 `<解决方案根>/.uotan/delivery.json` 写入途径已整体移除，不做迁移读取：`DeliveryPlanStore` 仅提供 `CaptureElement`（序列化进 State、路径转相对解决方案根）与 `LoadFromState`（从 State 还原、路径转绝对），校验与 8 MiB 上限保持不变。解决方案根不得再出现 `.uotan` 目录；子项目 `.uotan/`（history/settings/metadata/backup/原包配置）语义不变。
-- `ProjectSession` 提供 `CaptureState` 宿主钩子（`PersistCoreAsync`、另存为与 `PersistSolutionStateAsync` 写解决方案文件时调用）、`SolutionState` 属性（最近打开/另存携带的状态）与 `PersistSolutionStateAsync`（经既有会话操作门仅重写解决方案文件）。桌面门面 `ProjectOperationsService` 注册捕获（`CaptureDeliveryState` 由 `DeliveryView.Operations.cs` 注册，交付页未加载或恢复中返回 null 以保留原状态）并在解决方案状态更换时恢复面板可见性；交付页防抖保存改走 `PersistSolutionStateAsync`。无工程时面板可见性仍由全局 `workspace-session.json` 兜底。测试经 `CaptureElement`/`LoadFromState` 回环验证（84 项 Delivery、69 项 Projects 通过）。
+- 优先使用流式处理和有界缓冲，避免把整个镜像、压缩结果或单个归档条目一次性读入内存。
+- 所有偏移、长度、条目数量、解压大小和块数量都必须先检查上限，并防止整数溢出。
+- 支持取消的 API 必须贯穿传递 `CancellationToken`；发布到文件时使用临时文件并在完整校验后原子替换。
+- 保留输入字节身份、哈希和结构信息。修改后的镜像应分别报告字节、结构、内容和容量等价性，不能只依赖项目内部的往返测试。
+- 文件系统重建应尽量继承经校验的原镜像参数；压缩率、块数、最终大小和物理布局允许重新计算，不得承诺修改后一定适合原分区容量。
+- 外部工具、WSL、QEMU、真实设备和 GPU 的验证边界必须单独说明。未执行的硬件、原生挂载、商店或性能验证不能写成已通过。
 
-## 交付 ZST 工具与脚本文本（2026-09-13）
+## 通信和设备规则
 
-- 勾选“压缩为ZST”后，`DeliveryToolService.PrepareAsync` 按选中平台把钉住版本的 zstd 二进制放入 `bin/<平台>/`：Windows 用官方 `zstd-v1.5.7-win64.zip`（仅提取 `zstd.exe`），Linux 用 aspect-build 的 musl 静态单文件 `zstd_linux_amd64`；macOS 无官方预编译，同时放入 arm64（`zstd`）与 x86_64（`zstd-x86_64`）两个二进制，脚本按 `uname -m` 选择。全部经 SHA-256 校验并复用现有工具缓存与 GitHub 镜像回退；`plan.LocalZstd` 仅作可选覆盖，路径存在时优先复制，缺失时不再要求用户自备，由下载兜底。
-- 脚本的 `.zst` 解压步骤由 `DeliveryScriptGenerator` 生成：Shell 在 `flash()` 内用 `"$ZSTD" -d` 解压到临时目录再 fastboot 刷写，Batch 在 `:flash` 用 `zstd.exe -d`，存在性检查同步生成；TXT 为纯清单且旧工具箱无法解压 zstd，压缩镜像（如 `super.zst`）不写入 `flash.txt` 及其变体，避免被直接当作 super 分区刷入压缩数据，测试见 `TxtManifestExcludesCompressedImages`。
-- 脚本用户可见提示文案按生成时的界面语言输出：`Generate(plan, localize)` 经 `Delivery_Script_*` 中英资源解析，未提供 localize 或资源缺失回退英文；指纹不含语言，切换语言不重写已生成的脚本正文。
-- 工具落盘后由 `DeliveryToolService.TrimPlatformTools` 清理 platform-tools 包内脚本用不到的二进制（`adb`/`sqlite3`/`mke2fs*`/`etc1tool`/`hprof-conv`/`make_f2fs*`），仅保留 `fastboot` 及其运行依赖（Windows 的 `AdbWinApi.dll`/`AdbWinUsbApi.dll`/`libwinpthread-1.dll`，Linux/macOS 的 `lib64/libc++*`）与 zstd；保留 `NOTICE.txt`/`source.properties`。三平台清单及测试见 `TrimPlatformToolsKeepsFastbootAndRemovesDeadBinaries`。
-- 输出校验阶段按已处理文件字节数报告进度：`Delivery_ProgressVerify` 携带 `Bytes=(已处理, 总量)` 且百分比随字节推进，不再按文件数报告。
+- ADB/HDC 的 server 路由由 `DebugBridgeRoute` 决定。目标存在、离线或未授权时仍属于 server 管理的目标，协议错误不能自动回退 USB；只有连接被拒绝才视为 server 不存在。
+- server 的 serial/connect key 是权威身份，不能按枚举顺序、VID/PID 或设备列表位置映射到 USB 设备。
+- 原生 USB 会话必须精确筛选物理路径，接口申请失败立即释放本会话已申请的资源。取消传输时要等待原生操作真正结束后再复用缓冲区。
+- scrcpy 投屏复用已有 ADB server 路径；GPU 呈现只有在真实取得 GPU 上下文并准备好 shader 后才启用，失败时保留 CPU 位图回退。
+- 涉及真实设备的测试优先使用只读命令。除非用户明确要求并且测试已隔离，不执行重启、刷写、提权、安装、卸载、清日志或清数据。
 
-## 八项内存与 I/O 优化（2026-09-12）
+## UI、项目和持久化
 
-- GStreamer 默认音量直接使用同步复制的 `Push`；HarmonyOS USB 在 DDK 映射与调用方间直接复制；libusb 同步／异步 bulk 共用每方向缓冲与门闩，取消后仍等待原生完成，不提前复用在飞缓冲。
-- EROFS 目录提取通过路径首个 nid 索引保持重复路径语义，共享 xattr 按四字节单位 ID 有界读取单条；Firehose 回读经 `ReadBackComparisonStream` 使用 64 KiB 比较缓冲，先消费设备数据与收尾响应再报告比较错误；AudioUnit 用固定 19200 帧环形区，保留丢最旧与补静音规则。
-- XZ 的 Stream 压缩入口将压缩结果暂存到自动删除文件，减少整结果托管驻留但增加磁盘 I/O。默认 CRC32 通过系统 xz 验证；既有 CRC64 输出错误与 EROFS 第 0 块共享属性缺失未在此轮修复。22 项新增、173 项相关旧测试与平台／真机边界见 `docs/perf-memory-io-implementation.md`，不得将这些结果表述为各平台硬件性能通过。
+- `UotanStudio.Desktop` 保持应用入口；不要在共享 `UotanStudio` 项目重新引入 `App.axaml.cs` 式桌面入口。
+- 交付页面保留现有控件和布局语义。需要新增行为时先复用 `DeliveryViewModel`、`DeliveryCompositionView` 和 `DeliveryView.Operations.cs`，不要在 View 层维护第二套镜像归属、确认状态或输出集合。
+- 新建项目、打开、关闭和另存为必须经过项目操作门。保存失败时保留源上下文和原目标内容；另存为成功后再切换项目根目录。
+- 解决方案快照中的交付计划和面板可见性通过 `SolutionSnapshot.State` 保存。解决方案根目录不再创建旧式 `.uotan/delivery.json`；子项目自己的 `.uotan/` 目录语义保持不变。
+- 编辑器明确选择“按文本打开”时必须保持文本模式，即使文件包含 NUL 或使用二进制扩展名。自动探测不能覆盖用户的显式模式。
+- UI 可见文本经资源字典本地化，不能在界面中拼接中英文。已生成脚本文本只在生成时确定语言，切换界面语言不得偷偷改写已有脚本。
+- 文件管理器、交付列表和脚本生成器对 `.dat`、`.new.dat`、`.patch.dat`、`.br` 和 `.transfer.list` 的识别应复用现有格式注册和校验，不要复制后缀判断。
 
-## ADB / HDC server 路由统一（2026-09-11）
+## C#、格式和可维护性
 
-- 新操作经 `Comm.Protocols.Common.DebugBridgeRoute` 判断 server；server endpoint 可连接时固定走 server，目标缺失、offline、unauthorized、协议失败不得回退 USB。仅连接被拒绝视为不存在，不缓存负结果。server 存在的正值探测结果按 2 秒 TTL 缓存；`BeginProbeScope` 供一次全量扫描在同一作用域内复用同一端点结论（含拒绝结果），作用域结束即失效，不改变路由语义。（2026-09-13）本条替代下文 scrcpy 的“无对应 server 目标时保留直连”。
-- ADB 的 `OpenAdbSession` 同时支持 server 服务流与原生 USB，Shell/Sync/重启/刷写共用；HDC 操作不再以旧 `hdc:` Key 前缀决定直连。原始 USB API 检测到 server 时拒绝打开调试接口，原生握手前再次检查。
-- server serial/connect key 为权威身份，不按枚举顺序或 VID/PID 将其配给 USB key。USB 重开先精确筛选物理路径再打开；元数据枚举不得申请调试接口。实现与验证边界见 `docs/adb-hdc-server-routing.md`。
+项目目标为 .NET 10/C# 14。遵循根目录 `.editorconfig`：
 
-## Payload 确认前置校验（2026-09-13）
+- 4 个空格缩进，禁止 Tab；使用 file-scoped namespace。
+- 使用 `var`、模式匹配、集合表达式、对象初始化和空合并等现有规则要求的现代 C# 写法。
+- 公共和内部 API 保持明确的可空标注；DTO 的必需值使用 `required` 或合理默认值。
+- 控制流必须使用花括号；避免无意义的表达式链、过深的模式匹配和只能增加阅读负担的抽象。
+- `insert_final_newline = false` 是当前仓库约束，格式化后不要手动重新添加文件末尾换行。
+- 修改 XAML 时使用当前 Avalonia API，避免引入已标记 obsolete 的属性。
+- 注释解释原因、边界和外部格式约束；不要堆积与实现重复的注释。
 
-- Payload 仅产出卡刷包（ota.zip），不生成线刷脚本；Super 与 Payload 的互斥选择保持不变。
-- `DeliveryViewModel.Confirm` 签名改为 `Confirm(DeliveryPlan plan)`：`plan.PackPayload` 时先调用 `DeliveryPayloadBuilder.Validate(plan)` 做前置校验（版本 2.0、分区名合法唯一、SourcePath 非空、块大小、Postinstall、签名密钥），失败向上抛异常、不置 `Confirmed`，与 Super 确认时执行 `ExpandPartitions` 校验对称。宿主经 `DeliveryCompositionView.ReadPlan`（接线 `CaptureDeliveryPlan`）提供完整计划。
-- `RefreshAutoZero` 在 `PackPayload` 时直接返回：Payload 卡刷模式不物化 VAB B 槽零大小伴随条目（`Validate` 会拒绝空 SourcePath 分区）。
-- 设备类型选中 A-Only 时，"自动添加零大小分区"复选框与手动零分区表单整体隐藏，切回 VAB/AB 后按复选框勾选态恢复显示；A-Only 下自动零分区强制关闭，不参与零分区编排。该复选框仅在打包 Super 模式可见，Payload 或纯脚本交付一律隐藏。
-- "自动添加零大小分区"开关切换（含经 A-Only 联动进入 A-Only）会清空 Super 镜像编排列表并重置确认状态，源镜像勾选归属随 `SetAssignedPaths` 同步取消；恢复交付计划经 `AutoZeroPartitionsRestoreGuard` 抑制该清空语义，仅做常规刷新。编排列表中的分区名支持手动编辑即时校验：非法名或与其他行重复时回退编辑前的值并经 `Delivery_InvalidPartition` 提示（`DeliveryImage.PreviousPartitionName` 记录回退基准）。
-- 动态分区"自动生成"按钮（`GenerateDynamicPartitionsButton`）由 `QueueDeliveryChange` 按数据驱动启用：仅 Payload 模式且编排列表存在勾选 `IncludeInSuper` 的成员时可用，无成员时禁用而非点击后报错。
-- Payload 模式下"卡刷"复选框（`RecoveryScriptBox`）锁定为勾选且禁用（`ResetScriptOptions`/`Restore` 同步 `IsEnabled = !payload`），取消与否不影响 ota.zip 产出，消除语义歧义。
-- 回归用例见 `UotanStudio.Tests/Delivery/DeliveryTests.cs`：Payload 确认成功发布 generated ota.zip 行、重名分区确认失败不置确认、Payload 模式不物化零分区（对照组 Super 模式物化）。
+推荐验证命令：
 
-## Payload 脚本选项（2026-09-12）
-
-- 交付页脚本选项跟随 `DeliveryViewModel.PackPayload`：进入 Payload 模式取消并禁用 TXT 与 Bat&SH，默认仅选卡刷；退出 Payload（包括切换 Super）解除这两项禁用并恢复默认仅选 TXT。同模式下刷新或切换打包成ZIP不重置脚本选择，恢复 Payload 计划时也不重新启用旧计划中的 TXT 或平台脚本。选项变化继续遵循输出区原有的确认/取消禁用状态，不扩展打包或脚本生成后端。
-
-## 交付页 Payload 表单与模式切换（2026-09-12）
-
-- 左栏移除“完整更新 · payload.bin”说明，动态分区文件及其操作按钮移到最大时间戳上方；Payload 次版本下依次显示构建指纹、增量编号、SDK 等级输入框，使用 `Delivery_BuildFingerprint` / `Delivery_Incremental` / `Delivery_SdkLevel` 中英资源。三个值复用 `DeliveryPlan.Package` 现有字段保存和恢复，不重新启用 OTA ZIP 或外层签名选项。
-- 打包 Super 时隐藏 AB，打包 Payload 时隐藏 A-Only；切换模式、恢复计划或应用原包设置后，已选中但被隐藏的类型改选 VAB。
-- 打包成ZIP、打包 Super、打包 Payload 任一实际变化时，由 `DeliveryViewModel.SetMode` 清空编排与输出镜像列表、选择历史及确认状态，源列表通过 `SetAssignedPaths` 同步取消勾选和只读归属。相同模式刷新不清空列表，恢复交付计划保留计划中的镜像；脚本选择仍遵循上节规则。
-
-## 交付表单精简（2026-09-11）
-
-- 镜像列表位于底部时隐藏右侧文本标签栏的主题分隔线；列表移至右侧时保留该侧顶部的独立分隔线。Payload 动态分区文件下方的“选择文件”和“自动生成”按行右对齐，窄栏继续支持换行。
-- Super 的“压缩为ZST”与“生成Super_Empty”两项按行居中排列，窄栏可换行，两项可同时勾选。脚本生成器移除刷写槽位及下拉框，界面输出使用默认槽位；编辑器初始、重置及关闭最后一页后保持空白且只读，不自动新建 script.txt，也不提供手动新建入口。旧计划仅跳过未编辑、未生成的空白 script.txt，保留用户已编辑文本及多文档切换/关闭/重开。右上角改为保存图标，无文档时禁用，按钮暂不接后端。
-- 移除多组布局编辑框与 Payload 镜像压缩选项；原包及已保存计划的分组元数据继续保留，Payload 的 Super 分区归属直接读取该元数据。Super / Payload 共用名称下方的块大小输入框，默认 4096；恢复旧计划时采用当前打包类型的块大小，原包配置也回填该输入框。
-- 输出镜像列表仅保留可选、可编辑分区名、镜像文件名三列。脚本选项为 TXT、Bat&SH、卡刷；Bat&SH 同时控制 Windows / Linux / macOS，恢复旧计划时任一平台选中即勾选。仅选 TXT 时仍禁用作者信息。
-- 移除 OTA ZIP 及其构建元数据、询问清除数据、完成后重启、三平台便携 Zstd 路径；保存输出选项时不沿用这些已移除开关。zstd 不再要求用户自备便携路径，改为按平台自动下载钉住版本（`plan.LocalZstd` 仅作可选覆盖，见“交付 ZST 工具与脚本文本”）。卡刷脚本的证书、私钥输入框、选择按钮及自定义 Recovery 说明均已移除，旧计划中的外层签名路径不再由界面带入输出。界面标签、提示、取消按钮及视图层消息按当前语言显示，不拼接中英双语；已生成的脚本正文不因语言切换改写。
-
-## 密钥管理布局（2026-09-11）
-
-- 交付页 Payload 发布签名的密钥下拉框与“密钥管理”按钮同行。密钥管理窗口使用 Semi 的 32 DIP 自绘顶栏并保留 Logo；主体沿用新建项目的 13 DIP 字号、32 DIP 输入/按钮及同行标签布局，移除主体大标题、副标题与固定目录显示。
-- 搜索、“我的密钥”及列表占满所在栏，新增与刷新入口放在列表上方；条目使用与文本框一致的 6 DIP 圆角边框和 8 DIP 间距。移除底部两组删除控件，每行右侧提供删除按钮，经 `DialogService.ConfirmAsync` 二次确认后删除点击时捕获的密钥；取消不删除，复用 `KeyLibraryService.Delete` 并刷新列表。
-- 生成/导入区的导入按钮及密码框靠左，生成按钮靠右；窄窗口或较长英文文案时，生成按钮自动换行并继续右对齐，详情导出操作靠右；详情滚动条靠窗口右缘，留白位于滚动内容内部，避免覆盖输入与操作控件。窗口最小尺寸 800 × 540，密钥列表与详情分别滚动。
-
-## 默认签名与运行时身份（2026-09-13）
-
-- 启动时 `DebugBridgeIdentityService.EnsureDefaults(adbPath, hdcPath, libraryRoot)` 在生成/加载 ADB（`AdbAuthentication.DefaultKeyFilePath`）与 HDC（`HdcAuthentication.DefaultKeyFilePath`）运行时身份后，尽力经 `KeyLibraryService.ImportIdentity` 把运行时身份导入密钥库（幂等：同 Kind 同 SPKI 指纹直接返回已有条目），名称取 `Keys_DefaultAutoName` / `Keys_DefaultAutoNameHdc`，资源缺失回退英文；导入成功后若 `AppSettings` 中对应默认签名 Id 为空则回填导入条目 Id（`BackfillDefaultKeyId` 仅在尚未保存默认时写入，不覆盖用户显式选择），使自动生成的身份直接显示为当前默认；导入失败仅记 `LogService` Warn，不影响启动。既有 `EnsureDefaults(adbPath, hdcPath)` 两个参数重载语义不变，`libraryRoot` 与静态设置委托（`LoadSettings` / `UpdateDefaultKeyId`）供测试注入隔离环境。
-- `KeyLibraryService` 新增 `FindByFingerprint`、`ImportIdentity`、`PublishDefault(key[, target])`：发布仅允许 ADB（2048）/HDC（3072），私钥与 `.pub` 先写同目录临时文件再 `File.Move(overwrite:true)` 原子替换（先私钥后公钥），最后经对应协议 `LoadOrCreate` 验证；任何失败不破坏既有运行时文件。`internal` 重载接受显式目标路径供测试使用，不得在测试中触达真实运行时密钥。
-- “当前签名”（默认签名）记录在 `AppSettings.AdbDefaultKeyId` / `HdcDefaultKeyId`（空 = 使用启动自动生成的运行时身份），经 `SettingsPersistenceService.UpdateDefaultKeyId(kind, keyId)` 以磁盘最新设置合并写入。签名管理器的默认判定（`KeyManagerViewModel.RebuildDefaultIds`）：持久化 Id 非空且库中存在该条目时直接使用；Id 为空**或指向库中已不存在的条目**（如删除后的死绑定）时，经 `KeyLibraryService.GetRuntimeIdentityFingerprint(kind)`（静态，读取运行时私钥计算 SPKI SHA-256 指纹，文件缺失或不可读返回 null）取运行时身份指纹，再经 `FindByFingerprint` 匹配库条目以其 Id 参与判定，使自动导入但尚未回填设置的环境也能正确显示当前使用条目；显式保存的有效选择始终优先，运行时身份缺失或不匹配时不判定默认。列表条目命中时显示“<用途> · 当前使用”徽标（`DefaultKeyBadgeConverter` 接收条目 Kind 作第三个绑定值 + `DefaultSignatureIds` 绑定，文案 `Keys_InUse`）；ADB/HDC 详情区“设为当前签名”按钮经 `DialogService.ConfirmAsync` 重启确认后发布运行时文件、保存设置并调用 `ApplicationRestartService.RestartWithSolution()` 重启；已选密钥为当前默认时按钮禁用并显示 `Keys_AlreadyDefault` 文案。
-- `ApplicationRestartService.RestartWithSolution()` 在主窗口 `Closed`（真正关闭后，规避 `MainWindow_Closing` 异步取消/延迟）一次性启动 `Environment.ProcessPath` 新进程并携带关闭前 `ProjectContextService.CurrentSolutionPath`，新实例经既有命令行 `.uotan` 通道重开解决方案；主窗口为 null 返回 false，用户取消关闭或保存失败时重启自然中止。设备管理器界面不提供签名选择。
-- 删除当前默认密钥前先经 `UpdateDefaultKeyId(kind, null)` 清除绑定（失败不阻断删除），运行时文件保留、下次启动自动重建。回归测试见 `DefaultSignatureTests`（发布校验/导入幂等/设置回读/删除清除绑定）。
-
-## 投屏内存优化（2026-09-11）
-
-- 三个平台共用 `ScreenMirrorGpuPresenter` / `ScreenMirrorVideoControl`，对齐官方 scrcpy 的紧凑 YUV 上传与 GPU 颜色转换路径。仅在实际取得 Skia GPU 上下文并成功准备 shader 后启用；Windows 此时设置 `PreferNv12Output=true`，不再在 CPU 上转换整幅 BGRA。GPU 不可用时保留原位图路径；此规则替代旧版无条件关闭 NV12 的描述。
-- GPU 路径最多保留三份不可变视频图像，场景操作按引用交接；只淘汰已解码的显示帧，不丢压缩包。上传纹理不计入通用 GPU 缓存，锁内只交换归属。位图回退最多复用两份 `ScreenMirrorPixelBuffer`；关闭释放所属图像／旧位图，重连创建新的呈现器。视频尺寸通过 `VideoPixelSize` 获取，不能以 `Frame` 是否为空判断 GPU 投屏状态。
-- 本次跨平台实现、测试工具与实机验证边界见 `docs/scrcpy-gpu-presentation.md` 和 `tools/GpuMirrorSmoke`。GPU 绘制计数不是显示器实际 present FPS；CPU 着色测试、平台构建和真实 GPU 验收须分别报告。仍有原生解码帧回读，不宣称 D3D11／IOSurface／DMA-BUF 零拷贝显示。
-- 真实窗口内存测量工具为 `tools/ScreenMirrorMemorySmoke`；数据和验证边界见 `docs/screen-mirror-memory.md`。工具的最终强制 GC 仅用于诊断残留，生产投屏流程不强制 GC。
-- 帧率回归使用 `tools/ScreenMirrorFrameRateSmoke`，以固定 1440×2880、60 fps H.264 动态码流验证完整解码帧数和 UI 更新；对照数据见 `docs/screen-mirror-frame-rate.md`，UI 更新次数不得当成显示器实际 present FPS。
-
-## scrcpy USB 连接修复（2026-09-11）
-
-- 所有桌面平台的 USB 投屏先按所选序列号精确查询现有 ADB server；目标存在时，复用 `AdbServerServices` 的 sync/shell/localabstract 服务，包括离线／未授权目标的错误报告，避免再次独占申请同一 USB 接口。无对应 server 目标时保留直连，TCP 沿用 server；下文“USB 路径显式建立原生 ADB 会话”对这一情形不再适用。此规则也适用于 Windows，不能仅限制为 macOS，否则本机已由 server 管理的 USB 设备会出现 `ADB session unavailable`。
-- libusb 接口申请失败立即终止打开，保留原始 claim 错误日志；释放时仅清理本会话已申请的接口，自动发现的端点同步到会话属性。投屏 ADB 握手失败须释放尚未移交的会话。
-- 回归测试与 macOS 真机验证边界见 `docs/macos-scrcpy-usb.md`。
-
-## macOS 主窗口菜单（2026-09-11）
-
-- `App.axaml` 显式设置 `Application.Name=UotanStudio`，供 macOS 应用菜单及进程名称使用。
-- `MacOSApplicationMenu` 在桌面框架初始化后接入 Avalonia 12.1.2 默认应用菜单，以原始英文标题识别默认项后绑定 `Menu_Mac*` 中英文资源；保留服务子菜单和隐藏、显示、退出的原生回调。默认 `About Avalonia` 条目整体替换，点击时调用当前主窗口已有 `MenuVM.AboutCommand` 打开项目 `AboutDialog`，不复用框架关于回调；应用退出时释放绑定。
-- `MainWindowNativeMenu` 仅在 macOS 将现有 `TopMenu` 映射到 `NativeMenu`，复用同一菜单定义、命令、本地化、可用性与面板勾选状态；最近项目直接消费 `RecentProjectEntry` 和集合变更，不依赖隐藏菜单的容器生成。原生菜单导出成功时隐藏窗口内菜单，未导出时保留；关闭窗口解除全部订阅。
-- 关闭时 `MainWindowNativeMenu.Dispose` 保留已导出的 `NativeMenu` 对象，只释放订阅、绑定并清空原集合，且可重复调用。Avalonia 12.1.2 原生导出器要求菜单实例保持一致，禁止在 `Closed` 中调用 `NativeMenu.SetMenu(window, null)` 或替换为新菜单，否则抛出 `The menu being updated does not match` 并导致异常退出；退出验证须检查真实进程退出码及标准错误。
-- macOS 主窗口顶栏隐藏 Logo，左侧为系统交通灯按钮预留 80 DIP，右侧不再预留 Windows 按钮区域。软件标题与项目名相对整个窗口居中，按两侧按钮/设备选择器实际宽度取对称留白，长标题省略且保留拖动区域；其他平台继续使用原顶栏布局。原生菜单将 Ctrl 快捷键映射为 Command，替换为 ⌘⌥F、重做为 ⇧⌘Z，隐藏其他应用为 ⌘⌥H；窗口保存、另存为、查找、替换的快捷键同步按平台选择。
-
-## 交付页面合并约定（2026-09-11）
-
-- 镜像归属、确认与返回编辑统一沿用 `ViewModels/Shell/DeliveryViewModel`；视图通过 `Model.SelectSources`、`Model.Confirm`、`Model.ReturnToContainer` 接入，源列表通过 `SetAssignedPaths` / `RestoreAssignedSources` 同步。合并时移除重复的视图内选择投影、锁定状态及输出集合维护逻辑，不并存两套实现。
-- 保留 `DeliveryView.Operations.cs` 的实际输出、脚本同步及交付计划持久化。下文交付页面旧版“仅界面、不执行输出或持久化”的描述属于历史布局说明。
-- 保留 Super / Payload 列表中位于镜像名称前的可编辑“分区名”列，直接绑定已有 `DeliveryImage.PartitionName`，编辑与拖动排序互不干扰；脚本生成器底部保留“生成”按钮及中英文文案，该按钮本身仍未绑定动作。
-- 源列表的只读状态由现有 `DeliveryViewModel` 的非编辑列表归属派生，经 `SetAssignedPaths` / `RestoreAssignedSources` 同步；确认后编排输入行只读，返回编排后这些行恢复可选，独立输出镜像改为只读。全选状态与全选/取消全选只计算当前可编辑的可见行，整组无可编辑行时禁用全选，避免固定勾选项使全选反复停在部分选中状态；刷新及恢复计划沿用同一规则，不增加第二套镜像归属或确认状态。
-
-## 新建子项目交互更新（2026-09-11）
-
-- 新建窗口的原包行可勾选，控制是否复制；内部条目独立选择，并与 ZIP 条目共用自适应多列布局。下文旧版“分组头不可勾选”“提交即关闭”“容器必须先复制”的描述已被替代。窗口等待创建、复制和解包完成再关闭，期间显示进度并禁止重复提交。
-- RAW/Sparse Super 均按 LP 内容识别为 `super`，不能仅靠文件名推断；通过 Sparse 逻辑流读取和提取，不先展开完整 RAW 临时文件。原始 Super/Payload 配置独立于复制选项，保存在子项目 `.uotan/source-super.json` / `source-payload.json`，交付页面按对应配置筛选项目并回填。
-- 修复范围、配置语义及真实样本/窗口验证见 `docs/new-subproject-interaction.md`；窗口验证工具为 `tools/NewProjectSmoke`。
-
-## 当前功能边界（2026-09-10）
-
-- 文件管理视图新增 CPIO/TAR 与压缩文件浏览：`ArchiveBrowser` 统一目录枚举和所选条目提取；支持 `.cpio/.tar/.xz/.gz/.tgz/.txz/.tbz/.tbz2/.tlz/.tzst` 及压缩库登记的其他扩展名。压缩层在可取消、64 GiB 上限的临时文件中展开，关闭文档释放；内部是 CPIO/TAR 时显示目录，否则显示单个文件，不递归展开嵌套压缩。目录索引上限 100000 条、名称总量 8 Mi 字符。自动打开和强制文件管理视图共用后端，显式文本／十六进制打开不受影响。回归测试见 `ArchiveBrowserTests`。
-
-- CLI、MCP 客户端／宿主、MCP 设置与工具箱节点、Avalonia MCP 诊断接入已暂时移除。完整实现保存在本地分支 `codex/archive-cli-mcp`（`9c55695`）。下文尚涉及这些功能的描述为归档版本背景，不代表当前可用能力。
-- Desktop 直接启动图形界面，仅保留文件关联传入路径的打开／导入；不再提供 `firmware`、`workflow`、帮助／版本及其他命令行选项。
-- 固件库、桌面镜像操作和可视化节点工作流继续保留。旧工程中的 MCP 节点按既有未知节点规则处理；请勿在当前版本覆盖保存需要保留 MCP 节点的工程。
-- 设置通过源生成 JSON 的 `JsonExtensionData` 保留暂不可用功能的原始字段，不启动旧设置中启用的 MCP 服务。
-- 本次移除及验证记录见 `docs/cli-mcp-removal.md`。`docs/entry-point-refactoring.md` 中的 CLI／MCP 对照测试结果属于移除前版本。
-
-## 事件与入口复用（2026-09-10）
-
-- **应用结构**：保留模块化单体 + MVVM，`Composition/ShellComposition` 显式组装主窗口组件并复用 `ProjectOperationsService.Instance`；`ShellComponents` 释放菜单/节点订阅、工作区和自动保存，解绑需校验当前归属。`MainWindow` 在 `Closed` 后释放所属主视图模型，桌面设备监视由 `DesktopApplicationServices` 在退出时释放。
-- **项目生命周期类库**：`UotanStudio.Projects` 独立承载工程 DTO、源生成 JSON、路径上下文、历史、另存为事务、归档导出和 `ProjectSession`，无应用／固件库／界面包依赖。默认会话独立持有 `ProjectContext`、`ProjectHistory` 和纯数据工作区；`IProjectWorkspace` 供宿主适配，界面收集/恢复仍在 `ProjectWorkspaceCoordinator`。桌面 `ProjectOperationsService` 通过组合保留原 `Instance`/`NodeEditorVM`/`WorkspaceVM` 入口，原公共数据／存储类型由应用程序集转发。子项目切换与关闭接入会话操作门，固件全局元数据根仅由桌面门面同步。自动保存支持范围及页面策略保留。生命周期与边界测试统一位于 `UotanStudio.Tests/Projects`，真实窗口验证见 `tools/ProjectLifecycleSmoke`，边界及验证见 `docs/project-library-extraction.md` 和 `UotanStudio.Projects/README.md`。
-- **项目另存为与子项目注册**：`ProjectSaveAsTransaction` 在目标旁准备完整项目目录副本和最新快照，捕获写入/发布失败时回滚目录替换，发布成功后才切换路径、活动子项目与元数据根。保留目标不冲突文件；源/目标目录重叠、符号链接/联接及源根外共享子项目明确拒绝。已打开编辑器保持原文件身份，页面记录按新根重算相对路径。新增/导入子项目先保存 `.uotan` 引用，再在同一操作互斥门内重载；普通工程持久化写入失败向上抛错，不再返回成功。
-
-- **当前主项目分批合并**：DTB/DEX/Manifest/ARSC/Hex/APK 打开共用 `OpenOrActivateDocumentAsync`，按编辑器类型+路径复用，仍活动才加载后补发；拖放解析共用 `FileDropPaths`，工作区导入与比较策略独立。节点元数据打包接入 `RegisteredFirmwareFormats`，显式保留不支持格式时的异常策略与 CPIO 回退。
-- **日志视图复用**：全局/工作区日志共用 `LogTextBuffer` / `LogTextPresenter`，增量淘汰保留选区，卸载作废排队滚动；工作区 DataContext 更换成对解绑/重绑。ADB/离线日志仅共用行高计算，专用列不合并。文本/DTB 编辑器引用归属共用 `EditorOwnerBinding`。
-- App 转发、菜单编辑目标、镜像条目进度、属性类型分派与空选择状态重置已局部合并。App 另订阅 `LanguageStateChangedMessage` 同步 Semi/Ursa Locale，保留旧语言消息和 CLR 事件。实施与验证见 `docs/entry-point-consolidation.md`，真实窗口回归工具为 `tools/EntryPointSmoke`。
-- `FirmwareUnpackDispatcher` 共用界面与 MCP 的服务层解包分派；调用方显式保留 Sparse 支持、后台调度、分区选择和原有取消能力。CLI 继续直接调用格式处理器，不自动改为级联解包。
-- `RegisteredFirmwareFormats` 共用注册格式名称查找和元数据目录打包；`FirmwareFormatResolution` 保存 MCP 的别名及默认格式策略。CLI 名称先 Trim 后忽略大小写，元数据处理器查找仍精确匹配。无元数据时 CLI 默认 EXT4、MCP 保留扩展名推断及 CPIO 回退、界面保留项目设置。
-- `WorkflowReconstruction` 共用节点创建、初始值转换和连接端点查找。UI 保留工厂标题并恢复坐标，CLI 保留快照标题；UI 对实例命中但端口缺失的连接继续回退查找，CLI 保留该实例交由引擎处理。未知类型、失效连接的原有日志和退出行为由各入口保留。
-- `DocumentNotifications` 是活动文档消息的公共发布适配器，保持同步发送、类型化消息字段和不支持文档时的空载荷。Dock 切换、加载完成补发及投屏点击的发送位置和次数保持不变，不能按文档实例简单去重。
-- `PartitionProgressThrottle` 共用刷写与备份的 100 ms 节流算法，但两服务仍各自持有静态历史，保持按分区名匹配、状态变化立即发送、100% 必达以及先 IProgress 后 Messenger 的顺序。本次纯重构没有改变并发任务的节流作用域。
-- `ISaveableDocument` / `ICommandSaveableDocument` 仅由原先支持统一保存的五种编辑器实现；文本的另存为与其他编辑器的原有保存命令保持不变。自动保存的公共等待／确认步骤不主动保存，项目切换与关闭仍分别决定页面和会话的持久化范围。
-- 资源管理器共用监听器配置，但保留项目／独立文件夹两个监听器、原有订阅集合和防抖逻辑。公共消息类型、语言 CLR 事件和 Messenger 通知均保留兼容性；未在仓库内找到消费者不构成直接删除公共入口的依据。
-- 对照与回归测试见 `EntryPointCompatibilityTests` 和 `SharedEntryPointTests`；实施范围及验证边界见 `docs/entry-point-refactoring.md`。
-
-## 构建与运行
-
-> 本项目面向 .NET 10.0，使用 Central Package Management，所有包版本集中在 `Directory.Packages.props`，请勿在各 `.csproj` 中重复指定版本号。
-
-```bash
-# 还原 + 编译整个解决方案（无需 IDE）
-dotnet restore
-dotnet build UotanStudio.slnx
-
-# 运行测试（xunit.v3 + .NET 10 MTP 测试通道；须显式 -c Debug，不兼容 VSTest 传统参数）
-dotnet test UotanStudio.slnx -c Debug
-# 若 dotnet test 报「运行了零个测试」（MTP 发现偶发），可直接运行测试宿主：
-./UotanStudio.Tests/bin/Debug/net10.0/UotanStudio.Tests.exe
-
-# 启动应用（Desktop 为启动项目）
-dotnet run --project UotanStudio.Desktop
-
-# AOT 发布（IsAotCompatible / PublishAot / TrimMode=partial 均已启用；项目类库提取后的 win-x64 发布通过，仍有第三方和生成 XAML 的 IL2026/IL2104/IL3053 诊断，详见 docs/project-library-extraction.md；不代表原生包全部运行路径已验证）
-dotnet publish UotanStudio.Desktop -c Release -r win-x64
+```text
+dotnet build UotanStudio.slnx --no-restore --nologo
+dotnet format UotanStudio.slnx whitespace --no-restore --verify-no-changes
+dotnet format UotanStudio.slnx style --no-restore --verify-no-changes
 ```
 
-### 可视化工作流与节点流控
+测试项目是可执行的 xUnit v3 测试宿主。异步测试使用 `async Task`、`await` 和 `TestContext.Current.CancellationToken`；测试方法中禁止 `.Result`、`.Wait()` 和 `.GetAwaiter().GetResult()`。同步等待只能留在明确的同步基础设施边界，并且不得因此让 xUnit analyzer 报警。
 
-- **节点工厂注册**：`NodeFactoryRegistrar.RegisterAll()`（`ViewModels/Nodes/NodeFactoryRegistrar.cs`）集中登记全部 TypeKey → 工厂映射，UI 工具箱初始化与无头 CLI 共用；新增节点类型必须在此登记（`InitializeToolbox` 仅负责本地化工具箱条目）。
-- **连接持久化**：`ConnectionDto` 携带可选 `SourceInstanceId`/`TargetInstanceId`（`WorkflowPersistenceService.BuildConnectionDtos` 解析连接器所属节点写入）；`NodeEditorViewModel.LoadFromAsync` 与 WorkflowCli 优先按实例 ID 精确重建拓扑，缺失时回退按连接器标题匹配（旧版工程兼容）。
-- **真实流控**：`NodeExecutionEngine` 识别源端口类型为 `Flow` 的连接为控制流边——`Flow.Branch` 把未选中分支的下游子图标记为 `Skipped`；`Flow.Loop` 按 `Count` 输入迭代执行 Body 子图并逐次写 `Index` 输出（上限 `NodeExecutionEngine.MaxLoopIterations = 10000`）；`Flow.Parallel` 经 `Task.WhenAll` 并发执行各 Flow 输出端口的分支子图（分支内保持拓扑顺序）。
-- **数据流注入**：`FlowInputs` 先注入未连接输入端口的 `InitialValue`，再仅以上游**非空**输出值覆盖（Flow 端口等无数据连接不会清掉初始值）。
+测试名称使用 `Method_Scenario_ExpectedBehavior`，遵循 Arrange/Act/Assert，优先验证真实格式互操作性、失败回滚、取消和边界，而不是只验证内部对象往返。跨平台、WSL、QEMU、真实设备和真实语料测试缺少环境时应明确跳过并写出原因。
 
+测试项目中保留的 `CS0618` 抑制只用于覆盖旧的整镜像内存型构建 API；生产代码必须使用文件路径或流式重载。不要用项目级 `NoWarn` 隐藏新的生产警告，也不要用它掩盖可修复的空引用、裁剪或异步问题。
 
-### 解包目录原始配置
+裁剪兼容性优先修复真实调用链。避免在生产路径使用 `StackFrame.GetMethod()` 等需要保留反射元数据的 API；若确需使用，必须明确标注和验证裁剪边界，不能为了安静构建而全局禁用 IL2026。
 
-- **文件系统编辑与属性继承**：EXT4/EROFS/F2FS/Sparse 格式处理器先冻结输入，在所属子项目元数据目录 `.filesystem/<id>/` 保存原始镜像与校验清单。未编辑时精确恢复；普通文件和目录的修改、新增、删除通过 `FileSystemEditPlan` 重建。已有路径保留原始 UID/GID、权限与二进制 xattr；新增条目优先同目录同类型原始条目（同扩展名优先、路径序确定），没有时使用最近原始上级目录，删除的原始条目仍可作为属性依据。目录默认 ACL 转为访问 ACL，普通文件不继承目录执行位和默认 ACL。新增 shebang 脚本和 ELF 可执行文件按读权限补执行位，共享库不自动增加执行位；已有路径仍保留原始权限。软链接文本、特殊节点、硬链接关系及可逆名称映射写回镜像；只修改一个硬链接别名更新整组，不一致编辑拒绝覆盖。F2FS 读写内联与独立节点 xattr，EXT4 属性超限禁止静默丢弃。配置损坏、未知认证/加密属性等未经支持的情况仍在发布前拒绝；不承诺任意特性组合或真机启动均已验证。实现与验证见 `docs/filesystem-editing-attributes.md`。
+## Git 和工作区纪律
 
-- 各格式处理器和应用层解包服务在成功提取后写入 `.uotanstudio-repack.json`，使用源生成 JSON、32 MiB 上限和原子替换。`sourceProperties` 为描述性信息，`packingOptions` 和 `configuration` 为实际打包配置；普通文件系统子目录不单独生成镜像配置。
-- **子项目元数据目录**：元数据存放在 `{所属子项目根}/.uotan/metadata/<分区名>/`，包含 `.uotanstudio-repack.json`、分区 `_fs_config` / `_file_contexts` / `_info`，以及文件系统保真快照。解决方案根没有独立 `.uotan/` 状态文件夹。`ProjectContext.GetMetadataRoot()` 返回活动子项目的元数据根；路径重载查找实际所属子项目。异步解包和重打包固定操作上下文；不存在时不跨目录回退。无项目归属的独立目录使用显式本地模式。附属配置按来源分区精确匹配。
-- EXT4/EROFS/F2FS 解包时，解析器 entry 模型已暴露 inode 的 `Uid`/`Gid`/`Mode`（`Ext4FileEntry`、`ErofsFileEntry`、`F2fsFileEntry`），`FileSystemMetadataGenerator` 据此生成 `fs_config`（`path uid gid mode capabilities`）和 `file_contexts`（`path selinux_label`，优先读取 `security.selinux` xattr，缺失时回退默认标签）；`partition_info` 从超级块配置生成 `partition.key=value` 格式。
-- Boot 和 DTBO 不再生成独立的 `header`、`header.json` 或 `dtbo.json`：Boot 配置保存在 `configuration.magic/header`，vendor_boot 为 `configuration.magic/vendorHeader/ramdiskTable`，DTBO 为 `configuration.header/entries/imageSize/hasOriginalImage`。DTBO 的 `original.dtbo.img` 是无损重打包所需的二进制模板，不是额外配置文件。
-- Boot v0-v4 和 vendor_boot v3/v4 目录重建共用固件库后端，组件通过 `BootComponentFiles` 有界流式复制，SHA-1 ID 流式计算，输出原子提交。原始 `ramdisk` / `vendor_ramdisk` 是打包输入，解压的 CPIO 副本及拆分 vendor ramdisk 仅用于查看。vendor 产品名和 v4 ramdisk 条目表一并保存在配置内。
-- CLI、节点工作流、镜像面板和 MCP 自动打包均按统一元数据分派（`RepackMetadata.Read()` 按单一位置规则发现元数据）；镜像面板仅在无元数据时回退到项目打包设置。项目资源管理器双击解包文件夹以文本方式打开其配置（`RepackConfigurationPath` 按单一位置规则解析：有项目时映射到 `.uotan/metadata/<分区名>/` 下的实际元数据 JSON，无项目时打开本地文件），即使 JSON 尚未编辑完整也允许打开修复。
-- **APK 解包**：APK 按标准 ZIP 容器完整解出全部条目（`ApkFormatHandler.UnpackCoreAsync`：`FileExtraction.ResolvePath` zip-slip 校验、`CountingWriteStream` 按 `entry.Length` 有界复制 + `UnpackOptions.MaximumOutputBytes` 总量预算、`FileExtraction.WriteAtomicAsync` 原子提交、目录占位条目仅建目录）；解包目录另写 `apk-metadata.txt` 概要文件，该文件与 `.uotanstudio-repack.json` 同规则统一管理——有项目上下文时写入 `.uotan/metadata/<分区名>/`（分区名按源文件名 `DetectPartitionName` 检测），无项目时写入解包目录。
-- **APK 重打包与签名**（`Apk/Signing/` 目录，全托管、AOT 安全、零反射）：`ApkRepacker` 把解包目录重建为可安装 APK（自研流式 ZIP 写入器：`resources.arsc` 未压缩 + 4 字节对齐、`.so` 按 `NativeLibraryAlignmentBytes` 对齐（默认 4096，16 KiB 页设备可设 16384，zipalign 语义、`0xd935` 对齐 extra 字段）、确定性条目排序与固定时间戳保证输出可复现、临时文件原子提交、剥离旧 v1 签名条目）；`ApkSigner` 编排 v1/v2/v3 组合签名（`ApkEntryStripper` 直接解析中央目录重写 ZIP 层，剔除旧签名条目/追加 STORED 条目，无反射；v2/v3 经 `ApkContentDigest` 两级分块摘要 + `ApkSigningBlock` 插入签名分块——摘要中的 EOCD 指向签名块起点，不依赖签名块长度；签名完成后再按真实签名块长度修正输出 EOCD；EOCD 中央目录偏移同步修正）；v1 为 JAR 规范工件（`ApkV1Signer`：MANIFEST.MF 条目 SHA-256 摘要、`.SF` 含 `X-Android-APK-Signed: 2, 3` 防剥离属性、PKCS#7 CMS 经平台 `System.Security.Cryptography.Pkcs` 的 `SignedCms` 生成，分离式 CMS，IssuerAndSerialNumber 标识，SHA-256-Digest-Manifest 及逐段摘要对齐 apksig）。**签名密钥完全由用户自定义指定**，不内置任何密钥材料：`ApkSignerKeyMaterial.Load` 支持私钥 PKCS#8 明文/加密、PKCS#1（RSA）或 SEC1（EC），PEM 或 DER；证书支持 PEM/DER/PFX（`.pfx/.p12` 带可选密码）。**APK 签名材料生成（2026-09-13）**：`ApkSigningKeyGenerator.Generate`（`Apk/Signing/`，AOT 安全）按 `ApkSigningKeyOptions`（RSA 2048/3072/4096 或 EC P-256/P-384/P-521，CN 必填、O/OU/C 可选，有效期 1–100 年默认 30 年，可选私钥密码）生成 PKCS#8 PEM 私钥（有密码时为加密 PKCS#8，AES-256-CBC/SHA-256/100k 迭代）、自签 X.509 证书（哈希与 `ApkSignatureAlgorithmSelector` 同策略：RSA>3072 位或 EC>256 位用 SHA-512，否则 SHA-256）及可选含私钥 PFX；输出写临时文件并经 `ApkSignerKeyMaterial.Load` 回环自检后原子提交，`FileMode.CreateNew` 保证不覆盖已存在文件。服务层入口 `FirmwareService.GenerateApkSigningKeyAsync`；暂无 UI 接线。测试见 `UotanStudio.Tests/Firmware/ApkSigningKeyGenerationTests.cs`。算法按 apksigner 默认策略选择（`ApkSignatureAlgorithmSelector`：RSA 使用 PKCS#1 v1_5，超过 3072 位用 SHA-512，否则 SHA-256；EC 超过 256 位用 SHA-512，否则 SHA-256，签名编码为 DER）。`ApkFormatHandler.PackAsync` 对目录输入走 `ApkRepacker` 重建。服务层入口 `FirmwareService.SignApkAsync`。CLI：`firmware sign <apk> -o <out> --key <pk8/pem> [--key-pass 密码] --cert <pem/der/pfx> [--cert-pass 密码] [--v1|--no-v1] [--v2|--no-v2] [--v3|--no-v3]`。测试见 `UotanStudio.Tests/Firmware/ApkSigningTests.cs`（签名块结构/分块摘要确定性/v2+v3 回环/重签名剥离/v1 工件与 CMS 签名验证/重打包与对齐）。
-- **解包目标目录规则**：`ImageOperationPaths.UnpackedDirectory` 按 `IsUnderImagesDirectory` 判定——源文件位于子项目 `images/` 目录（或其子目录）时解包到 `Root/<文件名>/`（与 images/ 同级）；其余位置一律**本地解包**到源文件所在目录下的同名子目录。保留名（images/output/.uotan/.deleted）与非法 `Name` 仍拒绝；`ValidateExtraction` 保留源归属与「输出不得包含源文件」检查。
+- 当前工作区可能包含多个并行功能改动。只编辑完成当前任务所需的文件，保留无关修改。
+- 禁止使用 `git reset --hard`、全量恢复或删除未知来源文件来“清理”工作区。
+- 不要提交、推送、合并或重写历史，除非用户明确要求。需要提交时使用英文 Conventional Commit、`git commit -s`，并保持现有签名约定。
+- 修改完成后报告实际变更、构建命令、定向测试、跳过的测试和仍未验证的边界。不要把编译通过写成真实设备或全平台运行通过。
 
-- **SELinux 文件标签推定（2026-09-12）**：新增或类型替换条目通过 `SelinuxFileLabelInference` 优先匹配当前解包树的文本 `file_contexts`（经原始路径映射识别编码名称）；同目录同类型/扩展名的普通对象标签共识及原始上级目录为回退。专用 `*_exec` / `*_exec_t` 和进程域不作为默认参考；已有路径保留原标签。规则冲突、显式无标签及不支持的正则语法禁止静默回退。此条细化上文通用属性继承中的 SELinux 选择，不代表二进制 sepolicy、跨分区完整策略或真机启动已验证。23 个新用例、233 项相关回归及 6 个原生 libselinux 对照见 `docs/selinux-file-label-inference.md`。
+## 当前验证基线
 
-## 解决方案结构
+最近一次工作区验证结果：
 
-> 入口点唯一：`UotanStudio.Desktop/Program.cs` → 构造 `AppBuilder.Configure<App>()`。
-
-| 项目 | 职责 |
-|---|---|
-| `UotanStudio.Comm` | 设备通信库：USB 多后端（WinUSB/LibUsb/Linux/MacOS/HarmonyOS；macOS `native` 优先走 **IOUSBHost ObjC 后端**——`Backend/MacOS/` 的 `ObjcRuntime`/`UsbHostAPI`/`UsbHostFinder`/`UsbHostDevice` 经 libobjc 直连，IOUSBHost 框架须显式 dlopen 后 ObjC 类才注册；选择器以运行时内省为准（`copyPipeWithAddress:error:` 带 error 后缀）；`dataWithLength:` 返回 autorelease 对象须手动 retain，`error:` 出参 NSError 按 Cocoa 惯例不释放；Dispose 顺序为置 `_disposing` → `abortWithError:` → 等待在飞计数归零 → 释放管道/接口/设备；枚举仅设备级标量属性 + 按 `bInterfaceNumber` 识别接口子项，刻意不构建全局 IOUSBInterface 表——该表在异常设备上会令 IORegistry MIG 调用无限阻塞，IOKit classic 路径同样如此；回退判定依据 `UsbHostFinder.LastUsbHostAvailable`，不缓存负结果。实现与真机验证（OnePlus PJZ110 ADB 全用例通过）见 `docs/macos-usbhost.md`）+ ADB / Fastboot / EDL / RKDL 协议会话 + TCP/UDP/串口/mDNS 传输 + super 镜像构建/刷写（`SuperImageBuilder.Build` / `SuperFlashHelper.FlashSuper`，LP 元数据读写）+ **scrcpy 投屏协议**（`Protocols/Scrcpy/`：`ScrcpyConstants`（scrcpy 2.7 控制消息类型/动作/按钮掩码常量）、`ScrcpyServerOptions`（服务端参数与 `BuildShellCommand` 生成 `CLASSPATH=… app_process` 命令行）、`ScrcpyServerManager`（经自研 ADB wire 栈 `AdbSyncClient.Push` 推送服务端 jar 到 `/data/local/tmp`、v1 shell 长驻流启动进程、`pkill` 停止）、`ScrcpyClient`（按视频→音频→控制顺序经 `localabstract:` 直连 adbd smart socket（免 reverse 注册），读取哑字节/64 字节设备名/12 字节编码器元数据，`ReadFrame` 解帧（12 字节头：PTS + 长度，负载上限 32 MiB），控制消息收发与设备消息（剪贴板/ACK）轮询）、`ScrcpyControlMessageWriter`（控制消息编码：键码 14B、文本 5+N、触摸 32B（type/action/pointerId/position/pressure/actionButton/buttons，布局对照 scrcpy 2.7 `ControlMessageReader`）、滚轮 21B（i16 定点，1 刻度 = 0x7FFF，向下滚动为负）、剪贴板等；坐标使用视频像素坐标 + 帧尺寸）。**零 Avalonia 依赖**，供应用层引用。 |
-| `UotanStudio.Firmware` | 固件解析库：boot image（V0–V4 解包；V0–V4 boot 打包（V3/V4 经 `BootImagePacker.PackV3OrV4`，含 V4 signature 段）与 vendor_boot V3/V4 打包，`BootImagePacker`/`VendorBootPacker`）、Payload、Sparse、CPIO、AVB（`AvbVerifier` 校验 + `AvbSigner` 签名：vbmeta RSASSA-PKCS1-v1_5 SHA-256 签名（PSS 签名被拒）、v2 hash footer、dm-verity hashtree footer（`AvbHashtreeBuilder` 构建 Merkle 哈希树 + `AddHashtreeFooterAsync`，`SHA256(salt||block)` 逐层哈希、64KiB 有界流式、对齐 avbtool `add_hashtree_footer` 布局）与 `DisableVbmetaVerificationAsync` 禁校验补丁（置位 flags 0x1|0x2 并清零认证块，无需私钥）；描述符序列化/解析覆盖上游 libavb 全部五种（0=Property/1=Hashtree/2=Hash/3=KernelCmdline/4=ChainPartition，`SerializeDescriptors`/`AvbSignatureVerifier.ParseDescriptor` 按 avbtool 1.2 FORMAT_STRING 布局，混合描述符经泛型 `SignVbmetaAsync<TDescriptor>` 签名；footer 主版本 1.x 一律接受，忽略 minor）、压缩（Gzip/Zlib/Deflate/Brotli/Lz4/Lzma/Xz/Bzip2/Zstd + **LZOP 压缩端**：`LzopCompressor.Compress` 256KiB 块 + Adler32 校验 + 复用 `Lzo1x` 托管 LZO1X-1，不可压缩块按规范存原始块）、DAT（Android v4 transfer list 写入，支持 `.new.dat.br` Brotli 输入与分段输出；**增量读**：`DatReader` 按 Android 端点个数范围语法执行 stash/free/move/bsdiff/imgdiff，恢复 source location 与 stash 引用，补丁按命令声明的 offset/length 读取；支持 BSDIFF40/BSDF2 和 IMGDIFF2 NORMAL/DEFLATE/RAW，输出经目标范围和哈希校验）、Oppo/NTPi/Nb0/Pac/Rockchip（`Rockchip/`：RKFW 102 字节打包头，分别提取 BOOT/LDR 与嵌套 RKAF；RKAF 140 字节头和 112 字节条目，按真实大小提取并验证 PARM 包装；通过 afptool-rs 1.1.0 生成的固定双层样本验证）等格式处理；**DT**（`Dt/` 目录：DTB 解析/序列化、**DTBO 按上游 `dt_table.h` 重写**（大端 32 字节头 + 32 字节条目描述符，blob 不页对齐）+ DTB/DTBO 打包、**DTS 解析/写入**（label/phandle 引用回填、`/delete-node/`/`/delete-property/` 生效、顶层 `&label{}` overlay 片段合并、`DtsFormat.MergeOverlay` 支持 fragment/target-path、symbols/fixups/local-fixups 及 phandle 重定位，`DeviceTreeNode.RemoveChild/RemoveProperty`；已与 dtc/fdtoverlay 交叉验证，DTS 文本解析不等于完整 dtc 预处理器））；**OTA 差分**（`Diff/` 目录，`DeltaEngine` 流式生成 BSDIFF40、应用 BSDIFF40/BSDF2，临时文件原子提交；生成端采用线性同位置差分，补丁可能大于上游后缀排序算法；`DatFormatHandler`/`DiffFormatHandler` 已注册进 `FirmwareFormatRegistry`，DAT 镜像对与 bsdiff 补丁可自动识别）；**Payload 写入**（`PayloadBuilder` 每操作最多 1 MiB、最多 65536 个操作、磁盘暂存与路径原子提交；输入须块对齐，输出明确未签名；raw/BZip2/XZ 可写，Brotli/Zstd REPLACE 与无依据编号 14 读写均拒绝；minor 0/2/3 零分区使用 REPLACE_BZ，minor >=4 使用 ZERO）；**Payload 增量提取**（`PayloadParser.Extract/ExtractAsync` 支持**源基座注入** `sourcePayloadPath`/`sourceImages`：含源依赖操作（SOURCE_COPY/SOURCE_BSDIFF/BROTLI_BSDIFF/PUFFDIFF/BSDIFF/LZ4DIFF_*）的分区须提供基座镜像，未提供时抛 `PartitionExtractionException`；源镜像始终独立只读，拒绝未知操作并校验旧/新分区大小与 SHA-256；PUFFDIFF 按 PUF1 容器和位级 Puff/Huff 转换，LZ4DIFF 按上游容器解压源块、应用内层差分、目标重压缩与 postfix patch；随机访问差分 codec 单操作限制 256 MiB；**多区间语义对齐上游 delta_performer**：SOURCE_COPY 把全部源区间拼接为一条数据流整体校验 `src_sha256_hash` 后经 `ExtentWriteStream(requireExactLength)` 写入全部目标区间，SOURCE_BSDIFF/BROTLI_BSDIFF/BSDIFF/PUFFDIFF/LZ4DIFF_*/ZUCCHINI 的输出统一经 `OperationProcessor.ProcessDeltaOperation` 与 `ExtentWriteStream` 精确映射到全部 `DstExtents`（长度不符即抛错，不再只写 `DstExtents[0]`）；**Zucchini 全托管实现**（`Zucchini/` 目录，`ZucchiniPatchApplier`：上游 `Zucc` 魔数 `0x6363755A`、24 字节总头、22 字节元素头、独立长度前缀数据流与 CRC-32，支持 NoOp/RAW 元素；Payload 先按上游 Brotli 解包；非 RAW 可执行元素明确抛 `ZucchiniUnsupportedExecutableTypeException`））；**EXT4/EROFS/F2FS**（`Ext4/`、`Erofs/`、`F2fs/` 目录，全托管文件系统镜像解析/构建/压缩，`Ext4FormatHandler`/`ErofsFormatHandler`/`F2fsFormatHandler` 经 `FirmwareFormatRegistry` 注册；**Ext4**：解析侧支持外部 xattr 块（`i_file_acl`，含 64-bit 高低位合并）与 ea_inode 大值读取、htree 未知哈希版本回退线性扫描，内联内容按 i_block 前 60 字节与 system.data xattr 组合、内联目录分段读取；incompat 特性掩码按 e2fsprogs 位定义放行真实镜像常见位（FILETYPE/RECOVER/CSUM_SEED/LARGEDIR/INLINE_DATA/ENCRYPT，仅 META_BG/JOURNAL_DEV 拒绝）；构建侧支持 htree(dx_dir) 大目录索引（`Ext4Htree` 原语，half-md4 哈希；metadata_csum 下 dx_root/dx_node 写 dx_tail、叶块与线性目录块一致写 12 字节 dir_entry_tail + dirent csum）、metadata_csum（superblock/GDT/inode 尾部 csum + 目录块 dir_tail 校验和，crc32c 与 e2fsprogs 算法一致）、ibody xattr 按完整名映射命名空间索引（user.=1/trusted.=4/security.=6/system.posix_acl_access=2/system.posix_acl_default=3），普通 ibody xattr 的 e_hash 按内核置 0、超级块字段偏移对齐内核定义（`s_creator_os=0`（LINUX）为内核挂载必要条件——该字段误写 1（HURD）时 e2fsck 仍通过但内核拒绝挂载）、JBD2 journal 写端（`Journal/`：`JournalSuperblock.CreateEmpty/ToBytes` 干净空日志 + csum v3，`Ext4Options.IncludeJournal` 默认开，内部日志 inode 方案）、INLINE_DATA 特性位、确定性默认 UUID（`Ext4Options.Uuid` 覆盖，相同输入两次 Build 逐字节一致）；**构建器特性位/字段对齐 mke2fs -t ext4 默认**：compat=RESIZE_INODE|EXT_ATTR|DIR_INDEX[|HAS_JOURNAL]、incompat=FILETYPE|EXTENTS|64BIT|FLEX_BG、ro_compat=SPARSE_SUPER|LARGE_FILE|HUGE_FILE|DIR_NLINK|EXTRA_ISIZE[|METADATA_CSUM]（注意 HUGE_FILE=0x8/EXTRA_ISIZE=0x40，勿与 RO_COMPAT 的 BIGALLOC=0x200/READONLY=0x1000 混淆）；目录项为 FILETYPE 布局（name_len u8 + file_type u8，htree 叶块一致）；**resize_inode + 保留 GDT**（严格对照 e2fsprogs `lib/ext2fs/res_gdt.c`：i_block[DIND] 从槽位 desc_blocks 起指向主保留 GDT 块（块号 sb_blk+1+desc_blocks+i），主保留 GDT 块按 `ext2fs_list_backups` 序列（1,3,5,7,9,25,…）**顺序**存放备份指针（buf[last++]，非按组号索引），reserved GDT 块数按 `calc_reserved_gdt_blocks`（1024 倍增长封顶 2^32、上限 apb）；e2fsck resize inode 校验与 `resize2fs` 在线扩容 128M→256M 均已实测通过）；超级块补齐 s_r_blocks_count(5%)/s_mkfs_time/s_jnl_blocks[17]（[0..14]=日志 inode i_block、[15]=i_size_hi、[16]=i_size_lo，并置 `s_jnl_backup_type=1`）/s_min,want_extra_isize；unused inode 槽位保持全零（e2fsprogs 校验失败时视全零 inode 为有效，无需 dup csum）；**EROFS**：超级块 `s_dirblkbits` 恒写 0（上游约定；内核 ≥6.3 对非零值拒绝挂载——曾写 log2(blockSize) 导致 fsck 通过但 mount 报 EINVAL）、压缩文件默认 compacted 4B amortized 索引（`ErofsOptions.UseCompactedIndexes` 默认 true，对齐 erofs-utils 默认；NONHEAD 的 pack 末槽存 delta[1]、读端按 delta[0]=前条+1 还原）、**big-pcluster 编码对齐 erofs-utils**（LZMA/DEFLATE/ZSTD 声明超级块 IncompatBigPcluster 时 per-inode `h_advise` 同步置 BIG_PCLUSTER_1|2，且每个 pcluster 首个 NONHEAD 携带 CBLKCNT（delta[0]=压缩块数|bit11）——内核在 big-pcluster advise 下拒绝普通 d0=1（EFSCORRUPTED）；LZ4（LZ4_0PADDING）保持非 big 编码；解析器按内核语义对 HEAD1 用 _1、PLAIN/HEAD2 用 _2 分别判定，不做 _1/_2 一致性强校验）、多设备表仅存额外设备（`ErofsDeviceSlot`，`ExtraDeviceCount`），devt_slotoff 按 128 字节槽解释；缺失外部设备明确失败，chunk 索引支持 32/48 位空洞地址与 64 位有界复制、fragments/dedup 写端（`Fragments`/`Dedup` 开关，整文件级去重）、metabox 写端（`Metabox` 开关，compact inode 槽表方案；fsck.erofs 1.8.6 不识别 METABOX 特性 0x100 属 1.9.x，metabox 镜像走自回环验证、flat 布局走 fsck 验证）、LZMA 压缩（MicroLZMA 属性字节与 `SetCoderProperties` 同源）；非 LZ4 的 COMPR_CFGS 算法记录紧随实际超级块/扩展槽（LE16 长度前缀，LZMA 14 字节、DEFLATE/ZSTD 6 字节），inode 起点避开配置，ZSTD 窗口限定 1 MiB，避免内核把首 inode 当配置并拒绝挂载；**F2FS**：superblock/checkpoint/NAT/SIT/dnode 寻址与 inline data，结构参照内核 `fs/f2fs/f2fs_fs.h` 与 f2fs-tools 并经原生 fsck 验证；读取两份 checkpoint 头尾 CRC 并选较新有效版本，按 NAT bitmap/journal 寻址；未实现未提交 fsync roll-forward 恢复（**fsck 合规要点**：主区按 node/data 分区且段号全程主区相对（checkpoint 的 `cur_*_segno`、SIT/SSA 寻址一致）；curseg 记账含 `cur_*_blkoff`，满段迁移空闲段；cp pack 为 mkfs.f2fs 布局（6 块，compact data 摘要单块容量 439 条上限、node 摘要块 2-4、footer entry_type@4091），flags=UMOUNT|COMPACT_SUM；SIT vblocks[15:10] 写段类型、free_segment_count 与 SIT 严格一致且满足 fsmeta=ckpt+sit+nat+rsvd+ssa<segment_count；NAT/SIT 双副本为连续主副本+独立第二副本区（NAT 按 512 块分组 ×2、SIT 第二副本 +sit_blocks）；dentry 位图为 LSB-first（`test_bit_le`）而 SIT/NAT 位图为 MSB-first（`f2fs_test_bit`），f2fs 两种位序并存；目录为内核式哈希桶布局（`dir_buckets`/`bucket_blocks`/`dir_block_index`，`i_current_depth`=已用层数）；dentry 块恰占满 4096 字节**无块级 CRC**；`i_blocks` 以 4KB 块为单位且含节点块；inode 时间戳为 le64 秒@32/40/48 + le32 纳秒@56/60/64；`F2FS_COMPR_FL=0x4`，含压缩文件时 superblock 声明 `F2FS_FEATURE_COMPRESSION`）、**节点读写拓扑**（`F2fsParser.ReadDoubleIndirectAddress` + `F2fsBuilder.PlanDnodes`，Nid[0..1] direct、Nid[2..3] indirect、Nid[4] double indirect；8 GiB 稀疏文件跨边界读回与原生 fsck 通过）、**压缩簇读写**（`F2fsCompression`/`F2fsCompressedCluster`：24 字节 clen/chksum/reserved[4] 头，算法参数位于 inode extra attr，正确处理 COMPRESS_ADDR 和预留块；LZ4/ZSTD/LZO 压缩与有界解压，LZO/LZO-RLE 经托管 `Lzo1x`（对齐内核 `lzo1x_1_compress`/`lzo1x_decompress_safe`，解压侧两种算法共用、写侧输出标准位流），`EnableCompression`/`CompressionAlgorithm`/`CompressionLevel` 选项，读侧按簇探测簇头、写侧逐簇压缩不值得压缩整文件回退）；WSL 工具级交叉验证（`WslCrossValidationTests`：e2fsck -fn / fsck.erofs / fsck.f2fs / dump.erofs / debugfs rdump，按工具粒度 `Assert.Skip`）；**DEX**（`DEX/` 目录，Dalvik 解析/反汇编/重建，保留 038/039/040 版本并读写 method_handle/call_site 表；041 多文件容器明确不支持；**轻量化反编译**在 `DEX/Decompile/`：`BasicBlock`/`CfgBuilder`/`RegisterAnalyzer`/`MethodResolver`（重载解析：过滤 bridge/synthetic、按推断实参类型选最特定重载并对实参施加显式转型）/`ControlFlowStructuring`/`JavaCodegen`/`LightweightDecompiler`，参考 jadx 的 CFG 结构化思路，输出伪 Java 或字节码指导（BytecodeGuide 模式），明确不做 SSA/跨方法内联/lambda/泛型还原；`DexService.DecompileDexAsync` 供应用层调用）；**AXML**（`AXml/` 目录，Android 二进制 XML 解析/重建，保留资源映射索引，生成合法 XML；任意混合文本顺序不在对象模型支持范围内）；**ARSC**（`Arsc/` 目录，resources.arsc 解析/重建，支持 UTF-16、稀疏/offset16/compact 项和可变配置长度；DEX/AXML/ARSC 元数据上限 256 MiB）。**零 Avalonia 依赖**。 |
-| `UotanStudio.Media` | 独立、零 NuGet/Avalonia、NativeAOT 兼容的媒体库。`VideoDecoderFactory` 统一创建与报告实际后端：Windows D3D11 感知同步/异步 Media Foundation GPU 与 MF CPU，macOS 原生 VideoToolbox H.264/H.265，Linux `VaApiVideoDecoder` 经固定 C ABI 的 `libuotan_media_va.so` 与 libavcodec/libavutil 提供强制 VA-API 硬件解码（8-bit 4:2:0 H.264/HEVC/AV1，取决于驱动）；Auto 初始化时依次尝试 VA、GStreamer 硬件、GStreamer 软件。原不完整的托管 VA codec ABI/解析器已替换，桥接及部署/验收见 `UotanStudio.Media/Native/Linux/README.md`；本机 WSL 无 DRM render node，尚无此次直接 VA 硬件验收。GStreamer 1.24+ 提供 VA/NVDEC/V4L2 插件入口及软件回退，macOS AV1 使用 `vtdec_hw`。GStreamer 是需另行安装的原生运行时，插件存在不等于硬件验证成功。显式后端不静默切换，Auto 仅初始化时回退。输出为有界池化 8-bit NV12 或 Windows GPU 转换后的 BGRA，支持 PTS/Drain/Reset/Poll、BT.601/BT.709 与有限/全范围；不宣称 HDR/P010/零拷贝。音频由 `AudioDecoderFactory` 分派：原生 MF/AudioToolbox AAC-LC、GStreamer AAC/Opus/FLAC、直通 48 kHz 立体声 PCM；WASAPI/AudioUnit/GStreamer PulseAudio 输出。VA/DMA-BUF/EGL 原语保持独立。 |
-| `UotanStudio` | 应用层：Avalonia 资源/主题（`avares://UotanStudio/...`）、ViewModel（继承 `ViewModelBase` → `ObservableObject`，按特性分区于 `ViewModels/{Shell,Workspace,Editors,Devices,Nodes,Compare}/`）、视图（`Views/{Shell,Workspace,Editors,Devices,Nodes,Compare,Controls}/`，与 ViewModel 同构）、服务（按域分区于 `Services/{Devices,Firmware,Flash,Projects,Compare,Mcp}/` 与根：`LanguageService`、`LogService`、`SettingsPersistenceService` 等）、消息（`WeakReferenceMessenger` 派生消息类在 `Messages/`）；**scrcpy 投屏文档**（`ViewModels/Editors/ScreenMirrorViewModel` + `Views/Editors/ScreenMirrorView`，经 `ViewModelViewRegistry` 注册：后台线程完成服务端推送/启动/socket 握手，专用解码线程 scrcpy 解帧 → `UotanStudio.Media` 平台解码 → GPU 路径将 BGRA（`GpuDecodedVideoFrame`）复制到 UI 所有的缓冲区或 CPU 路径 NV12→BGRA → Dispatcher 写 `WriteableBitmap`；**音频链路**：设置项 `ScreenMirrorAudioEnabled`/`ScreenMirrorVideoCodec`（`AppSettings`，源生成 JSON 持久化）控制服务端参数；按用户所选 H.264/H.265/AV1 启动服务端，`VideoDecoderFactory` 统一选择主机后端，显式编码不静默降级；音频 socket 由独立 `AudioLoop` 线程持续消费（不消费会阻塞服务端），AAC/Opus/FLAC/PCM 经 `AudioDecoderFactory` 分派，并经 `AudioSinkFactory`（WASAPI/AudioUnit/GStreamer）惰性打开播放，格式不符或失败仅记日志不阻塞视频；不支持编解码时保持排空；鼠标按下/移动/抬起与滚轮按 `Stretch=Uniform` 渲染矩形换算为视频像素坐标注入设备，`InjectKeyCode`/`InjectText` API 备用；`WorkspaceViewModel.OpenScreenMirrorDocument` 打开/聚焦复用实例；设备面板 `DeviceViewModel.ScreenMirrorCommand`（仅 ADB 设备启用）经 `OpenScreenMirrorRequestMessage` → `App` 触发；服务端 jar 随 `UotanStudio.Desktop/Assets/scrcpy-server.jar`（Content）复制到输出目录；设置项 `ScreenMirrorBitRate`/`ScreenMirrorMaxFps`/`ScreenMirrorMaxSize` 持久化到 `AppSettings`）；**投屏属性面板**（`PropertiesViewModel.ScreenMirror.cs` 按 1 秒采样更新显示编码格式/解码后端/帧率/码率及音频行（`MirrorProperty_Audio`/`AudioFormat`/`AudioFps`，音频关闭显示「关闭」，未解码前显示等待占位），源色彩空间与设备编码器未报告时明确显示未知，不从旧数据推断；中英文本在 `Locale/*/Dock.axaml`）；**MCP 能力**（`Services/Mcp/`：`McpClientService` 懒连接并调用外部 MCP server 工具（stdio/HTTP，实参为原始 JSON，AOT 安全）、`McpHostService` 把固件能力暴露为 MCP server（TCP 流传输，`UotanStudioMcpTools`（partial，`[McpServerToolType]`）经 DI 发现全部 `[McpServerTool]` 方法：`firmware.info` / `firmware.unpack`（按格式分派解包）/ `firmware.pack`（cpio/boot/ext4/erofs 打包）/ `flash.image`（按 serial 或单设备刷写，15 分钟超时），输入输出为结构化 JSON）、`McpServerConfig`/`McpTransportKind` 配置模型；设置页「MCP」区块维护服务器列表与暴露开关/端口并持久化到 `AppSettings`（`AppSettingsJsonContext` 已注册）；工具箱「MCP 工具」分类含 `MCP.ListTools`/`MCP.CallTool` 节点；基于官方 `ModelContextProtocol` SDK 2.2.0 与 `Microsoft.Extensions.DependencyInjection`，均 AOT 兼容）。 |
-| `UotanStudio.Desktop` | 启动项目：`WinExe`、`PublishAot=true`、`TrimMode=partial`（当前临时关闭，见 §1）。`Main` 返回 `int`，启动 Avalonia 前分发 `firmware` 子命令（无 UI 固件 CLI，见上「固件 CLI」）。 |
-
-## 关键开发约定
-
-### 1. AOT 兼容性（强制）
-`UotanStudio.csproj` 与 `Desktop` 项目已启用 `IsAotCompatible` / `PublishAot` / `TrimMode=partial`（曾为支持 Avalonia 布局预览器临时关闭，现已恢复并经 `dotnet publish -r win-x64` 发布冒烟验证）。以下约束在 AOT 下必须遵守：
-- **禁止 `Assembly.LoadFrom`、`Activator.CreateInstance(Type)` 等反射加载**。设备协议会话、USB 后端等均通过编译期类型直接构造（`UotanStudio.Comm` 提供工厂/会话类，无运行时加载）。
-- **禁止运行时 `new ResourceInclude(uri)` 动态加载 XAML**（AOT 裁剪下抛 "No precompiled XAML found"）。主题/语言资源字典一律带 `x:Class` + 代码后置 partial 类（`ThemeDictionaries.cs`/`EnUsDictionaries.cs`/`ZhCnDictionaries.cs`，构造函数 `AvaloniaXamlLoader.Load(this)`），切换经 `LanguageService.ApplyTheme` / `CreateLocaleDictionary` 类型实例化；`.axaml` 由 Avalonia 默认 glob（`**/*.axaml`）纳入，csproj 不得再显式 `AvaloniaResource Include="Locale\**"`/`Themes\**`（与默认项重复触发 AVLN2002 重复 x:Class）。
-- JSON 序列化使用**源生成**：`AppSettingsJsonContext : JsonSerializerContext`，配合 `AppSettingsJsonContext.Default.AppSettings`。新增需序列化的类型必须用 `[JsonSerializable]` 注册到该上下文。
-- View 解析无反射：`ViewLocator` 经 `ViewModelViewRegistry`（`UotanStudio/ViewModelViewRegistry.cs`）按 VM 类型显式查表构造视图，**不依赖反射**；新增 ViewModel 须在该注册表登记（View 与 ViewModel 均按特性分区，见 §5）。
-
-**Debug 诊断工具（仅 DEBUG 启用，`#if DEBUG` 隔离 + 包引用按 `$(Configuration)` 条件剔除，不进入 Release/AOT 发布）：**
-- `Dock.Avalonia.Diagnostics`（`MainWindow` 打开时 `AttachDockDebugOverlay()`）：按 F9 显示 Dock 布局覆盖诊断。
-
-### 1.1 有界流式 IO（固件库强制）
-`UotanStudio.Firmware` 处理的固件、分区与压缩数据均视为**不可信且可能达到数十 GB**；新增或修改解析、提取、构建、压缩/解压代码时必须遵循：
-- **Stream-first / FileStream-first**：文件路径 API 内部直接打开流；禁止以 `File.ReadAllBytes`、无界 `ReadToEnd`、`MemoryStream.ToArray` 或整镜像 `byte[]` 作为大文件主路径。`byte[]` API 仅作为明确的小型元数据或便利包装。
-- **所有范围必须有界**：外部长度、偏移、块数、extent、chunk count 在使用前以 `long`/`ulong` 和 `checked` 验证；范围检查使用 `offset <= length && size <= length - offset`，避免 `offset + size` 溢出。
-- **精确复制与截断失败**：固定长度数据使用 `Common/Streams/StreamCopy.CopyExactly[Async]` 或等价循环；提前 EOF 必须抛出格式异常，不得静默生成部分输出。
-- **解压必须限制输出**：调用 `CompressionService` 的有界重载并由格式语义提供 `maximumOutputBytes`（如 Payload 目标 extents、EROFS cluster、NTPi OriginalSize）；禁止对不可信数据执行无上限解压。
-- **随机访问使用范围流**：优先用 `Common/Streams/BoundedReadStream` 或格式专用 bounded stream 表示 `(offset,length)`；解析器只保留元数据与文件范围，提取时再流式复制。
-- **多 extent 输出必须严格映射**：Payload 等格式使用 `ExtentWriteStream` 映射目标区间，拒绝超长输出并在完成时校验精确长度。
-- **构建器采用两遍模型**：第一遍扫描并计算布局，第二遍 `FileStream.SetLength` 后定位写入/回填；禁止为 EXT4、EROFS、Sparse、super 等大型输出构造完整镜像数组。
-- **输出原子提交**：不可信输入的提取/解压先写同目录临时文件，全部长度、哈希和格式校验成功后再原子替换；失败或取消时清理临时文件。
-- 公共流包装器位于 `UotanStudio.Firmware/Common/Streams/`；新增 public 类型/成员须提供中英文 XML 文档并保持 AOT 兼容。
-
-### 2. 节点编辑器（NodifyM）
-1. 节点定义与注册：所有节点视图模型继承 `FlowNodeViewModel`（`UotanStudio.ViewModels.NodeViewModels`），工厂方法 `XxxNodeViewModel.CreateXxxNode()` 在初始化器中设置稳定 `TypeKey`（如 `"Firmware.Unpack"`、`"Data.ReadFile"`）与各连接器的 `PortType`。`NodeTypeRegistry`（`NodeViewModels/NodeTypeRegistry.cs`）以 TypeKey 注册工厂；**节点工厂在 `NodeEditorViewModel.InitializeToolbox` 中集中注册**（既有节点直接 `NodeTypeRegistry.Register(key, () => CreateXxxNode())`，DEX 节点经 `DexNodeViewModel.RegisterNodes()`），同时以 `NodeToolboxItem(name, () => CreateXxxNode())` 声明工具箱，分类为 `Firmware` / `Flash` / `Data` / `Flow` / `Output` / `Dex` / `Mcp`（Dex 分类含 `Dex.Parse` / `Dex.Disassemble` / `Dex.Rebuild` / `Dex.Decompile`——反编译节点输入 Dex Path/Output Path，输出 Result，把 DEX 还原为伪 Java 源码；MCP 分类含 `MCP.ListTools` / `MCP.CallTool`——列举服务器工具、以 JSON 实参调用工具并输出结果，经 `McpNodeViewModel` + `McpClientService` 调用设置页配置的 MCP 服务器）。**各节点 `ExecuteAsync` 一律按 `TypeKey` 分发（`switch (TypeKey)`），不得按显示标题分发。**
-2. 端口类型约束：`NodePortType` 枚举（`Any`/`Flow`/`Path`/`Data`/`Text`/`Number`/`Boolean`）由 `NodeConnectorViewModel.PortType` 承载，兼容性判定在 `NodeDataUtil.CanConnect`（`Any` 通配、其余须相等），`NodeEditorViewModel.CreateConnection` 拒绝不兼容连接；端口类型徽章显示在节点图标连接器上。
-3. 选择与属性面板：`NodeEditorView` 订阅 `NodifyEditor`（`SelectingItemsControl`）的 `SelectionChanged` 同步到 `SelectNode()`，驱动右侧属性面板与一键删除（删除 `IsSelected` 节点）。
-4. 工作流执行由 `NodeExecutionEngine`（拓扑排序 + 异步调度 + **真实流控**：Branch 标记 Skipped 子图 / Loop 迭代执行 Body 子图（上限 `MaxLoopIterations`）并逐次写 Index / Parallel 经 `Task.WhenAll` 并发执行分支子图；Flow 类型连接即控制流边）驱动，状态通过事件回传画布。
-5. 工程加载：`LoadFromAsync` 按 `NodeDto.TypeKey` 经 `NodeTypeRegistry` 重建具体节点；未注册 TypeKey 时跳过该节点并记录警告日志（软件未发布，无旧工程占位兼容需求）。
-6. 项目插件系统已移除：不再有 `IPlugin` / `PluginRegistry` / `UotanStudio.Abstractions` / `UotanStudio.Plugins.BuiltIn`。
-
-### 3. 本地化（`Locale/`）
-- 资源字典 `Locale/{culture}/{Module}.axaml` 作为 `AvaloniaResource` 嵌入，运行时由 `LanguageService` 动态切换。**每个字典带 `x:Class`**（`Locale/en-US|zh-CN/*.axaml` → `UotanStudio.Locale.EnUs|ZhCn.*`，代码后置集中在 `UotanStudio/EnUsDictionaries.cs` / `ZhCnDictionaries.cs` 的 `partial class : ResourceDictionary`，构造函数 `AvaloniaXamlLoader.Load(this)`）；`LanguageService.CreateLocaleDictionary(culture, module)` 以类型实例化切换（AOT 安全），**禁止运行时 `new ResourceInclude(uri)` 反射加载**（裁剪下报 "No precompiled XAML found"）。
-- 模块：`Common`、`Dock`、`Menu`、`Node`、`Settings`、`Device`。
-- 新增键必须**同时在 `en-US` 和 `zh-CN` 中补齐**；查找键通过 `LanguageService.Instance.GetString("Key")`。
-- 添加新语言：创建 `Locale/{culture}/` 并在 `LanguageService` 注册。
-- **设置页开源致谢区块**：`SettingsView.axaml` 底部「开源致谢」区块展示本项目使用/参考的开源项目，数据源为 `SettingsViewModel.OpenSourceProjects`（`UotanStudio/Models/OpenSourceProject.cs`，静态只读集合，AOT 友好），每条含名称/描述/仓库链接/协议/作者 GitHub 链接与头像（GitHub avatar URL），「仓库」「作者」按钮经 `SettingsView.OnOpenLinkClick` 用系统浏览器打开链接；区块标题与商业许可说明文案来自 `Settings_OpenSourceCredits` / `Settings_OpenSourceNotice` / `Settings_OpenRepository` 本地化键。
-
-### 4. 消息（`CommunityToolkit.Mvvm.Messaging`）
-跨组件通信统一用 `WeakReferenceMessenger.Default`。消息类定义在 `UotanStudio/Messages/`，命名约定 `XxxMessage` / `XxxChangedMessage`。发送用 `WeakReferenceMessenger.Default.Send(msg)`，接收方在 `App` 等处理类用 `.register<MessageType>(this, handler)`。
-
-### 5. ViewModel 与 View 命名约定
-ViewModel 类名 → 同名 `View`（替换 `ViewModel` 为 `View`），且**目录同构**：`ViewModels/{Shell,Workspace,Editors,Devices,Nodes,Compare}/` ↔ `Views/{Shell,Workspace,Editors,Devices,Nodes,Compare}/`（纯控件与布局工厂在 `Views/Controls/`、`Views/Workspace/WorkspaceDockFactory.cs`、`Views/Nodes/NodeDockFactory.cs`）。解析统一走 `ViewModelViewRegistry`（显式注册表，非反射）。ViewModel 统一继承 `ViewModelBase : ObservableObject`，属性用 `[ObservableProperty]` 自动生成。
-
-### 6. 主题与样式
-
-- **交付布局切换**：镜像选择区左上角、“显示原包镜像”左侧新增带中英提示的布局切换按钮（`Delivery_ToggleLayout`，24 × 24 DIP、16 DIP 图标），相邻原包 CheckBox 的控件及内容均垂直居中。默认仍为底部镜像列表；切换后镜像区移至最右侧并占满内容区域高度，新增可左右拖动的竖向分隔线，沿用圆角端部，3 DIP 单侧投影朝左侧面板；`RoundedPaneDivider.ShadowLeft` 默认为 false，其他分隔线方向不变。右侧布局顶部补充与左栏同色同厚度的 1 DIP 顶部分隔线（`TabControlSeparatorBorderBrush`），左端预留 6 DIP 衔接圆角，切回底部布局时隐藏。原文本编辑器连同多文档标签移到中间下方，上方 Super / Payload 编排与输出设置等宽，中间上下仍可拖动调整；再次切换恢复原布局。每次从横向编辑器布局切到右侧时，按编辑器的实际边界对齐镜像区的宽度和位置，将新竖线放入原有 12 DIP 间距中；移除中间编排区域多余的右侧留白，保持编排与输出设置两栏的宽度及位置。右侧宽度仍可拖动，再次切入以当前编辑器宽度为准；两种布局各自保留上下分隔比例。原编辑器已上下排列的窄区按可用宽度分配两栏，继续使用镜像分页及表单上下排列，左栏沿用原响应式规则。切换复用镜像选择、编排和文档控件，提交正在编辑的分区名，保留勾选、顺序、确认状态、表单、草稿与撤销历史；只维护当前页面布局状态，不新增输出后端或持久化。
-
-- **交付页面**：`Views/Shell/DeliveryView.axaml(.cs)` 位于主窗口底栏工作区之后（Workspace=3、Delivery=4、NodeEditor=5、Settings=6），镜像页“打包ZIP”按钮发送 `NavigationTarget.Delivery` 跳转；激活页广播 `ActiveTab.Delivery`，避免编辑菜单操作后台工作区。左侧默认仅选“打包成ZIP”，SUPER / Payload 互斥；未勾选任何打包模式时隐藏输出方式下方的分隔线和全部设置。Super 模式显示项目选择与 Super 表单，隐藏 Payload 版本及后续字段；Payload 模式将项目复选框改为“使用项目Payload设置”，保留设备类型、名称、Super 大小和簇名，隐藏 Super 格式、元数据大小、块大小、槽位及镜像生成选项，并显示 Payload 版本及后续字段。勾选 Super / Payload 分别将名称重置为 super / payload.bin，切换打包成ZIP开关或同项目刷新不重置名称；打包成ZIP可与任一打包模式同时勾选，设置按打包模式显示。输出目录默认第一个子项目的 `OutputDir`，仅保存本地文本。SUPER 大小、分组名与 RAW/SPARSE 格式从 `ProjectSettingView` 移入输出目录下方，继续共用 `ProjectSettingViewModel` 的现有设置绑定。左栏顶部显示“打包设置”，其下按“输出目录 → 输出方式 → SUPER 设置”排列，组间以细横线分隔；输出方式下方新增“使用项目Super设置”复选框（默认不勾选）与子项目下拉框，固定上下排列、间距 6 DIP，下拉框占满可用宽度；勾选后从所选子项目读取原包 super/payload 配置回填表单，并禁用由项目配置驱动的设置字段（Super 格式、设备类型、名称、块大小、元数据大小、Super 大小、簇名、元数据槽位，及 Payload 的时间戳/安全补丁）；底部“压缩为ZST”与“生成Super_Empty”两个镜像选项不属于项目配置驱动字段，勾选后仍保持可交互，两项可同时勾选。取消勾选或项目列表为空时恢复可编辑。SUPER 表单依次为格式、设备类型（VAB / A-Only，默认 VAB）、名称（super）、元数据大小（65536）、块大小（4096）、原有 SUPER 大小与簇名、元数据槽位，以及并排的“压缩为ZST”与“生成Super_Empty”（默认不勾选；勾选后在生成完整 Super 镜像的同时额外生成 super_empty.img，输出镜像列表追加对应生成条目，脚本与清单不把 super_empty.img 当作可刷写分区；两项可并存；窄栏自动换行）。其后为 Payload 版本（2）、次版本（0）、动态分区文件、签名与 Postinstall；三个文件选择按钮仅回填本地路径，动态分区文件输入框下方单独一行放“选择文件”和禁用的“自动生成”按钮，不生成文件或执行签名。签名与 Postinstall 的输入框和选择按钮同行，窄栏时按钮换行。新增字段同样在切换工程时重置，刷新保留。本页 Super 文案采用首字母大写，使用 Delivery 专用文案键。切换 VAB / A-Only 时槽位分别重置为 3 / 2，槽位文本可编辑；新增参数仅保留页面状态，同一项目刷新保留、切换工程重置，不新增打包后端或配置持久化。输出目录的“选择目录”按钮带图标和文字、至少 100 DIP 宽，调用系统目录选择器并回填本地路径（取消不改值、工程切换后丢弃旧结果）。目录框和按钮同行，行宽不足 300 DIP 时按钮移至下一行；三个输出选项横向整体居中；左栏默认宽度按三个 CheckBox 的实际测量宽度、间距与左右内边距计算，随语言/字体变化更新，窗口缩放不按比例改变左栏宽度。手动拖动或键盘调整后保留用户指定宽度，窗口变窄时限制实际宽度以留出镜像区域；空间不足时选项逐行居中换行。SUPER 格式标签与 RAW/SPARSE 单选按钮同行且整体居中，其余字段为文字在上、输入框在下；侧栏独立滚动，12 DIP 表单留白放在滚动内容内部；滚动条靠面板右边缘，外侧预留 4 DIP 避开分割线拖动区，与输入控件之间保留空隙，沿用主题自动收起行为；默认宽度计算包含表单留白和边缘避让，最小宽度 268 DIP，背景沿用页面，顶部以 1 DIP 横线与顶栏分隔，颜色复用底部面板切换区的 `TabControlSeparatorBorderBrush`。左右以可拖动竖线分隔，右侧上区为 `Views/Controls/DeliveryCompositionView.axaml(.cs)`、下区为共用 `PackImageSelectionView`，默认高度按 3:2 分配（下区占五分之二，极矮区域仍遵守最小高度），两区以可拖动横线分隔；“显示原包镜像”在镜像区左上方、第一列全选上方对齐；两条区域分隔线由 `Views/Controls/RoundedPaneDivider.cs` 绘制，端部以 6 DIP 圆弧收进面板，使用 0.5 DIP 细线与沿弧线绘制的单侧渐隐投影（竖线仅向右、右侧横线仅向上延伸 3 DIP；窄屏时侧栏下方的横线仍向下投影，不使用向两侧扩散的模糊阴影），透明拖动范围保留 9 DIP，内容留白位于区域内部。页面宽度低于 640 DIP，或不足以同时容纳默认左栏与 260 DIP 镜像区域时，侧栏移至顶部，原左右分隔线改为横向拖动；上下布局保留拖动后的高度比例，切回左右布局恢复固定侧栏宽度，各区域设置最小尺寸。交付页启用 `ShowEmptyList`：无镜像分组时仍显示一个带表头的空列表及添加入口，占位列表不计入分组数、翻页或选择结果。镜像列表按宽度每页一至三列，含每列全选、原包开关与附加镜像入口（总列表不足三列时可添加）；所有镜像初始不勾选，交付页底部列表移除 Super 归属列，保留选择、镜像名称和大小列，不显示或识别镜像格式。PackImageFileInfo 在后台枚举 output/、images/ 与附加文件时仅读取实际文件长度，不打开文件探测内容；读取失败的大小显示“—”，刷新更新已有条目元信息而不重置选择。每列至少约 300 DIP，按可用宽度分页。进入页面和工程上下文变更时刷新，保留同一项目仍存在的选择，切换工程清除旧选择与附加镜像，异步枚举可取消且丢弃过期结果。上区默认按 1:3 分成镜像顺序与脚本编辑两栏，以两端留白的 1 DIP 普通分隔线隔开，无阴影；窄区为保证列表和编辑器可用，保留最小列宽，宽度不足 460 DIP 时上下排列，区域过矮时可滚动。左栏标题默认 Super镜像列表，Payload 模式改为 Payload镜像列表；始终汇总下方“选择”列的全部勾选镜像（忽略 Super 归属标记），包含其他分页、原包与附加分组，按完整路径去重。新增选择追加末尾、取消选择移除；Super / Payload 各自保留本地顺序，刷新保留仍存在的顺序。列表支持拖动插入线、边缘自动滚动、Esc 取消及 Alt+上下键排序。Super 的“自动添加零大小分区”默认勾选，取消时在列表下显示短横线与手动分区名输入；添加只产生可排序、可移除的 0 B 本地条目，拒绝空白、重复及非法分区名，不自动推导或写出分区。打包 Super 且启用自动零分区（VAB/AB）时，Super 镜像列表中无 _a/_b 后缀的文件承载镜像在勾选阶段即把分区名补为 _a，并自动生成对应的 _b 零大小只读伴随条目；已有 _a 后缀的镜像保持原逻辑，确认时 `DeliverySuperBuilder.ExpandPartitions` 的补名逻辑保留为兜底。Payload 隐藏零大小分区选项和手动表单，列表每行新增“属于Super分区”复选框（默认不勾选），与拖动手势分开处理，拖动、同项目刷新和模式切换保留勾选与顺序。Super / Payload 排序列表均有镜像名称、来源项目和大小列；来源项目使用独立共享列宽、与镜像名同行，按完整内容自动定宽并可悬浮查看，手动零分区的来源列留空；窄栏可横向滚动且表头随内容对齐；上下镜像列表使用各列表独立的 SharedSizeGroup 按内容自动定宽，名称、来源项目和大小列均不设置最大列宽或省略显示，空白保留在末尾；底部源列表的选择列也按内容对齐，每组表头和行内容放在同一横向滚动区域，窄栏可滚动查看完整名称及大小，竖向列表继续虚拟化；两种模式在自动添加零分区选项所在行的最右侧始终显示当前列表总大小，按去重后的实际文件长度合计，手动零分区贡献 0，未知大小显示已知合计加“+ ?”，取消选择、刷新与工程切换同步更新。右栏由 Views/Controls/DeliveryOutputView.axaml(.cs) 再分为输出设置与多文档编辑两部分；横向布局时输出设置通过 SettingsWidth 绑定相邻 Super / Payload 列表的实际宽度，两栏等宽，剩余空间全部分配给编辑器。输出设置与编辑器之间仅留 12 DIP 空白，不绘制分隔线；不足以同时容纳设置栏、间距与 220 DIP 编辑器时上下排列并保留最小高度。输出设置的“输出镜像”标题居中；“输出镜像列表”Expander 默认展开，表格展开时最小高度为 152 DIP（约四行镜像加表头），少量或没有镜像时仍保留该高度，脚本生成器紧跟其后；条目较多时增长至可用高度上限。输出设置区域最小高度同步为 340 DIP，窄区上下排列时也保留表头、四行列表及底部按钮的空间，整体空间不足时沿用编排区域滚动。DeliveryOutputSectionsPanel 按剩余空间有界测量两个折叠区，脚本收起时列表的最大高度恰好将脚本标题推到输出按钮上方，展开时先为脚本预留最多一半高度，并将短列表节省的空间交给脚本；两部分各自滚动，两项都关闭时只保留紧凑标题。输出表格的分区名与镜像文件名列也按内容自动定宽，可横向滚动查看完整文字。表格汇总下方选择的实际镜像文件，列为“可选”（默认不勾选，悬浮提示“设置为用户可选镜像”）、可编辑的“分区名”（初值为文件名去扩展名）、只读的“镜像文件名”（悬浮显示完整路径）。完整路径标识各条目，刷新、模式切换和取消后重新勾选保留分区名与可选状态；手动 0 B 分区仅属于 Super 编排列表。“脚本生成器”Expander 默认收起，展开时提交当前镜像表格编辑并自动收起上方“输出镜像列表”；收起脚本区域不自动展开镜像列表，用户仍可手动展开镜像列表。脚本区域依次为“选择脚本”标签及 TXT、Bat&SH、卡刷复选框（默认仅勾选 TXT，切换工程时恢复此默认值）、“机型代号”标签及空文本框、“作者信息”标签及九行高度的多行文本框。仅勾选 TXT 脚本时禁用作者信息输入框（包括默认状态）；同时勾选 Bat&SH 或卡刷脚本、或取消 TXT 勾选时，在输出设置区域可用的前提下恢复编辑，不清除已有作者内容。标签改为“作者信息（不支持TXT脚本）”，中英文同步更新，窄栏自动换行。作者框保持文字与光标垂直居中，水印按用户提供的刷机包信息、liuqin、sheng、安卓版本 16 和作者暮间雾示例保留换行，仅作为占位提示，不填入实际文本；机型代号与作者信息同项目刷新保留、切换项目清空。进度条与“开始输出”按钮固定在左侧底部、位于折叠区之外，进度初始为 0；进度条使用 20 DIP 高度和百分比文字，宽度随本栏剩余空间伸缩，按钮随输出设置区域启用，不连接输出后端。Super / Payload 编排列表底部、手动零分区表单之后并排显示“取消”和“确认”：同时勾选打包成ZIP与一种打包模式时，初始仅启用镜像编排内容，输出设置禁用；确认后锁定镜像编排内容并启用输出设置，取消按钮保留可用以返回编辑，取消后恢复确认前状态。只选择 Super 或 Payload 打包时，该页脚替换为同款 20 DIP 进度条及“开始输出”按钮，输出设置始终禁用；两个开始输出按钮都只作界面占位，点击不打包或改变进度。仅选打包成ZIP时禁用镜像编排及其确认/取消按钮，启用输出设置。三个输出选项均未勾选时禁用右上镜像编排、输出设置和文本编辑器；有任一输出方式时文本编辑器可用，底部源镜像选择始终可用。切换输出选项或工程时清除确认状态；确认后源镜像选择或大小发生变化也恢复编辑，未变化的刷新保留确认状态。右侧由文档标签和 CodeEditor 占满，可新建、切换和关闭多份文本草稿，每份使用独立 TextDocument 保存内容、撤销历史与光标位置；始终保留至少一份空白草稿，不生成或执行脚本。顺序、零分区、输出表格设置、作者信息及脚本草稿仅保留页面状态，切换工程全部重置并清空草稿和撤销历史。PackImageGroup 的选择事件经 PackImageSelectionView.SelectedImagesChanged 在 UI 队列中合并通知，避免全选或刷新中间态影响顺序。新页面没有打包、压缩或写出后端；中英 `Tab_Delivery` / `Delivery_*` 在 `Common` 模块，未使用 Test 项目。
-
-- **打包 ROM 入口**：旧 `PackSuperRomWindow` 的视图、代码后置、归档格式选项与表单结果模型已移除。镜像页输出模式统一使用 `ImageView_PackRom`（打包ZIP / Pack ZIP）导航到交付页。交付镜像选择的数据类型集中在 `Views/Controls/PackImageSelection.cs`，不依赖旧窗口或 Shell 表单类型；底部镜像选择器不再保留旧窗口的 Super 归属列和隐藏原包开关接口，Payload 镜像编排区的 Super 归属选择继续独立保留。
-- 新建项目窗口设置 `CanMinimize=False`、`CanMaximize=False`，局部隐藏并禁用 Semi 标题栏中角色为 MinimizeButton / MaximizeButton / FullScreenButton 的按钮，仅保留关闭按钮；`PART_OverlayPanel` 宽度使用单个 `CaptionButtonWidth`、最小宽度归零，使关闭按钮贴齐右上角，标题右侧留白 48 DIP。
-- 文件菜单依次为新建项目/文件夹/文件、打开项目/最近打开/打开文件夹/打开文件、保存/另存为、导入/导出、退出，各组使用分隔线及既有 16×16 Material 图标。新建文件/文件夹与资源管理器右键共用 `ExplorerItemCreationService` 的名称输入、名称校验和错误对话框，拒绝覆盖同名条目；目标优先为选中的目录或文件所在目录，再回退当前浏览文件夹/工程根目录，无目录时打开位置选择器。新文件创建后在文本编辑器中打开；打开文件使用现有编辑器路由。打开文件夹在资源管理器中增加一个普通浏览根（再次打开替换上次的普通浏览根，工程根保留），不创建工程；普通浏览根不持久化，名称变动通过独立监听器增量刷新，视图模型销毁时释放监听器。菜单中英文本位于 Menu 模块，共用新建错误文本位于 Dock 模块。
-- 新建项目窗口默认 800×600 DIP、最小 720×540 DIP，文字使用 13 DIP（必填错误提示为 12 DIP），文本框和底部按钮高 32 DIP，表单左右边距 20 DIP、字段组间距 12 DIP。标签与输入框同行，标签按内容共享宽度并右对齐，间隔 8 DIP；目录和镜像选择按钮显示图标与中英文字，共享宽度且至少 100 DIP。镜像列表按文件数量、列表实际高度和宽度自动分为一至三列：以 28 DIP 行高计算单列容量，优先采用容纳文件所需的最少列数，每列至少 240 DIP，超出三列或宽度限制时垂直滚动；窗口增高时自动合并列，变矮时展开，重排复用原条目以保留勾选。表头数量与行列数同步，格式列固定 88 DIP 以容纳中英表头并对齐内容，名称占满剩余空间并保留 8 DIP 间隔；超长名称省略并可悬停查看完整路径。
-- **新建项目窗口**：文件菜单的 `NewProjectCommand` 打开 `Views/Shell/NewProjectWindow.axaml(.cs)`，使用 32 DIP Semi 标题栏和 25×25 项目图标。窗口支持两种语义模式（`NewProjectWindowMode`）：顶部菜单入口为 **Solution**（新建解决方案，首个子项目与解决方案同名）；已打开解决方案的资源管理器右键「新建子项目」与菜单命令走 **SubProject** 模式（经 `AddSubProjectRequestMessage` 由 App 转发到 `MenuViewModel.AddSubProjectCommand`），创建子项目目录 + `.uotanfw` 并经 `ProjectOperationsService.AddSubProjectAsync` 重开解决方案把子项目写回解决方案文件，随后切回活动子项目再导入。项目名称与位置默认非空白：名称默认为 `NewProjectN`（跳过目标目录下已存在的目录与 `reservedNames` 中的现有子项目），位置显示**组合后的完整路径** `<基础目录>/<名称>` 并始终随名称联动——修改项目名称会同步路径中的文件夹名；手动编辑位置视为修改基础目录（编辑结果仍以当前项目名结尾时去掉该段作为新基础目录，联动保持开启，不再停止联动），「选择目录」选定的是基础目录，仍拼接当前名称显示；Solution 模式基础目录默认应用所在目录（工具箱同级），SubProject 模式默认解决方案根目录。点击创建时校验必填项（红色状态补齐即清除），且要求组合位置目录**必须为空或不存在**（`ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing`），否则显示 `NewProject_LocationNotEmpty` 提示。选择镜像后，恰好选中一个文件且内容为 super（LP geometry 魔数@4096）/ payload.bin（`CrAU`）/ zip（`PK`）时经 `ContainerStructureAnalyzer.Analyze`（`Services/Firmware/`，后台线程、有界只读元数据解析）分析内部结构并把列表重建为分组条目：super 列 LP 逻辑分区（按 extent 计算大小）、payload.bin 列 manifest 分区、zip 枚举内部镜像文件且内含 payload.bin 时**额外**追加 payload 分区组（ZIP 成员与 payload 分区可独立勾选，允许只勾选部分分区）；格式列显示真实格式，分组头不可勾选，中英分组标题为 `NewProject_GroupSuperPartitions/PayloadPartitions/ZipImages`。此窗口仍只保存本地表单状态；取消或关闭直接丢弃表单。创建流程在 `MenuViewModel`：普通多选镜像复用 `ImportAsync` + `UnpackFromProjectCreationAsync`；容器（`NewProjectFormResult` 携带 `ContainerKind`/`ContainerPath`/`SelectedZipMembers`/`SelectedPartitions`）先经 `ImageViewModel.ImportContainerAsync` 复制进子项目 `images/`，勾选解压时按 `ContainerEntryExtractor.ExtractAsync`（`Services/Firmware/`）**原地在 images/ 内定向提取**勾选条目（super 按分区名裁剪 LP extent、payload 经 `PayloadParser.Extract` 按分区名、zip 按条目路径流式解出/`fromPayloadOnly` 时对内含 payload.bin 递归一层），提取产物经 `ImageViewModel.AddExtractedImage` 登记为镜像条目；勾选「完全解压」时对提取出的受支持 img 继续递归解包为与 `images/` 同级的镜像同名文件夹。`ContainerStructureTests`（`UotanStudio.Tests/Services/`）覆盖空目录校验、默认名探测、三类容器分析与按勾选提取回环。中英文本位于 `Menu` 模块。
-- **文档查找与替换浮窗**：`Views/Controls/FindReplacePanel.axaml(.cs)` 提供 VS 风格的查找替换界面，`WorkspaceView.Search.cs` 按工作区 `DocumentsPane` 的实际停靠边界定位在标签栏下方右上角，随面板尺寸调整。宽度上限 300（常规布局输入框宽 196、范围框宽 171）、输入框高 24、图标按钮与范围框高 22，内外边距 4、行距 3；宽度小于 300 时范围框换行。通过顶部“编辑 → 查找 / 替换”或主窗口 `Ctrl+F` / `Ctrl+H` 打开，`MenuViewModel` 发送 `OpenDocumentSearchMessage`，`MainView` 切回工作区并在布局完成后打开对应模式；关闭按钮或 Esc 收起，文档区不保留常驻搜索按钮。文本、匹配选项与范围为控件本地状态，`WorkspaceView.SearchOperations.cs` 接线 `TextSearchService` / `ProjectTextSearchService`：支持当前文本/DTB 源码、固定选区、已打开文档和项目范围，大小写/整词/正则/保留大小写、前后循环导航、单次/全部替换。项目范围跳过二进制与超过 8 MiB 的文件，不跟随链接；扫描限 10000 个条目、64 MiB，匹配限 10000 项，正则有超时。替换先校验快照，写入文档未保存状态，复用原保存入口；已加载编辑器按文档合并撤销，项目替换不直接覆写磁盘。沿用 Material 图标与现有主题资源，中英文本位于 `Dock` 本地化模块；仅在 Test 项目验证搜索、替换与项目文件读取等后端逻辑，不构造 UI。
-- **AI 输入区下拉框**：模式与模型选择框共用局部 `ai-choice` 样式，固定高度 28、字号 12、上下内边距 0；文本模板行高 16 并垂直居中，占位文字采用相同度量。模式通过 `ModeOptions` 中实例稳定的 `AiModeOptionViewModel` 绑定 `ItemsSource`，语言切换仅通知 `DisplayName` 更新；不直接放置 `ComboBoxItem`，避免展开列表后切换 Dock 导致选项失效。下拉项使用紧凑内边距，避免与 Semi 的 `Small` 尺寸样式混用。
-- **AI 会话附件**：输入区提供「添加文件」图标入口，使用系统文件选择器多选任意文件；每个 `AiConversationViewModel.Attachments` 独立保存文件名和路径，按平台路径大小写规则去重，可逐项移除，清空会话同步清除附件。附件列表限高滚动，长文件名省略，悬停显示完整路径；不读取、上传或持久化文件内容，活动文档开关独立保留。
-- **AI 助手界面**：代码保留，但 `AppFeatures.AiAssistantEnabled` 固定为 `false`，Debug / Release 均隐藏 AI 窗口菜单项及设置区块，工作区不创建或注册 AI 面板，因此旧的面板可见性记录无法重新显示它。启用时，`AiAssistantViewModel` / `AiAssistantView` 位于 `Workspace` 分区，注册到右上 `RightPaneTop`，与镜像文件管理叠放，并接入「窗口」菜单和现有面板可见性保存。`MainViewModel` 将设置页的 `AiSettingsViewModel` 传给工作区工厂，共用 API 地址、密钥、模型列表与选中模型的内存状态；`AiSettingsView` 位于 `Shell` 分区。仅实现 UI 和绑定：会话草稿、历史切换、清空、聊天/智能体模式及活动文档开关为本地状态；发送和获取模型命令保持禁用，未接入网络、智能体执行、文件读取或 AI 配置持久化，密钥默认遮蔽。中英文本沿用 `Dock` / `Settings` 本地化模块，视图使用显式注册表。
-- **提示与确认弹窗**：资源管理器删除/重命名/新建、设备重启/刷写确认、镜像解包覆盖统一经 `Services/DialogService` 创建 Ursa `MessageBoxWindow`，使用已注册的 `UrsaSemiTheme`，独立窗口显示，无遮罩；删除/覆盖/设备操作确认使用 Warning，输入与关于窗口使用 Information，资源管理器操作失败使用 Error。按钮文案按当前语言设置，确认窗口默认聚焦取消，关闭和 Esc 不执行操作；关于窗口保留图标、版本与简介。设置保存经 `SettingsSaveCompletedMessage` 通知视图，由 Ursa `WindowToastManager` 显示无模态、无遮罩的轻提示，成功为 Success（2 秒）、失败为 Error（6 秒，可关闭）；`TrySaveSettings` 返回实际保存结果，避免失败后显示成功。
-- 主题资源：`Themes/LightColors.axaml` / `DarkColors.axaml`（`ResourceDictionary`，含 `PageBackground`、`AccentColor` 等画刷）。**两字典带 `x:Class`**（`UotanStudio.Themes.LightColors|DarkColors`，代码后置在 `UotanStudio/ThemeDictionaries.cs`，构造函数 `AvaloniaXamlLoader.Load(this)`）；`LanguageService.ApplyTheme` 以类型实例化切换（`new LightColors()` / `new DarkColors()`），**禁止运行时 `new ResourceInclude(uri)` 反射加载**。
-- **Fluent 兼容键**：主题字典额外定义 `TextFillColorSecondaryBrush`（`SolidColorBrush`，取 `SecondaryTextForeground` 颜色）——Semi 主题不提供该键，视图多处 `DynamicResource` 引用，缺失时解析回退默认色导致不随主题切换。
-- **比对高亮键**：主题字典定义 `DiffBackgroundBrush`（`SolidColorBrush`：浅色主题 `#FFF3D9`，深色主题 `#5A3A00`），`BinaryCompareViewer` 双栏 hex 与文本比较的差异行高亮使用。
-- 样式层：Semi.Avalonia + Ursa + Material.Icons + NodifyM，在 `App.axaml` `Application.Styles` 合并。切换主题调用 `LanguageService.Instance.ApplyTheme("DarkColors")`。
-- **浮动文档标题栏**：`App.axaml` 对 `HostWindow[IsToolWindow=False]` 统一启用 `ExtendClientAreaToDecorationsHint=True`、`ExtendClientAreaTitleBarHeightHint=32`、`WindowDecorations=Full`，使用 Semi 的 `WindowDrawnDecorations` 绘制标题栏与窗口按钮，覆盖 Dock 默认的原生标题栏设置。`Title` 通过 `DynamicResource Dock_Documents` 统一显示“文档”（英文为“Documents”），文档标签仍显示各自名称。按属性匹配，不使用 Dock 当前未设置的 `:documentwindow` 伪类。工作区与节点编辑器的文档浮动窗口共用此样式；工具面板保留 Dock 的工具标题栏行为。
-- **浮动文档图标**：同一全局样式将 `HostWindow.Icon` 设为 `/Assets/UotanToolbox.png`，与主窗口共用系统图标。通过 `WindowDrawnDecorations` 模板中的 `PART_TitleTextPanel.Background` 使用 `ImageBrush` 在左侧绘制 25×25 的同一图片，标题文字左侧留白 40、右侧留白 136 并启用省略，保留 Semi 原有窗口按钮与拖动区域；主窗口已有的顶栏图片不受影响。
-- **全局紧凑菜单**：`App.axaml` 统一设置 `MenuItem` 字号 12、最小高度 24、内边距 `8,2`、外边距 0，`ContextMenu` 内边距 4，菜单内 `Separator` 外边距 `4,2`；通过 `ContextMenu, ContextMenu MenuItem, MenuItem MenuItem` 将右键菜单与下拉菜单项的最小宽度设为 200，顶部菜单栏标题按内容宽度显示；顶部菜单栏、下拉子菜单和右键菜单共用全局样式，视图中不再单独指定菜单字号与间距。
-- **顶部菜单分组与图标**：`MainWindow.axaml` 的“编辑”菜单依次为查找/替换、撤销/重做、剪切/复制/粘贴/删除、全选，组间使用分隔线。文件、编辑、视图、工具与帮助中的常用命令使用 16×16 Material 图标，导入/导出图标方向对应操作；“窗口”菜单保留表示面板可见性的勾选标记。
-- **顶栏设备入口**：`MainWindow.axaml` 在最小化按钮左侧提供带手机图标的设备下拉菜单，已接入真实设备枚举：`MainViewModel.DeviceVM` 暴露 `DeviceViewModel` 单例（首次访问即启动 `DeviceMonitorService` 扫描与热插拔监听），下拉第一层直接平铺设备项，不再嵌套“选择设备”子菜单；代码后置监听 `DeviceVM.Devices.CollectionChanged`，在静态空态项与底部分隔线之间增量同步 `MenuItem`，保留仍存在的设备行，关闭窗口时解除订阅。设备行复用 XAML 中的 `DeviceSelectorItemTheme`（`DisplayName` 头部、`ToggleType=CheckBox` 打勾绑定 `DeviceInfo.IsSelected`，点选走 `DeviceInfo.SelectCommand` → `DeviceViewModel.SelectDevice`，与设备面板共享同一 `SelectedDevice`）；无设备时显示禁用的 `Device_NoDevices` 占位项，有设备未选中时头部显示 `Device_Select` 占位文本、选中后显示 `DeviceVM.SelectedDeviceName`。`RefreshDevicesAsync` 维护选中不变式：只要设备列表非空就保证 `SelectedDevice` 非空——原选中设备仍在则保留，设备断开或从未选中时自动回退选中列表第一项（首次扫描亦默认选中第一项）。`DeviceInfo.IsSelected` 由 `DeviceViewModel` 在选择变化时统一通知（`NotifySelectionChanged`），新增 `ReferenceEqualConverter`（支持双值 MultiBinding 与 ConverterParameter 引用相等比较）。`MenuItem` 设 `ItemsSource` 后不能混排静态子项，也不能用 `ItemTemplate` 嵌套 `MenuItem`（容器套容器且外层无 Command 被禁用）、Setter 值不能是控件实例（`Setter Property="Icon"` 放 `MaterialIcon` 会运行时抛 "Cannot use a control as a Setter value" 导致启动崩溃），设备行通过独立 `ControlTheme` 设置 Header/Command/打勾，静态空态与管理器项不套用设备绑定。“设备管理器”固定在分隔线下方的最后一项，复用 `MenuVM.OpenDeviceCommand` 打开或聚焦承载 `DeviceView` 的 `DeviceWindow`。主窗口顶栏使用独立列布局，右侧为 Semi 窗口按钮预留 136 DIP，项目标题在剩余空间内省略，窗口最小宽度为 720；`Device_Select` 在中英文 `Device` 字典中同步维护。
-- **设备管理器标题栏**：`DeviceWindow` 使用 32 DIP 的 Semi `WindowDrawnDecorations`，左侧绘制 25×25 项目图标 `/Assets/UotanToolbox.png`，标题为本地化“设备管理器”，保留 Semi 窗口按钮与拖动区域；`DeviceView` 内容向下预留 32 DIP，窗口最小尺寸为 720×400。
-
-### 7. 日志
-统一走 `LogService.Instance.Write(LogLevel, "Source", "Message")`，UI 日志窗口通过 `LogEnqueued` 事件或 `Subscribe` 增量消费。`LogLevel` / `IUnifiedLog` 定义在 `UotanStudio/Services/Logging/IUnifiedLog.cs`（命名空间 `UotanStudio.Services`），`LogService` 实现 `IUnifiedLog`；`UotanStudio.Comm` 的 USB 诊断通过 `UsbLogBridge` 桥接到统一日志。**首次机会异常记录**（2026-09-13）：`FirstChanceExceptionLogger.Install()`（`App.OnFrameworkInitializationCompleted` 挂接）捕获调试器输出窗中「引发的异常」的 `SocketException`/`OperationCanceledException`/`TimeoutException`，按「类型+消息+顶层帧」5 秒窗口节流后以 Debug 级别、来源 `Exception` 写入全局日志，消息含异常抛出点调用路径（最多 10 帧，Debug 构建含文件行号）；其余异常类型不处理。`SettingsViewModel.InitializeFromAppSettings` 启动时应用 `ApplyDebugMode`，开启调试模式后这些条目在日志窗口可见。`DeviceMonitorService.MonitorHdcTargetsAsync` 在 HDC server 不存在时按退避拉长轮询间隔（3s → 上限 60s，先经 `DebugBridgeRoute.UseHdcServer()` 探测再执行命令），探测到 server 恢复 3 秒。**分通道日志**：`LogService.ChannelOf(source)` 按 Source 前缀把日志归入 `LogChannel`（`General`/`Device`/`Flash`/`Firmware`/`Build`，`LogEntry` record 不变），`LogViewModel` 提供通道 Tab（`Log_Channel_*` 键）与既有级别/来源筛选叠加。**调试模式**：设置页 `Settings_DebugMode` 开关联动 `LogService.ApplyDebugMode(bool)`——开启时最低级别降为 `Trace`（显示全部诊断），关闭时为 `Info`（过滤 Trace/Debug）；工作区输出面板（`WorkspaceLogViewModel`，`Firmware`+`Flash` 通道）共享这一过滤级别。ADB 日志面板使用独立的 `AdbLogView` / `AdbLogViewModel`，通过 `DeviceMonitorService.StartLogcatStreamingAsync` 读取当前选中 ADB 设备的实时 logcat，不消费全局日志通道。
-
-日志界面统一由 `Views/Shell/LogWindow.axaml(.cs)` 承载（原 `LogView` 已合并移除），标题栏使用 Semi `WindowDrawnDecorations`（32 高、左侧 25×25 应用图标、保留窗口按钮）。日志区域使用只读 AvaloniaEdit `TextEditor`（13 DIP 等宽字体、紧凑行距，与底部“输出”和 ADB 日志正文一致），按集合增删增量同步文本并关闭撤销缓存；支持跨行拖选、Ctrl+C、Ctrl+A 及右键复制/全选，选中文字时暂停自动滚动。各等级整行文字使用明暗主题中的 `LogTraceBrush` / `LogDebugBrush` / `LogInfoBrush` / `LogWarnBrush` / `LogErrorBrush` / `LogFatalBrush`，多行消息保持同一等级颜色。窗口共用静态 `LogViewModel`，关闭时解除窗口的集合变更、滚动、选择及主题事件订阅，保留日志接收、缓存与筛选状态；再次打开继续显示已有日志。筛选、清空显示和导出行为保留，`LogService` 和 `LogViewModel` 的默认缓存上限仍为 5000 条。
-
-日志等级文字使用六种独立固定色值，不直接引用主题强调色或通用文字色，修改 `AccentColor` / `SecondaryTextForeground` 不改变日志等级颜色。浅色主题配色：Trace 灰色 `#666666`、Debug 使用参考截图的绿色 `#4CAF50`、Info 蓝色 `#0078D4`、Warn 橙色 `#FF9800`、Error 正红色 `#FF0000`、Fatal 紫色 `#9C27B0`。深色主题保留现有配色：Trace `#999999`、Debug `#69CEC7`、Info `#82B7FA`、Warn `#E8B85E`、Error `#FF8989`、Fatal `#ED8CD0`。
-
-级别下拉框按所选等级精确筛选（例如 Info 仅显示 Info）；“全部”对应 `LevelFilter=null`，显示全部等级。历史日志与新增日志共用 `MatchesFilter`，级别、组件、通道条件同时生效；筛选只影响展示，不丢弃缓存中的其他等级日志。
-
-独立日志窗口与工作区“输出”面板均提供 `SearchText` 整行搜索（条目 `Text.Contains` + `OrdinalIgnoreCase`，按字面子串匹配），显示与搜索共用 `Text` 格式，覆盖时间、等级、组件名、正文及跨字段文本，支持中文与多行内容，并与其他筛选条件叠加；`ClearSearchCommand` 清除搜索并恢复符合其他条件的日志。顶部下拉框与搜索框使用 `Classes="Small"`、高度 22，操作按钮为 20×20；独立窗口搜索框占据剩余宽度，Dock 输出工具栏在窄面板中自动换行。搜索本地化键为 `Log_Search` / `Log_ClearSearch`。输出面板日志集合统一在 UI 线程变更，视图按事件顺序同步文本，避免筛选时延迟 Reset/Add 导致重复行；默认缓存上限仍为 5000，淘汰时同步移除展示条目。
-
-通道分类按组件名关键字匹配，未命中专门分类的组件统一归入“通用”，因此全部日志均可在某个具体通道中找到。组件名 `Images`（不区分大小写、完整匹配）归入“固件”，工作区日志面板也共用此归类。“构建”选项卡显示名改为“节点”（英文 `Nodes`），保留 `LogChannel.Build` 与 `Log_Channel_Build` 标识及现有筛选范围。
-
-日志编辑器显式设置 `AllowScrollBelowDocument=false`，避免自动滚动或重开窗口时将末尾空行推到视口顶部，显示整屏空白。
-
-ADB 日志面板顶栏提供 Small 级别下拉框、整行搜索，以及正则表达式、区分大小写、自动滚动、暂停/继续、重置、清空图标按钮（20×20，带中英文悬浮提示），不显示“跟随日志”复选框。组件筛选及其后端 `SourceFilter` / `Sources` 已移除，Tag 仍作为日志字段显示和搜索。解析 threadtime 输出的等级与各字段（V/D/I/W/E/F 或 A 对应 Trace/Debug/Info/Warn/Error/Fatal），级别精确匹配，整行搜索默认忽略大小写，`UseRegex` / `MatchCase` 可组合切换；未解析的原始行保留在全部日志中。动态正则使用 AOT 兼容的解释执行及 50ms 匹配超时；语法错误或超时显示错误提示并停止匹配，修改搜索选项后恢复，历史日志仍保留。`ResetLogsCommand` 仅清除本地显示、历史和待处理日志，当前采集连接继续运行，不重启采集、不重读或清除设备缓冲区。`ClearLogsCommand` 同时清空本地与设备 logcat 缓冲区：取消并等待旧采集结束，经 `DeviceMonitorService.ClearLogcatBuffersAsync` 执行 `logcat -b all -c`（adb server/USB 双后端、成功标记验证、10 秒超时），成功后重新开始采集；旧连接迟到回调被丢弃，失败显示错误并允许重试，切换设备或销毁面板取消未完成操作。两种操作均保留等级、搜索、正则、大小写、暂停和自动滚动设置；无可用设备时只处理本地日志。筛选仅影响显示，原始历史缓存仍为 5000 行，切换筛选可恢复缓存内日志。自动滚动按钮使用 `AutoScroll` 双向绑定及 `Log_AutoScroll` 提示，默认开启；关闭后新增日志不重新开启，向上翻阅历史会关闭跟随，点击开启立即滚到末尾，文字选区存在时暂停滚动。`IsPaused` 暂停时停止刷新显示，后台继续向现有有界待处理队列接收最新 5000 行；继续后按每批最多 250 行增量补入并沿用文字定位补偿。暂停期间可筛选已显示的历史。
-
-ADB 日志的采集与展示共用 `AdbLogcatEntry`（`Services/Devices/`）：保留原始行，并解析设备日期时间、PID、TID、Tag、等级与正文；`Text` 按 Android Studio 的字段顺序保存“日期时间、PID-TID、组件、进程名称、等级、正文”，保留完整字段供搜索和复制。`AdbLogcatReader` 通过 `logcat -b all -v threadtime -v year '*:V'` 读取所有可用缓冲区和等级，adb server 与 USB 直连共用该路径；采集开始时及每 2 秒执行 `ps -A -o PID,NAME`，使用当前进程表为新日志补充进程名称（Android 应用通常为包名），未查询到时显示 `-`，不猜测名称，已收到条目的进程名不因后续 PID 变化而改写。进程查询限时 3 秒，失败仅影响元数据；流结束或取消时等待查询任务退出，USB 下复用同一 ADB 会话。整行普通搜索与正则搜索均使用 `Text`，包含所有这些字段，`MatchCase` 同样作用于整行；单条原始日志仍限制 16384 字符，两个日志队列上限仍为 5000。视图按物理行同步等级与文本，普通字段和正文复用工具箱日志的六种 `Log*Brush`，未识别等级的提示行使用 `TextForeground`。筛选、缓存淘汰和重新挂载时同步重建或更新颜色映射；主题事件在 Loaded/Unloaded 时订阅/解绑，深浅主题切换重新着色，等级色仍独立于主题强调色。编辑器禁用链接特殊着色，并使用相同的中英文行高与居中基线，保留选择复制及自动跟随行为。
-
-ADB 固定列排版位于 `Views/Workspace/AdbLogView.Columns.cs`：通过 AvaloniaEdit `VisualLineElementGenerator` 将前五个字段渲染为固定宽度的文本元素（按等宽字体分别占 24/14/25/33/3 个字符宽），正文保持普通可逐字选择的文本；超长字段仅在显示时省略，元素仍覆盖完整文档范围，选择字段或跨行复制时不丢失内容，普通/正则搜索仍匹配完整行。中文、长组件名、长进程名以及不同时间精度和 PID 长度不挤动后续列。等级列以对应 `Log*Brush` 为背景，按相对亮度选择黑/白字母，保证至少 4.5:1 对比度；F/A 共用 Fatal 底色。列元素使用字体 ascent/descent 度量，避免重复计入 line gap 撑高行距，行高随正文字号自动计算，缓存上限与滚动定位不变。
-
-ADB 等级列使用直角矩形背景，由 `LogPriorityBackgroundRenderer` 在 `KnownLayer.Background` 绘制，颜色保存在元素的 `TextRunProperties.BackgroundBrush`，避免 AvaloniaEdit 内置元素背景的圆角；背景随文字滚动，并位于选区层之下。
-
-实时 ADB 与离线日志共用 `ILogLine` / `LogTextColumn`（`Services/Logging/`）描述完整文本、等级和列映射，`ILogViewModel`（`ViewModels/`）提供视图所需的筛选及集合事件。组件名和进程/包名列使用 `TextTrimming.PrefixCharacterEllipsis` 省略中间内容、保留首尾，仅影响显示；复制、整行搜索和导出始终使用完整文本。
-
-ADB 顶栏的“导出”图标按钮紧邻“清空”右侧，两者作为同组换行，位于设备序列号之前，仅在实时日志中显示。点击时固定当前筛选结果的快照，选择文件期间的新日志及筛选变更不影响本次导出。`LogFileService.WriteAsync` 写入带 `# UotanStudio Log 1` 版本头的 UTF-8 JSON Lines（默认 `.log`），保留完整文字、多行消息、等级、组件及进程列；`LogFileRecord` 注册到 `AppSettingsJsonContext`，使用源生成序列化保持 AOT 兼容。全局 `LogWindow` 仍使用原有纯文本导出。
-
-离线日志文档为 `Views/Editors/LogEditorView` / `ViewModels/Editors/LogEditorViewModel`，经 `ViewModelViewRegistry` 显式注册。视图复用 `AdbLogView` 的 13 DIP 正文、固定列、等级底色、选择复制、等级/整行/正则/大小写筛选，仅显示重新加载操作，不创建设备连接，也不显示设备、自动跟随、暂停、重置、清空和导出控件。`LogFileService.ReadAsync` 与 `LogTextParser` 支持本工具导出格式、普通 logcat 的 threadtime/time/brief/long 文本，以及全局项目日志导出；未识别行保留原文，未知进程/TID 显示 `-`。离线读取独立于实时 5000 条缓存，限制文件 64 MiB、输入 250000 行、单条逻辑日志 1 Mi 字符，超过限制明确报错，不静默截断；异步加载和重新加载仅在成功时替换文档，关闭时取消加载并释放历史。
-
-ADB 暂停跟随时固定正在查看的文字位置：缓存淘汰位于视口上方的旧日志后，按 `TextView.GetVisualTopByDocumentLine` 得到的实际删除高度补偿垂直滚动偏移，保留行内像素偏移、水平位置和选区。新日志仍正常接收，滚动条位置随缓存变化，缓存上限仍为 5000；若当前文字本身已被淘汰，则显示缓存中剩余的日志。选中文字导致的临时暂停使用同样的定位补偿。
-
-日志行高在编辑器加载后按中英文混合文字的实际字体度量向上取整，通过 `LineHeightFactor` 统一设置，随当前 13 DIP 正文字号自动计算；文字运行片段使用 `BaselineAlignment.Center`，避免中文回退字体改变行高及纯英文文字的垂直位置。首行、多行消息与不同等级共用排版，深浅主题切换只更新颜色。
-
-### 8. 工作区面板与工程文件
-“终端”面板为 `ViewModels/Workspace/TerminalViewModel` / `Views/Workspace/TerminalView`，经 `ViewModelViewRegistry` 登记，默认位于中间底部 `BottomPane`，与“输出”“ADB 日志”并列。每个面板只承载一个 Shell 会话，顶部只保留 Shell 下拉框；新建按钮经 `TerminalDockService` 在当前宿主中新建独立 Dock 标签（唯一 Id 与编号标题），可各自拖动、浮动、关闭。`WorkspacePanelService.Terminal` 统一管理这组面板的显隐，“窗口”菜单的 `ToggleTerminalCommand` 可重新打开；全部关闭后重新显示会创建新终端。会话保存机制只记录终端组可见性，不保存运行中的 Shell 实例。
-
-终端使用 `Iciclecreek.Avalonia.Terminal` 4.0.2（XTerm.NET）与 `Porta.Pty` 2.2.2，版本由 `Directory.Packages.props` 管理，设置页开源致谢同步登记。Windows 使用 ConPTY（Windows 10 1809 或更新版本），优先 PowerShell 7，再选 Windows PowerShell / cmd；macOS/Linux 使用 PTY，按 `$SHELL` 及已安装的 zsh/bash/fish/sh 提供选项，原生库随依赖提供 x64/arm64 版本。`TerminalShellService` 仅解析可执行文件路径，启动参数按数组传递；新会话以工程根目录为起点，无工程时使用用户目录。支持独立 Dock 终端、新建/关闭、ANSI 颜色、交互输入、选择复制/粘贴、清屏、回滚缓冲区和窗口尺寸同步；正文 13 DIP，每会话回滚 10000 行，与日志缓存无关。终端背景绑定 `PageBackground`，默认文字及光标绑定 `TextForeground`，随深浅主题动态切换；通过终端库 `MinimumContrastRatio=4.5` 保证 ANSI 亮色文字在浅色背景下可读。底部状态文字仅在非空时显示，正常运行不预留灰色状态条。
-
-每个 `TerminalViewModel.Session` 由 `TerminalSessionViewModel` 持有 PTY 与取消令牌，首次显示时异步启动。直接使用第三方 `TerminalView` 绘制，避免 `TerminalControl` 的运行时主题加载；`DockTerminal` 通过显式 reparent API 在 Dock 切换、隐藏、浮动时保留进程及历史，并在脱离界面期间继续回复 VT 查询。视图忽略 Dock 切换时临时清空的继承 DataContext，保留缓存终端及其读取循环。Dock 关闭按钮和终端关闭按钮均移除对应标签并释放终端控件及 PTY；“窗口”菜单隐藏面板只改变可见性，不结束会话。`TerminalDockService` 在工作区销毁或布局替换时释放全部会话。终端实例不写入磁盘，应用重启不恢复命令或进程；不使用 `UotanStudio.Tests` 项目验证终端界面。
-
-工作区（`WorkspaceView` / `WorkspaceDockFactory`，`Views/Workspace/`）承载 Dock 布局：
-- **离线日志打开**：`EditorOpenMode.Log` 经 `WorkspaceViewModel.OpenLogAsync` 打开或聚焦同一路径的 `LogEditorViewModel`。`.log/.logcat/.adblog` 默认进入日志文档，`.txt` 和无扩展名文件通过文件头识别日志；明确为二进制的内容仍走 Hex。资源管理器右键“打开方式”增加“以日志打开”，可显式打开其他扩展名。`WorkspaceDockFactory` 关闭文档时调用 `Cleanup()`。
-- **面板构成**：左侧（项目资源管理器；**打包设置面板默认隐藏**，经「窗口」菜单唤出）、中部文档区（`DocumentDock`，Id=`DocumentsPane`）、右侧（镜像管理 / 属性）；底部 `BottomPane` 默认显示“输出”“ADB 日志”“终端”三个标签，初始选中“输出”。“输出”（`WorkspaceLogViewModel`）仅过滤 `Firmware` + `Flash` 通道，显示固件处理与烧录日志，不包含节点 `Build` 通道；“ADB 日志”（`AdbLogViewModel`）显示当前选中 ADB 设备的实时 logcat；“终端”（`TerminalViewModel`）提供本机交互式 Shell 与多会话。ADB 面板及「窗口」菜单入口不受设备可用性影响，断开设备不会隐藏标签，手动关闭后也不会因设备变化自动弹出，可随时经菜单重新打开；设备可用性只控制采集。面板显隐/聚焦由 `WorkspacePanelService`（`Services/Workspace/WorkspacePanelService.cs`，单例）统一管理，`WorkspaceDockFactory.CreateLayout` 用 `Register(key, dockable, host, visible)` 登记各面板，`CloseDockable` 关闭面板后回调 `OnDockContentsChanged` 同步可见状态。
-- **顶部菜单「窗口」栏目**：`MainWindow.axaml` 在 视图 与 工具 之间提供「窗口」菜单，各面板项以 CheckBox 形式勾选当前可见性（绑定 `WorkspacePanelService` 的可观察属性），命令由 `MenuViewModel` 的 `ToggleProjectExplorer` / `ToggleProjectSetting` / `ToggleImagesView` / `ToggleProperties` / `ToggleWorkspaceLog` / `ToggleAdbLog` / `ToggleTerminal`（`[RelayCommand]`）转发到 `WorkspacePanelService.Toggle(key)`。窗口菜单**不管理**设备管理器 / 日志等独立窗口（仍由「工具」菜单打开）。
-- **文档编辑器**：`FileView` 使用 `Views/Controls/CodeEditor`（继承 AvaloniaEdit `TextEditor`，TextMate 语法高亮，LightPlus/DarkPlus 随主题切换）；`FileViewModel`（`ViewModels/Editors/`）承载 `Text` / `Language` / `FilePath` / `IsDirty`，并支持**用户选择保存编码**：`FileViewModel.SupportedEncodings`（UTF-8 / UTF-8 (BOM) / UTF-16 LE / UTF-16 BE / GB18030 / ASCII）经 `ResolveEncoding` 解析写盘编码，`ApplyEncoding` 更新写盘编码并把文档标记为已修改（下次保存按新编码写字节，默认保持无 BOM UTF-8 与 BOM 探测读取不变）；属性面板（`PropertiesViewModel`）在语法语言选择行**上方**提供编码下拉行（`PropertyRow.IsEncodingSelector`，普通行以 `IsPlainValue` 控制纯文本可见性），选择经 `OnSelectedEncodingChanged` 回写文档，「自动检测」仅同步显示不改变写盘编码。Hex 编辑器（`HexEditorViewModel` + `HexViewer`）属性面板同样提供编码下拉行（复用 `PropertyRow.IsEncodingSelector` 与 `FileViewModel.SupportedEncodings`）：`RefreshForHexDocument` 填充并经 `HexEditorViewModel.ApplyEncoding` 回写，控制 `HexViewer` 文本（ASCII）列的解码显示与文本输入编码（`HexViewer.EncodingName` StyledProperty，默认 ASCII，未知名称回落 ASCII），**仅影响显示/输入，不改变保存的字节内容**；多字节编码下文本列按单字节独立解码、不可解码显示 "."。，`FileView` 双向绑定；语言按扩展名由 `SyntaxLanguageRegistry.GetLanguageId` 解析（`.prop/.rc→ini`、`.xml→xml`、`.json→json` 等）。`WorkspaceViewModel.OpenDocumentAsync(path)` 打开/聚焦文档，`App` 注册 `OpenDocumentRequestMessage` 转发。特殊格式走专用编辑器：DTB/DTBO → `DtbEditorViewModel`（左节点树 + 右 DTS 源码）；`.dex` → `DexEditorViewModel`（只读反汇编，经 `FirmwareFormatRegistry` 注册的 `UotanStudio.Firmware.Dex.DexFormatHandler` 解析，`DexService` 提供 Parse/Disassemble/Rebuild 服务）；AXML（`AndroidManifest.xml` 等二进制 XML）→ `ManifestEditorViewModel`（左元素结构树 + 右属性编辑与 XML 预览，经 `UotanStudio.Firmware.AXml.AXmlFormatHandler` 解析，保存时以 `AXmlWriter` 重建）；resources.arsc → `ArscEditorViewModel`（左包→类型→配置→条目资源树 + 右条目详情，经 `UotanStudio.Firmware.Arsc.ArscFormatHandler` 解析，只读浏览）；文件系统镜像（raw img：扩展名命中 `.img/.ext4/.erofs/.f2fs` 且内容魔数命中 ext4 `0xEF53`@1080 / EROFS `0xE0F5E1E2`@1024 / F2FS `0xF2F52010`@1024）→ `FileManagerEditorViewModel`（`ViewModels/Editors/`，左内部目录树初始宽度 Auto、图标高 14；右侧可切换紧凑列表（行高 36）与方形图标网格（默认布局，72×72，按宽度换行），共用 Filemgr 文件/文件夹位图与目录/选择状态；右上角提取、刷新、视图切换及返回上级按钮使用 Small 类，尺寸与 ManifestEditor 一致（18×18、内部图标 12×12）；支持双击/Enter 进入目录、返回上级、刷新保留目录与选择；分割条复用 DtbEditor 样式，面板宽度小于 600 时切为上下分割，右栏小于 480 时列表类型换到名称下方，经 `Ext4Parser`/`ErofsParser`/`F2fsParser` 流式解析，支持刷新与提取选中条目；`FileOpenMode.ResolveMode` 在固件分支前按内容魔数路由到 `EditorOpenMode.FileSystem`）；分区表（LP super 元数据或 Rockchip parameter 内容）→ `PartitionEditorViewModel`（`ViewModels/Editors/`，左分区树 + 右属性编辑（分区名/起始/大小/类型），LP 经 `UotanStudio.Firmware.Lp` 元数据读写，Rockchip 经 `RockchipParameter` 解析并重建 `CMDLINE: mtdparts=…` 保存，`FileOpenMode.ResolveMode` 按内容路由到 `EditorOpenMode.Partition`）；固件文件（扩展名命中格式处理器注册表，如 `.img/.pac/.ops/.nb0`）→ `FirmwareInfoViewModel`（`ViewModels/Editors/`）+ `FirmwareInfoView`，展示格式名/摘要/元数据/条目（数据来自 `FormatDetector.Detect` + `IFormatHandler.ReadMetadataAsync`；**格式未识别或元数据读取失败时 `OpenFirmwareAsync` 移除刚创建的固件文档并自动回退到十六进制编辑器打开同一文件**），工具栏含**动作按钮**：「校验」（AVB 格式走 `FirmwareService.VerifyAvbAsync`，其余流式 SHA-256）与「解包到工程目录」（按格式分派解包到 `ImageOperationPaths.UnpackedDirectory`）。打开方式由 `FileOpenMode.ResolveMode`（`EditorOpenMode`：`Auto/Text/Hex/Dtb/Dex/Axml/Arsc/Apk/Firmware/FileSystem/Partition`，AXML 按内容魔数优先于 `.xml` 文本路由，ARSC 按内容魔数兜底，文件系统镜像按内容魔数优先于固件面板，**无扩展名文件经 `FirmwareFormatRegistry.RegisterAll()` + `FormatDetector.Detect(path)` 按内容嗅探路由到固件面板（未命中再按 `ManagedMagic`/二进制启发式回退 Hex）**；**已知固件扩展名集合由 `FormatDetector.RegisteredHandlers` 的 `FileExtensions` 聚合**，`IsFirmwareExtension` 统一驱动固件面板与 Hex 路由，避免双源维护）路由，资源管理器右键「打开方式」菜单（含「在固件信息中打开」「以文件管理视图打开」——后者强制 `EditorOpenMode.FileSystem` 经 `FileManagerEditorViewModel` 打开 ext4/erofs/f2fs 磁盘映像视图）与双击（Auto 模式）复用同一消息。**OS 文件/目录拖拽**：`WorkspaceView` 根容器挂 `DragDrop`（Avalonia 12 `DataTransfer`/`DataFormat.File` 双保险，与 CompareView 一致），拖入文件按 `FileOpenMode.ResolveMode` 路由打开、拖入目录则枚举直接子级中的固件扩展名文件经 `MenuViewModel.ImportFilesAsync` 导入工程，混合拖拽只取文件。
-- **文件/文件夹比较（BC 式）**：服务层在 `Services/Compare/`（`FolderCompareService` 递归目录比对：先比大小、再流式 SHA256，状态 Equal/Different/LeftOnly/RightOnly，含复制/删除动作；`TextDiffService` 基于 **DiffPlex** 的行级 diff + 行号对齐，大文件有界流式；`BinaryDiffService` 流式单遍差异统计（不物化区间列表）+ 可选行差异位图（每 16 字节行 1 bit，内存与文件长度成正比）/`IsTextFile` NUL 探测）。**对比面板为工作区文档区中的统一双栏视图**（`ViewModels/Compare/` ↔ `Views/Compare/`，底部不再提供对比入口）：`CompareView` 左右分栏（左栏 | 分隔线 | 右栏），由 `CompareViewModel : Document`（`ViewModels/Compare/`，经 `ViewModelViewRegistry` 显式注册 `CompareView`）承载三种内容模式 `CompareMode`（`Folder`/`Text`/`Binary`）；每栏经新建 `ComparePaneView` 或直接双 `ListBox` 渲染同一行模型 `CompareRowViewModel`（`ViewModels/Compare/`，含 `Status`/`Depth`/左右单元格文本/`IsLeftDiff` 等），但**左右各自绑定独立行列表**（`CompareViewModel.LeftRows`/`RightRows`，文件夹模式由 `RebuildSideRows` 按单元格空态过滤：仅左侧条目不显示在右侧、仅右侧条目不显示在左侧，不跨栏重复；文本/十六进制模式两侧共享 `Rows`）；仅单侧路径时该侧渲染内容、另一侧置空态提示（`Compare_DropRightFile`/`Compare_DropRightFolder`）；相同两侧都显示无高亮、不同两侧都显示并整行 `DiffBackgroundBrush` 差异高亮，仅单侧条目在所属侧整行淡色背景（`CompareRowViewModel.LeftTintBrush` 橙调 / `RightTintBrush` 蓝调，`ForFolder` 对 Equal/Different 两侧填名称与大小、LeftOnly/RightOnly 缺失侧单元格置空）；点击任一侧条目按引用在另一侧查找同一行对象联动选中（找不到则不联动，`_syncingSelection` 防回环）；两侧 `ListBox` 内 `ScrollViewer` 经代码后置同步滚动（`_syncing` 防回环）。**二进制/固件文件比较**：`OpenCompareFilesAsync` 内容嗅探——文本 → `Text` 模式（`TextDiffService` 流式行 diff）；二进制（含可识别固件 `.img` 等）→ `Binary` 模式默认展示解析元数据（`FormatDetector.Detect` + `IFormatHandler.ReadMetadataAsync` 得 `FirmwareOpResult`，左右并排显示格式名/摘要/键值/条目/组件），工具栏「`Compare_HexRaw`」按钮切换十六进制原始数据对比（`BinaryViewKind` `Metadata`↔`Hex`，hex 行经 `CompareHexRowCollection` 懒加载集合流式按需读取 + 行差异位图（`BinaryDiffService.CompareStats` 可选输出，每 16 字节行 1 bit）差异高亮，不整读大文件）。**已删除旧结构**：`CompareFolderView`/`CompareFileView`/`CompareBinaryView`（及各自 `.axaml.cs`）、`CompareFolderViewModel`/`CompareFileViewModel`/`CompareBinaryViewModel`、`FolderCompareItemViewModel`、`Views/Controls/BinaryCompareViewer.cs`（`HexViewer`/`HexMetrics` 仍保留供 `HexEditor` 使用）。文本比较（`TextDiffService`）与文件夹比较（`FolderCompareService`）服务层不变。**OS 文件拖拽**：`CompareView` 挂载 `DragDrop`（Avalonia 12 的 `DataTransfer`/`DataFormat.File` 双保险），拖入两个文件 → 按内容嗅探进入 `Text` 或 `Binary` 模式比较，两个目录 → `Folder` 模式文件夹比较，单个路径 → 替换当前比较的单侧（该侧渲染内容、另一侧置空态提示）。入口统一经 `WorkspaceViewModel.OpenCompareDocument()` 创建或聚焦工作区中的同一对比文档并导航至 Workspace；「视图」→「对比」发送 `OpenCompareRequestMessage` 打开空文档或聚焦已有文档；目录树「开始对比」以右键菜单的 `ExplorerNode` 为准发送带 Path 的同一消息，`CompareViewModel.AddComparisonPathAsync` 首次填左侧，后续同类路径填充/替换右侧，文件与目录互换时重开左侧（按已设置的路径配对，支持首次加载中再次选择）。「工具」菜单 `Menu_CompareFiles` / `Menu_CompareFolders` → `MenuViewModel.CompareFilesCommand` / `CompareFoldersCommand`（两次选择器）→ `OpenFileCompareRequestMessage` / `OpenFolderCompareRequestMessage` → `App.axaml.cs` 在同一文档中加载双侧。关闭对比文档由 `WorkspaceDockFactory` 调用 `Cleanup()` 取消加载并释放十六进制文件流；再次打开创建空文档。底栏使用 Workspace=3、Delivery=4、NodeEditor=5、Settings=6 的导航映射；`MainViewModel.CompareVM` 与 Compare 导航枚举已移除。`Compare_*` 本地化键（空态提示/工具栏文案等）保留。DiffPlex 依赖集中在 `Directory.Packages.props`。
-- **镜像面板**：`ImageViewModel`（`ViewModels/Workspace/ImageViewModel.cs`）为单例（`EnsureInstance()` / `Instance`），维护 `Images`（相对工程根目录的 `ImageEntryViewModel`）与 8 个命令（提取 / 合成 img / 合成 br / 删除 / 合成 super / 合成 dat / 打包镜像 / 全选刷入），操作经 `FirmwareService`（`Services/Firmware/FirmwareService.cs`，`SynthesizeSuperAsync` 等）、`PackingService`（`Services/Firmware/PackingService.cs`，按打包设置面板的镜像类型/格式/压缩选项调 `Ext4Builder`/`ErofsBuilder` 打包系统镜像）与 `UotanStudio.Firmware.Dat.DatWriter`；输出路径由 `ImageOperationPaths` 统一解析；文件菜单含「导入镜像」「导出镜像」。`ImageView`（`Views/Workspace/ImageView.axaml(.cs)`）以 `DataGrid` 展示镜像（勾选列 / 名称 / 格式 / 大小），当前行 `SelectedImage` 用于单文件操作与属性面板，`ImageEntryViewModel.IsSelected` 复选框独立维护批量选择集（提取、删除、合成 super、批量刷入消费全部勾选项）；表格行为条目提供**右键菜单**（提取/合成 img/br/super/dat/打包镜像/删除/全部刷入，Click 处理器先 `SelectedImage = 菜单条目` 再执行命令）。批量刷入经 `BatchFlashService`（`Services/Flash/BatchFlashService.cs`，新建）按勾选分区列表逐分区复用 `FlashService.FlashImageAsync`，单分区失败继续，进度回报 `StatusText`。镜像面板顶部「向导刷写」按钮（`ImageView_FlashWizard` 键）打开 **`FlashWizardView`**（`FlashWizardViewModel`，`Messages/FlashWizardMessages.cs` 的 `FlashWizardConfirmRequestMessage` 请求确认）：选分区镜像 → 选目标设备（跟随 `DeviceViewModel` 选中）→ 模式白名单（Fastboot/RKDL 分区名非空即可刷、EDL 需分区名在 `rawprogram*.xml` 命中（缺失时回退基础校验）、ADB 禁用）→ `FlashService.FlashImageAsync` 刷写（进度回报 `StatusText` + `ProgressPercent` 并转发 `FlashProgressMessage`）→ 可选 `RebootAsync` 重启。
-- **工程文件（VS 式布局）**：`SolutionPersistenceService`（`Services/Projects/`，静态，`SolutionJsonContext` 源生成 JSON）读写三类文件——解决方案 `<名称>.uotan`（`SolutionSnapshot`：解决方案名 + 引用的固件/节点项目相对路径 + 可选 `State` 扩展段）、固件项目 `<名称>.uotanfw`（`FirmwareProjectSnapshot`：镜像清单 `ImageEntryDto`（相对路径）+ 打包设置 `ProjectSettingsDto`）、节点项目 `<名称>.uotannode`（`NodeProjectSnapshot`：节点画布 `NodeDto`+`ConnectionDto`）。新建 / 打开 / 保存由 `MenuViewModel` 编排；`MenuViewModel.OpenProjectFromPathAsync(path)` / `ImportFilesAsync(paths)` 供菜单与命令行共用。旧单文件 `.uotan`（`ProjectSnapshot`）已废弃。
-- **工程目录约定**：解决方案只采用版本 2 的 `SubProjects` 引用，每个 `.uotanfw` 位于独立子项目目录。`RootDirectory` 是解决方案文件同名目录；子项目内的 `images/` 存源镜像、`output/` 存输出，解包目录遵循 `ImageOperationPaths`。元数据、设置、历史、原包配置均由子项目 `.uotan/` 持有；交付计划与面板可见性存于解决方案文件 `State` 段（见「交付计划与面板可见性改存解决方案文件」），解决方案根不得出现 `.uotan` 目录。禁止将解决方案根或保留数据目录注册为子项目；镜像条目继续存相对路径。
-- **操作历史**：`OperationHistoryService`（`Services/Projects/`，单例）维护内存撤销/重做栈（容量 50），工作区操作通过 `Record(description, [HistoryOperationDto,] undo, redo)` 登记；带 `HistoryOperationDto` 的条目可经 `SaveAsync`/`LoadAsync` 持久化到 `.uotan/history.json` 并跨会话重建（重建工厂由 `ImageViewModel` 注册到 `ReconstructOperation`）。`MenuViewModel` 的 Undo/Redo 按当前页面路由：文本页面使用编辑器撤销栈，节点页面转发 `NodeEditorActionMessage`，不再隐式执行磁盘操作历史。
-- **窗口标题**：`MainViewModel.WindowTitle`（`"<解决方案名> - UotanStudio"`）仅绑定顶部自绘标题栏 `TextBlock`，随 `ProjectContextChangedMessage` 更新；`MainWindow.Title` 保持为空，避免系统标题叠在菜单上。
-
-### 9. 设备管理器
-设备监视与协议交互**统一基于 `UotanStudio.Comm`**，由 `DeviceMonitorService`（`UotanStudio/Services/Devices/DeviceMonitorService.cs`，单例）驱动：
-
-**核心组件：**
-- `DeviceMonitorService`：启动时执行全量 USB 扫描并监听热插拔（Windows 原生 WM_DEVICECHANGE，其他平台轮询快照）与 adb server 设备变更；结果缓存至下一次变更，提供 `Scan()` / `ForceRefreshAsync()` / `FindDeviceBySerial()` / `OpenUsbSession()` / `OpenAdbSession()` / `OpenFastbootSession()` / `OpenEdlSession()` / `OpenRkdlSession()` / `RebootAsync()`。与 Google 官方 adb server（127.0.0.1:5037）交互使用 `AdvancedSharpAdbClient`（探测结果缓存 3 秒，server 未运行时静默降级为仅 USB 源）。
-- `DetectedDevice` / `DeviceProtocolKind`（Adb/Fastboot/Edl/Rkdl）/ `DeviceTransportKind`（Usb/Tcp/Serial）：枚举结果模型，稳定键为 USB `DeviceKey` 或 `"tcp:host:port"`。
-- `DeviceViewModel`（`UotanStudio/ViewModels/Devices/`）为全局单例（`EnsureInstance()` / `Instance`），主窗口底部 Device 选项卡与 Workspace 停靠面板共享同一实例，避免双实例双订阅；`DeviceInfo` 包装枚举设备并承载拉取到的属性（ADB getprop / Fastboot getvar）。除基础的刷新/连接/断开/重启（system/bootloader/recovery/edl）外，还提供**快速固件操作**命令：`OpenAdbShellCommand`（仅 ADB，新控制台执行 `adb -s <serial> shell`）、`FastbootReadInfoCommand`（仅 Fastboot，读 getvar 分区信息）、`QuickFlashCommand`（ADB/Fastboot/EDL/RKDL，选镜像经 `FlashService.FlashImageAsync` 刷写，进度回报 `StatusText`，刷写前经 `FlashConfirmationRequested` 请求确认）、`BackupPartitionCommand`/`RestorePartitionCommand`（仅 Fastboot，经 `BackupService.BackupFastbootPartition`/`RestoreFastbootPartition` 备份/恢复分区镜像，进度回报 `StatusText`，进度经 `BackupProgressMessage` 转发统一日志）；`DeviceView` 工具栏按钮与设备条目**右键菜单**（`Views/Devices/DeviceView.axaml(.cs)`，Click 处理器先 `SelectedDevice = 菜单设备` 再执行命令）均绑定这些命令。
-- 刷写：`UotanStudio/Services/Flash/FlashService` 统一封装 Fastboot 与 EDL（`Firehose`）两条路径，进度经 `FlashProgressMessage` 广播；Fastboot 路径支持 **sparse 感知分片刷写**（`FlashImageChunked`：镜像 ≤ max-download-size 时单次 download+flash（稀疏原样交由 bootloader）；超过时转/拆为稀疏分片顺序刷写，行为对齐 AOSP fastboot）；Fastboot 路径在设置 `AppSettings.AutoBackupBeforeFlash`（`SettingsPersistenceService`）开启时，刷写前自动备份目标分区到工程 `.uotan/backup/`（失败仅记警告，不中断刷写）。
-- 固件：`UotanStudio/Services/Firmware/FirmwareService` 基于 `UotanStudio.Firmware` 封装 CPIO 解包/打包、Payload 提取、AVB 校验与签名（`VerifyAvbAsync` / `SignVbmetaAsync` / `AddHashFooterAsync`，经 `UotanStudio.Firmware.Avb.AvbSigner`）、Oppo 全格式读取（OFP/OPS/OZIP，见下）等。
-- **Oppo OZIP 解包**：`UotanStudio.Firmware/Oppo/` 提供 OFP/OPS/OZIP 三种 Oppo 固件格式的统一解析与解包。OZIP（`OPPOENCRYPT!` 魔数）Mode 1 每个加密单元由 16 字节 AES-128-ECB 密文前缀和随后的 0x4000 字节明文组成，总步长为 0x4010；解密后得到内部 ZIP 文件，包含 `.img` 分区镜像、`.dat.br` OTA 数据与配置文件。密钥自动检测遍历 `OzipKeyDatabase`（`Oppo/Crypto/KeyDatabase/OzipKeyDatabase.cs`，含35个已知设备密钥）。`OzipBlockDecryptStream` 提供可定位的按需解密视图，解析与提取通过 `ZipArchive` 直接读取大文件，无需生成完整临时 ZIP；条目输出使用有界写入与同目录临时文件原子提交，解压错误会明确失败而非静默只留下早期配置文本。
-- USB 诊断：`UsbLogBridge`（`UotanStudio/Services/Devices/UsbLogBridge.cs`，`IUsbLogger`）把 `UotanStudio.Comm` 的 `UsbTrace` 输出桥接到统一日志，`UsbLogBridge.Install()` 安装。
-
-**关键约定：**
-- USB 设备按 VID:PID 分类协议（Qualcomm 9008 / MTK 0E8D / Rockchip 2207 / Allwinner 1F3A 等），与工具无关的设备（摄像头/键鼠）变更不触发重扫。
-- adb server 未运行时，USB 设备序列号回退为 VID:PID；ADB 条目按序列号去重（多后端重复枚举场景）。
-- `DeviceViewModel` / `DeviceView` 在 `ViewModels/Devices/` ↔ `Views/Devices/` 分区，经 `ViewModelViewRegistry` 显式注册解析（见 §5）。
-
-**AOT 注意事项：**
-- `UotanStudio.Comm` 无反射：USB 后端（WinUSB/LibUsb/Linux/MacOS/HarmonyOS）按平台编译期选择，协议会话直接构造。
-- `LibUsbDotNet` 通过 `LibUsbNativeLoader` 托管加载，`Makaretu.Dns.Multicast` 为纯托管 mDNS，`System.IO.Ports` 在 .NET 10 下完全支持 AOT。
-- `AdvancedSharpAdbClient` 用于 adb server 交互（网络设备/状态/重启），与 `UotanStudio.Comm` 原生协议并存。
-
-## 测试
-- **AVB 原生交叉验证环境**：`UotanStudio.Tests/TestInfrastructure/avbtool.py` 固定为上游提交 `91f1bfc948d35265c3b1e5e97bf1c410e65d18fa` 的 avbtool 1.3.0；来源与 SHA-256 见同名 `.md`。项目显式复制该文件，缺失时构建失败；`.gitattributes` 固定 LF，运行前校验哈希和版本。测试通过 WSL Alpine 的 `python3` 直接执行输出目录内脚本，参数由 `ArgumentList` 分别传递，不依赖系统 `avbtool`，不修改仓库配置、sudoers 或系统工具；仅需预先具备 Python 3/OpenSSL。夹具缺失、哈希错误、脚本启动或版本错误必须失败，缺少 WSL/Alpine/Python/OpenSSL 才按具体原因跳过。`AvbAvbToolCrossValidationTests` 两项与 hashtree 原生验证已实际通过。
-- **LP/super 集成约束**：extent 地址始终是设备内绝对 512 字节扇区；`MetadataBuilder.New` 四参数重载保留逻辑块大小与元数据槽布局，分区大小向逻辑块对齐。minor 0/1 使用 128 字节头、minor 2 使用 256 字节头；UPDATED/DISABLED 属性至少需要 minor 1。备份槽位于全部主槽之后，首设备数据区不得侵入元数据。目录打包按真实容量两遍流式生成，文件元数据更新保留已有 payload 并原子提交。Comm `SuperImageBuilder.Build(Stream, ..., ulong deviceSize)` 支持大镜像，byte[] 便利入口限 256 MiB；Fastboot `update-super` 使用 `geometry@0 + metadata@4096` 的精简镜像，单文件刷写先校验所有范围，并拒绝缺失的额外 backing device。
-- `UotanStudio.Tests`（xunit.v3 + .NET 10 MTP 测试通道，`dotnet test -c Debug`；若报「零测试」直接运行 `./UotanStudio.Tests/bin/Debug/net10.0/UotanStudio.Tests.exe`）覆盖 Firmware / Comm / Media / Projects / Services / Compare / Devices 的后端算法与协议，不测试视图、布局、渲染、编辑器导航或显示绑定，不初始化 Avalonia 或无头 UI 平台；范围见 `UotanStudio.Tests/README.md`。Comm 侧经 `UotanStudio.Comm/Properties/AssemblyInfo.cs` 的 `InternalsVisibleTo("UotanStudio.Tests")` 访问内部接缝（USB 抽象层 `UsbDevice` 派生、`UsbDeviceMonitor`/`UsbDeviceIdentity`/`UsbProviderProjection` 纯逻辑、Hdlc/Hsuart/TCP/UDP 传输、Firehose/Sahara XML 命令与响应、FlashBundleOrchestrator 编排、SuperImageBuilder/SuperFlashHelper、UsbTrace 事件）；真实硬件 I/O（USB 后端、热插拔真实枚举、mDNS 组播）不测。
-- **文件系统特性测试**（`UotanStudio.Tests/Firmware/`，均为 xunit.v3）：`Ext4HtreeAndCsumTests`（htree 大目录全条目列全、inode csum 回算匹配）、`Ext4JournalTests`（JBD2 写端 round-trip、csum v3 校验、IncludeJournal 默认开/关）、`Ext4ExternalXattrTests`（`i_file_acl` 高低位解析、外部 xattr 块读取、未知哈希回退线性扫描）、`ErofsFragmentTests`（Fragments/Dedup 读回一致、共享块）、`ErofsMultiDeviceTests`（设备表槽位校验、fsck.erofs）、`ErofsMetaboxTests`（metabox 自回环 + flat 回归 + WSL 交叉验证；metabox 特性 0x100 被 fsck.erofs 1.8.6 文档化拒绝）、`F2fsCompressionReadTests`/`F2fsCompressionWriteTests`（压缩簇读写回环、LZ4/ZSTD/LZO）、`F2fsDoubleIndirectTests`（>single-indirect 上限大文件流式读回 SHA-256 对比、稀疏洞+尾数据）、`BuilderStreamingTests`（byte[]/Path/Stream 三 API 逐字节一致、非 seekable 流、确定性 UUID）、`Lzo1xTests`（托管 LZO1X 回环、f2fs 簇级回环、LZO-RLE 零游程位流、截断/越界/垃圾输入错误路径）、`PayloadMultiExtentTests`（SOURCE_COPY/SOURCE_BSDIFF/BSDIFF 多源/多目标区间顺序映射与长度不符报错）、`Ext4IncompatFeatureTests`（FILETYPE/INLINE_DATA/LARGEDIR 等掩码放行 + META_BG 仍拒绝）。
-- **格式支持补全测试**（P1，均为 xunit.v3）：`LzopCompressionTests`（LZOP 压缩端回环：空/小/256KiB 边界/多块/随机不可压缩/重复可压缩数据，CompressionService 门面回环 + Detect + IsLzopFormat + 流式重载）、`DatIncrementalTests`（Android 端点范围语法、new/zero/erase/free/stash/move/bsdiff/imgdiff、显式 patch offset/length、source location 与 stash 引用；缺补丁/缺源镜像明确报错）、`RockchipTests`（标准 RKAF/RKFW 布局、afptool-rs 固定双层样本、内容检测/元数据/逐字节解包、畸形范围拒绝/Pack 不支持）、`DtsOverlayTests`（delete-node/delete-property 生效、顶层 `&label{}` overlay 合并与覆盖、`DtsFormat.MergeOverlay` API、解析→写回→解析回环）+ `DtsCoverageTests.DeleteNodeDirective_RemovesNode`（原跳过+警告断言已改为真正删除）、`AvbHashtreeAndDescriptorsTests`（哈希树手工计算根摘要（1/2 块）、byte[]/Stream/Path 三 API 一致、五类描述符序列化→`ExtractDescriptors` 解析回环、`AddHashtreeFooterAsync` 端到端 + WSL avbtool verify_image 条件交叉验证）；另含 `PacFormatHandlerTests`、`DtboRoundTripTests`、`OzipSymmetricTests`、`AvbAvbToolCrossValidationTests`（P0）。
-- **2026-09-07 审阅修复验证**：新增格式 conformance 与失败路径测试，使用上游固定样本和原生工具交叉检查。已有 Alpine WSL2 完成 4 项内核挂载，隔离 QEMU/Linux 6.18.48 进一步完成 EXT4 2 种、EROFS 7 种、F2FS 4 种配置的只读挂载，每项完整比对目录树和 608 个文件哈希，并验证卸载及镜像未变；EROFS DEFLATE 因内核配置缺失仅通过原生提取，不计为挂载通过。复验见 `UotanStudio.Tests/TestInfrastructure/FirmwareMountCheck/README.md`；挂载 EINVAL/EBADMSG 必须视为失败。F2FS 原生检查使用 `--dry-run` 并要求退出码 0，不得把不支持参数的帮助输出算作通过。OFP QC XML 元数据上限 16 MiB；CPIO 不可定位输入默认磁盘暂存上限 64 GiB，`CpioArchiveReader` 有可配置限额及取消重载；普通压缩处理器通过 `UnpackOptions.MaximumOutputBytes` 限制输出，默认 64 GiB。
-- **挂载测试基础设施**：位于 `UotanStudio.Tests/TestInfrastructure/FirmwareMountCheck`，由 `FirmwareMountCheckTests` 的 14 项 QEMU theory 和 1 项原生 DEFLATE 提取测试执行；共用夹具延迟生成镜像并共用一次 QEMU 启动。测试只使用本机已有依赖，不下载、安装软件，不修改软件源/sudoers，不加载宿主模块。缺少 WSL、工具、QEMU 运行包或内核能力时按用例 `Assert.Skip`；脚本夹具缺失、预检查通过后的超时、挂载/卸载/目录树/哈希错误必须失败。`UOTAN_TEST_WSL_DISTRO` 可覆盖共享助手默认的 Alpine；`UOTAN_FIRMWARE_QEMU_ROOT` 指向已有 Linux 运行包目录；`UOTAN_FIRMWARE_TEST_ARTIFACTS` 可指定 Windows 产物保留目录。WSL 原生工具检查不要求内核模块，工具可用性按单项退出码独立缓存。
-- **真实语料测试**（`UotanStudio.Tests/Firmware/`）：真实文件用例不再硬编码开发者本机路径，统一经 `TestInfrastructure/FirmwareCorpus.cs` 定位器（默认语料根 `D:\Firmware`，可用环境变量 `UOTAN_FIRMWARE_CORPUS` 覆盖，按文件名大小写不敏感递归查找）；语料或样本缺失时以 `Assert.Skip` 跳过，不静默假通过。`RealCorpusDeepTests` 在真实生产文件上做结构解析校验（SM7150 分区集的 EXT4 全树遍历/AVB vbmeta/Boot/DTBO、根目录 payload.bin manifest 有界读取、UPDATE.APP、Oppo OZIP 等）；`ApkParseTests`/`ArscParseTests`/`ArscWriterRoundTripTests`/`AXmlRoundTripTests` 从语料 Magisk-v30.6.apk 内读 `AndroidManifest.xml`/`resources.arsc` 条目校验，`ErofsRealImageExtractAll` 对语料 odm.img（校验 EROFS 魔数后）全量解包比对尺寸。
-- **WSL 交叉验证**（`WslCrossValidationTests`）：构建 EXT4/EROFS/F2FS 镜像后经 Alpine WSL2 工具实测——`e2fsck -fn`（基础/htree 2000 项大目录/多块组 240MB/无校验和；断言无 "not valid"/空闲计数错误）、`resize2fs` 在线扩容 128M→256M + 扩容后 e2fsck（验证 resize_inode/保留 GDT 布局）、`dumpe2fs -h`（断言特性集与 mke2fs -t ext4 默认一致、Reserved GDT 非零、无 bigalloc/read-only 误置位）、`debugfs -R 'rdump /'`（内容一致）、`fsck.erofs`（默认 LZ4 compacted 索引 + LZMA big-pcluster CBLKCNT 两用例）、`dump.erofs --ls/--cat`、`fsck.f2fs`（基础/压缩/千项目录多段/16MB 大文件）、`dump.f2fs`；按工具粒度可用性探测 + `Assert.Skip`（WSL 不可用或工具缺失时跳过，不静默 return）。挂载级验证（`WslMountTests`）：EXT4/EROFS（flat + LZ4 压缩两用例）/F2FS 镜像均可被 WSL2 内核 loop 挂载并读回内容。三者打包镜像均通过对应上游原生 fsck（e2fsck / fsck.erofs / fsck.f2fs）。
-
-- **工作区自动保存**：设置页 `AutoSave` 由 `WorkspaceAutoSaveService` 消费，每 15 秒检查已打开编辑器的未保存内容，不定时读写工程或会话快照；会话快照（`workspace-session.json`）以轻量变更签名（文档路径集合、停靠比例/活动项、节点拓扑与缩放）判断内容未变化时跳过整轮 DTO 构建与序列化。工程内容在手动保存、切换工程或关闭窗口时持久化；打开页面与面板状态仅在关闭时自动记录，切换工程保留原有页面记录。`workspace-session.json` 位于设置目录，保存面板可见性、停靠比例、文档及无工程草稿；启动不自动打开上次工程或文档，恢复面板布局，用户显式打开工程时仍可恢复该工程保存的文档。支持具名文本、DTB、Manifest、分区编辑器，排除原始二进制及未命名文本。JSON 原子替换且内容未变不重写，文本保留编码并检查外部修改；关闭自动保存开关停止自动持久化。浮窗位置及任意停靠拓扑不恢复。相关验证为 `WorkspaceAutoSaveTests`。
-
-## 维护规则
-
-主窗口保留自绘项目标题，`Window.Title` 保持为空；macOS 原生菜单导出后，菜单显示在系统顶部，其他平台继续显示窗口内菜单。界面内的自绘标题与设备选择器按平台避让窗口按钮，不依赖 `WindowDrawnDecorations` 模板选择器隐藏原生系统标题。
-
-文件未保存标识复用 Dock 原生 `IsModified`：文本、Hex、DTB、Manifest、分区编辑器在 `IsDirty` 变化时同步该属性，使用既有主题的标签标识，不修改文件名或 `Title`。`WorkspaceModificationTracker` 监听文档集合及浮窗布局中的未保存状态，自绘主窗口标题 `WindowTitle` 在存在未保存文件时加圆点前缀；文档保存或关闭后实时更新，不使用轮询。
-
-切换工程和退出主窗口时先暂停定时保存、等待已开始的保存结束，再遍历工作区文档复用保存／不保存／取消确认；确认之前不得强制发起自动保存。确认后只持久化工程与会话状态，不再次保存用户选择不保存的文档；取消或保存失败时保留工作区并恢复定时保存。未启用自动保存时仍检查未保存文档。
-
-资源管理器显式选择“以文本形式打开”时，`FileViewModel` 必须使用文本视图，即使文件包含 NUL 字节或具有二进制扩展名也不得改为十六进制；只有自动打开模式按文件类型和内容选择编辑器。
-
-镜像管理顶部提供互斥的“解包 / 打包 / 输出”模式，分别扫描当前子项目的 `images/`、根目录下的解包文件夹、`output/`；输出模式包含普通 IMG/RAW 镜像，切换模式或子项目时刷新列表并清除当前行选择。右键菜单按模式显示：解包为提取、刷入、删除；打包为四种合成与删除；输出仅刷入与删除。右键刷入处理当前条目，底部刷入按钮仍批量处理勾选项，支持 boot/raw/sparse/ext4/erofs/f2fs。打包模式底部“合成IMG”单独占满首行，下一行显示自适应换行的“合成BR”和“合成DAT”，不显示“合成SUPER”按钮。输出模式底部显示“刷入选中文件”和“打包ZIP”，后者复用中英键 `ImageView_PackRom`，导航到与工作区同级的 `DeliveryView` 交付页面；旧的 `ImageView_PackSuperRom` 文案键已移除。模式与右键刷入使用 `ImageView_OutputMode` / `ImageView_Flash`，右键删除复用 `Menu_Delete`。自动扫描（解包 / 输出模式）过滤 0 字节占位镜像（如 VAB 的 b 槽位空分区），此类文件不显示也不可操作；用户显式导入的 0 字节文件不受影响。
-
-镜像管理顶部的三个模式 RadioButton 使用局部 `MinWidth="0"`、`MinHeight="24"`、`Padding="8,0"`、`Margin="0"`，组外框内边距 2、按钮间距 2，让选中按钮四周露出主题背景；整体高度 28，与两侧工具按钮对齐，保留紧凑横向占位及 `ButtonRadioButton` / `Small` 的选中样式。
-
-镜像列表右键菜单使用 16×16 Material 图标，与页面对应操作一致：提取 `PackageDown`、合成 IMG `ImagePlus`、合成 BR `ArchivePlus`、合成 SUPER `LayersPlus`、合成 DAT `FileMultipleOutline`、刷入 `Flash`、删除 `DeleteOutline`，颜色继承菜单主题。
-
-镜像列表的 Auto 列宽在条目增删、刷新、名称／格式／显示大小／可见性变化时重新测量，长文本缩短或移除后可收回宽度；通过 `DispatcherPriority.Loaded` 合并更新，等文字布局完成再清除历史测量宽度。视图卸载或 DataContext 更换时解除旧集合及条目订阅，保留用户手动设置的列宽。
-
-镜像管理进度条上方的模式切换、子项目选择与列表区域包在 Ursa `LoadingContainer` 中，`IsLoading` 绑定 `ImageViewModel.IsOperating`，提示使用中英 `ImageView_Processing`。解包、合成、刷入等现有命令在开始时置位，并在 `finally` 中复位；完成、失败或跳过后自动解除 Busy。忙碌期间上方内容和底部操作按钮禁用，进度条与状态文字保持正常显示；“打包ZIP”只导航到交付配置页，不触发打包 Busy。操作完成报告（进度条、状态与统计文字）在显示约 5 秒后自动隐藏，新操作开始时立即恢复显示。
-
-镜像管理在解包和打包模式下的右键删除仅作用于右键条目对应的解包文件夹：固件文件通过 `ImageOperationPaths` 按子项目根目录与镜像名称定位，文件夹条目按自身 `RelativePath` 定位（保留名称中的点和括号），不消费复选框批量选择集、不删除源镜像。复用 `DialogService` 的删除确认和失败对话框；目录不存在时通过 `Image_UnpackedDirectoryMissingTitle/Message` 中英文本地化键弹出提示。输出模式右键删除通过 `DeleteImageAsync` 将当前输出文件移入子项目 `.deleted/` 并登记可撤销历史。顶部批量删除遇到文件夹条目时直接调用 `ImageViewModel.DeleteUnpackedDirectoryAsync` 复用同一目录删除流程；文件条目仍移入子项目 `.deleted/` 并登记可撤销历史。删除成功后移除列表条目并清除对应当前行选择。
-
-项目资源管理器在目录变动时按路径增量同步已加载子节点，保留仍存在的节点实例和展开状态；同一工程上下文刷新不重建根节点。文件监听只订阅名称和目录变动，文件内容保存不触发整树刷新；目录暂时不可读时保留现有显示。
-
-EXT4、EROFS、F2FS 解包的统一元数据在 `configuration.fileSystem` / `configuration.superblock` 保存已有解析器支持的原始超级块字段，UUID 为十六进制字符串；Sparse 包装镜像也通过有界逻辑流记录内部超级块。EROFS 另记录 `configuration.compression`，修改后重建从校验通过的原镜像恢复可解释的压缩与 inode 参数；描述性超级块字段不直接恢复物理布局或分配状态。格式处理器和应用文件系统解包服务共用该输出。
-
-资源管理器不再隐藏 `.uotanstudio-repack.json`，其与普通文件一样显示；双击解包文件夹以文本方式打开配置（`RepackConfigurationPath` 按单一位置规则解析：有项目时映射到 `.uotan/metadata/<分区名>/` 下的实际元数据 JSON，无项目时打开本地文件）。目录双击处理接收树控件已处理的事件，普通文件夹继续使用原有展开行为。根节点在项目打开时立即加载子目录（`EnsureChildrenLoaded`），确保 FileSystemWatcher 触发的后续刷新能生效。
-
-当以下任何一项发生变更时，**必须在同一次改动中同步更新本文件**：
-
-- 新增 / 移除项目或项目引用关系。
-- 构建命令、目标框架、AOT/裁剪配置变化。
-- 插件注册流程、节点定义基类、消息约定变化。
-- 本地化模块、主题资源键、样式层变化。
-- 本文件记录的任何事实性信息。
-
-
-当前页面手动保存统一经既有保存入口和 Ctrl+S 分派到 `DocumentSaveService`，覆盖文本、Hex、DTB、Manifest 与分区编辑器；未命名文本复用另存选择器。关闭文档、切换工程和退出窗口先处理未保存修改，保存失败或取消时保留页面。镜像右键提取/打包仅处理右键条目，工具栏保留勾选批量操作；解包拒绝目录输入，覆盖失败恢复旧目录，IMG 按统一元数据分派，DAT/BR 生成 Android transfer list 与数据文件。设备确认通过 `DialogService` 单点发起并固定目标设备，节点搜索只在 UI 线程发布集合。资源管理器粘贴复用 `ExplorerFileOperations`，拒绝覆盖与复制到自身子目录。新增回归验证集中于后端 `WorkspaceFileOperationTests`。
-
-APK 签名入口：APK 文档页提供自定义私钥、证书、输出路径、遮蔽密码、v1/v2/v3 选择及取消；节点工具箱固件分类新增 Firmware.SignApk（注册于 NodeFactoryRegistrar），输出 Signed APK/Report，失败向引擎传播。节点加密材料密码通过 Key Password Environment / Certificate Password Environment 指定环境变量名，工程不保存密码值。签名输出须与输入不同且至少启用一种方案，RSA/EC 公钥与证书必须匹配。APK 签名应使用上游 apksig 独立验证；模拟器安装成功不代表签名完整性校验通过。
-
-### 9.1 HDC / OpenHarmony 支持
-
-- 应用层 HDC 操作使用官方服务端管理的目标（包括 USB 设备）。`HdcServerClient` 按上游 `channel.h/channel.cpp` 与 `host/client.cpp` 实现主机通道：服务端先发握手，4 字节大端长度，12 字节 banner + 32 字节 connectKey 联合体，命令带 NUL；每次操作独占连接，完整读取至 EOF。默认端口遵循 `OHOS_HDC_SERVER_PORT`，未设置时为 8710。单帧上限 4 MiB、捕获输出上限 16 MiB，有总超时和取消；不把 `DataAvailable` 或超时当作完成。
-- `DeviceMonitorService` 以官方详细目标列表提供的 USB/TCP/UART 类型和授权状态为准；没有服务端时使用 FF/50/01 原始 USB 接口，排除无端点的接口别名。`HdcDaemonCodec` 使用上游设备 PayloadHead 与 protobuf 元数据，USB 外层 UB 帧独立读写；`HdcConnection` 执行 AUTH_NONE/PUBLICKEY/SIGNATURE/OK 状态机，声明 RSA-SHA512 能力并使用 ~/.harmony/hdckey。`HdcDirectSessionPool` 让详情、Shell、HiLog 共用已认证连接和独立通道，断连/退出释放。官方主机通道与原生设备通道不能混用。直连单文件传输、应用安装/卸载、TCP 正反转发及移除已接入原生任务；目录接收通过通信库 RecvDirectory 提供。文件配置使用上游 protobuf、64 字节数据前缀及 LZ4 原始块；WakeupSlaveTask 为会话控制消息。能力与真机证据见 docs/hdc-support.md。
-- `HdcDeviceService` 共用于界面和工作流：Shell 通过独立退出码标记验证远端结果，属性使用 OpenHarmony `param get`，重启仅映射 system/bootloader/recovery 到 `target boot`，不支持的模式明确失败。原始 `HdcShellClient` 返回 -1 表示远端退出码未知，不能将关闭通道认作成功。
-- 设备管理支持 HDC 连接检查、系统详情、Shell、文件发送/接收、HAP/HSP/APP 安装及按 bundle 名卸载；官方服务端目标的文件/应用任务使用官方 HDC 可执行文件，参数使用 `ArgumentList`，同时排空输出、支持取消和总时限。接收先暂存到本地独立目录再原子发布。安装/卸载验证上游 `msg:install/uninstall bundle successfully.`，不能把 `[Info]` 当成功。设置页提供 `AppSettings.HdcPath`；留空查找 PATH 或 Windows 标准 DevEco SDK。该字段使用既有源生成 JSON 持久化。
-- 设备详情的不可读取项独立降级，权限不足不影响其他信息。原 ADB 日志面板统一显示为“设备日志”，ADB 读取 logcat、HDC 读取 `shell hilog -v year`，共用有界 UTF-8 解码、搜索与过滤；清空动作按协议分派，HDC 为 `hilog -r`。scrcpy 投屏仍仅适用于 ADB，HDC 不复用其协议。
-- HDC 工作流 TypeKey 为 `HDC.Shell/GetProperty/Send/Receive/Install/Uninstall/Forward/Reverse/ListForwards/RemoveForward/RemoveReverse/ListDebugProcesses/Remount`；集中在 `NodeFactoryRegistrar` 注册，与 UI 工具箱共用，稳定 Device/Path/Text/Number 端口，异常及取消传播给引擎。既有 `Flash.GetProp` / `Flash.Reboot` 同时支持 HDC 的对应能力。
-- 回归测试见 `HdcServerClientTests` / `HdcDeviceServiceTests`。`HdcReadOnlyDeviceTests` 仅在显式设置 `UOTAN_TEST_HDC_TARGET` 和 `UOTAN_TEST_HDC_EXE` 时执行真实设备的只读命令、日志和文件接收；普通测试跳过。不得在真机验证中自动重启、提权、安装、卸载、写文件、清日志或刷写。上游依据与验证边界见 `docs/hdc-support.md`。
-
-- 设备日志继续使用 AvaloniaEdit 可见行虚拟化；每 100 ms 按最多 250 行/约 128 Ki 原始字符批量更新，范围集合最多两个通知。待显示与历史队列各限 5,000 行和 2 Mi 原始字符；可见列延迟生成，过滤一次 Reset，卸载视图释放文档。原生 HDC 每通道未消费数据上限 4 MiB。
-
-### 平台媒体与投屏验证边界（2026-09-09）
-
-- 选中投屏文档或点击投屏视图，通过 `ActiveDocumentChangedMessage` 选择 `PropertiesContentType.ScreenMirror`。`PropertiesViewModel.ScreenMirror.cs` 按 1 秒实际采样间隔更新既有属性行的 Value，不重建集合；切换内容或关闭会话停止定时更新。显示编码格式、实际解码后端、当前帧尺寸、NV12 像素格式、BT.601 有限范围显示转换、接收/解码/位图更新率、帧率上限、目标/接收码率等。计数使用 Interlocked，配置包不算视频帧；位图更新率不是显示器 present FPS。源色彩空间未解析、设备编码器名称未报告时必须明确标未知/自动选择，不从转换公式或旧日志推断。中英文本集中于 Locale/*/Dock.axaml。
-
-- 投屏鼠标坐标必须经 `e.GetPosition(FrameImage)` 取得图像控件本地逻辑坐标，再由 `ScreenMirrorCoordinates` 按居中 `Stretch=Uniform` 映射为视频像素；禁止混用整个视图坐标和图像尺寸，也不重复乘 DPI。黑边与右/下排他边缘在整数转换前拒绝。鼠标按下捕获指针，拖动越界钳制，释放/失去捕获/视图卸载结束手势；发送正确的 actionButton 与释放时零压力。滚轮按 Avalonia 正向向上与 VM 正向向下约定转换一次。
-
-- 投屏复用 `WriteableBitmap` 时，每帧解锁后通过 UI 线程 `FramePresented` 事件通知 `FrameImage.InvalidateVisual()`；仅写像素不会替代控件的重绘请求。视图在挂载/DataContext 切换时订阅、卸载时解除；最新帧通过 `DispatcherPriority.Render` 调度。NV12→BGRA 使用精确整数 `Vector128` 路径，保留标量尾部与无向量平台回退，颜色支持 BT.601/BT.709、有限/全范围；自动模式采用已报告元数据，缺失时按 BT.601 有限范围转换。显示帧率不得由解码帧数直接推断；性能验证应分别测量接收、解码、转换和实际显示。
-
-- 模拟器/TCP 投屏通过 `AdbServerServices` 使用既有 ADB server（默认 127.0.0.1:5037），按序列号打开 sync/shell/localabstract 服务；USB 路径显式建立原生 ADB 会话。`AdbServiceStream` 保留 ADB 数据块未读尾部。scrcpy 使用 `tunnel_forward=true` 与非负有符号 32 位 SCID；先读视频 dummy，再打开音频/控制，最后读取元数据，避免上游等待连接时死锁。无数据超时返回空，EOF/部分读取失败抛错；连接失败释放全部已开流。
-
-- scrcpy 2.7 视频头使用小写 `h264/h265` fourcc；配置位为 bit 63，关键帧位为 bit 62，余下位为微秒 PTS。`ScrcpyVideoFrame` 按位解析配置/关键帧并提供去标志时间戳；投屏将配置包与下一帧合并，按微秒 ×10 传递 ticks。
-- `ScreenMirrorViewModel` 在专用线程创建、使用并释放解码器，关闭时先打断 socket 读取；显示只保留最新画面，并复用会话拥有的最多三份 BGRA 缓冲区，关闭时释放显示位图。解码错误进入日志/状态。Windows GPU 投屏使用 GPU BGRA 输出；其他 NV12 后端按所选或已报告的矩阵/范围转换。不是 GPU 零拷贝显示。
-- Windows 同步路径通过 H.264 固定 I_PCM 黑帧逐像素验证、上游 CABAC 30 帧完整排空、多实例与 Reset。设置低延迟属性不保证无排队：CABAC 样本 30 次输入先输出 14 帧，Drain 后共 30 帧。2026-09-10 已补充 Windows 三种格式的 GPU 码流验证与桌面进程视频引擎计数器；Mac 硬件和 Linux VA/EGL 仍不得用编译或枚举代替运行证明。
-- Mac 新增硬件编码→解码回环测试，非 Mac 显式跳过；Linux VA 测试通过 `UOTAN_TEST_VA_RENDER_NODE` 选择已有节点，缺环境跳过。测试夹具来源和哈希在 `UotanStudio.Tests/TestInfrastructure/Media/README.md`。
-
-### 投屏设置与媒体验证（2026-09-10）
-
-- 属性面板通过 `PropertyChoice` 稳定值和统一 `ChoiceChanged` 入口暂存视频编码、解码后端、矩阵、范围、帧率、尺寸、码率、音频编码/后端、音量与控制开关；点击“应用并重新连接”才写入源生成 JSON 并重启会话。保存失败明确报告，先等启动/解码/音频线程退出，再释放并重建资源；显式选择的格式或后端不暗中降级。
-- scrcpy 音频头 0/1 表示服务端禁用音频，不作为 codec fourcc 解码；视频仍继续。服务端启动失败附带最多 4096 字符的输出摘要，便于识别设备缺少编码器。音频解码失败保持传输排空。
-- GStreamer 使用稳定 C ABI、线程归属检查、有界输入与输出；NV12 通过 `GstVideoMeta` 映射读取真实平面行距，缺元数据才采用默认布局。原生 ABI 应对照目标平台头文件验证；Windows/WSL 构建使用不同 obj/bin 输出。
-- 本轮 Windows GPU 是同步 D3D11 感知系统 MFT；本机没有异步硬件候选。异步路径有实现及边界检查，但尚无厂商异步 MFT 运行证据。跨平台硬件支持受 GPU/profile/驱动/系统 codec 与原生插件制约。
-
-### 交付逻辑子项目（2026-09-15）
-
-- 交付计划、Payload/Super/Recovery 构建、脚本生成、工具准备、输出发布及校验逻辑位于 `UotanStudio.Delivery`，主项目通过项目引用使用，测试项目也直接引用该子项目。
-- `UotanStudio.Delivery` 只依赖 `UotanStudio.Firmware` 和必要的第三方压缩库，不得反向引用主项目的 UI、项目或密钥服务。主项目保留 `DeliveryDynamicPartitions`、`DeliveryKeyProvider` 等组合适配层，由宿主注入项目配置和密钥实现。
-- 签名通过 `IDeliverySigningKeyProvider` 依赖倒置；交付库不直接加载 `KeyLibraryService`。新增交付能力应优先复用现有类型和校验流程，避免在 UI 与后端各维护一套实现或引入难以阅读的多层抽象。
+- `dotnet build UotanStudio.slnx --no-restore --nologo`：0 错误、0 警告。
+- whitespace/style `dotnet format --verify-no-changes`：通过。
+- JAR/DEX、LP、流式构建、异常日志、Delivery 和镜像输入的定向测试均通过。
+- 完整测试集可能包含需要 WSL、真实设备、外部工具或本地语料的条件测试；运行时必须按测试输出区分通过、跳过、失败和环境不可用。

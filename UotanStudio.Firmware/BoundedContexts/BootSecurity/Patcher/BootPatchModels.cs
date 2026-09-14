@@ -351,11 +351,11 @@ public static class KernelSuEmbeddedExtractor
     {
         var text = Encoding.Latin1.GetString(data);
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (Match match in Regex.Matches(text, @"(?i)android\d+(?:\.\d+)?[-_]\d+\.\d+(?:[-_][0-9A-Za-z.]+)?(?:_kernelsu\.ko)?"))
-        {
-            var value = match.Value.Replace("_kernelsu.ko", string.Empty, StringComparison.OrdinalIgnoreCase).Replace('_', '-');
-            found.Add(value);
-        }
+        // A KMI is only considered advertised when the complete resource name
+        // is present. Do not consume adjacent strings from a merged .rodata
+        // section and do not infer a module from a bare KMI token.
+        foreach (Match match in Regex.Matches(text, @"(?i)(android\d+(?:\.\d+)?[-_]\d+\.\d+)_kernelsu\.ko"))
+            found.Add(match.Groups[1].Value.Replace('_', '-'));
         return found.OrderBy(static x => x, StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
