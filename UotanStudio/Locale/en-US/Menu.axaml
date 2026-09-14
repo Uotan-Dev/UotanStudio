@@ -42,6 +42,7 @@
     <x:String x:Key="NewProject_BrowseImages">Select ROM or image files</x:String>
     <x:String x:Key="NewProject_SelectFolder">Select folder</x:String>
     <x:String x:Key="NewProject_SelectImages">Select images</x:String>
+    <x:String x:Key="NewProject_GetRom">Get ROM</x:String>
     <x:String x:Key="NewProject_ClearImages">Clear selected files</x:String>
     <x:String x:Key="NewProject_ImageFiles">ROM and image files</x:String>
     <x:String x:Key="NewProject_PickerFailed">Unable to select files or folder</x:String>
