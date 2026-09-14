@@ -94,7 +94,10 @@ public sealed class HdcForwardManager(HdcConnection connection) : IDisposable
                     !int.TryParse(parts[1], out var thread) || thread <= 0 || parts[2] is not ("Debugger" or "ArkCompiler"))
                     throw new ArgumentException("Invalid Ark debug endpoint.", nameof(endpoint));
                 break;
-            case "localabstract": case "localfilesystem": case "localreserved": case "dev":
+            case "localabstract":
+            case "localfilesystem":
+            case "localreserved":
+            case "dev":
                 break;
             default: throw new NotSupportedException("Unsupported HDC endpoint schema: " + schema);
         }

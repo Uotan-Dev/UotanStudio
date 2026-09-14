@@ -32,9 +32,19 @@ public static class HdcTransferCodec
             ? Encoding.UTF8.GetString(bytes) : throw new InvalidDataException("Missing HDC transfer string field.");
         return new TransferConfig
         {
-            FileSize = Number(1), Atime = Number(2), Mtime = Number(3), Options = Text(4), Path = Text(5), OptionalName = Text(6),
-            UpdateIfNew = Number(7) != 0, CompressType = checked((int)Number(8)), HoldTimestamp = Number(9) != 0,
-            FunctionName = Text(10), ClientCwd = Text(11), Reserve1 = Text(12), Reserve2 = Text(13),
+            FileSize = Number(1),
+            Atime = Number(2),
+            Mtime = Number(3),
+            Options = Text(4),
+            Path = Text(5),
+            OptionalName = Text(6),
+            UpdateIfNew = Number(7) != 0,
+            CompressType = checked((int)Number(8)),
+            HoldTimestamp = Number(9) != 0,
+            FunctionName = Text(10),
+            ClientCwd = Text(11),
+            Reserve1 = Text(12),
+            Reserve2 = Text(13),
         };
     }
 

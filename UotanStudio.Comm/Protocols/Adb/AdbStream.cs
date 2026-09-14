@@ -175,7 +175,8 @@ public sealed class AdbStream : IDisposable
                     return buffer.AsSpan(0, count).ToArray();
                 }
                 catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketException socket &&
-                    socket.SocketErrorCode is System.Net.Sockets.SocketError.TimedOut or System.Net.Sockets.SocketError.WouldBlock) { return null; }
+                    socket.SocketErrorCode is System.Net.Sockets.SocketError.TimedOut or System.Net.Sockets.SocketError.WouldBlock)
+                { return null; }
                 catch (Exception ex) { MarkFaulted(ex); throw; }
             }
         }

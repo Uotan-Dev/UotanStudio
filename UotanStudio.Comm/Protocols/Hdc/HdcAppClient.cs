@@ -1,5 +1,5 @@
-using System.Text;
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 
 namespace UotanStudio.Comm.Protocols.Hdc;
@@ -81,7 +81,8 @@ public sealed class HdcAppClient(HdcConnection connection)
                     using var input = package.OpenRead();
                     if (input.Length != package.Length) throw new IOException("HDC package changed during preparation.");
                     var entry = new System.Formats.Tar.UstarTarEntry(System.Formats.Tar.TarEntryType.RegularFile,
-                        Path.GetRelativePath(root.FullName, package.FullName).Replace('\\', '/')) { DataStream = input };
+                        Path.GetRelativePath(root.FullName, package.FullName).Replace('\\', '/'))
+                    { DataStream = input };
                     writer.WriteEntryAsync(entry, cancellationToken).GetAwaiter().GetResult();
                 }
             cancellationToken.ThrowIfCancellationRequested();

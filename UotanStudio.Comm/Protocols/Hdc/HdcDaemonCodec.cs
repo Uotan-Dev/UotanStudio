@@ -120,7 +120,8 @@ public static class HdcDaemonCodec
                     var length = Varint(input, ref offset);
                     if (length > (ulong)(input.Length - offset)) throw new InvalidDataException("Truncated HDC field.");
                     fields[tag] = (0, input.Slice(offset, (int)length).ToArray()); offset += (int)length; break;
-                case 1: case 5:
+                case 1:
+                case 5:
                     var skip = (key & 7) == 1 ? 8 : 4;
                     if (input.Length - offset < skip) throw new InvalidDataException("Truncated HDC fixed field.");
                     offset += skip; break;

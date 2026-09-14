@@ -1,7 +1,7 @@
-using UotanStudio.Comm.Protocols.Common;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using UotanStudio.Comm.Diagnostics;
+using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Transports.Usb.Abstractions;
 
 namespace UotanStudio.Comm.Transports.Usb.Backend.Windows;

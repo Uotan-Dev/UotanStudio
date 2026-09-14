@@ -141,9 +141,14 @@ public sealed class HdcSyncClient(HdcConnection connection) : IDisposable
 
     private TransferConfig CreateSendConfig(Stream source, string remotePath, long fileSize, bool holdTimestamp)
     {
-        var config = new TransferConfig { FileSize = fileSize, Path = remotePath,
+        var config = new TransferConfig
+        {
+            FileSize = fileSize,
+            Path = remotePath,
             OptionalName = source is FileStream named ? Path.GetFileName(named.Name) : remotePath.TrimEnd('/').Split('/')[^1],
-            CompressType = Compress ? 1 : 0, HoldTimestamp = holdTimestamp && source is FileStream };
+            CompressType = Compress ? 1 : 0,
+            HoldTimestamp = holdTimestamp && source is FileStream
+        };
         if (config.HoldTimestamp && source is FileStream file)
         {
             config.Atime = checked((File.GetLastAccessTimeUtc(file.Name).Ticks - DateTime.UnixEpoch.Ticks) * 100);

@@ -1,7 +1,7 @@
+using System.Buffers.Binary;
+using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
-using System.Globalization;
-using System.Buffers.Binary;
 
 namespace UotanStudio.Comm.Protocols.Adb;
 
