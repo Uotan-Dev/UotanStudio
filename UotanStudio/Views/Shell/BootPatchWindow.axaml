@@ -85,11 +85,12 @@
                         <Grid Name="PatchInputRow" ColumnDefinitions="*,*" ColumnSpacing="10">
                             <TextBox Name="PrebootDeviceBox" PlaceholderText="{DynamicResource BootPatch_DevicePlaceholder}" />
                             <ComboBox Grid.Column="1" Name="ArchitectureBox" HorizontalAlignment="Stretch" SelectedIndex="-1" />
+                            <ComboBox Grid.Column="1" Name="KmiBox" HorizontalAlignment="Stretch" SelectedIndex="-1" IsVisible="False" />
                         </Grid>
                         <WrapPanel Grid.Row="1" Name="MagiskOptionsRow" Orientation="Horizontal"
                                    ItemWidth="220" ItemHeight="40" MaxHeight="200"
                                    HorizontalAlignment="Center" VerticalAlignment="Top">
-                            <CheckBox Classes="compact-check" Name="ForceRootfsBox" IsChecked="True">
+                            <CheckBox Classes="compact-check" Name="ForceRootfsBox" IsChecked="False">
                                 <TextBlock Text="{DynamicResource BootPatch_ForceRootfs}" TextWrapping="Wrap" />
                             </CheckBox>
                             <CheckBox Classes="compact-check" Name="KeepEncryptionBox" IsChecked="True">

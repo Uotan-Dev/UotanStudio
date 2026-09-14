@@ -79,12 +79,18 @@ public static partial class Extractor
                 uint rd = insn & 0x1F;
                 uint immlo = (insn >> 29) & 0x3;
                 uint immhi = (insn >> 5) & 0x7FFFF;
-                int imm = (int)((immhi << 2) | immlo);
-                if ((imm & 0x80000) != 0)
-                    imm -= 0x100000;
+                long imm21 = ((long)immhi << 2) | immlo;
+                // ADRP carries a signed 21-bit page delta. Sign-extend bit 20
+                // before shifting; testing bit 19 (the old implementation) sent
+                // backward references to the wrong high address.
+                if ((imm21 & (1L << 20)) != 0)
+                    imm21 -= 1L << 21;
                 ulong pcVa = elf.OffToVa(i) ?? fnVa;
-                ulong page = (pcVa >> 12) << 12;
-                ulong target = (page + ((ulong)imm << 12)) & 0xFFFFFFFFFFFFFFFFUL;
+                long page = checked((long)(pcVa & ~0xFFFUL));
+                long targetPage = checked(page + (imm21 << 12));
+                if (targetPage < 0)
+                    continue;
+                ulong target = (ulong)targetPage;
                 // Binary parsing and patching implementation detail.
                 for (long j = i + 4; j <= Math.Min(end, i + 12); j += 4)
                 {
@@ -99,7 +105,7 @@ public static partial class Extractor
                             ulong final = (target + ((ulong)imm12 << (shift == 1 ? 12 : 0))) & 0xFFFFFFFFFFFFFFFFUL;
                             long? ro = elf.ResolveRef(final);
                             ulong? rva = ro is not null ? elf.OffToVa(ro.Value) : null;
-                            if (rva is not null && !elf.IsExecVa(rva.Value))
+                            if (rva is not null)
                                 refs.Add(final);
                             break;
                         }
@@ -147,7 +153,7 @@ public static partial class Extractor
                     ulong target = (nextVa + (ulong)disp) & 0xFFFFFFFFFFFFFFFFUL;
                     long? ro = elf.ResolveRef(target);
                     ulong? rva = ro is not null ? elf.OffToVa(ro.Value) : null;
-                    if (rva is not null && !elf.IsExecVa(rva.Value))
+                    if (rva is not null)
                         refs.Add(target);
                     i += 7;
                     continue;
@@ -371,6 +377,113 @@ public static partial class Extractor
 
 
 
+    private static IEnumerable<byte[]> EnumerateX86InlineHashes(ElfFile elf, ulong fnVa, int window)
+    {
+        long? start = elf.VaToOff(fnVa);
+        if (start is null)
+            yield break;
+        var blocks = new List<byte[]>(2);
+        long end = Math.Min(elf.Data.Length - 7L, start.Value + Math.Max(window, 0x80));
+        for (long offset = start.Value; offset <= end; offset++)
+        {
+            byte op0 = elf.Data[offset];
+            byte op1 = elf.Data[offset + 1];
+            if (op0 != 0x0F || (op1 != 0x28 && op1 != 0x10) || elf.Data[offset + 2] != 0x05)
+                continue;
+            int displacement = BinaryPrimitives.ReadInt32LittleEndian(elf.Data.AsSpan((int)offset + 3));
+            ulong nextVa = elf.OffToVa(offset + 7) ?? 0;
+            if (nextVa == 0)
+                continue;
+            ulong target = unchecked(nextVa + (ulong)displacement);
+            long? targetOffset = elf.ResolveRef(target);
+            if (targetOffset is null || targetOffset.Value < 0 || targetOffset.Value + 16 > elf.Data.Length)
+                continue;
+            blocks.Add(elf.Data.AsSpan((int)targetOffset.Value, 16).ToArray());
+            if (blocks.Count == 2)
+            {
+                byte[] digest = new byte[32];
+                blocks[0].CopyTo(digest, 0);
+                blocks[1].CopyTo(digest, 16);
+                yield return digest;
+                yield break;
+            }
+        }
+    }
+
+    private static IEnumerable<byte[]> EnumerateInlineHashes(ElfFile elf, ulong fnVa, int window)
+    {
+        if (elf.Machine != 183)
+            yield break;
+        long? start = elf.VaToOff(fnVa);
+        if (start is null)
+            yield break;
+
+        ulong x8 = 0, x9 = 0;
+        int mask8 = 0, mask9 = 0;
+        ulong? firstHashWord8 = null, firstHashWord9 = null;
+        long end = Math.Min(elf.Data.Length - 4L, start.Value + Math.Max(window, 0x80));
+        for (long offset = start.Value; offset <= end; offset += 4)
+        {
+            uint instruction = BinaryPrimitives.ReadUInt32LittleEndian(elf.Data.AsSpan((int)offset));
+            uint opcode = instruction & 0xFF800000u;
+            if (opcode is 0xD2800000u or 0xF2800000u or 0x52800000u or 0x72800000u)
+            {
+                int registerIndex = (int)(instruction & 0x1Fu);
+                if (registerIndex is 8 or 9)
+                {
+                    int halfword = (int)((instruction >> 21) & 0x3u);
+                    ulong value = (ulong)((instruction >> 5) & 0xFFFFu) << (halfword * 16);
+                    int bit = 1 << halfword;
+                    bool moveWide = opcode is 0xD2800000u or 0x52800000u;
+                    if (registerIndex == 8)
+                    {
+                        if (moveWide) x8 = value; else x8 = (x8 & ~((ulong)0xFFFF << (halfword * 16))) | value;
+                        mask8 = moveWide ? bit : mask8 | bit;
+                    }
+                    else
+                    {
+                        if (moveWide) x9 = value; else x9 = (x9 & ~((ulong)0xFFFF << (halfword * 16))) | value;
+                        mask9 = moveWide ? bit : mask9 | bit;
+                    }
+                }
+            }
+
+            // rust-embed writes the SHA-256 metadata as two adjacent STP pairs:
+            // [x8, x9] at EmbeddedFile + 0x20 and +0x30. Capture only those
+            // stores, keeping the digest tied to this exact factory function.
+            if ((instruction & 0xFFC00000u) == 0xA9000000u &&
+                (instruction & 0x1Fu) == 8u && ((instruction >> 10) & 0x1Fu) == 9u &&
+                ((instruction >> 5) & 0x1Fu) == 19u)
+            {
+                int scaled = (int)((instruction >> 15) & 0x7Fu);
+                if ((scaled & 0x40) != 0) scaled -= 0x80;
+                int byteOffset = scaled * 8;
+                if (byteOffset == 0x20 && mask8 == 0xF && mask9 == 0xF)
+                {
+                    firstHashWord8 = x8;
+                    firstHashWord9 = x9;
+                }
+            }
+
+            // The second hash pair is stored by include-flate's tiny helper
+            // (`bl ...; stp x8, x9, [x19, #0x30]`). The call itself is the
+            // stable boundary even when the helper is inlined or deduplicated.
+            if ((instruction & 0xFC000000u) == 0x94000000u &&
+                firstHashWord8 is not null && firstHashWord9 is not null &&
+                mask8 == 0xF && mask9 == 0xF && (x8 != firstHashWord8 || x9 != firstHashWord9))
+            {
+                byte[] digest = new byte[32];
+                BinaryPrimitives.WriteUInt64LittleEndian(digest.AsSpan(0, 8), firstHashWord8.Value);
+                BinaryPrimitives.WriteUInt64LittleEndian(digest.AsSpan(8, 8), firstHashWord9.Value);
+                BinaryPrimitives.WriteUInt64LittleEndian(digest.AsSpan(16, 8), x8);
+                BinaryPrimitives.WriteUInt64LittleEndian(digest.AsSpan(24, 8), x9);
+                yield return digest;
+                firstHashWord8 = null;
+                firstHashWord9 = null;
+            }
+        }
+    }
+
     /// <summary>
     /// <summary>KernelSU ELF extraction and patching details.</summary>
     public static (List<Asset> Assets, List<string> Log) ExtractAssets(
@@ -453,7 +566,6 @@ public static partial class Extractor
 
             // Binary parsing and patching implementation detail.
             {
-                byte[] hb = Convert.FromHexString(result.Sha256);
                 ulong? hashHit = null;
                 foreach (var hr in hashRefs)
                 {
@@ -466,13 +578,16 @@ public static partial class Extractor
                     }
                 }
                 result.HashRefVa = hashHit;
-                // A digest merely occurring somewhere in the ELF is not enough
-                // to associate it with this resource. It must be reached by a
-                // reference from the same resource factory.
-                result.HashInBinary = false;
+                bool inlineHash = !string.IsNullOrEmpty(result.Sha256) &&
+                    (EnumerateInlineHashes(elf, fnVa, extWindow)
+                        .Concat(elf.Machine == 62 ? EnumerateX86InlineHashes(elf, fnVa, extWindow) : [])
+                        .Any(candidate => Convert.ToHexStringLower(candidate) == result.Sha256));
+                // The digest must be referenced from the same factory. A matching
+                // byte sequence found elsewhere in the ELF is not sufficient.
+                result.HashInBinary = hashHit is not null || inlineHash;
                 byte[] outBytes = GetOutBytes(data, result);
                 result.Verified =
-                    hashHit is not null &&
+                    result.HashInBinary &&
                     outBytes.Length >= 4 &&
                     outBytes[0] == 0x7F && outBytes[1] == (byte)'E' &&
                     outBytes[2] == (byte)'L' && outBytes[3] == (byte)'F';

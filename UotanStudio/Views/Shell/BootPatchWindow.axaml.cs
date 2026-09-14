@@ -78,10 +78,15 @@ public partial class BootPatchWindow : Window
         _detection = detection;
         var isMagisk = detection?.Kind == BootPatchKind.Magisk;
         var isApatch = detection?.Kind == BootPatchKind.APatch;
-        var showPatchInputs = isMagisk || isApatch;
+        var isKernelSu = detection?.Kind == BootPatchKind.KernelSu;
+        var showPatchInputs = isMagisk || isApatch || isKernelSu;
 
         PatchOptionsPanel.IsVisible = showPatchInputs;
+        PatchInputRow.IsVisible = showPatchInputs;
         MagiskOptionsRow.IsVisible = isMagisk;
+        PrebootDeviceBox.IsVisible = isMagisk || isApatch;
+        ArchitectureBox.IsVisible = isMagisk || isApatch;
+        KmiBox.IsVisible = isKernelSu;
         var supported = detection?.SupportedOptions;
         var supports = (BootPatchOption option) => isMagisk && (supported is null || supported.Contains(option));
         ForceRootfsBox.IsVisible = supports(BootPatchOption.LegacySar);
@@ -95,9 +100,10 @@ public partial class BootPatchWindow : Window
         if (!KeepAvbBox.IsVisible) KeepAvbBox.IsChecked = false;
         if (!PatchVbmetaBox.IsVisible) PatchVbmetaBox.IsChecked = false;
         RefreshArchitectureOptions();
+        RefreshKmiOptions();
 
         // The left field is the SuperKey field for APatch and the pre-init
-        // device field for Magisk. KernelSU and unknown packages hide both.
+        // device field for Magisk. KernelSU uses the KMI selector instead.
         PrebootDeviceBox.Text = string.Empty;
         PrebootDeviceBox.PlaceholderText = LanguageService.Instance.GetString(
             isApatch ? "BootPatch_ApatchPassword" : "BootPatch_DevicePlaceholder");
@@ -119,9 +125,10 @@ public partial class BootPatchWindow : Window
         }
         if (_detection?.Kind == BootPatchKind.KernelSu)
             ProgressText.Text = string.IsNullOrWhiteSpace(_bootKmi)
-                ? "Unable to determine the boot kernel KMI."
-                : $"KernelSU KMI: {_bootKmi} (supported: {string.Join(", ", _detection.Kmis ?? [])})";
+                ? LanguageService.Instance.GetString("BootPatch_KmiDetectionFailed")
+                : LanguageService.Instance.GetString("BootPatch_KmiDetected", _bootKmi);
         RefreshArchitectureOptions();
+        RefreshKmiOptions();
     }
 
     private void RefreshArchitectureOptions()
@@ -134,11 +141,10 @@ public partial class BootPatchWindow : Window
             return;
         }
 
-        var autoLabel = LanguageService.Instance.GetString("BootPatch_AutoDetect");
         var detectedLabel = string.IsNullOrWhiteSpace(_bootArchitecture)
             ? LanguageService.Instance.GetString("BootPatch_ArchitectureUnknown")
             : _bootArchitecture;
-        var autoText = $"{autoLabel}（{detectedLabel}）";
+        var autoText = LanguageService.Instance.GetString("BootPatch_AutoDetectArchitecture", detectedLabel);
         var items = new List<string> { autoText };
         // Preserve the package's architecture entries verbatim, including an
         // entry equal to the architecture detected from boot.
@@ -147,12 +153,40 @@ public partial class BootPatchWindow : Window
         ArchitectureBox.SelectedIndex = 0;
     }
 
+    private void RefreshKmiOptions()
+    {
+        var detection = _detection;
+        if (detection?.Kind != BootPatchKind.KernelSu)
+        {
+            KmiBox.ItemsSource = Array.Empty<string>();
+            KmiBox.SelectedIndex = -1;
+            return;
+        }
+
+        var detectedLabel = string.IsNullOrWhiteSpace(_bootKmi)
+            ? LanguageService.Instance.GetString("BootPatch_KmiUnknown")
+            : _bootKmi;
+        var items = new List<string>
+        {
+            LanguageService.Instance.GetString("BootPatch_AutoDetectKmi", detectedLabel)
+        };
+        if (detection.Kmis is { Count: > 0 })
+            items.AddRange(detection.Kmis);
+        KmiBox.ItemsSource = items;
+        KmiBox.SelectedIndex = 0;
+    }
+
     private string? SelectedArchitecture()
     {
         if (ArchitectureBox.SelectedIndex <= 0)
             return _bootArchitecture ?? _detection?.Architectures.FirstOrDefault();
         return ArchitectureBox.SelectedItem as string;
     }
+
+    private string? SelectedKmi()
+        => _detection?.Kind == BootPatchKind.KernelSu && KmiBox.SelectedIndex > 0
+            ? KmiBox.SelectedItem as string
+            : null;
     private async void OnStartPatchClick(object? sender, RoutedEventArgs e)
     {
         if (_isPatching) return;
@@ -165,6 +199,7 @@ public partial class BootPatchWindow : Window
             var result = await _patchService.PatchAsync(FilePathBox.Text, BootPathBox.Text, output, new BootPatchOptions
             {
                 Architecture = SelectedArchitecture(),
+                KernelSuKmi = SelectedKmi(),
                 SuperPassword = _detection?.Kind == BootPatchKind.APatch ? PrebootDeviceBox.Text : null,
                 ForceRootfs = ForceRootfsBox.IsChecked == true,
                 KeepForceEncryption = KeepEncryptionBox.IsChecked == true,

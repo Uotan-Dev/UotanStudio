@@ -36,9 +36,13 @@ public sealed record BootPatchOptions
     /// <summary>Requests the Magisk PATCHVBMETAFLAG configuration.</summary>
     public bool PatchVbmetaFlag { get; init; }
     public bool RecoveryMode { get; init; }
-    public bool ForceRootfs { get; init; } = true;
+    /// <summary>Requests Magisk's legacy SAR rootfs kernel patch.</summary>
+    /// <remarks>Magisk defaults this option to false; it is only needed for legacy SAR images.</remarks>
+    public bool ForceRootfs { get; init; }
     public string? PreInitDevice { get; init; }
     public string? Architecture { get; init; }
+    /// <summary>Explicit KernelSU KMI selection; null means use the boot kernel KMI.</summary>
+    public string? KernelSuKmi { get; init; }
     public string? SuperPassword { get; init; }
     public IProgress<double>? Progress { get; init; }
 }
@@ -231,7 +235,10 @@ public static class BootPatchAnalyzer
             }
         }
         hasApatch = hasApatch || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
-        var kind = hasApatch ? BootPatchKind.APatch : hasMagisk ? BootPatchKind.Magisk : hasKsu ? BootPatchKind.KernelSu : BootPatchKind.Unknown;
+        // KernelSU variants often carry Magisk compatibility scripts and shared
+        // util_functions.sh files. Native KSU markers are stronger evidence than
+        // those compatibility names, so classify KSU before falling back to Magisk.
+        var kind = hasApatch ? BootPatchKind.APatch : hasKsu ? BootPatchKind.KernelSu : hasMagisk ? BootPatchKind.Magisk : BootPatchKind.Unknown;
         var kmiNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (kind == BootPatchKind.KernelSu)
         {

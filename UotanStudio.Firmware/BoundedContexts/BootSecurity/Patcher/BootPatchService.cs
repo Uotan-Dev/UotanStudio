@@ -34,6 +34,7 @@ public sealed class BootPatchService
         parser.ParseFile(bootPath);
         options.Progress?.Report(.2d);
         string? bootKmi = null;
+        string? kernelSuKmi = null;
         if (detection.Kind == BootPatchKind.KernelSu)
         {
             if (parser.Kernel.Length == 0)
@@ -47,14 +48,16 @@ public sealed class BootPatchService
                 throw new InvalidDataException("Unable to determine the boot kernel KMI.");
             if (detection.Kmis is not { Count: > 0 })
                 throw new InvalidDataException("KernelSU package does not contain any KMI-specific modules.");
-            if (!detection.Kmis.Contains(bootKmi, StringComparer.OrdinalIgnoreCase))
-                throw new InvalidDataException($"KernelSU package does not contain a module for boot KMI '{bootKmi}'.");
+            kernelSuKmi = string.IsNullOrWhiteSpace(options.KernelSuKmi) ? bootKmi : options.KernelSuKmi.Trim();
+            if (!detection.Kmis.Contains(kernelSuKmi, StringComparer.OrdinalIgnoreCase))
+                throw new InvalidDataException($"KernelSU package does not contain a module for KMI '{kernelSuKmi}'.");
         }
         if (parser.Ramdisk.Length == 0 && detection.Kind != BootPatchKind.APatch)
             throw new InvalidDataException("The boot image has no ramdisk to patch.");
         var changes = new List<string>();
 
         var patchedKernel = parser.Kernel;
+        byte[]? kernelDtb = null;
         if (detection.Kind == BootPatchKind.APatch)
         {
             var kpimg = await ReadPackageEntryAsync(packagePath, detection, arch, "kpimg", cancellationToken).ConfigureAwait(false)
@@ -63,7 +66,9 @@ public sealed class BootPatchService
                 ? parser.Kernel
                 : BootCompressor.TryDecompress(parser.Kernel, parser.Header.KernelCompression)
                     ?? throw new InvalidDataException("The boot kernel compression is unsupported or corrupt.");
-            var injected = KernelPatchInjector.Patch(rawKernel, kpimg, options.SuperPassword!);
+            SplitEmbeddedKernelDtb(parser, rawKernel, out var kernelBody, out kernelDtb);
+            var injected = KernelPatchInjector.Patch(kernelBody, kpimg, options.SuperPassword!);
+            if (kernelDtb is { Length: > 0 }) injected = [.. injected, .. kernelDtb];
             patchedKernel = parser.Header.KernelCompression == CompressionType.None
                 ? injected
                 : CompressRamdisk(injected, parser.Header.KernelCompression);
@@ -75,14 +80,16 @@ public sealed class BootPatchService
                 ? parser.Kernel
                 : BootCompressor.TryDecompress(parser.Kernel, parser.Header.KernelCompression)
                     ?? throw new InvalidDataException("The boot kernel compression is unsupported or corrupt.");
+            SplitEmbeddedKernelDtb(parser, rawKernel, out var kernelBody, out kernelDtb);
             var beforeKernelChanges = changes.Count;
-            var patched = MagiskKernelPatcher.Apply(rawKernel, options.ForceRootfs, changes);
+            var patched = MagiskKernelPatcher.Apply(kernelBody, options.ForceRootfs, changes);
             // Magisk deliberately keeps the original compressed bytes when no
             // vendor pattern was found.  Recompressing an unchanged kernel can
             // alter headers and invalidate vendor signatures.
             if (changes.Count == beforeKernelChanges)
                 patchedKernel = parser.Kernel;
             else
+                if (kernelDtb is { Length: > 0 }) patched = [.. patched, .. kernelDtb];
                 patchedKernel = parser.Header.KernelCompression == CompressionType.None
                     ? patched
                     : CompressRamdisk(patched, parser.Header.KernelCompression);
@@ -101,34 +108,11 @@ public sealed class BootPatchService
                     ?? throw new InvalidDataException("The boot ramdisk compression is unsupported or corrupt.");
             var editor = new CpioArchiveEditor();
             using (var ramdiskStream = new MemoryStream(rawRamdisk, writable: false)) editor.Load(ramdiskStream);
-            // Repatching an image starts from Magisk's saved stock ramdisk when
-            // available, which makes option changes and restore deterministic.
-            if (editor.Find("ramdisk.cpio.orig") is { } backup)
-            {
-                try
-                {
-                    var restored = new CpioArchiveEditor();
-                    using var backupStream = new MemoryStream(backup.Data, writable: false);
-                    restored.Load(backupStream);
-                    editor = restored;
-                    changes.Add("restore original ramdisk backup");
-                }
-                catch (InvalidDataException) { }
-            }
-            if (detection.Kind == BootPatchKind.Magisk && !editor.Exists("ramdisk.cpio.orig"))
-            {
-                using var originalArchive = new MemoryStream();
-                editor.Save(originalArchive);
-                editor.AddOrReplace("ramdisk.cpio.orig", originalArchive.ToArray(), Regular(0x8000u));
-                changes.Add("backup original ramdisk");
-            }
-            if (options.ForceRootfs && editor.Find("init") is { } stockInit && !editor.Exists("init.orig"))
-            {
-                editor.AddOrReplace("init.orig", stockInit.Data, stockInit.Metadata);
-                changes.Add("backup init as init.orig");
-            }
+            var stockInit = editor.Find("init")?.Data;
             PatchFstab(editor, options, changes);
-            await ApplyPackageAsync(editor, packagePath, detection, arch, options, changes, cancellationToken, bootKmi).ConfigureAwait(false);
+            await ApplyPackageAsync(editor, packagePath, detection, arch, options, changes, cancellationToken, kernelSuKmi).ConfigureAwait(false);
+            if (detection.Kind == BootPatchKind.Magisk)
+                AddMagiskBackupEntries(editor, stockInit, changes);
             options.Progress?.Report(.65d);
             using var rebuilt = new MemoryStream();
             editor.Save(rebuilt);
@@ -174,11 +158,16 @@ public sealed class BootPatchService
             if (!inAbi && !isMagiskAsset) continue;
             if (detection.Kind == BootPatchKind.Magisk)
             {
+                // Magisk's boot_patch.sh injects only the runtime payloads below.
+                // util_functions.sh and helper libraries are patch-time inputs and
+                // must never become ramdisk files.
+                if (!IsMagiskRuntimeEntry(entry.Name)) continue;
                 var magiskTarget = MagiskTarget(entry.Name, initTarget);
                 if (magiskTarget is null) continue;
                 var bytes = await ReadEntryBoundedAsync(entry, ct).ConfigureAwait(false);
                 if (!entry.Name.EndsWith(".xz", StringComparison.OrdinalIgnoreCase) && magiskTarget.EndsWith(".xz", StringComparison.OrdinalIgnoreCase))
                     bytes = CompressionService.Compress(bytes, CompressionFormat.Xz);
+                EnsureParentDirectories(editor, magiskTarget, changes);
                 editor.AddOrReplace(magiskTarget, bytes, Regular(magiskTarget.Equals(initTarget, StringComparison.Ordinal) ? 0x81E8u : 0x81A4u));
                 changes.Add($"install {magiskTarget}");
                 continue;
@@ -193,6 +182,7 @@ public sealed class BootPatchService
             using var data = new MemoryStream();
             await input.CopyToAsync(data, ct).ConfigureAwait(false);
             var target = entry.Name.Equals("init", StringComparison.OrdinalIgnoreCase) ? initTarget : $"overlay.d/sbin/{entry.Name}";
+            EnsureParentDirectories(editor, target, changes);
             editor.AddOrReplace(target, data.ToArray(), Regular((uint)(entry.Name.Equals("init", StringComparison.OrdinalIgnoreCase) ? 0x81E8 : 0x81A4)));
             changes.Add($"install {target}");
         }
@@ -200,8 +190,9 @@ public sealed class BootPatchService
         {
             var config = Encoding.UTF8.GetBytes($"KEEPVERITY={(options.KeepVerity ? "true" : "false")}\n" +
                 $"KEEPFORCEENCRYPT={(options.KeepForceEncryption ? "true" : "false")}\n" +
-                $"PATCHVBMETAFLAG={(options.PatchVbmetaFlag ? "true" : "false")}\n" +
-                $"RECOVERYMODE={(options.RecoveryMode ? "true" : "false")}\n");
+                $"RECOVERYMODE={(options.RecoveryMode ? "true" : "false")}\n" +
+                "VENDORBOOT=false\n" +
+                (string.IsNullOrWhiteSpace(options.PreInitDevice) ? string.Empty : $"PREINITDEVICE={options.PreInitDevice.Trim()}\n"));
             if (editor.Exists(".backup/.magisk")) editor.Remove(".backup/.magisk");
             editor.AddOrReplace(".backup", [], new ArchiveEntryMetadata
             {
@@ -229,18 +220,21 @@ public sealed class BootPatchService
                 if (entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))
                 {
                     var target = entry.Name.Equals("ksu.ko", StringComparison.OrdinalIgnoreCase) ? "kernelsu.ko" : entry.Name;
+                    EnsureParentDirectories(editor, $"overlay.d/sbin/{target}", changes);
                     editor.AddOrReplace($"overlay.d/sbin/{target}", bytes, Regular(0x81A4));
                     changes.Add($"install {target}");
                     continue;
                 }
                 if (entry.Name.Equals("ksud", StringComparison.OrdinalIgnoreCase) || entry.Name.Equals("ksuinit", StringComparison.OrdinalIgnoreCase))
                 {
+                    EnsureParentDirectories(editor, $"overlay.d/sbin/{entry.Name}", changes);
                     editor.AddOrReplace($"overlay.d/sbin/{entry.Name}", bytes, Regular(0x81EDu));
                     changes.Add($"install {entry.Name}");
                     continue;
                 }
                 var extracted = bootKmi is null ? null : KernelSuEmbeddedExtractor.ExtractForKmi(bytes, bootKmi);
                 if (extracted is null) continue;
+                EnsureParentDirectories(editor, "overlay.d/sbin/kernelsu.ko", changes);
                 editor.AddOrReplace("overlay.d/sbin/kernelsu.ko", extracted, Regular(0x81A4));
                 changes.Add($"extract and install KernelSU module for KMI {bootKmi}");
                 break;
@@ -277,6 +271,32 @@ public sealed class BootPatchService
         if (name.Equals("busybox.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("busybox", StringComparison.OrdinalIgnoreCase) || name.Equals("libbusybox.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/busybox.xz";
         if (name.Equals("util_functions.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("util_functions.sh", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/util_functions.xz";
         return name.EndsWith(".xz", StringComparison.OrdinalIgnoreCase) ? $"overlay.d/sbin/{name}" : null;
+    }
+
+    private static bool IsMagiskRuntimeEntry(string name)
+        => name.Equals("stub.apk", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("libmagisk.so", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("libmagiskinit.so", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("libinit-ld.so", StringComparison.OrdinalIgnoreCase);
+
+    private static void SplitEmbeddedKernelDtb(BootImageParser parser, ReadOnlySpan<byte> rawKernel,
+        out byte[] kernelBody, out byte[]? kernelDtb)
+    {
+        kernelBody = rawKernel.ToArray();
+        kernelDtb = null;
+        // Android v1 images commonly carry a concatenated FDT after the gzip
+        // kernel. Preserve that payload when patching the kernel body.
+        if (parser.Header.HeaderVersion != BootImageVersion.V1) return;
+        ReadOnlySpan<byte> dtbMagic = "\xD0\x0D\xFE\xED"u8;
+        for (var offset = Math.Max(0, rawKernel.Length - 8 * 1024 * 1024); offset <= rawKernel.Length - 40; offset++)
+        {
+            if (!rawKernel.Slice(offset, 4).SequenceEqual(dtbMagic)) continue;
+            var total = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(rawKernel.Slice(offset + 4, 4));
+            if (total < 40 || total > rawKernel.Length - offset) continue;
+            kernelBody = rawKernel[..offset].ToArray();
+            kernelDtb = rawKernel[offset..].ToArray();
+            return;
+        }
     }
 
     private static bool IsKernelSuLibrary(string name)
@@ -319,6 +339,42 @@ public sealed class BootPatchService
     }
 
     private static ArchiveEntryMetadata Regular(uint mode) => new() { FileType = CpioFileType.Regular, Mode = mode, UnixPermissions = (int)(mode & 0x1FF), LinkCount = 1 };
+
+    private static ArchiveEntryMetadata DirectoryMetadata(uint mode) => new() { FileType = CpioFileType.Directory, Mode = mode, UnixPermissions = (int)(mode & 0x1FF), LinkCount = 2 };
+
+    private static void AddMagiskBackupEntries(CpioArchiveEditor editor, byte[]? stockInit, List<string> changes)
+    {
+        if (stockInit is not { Length: > 0 }) return;
+        EnsureParentDirectories(editor, ".backup/.magisk", changes);
+        var compressedInit = CompressionService.Compress(stockInit, CompressionFormat.Xz);
+        editor.AddOrReplace(".backup/init.xz", compressedInit, Regular(0x81A4u));
+        // Magisk records files created by the patch so its restore operation can
+        // remove them on the next patch. Keep this list deterministic.
+        // Magisk's restore list is a NUL-terminated sequence, rather than a
+        // text file with line separators.  Keep the exact delimiter so the
+        // next patch can consume it with the same semantics as Magisk.
+        var removeList = Encoding.UTF8.GetBytes(
+            "overlay.d\0" +
+            "overlay.d/sbin\0" +
+            "overlay.d/sbin/init-ld.xz\0" +
+            "overlay.d/sbin/magisk.xz\0" +
+            "overlay.d/sbin/stub.xz\0");
+        editor.AddOrReplace(".backup/.rmlist", removeList, Regular(0x81A4u));
+        changes.Add("write Magisk restore metadata");
+    }
+
+    private static void EnsureParentDirectories(CpioArchiveEditor editor, string path, List<string> changes)
+    {
+        var parts = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var current = string.Empty;
+        for (var i = 0; i < parts.Length - 1; i++)
+        {
+            current = current.Length == 0 ? parts[i] : $"{current}/{parts[i]}";
+            if (editor.Exists(current)) continue;
+            editor.AddOrReplace(current, [], DirectoryMetadata(0x41E8u));
+            changes.Add($"create {current} directory");
+        }
+    }
 
     private static void PatchFstab(CpioArchiveEditor editor, BootPatchOptions options, List<string> changes)
     {
