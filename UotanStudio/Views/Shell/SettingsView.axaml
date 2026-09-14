@@ -15,11 +15,6 @@
         <ScrollViewer HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="24,16" Spacing="24" MaxWidth="800">
 
-                <StackPanel Spacing="8">
-                    <TextBlock Text="{DynamicResource Settings_HdcPath}" FontWeight="SemiBold" />
-                    <TextBox Text="{Binding HdcPath, Mode=TwoWay}" PlaceholderText="{DynamicResource Settings_HdcPathHint}" />
-                </StackPanel>
-
                 <!-- Section 1: Appearance -->
                 <StackPanel Spacing="8">
                     <TextBlock Text="{DynamicResource Settings_Appearance}" FontWeight="SemiBold" FontSize="16" />

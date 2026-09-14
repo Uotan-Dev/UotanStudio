@@ -1,6 +1,7 @@
 using UotanStudio.ViewModels.Shell;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Styling;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -34,6 +35,7 @@ public partial class MainWindow : Window
         _ownedViewModel = viewModel;
         DataContext = viewModel;
         InitializeComponent();
+        viewModel.AttachMainWindow(this);
         if (OperatingSystem.IsMacOS())
         {
             _nativeMenu = new MainWindowNativeMenu(this, TopMenu);
@@ -45,6 +47,7 @@ public partial class MainWindow : Window
         BindDeviceSelector();
         Closed += (_, _) =>
         {
+            CloseChildWindows();
             _nativeMenu?.Dispose();
             TitleBar.SizeChanged -= OnTitleBarSizeChanged;
             DeviceSelectorMenu.SizeChanged -= OnTitleBarSizeChanged;
@@ -66,6 +69,24 @@ public partial class MainWindow : Window
 #if DEBUG
         Opened += MainWindow_Opened;
 #endif
+    }
+
+    private void CloseChildWindows()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+            return;
+        foreach (var window in desktop.Windows.ToArray())
+        {
+            if (ReferenceEquals(window, this) || !window.IsVisible) continue;
+            try
+            {
+                window.Close();
+                // A busy child may veto Closing; hide it as a last resort so no
+                // secondary window survives the main-window lifetime.
+                if (window.IsVisible) window.Hide();
+            }
+            catch (Exception ex) { Services.LogService.Instance.Write(Services.LogLevel.Warn, "Lifecycle", ex.Message); }
+        }
     }
 
     private void OnTitleBarSizeChanged(object? sender, SizeChangedEventArgs e)

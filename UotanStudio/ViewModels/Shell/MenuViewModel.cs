@@ -201,7 +201,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var owner = DialogService.GetOwnerWindow();
         if (owner is null) return;
         var window = new NewProjectWindow(NewProjectWindowMode.Solution, null, null);
-        window.CreateAsync = async form =>
+        window.CreateWithCancellationAsync = async (form, cancellationToken) =>
         {
             // 位置已是组合后的完整目录（基础目录/解决方案名），直接作为解决方案目录使用。
             // The location is already the combined directory (base/solution name); use it directly.
@@ -219,12 +219,12 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             var images = ImageViewModel.EnsureInstance();
             if (form.ContainerPath is not null)
             {
-                await ImportContainerWithSelectionAsync(form, images, window);
+                await ImportContainerWithSelectionAsync(form, images, window, cancellationToken);
             }
             else if (form.SelectedImagePaths.Length > 0)
             {
                 await images.ImportAsync(form.SelectedImagePaths,
-                    byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")));
+                    byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
             }
 
             WorkspacePanelService.Instance.Show(WorkspacePanelService.ImagesView);
@@ -232,7 +232,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
             if (form.ContainerPath is null)
             {
-                await UnpackSelectedPlainImagesAsync(form, images, window);
+                await UnpackSelectedPlainImagesAsync(form, images, window, cancellationToken);
             }
             // 保存前刷新镜像列表：过滤手动登记的容器条目（zip 等 unknown 格式），避免持久化进工程快照。
             // Refresh the image list before saving: filter manually registered container entries
@@ -250,7 +250,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// Unpacking for plain multi-selected images (shared by new solution and new sub-project): only
     /// imported entries are unpacked; with full unpack checked nested images are unpacked recursively.
     /// </summary>
-    private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window)
+    private async Task UnpackSelectedPlainImagesAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window, CancellationToken cancellationToken = default)
     {
         if (!form.UnpackImages || form.SelectedImagePaths.Length == 0) return;
         // 只解包导入成功的镜像条目；导入失败（格式未知等）的文件不在列表中。
@@ -261,7 +261,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                     OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
             .ToList();
         if (entries.Count == 0) return;
-        await UnpackWithCreationProgressAsync(images, entries, form.UnpackFully, window);
+        await UnpackWithCreationProgressAsync(images, entries, form.UnpackFully, window, cancellationToken);
     }
 
     /// <summary>
@@ -273,7 +273,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     /// thread and writes to the log.
     /// </summary>
     private static async Task UnpackWithCreationProgressAsync(ImageViewModel images,
-        IReadOnlyList<ImageEntryViewModel> entries, bool fully, NewProjectWindow window)
+        IReadOnlyList<ImageEntryViewModel> entries, bool fully, NewProjectWindow window, CancellationToken cancellationToken = default)
     {
         void Update(object? sender, System.ComponentModel.PropertyChangedEventArgs args)
         {
@@ -282,11 +282,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         }
         window.ResetProgressStats();
         images.PropertyChanged += Update;
-        try { await images.UnpackFromProjectCreationAsync(entries, fully); }
+        try { await images.UnpackFromProjectCreationAsync(entries, fully, cancellationToken); }
         finally { images.PropertyChanged -= Update; }
     }
 
-    private async Task ImportContainerWithSelectionAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window)
+    private async Task ImportContainerWithSelectionAsync(NewProjectFormResult form, ImageViewModel images, NewProjectWindow window, CancellationToken cancellationToken = default)
     {
         var source = form.ContainerPath;
         if (source is null) return;
@@ -301,7 +301,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 ContainerKind.Payload => "payload",
                 ContainerKind.Zip => "zip",
                 _ => "raw"
-            }, byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")));
+            }, byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
             if (container is null) throw new IOException("Container import failed.");
             containerPath = ProjectContextService.Instance.ResolvePath(container.RelativePath) ?? source;
         }
@@ -320,7 +320,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             {
                 var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
                 var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
-                    containerPath, form.SelectedZipMembers, fromPayloadOnly: false, outputDirectory: outputDirectory, byteProgress: byteProgress)).ConfigureAwait(true);
+                    containerPath, form.SelectedZipMembers, fromPayloadOnly: false, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
                 extractedPaths.AddRange(result.OutputPaths);
             }
 
@@ -329,7 +329,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
                 var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
                     containerPath, form.SelectedPartitions,
-                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, byteProgress: byteProgress)).ConfigureAwait(true);
+                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
                 extractedPaths.AddRange(result.OutputPaths);
             }
 
@@ -519,7 +519,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             NewProjectWindowMode.SubProject,
             context.RootDirectory,
             context.SubProjects.Select(sp => sp.Name));
-        window.CreateAsync = async form =>
+        window.CreateWithCancellationAsync = async (form, cancellationToken) =>
         {
             // 位置已是组合后的完整目录（解决方案根/子项目名），.uotanfw 与目录同名。
             // The location is the combined directory (solution root/sub-project name); the .uotanfw
@@ -534,13 +534,13 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             var images = ImageViewModel.EnsureInstance();
             if (form.ContainerPath is not null)
             {
-                await ImportContainerWithSelectionAsync(form, images, window);
+                await ImportContainerWithSelectionAsync(form, images, window, cancellationToken);
             }
             else if (form.SelectedImagePaths.Length > 0)
             {
                 await images.ImportAsync(form.SelectedImagePaths,
-                    byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")));
-                await UnpackSelectedPlainImagesAsync(form, images, window);
+                    byteProgress: window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Copying")), cancellationToken: cancellationToken);
+                await UnpackSelectedPlainImagesAsync(form, images, window, cancellationToken);
             }
             // 保存前刷新镜像列表：过滤手动登记的容器条目（zip 等 unknown 格式），避免持久化进工程快照。
             // Refresh the image list before saving: filter manually registered container entries

@@ -33,19 +33,6 @@ public partial class SettingsViewModel : ViewModelBase, IDisposable
         }
     }
 
-    /// <summary>Official HDC executable path.</summary>
-    public string HdcPath
-    {
-        get => _appSettings.HdcPath;
-        set
-        {
-            if (_appSettings.HdcPath == value) return;
-            _appSettings.HdcPath = value;
-            OnPropertyChanged();
-            DebouncedSaveSettings();
-        }
-    }
-
     private CancellationTokenSource? _saveCts;
     private bool _disposed;
 

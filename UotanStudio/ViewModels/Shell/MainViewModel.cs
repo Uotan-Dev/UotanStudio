@@ -5,6 +5,7 @@ using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Nodes;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Composition;
+using Avalonia.Controls;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -15,6 +16,7 @@ public partial class MainViewModel : ViewModelBase, IDisposable
     private readonly Services.Workspace.WorkspaceAutoSaveService _autoSave;
     private readonly Services.Workspace.WorkspaceModificationTracker _modifications;
     internal Task InitializeAutoSaveAsync() => _autoSave.InitializeAsync();
+    internal void AttachMainWindow(Window window) => _autoSave.AttachMainWindow(window);
     internal void ResumeAutoSave() => _autoSave.Resume();
     internal async Task<bool> FlushAutoSaveAsync()
     {

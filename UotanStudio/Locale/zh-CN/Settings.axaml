@@ -61,6 +61,4 @@
     <x:String x:Key="Settings_AIToggleKey">显示 / 隐藏 API 密钥</x:String>
     <x:String x:Key="Settings_AIModels">模型</x:String>
     <x:String x:Key="Settings_AIFetchModels">获取模型列表</x:String>
-    <x:String x:Key="Settings_HdcPath">HDC 可执行文件</x:String>
-    <x:String x:Key="Settings_HdcPathHint">留空使用 PATH 或 DevEco 标准 SDK</x:String>
 </ResourceDictionary>

@@ -19,14 +19,12 @@ public partial class KeyManagerViewModel : ViewModelBase
     // 运行时身份指纹接缝；测试注入隔离密钥以避免触碰真实运行时文件。
     private readonly Func<ManagedKeyKind, string?> _runtimeFingerprint = KeyLibraryService.GetRuntimeIdentityFingerprint;
     public ObservableCollection<ManagedKey> Keys { get; } = [];
-    public string[] Kinds { get; } = ["ADB", "HDC", "Payload", "JAR"];
+    public string[] Kinds { get; } = ["ADB", "HDC", "Payload", "JAR", "APK"];
     public int[] PayloadSizes => KindIndex switch
     {
         0 => [2048],
         1 => [3072],
-        // APK signing keys accept RSA 2048–4096 and EC P-256/P-384/P-521.
-        // APK 签名密钥接受 RSA 2048–4096 与 EC P-256/P-384/P-521。
-        3 => [2048, 3072, 4096, 256, 384, 521],
+        3 => [2048, 4096],
         _ => [2048, 4096],
     };
     public string LibraryPath => _library.Root;
@@ -45,21 +43,19 @@ public partial class KeyManagerViewModel : ViewModelBase
     [ObservableProperty][NotifyPropertyChangedFor(nameof(IsSelectedDefault), nameof(CanSetCurrentDefault))] private string _defaultSignatureIds = "";
     public bool IsIdle => !IsBusy;
     public bool IsPayload => KindIndex == (int)ManagedKeyKind.Payload;
-    /// <summary>Whether the UI is showing the APK key purpose.</summary>
     /// <summary>当前是否选择了 APK 密钥用途。</summary>
-    public bool IsApkKey => KindIndex == 3;
     /// <summary>Whether the UI is showing the APK certificate purpose.</summary>
     /// <summary>当前是否选择了 APK 证书用途。</summary>
-    public bool IsApkCertificate => KindIndex == 4;
+    public bool IsApkCertificate => KindIndex == (int)ManagedKeyKind.Apk;
     /// <summary>Whether the UI is showing the JAR purpose (library-backed, 2048/4096 bits).</summary>
     /// <summary>当前是否选择了 JAR 用途（库后端支持，2048/4096 位）。</summary>
-    public bool IsJar => KindIndex == 5;
+    public bool IsJar => KindIndex == (int)ManagedKeyKind.Jar;
     /// <summary>Whether the selected purpose is backed by the managed key library.</summary>
     /// <summary>当前用途是否由密钥库后端支持。</summary>
-    public bool IsLibraryPurpose => KindIndex is >= 0 and <= 3 or 5;
+    public bool IsLibraryPurpose => KindIndex is >= (int)ManagedKeyKind.Adb and <= (int)ManagedKeyKind.Jar;
     /// <summary>Whether the key-size selector can be changed for the selected purpose.</summary>
     /// <summary>当前用途是否允许调整密钥位数。</summary>
-    public bool IsBitsEditable => IsPayload || IsApkKey || IsJar;
+    public bool IsBitsEditable => IsPayload || IsJar;
     // ---- APK certificate form (purpose index 4) ----
     // ---- APK 证书表单（用途下标 4）----
     [ObservableProperty] private string _certificateAlias = "my-release-key";
@@ -164,7 +160,6 @@ public partial class KeyManagerViewModel : ViewModelBase
     partial void OnKindIndexChanged(int value)
     {
         OnPropertyChanged(nameof(IsPayload));
-        OnPropertyChanged(nameof(IsApkKey));
         OnPropertyChanged(nameof(IsApkCertificate));
         OnPropertyChanged(nameof(IsJar));
         OnPropertyChanged(nameof(IsLibraryPurpose));
@@ -269,13 +264,13 @@ public partial class KeyManagerViewModel : ViewModelBase
         // APK certificate generation goes through the dedicated generator + export bundle.
         // APK 证书生成走专用生成器 + 格式导出。
         if (IsApkCertificate) return GenerateApkCertificateAsync();
-        // Other purposes map to the managed key library; JAR (index 5) maps to ManagedKeyKind.Jar.
-        // 其余用途映射到密钥库；JAR（下标 5）映射到 ManagedKeyKind.Jar。
+        // Other purposes map to the managed key library; JAR (index 3) maps to ManagedKeyKind.Jar.
+        // 其余用途映射到密钥库；JAR（下标 3）映射到 ManagedKeyKind.Jar。
         if (!IsLibraryPurpose) return Task.CompletedTask;
         var name = Name;
         var kind = KindIndex switch
         {
-            5 => ManagedKeyKind.Jar,
+            (int)ManagedKeyKind.Jar => ManagedKeyKind.Jar,
             _ => (ManagedKeyKind)KindIndex,
         };
         var bits = kind switch { ManagedKeyKind.Adb => 2048, ManagedKeyKind.Hdc => 3072, _ => PayloadBits };
@@ -331,11 +326,11 @@ public partial class KeyManagerViewModel : ViewModelBase
     {
         if (!IsLibraryPurpose) return Task.CompletedTask;
         var name = Name;
-        // APK keys (index 3) import as ManagedKeyKind.Apk; JAR (index 5) as ManagedKeyKind.Jar.
-        // APK 密钥（下标 3）导入为 ManagedKeyKind.Apk；JAR（下标 5）为 ManagedKeyKind.Jar。
+        // JAR (index 3) imports as ManagedKeyKind.Jar; APK certificates use index 4.
+        // JAR（下标 3）导入为 ManagedKeyKind.Jar；APK 证书使用下标 4。
         var kind = KindIndex switch
         {
-            5 => ManagedKeyKind.Jar,
+            (int)ManagedKeyKind.Jar => ManagedKeyKind.Jar,
             _ => (ManagedKeyKind)KindIndex,
         };
         var password = Password;

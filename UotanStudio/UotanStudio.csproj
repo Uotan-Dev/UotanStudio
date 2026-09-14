@@ -53,6 +53,7 @@
     <PackageReference Include="NodifyM.Avalonia" />
     <PackageReference Include="AdvancedSharpAdbClient" />
     <PackageReference Include="DiffPlex" />
+    <PackageReference Include="SharpCompress" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
