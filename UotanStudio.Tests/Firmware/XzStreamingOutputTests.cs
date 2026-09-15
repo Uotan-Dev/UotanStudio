@@ -19,6 +19,20 @@ public class XzStreamingOutputTests
     public void Crc64Spooling_PreservesLegacyBytesOnly()
         => AssertSpooling(2097169, 4, verifyRoundTrip: false);
 
+    [Fact]
+    public void LargeCompressibleInput_DoesNotFallBackToUncompressedChunks()
+    {
+        var data = new byte[2 * 1024 * 1024 + 12345];
+        for (var i = 0; i < data.Length; i++)
+            data[i] = (byte)(i % 251);
+
+        var compressed = XzCompressor.Compress(data, maxDegreeOfParallelism: 1);
+
+        Assert.True(compressed.Length < data.Length * 0.2,
+            $"Expected LZMA2 compression below 20% of input, got {compressed.Length} of {data.Length} bytes.");
+        Assert.Equal(data, XzCompressor.Decompress(compressed));
+    }
+
     private static void AssertSpooling(int length, byte check, bool verifyRoundTrip)
     {
         byte[] data = new byte[length];

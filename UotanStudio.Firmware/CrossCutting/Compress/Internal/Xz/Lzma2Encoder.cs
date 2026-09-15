@@ -5,7 +5,13 @@ namespace UotanStudio.Firmware.CrossCutting.Compress.Internal.Xz;
 
 internal static class Lzma2Encoder
 {
-    private const int UncompressedChunkMax = 1 << 21;
+    // LZMA2 chunk headers carry the compressed-size field in 16 bits.  The
+    // previous 2 MiB window therefore fell back to an uncompressed chunk for
+    // most real ramdisks (the compressed stream was larger than 64 KiB),
+    // producing .xz files that were almost as large as their input.  Keeping
+    // each independently encoded chunk within the representable range lets
+    // the XZ stream retain compression while preserving bounded memory use.
+    private const int UncompressedChunkMax = 1 << 16;
 
     private const byte Lclppb = 0x5D;
 
