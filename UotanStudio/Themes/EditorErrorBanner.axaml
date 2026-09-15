@@ -1,0 +1,17 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 编辑器页面的顶部错误提示条：所有 Editors 页面共用同一套高度、位置与配色，
+         页面只负责 DockPanel.Dock="Top" 与可见性绑定（与 FileManager 编辑器原样式一致）。 -->
+    <!-- Editor top error banner: one shared definition of height, placement and colour for every Editors
+         page; pages only bind DockPanel.Dock="Top" and visibility (matching the FileManager editor). -->
+    <Style Selector="Border.error-banner">
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="Background" Value="#22C42B1C" />
+    </Style>
+    <Style Selector="TextBlock.error-banner">
+        <Setter Property="Foreground" Value="Red" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="MaxHeight" Value="72" />
+    </Style>
+</Styles>

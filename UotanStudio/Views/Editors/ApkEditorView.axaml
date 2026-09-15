@@ -7,9 +7,11 @@
              x:Class="UotanStudio.Views.Editors.ApkEditorView"
              x:DataType="viewmodels:ApkEditorViewModel">
   <DockPanel>
-    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <TextBlock Text="{Binding CompileError}" VerticalAlignment="Center" Foreground="Red" TextTrimming="CharacterEllipsis"
-                 IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式。 -->
+    <!-- Top error banner: same styling as the FileManager editor. -->
+    <Border Classes="error-banner" DockPanel.Dock="Top"
+            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
     <ScrollViewer>
       <StackPanel Margin="16" Spacing="16">

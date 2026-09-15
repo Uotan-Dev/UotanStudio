@@ -74,5 +74,8 @@
         <Style Selector="Menu Separator, ContextMenu Separator">
             <Setter Property="Margin" Value="4,2" />
         </Style>
+        <!-- 编辑器页面共用的顶部错误提示条样式（高度/位置/配色集中定义）。 -->
+        <!-- Shared top error-banner styles for every editor page (height/placement/colour in one place). -->
+        <StyleInclude Source="avares://UotanStudio/Themes/EditorErrorBanner.axaml" />
     </Application.Styles>
 </Application>

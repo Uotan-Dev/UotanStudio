@@ -163,6 +163,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
 
         OpenMode = mode;
         FilePath = path;
+        CompileError = string.Empty;
         _isLoading = true;
         try
         {
@@ -193,6 +194,17 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
 
             _loadedWriteTime = File.GetLastWriteTimeUtc(path);
             IsDirty = false;
+        }
+        catch (Exception ex)
+        {
+            // 加载失败时把原因留给页面顶部错误条，避免只留下一片空编辑器（打开失败的调用方只记日志）。
+            // Surface load failures in the page's top error banner instead of leaving an empty editor
+            // behind (the open path only logs the exception).
+            CompileError = ex.Message;
+            RawBytes = null;
+            Text = string.Empty;
+            IsBinary = false;
+            LogService.Instance.Write(LogLevel.Error, "FileEditor", $"Failed to load '{path}': {ex.Message}");
         }
         finally
         {
@@ -643,6 +655,7 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISe
         _fileSize = 0;
         DetectedFormat = string.Empty;
         DetectedEncoding = string.Empty;
+        CompileError = string.Empty;
     }
 }
 

@@ -8,14 +8,13 @@
              x:Class="UotanStudio.Views.Editors.HexEditorView"
              x:DataType="viewmodels:HexEditorViewModel">
   <Grid RowDefinitions="Auto,*,Auto">
-    <!-- 顶部文件路径 -->
-    <Border Grid.Row="0" Padding="6,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Left" Text="{Binding FilePathDisplay}"
-                   VerticalAlignment="Center"
-                   FontSize="12" Opacity="0.7"
-                   TextTrimming="CharacterEllipsis" />
-      </DockPanel>
+    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式（加载失败 / 保存失败时出现）；
+         文件路径行已按需求移除。 -->
+    <!-- Top error banner: same styling as the FileManager editor (shown on load/save failure); the file
+         path row was removed on request. -->
+    <Border Grid.Row="0" Classes="error-banner"
+            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
 
     <!-- Hex 视图：自绘制 HexViewer 控件承载二进制查看/编辑（编辑就地写回 RawBytes）；

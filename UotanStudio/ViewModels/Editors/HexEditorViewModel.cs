@@ -139,6 +139,13 @@ public partial class HexEditorViewModel : Document, ICommandSaveableDocument
             CompileError = string.Empty;
             IsDirty = false;
         }
+        catch (Exception ex)
+        {
+            // 其余加载失败（权限、占用、读取中断等）同样交给页面顶部错误条显示。
+            // Other load failures (permissions, locks, interrupted reads) go to the page's top error banner.
+            RawBytes = null;
+            CompileError = $"Failed to load: {ex.Message}";
+        }
         finally
         {
             IsBusy = false;

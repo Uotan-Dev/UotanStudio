@@ -8,13 +8,11 @@
              x:Class="UotanStudio.Views.Editors.FileView"
              x:DataType="viewmodels:FileViewModel">
   <Grid RowDefinitions="Auto,*,Auto">
-    <!-- 顶部文件路径 -->
-    <Border Grid.Row="0" Padding="6,2" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Left" Text="{Binding FilePathDisplay}"
-                   FontSize="12" Opacity="0.7" VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" />
-      </DockPanel>
+    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式（文件路径行已按需求移除）。 -->
+    <!-- Top error banner: same styling as the FileManager editor (the file path row was removed on request). -->
+    <Border Grid.Row="0" Classes="error-banner"
+            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
 
     <!-- 文本编辑器 -->

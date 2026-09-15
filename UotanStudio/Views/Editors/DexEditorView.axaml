@@ -7,71 +7,81 @@
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.DexEditorView"
              x:DataType="viewmodels:DexEditorViewModel">
+  <UserControl.Styles>
+    <!-- 顶栏紧凑样式：控件 20px 高 + 栏内边距 6,4，整条高度与 FileManager 编辑器顶栏一致（约 28px）。 -->
+    <!-- Compact top-bar styles: 20px controls with 6,4 strip padding, giving the same ~28px strip height
+         as the FileManager editor's top bar. -->
+    <Style Selector="TextBlock.Small">
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Opacity" Value="0.7" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ComboBox.Small">
+      <Setter Property="Height" Value="20" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="CheckBox.Small">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="Padding" Value="6,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.Small">
+      <Setter Property="Height" Value="20" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+  </UserControl.Styles>
   <DockPanel>
-    <!-- 顶部工具栏：文件路径 + 容器条目/合并视图 + 解析错误状态 -->
-    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+    <!-- 顶部工具栏（容器样式）：条目/合并视图 + 资源与签名控件 + 签名状态。原先位于底部状态栏的
+         资源/签名控件已上移到这一条；文件路径与「重建并保存」按钮已按需求移除（保存仍可通过菜单 / Ctrl+S
+         触发，命令与脏标记保留在视图模型）。整条工具栏只在容器样式下占位。 -->
+    <!-- Top toolbar (container style): entry / merge view, resource and signing controls plus the signing
+         status. The resource/signing controls that used to live in the bottom status bar moved up here;
+         the file path and the "Rebuild & Save" button were removed on request (saving stays available via
+         the menu / Ctrl+S). The strip only occupies space in container mode. -->
+    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
+            IsVisible="{Binding IsContainer}">
       <DockPanel>
-        <Button DockPanel.Dock="Left" Height="24" Padding="8,0" FontSize="11"
-                Content="{x:Static viewmodels:DexEditorViewModel.SaveLabel}"
-                Command="{Binding SaveCommand}"
-                IsEnabled="{Binding IsDirty}" />
-        <TextBlock DockPanel.Dock="Right"
-                   Text="{Binding CompileError}"
-                   MaxWidth="360"
-                   Margin="12,0,0,0"
-                   VerticalAlignment="Center"
-                   Foreground="Red"
+        <TextBlock DockPanel.Dock="Right" Classes="Small"
+                   Text="{Binding SignStatus}"
+                   MaxWidth="280"
+                   Margin="10,0,0,0"
+                   Opacity="0.8"
                    TextTrimming="CharacterEllipsis"
-                   IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                   IsVisible="{Binding SignStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6"
                     IsVisible="{Binding IsContainer}">
-          <TextBlock Text="{DynamicResource Dock_Dex_Entry}"
-                     VerticalAlignment="Center" FontSize="11" Opacity="0.7" />
-          <ComboBox MinWidth="140" Height="24" FontSize="11"
+          <TextBlock Classes="Small" Text="{DynamicResource Dock_Dex_Entry}" />
+          <ComboBox Classes="Small" MinWidth="110"
                     ItemsSource="{Binding DexEntryNames}"
                     SelectedItem="{Binding SelectedEntry}"
                     IsEnabled="{Binding !IsMergeView}"
                     AutomationProperties.Name="{DynamicResource Dock_Dex_Entry}" />
-          <CheckBox Content="{DynamicResource Dock_Dex_MergeView}"
-                    IsChecked="{Binding IsMergeView}"
-                    VerticalAlignment="Center" FontSize="11" />
-          <Button Height="24" Padding="8,0" FontSize="11"
+          <CheckBox Classes="Small"
+                    Content="{DynamicResource Dock_Dex_MergeView}"
+                    IsChecked="{Binding IsMergeView}" />
+          <Button Classes="Small"
                   Content="{DynamicResource Dock_Dex_ResourceExport}"
                   Command="{Binding ExportResourceCommand}"
                   IsEnabled="{Binding HasSelectedResource}" />
-          <Button Height="24" Padding="8,0" FontSize="11"
+          <Button Classes="Small"
                   Content="{DynamicResource Dock_Dex_ResourceReplace}"
                   Command="{Binding ReplaceResourceCommand}"
                   IsEnabled="{Binding HasSelectedResource}" />
-        </StackPanel>
-        <TextBlock Margin="12,0,0,0"
-                   Text="{Binding FilePathDisplay}"
-                   FontSize="11" Opacity="0.7" VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" />
-      </DockPanel>
-    </Border>
-
-    <!-- 底部状态栏：资源条目选择 + JAR 签名（仅容器显示） -->
-    <Border DockPanel.Dock="Bottom" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0"
-            IsVisible="{Binding IsContainer}">
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Right"
-                   Text="{Binding SignStatus}"
-                   MaxWidth="360" Margin="12,0,0,0"
-                   VerticalAlignment="Center" FontSize="11" Opacity="0.8"
-                   TextTrimming="CharacterEllipsis"
-                   IsVisible="{Binding SignStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <TextBlock Text="{DynamicResource Dock_Dex_Resource}"
-                     VerticalAlignment="Center" FontSize="11" Opacity="0.7" />
-          <ComboBox MinWidth="180" Height="24" FontSize="11"
+          <TextBlock Classes="Small" Text="{DynamicResource Dock_Dex_Resource}" />
+          <ComboBox Classes="Small" MinWidth="140"
                     ItemsSource="{Binding ResourceEntries}"
                     SelectedItem="{Binding SelectedResource}"
                     DisplayMemberBinding="{Binding Name}"
                     AutomationProperties.Name="{DynamicResource Dock_Dex_Resource}" />
-          <TextBlock Text="{DynamicResource Dock_Dex_SignKey}"
-                     VerticalAlignment="Center" FontSize="11" Opacity="0.7" />
-          <ComboBox MinWidth="140" Height="24" FontSize="11"
+          <TextBlock Classes="Small" Text="{DynamicResource Dock_Dex_SignKey}" />
+          <ComboBox Classes="Small" MinWidth="110"
                     ItemsSource="{Binding JarKeys}"
                     SelectedItem="{Binding SelectedJarKey}"
                     AutomationProperties.Name="{DynamicResource Dock_Dex_SignKey}">
@@ -81,11 +91,18 @@
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-          <Button Height="24" Padding="8,0" FontSize="11"
+          <Button Classes="Small"
                   Content="{DynamicResource Dock_Dex_Sign}"
                   Command="{Binding SignJarCommand}" />
         </StackPanel>
       </DockPanel>
+    </Border>
+
+    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式。 -->
+    <!-- Top error banner: same styling as the FileManager editor. -->
+    <Border Classes="error-banner" DockPanel.Dock="Top"
+            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
 
     <!-- 全量反汇编文本（只读），后台加载时叠加忙碌动画 -->

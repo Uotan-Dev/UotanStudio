@@ -9,21 +9,13 @@
              x:Class="UotanStudio.Views.Editors.DtbEditorView"
              x:DataType="viewmodels:DtbEditorViewModel">
   <DockPanel>
-    <!-- 顶部工具栏：文件路径 + 编译错误状态 -->
-    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <DockPanel>
-        <TextBlock DockPanel.Dock="Right"
-                   Text="{Binding CompileError}"
-                   MaxWidth="360"
-                   Margin="12,0,0,0"
-                   VerticalAlignment="Center"
-                   Foreground="Red"
-                   TextTrimming="CharacterEllipsis"
-                   IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <TextBlock Text="{Binding FilePathDisplay}"
-                   FontSize="11" Opacity="0.7" VerticalAlignment="Center"
-                   TextTrimming="CharacterEllipsis" />
-      </DockPanel>
+    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式（文件路径已按需求移除）。
+         本页没有「重建并保存」按钮（保存经菜单 / Ctrl+S 走 ISaveableDocument 通道）。 -->
+    <!-- Top error banner: same styling as the FileManager editor (the file path was removed on request).
+         This page has no "Rebuild & Save" button (saving goes through the menu / Ctrl+S). -->
+    <Border Classes="error-banner" DockPanel.Dock="Top"
+            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
 
     <!-- 设备节点树（左） + DTS 源码（右） -->

@@ -9,22 +9,16 @@
              x:Class="UotanStudio.Views.Editors.ManifestEditorView"
              x:DataType="viewmodels:ManifestEditorViewModel">
   <DockPanel IsEnabled="{Binding !IsBusy}">
-    <!-- 顶部工具栏：文件路径 + 解析错误状态 + 右侧视图布局切换 -->
+    <!-- 顶部工具栏：标题 + 右侧视图布局切换（文件路径已按需求移除，改为固定标题） -->
     <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="*,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto">
+        <!-- 与文件管理器顶栏的格式名同款：加粗文字显示当前编辑器名称。 -->
+        <!-- Same look as the file manager's format-name label: bold text naming the current editor. -->
         <TextBlock Grid.Column="0"
-                   Text="{Binding FilePathDisplay}"
-                   FontSize="11" Opacity="0.7" VerticalAlignment="Center"
+                   Text="{DynamicResource Dock_Manifest_Header}"
+                   FontWeight="SemiBold" VerticalAlignment="Center"
                    TextTrimming="CharacterEllipsis" />
-        <TextBlock Grid.Column="1"
-                   Text="{Binding CompileError}"
-                   MaxWidth="360"
-                   Margin="12,0,0,0"
-                   VerticalAlignment="Center"
-                   Foreground="Red"
-                   TextTrimming="CharacterEllipsis"
-                   IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-        <Button Grid.Column="2"
+        <Button Grid.Column="1"
                 Width="18" Height="18"
                 MinWidth="0" MinHeight="0"
                 Margin="6,0,0,0" Padding="0"
@@ -37,6 +31,13 @@
                                  Width="12" Height="12" />
         </Button>
       </Grid>
+    </Border>
+
+    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式。 -->
+    <!-- Top error banner: same styling as the FileManager editor. -->
+    <Border Classes="error-banner" DockPanel.Dock="Top"
+            IsVisible="{Binding CompileError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Classes="error-banner" Text="{Binding CompileError}" />
     </Border>
 
     <!-- 左：元素结构树；右上：选中元素属性；右下：XML 文本预览 -->

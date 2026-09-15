@@ -17,7 +17,7 @@
       <Setter Property="AutomationProperties.Name" Value="{DynamicResource Log_Resume}" />
     </Style>
   </UserControl.Styles>
-  <Grid RowDefinitions="Auto,*">
+  <Grid RowDefinitions="Auto,Auto,*">
     <!-- 顶栏：筛选与操作按钮 -->
     <Border Grid.Row="0" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
       <WrapPanel ItemSpacing="8" LineSpacing="4">
@@ -103,13 +103,18 @@
         <TextBlock Name="SearchErrorText" Text="{Binding SearchError}" IsVisible="{Binding HasSearchError}"
                    Foreground="{DynamicResource LogErrorBrush}" FontSize="11" MaxWidth="180"
                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding SearchError}" />
-        <TextBlock Text="{Binding ErrorMessage}" Foreground="{DynamicResource LogErrorBrush}"
-                   FontSize="11" MaxWidth="180" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                   ToolTip.Tip="{Binding ErrorMessage}" />
       </WrapPanel>
     </Border>
+
+    <!-- 顶部错误提示条：与其它编辑器同一套样式（加载/导出失败时出现）。 -->
+    <!-- Top error banner: same styling as the other editors (shown on load/export failure). -->
+    <Border Grid.Row="1" Classes="error-banner"
+            IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+      <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
+    </Border>
+
     <!-- 日志编辑器 -->
-    <edit:TextEditor Grid.Row="1" Name="LogEditor"
+    <edit:TextEditor Grid.Row="2" Name="LogEditor"
                      IsReadOnly="True" ShowLineNumbers="False" WordWrap="False"
                      FontFamily="Consolas,monospace" FontSize="13"
                      Padding="8,4" Background="Transparent"
