@@ -263,8 +263,7 @@
     <x:String x:Key="Explorer_No">No</x:String>
     <x:String x:Key="Explorer_Ok">OK</x:String>
     <x:String x:Key="Explorer_ConvertFormat">Convert Format</x:String>
-    <x:String x:Key="Explorer_ConvertImgToSimg">IMG to SIMG</x:String>
-    <x:String x:Key="Explorer_ConvertSimgToImg">SIMG to IMG</x:String>
+    <x:String x:Key="Explorer_ConvertSparse">Sparse Convert</x:String>
     <x:String x:Key="Explorer_ConvertImgToDat">IMG to DAT</x:String>
     <x:String x:Key="Explorer_ConvertImgToBr">IMG to BR</x:String>
     <x:String x:Key="Explorer_Checksum">Checksum</x:String>

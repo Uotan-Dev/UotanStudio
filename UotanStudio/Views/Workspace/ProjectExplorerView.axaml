@@ -90,8 +90,7 @@
                             <MenuItem.Icon>
                                 <icons:MaterialIcon Kind="SwapHorizontal" />
                             </MenuItem.Icon>
-                            <MenuItem Header="{DynamicResource Explorer_ConvertImgToSimg}" Click="OnConvertImgToSimg" />
-                            <MenuItem Header="{DynamicResource Explorer_ConvertSimgToImg}" Click="OnConvertSimgToImg" />
+                            <MenuItem Header="{DynamicResource Explorer_ConvertSparse}" Click="OnConvertSparse" />
                             <MenuItem Header="{DynamicResource Explorer_ConvertImgToDat}" Click="OnConvertImgToDat" />
                             <MenuItem Header="{DynamicResource Explorer_ConvertImgToBr}" Click="OnConvertImgToBr" />
                         </MenuItem>
@@ -128,11 +127,6 @@
                             </MenuItem>
                         </MenuItem>
                         <Separator />
-                        <MenuItem Header="{DynamicResource ImageView_PackRom}" IsVisible="{Binding IsDirectory}" Click="OnPackRom">
-                            <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="ArchiveOutline" />
-                            </MenuItem.Icon>
-                        </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_Unpack}" IsVisible="{Binding !IsDirectory}" Click="OnUnpack">
                             <MenuItem.Icon>
                                 <icons:MaterialIcon Kind="PackageDown" />

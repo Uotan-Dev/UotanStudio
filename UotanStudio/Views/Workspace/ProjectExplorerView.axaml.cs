@@ -180,9 +180,12 @@ public partial class ProjectExplorerView : UserControl
         OpenWith(EditorOpenMode.FileSystem);
     }
 
-    private void OnConvertImgToSimg(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG→SIMG");
-
-    private void OnConvertSimgToImg(object? sender, RoutedEventArgs e) => RequestFormatConversion("SIMG→IMG");
+    /// <summary>
+    /// <para>稀疏转换：原始镜像与稀疏镜像之间的双向转换（需求上两项合一，方向由源文件类型决定）。</para>
+    /// Sparse conversion: converts between raw and sparse images in either direction; the source file type
+    /// decides the direction, so the two former entries are merged into one.
+    /// </summary>
+    private void OnConvertSparse(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG↔SIMG");
 
     private void OnConvertImgToDat(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG→DAT");
 
@@ -376,11 +379,6 @@ public partial class ProjectExplorerView : UserControl
         await ImageViewModel.Instance.RunExplorerOperationAsync(node.Path, false);
     }
 
-    private async void OnPackRom(object? sender, RoutedEventArgs e)
-    {
-        if (ProjectTree.SelectedItem is not ExplorerNode node || !node.IsDirectory || node.IsPlaceholder) return;
-        await ImageViewModel.Instance.RunExplorerOperationAsync(node.Path, true);
-    }
 }
 
 internal static class ExplorerClipboard

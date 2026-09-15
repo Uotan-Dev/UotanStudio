@@ -263,8 +263,7 @@
     <x:String x:Key="Explorer_No">否</x:String>
     <x:String x:Key="Explorer_Ok">确定</x:String>
     <x:String x:Key="Explorer_ConvertFormat">格式转换</x:String>
-    <x:String x:Key="Explorer_ConvertImgToSimg">IMG 转 SIMG</x:String>
-    <x:String x:Key="Explorer_ConvertSimgToImg">SIMG 转 IMG</x:String>
+    <x:String x:Key="Explorer_ConvertSparse">稀疏转换</x:String>
     <x:String x:Key="Explorer_ConvertImgToDat">IMG 转 DAT</x:String>
     <x:String x:Key="Explorer_ConvertImgToBr">IMG 转 BR</x:String>
     <x:String x:Key="Explorer_Checksum">校验</x:String>
