@@ -65,6 +65,9 @@
     <x:String x:Key="Settings_McpExpose">Expose as MCP server</x:String>
     <x:String x:Key="Settings_McpExposePort">Port</x:String>
     <x:String x:Key="Settings_McpSave">Save MCP Settings</x:String>
+    <x:String x:Key="Settings_Developers">Developers</x:String>
+    <x:String x:Key="Settings_GitHub">GitHub</x:String>
+    <x:String x:Key="Settings_Coolapk">Coolapk</x:String>
 
     <x:String x:Key="Settings_AI">AI Assistant</x:String>
     <x:String x:Key="Settings_AIEndpoint">API endpoint</x:String>

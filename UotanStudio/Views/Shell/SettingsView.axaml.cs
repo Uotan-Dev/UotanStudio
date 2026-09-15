@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Notifications;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
@@ -59,5 +60,19 @@ public partial class SettingsView : UserControl
         _toastManager?.Show(content,
             message.Succeeded ? NotificationType.Success : NotificationType.Error,
             TimeSpan.FromSeconds(message.Succeeded ? 2 : 6), showIcon: true, showClose: !message.Succeeded);
+    }
+
+    /// <summary>
+    /// <para>用系统默认浏览器打开按钮携带的链接（开发成员的 GitHub / 酷安主页）。</para>
+    /// Opens the link carried by the button (developer GitHub / Coolapk profiles) in the default browser.
+    /// </summary>
+    /// <param name="sender"><para>事件发送者。</para>The event sender.</param>
+    /// <param name="e"><para>事件参数。</para>The event arguments.</param>
+    private void OnOpenLinkClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string url })
+        {
+            ExternalLinkService.TryOpen(url);
+        }
     }
 }

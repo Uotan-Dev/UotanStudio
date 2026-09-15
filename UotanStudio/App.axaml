@@ -20,6 +20,7 @@
                 <ResourceInclude Source="avares://UotanStudio/Themes/AccentColors.axaml"/>
             </ResourceDictionary.MergedDictionaries>
             <converters:IntEqualConverter x:Key="IntEqualConverter" />
+            <converters:AssetImageConverter x:Key="AssetImageConverter" />
             <converters:StringNotNullOrEmptyConverter x:Key="StringNotNullOrEmptyConverter" />
             <converters:LogFilterDisplayConverter x:Key="LogFilterDisplayConverter" />
         </ResourceDictionary>

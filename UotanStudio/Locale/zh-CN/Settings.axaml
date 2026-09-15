@@ -65,6 +65,9 @@
     <x:String x:Key="Settings_McpExpose">暴露为 MCP 服务器</x:String>
     <x:String x:Key="Settings_McpExposePort">端口</x:String>
     <x:String x:Key="Settings_McpSave">保存 MCP 设置</x:String>
+    <x:String x:Key="Settings_Developers">开发成员</x:String>
+    <x:String x:Key="Settings_GitHub">GitHub</x:String>
+    <x:String x:Key="Settings_Coolapk">酷安</x:String>
 
     <x:String x:Key="Settings_AI">AI 助手</x:String>
     <x:String x:Key="Settings_AIEndpoint">API 地址</x:String>
