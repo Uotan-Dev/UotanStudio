@@ -140,6 +140,7 @@
     <x:String x:Key="Keys_Password">Import password (optional)</x:String>
     <x:String x:Key="Keys_ApkKey">JAR</x:String>
     <x:String x:Key="Keys_ApkCertificate">APK</x:String>
+    <x:String x:Key="Keys_Zip">ZIP</x:String>
     <x:String x:Key="Keys_KeystoreAlias">Keystore alias</x:String>
     <x:String x:Key="Keys_KeystorePassword">Keystore password</x:String>
     <x:String x:Key="Keys_ValidityYears">Validity (years)</x:String>

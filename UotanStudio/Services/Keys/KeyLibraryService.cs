@@ -10,7 +10,7 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Apk.Signing;
 namespace UotanStudio.Services.Keys;
 
 /// <summary>Supported key purposes; purpose determines the exported public key format.</summary>
-public enum ManagedKeyKind { Adb, Hdc, Payload, Jar, Apk }
+public enum ManagedKeyKind { Adb, Hdc, Payload, Jar, Apk, Zip }
 
 /// <summary>Export bundle choices for a freshly generated APK signing certificate.</summary>
 /// <summary>新生成 APK 签名证书的导出格式组合。</summary>
@@ -298,8 +298,8 @@ public sealed class KeyLibraryService
     /// <summary>Returns the certificate path, generating the self-signed certificate for a legacy Payload/JAR key on first use.</summary>
     public string EnsureCertificate(ManagedKey key)
     {
-        if (key.Kind is not (ManagedKeyKind.Payload or ManagedKeyKind.Jar))
-            throw new InvalidOperationException("Only Payload and JAR keys carry certificates.");
+        if (key.Kind is not (ManagedKeyKind.Payload or ManagedKeyKind.Jar or ManagedKeyKind.Zip))
+            throw new InvalidOperationException("Only Payload, JAR and ZIP keys carry certificates.");
         var path = CertificatePath(key);
         if (File.Exists(path)) return path;
         var directory = KeyDirectory(key.Id);
@@ -499,10 +499,10 @@ public sealed class KeyLibraryService
         try
         {
             var path = Path.Combine(staging, PrivateName(kind));
-            // APK keys keep PKCS#8 PEM so both RSA and EC material can be stored in one format;
-            // other purposes keep their legacy encodings.
-            // APK 密钥统一存 PKCS#8 PEM（兼容 RSA 与 EC）；其他用途保留旧编码。
-            var privateText = kind == ManagedKeyKind.Apk || kind == ManagedKeyKind.Payload
+            // APK and ZIP keys keep PKCS#8 PEM so a single format covers RSA/EC material (ZIP
+            // signing needs an RSA key for OTA; read via LoadPrivateKey); Payload inherited the format.
+            // APK 与 ZIP 密钥统一存 PKCS#8 PEM（兼容 RSA 与 EC）；ZIP 用于 OTA 签名需要 RSA。Payload 沿用该格式。
+            var privateText = kind is ManagedKeyKind.Apk or ManagedKeyKind.Payload or ManagedKeyKind.Zip
                 ? key.ExportPkcs8PrivateKeyPem()
                 : ((RSA)key).ExportRSAPrivateKeyPem();
             Write(path, privateText);
@@ -517,7 +517,7 @@ public sealed class KeyLibraryService
             }
             else publicText = key.ExportSubjectPublicKeyInfoPem() + "\n";
             Write(path + ".pub", publicText);
-            if (kind is ManagedKeyKind.Payload or ManagedKeyKind.Jar or ManagedKeyKind.Apk)
+            if (kind is ManagedKeyKind.Payload or ManagedKeyKind.Jar or ManagedKeyKind.Apk or ManagedKeyKind.Zip)
                 Write(Path.Combine(staging, PrivateName(kind) + ".crt"), CreateCertificate(name, key));
             Write(Path.Combine(staging, "key.json"), JsonSerializer.Serialize(key2, KeyLibraryJsonContext.Default.ManagedKey));
             Directory.Move(staging, KeyDirectory(key2.Id));
@@ -533,6 +533,7 @@ public sealed class KeyLibraryService
         ManagedKeyKind.Payload => "payload-key.pem",
         ManagedKeyKind.Jar => "jar-key.pem",
         ManagedKeyKind.Apk => "apk-key.pem",
+        ManagedKeyKind.Zip => "zip-key.pem",
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -570,9 +571,12 @@ public sealed class KeyLibraryService
             // APK signing accepts RSA 2048–4096 and EC curves P-256/P-384/P-521.
             // APK 签名接受 RSA 2048–4096 与 EC 曲线 P-256/P-384/P-521。
             ManagedKeyKind.Apk => bits is 2048 or 3072 or 4096 or 256 or 384 or 521,
+            // OTA ZIP signing uses a platform-style RSA key.
+            // OTA ZIP 签名使用平台风格的 RSA 密钥。
+            ManagedKeyKind.Zip => bits is 2048 or 4096,
             _ => false
         }))
-            throw new ArgumentException("密钥位数与用途不匹配：ADB 2048、HDC 3072、Payload/JAR 2048/4096、APK RSA 2048–4096 或 EC 256/384/521。");
+            throw new ArgumentException("密钥位数与用途不匹配：ADB 2048、HDC 3072、Payload/JAR/ZIP 2048/4096、APK RSA 2048–4096 或 EC 256/384/521。");
     }
 
     private static void Write(string path, string text)

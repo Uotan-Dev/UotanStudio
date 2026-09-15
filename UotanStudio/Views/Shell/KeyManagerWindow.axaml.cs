@@ -103,7 +103,11 @@ public partial class KeyManagerWindow : Window
 
     private async void CopyClick(object? sender, RoutedEventArgs e) => await Model.RunAsync(async () =>
     {
-        if (Clipboard is { } clipboard) await clipboard.SetTextAsync(Model.PublicKey);
+        if (Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(Model.PublicKey);
+            await clipboard.FlushAsync();
+        }
     });
 
     private async void ExportPublicClick(object? sender, RoutedEventArgs e) => await ExportAsync(false);

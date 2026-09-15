@@ -19,7 +19,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     // 运行时身份指纹接缝；测试注入隔离密钥以避免触碰真实运行时文件。
     private readonly Func<ManagedKeyKind, string?> _runtimeFingerprint = KeyLibraryService.GetRuntimeIdentityFingerprint;
     public ObservableCollection<ManagedKey> Keys { get; } = [];
-    public string[] Kinds { get; } = ["ADB", "HDC", "Payload", "JAR", "APK"];
+    public string[] Kinds { get; } = ["ADB", "HDC", "Payload", "JAR", "APK", "ZIP"];
     public int[] PayloadSizes => KindIndex switch
     {
         0 => [2048],
@@ -56,12 +56,15 @@ public partial class KeyManagerViewModel : ViewModelBase
     /// <summary>Whether the UI is showing the JAR purpose (library-backed, 2048/4096 bits).</summary>
     /// <summary>当前是否选择了 JAR 用途（库后端支持，2048/4096 位）。</summary>
     public bool IsJar => KindIndex == (int)ManagedKeyKind.Jar;
+    /// <summary>当前是否选择了 ZIP（OTA 包签名）用途。</summary>
+    /// <summary>Whether the UI is showing the ZIP (OTA package signing) purpose.</summary>
+    public bool IsZip => KindIndex == (int)ManagedKeyKind.Zip;
     /// <summary>Whether the selected purpose is backed by the managed key library.</summary>
     /// <summary>当前用途是否由密钥库后端支持。</summary>
-    public bool IsLibraryPurpose => KindIndex is >= (int)ManagedKeyKind.Adb and <= (int)ManagedKeyKind.Jar;
+    public bool IsLibraryPurpose => KindIndex is (int)ManagedKeyKind.Zip or < (int)ManagedKeyKind.Apk;
     /// <summary>Whether the key-size selector can be changed for the selected purpose.</summary>
     /// <summary>当前用途是否允许调整密钥位数。</summary>
-    public bool IsBitsEditable => IsPayload || IsJar;
+    public bool IsBitsEditable => IsPayload || IsJar || IsZip;
     // ---- APK certificate form (purpose index 4) ----
     // ---- APK 证书表单（用途下标 4）----
     [ObservableProperty]
@@ -127,7 +130,7 @@ public partial class KeyManagerViewModel : ViewModelBase
     /// </summary>
     public bool CanImport => IsLibraryPurpose && !string.IsNullOrWhiteSpace(Name);
     public string SelectedPath => SelectedKey is { } key ? _library.PrivatePath(key) : "";
-    public bool HasCertificate => SelectedKey is { Kind: ManagedKeyKind.Payload or ManagedKeyKind.Jar };
+    public bool HasCertificate => SelectedKey is { Kind: ManagedKeyKind.Payload or ManagedKeyKind.Jar or ManagedKeyKind.Zip };
     public bool IsSelectedDefault => SelectedKey is { } k && IsDefault(k);
     public bool CanSetCurrentDefault => SelectedKey is { Kind: ManagedKeyKind.Adb or ManagedKeyKind.Hdc };
     private IReadOnlyList<ManagedKey> _all = [];
@@ -183,6 +186,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsPayload));
         OnPropertyChanged(nameof(IsApkCertificate));
         OnPropertyChanged(nameof(IsJar));
+        OnPropertyChanged(nameof(IsZip));
         OnPropertyChanged(nameof(IsLibraryPurpose));
         OnPropertyChanged(nameof(IsBitsEditable));
         OnPropertyChanged(nameof(IsOutputDirectoryRequired));

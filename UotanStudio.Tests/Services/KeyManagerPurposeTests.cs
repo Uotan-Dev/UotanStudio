@@ -9,11 +9,11 @@ public sealed class KeyManagerPurposeTests : IDisposable
     private readonly string _root = Path.Combine(Path.GetTempPath(), "uotan-key-purpose-" + Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public void PurposeEntries_ExposeJarAndApkInTheExpectedOrder()
+    public void PurposeEntries_ExposeJarApkAndZipInTheExpectedOrder()
     {
         var model = new KeyManagerViewModel(new KeyLibraryService(Path.Combine(_root, "library")));
 
-        Assert.Equal(["ADB", "HDC", "Payload", "JAR", "APK"], model.Kinds);
+        Assert.Equal(["ADB", "HDC", "Payload", "JAR", "APK", "ZIP"], model.Kinds);
 
         model.KindIndex = 3;
         Assert.True(model.IsJar);
@@ -25,6 +25,31 @@ public sealed class KeyManagerPurposeTests : IDisposable
         Assert.False(model.IsJar);
         Assert.False(model.IsLibraryPurpose);
         Assert.True(model.IsApkCertificate);
+
+        model.KindIndex = 5;
+        Assert.True(model.IsZip);
+        Assert.True(model.IsLibraryPurpose);
+        Assert.True(model.IsBitsEditable);
+        Assert.Equal([2048, 4096], model.PayloadSizes);
+    }
+
+    [Fact]
+    public async Task ZipPurpose_GeneratesManagedZipKey()
+    {
+        var library = new KeyLibraryService(Path.Combine(_root, "library"));
+        var model = new KeyManagerViewModel(library)
+        {
+            KindIndex = 5,
+            Name = "zip-signing",
+            PayloadBits = 2048,
+        };
+
+        await model.GenerateCommand.ExecuteAsync(null);
+
+        var key = Assert.Single(library.List());
+        Assert.Equal(ManagedKeyKind.Zip, key.Kind);
+        Assert.Equal("zip-signing", key.Name);
+        Assert.True(File.Exists(library.CertificatePath(key)), "ZIP 密钥应随附自签名证书");
     }
 
     [Fact]

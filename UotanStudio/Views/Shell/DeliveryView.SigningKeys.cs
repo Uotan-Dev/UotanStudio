@@ -87,10 +87,10 @@ public partial class DeliveryView
         try
         {
             _zipSigningKeys = _payloadKeyLibrary.List()
-                .Where(k => k.Kind == ManagedKeyKind.Payload)
+                .Where(k => k.Kind == ManagedKeyKind.Zip)
                 .ToArray();
             ZipSigningKeyBox.ItemsSource = new[] { LanguageService.Instance.GetString("Keys_Unsigned") }
-                .Concat(_zipSigningKeys.Select(k => $"{k.Name} 路 RSA {k.Bits} 路 {k.Fingerprint[^12..]}"))
+                .Concat(_zipSigningKeys.Select(k => $"{k.Name} · RSA {k.Bits} · {k.Fingerprint[^12..]}"))
                 .ToArray();
             var path = _zipSigningIdentityPath.Trim();
             ZipSigningKeyBox.SelectedIndex = path.Length == 0 ? 0 :
