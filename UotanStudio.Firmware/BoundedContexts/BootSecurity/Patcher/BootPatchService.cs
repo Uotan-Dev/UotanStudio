@@ -126,6 +126,13 @@ public sealed class BootPatchService
                     ?? throw new InvalidDataException("The boot ramdisk compression is unsupported or corrupt.");
             var editor = new CpioArchiveEditor();
             using (var ramdiskStream = new MemoryStream(rawRamdisk, writable: false)) editor.Load(ramdiskStream);
+            // ksud refuses KernelSU patching of Magisk-patched images; layering
+            // KernelSU on top of Magisk's init replacement corrupts the ramdisk
+            // chain. Magisk may legitimately re-patch its own image, so only
+            // KernelSU packages hit this guard.
+            if (detection.Kind is BootPatchKind.KernelSu or BootPatchKind.KernelSuLkm
+                && (editor.Exists(".backup/.magisk") || editor.Exists("overlay.d/sbin/magisk.xz")))
+                throw new InvalidDataException("Cannot work with a Magisk patched image; restore the stock image first.");
             var stockInit = editor.Find("init")?.Data;
             PatchFstab(editor, options, changes);
             await ApplyPackageAsync(editor, packagePath, detection, arch, options, changes, cancellationToken, kernelSuKmi, stockBootSha1).ConfigureAwait(false);
@@ -157,17 +164,21 @@ public sealed class BootPatchService
         string architecture, BootPatchOptions options, List<string> changes, CancellationToken ct, string? bootKmi = null,
         string? stockBootSha1 = null)
     {
+        // KernelSU's ksud boot_patch replaces the ramdisk init with ksuinit and
+        // drops the LKM at the cpio root; overlay.d is a Magisk-only mechanism
+        // that ksud never reads.
+        var initTarget = editor.Exists("init.real") ? "init.real" : "init";
         if (detection.Kind == BootPatchKind.KernelSuLkm)
         {
             var ko = await File.ReadAllBytesAsync(packagePath, ct).ConfigureAwait(false);
-            editor.AddOrReplace("overlay.d/sbin/kernelsu.ko", ko, Regular(0x81A4));
+            EnsureParentDirectories(editor, "kernelsu.ko", changes);
+            editor.AddOrReplace("kernelsu.ko", ko, Regular(0x81A4));
             changes.Add("install kernelsu.ko");
             return;
         }
         using var fs = new FileStream(packagePath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using var zip = new ZipArchive(fs, ZipArchiveMode.Read);
         var abiNames = AbiDirectories(architecture);
-        var initTarget = editor.Exists("init.real") ? "init.real" : "init";
         foreach (var entry in zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)))
         {
             var path = entry.FullName.Replace('\\', '/');
@@ -192,17 +203,31 @@ public sealed class BootPatchService
                 continue;
             }
             if (detection.Kind == BootPatchKind.KernelSu && IsKernelSuLibrary(entry.Name)) continue;
-            if (!(entry.Name.EndsWith(".xz", StringComparison.OrdinalIgnoreCase) || entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase) || entry.Name.Equals("init", StringComparison.OrdinalIgnoreCase))) continue;
+            var isKsuInit = detection.Kind == BootPatchKind.KernelSu && entry.Name.Equals("init", StringComparison.OrdinalIgnoreCase);
+            if (!isKsuInit && !(entry.Name.EndsWith(".xz", StringComparison.OrdinalIgnoreCase) || entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))) continue;
             if (detection.Kind == BootPatchKind.KernelSu && entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase)
                 && bootKmi is not null && KernelSuEmbeddedExtractor.TryGetKmi(entry.FullName, out var entryKmi)
                 && !string.Equals(entryKmi, bootKmi, StringComparison.OrdinalIgnoreCase))
                 continue;
+            if (isKsuInit)
+            {
+                await using var initInput = entry.Open();
+                using var initData = new MemoryStream();
+                await initInput.CopyToAsync(initData, ct).ConfigureAwait(false);
+                editor.AddOrReplace("ksuinit", initData.ToArray(), Regular(0x81ED));
+                changes.Add("stage ksuinit");
+                InstallKernelSuInit(editor, initTarget, changes);
+                continue;
+            }
             await using var input = entry.Open();
             using var data = new MemoryStream();
             await input.CopyToAsync(data, ct).ConfigureAwait(false);
-            var target = entry.Name.Equals("init", StringComparison.OrdinalIgnoreCase) ? initTarget : $"overlay.d/sbin/{entry.Name}";
+            // KernelSU follows magiskboot semantics: ksuinit replaces the root
+            // init (stock init moves to init.real); the LKM lives at the cpio
+            // root, not under the Magisk-only overlay.d directory.
+            var target = isKsuInit ? initTarget : "kernelsu.ko";
             EnsureParentDirectories(editor, target, changes);
-            editor.AddOrReplace(target, data.ToArray(), Regular((uint)(entry.Name.Equals("init", StringComparison.OrdinalIgnoreCase) ? 0x81E8 : 0x81A4)));
+            editor.AddOrReplace(target, data.ToArray(), Regular((uint)(isKsuInit ? 0x81ED : 0x81A4)));
             changes.Add($"install {target}");
         }
         if (detection.Kind == BootPatchKind.Magisk)
@@ -237,7 +262,24 @@ public sealed class BootPatchService
             foreach (var entry in zip.Entries.Where(e => IsKernelSuLibrary(e.Name)))
             {
                 var bytes = await ReadEntryBoundedAsync(entry, ct).ConfigureAwait(false);
-                if (entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))
+                if (detection.Kind == BootPatchKind.KernelSu && entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))
+                {
+                    // KernelSU reads the LKM from the cpio root under the fixed
+                    // name kernelsu.ko regardless of the KMI-qualified package
+                    // entry name (ksu.ko is the Next/SukiSU alias).
+                    EnsureParentDirectories(editor, "kernelsu.ko", changes);
+                    editor.AddOrReplace("kernelsu.ko", bytes, Regular(0x81A4));
+                    changes.Add("install kernelsu.ko");
+                    continue;
+                }
+                if (detection.Kind == BootPatchKind.KernelSu && entry.Name.Equals("ksuinit", StringComparison.OrdinalIgnoreCase))
+                {
+                    editor.AddOrReplace("ksuinit", bytes, Regular(0x81ED));
+                    changes.Add("stage ksuinit");
+                    InstallKernelSuInit(editor, initTarget, changes);
+                    continue;
+                }
+                if (detection.Kind == BootPatchKind.APatch && entry.Name.EndsWith(".ko", StringComparison.OrdinalIgnoreCase))
                 {
                     var target = entry.Name.Equals("ksu.ko", StringComparison.OrdinalIgnoreCase) ? "kernelsu.ko" : entry.Name;
                     EnsureParentDirectories(editor, $"overlay.d/sbin/{target}", changes);
@@ -245,17 +287,18 @@ public sealed class BootPatchService
                     changes.Add($"install {target}");
                     continue;
                 }
-                if (entry.Name.Equals("ksud", StringComparison.OrdinalIgnoreCase) || entry.Name.Equals("ksuinit", StringComparison.OrdinalIgnoreCase))
+                if (detection.Kind == BootPatchKind.APatch && (entry.Name.Equals("ksud", StringComparison.OrdinalIgnoreCase) || entry.Name.Equals("ksuinit", StringComparison.OrdinalIgnoreCase)))
                 {
                     EnsureParentDirectories(editor, $"overlay.d/sbin/{entry.Name}", changes);
                     editor.AddOrReplace($"overlay.d/sbin/{entry.Name}", bytes, Regular(0x81EDu));
                     changes.Add($"install {entry.Name}");
                     continue;
                 }
+                if (detection.Kind != BootPatchKind.KernelSu) continue;
                 var extracted = bootKmi is null ? null : KernelSuEmbeddedExtractor.ExtractForKmi(bytes, bootKmi);
                 if (extracted is null) continue;
-                EnsureParentDirectories(editor, "overlay.d/sbin/kernelsu.ko", changes);
-                editor.AddOrReplace("overlay.d/sbin/kernelsu.ko", extracted, Regular(0x81A4));
+                EnsureParentDirectories(editor, "kernelsu.ko", changes);
+                editor.AddOrReplace("kernelsu.ko", extracted, Regular(0x81A4));
                 changes.Add($"extract and install KernelSU module for KMI {bootKmi}");
                 break;
             }
@@ -384,6 +427,27 @@ public sealed class BootPatchService
             "overlay.d/sbin/stub.xz\0");
         editor.AddOrReplace(".backup/.rmlist", removeList, Regular(0x8000u));
         changes.Add("write Magisk restore metadata");
+    }
+
+    /// <summary>
+    /// Mirrors ksud's boot_patch cpio sequence: the stock init moves to
+    /// init.real (when present) and ksuinit becomes the root init with 0755.
+    /// </summary>
+    private static void InstallKernelSuInit(CpioArchiveEditor editor, string initTarget, List<string> changes)
+    {
+        // Only swap when a ksuinit payload is available; renaming the stock
+        // init without a replacement would produce an unbootable image.
+        var ksuinit = editor.Find("ksuinit")?.Data;
+        if (ksuinit is not { Length: > 0 }) return;
+        var stockInit = editor.Find("init")?.Data;
+        if (stockInit is { Length: > 0 } && !editor.Exists("init.real"))
+        {
+            editor.Remove("init");
+            editor.AddOrReplace("init.real", stockInit, Regular(0x81E8));
+            changes.Add("rename init to init.real");
+        }
+        editor.AddOrReplace("init", ksuinit, Regular(0x81ED));
+        changes.Add("install init (ksuinit)");
     }
 
     private static void EnsureParentDirectories(CpioArchiveEditor editor, string path, List<string> changes)

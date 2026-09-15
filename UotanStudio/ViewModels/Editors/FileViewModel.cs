@@ -5,6 +5,7 @@ using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Workspace;
 using UotanStudio.Views.Controls;
 
 namespace UotanStudio.ViewModels.Editors;
@@ -15,7 +16,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// Document view model, holding the document editor's text content, syntax language, file path and
 /// dirty state, with support for hex viewing and firmware structure analysis of binary files.
 /// </summary>
-public partial class FileViewModel : Document, IEditable, ISaveableDocument
+public partial class FileViewModel : Document, IEditable, ISaveableDocument, ISearchableDocument
 {
     static FileViewModel()
     {
@@ -554,6 +555,21 @@ public partial class FileViewModel : Document, IEditable, ISaveableDocument
     /// TextEditor reference set by FileView on load, used to support clipboard operations.
     /// </summary>
     internal AvaloniaEdit.TextEditor? Editor { get; set; }
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.SearchText => IsBinary ? null : Text;
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.FilePath => FilePath;
+
+    /// <inheritdoc/>
+    AvaloniaEdit.TextEditor? ISearchableDocument.Editor => Editor;
+
+    /// <inheritdoc/>
+    bool ISearchableDocument.SupportsSearchReplacement => !IsBinary;
+
+    /// <inheritdoc/>
+    void ISearchableDocument.ApplySearchText(string text) => Text = text;
 
     /// <inheritdoc/>
     public void Cut() => Editor?.Cut();

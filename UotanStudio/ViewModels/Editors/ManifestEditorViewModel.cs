@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.AXml;
 using UotanStudio.Services;
+using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -13,7 +14,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// Manifest (AndroidManifest.xml / AXML) editor view model: a left element tree plus a right
 /// attribute-editing / XML-preview pane, supporting parse, visual editing and rebuild-write.
 /// </summary>
-public partial class ManifestEditorViewModel : Document, ICommandSaveableDocument
+public partial class ManifestEditorViewModel : Document, ICommandSaveableDocument, ISearchableDocument
 {
     /// <summary>
     /// <para>保存按钮的本地化标题。</para>
@@ -53,10 +54,52 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
                 FilePath);
 
     /// <summary>
-    /// <para>XML 文本预览（只读）。</para>
-    /// The XML text preview (read-only).
+    /// <para>XML 文本预览（可编辑；保存时按原模型类型参照重编译回 AXML）。</para>
+    /// The XML text preview (editable; recompiled back to AXML on save using the original model's
+    /// types as reference).
     /// </summary>
     [ObservableProperty] private string _source = string.Empty;
+
+    /// <summary>
+    /// <para>XML 文本是否被编辑器修改过（决定保存时是否需要重编译）。</para>
+    /// Whether the XML text was modified by the editor (decides whether save must recompile).
+    /// </summary>
+    private bool _sourceEdited;
+
+    /// <summary>
+    /// <para>抑制文本变更脏标记（加载、清理与模型回写期间）。</para>
+    /// Suppresses the text-change dirty flag (during load, cleanup and model write-back).
+    /// </summary>
+    private bool _suppressSourceEdit;
+
+    /// <summary>Active XML preview editor for workspace actions. 供工作区操作使用的 XML 预览编辑器。</summary>
+    internal AvaloniaEdit.TextEditor? Editor { get; set; }
+
+    partial void OnSourceChanged(string value)
+    {
+        if (_suppressSourceEdit)
+        {
+            return;
+        }
+
+        _sourceEdited = true;
+        IsDirty = true;
+    }
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.SearchText => Source;
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.FilePath => FilePath;
+
+    /// <inheritdoc/>
+    AvaloniaEdit.TextEditor? ISearchableDocument.Editor => Editor;
+
+    /// <inheritdoc/>
+    bool ISearchableDocument.SupportsSearchReplacement => true;
+
+    /// <inheritdoc/>
+    void ISearchableDocument.ApplySearchText(string text) => Source = text;
 
     /// <summary>
     /// <para>最后一次解析错误文本；为空表示无错误。</para>
@@ -172,7 +215,17 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
             rootNode.IsExpanded = true;
             Nodes.Add(rootNode);
 
-            Source = doc.ToXml();
+            _suppressSourceEdit = true;
+            try
+            {
+                Source = doc.ToXml();
+            }
+            finally
+            {
+                _suppressSourceEdit = false;
+            }
+
+            _sourceEdited = false;
             CompileError = string.Empty;
             IsDirty = false;
 
@@ -201,6 +254,36 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
         IsBusy = true;
         try
         {
+            // 文本被编辑过：按原模型类型参照重编译回 AXML 模型，再走现有写盘路径。
+            // Text was edited: recompile it back into the AXML model using the original model's types
+            // as a reference, then use the existing write path.
+            if (_sourceEdited)
+            {
+                AXmlDocument recompiled;
+                try
+                {
+                    recompiled = AXmlTextFormat.Parse(Source, _doc);
+                }
+                catch (Exception ex)
+                {
+                    CompileError = $"Failed to recompile XML: {ex.Message}";
+                    return;
+                }
+
+                _doc = recompiled;
+                _suppressSourceEdit = true;
+                try
+                {
+                    Source = _doc.ToXml();
+                }
+                finally
+                {
+                    _suppressSourceEdit = false;
+                }
+
+                _sourceEdited = false;
+            }
+
             var outBytes = await Task.Run(() => AXmlWriter.Write(_doc), default).ConfigureAwait(true);
             await File.WriteAllBytesAsync(temporary, outBytes).ConfigureAwait(true);
             File.Move(temporary, FilePath, overwrite: true);
@@ -234,7 +317,34 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
 
         foreach (var attr in value.Element.Attributes)
         {
-            Attributes.Add(new ManifestAttributeRow(attr, _doc?.StringPool, () => IsDirty = true));
+            Attributes.Add(new ManifestAttributeRow(attr, _doc?.StringPool, () =>
+            {
+                IsDirty = true;
+                RefreshSourceFromModel();
+            }));
+        }
+    }
+
+    /// <summary>
+    /// <para>把模型变更回写到 XML 预览文本，使搜索文本与属性面板编辑保持一致。</para>
+    /// Writes model changes back into the XML preview text so the search text stays consistent with
+    /// attribute-pane edits.
+    /// </summary>
+    private void RefreshSourceFromModel()
+    {
+        if (_doc is null)
+        {
+            return;
+        }
+
+        _suppressSourceEdit = true;
+        try
+        {
+            Source = _doc.ToXml();
+        }
+        finally
+        {
+            _suppressSourceEdit = false;
         }
     }
 
@@ -259,7 +369,18 @@ public partial class ManifestEditorViewModel : Document, ICommandSaveableDocumen
         SelectedNode = null;
         Nodes.Clear();
         Attributes.Clear();
-        Source = string.Empty;
+        _suppressSourceEdit = true;
+        try
+        {
+            Source = string.Empty;
+        }
+        finally
+        {
+            _suppressSourceEdit = false;
+        }
+
+        _sourceEdited = false;
+        Editor = null;
         CompileError = string.Empty;
         RawBytes = null;
         _doc = null;

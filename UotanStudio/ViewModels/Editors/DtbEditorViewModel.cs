@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt;
 using UotanStudio.Messages;
+using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -13,7 +14,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// DTB device-tree dual-pane editor view model: a left device-node tree plus an editable DTS source pane,
 /// with bidirectional linkage and recompile-save (DTS→DTB).
 /// </summary>
-public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableDocument
+public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableDocument, ISearchableDocument
 {
     private Dictionary<string, int> _lineMap = [];
 
@@ -202,6 +203,21 @@ public partial class DtbEditorViewModel : Document, IEditable, ICommandSaveableD
 
     /// <summary>Active source editor for workspace actions. 供工作区操作使用的源码编辑器。</summary>
     internal AvaloniaEdit.TextEditor? Editor { get; set; }
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.SearchText => Source;
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.FilePath => FilePath;
+
+    /// <inheritdoc/>
+    AvaloniaEdit.TextEditor? ISearchableDocument.Editor => Editor;
+
+    /// <inheritdoc/>
+    bool ISearchableDocument.SupportsSearchReplacement => true;
+
+    /// <inheritdoc/>
+    void ISearchableDocument.ApplySearchText(string text) => Source = text;
 
     /// <inheritdoc/>
     public void Cut() => Editor?.Cut();

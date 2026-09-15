@@ -1,6 +1,8 @@
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using UotanStudio.Services;
+using UotanStudio.ViewModels.Editors;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Editors;
 
@@ -11,6 +13,9 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public partial class DexEditorView : UserControl
 {
+    private readonly EditorOwnerBinding<DexEditorViewModel> _editorOwner =
+        new(static model => model.Editor, static (model, editor) => model.Editor = editor);
+
     /// <summary>
     /// <para>创建 DEX 编辑器视图并初始化组件。</para>
     /// Creates the DEX editor view and initializes its components.
@@ -19,15 +24,21 @@ public partial class DexEditorView : UserControl
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        Loaded += (_, _) => UpdateEditorOwner();
+        Unloaded += (_, _) => UpdateEditorOwner(detach: true);
     }
 
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
+        UpdateEditorOwner();
         if (sender is not DexEditorView view) return;
         if (view._viewModel is not null) view._viewModel.ResourceOperationRequested -= OnResourceOperationRequested;
         view._viewModel = view.DataContext as UotanStudio.ViewModels.Editors.DexEditorViewModel;
         if (view._viewModel is not null) view._viewModel.ResourceOperationRequested += OnResourceOperationRequested;
     }
+
+    private void UpdateEditorOwner(bool detach = false)
+        => _editorOwner.Update(!detach && IsLoaded ? DataContext as DexEditorViewModel : null, SourceEditor);
 
     private UotanStudio.ViewModels.Editors.DexEditorViewModel? _viewModel;
 

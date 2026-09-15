@@ -143,4 +143,114 @@ public sealed class BootPatchModelsTests
         Assert.True(KernelSuEmbeddedExtractor.TryGetKmi(name, out var actual));
         Assert.Equal(expected, actual);
     }
+
+    [Fact]
+    public async Task PatchAsync_KernelSuPackage_InstallsRootInitAndLkm()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootpatch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = "\0Linux version 5.15.123-android13-5.15 (builder)\0"u8.ToArray();
+            var stockInit = "stock-init"u8.ToArray();
+            var ksuinit = "ksu-init"u8.ToArray();
+            var lkm = "fake-kernelsu-ko"u8.ToArray();
+            var ramdisk = BuildCpio([("init", stockInit)]);
+            var bootPath = Path.Combine(work, "boot.img");
+            var packagePath = Path.Combine(work, "kernelsu.apk");
+            var outputPath = Path.Combine(work, "patched.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel, ramdisk));
+            File.WriteAllBytes(Path.Combine(work, "ksuinit.bin"), ksuinit);
+            File.WriteAllBytes(Path.Combine(work, "lkm.bin"), lkm);
+            using (var zip = System.IO.Compression.ZipFile.Open(packagePath, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                zip.CreateEntryFromFile(Path.Combine(work, "ksuinit.bin"), "lib/arm64-v8a/init");
+                zip.CreateEntryFromFile(Path.Combine(work, "lkm.bin"), "lib/arm64-v8a/android13-5.15/kernelsu.ko");
+            }
+
+            var result = await new BootPatchService().PatchAsync(packagePath, bootPath, outputPath, cancellationToken: TestContext.Current.CancellationToken);
+
+            using var parser = new UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.BootImageParser();
+            parser.Parse(File.ReadAllBytes(outputPath));
+            var editor = new UotanStudio.Firmware.BoundedContexts.Archive.Cpio.CpioArchiveEditor();
+            using var ramdiskStream = new MemoryStream(parser.Ramdisk);
+            editor.Load(ramdiskStream);
+            // Upstream ksud layout: root init (ksuinit), stock init preserved as
+            // init.real, LKM at the cpio root, no Magisk overlay.d entries.
+            Assert.Equal(ksuinit, editor.Find("init")!.Data);
+            Assert.Equal(stockInit, editor.Find("init.real")!.Data);
+            Assert.Equal(lkm, editor.Find("kernelsu.ko")!.Data);
+            Assert.DoesNotContain(editor.Entries, e => e.Name.Contains("overlay.d", StringComparison.Ordinal));
+            Assert.Contains("install init (ksuinit)", result.Changes);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task PatchAsync_KernelSuOnMagiskPatchedImage_IsRejected()
+    {
+        var work = Path.Combine(Path.GetTempPath(), "uotan-bootpatch-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(work);
+        try
+        {
+            var kernel = "\0Linux version 5.15.123-android13-5.15 (builder)\0"u8.ToArray();
+            var ramdisk = BuildCpio([("init", "stock-init"u8.ToArray()), (".backup/.magisk", "KEEPVERITY=true\n"u8.ToArray())]);
+            var bootPath = Path.Combine(work, "boot.img");
+            var packagePath = Path.Combine(work, "kernelsu.apk");
+            var outputPath = Path.Combine(work, "patched.img");
+            File.WriteAllBytes(bootPath, PackBootImage(kernel, ramdisk));
+            File.WriteAllBytes(Path.Combine(work, "lkm.bin"), "fake-kernelsu-ko"u8.ToArray());
+            using (var zip = System.IO.Compression.ZipFile.Open(packagePath, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                zip.CreateEntryFromFile(Path.Combine(work, "lkm.bin"), "lib/arm64-v8a/android13-5.15/kernelsu.ko");
+            }
+
+            await Assert.ThrowsAsync<InvalidDataException>(() => new BootPatchService().PatchAsync(
+                packagePath, bootPath, outputPath, cancellationToken: TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
+    }
+
+    private static byte[] BuildCpio(params (string Name, byte[] Data)[] entries)
+    {
+        var archive = new UotanStudio.Firmware.BoundedContexts.Archive.Cpio.CpioArchive();
+        using var stream = new MemoryStream();
+        archive.SaveAll(stream, [.. entries.Select(e => new UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model.ArchiveEntry
+        {
+            Name = e.Name,
+            Data = e.Data,
+            Metadata = new UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model.ArchiveEntryMetadata
+            {
+                FileType = UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model.CpioFileType.Regular,
+                UnixPermissions = 0x81ED,
+                LinkCount = 1
+            }
+        })], UotanStudio.Firmware.BoundedContexts.Archive.Cpio.Model.ArchiveFormat.NewAscii);
+        return stream.ToArray();
+    }
+
+    private static byte[] PackBootImage(byte[] kernel, byte[] ramdisk)
+    {
+        var packer = new UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.BootImagePacker
+        {
+            Header = new UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.BootImageHeader
+            {
+                HeaderVersion = UotanStudio.Firmware.BoundedContexts.BootSecurity.BootImage.BootImageVersion.V3,
+                HeaderSize = 1580,
+                OsVersion = 0x01030000,
+                CommandLine = "androidboot.slot_suffix=_a",
+            },
+            Kernel = kernel,
+            Ramdisk = ramdisk,
+        };
+        using var ms = new MemoryStream();
+        packer.PackToStream(ms);
+        return ms.ToArray();
+    }
 }

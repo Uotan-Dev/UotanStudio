@@ -383,6 +383,7 @@
     <x:String x:Key="FindReplace_Replaced">Replaced {0} matches</x:String>
     <x:String x:Key="FindReplace_ConfirmReplaceAll">Replace {0} matches in {1} documents?</x:String>
     <x:String x:Key="FindReplace_EditorNotReady">The editor is not ready. Retry when the document is visible.</x:String>
+    <x:String x:Key="FindReplace_NotSupported">This document type does not support replacement.</x:String>
     <x:String x:Key="ApkSign_Title">Sign APK</x:String>
     <x:String x:Key="ApkSign_Key">Private key (PKCS#8 / PKCS#1 / SEC1, PEM or DER)</x:String>
     <x:String x:Key="ApkSign_Certificate">Certificate (PEM / DER / PFX)</x:String>

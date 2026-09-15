@@ -37,6 +37,7 @@
       <Border Grid.Column="0">
         <TreeView x:Name="ResourceTree"
                   ItemsSource="{Binding Nodes}"
+                  SelectedItem="{Binding SelectedNode, Mode=TwoWay}"
                   SelectionChanged="OnTreeSelectionChanged">
           <TreeView.ItemTemplate>
             <TreeDataTemplate x:DataType="viewmodels:ArscTreeNodeViewModel" ItemsSource="{Binding Children}">

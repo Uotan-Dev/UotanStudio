@@ -89,4 +89,92 @@ public class FileOpenModeTests
         Assert.Equal(EditorOpenMode.Firmware, FileOpenMode.ResolveMode("boot.img"));
         Assert.Equal(EditorOpenMode.Dtb, FileOpenMode.ResolveMode("boot.dtb"));
     }
+
+    [Fact]
+    public void RenamedDtbMagicRoutesToDtbEditor()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        // FDT 魔数（大端 0xD00DFEED）优先于扩展名：改名 .bin 的 DTB 仍走设备树编辑器。
+        // The FDT magic (big-endian 0xD00DFEED) wins over the extension: a DTB renamed .bin
+        // still opens in the device-tree editor.
+        var dtb = new byte[] { 0xD0, 0x0D, 0xFE, 0xED, 0x00, 0x00, 0x00, 0x28 };
+        var path = WriteTempFile("renamed.bin", dtb);
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+            Assert.Equal(EditorOpenMode.Dtb, FileOpenMode.ResolveMode(path, header));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void RenamedDtboMagicRoutesToDtbEditor()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        // DTBO 魔数（大端 0xD7B7AB1E）按内容命中设备树编辑器。
+        // The DTBO magic (big-endian 0xD7B7AB1E) hits the device-tree editor by content.
+        var dtbo = new byte[] { 0xD7, 0xB7, 0xAB, 0x1E, 0x00, 0x00, 0x00, 0x20 };
+        var path = WriteTempFile("table", dtbo);
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+            Assert.Equal(EditorOpenMode.Dtb, FileOpenMode.ResolveMode(path, header));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ExtensionLessDexMagicRoutesToDexEditor()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        // "dex\n035" 魔数：无扩展名的 DEX 按内容走 DEX 编辑器。
+        // The "dex\n035" magic: an extension-less DEX opens in the DEX editor by content.
+        var dex = new byte[] { (byte)'d', (byte)'e', (byte)'x', (byte)'\n', (byte)'0', (byte)'3', (byte)'5', 0, 0, 0 };
+        var path = WriteTempFile("classes", dex);
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+            Assert.Equal(EditorOpenMode.Dex, FileOpenMode.ResolveMode(path, header));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ExtensionLessZipMagicRoutesToFileManager()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        // PK 本地文件头魔数：无扩展名 ZIP 按内容走文件管理器浏览。
+        // The PK local-file-header magic: an extension-less ZIP opens in the file manager by content.
+        var zip = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00 };
+        var path = WriteTempFile("package", zip);
+        try
+        {
+            var header = FormatDetector.ReadHeader(path, FileOpenMode.ContentProbeLength);
+            Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(path, header));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ApkAndJarExtensionsKeepDedicatedEditorsOverZipMagic()
+    {
+        FirmwareFormatRegistry.RegisterAll();
+        // ZIP 魔数无法区分 APK/JAR：两者扩展名路由仍优先于内容命中。
+        // The ZIP magic cannot tell an APK/JAR: their extension routes still win over content.
+        var zip = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00 };
+        Assert.Equal(EditorOpenMode.Apk, FileOpenMode.ResolveMode("app.apk", zip));
+        Assert.Equal(EditorOpenMode.Dex, FileOpenMode.ResolveMode("lib.jar", zip));
+    }
 }

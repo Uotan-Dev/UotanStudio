@@ -54,11 +54,60 @@ public sealed class ArchiveBrowser : IDisposable
         Members = members;
     }
 
-    /// <summary>Recognizes archive extensions and compression extensions supported by the backend.</summary>
+    /// <summary>Recognizes archive extensions and compression extensions supported by the backend.
+    /// Extensions not claimed fall back to a bounded container-magic sniff (ZIP/RAR/7z), so renamed
+    /// or extension-less archives still open.</summary>
     public static bool SupportsPath(string path) => Path.GetExtension(path).ToLowerInvariant() is ".cpio" or ".tar"
-        or ".zip" or ".rar" or ".7z" or ".arj" or ".ace" or ".arc"
+        or ".zip" or ".apk" or ".rar" or ".7z" or ".arj" or ".ace" or ".arc"
         or ".lzw" or ".z"
-        || CompressionForPath(path) != CompressionFormat.None;
+        || CompressionForPath(path) != CompressionFormat.None
+        || HasContainerMagic(path);
+
+    /// <summary>Reads a bounded header and checks the ZIP/RAR/7z container magics; unreadable files return false.</summary>
+    private static bool HasContainerMagic(string path)
+    {
+        try
+        {
+            Span<byte> header = stackalloc byte[8];
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 8, FileOptions.SequentialScan);
+            var read = stream.Read(header);
+            if (read < 4) return false;
+
+            // ZIP："PK\x03\x04" 本地头、"PK\x05\x06" 空归档结尾、"PK\x07\x08" 跨卷条目。
+            // ZIP: "PK\x03\x04" local header, "PK\x05\x06" empty-archive end, "PK\x07\x08" spanned entry.
+            if (header[0] == (byte)'P' && header[1] == (byte)'K'
+                && (header[2] == 0x03 || header[2] == 0x05 || header[2] == 0x07)
+                && (header[3] == 0x04 || header[3] == 0x06 || header[3] == 0x08))
+            {
+                return true;
+            }
+
+            // RAR：起始 "Rar!\x1A\x07"（Rar4 为 00，Rar5 为 01）。
+            // RAR: leading "Rar!\x1A\x07" (Rar4 ends 00, Rar5 ends 01).
+            if (read >= 7 && header[0] == (byte)'R' && header[1] == (byte)'a' && header[2] == (byte)'r'
+                && header[3] == (byte)'!' && header[4] == 0x1A && header[5] == 0x07
+                && (header[6] == 0x00 || header[6] == 0x01))
+            {
+                return true;
+            }
+
+            // 7z：起始 "7z\xBC\xAF\x27\x1C"。
+            // 7z: leading "7z\xBC\xAF\x27\x1C".
+            if (read >= 6 && header[0] == (byte)'7' && header[1] == (byte)'z' && header[2] == 0xBC
+                && header[3] == 0xAF && header[4] == 0x27 && header[5] == 0x1C)
+            {
+                return true;
+            }
+
+            return false;
+        }
+        catch
+        {
+            // 读取失败按非容器处理，交由调用方走魔数/异常路径。
+            // A read failure is treated as a non-container; callers fall through to magic/exception paths.
+            return false;
+        }
+    }
 
     private static CompressionFormat CompressionForPath(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
@@ -227,7 +276,7 @@ public sealed class ArchiveBrowser : IDisposable
     private static bool IsSharpArchivePath(string path)
     {
         return Path.GetExtension(path).ToLowerInvariant() is
-            ".zip" or ".rar" or ".7z" or ".arj" or ".ace" or ".arc"
+            ".zip" or ".apk" or ".rar" or ".7z" or ".arj" or ".ace" or ".arc"
             or ".lzw" or ".z";
     }
 }

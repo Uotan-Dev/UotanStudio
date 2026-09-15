@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using Material.Icons;
 using UotanStudio.Messages;
 using UotanStudio.ViewModels.Editors;
+using UotanStudio.Views.Controls;
 
 namespace UotanStudio.Views.Editors;
 
@@ -14,6 +15,9 @@ namespace UotanStudio.Views.Editors;
 /// </summary>
 public partial class ManifestEditorView : UserControl
 {
+    private readonly EditorOwnerBinding<ManifestEditorViewModel> _editorOwner =
+        new(static model => model.Editor, static (model, editor) => model.Editor = editor);
+
     private bool _isRightViewSideBySide;
     private double _stackedAttributesWeight = 1;
     private double _stackedSourceWeight = 1;
@@ -27,7 +31,13 @@ public partial class ManifestEditorView : UserControl
     public ManifestEditorView()
     {
         InitializeComponent();
+        Loaded += (_, _) => UpdateEditorOwner();
+        Unloaded += (_, _) => UpdateEditorOwner(detach: true);
+        DataContextChanged += (_, _) => UpdateEditorOwner();
     }
+
+    private void UpdateEditorOwner(bool detach = false)
+        => _editorOwner.Update(!detach && IsLoaded ? DataContext as ManifestEditorViewModel : null, SourceEditor);
 
     /// <summary>
     /// <para>在右侧上下布局和左右布局之间切换。</para>

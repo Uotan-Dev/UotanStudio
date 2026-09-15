@@ -137,8 +137,7 @@
                                ZIndex="2" />
 
         <controls:CodeEditor Grid.Row="2" x:Name="SourceEditor"
-                             Text="{Binding Source, Mode=TwoWay}"
-                             IsReadOnly="True" />
+                             Text="{Binding Source, Mode=TwoWay}" />
       </Grid>
     </Grid>
   </DockPanel>
