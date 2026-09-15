@@ -28,7 +28,7 @@ internal static class FirmwareToolFactory
             });
 
         var detect = McpServerTool.Create(
-            ([Description("Absolute path inside the sandbox, or sandbox-relative path.")] string path => FirmwareToolHandlers.DetectFormatAsync(sandbox, path),
+            ([Description("Absolute path inside the sandbox, or sandbox-relative path.")] string path) => FirmwareToolHandlers.DetectFormatAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "detect_format",
@@ -41,7 +41,7 @@ internal static class FirmwareToolFactory
             });
 
         var metadata = McpServerTool.Create(
-            ([Description("Absolute path inside the sandbox, or sandbox-relative path.")] string path => FirmwareToolHandlers.ReadMetadataAsync(sandbox, path),
+            ([Description("Absolute path inside the sandbox, or sandbox-relative path.")] string path) => FirmwareToolHandlers.ReadMetadataAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "read_metadata",
@@ -69,7 +69,7 @@ internal static class FirmwareToolFactory
 
         var pack = McpServerTool.Create(
             ([Description("Input directory or file, depending on the detected format.")] string inputPath,
-             [Description("Target file path for the packed image. Must stay inside the sandbox.")] string outputPath => FirmwareToolHandlers.PackAsync(sandbox, inputPath, outputPath),
+             [Description("Target file path for the packed image. Must stay inside the sandbox.")] string outputPath) => FirmwareToolHandlers.PackAsync(sandbox, inputPath, outputPath),
             new McpServerToolCreateOptions
             {
                 Name = "pack_firmware",

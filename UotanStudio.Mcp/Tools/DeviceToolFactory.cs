@@ -52,7 +52,7 @@ internal static class DeviceToolFactory
 
         var adbShell = McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
-             [Description("Shell command to execute on the device.")] string command => DeviceToolHandlers.AdbShellAsync(serial, command),
+             [Description("Shell command to execute on the device.")] string command) => DeviceToolHandlers.AdbShellAsync(serial, command),
             new McpServerToolCreateOptions
             {
                 Name = "adb_shell",
@@ -68,7 +68,7 @@ internal static class DeviceToolFactory
         var adbPull = McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
              [Description("Remote path on the device.")] string remotePath,
-             [Description("Local file path inside the sandbox.")] string localPath => DeviceToolHandlers.AdbPullAsync(sandbox, serial, remotePath, localPath),
+             [Description("Local file path inside the sandbox.")] string localPath) => DeviceToolHandlers.AdbPullAsync(sandbox, serial, remotePath, localPath),
             new McpServerToolCreateOptions
             {
                 Name = "adb_pull",
@@ -82,7 +82,7 @@ internal static class DeviceToolFactory
         var adbPush = McpServerTool.Create(
             ([Description("Target serial from adb_devices.")] string serial,
              [Description("Local file path inside the sandbox.")] string localPath,
-             [Description("Remote path on the device.")] string remotePath => DeviceToolHandlers.AdbPushAsync(sandbox, serial, localPath, remotePath),
+             [Description("Remote path on the device.")] string remotePath) => DeviceToolHandlers.AdbPushAsync(sandbox, serial, localPath, remotePath),
             new McpServerToolCreateOptions
             {
                 Name = "adb_push",
@@ -146,7 +146,7 @@ internal static class DeviceToolFactory
             });
 
         var fastbootErase = McpServerTool.Create(
-            ([Description("Partition name.")] string partition => DeviceToolHandlers.FastbootEraseAsync(partition),
+            ([Description("Partition name.")] string partition) => DeviceToolHandlers.FastbootEraseAsync(partition),
             new McpServerToolCreateOptions
             {
                 Name = "fastboot_erase",
@@ -378,7 +378,9 @@ internal static class DeviceToolHandlers
     private static FastbootSession OpenFastbootSession()
     {
         var factory = new FastbootFactory();
-        if (!factory.TryCreate(Comm.OpenUsbDeviceSession(UsbApiKind.Auto, FastbootFilter()), out var session)
+        var transport = Comm.OpenUsbDeviceSession(UsbApiKind.Auto, FastbootFilter());
+        if (transport is null
+            || !factory.TryCreate(transport, out var session)
             || session is not FastbootSession fastboot)
         {
             throw new InvalidOperationException("No fastboot device found.");

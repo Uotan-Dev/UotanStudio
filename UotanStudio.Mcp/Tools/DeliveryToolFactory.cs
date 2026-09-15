@@ -41,7 +41,7 @@ internal static class DeliveryToolFactory
             });
 
         var outputs = McpServerTool.Create(
-            ([Description("Delivery plan JSON.")] string planJson => DeliveryToolHandlers.ListOutputs(sandbox, planJson),
+            ([Description("Delivery plan JSON.")] string planJson) => DeliveryToolHandlers.ListOutputs(sandbox, planJson),
             new McpServerToolCreateOptions
             {
                 Name = "delivery_list_outputs",

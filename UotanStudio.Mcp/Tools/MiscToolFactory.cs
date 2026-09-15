@@ -17,7 +17,7 @@ internal static class MiscToolFactory
     internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
     {
         var dexDisassemble = McpServerTool.Create(
-            ([Description("DEX file path inside the sandbox.")] string path => MiscToolHandlers.DexDisassembleAsync(sandbox, path),
+            ([Description("DEX file path inside the sandbox.")] string path) => MiscToolHandlers.DexDisassembleAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "dex_disassemble",
@@ -29,7 +29,7 @@ internal static class MiscToolFactory
             });
 
         var dexDecompile = McpServerTool.Create(
-            ([Description("DEX file path inside the sandbox.")] string path => MiscToolHandlers.DexDecompileAsync(sandbox, path),
+            ([Description("DEX file path inside the sandbox.")] string path) => MiscToolHandlers.DexDecompileAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "dex_decompile",
@@ -43,7 +43,7 @@ internal static class MiscToolFactory
 
         var dexAssemble = McpServerTool.Create(
             ([Description("Smali text to assemble.")] string smali,
-             [Description("Output .dex file path inside the sandbox.")] string outputPath => MiscToolHandlers.DexAssembleAsync(sandbox, smali, outputPath),
+             [Description("Output .dex file path inside the sandbox.")] string outputPath) => MiscToolHandlers.DexAssembleAsync(sandbox, smali, outputPath),
             new McpServerToolCreateOptions
             {
                 Name = "dex_assemble",
@@ -55,7 +55,7 @@ internal static class MiscToolFactory
             });
 
         var dexInfo = McpServerTool.Create(
-            ([Description("DEX file path inside the sandbox.")] string path => MiscToolHandlers.DexInfoAsync(sandbox, path),
+            ([Description("DEX file path inside the sandbox.")] string path) => MiscToolHandlers.DexInfoAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "dex_info",
@@ -68,7 +68,7 @@ internal static class MiscToolFactory
             });
 
         var axmlParse = McpServerTool.Create(
-            ([Description("Compiled binary XML (AXML) file path inside the sandbox.")] string path => MiscToolHandlers.AxmlParseAsync(sandbox, path),
+            ([Description("Compiled binary XML (AXML) file path inside the sandbox.")] string path) => MiscToolHandlers.AxmlParseAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "axml_parse",
@@ -81,7 +81,7 @@ internal static class MiscToolFactory
             });
 
         var arscParse = McpServerTool.Create(
-            ([Description("resources.arsc file path inside the sandbox.")] string path => MiscToolHandlers.ArscParseAsync(sandbox, path),
+            ([Description("resources.arsc file path inside the sandbox.")] string path) => MiscToolHandlers.ArscParseAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "arsc_parse",
@@ -94,7 +94,7 @@ internal static class MiscToolFactory
 
         var apkStrip = McpServerTool.Create(
             ([Description("Input APK path inside the sandbox.")] string inputPath,
-             [Description("Output APK path inside the sandbox (must differ from the input).")] string outputPath => MiscToolHandlers.ApkStripSignaturesAsync(sandbox, inputPath, outputPath),
+             [Description("Output APK path inside the sandbox (must differ from the input).")] string outputPath) => MiscToolHandlers.ApkStripSignaturesAsync(sandbox, inputPath, outputPath),
             new McpServerToolCreateOptions
             {
                 Name = "apk_strip_signatures",

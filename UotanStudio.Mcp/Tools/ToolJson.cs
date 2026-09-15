@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using UotanStudio.Firmware.SharedKernel;
@@ -24,6 +25,10 @@ internal static class ToolJson
     /// Serializes a result payload as the tool's JSON text output.
     /// <para>把结果负载序列化为工具的 JSON 文本输出。</para>
     /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2026",
+        Justification = "MCP results intentionally carry runtime-shaped anonymous payloads; the MCP assembly is not a native-AOT boundary.")]
+    [UnconditionalSuppressMessage("AOT", "IL3050",
+        Justification = "MCP results intentionally carry runtime-shaped anonymous payloads; the MCP assembly is not a native-AOT boundary.")]
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Options);
 }
 

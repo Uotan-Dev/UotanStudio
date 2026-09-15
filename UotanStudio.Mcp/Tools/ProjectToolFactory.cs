@@ -20,7 +20,7 @@ internal static class ProjectToolFactory
     internal static IReadOnlyList<McpServerTool> CreateTools(PathSandbox sandbox)
     {
         var read = McpServerTool.Create(
-            ([Description("Solution file path (.uotan) inside the sandbox.")] string path => ProjectToolHandlers.ReadSolutionAsync(sandbox, path),
+            ([Description("Solution file path (.uotan) inside the sandbox.")] string path) => ProjectToolHandlers.ReadSolutionAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "solution_read",
@@ -34,7 +34,7 @@ internal static class ProjectToolFactory
 
         var write = McpServerTool.Create(
             ([Description("Solution file path (.uotan) inside the sandbox.")] string path,
-             [Description("Complete SolutionSnapshot JSON to write. Existing state not included in the JSON is lost.")] string snapshotJson => ProjectToolHandlers.WriteSolutionAsync(sandbox, path, snapshotJson),
+             [Description("Complete SolutionSnapshot JSON to write. Existing state not included in the JSON is lost.")] string snapshotJson) => ProjectToolHandlers.WriteSolutionAsync(sandbox, path, snapshotJson),
             new McpServerToolCreateOptions
             {
                 Name = "solution_write",
@@ -47,7 +47,7 @@ internal static class ProjectToolFactory
             });
 
         var firmwareProject = McpServerTool.Create(
-            ([Description("Firmware project file path (.uotanfw) inside the sandbox.")] string path => ProjectToolHandlers.ReadFirmwareProjectAsync(sandbox, path),
+            ([Description("Firmware project file path (.uotanfw) inside the sandbox.")] string path) => ProjectToolHandlers.ReadFirmwareProjectAsync(sandbox, path),
             new McpServerToolCreateOptions
             {
                 Name = "firmware_project_read",
@@ -75,7 +75,7 @@ internal static class ProjectToolHandlers
         return snapshot is null
             ? ToolJson.Serialize(new ToolResult(false, $"Not a valid solution file: {resolved}"))
             : ToolJson.Serialize(new ToolResult(true, $"Solution '{snapshot.SolutionName}'.",
-                JsonSerializer.SerializeToElement(snapshot)));
+                JsonSerializer.SerializeToElement(snapshot, McpJsonContext.Default.SolutionSnapshot)));
     }
 
     public static async Task<string> WriteSolutionAsync(PathSandbox sandbox, string path, string snapshotJson)
@@ -97,7 +97,7 @@ internal static class ProjectToolHandlers
         return snapshot is null
             ? ToolJson.Serialize(new ToolResult(false, $"Not a valid firmware project file: {resolved}"))
             : ToolJson.Serialize(new ToolResult(true, $"Firmware project loaded.",
-                JsonSerializer.SerializeToElement(snapshot)));
+                JsonSerializer.SerializeToElement(snapshot, McpJsonContext.Default.FirmwareProjectSnapshot)));
     }
 }
 
@@ -106,4 +106,5 @@ internal static class ProjectToolHandlers
 /// <para>MCP 边界上解决方案 DTO 的 source-gen JSON 上下文。</para>
 /// </summary>
 [JsonSerializable(typeof(SolutionSnapshot))]
+[JsonSerializable(typeof(FirmwareProjectSnapshot))]
 internal sealed partial class McpJsonContext : JsonSerializerContext;
