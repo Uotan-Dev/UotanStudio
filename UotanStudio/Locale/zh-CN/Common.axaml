@@ -369,6 +369,15 @@
     <x:String x:Key="Delivery_ProgressDone">输出完成</x:String>
     <x:String x:Key="Progress_Stats">{0} / {1} · 速度 {2} · 剩余 {3}</x:String>
     <x:String x:Key="Progress_StatsNoEta">{0} / {1} · 速度 {2}</x:String>
+    <x:String x:Key="Image_ConvertTitle">镜像格式转换</x:String>
+    <x:String x:Key="Image_ConvertConfirm">操作内容：{0}&#xA;预期输出文件：&#xA;{1}&#xA;&#xA;是否确定继续？</x:String>
+    <x:String x:Key="Image_ConvertSparseToRaw">将稀疏镜像（sparse）转换为原始镜像（raw）</x:String>
+    <x:String x:Key="Image_ConvertRawToSparse">将原始镜像（raw）转换为稀疏镜像（sparse）</x:String>
+    <x:String x:Key="Image_ConvertImgToDat">将镜像 {0} 转换为 Android DAT（生成 NEW.dat 与 transfer.list）</x:String>
+    <x:String x:Key="Image_ConvertImgToBr">将镜像 {0} 转换为 Brotli 压缩 DAT（生成 NEW.dat.br 与 transfer.list）</x:String>
+    <x:String x:Key="Image_ConvertStage">正在转换镜像格式：{0}</x:String>
+    <x:String x:Key="Image_ConvertSummary">转换完成：{0}</x:String>
+    <x:String x:Key="Image_ConvertFailed">镜像格式转换失败，请查看日志。</x:String>
     <x:String x:Key="Delivery_DiskSpaceWarning">磁盘剩余空间不足：输出目录所在分区剩余 {0}，预计需要 {1}。是否继续输出？</x:String>
     <x:String x:Key="Delivery_DiskSpaceTitle">磁盘空间不足</x:String>
     <x:String x:Key="Delivery_DiskSpaceContinue">继续</x:String>

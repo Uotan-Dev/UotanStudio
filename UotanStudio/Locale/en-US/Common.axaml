@@ -369,6 +369,15 @@
     <x:String x:Key="Delivery_ProgressDone">Output complete</x:String>
     <x:String x:Key="Progress_Stats">{0} / {1} · Speed {2} · {3} left</x:String>
     <x:String x:Key="Progress_StatsNoEta">{0} / {1} · Speed {2}</x:String>
+    <x:String x:Key="Image_ConvertTitle">Image Format Conversion</x:String>
+    <x:String x:Key="Image_ConvertConfirm">Operation: {0}&#xA;Expected output files:&#xA;{1}&#xA;&#xA;Continue?</x:String>
+    <x:String x:Key="Image_ConvertSparseToRaw">Convert sparse image to raw</x:String>
+    <x:String x:Key="Image_ConvertRawToSparse">Convert raw image to sparse</x:String>
+    <x:String x:Key="Image_ConvertImgToDat">Convert image {0} to Android DAT (NEW.dat and transfer.list)</x:String>
+    <x:String x:Key="Image_ConvertImgToBr">Convert image {0} to Brotli DAT (NEW.dat.br and transfer.list)</x:String>
+    <x:String x:Key="Image_ConvertStage">Converting image format: {0}</x:String>
+    <x:String x:Key="Image_ConvertSummary">Conversion complete: {0}</x:String>
+    <x:String x:Key="Image_ConvertFailed">Image format conversion failed; see the log.</x:String>
     <x:String x:Key="Delivery_DiskSpaceWarning">Insufficient disk space: {0} free on the output drive, {1} estimated for this output. Continue anyway?</x:String>
     <x:String x:Key="Delivery_DiskSpaceTitle">Insufficient disk space</x:String>
     <x:String x:Key="Delivery_DiskSpaceContinue">Continue</x:String>

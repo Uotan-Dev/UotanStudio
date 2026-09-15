@@ -84,7 +84,7 @@
                                 </MenuItem.Icon>
                             </MenuItem>
                         </MenuItem>
-                        <!-- 镜像类文件：格式转换（当前仅记录请求，转换后端未接入） -->
+                        <!-- 镜像类文件：格式转换（确认后输出到子项目 output/，进度显示在镜像管理面板） -->
                         <MenuItem Header="{DynamicResource Explorer_ConvertFormat}"
                                   IsVisible="{Binding IsImageFile}">
                             <MenuItem.Icon>

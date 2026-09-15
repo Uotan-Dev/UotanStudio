@@ -451,13 +451,6 @@ public sealed partial class ExplorerNode : ObservableObject
             var discovered = new List<ExplorerNode>();
             foreach (var dir in Directory.EnumerateDirectories(Path))
             {
-                // 排除会话状态目录 .uotan/（类似 VS 的 .vs/），不在资源管理器中显示。
-                // Exclude the session state directory .uotan/ (like VS's .vs/) from the explorer.
-                if (string.Equals(System.IO.Path.GetFileName(dir), ".uotan", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
                 discovered.Add(new ExplorerNode(dir, isDirectory: true, isProjectFolder: ProjectFolderPaths.Contains(dir)));
             }
 

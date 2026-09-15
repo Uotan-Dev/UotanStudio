@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
@@ -20,7 +20,8 @@ public static class DatWriter
     /// Writes a raw image as a DAT image pair with the given options.
     /// <para>使用给定选项将原始镜像写出为 DAT 镜像对。</para>
     /// </summary>
-    public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath, DatWriteOptions options)
+    /// <param name="progress">Optional byte progress, fed with (processed bytes read from the raw image, total raw bytes); <c>null</c> to disable reporting. <para>可选的按字节进度回调（读入原始镜像的字节数、原始镜像总字节数）；<c>null</c> 表示不报告。</para></param>
+    public static void Write(string inputImagePath, string outputDatPath, string outputTransferListPath, DatWriteOptions options, IProgress<(long Processed, long Total)>? progress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputImagePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDatPath);
@@ -73,7 +74,9 @@ public static class DatWriter
                 }
 
                 block++;
+                progress?.Report((Math.Min(checked(block * BlockSize), totalBytes), totalBytes));
             }
+            progress?.Report((totalBytes, totalBytes));
 
             if (newStart is not null)
             {

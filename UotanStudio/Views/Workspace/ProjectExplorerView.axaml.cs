@@ -185,27 +185,50 @@ public partial class ProjectExplorerView : UserControl
     /// Sparse conversion: converts between raw and sparse images in either direction; the source file type
     /// decides the direction, so the two former entries are merged into one.
     /// </summary>
-    private void OnConvertSparse(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG↔SIMG");
+    private void OnConvertSparse(object? sender, RoutedEventArgs e)
+        => _ = ConvertSelectedImageAsync(ImageViewModel.ConvertSparse);
 
-    private void OnConvertImgToDat(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG→DAT");
+    private void OnConvertImgToDat(object? sender, RoutedEventArgs e)
+        => _ = ConvertSelectedImageAsync(ImageViewModel.ConvertImgToDat);
 
-    private void OnConvertImgToBr(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG→BR");
+    private void OnConvertImgToBr(object? sender, RoutedEventArgs e)
+        => _ = ConvertSelectedImageAsync(ImageViewModel.ConvertImgToBr);
 
     /// <summary>
-    /// <para>记录格式转换请求：按需求本页暂不接入转换后端，只在日志中留下所选文件与转换方向。</para>
-    /// Records a format-conversion request: the conversion backend is intentionally not wired up yet (per
-    /// request), so the selected file and direction are only written to the log.
+    /// <para>弹出确认对话框展示操作内容与预期输出文件，确认后执行格式转换并把进度上报到镜像管理面板。</para>
+    /// Shows a confirmation dialog with the operation and expected output files, then runs the conversion
+    /// whose progress is reported to the image manager panel.
     /// </summary>
-    /// <param name="direction"><para>转换方向文本，如 <c>IMG→SIMG</c>。</para>The direction text, e.g. <c>IMG→SIMG</c>.</param>
-    private void RequestFormatConversion(string direction)
+    /// <param name="direction"><para>转换方向键（见 <see cref="ImageViewModel"/>）。</para>Conversion direction key (see <see cref="ImageViewModel"/>).</param>
+    private async Task ConvertSelectedImageAsync(string direction)
     {
-        if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node)
+        if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node
+            || TopLevel.GetTopLevel(this) is not Window owner)
         {
             return;
         }
 
-        LogService.Instance.Write(LogLevel.Info, "Explorer",
-            $"Format conversion requested ({direction}) for '{node.Path}'; the conversion backend is not wired up yet.");
+        var language = LanguageService.Instance;
+        try
+        {
+            var preview = ImageViewModel.Instance.GetFormatConversionPreview(node.Path, direction);
+            var message = string.Format(language.GetString("Image_ConvertConfirm"),
+                preview.Operation, string.Join("\n", preview.OutputPaths));
+            if (!await DialogService.ConfirmAsync(owner, language.GetString("Image_ConvertTitle"), message))
+            {
+                return;
+            }
+
+            await ImageViewModel.Instance.RunExplorerFormatConversionAsync(node.Path, direction);
+            await DialogService.ShowAsync(owner, language.GetString("Image_ConvertTitle"),
+                ImageViewModel.Instance.StatusText, Ursa.Controls.MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Write(LogLevel.Error, "Explorer", ex.Message);
+            await DialogService.ShowAsync(owner, language.GetString("Image_ConvertTitle"), ex.Message,
+                Ursa.Controls.MessageBoxIcon.Error);
+        }
     }
 
     /// <summary>
@@ -258,6 +281,7 @@ public partial class ProjectExplorerView : UserControl
         if (clipboard is not null)
         {
             await clipboard.SetTextAsync(node.Path);
+            await clipboard.FlushAsync();
         }
     }
 
