@@ -127,10 +127,7 @@ public sealed partial class ProjectSession
             ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
         var nodePath = target.NodeProjectPath
             ?? Path.Combine(rootDir, solutionName + ".uotannode");
-        // The solution root is already the project directory (the .uotan
-        // extension is removed by ProjectContext). Keep the initial project
-        // files at this level to avoid a redundant <name>/<name> nesting.
-        var subProjectDir = rootDir;
+        var subProjectDir = Path.Combine(rootDir, solutionName);
         var stateDir = Path.Combine(subProjectDir, ".uotan");
         var subImagesDir = Path.Combine(subProjectDir, "images");
         var subOutputDir = Path.Combine(subProjectDir, "output");
@@ -156,10 +153,10 @@ public sealed partial class ProjectSession
         {
             FormatVersion = 2,
             SolutionName = solutionName,
-            NodeProjectPath = $"{solutionName}.uotannode",
+            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
             SubProjects =
             [
-                new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}.uotanfw" }
+                new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}/{solutionName}.uotanfw" }
             ]
         };
 

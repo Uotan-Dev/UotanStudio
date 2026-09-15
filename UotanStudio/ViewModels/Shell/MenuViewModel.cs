@@ -203,14 +203,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
         var window = new NewProjectWindow(NewProjectWindowMode.Solution, null, null);
         window.CreateWithCancellationAsync = async (form, cancellationToken) =>
         {
-            // 位置已是组合后的完整目录（基础目录/解决方案名），直接作为解决方案目录使用。
-            // The location is already the combined directory (base/solution name); use it directly.
-            // NewProjectWindow keeps Location as the complete project directory
-            // (base directory plus the entered project name). Appending the name
-            // again created <name>\<name> when creating a solution.
-            var solutionPath = Path.Combine(
-                Directory.GetParent(form.Location)?.FullName ?? form.Location,
-                form.ProjectName + ".uotan");
+            // Location 即所选项目目录（基础目录/名称），解决方案文件位于该目录内，
+            // 数据目录与 .uotan/ 状态目录随之嵌套在所选目录下，不污染上级。
+            // Location is the chosen project directory (base/name); the solution file lives
+            // inside it so the data and .uotan state directories nest under it.
+            var solutionPath = Path.Combine(form.Location, form.ProjectName + ".uotan");
             await _projectOps.CreateNewSolutionAsync(solutionPath);
             if (!string.Equals(_projectOps.CurrentProjectPath, solutionPath, StringComparison.OrdinalIgnoreCase))
                 throw new OperationCanceledException("Project creation was cancelled.");

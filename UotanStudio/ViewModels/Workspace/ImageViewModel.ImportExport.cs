@@ -34,7 +34,13 @@ internal partial class ImageViewModel
         var context = ProjectContextService.Instance;
         if (!context.IsProjectOpen || context.ActiveSubProject is null)
         {
-            LogService.Instance.Write(LogLevel.Warn, "Images", "Import aborted: no project is open  导入中止：尚未打开工程");
+            // 记录精确的中止原因，便于定位创建流程中偶发的未打开工程状态：
+            // 区分是解决方案未打开，还是已打开但缺少活动子项目。
+            // Log the precise abort reason to diagnose transient no-project state during
+            // creation: distinguish a closed solution from a solution with no active sub-project.
+            LogService.Instance.Write(LogLevel.Warn, "Images",
+                $"Import aborted: no project is open  导入中止：尚未打开工程 "
+                + $"[solutionOpen={context.IsProjectOpen}, solutionPath={context.CurrentSolutionPath ?? "<null>"}, activeSubProject={context.ActiveSubProject?.Name ?? "<null>"}]");
             return;
         }
 
