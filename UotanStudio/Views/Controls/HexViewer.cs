@@ -184,6 +184,14 @@ public class HexViewer : Grid
         private readonly ScrollViewer _scroll;
         private byte[]? _data = System.Array.Empty<byte>();
         private System.Text.Encoding _textEncoding = System.Text.Encoding.ASCII;
+
+        /// <summary>
+        /// <para>文本列表头显示的编码标签，与属性面板选择的编码保持一致；默认纯 ASCII。</para>
+        /// Encoding label drawn in the text-column header, kept in sync with the encoding chosen in the
+        /// properties panel; plain ASCII by default.
+        /// </summary>
+        private string _encodingLabel = "ASCII";
+
         private long _caretOffset;
         private long _selectionAnchor = -1;
         private bool _hasSelection;
@@ -257,30 +265,68 @@ public class HexViewer : Grid
         }
 
         /// <summary>
-        /// <para>设置文本列与文本输入的编码；未知名称回落为 ASCII。</para>
-        /// Sets the encoding for the text column and text input; unknown names fall back to ASCII.
+        /// <para>设置文本列与文本输入的编码，并同步列表头标签；未知名称回落为 ASCII。</para>
+        /// Sets the encoding for the text column and text input and updates the column-header label;
+        /// unknown names fall back to ASCII.
         /// </summary>
         public void SetEncodingName(string? name)
         {
-            System.Text.Encoding encoding;
-            try
-            {
-                encoding = string.IsNullOrEmpty(name) || name == "ASCII"
-                    ? System.Text.Encoding.ASCII
-                    : System.Text.Encoding.GetEncoding(name);
-            }
-            catch (ArgumentException)
-            {
-                encoding = System.Text.Encoding.ASCII;
-            }
-
-            if (_textEncoding.CodePage == encoding.CodePage)
+            var (encoding, label) = ResolveTextEncoding(name);
+            if (_textEncoding.CodePage == encoding.CodePage && string.Equals(_encodingLabel, label, StringComparison.Ordinal))
             {
                 return;
             }
 
             _textEncoding = encoding;
+            _encodingLabel = label;
             InvalidateVisual();
+        }
+
+        /// <summary>
+        /// <para>解析属性面板使用的编码名称（与 <c>FileViewModel.SupportedEncodings</c> 同一套取值），
+        /// 返回实际生效的 .NET 编码与应显示在列表头上的标签；无法解析时回落为 ASCII。</para>
+        /// Resolves a properties-panel encoding name (the same set as <c>FileViewModel.SupportedEncodings</c>)
+        /// into the effective .NET encoding plus the label shown in the column header, falling back to ASCII
+        /// when the name cannot be resolved.
+        /// </summary>
+        private static (System.Text.Encoding Encoding, string Label) ResolveTextEncoding(string? name)
+        {
+            switch (name)
+            {
+                case null or "" or "ASCII":
+                    return (System.Text.Encoding.ASCII, "ASCII");
+                case "UTF-8":
+                    return (new System.Text.UTF8Encoding(false), "UTF-8");
+                case "UTF-8 (BOM)":
+                    return (new System.Text.UTF8Encoding(true), "UTF-8 (BOM)");
+                case "UTF-16 LE":
+                    return (new System.Text.UnicodeEncoding(false, true), "UTF-16 LE");
+                case "UTF-16 BE":
+                    return (new System.Text.UnicodeEncoding(true, true), "UTF-16 BE");
+                case "GB18030":
+                    // 代码页提供程序未注册时 GetEncoding 会失败，此时保持 ASCII 并如实标注。
+                    // Registration of the code-page provider may be missing; keep ASCII and label it honestly.
+                    System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+                    return TryGetEncoding("GB18030", out var gb18030)
+                        ? (gb18030, "GB18030")
+                        : (System.Text.Encoding.ASCII, "ASCII");
+                default:
+                    return TryGetEncoding(name, out var other) ? (other, name) : (System.Text.Encoding.ASCII, "ASCII");
+            }
+        }
+
+        private static bool TryGetEncoding(string name, out System.Text.Encoding encoding)
+        {
+            try
+            {
+                encoding = System.Text.Encoding.GetEncoding(name);
+                return true;
+            }
+            catch (ArgumentException)
+            {
+                encoding = System.Text.Encoding.ASCII;
+                return false;
+            }
         }
 
         public void Goto(long offset)
@@ -332,7 +378,7 @@ public class HexViewer : Grid
             var selectionBrush = ResolveBrush("HexSelectionBrush") ?? new SolidColorBrush(Color.FromArgb(0x66, 0x59, 0xC2, 0xFF));
             var caretBrush = ResolveBrush("HexCaretBrush") ?? Brushes.DeepSkyBlue;
 
-            DrawHeader(context, headerBrush, headerBackground, layout);
+            DrawHeader(context, headerBrush, headerBackground, layout, _encodingLabel);
             if (_data is null || _data.Length == 0)
             {
                 return;
@@ -395,7 +441,8 @@ public class HexViewer : Grid
             DrawingContext context,
             IBrush headerBrush,
             IBrush background,
-            HexColumnLayout layout)
+            HexColumnLayout layout,
+            string textColumnLabel)
         {
             context.FillRectangle(background, new Rect(0, 0, layout.ContentWidth, HexMetrics.HeaderHeight));
             DrawCenteredText(context, "Offset", 0, layout.OffsetWidth, 0, headerBrush);
@@ -411,7 +458,10 @@ public class HexViewer : Grid
                     headerBrush);
             }
 
-            DrawCenteredText(context, "ASCII", layout.AsciiZoneStart, layout.AsciiWidth, 0, headerBrush);
+            // 文本列表头显示当前生效的编码（随属性面板的编码下拉变化），不再是固定的 "ASCII"。
+            // The text-column header shows the effective encoding (driven by the properties-panel dropdown)
+            // instead of a hardcoded "ASCII".
+            DrawCenteredText(context, textColumnLabel, layout.AsciiZoneStart, layout.AsciiWidth, 0, headerBrush);
             context.DrawLine(
                 new Pen(headerBrush, 1),
                 new Point(0, HexMetrics.HeaderHeight),
