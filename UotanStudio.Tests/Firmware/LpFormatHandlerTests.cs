@@ -163,6 +163,47 @@ public class LpFormatHandlerTests
     }
 
     [Fact]
+    public void CanHandle_RejectsNonLpImageWithoutGeometryMagicFast()
+    {
+        // 非 LP 镜像（如工程打开时扫描到的 erofs/img）不得触发主/备/空三个几何槽位的
+        // 全量解析异常风暴：无几何魔数时应在魔数预检处直接返回 false。
+        // A non-LP image (e.g. an erofs .img scanned on project open) must not trigger the
+        // primary/backup/empty geometry full-parse exception storm: the geometry-magic pre-probe
+        // rejects it without parsing.
+        using var temp = new TempDirectory();
+        var file = Path.Combine(temp.Path, "my_bigball_a.img");
+        // 普通数据镜像：既非 sparse 魔数开头，偏移 0/4096/8192 也无 LP 几何魔数。
+        // A plain data image: neither sparse-magic at offset 0 nor LP geometry magic at 0/4096/8192.
+        File.WriteAllBytes(file, new byte[16 * 1024]);
+
+        var handler = new LpFormatHandler();
+        Assert.False(handler.CanHandle(file));
+        Assert.False(handler.CanHandle(file));
+    }
+
+    [Fact]
+    public void CanHandle_AcceptsValidSuperImage()
+    {
+        // 魔数预检放行真实 LP 镜像后仍由完整解析确认：用真实写入的 super 验证未被预检误伤。
+        // The magic pre-probe must let genuine LP images reach the full parse and be accepted.
+        using var temp = new TempDirectory();
+        var image = Path.Combine(temp.Path, "super.img");
+        var device = new LpMetadataBlockDevice { Size = 1024 * 1024, FirstLogicalSector = 536, Alignment = 4096, PartitionName = "super"u8.ToArray() };
+        var metadata = new LpMetadata
+        {
+            Geometry = new LpMetadataGeometry { MetadataMaxSize = 65536, MetadataSlotCount = 2, LogicalBlockSize = 4096 },
+            Partitions = [],
+            Extents = [],
+            Groups = [new() { Name = "default"u8.ToArray() }],
+            BlockDevices = [device]
+        };
+        MetadataWriter.WriteToImageFile(image, metadata);
+
+        Assert.True(new LpFormatHandler().CanHandle(image));
+        Assert.True(new LpFormatHandler().CanHandle(image));
+    }
+
+    [Fact]
     public async Task StandaloneEmptyImage_LiblpLayoutIsHandledAndReadable()
     {
         // liblp 独立空镜像（super_empty）布局：geometry@0 + 单个 metadata blob，无保留区/备份副本。

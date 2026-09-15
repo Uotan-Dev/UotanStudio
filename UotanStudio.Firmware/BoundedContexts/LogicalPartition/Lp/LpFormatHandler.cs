@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
@@ -10,6 +11,14 @@ public sealed class LpFormatHandler : IFormatHandler
     public IReadOnlyList<string> FileExtensions => ["img", "super", "simg", "sparse", "raw"];
 
     /// <summary>
+    /// Android sparse header magic (little-endian 0xED26FF3A). A sparse image's logical bytes differ
+    /// from its raw file layout, so the geometry slot check below must be skipped for sparse supers.
+    /// <para>Android sparse 魔数（小端 0xED26FF3A）。稀疏镜像的逻辑字节与原始文件布局不同，
+    /// 因此下面的几何槽位魔数预检必须对稀疏 super 跳过。</para>
+    /// </summary>
+    private const uint SparseMagic = 0xED26FF3A;
+
+    /// <summary>
     /// Determines whether the file matches this format.
     /// <para>判断文件是否匹配此格式。</para>
     /// </summary>
@@ -18,12 +27,48 @@ public sealed class LpFormatHandler : IFormatHandler
         if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return false;
         try
         {
+            // 无损预检：逻辑分区镜像必须在主、备份或空布局（偏移 0）几何槽位携带几何魔数。
+            // 不满足时立即返回 false，避免为每个无关 .img 做全量 LP 解析并在主/备/空三个槽位
+            // 各抛一次 InvalidDataException/EndOfStreamException（被捕获）——这正是工程打开时
+            // 镜像扫描对 images/ 下每个非 super 镜像产生异常风暴的来源。
+            // Cheap, lossless pre-probe: a logical-partition image must carry the geometry magic in
+            // the primary, backup or empty-layout (offset 0) geometry slot. Otherwise it is rejected
+            // immediately, so unrelated .img files are not fully LP-parsed and do not throw an
+            // InvalidDataException/EndOfStreamException per slot (which is what produced the first-chance
+            // exception storm when the project-open image scan probed every non-super images/ entry).
+            if (!HasGeometryMagicOrIsSparse(filePath))
+            {
+                return false;
+            }
+
             using var stream = MetadataReader.OpenImage(filePath);
             _ = MetadataReader.ReadFromImageStream(stream);
             return true;
         }
         catch { return false; }
     }
+
+    private static bool HasGeometryMagicOrIsSparse(string filePath)
+    {
+        var header = FormatDetector.ReadHeader(filePath,
+            MetadataFormat.LP_PARTITION_RESERVED_BYTES + MetadataFormat.LP_METADATA_GEOMETRY_SIZE + sizeof(uint));
+        var isSparse = header.Length >= sizeof(uint)
+            && BinaryPrimitives.ReadUInt32LittleEndian(header) == SparseMagic;
+        if (isSparse)
+        {
+            return true;
+        }
+
+        var primary = header.Length >= MetadataFormat.LP_PARTITION_RESERVED_BYTES + sizeof(uint)
+            && MagicAt(header, MetadataFormat.LP_PARTITION_RESERVED_BYTES);
+        var backup = header.Length >= MetadataFormat.LP_PARTITION_RESERVED_BYTES + MetadataFormat.LP_METADATA_GEOMETRY_SIZE + sizeof(uint)
+            && MagicAt(header, MetadataFormat.LP_PARTITION_RESERVED_BYTES + MetadataFormat.LP_METADATA_GEOMETRY_SIZE);
+        var empty = header.Length >= sizeof(uint) && MagicAt(header, 0);
+        return primary || backup || empty;
+    }
+
+    private static bool MagicAt(byte[] header, int offset)
+        => BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(offset, sizeof(uint))) == MetadataFormat.LP_METADATA_GEOMETRY_MAGIC;
 
     /// <summary>
     /// Reads the firmware metadata asynchronously.
