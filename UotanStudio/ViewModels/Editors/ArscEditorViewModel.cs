@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Arsc;
 using UotanStudio.Services;
+using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -15,7 +16,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// tree plus a right details pane (key name, type, formatted value and raw data) for the selected
 /// entry, supporting parse, value-level editing and rebuild-save.
 /// </summary>
-public partial class ArscEditorViewModel : Document
+public partial class ArscEditorViewModel : Document, ISearchableDocument, ISearchMatchLocator
 {
     /// <summary>
     /// <para>保存按钮的本地化标题。</para>
@@ -87,6 +88,27 @@ public partial class ArscEditorViewModel : Document
     /// The parsed resource-table model (for the details pane and rebuild-save).
     /// </summary>
     private ResourceTable? _table;
+
+    /// <summary>
+    /// <para>行式反编译搜索文本（包→类型→配置→条目），加载后生成并缓存；只读结构化视图的文本载体。</para>
+    /// The line-based decompiled search text (package→type→configuration→entry), generated and cached
+    /// after loading; the text carrier of this read-only structured view.
+    /// </summary>
+    private string? _searchText;
+
+    /// <summary>
+    /// <para>搜索文本行起始偏移 → 结构锚点（供匹配偏移映射回资源树节点）。</para>
+    /// Search-text line start offset → structural anchor (maps a match offset back to a resource-tree node).
+    /// </summary>
+    private readonly List<(int Offset, ResSearchAnchor Anchor)> _searchAnchors = [];
+
+    /// <summary>
+    /// <para>模型引用 → 左栏节点，用于把搜索锚点解析成可选中的树节点。</para>
+    /// Model reference → left-tree node, used to resolve a search anchor into a selectable node.
+    /// </summary>
+    private readonly Dictionary<ResPackage, ArscTreeNodeViewModel> _packageNodes = [];
+    private readonly Dictionary<ResType, ArscTreeNodeViewModel> _typeNodes = [];
+    private readonly Dictionary<ResEntry, ArscTreeNodeViewModel> _entryNodes = [];
 
     /// <summary>
     /// <para>包总数；未加载时为 0。</para>
@@ -164,6 +186,8 @@ public partial class ArscEditorViewModel : Document
             {
                 Nodes.Add(BuildPackageNode(pkg, table));
             }
+
+            BuildSearchText(table);
 
             CompileError = string.Empty;
         }
@@ -317,6 +341,125 @@ public partial class ArscEditorViewModel : Document
         }
     }
 
+    /// <inheritdoc/>
+    string? ISearchableDocument.SearchText => _searchText;
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.FilePath => FilePath;
+
+    /// <inheritdoc/>
+    AvaloniaEdit.TextEditor? ISearchableDocument.Editor => null;
+
+    /// <inheritdoc/>
+    bool ISearchableDocument.SupportsSearchReplacement => false;
+
+    /// <inheritdoc/>
+    void ISearchableDocument.ApplySearchText(string text) =>
+        throw new NotSupportedException("ARSC resource tables are read-only for text replacement.");
+
+    /// <inheritdoc/>
+    void ISearchMatchLocator.LocateSearchMatch(int offset, int length)
+    {
+        // 从后往前找最后一个起始偏移不超过匹配位置的行，即为包含该匹配的锚点。
+        // Scan backwards for the last line starting at or before the match offset: the containing anchor.
+        ArscTreeNodeViewModel? target = null;
+        for (var i = _searchAnchors.Count - 1; i >= 0 && target is null; i--)
+        {
+            if (_searchAnchors[i].Offset > offset)
+            {
+                continue;
+            }
+
+            var anchor = _searchAnchors[i].Anchor;
+            if (anchor.Entry is not null && _entryNodes.TryGetValue(anchor.Entry, out var entryNode))
+            {
+                target = entryNode;
+            }
+            else if (anchor.Type is not null && _typeNodes.TryGetValue(anchor.Type, out var typeNode))
+            {
+                target = typeNode;
+            }
+            else if (_packageNodes.TryGetValue(anchor.Package, out var packageNode))
+            {
+                target = packageNode;
+            }
+        }
+
+        if (target is null)
+        {
+            return;
+        }
+
+        ExpandPath(Nodes, target);
+        target.IsSelected = true;
+        SelectedNode = target;
+    }
+
+    /// <summary>
+    /// <para>生成行式搜索文本并缓存，同时建立模型引用到左栏节点的映射。</para>
+    /// Builds and caches the line-based search text and maps model references to left-tree nodes.
+    /// </summary>
+    private void BuildSearchText(ResourceTable table)
+    {
+        _packageNodes.Clear();
+        _typeNodes.Clear();
+        _entryNodes.Clear();
+        foreach (var node in Flatten(Nodes))
+        {
+            switch (node.Payload)
+            {
+                case ResPackage package:
+                    _packageNodes[package] = node;
+                    break;
+                case ResType type:
+                    _typeNodes[type] = node;
+                    break;
+                case ResEntryEntry entry:
+                    _entryNodes[entry.Entry] = node;
+                    break;
+            }
+        }
+
+        _searchAnchors.Clear();
+        _searchText = ResourceTableSearchText.Serialize(table, (offset, anchor) => _searchAnchors.Add((offset, anchor)));
+        OnPropertyChanged(nameof(ISearchableDocument.SearchText));
+    }
+
+    /// <summary>
+    /// <para>展开目标节点的祖先链，使被定位的条目在左栏可见。</para>
+    /// Expands the target node's ancestor chain so the located entry is visible in the left tree.
+    /// </summary>
+    private static bool ExpandPath(IEnumerable<ArscTreeNodeViewModel> nodes, ArscTreeNodeViewModel target)
+    {
+        foreach (var node in nodes)
+        {
+            if (ReferenceEquals(node, target))
+            {
+                return true;
+            }
+
+            if (ExpandPath(node.Children, target))
+            {
+                node.IsExpanded = true;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<ArscTreeNodeViewModel> Flatten(IEnumerable<ArscTreeNodeViewModel> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            yield return node;
+            foreach (var child in Flatten(node.Children))
+            {
+                yield return child;
+            }
+        }
+    }
+
     private static ArscTreeNodeViewModel BuildPackageNode(ResPackage pkg, ResourceTable table)
     {
         var packageNode = new ArscTreeNodeViewModel($"{pkg.Name} (0x{pkg.Id:x2})", pkg);
@@ -359,21 +502,7 @@ public partial class ArscEditorViewModel : Document
         return packageNode;
     }
 
-    private static string TypeDisplayName(byte typeId) => typeId switch
-    {
-        1 => "attr",
-        2 => "string",
-        3 => "style",
-        4 => "color",
-        5 => "dimen",
-        6 => "drawable",
-        7 => "layout",
-        8 => "anim",
-        9 => "mipmap",
-        10 => "menu",
-        12 => "xml",
-        _ => "type"
-    };
+    private static string TypeDisplayName(byte typeId) => ResourceTableSearchText.TypeDisplayName(typeId);
 
     private void AddDetail(string key, string value)
     {
@@ -391,6 +520,11 @@ public partial class ArscEditorViewModel : Document
         Details.Clear();
         CompileError = string.Empty;
         _table = null;
+        _searchText = null;
+        _searchAnchors.Clear();
+        _packageNodes.Clear();
+        _typeNodes.Clear();
+        _entryNodes.Clear();
         PackageCount = 0;
         TypeCount = 0;
         EntryCount = 0;

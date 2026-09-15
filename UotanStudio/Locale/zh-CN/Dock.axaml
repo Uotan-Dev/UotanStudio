@@ -383,6 +383,7 @@
     <x:String x:Key="FindReplace_Replaced">已替换 {0} 项</x:String>
     <x:String x:Key="FindReplace_ConfirmReplaceAll">替换 {1} 个文档中的 {0} 处匹配？</x:String>
     <x:String x:Key="FindReplace_EditorNotReady">编辑器尚未就绪，请在文档显示后重试。</x:String>
+    <x:String x:Key="FindReplace_NotSupported">此文档类型不支持替换。</x:String>
     <x:String x:Key="ApkSign_Title">APK 签名</x:String>
     <x:String x:Key="ApkSign_Key">私钥（PKCS#8 / PKCS#1 / SEC1，PEM 或 DER）</x:String>
     <x:String x:Key="ApkSign_Certificate">证书（PEM / DER / PFX）</x:String>

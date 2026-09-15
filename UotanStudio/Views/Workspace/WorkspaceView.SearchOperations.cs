@@ -31,28 +31,13 @@ public partial class WorkspaceView
     private IDockable? ActiveSearchDocument => DataContext is WorkspaceViewModel vm
         ? vm.FindDocumentsPanePublic()?.ActiveDockable : null;
 
-    private static string? SearchText(IDockable? document) => document switch
-    {
-        FileViewModel { IsBinary: false } text => text.Text,
-        DtbEditorViewModel dtb => dtb.Source,
-        _ => null
-    };
+    private static string? SearchText(IDockable? document) => (document as ISearchableDocument)?.SearchText;
 
-    private static string? SearchPath(IDockable? document) => document switch
-    {
-        FileViewModel text => text.FilePath,
-        DtbEditorViewModel dtb => dtb.FilePath,
-        _ => null
-    };
+    private static string? SearchPath(IDockable? document) => (document as ISearchableDocument)?.FilePath;
 
     private static TextEditor? SearchEditor(IDockable? document)
     {
-        var editor = document switch
-        {
-            FileViewModel text => text.Editor,
-            DtbEditorViewModel dtb => dtb.Editor,
-            _ => null
-        };
+        var editor = (document as ISearchableDocument)?.Editor;
         return editor is { IsLoaded: true } && ReferenceEquals(editor.DataContext, document) ? editor : null;
     }
 
@@ -80,7 +65,7 @@ public partial class WorkspaceView
 
     private void OnSearchDocumentChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is "Text" or "Source" && !_searchActionRunning) QueueDocumentSearch();
+        if (e.PropertyName is "Text" or "Source" or "SearchText" && !_searchActionRunning) QueueDocumentSearch();
     }
 
     private void StopDocumentSearch()
@@ -258,6 +243,10 @@ public partial class WorkspaceView
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var document = await ResolveSearchDocumentAsync(group.Key, cancellationToken);
+                // 只读结构化视图（ARSC/DEX）不支持文本替换：在应用任何写入前拒绝。
+                // Read-only structured views (ARSC/DEX) reject text replacement before any write is applied.
+                if (document is not ISearchableDocument { SupportsSearchReplacement: true })
+                    throw new IOException(LanguageService.Instance.GetString("FindReplace_NotSupported"));
                 var matches = group.Select(item => item.Match).ToArray();
                 replacementSize += group.Key.Text.Length + matches.Sum(match => (long)match.Replacement.Length - match.Length);
                 if (replacementSize > 64 * 1024 * 1024) throw new IOException("Replacement exceeds the 64 MiB total limit. Narrow the scope.");
@@ -275,8 +264,10 @@ public partial class WorkspaceView
                     using (editor.Document.RunUpdate())
                         foreach (var match in edit.Matches.Reverse()) editor.Document.Replace(match.Offset, match.Length, match.Replacement);
                 }
-                else if (edit.Document is FileViewModel file) file.Text = edit.Result;
-                else if (edit.Document is DtbEditorViewModel dtb) dtb.Source = edit.Result;
+                else if (edit.Document is ISearchableDocument searchable)
+                {
+                    searchable.ApplySearchText(edit.Result);
+                }
                 if (ReferenceEquals(edit.Document, _selectionDocument) && DocumentSearchPanel.Scope == 1)
                     _selectionLength += edit.Result.Length - edit.Snapshot.Text.Length;
             }
@@ -319,9 +310,11 @@ public partial class WorkspaceView
         if (document is null)
         {
             if (snapshot.Path is null) throw new IOException(LanguageService.Instance.GetString("FindReplace_Changed"));
-            if (await Task.Run(() => ProjectTextSearchService.ReadText(snapshot.Path, cancellationToken), cancellationToken) != snapshot.Text)
+            if (await Task.Run(() => ProjectTextSearchService.ReadSearchText(snapshot.Path, cancellationToken), cancellationToken) != snapshot.Text)
                 throw new IOException(LanguageService.Instance.GetString("FindReplace_Changed"));
-            await vm.OpenDocumentAsync(snapshot.Path, EditorOpenMode.Text);
+            // 按路径自动解析编辑器模式（文本 / DTB / ARSC / AXML / DEX 等）。
+            // Auto-resolve the editor mode by path (text / DTB / ARSC / AXML / DEX etc.).
+            await vm.OpenDocumentAsync(snapshot.Path, EditorOpenMode.Auto);
             document = vm.FindDocumentsPanePublic()?.ActiveDockable;
         }
         cancellationToken.ThrowIfCancellationRequested();
@@ -339,6 +332,17 @@ public partial class WorkspaceView
     private async Task SelectSearchMatchAsync(IDockable document, string snapshot, TextSearchMatch match,
         CancellationToken cancellationToken)
     {
+        // 无文本编辑器的结构化文档（如 ARSC）按偏移选中对应树节点，不做编辑器内定位。
+        // Structured documents without a text editor (e.g. ARSC) select the matching tree node by
+        // offset instead of locating inside an editor.
+        if (document is ISearchMatchLocator locator)
+        {
+            if (SearchText(document) != snapshot)
+                throw new IOException(LanguageService.Instance.GetString("FindReplace_Changed"));
+            locator.LocateSearchMatch(match.Offset, match.Length);
+            return;
+        }
+
         var ready = new TaskCompletionSource<TextEditor>(TaskCreationOptions.RunContinuationsAsynchronously);
         void CheckEditor(object? sender, EventArgs args)
         {

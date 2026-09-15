@@ -37,7 +37,17 @@ internal static class ProjectTextSearchService
                 bytes += size;
                 if (bytes > 64 * 1024 * 1024) throw new IOException("Project search exceeds the 64 MiB scan limit. Narrow the scope.");
                 var text = ReadText(path, cancellationToken);
-                if (text is null) continue;
+                if (text is null)
+                {
+                    // 非纯文本：尝试二进制格式（DTB/ARSC/AXML/DEX/JAR）适配文本化，失败即跳过。
+                    // Not plain text: try the binary-format adapter (DTB/ARSC/AXML/DEX/JAR); skip on failure.
+                    text = FormatSearchText.TryRead(path, cancellationToken);
+                    if (text is null) continue;
+                    // 生成文本计入 64 MiB 扫描上限，避免单个小文件展开出超大搜索文本。
+                    // The generated text counts toward the 64 MiB scan cap so a small file cannot expand unboundedly.
+                    bytes += text.Length;
+                    if (bytes > 64 * 1024 * 1024) throw new IOException("Project search exceeds the 64 MiB scan limit. Narrow the scope.");
+                }
                 var found = TextSearchService.Find(text, options, cancellationToken: cancellationToken);
                 matches += found.Count;
                 if (matches > TextSearchService.MaximumMatches) throw new IOException("Project search exceeds 10000 matches. Narrow the scope.");
@@ -46,6 +56,16 @@ internal static class ProjectTextSearchService
         }
         return result;
     }
+
+    /// <summary>
+    /// <para>读取文件的搜索文本：优先纯文本，其次二进制格式适配；均失败或超限时返回 <c>null</c>。
+    /// 用于项目范围结果导航前核对磁盘内容与搜索快照是否一致。</para>
+    /// Reads a file's search text: plain text first, then the binary-format adapter; returns
+    /// <c>null</c> when both fail or the result is over-limit. Used to verify a project-scope result's
+    /// on-disk content matches the search snapshot before navigation.
+    /// </summary>
+    internal static string? ReadSearchText(string path, CancellationToken cancellationToken) =>
+        ReadText(path, cancellationToken) ?? FormatSearchText.TryRead(path, cancellationToken);
 
     internal static string? ReadText(string path, CancellationToken cancellationToken)
     {

@@ -6,6 +6,7 @@ using UotanStudio.Firmware.BoundedContexts.AndroidMeta.Dex;
 using UotanStudio.Services;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Keys;
+using UotanStudio.Services.Workspace;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -23,7 +24,7 @@ namespace UotanStudio.ViewModels.Editors;
 /// Smali and statistics), per-entry rebuild write-back, resource export/replace, and v1/v2/v3
 /// signing through JAR-purpose keys from the key library.
 /// </summary>
-public partial class DexEditorViewModel : Document
+public partial class DexEditorViewModel : Document, ISearchableDocument
 {
     /// <summary>
     /// <para>保存按钮的本地化标题。</para>
@@ -65,6 +66,25 @@ public partial class DexEditorViewModel : Document
     /// The disassembly text (read-only; generated in full on load).
     /// </summary>
     [ObservableProperty] private string _source = string.Empty;
+
+    /// <summary>Active disassembly editor for workspace actions. 供工作区操作使用的反汇编编辑器。</summary>
+    internal AvaloniaEdit.TextEditor? Editor { get; set; }
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.SearchText => Source;
+
+    /// <inheritdoc/>
+    string? ISearchableDocument.FilePath => FilePath;
+
+    /// <inheritdoc/>
+    AvaloniaEdit.TextEditor? ISearchableDocument.Editor => Editor;
+
+    /// <inheritdoc/>
+    bool ISearchableDocument.SupportsSearchReplacement => false;
+
+    /// <inheritdoc/>
+    void ISearchableDocument.ApplySearchText(string text) =>
+        throw new NotSupportedException("DEX disassembly is read-only for text replacement.");
 
     private bool _suppressSourceDirty;
 
@@ -434,24 +454,16 @@ public partial class DexEditorViewModel : Document
     /// </summary>
     private static DexLoadResult LoadMergedModel(string containerPath)
     {
-        var entries = JarDexContainer.ListDexEntries(containerPath);
-        if (entries.Count == 0)
-        {
-            throw new InvalidDataException("容器内没有 classes*.dex 条目。/ The container has no classes*.dex entry.");
-        }
-
-        var builder = new System.Text.StringBuilder();
         var classCount = 0;
         var methodCount = 0;
         var fieldCount = 0;
         var stringCount = 0;
         var typeCount = 0;
-        foreach (var entry in entries)
+        // 合并文本与项目范围格式适配共用同一生成器，保证两侧文本逐字节一致。
+        // The merged text shares its generator with the project-scope format adapter so both
+        // sides produce byte-identical text.
+        var source = DexContainerSearchText.BuildMergedSource(containerPath, dex =>
         {
-            var dex = DexFile.Load(JarDexContainer.LoadEntry(containerPath, entry));
-            builder.AppendLine($"## ===== {entry} =====");
-            builder.AppendLine(Disassembler.DisassembleAll(dex));
-            builder.AppendLine();
             classCount += dex.Classes.Count;
             stringCount += dex.Strings.Count;
             typeCount += dex.Types.Count;
@@ -460,9 +472,9 @@ public partial class DexEditorViewModel : Document
                 methodCount += cls.DirectMethods.Count + cls.VirtualMethods.Count;
                 fieldCount += cls.StaticFields.Count + cls.InstanceFields.Count;
             }
-        }
+        });
 
-        return new DexLoadResult(null, builder.ToString(), classCount, methodCount, fieldCount, stringCount, typeCount, string.Empty);
+        return new DexLoadResult(null, source, classCount, methodCount, fieldCount, stringCount, typeCount, string.Empty);
     }
 
     /// <summary>
@@ -713,6 +725,7 @@ public partial class DexEditorViewModel : Document
         IsMergeView = false;
         SelectedEntry = null;
         SelectedResource = null;
+        Editor = null;
         ContainerEntries.Clear();
         ResourceEntries.Clear();
         DexEntryNames.Clear();
