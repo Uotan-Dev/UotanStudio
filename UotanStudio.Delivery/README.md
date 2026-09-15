@@ -12,5 +12,10 @@ The source tree is grouped by responsibility:
 - `Build/` contains output, package, Payload, Super, Recovery, validation, and size calculation code.
 - `Scripts/` contains the script generator and its small preflight/text partials.
 - `Tools/` contains delivery tool preparation and pruning.
+- `Assets/` contains pinned native Recovery updaters (`update-binary-arm64` for DAT shell
+  fallback, `update-binary-ab-arm64` for the A/B OTA entry point). `ota.zip` always ships
+  `META-INF/com/google/android/update-binary` — the user-specified native updater when
+  provided, otherwise the embedded arm64 one — so TWRP and stock A/B recovery can install
+  the package without external inputs.
 
 File names are intentionally short because the project and namespace already provide the `Delivery` context.

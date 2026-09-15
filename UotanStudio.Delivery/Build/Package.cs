@@ -70,6 +70,12 @@ internal static partial class DeliveryPackageBuilder
                 writer.Write("payload.bin", new FileInfo(Path.Combine(images, "payload.bin")));
                 writer.Write("payload_properties.txt", new FileInfo(Path.Combine(images, "payload_properties.txt")));
                 writer.Write("META-INF/com/android/metadata", new MemoryStream(Encoding.UTF8.GetBytes(text)));
+                // Recovery 执行包内 update-binary 调 update_engine 消费 payload；没有它 TWRP 与原生
+                // A/B recovery 都会拒绝安装。优先用户指定的原生更新器，否则回退内嵌 arm64。
+                var updater = plan.Package.RecoveryUpdaterPath.Length > 0
+                    ? DeliveryRecoveryUpdater.Validate(plan.Package.RecoveryUpdaterPath)
+                    : DeliveryRecoveryUpdater.EmbeddedOtaUpdater();
+                writer.Write(DeliveryRecoveryUpdater.EntryPath, new FileInfo(updater));
                 if (plan.Package.CertificatePath.Length > 0)
                 {
                     using var cert = LoadCertificate(plan.Package.CertificatePath);

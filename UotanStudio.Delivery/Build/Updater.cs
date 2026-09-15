@@ -8,6 +8,8 @@ internal static class DeliveryRecoveryUpdater
 {
     internal const string ArchivePath = "META-INF/com/google/android/uotan-updater";
     internal const string ScriptPath = "META-INF/com/google/android/updater-script";
+    /// <summary><para>A/B OTA 包内原生更新器的标准成员路径。</para>Standard member path of the native updater inside an A/B OTA package.</summary>
+    internal const string EntryPath = "META-INF/com/google/android/update-binary";
 
     internal static string Resolve(DeliveryPlan plan)
     {
@@ -18,12 +20,42 @@ internal static class DeliveryRecoveryUpdater
             .OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase);
         var candidates = roots.Select(root => Path.Combine(root, "META-INF", "com", "google", "android", "update-binary"))
             .Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (candidates.Length != 1)
-            throw new InvalidDataException("DAT 卡刷需要原包的原生 update-binary。请保留 DAT 目录（或其上一级）的 META-INF/com/google/android/update-binary；多个原包请明确指定 RecoveryUpdaterPath。");
-        return Validate(candidates[0]);
+        return candidates.Length switch
+        {
+            1 => Validate(candidates[0]),
+            // 多个原包无法自动挑选时回退到内嵌的 arm64 更新器；arm32 设备需明确指定 RecoveryUpdaterPath。
+            > 1 => Embedded(),
+            _ => throw new InvalidDataException("DAT 卡刷需要原包的原生 update-binary。请保留 DAT 目录（或其上一级）的 META-INF/com/google/android/update-binary，或明确指定 RecoveryUpdaterPath。"),
+        };
     }
 
-    private static string Validate(string path)
+    /// <summary><para>解开随程序内嵌的 arm64 原生更新器到工具缓存；返回磁盘路径。</para>
+    /// Extracts the embedded arm64 native updater into the tool cache; returns the disk path.</summary>
+    internal static string Embedded()
+    {
+        var path = MaterializeAsset("update-binary-arm64", "delivery-updater");
+        return Validate(path);
+    }
+
+    /// <summary><para>解开内嵌的 A/B OTA 原生更新器（ginkgo 上游构建）；用于 ota.zip 的执行入口。</para>
+    /// Extracts the embedded A/B OTA native updater (ginkgo upstream build) used as ota.zip's entry point.</summary>
+    internal static string EmbeddedOtaUpdater() => MaterializeAsset("update-binary-ab-arm64", "delivery-ota-updater");
+
+    private static string MaterializeAsset(string name, string cacheDirectory)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "UotanStudio", cacheDirectory, name);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var source = Path.Combine(AppContext.BaseDirectory, "Assets", name);
+        if (!File.Exists(source)) throw new FileNotFoundException("Missing embedded Recovery updater asset.", source);
+        if (!File.Exists(path) || new FileInfo(path).Length != new FileInfo(source).Length)
+            File.Copy(source, path, true);
+        if (!OperatingSystem.IsWindows())
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        return path;
+    }
+
+    internal static string Validate(string path)
     {
         var file = new DeliveryFile { SourcePath = Path.GetFullPath(path) };
         DeliveryValidation.CheckSource(file);
