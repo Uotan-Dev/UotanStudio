@@ -44,11 +44,13 @@ public class ApkKeystoreAndCertificateTests : IDisposable
         Assert.Single(entry.Certificates);
         Assert.Equal(certificate.RawData, entry.Certificates[0]);
 
-        // The protected key decrypts back to the original PKCS#8 through the reader's own trust path:
+        // The protected key recovers back to the original PKCS#8 through the KeyProtector path:
         // wrong password must fail, correct password must match the certificate's public key.
-        // 受保护私钥经错误密码必须失败、正确密码必须与证书公钥一致。
+        // 受保护私钥经 KeyProtector 恢复出原始 PKCS#8：错误密码必须失败，正确密码必须与证书公钥一致。
         Assert.Throws<InvalidDataException>(() => JksKeyStoreReader.Read(data, "wrong"));
-        var decrypted = JksKeyStoreReader.Read(data, "store-pass")[0].ProtectedPrivateKey!;
+        var protectedKey = JksKeyStoreReader.Read(data, "store-pass")[0].ProtectedPrivateKey!;
+        Assert.Throws<InvalidDataException>(() => JksKeyStoreReader.Unprotect(protectedKey, "wrong"));
+        var decrypted = JksKeyStoreReader.Unprotect(protectedKey, "store-pass");
         using var loaded = RSA.Create();
         loaded.ImportPkcs8PrivateKey(decrypted, out var read);
         Assert.Equal(read, decrypted.Length);
@@ -87,7 +89,7 @@ public class ApkKeystoreAndCertificateTests : IDisposable
         Assert.Equal(2048, bundle.Key.Bits);
         Assert.All(bundle.ExportedFiles, f => Assert.True(File.Exists(f), f));
         Assert.All(bundle.ExportedFiles, f => Assert.Equal(output, Path.GetDirectoryName(f)));
-        Assert.Equal(["release-key.jks", "release-key.p12", "release-key.pk8", "release-key.pem"],
+        Assert.Equal(["release-key.jks", "release-key.p12", "release-key.pem", "release-key.pk8"],
             bundle.ExportedFiles.Select(Path.GetFileName).Order().ToArray());
 
         // JKS integrity + alias.

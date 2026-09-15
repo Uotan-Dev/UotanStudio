@@ -101,7 +101,9 @@ public class ApkSigningKeyGenerationTests : IDisposable
 
         using var pfx = X509CertificateLoader.LoadPkcs12FromFile(files.PfxPath!, "pfx-pass", X509KeyStorageFlags.EphemeralKeySet);
         Assert.True(pfx.HasPrivateKey);
-        using var material = ApkSignerKeyMaterial.Load(files.PrivateKeyPath, null, files.PfxPath!, "pfx-pass");
+        // The generated private key file honors options.KeyPassword; load it with that password.
+        // 生成的私钥文件遵循 options.KeyPassword，加载时须传入同一密码。
+        using var material = ApkSignerKeyMaterial.Load(files.PrivateKeyPath, "pfx-pass", files.PfxPath!, "pfx-pass");
         Assert.Equal(material.Key.ExportSubjectPublicKeyInfo(), pfx.PublicKey.ExportSubjectPublicKeyInfo());
     }
 
@@ -122,7 +124,9 @@ public class ApkSigningKeyGenerationTests : IDisposable
         Assert.Contains("Uotan Studio", certificate.Subject, StringComparison.Ordinal);
         Assert.Contains("Firmware", certificate.Subject, StringComparison.Ordinal);
         Assert.Contains("CN=Subject Fields", certificate.Subject, StringComparison.Ordinal);
-        Assert.Equal(5, certificate.NotAfter.Year - certificate.NotBefore.Year + 1);
+        // notAfter is notBefore + ValidityYears, so the year delta is exactly the requested validity.
+        // notAfter = notBefore + ValidityYears，年份差即请求的有效年数。
+        Assert.Equal(5, certificate.NotAfter.Year - certificate.NotBefore.Year);
     }
 
     [Theory]
@@ -167,7 +171,7 @@ public class ApkSigningKeyGenerationTests : IDisposable
         var files = ApkSigningKeyGenerator.Generate(
             new ApkSigningKeyOptions { CommonName = "Clean" }, _root, "clean", exportPfx: true);
 
-        Assert.Equal(["clean.pk8", "clean.pem", "clean.pfx"],
+        Assert.Equal(["clean.pem", "clean.pfx", "clean.pk8"],
             Directory.EnumerateFiles(_root).Select(Path.GetFileName).OrderBy(n => n).ToArray());
         _ = files;
     }

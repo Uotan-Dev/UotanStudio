@@ -99,7 +99,9 @@ public sealed class DefaultSignatureTests : IDisposable
         // 私钥损坏时同样中止（先恢复公钥文件，否则先命中缺少公钥的检查）。
         File.WriteAllText(library.PrivatePath(adb) + ".pub", publicText);
         File.WriteAllText(library.PrivatePath(adb), "not a key");
-        Assert.ThrowsAny<CryptographicException>(() => library.PublishDefault(adb, target));
+        // Corrupted material surfaces as the key loader's documented InvalidDataException.
+        // 损坏材料以密钥加载器声明的 InvalidDataException 暴露。
+        Assert.Throws<InvalidDataException>(() => library.PublishDefault(adb, target));
         Assert.Equal(before, File.ReadAllBytes(target));
     }
 
