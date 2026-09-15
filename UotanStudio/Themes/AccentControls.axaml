@@ -1,0 +1,46 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- 按钮与分段单选的状态补丁：Semi 只为悬浮/选中提供底色键，没有悬浮前景键，
+         这里把悬浮（以及按下）时的文字与图标统一成浅色，配合主色底使用。
+         选中态与普通按钮的文字色由 Themes/AccentColors.axaml 中的控件状态键提供。 -->
+    <!-- State patch for buttons and segmented radios: Semi only ships background keys for hover/selection, so
+         the hover (and pressed) text/icon colour is set here to pair with the accent background. The normal
+         button text and the selected-radio colours come from the control-state keys in Themes/AccentColors.axaml. -->
+    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource AccentHoverForeground}" />
+    </Style>
+    <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource AccentHoverForeground}" />
+    </Style>
+
+    <!-- 复选框：悬浮与选中的方框改用主色（Semi 的悬浮边框键不会跟着调色板走，这里显式指定）。 -->
+    <!-- Check box: hover and checked states use the accent (Semi's hover border key does not follow the palette). -->
+    <Style Selector="CheckBox:pointerover /template/ Border#NormalRectangle">
+        <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource SemiColorPrimaryLight}" />
+    </Style>
+    <Style Selector="CheckBox:checked:pointerover /template/ Border#NormalRectangle">
+        <Setter Property="BorderBrush" Value="{DynamicResource SemiColorPrimaryPointerover}" />
+        <Setter Property="Background" Value="{DynamicResource SemiColorPrimaryPointerover}" />
+    </Style>
+
+    <!-- 单选框：圆环与圆点同样跟随主色。 -->
+    <!-- Radio button: ring and dot follow the accent as well. -->
+    <Style Selector="RadioButton:pointerover /template/ Ellipse#OuterEllipse">
+        <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimary}" />
+        <Setter Property="Fill" Value="{DynamicResource SemiColorPrimaryLight}" />
+    </Style>
+    <Style Selector="RadioButton:checked:pointerover /template/ Ellipse#OuterEllipse">
+        <Setter Property="Stroke" Value="{DynamicResource SemiColorPrimaryPointerover}" />
+        <Setter Property="Fill" Value="{DynamicResource SemiColorPrimaryPointerover}" />
+    </Style>
+
+    <!-- 镜像文件管理上方的三个分段单选按钮：悬浮与选中都是主色底 + 浅色文字。 -->
+    <!-- The three segmented radio buttons above the image list: accent fill with light text on hover/selection. -->
+    <Style Selector="RadioButton.segment:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource AccentHoverForeground}" />
+    </Style>
+    <Style Selector="RadioButton.segment:checked /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{DynamicResource AccentHoverForeground}" />
+    </Style>
+</Styles>

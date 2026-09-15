@@ -1,0 +1,95 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="UotanStudio.Themes.AccentColors">
+    <!-- 全局主题色：浅色与深色各一组，要整体换色只需改这里的 AccentColor 与它的派生色。
+         本字典在 App.axaml 中排在 LightColors/DarkColors 之后，同名键覆盖应用主题字典；
+         Semi 调色板键由 Themes/AccentPalette.cs 在启动时按主题变体补进 Semi 主题作用域
+         （控件在那里解析调色板，只改应用资源字典不会影响按钮等控件）。 -->
+    <!-- Global accent: one set per mode. Re-skinning only touches AccentColor and its derivatives here.
+         This dictionary is merged after LightColors/DarkColors in App.axaml so its keys win there, and
+         Themes/AccentPalette.cs copies the Semi palette keys into the Semi theme scope per theme variant
+         (that is where the control themes resolve their palette). -->
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+            <Color x:Key="AccentColor">#D03A2F</Color>
+            <SolidColorBrush x:Key="HexCaretBrush" Color="{StaticResource AccentColor}" />
+
+            <!-- Semi 调色板映射：确认按钮、选中态、焦点框与链接都读取这几个键。 -->
+            <!-- Semi palette mapping: accent buttons, selection, focus ring and links read these keys. -->
+            <SolidColorBrush x:Key="SemiColorPrimary" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="SemiColorPrimaryPointerover" Color="#B73229" />
+            <SolidColorBrush x:Key="SemiColorPrimaryActive" Color="#A82C24" />
+            <SolidColorBrush x:Key="SemiColorPrimaryDisabled" Color="#EDB3AE" />
+            <SolidColorBrush x:Key="SemiColorPrimaryLight" Color="#FCE7E5" />
+            <SolidColorBrush x:Key="SemiColorPrimaryLightActive" Color="#F7CDC9" />
+            <SolidColorBrush x:Key="SemiColorPrimaryLightPointerover" Color="#F7CDC9" />
+            <SolidColorBrush x:Key="SemiColorLink" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="SemiColorFocusBorder" Color="{StaticResource AccentColor}" />
+
+            <!-- 悬浮文字/图标色（Semi 没有专门的悬浮前景键，由 Themes/AccentControls.axaml 的样式引用）。 -->
+            <!-- Hover text/icon colour (Semi has no hover-foreground key; Themes/AccentControls.axaml styles use it). -->
+            <SolidColorBrush x:Key="AccentHoverForeground" Color="#FCE7E5" />
+
+            <!-- 控件状态键：按钮文字改回普通文本色，悬浮/选中改为主色底。 -->
+            <!-- Control-state keys: button text back to the normal text colour, hover/selected fills use the accent. -->
+            <SolidColorBrush x:Key="ButtonDefaultPrimaryForeground" Color="#1A1A1A" />
+            <SolidColorBrush x:Key="ButtonDefaultBackground" Color="#F4F5F7" />
+            <SolidColorBrush x:Key="ButtonDefaultPointeroverBackground" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ButtonDefaultPressedBackground" Color="#A82C24" />
+            <SolidColorBrush x:Key="RadioButtonButtonCheckedBackground" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="RadioButtonButtonCheckedForeground" Color="#FCE7E5" />
+            <SolidColorBrush x:Key="RadioButtonButtonUncheckedPointeroverBackground" Color="{StaticResource AccentColor}" />
+
+            <!-- 列表 / 表格行：悬浮用主色浅调，选中悬浮用主色浅调按下色（原来用的是中性填充，观感与主题不符）。 -->
+            <!-- List / grid rows: hover uses the light accent tint and selected-hover the pressed tint
+                 (Semi's neutral fill looked wrong next to the accent theme). -->
+            <StaticResource x:Key="ListBoxItemPointeroverBackground" ResourceKey="SemiColorPrimaryLight" />
+            <StaticResource x:Key="ListBoxItemSelectedBackground" ResourceKey="SemiColorPrimaryLight" />
+            <StaticResource x:Key="ListBoxItemPressedBackground" ResourceKey="SemiColorPrimaryLightActive" />
+            <StaticResource x:Key="ListBoxItemSelectedPointeroverBackground" ResourceKey="SemiColorPrimaryLightActive" />
+            <StaticResource x:Key="DataGridRowPointeroverBackground" ResourceKey="SemiColorPrimaryLight" />
+            <StaticResource x:Key="DataGridRowSelectedBackground" ResourceKey="SemiColorPrimaryLight" />
+            <StaticResource x:Key="DataGridRowSelectedPointeroverBackground" ResourceKey="SemiColorPrimaryLightActive" />
+            <StaticResource x:Key="DataGridColumnHeaderPointeroverBackground" ResourceKey="SemiColorPrimaryLight" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+            <!-- 深色模式同样的红会显得更亮，这里用深色专用的暗一档取值：浅色系键不再使用近白色底。 -->
+            <!-- The same red reads brighter on dark surfaces, so the dark set uses darker derivatives and
+                 keeps the "light" tint keys away from near-white fills. -->
+            <Color x:Key="AccentColor">#D33B2F</Color>
+            <SolidColorBrush x:Key="HexCaretBrush" Color="{StaticResource AccentColor}" />
+
+            <SolidColorBrush x:Key="SemiColorPrimary" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="SemiColorPrimaryPointerover" Color="#DE6A5D" />
+            <SolidColorBrush x:Key="SemiColorPrimaryActive" Color="#E36A60" />
+            <SolidColorBrush x:Key="SemiColorPrimaryDisabled" Color="#6B2A24" />
+            <SolidColorBrush x:Key="SemiColorPrimaryLight" Color="#3A1C18" />
+            <SolidColorBrush x:Key="SemiColorPrimaryLightActive" Color="#55241E" />
+            <SolidColorBrush x:Key="SemiColorPrimaryLightPointerover" Color="#55241E" />
+            <SolidColorBrush x:Key="SemiColorLink" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="SemiColorFocusBorder" Color="{StaticResource AccentColor}" />
+
+            <SolidColorBrush x:Key="AccentHoverForeground" Color="#FCE7E5" />
+
+            <SolidColorBrush x:Key="ButtonDefaultPrimaryForeground" Color="#FEFEFE" />
+            <SolidColorBrush x:Key="ButtonDefaultBackground" Color="#2E3238" />
+            <SolidColorBrush x:Key="ButtonDefaultPointeroverBackground" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="ButtonDefaultPressedBackground" Color="#E36A60" />
+            <SolidColorBrush x:Key="RadioButtonButtonCheckedBackground" Color="{StaticResource AccentColor}" />
+            <SolidColorBrush x:Key="RadioButtonButtonCheckedForeground" Color="#FCE7E5" />
+            <SolidColorBrush x:Key="RadioButtonButtonUncheckedPointeroverBackground" Color="{StaticResource AccentColor}" />
+
+            <!-- 深色模式的行底色比浅色模式再深一档：悬浮/选中同为 #55241E，选中后再悬浮再叠一档 #6E2E26。 -->
+            <!-- Dark rows step one level deeper: hover/selected share #55241E, and selected+hover adds
+                 another step (#6E2E26). -->
+            <SolidColorBrush x:Key="ListBoxItemPointeroverBackground" Color="#55241E" />
+            <SolidColorBrush x:Key="ListBoxItemSelectedBackground" Color="#55241E" />
+            <SolidColorBrush x:Key="ListBoxItemPressedBackground" Color="#6E2E26" />
+            <SolidColorBrush x:Key="ListBoxItemSelectedPointeroverBackground" Color="#6E2E26" />
+            <SolidColorBrush x:Key="DataGridRowPointeroverBackground" Color="#55241E" />
+            <SolidColorBrush x:Key="DataGridRowSelectedBackground" Color="#55241E" />
+            <SolidColorBrush x:Key="DataGridRowSelectedPointeroverBackground" Color="#6E2E26" />
+            <SolidColorBrush x:Key="DataGridColumnHeaderPointeroverBackground" Color="#55241E" />
+        </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

@@ -121,7 +121,9 @@ public partial class FlowNodeViewModel : ViewModelBase, INodePosition
                 && app.TryGetResource("AccentColor", app.ActualThemeVariant, out var value)
                 && value is Color color)
                 return new SolidColorBrush(color);
-            return new SolidColorBrush(Color.Parse("#0078d4"));
+            // 主题色兜底值：与 Themes/AccentColors.axaml 的 AccentColor 保持一致。
+            // Accent fallback, kept in sync with AccentColor in Themes/AccentColors.axaml.
+            return new SolidColorBrush(Color.Parse("#FF4E45"));
         }
     }
 

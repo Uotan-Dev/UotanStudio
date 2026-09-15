@@ -11,6 +11,7 @@ using UotanStudio.Models;
 using UotanStudio.Services;
 using UotanStudio.Services.Devices;
 using UotanStudio.Services.Logging;
+using UotanStudio.Themes;
 using UotanStudio.ViewModels.Shell;
 using UotanStudio.Views.Shell;
 
@@ -26,6 +27,9 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        // 全局主题色：把 Themes/AccentColors.axaml 的强调色补进 Semi 主题作用域（见 AccentPalette）。
+        // Global accent: copy Themes/AccentColors.axaml into the Semi theme scope (see AccentPalette).
+        AccentPalette.Install(this);
         // Subscribe before startup settings are applied; retain LanguageChangedMessage for legacy callers.
         WeakReferenceMessenger.Default.Register<App, LanguageStateChangedMessage>(this,
             static (app, message) => app.UpdateSemiThemeLocale(message.CultureName));

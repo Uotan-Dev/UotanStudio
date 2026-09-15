@@ -40,3 +40,23 @@ public partial class DarkColors : ResourceDictionary
         AvaloniaXamlLoader.Load(this);
     }
 }
+
+/// <summary>
+/// <para>全局主题色资源字典（<c>Themes/AccentColors.axaml</c> 的代码后置）：强调色及其派生色只在这里定义一次，
+/// 整档在 <c>App.axaml</c> 中排在 <see cref="LightColors"/> / <see cref="DarkColors"/> 之后合并，
+/// 因此同名的 Semi 调色板键会被这里的值覆盖，换色只需改这一个文件。</para>
+/// Global accent dictionary (code-behind of <c>Themes/AccentColors.axaml</c>): the accent and its derivatives
+/// are defined once here and the dictionary is merged after <see cref="LightColors"/> / <see cref="DarkColors"/>
+/// in <c>App.axaml</c>, so its keys override the Semi palette and re-skinning touches a single file.
+/// </summary>
+public partial class AccentColors : ResourceDictionary
+{
+    /// <summary>
+    /// <para>创建主题色字典并从预编译 XAML 填充内容。</para>
+    /// Creates the accent dictionary, loading its content from the precompiled XAML.
+    /// </summary>
+    public AccentColors()
+    {
+        AvaloniaXamlLoader.Load(this);
+    }
+}

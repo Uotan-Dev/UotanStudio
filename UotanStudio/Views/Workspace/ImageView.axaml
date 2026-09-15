@@ -46,19 +46,19 @@
                                          MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
                                          IsChecked="{Binding IsUnpackMode, Mode=TwoWay}"
                                          Theme="{StaticResource ButtonRadioButton}"
-                                         Classes="Small"
+                                         Classes="Small segment"
                                          Content="{DynamicResource ImageView_UnpackMode}" />
                             <RadioButton GroupName="ImageScope"
                                          MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
                                          IsChecked="{Binding IsPackMode, Mode=TwoWay}"
                                          Theme="{StaticResource ButtonRadioButton}"
-                                         Classes="Small"
+                                         Classes="Small segment"
                                          Content="{DynamicResource ImageView_PackMode}" />
                             <RadioButton GroupName="ImageScope"
                                          MinWidth="0" MinHeight="24" Padding="8,0" Margin="0"
                                          IsChecked="{Binding IsOutputMode, Mode=TwoWay}"
                                          Theme="{StaticResource ButtonRadioButton}"
-                                         Classes="Small"
+                                         Classes="Small segment"
                                          Content="{DynamicResource ImageView_OutputMode}" />
                         </StackPanel>
                     </Border>
