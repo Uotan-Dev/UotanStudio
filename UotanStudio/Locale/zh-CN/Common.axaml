@@ -200,13 +200,6 @@
     <x:String x:Key="Image_UnpackedDirectoryMissingMessage">未找到解包文件夹“{0}”。</x:String>
 
     <!-- FirmwareInfo actions -->
-    <x:String x:Key="FirmwareInfo_Verify">校验</x:String>
-    <x:String x:Key="FirmwareInfo_UnpackToProject">解包到工程目录</x:String>
-    <x:String x:Key="FirmwareInfo_Result">操作结果</x:String>
-    <x:String x:Key="FirmwareInfo_Verifying">正在校验…</x:String>
-    <x:String x:Key="FirmwareInfo_Unpacking">正在解包…</x:String>
-    <x:String x:Key="FirmwareInfo_NoProject">尚未打开工程，无法解包。</x:String>
-    <x:String x:Key="FirmwareInfo_UnpackUnsupported">当前格式不支持解包到工程目录。</x:String>
 
     <!-- Log channels -->
     <x:String x:Key="Log_Channel_All">全部通道</x:String>

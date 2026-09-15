@@ -1,13 +1,8 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Mvvm.Controls;
-using UotanStudio.Firmware;
 using UotanStudio.Firmware.SharedKernel;
 using UotanStudio.Services;
-using UotanStudio.Services.Firmware;
-using UotanStudio.Services.Projects;
-using FirmwareOpResult = UotanStudio.Services.Firmware.FirmwareOpResult;
 
 namespace UotanStudio.ViewModels.Editors;
 
@@ -75,48 +70,6 @@ public partial class FirmwareInfoViewModel : Document
     public static string UnrecognizedLabel => LanguageService.Instance.GetString("FirmwareInfo_Unrecognized");
 
     /// <summary>
-    /// <para>「校验」动作按钮标题的本地化文本。</para>
-    /// The localized title of the "verify" action button.
-    /// </summary>
-    public static string VerifyLabel => LanguageService.Instance.GetString("FirmwareInfo_Verify");
-
-    /// <summary>
-    /// <para>「解包到工程目录」动作按钮标题的本地化文本。</para>
-    /// The localized title of the "unpack to project directory" action button.
-    /// </summary>
-    public static string UnpackLabel => LanguageService.Instance.GetString("FirmwareInfo_UnpackToProject");
-
-    /// <summary>
-    /// <para>「操作结果」分区标题的本地化文本。</para>
-    /// The localized "operation result" section title.
-    /// </summary>
-    public static string ResultLabel => LanguageService.Instance.GetString("FirmwareInfo_Result");
-
-    /// <summary>
-    /// <para>校验进行中的本地化提示文本。</para>
-    /// The localized verifying-in-progress hint.
-    /// </summary>
-    public static string VerifyingLabel => LanguageService.Instance.GetString("FirmwareInfo_Verifying");
-
-    /// <summary>
-    /// <para>解包进行中的本地化提示文本。</para>
-    /// The localized unpacking-in-progress hint.
-    /// </summary>
-    public static string UnpackingLabel => LanguageService.Instance.GetString("FirmwareInfo_Unpacking");
-
-    /// <summary>
-    /// <para>尚未打开工程时的本地化错误文本。</para>
-    /// The localized error text for when no project is open.
-    /// </summary>
-    public static string NoProjectLabel => LanguageService.Instance.GetString("FirmwareInfo_NoProject");
-
-    /// <summary>
-    /// <para>当前格式不支持解包时的本地化错误文本。</para>
-    /// The localized error text for an unsupported unpack format.
-    /// </summary>
-    public static string UnpackUnsupportedLabel => LanguageService.Instance.GetString("FirmwareInfo_UnpackUnsupported");
-
-    /// <summary>
     /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
     /// </summary>
@@ -177,42 +130,6 @@ public partial class FirmwareInfoViewModel : Document
     [ObservableProperty] private bool _hasComponents;
 
     /// <summary>
-    /// <para>是否正在执行校验动作（驱动校验按钮忙碌状态）。</para>
-    /// Whether the verify action is running (drives the verify button busy state).
-    /// </summary>
-    [ObservableProperty] private bool _isVerifying;
-
-    /// <summary>
-    /// <para>是否正在执行解包动作（驱动解包按钮忙碌状态）。</para>
-    /// Whether the unpack action is running (drives the unpack button busy state).
-    /// </summary>
-    [ObservableProperty] private bool _isUnpacking;
-
-    /// <summary>
-    /// <para>是否有动作（校验/解包）正在执行（驱动工具栏状态提示显示）。</para>
-    /// Whether any action (verify/unpack) is running (drives the toolbar status hint).
-    /// </summary>
-    [ObservableProperty] private bool _isOperating;
-
-    /// <summary>
-    /// <para>当前动作的状态提示文本（如「正在校验…」）。</para>
-    /// The status hint text of the current action (e.g. "Verifying…").
-    /// </summary>
-    [ObservableProperty] private string _operationStatus = string.Empty;
-
-    /// <summary>
-    /// <para>最近一次动作（校验/解包）的结果文本；尚无结果时为空字符串。</para>
-    /// The result text of the last action (verify/unpack); empty when no result yet.
-    /// </summary>
-    [ObservableProperty] private string _resultText = string.Empty;
-
-    /// <summary>
-    /// <para>动作结果区是否非空（驱动结果区显示）。</para>
-    /// Whether the action result section is non-empty (drives its visibility).
-    /// </summary>
-    [ObservableProperty] private bool _hasResult;
-
-    /// <summary>
     /// <para>元数据键值对列表（UI 绑定）。</para>
     /// The metadata key-value list (bound by the UI).
     /// </summary>
@@ -236,34 +153,6 @@ public partial class FirmwareInfoViewModel : Document
     /// </summary>
     public FirmwareInfoViewModel()
     {
-    }
-
-    /// <summary>
-    /// <para>校验命令是否可执行（元数据加载或任一动作执行中禁用）。</para>
-    /// Whether the verify command can execute (disabled while metadata loads or any action runs).
-    /// </summary>
-    private bool CanVerify() => !IsBusy && !IsVerifying && !IsUnpacking;
-
-    /// <summary>
-    /// <para>解包命令是否可执行（元数据加载或任一动作执行中禁用）。</para>
-    /// Whether the unpack command can execute (disabled while metadata loads or any action runs).
-    /// </summary>
-    private bool CanUnpack() => !IsBusy && !IsVerifying && !IsUnpacking;
-
-    partial void OnIsBusyChanged(bool value) => NotifyOperationCommands();
-
-    partial void OnIsVerifyingChanged(bool value) => NotifyOperationCommands();
-
-    partial void OnIsUnpackingChanged(bool value) => NotifyOperationCommands();
-
-    /// <summary>
-    /// <para>重新评估两个动作命令的 CanExecute（忙碌状态变化时刷新按钮可用性）。</para>
-    /// Re-evaluates the CanExecute of both action commands (refreshes button availability on busy-state changes).
-    /// </summary>
-    private void NotifyOperationCommands()
-    {
-        VerifyCommand.NotifyCanExecuteChanged();
-        UnpackCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -393,216 +282,7 @@ public partial class FirmwareInfoViewModel : Document
         HasError = false;
         IsRecognized = false;
         IsBusy = false;
-        IsVerifying = false;
-        IsUnpacking = false;
-        IsOperating = false;
-        OperationStatus = string.Empty;
-        ResultText = string.Empty;
-        HasResult = false;
         FilePath = null;
-    }
-
-    /// <summary>
-    /// <para>校验命令：对当前固件文件执行完整性校验。AVB/vbmeta 镜像调用
-    /// <see cref="FirmwareService.VerifyAvbAsync"/> 校验签名与内嵌摘要；其余格式流式计算
-    /// SHA-256 摘要。结果经 <see cref="LogService"/> 记录并显示在结果区。</para>
-    /// Verify command: performs an integrity check on the current firmware file. AVB/vbmeta images
-    /// go through <see cref="FirmwareService.VerifyAvbAsync"/> (signature and embedded digest); all
-    /// other formats get a streaming SHA-256 digest. The result is logged via <see cref="LogService"/>
-    /// and shown in the result section.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanVerify))]
-    private async Task VerifyAsync()
-    {
-        var path = FilePath;
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-        {
-            return;
-        }
-
-        IsVerifying = true;
-        IsOperating = true;
-        OperationStatus = VerifyingLabel;
-        HasError = false;
-        ErrorMessage = string.Empty;
-        try
-        {
-            // 按格式名判断是否为 AVB/vbmeta 镜像：是则做 AVB 签名/摘要校验，否则流式计算 SHA-256。
-            // Dispatch by format name: AVB/vbmeta images get AVB signature/digest verification,
-            // everything else gets a streaming SHA-256 digest.
-            FirmwareOpResult result;
-            if (IsAvbFormat())
-            {
-                // VerifyAvbAsync 内部含 CPU 密集的 RSA 验签，放到线程池执行避免阻塞 UI。
-                // VerifyAvbAsync performs CPU-bound RSA verification; run it on the thread pool.
-                result = await Task.Run(() => FirmwareService.Instance.VerifyAvbAsync(path))
-                    .ConfigureAwait(true);
-            }
-            else
-            {
-                // 流式 SHA-256：FirmwareService.VerifyChecksumAsync 内部经
-                // System.Security.Cryptography.SHA256.HashDataAsync 流式计算，避免整文件载入内存
-                // （与 UotanStudio.Firmware 中 Payload 的流式哈希用法一致）。
-                // Streaming SHA-256: FirmwareService.VerifyChecksumAsync streams the file via
-                // System.Security.Cryptography.SHA256.HashDataAsync instead of loading it fully
-                // (matching the streaming-hash usage found in UotanStudio.Firmware's Payload code).
-                result = await FirmwareService.Instance.VerifyChecksumAsync(path).ConfigureAwait(true);
-            }
-
-            ResultText = result.Summary;
-            HasResult = true;
-            if (!result.Success)
-            {
-                ErrorMessage = result.Summary;
-                HasError = true;
-            }
-
-            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "FirmwareInfo",
-                result.Success
-                    ? $"Verification passed for '{path}': {result.Summary}"
-                    : $"Verification failed for '{path}': {result.Summary}");
-        }
-        catch (Exception ex)
-        {
-            ResultText = ex.Message;
-            HasResult = true;
-            ErrorMessage = ex.Message;
-            HasError = true;
-            LogService.Instance.Write(LogLevel.Error, "FirmwareInfo", $"Failed to verify '{path}': {ex.Message}");
-        }
-        finally
-        {
-            IsVerifying = false;
-            IsOperating = false;
-            OperationStatus = string.Empty;
-        }
-    }
-
-    /// <summary>
-    /// <para>解包命令：按当前格式名分派 <see cref="FirmwareService"/> 的解包方法（CPIO/Payload/Boot/Oppo/Super），
-    /// 将当前固件文件解包到工程 <c>&lt;文件名&gt;/</c> 子目录（路径经
-    /// <see cref="ProjectContextService.Instance"/> 获取）；失败时给出清晰错误信息。</para>
-    /// Unpack command: dispatches a <see cref="FirmwareService"/> unpack method (CPIO/Payload/Boot/Oppo/Super)
-    /// by the current format name, unpacking the firmware file into the project
-    /// <c>&lt;file-name&gt;/</c> sub-directory (path obtained via
-    /// <see cref="ProjectContextService.Instance"/>); failures produce a clear error message.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(CanUnpack))]
-    private async Task UnpackAsync()
-    {
-        var path = FilePath;
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
-        {
-            return;
-        }
-
-        if (!ProjectContextService.Instance.IsProjectOpen)
-        {
-            ResultText = NoProjectLabel;
-            HasResult = true;
-            ErrorMessage = NoProjectLabel;
-            HasError = true;
-            LogService.Instance.Write(LogLevel.Warn, "FirmwareInfo",
-                $"Unpack aborted: no project is open  {NoProjectLabel}");
-            return;
-        }
-
-        IsUnpacking = true;
-        IsOperating = true;
-        OperationStatus = UnpackingLabel;
-        HasError = false;
-        ErrorMessage = string.Empty;
-        try
-        {
-            // 目标目录 = 子项目根目录/<文件名>/ 子目录（与 images/ 同级）。
-            // Target directory = sub-project root/<file-name>/ sub-directory (same level as images/).
-            var subProjectRoot = ProjectContextService.Instance.ActiveSubProject?.RootPath;
-            if (subProjectRoot is null)
-            {
-                OperationStatus = "No active sub-project  无活动子项目";
-                HasError = true;
-                ErrorMessage = OperationStatus;
-                return;
-            }
-
-            var outputDir = Path.Combine(subProjectRoot, Path.GetFileNameWithoutExtension(path));
-            if (Directory.Exists(outputDir))
-            {
-                OperationStatus = $"Directory \"{Path.GetFileNameWithoutExtension(path)}\" already exists  目录 \"{Path.GetFileNameWithoutExtension(path)}\" 已存在";
-                HasError = true;
-                ErrorMessage = OperationStatus;
-                return;
-            }
-
-            Directory.CreateDirectory(outputDir);
-
-            var result = await DispatchUnpackAsync(path, outputDir).ConfigureAwait(true);
-
-            ResultText = result.Summary;
-            HasResult = true;
-            if (!result.Success)
-            {
-                ErrorMessage = result.Summary;
-                HasError = true;
-            }
-
-            LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "FirmwareInfo",
-                result.Success
-                    ? $"Unpacked '{path}' -> {outputDir}: {result.Summary}"
-                    : $"Unpack failed for '{path}': {result.Summary}");
-        }
-        catch (Exception ex)
-        {
-            ResultText = ex.Message;
-            HasResult = true;
-            ErrorMessage = ex.Message;
-            HasError = true;
-            LogService.Instance.Write(LogLevel.Error, "FirmwareInfo", $"Failed to unpack '{path}': {ex.Message}");
-        }
-        finally
-        {
-            IsUnpacking = false;
-            IsOperating = false;
-            OperationStatus = string.Empty;
-        }
-    }
-
-    /// <summary>
-    /// <para>按当前格式名将解包操作分派到 <see cref="FirmwareService"/> 的解包方法；
-    /// 不支持解包的格式返回带清晰提示的失败结果。CPU 密集解包放到线程池执行。</para>
-    /// Dispatches the unpack operation to a <see cref="FirmwareService"/> unpack method by the current
-    /// format name; formats without unpack support return a failure with a clear hint. CPU-bound
-    /// unpacking is offloaded to the thread pool.
-    /// </summary>
-    /// <param name="path">固件文件路径。<para>The firmware file path.</para></param>
-    /// <param name="outputDirectory">解包输出目录。<para>The unpack output directory.</para></param>
-    /// <returns>解包操作结果。<para>The unpack operation result.</para></returns>
-    private Task<FirmwareOpResult> DispatchUnpackAsync(string path, string outputDirectory)
-    {
-        return FirmwareUnpackDispatcher.UnpackAsync(FormatName, path, outputDirectory, UnpackUnsupportedLabel,
-            allowSparse: true, runInBackground: true);
-    }
-
-    /// <summary>
-    /// <para>根据现有元数据（格式名、文件名/扩展名）判断当前文件是否为 AVB/vbmeta 镜像。</para>
-    /// Determines whether the current file is an AVB/vbmeta image from the existing metadata
-    /// (format name and file name/extension).
-    /// </summary>
-    private bool IsAvbFormat()
-    {
-        if (FormatName.Contains("AVB", StringComparison.OrdinalIgnoreCase) ||
-            FormatName.Contains("vbmeta", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (FilePath is null)
-        {
-            return false;
-        }
-
-        return Path.GetExtension(FilePath).Equals(".vbmeta", StringComparison.OrdinalIgnoreCase) ||
-               Path.GetFileName(FilePath).StartsWith("vbmeta", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

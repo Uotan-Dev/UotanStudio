@@ -1,4 +1,3 @@
-using System.Reflection;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Controls;
 using Dock.Model.Core;
@@ -63,7 +62,7 @@ public sealed class EntryPointCompatibilityTests
     }
 
     [Fact]
-    public async Task SparseUnpack_PreservesEditorRawFallback()
+    public async Task SparseUnpack_ProducesRawImageFile()
     {
         using var temp = new TempDirectory();
         var path = Path.Combine(temp.Path, "system.img");
@@ -73,12 +72,11 @@ public sealed class EntryPointCompatibilityTests
             using var stream = File.Create(path);
             sparse.WriteToStream(stream, sparse: true);
         }
-        var editor = new FirmwareInfoViewModel { FormatName = "Android Sparse Image (simg)" };
-        var dispatch = typeof(FirmwareInfoViewModel).GetMethod("DispatchUnpackAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var result = await (Task<UotanStudio.Services.Firmware.FirmwareOpResult>)dispatch.Invoke(editor,
-            [path, Path.Combine(temp.Path, "editor")])!;
+        var output = Path.Combine(temp.Path, "editor");
+        var result = await UotanStudio.Services.Firmware.FirmwareService.Instance
+            .UnpackSparseImageAsync(path, output, TestContext.Current.CancellationToken);
         Assert.True(result.Success, result.Summary);
-        var raw = Assert.Single(Directory.GetFiles(Path.Combine(temp.Path, "editor"), "*.raw"));
+        var raw = Assert.Single(Directory.GetFiles(output, "*.raw"));
         Assert.Equal(Enumerable.Repeat((byte)1, 4096), File.ReadAllBytes(raw));
     }
 

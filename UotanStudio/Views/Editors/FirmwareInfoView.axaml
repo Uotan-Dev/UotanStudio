@@ -8,20 +8,6 @@
              x:Class="UotanStudio.Views.Editors.FirmwareInfoView"
              x:DataType="viewmodels:FirmwareInfoViewModel">
   <DockPanel>
-    <!-- 动作工具栏：校验 / 解包到工程目录 -->
-    <Border DockPanel.Dock="Top" Padding="6,4" BorderBrush="{DynamicResource BorderBrush}"
-            BorderThickness="0,0,0,1">
-      <StackPanel Orientation="Horizontal" Spacing="6">
-        <Button Content="{x:Static viewmodels:FirmwareInfoViewModel.VerifyLabel}"
-                Command="{Binding VerifyCommand}" />
-        <Button Content="{x:Static viewmodels:FirmwareInfoViewModel.UnpackLabel}"
-                Command="{Binding UnpackCommand}" />
-        <TextBlock Text="{Binding OperationStatus}" FontSize="12" VerticalAlignment="Center"
-                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                   IsVisible="{Binding IsOperating}" />
-      </StackPanel>
-    </Border>
-
     <!-- 加载中提示条 -->
     <Border DockPanel.Dock="Top" Padding="12,8" BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
@@ -30,26 +16,10 @@
                  VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
     </Border>
 
-    <!-- 错误区 -->
-    <Border DockPanel.Dock="Top" Padding="12,8" Background="#22C42B1C"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
-            IsVisible="{Binding HasError}">
-      <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.ErrorLabel}"
-                   FontWeight="SemiBold" Foreground="Red" />
-        <TextBlock Text="{Binding ErrorMessage}" Foreground="Red" TextWrapping="Wrap" FontSize="12" />
-      </StackPanel>
-    </Border>
-
-    <!-- 操作结果区（校验摘要 / 解包结果） -->
-    <Border DockPanel.Dock="Top" Padding="12,8" Background="{DynamicResource ControlFillColorDefaultBrush}"
-            BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"
-            IsVisible="{Binding HasResult}">
-      <StackPanel Spacing="4">
-        <TextBlock Text="{x:Static viewmodels:FirmwareInfoViewModel.ResultLabel}"
-                   FontWeight="SemiBold" FontSize="12" />
-        <TextBlock Text="{Binding ResultText}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" />
-      </StackPanel>
+    <!-- 顶部错误提示条：与 FileManager 编辑器同一套样式。 -->
+    <!-- Top error banner: same styling as the FileManager editor. -->
+    <Border Classes="error-banner" DockPanel.Dock="Top" IsVisible="{Binding HasError}">
+      <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
     </Border>
 
     <ScrollViewer>

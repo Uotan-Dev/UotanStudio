@@ -200,13 +200,6 @@
     <x:String x:Key="Image_UnpackedDirectoryMissingMessage">The unpacked folder '{0}' does not exist.</x:String>
 
     <!-- FirmwareInfo actions -->
-    <x:String x:Key="FirmwareInfo_Verify">Verify</x:String>
-    <x:String x:Key="FirmwareInfo_UnpackToProject">Unpack to Project</x:String>
-    <x:String x:Key="FirmwareInfo_Result">Result</x:String>
-    <x:String x:Key="FirmwareInfo_Verifying">Verifying…</x:String>
-    <x:String x:Key="FirmwareInfo_Unpacking">Unpacking…</x:String>
-    <x:String x:Key="FirmwareInfo_NoProject">No project is open; cannot unpack.</x:String>
-    <x:String x:Key="FirmwareInfo_UnpackUnsupported">Unpacking to the project is not supported for this format.</x:String>
 
     <!-- Log channels -->
     <x:String x:Key="Log_Channel_All">All Channels</x:String>
