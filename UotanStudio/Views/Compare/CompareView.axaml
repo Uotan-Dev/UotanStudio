@@ -16,66 +16,353 @@
   <!-- Transparent background is required: Avalonia hit-testing only lands on elements with a
        Background, so without it InputHitTest fails on empty areas and DragDropDevice.GetTarget
        returns null, making the OS cursor show the "not allowed" glyph. -->
+  <UserControl.Resources>
+    <!-- 行模板（左/右）：目录树行渲染展开箭头 + 资源管理器图标 + 名称，文本行渲染行号 + 文本；
+         两侧共用同一份行列表，因此同名条目落在同一行、单侧条目在另一侧自动留空。
+         整行变色规则与 Beyond Compare 一致：不同 → 两侧整行高亮，仅单侧 → 该侧淡色背景。 -->
+    <!-- Row templates (left/right): a tree row renders the expander, the explorer glyph and the name, a text
+         row renders the line number and text. Both panes share one row list, so same-name entries share a row
+         and single-side entries stay blank on the other side. Whole-row colouring follows Beyond Compare:
+         different → both rows highlighted, single-side → that side tinted. -->
+    <DataTemplate x:Key="CompareLeftRowTemplate" x:DataType="vm:CompareRowViewModel">
+      <Grid ColumnDefinitions="3,*" MinHeight="20" ContextRequested="OnRowContextRequested">
+        <Grid.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="{DynamicResource Compare_CopyTextToOtherSide}" Tag="Left"
+                      IsVisible="{Binding ShowTextTransfer}" Click="OnCopyTextToOtherSide" />
+            <MenuItem Header="{DynamicResource Compare_DeleteSelectedRows}" Tag="Left"
+                      IsVisible="{Binding ShowTextTransfer}" Click="OnDeleteSelectedTextRows" />
+            <MenuItem Header="{DynamicResource Compare_CopyToOtherSide}" Tag="Left"
+                      IsVisible="{Binding ShowComparedTransfers}" Click="OnCopyToOtherSide" />
+            <MenuItem Header="{DynamicResource Compare_MoveToOtherSide}" Tag="Left"
+                      IsVisible="{Binding ShowComparedTransfers}" Click="OnMoveToOtherSide" />
+            <MenuItem Header="{DynamicResource Compare_CopyToLeftColumn}" Tag="Left"
+                      IsVisible="{Binding ShowBrowsingTransfers}" Click="OnCopyToNeighbourColumn" />
+            <MenuItem Header="{DynamicResource Compare_CopyToRightColumn}" Tag="Right"
+                      IsVisible="{Binding ShowBrowsingTransfers}" Click="OnCopyToNeighbourColumn" />
+            <MenuItem Header="{DynamicResource Compare_MoveToLeftColumn}" Tag="Left"
+                      IsVisible="{Binding ShowBrowsingTransfers}" Click="OnMoveToNeighbourColumn" />
+            <MenuItem Header="{DynamicResource Compare_MoveToRightColumn}" Tag="Right"
+                      IsVisible="{Binding ShowBrowsingTransfers}" Click="OnMoveToNeighbourColumn" />
+            <Separator IsVisible="{Binding ShowEntryMenu}" />
+            <MenuItem Header="{DynamicResource Menu_Delete}" IsVisible="{Binding ShowEntryMenu}" Tag="Left"
+                      Click="OnDeleteEntry" />
+            <MenuItem Header="{DynamicResource Explorer_Rename}" IsVisible="{Binding ShowEntryMenu}" Tag="Left"
+                      Click="OnRenameEntry" />
+            <MenuItem Header="{DynamicResource Explorer_NewFolder}" IsVisible="{Binding ShowEntryMenu}" Tag="Left"
+                      Click="OnCreateFolder" />
+            <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" IsVisible="{Binding ShowEntryMenu}" Tag="Left"
+                      Click="OnCopyEntryPath" />
+            <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" IsVisible="{Binding ShowEntryMenu}" Tag="Left"
+                      Click="OnOpenEntryInExplorer" />
+          </ContextMenu>
+        </Grid.ContextMenu>
+        <Border Grid.ColumnSpan="2" Background="{Binding LeftTintBrush}"
+                IsVisible="{Binding LeftTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <Border Grid.ColumnSpan="2" Background="{DynamicResource DiffBackgroundBrush}"
+                IsVisible="{Binding IsLeftDiff}" />
+        <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
+                Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsLeftEmpty}" />
+        <Grid Grid.Column="1" ColumnDefinitions="14,32,*,Auto"
+              Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}">
+          <avalonia:MaterialIcon Grid.Column="1" Kind="{Binding LeftIconKind}" Foreground="{Binding LeftIconBrush}"
+                                 Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                 IsVisible="{Binding ShowLeftIcon}" />
+          <TextBlock Grid.Column="1" Text="{Binding LeftLine}" FontSize="11" Opacity="0.6" MinWidth="32"
+                     TextAlignment="Right" VerticalAlignment="Center" Margin="4,0"
+                     IsVisible="{Binding !IsLeftEmpty}" />
+          <TextBlock Grid.Column="2" Text="{Binding LeftText}" FontFamily="Consolas" FontSize="12"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     IsVisible="{Binding ShowLeftText}" />
+          <!-- 文本对比中该行可编辑：直接在行内改文本，鼠标可拖拽选中，顶部两个复制按钮把选中行推到另一侧。 -->
+          <!-- Editable in a text comparison: the text is edited in place, mouse selection works, and the toolbar's copy
+               buttons push the selected rows to the other side. -->
+          <TextBox Grid.Column="2" Text="{Binding LeftText, Mode=TwoWay}" FontFamily="Consolas" FontSize="12"
+                   IsVisible="{Binding IsEditable}" BorderThickness="0" Background="Transparent" Padding="0"
+                   MinHeight="0" Height="20" VerticalContentAlignment="Center" AcceptsReturn="False"
+                   KeyDown="OnRowEditorKeyDown" />
+          <TextBlock Grid.Column="3" Text="{Binding LeftSub}" FontSize="11" Opacity="0.6"
+                     HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,6,0"
+                     IsVisible="{Binding !IsLeftEmpty}" />
+        </Grid>
+      </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="CompareRightRowTemplate" x:DataType="vm:CompareRowViewModel">
+      <Grid ColumnDefinitions="3,*" MinHeight="20" ContextRequested="OnRowContextRequested">
+        <Grid.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="{DynamicResource Compare_CopyTextToOtherSide}" Tag="Right"
+                      IsVisible="{Binding ShowTextTransfer}" Click="OnCopyTextToOtherSide" />
+            <MenuItem Header="{DynamicResource Compare_DeleteSelectedRows}" Tag="Right"
+                      IsVisible="{Binding ShowTextTransfer}" Click="OnDeleteSelectedTextRows" />
+            <MenuItem Header="{DynamicResource Compare_CopyToOtherSide}" Tag="Right"
+                      IsVisible="{Binding ShowComparedTransfers}" Click="OnCopyToOtherSide" />
+            <MenuItem Header="{DynamicResource Compare_MoveToOtherSide}" Tag="Right"
+                      IsVisible="{Binding ShowComparedTransfers}" Click="OnMoveToOtherSide" />
+            <Separator IsVisible="{Binding ShowEntryMenu}" />
+            <MenuItem Header="{DynamicResource Menu_Delete}" IsVisible="{Binding ShowEntryMenu}" Tag="Right"
+                      Click="OnDeleteEntry" />
+            <MenuItem Header="{DynamicResource Explorer_Rename}" IsVisible="{Binding ShowEntryMenu}" Tag="Right"
+                      Click="OnRenameEntry" />
+            <MenuItem Header="{DynamicResource Explorer_NewFolder}" IsVisible="{Binding ShowEntryMenu}" Tag="Right"
+                      Click="OnCreateFolder" />
+            <MenuItem Header="{DynamicResource Explorer_CopyFullPath}" IsVisible="{Binding ShowEntryMenu}" Tag="Right"
+                      Click="OnCopyEntryPath" />
+            <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" IsVisible="{Binding ShowEntryMenu}" Tag="Right"
+                      Click="OnOpenEntryInExplorer" />
+          </ContextMenu>
+        </Grid.ContextMenu>
+        <Border Grid.ColumnSpan="2" Background="{Binding RightTintBrush}"
+                IsVisible="{Binding RightTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <Border Grid.ColumnSpan="2" Background="{DynamicResource DiffBackgroundBrush}"
+                IsVisible="{Binding IsRightDiff}" />
+        <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
+                Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsRightEmpty}" />
+        <Grid Grid.Column="1" ColumnDefinitions="14,32,*,Auto"
+              Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}">
+          <avalonia:MaterialIcon Grid.Column="1" Kind="{Binding RightIconKind}" Foreground="{Binding RightIconBrush}"
+                                 Width="16" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                 IsVisible="{Binding ShowRightIcon}" />
+          <TextBlock Grid.Column="1" Text="{Binding RightLine}" FontSize="11" Opacity="0.6" MinWidth="32"
+                     TextAlignment="Right" VerticalAlignment="Center" Margin="4,0"
+                     IsVisible="{Binding !IsRightEmpty}" />
+          <TextBlock Grid.Column="2" Text="{Binding RightText}" FontFamily="Consolas" FontSize="12"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                     IsVisible="{Binding ShowRightText}" />
+          <TextBox Grid.Column="2" Text="{Binding RightText, Mode=TwoWay}" FontFamily="Consolas" FontSize="12"
+                   IsVisible="{Binding IsEditable}" BorderThickness="0" Background="Transparent" Padding="0"
+                   MinHeight="0" Height="20" VerticalContentAlignment="Center" AcceptsReturn="False"
+                   KeyDown="OnRowEditorKeyDown" />
+          <TextBlock Grid.Column="3" Text="{Binding RightSub}" FontSize="11" Opacity="0.6"
+                     HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,6,0"
+                     IsVisible="{Binding !IsRightEmpty}" />
+        </Grid>
+      </Grid>
+    </DataTemplate>
+
+    <!-- 单个文件列：列头（按钮在路径左侧，确认与关闭在路径右侧）+ 行列表。
+         列头按钮尺寸与 LogEditorView 顶部按钮一致（20×20，图标 12）。 -->
+    <!-- One file column: header (buttons left of the path, confirm/close right of it) plus the row list.
+         Header buttons match the LogEditorView toolbar size (20×20, 12 icon). -->
+    <DataTemplate x:Key="CompareColumnTemplate" x:DataType="vm:CompareColumnViewModel">
+      <DockPanel>
+        <Border DockPanel.Dock="Top" Padding="4,3"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="2">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+              <Button Classes="Small" Command="{Binding ReloadCommand}"
+                      ToolTip.Tip="{DynamicResource Compare_Refresh}"
+                      AutomationProperties.Name="{DynamicResource Compare_Refresh}">
+                <avalonia:MaterialIcon Kind="Refresh" />
+              </Button>
+              <Button Classes="Small" Command="{Binding GoUpCommand}"
+                      ToolTip.Tip="{DynamicResource Compare_GoUp}"
+                      AutomationProperties.Name="{DynamicResource Compare_GoUp}">
+                <avalonia:MaterialIcon Kind="ArrowUpBold" />
+              </Button>
+              <Button Classes="Small" Command="{Binding ToggleHexViewCommand}" IsVisible="{Binding ShowHexToggle}"
+                      ToolTip.Tip="{DynamicResource Compare_HexRaw}"
+                      AutomationProperties.Name="{DynamicResource Compare_HexRaw}">
+                <avalonia:MaterialIcon Kind="CodeBraces" />
+              </Button>
+              <Button Classes="Small" Command="{Binding PrevDiffCommand}" IsVisible="{Binding ShowDiffNavigation}"
+                      ToolTip.Tip="{DynamicResource Compare_PrevDiff}"
+                      AutomationProperties.Name="{DynamicResource Compare_PrevDiff}">
+                <avalonia:MaterialIcon Kind="ArrowUp" />
+              </Button>
+              <Button Classes="Small" Command="{Binding NextDiffCommand}" IsVisible="{Binding ShowDiffNavigation}"
+                      ToolTip.Tip="{DynamicResource Compare_NextDiff}"
+                      AutomationProperties.Name="{DynamicResource Compare_NextDiff}">
+                <avalonia:MaterialIcon Kind="ArrowDown" />
+              </Button>
+            </StackPanel>
+            <TextBox Grid.Column="1" Classes="Small" Height="22" MinHeight="0" FontSize="11" Padding="4,0"
+                     FontFamily="Consolas" VerticalContentAlignment="Center"
+                     Text="{Binding Path, Mode=TwoWay}" ToolTip.Tip="{Binding Path}"
+                     PlaceholderText="{DynamicResource Compare_PathPlaceholder}"
+                     AutomationProperties.Name="{DynamicResource Compare_PathPlaceholder}" />
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+              <Button Classes="Small" Command="{Binding ConfirmPathCommand}"
+                      ToolTip.Tip="{DynamicResource Compare_LoadPath}"
+                      AutomationProperties.Name="{DynamicResource Compare_LoadPath}">
+                <avalonia:MaterialIcon Kind="Check" />
+              </Button>
+              <!-- 文本对比编辑后出现：把本列内容写回文件（保留原编码与换行风格）。 -->
+              <!-- Appears after text-comparison edits: writes this column's content back to the file. -->
+              <Button Classes="Small" Command="{Binding SaveCommand}" IsVisible="{Binding IsDirty}"
+                      ToolTip.Tip="{DynamicResource Compare_SaveFile}"
+                      AutomationProperties.Name="{DynamicResource Compare_SaveFile}">
+                <avalonia:MaterialIcon Kind="ContentSave" />
+              </Button>
+              <Button Classes="Small" Command="{Binding CloseCommand}" IsVisible="{Binding CanClose}"
+                      ToolTip.Tip="{DynamicResource Compare_CloseColumn}"
+                      AutomationProperties.Name="{DynamicResource Compare_CloseColumn}">
+                <avalonia:MaterialIcon Kind="Close" />
+              </Button>
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <ProgressBar DockPanel.Dock="Top" IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
+
+        <Grid>
+          <!-- 左单元格行列表：浏览列显示目录树行或文件内容，对比左列显示对比结果左侧。 -->
+          <!-- Left-cell row list: a browsing column shows tree rows or file content, the compare left column
+               shows the comparison's left side. -->
+          <ListBox x:Name="LeftCellsList" ItemsSource="{Binding Rows}" IsVisible="{Binding ShowLeftCells}"
+                   Classes="compare-rows" SelectionChanged="OnRowSelectionChanged"
+                   SelectionMode="{Binding RowSelectionMode}"
+                   AutoScrollToSelectedItem="False" Background="Transparent"
+                   DoubleTapped="OnRowDoubleTapped"
+                   KeyDown="OnRowListKeyDown"
+                   PointerPressed="OnRowPointerPressed" PointerMoved="OnRowPointerMoved"
+                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   ItemTemplate="{StaticResource CompareLeftRowTemplate}" />
+
+          <!-- 右单元格行列表：仅对比右列使用。 -->
+          <!-- Right-cell row list: used by the compare right column only. -->
+          <ListBox x:Name="RightCellsList" ItemsSource="{Binding Rows}" IsVisible="{Binding ShowRightCells}"
+                   Classes="compare-rows" SelectionChanged="OnRowSelectionChanged"
+                   SelectionMode="{Binding RowSelectionMode}"
+                   AutoScrollToSelectedItem="False" Background="Transparent"
+                   DoubleTapped="OnRowDoubleTapped"
+                   KeyDown="OnRowListKeyDown"
+                   PointerPressed="OnRowPointerPressed" PointerMoved="OnRowPointerMoved"
+                   ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   ItemTemplate="{StaticResource CompareRightRowTemplate}" />
+
+          <!-- 列内空态提示 -->
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6" Margin="12"
+                      IsVisible="{Binding ShowHint}">
+            <avalonia:MaterialIcon Kind="FolderSearchOutline" Width="24" Height="24" Opacity="0.3"
+                                   HorizontalAlignment="Center" />
+            <TextBlock Text="{DynamicResource Compare_ColumnHint}" IsVisible="{Binding IsBrowsing}"
+                       FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
+            <TextBlock Text="{DynamicResource Compare_CompareEmpty}" IsVisible="{Binding IsCompareSide}"
+                       FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
+          </StackPanel>
+        </Grid>
+      </DockPanel>
+    </DataTemplate>
+
+    <!-- 列间隔的 1px 分割线；可拖动的 GridSplitter 由代码直接放进列网格（放进模板内无法定位
+         自己的列，导致拖不动）。 -->
+    <!-- The 1px divider line of a column gap; the draggable GridSplitter is placed directly in the column
+         grid by code (inside a template it cannot resolve its own column and never drags). -->
+    <ControlTemplate x:Key="CompareDividerTemplate">
+      <Border Width="1" HorizontalAlignment="Center"
+              Background="{DynamicResource EditorPaneSplitterBackgroundBrush}"
+              IsHitTestVisible="False" />
+    </ControlTemplate>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <!-- 顶部与列头按钮尺寸参考 LogEditorView（20×20，图标 12）。 -->
+    <!-- Toolbar and column-header buttons match LogEditorView's size (20×20, 12 icon). -->
+    <Style Selector="Button.Small">
+      <Setter Property="Width" Value="20" />
+      <Setter Property="Height" Value="20" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.Small avalonia|MaterialIcon">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+    </Style>
+    <!-- 目录树行的展开箭头：透明背景、只在悬停时给出反馈，尺寸对齐行高。 -->
+    <!-- The tree row's expander: transparent, hover feedback only, sized to the row height. -->
+    <Style Selector="Button.tree-expander">
+      <Setter Property="Width" Value="14" />
+      <Setter Property="Height" Value="14" />
+      <Setter Property="MinWidth" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tree-expander avalonia|MaterialIcon">
+      <Setter Property="Width" Value="12" />
+      <Setter Property="Height" Value="12" />
+      <Setter Property="Opacity" Value="0.7" />
+    </Style>
+    <!-- 行列表：行内容自绘边框与背景，容器不额外留白。 -->
+    <!-- Row lists: rows draw their own border and background, containers add no padding. -->
+    <Style Selector="ListBox.compare-rows">
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.compare-rows > ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0" />
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+  </UserControl.Styles>
+
   <Grid Background="Transparent">
-    <!-- 空态提示：尚无比较内容时展示（拖入文件/文件夹或从「工具」菜单选择） -->
+    <!-- 空态提示：尚无任何文件列内容时展示（拖入文件/文件夹，或用顶部「添加文件夹」）。 -->
     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
-                IsVisible="{Binding !HasComparison}">
+                IsVisible="{Binding IsEmptyDocument}">
       <avalonia:MaterialIcon Kind="FileCompare" Width="48" Height="48" Opacity="0.35"
                              HorizontalAlignment="Center" />
       <TextBlock Text="{DynamicResource Compare_DropHint}" FontSize="14" Opacity="0.7"
                  HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
     </StackPanel>
 
-    <!-- 统一双栏对比视图：文件夹 / 文本 / 二进制共用同一套左右双栏布局，
-         行模板由 CompareRowViewModel 的 Left* / Right* 属性驱动。 -->
-    <DockPanel IsVisible="{Binding HasComparison}">
-      <!-- 按模式切换工具栏，路径显示在各侧栏头部。 -->
+    <DockPanel>
+      <!-- 顶栏：左侧两个复制按钮，右侧「开启/结束对比」与「添加文件夹」；其余按钮在各列路径行。 -->
+      <!-- Toolbar: the two copy buttons on the left, start/stop-compare and add-folder on the right; every
+           other button lives on a column's path row. -->
       <Border DockPanel.Dock="Top" Padding="6,4"
               BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-        <WrapPanel>
-          <WrapPanel.Styles>
-            <Style Selector="Button">
-              <Setter Property="Width" Value="28" />
-              <Setter Property="Height" Value="26" />
-              <Setter Property="Padding" Value="4" />
-              <Setter Property="Margin" Value="0,0,4,0" />
-            </Style>
-            <Style Selector="avalonia|MaterialIcon">
-              <Setter Property="Width" Value="14" />
-              <Setter Property="Height" Value="14" />
-            </Style>
-          </WrapPanel.Styles>
-          <StackPanel Orientation="Horizontal" IsVisible="{Binding IsFolderMode}">
-            <Button ToolTip.Tip="{DynamicResource Compare_Refresh}" Command="{Binding RefreshCommand}">
-              <avalonia:MaterialIcon Kind="Refresh" />
-            </Button>
-            <Button ToolTip.Tip="{DynamicResource Compare_CopyLeftToRight}" Command="{Binding CopyLeftToRightCommand}">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+          <TextBlock Grid.Column="0" Text="{Binding StatsText}" FontSize="12" VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" />
+          <!-- 两个复制按钮放在顶栏中间，且仅在对比状态下显示。 -->
+          <!-- The two copy buttons sit in the middle of the toolbar and only appear while comparing. -->
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                      HorizontalAlignment="Center" IsVisible="{Binding IsComparing}">
+            <Button Classes="Small" Command="{Binding CopyLeftToRightCommand}"
+                    ToolTip.Tip="{DynamicResource Compare_CopyLeftToRight}"
+                    AutomationProperties.Name="{DynamicResource Compare_CopyLeftToRight}">
               <avalonia:MaterialIcon Kind="ArrowRight" />
             </Button>
-            <Button ToolTip.Tip="{DynamicResource Compare_CopyRightToLeft}" Command="{Binding CopyRightToLeftCommand}">
+            <Button Classes="Small" Command="{Binding CopyRightToLeftCommand}"
+                    ToolTip.Tip="{DynamicResource Compare_CopyRightToLeft}"
+                    AutomationProperties.Name="{DynamicResource Compare_CopyRightToLeft}">
               <avalonia:MaterialIcon Kind="ArrowLeft" />
             </Button>
-            <Button ToolTip.Tip="{DynamicResource Compare_DeleteLeft}" Command="{Binding DeleteLeftCommand}">
-              <avalonia:MaterialIcon Kind="Delete" />
+          </StackPanel>
+          <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+            <Button Classes="Small" Command="{Binding ToggleCompareCommand}"
+                    AutomationProperties.Name="{DynamicResource Compare_StartCompare}">
+              <ToolTip.Tip>
+                <Panel>
+                  <TextBlock Text="{DynamicResource Compare_StartCompare}" IsVisible="{Binding !IsComparing}" />
+                  <TextBlock Text="{DynamicResource Compare_StopCompare}" IsVisible="{Binding IsComparing}" />
+                </Panel>
+              </ToolTip.Tip>
+              <Panel>
+                <avalonia:MaterialIcon Kind="FileCompare" IsVisible="{Binding !IsComparing}" />
+                <avalonia:MaterialIcon Kind="CloseCircleOutline" IsVisible="{Binding IsComparing}" />
+              </Panel>
             </Button>
-            <Button ToolTip.Tip="{DynamicResource Compare_DeleteRight}" Command="{Binding DeleteRightCommand}">
-              <avalonia:MaterialIcon Kind="DeleteOutline" />
+            <Button Classes="Small" Click="OnAddFoldersClick"
+                    ToolTip.Tip="{DynamicResource Compare_AddFolder}"
+                    AutomationProperties.Name="{DynamicResource Compare_AddFolder}">
+              <avalonia:MaterialIcon Kind="FolderPlusOutline" />
             </Button>
           </StackPanel>
-          <Button IsVisible="{Binding IsBinaryMode}" ToolTip.Tip="{DynamicResource Compare_HexRaw}" Command="{Binding ToggleHexViewCommand}">
-            <avalonia:MaterialIcon Kind="CodeBraces" />
-          </Button>
-          <StackPanel Orientation="Horizontal" IsVisible="{Binding !IsFolderMode}">
-            <Button ToolTip.Tip="{DynamicResource Compare_PrevDiff}" Command="{Binding PrevDiffCommand}">
-              <avalonia:MaterialIcon Kind="ArrowUp" />
-            </Button>
-            <Button ToolTip.Tip="{DynamicResource Compare_NextDiff}" Command="{Binding NextDiffCommand}">
-              <avalonia:MaterialIcon Kind="ArrowDown" />
-            </Button>
-          </StackPanel>
-          <TextBlock Text="{Binding StatsText}" IsVisible="{Binding IsTextMode}" FontSize="12"
-                     VerticalAlignment="Center" TextWrapping="Wrap" />
-        </WrapPanel>
+        </Grid>
       </Border>
 
       <!-- 错误区 -->
@@ -85,153 +372,16 @@
         <TextBlock Text="{Binding ErrorMessage}" Foreground="Red" TextWrapping="Wrap" FontSize="12" />
       </Border>
 
-      <!-- 主体：左栏 / 分隔线 / 右栏 -->
-      <Grid ColumnDefinitions="*,1,*">
-        <!-- 左栏 -->
-        <Border Grid.Column="0">
-          <DockPanel>
-            <Border DockPanel.Dock="Top" Padding="6,4"
-                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                <TextBlock Text="{DynamicResource Compare_Left}" FontWeight="SemiBold" FontSize="11" />
-                <TextBlock Grid.Column="1" Text="{Binding LeftPath}" ToolTip.Tip="{Binding LeftPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-              </Grid>
-            </Border>
-            <Grid>
-              <ListBox x:Name="LeftList"
-                       ItemsSource="{Binding LeftRows}"
-                       SelectionChanged="OnLeftSelectionChanged"
-                       AutoScrollToSelectedItem="False"
-                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                       ScrollViewer.VerticalScrollBarVisibility="Auto"
-                       Background="Transparent">
-                <ListBox.ItemContainerTheme>
-                  <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                    <Setter Property="Padding" Value="0" />
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                  </ControlTheme>
-                </ListBox.ItemContainerTheme>
-                <ListBox.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <VirtualizingStackPanel />
-                  </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-                <ListBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:CompareRowViewModel">
-                    <Grid ColumnDefinitions="3,Auto,*,Auto" MinHeight="20">
-                      <!-- 仅左侧条目的橙色调淡色背景（Overlay） -->
-                      <Border Grid.ColumnSpan="4" Background="{Binding LeftTintBrush}"
-                              IsVisible="{Binding LeftTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                      <!-- 差异行整行高亮（Overlay：主题画刷随明暗主题切换） -->
-                      <Border Grid.ColumnSpan="4" Background="{DynamicResource DiffBackgroundBrush}"
-                              IsVisible="{Binding IsLeftDiff}" />
-                      <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
-                              Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsLeftEmpty}" />
-                      <TextBlock Grid.Column="1" Text="{Binding LeftLine}" FontSize="11" Opacity="0.6"
-                                 MinWidth="32" TextAlignment="Right" VerticalAlignment="Center" Margin="4,0"
-                                 IsVisible="{Binding !IsLeftEmpty}" />
-                      <TextBlock Grid.Column="2" Text="{Binding LeftText}" FontFamily="Consolas" FontSize="12"
-                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                 Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}"
-                                 IsVisible="{Binding !IsLeftEmpty}" />
-                      <TextBlock Grid.Column="3" Text="{Binding LeftSub}" FontSize="11" Opacity="0.6"
-                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,6,0"
-                                 IsVisible="{Binding !IsLeftEmpty}" />
-                    </Grid>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-
-              <!-- 左栏空态提示：单侧留空等待拖入补齐 -->
-              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"
-                          IsVisible="{Binding !HasLeft}">
-                <TextBlock Text="{DynamicResource Compare_DropRightFolder}" IsVisible="{Binding IsFolderMode}"
-                           FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
-                <TextBlock Text="{DynamicResource Compare_DropRightFile}" IsVisible="{Binding !IsFolderMode}"
-                           FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
-              </StackPanel>
-            </Grid>
-          </DockPanel>
-        </Border>
-
-        <!-- 中部分隔线 -->
-        <Border Grid.Column="1" Background="{DynamicResource BorderBrush}" />
-
-        <!-- 右栏 -->
-        <Border Grid.Column="2">
-          <DockPanel>
-            <Border DockPanel.Dock="Top" Padding="6,4"
-                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="4">
-                <TextBlock Text="{DynamicResource Compare_Right}" FontWeight="SemiBold" FontSize="11" />
-                <TextBlock Grid.Column="1" Text="{Binding RightPath}" ToolTip.Tip="{Binding RightPath}" FontSize="11" Opacity="0.7" VerticalAlignment="Center"
-                           TextTrimming="CharacterEllipsis" />
-              </Grid>
-            </Border>
-            <Grid>
-              <ListBox x:Name="RightList"
-                       ItemsSource="{Binding RightRows}"
-                       SelectionChanged="OnRightSelectionChanged"
-                       AutoScrollToSelectedItem="False"
-                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                       ScrollViewer.VerticalScrollBarVisibility="Auto"
-                       Background="Transparent">
-                <ListBox.ItemContainerTheme>
-                  <ControlTheme TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-                    <Setter Property="Padding" Value="0" />
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                  </ControlTheme>
-                </ListBox.ItemContainerTheme>
-                <ListBox.ItemsPanel>
-                  <ItemsPanelTemplate>
-                    <VirtualizingStackPanel />
-                  </ItemsPanelTemplate>
-                </ListBox.ItemsPanel>
-                <ListBox.ItemTemplate>
-                  <DataTemplate x:DataType="vm:CompareRowViewModel">
-                    <Grid ColumnDefinitions="3,Auto,*,Auto" MinHeight="20">
-                      <!-- 仅右侧条目的蓝色调淡色背景（Overlay） -->
-                      <Border Grid.ColumnSpan="4" Background="{Binding RightTintBrush}"
-                              IsVisible="{Binding RightTintBrush, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                      <!-- 差异行整行高亮（Overlay：主题画刷随明暗主题切换） -->
-                      <Border Grid.ColumnSpan="4" Background="{DynamicResource DiffBackgroundBrush}"
-                              IsVisible="{Binding IsRightDiff}" />
-                      <Border Grid.Column="0" Width="3" Background="{Binding StatusBrush}"
-                              Margin="2,3" CornerRadius="2" IsVisible="{Binding !IsRightEmpty}" />
-                      <TextBlock Grid.Column="1" Text="{Binding RightLine}" FontSize="11" Opacity="0.6"
-                                 MinWidth="32" TextAlignment="Right" VerticalAlignment="Center" Margin="4,0"
-                                 IsVisible="{Binding !IsRightEmpty}" />
-                      <TextBlock Grid.Column="2" Text="{Binding RightText}" FontFamily="Consolas" FontSize="12"
-                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                 Margin="{Binding Depth, Converter={x:Static compareviews:DepthToIndentConverter.Instance}}"
-                                 IsVisible="{Binding !IsRightEmpty}" />
-                      <TextBlock Grid.Column="3" Text="{Binding RightSub}" FontSize="11" Opacity="0.6"
-                                 HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8,0,6,0"
-                                 IsVisible="{Binding !IsRightEmpty}" />
-                    </Grid>
-                  </DataTemplate>
-                </ListBox.ItemTemplate>
-              </ListBox>
-
-              <!-- 右栏空态提示：单侧留空等待拖入补齐 -->
-              <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"
-                          IsVisible="{Binding !HasRight}">
-                <TextBlock Text="{DynamicResource Compare_DropRightFolder}" IsVisible="{Binding IsFolderMode}"
-                           FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
-                <TextBlock Text="{DynamicResource Compare_DropRightFile}" IsVisible="{Binding !IsFolderMode}"
-                           FontSize="12" Opacity="0.6" TextAlignment="Center" TextWrapping="Wrap" />
-              </StackPanel>
-            </Grid>
-          </DockPanel>
-        </Border>
-      </Grid>
+      <!-- 文件列由代码按列集合动态生成：每列之间插入分割线与可拖动分隔条。 -->
+      <!-- File columns are generated from the column collection: a divider and a draggable splitter sit
+           between them. -->
+      <Grid x:Name="ColumnGrid" ClipToBounds="True" />
     </DockPanel>
 
     <!-- 加载中的 busy 指示：大文件比对 / 十六进制原始视图扫描期间显示（命令执行时按钮自身
          也会变灰禁用，二者配合给出明确的进行中反馈）。 -->
-    <!-- Busy indicator while loading: shown during large-file comparisons / hex raw scans (the
-         executing command also disables its button, together giving clear in-progress feedback). -->
+    <!-- Busy indicator while loading: shown during large-file comparisons / hex raw scans (the executing
+         command also disables its button, together giving clear in-progress feedback). -->
     <Grid IsVisible="{Binding IsBusy}" IsHitTestVisible="False" Background="#22000000">
       <ProgressBar Width="160" Height="6" IsIndeterminate="True"
                    HorizontalAlignment="Center" VerticalAlignment="Center" />

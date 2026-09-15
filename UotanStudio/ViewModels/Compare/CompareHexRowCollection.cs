@@ -281,7 +281,6 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
         var offsetText = offset.ToString("X8", CultureInfo.InvariantCulture);
         return new CompareRowViewModel(
             status,
-            isDirectory: false,
             depth: 0,
             leftLine: leftMissing ? string.Empty : offsetText,
             leftText: FormatHex(slot.Left, slot.LeftCount),
@@ -290,7 +289,9 @@ public sealed class CompareHexRowCollection : IReadOnlyList<CompareRowViewModel>
             rightLine: rightMissing ? string.Empty : offsetText,
             rightText: FormatHex(slot.Right, slot.RightCount),
             rightSub: FormatAscii(slot.Right, slot.RightCount),
-            isRightDiff);
+            isRightDiff,
+            hasLeftLine: !leftMissing,
+            hasRightLine: !rightMissing);
     }
 
     /// <summary>

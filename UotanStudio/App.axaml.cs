@@ -110,6 +110,7 @@ public partial class App : Application
         WeakReferenceMessenger.Default.Register<OpenScreenMirrorRequestMessage>(this, OnOpenScreenMirror);
         WeakReferenceMessenger.Default.Register<AddSubProjectRequestMessage>(this, OnAddSubProject);
         WeakReferenceMessenger.Default.Register<OpenFileCompareRequestMessage>(this, OnOpenFileCompare);
+        WeakReferenceMessenger.Default.Register<OpenFileCompareInNewTabRequestMessage>(this, OnOpenFileCompareInNewTab);
         WeakReferenceMessenger.Default.Register<OpenFolderCompareRequestMessage>(this, OnOpenFolderCompare);
 
     }
@@ -282,6 +283,18 @@ public partial class App : Application
     private async void OnOpenFileCompare(object recipient, OpenFileCompareRequestMessage message)
         => await RunCompareRequestAsync("Open file compare failed",
             compare => compare.OpenCompareFilesAsync(message.LeftPath, message.RightPath));
+
+    /// <summary>
+    /// <para>响应「在新标签打开文件比较」请求：新建一个对比文档并载入两侧文件（一侧为空时该侧留白），
+    /// 当前标签（目录对比）保持不变。</para>
+    /// Responds to the "open the file comparison in a new tab" request: creates an additional compare document and
+    /// loads both files (an empty side stays blank), leaving the current tab (the folder comparison) untouched.
+    /// </summary>
+    private async void OnOpenFileCompareInNewTab(object recipient, OpenFileCompareInNewTabRequestMessage message)
+        => await RunMainRequestAsync("Open file compare in new tab failed", main =>
+            main.WorkspaceVM.OpenNewCompareDocument() is { } compare
+                ? compare.OpenCompareFilesAsync(message.LeftPath, message.RightPath)
+                : Task.CompletedTask);
 
     /// <summary>
     /// <para>响应文件夹比较请求消息，在工作区对比文档中载入两个目录。</para>

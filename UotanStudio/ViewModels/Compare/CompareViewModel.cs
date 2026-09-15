@@ -1,20 +1,37 @@
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Compare;
 
 namespace UotanStudio.ViewModels.Compare;
 
 /// <summary>
-/// <para>双栏比较文档，管理展示状态、取消、缓存和命令协调。
-/// 文件读取与比较交给注入的后端，展示行由独立构建器生成；二进制差异仍按需扫描。</para>
-/// Owns display state, cancellation, caches and commands for a two-column comparison.
-/// An injected backend reads and compares files; a separate builder projects display rows.
-/// Binary difference scans remain lazy.
+/// <para>对比文档：以「文件列」的形式并排展示目录树 / 文件内容，既可作为普通文件浏览器使用，也可以
+/// 在其中两列之间开启对比。列数不设上限（浏览用），开启对比后只使用其中两列。</para>
+/// <para>对比逻辑与 Beyond Compare 一致：目录对比把两侧压平成**同一份对齐行列表**——同名条目落在同一行、
+/// 单侧条目在另一侧自动留空、差异行整行变色、两侧共用一套展开状态（一侧展开即两侧同步展开），两栏并排
+/// 滚动；双击文件不占用当前视图，而是在新标签打开文件对比。</para>
+/// Compare document: file columns laid out side by side, each showing a directory tree or a file's content,
+/// so it doubles as a plain file browser while any two columns can be compared. The comparison follows
+/// Beyond Compare's logic: a folder comparison flattens both sides into one aligned row list — same-name
+/// entries share a row, single-side entries stay blank on the other side, differing rows are coloured as a
+/// whole, both sides share one expansion state (expanding one side expands the other) and the panes scroll
+/// together; double-clicking a file opens its comparison in a new tab instead of taking over this view.
 /// </summary>
 public sealed partial class CompareViewModel : Document
 {
+    /// <summary>
+    /// <para>文档打开时的默认列数：两列既是最常见的浏览布局，也是对比所需的列数。</para>
+    /// Columns created when the document opens: two columns is both the common browsing layout and the number
+    /// a comparison needs.
+    /// </summary>
+    private const int DefaultColumnCount = 2;
+
     private readonly IComparisonService _comparison;
 
     /// <summary>Creates a compare document with the default file-comparison services.</summary>
@@ -25,43 +42,88 @@ public sealed partial class CompareViewModel : Document
     {
         ArgumentNullException.ThrowIfNull(comparison);
         _comparison = comparison;
+        for (var index = 0; index < DefaultColumnCount; index++)
+        {
+            Columns.Add(new CompareColumnViewModel(this));
+        }
+
+        Columns.CollectionChanged += OnColumnsChanged;
     }
 
     private CancellationTokenSource _loadCts = new();
-    private FolderCompareResult? _lastFolderResult;
-    private List<FolderCompareItem> _folderItems = [];
+    private CompareTreeNodeViewModel? _compareTreeRoot;
     private ComparisonMetadata? _leftMetadata;
     private ComparisonMetadata? _rightMetadata;
     private CompareHexRowCollection? _currentHexRows;
     private string _statsText = string.Empty;
+    private string _folderSummaryText = string.Empty;
+    private string _leftPath = string.Empty;
+    private string _rightPath = string.Empty;
+    private string _fileLeftPath = string.Empty;
+    private string _fileRightPath = string.Empty;
+    private CompareColumnViewModel? _leftColumn;
+    private CompareColumnViewModel? _rightColumn;
+    private List<int> _selectedRowIndices = [];
+    private bool _dirtyLeft;
+    private bool _dirtyRight;
+    private ObservableCollection<CompareRowViewModel>? _textRows;
 
     /// <summary>
-    /// <para>左侧路径：文件夹比较时为目录，文本/二进制比较时为文件。</para>
-    /// The left path: a directory in folder mode, a file in text/binary mode.
+    /// <para>文档中的文件列；可以任意追加，对比只使用其中两列。</para>
+    /// The document's file columns; any number can be appended and a comparison uses two of them.
     /// </summary>
-    [ObservableProperty] private string _leftPath = string.Empty;
+    public ObservableCollection<CompareColumnViewModel> Columns { get; } = [];
 
     /// <summary>
-    /// <para>右侧路径：文件夹比较时为目录，文本/二进制比较时为文件；单侧比较时为空。</para>
-    /// The right path: a directory in folder mode, a file in text/binary mode; empty for single-side
-    /// comparisons.
+    /// <para>对比后端：列内容读取（文本/元数据）、目录比对与文件复制的边界。</para>
+    /// The comparison backend: the boundary for column content reads (text/metadata), directory comparison and
+    /// file copy.
     /// </summary>
-    [ObservableProperty] private string _rightPath = string.Empty;
+    internal IComparisonService Comparison => _comparison;
 
     /// <summary>
-    /// <para>当前选中行在 <see cref="Rows"/> 中的索引；无选中时重置为 -1。</para>
-    /// The index of the selected row within <see cref="Rows"/>; -1 when nothing is selected.
+    /// <para>左侧列路径：对比中为左列路径，否则为第一个文件列的路径（供会话快照持久化）。</para>
+    /// The left column's path: the compare left column while comparing, otherwise the first file column (used
+    /// by the session snapshot).
+    /// </summary>
+    public string LeftPath => (_leftColumn ?? Columns.ElementAtOrDefault(0))?.Path ?? string.Empty;
+
+    /// <summary>
+    /// <para>右侧列路径：对比中为右列路径，否则为第二个文件列的路径（供会话快照持久化）。</para>
+    /// The right column's path: the compare right column while comparing, otherwise the second file column
+    /// (used by the session snapshot).
+    /// </summary>
+    public string RightPath => (_rightColumn ?? Columns.ElementAtOrDefault(1))?.Path ?? string.Empty;
+
+    /// <summary>
+    /// <para>文档中是否还没有任何内容（驱动拖入提示的显示）。</para>
+    /// Whether the document holds no content yet (drives the drop hint).
+    /// </summary>
+    public bool IsEmptyDocument => Columns.All(column => !column.HasPath);
+
+    /// <summary>
+    /// <para>是否正在对比：目录对比时两列显示同一份对齐的目录树行，文件对比时显示对齐的差异行。</para>
+    /// Whether a comparison is active: a folder comparison shows both columns the same aligned tree rows, and a
+    /// file comparison shows aligned diff rows.
+    /// </summary>
+    [ObservableProperty] private bool _isComparing;
+
+    /// <summary>
+    /// <para>当前选中行在 <see cref="Rows"/> 中的索引；无选中时重置为 -1。两栏共享同一份行列表，
+    /// 因此选中索引就是两侧共同的行号。</para>
+    /// The index of the selected row within <see cref="Rows"/>; -1 when nothing is selected. Both panes share
+    /// one row list, so the selection index is the row number on both sides.
     /// </summary>
     [ObservableProperty] private int _selectedIndex = -1;
 
     /// <summary>
-    /// <para>差异导航滚动请求：由上一处/下一处差异命令写入目标行索引，视图据此把两栏
+    /// <para>差异导航滚动请求：由上一处/下一处差异命令写入目标行索引，视图据此把两列
     /// 顶部对齐滚动到该行；普通点选不写此属性（不触发滚动）。先写 -1 再写目标值以保证
     /// 同一索引重复导航也能再次触发属性通知。</para>
-    /// Diff-navigation scroll request: written by the prev/next-diff commands with the target row
-    /// index; the view top-aligns both panes to that row. Plain clicks never write it (no scroll
-    /// happens). Written as -1 first, then the target, so re-navigating to the same index still
-    /// raises a property-change notification.
+    /// Diff-navigation scroll request: written by the prev/next-diff commands with the target row index; the
+    /// view top-aligns both columns to that row. Plain clicks never write it (no scroll happens). Written as
+    /// -1 first, then the target, so re-navigating to the same index still raises a property-change
+    /// notification.
     /// </summary>
     [ObservableProperty] private int _scrollToIndex = -1;
 
@@ -84,56 +146,32 @@ public sealed partial class CompareViewModel : Document
     [ObservableProperty] private string _errorMessage = string.Empty;
 
     /// <summary>
-    /// <para>相同条目数（文件夹模式）。</para>
-    /// Count of equal items (folder mode).
+    /// <para>相同条目数（文件夹对比）。</para>
+    /// Count of equal items (folder comparison).
     /// </summary>
     [ObservableProperty] private int _equalCount;
 
     /// <summary>
-    /// <para>不同条目数（文件夹模式）。</para>
-    /// Count of different items (folder mode).
+    /// <para>不同条目数（文件夹对比）。</para>
+    /// Count of different items (folder comparison).
     /// </summary>
     [ObservableProperty] private int _differentCount;
 
     /// <summary>
-    /// <para>仅左侧条目数（文件夹模式）。</para>
-    /// Count of left-only items (folder mode).
+    /// <para>仅左侧条目数（文件夹对比）。</para>
+    /// Count of left-only items (folder comparison).
     /// </summary>
     [ObservableProperty] private int _leftOnlyCount;
 
     /// <summary>
-    /// <para>仅右侧条目数（文件夹模式）。</para>
-    /// Count of right-only items (folder mode).
+    /// <para>仅右侧条目数（文件夹对比）。</para>
+    /// Count of right-only items (folder comparison).
     /// </summary>
     [ObservableProperty] private int _rightOnlyCount;
 
     /// <summary>
-    /// <para>是否显示相同条目（文件夹过滤开关）。</para>
-    /// Whether equal items are shown (folder filter toggle).
-    /// </summary>
-    [ObservableProperty] private bool _showEqual = true;
-
-    /// <summary>
-    /// <para>是否显示不同条目（文件夹过滤开关）。</para>
-    /// Whether different items are shown (folder filter toggle).
-    /// </summary>
-    [ObservableProperty] private bool _showDifferent = true;
-
-    /// <summary>
-    /// <para>是否显示仅左侧条目（文件夹过滤开关）。</para>
-    /// Whether left-only items are shown (folder filter toggle).
-    /// </summary>
-    [ObservableProperty] private bool _showLeftOnly = true;
-
-    /// <summary>
-    /// <para>是否显示仅右侧条目（文件夹过滤开关）。</para>
-    /// Whether right-only items are shown (folder filter toggle).
-    /// </summary>
-    [ObservableProperty] private bool _showRightOnly = true;
-
-    /// <summary>
-    /// <para>当前展示模式。</para>
-    /// The active display mode.
+    /// <para>当前对比模式；未对比时为 <see cref="CompareMode.None"/>。</para>
+    /// The active comparison mode; <see cref="CompareMode.None"/> while not comparing.
     /// </summary>
     public CompareMode Mode
     {
@@ -147,11 +185,10 @@ public sealed partial class CompareViewModel : Document
 
             _mode = value;
             OnPropertyChanged();
-            OnPropertyChanged(nameof(HasComparison));
             OnPropertyChanged(nameof(IsFolderMode));
             OnPropertyChanged(nameof(IsTextMode));
             OnPropertyChanged(nameof(IsBinaryMode));
-            RebuildSideRows();
+            NotifyColumnsCompareState();
         }
     }
 
@@ -179,8 +216,11 @@ public sealed partial class CompareViewModel : Document
     private BinaryViewKind _binaryViewKind = BinaryViewKind.Metadata;
 
     /// <summary>
-    /// <para>当前展示的对比行列表；尚无比较内容时为 <c>null</c>。</para>
-    /// The currently displayed compare rows; <c>null</c> when there is no comparison.
+    /// <para>当前对比结果行；两栏共享同一份列表（分别渲染左侧/右侧单元格），因此同名条目落在同一行、
+    /// 单侧条目在另一侧留空。目录对比给的是压平后的目录树行，文件对比给的是差异行。</para>
+    /// The current comparison rows; both panes share one list (rendering the left/right cells respectively), so
+    /// same-name entries share a row and single-side entries stay blank on the other side. A folder comparison
+    /// supplies flattened tree rows and a file comparison supplies diff rows.
     /// </summary>
     public IReadOnlyList<CompareRowViewModel>? Rows
     {
@@ -194,87 +234,48 @@ public sealed partial class CompareViewModel : Document
 
             _rows = value;
             OnPropertyChanged();
-            RebuildSideRows();
+            if (_leftColumn is not null)
+            {
+                _leftColumn.Rows = value;
+            }
+
+            if (_rightColumn is not null)
+            {
+                _rightColumn.Rows = value;
+            }
         }
     }
 
     private IReadOnlyList<CompareRowViewModel>? _rows;
 
     /// <summary>
-    /// <para>左侧栏绑定的行列表：文件夹模式时排除仅右侧条目（仅右侧条目不在左侧显示），
-    /// 文本/十六进制模式时与 <see cref="Rows"/> 相同。</para>
-    /// The left-pane row list: in folder mode excludes right-only items (they are not shown on the
-    /// left), and is identical to <see cref="Rows"/> in text/hex mode.
-    /// </summary>
-    public IReadOnlyList<CompareRowViewModel>? LeftRows
-    {
-        get => _leftRows;
-        private set
-        {
-            if (ReferenceEquals(_leftRows, value)) return;
-            _leftRows = value;
-            OnPropertyChanged();
-        }
-    }
-    private IReadOnlyList<CompareRowViewModel>? _leftRows;
-
-    /// <summary>
-    /// <para>右侧栏绑定的行列表：文件夹模式时排除仅左侧条目，
-    /// 文本/十六进制模式时与 <see cref="Rows"/> 相同。</para>
-    /// The right-pane row list: in folder mode excludes left-only items,
-    /// and is identical to <see cref="Rows"/> in text/hex mode.
-    /// </summary>
-    public IReadOnlyList<CompareRowViewModel>? RightRows
-    {
-        get => _rightRows;
-        private set
-        {
-            if (ReferenceEquals(_rightRows, value)) return;
-            _rightRows = value;
-            OnPropertyChanged();
-        }
-    }
-    private IReadOnlyList<CompareRowViewModel>? _rightRows;
-
-    /// <summary>
-    /// <para>是否已有比较内容（驱动空态提示显示）。</para>
-    /// Whether a comparison is loaded (drives the empty-state hint).
-    /// </summary>
-    public bool HasComparison => Mode != CompareMode.None;
-
-    /// <summary>
-    /// <para>左侧路径是否非空。</para>
-    /// Whether the left path is non-empty.
-    /// </summary>
-    public bool HasLeft => !string.IsNullOrWhiteSpace(LeftPath);
-
-    /// <summary>
-    /// <para>右侧路径是否非空。</para>
-    /// Whether the right path is non-empty.
-    /// </summary>
-    public bool HasRight => !string.IsNullOrWhiteSpace(RightPath);
-
-    /// <summary>
-    /// <para>是否处于文件夹比较模式。</para>
+    /// <para>是否处于文件夹对比模式。</para>
     /// Whether folder-compare mode is active.
     /// </summary>
     public bool IsFolderMode => Mode == CompareMode.Folder;
 
     /// <summary>
-    /// <para>是否处于文本比较模式。</para>
+    /// <para>是否处于文本对比模式。</para>
     /// Whether text-compare mode is active.
     /// </summary>
     public bool IsTextMode => Mode == CompareMode.Text;
 
     /// <summary>
-    /// <para>是否处于二进制比较模式。</para>
+    /// <para>是否处于二进制对比模式。</para>
     /// Whether binary-compare mode is active.
     /// </summary>
     public bool IsBinaryMode => Mode == CompareMode.Binary;
 
     /// <summary>
-    /// <para>状态栏汇总文本（差异汇总或"等待拖入右侧"提示）。</para>
-    /// The status-bar summary text (diff summary or a "drop the right side" hint).
+    /// <para>是否具备打开十六进制差异视图的条件：两侧都有文件（单侧文件没有可比对的差异区间）。</para>
+    /// Whether the hex-diff view is available: both sides must have a file (a single side has no diffable
+    /// ranges).
+    /// </summary>
+    public bool CanShowHexView => _fileLeftPath.Length > 0 && _fileRightPath.Length > 0;
+
+    /// <summary>
+    /// <para>状态栏汇总文本（目录对比的状态计数，或文件对比的差异汇总）。</para>
+    /// The status-bar summary text (folder-status counts, or a file-diff summary).
     /// </summary>
     public string StatsText
     {
@@ -291,10 +292,6 @@ public sealed partial class CompareViewModel : Document
         }
     }
 
-    partial void OnLeftPathChanged(string value) => OnPropertyChanged(nameof(HasLeft));
-
-    partial void OnRightPathChanged(string value) => OnPropertyChanged(nameof(HasRight));
-
     partial void OnSelectedIndexChanged(int value)
     {
         var max = Rows is null || Rows.Count == 0 ? -1 : Rows.Count - 1;
@@ -305,42 +302,11 @@ public sealed partial class CompareViewModel : Document
         }
     }
 
-    partial void OnShowEqualChanged(bool value)
-    {
-        if (Mode == CompareMode.Folder)
-        {
-            ApplyFolderFilters();
-        }
-    }
-
-    partial void OnShowDifferentChanged(bool value)
-    {
-        if (Mode == CompareMode.Folder)
-        {
-            ApplyFolderFilters();
-        }
-    }
-
-    partial void OnShowLeftOnlyChanged(bool value)
-    {
-        if (Mode == CompareMode.Folder)
-        {
-            ApplyFolderFilters();
-        }
-    }
-
-    partial void OnShowRightOnlyChanged(bool value)
-    {
-        if (Mode == CompareMode.Folder)
-        {
-            ApplyFolderFilters();
-        }
-    }
-
     /// <summary>
-    /// <para>载入右键选中的路径：首次或文件/目录类型变化时填充左侧，否则填充或替换右侧。</para>
-    /// Loads an explorer selection on the left initially or when switching between files and folders;
-    /// otherwise fills or replaces the right side.
+    /// <para>把一个路径加入对比文档：优先复用还没有内容的文件列，不足时在末尾追加新列，
+    /// 并按其类型显示目录树或文件内容（不做对比）。</para>
+    /// Adds a path to the compare document: reuses the first empty file column, appends a new column when none
+    /// is free, and shows a directory tree or the file's content (no comparison runs).
     /// </summary>
     /// <param name="path"><para>选中的文件或目录路径。</para>The selected file or directory path.</param>
     public Task AddComparisonPathAsync(string path)
@@ -352,174 +318,77 @@ public sealed partial class CompareViewModel : Document
             throw new FileNotFoundException("Comparison path does not exist.", fullPath);
         }
 
-        // 首次加载尚未完成时 Mode 可能仍为空态，按已设置的左侧路径决定配对。
-        // The first load may not have set Mode yet; use the assigned left path to pair selections.
-        var canPair = HasLeft && (isDirectory ? Directory.Exists(LeftPath) : File.Exists(LeftPath));
-        var left = canPair ? LeftPath : fullPath;
-        var right = canPair ? fullPath : string.Empty;
-        return isDirectory
-            ? OpenCompareFoldersAsync(left, right)
-            : OpenCompareFilesAsync(left, right);
+        var column = ReserveColumn();
+        column.Path = fullPath;
+        return column.LoadPathAsync(fullPath, isDirectory);
     }
 
     /// <summary>
-    /// <para>打开文件比较：嗅探左右文件（NUL 文本探测且非已知固件扩展名则为文本模式，
-    /// 否则二进制模式）并异步加载；右侧可留空作为单侧比较等待第二次拖入。</para>
-    /// Opens a file comparison: sniffs both files (text mode when they pass the NUL probe and have no
-    /// known firmware extension, otherwise binary mode) and loads asynchronously; the right side may be
-    /// empty to await a second drop as a single-side comparison.
+    /// <para>打开文件比较：两个文件分别放入前两个文件列并立即开始对比（一侧留空时该侧留白，
+    /// 用于「在新标签打开单侧文件对比」）。</para>
+    /// Opens a file comparison: the two files fill the first two file columns and the comparison starts
+    /// immediately (an empty side stays blank, which is how a single-side file comparison is opened in a new
+    /// tab).
     /// </summary>
-    /// <param name="leftPath">左文件路径。<para>Left file path.</para></param>
-    /// <param name="rightPath">右文件路径；可留空。<para>Right file path; may be empty.</para></param>
+    /// <param name="leftPath"><para>左文件路径；可留空。</para>Left file path; may be empty.</param>
+    /// <param name="rightPath"><para>右文件路径；可留空。</para>Right file path; may be empty.</param>
     public Task OpenCompareFilesAsync(string leftPath, string rightPath)
-    {
-        if (string.IsNullOrWhiteSpace(leftPath))
-        {
-            return Task.CompletedTask;
-        }
-
-        LeftPath = leftPath;
-        RightPath = rightPath ?? string.Empty;
-        return LoadFilesAsync();
-    }
+        => OpenComparePairAsync(leftPath, rightPath);
 
     /// <summary>
-    /// <para>打开文件夹比较：切到文件夹模式并触发首次异步比对；右侧可留空作为单侧比较
-    /// （自行递归枚举左侧目录生成仅左侧行）等待第二次拖入。</para>
-    /// Opens a folder comparison: switches to folder mode and kicks off the first asynchronous
-    /// comparison; the right side may be empty as a single-side comparison (recursively enumerating the
-    /// left directory into left-only rows) awaiting a second drop.
+    /// <para>打开文件夹比较：两个目录分别放入前两个文件列并立即开始对比。</para>
+    /// Opens a folder comparison: the two directories fill the first two file columns and the comparison
+    /// starts immediately.
     /// </summary>
-    /// <param name="leftDirectory">左目录路径。<para>Left directory path.</para></param>
-    /// <param name="rightDirectory">右目录路径；可留空。<para>Right directory path; may be empty.</para></param>
+    /// <param name="leftDirectory"><para>左目录路径。</para>Left directory path.</param>
+    /// <param name="rightDirectory"><para>右目录路径。</para>Right directory path.</param>
     public Task OpenCompareFoldersAsync(string leftDirectory, string rightDirectory)
-    {
-        if (string.IsNullOrWhiteSpace(leftDirectory))
-        {
-            return Task.CompletedTask;
-        }
-
-        _currentHexRows?.Dispose();
-        _currentHexRows = null;
-        LeftPath = leftDirectory;
-        RightPath = rightDirectory ?? string.Empty;
-        Mode = CompareMode.Folder;
-        return RefreshAsync();
-    }
+        => OpenComparePairAsync(leftDirectory, rightDirectory);
 
     /// <summary>
-    /// <para>按拖拽路径打开比较：两个文件 → 文件比较；两个目录 → 文件夹比较；
-    /// 单个文件/文件夹在空态时作为左侧打开对应比较等待再次拖入；已有文件夹比较时单个路径
-    /// 替换对应侧（右侧留空时优先填充右侧，否则替换左侧）；已有文件比较时单个文件替换对应侧，
-    /// 单个目录重新开始文件夹比较。</para>
-    /// Opens a comparison from dropped paths: two files → file compare; two directories → folder
-    /// compare; a single file/folder opens the matching comparison with it as the left side from the
-    /// empty state, awaiting a second drop; with an existing folder comparison a single path replaces
-    /// the matching side (filling the right side first when it is still empty, otherwise the left); with
-    /// an existing file comparison a single file replaces the matching side while a single directory
-    /// starts a fresh folder comparison.
+    /// <para>按路径加载文件列（拖入的文件/文件夹与「添加文件夹」对话框共用）：每个路径占用一个文件列
+    /// （优先复用空列），不做自动对比——需要对比时由「开启对比」按钮明确触发。</para>
+    /// Loads columns from paths (shared by dropped files/folders and the "add folder" dialog): each path takes
+    /// one file column (reusing empty columns first) without starting a comparison; the compare button triggers
+    /// that explicitly.
     /// </summary>
-    /// <param name="paths"><para>拖入的路径列表。</para>The dropped path list.</param>
-    /// <returns><para>是否消费了全部路径（两个文件或两个目录）。</para>
-    /// Whether all paths were consumed (two files or two directories).</returns>
-    public async Task<bool> TryOpenDroppedPathsAsync(IReadOnlyList<string> paths)
+    /// <param name="paths"><para>待加载的路径列表。</para>The paths to load.</param>
+    /// <returns><para>是否消费了全部路径（路径全部存在且至少一个）。</para>Whether every path was consumed (all exist and at least one).</returns>
+    public async Task<bool> TryAddPathsAsync(IReadOnlyList<string> paths)
     {
-        if (paths.Count == 1)
+        if (IsComparing)
         {
-            // 单个路径：文件在文件夹比较中重启文件比较、在文件比较中填充/替换对应侧；
-            // 目录在文件夹比较中填充/替换对应侧、在文件比较中重启文件夹比较。
-            // A single path: in folder mode a file restarts a file comparison while a directory
-            // fills/replaces a side; in file mode a file fills/replaces a side while a directory
-            // restarts a folder comparison.
-            var single = paths[0];
-            if (File.Exists(single))
-            {
-                if (Mode == CompareMode.Folder)
-                {
-                    await OpenCompareFilesAsync(single, string.Empty);
-                }
-                else if (HasComparison)
-                {
-                    if (!HasRight)
-                    {
-                        await ReplaceRightAsync(single);
-                    }
-                    else
-                    {
-                        await ReplaceLeftAsync(single);
-                    }
-                }
-                else
-                {
-                    await OpenCompareFilesAsync(single, string.Empty);
-                }
-
-                return true;
-            }
-
-            if (Directory.Exists(single))
-            {
-                if (Mode == CompareMode.Folder)
-                {
-                    if (!HasRight)
-                    {
-                        await ReplaceRightAsync(single);
-                    }
-                    else
-                    {
-                        await ReplaceLeftAsync(single);
-                    }
-                }
-                else
-                {
-                    await OpenCompareFoldersAsync(single, string.Empty);
-                }
-
-                return true;
-            }
-
+            // 对比进行中列数固定为两列：拖入新路径只会被忽略，改为明确提示先结束对比。
+            // A comparison keeps exactly two columns: a dropped path is rejected with an explicit hint instead
+            // of silently changing the layout.
+            ReportError(LanguageService.Instance.GetString("Compare_AddColumnWhileComparing"));
             return false;
         }
 
-        if (paths.Count < 2)
-        {
-            return false;
-        }
-
-        var files = new List<string>();
-        var directories = new List<string>();
+        var loaded = 0;
         foreach (var path in paths)
         {
-            if (Directory.Exists(path))
+            var fullPath = Path.GetFullPath(path);
+            var isDirectory = Directory.Exists(fullPath);
+            if (!isDirectory && !File.Exists(fullPath))
             {
-                directories.Add(path);
+                continue;
             }
-            else if (File.Exists(path))
-            {
-                files.Add(path);
-            }
+
+            var column = ReserveColumn();
+            column.Path = fullPath;
+            await column.LoadPathAsync(fullPath, isDirectory);
+            loaded++;
         }
 
-        if (files.Count >= 2)
-        {
-            await OpenCompareFilesAsync(files[0], files[1]);
-            return true;
-        }
-
-        if (directories.Count >= 2)
-        {
-            await OpenCompareFoldersAsync(directories[0], directories[1]);
-            return true;
-        }
-
-        return false;
+        return loaded > 0 && loaded == paths.Count;
     }
 
     /// <summary>
-    /// <para>释放文档持有的比较状态（文档关闭时调用），取消进行中的加载并回收懒加载的
+    /// <para>关闭文档时释放列与对比状态（文档关闭事件调用），取消进行中的加载并回收懒加载的
     /// 十六进制集合。</para>
-    /// Releases the comparison state held by this document (called when the document is closed),
-    /// cancels any in-flight load and disposes the lazily-loaded hex collection.
+    /// Releases the columns and comparison state when the document closes (called by the document-close event),
+    /// cancelling in-flight loads and disposing the lazily-loaded hex collection.
     /// </summary>
     public void Cleanup()
     {
@@ -528,30 +397,47 @@ public sealed partial class CompareViewModel : Document
         _loadCts = new CancellationTokenSource();
         _currentHexRows?.Dispose();
         _currentHexRows = null;
-        _leftMetadata = null;
-        _rightMetadata = null;
-        _lastFolderResult = null;
-        _folderItems = [];
-        Rows = null;
-        Mode = CompareMode.None;
-        BinaryViewKind = BinaryViewKind.Metadata;
-        SelectedIndex = -1;
-        LeftPath = string.Empty;
-        RightPath = string.Empty;
+
+        foreach (var column in Columns)
+        {
+            column.Dispose();
+        }
+
+        Columns.Clear();
+        _leftColumn = null;
+        _rightColumn = null;
+        ResetCompareState();
+        IsComparing = false;
+        StatsText = string.Empty;
         IsBusy = false;
         HasError = false;
         ErrorMessage = string.Empty;
-        EqualCount = 0;
-        DifferentCount = 0;
-        LeftOnlyCount = 0;
-        RightOnlyCount = 0;
-        StatsText = string.Empty;
+        NotifyColumnsChanged();
     }
 
     /// <summary>
-    /// <para>下一差异命令：在文本/十六进制模式下从选中行之后查找差异行并选中，绕回循环。</para>
-    /// Next-diff command: in text/hex mode finds the next diff row after the selected one and selects
-    /// it, wrapping around.
+    /// <para>开启/结束对比命令：浏览状态校验两列后开始对比，对比中再次点击结束对比并把两列还原为浏览
+    /// 状态（目录重新折叠为普通浏览树）。</para>
+    /// Start/stop-compare command: validates the two columns and starts the comparison while browsing, and ends
+    /// it (restoring both columns to browsing, with directories collapsed back into plain browsing trees) when
+    /// pressed again.
+    /// </summary>
+    [RelayCommand]
+    private async Task ToggleCompareAsync()
+    {
+        if (IsComparing)
+        {
+            await EndCompareAsync();
+            return;
+        }
+
+        await StartCompareAsync(allowSingleSide: false);
+    }
+
+    /// <summary>
+    /// <para>下一处差异命令：在文本/十六进制模式下从选中行之后查找差异行并选中，绕回循环。</para>
+    /// Next-diff command: in text/hex mode finds the next diff row after the selected one and selects it,
+    /// wrapping around.
     /// </summary>
     [RelayCommand]
     private void NextDiff()
@@ -575,9 +461,9 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>上一差异命令：在文本/十六进制模式下从选中行之前查找差异行并选中，绕回循环。</para>
-    /// Previous-diff command: in text/hex mode finds the previous diff row before the selected one and
-    /// selects it, wrapping around.
+    /// <para>上一处差异命令：在文本/十六进制模式下从选中行之前查找差异行并选中，绕回循环。</para>
+    /// Previous-diff command: in text/hex mode finds the previous diff row before the selected one and selects
+    /// it, wrapping around.
     /// </summary>
     [RelayCommand]
     private void PrevDiff()
@@ -603,9 +489,9 @@ public sealed partial class CompareViewModel : Document
     /// <summary>
     /// <para>切换二进制视图命令：在元数据与十六进制差异视图间切换并重建行；
     /// 切换前释放旧十六进制集合，切回元数据时使用缓存结果避免重复读取。</para>
-    /// Toggle-binary-view command: switches between the metadata and hex-diff views and rebuilds the
-    /// rows; the old hex collection is disposed first and switching back to metadata reuses the cached
-    /// metadata to avoid re-reading.
+    /// Toggle-binary-view command: switches between the metadata and hex-diff views and rebuilds the rows; the
+    /// old hex collection is disposed first and switching back to metadata reuses the cached metadata to avoid
+    /// re-reading.
     /// </summary>
     [RelayCommand]
     private async Task ToggleHexView()
@@ -625,9 +511,9 @@ public sealed partial class CompareViewModel : Document
             return;
         }
 
-        // 单侧（右空）没有可比较的右侧文件，无法产出差异区间，保持在元数据视图。
-        // A single side (empty right) has no right file to diff against, so hex stays unavailable.
-        if (string.IsNullOrWhiteSpace(RightPath))
+        // 单侧（对侧没有对应文件）没有可比对的第二个文件，无法产出差异区间，保持在元数据视图。
+        // A single side (no counterpart file) has no second file to diff against, so hex stays unavailable.
+        if (!CanShowHexView)
         {
             return;
         }
@@ -638,25 +524,25 @@ public sealed partial class CompareViewModel : Document
         ErrorMessage = string.Empty;
         try
         {
-            var maxLength = Math.Max(new FileInfo(LeftPath).Length, new FileInfo(RightPath).Length);
+            var maxLength = Math.Max(new FileInfo(_fileLeftPath).Length, new FileInfo(_fileRightPath).Length);
             var rowDiffBitmap = new byte[BinaryDiffService.RowBitmapLength(maxLength)];
-            var stats = await _comparison.CompareBinaryAsync(LeftPath, RightPath, rowDiffBitmap, ct);
+            var stats = await _comparison.CompareBinaryAsync(_fileLeftPath, _fileRightPath, rowDiffBitmap, ct);
             if (ct.IsCancellationRequested)
             {
                 // 协作式取消：位图/统计基于部分扫描结果，直接丢弃并保持当前视图。
-                // Cooperative cancellation: the bitmap/stats came from a partial scan, discard them
-                // and keep the current view.
+                // Cooperative cancellation: the bitmap/stats came from a partial scan, discard them and keep the
+                // current view.
                 return;
             }
 
             _currentHexRows?.Dispose();
-            var hex = new CompareHexRowCollection(LeftPath, RightPath, rowDiffBitmap);
+            var hex = new CompareHexRowCollection(_fileLeftPath, _fileRightPath, rowDiffBitmap);
             _currentHexRows = hex;
             Rows = hex;
             BinaryViewKind = BinaryViewKind.Hex;
             SelectedIndex = -1;
             StatsText = string.Format(
-                LanguageService.Instance.GetString("Compare_Summary"),
+                LanguageService.Instance.GetString("Compare_HexSummary"),
                 stats.TotalDifferentBytes,
                 stats.RangeCount);
             HasError = false;
@@ -677,8 +563,8 @@ public sealed partial class CompareViewModel : Document
         {
             // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
             // 不得把新加载的 busy 状态置 false。
-            // Clear busy only while this load is still the current one: a cancelled older load
-            // must not clear the newer load's busy state.
+            // Clear busy only while this load is still the current one: a cancelled older load must not clear
+            // the newer load's busy state.
             if (ct == _loadCts.Token)
             {
                 IsBusy = false;
@@ -687,53 +573,742 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>用拖入路径替换左侧（目录替换后重扫文件夹；文件重载对应模式），供单路径拖入使用。</para>
-    /// Replaces the left side with a dropped path (directories re-scan the folder; files reload the
-    /// matching mode); used by single-path drops.
+    /// <para>在文档末尾追加一个空文件列。</para>
+    /// Appends an empty file column to the document.
     /// </summary>
-    /// <param name="path">新左侧路径。<para>The new left path.</para></param>
-    private async Task ReplaceLeftAsync(string path)
+    /// <returns><para>新建的文件列。</para>The new file column.</returns>
+    internal CompareColumnViewModel AddColumn()
     {
-        LeftPath = path;
-        if (Directory.Exists(path))
+        var column = new CompareColumnViewModel(this);
+        Columns.Add(column);
+        return column;
+    }
+
+    /// <summary>
+    /// <para>移除一个文件列；关闭参与对比的列会先结束对比（并等待两列的浏览内容载入完成，避免移除后仍有
+    /// 后台读取在跑），最后一列不会被移除。</para>
+    /// Removes a file column; closing a compare column ends the comparison first (awaiting the columns' browsing
+    /// reload so no background read outlives the removal), and the last remaining column is never removed.
+    /// </summary>
+    /// <param name="column"><para>被移除的文件列。</para>The column to remove.</param>
+    internal async Task RemoveColumnAsync(CompareColumnViewModel column)
+    {
+        if (!Columns.Contains(column) || Columns.Count <= 1)
         {
-            Mode = CompareMode.Folder;
-            await RefreshAsync();
+            return;
         }
-        else if (File.Exists(path))
+
+        if (IsComparing && column.IsCompareSide)
         {
-            await LoadFilesAsync();
+            // 结束对比会重载两列的浏览内容，随后的移除落到浏览状态上。
+            // Ending the comparison reloads both columns' browsing content; the removal then applies to that
+            // browsing state.
+            await EndCompareAsync();
+        }
+
+        Columns.Remove(column);
+        column.Dispose();
+    }
+
+    /// <summary>
+    /// <para>用当前两列重新执行当前对比（目录对比重新比对目录并重建对齐行列表，文件对比重新读取该文件对）。
+    /// 对比中任一侧点击刷新都会走这里，因此左右两侧同时刷新。</para>
+    /// Re-runs the active comparison with the current two columns (a folder comparison re-compares the
+    /// directories and rebuilds the aligned rows, a file comparison re-reads the pair). Refreshing either side
+    /// lands here, so both sides refresh together.
+    /// </summary>
+    internal async Task RefreshCompareAsync()
+    {
+        if (!IsComparing)
+        {
+            await StartCompareAsync(allowSingleSide: false);
+            return;
+        }
+
+        var left = _leftColumn;
+        var right = _rightColumn;
+        if (left is null || right is null)
+        {
+            return;
+        }
+
+        _leftPath = left.Path;
+        _rightPath = right.Path;
+        await LoadCompareAsync();
+    }
+
+    /// <summary>
+    /// <para>对比中「返回上一级」：把左右两侧同时切到各自的父目录并重新比对（一侧已在根目录时整体不动作）。
+    /// 两侧同时操作，保证对齐关系不被破坏。</para>
+    /// "Go up" while comparing: moves both sides to their parent directories at once and re-compares (a side
+    /// already at a root aborts the whole move). Both sides move together so the alignment stays intact.
+    /// </summary>
+    internal async Task GoUpCompareAsync()
+    {
+        if (!IsComparing)
+        {
+            return;
+        }
+
+        var leftParent = ParentDirectoryOf(_leftPath);
+        var rightParent = ParentDirectoryOf(_rightPath);
+        if (leftParent is null || rightParent is null)
+        {
+            ReportError(LanguageService.Instance.GetString("Compare_NoParentFolder"));
+            return;
+        }
+
+        _leftPath = leftParent;
+        _rightPath = rightParent;
+        if (_leftColumn is not null)
+        {
+            _leftColumn.Path = leftParent;
+        }
+
+        if (_rightColumn is not null)
+        {
+            _rightColumn.Path = rightParent;
+        }
+
+        ClearError();
+        await LoadCompareAsync();
+    }
+
+    /// <summary>
+    /// <para>展开/折叠文件夹对比中的节点：两侧共享同一节点，因此一侧展开即两侧同步展开，
+    /// 并立即重建对齐行列表（子项紧跟在父项后面）。</para>
+    /// Expands or collapses a node of the folder comparison: both sides share one node, so expanding on one
+    /// side expands the other, and the aligned row list is rebuilt immediately (children follow their parent).
+    /// </summary>
+    /// <param name="node"><para>被展开/折叠的对比节点。</para>The comparison node to expand or collapse.</param>
+    internal async Task ToggleTreeExpansionAsync(CompareTreeNodeViewModel node)
+    {
+        if (!IsComparing || _compareTreeRoot is null)
+        {
+            return;
+        }
+
+        if (!node.IsExpanded)
+        {
+            await node.EnsureChildrenLoadedAsync();
+        }
+
+        node.IsExpanded = !node.IsExpanded;
+        Rows = ComparisonRowBuilder.ForTree([_compareTreeRoot], compared: true);
+    }
+
+    /// <summary>
+    /// <para>文件夹对比中双击文件：按相对路径解析两侧的完整路径（对侧不存在时留空），并请求在新标签中
+    /// 打开该文件的对比——当前视图保持目录对比不被打断。</para>
+    /// Double-clicking a file in a folder comparison: resolves both sides' full paths from the relative path
+    /// (empty when the counterpart is missing) and asks for the file comparison to open in a new tab, leaving
+    /// the current view's folder comparison untouched.
+    /// </summary>
+    /// <param name="node"><para>被双击的文件节点。</para>The double-clicked file node.</param>
+    internal void OpenFileComparisonInNewTab(CompareTreeNodeViewModel node)
+    {
+        if (!IsComparing || Mode != CompareMode.Folder || node.IsDirectory)
+        {
+            return;
+        }
+
+        var relative = node.RelativePath.Replace('/', Path.DirectorySeparatorChar);
+        var left = Path.Combine(_leftPath, relative);
+        var right = Path.Combine(_rightPath, relative);
+        var leftPath = File.Exists(left) ? left : string.Empty;
+        var rightPath = File.Exists(right) ? right : string.Empty;
+        if (leftPath.Length == 0 && rightPath.Length == 0)
+        {
+            ReportError(string.Format(LanguageService.Instance.GetString("Compare_PathNotFound"), node.Name));
+            return;
+        }
+
+        WeakReferenceMessenger.Default.Send(new OpenFileCompareInNewTabRequestMessage
+        {
+            LeftPath = leftPath,
+            RightPath = rightPath,
+        });
+    }
+
+    /// <summary>
+    /// <para>记录一条操作错误（列加载、路径校验、对比失败等）。</para>
+    /// Records an operation error (column load, path validation, comparison failure).
+    /// </summary>
+    /// <param name="message"><para>错误文本。</para>The error text.</param>
+    internal void ReportError(string message)
+    {
+        HasError = true;
+        ErrorMessage = message;
+    }
+
+    /// <summary>清除当前错误提示。</summary>
+    internal void ClearError()
+    {
+        HasError = false;
+        ErrorMessage = string.Empty;
+    }
+
+    /// <summary>列状态变化后刷新文档级派生属性（空文档提示）。</summary>
+    internal void NotifyColumnsChanged() => OnPropertyChanged(nameof(IsEmptyDocument));
+
+    /// <summary>
+    /// <para>某一侧的文件是否被编辑过（文本对比中修改文本或「复制到另一侧」之后置位，保存后清除）。</para>
+    /// Whether one side's file has been edited (set after text edits or "copy to the other side" in a text comparison,
+    /// cleared by saving).
+    /// </summary>
+    /// <param name="side"><para>列的角色（左/右）。</para>The column's role (left/right).</param>
+    internal bool IsFileDirty(CompareColumnSide side) => side == CompareColumnSide.Right ? _dirtyRight : _dirtyLeft;
+
+    /// <summary>记录文本编辑（文本对比中任一侧文本被修改时由行模型回调）。</summary>
+    internal void MarkRowEdited(CompareRowViewModel row, bool leftSide) => MarkDirty(leftSide);
+
+    /// <summary>标记某一侧文件为已修改并刷新该列头的保存按钮。</summary>
+    private void MarkDirty(bool leftSide)
+    {
+        if (leftSide)
+        {
+            _dirtyLeft = true;
+        }
+        else
+        {
+            _dirtyRight = true;
+        }
+
+        NotifyColumnsDirtyState();
+    }
+
+    /// <summary>清除某一侧的已修改标记。</summary>
+    private void ClearDirty(bool leftSide)
+    {
+        if (leftSide)
+        {
+            _dirtyLeft = false;
+        }
+        else
+        {
+            _dirtyRight = false;
+        }
+
+        NotifyColumnsDirtyState();
+    }
+
+    /// <summary>把「已修改」状态变化通知到各列（决定保存按钮是否显示）。</summary>
+    private void NotifyColumnsDirtyState()
+    {
+        foreach (var column in Columns)
+        {
+            column.NotifyDirtyChanged();
         }
     }
 
     /// <summary>
-    /// <para>用拖入路径替换右侧（目录替换后重扫文件夹；文件重载对应模式），供单路径拖入使用。</para>
-    /// Replaces the right side with a dropped path (directories re-scan the folder; files reload the
-    /// matching mode); used by single-path drops.
+    /// <para>记录两栏当前选中的行索引（视图在选中变化时写回）：文本对比的「复制到另一侧」按这些行执行，
+    /// 目录对比的复制按钮不再依赖它（按行列表选中项定位条目）。</para>
+    /// Records the currently selected row indices (written back by the view on selection changes): "copy to the other
+    /// side" in a text comparison acts on them, while the folder comparison's copy button locates its entry through the
+    /// row list's selection instead.
     /// </summary>
-    /// <param name="path">新右侧路径。<para>The new right path.</para></param>
-    private async Task ReplaceRightAsync(string path)
+    /// <param name="indices"><para>选中的行索引。</para>The selected row indices.</param>
+    internal void UpdateRowSelection(IEnumerable<int> indices) => _selectedRowIndices = [.. indices];
+
+    /// <summary>
+    /// <para>把选中行在某一侧的文本复制到同一行的另一侧（文本对比专用）：目标侧没有该行时补出一行，
+    /// 源侧没有该行时把目标侧该行删除（与 Beyond Compare 的「复制到另一侧」一致），并标记目标侧文件已修改。</para>
+    /// Copies the selected rows' text from one side to the same rows on the other side (text comparisons only): a target
+    /// side without the row gains one, and a source side without the row deletes the target's row (matching Beyond
+    /// Compare's "copy to other side"), marking the target file modified.
+    /// </summary>
+    /// <param name="fromLeftToRight"><para>是否从左复制到右。</para>Whether to copy left to right.</param>
+    internal void CopySelectedTextRows(bool fromLeftToRight)
     {
-        RightPath = path;
-        if (Directory.Exists(path))
+        if (Rows is null || _selectedRowIndices.Count == 0)
         {
-            Mode = CompareMode.Folder;
-            await RefreshAsync();
+            return;
         }
-        else if (File.Exists(path))
+
+        var changed = false;
+        foreach (var index in _selectedRowIndices)
         {
-            await LoadFilesAsync();
+            if (index < 0 || index >= Rows.Count)
+            {
+                continue;
+            }
+
+            var row = Rows[index];
+            if (!row.IsEditable)
+            {
+                continue;
+            }
+
+            var sourcePresent = fromLeftToRight ? row.HasLeftLine : row.HasRightLine;
+            var text = fromLeftToRight ? row.LeftText : row.RightText;
+            row.SetSideText(leftSide: !fromLeftToRight, sourcePresent ? text : string.Empty, sourcePresent);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            MarkDirty(!fromLeftToRight);
         }
     }
 
     /// <summary>
-    /// <para>加载文件比较：嗅探左右文件选择文本/二进制模式并构建对应行与状态。</para>
-    /// Loads a file comparison: sniffs both files to pick text/binary mode and builds the matching
-    /// rows and status.
+    /// <para>把某一行在某一侧断开成两行（行内回车）：光标前留在原行，光标后成为紧随其后的新行，
+    /// 另一侧内容留在原行，因此新行只存在于被编辑的一侧。</para>
+    /// Splits one row into two on the edited side (Enter inside a line): the text before the caret stays in the row and
+    /// the text after it becomes the immediately following row, while the other side's line stays with the original row —
+    /// so the new row exists only on the edited side.
+    /// </summary>
+    /// <param name="row"><para>被断开的行。</para>The row being split.</param>
+    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
+    /// <param name="caretIndex"><para>光标位置。</para>The caret position.</param>
+    /// <returns><para>新行的索引与应放置的光标位置。</para>The new row's index and the caret position to restore.</returns>
+    internal (int Index, int Caret) SplitTextRow(CompareRowViewModel row, bool leftSide, int caretIndex)
+    {
+        if (_textRows is null)
+        {
+            return (0, 0);
+        }
+
+        var index = _textRows.IndexOf(row);
+        if (index < 0)
+        {
+            return (0, 0);
+        }
+
+        var text = leftSide ? row.LeftText : row.RightText;
+        var caret = Math.Clamp(caretIndex, 0, text.Length);
+        var head = text[..caret];
+        var tail = text[caret..];
+
+        row.SetSideText(leftSide, head, present: true);
+        var inserted = leftSide
+            ? CreateTextRow(tail, string.Empty, hasLeft: true, hasRight: false)
+            : CreateTextRow(string.Empty, tail, hasLeft: false, hasRight: true);
+        _textRows.Insert(index + 1, inserted);
+        row.RefreshDiffState();
+        inserted.RefreshDiffState();
+        MarkDirty(leftSide);
+        return (index + 1, 0);
+    }
+
+    /// <summary>
+    /// <para>把某一行与下一行合并（行尾 Delete）：下一行在编辑侧的文本接到本行末尾；下一行在两侧都没有内容时
+    /// 整行移除。</para>
+    /// Joins a row with the next one (Delete at the end of a line): the next row's text on the edited side is appended and
+    /// the next row is removed entirely once it has no content on either side.
+    /// </summary>
+    /// <param name="row"><para>合并的起始行。</para>The row the join starts from.</param>
+    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
+    /// <returns><para>光标应回到的行索引与位置。</para>The row index and caret position to restore.</returns>
+    internal (int Index, int Caret) JoinTextRowWithNext(CompareRowViewModel row, bool leftSide)
+    {
+        if (_textRows is null)
+        {
+            return (0, 0);
+        }
+
+        var index = _textRows.IndexOf(row);
+        if (index < 0 || index + 1 >= _textRows.Count)
+        {
+            return (Math.Max(index, 0), leftSide ? row.LeftText.Length : row.RightText.Length);
+        }
+
+        var next = _textRows[index + 1];
+        var caret = leftSide ? row.LeftText.Length : row.RightText.Length;
+        if (leftSide ? next.HasLeftLine : next.HasRightLine)
+        {
+            var merged = (leftSide ? row.LeftText : row.RightText) + (leftSide ? next.LeftText : next.RightText);
+            row.SetSideText(leftSide, merged, present: true);
+        }
+
+        next.SetSideText(leftSide, string.Empty, present: false);
+        RemoveRowWhenEmpty(next);
+        row.RefreshDiffState();
+        MarkDirty(leftSide);
+        return (index, caret);
+    }
+
+    /// <summary>
+    /// <para>把某一行并入上一行（行首 Backspace）：本行在编辑侧的文本接到上一行末尾；本行在两侧都没有内容时
+    /// 整行移除。</para>
+    /// Merges a row into the previous one (Backspace at the start of a line): this row's text on the edited side is
+    /// appended to the previous row, and this row is removed entirely once it has no content on either side.
+    /// </summary>
+    /// <param name="row"><para>被合并的行。</para>The row being merged.</param>
+    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
+    /// <returns><para>光标应回到的行索引与位置。</para>The row index and caret position to restore.</returns>
+    internal (int Index, int Caret) JoinTextRowWithPrevious(CompareRowViewModel row, bool leftSide)
+    {
+        if (_textRows is null)
+        {
+            return (0, 0);
+        }
+
+        var index = _textRows.IndexOf(row);
+        if (index <= 0)
+        {
+            return (Math.Max(index, 0), 0);
+        }
+
+        var previous = _textRows[index - 1];
+        var caret = leftSide ? previous.LeftText.Length : previous.RightText.Length;
+        if (leftSide ? row.HasLeftLine : row.HasRightLine)
+        {
+            var merged = (leftSide ? previous.LeftText : previous.RightText) + (leftSide ? row.LeftText : row.RightText);
+            previous.SetSideText(leftSide, merged, present: true);
+        }
+
+        row.SetSideText(leftSide, string.Empty, present: false);
+        RemoveRowWhenEmpty(row);
+        previous.RefreshDiffState();
+        MarkDirty(leftSide);
+        return (index - 1, caret);
+    }
+
+    /// <summary>
+    /// <para>删除选中的行（在该侧清空这些行）：该侧的行被移除，另一侧仍有内容的行保留自己的内容；
+    /// 两侧都没有内容的行整行移除。</para>
+    /// Deletes the selected rows on the edited side: that side's lines disappear while the other side keeps its content,
+    /// and a row that loses its content on both sides is removed entirely.
+    /// </summary>
+    /// <param name="leftSide"><para>是否为左侧。</para>Whether the left side is edited.</param>
+    internal void DeleteSelectedTextRows(bool leftSide)
+    {
+        if (_textRows is null || _selectedRowIndices.Count == 0)
+        {
+            return;
+        }
+
+        var removed = false;
+        foreach (var index in _selectedRowIndices.OrderByDescending(index => index))
+        {
+            if (index < 0 || index >= _textRows.Count)
+            {
+                continue;
+            }
+
+            var row = _textRows[index];
+            row.SetSideText(leftSide, string.Empty, present: false);
+            RemoveRowWhenEmpty(row);
+            removed = true;
+        }
+
+        if (removed)
+        {
+            MarkDirty(leftSide);
+        }
+    }
+
+    /// <summary>
+    /// <para>构建一个可编辑文本行（新增行用）：一侧有内容、另一侧为空，供断开/合并/复制使用。</para>
+    /// Creates an editable text row (used for new rows): content on one side and empty on the other, shared by split,
+    /// join and copy.
+    /// </summary>
+    private CompareRowViewModel CreateTextRow(string leftText, string rightText, bool hasLeft, bool hasRight)
+        => new(
+            FolderItemStatus.Equal,
+            depth: 0,
+            leftLine: string.Empty,
+            leftText: leftText,
+            leftSub: string.Empty,
+            isLeftDiff: false,
+            rightLine: string.Empty,
+            rightText: rightText,
+            rightSub: string.Empty,
+            isRightDiff: false,
+            editable: true,
+            menu: CompareRowMenuKind.ComparedText,
+            hasLeftLine: hasLeft,
+            hasRightLine: hasRight,
+            edited: MarkRowEdited);
+
+    /// <summary>两侧都没有内容时把行从列表里移除（断开/合并/删除留下的空行）。</summary>
+    private void RemoveRowWhenEmpty(CompareRowViewModel row)
+    {
+        if (_textRows is null || row.HasLeftLine || row.HasRightLine)
+        {
+            return;
+        }
+
+        _textRows.Remove(row);
+    }
+
+
+    /// <summary>
+    /// <para>保存某一侧文本对比的编辑：把该侧当前的所有行按顺序写回文件（保留原编码与换行风格），
+    /// 完成后清除「已修改」标记。</para>
+    /// Saves one side's text-comparison edits: writes that side's current lines back to the file in order (preserving the
+    /// original encoding and line ending) and clears the modified flag afterwards.
+    /// </summary>
+    /// <param name="column"><para>发起保存的列。</para>The column that raised the save.</param>
+    internal async Task SaveSideAsync(CompareColumnViewModel column)
+    {
+        if (!IsComparing || !column.IsCompareSide || Rows is null)
+        {
+            return;
+        }
+
+        var leftSide = column.Side != CompareColumnSide.Right;
+        var path = leftSide ? _fileLeftPath : _fileRightPath;
+        if (path.Length == 0)
+        {
+            ReportError(LanguageService.Instance.GetString("Compare_SingleSideFile"));
+            return;
+        }
+
+        var lines = new List<string>();
+        foreach (var row in Rows)
+        {
+            if (!row.IsEditable)
+            {
+                return;
+            }
+
+            if (leftSide ? row.HasLeftLine : row.HasRightLine)
+            {
+                lines.Add(leftSide ? row.LeftText : row.RightText);
+            }
+        }
+
+        try
+        {
+            await _comparison.SaveTextAsync(path, lines, CancellationToken.None);
+            ClearDirty(leftSide);
+            ClearError();
+        }
+        catch (Exception ex)
+        {
+            ReportError(ex.Message);
+            LogService.Instance.Write(LogLevel.Error, "Compare", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// <para>构建浏览一个文件所需的行：文本文件按行（1 起行号），二进制文件按固件元数据（单侧）。</para>
+    /// Builds the rows for browsing one file: text files by line (1-based numbers), binary files by firmware
+    /// metadata (single side).
+    /// </summary>
+    /// <param name="path"><para>文件路径。</para>The file path.</param>
+    /// <param name="cancellationToken"><para>取消令牌。</para>The cancellation token.</param>
+    /// <returns><para>该文件的展示行。</para>The rows that display the file.</returns>
+    internal async Task<IReadOnlyList<CompareRowViewModel>> BuildFileRowsAsync(string path, CancellationToken cancellationToken)
+    {
+        var isText = await _comparison.IsTextLikeFileAsync(path, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (isText)
+        {
+            var lines = await _comparison.ReadTextAsync(path, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            return await Task.Run(() => ComparisonRowBuilder.ForText(lines), cancellationToken);
+        }
+
+        var metadata = await _comparison.ReadMetadataAsync(path, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return ComparisonRowBuilder.ForMetadata(metadata, null, LanguageService.Instance.GetString("Compare_Unrecognized"));
+    }
+
+    /// <summary>
+    /// <para>取路径的父目录：目录取其父目录，文件取所在目录的父目录；已在根目录时返回 <c>null</c>。</para>
+    /// Returns the parent directory of a path: for a directory its parent, for a file the parent of its
+    /// directory; <c>null</c> at a root.
+    /// </summary>
+    private static string? ParentDirectoryOf(string path)
+    {
+        if (path.Length == 0)
+        {
+            return null;
+        }
+
+        var directory = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+        return string.IsNullOrEmpty(directory) ? null : Directory.GetParent(directory)?.FullName;
+    }
+
+    /// <summary>
+    /// <para>把两个路径放入前两个文件列并开始对比（一侧留空表示单侧文件对比）。</para>
+    /// Places the two paths into the first two file columns and starts the comparison (an empty side means a
+    /// single-side file comparison).
+    /// </summary>
+    private async Task OpenComparePairAsync(string leftPath, string rightPath)
+    {
+        if (string.IsNullOrWhiteSpace(leftPath) && string.IsNullOrWhiteSpace(rightPath))
+        {
+            return;
+        }
+
+        if (IsComparing)
+        {
+            await EndCompareAsync();
+        }
+
+        EnsureColumnCount(2);
+
+        // 命令语义是「对比这两个路径」：只保留前两列，多余的浏览列一并关闭。
+        // The command's contract is "compare these two paths": keep only the first two columns and close any
+        // extra browsing columns.
+        while (Columns.Count > 2)
+        {
+            await RemoveColumnAsync(Columns[^1]);
+        }
+
+        Columns[0].Path = string.IsNullOrWhiteSpace(leftPath) ? string.Empty : Path.GetFullPath(leftPath);
+        Columns[1].Path = string.IsNullOrWhiteSpace(rightPath) ? string.Empty : Path.GetFullPath(rightPath);
+        await StartCompareAsync(allowSingleSide: true);
+    }
+
+    /// <summary>
+    /// <para>开启对比：要求两个文件列有内容，两侧同为目录时保持目录树外观并逐行对齐，同为文件时直接对比；
+    /// 一侧为文件一侧为目录会被拒绝。只有「对比指定路径」（在新标签打开文件对比等）允许单侧留空。</para>
+    /// Starts the comparison: two columns must hold content; two directories keep the tree look with aligned rows,
+    /// two files are compared directly, and a file against a directory is rejected. Only an explicit "compare
+    /// these paths" request (opening a file comparison in a new tab) may leave one side empty.
+    /// </summary>
+    /// <param name="allowSingleSide"><para>是否允许单侧文件对比（对侧留空）。</para>Whether a single-side file comparison (an empty counterpart) is allowed.</param>
+    private async Task StartCompareAsync(bool allowSingleSide)
+    {
+        var loaded = Columns.Where(column => column.HasPath).ToList();
+        if (loaded.Count is 0 or > 2 || (loaded.Count == 1 && !allowSingleSide))
+        {
+            ReportError(string.Format(
+                LanguageService.Instance.GetString("Compare_NeedTwoColumns"), loaded.Count));
+            return;
+        }
+
+        CompareColumnViewModel? left;
+        CompareColumnViewModel? right;
+        if (loaded.Count == 2)
+        {
+            left = loaded[0];
+            right = loaded[1];
+        }
+        else
+        {
+            // 单侧：内容列保持它在文档中的位置（第 1 列 → 左，第 2 列 → 右），另一列为空。
+            // Single side: the populated column keeps its position (first column → left, second → right) and the
+            // other stays empty.
+            left = Columns.ElementAtOrDefault(0);
+            right = Columns.ElementAtOrDefault(1);
+            if (ReferenceEquals(left, right))
+            {
+                right = null;
+            }
+        }
+
+        var leftPath = left?.Path ?? string.Empty;
+        var rightPath = right?.Path ?? string.Empty;
+        var leftIsDirectory = Directory.Exists(leftPath);
+        var rightIsDirectory = Directory.Exists(rightPath);
+        var leftIsFile = File.Exists(leftPath);
+        var rightIsFile = File.Exists(rightPath);
+
+        if (leftIsDirectory || rightIsDirectory)
+        {
+            if (!leftIsDirectory || !rightIsDirectory)
+            {
+                ReportError(LanguageService.Instance.GetString("Compare_MixedKinds"));
+                return;
+            }
+        }
+        else if (!leftIsFile && !rightIsFile)
+        {
+            ReportError(string.Format(
+                LanguageService.Instance.GetString("Compare_NeedTwoColumns"), loaded.Count));
+            return;
+        }
+
+        ResetCompareState();
+        _leftColumn = left;
+        _rightColumn = right;
+        _leftPath = leftPath;
+        _rightPath = rightPath;
+        if (left is not null)
+        {
+            left.Side = CompareColumnSide.Left;
+        }
+
+        if (right is not null)
+        {
+            right.Side = CompareColumnSide.Right;
+        }
+
+        IsComparing = true;
+        ClearError();
+        await LoadCompareAsync();
+    }
+
+    /// <summary>
+    /// <para>结束对比：释放对比结果与懒加载集合，并把两列还原为浏览状态（目录重新折叠为普通浏览树）。</para>
+    /// Ends the comparison: releases the result and lazily-loaded collections, and restores both columns to
+    /// browsing (directories collapse back into plain browsing trees).
+    /// </summary>
+    private async Task EndCompareAsync()
+    {
+        var left = _leftColumn;
+        var right = _rightColumn;
+        _leftColumn = null;
+        _rightColumn = null;
+        IsComparing = false;
+        ResetCompareState();
+        StatsText = string.Empty;
+        NotifyColumnsChanged();
+
+        foreach (var column in new[] { left, right })
+        {
+            if (column is null || !Columns.Contains(column))
+            {
+                continue;
+            }
+
+            column.Side = CompareColumnSide.Browse;
+            var path = column.Path;
+            if (path.Length == 0)
+            {
+                column.ClearContent();
+                continue;
+            }
+
+            await column.LoadPathAsync(path, Directory.Exists(path));
+        }
+    }
+
+    /// <summary>
+    /// <para>按当前两侧路径执行对比：两个目录走文件夹对比，其余按文件对比（含单侧）。</para>
+    /// Runs the comparison for the current pair of paths: two directories use the folder comparison and anything
+    /// else uses the file comparison (including a single side).
+    /// </summary>
+    private async Task LoadCompareAsync()
+    {
+        if (Directory.Exists(_leftPath) && Directory.Exists(_rightPath))
+        {
+            await CompareFoldersAsync();
+            return;
+        }
+
+        _fileLeftPath = File.Exists(_leftPath) ? _leftPath : string.Empty;
+        _fileRightPath = File.Exists(_rightPath) ? _rightPath : string.Empty;
+        if (_fileLeftPath.Length == 0 && _fileRightPath.Length == 0)
+        {
+            ReportError(string.Format(
+                LanguageService.Instance.GetString("Compare_PathNotFound"), _leftPath.Length > 0 ? _leftPath : _rightPath));
+            return;
+        }
+
+        await LoadFilesAsync();
+    }
+
+    /// <summary>
+    /// <para>加载文件对比：嗅探两侧文件选择文本/二进制模式并构建对应行与状态；对侧没有对应文件时
+    /// 只读取存在的一侧，另一侧整列留空（对齐行号仍逐行对应）。</para>
+    /// Loads a file comparison: sniffs both files to pick text/binary mode and builds the matching rows and
+    /// status; when a side has no counterpart only the existing side is read and the other column stays empty
+    /// (row numbers still line up).
     /// </summary>
     private async Task LoadFilesAsync()
     {
-        if (string.IsNullOrWhiteSpace(LeftPath))
+        var hasLeft = _fileLeftPath.Length > 0;
+        var hasRight = _fileRightPath.Length > 0;
+        if (!hasLeft && !hasRight)
         {
             return;
         }
@@ -746,29 +1321,24 @@ public sealed partial class CompareViewModel : Document
         IsBusy = true;
         HasError = false;
         ErrorMessage = string.Empty;
-        ResetFolderState();
+        // 重新读取磁盘内容意味着放弃此前的内存编辑（刷新/重新对比的语义）。
+        // Re-reading from disk abandons previous in-memory edits (the semantics of refresh/re-compare).
+        _dirtyLeft = false;
+        _dirtyRight = false;
+        _selectedRowIndices = [];
+        NotifyColumnsDirtyState();
         try
         {
-            var leftIsText = await _comparison.IsTextLikeFileAsync(LeftPath, ct);
+            var leftIsText = hasLeft && await _comparison.IsTextLikeFileAsync(_fileLeftPath, ct);
+            ct.ThrowIfCancellationRequested();
+            var rightIsText = hasRight && await _comparison.IsTextLikeFileAsync(_fileRightPath, ct);
             ct.ThrowIfCancellationRequested();
 
-            if (string.IsNullOrWhiteSpace(RightPath))
+            if (!hasLeft || !hasRight)
             {
-                Mode = leftIsText ? CompareMode.Text : CompareMode.Binary;
-                if (leftIsText)
-                {
-                    await LoadTextSingleSideAsync(ct);
-                }
-                else
-                {
-                    await LoadBinarySingleSideAsync(ct);
-                }
-
+                await LoadSingleSideAsync(hasLeft, hasLeft ? leftIsText : rightIsText, ct);
                 return;
             }
-
-            var rightIsText = await _comparison.IsTextLikeFileAsync(RightPath, ct);
-            ct.ThrowIfCancellationRequested();
 
             if (leftIsText && rightIsText)
             {
@@ -796,30 +1366,78 @@ public sealed partial class CompareViewModel : Document
         {
             // 仅当仍是当前加载（未被更新的加载取代）时清除 busy：被取消的旧加载
             // 不得把新加载的 busy 状态置 false。
-            // Clear busy only while this load is still the current one: a cancelled older load
-            // must not clear the newer load's busy state.
+            // Clear busy only while this load is still the current one: a cancelled older load must not clear the
+            // newer load's busy state.
             if (ct == _loadCts.Token)
             {
                 IsBusy = false;
             }
+
+            // 列头的十六进制/差异导航按钮可见性随本次加载后的模式与文件对重新求值。
+            // The header's hex/navigation button visibility is re-evaluated from the mode and file pair this load
+            // produced.
+            NotifyColumnsCompareState();
         }
     }
 
     /// <summary>
+    /// <para>加载单侧文件内容：文本按行、二进制按固件元数据，内容落在存在的一侧，另一侧留空。</para>
+    /// Loads a single side's file content: text by line, binary by firmware metadata, with the content on the
+    /// side that has the file and the other side left empty.
+    /// </summary>
+    /// <param name="useLeftSide"><para>文件是否在左侧。</para>Whether the file is on the left.</param>
+    /// <param name="isText"><para>是否为文本文件。</para>Whether the file is textual.</param>
+    /// <param name="ct"><para>取消令牌。</para>The cancellation token.</param>
+    private async Task LoadSingleSideAsync(bool useLeftSide, bool isText, CancellationToken ct)
+    {
+        var path = useLeftSide ? _fileLeftPath : _fileRightPath;
+        var unrecognized = LanguageService.Instance.GetString("Compare_Unrecognized");
+        if (isText)
+        {
+            var lines = await _comparison.ReadTextAsync(path, ct);
+            ct.ThrowIfCancellationRequested();
+            var rows = await Task.Run(() => ComparisonRowBuilder.ForTextSingleSide(lines, useLeftSide), ct);
+            ct.ThrowIfCancellationRequested();
+
+            Mode = CompareMode.Text;
+            _textRows = [.. rows];
+            Rows = _textRows;
+            StatsText = LanguageService.Instance.GetString("Compare_SingleSideFile");
+        }
+        else
+        {
+            var metadata = await _comparison.ReadMetadataAsync(path, ct);
+            ct.ThrowIfCancellationRequested();
+
+            Mode = CompareMode.Binary;
+            _leftMetadata = useLeftSide ? metadata : null;
+            _rightMetadata = useLeftSide ? null : metadata;
+            BinaryViewKind = BinaryViewKind.Metadata;
+            Rows = useLeftSide
+                ? ComparisonRowBuilder.ForMetadata(metadata, null, unrecognized)
+                : ComparisonRowBuilder.ForMetadata(null, metadata, unrecognized);
+            StatsText = LanguageService.Instance.GetString("Compare_SingleSideFile");
+        }
+
+        SelectedIndex = -1;
+        HasError = false;
+        ErrorMessage = string.Empty;
+    }
+
+    /// <summary>
     /// <para>加载双侧文本比较：流式 DiffPlex 行差异并生成对比行与差异汇总。</para>
-    /// Loads a two-sided text comparison: a streamed DiffPlex line diff producing rows and a diff
-    /// summary.
+    /// Loads a two-sided text comparison: a streamed DiffPlex line diff producing rows and a diff summary.
     /// </summary>
     private async Task LoadTextBothSidesAsync(CancellationToken ct)
     {
-        var lines = await _comparison.CompareTextAsync(LeftPath, RightPath, ct);
+        var lines = await _comparison.CompareTextAsync(_fileLeftPath, _fileRightPath, ct);
         ct.ThrowIfCancellationRequested();
 
-        var rows = new List<CompareRowViewModel>(lines.Count);
+        var rows = new ObservableCollection<CompareRowViewModel>();
         var diffCount = 0;
         foreach (var line in lines)
         {
-            var row = CompareRowViewModel.ForText(line);
+            var row = CompareRowViewModel.ForText(line, MarkRowEdited);
             if (row.IsLeftDiff || row.IsRightDiff)
             {
                 diffCount++;
@@ -828,10 +1446,11 @@ public sealed partial class CompareViewModel : Document
             rows.Add(row);
         }
 
+        _textRows = rows;
         Rows = rows;
         SelectedIndex = -1;
         StatsText = string.Format(
-            LanguageService.Instance.GetString("Compare_Summary"),
+            LanguageService.Instance.GetString("Compare_TextSummary"),
             diffCount,
             rows.Count);
         HasError = false;
@@ -839,37 +1458,18 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>加载单侧文本比较：自行流式读取左侧文件行（UTF-8，上限 200 万行/256 MB）生成仅左侧行。</para>
-    /// Loads a single-sided text comparison: streams the left file's lines itself (UTF-8, bounded to
-    /// 2,000,000 lines / 256 MB) into left-only rows.
-    /// </summary>
-    private async Task LoadTextSingleSideAsync(CancellationToken ct)
-    {
-        var lines = await _comparison.ReadTextAsync(LeftPath, ct);
-        ct.ThrowIfCancellationRequested();
-        var rows = await Task.Run(() => ComparisonRowBuilder.ForText(lines), ct);
-        ct.ThrowIfCancellationRequested();
-
-        Rows = rows;
-        SelectedIndex = -1;
-        StatsText = LanguageService.Instance.GetString("Compare_DropRightFile");
-        HasError = false;
-        ErrorMessage = string.Empty;
-    }
-
-    /// <summary>
     /// <para>加载双侧二进制比较：识别并读取两侧元数据生成元数据行（差异统计仅在切换十六进制
     /// 原始视图时计算）。</para>
-    /// Loads a two-sided binary comparison: detects and reads both sides' metadata into metadata
-    /// rows (diff stats are computed only when switching to the hex-raw view).
+    /// Loads a two-sided binary comparison: detects and reads both sides' metadata into metadata rows (diff
+    /// stats are computed only when switching to the hex-raw view).
     /// </summary>
     private async Task LoadBinaryBothSidesAsync(CancellationToken ct)
     {
         try
         {
-            var leftMeta = await _comparison.ReadMetadataAsync(LeftPath, ct);
+            var leftMeta = await _comparison.ReadMetadataAsync(_fileLeftPath, ct);
             ct.ThrowIfCancellationRequested();
-            var rightMeta = await _comparison.ReadMetadataAsync(RightPath, ct);
+            var rightMeta = await _comparison.ReadMetadataAsync(_fileRightPath, ct);
             ct.ThrowIfCancellationRequested();
 
             _leftMetadata = leftMeta;
@@ -877,14 +1477,15 @@ public sealed partial class CompareViewModel : Document
             BinaryViewKind = BinaryViewKind.Metadata;
             Rows = ComparisonRowBuilder.ForMetadata(leftMeta, rightMeta, LanguageService.Instance.GetString("Compare_Unrecognized"));
             SelectedIndex = -1;
+            StatsText = string.Empty;
 
-            // 不在此跑全文件差异扫描：二进制模式下 StatsText 不显示，且多 GB 固件的全量扫描
+            // 不在此跑全文件差异扫描：二进制模式下汇总不显示差异计数，且多 GB 固件的全量扫描
             // 耗时数十秒，会让 busy 指示一直转；差异统计在切换十六进制原始视图时才需要
             // （CompareStats 位图重载），由 ToggleHexView 计算。
-            // No full-file diff scan here: StatsText is not shown in binary mode, and a full scan
-            // of multi-GB firmware takes tens of seconds, keeping the busy indicator spinning; diff
-            // stats are only needed when switching to the hex-raw view (the CompareStats bitmap
-            // overload), computed by ToggleHexView.
+            // No full-file diff scan here: in binary mode the summary shows no diff counts, and a full scan of
+            // multi-GB firmware takes tens of seconds, keeping the busy indicator spinning; diff stats are only
+            // needed when switching to the hex-raw view (the CompareStats bitmap overload), computed by
+            // ToggleHexView.
             HasError = false;
             ErrorMessage = string.Empty;
         }
@@ -892,30 +1493,40 @@ public sealed partial class CompareViewModel : Document
         {
             // 取消：保持当前状态，不向上传播（切换十六进制视图/重新加载会取消进行中的加载，
             // 若此处不捕获，后台 Task 抛出的 OCE 可能成为未处理异常导致崩溃）。
-            // Cancelled: keep the current state and do not propagate — toggling the hex view or
-            // reloading cancels the in-flight load, and without this catch the OCE thrown inside
-            // the background Task could surface as an unhandled exception and crash the app.
+            // Cancelled: keep the current state and do not propagate — toggling the hex view or reloading cancels
+            // the in-flight load, and without this catch the OCE thrown inside the background Task could surface
+            // as an unhandled exception and crash the app.
         }
     }
 
     /// <summary>
-    /// <para>加载单侧二进制比较：识别并读取左侧元数据生成元数据行，右侧留空并提示拖入。</para>
-    /// Loads a single-sided binary comparison: detects and reads the left metadata into rows, leaving
-    /// the right side empty with a drop hint.
+    /// <para>清空一次对比的全部派生状态（路径、对比树、元数据缓存、计数与行）。</para>
+    /// Clears every derived state of one comparison (paths, compare tree, metadata caches, counts and rows).
     /// </summary>
-    private async Task LoadBinarySingleSideAsync(CancellationToken ct)
+    private void ResetCompareState()
     {
-        var leftMeta = await _comparison.ReadMetadataAsync(LeftPath, ct);
-        ct.ThrowIfCancellationRequested();
-
-        _leftMetadata = leftMeta;
+        _leftPath = string.Empty;
+        _rightPath = string.Empty;
+        _fileLeftPath = string.Empty;
+        _fileRightPath = string.Empty;
+        _folderSummaryText = string.Empty;
+        _compareTreeRoot = null;
+        _textRows = null;
+        _currentHexRows?.Dispose();
+        _currentHexRows = null;
+        _leftMetadata = null;
         _rightMetadata = null;
+        _dirtyLeft = false;
+        _dirtyRight = false;
+        _selectedRowIndices = [];
+        Rows = null;
+        Mode = CompareMode.None;
         BinaryViewKind = BinaryViewKind.Metadata;
-        Rows = ComparisonRowBuilder.ForMetadata(leftMeta, null, LanguageService.Instance.GetString("Compare_Unrecognized"));
         SelectedIndex = -1;
-        StatsText = LanguageService.Instance.GetString("Compare_DropRightFile");
-        HasError = false;
-        ErrorMessage = string.Empty;
+        EqualCount = 0;
+        DifferentCount = 0;
+        LeftOnlyCount = 0;
+        RightOnlyCount = 0;
     }
 
     /// <summary>
@@ -931,21 +1542,47 @@ public sealed partial class CompareViewModel : Document
     }
 
     /// <summary>
-    /// <para>按当前模式与 <see cref="Rows"/> 重建左右两侧的行列表：所有模式两侧均共享
-    /// <see cref="Rows"/>（行按相对路径/行号一一对应，同名/同行条目自然落在同一水平行）；
-    /// 仅单侧条目由 <see cref="CompareRowViewModel"/> 的缺失侧单元格置空驱动，在另一侧渲染
-    /// 空白占位行（不显示名称）以保持行对齐。</para>
-    /// Rebuilds the left/right row lists by the current mode and <see cref="Rows"/>: both sides
-    /// share <see cref="Rows"/> in every mode so rows are aligned one-to-one by relative path /
-    /// line number (same-name items land on the same horizontal row). Left-only/right-only items
-    /// rely on the empty missing-side cell of <see cref="CompareRowViewModel"/> and render as a
-    /// blank placeholder row on the other side to keep alignment.
+    /// <para>取第一个还没有内容的文件列，没有空列时在末尾追加。</para>
+    /// Returns the first file column without content, appending a new one when none is free.
     /// </summary>
-    private void RebuildSideRows()
+    private CompareColumnViewModel ReserveColumn()
     {
-        LeftRows = Rows;
-        RightRows = Rows;
+        foreach (var column in Columns)
+        {
+            if (!column.HasPath)
+            {
+                return column;
+            }
+        }
+
+        return AddColumn();
     }
 
+    /// <summary>把文件列数量补足到指定值。</summary>
+    private void EnsureColumnCount(int count)
+    {
+        while (Columns.Count < count)
+        {
+            AddColumn();
+        }
+    }
 
+    /// <summary>列集合变化后刷新文档级派生属性与各列的关闭按钮状态。</summary>
+    private void OnColumnsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        NotifyColumnsChanged();
+        foreach (var column in Columns)
+        {
+            column.NotifyCanCloseChanged();
+        }
+    }
+
+    /// <summary>把对比模式派生的可见性变化通知到每一列（列头的差异导航/十六进制按钮）。</summary>
+    private void NotifyColumnsCompareState()
+    {
+        foreach (var column in Columns)
+        {
+            column.NotifyCompareStateChanged();
+        }
+    }
 }

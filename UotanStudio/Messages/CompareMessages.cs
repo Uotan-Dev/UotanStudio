@@ -24,6 +24,22 @@ public sealed class OpenFileCompareRequestMessage
 }
 
 /// <summary>
+/// <para>请求在新标签中打开一个文件比较文档：用于对比视图双击文件时把文件对比放到新标签，
+/// 不打断当前的目录对比。左侧为空表示该文件只存在于右侧。</para>
+/// Message requesting a file comparison to open in a new tab: used when the compare view double-clicks a file, so
+/// the file comparison opens in its own tab without interrupting the current folder comparison. An empty left
+/// path means the file exists on the right side only.
+/// </summary>
+public sealed class OpenFileCompareInNewTabRequestMessage
+{
+    /// <summary>左文件路径；该侧没有对应文件时为空。<para>Left file path; empty when that side has no counterpart.</para></summary>
+    public required string LeftPath { get; init; }
+
+    /// <summary>右文件路径；该侧没有对应文件时为空。<para>Right file path; empty when that side has no counterpart.</para></summary>
+    public required string RightPath { get; init; }
+}
+
+/// <summary>
 /// <para>请求打开文件夹比较文档的消息。</para>
 /// Message requesting to open a folder-compare document.
 /// </summary>

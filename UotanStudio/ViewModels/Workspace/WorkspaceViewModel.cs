@@ -91,6 +91,40 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
+    /// <para>在工作区文档区新建一个对比文档（不复用已有实例），供「在新标签打开文件对比」使用；
+    /// 新文档的 Id 唯一，避免与已打开的对比标签冲突。</para>
+    /// Opens an additional compare document in the workspace document area (never reusing an existing instance),
+    /// used by "open the file comparison in a new tab"; the new document gets a unique Id so it cannot clash with
+    /// an already open compare tab.
+    /// </summary>
+    /// <returns><para>新建的对比文档；布局未就绪时为 null。</para>The new compare document, or null if the layout is unavailable.</returns>
+    public CompareViewModel? OpenNewCompareDocument()
+    {
+        var documentDock = _documentDock ??= FindDocumentsPane();
+        if (documentDock is null)
+        {
+            return null;
+        }
+
+        EnsureDocumentDockSubscribed(documentDock);
+        var document = new CompareViewModel
+        {
+            Id = $"CompareDocument{Guid.NewGuid():N}",
+            Title = LanguageService.Instance.GetString("Tab_Compare"),
+            CanClose = true
+        };
+        _factory.AddDockable(documentDock, document);
+        _factory.SetActiveDockable(document);
+        if (_factory.FindRoot(document) is { } root)
+        {
+            _factory.SetFocusedDockable(root, document);
+        }
+
+        WeakReferenceMessenger.Default.Send(new NavigateToTabMessage(NavigationTarget.Workspace));
+        return document;
+    }
+
+    /// <summary>
     /// <para>在工作区文档区打开或聚焦投屏文档，复用尚未关闭的实例并切换到工作区。</para>
     /// Opens or focuses the screen-mirror document, reusing its instance until closed,
     /// and navigates to the workspace.
@@ -629,7 +663,10 @@ public class WorkspaceViewModel : ViewModelBase, IDisposable
     {
         if (dto.Kind == "Compare")
         {
-            var compare = OpenCompareDocument();
+            // 第一份对比文档复用文档区的实例，其余（同一会话里在新标签打开的文件对比）各开一个新标签。
+            // The first compare document reuses the document area's instance; the rest (file comparisons opened in
+            // new tabs during the session) each get their own tab.
+            var compare = _compareDocument is null ? OpenCompareDocument() : OpenNewCompareDocument();
             if (compare is not null)
                 foreach (var path in new[] { dto.CompareLeftPath, dto.CompareRightPath })
                     if (!string.IsNullOrEmpty(path) && (File.Exists(path) || Directory.Exists(path)))

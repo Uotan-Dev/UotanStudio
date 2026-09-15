@@ -12,6 +12,13 @@ internal interface IComparisonService
     /// <summary>Reads BOM-aware text, bounded to two million lines and 256 MiB.</summary>
     Task<IReadOnlyList<string>> ReadTextAsync(string path, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// <para>把文本行写回文件：保留原文件的编码（按 BOM 判定）与换行风格，先写同目录临时文件再原子替换。</para>
+    /// Writes text lines back to a file: the original encoding (detected from the BOM) and line ending are preserved,
+    /// and a temporary file next to the target is atomically swapped in.
+    /// </summary>
+    Task SaveTextAsync(string path, IReadOnlyList<string> lines, CancellationToken cancellationToken);
+
     /// <summary>Reads firmware metadata without extracting or scanning binary differences.</summary>
     Task<ComparisonMetadata> ReadMetadataAsync(string path, CancellationToken cancellationToken);
 
