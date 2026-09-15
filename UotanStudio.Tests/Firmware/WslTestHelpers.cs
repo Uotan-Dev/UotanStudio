@@ -16,6 +16,16 @@ internal static class WslTestHelpers
     /// </summary>
     public static string DistroName { get; } = Environment.GetEnvironmentVariable("UOTAN_TEST_WSL_DISTRO") ?? "Alpine";
 
+    /// <summary>
+    /// Native/WSL interoperability suites drive real mkfs/fsck/mount tools and can run for minutes;
+    /// they are opt-in so the default suite stays bounded. Set <c>UOTAN_TEST_WSL_INTEROP=1</c>
+    /// (any non-empty value) to run them.
+    /// <para>原生/WSL 互操作套件会驱动真实 mkfs/fsck/mount 工具且可能持续数分钟；它们默认不运行，
+    /// 以保持默认测试集有界。设置 <c>UOTAN_TEST_WSL_INTEROP=1</c>（任意非空值）即可运行。</para>
+    /// </summary>
+    public static bool IsInteropEnabled()
+        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UOTAN_TEST_WSL_INTEROP"));
+
     private static readonly Lock ConfigLock = new();
 
     /// <summary>

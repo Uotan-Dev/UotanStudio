@@ -16,6 +16,8 @@ public sealed class NativeFileSystemInteropTests
     [InlineData(32746L * 4096, false)]
     public void Ext4BackupSuperblock_NativeFsckAcceptsSecondGroup(long fileBytes, bool journal)
     {
+        if (!WslTestHelpers.IsInteropEnabled())
+            Assert.Skip("Native/WSL interop verification is opt-in; set UOTAN_TEST_WSL_INTEROP=1 to run it.");
         if (!WslTestHelpers.IsAlpineAvailable() || !WslTestHelpers.IsToolAvailable("e2fsck"))
             Assert.Skip("Native e2fsck is unavailable.");
         using var temp = new TempDirectory();
@@ -68,6 +70,8 @@ public sealed class NativeFileSystemInteropTests
     [InlineData("f2fs")]
     public void NativeImage_ManagedExtractionMatchesSource(string format)
     {
+        if (!WslTestHelpers.IsInteropEnabled())
+            Assert.Skip("Native/WSL interop verification is opt-in; set UOTAN_TEST_WSL_INTEROP=1 to run it.");
         if (!WslTestHelpers.IsAlpineAvailable()) Assert.Skip("The configured WSL distribution is unavailable.");
         var tools = format.StartsWith("ext", StringComparison.Ordinal) ? new[] { "mke2fs" } :
             format.StartsWith("erofs", StringComparison.Ordinal) ? ["mkfs.erofs"] : ["mkfs.f2fs", "sload.f2fs"];

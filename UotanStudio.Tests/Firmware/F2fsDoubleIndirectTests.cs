@@ -57,7 +57,9 @@ public class F2fsDoubleIndirectTests
         Assert.Null(parser.MapBlock(inode, logicalBlocks[^1] - 5));
         image.Dispose();
         parser.Dispose();
-        var native = CheckNative(imagePath);
+        // Native fsck runs the real kernel tool; keep it opt-in so the default suite stays bounded.
+        // 原生 fsck 会运行真实内核工具；保持显式启用，确保默认测试集有界。
+        var native = WslTestHelpers.IsInteropEnabled() ? CheckNative(imagePath) : null;
         if (native is not null) Assert.True(native.Value.ExitCode == 0 && !native.Value.Output.Contains("[ASSERT]") && !native.Value.Output.Contains("[Fail]"), native.Value.Output);
     }
 

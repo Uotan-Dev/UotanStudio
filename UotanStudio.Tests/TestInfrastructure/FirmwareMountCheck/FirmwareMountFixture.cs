@@ -37,9 +37,20 @@ public sealed class FirmwareMountFixture : IDisposable
         _nativeResult = new(RunNative);
     }
 
+    /// <summary>
+    /// The heavy QEMU mount matrix is opt-in: it boots up to 14 kernel guests and must not
+    /// stall the default test flow. Set <c>UOTAN_FIRMWARE_QEMU_ENABLED</c> to run it.
+    /// <para>重型 QEMU 挂载矩阵为显式启用项：它最多启动 14 个内核客户机，不应阻塞默认测试流程。
+    /// 设置 <c>UOTAN_FIRMWARE_QEMU_ENABLED</c> 才运行。</para>
+    /// </summary>
+    private static bool QemuEnabled()
+        => !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UOTAN_FIRMWARE_QEMU_ENABLED"));
+
     internal string VerifyQemu(string name)
     {
         Assert.Contains(name, CaseNames);
+        if (!QemuEnabled())
+            Assert.Skip("QEMU mount verification is opt-in; set UOTAN_FIRMWARE_QEMU_ENABLED=1 to run the mount matrix.");
         var unavailable = QemuUnavailableReason(name);
         if (unavailable is not null) Assert.Skip(unavailable);
         try
@@ -60,6 +71,8 @@ public sealed class FirmwareMountFixture : IDisposable
 
     internal string VerifyNativeDeflate()
     {
+        if (!QemuEnabled())
+            Assert.Skip("Native DEFLATE verification is opt-in; set UOTAN_FIRMWARE_QEMU_ENABLED=1 to run it.");
         var probe = _nativeProbe.Value;
         if (probe.ExitCode == 77) Assert.Skip(probe.Output.Trim());
         Assert.True(probe.ExitCode == 0, probe.Output);
