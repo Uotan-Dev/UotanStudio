@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 using UotanStudio.Comm;
 using UotanStudio.Comm.Protocols.Common;
 using UotanStudio.Comm.Protocols.Fastboot;
-using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Comm.Protocols.Hdc;
+using UotanStudio.Comm.Transports.Usb.Abstractions;
 using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Cli;
