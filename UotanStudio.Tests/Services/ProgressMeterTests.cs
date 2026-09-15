@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Threading;
 using UotanStudio.Services;
 using Xunit;
 
@@ -114,10 +113,11 @@ public sealed class ProgressMeterTests
     [Fact]
     public void Report_AfterSampleGap_ComputesPositiveSpeedAndEta()
     {
-        var meter = new ProgressMeter();
+        var clock = new ManualClock();
+        var meter = new ProgressMeter(clock);
         meter.Report(0, 1000);
         // 越过 0.25s 最小样本间隔，使窗口首尾可估算速度。
-        Thread.Sleep(300);
+        clock.Advance(0.3);
         meter.Report(500, 1000);
 
         Assert.Equal(500, meter.Processed);
@@ -133,9 +133,10 @@ public sealed class ProgressMeterTests
     [Fact]
     public void ReportItems_WithSufficientGap_SpeedSegmentContainsPerSecond()
     {
-        var meter = new ProgressMeter();
+        var clock = new ManualClock();
+        var meter = new ProgressMeter(clock);
         meter.ReportItems(0, 100);
-        Thread.Sleep(300);
+        clock.Advance(0.3);
         meter.ReportItems(50, 100);
 
         Assert.NotNull(meter.BytesPerSecond);
@@ -148,9 +149,10 @@ public sealed class ProgressMeterTests
     [Fact]
     public void Report_ProcessedRegression_StartsNewStageWithClearedSamples()
     {
-        var meter = new ProgressMeter();
+        var clock = new ManualClock();
+        var meter = new ProgressMeter(clock);
         meter.Report(0, 1000);
-        Thread.Sleep(300);
+        clock.Advance(0.3);
         meter.Report(500, 1000);
         Assert.NotNull(meter.BytesPerSecond);
 
@@ -161,7 +163,7 @@ public sealed class ProgressMeterTests
         Assert.True(meter.EstimatedRemaining is null);
 
         // 新阶段继续喂样本后速度重新起算。
-        Thread.Sleep(300);
+        clock.Advance(0.3);
         meter.Report(600, 1000);
         var speed = meter.BytesPerSecond;
         Assert.NotNull(speed);
@@ -172,16 +174,17 @@ public sealed class ProgressMeterTests
     [Fact]
     public void EstimatedRemaining_WhenTotalNotGreaterThanProcessed_IsNull()
     {
-        var meter = new ProgressMeter();
+        var clock = new ManualClock();
+        var meter = new ProgressMeter(clock);
         meter.Report(1000, 1000);
-        Thread.Sleep(300);
+        clock.Advance(0.3);
         meter.Report(1000, 1000);
 
         Assert.Null(meter.EstimatedRemaining);
 
         meter.Reset();
         meter.Report(500, 400);
-        Thread.Sleep(300);
+        clock.Advance(0.3);
         meter.Report(500, 400);
         Assert.True(meter.EstimatedRemaining is null);
     }
