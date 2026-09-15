@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Models;
+using UotanStudio.Services.Mcp;
 
 namespace UotanStudio.Services;
 
@@ -33,6 +34,7 @@ public class AppSettings : IJsonOnDeserialized
     {
         var copy = (AppSettings)MemberwiseClone();
         copy.RecentProjects = [.. RecentProjects];
+        copy.McpServers = [.. McpServers];
         copy.AdditionalSettings = AdditionalSettings is null ? null : new(AdditionalSettings);
         return copy;
     }
@@ -207,6 +209,29 @@ public class AppSettings : IJsonOnDeserialized
     public float ScreenMirrorVolume { get; set; } = 1;
     /// <summary>Enable remote input. 是否允许远程输入。</summary>
     public bool ScreenMirrorControl { get; set; } = true;
+
+    /// <summary>
+    /// <para>获取或设置 MCP 服务器连接列表（设置页维护，MCP 客户端按名称调用其工具）。</para>
+    /// Gets or sets the MCP server connection list (maintained by the settings page; MCP clients
+    /// call their tools by name).
+    /// </summary>
+    [JsonPropertyName("mcpServers")]
+    public List<McpServerConfig> McpServers { get; set; } = [];
+
+    /// <summary>
+    /// <para>获取或设置是否把本应用的固件能力暴露为 MCP 服务器（端口见 <see cref="McpExposePort"/>）。</para>
+    /// Gets or sets whether to expose this application's firmware capabilities as an MCP server
+    /// (port in <see cref="McpExposePort"/>).
+    /// </summary>
+    [JsonPropertyName("mcpExposeEnabled")]
+    public bool McpExposeEnabled { get; set; }
+
+    /// <summary>
+    /// <para>获取或设置 MCP 服务器暴露端口。</para>
+    /// Gets or sets the MCP server exposure port.
+    /// </summary>
+    [JsonPropertyName("mcpExposePort")]
+    public int McpExposePort { get; set; } = 18321;
 }
 
 /// <summary>
@@ -216,13 +241,15 @@ public class AppSettings : IJsonOnDeserialized
 [JsonSerializable(typeof(AppSettings))]
 [JsonSerializable(typeof(Workspace.WorkspaceSessionSnapshot))]
 [JsonSerializable(typeof(ThemeMode))]
+[JsonSerializable(typeof(McpServerConfig))]
+[JsonSerializable(typeof(McpTransportKind))]
 [JsonSerializable(typeof(UotanStudio.Services.Logging.LogFileRecord))]
 [JsonSerializable(typeof(Dictionary<string, bool>))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    Converters = [typeof(JsonStringEnumConverter<ThemeMode>)])]
+    Converters = [typeof(JsonStringEnumConverter<ThemeMode>), typeof(JsonStringEnumConverter<McpTransportKind>)])]
 internal partial class AppSettingsJsonContext : JsonSerializerContext;
 
 /// <summary>

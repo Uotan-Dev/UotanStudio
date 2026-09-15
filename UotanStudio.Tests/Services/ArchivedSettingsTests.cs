@@ -27,8 +27,8 @@ public sealed class ArchivedSettingsTests
     public void SaveAndClone_PreserveUnavailableFeatureSettings()
     {
         const string json = """
-            {"mcpExposeEnabled":true,"mcpExposePort":18321,
-             "mcpServers":[{"name":"local","transport":"Stdio","command":"example","enabled":true}]}
+            {"legacyExposeEnabled":true,"legacyExposePort":18321,
+             "legacyServers":[{"name":"local","transport":"Stdio","command":"example","enabled":true}]}
             """;
         var settings = JsonSerializer.Deserialize(json, AppSettingsJsonContext.Default.AppSettings)!;
         var copy = settings.Copy();
@@ -37,7 +37,7 @@ public sealed class ArchivedSettingsTests
         using var original = JsonDocument.Parse(json);
         foreach (var property in original.RootElement.EnumerateObject())
             Assert.True(JsonElement.DeepEquals(property.Value, saved.RootElement.GetProperty(property.Name)));
-        copy.AdditionalSettings!.Remove("mcpServers");
-        Assert.True(settings.AdditionalSettings!.ContainsKey("mcpServers"));
+        copy.AdditionalSettings!.Remove("legacyServers");
+        Assert.True(settings.AdditionalSettings!.ContainsKey("legacyServers"));
     }
 }
