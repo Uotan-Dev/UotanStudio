@@ -32,6 +32,13 @@ public sealed class BootPatchService
             ? selected : detection.Architectures[0];
         using var parser = new BootImageParser();
         parser.ParseFile(bootPath);
+        string? stockBootSha1 = null;
+        if (detection.Kind == BootPatchKind.Magisk)
+        {
+            await using var sourceBoot = new FileStream(bootPath, FileMode.Open, FileAccess.Read, FileShare.Read,
+                65536, FileOptions.SequentialScan);
+            stockBootSha1 = Convert.ToHexStringLower(await SHA1.HashDataAsync(sourceBoot, cancellationToken).ConfigureAwait(false));
+        }
         options.Progress?.Report(.2d);
         string? bootKmi = null;
         string? kernelSuKmi = null;
@@ -82,17 +89,28 @@ public sealed class BootPatchService
                     ?? throw new InvalidDataException("The boot kernel compression is unsupported or corrupt.");
             SplitEmbeddedKernelDtb(parser, rawKernel, out var kernelBody, out kernelDtb);
             var beforeKernelChanges = changes.Count;
-            var patched = MagiskKernelPatcher.Apply(kernelBody, options.ForceRootfs, changes);
+            // Magisk's legacy boot flow always requests an initramfs when the
+            // stock kernel advertises skip_initramfs.  Keep the explicit option
+            // for callers while matching the device patcher by detecting that
+            // marker automatically.
+            var patched = MagiskKernelPatcher.Apply(kernelBody,
+                options.ForceRootfs || MagiskKernelPatcher.NeedsLegacyRootfs(kernelBody), changes);
             // Magisk deliberately keeps the original compressed bytes when no
             // vendor pattern was found.  Recompressing an unchanged kernel can
             // alter headers and invalidate vendor signatures.
             if (changes.Count == beforeKernelChanges)
                 patchedKernel = parser.Kernel;
             else
-                if (kernelDtb is { Length: > 0 }) patched = [.. patched, .. kernelDtb];
+            {
+                if (kernelDtb is { Length: > 0 })
+                {
+                    patched = [.. patched, .. kernelDtb];
+                }
+
                 patchedKernel = parser.Header.KernelCompression == CompressionType.None
                     ? patched
                     : CompressRamdisk(patched, parser.Header.KernelCompression);
+            }
         }
 
         byte[] compressed;
@@ -110,7 +128,7 @@ public sealed class BootPatchService
             using (var ramdiskStream = new MemoryStream(rawRamdisk, writable: false)) editor.Load(ramdiskStream);
             var stockInit = editor.Find("init")?.Data;
             PatchFstab(editor, options, changes);
-            await ApplyPackageAsync(editor, packagePath, detection, arch, options, changes, cancellationToken, kernelSuKmi).ConfigureAwait(false);
+            await ApplyPackageAsync(editor, packagePath, detection, arch, options, changes, cancellationToken, kernelSuKmi, stockBootSha1).ConfigureAwait(false);
             if (detection.Kind == BootPatchKind.Magisk)
                 AddMagiskBackupEntries(editor, stockInit, changes);
             options.Progress?.Report(.65d);
@@ -136,7 +154,8 @@ public sealed class BootPatchService
     }
 
     private static async Task ApplyPackageAsync(CpioArchiveEditor editor, string packagePath, BootPatchDetection detection,
-        string architecture, BootPatchOptions options, List<string> changes, CancellationToken ct, string? bootKmi = null)
+        string architecture, BootPatchOptions options, List<string> changes, CancellationToken ct, string? bootKmi = null,
+        string? stockBootSha1 = null)
     {
         if (detection.Kind == BootPatchKind.KernelSuLkm)
         {
@@ -161,8 +180,8 @@ public sealed class BootPatchService
                 // Magisk's boot_patch.sh injects only the runtime payloads below.
                 // util_functions.sh and helper libraries are patch-time inputs and
                 // must never become ramdisk files.
-                if (!IsMagiskRuntimeEntry(entry.Name)) continue;
-                var magiskTarget = MagiskTarget(entry.Name, initTarget);
+                if (!IsMagiskRuntimeEntry(entry.Name, detection.Version)) continue;
+                var magiskTarget = MagiskTarget(entry.Name, initTarget, detection.Version);
                 if (magiskTarget is null) continue;
                 var bytes = await ReadEntryBoundedAsync(entry, ct).ConfigureAwait(false);
                 if (!entry.Name.EndsWith(".xz", StringComparison.OrdinalIgnoreCase) && magiskTarget.EndsWith(".xz", StringComparison.OrdinalIgnoreCase))
@@ -192,7 +211,8 @@ public sealed class BootPatchService
                 $"KEEPFORCEENCRYPT={(options.KeepForceEncryption ? "true" : "false")}\n" +
                 $"RECOVERYMODE={(options.RecoveryMode ? "true" : "false")}\n" +
                 "VENDORBOOT=false\n" +
-                (string.IsNullOrWhiteSpace(options.PreInitDevice) ? string.Empty : $"PREINITDEVICE={options.PreInitDevice.Trim()}\n"));
+                (string.IsNullOrWhiteSpace(options.PreInitDevice) ? string.Empty : $"PREINITDEVICE={options.PreInitDevice.Trim()}\n") +
+                (string.IsNullOrWhiteSpace(stockBootSha1) ? string.Empty : $"SHA1={stockBootSha1}\n"));
             if (editor.Exists(".backup/.magisk")) editor.Remove(".backup/.magisk");
             editor.AddOrReplace(".backup", [], new ArchiveEntryMetadata
             {
@@ -260,12 +280,12 @@ public sealed class BootPatchService
         _ => [architecture]
     };
 
-    private static string? MagiskTarget(string name, string initTarget)
+    private static string? MagiskTarget(string name, string initTarget, string? version)
     {
         if (name.Equals("init", StringComparison.OrdinalIgnoreCase) || name.Equals("magiskinit", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagiskinit.so", StringComparison.OrdinalIgnoreCase)) return initTarget;
         if (name.Equals("magisk.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("magisk", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagisk.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/magisk.xz";
         if (name.Equals("magisk32.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("magisk32", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagisk32.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/magisk32.xz";
-        if (name.Equals("magisk64.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("magisk64", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagisk64.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/magisk64.xz";
+        if (name.Equals("magisk64.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("magisk64", StringComparison.OrdinalIgnoreCase) || name.Equals("libmagisk64.so", StringComparison.OrdinalIgnoreCase)) return version?.StartsWith("27.", StringComparison.Ordinal) == true ? "overlay.d/sbin/magisk64.xz" : "overlay.d/sbin/magisk.xz";
         if (name.Equals("stub.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("stub.apk", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/stub.xz";
         if (name.Equals("init-ld.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("init-ld", StringComparison.OrdinalIgnoreCase) || name.Equals("libinit-ld.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/init-ld.xz";
         if (name.Equals("busybox.xz", StringComparison.OrdinalIgnoreCase) || name.Equals("busybox", StringComparison.OrdinalIgnoreCase) || name.Equals("libbusybox.so", StringComparison.OrdinalIgnoreCase)) return "overlay.d/sbin/busybox.xz";
@@ -273,9 +293,12 @@ public sealed class BootPatchService
         return name.EndsWith(".xz", StringComparison.OrdinalIgnoreCase) ? $"overlay.d/sbin/{name}" : null;
     }
 
-    private static bool IsMagiskRuntimeEntry(string name)
+    private static bool IsMagiskRuntimeEntry(string name, string? version)
         => name.Equals("stub.apk", StringComparison.OrdinalIgnoreCase)
             || name.Equals("libmagisk.so", StringComparison.OrdinalIgnoreCase)
+            || (version?.StartsWith("27.", StringComparison.Ordinal) == true
+                && (name.Equals("libmagisk32.so", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("libmagisk64.so", StringComparison.OrdinalIgnoreCase)))
             || name.Equals("libmagiskinit.so", StringComparison.OrdinalIgnoreCase)
             || name.Equals("libinit-ld.so", StringComparison.OrdinalIgnoreCase);
 
@@ -347,7 +370,7 @@ public sealed class BootPatchService
         if (stockInit is not { Length: > 0 }) return;
         EnsureParentDirectories(editor, ".backup/.magisk", changes);
         var compressedInit = CompressionService.Compress(stockInit, CompressionFormat.Xz);
-        editor.AddOrReplace(".backup/init.xz", compressedInit, Regular(0x81A4u));
+        editor.AddOrReplace(".backup/init.xz", compressedInit, Regular(0x81E8u));
         // Magisk records files created by the patch so its restore operation can
         // remove them on the next patch. Keep this list deterministic.
         // Magisk's restore list is a NUL-terminated sequence, rather than a
@@ -359,7 +382,7 @@ public sealed class BootPatchService
             "overlay.d/sbin/init-ld.xz\0" +
             "overlay.d/sbin/magisk.xz\0" +
             "overlay.d/sbin/stub.xz\0");
-        editor.AddOrReplace(".backup/.rmlist", removeList, Regular(0x81A4u));
+        editor.AddOrReplace(".backup/.rmlist", removeList, Regular(0x8000u));
         changes.Add("write Magisk restore metadata");
     }
 

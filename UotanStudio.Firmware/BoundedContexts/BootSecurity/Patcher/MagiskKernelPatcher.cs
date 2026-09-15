@@ -3,6 +3,11 @@ namespace UotanStudio.Firmware.BoundedContexts.BootSecurity.Patcher;
 /// <summary>Applies the source-faithful, pattern based kernel fixes used by Magisk patchers.</summary>
 internal static class MagiskKernelPatcher
 {
+    private static ReadOnlySpan<byte> SkipInitramfs => "skip_initramfs"u8;
+
+    public static bool NeedsLegacyRootfs(ReadOnlySpan<byte> kernel)
+        => kernel.IndexOf(SkipInitramfs) >= 0;
+
     private static readonly (string Find, string Replace, string Name)[] CommonPatches =
     [
         ("49010054011440B93FA00F71E9000054010840B93FA00F7189000054001840B91FA00F7188010054",

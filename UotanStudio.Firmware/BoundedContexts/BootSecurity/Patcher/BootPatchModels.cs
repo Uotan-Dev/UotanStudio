@@ -215,10 +215,13 @@ public static class BootPatchAnalyzer
             || names.Any(n => n.EndsWith("kernelsu.ko", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("ksu.ko", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("susfs.ko", StringComparison.OrdinalIgnoreCase));
-        var hasApatch = names.Any(n => n.EndsWith("kpimg", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("libkptools.so", StringComparison.OrdinalIgnoreCase))
+        // KernelSU variants such as SukiSU also ship a KPM image named
+        // `kpimg`; that marker alone must not classify them as APatch.  APatch
+        // packages carry the kpatch native library or an APatch-specific
+        // installer script, which are stronger family identifiers.
+        var hasApatch = names.Any(n => n.EndsWith("libkptools.so", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("libkpatch.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.Contains("apatch", StringComparison.OrdinalIgnoreCase));
+            || names.Any(n => n.EndsWith("kpatch", StringComparison.OrdinalIgnoreCase));
         if (!hasApatch && names.Any(n => n.EndsWith("boot_patch.sh", StringComparison.OrdinalIgnoreCase)))
         {
             // Both Magisk and APatch ship a script with this name.  Inspect the
