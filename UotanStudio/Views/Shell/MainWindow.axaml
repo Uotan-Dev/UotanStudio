@@ -283,6 +283,9 @@
 				 <MenuItem Header="{DynamicResource Menu_ApkSigner}" Command="{Binding MenuVM.OpenApkSignerCommand}">
 					<MenuItem.Icon><avalonia:MaterialIcon Kind="FileCertificateOutline" Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>
+				 <MenuItem Header="{DynamicResource Menu_FileChecksum}" Command="{Binding MenuVM.OpenFileChecksumCommand}">
+					<MenuItem.Icon><avalonia:MaterialIcon Kind="FileCheckOutline" Width="16" Height="16" /></MenuItem.Icon>
+				 </MenuItem>
 				 <MenuItem Header="{DynamicResource Menu_BootPatch}" Command="{Binding MenuVM.OpenBootPatchCommand}">
 					<MenuItem.Icon><avalonia:MaterialIcon Kind="Build" Width="16" Height="16" /></MenuItem.Icon>
 				 </MenuItem>

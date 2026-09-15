@@ -1,0 +1,130 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:shell="using:UotanStudio.ViewModels.Shell"
+        xmlns:icons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+        x:Class="UotanStudio.Views.Shell.ChecksumWindow"
+        x:DataType="shell:ChecksumViewModel"
+        Title="{DynamicResource Checksum_Title}"
+        Width="620" MinWidth="560" SizeToContent="Height"
+        MinHeight="520"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True"
+        CanMinimize="False" CanMaximize="False" CanResize="False"
+        ExtendClientAreaToDecorationsHint="True" ExtendClientAreaTitleBarHeightHint="32"
+        WindowDecorations="Full" Icon="/Assets/UotanToolbox.png">
+  <Window.Styles>
+    <Style Selector="TextBlock"><Setter Property="FontSize" Value="13" /></Style>
+    <Style Selector="Button"><Setter Property="FontSize" Value="13" /></Style>
+    <Style Selector="TextBox"><Setter Property="FontSize" Value="13" /><Setter Property="Height" Value="32" /><Setter Property="VerticalContentAlignment" Value="Center" /></Style>
+    <Style Selector="CheckBox"><Setter Property="FontSize" Value="13" /></Style>
+    <Style Selector="WindowDrawnDecorations /template/ StackPanel#PART_OverlayPanel">
+      <Setter Property="MinWidth" Value="0" /><Setter Property="Width" Value="{DynamicResource CaptionButtonWidth}" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MinimizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=MaximizeButton], WindowDrawnDecorations /template/ Button[(chrome|WindowDecorationProperties.ElementRole)=FullScreenButton]">
+      <Setter Property="IsVisible" Value="False" /><Setter Property="IsEnabled" Value="False" />
+    </Style>
+    <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+      <Setter Property="Background"><ImageBrush Source="/Assets/UotanToolbox.png" DestinationRect="5,3.5,25,25" Stretch="Uniform" /></Setter>
+    </Style>
+    <Style Selector="WindowDrawnDecorations[HasTitleBar=True] /template/ TextBlock">
+      <Setter Property="Margin" Value="40,0,48,0" /><Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+  </Window.Styles>
+
+  <!-- 文字与输入框统一上下布局：每个字段先标签、再（输入框 + 右侧按钮）。 -->
+  <!-- Every field is stacked label-above-input, with the action buttons to the right of the inputs. -->
+  <!-- 底部留出空白空间：窗口高度由 MinHeight 抬高，内容顶部对齐。 -->
+  <!-- Blank space is kept at the bottom: MinHeight raises the window, the content stays top-aligned. -->
+  <StackPanel Margin="16,40,16,40" Spacing="14">
+
+    <!-- 文件名 -->
+    <StackPanel Spacing="4">
+      <TextBlock Text="{DynamicResource Checksum_FileName}" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox Text="{Binding FilePath, Mode=TwoWay}" PlaceholderText="{DynamicResource Checksum_FileName}" />
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+                Content="{DynamicResource Checksum_ChooseFile}" Click="OnChooseFile" />
+      </Grid>
+    </StackPanel>
+
+    <!-- 算法勾选（整排居中）+ 右侧「校验」按钮 -->
+    <Grid ColumnDefinitions="*,Auto">
+      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="18"
+                  HorizontalAlignment="Center" VerticalAlignment="Center">
+        <CheckBox Content="MD5" IsChecked="{Binding Md5Selected, Mode=TwoWay}" />
+        <CheckBox Content="SHA1" IsChecked="{Binding Sha1Selected, Mode=TwoWay}" />
+        <CheckBox Content="SHA256" IsChecked="{Binding Sha256Selected, Mode=TwoWay}" />
+        <CheckBox Content="CRC" IsChecked="{Binding CrcSelected, Mode=TwoWay}" />
+      </StackPanel>
+      <Button Grid.Column="1" MinWidth="88" Margin="8,0,0,0"
+              Content="{DynamicResource Checksum_Verify}" Click="OnVerify"
+              IsEnabled="{Binding HasFile}" />
+    </Grid>
+
+    <!-- 四排结果：文字 + 只读 TextBox + 复制 -->
+    <StackPanel Spacing="4">
+      <TextBlock Text="MD5" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox Text="{Binding Md5Value}" IsReadOnly="True" />
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+                Content="{DynamicResource Checksum_Copy}" Click="OnCopyMd5"
+                IsEnabled="{Binding CanCopyMd5}" />
+      </Grid>
+    </StackPanel>
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="SHA1" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox Text="{Binding Sha1Value}" IsReadOnly="True" />
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+                Content="{DynamicResource Checksum_Copy}" Click="OnCopySha1"
+                IsEnabled="{Binding CanCopySha1}" />
+      </Grid>
+    </StackPanel>
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="SHA256" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox Text="{Binding Sha256Value}" IsReadOnly="True" />
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+                Content="{DynamicResource Checksum_Copy}" Click="OnCopySha256"
+                IsEnabled="{Binding CanCopySha256}" />
+      </Grid>
+    </StackPanel>
+
+    <StackPanel Spacing="4">
+      <TextBlock Text="CRC" />
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox Text="{Binding CrcValue}" IsReadOnly="True" />
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+                Content="{DynamicResource Checksum_Copy}" Click="OnCopyCrc"
+                IsEnabled="{Binding CanCopyCrc}" />
+      </Grid>
+    </StackPanel>
+
+    <!-- 粘贴并校验：结论（绿勾/红叉）显示在标题文字旁，输入框与按钮在下一行 -->
+    <StackPanel Spacing="4">
+      <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <TextBlock Text="{DynamicResource Checksum_PasteAndVerify}" VerticalAlignment="Center" />
+        <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
+                    IsVisible="{Binding HasMatchResult}">
+          <icons:MaterialIcon Kind="CheckCircleOutline" Width="16" Height="16" Foreground="Green"
+                              IsVisible="{Binding PasteIsCorrect}" />
+          <icons:MaterialIcon Kind="CloseCircleOutline" Width="16" Height="16" Foreground="Red"
+                              IsVisible="{Binding !PasteIsCorrect}" />
+          <TextBlock Text="{DynamicResource Checksum_Correct}" Foreground="Green"
+                     VerticalAlignment="Center" IsVisible="{Binding PasteIsCorrect}" />
+          <TextBlock Text="{DynamicResource Checksum_Wrong}" Foreground="Red"
+                     VerticalAlignment="Center" IsVisible="{Binding !PasteIsCorrect}" />
+        </StackPanel>
+      </StackPanel>
+      <Grid ColumnDefinitions="*,Auto">
+        <TextBox Text="{Binding PastedText, Mode=TwoWay}" IsEnabled="{Binding CanPaste}"
+                 PlaceholderText="{DynamicResource Checksum_PasteAndVerify}" />
+        <Button Grid.Column="1" Margin="8,0,0,0" MinWidth="88"
+                Content="{DynamicResource Checksum_Paste}" Click="OnPaste"
+                IsEnabled="{Binding CanPaste}" />
+      </Grid>
+    </StackPanel>
+  </StackPanel>
+</Window>

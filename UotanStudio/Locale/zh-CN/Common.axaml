@@ -269,6 +269,15 @@
     <x:String x:Key="Explorer_Yes">是</x:String>
     <x:String x:Key="Explorer_No">否</x:String>
     <x:String x:Key="Explorer_Ok">确定</x:String>
+    <x:String x:Key="Checksum_Title">校验</x:String>
+    <x:String x:Key="Checksum_FileName">文件名</x:String>
+    <x:String x:Key="Checksum_ChooseFile">选择文件</x:String>
+    <x:String x:Key="Checksum_Verify">校验</x:String>
+    <x:String x:Key="Checksum_Copy">复制</x:String>
+    <x:String x:Key="Checksum_Paste">粘贴</x:String>
+    <x:String x:Key="Checksum_PasteAndVerify">粘贴并校验</x:String>
+    <x:String x:Key="Checksum_Correct">正确</x:String>
+    <x:String x:Key="Checksum_Wrong">错误</x:String>
     <x:String x:Key="Dock_Dtb_Save">保存</x:String>
     <x:String x:Key="Dock_Dtb_Tree">设备树</x:String>
     <x:String x:Key="Dock_Dtb_Source">设备树源</x:String>

@@ -269,6 +269,15 @@
     <x:String x:Key="Explorer_Yes">Yes</x:String>
     <x:String x:Key="Explorer_No">No</x:String>
     <x:String x:Key="Explorer_Ok">OK</x:String>
+    <x:String x:Key="Checksum_Title">Checksum</x:String>
+    <x:String x:Key="Checksum_FileName">File name</x:String>
+    <x:String x:Key="Checksum_ChooseFile">Choose File</x:String>
+    <x:String x:Key="Checksum_Verify">Verify</x:String>
+    <x:String x:Key="Checksum_Copy">Copy</x:String>
+    <x:String x:Key="Checksum_Paste">Paste</x:String>
+    <x:String x:Key="Checksum_PasteAndVerify">Paste and Verify</x:String>
+    <x:String x:Key="Checksum_Correct">Correct</x:String>
+    <x:String x:Key="Checksum_Wrong">Incorrect</x:String>
     <x:String x:Key="Dock_Dtb_Save">Save</x:String>
     <x:String x:Key="Dock_Dtb_Tree">Device Tree</x:String>
     <x:String x:Key="Dock_Dtb_Source">Device Tree Source</x:String>

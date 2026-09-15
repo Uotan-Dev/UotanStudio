@@ -1083,6 +1083,7 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private static Window? _keyManagerWindow;
     private static Window? _apkSigningWindow;
     private static Window? _bootPatchWindow;
+    private static ChecksumWindow? _checksumWindow;
 
     /// <summary>Opens or activates the independent key library.</summary>
     [RelayCommand]
@@ -1100,6 +1101,36 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     private void OpenBootPatch() => ShowBootPatchWindow();
 
     internal static void ShowBootPatchWindow() => ShowWindow(ref _bootPatchWindow, () => new BootPatchWindow());
+
+    /// <summary>打开文件校验器窗口；窗口已打开时前置聚焦。</summary>
+    [RelayCommand]
+    private void OpenFileChecksum() => ShowFileChecksumWindow();
+
+    /// <summary>
+    /// <para>打开或前置文件校验器窗口：传入路径时切换其目标文件（资源管理器右键复用同一窗口），
+    /// 不传路径（工具菜单入口）时保留窗口当前状态。</para>
+    /// Opens or activates the checksum tool window: a given path switches its target file (the explorer
+    /// context menu reuses one window); without a path (the Tools menu entry) its current state is kept.
+    /// </summary>
+    /// <param name="filePath"><para>可选的预选文件路径。</para>An optional pre-selected file path.</param>
+    internal static void ShowFileChecksumWindow(string? filePath = null)
+    {
+        if (_checksumWindow is { IsVisible: true } existing)
+        {
+            if (!string.IsNullOrEmpty(filePath))
+            {
+                existing.SetFile(filePath);
+            }
+
+            existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            return;
+        }
+
+        var window = new ChecksumWindow(filePath);
+        _checksumWindow = window;
+        window.Show();
+    }
 
     /// <summary>
     /// <para>显示辅助工具窗口：若尚未打开则创建并显示，否则前置并恢复正常窗口状态。</para>
