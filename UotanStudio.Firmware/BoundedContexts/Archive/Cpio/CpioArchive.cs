@@ -379,6 +379,10 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         }
 
         var expected = ParseTarOctal(header.Slice(148, 8));
+        if (expected is null)
+        {
+            return false;
+        }
         uint actual = 0;
         for (var i = 0; i < 512; i++)
         {
@@ -388,9 +392,27 @@ public sealed class CpioArchive(CpioExtractor? extractor = null)
         return expected == actual;
     }
 
-    private static uint ParseTarOctal(ReadOnlySpan<byte> octal)
+    // 格式探测使用：任意文件前 512 字节都可能是非 tar 数据，checksum 字段必须容错解析而非抛异常。
+    private static uint? ParseTarOctal(ReadOnlySpan<byte> octal)
     {
-        var text = Encoding.ASCII.GetString(octal).TrimEnd('\0', ' ');
-        return text.Length == 0 ? 0U : Convert.ToUInt32(text, 8);
+        var end = octal.Length;
+        while (end > 0 && (octal[end - 1] is (byte)'\0' or (byte)' '))
+        {
+            end--;
+        }
+
+        uint value = 0;
+        for (var i = 0; i < end; i++)
+        {
+            var digit = octal[i] - (byte)'0';
+            if (digit is < 0 or > 7 || (value > (uint.MaxValue - digit) / 8))
+            {
+                return null;
+            }
+
+            value = (value * 8) + (uint)digit;
+        }
+
+        return value;
     }
 }
