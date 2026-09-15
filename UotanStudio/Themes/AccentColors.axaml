@@ -26,6 +26,16 @@
             <SolidColorBrush x:Key="SemiColorLink" Color="{StaticResource AccentColor}" />
             <SolidColorBrush x:Key="SemiColorFocusBorder" Color="{StaticResource AccentColor}" />
 
+            <!-- 超链接：Semi 只在主题作用域提供普通/悬浮/按下/已访问四组前景键，默认悬浮是蓝色，
+                 这里全部改到主色系（普通=主色，悬浮/按下用主色的深浅档，已访问保持主色）。 -->
+            <!-- Hyperlinks: Semi ships separate normal/pointerover/pressed/visited foreground keys and its
+                 defaults are blue; all four are mapped onto the accent shades here. -->
+            <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="SemiColorLink" />
+            <StaticResource x:Key="HyperlinkButtonPointeroverForeground" ResourceKey="SemiColorPrimaryPointerover" />
+            <StaticResource x:Key="HyperlinkButtonPressedForeground" ResourceKey="SemiColorPrimaryActive" />
+            <StaticResource x:Key="HyperlinkButtonVisitedForeground" ResourceKey="SemiColorLink" />
+            <StaticResource x:Key="HyperlinkButtonDisabledForeground" ResourceKey="SemiColorPrimaryDisabled" />
+
             <!-- 悬浮文字/图标色（Semi 没有专门的悬浮前景键，由 Themes/AccentControls.axaml 的样式引用）。 -->
             <!-- Hover text/icon colour (Semi has no hover-foreground key; Themes/AccentControls.axaml styles use it). -->
             <SolidColorBrush x:Key="AccentHoverForeground" Color="#FCE7E5" />
@@ -68,6 +78,14 @@
             <SolidColorBrush x:Key="SemiColorPrimaryLightPointerover" Color="#55241E" />
             <SolidColorBrush x:Key="SemiColorLink" Color="{StaticResource AccentColor}" />
             <SolidColorBrush x:Key="SemiColorFocusBorder" Color="{StaticResource AccentColor}" />
+
+            <!-- 深色模式下悬浮/按下改亮一档，避免在深底上发暗。 -->
+            <!-- In dark mode the hover/pressed shades step brighter so they stay legible on dark surfaces. -->
+            <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="SemiColorLink" />
+            <StaticResource x:Key="HyperlinkButtonPointeroverForeground" ResourceKey="SemiColorPrimaryPointerover" />
+            <StaticResource x:Key="HyperlinkButtonPressedForeground" ResourceKey="SemiColorPrimaryActive" />
+            <StaticResource x:Key="HyperlinkButtonVisitedForeground" ResourceKey="SemiColorLink" />
+            <StaticResource x:Key="HyperlinkButtonDisabledForeground" ResourceKey="SemiColorPrimaryDisabled" />
 
             <SolidColorBrush x:Key="AccentHoverForeground" Color="#FCE7E5" />
 
