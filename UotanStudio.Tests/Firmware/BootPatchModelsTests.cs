@@ -92,7 +92,10 @@ public sealed class BootPatchModelsTests
         "KP1158"u8.CopyTo(kpimg);
 
         var patched = KernelPatchInjector.Patch(kernel, kpimg, "password1");
-        Assert.Equal(0x3100, patched.Length);
+        // Layout: aligned kernel (0x2000) + aligned kpimg (0x1100) + 0x80 extra-item sentinel.
+        Assert.Equal(0x3180, patched.Length);
+        Assert.Equal(0x00u, patched[patched.Length - 1]);
+        Assert.Equal(0x00u, patched[patched.Length - 0x80]);
         Assert.Equal(0x14000c00u, BitConverter.ToUInt32(patched, 0));
         Assert.Equal(0x2000L, BitConverter.ToInt64(patched, 0x2048));
         Assert.Equal(System.Security.Cryptography.SHA256.HashData("password1"u8), patched.AsSpan(0x2128, 32).ToArray());
