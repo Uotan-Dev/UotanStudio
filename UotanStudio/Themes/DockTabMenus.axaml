@@ -1,0 +1,152 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dock="using:Dock.Avalonia.Controls"
+        xmlns:icons="using:Material.Icons.Avalonia"
+        xmlns:core="using:Dock.Model.Core">
+    <!-- 文档/工具标签页右键菜单：覆盖 Semi Dock 主题的默认菜单——
+         去掉方向性关闭（关闭左侧/右侧/上方/下方）、新建水平/垂直文档停靠区、布局模式，
+         并为保留项加上图标。命令仍走 Dock 工厂方法（Factory.Xxx + CommandParameter=当前停靠项）。 -->
+    <!-- Document/tool tab context menus: override the Semi Dock theme defaults by dropping the directional
+         closes, the new horizontal/vertical document dock entries and the layout-mode submenu, and by adding
+         icons to the remaining entries. Commands still call the Dock factory methods (Factory.Xxx with the
+         current dockable as CommandParameter). -->
+    <Style Selector="dock|DocumentTabStripItem">
+        <Setter Property="DocumentContextMenu">
+            <Template><ContextMenu x:DataType="core:IDockable">
+                <MenuItem Header="{DynamicResource DockMenu_Float}" IsVisible="{Binding CanFloat}"
+                          Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="OpenInNew" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{DynamicResource DockMenu_FloatAll}"
+                          Command="{Binding Factory.FloatAllDockables}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="WindowRestore" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{DynamicResource DockMenu_Close}" IsVisible="{Binding CanClose}"
+                          Command="{Binding Factory.CloseDockable}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="Close" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{DynamicResource DockMenu_CloseOthers}"
+                          Command="{Binding Factory.CloseOtherDockables}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="CloseBoxMultipleOutline" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{DynamicResource DockMenu_CloseAll}"
+                          Command="{Binding Factory.CloseAllDockables}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="CloseBoxMultiple" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{DynamicResource DockMenu_TabLayout}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="Tab" />
+                    </MenuItem.Icon>
+                    <MenuItem Header="{DynamicResource DockMenu_TabsLeft}"
+                              Command="{Binding Factory.SetDocumentDockTabsLayoutLeft}" CommandParameter="{Binding}">
+                        <MenuItem.Icon>
+                            <icons:MaterialIcon Kind="ArrowLeft" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="{DynamicResource DockMenu_TabsTop}"
+                              Command="{Binding Factory.SetDocumentDockTabsLayoutTop}" CommandParameter="{Binding}">
+                        <MenuItem.Icon>
+                            <icons:MaterialIcon Kind="ArrowUp" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="{DynamicResource DockMenu_TabsRight}"
+                              Command="{Binding Factory.SetDocumentDockTabsLayoutRight}" CommandParameter="{Binding}">
+                        <MenuItem.Icon>
+                            <icons:MaterialIcon Kind="ArrowRight" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                </MenuItem>
+            </ContextMenu></Template>
+        </Setter>
+    </Style>
+    <Style Selector="dock|ToolTabStripItem">
+        <Setter Property="TabContextMenu">
+            <Template><ContextMenu x:DataType="core:IDockable">
+                <MenuItem Header="{DynamicResource DockMenu_Float}" IsVisible="{Binding CanFloat}"
+                          Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="OpenInNew" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{DynamicResource DockMenu_FloatAll}"
+                          Command="{Binding Factory.FloatAllDockables}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="WindowRestore" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{DynamicResource DockMenu_Dock}" IsVisible="{Binding CanPin}"
+                          Command="{Binding Factory.PinDockable}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="Pin" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{DynamicResource DockMenu_DockAsDocument}" IsVisible="{Binding CanDockAsDocument}"
+                          Command="{Binding Factory.DockAsDocument}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="Tab" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="{DynamicResource DockMenu_AutoHide}" IsVisible="{Binding CanPin}"
+                          Command="{Binding Factory.PinDockable}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="PinOff" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="{DynamicResource DockMenu_Close}" IsVisible="{Binding CanClose}"
+                          Command="{Binding Factory.CloseDockable}" CommandParameter="{Binding}">
+                    <MenuItem.Icon>
+                        <icons:MaterialIcon Kind="Close" />
+                    </MenuItem.Icon>
+                </MenuItem>
+            </ContextMenu></Template>
+        </Setter>
+    </Style>
+    <!-- 自动隐藏后的固定工具条（ToolPinItemControl）内文本项的右键菜单：同样补上图标。 -->
+    <!-- Pinned (auto-hidden) tool bar item menu: icons added as well. -->
+    <Style Selector="dock|ToolPinItemControl TextBlock">
+        <Setter Property="ContextMenu">
+            <Template>
+                <ContextMenu x:DataType="core:IDockable">
+                    <MenuItem Header="{DynamicResource DockMenu_Float}"
+                              Command="{Binding Factory.FloatDockable}" CommandParameter="{Binding}">
+                        <MenuItem.Icon>
+                            <icons:MaterialIcon Kind="OpenInNew" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="{DynamicResource DockMenu_Show}"
+                              Command="{Binding Factory.PreviewPinnedDockable}" CommandParameter="{Binding}">
+                        <MenuItem.Icon>
+                            <icons:MaterialIcon Kind="EyeOutline" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="{DynamicResource DockMenu_DockAsDocument}"
+                              Command="{Binding Factory.DockAsDocument}" CommandParameter="{Binding}">
+                        <MenuItem.Icon>
+                            <icons:MaterialIcon Kind="Tab" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="{DynamicResource DockMenu_Close}"
+                              Command="{Binding Factory.CloseDockable}" CommandParameter="{Binding}">
+                        <MenuItem.Icon>
+                            <icons:MaterialIcon Kind="Close" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                </ContextMenu>
+            </Template>
+        </Setter>
+    </Style>
+</Styles>

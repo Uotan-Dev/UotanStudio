@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
@@ -34,6 +36,32 @@ public partial class WorkspaceView : UserControl
     {
         InitializeComponent();
         InitializeDocumentSearch();
+
+        // Dock 主题自带的菜单（如自动隐藏面板固定条上的菜单）没有图标，在打开前补齐。
+        // The Dock theme's own menus (e.g. the auto-hidden tool bar menu) carry no icons; fill them in
+        // before the menu opens.
+        DockControl.AddHandler(InputElement.ContextRequestedEvent, OnDockContextRequested,
+            RoutingStrategies.Bubble, handledEventsToo: true);
+
+        // Dock 顶栏「下箭头」的 MenuFlyout 不是可视树中的普通控件、无法用样式覆盖，按类型全局接线，
+        // 让主窗口与浮动窗口的顶栏菜单在打开前都挂上图标补齐处理。
+        // The Dock header's down-arrow MenuFlyout is not a normal visual-tree control and cannot be styled;
+        // wire it app-wide by type so headers in both the main window and floating windows get icons.
+        DockMenuIcons.EnsureWired();
+    }
+
+    /// <summary>
+    /// <para>Dock 区域内请求右键菜单时，为该控件的菜单补齐缺失的图标。</para>
+    /// Fills in missing menu icons when a context menu is requested inside the dock area.
+    /// </summary>
+    private void OnDockContextRequested(object? sender, ContextRequestedEventArgs e)
+    {
+        if (e.Source is Control { ContextMenu: { } menu })
+        {
+            // 菜单在 ContextRequested 之后才打开并设置 DataContext；延迟到打开后再补齐，否则标题尚未解析。
+            // The menu opens and receives its DataContext after ContextRequested; defer so the headers have resolved.
+            Dispatcher.UIThread.Post(() => DockMenuIcons.Apply(menu));
+        }
     }
 
     // ===== 系统文件拖拽 =====

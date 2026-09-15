@@ -77,5 +77,8 @@
         <!-- 编辑器页面共用的顶部错误提示条样式（高度/位置/配色集中定义）。 -->
         <!-- Shared top error-banner styles for every editor page (height/placement/colour in one place). -->
         <StyleInclude Source="avares://UotanStudio/Themes/EditorErrorBanner.axaml" />
+        <!-- Dock 标签页右键菜单（去掉多余项并统一图标）。 -->
+        <!-- Dock tab context menus (unwanted entries removed, icons unified). -->
+        <StyleInclude Source="avares://UotanStudio/Themes/DockTabMenus.axaml" />
     </Application.Styles>
 </Application>
