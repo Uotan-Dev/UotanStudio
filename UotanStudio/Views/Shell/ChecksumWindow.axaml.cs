@@ -32,6 +32,9 @@ public partial class ChecksumWindow : Window
         InitializeComponent();
         DataContext = new ChecksumViewModel();
         SetFile(filePath);
+        // 窗口关闭时取消进行中的校验，避免任务在窗口生命周期外继续读文件。
+        // Cancels the running verification on close so hashing does not outlive the window.
+        Closed += (_, _) => ViewModel.ClearResults();
     }
 
     private ChecksumViewModel ViewModel => (ChecksumViewModel)DataContext!;
@@ -63,7 +66,7 @@ public partial class ChecksumWindow : Window
         }
     }
 
-    private void OnVerify(object? sender, RoutedEventArgs e) => ViewModel.Verify();
+    private async void OnVerify(object? sender, RoutedEventArgs e) => await ViewModel.VerifyAsync();
 
     private async void OnCopyMd5(object? sender, RoutedEventArgs e) => await CopyAsync(ViewModel.Md5Value);
 
@@ -103,10 +106,11 @@ public partial class ChecksumWindow : Window
             }
 
             await clipboard.SetTextAsync(value);
+            await clipboard.FlushAsync();
         }
         catch (Exception ex)
         {
-            LogService.Instance.Write(LogLevel.Error, "Checksum", $"Copy failed: {ex.Message}");
+            LogService.Instance.Write(LogLevel.Error, "Checksum", $"Copy failed: {ex}");
         }
     }
 }

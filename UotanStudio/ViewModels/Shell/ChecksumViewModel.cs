@@ -1,4 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using UotanStudio.Services;
+using UotanStudio.Services.Checksum;
 
 namespace UotanStudio.ViewModels.Shell;
 
@@ -23,15 +25,15 @@ public enum ChecksumMatchResult
 /// Checksum window view model: file selection, the MD5/SHA1/SHA256/CRC checkboxes and result rows, plus the
 /// "paste and verify" comparison.
 /// </summary>
-/// <remarks>
-/// <para>按需求本窗口暂不接入真实校验后端：点「校验」只填入占位文本，使复制/粘贴/比对流程可用；
-/// 接入后端时只需替换 <see cref="CreatePlaceholderValue"/>。</para>
-/// The real checksum backends are intentionally not wired up yet (per request): "verify" fills placeholder
-/// text so the copy/paste/compare flow stays usable. Wiring a backend only requires replacing
-/// <see cref="CreatePlaceholderValue"/>.
-/// </remarks>
 public sealed partial class ChecksumViewModel : ObservableObject
 {
+    /// <summary>
+    /// <para>当前校验任务的取消源；文件切换清空结果时取消进行中的校验，旧结果不得写回界面。</para>
+    /// The cancellation source of the running verification; switching files cancels it so stale
+    /// results never reach the UI.
+    /// </summary>
+    private CancellationTokenSource? _verifyCts;
+
     /// <summary>
     /// <para>已选择的文件名（完整路径）。</para>
     /// The selected file name (full path).
@@ -65,6 +67,14 @@ public sealed partial class ChecksumViewModel : ObservableObject
     /// <summary>「粘贴并校验」输入内容。 The "paste and verify" input text.</summary>
     [ObservableProperty] private string _pastedText = string.Empty;
 
+    /// <summary>
+    /// <para>是否有校验正在进行（期间禁用校验按钮）。</para>
+    /// Whether a verification is running (the verify button stays disabled meanwhile).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanVerify))]
+    private bool _isBusy;
+
     /// <summary>比对结果（驱动勾/叉指示）。 The comparison result (drives the tick/cross indicator).</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMatchResult))]
@@ -76,6 +86,12 @@ public sealed partial class ChecksumViewModel : ObservableObject
     /// Whether a valid file is selected (decides whether copy and paste are available).
     /// </summary>
     public bool HasFile => !string.IsNullOrWhiteSpace(FilePath) && File.Exists(FilePath);
+
+    /// <summary>
+    /// <para>「校验」是否可用：必须已选择文件且当前没有校验在跑。</para>
+    /// Whether "verify" is available: a file must be selected and no verification may be running.
+    /// </summary>
+    public bool CanVerify => HasFile && !IsBusy;
 
     /// <summary>MD5 复制是否可用。 Whether the MD5 copy button is enabled.</summary>
     public bool CanCopyMd5 => HasFile && Md5Value.Length > 0;
@@ -121,23 +137,83 @@ public sealed partial class ChecksumViewModel : ObservableObject
     }
 
     /// <summary>
-    /// <para>执行「校验」：为勾选的算法填入结果，未勾选的清空。</para>
-    /// Runs "verify": fills results for the checked algorithms and clears the unchecked ones.
+    /// <para>执行「校验」：单次流式读取同时计算勾选的算法，未勾选的行清空；校验期间按钮禁用。</para>
+    /// Runs "verify": one streaming pass computes every checked algorithm; unchecked rows are cleared.
+    /// The verify button stays disabled while a verification runs.
     /// </summary>
-    public void Verify()
+    public async Task VerifyAsync()
     {
-        Md5Value = Md5Selected ? CreatePlaceholderValue("MD5") : string.Empty;
-        Sha1Value = Sha1Selected ? CreatePlaceholderValue("SHA1") : string.Empty;
-        Sha256Value = Sha256Selected ? CreatePlaceholderValue("SHA256") : string.Empty;
-        CrcValue = CrcSelected ? CreatePlaceholderValue("CRC") : string.Empty;
+        if (!HasFile || IsBusy)
+        {
+            return;
+        }
+
+        // 每次校验使用独立取消源：文件切换清空结果时旧任务被取消，其结果不会写回界面。
+        // Each run gets its own cancellation source: clearing results on a file switch cancels the
+        // previous run, whose results then never reach the UI.
+        var cts = new CancellationTokenSource();
+        _verifyCts = cts;
+        var path = FilePath;
+        var algorithms = new ChecksumAlgorithms(Md5Selected, Sha1Selected, Sha256Selected, CrcSelected);
+        IsBusy = true;
+        try
+        {
+            if (!algorithms.Any)
+            {
+                // 未勾选任何算法：只清空结果，不读文件。
+                // No algorithm selected: just clear the rows without reading the file.
+                Md5Value = string.Empty;
+                Sha1Value = string.Empty;
+                Sha256Value = string.Empty;
+                CrcValue = string.Empty;
+                return;
+            }
+
+            var result = await ChecksumService.ComputeAsync(path, algorithms, cts.Token);
+            if (cts.IsCancellationRequested)
+            {
+                // 校验期间文件被切换：丢弃结果，保持清空状态。
+                // The file was switched mid-run: discard the results and keep the cleared state.
+                return;
+            }
+
+            Md5Value = Md5Selected ? result.Md5 : string.Empty;
+            Sha1Value = Sha1Selected ? result.Sha1 : string.Empty;
+            Sha256Value = Sha256Selected ? result.Sha256 : string.Empty;
+            CrcValue = CrcSelected ? result.Crc32 : string.Empty;
+        }
+        catch (OperationCanceledException)
+        {
+            // 取消：丢弃部分结果，保持当前状态。
+            // Cancelled: discard the partial results and keep the current state.
+        }
+        catch (Exception ex)
+        {
+            // 文件读取失败（被删除、被占用等）：清空结果并记录日志。
+            // Reading failed (file deleted, locked, ...): clear the rows and log the error.
+            LogService.Instance.Write(LogLevel.Error, "Checksum", $"Verify failed: {ex.Message}");
+            ClearResults();
+        }
+        finally
+        {
+            // 仅当本次校验仍是当前校验时才复位 busy；被取代的旧任务不得干扰新一轮的状态。
+            // Reset busy only while this run is still the current one; a superseded run must not
+            // clear the newer run's busy state.
+            if (ReferenceEquals(_verifyCts, cts))
+            {
+                IsBusy = false;
+            }
+        }
     }
 
     /// <summary>
-    /// <para>清空全部结果、粘贴内容与比对结论（重选文件、清空文件名时调用）。</para>
-    /// Clears every result row, the pasted text and the verdict (used when the file changes or is cleared).
+    /// <para>清空全部结果、粘贴内容与比对结论（重选文件、清空文件名、校验失败时调用），并取消进行中的校验。</para>
+    /// Clears every result row, the pasted text and the verdict (on file switch, cleared file name or
+    /// verification failure), and cancels any running verification.
     /// </summary>
     public void ClearResults()
     {
+        _verifyCts?.Cancel();
         Md5Value = string.Empty;
         Sha1Value = string.Empty;
         Sha256Value = string.Empty;
@@ -193,6 +269,7 @@ public sealed partial class ChecksumViewModel : ObservableObject
     private void NotifyDerived()
     {
         OnPropertyChanged(nameof(HasFile));
+        OnPropertyChanged(nameof(CanVerify));
         OnPropertyChanged(nameof(HasAnyValue));
         OnPropertyChanged(nameof(CanPaste));
         OnPropertyChanged(nameof(CanCopyMd5));
@@ -202,12 +279,4 @@ public sealed partial class ChecksumViewModel : ObservableObject
         OnPropertyChanged(nameof(HasMatchResult));
         OnPropertyChanged(nameof(PasteIsCorrect));
     }
-
-    /// <summary>
-    /// <para>占位校验值：按需求校验后端尚未接入，这里只返回可复制的占位文本，使复制/粘贴/比对流程可用。</para>
-    /// Placeholder checksum value: the backend is not wired up yet (per request), so this returns copyable
-    /// placeholder text that keeps the copy/paste/compare flow usable.
-    /// </summary>
-    /// <param name="algorithm"><para>算法名（MD5/SHA1/SHA256/CRC）。</para>The algorithm name.</param>
-    private static string CreatePlaceholderValue(string algorithm) => $"<{algorithm} 待接入>";
 }

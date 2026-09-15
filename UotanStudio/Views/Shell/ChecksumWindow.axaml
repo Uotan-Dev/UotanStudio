@@ -58,7 +58,7 @@
       </StackPanel>
       <Button Grid.Column="1" MinWidth="88" Margin="8,0,0,0"
               Content="{DynamicResource Checksum_Verify}" Click="OnVerify"
-              IsEnabled="{Binding HasFile}" />
+              IsEnabled="{Binding CanVerify}" />
     </Grid>
 
     <!-- 四排结果：文字 + 只读 TextBox + 复制 -->

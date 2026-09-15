@@ -8,6 +8,12 @@ namespace UotanStudio.Tests.Comm.TestDoubles;
 /// </summary>
 public sealed class TempDirectory : IDisposable
 {
+    // Encoding.UTF8 写文件时会在开头附加 BOM，导致按字节断言内容的测试（如标准摘要）对不上；
+    // 这里显式使用无 BOM 的 UTF-8，保持「UTF-8 文本文件」的语义。
+    // Encoding.UTF8 emits a BOM when writing a file, which breaks byte-exact assertions (e.g. standard
+    // digests); use an explicit BOM-less UTF-8 to honor the "UTF-8 text file" contract.
+    private static readonly Encoding Utf8WithoutBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+
     /// <summary>Gets the directory path. 目录路径。</summary>
     public string Path { get; }
 
@@ -23,7 +29,7 @@ public sealed class TempDirectory : IDisposable
     {
         var full = System.IO.Path.Combine(Path, relativePath);
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(full)!);
-        File.WriteAllText(full, content, Encoding.UTF8);
+        File.WriteAllText(full, content, Utf8WithoutBom);
         return full;
     }
 
