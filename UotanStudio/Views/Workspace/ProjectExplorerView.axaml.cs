@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Messaging;
 using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Shell;
 using UotanStudio.ViewModels.Workspace;
 using UotanStudio.Views.Controls;
 using Ursa.Controls;
@@ -177,6 +178,47 @@ public partial class ProjectExplorerView : UserControl
     private void OnOpenAsFileSystem(object? sender, RoutedEventArgs e)
     {
         OpenWith(EditorOpenMode.FileSystem);
+    }
+
+    private void OnConvertImgToSimg(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG→SIMG");
+
+    private void OnConvertSimgToImg(object? sender, RoutedEventArgs e) => RequestFormatConversion("SIMG→IMG");
+
+    private void OnConvertImgToDat(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG→DAT");
+
+    private void OnConvertImgToBr(object? sender, RoutedEventArgs e) => RequestFormatConversion("IMG→BR");
+
+    /// <summary>
+    /// <para>记录格式转换请求：按需求本页暂不接入转换后端，只在日志中留下所选文件与转换方向。</para>
+    /// Records a format-conversion request: the conversion backend is intentionally not wired up yet (per
+    /// request), so the selected file and direction are only written to the log.
+    /// </summary>
+    /// <param name="direction"><para>转换方向文本，如 <c>IMG→SIMG</c>。</para>The direction text, e.g. <c>IMG→SIMG</c>.</param>
+    private void RequestFormatConversion(string direction)
+    {
+        if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node)
+        {
+            return;
+        }
+
+        LogService.Instance.Write(LogLevel.Info, "Explorer",
+            $"Format conversion requested ({direction}) for '{node.Path}'; the conversion backend is not wired up yet.");
+    }
+
+    /// <summary>
+    /// <para>打开校验窗口：复用已打开的实例，否则新建并作为主窗口的附属窗口显示。</para>
+    /// Opens the checksum window: reuses the existing instance, otherwise creates one owned by the main window.
+    /// </summary>
+    private void OnChecksum(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is not ExplorerNode { IsDirectory: false, IsPlaceholder: false } node)
+        {
+            return;
+        }
+
+        // 与「工具 → 文件校验器」共用同一个窗口实例，右键只切换目标文件。
+        // Shares one window instance with Tools -> File Checksum; the context menu just switches the file.
+        MenuViewModel.ShowFileChecksumWindow(node.Path);
     }
 
     private void OnNewEmptySubProject(object? sender, RoutedEventArgs e)
