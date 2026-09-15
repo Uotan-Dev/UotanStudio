@@ -20,9 +20,15 @@ public partial class BootPatchWindow : Window
     {
         InitializeComponent();
         FileSourceBox.SelectionChanged += OnFileSourceChanged;
+        // 必要项（补丁包与 boot 镜像）齐备前保持「开始」禁用，不再在点击后用文字提示。
+        // Keep Start disabled until both the patch package and the boot image are set, instead of
+        // reporting the absence after the click.
+        FilePathBox.TextChanging += (_, _) => UpdateStartEnabled();
+        BootPathBox.TextChanging += (_, _) => UpdateStartEnabled();
         Opened += async (_, _) => await DetectBootArchitectureAsync();
         BootPathBox.Text = ToAbsolutePath(imagePath);
         UpdateFileSourceState();
+        UpdateStartEnabled();
     }
 
     private static string? ToAbsolutePath(string? path)
@@ -40,12 +46,26 @@ public partial class BootPatchWindow : Window
             FilePathBox.Text = string.Empty;
             SetDetection(null);
         }
+        UpdateStartEnabled();
     }
+    /// <summary>
+    /// <para>补丁包与 boot 镜像都有路径时才允许开始，否则禁用「开始」按钮。</para>
+    /// Enables start only when both the patch package and the boot image paths are present.
+    /// </summary>
+    private void UpdateStartEnabled() => StartButton.IsEnabled =
+        !_isPatching
+        && !string.IsNullOrWhiteSpace(FilePathBox.Text)
+        && !string.IsNullOrWhiteSpace(BootPathBox.Text);
     private async void OnBrowseFileClick(object? sender, RoutedEventArgs e)
-    { await BrowseAsync(FilePathBox, "Patch package", ["*.apk", "*.zip", "*.ko"]); await DetectPackageAsync(); }
+    {
+        await BrowseAsync(FilePathBox, "Patch package", ["*.apk", "*.zip", "*.ko"]);
+        UpdateStartEnabled();
+        await DetectPackageAsync();
+    }
     private async void OnBrowseBootClick(object? sender, RoutedEventArgs e)
     {
         await BrowseAsync(BootPathBox, "Boot image", ["*.img", "*.bin"]);
+        UpdateStartEnabled();
         await DetectBootArchitectureAsync();
     }
     private async Task BrowseAsync(TextBox target, string description, IReadOnlyList<string> patterns)
@@ -189,14 +209,19 @@ public partial class BootPatchWindow : Window
             : null;
     private async void OnStartPatchClick(object? sender, RoutedEventArgs e)
     {
-        if (_isPatching) return;
-        if (string.IsNullOrWhiteSpace(FilePathBox.Text) || string.IsNullOrWhiteSpace(BootPathBox.Text)) { ProgressText.Text = "Select a patch package and boot image first."; return; }
+        // 取出路径的同时把非空判定交给编译器（按钮禁用只覆盖交互入口，这里再守一道）。
+        // Read the paths once and let the flow analysis see the non-null check; the disabled button covers
+        // the interactive entry only, so guard here as well.
+        var packagePath = FilePathBox.Text;
+        var bootPath = BootPathBox.Text;
+        if (_isPatching || string.IsNullOrWhiteSpace(packagePath) || string.IsNullOrWhiteSpace(bootPath)) return;
         try
         {
             _isPatching = true;
+            UpdateStartEnabled();
             MainBusyContainer.IsLoading = true; ProgressPanel.IsVisible = true; PatchProgressBar.Value = 0;
-            var output = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(BootPathBox.Text))!, $"patched_{DateTime.Now:yyyyMMdd_HHmmss}.img");
-            var result = await _patchService.PatchAsync(FilePathBox.Text, BootPathBox.Text, output, new BootPatchOptions
+            var output = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(bootPath))!, $"patched_{DateTime.Now:yyyyMMdd_HHmmss}.img");
+            var result = await _patchService.PatchAsync(packagePath, bootPath, output, new BootPatchOptions
             {
                 Architecture = SelectedArchitecture(),
                 KernelSuKmi = SelectedKmi(),
@@ -212,7 +237,7 @@ public partial class BootPatchWindow : Window
             ProgressText.Text = $"{result.OutputPath} ({result.Changes.Count} changes)";
         }
         catch (Exception ex) { ProgressText.Text = ex.Message; }
-        finally { MainBusyContainer.IsLoading = false; _isPatching = false; }
+        finally { MainBusyContainer.IsLoading = false; _isPatching = false; UpdateStartEnabled(); }
     }
     private void OnCancelClick(object? sender, RoutedEventArgs e) => Close();
 }

@@ -248,7 +248,8 @@
                         <Grid Name="KeyCreationActions" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="8" RowSpacing="8">
                             <StackPanel Name="ImportKeyControls" Orientation="Horizontal" Spacing="8" Grid.ColumnSpan="2"
                                         IsVisible="{Binding !IsApkCertificate}">
-                                <Button Name="ImportKeyButton" Classes="key-action" Content="{DynamicResource Keys_Import}" Click="ImportClick" />
+                                <Button Name="ImportKeyButton" Classes="key-action" Content="{DynamicResource Keys_Import}" Click="ImportClick"
+                                        IsEnabled="{Binding CanImport}" />
                                 <TextBox Name="ImportPasswordBox" Classes="key-field" Width="210" HorizontalAlignment="Left"
                                          Text="{Binding Password}" PasswordChar="●" PlaceholderText="{DynamicResource Keys_Password}" AutomationProperties.Name="{DynamicResource Keys_Password}" />
                             </StackPanel>
@@ -296,8 +297,6 @@
         </Grid>
         <StackPanel Grid.Row="1" Spacing="8">
             <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsBusy}" Height="3" />
-            <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="20,0,20,16"
-                       IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
     </Grid>
 </Window>

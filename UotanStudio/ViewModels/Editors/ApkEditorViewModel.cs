@@ -37,7 +37,9 @@ public partial class ApkEditorViewModel : Document
     /// <para>文档对应的文件路径。</para>
     /// The file path of the document.
     /// </summary>
-    [ObservableProperty] private string? _filePath;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SignApkCommand))]
+    private string? _filePath;
 
     /// <summary>
     /// <para>分析错误文本；为空表示无错误。</para>

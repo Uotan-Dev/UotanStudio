@@ -28,8 +28,14 @@ public partial class KeyManagerViewModel : ViewModelBase
         _ => [2048, 4096],
     };
     public string LibraryPath => _library.Root;
-    [ObservableProperty] private string _name = "My key";
-    [ObservableProperty] private int _kindIndex;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    [NotifyPropertyChangedFor(nameof(CanImport))]
+    private string _name = "My key";
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    [NotifyPropertyChangedFor(nameof(CanImport))]
+    private int _kindIndex;
     [ObservableProperty] private int _payloadBits = 2048;
     [ObservableProperty] private string _password = "";
     [ObservableProperty] private string _search = "";
@@ -58,7 +64,9 @@ public partial class KeyManagerViewModel : ViewModelBase
     public bool IsBitsEditable => IsPayload || IsJar;
     // ---- APK certificate form (purpose index 4) ----
     // ---- APK 证书表单（用途下标 4）----
-    [ObservableProperty] private string _certificateAlias = "my-release-key";
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GenerateCommand))]
+    private string _certificateAlias = "my-release-key";
     [ObservableProperty] private string _keystorePassword = "";
     [ObservableProperty] private int _validityYears = 10;
     [ObservableProperty] private string _commonName = "Memory";
@@ -105,6 +113,19 @@ public partial class KeyManagerViewModel : ViewModelBase
     public bool IsFormatPem { get => FormatIndex == 3; set { if (value) FormatIndex = 3; } }
     public bool IsOutputDirectoryRequired => IsApkCertificate;
     public bool HasSelection => SelectedKey is not null;
+    /// <summary>
+    /// <para>「生成密钥对」的必要条件：普通用途需要名称，APK 证书需要别名（或名称）；未填写完整时按钮禁用。</para>
+    /// Required inputs for Generate: a name for library purposes, the alias (or name) for APK certificates.
+    /// The button stays disabled until those are present.
+    /// </summary>
+    public bool CanGenerate => IsApkCertificate
+        ? !string.IsNullOrWhiteSpace(CertificateAlias) || !string.IsNullOrWhiteSpace(Name)
+        : !string.IsNullOrWhiteSpace(Name);
+    /// <summary>
+    /// <para>「导入」的必要条件：用途由密钥库支持且已填写名称；未填写完整时按钮禁用。</para>
+    /// Required inputs for Import: a library-backed purpose and a non-empty name.
+    /// </summary>
+    public bool CanImport => IsLibraryPurpose && !string.IsNullOrWhiteSpace(Name);
     public string SelectedPath => SelectedKey is { } key ? _library.PrivatePath(key) : "";
     public bool HasCertificate => SelectedKey is { Kind: ManagedKeyKind.Payload or ManagedKeyKind.Jar };
     public bool IsSelectedDefault => SelectedKey is { } k && IsDefault(k);
@@ -258,7 +279,7 @@ public partial class KeyManagerViewModel : ViewModelBase
         RebuildDefaultIds();
     });
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanGenerate))]
     private Task GenerateAsync()
     {
         // APK certificate generation goes through the dedicated generator + export bundle.

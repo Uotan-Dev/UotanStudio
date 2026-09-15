@@ -118,7 +118,7 @@
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                     <Button Content="{DynamicResource Editor_Cancel}" MinWidth="88" Height="32" IsCancel="True" Click="OnCancelClick" />
-                    <Button Content="{DynamicResource BootPatch_Start}" Theme="{StaticResource SolidButton}" MinWidth="110" Height="32" IsDefault="True" Click="OnStartPatchClick" />
+                    <Button Name="StartButton" Content="{DynamicResource BootPatch_Start}" Theme="{StaticResource SolidButton}" MinWidth="110" Height="32" IsDefault="True" Click="OnStartPatchClick" />
                 </StackPanel>
             </Grid>
         </Border>

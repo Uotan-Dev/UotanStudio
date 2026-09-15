@@ -81,7 +81,6 @@ public partial class NewProjectWindow : Window
     private NewProjectImageEntry[] _images = [];
     private int _imageColumnCount;
     private bool _updatingSelection;
-    private bool _validationRequested;
     private bool _updatingLocation;
     private string _baseDirectory;
     private int _analysisGeneration;
@@ -204,6 +203,14 @@ public partial class NewProjectWindow : Window
         IEnumerable<string>? reservedNames)
     {
         InitializeComponent();
+
+        // 窗口标题随表单语义：文件菜单入口创建新解决方案，已打开解决方案的入口创建子项目。
+        // The window title follows the form's semantics: the File-menu entry creates a new solution, the
+        // entry on an open solution creates a sub-project.
+        Title = LanguageService.Instance.GetString(mode == NewProjectWindowMode.Solution
+            ? "Menu_NewSolution"
+            : "Explorer_NewEmptySubProject");
+
         Closed += (_, _) => ResetProgressStats();
         Mode = mode;
         _baseDirectory = string.IsNullOrWhiteSpace(baseDirectory)
@@ -233,6 +240,7 @@ public partial class NewProjectWindow : Window
 
         ProjectNameBox.Text = ContainerStructureAnalyzer.GetNextDefaultName(_baseDirectory, ReservedNames);
         UpdateLocationText();
+        UpdateCreateEnabled();
     }
 
     /// <summary><para>表单语义模式。</para>Semantic mode of the form.</summary>
@@ -316,7 +324,7 @@ public partial class NewProjectWindow : Window
 
         ImagePicker.IsEnabled = false;
         _isAnalyzing = true;
-        CreateButton.IsEnabled = false;
+        UpdateCreateEnabled();
         MainBusyContainer.IsLoading = true;
         ProgressPanel.IsVisible = true;
         ResetProgressStats();
@@ -357,7 +365,7 @@ public partial class NewProjectWindow : Window
             if (generation == _analysisGeneration)
             {
                 _isAnalyzing = false;
-                CreateButton.IsEnabled = true;
+                UpdateCreateEnabled();
                 ProgressPanel.IsVisible = false;
                 MainBusyContainer.IsLoading = false;
             }
@@ -392,7 +400,7 @@ public partial class NewProjectWindow : Window
         var generation = ++_analysisGeneration;
         var single = images.Length == 1 ? images[0].FilePath : null;
         _isAnalyzing = single is not null;
-        CreateButton.IsEnabled = !_isAnalyzing;
+        UpdateCreateEnabled();
         ProgressPanel.IsVisible = _isAnalyzing;
         MainBusyContainer.IsLoading = _isAnalyzing;
         if (single is null) return;
@@ -413,7 +421,7 @@ public partial class NewProjectWindow : Window
             if (generation == _analysisGeneration)
             {
                 _isAnalyzing = false;
-                CreateButton.IsEnabled = true;
+                UpdateCreateEnabled();
                 ProgressPanel.IsVisible = false;
                 MainBusyContainer.IsLoading = false;
             }
@@ -527,7 +535,7 @@ public partial class NewProjectWindow : Window
     /// </summary>
     private void OnProjectNameChanged(object? sender, TextChangingEventArgs e)
     {
-        UpdateValidation();
+        UpdateCreateEnabled();
         UpdateLocationText();
     }
 
@@ -551,7 +559,7 @@ public partial class NewProjectWindow : Window
                         && text.EndsWith(Path.AltDirectorySeparatorChar + currentName, comparison)));
             _baseDirectory = strip ? text[..^currentName.Length] : text;
         }
-        UpdateValidation();
+        UpdateCreateEnabled();
     }
 
     /// <summary><para>按基础目录 + 当前名称刷新位置显示。</para>Refreshes the location display from base directory + current name.</summary>
@@ -576,84 +584,80 @@ public partial class NewProjectWindow : Window
 
     private async void OnCreateClick(object? sender, RoutedEventArgs e)
     {
-        if (_isAnalyzing || _isCreating) return;
-        _validationRequested = true;
-        UpdateValidation();
-        if (ProjectNameError.IsVisible) ProjectNameBox.Focus();
-        else if (ProjectLocationError.IsVisible) ProjectLocationBox.Focus();
-        else
+        // 表单未填写完整时「创建」按钮就处于禁用状态；这里再守一道，覆盖回车与程序化触发。
+        // The Create button is disabled while the form is incomplete; guard again for Enter and programmatic triggers.
+        if (_isAnalyzing || _isCreating || !IsFormValid()) return;
+
+        // Preserve analyzed identity; never repeat metadata I/O on the UI thread at submission.
+        // 提交时保留分析结果，避免在 UI 线程重新读取原包元数据。
+        var selected = _images.Where(image => image.IsSelectable && image.IsSelected).ToArray();
+        var containerPath = _containerPath;
+        var kind = _containerKind;
+        Result = new NewProjectFormResult(
+            ProjectNameBox.Text?.Trim() ?? string.Empty,
+            ProjectLocationBox.Text?.Trim() ?? string.Empty,
+            kind,
+            containerPath,
+            selected.Where(image => image.FilePath is not null).Select(image => image.FilePath!).ToArray(),
+            selected.Where(image => image.FilePath is null && !image.FromPayload).Select(image => image.Name).ToArray(),
+            selected.Where(image => image.FilePath is null && (kind != ContainerKind.Zip || image.FromPayload))
+                .Select(image => image.Name).ToArray(),
+            UnpackImagesBox.IsChecked == true,
+            UnpackFullyBox.IsChecked == true,
+            selected.Any(image => image.FilePath == containerPath || image.IsRemoteSource),
+            _remoteUrl);
+        _isCreating = true;
+        UpdateCreateEnabled();
+        _creationCancellation = new CancellationTokenSource();
+        FormContent.IsEnabled = false;
+        CancelButton.IsEnabled = true;
+        MainBusyContainer.IsLoading = true;
+        ReportProgress(LanguageService.Instance.GetString("NewProject_CheckingSpace"));
+        ResetProgressStats();
+        try
         {
-            // Preserve analyzed identity; never repeat metadata I/O on the UI thread at submission.
-            // 提交时保留分析结果，避免在 UI 线程重新读取原包元数据。
-            var selected = _images.Where(image => image.IsSelectable && image.IsSelected).ToArray();
-            var containerPath = _containerPath;
-            var kind = _containerKind;
-            Result = new NewProjectFormResult(
-                ProjectNameBox.Text?.Trim() ?? string.Empty,
-                ProjectLocationBox.Text?.Trim() ?? string.Empty,
-                kind,
-                containerPath,
-                selected.Where(image => image.FilePath is not null).Select(image => image.FilePath!).ToArray(),
-                selected.Where(image => image.FilePath is null && !image.FromPayload).Select(image => image.Name).ToArray(),
-                selected.Where(image => image.FilePath is null && (kind != ContainerKind.Zip || image.FromPayload))
-                    .Select(image => image.Name).ToArray(),
-                UnpackImagesBox.IsChecked == true,
-                UnpackFullyBox.IsChecked == true,
-                selected.Any(image => image.FilePath == containerPath || image.IsRemoteSource),
-                _remoteUrl);
-            _isCreating = true;
-            _creationCancellation = new CancellationTokenSource();
-            FormContent.IsEnabled = false;
-            CreateButton.IsEnabled = false;
-            CancelButton.IsEnabled = true;
-            MainBusyContainer.IsLoading = true;
-            ReportProgress(LanguageService.Instance.GetString("NewProject_CheckingSpace"));
-            ResetProgressStats();
-            try
+            if (!await ConfirmCreationSpaceAsync(Result))
             {
-                if (!await ConfirmCreationSpaceAsync(Result))
-                {
-                    Result = null;
-                    ProgressPanel.IsVisible = false;
-                    MainBusyContainer.IsLoading = false;
-                    return;
-                }
-                ReportProgress(LanguageService.Instance.GetString("NewProject_Creating"));
-                if (CreateWithCancellationAsync is not null) await CreateWithCancellationAsync(Result, _creationCancellation.Token);
-                else if (CreateAsync is not null) await CreateAsync(Result);
-                ResetProgressStats();
-                _isCreating = false;
-                Close();
-            }
-            catch (Exception ex)
-            {
-                if (ex is OperationCanceledException || _creationCancellation?.IsCancellationRequested == true)
-                {
-                    Result = null;
-                    ResetProgressStats();
-                    Close();
-                    return;
-                }
                 Result = null;
-                _isCreating = false;
-                CancelButton.IsEnabled = true;
-                CancelButton.Content = "取消";
-                ResetProgressStats();
-                ReportProgress(ex.Message, 0);
-                await DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_CreateFailed"),
-                    ex.Message, Ursa.Controls.MessageBoxIcon.Error);
-            }
-            finally
-            {
-                _isCreating = false;
-                FormContent.IsEnabled = true;
-                CreateButton.IsEnabled = true;
-                CancelButton.IsEnabled = true;
-                CancelButton.Content = "取消";
-                _creationCancellation?.Dispose();
-                _creationCancellation = null;
+                ProgressPanel.IsVisible = false;
                 MainBusyContainer.IsLoading = false;
+                return;
             }
+            ReportProgress(LanguageService.Instance.GetString("NewProject_Creating"));
+            if (CreateWithCancellationAsync is not null) await CreateWithCancellationAsync(Result, _creationCancellation.Token);
+            else if (CreateAsync is not null) await CreateAsync(Result);
+            ResetProgressStats();
+            _isCreating = false;
+            Close();
+        }
+        catch (Exception ex)
+        {
+            if (ex is OperationCanceledException || _creationCancellation?.IsCancellationRequested == true)
+            {
+                Result = null;
+                ResetProgressStats();
+                Close();
+                return;
+            }
+            Result = null;
+            _isCreating = false;
+            CancelButton.IsEnabled = true;
+            CancelButton.Content = "取消";
+            ResetProgressStats();
+            ReportProgress(ex.Message, 0);
+            await DialogService.ShowAsync(this, LanguageService.Instance.GetString("NewProject_CreateFailed"),
+                ex.Message, Ursa.Controls.MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _isCreating = false;
+            FormContent.IsEnabled = true;
+            UpdateCreateEnabled();
+            CancelButton.IsEnabled = true;
+            CancelButton.Content = "取消";
+            _creationCancellation?.Dispose();
+            _creationCancellation = null;
+            MainBusyContainer.IsLoading = false;
         }
     }
 
@@ -683,36 +687,29 @@ public partial class NewProjectWindow : Window
             language.GetString("NewProject_SpaceContinue"), language.GetString("NewProject_SpaceCancel"));
     }
 
-    private void UpdateValidation()
-    {
-        if (!_validationRequested) return;
-        SetRequiredError(ProjectNameBox, ProjectNameError, "NewProject_NameRequired");
-        SetRequiredError(ProjectLocationBox, ProjectLocationError, "NewProject_LocationRequired");
-        var name = ProjectNameBox.Text?.Trim() ?? "";
-        if (!ProjectNameError.IsVisible && (name is "." or ".." || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
-            || name.IndexOfAny(['/', '\\']) >= 0 || ReservedNames.Contains(name, StringComparer.OrdinalIgnoreCase)))
-        {
-            ProjectNameBox.SetValue(DataValidationErrors.HasErrorsProperty, true);
-            ProjectNameError.Text = LanguageService.Instance.GetString("NewProject_NameInvalid");
-            ProjectNameError.IsVisible = true;
-        }
-        if (!ProjectLocationError.IsVisible && ProjectLocationBox.Text is { } location
-            && !ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(location))
-        {
-            // 目录已存在且非空：新建要求全新目录。
-            // The directory exists and is not empty: a fresh directory is required.
-            ProjectLocationBox.SetValue(DataValidationErrors.HasErrorsProperty, true);
-            ProjectLocationError.Text = LanguageService.Instance.GetString("NewProject_LocationNotEmpty");
-            ProjectLocationError.IsVisible = true;
-        }
-    }
+    /// <summary>
+    /// <para>刷新「创建」按钮的可用性：只有名称与位置都合法时才允许提交，未填写完整时直接禁用按钮，
+    /// 不再在输入框下方用红字提示。</para>
+    /// Refreshes the Create button state: submitting is allowed only when both the name and the location are
+    /// valid, so an incomplete form disables the button instead of showing inline error text.
+    /// </summary>
+    private void UpdateCreateEnabled() => CreateButton.IsEnabled = IsFormValid();
 
-    private void SetRequiredError(TextBox input, TextBlock error, string requiredKey)
+    /// <summary>
+    /// <para>表单是否可提交：名称非空且合法、未被占用，位置非空且目录不存在或为空。</para>
+    /// Whether the form can be submitted: the name is non-empty, valid and not taken; the location is
+    /// non-empty and points at a missing or empty directory.
+    /// </summary>
+    private bool IsFormValid()
     {
-        var invalid = string.IsNullOrWhiteSpace(input.Text);
-        input.SetValue(DataValidationErrors.HasErrorsProperty, invalid);
-        error.Text = LanguageService.Instance.GetString(requiredKey);
-        error.IsVisible = invalid;
+        if (_isAnalyzing || _isCreating) return false;
+        var name = ProjectNameBox.Text?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(name) || name is "." or "..") return false;
+        if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || name.IndexOfAny(['/', '\\']) >= 0) return false;
+        if (ReservedNames.Contains(name, StringComparer.OrdinalIgnoreCase)) return false;
+        return ProjectLocationBox.Text is { } location
+            && !string.IsNullOrWhiteSpace(location)
+            && ContainerStructureAnalyzer.IsDirectoryEmptyOrMissing(location);
     }
 }
 

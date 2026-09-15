@@ -69,11 +69,6 @@
             <Setter Property="Height" Value="32" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
         </Style>
-        <Style Selector="TextBlock.field-error">
-            <Setter Property="Foreground" Value="{DynamicResource SemiColorDanger}" />
-            <Setter Property="FontSize" Value="12" />
-            <Setter Property="Margin" Value="0,4,0,0" />
-        </Style>
         <Style Selector="Button.browse">
             <Setter Property="MinWidth" Value="100" />
             <Setter Property="Height" Value="32" />
@@ -102,7 +97,7 @@
             </ursa:LoadingContainer.LoadingMessageTemplate>
             <Grid Name="FormContent" RowDefinitions="Auto,*" Margin="20,20,20,16" RowSpacing="14">
             <StackPanel Spacing="12" Grid.IsSharedSizeScope="True">
-                <Grid RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                <Grid RowDefinitions="Auto" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" SharedSizeGroup="ProjectFieldLabel" />
                         <ColumnDefinition Width="*" />
@@ -111,10 +106,8 @@
                     <TextBox Grid.Column="1" Name="ProjectNameBox" Classes="project-field"
                              PlaceholderText="{DynamicResource NewProject_NamePlaceholder}"
                              AutomationProperties.Name="{DynamicResource NewProject_Name}" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Name="ProjectNameError" Classes="field-error" IsVisible="False"
-                               Text="{DynamicResource NewProject_NameRequired}" />
                 </Grid>
-                <Grid RowDefinitions="Auto,Auto" ColumnSpacing="8">
+                <Grid RowDefinitions="Auto" ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" SharedSizeGroup="ProjectFieldLabel" />
                         <ColumnDefinition Width="*" />
@@ -131,8 +124,6 @@
                             <TextBlock Text="{DynamicResource NewProject_SelectFolder}" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
-                    <TextBlock Grid.Row="1" Grid.Column="1" Name="ProjectLocationError" Classes="field-error" IsVisible="False"
-                               Text="{DynamicResource NewProject_LocationRequired}" />
                 </Grid>
                 <Grid Name="ImagePicker" RowDefinitions="Auto,Auto" ColumnSpacing="8" RowSpacing="10">
                     <Grid.ColumnDefinitions>
