@@ -338,6 +338,23 @@ public sealed partial class CompareColumnViewModel : ObservableObject, IDisposab
     }
 
     /// <summary>
+    /// <para>浏览状态下进入某个目录：把该目录设为本列路径并重建内容（未对比时双击文件夹的行为）。</para>
+    /// Enters a directory while browsing: the directory becomes this column's path and the content is rebuilt
+    /// (the double-click behaviour when not comparing).
+    /// </summary>
+    /// <param name="node"><para>要进入的目录节点。</para>The directory node to enter.</param>
+    internal async Task EnterDirectoryAsync(CompareTreeNodeViewModel node)
+    {
+        if (!node.IsDirectory || node.FullPath.Length == 0 || !Directory.Exists(node.FullPath))
+        {
+            return;
+        }
+
+        Path = node.FullPath;
+        await LoadPathAsync(node.FullPath, isDirectory: true);
+    }
+
+    /// <summary>
     /// <para>把路径加载到本列：目录挂一棵折叠的浏览树（子项按需扫描），文件按文本行或固件元数据构造行。</para>
     /// Loads a path into this column: a directory gets a collapsed browsing tree (children scanned on demand),
     /// while a file's rows come from text lines or firmware metadata.

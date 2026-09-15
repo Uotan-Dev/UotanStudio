@@ -134,6 +134,7 @@
     <x:String x:Key="Dock_Properties_Type_ApkDocument">APK</x:String>
     <x:String x:Key="Dock_Properties_Type_FirmwareDocument">Firmware</x:String>
     <x:String x:Key="Dock_Properties_Type_HexDocument">Hex</x:String>
+    <x:String x:Key="Dock_Properties_Type_CompareEntry">Compare Entry</x:String>
 
     <!-- Firmware-info document properties panel labels -->
     <x:String x:Key="Dock_Properties_Fw_FileName">File Name</x:String>

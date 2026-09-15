@@ -120,6 +120,7 @@
     <x:String x:Key="Dock_Properties_Type_ApkDocument">APK</x:String>
     <x:String x:Key="Dock_Properties_Type_FirmwareDocument">固件</x:String>
     <x:String x:Key="Dock_Properties_Type_HexDocument">十六进制</x:String>
+    <x:String x:Key="Dock_Properties_Type_CompareEntry">对比条目</x:String>
 
     <!-- 固件信息文档属性面板标签 -->
     <x:String x:Key="Dock_Properties_Fw_FileName">文件名</x:String>

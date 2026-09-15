@@ -12,6 +12,8 @@ using Avalonia.Markup.Xaml.Templates;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using CommunityToolkit.Mvvm.Messaging;
+using UotanStudio.Messages;
 using UotanStudio.Services;
 using UotanStudio.Services.Projects;
 using UotanStudio.ViewModels.Compare;
@@ -561,6 +563,11 @@ public partial class CompareView : UserControl
         // A text comparison copies by the selected row set (dragging selects many rows), so the index set is written back
         // to the document.
         _vm.UpdateRowSelection(list.Selection?.SelectedIndexes ?? []);
+
+        // 把选中行广播给属性面板（无选中时清空）。
+        // Broadcasts the selected row to the properties panel (cleared when nothing is selected).
+        PublishSelectionToProperties(list);
+
         if (!visuals.Column.IsCompareSide)
         {
             return;
@@ -591,6 +598,37 @@ public partial class CompareView : UserControl
         {
             _syncingSelection = false;
         }
+    }
+
+    /// <summary>
+    /// <para>把当前选中行以绝对路径广播给属性面板（<see cref="CompareSelectionChangedMessage"/>）；
+    /// 文本对比行与空选择发送 <c>null</c> 清空面板。</para>
+    /// Broadcasts the current selected row's absolute path to the properties panel
+    /// (<see cref="CompareSelectionChangedMessage"/>); text-comparison rows and an empty selection send
+    /// <c>null</c> to clear the panel.
+    /// </summary>
+    private void PublishSelectionToProperties(ListBox list)
+    {
+        CompareRowViewModel? row = null;
+        if (list.SelectedItem is CompareRowViewModel selected)
+        {
+            row = selected;
+        }
+        else if (list.Selection?.SelectedIndexes.Count == 1)
+        {
+            // 多选（文本对比）模式没有单一 SelectedItem，按唯一选中索引取行。
+            // Multi-select (text comparison) has no single SelectedItem; take the row by the only selected index.
+            var index = list.Selection.SelectedIndexes[0];
+            if (index >= 0 && index < list.ItemCount)
+            {
+                row = list.Items[index] as CompareRowViewModel;
+            }
+        }
+
+        var path = row is not null && row.TreeNode is not null && !row.IsEditable ? ResolveRowPath(row, list) : null;
+        WeakReferenceMessenger.Default.Send(new CompareSelectionChangedMessage(
+            path,
+            row?.TreeNode?.IsDirectory ?? false));
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -769,11 +807,11 @@ public partial class CompareView : UserControl
     }
 
     /// <summary>
-    /// <para>行双击：目录行展开/折叠（文件夹对比中两侧共享同一节点，一侧展开即两侧同步展开），
-    /// 文件行在文件夹对比中于新标签打开该文件的对比；浏览状态下的文件行不做处理。</para>
-    /// Row double-click: a directory row expands or collapses (both sides share one node in a folder comparison,
-    /// so expanding one side expands the other), while a file row opens that file's comparison in a new tab
-    /// during a folder comparison. A file row while browsing does nothing.
+    /// <para>行双击：浏览状态下目录行进入该目录（路径框同步为新路径），对比状态下目录行展开/折叠
+    /// （两侧共享同一节点，一侧展开即两侧同步展开）；文件行在文件夹对比中于新标签打开该文件的对比。</para>
+    /// Row double-click: while browsing a directory row enters that directory (the path box follows), while
+    /// comparing it expands or collapses the row (both sides share one node, so expanding one side expands the
+    /// other); a file row opens that file's comparison in a new tab during a folder comparison.
     /// </summary>
     private async void OnRowDoubleTapped(object? sender, TappedEventArgs e)
     {
@@ -784,14 +822,29 @@ public partial class CompareView : UserControl
         }
 
         e.Handled = true;
+        var column = FindColumnFor(source);
         if (node.IsDirectory)
         {
+            // 未对比时双击目录进入该目录（路径框同步）；对比中展开/折叠。
+            // While not comparing, double-clicking a directory enters it (the path box follows); while
+            // comparing it expands or collapses the row.
+            if (DataContext is not CompareViewModel viewModel || column is null)
+            {
+                return;
+            }
+
+            if (!viewModel.IsComparing)
+            {
+                await column.EnterDirectoryAsync(node);
+                return;
+            }
+
             await ToggleRowExpansionAsync(node, source);
             return;
         }
 
         if (DataContext is CompareViewModel vm
-            && FindColumnFor(source) is { IsCompareSide: true }
+            && column is { IsCompareSide: true }
             && vm.IsFolderMode)
         {
             vm.OpenFileComparisonInNewTab(node);

@@ -260,6 +260,7 @@ internal partial class PropertiesViewModel : Tool
                 PropertiesContentType.ApkDocument => LanguageService.Instance.GetString("Dock_Properties_Type_ApkDocument"),
                 PropertiesContentType.FirmwareDocument => LanguageService.Instance.GetString("Dock_Properties_Type_FirmwareDocument"),
                 PropertiesContentType.HexDocument => LanguageService.Instance.GetString("Dock_Properties_Type_HexDocument"),
+                PropertiesContentType.CompareEntry => LanguageService.Instance.GetString("Dock_Properties_Type_CompareEntry"),
                 _ => string.Empty,
             };
 
@@ -281,6 +282,7 @@ internal partial class PropertiesViewModel : Tool
         WeakReferenceMessenger.Default.Register<ManifestNodeSelectionChangedMessage>(this, OnManifestNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<ArscNodeSelectionChangedMessage>(this, OnArscNodeSelectionChanged);
         WeakReferenceMessenger.Default.Register<FileManagerSelectionChangedMessage>(this, OnFileManagerSelectionChanged);
+        WeakReferenceMessenger.Default.Register<CompareSelectionChangedMessage>(this, OnCompareSelectionChanged);
         WeakReferenceMessenger.Default.Register<PropertiesViewModel, LanguageStateChangedMessage>(this,
             static (recipient, _) => recipient.RefreshLocalizedPropertyNamesOnUiThread());
     }
@@ -296,6 +298,12 @@ internal partial class PropertiesViewModel : Tool
     /// Responds to file-manager entry selection changed messages by refreshing the property rows.
     /// </summary>
     private void OnFileManagerSelectionChanged(object recipient, FileManagerSelectionChangedMessage message) => RefreshForFileManagerEntry(message.Entry, message.Document);
+
+    /// <summary>
+    /// <para>响应对比视图行选中变更消息，刷新属性行展示选中条目详情。</para>
+    /// Responds to compare-view row selection changed messages by refreshing property rows with the selected entry.
+    /// </summary>
+    private void OnCompareSelectionChanged(object recipient, CompareSelectionChangedMessage message) => RefreshForCompareEntry(message.Path, message.IsDirectory);
 
     /// <summary>
     /// <para>响应文件分析完成消息，刷新属性行展示分析结果。</para>
@@ -335,6 +343,7 @@ internal partial class PropertiesViewModel : Tool
                 || ContentType == PropertiesContentType.HexDocument
                 || ContentType == PropertiesContentType.FileManagerDocument
                 || ContentType == PropertiesContentType.FileManagerEntry
+                || ContentType == PropertiesContentType.CompareEntry
                 || ContentType == PropertiesContentType.ScreenMirror)
             {
                 ClearProperties();
@@ -1059,6 +1068,37 @@ internal partial class PropertiesViewModel : Tool
     }
 
     /// <summary>
+    /// <para>刷新对比视图选中条目的属性行（名称、路径、类型、大小）；路径为 <c>null</c> 时清空面板。</para>
+    /// Refreshes property rows for the selected compare-view entry (name, path, kind, size); clears the
+    /// panel when the path is <c>null</c>.
+    /// </summary>
+    public void RefreshForCompareEntry(string? path, bool isDirectory)
+    {
+        ClearProperties();
+        if (string.IsNullOrEmpty(path))
+        {
+            ResetSelection();
+            return;
+        }
+
+        ContentType = PropertiesContentType.CompareEntry;
+        HasSelection = true;
+        SelectedNodeTitle = System.IO.Path.GetFileName(path);
+
+        Properties.Add(CreateLocalizedRow("Dock_Properties_FileName", SelectedNodeTitle));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_Path", path));
+        Properties.Add(CreateLocalizedRow("Dock_Properties_ImageType",
+            LanguageService.Instance.GetString(isDirectory ? "FileManager_KindDirectory" : "FileManager_KindFile")));
+        if (!isDirectory && File.Exists(path))
+        {
+            var size = new FileInfo(path).Length;
+            Properties.Add(CreateLocalizedRow("Dock_Properties_Size", ProgressMeter.FormatSize(size)));
+        }
+
+        LogService.Instance.Write(LogLevel.Debug, "Properties", $"Refreshed for compare entry '{path}'");
+    }
+
+    /// <summary>
     /// <para>刷新指定文件分析结果的属性行。分析为 <c>null</c> 时显示占位。</para>
     /// Refreshes property rows for the specified file analysis results. Shows a placeholder when analysis is <c>null</c>.
     /// </summary>
@@ -1219,6 +1259,12 @@ public enum PropertiesContentType
     /// File-manager entry information.
     /// </summary>
     FileManagerEntry,
+
+    /// <summary>
+    /// <para>对比视图选中条目信息。</para>
+    /// Compare-view selected entry information.
+    /// </summary>
+    CompareEntry,
 
     /// <summary>Live screen-mirror parameters and rates.</summary>
     ScreenMirror
