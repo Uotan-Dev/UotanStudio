@@ -259,7 +259,12 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
         {
             if (!await WaitAndConfirmDocumentsAsync())
                 return false;
-            if (_initialized && _coordinator.Enabled && _projects.CurrentProjectPath is { Length: > 0 } path)
+            // 页面状态（打开文档标签）与 AutoSave（自动保存脏内容）解耦：无论是否启用自动保存，
+            // 在工程切换边界都持久化已打开文档，保证重开工程项目时标签可恢复。
+            // Page state (open document tabs) is decoupled from AutoSave (automatic saving of dirty
+            // content): open documents persist at every project boundary regardless of AutoSave so
+            // reloading a project restores its tabs.
+            if (_initialized && _projects.CurrentProjectPath is { Length: > 0 } path)
                 await _projects.PersistToAsync(path, persistPageState: true);
             await SaveSessionAsync();
             return true;
@@ -280,7 +285,11 @@ internal sealed class WorkspaceAutoSaveService : IDisposable
             Resume();
             return false;
         }
-        if (_initialized && _coordinator.Enabled)
+        // 页面状态（打开文档标签）与 AutoSave 解耦：关闭时无论 AutoSave 是否启用都持久化工程快照与
+        // 页面状态，再次打开该工程即可恢复上次的文档标签。
+        // Page state (open document tabs) is decoupled from AutoSave: on close the project snapshot and
+        // page state always persist so reopening the project restores the previous document tabs.
+        if (_initialized)
         {
             if (_projects.CurrentProjectPath is { Length: > 0 } path)
                 await _projects.PersistToAsync(path);
