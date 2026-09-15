@@ -265,6 +265,34 @@ public static class FileOpenMode
             return EditorOpenMode.Axml;
         }
 
+        // DTB/DTBO 魔数优先：FDT（0xD00DFEED）与 DTBO（0xD7B7AB1E，均大端）即使扩展名缺失或
+        // 被改为 .img/.bin（会被固件/Hex 路由拦截）也走设备树双栏编辑器。
+        // DTB/DTBO magic first: FDT (0xD00DFEED) and DTBO (0xD7B7AB1E, both big-endian) open in the
+        // device-tree dual-pane editor even when the extension is absent or renamed to .img/.bin
+        // (which the firmware/Hex routes would claim).
+        if (header is not null && IsDtbMagic(header))
+        {
+            return EditorOpenMode.Dtb;
+        }
+
+        // DEX 魔数优先："dex\n" 起始的字节码即使无扩展名或被改名也走 DEX 双栏编辑器。
+        // DEX magic first: bytecode starting with "dex\n" opens in the DEX dual-pane editor even
+        // without an extension or after a rename.
+        if (header is not null && IsDexMagic(header))
+        {
+            return EditorOpenMode.Dex;
+        }
+
+        // ZIP 容器魔数：PK 头按内容命中文件管理器浏览；.apk/.jar 的专用编辑器仍由扩展名路由
+        // 优先（ZIP 魔数无法区分 APK/JAR 与普通 ZIP）。
+        // ZIP container magic: a PK header routes to file-manager browsing by content; the dedicated
+        // .apk/.jar editors still win via their extension routes (the ZIP magic cannot tell an APK/JAR
+        // from a plain ZIP).
+        if (header is not null && IsZipMagic(header) && !IsApkExtension(Path.GetExtension(path)) && !IsJarExtension(Path.GetExtension(path)))
+        {
+            return EditorOpenMode.FileSystem;
+        }
+
         // 文件系统镜像魔数优先：头部已提供且长度足够时直接命中（ext4 0xEF53@1080、
         // erofs 0xE0F5E1E2@1024、f2fs 0xF2F52010@1024），不必再按扩展名回落固件面板。
         // Filesystem image magic takes priority: when the header is provided and long enough, the magic
@@ -556,6 +584,41 @@ public static class FileOpenMode
             return false;
         }
     }
+
+    /// <summary>
+    /// <para>是否为 FDT 设备树魔数（大端 0xD00DFEED 位于偏移 0）或 DTBO 表魔数（大端 0xD7B7AB1E）。</para>
+    /// Whether the header holds the FDT device-tree magic (big-endian 0xD00DFEED at offset 0) or the
+    /// DTBO table magic (big-endian 0xD7B7AB1E).
+    /// </summary>
+    public static bool IsDtbMagic(ReadOnlySpan<byte> header)
+    {
+        if (header.Length < 4)
+        {
+            return false;
+        }
+
+        var magic = BinaryPrimitives.ReadUInt32BigEndian(header);
+        return magic == UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.FdtConstants.FdtMagic
+            || magic == UotanStudio.Firmware.BoundedContexts.DeviceTree.Dt.FdtConstants.DtboMagic;
+    }
+
+    /// <summary>
+    /// <para>是否为 DEX 魔数（ASCII "dex\n" 位于偏移 0）。</para>
+    /// Whether the header holds the DEX magic (ASCII "dex\n" at offset 0).
+    /// </summary>
+    public static bool IsDexMagic(ReadOnlySpan<byte> header) =>
+        header.Length >= 4 && header[0] == (byte)'d' && header[1] == (byte)'e'
+            && header[2] == (byte)'x' && header[3] == (byte)'\n';
+
+    /// <summary>
+    /// <para>是否为 ZIP 容器魔数（"PK\x03\x04" / "PK\x05\x06" / "PK\x07\x08"，覆盖空归档与跨卷条目）。</para>
+    /// Whether the header holds a ZIP container magic ("PK\x03\x04" / "PK\x05\x06" / "PK\x07\x08",
+    /// covering empty archives and spanned entries).
+    /// </summary>
+    public static bool IsZipMagic(ReadOnlySpan<byte> header) =>
+        header.Length >= 4 && header[0] == (byte)'P' && header[1] == (byte)'K'
+            && (header[2] == 0x03 || header[2] == 0x05 || header[2] == 0x07)
+            && (header[3] == 0x04 || header[3] == 0x06 || header[3] == 0x08);
 
     /// <summary>
     /// <para>判断头部字节是否命中任意一种文件系统魔数（ext4/EROFS/F2FS）。</para>

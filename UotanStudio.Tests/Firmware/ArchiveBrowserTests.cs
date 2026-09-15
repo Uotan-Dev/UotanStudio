@@ -26,6 +26,12 @@ public sealed class ArchiveBrowserTests
         Assert.Equal(EditorOpenMode.FileSystem, FileOpenMode.ResolveMode(path));
     }
 
+    [Fact]
+    public void SupportsPath_ApkExtension_IsRecognizedAsBrowsableArchive()
+    {
+        Assert.True(ArchiveBrowser.SupportsPath("sample.apk"));
+    }
+
     [Theory]
     [InlineData(".tar", CompressionFormat.None)]
     [InlineData(".tgz", CompressionFormat.Gzip)]
