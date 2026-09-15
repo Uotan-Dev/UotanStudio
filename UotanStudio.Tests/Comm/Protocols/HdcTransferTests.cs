@@ -207,7 +207,7 @@ public sealed class HdcTransferTests
                 ? [HdcDaemonCodec.Encode(new(HdcCommand.Handshake, 0, 0, HdcDaemonCodec.Handshake(4, 0, "", [], "test")))]
                 : handler(message);
         };
-        var session = new HdcSession(transport, new HdcAuthentication(RSA.Create(3072)));
+        var session = new HdcSession(transport, HdcTestKeys.CreateAuthentication());
         session.Connect(); return session;
     }
 

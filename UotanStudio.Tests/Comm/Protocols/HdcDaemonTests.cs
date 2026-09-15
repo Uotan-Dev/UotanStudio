@@ -54,7 +54,7 @@ public sealed class HdcDaemonTests
             }
             return [];
         };
-        using var session = new HdcSession(transport, new HdcAuthentication(RSA.Create(3072)));
+        using var session = new HdcSession(transport, HdcTestKeys.CreateAuthentication());
         session.Connect();
         var result = session.ExecuteCommand("id", 2000);
         Assert.Equal("ok", Encoding.UTF8.GetString(result.Stdout));

@@ -49,7 +49,7 @@ public sealed class HdcAuthenticationTests
     [Fact]
     public void LegacySignature_IsPrivateBlockTypeOne_NotPublicEncryption()
     {
-        using var rsa = RSA.Create(3072);
+        using var rsa = HdcTestKeys.CreateRsa();
         var key = rsa.ExportParameters(false);
         using var auth = new HdcAuthentication(rsa, HdcAuthVerifyType.RsaEncrypt);
         var token = "independent raw challenge"u8.ToArray();

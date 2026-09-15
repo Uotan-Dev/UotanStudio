@@ -41,7 +41,14 @@ public class FakeCommTransport : ICommTransport
     public void Connect() => _connected = true;
 
     /// <inheritdoc />
-    public void Disconnect() => _connected = false;
+    public void Disconnect()
+    {
+        lock (_lock)
+        {
+            _connected = false;
+            Monitor.PulseAll(_lock);
+        }
+    }
 
     /// <inheritdoc />
     public void Reset() { }
@@ -146,6 +153,7 @@ public class FakeCommTransport : ICommTransport
     {
         lock (_lock)
         {
+            _connected = false;
             _reads.Clear();
             _headRemainder = null;
             Monitor.PulseAll(_lock);
@@ -170,13 +178,21 @@ public class FakeCommTransport : ICommTransport
                 return _reads.Dequeue();
             }
 
+            // A disposed/disconnected transport must unblock waiting reads immediately; otherwise
+            // HdcConnection.Dispose would join the message thread for the full read timeout.
+            // 已释放/断开的传输必须立即解除阻塞读取；否则 HdcConnection.Dispose 会按完整读超时等待消息线程。
+            if (!_connected)
+            {
+                return null;
+            }
+
             if (timeoutMs <= 0)
             {
                 return null;
             }
 
             var deadline = Environment.TickCount64 + timeoutMs;
-            while (_reads.Count == 0)
+            while (_reads.Count == 0 && _connected)
             {
                 var remaining = (int)Math.Min(deadline - Environment.TickCount64, int.MaxValue);
                 if (remaining <= 0)
@@ -187,7 +203,7 @@ public class FakeCommTransport : ICommTransport
                 Monitor.Wait(_lock, remaining);
             }
 
-            return _reads.Dequeue();
+            return _reads.Count > 0 ? _reads.Dequeue() : null;
         }
     }
 
@@ -209,6 +225,11 @@ public class FakeCommTransport : ICommTransport
                 if (_reads.Count > 0)
                 {
                     return (true, _reads.Dequeue());
+                }
+
+                if (!_connected)
+                {
+                    return (false, null);
                 }
             }
 

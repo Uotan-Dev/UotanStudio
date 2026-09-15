@@ -62,6 +62,9 @@ public sealed class HdcServiceBoundaryTests
                 return [Reply(message, HdcCommand.Handshake, HdcDaemonCodec.Handshake(4, 0, "", [], "test"))];
             if (message.Command == HdcCommand.JdwpList)
             {
+                // Run without a task-start token: a starved thread pool must not cancel the task
+                // before its delegate runs, or the awaited producer would surface TaskCanceledException.
+                // 不传任务启动令牌：线程池饥饿时不得在委托执行前取消任务，否则 await producer 会抛出 TaskCanceledException。
                 producer = Task.Run(async () =>
                 {
                     try
@@ -74,11 +77,11 @@ public sealed class HdcServiceBoundaryTests
                         transport.Enqueue(Reply(message, HdcCommand.ChannelClose, [0]));
                     }
                     catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
-                }, stop.Token);
+                });
             }
             return [];
         };
-        using var session = new HdcSession(transport, new HdcAuthentication(RSA.Create(3072)));
+        using var session = new HdcSession(transport, HdcTestKeys.CreateAuthentication());
         session.Connect();
         try
         {
