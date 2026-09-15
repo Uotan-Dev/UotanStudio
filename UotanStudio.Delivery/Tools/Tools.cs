@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Net.Http;
 using System.Security.Cryptography;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.Delivery;
 
@@ -44,14 +45,8 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
         "https://github.com/aspect-build/zstd-prebuilt/releases/download/v1.5.6-bcr2/zstd_darwin_amd64",
         "D81BE8618553D7D658E09DA669FFD68EC76D8095161A590C9B8A1A99FCE67CA8", "", Raw: true);
 
-    internal static IEnumerable<string> Sources(string url)
-    {
-        yield return url;
-        if (!url.StartsWith("https://github.com/", StringComparison.Ordinal)) yield break;
-        yield return "https://ghfast.top/" + url;
-        yield return "https://gh-proxy.org/" + url;
-        yield return "https://ghproxy.net/" + url;
-    }
+    // GitHub 镜像测速与源选择已统一到 Firmware.SharedKernel 的 HttpDownload。
+    // GitHub mirror probing and source selection are unified in HttpDownload (Firmware.SharedKernel).
 
     public async Task PrepareAsync(DeliveryPlan plan, string directory, IProgress<DeliveryProgress>? progress, CancellationToken token)
     {
@@ -172,9 +167,13 @@ internal sealed class DeliveryToolService(HttpClient client, string cacheDirecto
             Directory.CreateDirectory(cacheDirectory);
             var cached = Path.Combine(cacheDirectory, package.Name + (package.Raw ? ".bin" : ".zip"));
             if (await MatchesAsync(cached, package.Sha256, token).ConfigureAwait(false)) return cached;
+            // 先对源站与镜像测速，再从快到慢依次尝试；SHA-256 校验仍然兜底。
+            // Speed-probe origin and mirrors first, then try fastest-first; the SHA-256 check still guards integrity.
+            var sources = await HttpDownload.SelectSourcesBySpeedAsync(new Uri(package.Url), client, token).ConfigureAwait(false);
             var errors = new List<string>();
-            foreach (var url in Sources(package.Url))
+            foreach (var source in sources)
             {
+                var url = source.ToString();
                 token.ThrowIfCancellationRequested();
                 var temporary = cached + ".download-" + Guid.NewGuid().ToString("N");
                 try

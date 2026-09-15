@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.Firmware;
 
@@ -114,112 +115,10 @@ public sealed class RemoteRomService(HttpClient client)
 
     public async Task<string> DownloadAsync(Uri uri, string destination, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
-        var temporary = destination + $".part-{Guid.NewGuid():N}";
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(destination))!);
-            var remote = await ProbeDownloadAsync(uri, cancellationToken).ConfigureAwait(false);
-            if (remote.SupportsRanges && remote.Length >= ParallelDownloadThreshold)
-            {
-                try
-                {
-                    await DownloadParallelAsync(uri, temporary, remote.Length, progress, cancellationToken).ConfigureAwait(false);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Some CDNs advertise ranges but reject concurrent requests; retain a reliable sequential fallback.
-                    TryDelete(temporary);
-                    await DownloadSequentialAsync(uri, temporary, remote.Length, progress, cancellationToken).ConfigureAwait(false);
-                }
-            }
-            else
-                await DownloadSequentialAsync(uri, temporary, remote.Length, progress, cancellationToken).ConfigureAwait(false);
-
-            File.Move(temporary, destination, overwrite: true);
-            return destination;
-        }
-        catch
-        {
-            TryDelete(temporary);
-            throw;
-        }
-    }
-
-    private async Task<(long Length, bool SupportsRanges)> ProbeDownloadAsync(Uri uri, CancellationToken cancellationToken)
-    {
-        using var request = CreateRequest(uri);
-        request.Headers.Range = new RangeHeaderValue(0, 0);
-        using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        var length = response.Content.Headers.ContentRange?.Length ?? response.Content.Headers.ContentLength ?? 0;
-        return (length, response.StatusCode == HttpStatusCode.PartialContent && response.Content.Headers.ContentRange?.Length is > 0);
-    }
-
-    private async Task DownloadSequentialAsync(Uri uri, string destination, long total,
-        IProgress<(long Processed, long Total)>? progress, CancellationToken cancellationToken)
-    {
-        using var request = CreateRequest(uri);
-        using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        total = total > 0 ? total : response.Content.Headers.ContentLength ?? 0;
-        await using var input = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        await using var output = new FileStream(destination, FileMode.Create, FileAccess.Write, FileShare.None, TransferBufferBytes, FileOptions.SequentialScan);
-        var buffer = new byte[TransferBufferBytes];
-        long processed = 0;
-        int read;
-        while ((read = await input.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
-        {
-            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-            processed += read;
-            progress?.Report((processed, total));
-        }
-    }
-
-    private async Task DownloadParallelAsync(Uri uri, string destination, long total,
-        IProgress<(long Processed, long Total)>? progress, CancellationToken cancellationToken)
-    {
-        await using (var preallocate = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite, TransferBufferBytes, FileOptions.SequentialScan))
-            preallocate.SetLength(total);
-
-        var ranges = Enumerable.Range(0, checked((int)((total + ParallelChunkBytes - 1) / ParallelChunkBytes)))
-            .Select(index =>
-            {
-                var start = checked((long)index * ParallelChunkBytes);
-                return (Start: start, End: Math.Min(total - 1, start + ParallelChunkBytes - 1));
-            })
-            .ToArray();
-        long processed = 0;
-        var options = new ParallelOptions { MaxDegreeOfParallelism = ParallelWorkers, CancellationToken = cancellationToken };
-        await Parallel.ForEachAsync(ranges, options, async (range, token) =>
-        {
-            using var request = CreateRequest(uri);
-            request.Headers.Range = new RangeHeaderValue(range.Start, range.End);
-            using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            if (response.StatusCode != HttpStatusCode.PartialContent
-                || response.Content.Headers.ContentRange?.From != range.Start
-                || response.Content.Headers.ContentRange?.To != range.End)
-                throw new InvalidOperationException("The remote server returned an invalid HTTP range response.");
-            var expectedLength = checked(range.End - range.Start + 1);
-            if (response.Content.Headers.ContentLength is { } contentLength && contentLength != expectedLength)
-                throw new InvalidOperationException("The remote server returned an incomplete HTTP range response.");
-
-            await using var input = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
-            await using var output = new FileStream(destination, FileMode.Open, FileAccess.Write, FileShare.ReadWrite, TransferBufferBytes, FileOptions.RandomAccess);
-            output.Position = range.Start;
-            var buffer = new byte[TransferBufferBytes];
-            long rangeProcessed = 0;
-            while (rangeProcessed < range.End - range.Start + 1)
-            {
-                var requested = (int)Math.Min(buffer.Length, range.End - range.Start + 1 - rangeProcessed);
-                var read = await input.ReadAsync(buffer.AsMemory(0, requested), token).ConfigureAwait(false);
-                if (read == 0) throw new EndOfStreamException("The remote server closed a range response early.");
-                await output.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
-                rangeProcessed += read;
-                var current = Interlocked.Add(ref processed, read);
-                progress?.Report((current, total));
-            }
-        }).ConfigureAwait(false);
+        // GitHub 链接由共享入口做镜像测速并从最快源下载；非 GitHub 链接行为不变。
+        // GitHub URLs are speed-probed across mirrors by the shared entry point; other URLs behave as before.
+        await HttpDownload.DownloadAsync(_client, uri, destination, progress, cancellationToken).ConfigureAwait(false);
+        return destination;
     }
 
     /// <summary>Extracts selected raw-payload partitions with range reads, one partition at a time.</summary>
