@@ -43,7 +43,7 @@
 					<MenuItem.Header>
 						<TextBlock Text="{DynamicResource Menu_File}" FontWeight="SemiBold" />
 					</MenuItem.Header>
-					<MenuItem Header="{DynamicResource Menu_NewProject}" Command="{Binding MenuVM.NewProjectCommand}">
+					<MenuItem Header="{DynamicResource Menu_NewSolution}" Command="{Binding MenuVM.NewProjectCommand}">
 						<MenuItem.Icon>
 							<avalonia:MaterialIcon Kind="FolderPlus" Width="16" Height="16" />
 						</MenuItem.Icon>

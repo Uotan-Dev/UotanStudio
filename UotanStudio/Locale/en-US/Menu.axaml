@@ -11,6 +11,7 @@
 
     <!-- File menu -->
     <x:String x:Key="Menu_NewProject">New Project</x:String>
+    <x:String x:Key="Menu_NewSolution">New Solution</x:String>
     <x:String x:Key="NewProject_Name">Project name</x:String>
     <x:String x:Key="NewProject_NamePlaceholder">Enter a project name</x:String>
     <x:String x:Key="NewProject_Location">Project location</x:String>

@@ -11,6 +11,7 @@
 
     <!-- 文件菜单 -->
     <x:String x:Key="Menu_NewProject">新建项目</x:String>
+    <x:String x:Key="Menu_NewSolution">新建解决方案</x:String>
     <x:String x:Key="NewProject_Name">项目名称</x:String>
     <x:String x:Key="NewProject_NamePlaceholder">输入项目名称</x:String>
     <x:String x:Key="NewProject_Location">项目位置</x:String>
