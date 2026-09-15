@@ -955,6 +955,7 @@ public class HexViewer : Grid
             }
 
             await clipboard.SetTextAsync(builder.ToString().TrimEnd());
+            await clipboard.FlushAsync();
         }
 
         private async void PasteFromClipboard()
