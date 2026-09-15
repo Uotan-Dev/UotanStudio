@@ -114,6 +114,9 @@
     <x:String x:Key="About_Title">About UotanStudio</x:String>
     <x:String x:Key="About_Description">An integrated toolbox for firmware unpack/pack, board flashing and visual programming.</x:String>
     <x:String x:Key="About_Close">Close</x:String>
+    <x:String x:Key="About_OpenSource">Open Source Projects</x:String>
+    <x:String x:Key="About_OpenRepository">Repository</x:String>
+    <x:String x:Key="About_OpenSourceNotice">This software uses or references the following open-source projects, each governed by its own license. Most use permissive licenses (MIT / Apache-2.0, etc.) and may be used in commercial projects free of charge; LGPL-3.0 components (e.g., LibUsbDotNet) impose certain obligations on distribution (e.g., providing modified source or dynamic linking). Avalonia is licensed under the MIT License and requires no additional commercial license.</x:String>
 
     <x:String x:Key="Menu_CompareFiles">Compare Files</x:String>
     <x:String x:Key="Menu_CompareFolders">Compare Folders</x:String>
