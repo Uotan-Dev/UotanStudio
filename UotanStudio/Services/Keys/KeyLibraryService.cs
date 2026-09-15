@@ -277,16 +277,27 @@ public sealed class KeyLibraryService
     // 拒绝仅含公钥的输入，发布前先执行一次私钥运算。
     private static AsymmetricAlgorithm VerifyPrivate(AsymmetricAlgorithm key)
     {
-        switch (key)
+        try
         {
-            case RSA rsa:
-                rsa.SignData("UotanStudio key import"u8, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-                break;
-            case ECDsa ec:
-                ec.SignData("UotanStudio key import"u8, HashAlgorithmName.SHA256);
-                break;
+            switch (key)
+            {
+                case RSA rsa:
+                    rsa.SignData("UotanStudio key import"u8, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+                    break;
+                case ECDsa ec:
+                    ec.SignData("UotanStudio key import"u8, HashAlgorithmName.SHA256);
+                    break;
+            }
+            return key;
         }
-        return key;
+        catch (CryptographicException ex)
+        {
+            // Public-only material parses as a key but cannot sign; surface it as invalid
+            // material so callers only ever see this loader's documented failure type.
+            // 仅含公钥的材料能解析但不能签名；统一转换为无效材料异常，使调用方只需处理本加载器声明的失败类型。
+            key.Dispose();
+            throw new InvalidDataException("私钥不包含可用的私有材料。", ex);
+        }
     }
 
     public string PrivatePath(ManagedKey key) => Path.Combine(KeyDirectory(key.Id), PrivateName(key.Kind));
