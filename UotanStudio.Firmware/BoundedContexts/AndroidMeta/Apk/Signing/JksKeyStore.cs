@@ -56,9 +56,10 @@ public static class JksKeyStoreReader
             }
         }
 
-        // Verify the trailing keyed digest over every byte from the entry-count field onward,
-        // matching JavaKeyStore.load which digests everything except the leading magic+version.
-        // 校验尾部 keyed 摘要（覆盖条目计数起的所有字节），与 JavaKeyStore.load 一致（不含 magic 与版本）。
+        // Verify the trailing keyed digest over the entry bytes only, matching JavaKeyStore.load
+        // which wraps just the entries (the leading magic/version/count stay outside the digest).
+        // 校验尾部 keyed 摘要（仅覆盖条目字节），与 JavaKeyStore.load 一致
+        // （开头的 magic/version/count 不在摘要范围内）。
         digest.AppendData(data, bodyStart, offset - bodyStart);
         var computed = digest.GetHashAndReset();
         if (offset + computed.Length != data.Length) throw new InvalidDataException("JKS 尾部长度不符，密钥库已损坏。");
@@ -67,6 +68,54 @@ public static class JksKeyStoreReader
             if (computed[i] != data[offset + i]) throw new InvalidDataException("密码错误或密钥库已被篡改。");
         }
         return entries;
+    }
+
+    /// <summary>
+    /// Recovers the plaintext PKCS#8 private key from the KeyProtector blob stored in a tag-1
+    /// entry (salt || XOR keystream ciphertext || SHA-1 integrity digest), mirroring upstream
+    /// KeyProtector.recover.
+    /// <para>从 tag-1 条目存储的 KeyProtector 数据块（盐 || XOR 密钥流密文 || SHA-1 完整性摘要）
+    /// 恢复明文 PKCS#8 私钥，对应上游 KeyProtector.recover。</para>
+    /// </summary>
+    /// <param name="protectedKey">The <see cref="JksEntry.ProtectedPrivateKey"/> blob. <para>JksEntry.ProtectedPrivateKey 数据块。</para></param>
+    /// <param name="password">Keystore password used when the entry was written. <para>写入条目时使用的密钥库密码。</para></param>
+    /// <returns>The plaintext PKCS#8 DER key. <para>明文 PKCS#8 DER 私钥。</para></returns>
+    public static byte[] Unprotect(byte[] protectedKey, string password)
+    {
+        const int saltLength = 20;
+        const int digestLength = 20;
+        ArgumentNullException.ThrowIfNull(protectedKey);
+        if (protectedKey.Length < saltLength + digestLength + 1)
+            throw new InvalidDataException("JKS 受保护私钥长度不合法。");
+        var keyLength = protectedKey.Length - saltLength - digestLength;
+        var passwordBytes = EncodePassword(password);
+        try
+        {
+            var numRounds = (keyLength + digestLength - 1) / digestLength;
+            var xorKey = new byte[keyLength];
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+            var digest = protectedKey.AsSpan(0, saltLength).ToArray();
+            for (var round = 0; round < numRounds; round++)
+            {
+                sha.AppendData(passwordBytes);
+                sha.AppendData(digest);
+                digest = sha.GetHashAndReset();
+                Array.Copy(digest, 0, xorKey, round * digestLength, Math.Min(digestLength, xorKey.Length - (round * digestLength)));
+            }
+
+            var plainKey = new byte[keyLength];
+            for (var i = 0; i < keyLength; i++) plainKey[i] = (byte)(protectedKey[saltLength + i] ^ xorKey[i]);
+            sha.AppendData(passwordBytes);
+            sha.AppendData(plainKey);
+            var computed = sha.GetHashAndReset();
+            if (!computed.AsSpan().SequenceEqual(protectedKey.AsSpan(saltLength + keyLength, digestLength)))
+            {
+                CryptographicOperations.ZeroMemory(plainKey);
+                throw new InvalidDataException("密码错误或私钥条目已被篡改。");
+            }
+            return plainKey;
+        }
+        finally { CryptographicOperations.ZeroMemory(passwordBytes); }
     }
 
     /// <summary>The upstream pre-keyed digest: SHA1(passwordBytes || "Mighty Aphrodite").</summary>
@@ -113,6 +162,19 @@ public static class JksKeyStoreReader
         return value;
     }
 
+    // Java DataInputStream.readUTF prefixes modified UTF-8 with an unsigned 16-bit length;
+    // the writer (JksKeyStoreWriter) and upstream JavaKeyStore both use that 2-byte framing.
+    // Java DataInputStream.readUTF 以无符号 16 位长度前缀标记修改版 UTF-8；
+    // 写入端（JksKeyStoreWriter）与上游 JavaKeyStore 均使用该 2 字节框架。
+    private static int ReadInt16(byte[] data, ref int offset)
+    {
+        const int size = 2;
+        if (offset > data.Length - size) throw new EndOfStreamException("JKS 数据提前结束。");
+        var value = (data[offset] << 8) | data[offset + 1];
+        offset += size;
+        return value;
+    }
+
     private static byte[] ReadBounded(byte[] data, ref int offset)
     {
         var length = ReadInt32(data, ref offset);
@@ -127,7 +189,7 @@ public static class JksKeyStoreReader
     /// <para>解码带 2 字节长度前缀的 Java 修改版 UTF-8。</para>
     private static string ReadModifiedUtf(byte[] data, ref int offset)
     {
-        var length = ReadInt32(data, ref offset) & 0xFFFF;
+        var length = ReadInt16(data, ref offset);
         if (length > data.Length - offset) throw new InvalidDataException("JKS 字符串长度越界。");
         var chars = new List<char>(length);
         for (var i = 0; i < length;)
@@ -200,15 +262,17 @@ public static class JksKeyStoreWriter
             var creationMillis = (creation ?? DateTimeOffset.UtcNow).ToUnixTimeMilliseconds();
             var aliasBytes = EncodeModifiedUtf(alias);
 
-            // The keyed digest covers every byte from the entry count onward (upstream
-            // JavaKeyStore.engineStore hashes the stream as it writes). Build the body once,
-            // feeding the digest with exactly the same bytes in the same order.
-            // keyed 摘要覆盖条目计数起的全部字节（上游 engineStore 边写边哈希）。先构建 body，
-            // 并以相同字节、相同顺序喂入摘要。
+            // Build the entry body once; the keyed digest is fed with exactly the entry bytes in
+            // the same order that upstream JavaKeyStore.engineStore wraps in its digest stream.
+            // 先构建条目 body；keyed 摘要按上游 JavaKeyStore.engineStore 摘要流包装的同一顺序喂入条目字节。
             using var body = new MemoryStream();
+            var writer = new BinaryWriter(body, System.Text.Encoding.UTF8, leaveOpen: true);
+            // The keyed digest covers the entries only; upstream JavaKeyStore writes the entry
+            // count directly to the stream and wraps only the entries in the digest stream.
+            // keyed 摘要仅覆盖条目；上游 JavaKeyStore 直接写出条目计数，只把条目放进摘要流。
+            writer.WriteBEInt32(1); // entry count (not part of the keyed digest)
             using (var digest = JksKeyStoreReader.IntegrityDigest(password))
             {
-                var writer = new BinaryWriter(body, System.Text.Encoding.UTF8, leaveOpen: true);
                 void WriteHashedInt32(int value)
                 {
                     writer.WriteBEInt32(value);
@@ -233,7 +297,6 @@ public static class JksKeyStoreWriter
                     digest.AppendData(bytes);
                 }
 
-                WriteHashedInt32(1); // entry count
                 WriteHashedInt32(PrivateKeyTag);
                 WriteHashedInt16(aliasBytes.Length);
                 WriteHashed(aliasBytes);
@@ -252,11 +315,11 @@ public static class JksKeyStoreWriter
             }
 
             using var output = new MemoryStream();
-            using (var writer = new BinaryWriter(output, System.Text.Encoding.UTF8, leaveOpen: true))
+            using (var outputWriter = new BinaryWriter(output, System.Text.Encoding.UTF8, leaveOpen: true))
             {
-                writer.WriteBEInt32(Magic);
-                writer.WriteBEInt32(Version);
-                writer.Write(body.ToArray());
+                outputWriter.WriteBEInt32(Magic);
+                outputWriter.WriteBEInt32(Version);
+                outputWriter.Write(body.ToArray());
             }
             return output.ToArray();
         }
