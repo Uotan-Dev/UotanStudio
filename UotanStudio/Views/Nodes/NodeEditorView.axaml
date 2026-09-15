@@ -3,12 +3,39 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:controls="using:UotanStudio.Views.Controls"
              xmlns:vm="using:UotanStudio.ViewModels.Nodes"
              xmlns:nodify="clr-namespace:NodifyM.Avalonia.Controls;assembly=NodifyM.Avalonia"
              xmlns:nodeVm="using:UotanStudio.ViewModels.NodeViewModels"
              mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
              x:Class="UotanStudio.Views.Nodes.NodeEditorView"
              x:DataType="vm:NodeEditorViewModel">
+    <UserControl.Styles>
+        <!-- 三栏之间的分隔线（圆角边缘 + 单侧投影）与拖动条，样式与交付页保持一致。 -->
+        <!-- Divider (rounded edge plus one-sided shadow) and drag handle between the three panes,
+             matching the delivery page. -->
+        <Style Selector="controls|RoundedPaneDivider.pane-edge">
+            <Setter Property="EdgeBrush" Value="{DynamicResource EditorPaneSplitterBackgroundBrush}" />
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="UseLayoutRounding" Value="False" />
+        </Style>
+        <Style Selector="controls|RoundedPaneDivider.pane-edge.vertical">
+            <Setter Property="Width" Value="0.5" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="IsVertical" Value="True" />
+        </Style>
+        <!-- 拖动条：自绘拖动逻辑（见代码后置），保证相邻两栏只在自身之间搬运宽度、
+             不牵动第三栏，也不会把任何一栏拖到最小宽度以下。 -->
+        <!-- Drag handles: the drag is handled in code-behind so that the two adjacent panes only trade width
+             between themselves, never touching the third pane or dropping below a pane minimum. -->
+        <Style Selector="Border.splitter-handle">
+            <Setter Property="Width" Value="9" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="SizeWestEast" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Stretch" />
+        </Style>
+    </UserControl.Styles>
     <DockPanel>
         <!-- 顶部工具栏 -->
         <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
@@ -113,9 +140,24 @@
             </Expander>
         </Border>
 
+        <!-- 左中右三栏：始终按 1:4:1 比例分布，两侧保留最小宽度，
+             窗口变窄时三栏一起收缩而不是让两侧内容消失；栏间可拖动调整。 -->
+        <!-- Three panes always laid out 1:4:1 with minimum widths, so a narrow window shrinks all of them
+             instead of dropping the side content, and each pane border can be dragged. -->
+        <!-- 三栏的最小宽度写在列定义上（而不是子元素上），GridSplitter 才会在拖动时遵守，
+             左右两栏无法被直接拖没。 -->
+        <!-- Minimum widths live on the column definitions (not the children) so that GridSplitter honours
+             them while dragging and the side panes cannot be collapsed. -->
+        <Grid Name="PaneLayout" ClipToBounds="True">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" MinWidth="150" />
+                <ColumnDefinition Width="1" />
+                <ColumnDefinition Width="4*" MinWidth="200" />
+                <ColumnDefinition Width="1" />
+                <ColumnDefinition Width="1*" MinWidth="150" />
+            </Grid.ColumnDefinitions>
         <!-- 左侧工具箱面板 -->
-        <Border DockPanel.Dock="Left" Width="220"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+        <Border Grid.Column="0" BorderThickness="0">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Toolbox}"
                            FontWeight="SemiBold" FontSize="13"
@@ -129,7 +171,7 @@
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type vm:NodeToolboxItem}">
                                                 <Button HorizontalAlignment="Stretch"
-                                                        HorizontalContentAlignment="Left"
+                                                        HorizontalContentAlignment="Center"
                                                         Padding="6,4" Margin="0,1"
                                                         Click="OnToolboxItemClicked">
                                                     <TextBlock Text="{Binding Name}" FontSize="12" />
@@ -145,9 +187,13 @@
             </DockPanel>
         </Border>
 
+        <controls:RoundedPaneDivider Grid.Column="1" Classes="pane-edge vertical" />
+        <Border Grid.Column="1" Classes="splitter-handle"
+                PointerPressed="OnLeftSplitterPressed" PointerMoved="OnSplitterMoved"
+                PointerReleased="OnSplitterReleased" PointerCaptureLost="OnSplitterCaptureLost" />
+
         <!-- 右侧属性面板 -->
-        <Border DockPanel.Dock="Right" Width="240"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0">
+        <Border Grid.Column="4" BorderThickness="0">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="{DynamicResource Node_Properties}"
                            FontWeight="SemiBold" FontSize="13"
@@ -316,8 +362,13 @@
             </DockPanel>
         </Border>
 
+        <controls:RoundedPaneDivider Grid.Column="3" Classes="pane-edge vertical" ShadowLeft="True" />
+        <Border Grid.Column="3" Classes="splitter-handle"
+                PointerPressed="OnRightSplitterPressed" PointerMoved="OnSplitterMoved"
+                PointerReleased="OnSplitterReleased" PointerCaptureLost="OnSplitterCaptureLost" />
+
         <!-- 中央节点画布区域 - 使用 Grid 叠加小地图 -->
-        <Grid>
+        <Grid Grid.Column="2">
             <nodify:NodifyEditor ItemsSource="{Binding Nodes}"
                                  Connections="{Binding Connections}"
                                  PendingConnection="{Binding PendingConnection}"
@@ -413,6 +464,7 @@
                                         Width="180" Height="120"
                                         Margin="8"
                                         IsVisible="{Binding ShowMinimap}" />
+        </Grid>
         </Grid>
     </DockPanel>
 </UserControl>
