@@ -71,6 +71,55 @@ public sealed class BootPatchModelsTests
     }
 
     [Fact]
+    public async Task Analyzer_IgnoresPackagesWithOnlySharedOrGenericMarkers()
+    {
+        // An ordinary APK bundling the generic libsu.so and a shared
+        // util_functions.sh must not be classified as any root patcher.
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            zip.CreateEntry("assets/util_functions.sh");
+            zip.CreateEntry("lib/arm64-v8a/libsu.so");
+            zip.CreateEntry("lib/arm64-v8a/libfoo.so");
+        }
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("ordinary.apk", stream, TestContext.Current.CancellationToken);
+        Assert.Equal(BootPatchKind.Unknown, result.Kind);
+    }
+
+    [Fact]
+    public async Task Analyzer_RequiresMagiskNativeComponentsOverSharedScript()
+    {
+        // Magisk boot scripts and magiskboot are shared with root tooling, so
+        // their presence alone no longer classifies a package as Magisk.
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            zip.CreateEntry("assets/util_functions.sh");
+            zip.CreateEntry("assets/boot_patch.sh");
+            zip.CreateEntry("lib/arm64-v8a/magiskboot");
+        }
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("should-be-unknown.zip", stream, TestContext.Current.CancellationToken);
+        Assert.Equal(BootPatchKind.Unknown, result.Kind);
+    }
+
+    [Fact]
+    public async Task Analyzer_DoesNotClassifyGenericLibsuAloneAsKernelSu()
+    {
+        // libsu.so is a general root-Activity library used by many apps; a
+        // package carrying only that marker is not a KernelSU patcher.
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            zip.CreateEntry("lib/arm64-v8a/libsu.so");
+        }
+        stream.Position = 0;
+        var result = await BootPatchAnalyzer.AnalyzeAsync("root-manager.apk", stream, TestContext.Current.CancellationToken);
+        Assert.Equal(BootPatchKind.Unknown, result.Kind);
+    }
+
+    [Fact]
     public void ScriptParser_PreservesQuotedArgumentsAndLineNumbers()
     {
         var operations = BootPatchScriptParser.Parse("# comment\ncpio ramdisk.cpio \"add 0750 init magiskinit\"\nhexpatch kernel 00 FF");

@@ -203,14 +203,19 @@ public static class BootPatchAnalyzer
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         var names = zip.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).Select(e => e.FullName.Replace('\\', '/')).ToArray();
         var abis = names.Select(TryGetAbi).Where(static a => a is not null).Cast<string>().Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var hasMagisk = names.Any(n => n.EndsWith("util_functions.sh", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.Contains("libmagiskinit", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.Contains("libmagisk.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.Contains("magiskboot", StringComparison.OrdinalIgnoreCase));
+        // Classification must be driven by family-exclusive components only.
+        // util_functions.sh and magiskboot are shared by KernelSU forks and
+        // general root-package tooling; libsu.so is a generic root-Activity API
+        // library bundled by many ordinary applications, so none of those may
+        // mark a package as a patcher by itself.
+        var hasMagisk = names.Any(n => n.Contains("libmagiskinit", StringComparison.OrdinalIgnoreCase))
+            || names.Any(n => n.Contains("libmagisk.", StringComparison.OrdinalIgnoreCase))
+            || names.Any(n => n.Contains("libmagisk32", StringComparison.OrdinalIgnoreCase))
+            || names.Any(n => n.Contains("libmagisk64", StringComparison.OrdinalIgnoreCase))
+            || names.Any(n => n.Contains("libmagiskpolicy", StringComparison.OrdinalIgnoreCase));
         var hasKsu = names.Any(n => n.EndsWith("libksud.so", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("libkernelsu.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("libsu.so", StringComparison.OrdinalIgnoreCase))
-            || names.Any(n => n.EndsWith("ksud", StringComparison.OrdinalIgnoreCase))
+            || names.Any(n => n.EndsWith("libksud", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("ksuinit", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("kernelsu.ko", StringComparison.OrdinalIgnoreCase))
             || names.Any(n => n.EndsWith("ksu.ko", StringComparison.OrdinalIgnoreCase))
