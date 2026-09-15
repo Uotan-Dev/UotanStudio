@@ -11,7 +11,7 @@ sealed class Program
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
-    public static async Task<int> Main(string[] args)
+    public static int Main(string[] args)
     {
         // Headless MCP mode: serve the Model Context Protocol over stdio without any Avalonia
         // lifetime or windows; exits when the client closes the connection or Ctrl+C cancels.
@@ -27,7 +27,7 @@ sealed class Program
             };
             try
             {
-                await UotanStudio.Mcp.McpLauncher.RunHeadlessAsync(args, cts.Token);
+                UotanStudio.Mcp.McpLauncher.RunHeadlessAsync(args, cts.Token).GetAwaiter().GetResult();
                 return 0;
             }
             catch (OperationCanceledException)
@@ -38,7 +38,7 @@ sealed class Program
 
         if (CliProgram.IsCommandLineMode(args))
         {
-            return await CliProgram.RunAsync(CliProgram.StripModeSwitch(args));
+            return CliProgram.RunAsync(CliProgram.StripModeSwitch(args)).GetAwaiter().GetResult();
         }
 
         // Companion MCP mode: serve MCP over stdio in the background while the desktop UI runs.
