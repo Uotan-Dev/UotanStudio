@@ -27,8 +27,10 @@ public sealed class RemoteRomServiceTests
         using var http = new HttpClient(new StaticHandler("remote content"u8.ToArray()));
         var samples = new List<(long Processed, long Total)>();
         var destination = Path.Combine(temp.Path, "rom.bin");
+        // Report inline instead of via Progress<T>, whose thread-pool callbacks can lag the await.
+        // 使用同步内联报告而非 Progress<T>，后者在线程池回调可能滞后于 await。
         await new RemoteRomService(http).DownloadAsync(new Uri("https://example.test/rom.bin"), destination,
-            new Progress<(long Processed, long Total)>(samples.Add), TestContext.Current.CancellationToken);
+            new InlineProgress<(long Processed, long Total)>(samples.Add), TestContext.Current.CancellationToken);
         Assert.Equal("remote content", File.ReadAllText(destination));
         Assert.NotEmpty(samples);
         Assert.Equal(samples[^1].Total, samples[^1].Processed);
@@ -50,6 +52,11 @@ public sealed class RemoteRomServiceTests
         Assert.True(handler.MaximumConcurrentRequests > 1);
         Assert.True(handler.RangedRequestCount > 1);
         Assert.Contains(handler.UserAgents, userAgent => userAgent.Contains("Mozilla/5.0", StringComparison.Ordinal));
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 
     private sealed class StaticHandler(byte[] data) : HttpMessageHandler
