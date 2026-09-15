@@ -138,7 +138,7 @@ internal static class DeliveryPlanStore
         if (element.GetRawText().Length > 8 * 1024 * 1024) throw new InvalidDataException("Delivery plan exceeds 8 MiB.");
         var plan = element.Deserialize(DeliveryJsonContext.Default.DeliveryPlan);
         if (plan is null || plan.Version != 1 || plan.Files is null || plan.Container is null || plan.Super is null
-            || plan.Package is null || plan.Package.CertificatePath is null || plan.Package.SigningKeyPath is null || plan.Package.BuildFingerprint is null || plan.Package.Incremental is null || plan.Package.RecoveryUpdaterPath is null
+            || plan.Package is null || plan.Package.CertificatePath is null || plan.Package.SigningKeyPath is null || plan.Package.BuildFingerprint is null || plan.Package.Incremental is null
             || plan.Payload is null || plan.Payload.DynamicPartitionsFile is null || plan.Payload.SignatureFile is null || plan.Payload.PostinstallFile is null
             || plan.Payload.SecurityPatchLevel is null || plan.Payload.Compression is null
             || plan.Payload.SigningKeyPath is null || plan.Payload.SigningKeyFingerprint is null

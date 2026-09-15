@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
+using System.Text.Json;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Firmware.BoundedContexts.LogicalPartition.Lp;
 using UotanStudio.Services.Delivery;
@@ -401,6 +402,21 @@ public sealed class DeliveryTests : IDisposable
         Assert.Equal("boot images/boot.img\r\ninit_boot images/init_boot_ksu.img\r\n", scripts["flash-init_boot_ksu.txt"]);
         Assert.NotEqual(DeliveryScriptGenerator.Fingerprint(plan), DeliveryScriptGenerator.Fingerprint(plan with { Slot = "all" }));
         Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan with { Files = [plan.Files[1], plan.Files[2] with { Default = true }] }));
+    }
+
+    [Fact]
+    public void LoadFromState_ToleratesLegacyPlanMissingRecoveryUpdaterPath()
+    {
+        // 旧版本保存的方案没有 RecoveryUpdaterPath；缺省时 STJ 会置为 null（而非 ""），不得判为无效计划。
+        // Legacy plans predate RecoveryUpdaterPath; STJ leaves the absent property null rather than "", which must not invalidate the plan.
+        var plan = new DeliveryPlan { OutputDirectory = _root, Files = [Input()], Container = [] };
+        var captured = DeliveryPlanStore.CaptureElement(_root, plan);
+        var root = System.Text.Json.Nodes.JsonNode.Parse(captured.GetRawText())!;
+        root["Package"]!.AsObject().Remove("RecoveryUpdaterPath");
+        using var doc = JsonDocument.Parse(root.ToJsonString());
+        var restored = DeliveryPlanStore.LoadFromState(doc.RootElement, _root);
+        Assert.NotNull(restored);
+        Assert.Equal("", restored!.Package.RecoveryUpdaterPath);
     }
 
     [Fact]
