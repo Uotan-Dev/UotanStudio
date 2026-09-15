@@ -242,9 +242,7 @@
                         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
                             <ComboBox Name="ZipSigningKeyBox" HorizontalAlignment="Stretch" MinWidth="0" SelectedIndex="0"
                                       PlaceholderText="{DynamicResource Keys_ChooseZip}"
-                                      AutomationProperties.Name="{DynamicResource Keys_ZipSigning}">
-                                <ComboBoxItem Content="{DynamicResource Keys_Unsigned}" />
-                            </ComboBox>
+                                      AutomationProperties.Name="{DynamicResource Keys_ZipSigning}" />
                             <Button Name="ManageZipKeysButton" Grid.Column="1" Classes="file-action"
                                     Content="{DynamicResource Menu_KeyManager}" />
                         </Grid>
