@@ -5,17 +5,21 @@
              xmlns:avalonia="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              xmlns:imaging="clr-namespace:Avalonia.Media.Imaging;assembly=Avalonia.Base"
              xmlns:viewmodels="using:UotanStudio.ViewModels.Editors"
+             xmlns:workspace="using:UotanStudio.ViewModels.Workspace"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Editors.FileManagerEditorView"
              x:DataType="viewmodels:FileManagerEditorViewModel">
   <UserControl.Resources>
     <imaging:Bitmap x:Key="FolderIcon">avares://UotanStudio/Assets/folder.png</imaging:Bitmap>
     <imaging:Bitmap x:Key="FileIcon">avares://UotanStudio/Assets/file.png</imaging:Bitmap>
+    <!-- 列表与网格视图沿用现有彩色位图图标，只放大尺寸；目录树改用下方 TreeView 模板里的空心文件夹图标。 -->
+    <!-- The list and grid views keep the existing coloured bitmap icons and only grow in size; the
+         directory tree uses the outline folder icon in the TreeView template below. -->
     <DataTemplate x:Key="FileListTemplate" x:DataType="viewmodels:FileManagerEntryViewModel">
-      <Grid ColumnDefinitions="30,*,64,Auto" RowDefinitions="Auto,Auto" Height="28" ToolTip.Tip="{Binding Path}">
-        <Grid Grid.Column="0" Grid.RowSpan="2" Width="24" Height="24" HorizontalAlignment="Left">
+      <Grid ColumnDefinitions="44,*,72,Auto" RowDefinitions="Auto,Auto" Height="44" ToolTip.Tip="{Binding Path}">
+        <Grid Grid.Column="0" Grid.RowSpan="2" Width="36" Height="36" HorizontalAlignment="Left">
           <Image Classes="entry-icon" Classes.directory="{Binding IsDirectory}" />
-          <avalonia:MaterialIcon Kind="LinkVariant" Width="10" Height="10" IsVisible="{Binding IsSymlink}"
+          <avalonia:MaterialIcon Kind="LinkVariant" Width="12" Height="12" IsVisible="{Binding IsSymlink}"
                                  HorizontalAlignment="Right" VerticalAlignment="Bottom" />
         </Grid>
         <TextBlock Grid.Column="1" Classes="entry-name" Text="{Binding Name}" FontSize="12" LineHeight="14"
@@ -28,10 +32,10 @@
       </Grid>
     </DataTemplate>
     <DataTemplate x:Key="FileGridTemplate" x:DataType="viewmodels:FileManagerEntryViewModel">
-      <Grid RowDefinitions="28,28" RowSpacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}">
-        <Grid Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Grid RowDefinitions="52,30" RowSpacing="4" VerticalAlignment="Center" ToolTip.Tip="{Binding Path}">
+        <Grid Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center">
           <Image Classes="entry-icon" Classes.directory="{Binding IsDirectory}" />
-          <avalonia:MaterialIcon Kind="LinkVariant" Width="10" Height="10" IsVisible="{Binding IsSymlink}"
+          <avalonia:MaterialIcon Kind="LinkVariant" Width="14" Height="14" IsVisible="{Binding IsSymlink}"
                                  HorizontalAlignment="Right" VerticalAlignment="Bottom" />
         </Grid>
         <TextBlock Grid.Row="1" Text="{Binding Name}" FontSize="11" LineHeight="14"
@@ -67,9 +71,9 @@
     </Style>
     <Style Selector="ListBox.file-list > ListBoxItem">
       <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-      <Setter Property="Height" Value="36" />
+      <Setter Property="Height" Value="52" />
       <Setter Property="MinHeight" Value="0" />
-      <Setter Property="Padding" Value="6,2" />
+      <Setter Property="Padding" Value="8,3" />
       <Setter Property="Margin" Value="0" />
       <Setter Property="CornerRadius" Value="4" />
     </Style>
@@ -77,14 +81,14 @@
       <Setter Property="ItemTemplate" Value="{StaticResource FileGridTemplate}" />
       <Setter Property="ItemsPanel">
         <ItemsPanelTemplate>
-          <WrapPanel ItemWidth="72" ItemHeight="72" ItemSpacing="4" LineSpacing="4" />
+          <WrapPanel ItemWidth="100" ItemHeight="100" ItemSpacing="6" LineSpacing="6" />
         </ItemsPanelTemplate>
       </Setter>
     </Style>
     <Style Selector="ListBox.file-list.grid-view > ListBoxItem">
-      <Setter Property="Width" Value="72" />
-      <Setter Property="Height" Value="72" />
-      <Setter Property="Padding" Value="4" />
+      <Setter Property="Width" Value="100" />
+      <Setter Property="Height" Value="100" />
+      <Setter Property="Padding" Value="6" />
     </Style>
     <Style Selector="Image.entry-icon">
       <Setter Property="Source" Value="{StaticResource FileIcon}" />
@@ -115,12 +119,12 @@
 
   <DockPanel>
     <Border DockPanel.Dock="Top" Padding="8,5" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <TextBlock Text="{Binding FormatName}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0" />
-        <TextBlock x:Name="ImagePathText" Grid.Column="1" Text="{Binding ImagePath}" FontSize="12"
-                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" ToolTip.Tip="{Binding ImagePath}" />
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0">
+      <!-- 顶部只保留镜像格式与操作按钮；镜像文件路径已按需求移除。 -->
+      <!-- Top row keeps only the image format and the action buttons; the image path was removed on request. -->
+      <Grid ColumnDefinitions="Auto,*">
+        <TextBlock Text="{Binding FormatName}" FontWeight="SemiBold" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="8,0,0,0"
+                    HorizontalAlignment="Right">
           <Button Classes="Small" Command="{Binding ExtractSelectedCommand}"
                   ToolTip.Tip="{DynamicResource FileManager_Extract}" AutomationProperties.Name="{DynamicResource FileManager_Extract}">
             <avalonia:MaterialIcon Kind="DownloadOutline" />
@@ -154,8 +158,8 @@
       </Grid>
     </Border>
 
-    <Border DockPanel.Dock="Top" Padding="8,4" Background="#22C42B1C" IsVisible="{Binding HasError}">
-      <TextBlock Text="{Binding ErrorMessage}" Foreground="Red" TextWrapping="Wrap" FontSize="12" MaxHeight="72" />
+    <Border Classes="error-banner" DockPanel.Dock="Top" IsVisible="{Binding HasError}">
+      <TextBlock Classes="error-banner" Text="{Binding ErrorMessage}" />
     </Border>
 
     <Border DockPanel.Dock="Bottom" Padding="8,4" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
@@ -179,8 +183,12 @@
         <TreeView.ItemTemplate>
           <TreeDataTemplate x:DataType="viewmodels:FileManagerEntryViewModel" ItemsSource="{Binding Directories}">
             <Grid ColumnDefinitions="Auto,*" ToolTip.Tip="{Binding Path}">
-              <Image Source="{StaticResource FolderIcon}" Height="14" />
-              <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Margin="4,0,0,0"
+              <!-- 目录树图标与项目资源管理器同款：空心文件夹 + 家族色。 -->
+              <!-- Directory-tree icons match the project explorer: outline folder plus family colour. -->
+              <avalonia:MaterialIcon Kind="FolderOutline" Width="16" Height="16"
+                                     Foreground="{x:Static workspace:ExplorerIconPalette.Folder}"
+                                     VerticalAlignment="Center" />
+              <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Margin="6,0,0,0"
                          TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
             </Grid>
           </TreeDataTemplate>
