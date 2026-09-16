@@ -358,12 +358,42 @@ public partial class ProjectExplorerView : UserControl
         if (!await DialogService.ConfirmAsync(owner, LanguageService.Instance.GetString("Dialog_ConfirmDelete"),
                 string.Format(LanguageService.Instance.GetString("Dialog_ConfirmDeleteMessage"), name),
                 LanguageService.Instance.GetString("Menu_Delete"))) return;
-        try { if (node.IsDirectory) Directory.Delete(node.Path, true); else File.Delete(node.Path); }
+        try
+        {
+            // 子项目目录必须先经会话移除引用并重新加载解决方案（触发 ProjectContextChangedMessage，
+            // 刷新镜像面板下拉框等组件），再删除磁盘文件；直接 Directory.Delete 会让解决方案
+            // 保留指向已删目录的悬空引用。
+            // A sub-project directory must first go through the session (removing the reference and reloading
+            // the solution, which raises ProjectContextChangedMessage and refreshes the image panel's dropdown
+            // and other components) before deleting files; a raw Directory.Delete leaves a dangling reference.
+            var subProject = FindSubProject(node);
+            if (subProject is not null)
+            {
+                await ProjectOperationsService.Instance.RemoveSubProjectAsync(subProject.Name);
+            }
+            if (node.IsDirectory) Directory.Delete(node.Path, true); else File.Delete(node.Path);
+        }
         catch (Exception ex)
         {
             LogService.Instance.Write(LogLevel.Error, "Explorer", $"Delete failed: {ex.Message}");
             await DialogService.ShowAsync(owner, LanguageService.Instance.GetString("Dialog_DeleteFailed"), ex.Message, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>
+    /// <para>若节点是当前解决方案注册的子项目根目录，返回其上下文；否则返回 <c>null</c>。</para>
+    /// Returns the sub-project context when the node is a registered sub-project root of the open
+    /// solution; otherwise <c>null</c>.
+    /// </summary>
+    private static SubProjectContext? FindSubProject(ExplorerNode node)
+    {
+        if (!node.IsDirectory) return null;
+        var context = ProjectContextService.Instance;
+        if (!context.IsProjectOpen) return null;
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return context.SubProjects.FirstOrDefault(sp => string.Equals(
+            Path.TrimEndingDirectorySeparator(sp.RootPath),
+            Path.TrimEndingDirectorySeparator(node.Path), comparison));
     }
 
     private async void OnNewFile(object? sender, RoutedEventArgs e)
