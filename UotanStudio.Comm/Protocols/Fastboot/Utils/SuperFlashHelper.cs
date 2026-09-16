@@ -188,7 +188,10 @@ public sealed class SuperFlashHelper(FastbootSession session, string mainPartiti
                     WriteLogicalPartition(image, metadata, partition, output, cancellationToken);
                     output.Flush();
                     output.Position = 0;
-                    _session.FlashPartition(partition.Name, output, output.Length, progress, cancellationToken).ThrowIfFailed();
+                    // Logical partitions live inside super and must not be slot-suffixed (A/B is
+                    // handled by the super metadata, not the GPT slot suffix), so skip slot resolution.
+                    // 逻辑分区位于 super 内部，不得追加槽位后缀（A/B 由 super 元数据管理，而非 GPT 槽位后缀）。
+                    _session.FlashPartition(partition.Name, output, output.Length, progress, cancellationToken, resolveSlot: false).ThrowIfFailed();
                 }
             }
             finally

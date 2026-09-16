@@ -193,6 +193,56 @@ public class UsbProviderProjectionTests
     }
 
     [Fact]
+    public void UnlabelledDevice_MultipleInterfaceGuids_CollapseToOnePhysicalIdentity()
+    {
+        // A Windows fastboot node without a serial can register the same physical
+        // interface under several interface-class GUIDs; only the trailing
+        // "#{guid}" suffix differs and must not split the device into duplicates.
+        // <para>无序列号的 Windows fastboot 节点可把同一物理接口注册到多个接口类 GUID；
+        // 仅末尾 “#{guid}” 后缀不同，不应因此把设备分割为重复条目。</para>
+        var viaClassGuid = new UsbDeviceInfo
+        {
+            DevicePath = @"\\?\usb#vid_18d1&pid_d00d#6b24c48f#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
+            ApiName = "native",
+            VendorId = 0x18D1,
+            ProductId = 0xD00D,
+            InterfaceClass = 0xFF,
+            InterfaceSubClass = 0x42,
+        };
+        var viaLegacyGuid = new UsbDeviceInfo
+        {
+            DevicePath = @"\\?\usb#vid_18d1&pid_d00d#6b24c48f#{f72fe0d4-cbcb-407d-8814-9ed673d0dd6b}",
+            ApiName = "native",
+            VendorId = 0x18D1,
+            ProductId = 0xD00D,
+            InterfaceClass = 0xFF,
+            InterfaceSubClass = 0x42,
+        };
+        Assert.Equal(UsbDeviceIdentity.BuildPhysicalKey(viaClassGuid), UsbDeviceIdentity.BuildPhysicalKey(viaLegacyGuid));
+
+        // Distinct interfaces of one composite device keep separate identities.
+        var adbInterface = new UsbDeviceInfo
+        {
+            DevicePath = @"\\?\usb#vid_18d1&pid_d00d&mi_02#6b24c48f#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
+            ApiName = "native",
+            VendorId = 0x18D1,
+            ProductId = 0xD00D,
+            InterfaceClass = 0xFF,
+            InterfaceSubClass = 0x42,
+        };
+        var mtpInterface = new UsbDeviceInfo
+        {
+            DevicePath = @"\\?\usb#vid_18d1&pid_d00d&mi_05#6b24c48f#{a5dcbf10-6530-11d2-901f-00c04fb951ed}",
+            ApiName = "native",
+            VendorId = 0x18D1,
+            ProductId = 0xD00D,
+            InterfaceClass = 0xEE,
+            InterfaceSubClass = 0x01,
+        };
+        Assert.NotEqual(UsbDeviceIdentity.BuildPhysicalKey(adbInterface), UsbDeviceIdentity.BuildPhysicalKey(mtpInterface));
+    }
+
+    [Fact]
     public void ToSessions_NoFilter_KeepsAllOpenSessions()
     {
         var first = Device("usb:1", 1, 1);

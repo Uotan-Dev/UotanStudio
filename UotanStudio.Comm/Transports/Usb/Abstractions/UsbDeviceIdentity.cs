@@ -69,7 +69,7 @@ internal static class UsbDeviceIdentity
         ArgumentNullException.ThrowIfNull(info);
 
         var serial = string.IsNullOrEmpty(info.SerialNumber) || info.SerialNumber == "UNKNOWN"
-            ? info.ApiName + ":" + info.DevicePath : info.SerialNumber;
+            ? info.ApiName + ":" + NormalizeInterfacePath(info.DevicePath) : info.SerialNumber;
         var interfaceClass = info.InterfaceClass?.ToString("X2") ?? string.Empty;
         var interfaceSubClass = info.InterfaceSubClass?.ToString("X2") ?? string.Empty;
 
@@ -81,6 +81,25 @@ internal static class UsbDeviceIdentity
             interfaceSubClass,
             serial
         });
+    }
+
+    /// <summary>
+    /// Collapses the per-driver <c>#{interface-class-guid}</c> suffix on Windows device
+    /// interface paths so the same physical function registered under several interface
+    /// GUIDs (e.g. a fastboot node without a serial exposing WinUSB under two GUIDs) maps
+    /// to one physical identity. The instance id before the suffix (including the
+    /// <c>&amp;mi_</c> interface number on composite devices) is preserved, so genuinely
+    /// distinct devices or distinct interfaces never merge.
+    /// <para>去除 Windows 设备接口路径末尾的 <c>#{接口类 GUID}</c> 后缀，使同一物理功能在同一
+    /// 节点下注册多个接口 GUID（例如无序列号的 fastboot 节点在 WinUSB 下挂两个 GUID）映射为
+    /// 单一物理标识。后缀之前的实例 ID（含复合设备上的 <c>&amp;mi_</c> 接口号）被保留，
+    /// 因此真正不同的设备或不同接口不会被合并。</para>
+    /// </summary>
+    private static string NormalizeInterfacePath(string devicePath)
+    {
+        if (string.IsNullOrEmpty(devicePath)) return devicePath;
+        var marker = devicePath.IndexOf("#{", StringComparison.OrdinalIgnoreCase);
+        return marker < 0 ? devicePath : devicePath[..marker];
     }
 
     /// <summary>

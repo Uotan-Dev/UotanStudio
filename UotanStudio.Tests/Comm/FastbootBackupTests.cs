@@ -69,6 +69,7 @@ public class FastbootBackupTests
         transport.Enqueue("OKAY");                    // getvar:max-download-size (empty -> fallback)
         transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00004000
         transport.Enqueue("OKAY");                    // payload accepted
+        transport.Enqueue("OKAYno");                  // getvar:has-slot:boot -> no (no A/B slot)
         transport.Enqueue("OKAY");                    // flash:boot
 
         var session = new FastbootSession(transport);
@@ -88,6 +89,75 @@ public class FastbootBackupTests
         {
             session.Dispose();
         }
+    }
+
+    [Fact]
+    public void FlashPartition_ResolvesActiveSlot_ForSlotPartition()
+    {
+        var imageBytes = new byte[4096];
+        Random.Shared.NextBytes(imageBytes);
+
+        var transport = new FakeCommTransport();
+        transport.Enqueue("OKAY");                       // getvar:max-download-size (empty -> fallback)
+        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
+        transport.Enqueue("OKAY");                       // payload accepted
+        transport.Enqueue("OKAYyes");                    // getvar:has-slot:boot -> yes
+        transport.Enqueue("OKAYa");                      // getvar:current-slot -> a
+        transport.Enqueue("OKAY");                       // flash:boot_a
+
+        using var session = new FastbootSession(transport);
+        using var ms = new MemoryStream(imageBytes);
+        var response = session.FlashPartition("boot", ms, imageBytes.Length);
+
+        Assert.Equal(FastbootResponseState.Success, response.State);
+        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        Assert.Contains("getvar:has-slot:boot", commands);
+        Assert.Contains("getvar:current-slot", commands);
+        Assert.Contains("flash:boot_a", commands);
+    }
+
+    [Fact]
+    public void FlashPartition_DoesNotDoubleSuffix_WhenAlreadySlotted()
+    {
+        var imageBytes = new byte[4096];
+        Random.Shared.NextBytes(imageBytes);
+
+        var transport = new FakeCommTransport();
+        transport.Enqueue("OKAY");                       // getvar:max-download-size
+        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
+        transport.Enqueue("OKAY");                       // payload accepted
+        transport.Enqueue("OKAYyes");                    // getvar:has-slot:boot_a -> yes
+        transport.Enqueue("OKAY");                       // flash:boot_a (no re-suffix)
+
+        using var session = new FastbootSession(transport);
+        using var ms = new MemoryStream(imageBytes);
+        session.FlashPartition("boot_a", ms, imageBytes.Length);
+
+        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        Assert.Contains("getvar:has-slot:boot_a", commands);
+        Assert.Contains("flash:boot_a", commands);
+        Assert.DoesNotContain(commands, c => c == "flash:boot_a_a");
+    }
+
+    [Fact]
+    public void FlashPartition_SkipsSlotResolution_WhenDisabled()
+    {
+        var imageBytes = new byte[4096];
+        Random.Shared.NextBytes(imageBytes);
+
+        var transport = new FakeCommTransport();
+        transport.Enqueue("OKAY");                       // getvar:max-download-size
+        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
+        transport.Enqueue("OKAY");                       // payload accepted
+        transport.Enqueue("OKAY");                       // flash:boot
+
+        using var session = new FastbootSession(transport);
+        using var ms = new MemoryStream(imageBytes);
+        session.FlashPartition("boot", ms, imageBytes.Length, resolveSlot: false);
+
+        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        Assert.DoesNotContain(commands, c => c.StartsWith("getvar:has-slot:", StringComparison.Ordinal));
+        Assert.Contains("flash:boot", commands);
     }
 
     [Fact]

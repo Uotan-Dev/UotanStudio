@@ -684,11 +684,7 @@ public sealed class FastbootSession : IProtocolSession
             throw new ArgumentOutOfRangeException(nameof(offset));
         }
 
-        var targetPartition = partition;
-        if (HasSlot(partition))
-        {
-            targetPartition = partition + "_" + GetCurrentSlot();
-        }
+        var targetPartition = ResolvePartitionWithSlot(partition);
 
         if (size == -1)
         {
@@ -952,11 +948,11 @@ public sealed class FastbootSession : IProtocolSession
     /// Flashes a partition with data from a stream.
     /// <para>用流中的数据刷写分区。</para>
     /// </summary>
-    public FastbootResponse FlashPartition(string partition, Stream stream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    public FastbootResponse FlashPartition(string partition, Stream stream, long length, IProgress<long>? progress = null, CancellationToken cancellationToken = default, bool resolveSlot = true)
     {
         ThrowIfDisposed();
         DownloadData(stream, length, progress, cancellationToken).ThrowIfFailed();
-        return ExecuteCommand(FastbootConstants.CommandFlash + partition);
+        return ExecuteCommand(FastbootConstants.CommandFlash + (resolveSlot ? ResolvePartitionWithSlot(partition) : partition));
     }
 
     /// <summary>
@@ -1023,6 +1019,40 @@ public sealed class FastbootSession : IProtocolSession
     {
         var slot = GetVariable(FastbootConstants.VarCurrentSlot);
         return slot.StartsWith('_') ? slot[1..] : slot;
+    }
+
+    /// <summary>
+    /// Resolves the target partition name against A/B slots: slot-capable partitions that do
+    /// not already carry a slot suffix get the current active slot appended, matching upstream
+    /// fastboot. Non-slot partitions and already-slotted names are returned unchanged.
+    /// <para>按 A/B 槽位解析目标分区名：支持槽位且尚未携带槽位后缀的分区追加当前活跃槽位，
+    /// 与上游 fastboot 一致；非槽位分区与已带后缀的名称原样返回。</para>
+    /// </summary>
+    private string ResolvePartitionWithSlot(string partition)
+    {
+        if (string.IsNullOrEmpty(partition) || !HasSlot(partition) || HasSlotSuffix(partition))
+        {
+            return partition;
+        }
+
+        var suffix = GetCurrentSlot();
+        return string.IsNullOrEmpty(suffix) ? partition : partition + "_" + suffix;
+    }
+
+    /// <summary>
+    /// Determines whether a partition name already ends with an A/B slot suffix (e.g. "boot_a").
+    /// <para>判断分区名是否已带 A/B 槽位后缀（如 "boot_a"）。</para>
+    /// </summary>
+    private static bool HasSlotSuffix(string partition)
+    {
+        var underscore = partition.LastIndexOf('_');
+        if (underscore <= 0 || underscore == partition.Length - 1)
+        {
+            return false;
+        }
+
+        var suffix = partition[(underscore + 1)..];
+        return suffix.Length == 1 && (suffix[0] == 'a' || suffix[0] == 'b');
     }
 
     /// <summary>
