@@ -101,6 +101,22 @@ public sealed partial class DeliveryCompletionTests : IDisposable
     }
 
     [Fact]
+    public async Task OversizedPartitionsReportRequiredBytesAndMinimumSize()
+    {
+        // 断言失败发生在构建器分配 extent 前，且带具体短缺数值与最小 Super 大小，而不是裸 ArgumentException。
+        // Assert the failure happens before any extent allocation and names the shortage and minimum Super size.
+        var files = new[] { Image("system_a"), Image("vendor_a") };
+        var options = new DeliverySuperOptions { DeviceSize = 409_600 };
+        var path = Path.Combine(_root, "too-small.img");
+        var error = await Assert.ThrowsAsync<InvalidDataException>(() => DeliverySuperBuilder.BuildAsync(files, options, path, token: Token));
+        Assert.Contains("Super 空间不足", error.Message, StringComparison.Ordinal);
+        Assert.Contains("421888", error.Message, StringComparison.Ordinal);
+        Assert.Equal(421_888UL, DeliverySuperCapacity.MinimumDeviceSize([8192, 8192], options));
+        Assert.False(File.Exists(path));
+        Assert.Empty(Directory.GetFiles(_root, "too-small.img.*"));
+    }
+
+    [Fact]
     public async Task PackageIsReadableAndAndroidWholeFileSignatureRejectsTampering()
     {
         using var key = RSA.Create(2048);

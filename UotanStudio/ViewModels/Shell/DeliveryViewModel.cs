@@ -188,7 +188,15 @@ internal sealed partial class DeliveryViewModel : ObservableObject
     {
         if ((!PackSuper && !PackPayload) || Container.Count == 0) throw new InvalidDataException(LanguageService.Instance.GetString("Delivery_AddPartitionsFirst"));
         if (plan.PackPayload) DeliveryPayloadBuilder.Validate(plan);
-        if (plan.PackSuper) _ = DeliverySuperBuilder.ExpandPartitions(Container.Select(i => i.Snapshot()).ToArray(), plan.Super);
+        if (plan.PackSuper)
+        {
+            _ = DeliverySuperBuilder.ExpandPartitions(Container.Select(i => i.Snapshot()).ToArray(), plan.Super);
+            // 确认容器时即用面板参数预检容量：分区镜像变大时在确认阶段就报告短缺字节数与最小 Super 大小，
+            // 而不是在导出写出过程中才失败。仅生成Super_Empty 不占数据区，跳过预检。
+            // Pre-check capacity at confirmation with the panel's own options: grown partition images report the
+            // byte shortage and the minimum Super size here instead of failing mid-export. Super_Empty only has no data area.
+            if (!plan.Super.Empty) DeliverySuperCapacity.Validate([.. Container.Select(i => i.SizeBytes ?? 0)], plan.Super);
+        }
         foreach (var row in Output.Where(i => i.Generated).ToArray()) Output.Remove(row);
         // 仅生成Super_Empty：Empty 时唯一生成条目是 super_empty.img；否则按打包类型生成容器。
         // Super_Empty only: with Empty the single generated entry is super_empty.img; otherwise the container per pack mode.

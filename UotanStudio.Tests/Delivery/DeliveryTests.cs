@@ -213,6 +213,27 @@ public sealed class DeliveryTests : IDisposable
     }
 
     [Fact]
+    public void SuperConfirmRejectsPartitionsThatExceedDeviceSize()
+    {
+        // 分区镜像变大超过 Super 大小时，Confirm 立即给出需要的字节数与最小 Super 大小，不生成容器条目。
+        // Grown partitions that exceed the Super size fail at confirmation with required bytes and the minimum size.
+        var model = new DeliveryViewModel();
+        model.SetMode(true, true, false);
+        model.SelectSources([Input("system_a"), Input("vendor_a")]);
+        var plan = new DeliveryPlan
+        {
+            PackSuper = true,
+            Container = [.. model.Container.Select(i => i.Snapshot())],
+            Super = new DeliverySuperOptions { DeviceSize = 409_600 }
+        };
+        var error = Assert.Throws<InvalidDataException>(() => model.Confirm(plan));
+        Assert.Contains("Super 空间不足", error.Message, StringComparison.Ordinal);
+        Assert.Contains("421888", error.Message, StringComparison.Ordinal);
+        Assert.False(model.Confirmed);
+        Assert.DoesNotContain(model.Output, i => i.Generated);
+    }
+
+    [Fact]
     public void ConfirmedContainerKeepsMembershipAndNewSelectionsGoToOutput()
     {
         var system = Input("system"); var boot = Input();

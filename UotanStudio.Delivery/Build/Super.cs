@@ -49,20 +49,13 @@ internal static class DeliverySuperBuilder
         }
         // Precheck capacity before allocating extents so the error reports actual numbers instead of a bare parameter name.
         // 在分配 extent 前预检容量，使报错能给出具体数值而不是仅参数名。
-        var reservedBytes = checked(MetadataFormat.LP_PARTITION_RESERVED_BYTES + 2UL * MetadataFormat.LP_METADATA_GEOMETRY_SIZE
-            + (ulong)options.MetadataSize * options.Slots * 2);
-        var availableBytes = options.DeviceSize - AlignUp(reservedBytes, options.BlockSize);
-        var requiredBytes = lengths.Aggregate(0UL, (sum, length) => checked(sum + AlignUp((ulong)length, options.BlockSize)));
-        if (requiredBytes > availableBytes)
-            throw new InvalidDataException(
-                $"Super 空间不足 / Super space exceeded: partitions need {FormatSize((long)requiredBytes)}, "
-                + $"only {FormatSize((long)availableBytes)} available of {FormatSize((long)options.DeviceSize)} "
-                + $"(metadata reserves {FormatSize((long)reservedBytes)}). 请调大 Super 大小或减小分区镜像。");
-        foreach (var file in partitions)
+        DeliverySuperCapacity.Validate(lengths, options);
+        for (var i = 0; i < partitions.Count; i++)
         {
+            var file = partitions[i];
             var group = groups.SingleOrDefault(g => g.Partitions.Contains(file.Partition))
                 ?? throw new InvalidDataException("请在分组配置中指定分区归属：" + file.Partition);
-            builder.AddPartition(file.Partition, group.Name, (ulong)lengths[partitions.IndexOf(file)], 1);
+            builder.AddPartition(file.Partition, group.Name, (ulong)lengths[i], 1);
         }
         var metadata = builder.Build();
         metadata.Header = metadata.Header with { Flags = options.VirtualAb ? 1u : 0u, MinorVersion = options.VirtualAb ? (ushort)2 : (ushort)0 };
@@ -126,7 +119,7 @@ internal static class DeliverySuperBuilder
                     var saved = rawBytes - sparseBytes;
                     var ratio = rawBytes <= 0 ? 0d : saved * 100d / rawBytes;
                     detailProgress?.Report(new(99, "Converting Sparse", (rawBytes, rawBytes), "Delivery_ProgressSparse",
-                        Detail: $"RAW {FormatSize(rawBytes)} → Sparse {FormatSize(sparseBytes)} ({(saved >= 0 ? "saved" : "larger")} {Math.Abs(ratio):0.##}%)"));
+                        Detail: $"RAW {DeliverySuperCapacity.FormatSize(rawBytes)} → Sparse {DeliverySuperCapacity.FormatSize(sparseBytes)} ({(saved >= 0 ? "saved" : "larger")} {Math.Abs(ratio):0.##}%)"));
                 }
                 else File.Move(raw, temporary);
             }
@@ -138,20 +131,6 @@ internal static class DeliverySuperBuilder
         finally { File.Delete(raw); File.Delete(temporary); }
     }, token);
 
-    private static ulong AlignUp(ulong size, uint alignment)
-    {
-        var remainder = size % alignment;
-        return remainder == 0 ? size : checked(size + alignment - remainder);
-    }
-
-    private static string FormatSize(long bytes)
-    {
-        string[] units = ["B", "KiB", "MiB", "GiB", "TiB"];
-        var value = (double)bytes;
-        var index = 0;
-        while (Math.Abs(value) >= 1024 && index < units.Length - 1) { value /= 1024; index++; }
-        return $"{value:0.##} {units[index]}";
-    }
 }
 
 /// <summary>Non-owning write adapter providing bounded-frequency progress and cancellation for synchronous codecs.</summary>
