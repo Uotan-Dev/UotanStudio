@@ -40,7 +40,10 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
         Assert.Equal(first.MetadataRoot, context.GetMetadataRoot(Path.Combine(first.ImagesDir, "system.img")));
         Assert.Null(context.GetMetadataRoot(first.RootPath + "-unrelated/system.img"));
         Assert.Equal(second.StateDirectory, context.StateDirectory);
-        Assert.False(Directory.Exists(Path.Combine(context.RootDirectory!, ".uotan")));
+        // 扁平布局：默认子项目与解决方案根共享目录，其 .uotan 状态目录位于根下。
+        // Flat layout: the default sub-project shares the solution root, so its .uotan state
+        // directory lives at the root.
+        Assert.True(Directory.Exists(Path.Combine(context.RootDirectory!, ".uotan")));
         context.CloseProject();
         Assert.Null(context.GetMetadataRoot());
         Assert.Null(context.StateDirectory);
@@ -63,7 +66,7 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
         Assert.True(await session.SwitchSubProjectAsync("other", cancellationToken: Token));
         Assert.Equal("second", Assert.Single(session.History.CaptureSnapshot()).Description);
         await session.SaveAsAsync(Path.Combine(_root, "copy.uotan"), Token);
-        Assert.False(Directory.Exists(Path.Combine(session.Context.RootDirectory!, ".uotan")));
+        Assert.True(Directory.Exists(Path.Combine(session.Context.RootDirectory!, ".uotan")));
         foreach (var child in session.Context.SubProjects)
         {
             Assert.True(File.Exists(Path.Combine(child.StateDirectory, "settings.json")));
@@ -80,7 +83,7 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
         var imported = await ProjectPackage.ImportAsync(zip, Path.Combine(_root, "imported"), Token);
         var reopened = new ProjectSession();
         Assert.True(await reopened.OpenProjectFromPathAsync(imported, Token));
-        Assert.False(Directory.Exists(Path.Combine(reopened.Context.RootDirectory!, ".uotan")));
+        Assert.True(Directory.Exists(Path.Combine(reopened.Context.RootDirectory!, ".uotan")));
         Assert.Empty(reopened.History.CaptureSnapshot());
         Assert.Equal(2, reopened.Context.SubProjects.Count);
     }

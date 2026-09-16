@@ -4,9 +4,9 @@ using Xunit;
 namespace UotanStudio.Tests.Projects;
 
 /// <summary>
-/// Verifies the sub-project layout guard: a sub-project root must be a nested directory below the
-/// solution root, never the solution root itself; each sub-project owns its state directory.
-/// 验证子项目布局守卫：子项目根必须是解决方案根下的嵌套目录，不得为解决方案根本身，
+/// Verifies the sub-project layout guard: a sub-project root may be the solution root itself (flat
+/// layout) or a nested directory below it; each sub-project owns its state directory.
+/// 验证子项目布局守卫：子项目根可以是解决方案根本身（扁平布局），也可以是其下的嵌套目录，
 /// 每个子项目独立持有状态目录。
 /// </summary>
 public sealed class SubProjectLayoutGuardTests : IDisposable
@@ -16,7 +16,7 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
     public SubProjectLayoutGuardTests() => Directory.CreateDirectory(_root);
 
     [Fact]
-    public void SnapshotReference_RootLevelFirmware_IsSkipped()
+    public void SnapshotReference_RootLevelFirmware_IsKept()
     {
         var solutionDir = Path.Combine(_root, "sol");
         Directory.CreateDirectory(solutionDir);
@@ -31,7 +31,11 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
             SubProjects = [new() { Name = "flat", RelativePath = "flat.uotanfw" }]
         });
 
-        Assert.Empty(context.SubProjects);
+        // 扁平布局：默认子项目与解决方案根共享目录，根级 .uotanfw 引用有效。
+        // Flat layout: the default sub-project shares the solution root, so a root-level
+        // .uotanfw reference is valid.
+        Assert.Equal("flat", Assert.Single(context.SubProjects).Name);
+        Assert.Equal(solutionDir, Assert.Single(context.SubProjects).RootPath);
     }
 
     [Fact]
@@ -92,7 +96,7 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
     }
 
     [Fact]
-    public async Task AddSubProject_IntoSolutionRoot_IsAborted()
+    public async Task AddSubProject_IntoSolutionRoot_SucceedsInFlatLayout()
     {
         var session = CreateSession(out var workspace);
         var solution = Path.Combine(_root, "sol.uotan");
@@ -102,9 +106,12 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
 
         await session.AddSubProjectAsync(fwPath, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Single(session.Context.SubProjects);
-        Assert.False(File.Exists(fwPath));
-        Assert.Empty(workspace.Events);
+        // 扁平布局：根级子项目与默认子项目共享解决方案根目录，允许创建。
+        // Flat layout: a root-level sub-project shares the solution root with the default
+        // sub-project, so creating it is allowed.
+        Assert.Equal(2, session.Context.SubProjects.Count);
+        Assert.True(File.Exists(fwPath));
+        Assert.NotEmpty(workspace.Events);
     }
 
     [Fact]

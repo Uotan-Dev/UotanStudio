@@ -591,10 +591,10 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             context.SubProjects.Select(sp => sp.Name));
         window.CreateWithCancellationAsync = async (form, cancellationToken) =>
         {
-            // 位置已是组合后的完整目录（解决方案根/子项目名），.uotanfw 与目录同名。
-            // The location is the combined directory (solution root/sub-project name); the .uotanfw
-            // file shares the directory name.
-            var fwPath = Path.Combine(form.Location, form.ProjectName + ".uotanfw");
+            // 子项目与首个子项目布局一致：.uotanfw 直接位于解决方案根目录下，不再嵌套同名子目录。
+            // The sub-project follows the first sub-project's flat layout: the .uotanfw file lives
+            // directly in the solution root without a nested same-name directory.
+            var fwPath = Path.Combine(context.RootDirectory, form.ProjectName + ".uotanfw");
             await _projectOps.AddSubProjectAsync(fwPath);
             // 重新加载解决方案后活动子项目回到第一项；切回刚创建的子项目再导入。
             // Reloading the solution resets the active sub-project to the first one; switch back to
