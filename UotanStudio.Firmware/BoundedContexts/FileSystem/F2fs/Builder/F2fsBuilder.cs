@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.SharedKernel;
 
@@ -170,9 +170,10 @@ public sealed partial class F2fsBuilder
     /// <summary>Applies owner, mode and binary xattr overrides, including SELinux labels, before data/node allocation.</summary>
     private static void ApplyFsConfigOverrides(List<BuildNode> ordered, F2fsOptions options)
     {
-        if (options.FsConfigPath is null && options.FileContextsPath is null && options.FileXattrs is null) return;
-        var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
-        var contexts = FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
+        if (options.FsConfig is null && options.FileContexts is null
+            && options.FsConfigPath is null && options.FileContextsPath is null && options.FileXattrs is null) return;
+        var fsConfig = options.FsConfig ??= FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
+        var contexts = options.FileContexts ??= FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
         foreach (var node in ordered)
         {
             var relative = node.Parent is null ? string.Empty : BuildRelativePath(node);

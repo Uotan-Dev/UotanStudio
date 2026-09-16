@@ -123,6 +123,16 @@ public sealed class ErofsFormatHandler : IFormatHandler
     /// <para>将目录打包为 erofs 镜像。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        => PackCore(inputPath, outputPath, progress: null, cancellationToken);
+
+    /// <summary>
+    /// Packs a directory into an erofs image with byte-level progress.
+    /// <para>带字节级进度将目录打包为 erofs 镜像。</para>
+    /// </summary>
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken = default)
+        => PackCore(inputPath, outputPath, progress, cancellationToken);
+
+    private Task<FirmwareOpResult> PackCore(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken)
     {
         return Task.Run(() =>
         {
@@ -130,7 +140,9 @@ public sealed class ErofsFormatHandler : IFormatHandler
             try
             {
                 IReadOnlyDictionary<string, string>? rebuildReport = null;
-                if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName,
+                if (!RepackMetadata.HasPackingOverrides
+                    && Directory.Exists(inputPath)
+                    && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName,
                     cancellationToken, report => rebuildReport = report))
                 {
                     var summary = "Packed the filesystem using preserved source attributes.";
@@ -145,13 +157,24 @@ public sealed class ErofsFormatHandler : IFormatHandler
 
                 var builder = new ErofsBuilder();
                 var options = RepackMetadata.OptionsFor(inputPath, FormatName);
+                // LZ4HC is expressed as a higher LZ4 compression level; EROFS stores no codec enum for it.
+                // LZ4HC 由更高 LZ4 压缩级别表达；EROFS 没有对应的编解码枚举。
+                var lz4hc = string.Equals(options.TryGetValue("ErofsAlgorithm", out var algorithm) ? algorithm : "lz4",
+                    "lz4hc", StringComparison.OrdinalIgnoreCase);
+                var compressionLevel = RepackMetadata.IntegerOption(options, "ErofsCompressionLevel",
+                    lz4hc ? 4 : 1);
+                // 仅当调用方提供进度时才启用计数写入流；否则保留可寻址输出，避免激活不可寻址路径。
+                // Only wrap with a byte counter when the caller requests progress; otherwise keep the seekable output.
+                var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
                 builder.Build(inputPath, outputPath, new ErofsOptions
                 {
                     BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
                     VolumeName = options.TryGetValue("VolumeName", out var volume) ? volume : "erofs",
                     FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
                     FileContextsPath = RepackMetadata.NullIfEmpty(options, "FileContextsPath"),
-                });
+                    Algorithm = ErofsCompressionAlgorithm.Lz4,
+                    CompressionLevel = Math.Max(compressionLevel, lz4hc ? 4 : 1),
+                }, progressSink);
 
                 return FirmwareOpResult.Ok($"Packed '{inputPath}' into '{outputPath}' (EROFS).");
             }

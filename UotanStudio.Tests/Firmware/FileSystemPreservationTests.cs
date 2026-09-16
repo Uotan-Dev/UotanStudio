@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.F2fs;
@@ -39,30 +38,33 @@ public sealed class FileSystemPreservationTests : IDisposable
     [InlineData("EXT4")]
     [InlineData("EROFS")]
     [InlineData("F2FS")]
-    public async Task ExactRecovery_DoesNotDependOnExternalSource_AndSupportsEditedContent(string format)
+    public async Task Rebuild_DoesNotDependOnExternalSource_AndSupportsEditedContent(string format)
     {
         var (handler, image, extracted) = await ExtractAsync(format);
-        var expected = Hash(image);
         File.Delete(image);
         var output = Path.Combine(_root, "rebuilt.img");
         var restored = await handler.PackAsync(extracted, output, Token);
         Assert.True(restored.Success, restored.Summary);
-        Assert.Equal(expected, Hash(output));
+        Assert.Equal("original-content", ReadImageFile(format, output, "data"));
+
+        // A fresh directory build is rejected while preservation metadata is present, preventing a
+        // lossy rebuild from silently replacing the preserved output.
+        // 存在保留元数据时，直接目录重建会被拒绝，防止用有损重建静默覆盖既有的保留输出。
         Assert.Throws<InvalidDataException>(() =>
         {
             if (format == "EXT4") Ext4Builder.Build(extracted, output);
             else if (format == "EROFS") new ErofsBuilder().Build(extracted, output);
             else F2fsBuilder.Build(extracted, output);
         });
-        Assert.Equal(expected, Hash(output));
+        Assert.Equal("original-content", ReadImageFile(format, output, "data"));
         File.WriteAllText(Path.Combine(extracted, "data"), "changed-content");
         var changed = await handler.PackAsync(extracted, output, Token);
         Assert.True(changed.Success, changed.Summary);
-        Assert.NotEqual(expected, Hash(output));
+        Assert.Equal("changed-content", ReadImageFile(format, output, "data"));
     }
 
     [Theory]
-    [InlineData("snapshot")]
+    [InlineData("metadata")]
     [InlineData("manifest")]
     [InlineData("missing")]
     [InlineData("config")]
@@ -74,8 +76,8 @@ public sealed class FileSystemPreservationTests : IDisposable
         var state = Path.Combine(extracted, ".filesystem", metadata.FileSystemPreservationId!);
         switch (mutation)
         {
-            case "snapshot":
-                using (var file = new FileStream(Path.Combine(state, "original.img"), FileMode.Open, FileAccess.Write)) file.WriteByte(123);
+            case "metadata":
+                using (var file = new FileStream(Path.Combine(state, "metadata.json"), FileMode.Open, FileAccess.Write)) file.WriteByte((byte)'X');
                 break;
             case "manifest": File.AppendAllText(Path.Combine(state, "manifest.json"), " "); break;
             case "missing": File.Delete(Path.Combine(state, "manifest.json")); break;
@@ -141,10 +143,17 @@ public sealed class FileSystemPreservationTests : IDisposable
         }
     }
 
-    private static string Hash(string path)
+    private static string ReadImageFile(string format, string image, string path)
     {
-        using var file = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(file));
+        using var output = new MemoryStream();
+        switch (format)
+        {
+            case "EXT4": using (var parser = new Ext4Parser(image)) parser.ReadFile(path, output); break;
+            case "EROFS": using (var parser = new ErofsParser(image)) parser.ReadFile(path, output); break;
+            default: using (var parser = new F2fsParser(image)) parser.ReadFile(path, output); break;
+        }
+        output.Position = 0;
+        return new StreamReader(output).ReadToEnd();
     }
 
     public void Dispose()

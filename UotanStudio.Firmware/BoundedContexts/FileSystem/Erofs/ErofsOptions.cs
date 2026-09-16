@@ -1,4 +1,4 @@
-﻿namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 
 public sealed class ErofsOptions
 {
@@ -78,6 +78,10 @@ public sealed class ErofsOptions
     /// 命中的条目以 <c>security.selinux</c> xattr 写入镜像。</para>
     /// </summary>
     public string? FileContextsPath { get; set; }
+
+    /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
+    internal IReadOnlyDictionary<string, SharedKernel.FsConfigEntry>? FsConfig { get; set; }
+    internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
 
     /// <summary>
     /// Validates and normalizes the options.

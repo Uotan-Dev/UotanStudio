@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 
 namespace UotanStudio.Firmware.SharedKernel;
 
@@ -148,5 +149,89 @@ public static class FileSystemMetadataOverrides
             if (trimmed.Length == 0 || trimmed.StartsWith('#')) continue;
             yield return trimmed;
         }
+    }
+
+    private const string MetadataFolderName = ".filesystem";
+    private const string MetadataFileName = "metadata.json";
+    private const int MaximumMetadataBytes = 64 * 1024 * 1024;
+
+    /// <summary>
+    /// Loads an optional <c>metadata.json</c> document from the preservation directory
+    /// (<c>.filesystem/&lt;id&gt;/metadata.json</c>). Returns <c>null</c> when absent, the id is
+    /// invalid, or the document fails validation.
+    /// <para>从保留目录（<c>.filesystem/&lt;id&gt;/metadata.json</c>）加载可选的 <c>metadata.json</c> 文档。
+    /// 不存在、id 非法或文档校验失败时返回 <c>null</c>。</para>
+    /// </summary>
+    internal static FilesystemMetadataDocument? TryLoadDocument(string metadataDirectory, string sourceFileName, string? preservationId)
+    {
+        if (string.IsNullOrWhiteSpace(metadataDirectory) || string.IsNullOrWhiteSpace(sourceFileName)
+            || preservationId is not { Length: 32 } || !Guid.TryParseExact(preservationId, "N", out _))
+            return null;
+        var path = FileExtraction.ResolvePath(metadataDirectory, MetadataFolderName + "/" + preservationId + "/" + MetadataFileName);
+        if (!File.Exists(path) || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) return null;
+        using var input = File.OpenRead(path);
+        if (input.Length > MaximumMetadataBytes) return null;
+        FilesystemMetadataDocument? document;
+        try
+        {
+            document = JsonSerializer.Deserialize(input, FilesystemMetadataJsonContext.Default.FilesystemMetadataDocument);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        if (document is null || document.Version != 1 || document.FileContexts is null
+            || document.FsConfig is null || document.PartitionInfo is null)
+            return null;
+        return document;
+    }
+
+    /// <summary>
+    /// Builds a rich document from the on-disk Android-style flat sidecars, for persisting as
+    /// <c>metadata.json</c> when no original image is retained.
+    /// <para>从磁盘上的 Android 风格扁平附属文件构建富文档，用于在未保留原镜像时持久化为 <c>metadata.json</c>。</para>
+    /// </summary>
+    internal static FilesystemMetadataDocument BuildDocument(string metadataDirectory, string sourceFileName, RebuildParameters? rebuild = null)
+    {
+        var partition = RepackMetadata.DetectPartitionName(sourceFileName);
+        var prefix = FileSystemMetadataGenerator.GetMetadataFileName(partition, "");
+        return new FilesystemMetadataDocument
+        {
+            Partition = partition,
+            FileContexts = new Dictionary<string, string>(
+                LoadFileContexts(Path.Combine(metadataDirectory, prefix + "file_contexts")), StringComparer.Ordinal),
+            FsConfig = new Dictionary<string, FsConfigEntry>(
+                LoadFsConfig(Path.Combine(metadataDirectory, prefix + "fs_config")), StringComparer.Ordinal),
+            PartitionInfo = new Dictionary<string, string>(
+                LoadPartitionInfo(Path.Combine(metadataDirectory, prefix + "info")), StringComparer.Ordinal),
+            Rebuild = rebuild
+        };
+    }
+
+    /// <summary>
+    /// Loads the filesystem override tables, preferring the structured <c>metadata.json</c> and
+    /// falling back to parsing the flat sidecars when it is absent.
+    /// <para>加载文件系统覆盖表：优先使用结构化的 <c>metadata.json</c>，不存在时回退解析扁平附属文件。</para>
+    /// </summary>
+    internal static (
+        IReadOnlyDictionary<string, FsConfigEntry> FsConfig,
+        IReadOnlyDictionary<string, string> FileContexts,
+        IReadOnlyDictionary<string, string> PartitionInfo,
+        RebuildParameters? Rebuild) LoadTables(string metadataDirectory, string sourceFileName, string? preservationId)
+    {
+        var document = TryLoadDocument(metadataDirectory, sourceFileName, preservationId);
+        if (document is null)
+        {
+            var partition = RepackMetadata.DetectPartitionName(sourceFileName);
+            var prefix = FileSystemMetadataGenerator.GetMetadataFileName(partition, "");
+            return (
+                LoadFsConfig(Path.Combine(metadataDirectory, prefix + "fs_config")),
+                LoadFileContexts(Path.Combine(metadataDirectory, prefix + "file_contexts")),
+                LoadPartitionInfo(Path.Combine(metadataDirectory, prefix + "info")),
+                null);
+        }
+
+        return (document.FsConfig, document.FileContexts, document.PartitionInfo, document.Rebuild);
     }
 }

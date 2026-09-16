@@ -3,8 +3,12 @@ using UotanStudio.Firmware.SharedKernel.Streams;
 
 namespace UotanStudio.Firmware.SharedKernel;
 
-/// <summary>Identifies independently measured phases of filesystem extraction.</summary>
-public enum FileSystemWorkStage { Preparing, Extracting, Preserving, VerifyingImage, VerifyingFiles, ReadingMetadata }
+/// <summary>Identifies independently measured phases of filesystem build/extraction work.</summary>
+public enum FileSystemWorkStage
+{
+    Preparing, Extracting, Preserving, VerifyingImage, VerifyingFiles, ReadingMetadata,
+    BuildingImage, WritingDat, Compressing,
+}
 
 /// <summary>Reports actual bytes processed and the total for the current phase, not image counts.</summary>
 public readonly record struct FileSystemByteProgress(FileSystemWorkStage Stage, long Processed, long Total)

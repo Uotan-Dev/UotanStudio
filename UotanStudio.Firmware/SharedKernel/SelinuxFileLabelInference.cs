@@ -75,10 +75,13 @@ internal sealed class SelinuxFileLabelInference
                     throw new InvalidDataException($"Invalid SELinux file object context in {path}: {label}");
                 var pattern = parts[0];
                 // Keep a portable PCRE subset: no lookarounds, backreferences, Unicode classes,
-                // POSIX classes or engine-specific escapes. Never silently ignore an unsupported rule.
-                if (pattern.Contains("(?", StringComparison.Ordinal) || pattern.Contains("[[:", StringComparison.Ordinal)
-                    || pattern.Contains("&&", StringComparison.Ordinal) || pattern.Contains("-[", StringComparison.Ordinal)
-                    || Regex.IsMatch(pattern, @"\\[a-zA-Z0-9]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+                // POSIX classes or engine-specific escapes. The \d shorthand is ASCII [0-9] in
+                // both PCRE and .NET byte matching, so allow it; strip it before scanning so
+                // non-portable escapes such as \w, \s, \x and \p are still rejected.
+                var digest = pattern.Replace("\\d", "", StringComparison.Ordinal);
+                if (digest.Contains("(?", StringComparison.Ordinal) || digest.Contains("[[:", StringComparison.Ordinal)
+                    || digest.Contains("&&", StringComparison.Ordinal) || digest.Contains("-[", StringComparison.Ordinal)
+                    || Regex.IsMatch(digest, @"\\[a-zA-Z0-9]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
                     throw new InvalidDataException($"Unsupported SELinux regex in {path}: {pattern}");
                 var literal = !Regex.IsMatch(pattern, @"(?<!\\)[.\^$?*+|\[({]", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
                 try

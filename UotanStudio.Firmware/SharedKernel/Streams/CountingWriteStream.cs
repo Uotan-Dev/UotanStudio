@@ -28,10 +28,14 @@ public sealed class CountingWriteStream : Stream
     public long BytesWritten { get; private set; }
     public long MaximumBytes => _maximumBytes;
     public override bool CanRead => false;
-    public override bool CanSeek => false;
+    // 镜像构建（EXT4/EROFS）会随机定位写入，计数流必须把定位操作透传到底层可寻址流，
+    // 否则进度路径会在首次 WriteAt 时抛出 NotSupportedException。
+    // Random-access image builders seek before writing; forward positioning to the underlying
+    // seekable stream so a progress-enabled build can still place blocks anywhere.
+    public override bool CanSeek => _inner.CanSeek;
     public override bool CanWrite => !_disposed;
-    public override long Length => throw new NotSupportedException();
-    public override long Position { get => BytesWritten; set => throw new NotSupportedException(); }
+    public override long Length => _inner.Length;
+    public override long Position { get => _inner.Position; set => _inner.Position = value; }
 
     /// <summary>
     /// Writes bytes to the stream.
@@ -90,15 +94,15 @@ public sealed class CountingWriteStream : Stream
     /// </summary>
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     /// <summary>
-    /// Throws because this operation is not supported.
-    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// Repositions the underlying stream while continuing to count writes.
+    /// <para>定位到底层流位置并继续累计写入字节。</para>
     /// </summary>
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
     /// <summary>
-    /// Throws because this operation is not supported.
-    /// <para>此操作不受支持，调用时抛出异常。</para>
+    /// Resizes the underlying stream while continuing to count writes.
+    /// <para>调整底层流大小并继续累计写入字节。</para>
     /// </summary>
-    public override void SetLength(long value) => throw new NotSupportedException();
+    public override void SetLength(long value) => _inner.SetLength(value);
 
     /// <summary>
     /// Releases resources owned by this instance.

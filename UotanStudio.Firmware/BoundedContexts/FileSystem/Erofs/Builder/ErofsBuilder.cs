@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -76,7 +76,7 @@ public sealed partial class ErofsBuilder
     /// Atomically packs a directory to a path by building and flushing a temporary file in the destination directory before replacing the destination.
     /// <para>将目录原子打包到指定路径。</para>
     /// </summary>
-    public void Build(string directoryPath, string outputPath, ErofsOptions? options = null)
+    public void Build(string directoryPath, string outputPath, ErofsOptions? options = null, IProgress<(long Processed, long Total)>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(outputPath);
         var fullOutputPath = Path.GetFullPath(outputPath);
@@ -92,8 +92,14 @@ public sealed partial class ErofsBuilder
                        temporaryPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
                        FileOptions.SequentialScan))
             {
-                BuildImage(root, effective, temporary, 0, freshDestination: true);
+                var counter = progress is null ? null
+                    : new UotanStudio.Firmware.SharedKernel.ExtractionByteCounter(EstimateSourceBytes(directoryPath), progress);
+                Stream sink = temporary;
+                if (counter is not null) sink = counter.Wrap(temporary);
+                BuildImage(root, effective, sink, 0, freshDestination: true);
                 temporary.Flush(flushToDisk: true);
+                counter?.Complete();
+                sink.Dispose();
             }
 
             File.Move(temporaryPath, fullOutputPath, overwrite: true);
@@ -102,6 +108,17 @@ public sealed partial class ErofsBuilder
         {
             try { File.Delete(temporaryPath); } catch { }
         }
+    }
+
+    private static long EstimateSourceBytes(string directoryPath)
+    {
+        long total = 0;
+        foreach (var file in Directory.EnumerateFiles(directoryPath, "*", SearchOption.AllDirectories))
+        {
+            try { total += new FileInfo(file).Length; }
+            catch (IOException) { }
+        }
+        return total == 0 ? 1 : total;
     }
 
     /// <summary>
@@ -197,15 +214,16 @@ public sealed partial class ErofsBuilder
     /// </summary>
     private static void ApplyMetadataOverrides(BuildNode root, ErofsOptions options)
     {
-        if (options.FsConfigPath is null && options.FileContextsPath is null) return;
-        var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
-        var contexts = FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
+        if (options.FsConfig is null && options.FileContexts is null
+            && options.FsConfigPath is null && options.FileContextsPath is null) return;
+        var fsConfig = options.FsConfig ??= FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
+        var contexts = options.FileContexts ??= FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
         var ordered = new List<BuildNode>();
         CollectPreOrder(root, ordered);
         foreach (var node in ordered)
         {
             var relative = BuildImagePath(node);
-            if (options.FsConfigPath is not null && FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry))
+            if (fsConfig.Count > 0 && FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry))
             {
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
@@ -213,7 +231,7 @@ public sealed partial class ErofsBuilder
                 node.HasModeOverride = true;
             }
 
-            if (options.FileContextsPath is not null && node.XattrIbody.Length == 0 &&
+            if (contexts.Count > 0 && node.XattrIbody.Length == 0 &&
                 FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
             {
                 node.XattrIbody = ErofsXattr.EncodeInline(

@@ -91,6 +91,14 @@ public sealed class SelinuxFileLabelInferenceTests : IDisposable
     }
 
     [Fact]
+    public void DigitShorthandMatchesServiceVersions()
+    {
+        Policy(@"/(vendor|system/vendor)/bin/hw/android\.hardware\.broadcastradio@\d+\.\d+-service u:object_r:hal_file:s0");
+        Assert.Equal(Context("hal_file"), Infer("bin/hw/android.hardware.broadcastradio@1.0-service", partition: "vendor"));
+        Assert.Equal(Context("system_file"), Infer("bin/hw/android.hardware.sensors@2.1-service", partition: "vendor"));
+    }
+
+    [Fact]
     public void RegexUsesUtf8BytesAndFullPathMatching()
     {
         Policy("/system/bin/.. u:object_r:two_bytes_file:s0");

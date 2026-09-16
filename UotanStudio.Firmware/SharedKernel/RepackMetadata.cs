@@ -24,6 +24,7 @@ public sealed class RepackMetadata
 
     private static string? _defaultMetadataRoot;
     private static readonly AsyncLocal<MetadataScope?> CurrentScope = new();
+    private static readonly AsyncLocal<IReadOnlyDictionary<string, string>?> CurrentPackingOverrides = new();
 
     /// <summary>Legacy default metadata root. An operation scope takes precedence across awaits and background work.</summary>
     public static string? DefaultMetadataRoot
@@ -38,6 +39,46 @@ public sealed class RepackMetadata
 
     /// <summary>Indicates that this asynchronous operation has already fixed its metadata ownership.</summary>
     public static bool HasContext => CurrentScope.Value is not null;
+
+    /// <summary>
+    /// Gets the application-supplied packing-option overrides for the current operation, or <c>null</c>.
+    /// When set, exact-restore is skipped and filesystem packers merge these options over the on-disk
+    /// packing options so the packing-settings panel can override the unpacked metadata.
+    /// <para>获取当前操作的应用层打包选项覆盖，未设置时为 <c>null</c>。
+    /// 设置时目录打包器跳过精确还原，并将这些选项合并到磁盘打包选项之上，
+    /// 使打包设置面板能够覆盖解包时产出的元数据。</para>
+    /// </summary>
+    public static IReadOnlyDictionary<string, string>? PackingOverrides => CurrentPackingOverrides.Value;
+
+    /// <summary>
+    /// Indicates whether packing overrides are active for the current operation.
+    /// <para>指示当前操作是否启用了打包设置覆盖。</para>
+    /// </summary>
+    public static bool HasPackingOverrides => CurrentPackingOverrides.Value is not null;
+
+    /// <summary>
+    /// Applies the given options as packing overrides for the current packaging operation. The returned
+    /// scope restores the previous value on dispose; dispose it before leaving the packaging call so the
+    /// override never leaks into unrelated work. Passing <c>null</c> clears the override.
+    /// <para>将给定选项作为当前打包操作的打包覆盖应用。返回的作用域在释放时恢复先前值；
+    /// 应在打包调用结束前释放，避免覆盖泄漏到无关工作。传入 <c>null</c> 清除覆盖。</para>
+    /// </summary>
+    /// <param name="overrides">Override options merged over the on-disk packing options.
+    /// <para>合并到磁盘打包选项之上的覆盖选项。</para></param>
+    /// <returns>Disposable scope restoring the previous overrides. <para>释放后恢复先前覆盖的可释放作用域。</para></returns>
+    public static IDisposable UsePackingOverrides(IReadOnlyDictionary<string, string>? overrides)
+    {
+        var previous = CurrentPackingOverrides.Value;
+        CurrentPackingOverrides.Value = overrides;
+        return new PackingOverrideScope(previous);
+    }
+
+    private sealed class PackingOverrideScope : IDisposable
+    {
+        private readonly IReadOnlyDictionary<string, string>? _previous;
+        public PackingOverrideScope(IReadOnlyDictionary<string, string>? previous) => _previous = previous;
+        public void Dispose() => CurrentPackingOverrides.Value = _previous;
+    }
 
     private sealed class MetadataScope : IDisposable
     {
@@ -237,20 +278,46 @@ public sealed class RepackMetadata
     internal static IReadOnlyDictionary<string, string> OptionsFor(string directory, string formatName)
     {
         var metadata = Read(directory);
-        if (metadata?.FormatName != formatName) return new Dictionary<string, string>();
+        // Filesystem format conversions (e.g. EROFS → EXT4) still inherit the generic sidecars
+        // (fs_config, file_contexts, partition info) even when the target format differs; unrelated
+        // formats keep returning empty so their options never leak into a filesystem build.
+        // 文件系统格式转换（如 EROFS → EXT4）即使目标格式不同仍继承通用附属文件（fs_config、
+        // file_contexts、分区信息）；无关格式仍返回空，避免其选项泄漏进文件系统构建。
+        if (metadata is null
+            || (metadata.FormatName != formatName && metadata.FormatName is not ("EXT4" or "EROFS" or "F2FS")))
+            return new Dictionary<string, string>();
         var options = new Dictionary<string, string>(metadata.PackingOptions, StringComparer.Ordinal);
+        // Application packing-settings overrides always win over the on-disk packing options.
+        // 应用层打包设置覆盖始终优先于磁盘打包选项。
+        if (CurrentPackingOverrides.Value is { } overrides)
+            foreach (var pair in overrides) options[pair.Key] = pair.Value;
         // Backfill superblock keys from partition_info and expose fs_config/file_contexts paths;
         // packingOptions always win, discovered files only fill absent keys.
         // 从 partition_info 回填超级块键值并暴露 fs_config/file_contexts 路径；
         // packingOptions 优先，发现的文件仅补缺。
         try
         {
-            var infoPath = DiscoverMetadataFile(directory, "_info", metadata.SourceFileName);
-            if (infoPath is not null)
+            // Prefer the structured metadata.json partition table (escape-safe), falling back to
+            // the flat _info sidecar for old extraction trees that lack a JSON document.
+            // 优先使用结构化 metadata.json 分区表（免转义），旧解包目录无 JSON 时回退扁平 _info 附属文件。
+            var metadataDirectory = Path.GetDirectoryName(ResolveActualMetadataPath(directory)) ?? directory;
+            var document = FileSystemMetadataOverrides.TryLoadDocument(metadataDirectory, metadata.SourceFileName, metadata.FileSystemPreservationId);
+            if (document is { PartitionInfo.Count: > 0 })
             {
-                foreach (var (key, value) in FileSystemMetadataOverrides.LoadPartitionInfo(infoPath))
+                foreach (var (key, value) in document.PartitionInfo)
                 {
                     if (!options.ContainsKey(key)) options[key] = value;
+                }
+            }
+            else
+            {
+                var infoPath = DiscoverMetadataFile(directory, "_info", metadata.SourceFileName);
+                if (infoPath is not null)
+                {
+                    foreach (var (key, value) in FileSystemMetadataOverrides.LoadPartitionInfo(infoPath))
+                    {
+                        if (!options.ContainsKey(key)) options[key] = value;
+                    }
                 }
             }
 

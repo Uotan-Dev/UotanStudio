@@ -119,10 +119,22 @@ public sealed class Ext4FormatHandler : IFormatHandler
     /// <para>异步将输入打包为固件。</para>
     /// </summary>
     public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default)
+        => PackCore(inputPath, outputPath, progress: null, cancellationToken);
+
+    /// <summary>
+    /// Packs the input into firmware with byte-level progress.
+    /// <para>带字节级进度异步将输入打包为固件。</para>
+    /// </summary>
+    public Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken = default)
+        => PackCore(inputPath, outputPath, progress, cancellationToken);
+
+    private Task<FirmwareOpResult> PackCore(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken)
     {
         try
         {
-            if (Directory.Exists(inputPath) && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
+            if (!RepackMetadata.HasPackingOverrides
+                && Directory.Exists(inputPath)
+                && FileSystemPreservation.TryRestore(inputPath, outputPath, FormatName, cancellationToken))
                 return Task.FromResult(FirmwareOpResult.Ok("Packed the filesystem using preserved source attributes."));
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(outputPath))
@@ -142,12 +154,17 @@ public sealed class Ext4FormatHandler : IFormatHandler
             }
 
             var options = RepackMetadata.OptionsFor(inputPath, FormatName);
+            // 仅当调用方提供进度时才启用计数写入流；否则保留可寻址输出，避免激活不可寻址路径。
+            // Only wrap with a byte counter when the caller requests progress; otherwise keep the seekable output.
+            var progressSink = progress is null ? null : FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
             Ext4Builder.Build(inputPath, outputPath, new Ext4Options
             {
                 BlockSize = RepackMetadata.IntegerOption(options, "BlockSize", 4096),
                 FsConfigPath = RepackMetadata.NullIfEmpty(options, "FsConfigPath"),
                 FileContextsPath = RepackMetadata.NullIfEmpty(options, "FileContextsPath"),
-            });
+                EnableSparse = IsTrue(options, "EnableSparse"),
+                Ext4Compress = IsTrue(options, "Ext4Compress"),
+            }, progressSink);
             return Task.FromResult(FirmwareOpResult.Ok(
                 $"Packed EXT4 image '{inputPath}' -> '{outputPath}' ({new FileInfo(outputPath).Length} bytes).",
                 [outputPath]));
@@ -161,4 +178,9 @@ public sealed class Ext4FormatHandler : IFormatHandler
             return Task.FromResult(FirmwareOpResult.Fail($"Failed to pack EXT4 image '{inputPath}': {ex.Message}"));
         }
     }
+
+    /// <summary>Parses a boolean packing option, treating a missing value as <c>false</c>.
+    /// <para>解析布尔打包选项，缺失值视为 <c>false</c>。</para></summary>
+    private static bool IsTrue(IReadOnlyDictionary<string, string> options, string key)
+        => options.TryGetValue(key, out var value) && value is "1" or "true" or "True";
 }

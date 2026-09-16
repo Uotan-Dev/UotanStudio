@@ -38,12 +38,35 @@ public class JarRealCorpusTests
 
         foreach (var jar in Directory.EnumerateFiles(root, "*.jar", SearchOption.AllDirectories)
                      .Order(StringComparer.Ordinal)
+                     .Where(IsReadableArchive)
                      .Take(24))
         {
             data.Add(jar);
         }
 
         return data;
+    }
+
+    /// <summary>
+    /// <para>只抽样真实可读的 ZIP/JAR：容器内部不可读（如占位、损坏或空文件）的文件
+    /// 不算有效语料，直接跳过而不是作为回归失败。</para>
+    /// Only samples actually readable ZIP/JAR containers: files that cannot be opened as an
+    /// archive (placeholders, corrupt or empty files) are not valid corpus and are skipped
+    /// instead of failing the regression.
+    /// </summary>
+    private static bool IsReadableArchive(string jar)
+    {
+        try
+        {
+            using var stream = new FileStream(jar, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, FileOptions.SequentialScan);
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+            _ = archive.Entries;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

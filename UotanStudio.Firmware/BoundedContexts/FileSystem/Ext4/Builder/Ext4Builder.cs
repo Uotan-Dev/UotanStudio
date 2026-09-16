@@ -1,4 +1,4 @@
-﻿using System.Buffers.Binary;
+using System.Buffers.Binary;
 using System.Text;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Core;
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Ext4.Journal;
@@ -113,7 +113,8 @@ public sealed partial class Ext4Builder
     /// Builds an ext4 image from sourceDirectory and writes it to outputPath.
     /// <para>从 sourceDirectory 构建 ext4 镜像并写入 outputPath。</para>
     /// </summary>
-    public static void Build(string sourceDirectory, string outputPath, Ext4Options? options = null)
+    /// <param name="progress"><para>可选写作进度 <c>(已写字节, 源目录估算总字节)</c>；<c>null</c> 表示不报告。</para>Optional write progress <c>(bytes written, estimated source bytes)</c>; <c>null</c> disables reporting.</param>
+    public static void Build(string sourceDirectory, string outputPath, Ext4Options? options = null, IProgress<(long Processed, long Total)>? progress = null)
     {
         var effective = Validate(sourceDirectory, options);
         var fullOutputPath = Path.GetFullPath(outputPath);
@@ -127,8 +128,14 @@ public sealed partial class Ext4Builder
         {
             using (var output = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.None))
             {
-                BuildCore(sourceDirectory, output, effective, 0, freshDestination: true, excludedFiles: [fullOutputPath, temporaryPath], plannedRoot);
+                var counter = progress is null ? null
+                    : new ExtractionByteCounter(EstimateSourceBytes(sourceDirectory), progress);
+                Stream sink = output;
+                if (counter is not null) sink = counter.Wrap(output);
+                BuildCore(sourceDirectory, sink, effective, 0, freshDestination: true, excludedFiles: [fullOutputPath, temporaryPath], plannedRoot);
                 output.Flush(flushToDisk: true);
+                counter?.Complete();
+                sink.Dispose();
             }
 
             File.Move(temporaryPath, fullOutputPath, overwrite: true);
@@ -137,6 +144,17 @@ public sealed partial class Ext4Builder
         {
             try { File.Delete(temporaryPath); } catch { }
         }
+    }
+
+    private static long EstimateSourceBytes(string sourceDirectory)
+    {
+        long total = 0;
+        foreach (var file in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+        {
+            try { total += new FileInfo(file).Length; }
+            catch (IOException) { }
+        }
+        return total == 0 ? 1 : total;
     }
 
     /// <summary>
@@ -230,20 +248,21 @@ public sealed partial class Ext4Builder
     /// </summary>
     private static void ApplyMetadataOverrides(Node root, List<Node> nodes, Ext4Options options)
     {
-        if (options.FsConfigPath is null && options.FileContextsPath is null) return;
-        var fsConfig = FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
-        var contexts = FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
+        if (options.FsConfig is null && options.FileContexts is null
+            && options.FsConfigPath is null && options.FileContextsPath is null) return;
+        var fsConfig = options.FsConfig ??= FileSystemMetadataOverrides.LoadFsConfig(options.FsConfigPath);
+        var contexts = options.FileContexts ??= FileSystemMetadataOverrides.LoadFileContexts(options.FileContextsPath);
         foreach (var node in nodes)
         {
             var relative = node == root ? string.Empty : node.RelativePath;
-            if (options.FsConfigPath is not null && FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry))
+            if (fsConfig.Count > 0 && FileSystemMetadataOverrides.TryGetFsConfig(fsConfig, relative, out var entry))
             {
                 node.Uid = entry.Uid;
                 node.Gid = entry.Gid;
                 node.Mode = (ushort)((node.IsDirectory ? 0x4000 : node.IsSymlink ? 0xA000 : 0x8000) | (entry.Mode & 0x0FFF));
             }
 
-            if (options.FileContextsPath is not null && FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
+            if (contexts.Count > 0 && FileSystemMetadataOverrides.TryGetLabel(contexts, relative, out var label))
             {
                 node.Xattrs ??= new Dictionary<string, byte[]>(StringComparer.Ordinal);
                 node.Xattrs["security.selinux"] = FileSystemMetadataOverrides.ToSelinuxXattrValue(label);

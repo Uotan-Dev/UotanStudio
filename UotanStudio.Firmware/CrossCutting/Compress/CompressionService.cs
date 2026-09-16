@@ -1,4 +1,5 @@
-﻿using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
+﻿using System.Diagnostics;
+using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 using UotanStudio.Firmware.CrossCutting.Compress.Internal.Xz;
 using UotanStudio.Firmware.SharedKernel.Streams;
 
@@ -197,10 +198,16 @@ public static class CompressionService
 
 
     /// <summary>
-    /// Compresses a file.
-    /// <para>压缩文件。</para>
+    /// Compresses a file, reporting the bytes read against the source length.
+    /// <para>压缩文件，并按源文件长度上报已读字节进度。</para>
     /// </summary>
-    public static void CompressFile(string inputPath, string outputPath, CompressionFormat format, CompressionOptions? options = null)
+    /// <param name="inputPath"><para>源文件路径。</para>The input file path.</param>
+    /// <param name="outputPath"><para>目标文件路径。</para>The output file path.</param>
+    /// <param name="format"><para>压缩格式。</para>The compression format.</param>
+    /// <param name="options"><para>压缩选项。</para>Compression options.</param>
+    /// <param name="progress"><para>压缩进度 <c>(已读字节, 源文件总字节)</c>，可为空。</para>Progress <c>(bytes read, total)</c>; may be null.</param>
+    /// <param name="cancellationToken"><para>取消令牌。</para>Cancellation token.</param>
+    public static void CompressFile(string inputPath, string outputPath, CompressionFormat format, CompressionOptions? options = null, IProgress<(long Processed, long Total)>? progress = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrEmpty(inputPath))
         {
@@ -217,7 +224,26 @@ public static class CompressionService
         {
             using var input = File.OpenRead(inputPath);
             using var output = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            Compress(input, output, format, options);
+            if (progress is null)
+            {
+                Compress(input, output, format, options);
+                return;
+            }
+
+            var totalBytes = input.CanSeek ? input.Length : 0;
+            progress.Report((0, totalBytes));
+            long processed = 0;
+            var lastReport = Stopwatch.GetTimestamp();
+            using var counting = new CountingReadStream(input, leaveOpen: true, cancellationToken: cancellationToken,
+                bytesRead: bytes =>
+                {
+                    processed += bytes;
+                    if (Stopwatch.GetElapsedTime(lastReport).TotalMilliseconds < 100) return;
+                    lastReport = Stopwatch.GetTimestamp();
+                    progress.Report((processed, totalBytes));
+                });
+            Compress(counting, output, format, options);
+            progress.Report((processed, totalBytes));
         });
     }
 

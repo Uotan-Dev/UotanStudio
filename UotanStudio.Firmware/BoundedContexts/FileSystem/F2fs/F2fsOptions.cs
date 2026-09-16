@@ -39,6 +39,10 @@ public sealed class F2fsOptions
     /// <summary>Binary Linux xattrs keyed by image-relative path; root uses an empty path.</summary>
     public IReadOnlyDictionary<string, Dictionary<string, byte[]>>? FileXattrs { get; init; }
 
+    /// <summary>Preloaded override tables; when set they take precedence over the path-based sources above.</summary>
+    internal IReadOnlyDictionary<string, SharedKernel.FsConfigEntry>? FsConfig { get; set; }
+    internal IReadOnlyDictionary<string, string>? FileContexts { get; set; }
+
     /// <summary>
     /// Validates and normalizes the options.
     /// <para>校验并规整选项。</para>

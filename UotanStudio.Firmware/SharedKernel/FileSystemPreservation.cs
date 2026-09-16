@@ -28,6 +28,10 @@ public static class FileSystemPreservation
 
     internal static void RejectLossyDirectoryRebuild(string directory)
     {
+        // An explicit packing-options override (packing-settings panel) opts into a fresh rebuild,
+        // so the preservation-only guard is lifted for those mandatory repacks.
+        // 显式的打包选项覆盖（打包设置面板）选择全新重建，因此针对此类强制重打包放开“仅限保留还原”守卫。
+        if (RepackMetadata.HasPackingOverrides) return;
         if (FileSystemEditPlan.Current is { } plan && Path.GetFullPath(directory) == plan.Root) return;
         var metadataPath = RepackMetadata.ResolveActualMetadataPath(directory);
         var hasSnapshot = Directory.Exists(Path.Combine(directory, FolderName))
@@ -99,28 +103,29 @@ public static class FileSystemPreservation
         Directory.CreateDirectory(directory);
         try
         {
-            var snapshot = Path.Combine(directory, "original.img");
-            await using (var input = File.OpenRead(source))
-            await using (var output = new FileStream(snapshot, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
+            // No original image byte copy is retained; the structured metadata document (plus the
+            // preserved projection) is the authoritative source for later tree rebuilds.
+            // 不再保留原始镜像字节副本；结构化元数据文档（连同保留的投影）是后续目录重建的权威来源。
+            var rebuild = BuildRebuildParameters(source, metadata.FormatName);
+            var document = FileSystemMetadataOverrides.BuildDocument(metadataDirectory, metadata.SourceFileName, rebuild);
+            var metadataPath = FileExtraction.ResolvePath(directory, "metadata.json");
+            await using (var output = new FileStream(metadataPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
-                var bytes = new ExtractionByteCounter(input.Length, FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.Preserving), cancellationToken);
-                using var counted = bytes.Wrap(output);
-                await input.CopyToAsync(counted, 65536, cancellationToken).ConfigureAwait(false);
-                bytes.Complete();
+                using var bounded = new CountingWriteStream(output, MaximumManifestBytes, leaveOpen: true);
+                await JsonSerializer.SerializeAsync(bounded, document, FilesystemMetadataJsonContext.Default.FilesystemMetadataDocument,
+                    cancellationToken).ConfigureAwait(false);
             }
             metadata.FileSystemPreservationId = id;
             var manifest = new FileSystemPreservationManifest
             {
                 Format = metadata.FormatName,
-                SourceLength = new FileInfo(snapshot).Length,
-                SourceHash = HashImageWithProgress(snapshot, cancellationToken),
                 ConfigurationHash = HashConfiguration(metadata),
                 ConfigurationJson = JsonSerializer.Serialize(metadata, RepackJsonContext.Default.RepackMetadata),
                 ImagePaths = CapturedPaths.Value is { } paths ? new(paths, StringComparer.Ordinal) : [],
                 ParsedEntries = ReadEntries(source, metadata.FormatName),
                 Projection = Scan(extraction, metadataDirectory, metadata.SourceFileName, cancellationToken,
                     ActiveProgress.Value is null ? null : FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingFiles)),
-                Sidecars = ReadSidecars(metadataDirectory, metadata.SourceFileName, cancellationToken)
+                Sidecars = ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken)
             };
             var path = Path.Combine(directory, "manifest.json");
             await using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -133,12 +138,77 @@ public static class FileSystemPreservation
         }
         catch
         {
-            Directory.Delete(directory, true);
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
             throw;
         }
     }
 
-    /// <summary>Restores an unchanged image exactly, or rebuilds edited files and directories using validated source metadata.</summary>
+    private static RebuildParameters? BuildRebuildParameters(string source, string format)
+    {
+        if (format == "Android Sparse Image (simg)")
+        {
+            using var sparse = SparseReader.FromImageFile(source);
+            using var logical = new SparseReadStream(sparse);
+            var inner = BuildRebuildParameters(logical, DetectFilesystem(logical));
+            if (inner is null) return null;
+            // Preserve the real filesystem identity while marking the outer container.
+            inner.InnerFormat = inner.Format;
+            inner.Format = "Android Sparse Image (simg)";
+            inner.SparseBlockSize = checked((int)sparse.Header.BlockSize);
+            return inner;
+        }
+
+        using var stream = File.OpenRead(source);
+        return BuildRebuildParameters(stream, format);
+    }
+
+    private static RebuildParameters? BuildRebuildParameters(Stream source, string format) => format switch
+    {
+        "EXT4" => ReadExt4Rebuild(source),
+        "EROFS" => ReadErofsRebuild(source),
+        "F2FS" => ReadF2fsRebuild(source),
+        _ => null
+    };
+
+    private static RebuildParameters ReadExt4Rebuild(Stream source)
+    {
+        using var parser = new Ext4Parser(source);
+        return new RebuildParameters
+        {
+            Format = "EXT4",
+            BlockSize = checked((int)parser.BlockSize),
+            Uuid = parser.SourceUuid,
+            VolumeName = parser.SourceVolumeName
+        };
+    }
+
+    private static RebuildParameters ReadErofsRebuild(Stream source)
+    {
+        using var parser = new ErofsParser(source);
+        var options = parser.ReadRebuildOptions();
+        return new RebuildParameters
+        {
+            Format = "EROFS",
+            BlockSize = options.BlockSize,
+            Uuid = options.Uuid,
+            VolumeName = options.VolumeName
+        };
+    }
+
+    private static RebuildParameters ReadF2fsRebuild(Stream source)
+    {
+        using var parser = new F2fsParser(source);
+        return new RebuildParameters
+        {
+            Format = "F2FS",
+            BlockSize = checked((int)parser.BlockSize),
+            SegmentSize = parser.SegmentSize,
+            Uuid = parser.SourceUuid,
+            VolumeName = parser.SourceVolumeName
+        };
+    }
+
+    /// <summary>Rebuilds the extraction tree using validated source metadata, without retaining the original image.</summary>
     public static bool TryRestore(string inputDirectory, string outputPath, string format,
         CancellationToken cancellationToken = default,
         Action<IReadOnlyDictionary<string, string>>? rebuildReport = null)
@@ -166,15 +236,13 @@ public static class FileSystemPreservation
             manifest = JsonSerializer.Deserialize(file, FileSystemPreservationJsonContext.Default.FileSystemPreservationManifest)
                 ?? throw new InvalidDataException("Invalid filesystem preservation manifest.");
         }
-        if (manifest.Version != 1 || manifest.Format != format || manifest.SourceLength < 0
+        if (manifest.Version != 1 || manifest.Format != format
             || manifest.Projection is null || manifest.Sidecars is null || manifest.Projection.Count > MaximumEntries)
             throw new InvalidDataException("Unsupported filesystem preservation manifest.");
-        var volumeEdit = ValidateConfiguration(metadata, manifest);
-        if (!Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, cancellationToken), manifest.Sidecars))
+        ValidateConfiguration(metadata, manifest);
+        if (!Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken), manifest.Sidecars))
             throw new InvalidDataException("Filesystem configuration changed. The current writer cannot guarantee preservation of every source feature after this change.");
         var projection = Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken);
-        var edited = !Same(projection, manifest.Projection);
-        var snapshot = FileExtraction.ResolvePath(directory, "original.img");
         var fullOutput = Path.GetFullPath(outputPath);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         foreach (var protectedRoot in new[] { inputDirectory, metadataDirectory })
@@ -183,96 +251,88 @@ public static class FileSystemPreservation
             if (fullOutput.Equals(root, comparison) || fullOutput.StartsWith(root + Path.DirectorySeparatorChar, comparison))
                 throw new IOException("Rebuilt output must be outside the extracted tree and its preservation data.");
         }
-        if (edited)
-        {
-            if (HashFile(snapshot, cancellationToken) != manifest.SourceHash || new FileInfo(snapshot).Length != manifest.SourceLength)
-                throw new InvalidDataException("Retained filesystem image changed.");
-            manifest.ParsedEntries = ReadEntries(snapshot, format);
-            var plan = new FileSystemEditPlan(inputDirectory, manifest, projection, RepackMetadata.DetectPartitionName(metadata.SourceFileName));
-            using var editScope = plan.Enter();
-            FileExtraction.WriteAtomic(fullOutput, output =>
-            {
-                BuildEdited(inputDirectory, output, snapshot, format, metadata.PackingOptions, cancellationToken, rebuildReport: rebuildReport);
-                cancellationToken.ThrowIfCancellationRequested();
-                var current = RepackMetadata.Read(inputDirectory);
-                if (current is null || HashConfiguration(current) != HashConfiguration(metadata)
-                    || current.FileSystemPreservationHash != metadata.FileSystemPreservationHash
-                    || !Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, cancellationToken), manifest.Sidecars)
-                    || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken), projection))
-                    throw new IOException("Filesystem content or attributes changed during rebuilding.");
-            }, overwrite: true);
-            return true;
-        }
-        using var source = File.OpenRead(snapshot);
-        if (source.Length != manifest.SourceLength) throw new InvalidDataException("Retained filesystem image length changed.");
+        var tables = FileSystemMetadataOverrides.LoadTables(metadataDirectory, metadata.SourceFileName, id);
+        var plan = new FileSystemEditPlan(inputDirectory, manifest, projection, RepackMetadata.DetectPartitionName(metadata.SourceFileName));
+        using var editScope = plan.Enter();
         FileExtraction.WriteAtomic(fullOutput, output =>
         {
-            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-            var buffer = new byte[65536];
-            int count;
-            while ((count = source.Read(buffer)) != 0)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                hash.AppendData(buffer.AsSpan(0, count));
-                output.Write(buffer.AsSpan(0, count));
-            }
+            BuildEdited(inputDirectory, output, format, tables.FsConfig, tables.FileContexts, tables.Rebuild,
+                metadata.PackingOptions, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            if (Convert.ToHexString(hash.GetHashAndReset()) != manifest.SourceHash)
-                throw new InvalidDataException("Retained filesystem image hash mismatch.");
-            if (volumeEdit is not null) PatchErofsVolume(output, volumeEdit);
             var current = RepackMetadata.Read(inputDirectory);
             if (current is null || HashConfiguration(current) != HashConfiguration(metadata)
                 || current.FileSystemPreservationHash != metadata.FileSystemPreservationHash
-                || !Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, cancellationToken), manifest.Sidecars)
-                || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken), manifest.Projection))
-                throw new IOException("Filesystem projection or configuration changed while restoring the image.");
+                || !Same(ReadSidecars(metadataDirectory, metadata.SourceFileName, id, cancellationToken), manifest.Sidecars)
+                || !Same(Scan(inputDirectory, metadataDirectory, metadata.SourceFileName, cancellationToken), projection))
+                throw new IOException("Filesystem content or attributes changed during rebuilding.");
         }, overwrite: true);
         return true;
     }
 
-    private static void BuildEdited(string inputDirectory, Stream output, string snapshot, string format,
-        Dictionary<string, string> options, CancellationToken token, Stream? sourceFilesystem = null,
-        Action<IReadOnlyDictionary<string, string>>? rebuildReport = null)
+    private static void BuildEdited(string inputDirectory, Stream output, string format,
+        IReadOnlyDictionary<string, FsConfigEntry> fsConfig, IReadOnlyDictionary<string, string> fileContexts,
+        RebuildParameters? rebuild, Dictionary<string, string> options, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
         if (format == "Android Sparse Image (simg)")
         {
-            using var sparse = SparseReader.FromImageFile(snapshot);
-            using var logical = new SparseReadStream(sparse);
-            var inner = DetectFilesystem(logical);
+            if (rebuild is null || rebuild.InnerFormat is not string inner || rebuild.SparseBlockSize is not int sparseBlock)
+                throw new InvalidDataException("Sparse image rebuild parameters are missing. Re-extract the source image before rebuilding it.");
             var temporary = Path.Combine(Path.GetTempPath(), "uotan-edited-raw-" + Guid.NewGuid().ToString("N"));
             using var raw = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 65536, FileOptions.DeleteOnClose);
-            BuildEdited(inputDirectory, raw, snapshot, inner, options, token, logical, rebuildReport);
+            BuildEdited(inputDirectory, raw, inner, fsConfig, fileContexts, rebuild, options, token);
             raw.Position = 0;
-            SparseImageConverter.ConvertRawToSparse(raw, output, sparse.Header.BlockSize, raw.Length);
+            SparseImageConverter.ConvertRawToSparse(raw, output, (uint)sparseBlock, raw.Length);
             return;
         }
-        using var original = sourceFilesystem ?? File.OpenRead(snapshot);
-        original.Position = 0;
         switch (format)
         {
             case "EXT4":
-                using (var parser = new Ext4Parser(original))
-                    Ext4Builder.Build(inputDirectory, output, new Ext4Options { InodeSize = 4096, BlockSize = checked((int)parser.BlockSize), Uuid = parser.SourceUuid, VolumeName = parser.SourceVolumeName });
-                break;
-            case "EROFS":
-                using (var parser = new ErofsParser(original))
                 {
-                    var erofsOptions = parser.ReadRebuildOptions();
-                    erofsOptions.VolumeName = options.GetValueOrDefault("VolumeName", parser.SourceVolumeName);
-                    if (erofsOptions.VolumeName != parser.SourceVolumeName) erofsOptions.SourceVolumeNameBytes = null;
-                    // Sparse logical streams are forward-only in the conversion pipeline. Keep the
-                    // established single-pass builder there; direct EROFS files use candidate sizing.
-                    if (sourceFilesystem is null)
-                        rebuildReport?.Invoke(ErofsRebuildOptimizer.Build(inputDirectory, output, parser, erofsOptions, token));
-                    else
-                        new ErofsBuilder().Build(inputDirectory, output, erofsOptions);
+                    var rebuildBlock = rebuild?.BlockSize ?? 4096;
+                    if ((rebuildBlock & (rebuildBlock - 1)) != 0 || rebuildBlock is < 1024 or > 65536)
+                        throw new InvalidDataException("Invalid EXT4 rebuild block size.");
+                    var ext4Options = new Ext4Options
+                    {
+                        BlockSize = rebuildBlock,
+                        InodeSize = rebuild?.InodeSize ?? 256,
+                        Uuid = rebuild?.Uuid,
+                        VolumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "UOTANSTUDIO")
+                    };
+                    ext4Options.FsConfig = fsConfig;
+                    ext4Options.FileContexts = fileContexts;
+                    Ext4Builder.Build(inputDirectory, output, ext4Options);
+                    break;
                 }
-                break;
+            case "EROFS":
+                {
+                    var erofsOptions = new ErofsOptions
+                    {
+                        BlockSize = rebuild?.BlockSize ?? 4096,
+                        Uuid = rebuild?.Uuid,
+                        VolumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "erofs")
+                    };
+                    // Without the retained image the single-pass tree builder is used; the per-inode
+                    // source optimizer is unavailable, so physical layout is regenerated, not byte-identical.
+                    erofsOptions.FsConfig = fsConfig;
+                    erofsOptions.FileContexts = fileContexts;
+                    new ErofsBuilder().Build(inputDirectory, output, erofsOptions);
+                    break;
+                }
             case "F2FS":
-                using (var parser = new F2fsParser(original))
-                    F2fsBuilder.Build(inputDirectory, output, new F2fsOptions { Uuid = new Guid(parser.SourceUuid), VolumeName = options.GetValueOrDefault("VolumeName", parser.SourceVolumeName) });
-                break;
+                {
+                    var f2fsOptions = new F2fsOptions
+                    {
+                        BlockSize = rebuild?.BlockSize ?? 4096,
+                        SegmentSize = rebuild?.SegmentSize ?? 2L * 1024 * 1024,
+                        Uuid = rebuild?.Uuid is { Length: 16 } uuid ? new Guid(uuid) : null,
+                        VolumeName = options.GetValueOrDefault("VolumeName", rebuild?.VolumeName ?? "f2fs")
+                    };
+                    f2fsOptions.FsConfig = fsConfig;
+                    f2fsOptions.FileContexts = fileContexts;
+                    F2fsBuilder.Build(inputDirectory, output, f2fsOptions);
+                    break;
+                }
             default: throw new InvalidDataException("Editing this filesystem container is not supported.");
         }
     }
@@ -351,7 +411,7 @@ public static class FileSystemPreservation
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json.ToJsonString())));
     }
 
-    private static Dictionary<string, string> ReadSidecars(string directory, string source, CancellationToken token)
+    private static Dictionary<string, string> ReadSidecars(string directory, string source, string preservationId, CancellationToken token)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var suffix in new[] { "_fs_config", "_file_contexts", "_info" })
@@ -360,16 +420,9 @@ public static class FileSystemPreservation
             var path = FileExtraction.ResolvePath(directory, name);
             if (File.Exists(path)) result.Add(name, HashFile(path, token));
         }
+        var metadata = FileExtraction.ResolvePath(directory, FolderName + "/" + preservationId + "/metadata.json");
+        if (File.Exists(metadata)) result.Add("metadata.json", HashFile(metadata, token));
         return result;
-    }
-
-    private static string HashImageWithProgress(string path, CancellationToken token)
-    {
-        var bytes = new ExtractionByteCounter(new FileInfo(path).Length,
-            FileSystemByteProgress.ForStage(ActiveProgress.Value, FileSystemWorkStage.VerifyingImage), token);
-        var hash = HashFile(path, token, bytes.Add);
-        bytes.Complete();
-        return hash;
     }
 
     private static string HashFile(string path, CancellationToken token, Action<int>? processed = null)

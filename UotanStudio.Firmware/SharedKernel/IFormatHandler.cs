@@ -40,6 +40,20 @@ public interface IWritableFormatHandler : IReadonlyFormatHandler
     /// <para>将输入(目录或文件,依格式而定)打包为输出文件。</para>
     /// </summary>
     Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Packs input with optional byte-level progress. Defaults to
+    /// <see cref="PackAsync(string, string, CancellationToken)"/>; filesystem handlers override it
+    /// to report real byte counts to the caller.
+    /// <para>带可选字节级进度的打包。默认委托给 <see cref="PackAsync(string, string, CancellationToken)"/>；
+    /// 文件系统处理器可重写它以向调用方上报真实字节进度。</para>
+    /// </summary>
+    /// <param name="inputPath"><para>输入路径（目录或文件，依格式而定）。</para>Input path (directory or file, format-specific).</param>
+    /// <param name="outputPath"><para>输出文件路径。</para>Output file path.</param>
+    /// <param name="progress"><para>可选的字节级进度回调。</para>Optional byte-level progress callback.</param>
+    /// <param name="cancellationToken"><para>取消令牌。</para>Cancellation token.</param>
+    Task<FirmwareOpResult> PackAsync(string inputPath, string outputPath, IProgress<FileSystemByteProgress>? progress, CancellationToken cancellationToken = default)
+        => PackAsync(inputPath, outputPath, cancellationToken);
 }
 
 /// <summary>
