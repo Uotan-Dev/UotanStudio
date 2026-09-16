@@ -408,7 +408,7 @@ internal class PayloadExtractor
         crossProgress?.Complete();
     }
 
-    private static long ProgressSize(PartitionUpdate partition, uint blockSize) => partition.NewPartitionInfo is { } info
+    internal static long ProgressSize(PartitionUpdate partition, uint blockSize) => partition.NewPartitionInfo is { } info
         ? checked((long)info.Size)
         : partition.Operations.SelectMany(op => op.DstExtents)
             .Select(e => checked((long)checked(checked(e.StartBlock + e.NumBlocks) * blockSize))).DefaultIfEmpty(0).Max();

@@ -1,4 +1,4 @@
-﻿using System.IO.Compression;
+using System.IO.Compression;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
@@ -223,16 +223,37 @@ public static partial class PayloadParser
         return null;
     }
 
-    private static async Task<string> ExtractPayloadFromZipAsync(string filepath, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Materializes the ZIP-embedded payload to a temporary file (fallback for compressed entries),
+    /// reporting decompressed bytes against <paramref name="totalBytes"/> as progress.
+    /// <para>把 ZIP 内嵌的 payload 物化到临时文件（压缩条目的回退路径），并按解压字节逐块上报进度。</para>
+    /// </summary>
+    private static async Task<string> ExtractPayloadFromZipAsync(string filepath, CancellationToken cancellationToken,
+        IProgress<(long Processed, long Total)>? byteProgress, long totalBytes)
     {
-        using var zr = ZipFile.OpenRead(filepath);
-        var zf = FindPayloadEntry(zr)
-            ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
         var tempPath = TempFileHelper.CreateTempFile();
-        using (var outFile = File.Create(tempPath))
-        using (var zfStream = zf.Open())
+        var buffer = new byte[1 << 20];
+        using (var zr = ZipFile.OpenRead(filepath))
         {
-            await zfStream.CopyToAsync(outFile, cancellationToken).ConfigureAwait(false);
+            var zf = FindPayloadEntry(zr)
+                ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
+            using var zfStream = zf.Open();
+            using var outFile = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, buffer.Length, FileOptions.SequentialScan);
+            byteProgress?.Report((0, totalBytes));
+            long processed = 0;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var read = await zfStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                await outFile.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                processed = checked(processed + read);
+                byteProgress?.Report((processed, totalBytes));
+            }
         }
 
         return tempPath;
@@ -340,7 +361,10 @@ public static partial class PayloadParser
 
     /// <summary>
     /// Extracts partitions from a local payload file.
-    /// <para>从本地载荷文件中提取分区。</para>
+    /// ZIP-wrapped payloads with a STORED (uncompressed) payload.bin are read directly from the ZIP;
+    /// compressed entries fall back to materializing a temporary copy.
+    /// <para>从本地载荷文件中提取分区。ZIP 包裹的载荷中，STORED（未压缩）的 payload.bin 直接从 ZIP
+    /// 读取；压缩条目回退到物化临时副本。</para>
     /// </summary>
     public static void Extract(string filepath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
@@ -352,22 +376,11 @@ public static partial class PayloadParser
         var tempSourceFiles = new List<string>();
         try
         {
-            var payloadType = DetectPayloadType(filepath);
-            if (payloadType == PayloadType.ZipArchive)
-            {
-                tempPath = ExtractPayloadFromZip(filepath);
-            }
-
-            using var stream = File.OpenRead(tempPath ?? filepath);
-            var (manifest, header) = ReadManifest(stream);
-            var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
-            // 与异步路径一致：并发分区各开专属只读句柄，跨分区读不再串行化。
-            // Mirroring the async path: concurrent partitions each open an exclusive read-only
-            // handle so cross-partition reads no longer serialize.
-            var payloadFilePath = tempPath ?? filepath;
+            using var plan = BuildExtractPlan(filepath, ref tempPath);
+            var resolvedSourceImages = ResolveSourceImages(plan.Manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
             new PayloadExtractor().ExtractPartitions(
-                manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages,
-                openPayloadStream: () => new FileStream(payloadFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan));
+                plan.Manifest, plan.OuterStream, plan.Header.BaseOffset, extractFiles, outputDir ?? string.Empty, resolvedSourceImages,
+                openPayloadStream: plan.OpenPayloadStream);
         }
         finally
         {
@@ -385,14 +398,20 @@ public static partial class PayloadParser
 
     /// <summary>
     /// Asynchronously extracts partitions from a local payload file.
-    /// <para>从本地载荷文件中异步提取分区。</para>
+    /// ZIP-wrapped payloads with a STORED (uncompressed) payload.bin are read directly from the ZIP;
+    /// compressed entries fall back to materializing a temporary copy with byte progress.
+    /// <para>从本地载荷文件中异步提取分区。ZIP 包裹的载荷中，STORED（未压缩）的 payload.bin 直接从 ZIP
+    /// 读取；压缩条目回退到物化临时副本并上报字节进度。</para>
     /// </summary>
     /// <param name="byteProgress">
-    /// Optional byte-level progress callback receiving (Processed, Total) tuples for the current
-    /// partition; reports are throttled to at most one per 100 ms plus one forced report at stage
-    /// boundaries and a final (total, total) flush. Total is 0 when no reliable estimate exists.
-    /// <para>可选的字节级进度回调，上报 (Processed, Total) 元组；上报节流为每 100ms 至多一次，
-    /// 阶段结束时强制上报一次，最终上报 (total, total)。无可靠总量时 Total 为 0。</para>
+    /// Optional byte-level progress callback receiving (Processed, Total) tuples covering the whole
+    /// job; when a container (ZIP materialization) phase is present it maps to the leading bytes and
+    /// the partition extraction to the remainder, so Total is the combined job size. Reports are
+    /// throttled to at most one per 100 ms plus forced reports at stage boundaries and a final
+    /// (total, total) flush. Total is 0 when no reliable estimate exists.
+    /// <para>可选的字节级进度回调，覆盖整个作业并上报 (Processed, Total)；存在容器（ZIP 物化）阶段时
+    /// 其映射到前置字节，分区提取映射到其余部分，Total 为作业总字节。上报节流为每 100ms 至多一次，
+    /// 阶段边界与最终各上报一次 (total, total)。无可靠总量时 Total 为 0。</para>
     /// </param>
     public static async Task ExtractAsync(string filepath, string[]? extractFiles = null, string? outputDir = null, CancellationToken cancellationToken = default, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null, IProgress<(long Processed, long Total)>? byteProgress = null)
     {
@@ -404,26 +423,24 @@ public static partial class PayloadParser
         var tempSourceFiles = new List<string>();
         try
         {
-            var payloadType = DetectPayloadType(filepath);
-            if (payloadType == PayloadType.ZipArchive)
+            var (plan, planTempPath) = await BuildExtractPlanAsync(filepath, cancellationToken, byteProgress).ConfigureAwait(false);
+            tempPath = planTempPath;
+            using var planDisposable = plan;
+            var resolvedSourceImages = ResolveSourceImages(plan.Manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
+
+            // 存在容器阶段时把分区提取的绝对读数偏移到容器之后，保证整个作业的进度连续。
+            // When a container phase is present, offset the partition extraction readings past it so
+            // the whole job's progress stays continuous.
+            IProgress<(long Processed, long Total)>? sink = byteProgress;
+            if (plan.ContainerOffset > 0 && byteProgress is not null)
             {
-                tempPath = await ExtractPayloadFromZipAsync(filepath, cancellationToken).ConfigureAwait(false);
+                sink = new OffsetByteProgress(byteProgress, plan.ContainerOffset, plan.TotalBytes);
             }
 
-            using var stream = File.OpenRead(tempPath ?? filepath);
-            var (manifest, header) = await ReadManifestAsync(stream, cancellationToken).ConfigureAwait(false);
-            var resolvedSourceImages = ResolveSourceImages(manifest, extractFiles, sourcePayloadPath, sourceImages, tempSourceFiles);
             var extractor = new PayloadExtractor();
-            // 并发分区各开专属只读句柄，跨分区读不再共享单一 FileStream 串行化；
-            // 外层 stream 仅用于清单读取与回退路径。
-            // Concurrent partitions each open an exclusive read-only handle so cross-partition
-            // reads no longer serialize on a single FileStream; the outer stream serves manifest
-            // reads and the fallback path.
-            var payloadFilePath = tempPath ?? filepath;
             await extractor.ExtractPartitionsAsync(
-                manifest, stream, header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken,
-                resolvedSourceImages, byteProgress,
-                openPayloadStream: () => new FileStream(payloadFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan)).ConfigureAwait(false);
+                plan.Manifest, plan.OuterStream, plan.Header.BaseOffset, extractFiles, outputDir ?? string.Empty, cancellationToken,
+                resolvedSourceImages, sink, plan.OpenPayloadStream).ConfigureAwait(false);
         }
         finally
         {
@@ -504,6 +521,280 @@ public static partial class PayloadParser
         Guard.ThrowIfNull(filepath);
         Guard.ThrowIfNullOrWhiteSpace(filepath);
         return PayloadPropertiesParser.ParseFile(filepath);
+    }
+
+    #endregion
+
+    #region Extract Plan
+
+    /// <summary>
+    /// Builds a synchronous extract plan (manifest, header, outer stream, per-partition payload
+    /// handle) resolving the payload source once. ZIP payloads with a STORED payload.bin read
+    /// directly from the ZIP; compressed entries materialize a temporary copy recorded in
+    /// <paramref name="tempPath"/>.
+    /// <para>构建同步提取计划（清单、头、外层流、每分区载荷句柄），一次性解析载荷来源。STORED
+    /// payload.bin 的 ZIP 载荷从 ZIP 直读；压缩条目物化一份临时副本并记录到 <paramref name="tempPath"/>。</para>
+    /// </summary>
+    private static ExtractPlan BuildExtractPlan(string filepath, ref string? tempPath)
+    {
+        var payloadType = DetectPayloadType(filepath);
+        switch (payloadType)
+        {
+            case PayloadType.RawPayload:
+                {
+                    var outer = File.OpenRead(filepath);
+                    try
+                    {
+                        var (manifest, header) = ReadManifest(outer);
+                        var raw = filepath;
+                        return new ExtractPlan(manifest, header, outer,
+                            () => new FileStream(raw, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.RandomAccess),
+                            0, ExtractTotalBytes(manifest));
+                    }
+                    catch
+                    {
+                        outer.Dispose();
+                        throw;
+                    }
+                }
+
+            case PayloadType.ZipArchive:
+                {
+                    DeltaArchiveManifest manifest;
+                    PayloadHeader header;
+                    using (var zr = ZipFile.OpenRead(filepath))
+                    {
+                        var zf = FindPayloadEntry(zr)
+                            ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
+                        using var zfStream = zf.Open();
+                        (manifest, header) = ReadManifest(zfStream);
+                    }
+
+                    var extractionTotal = ExtractTotalBytes(manifest);
+                    if (StoredZipEntryReader.TryResolve(filepath, PayloadConstants.PayloadFilename, out var dataOffset, out var length))
+                    {
+                        var zip = filepath;
+                        long offset = dataOffset;
+                        long entryLength = length;
+                        var outer = File.OpenRead(filepath);
+                        try
+                        {
+                            return new ExtractPlan(manifest, header, outer,
+                                () => StoredZipEntryReader.OpenView(zip, offset, entryLength), 0, extractionTotal);
+                        }
+                        catch
+                        {
+                            outer.Dispose();
+                            throw;
+                        }
+                    }
+
+                    tempPath = ExtractPayloadFromZip(filepath);
+                    var tempFile = tempPath;
+                    var containerOuter = File.OpenRead(tempFile);
+                    try
+                    {
+                        return new ExtractPlan(manifest, header, containerOuter,
+                            () => new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.RandomAccess),
+                            PayloadEntryUncompressedLength(filepath), extractionTotal);
+                    }
+                    catch
+                    {
+                        containerOuter.Dispose();
+                        throw;
+                    }
+                }
+
+            default:
+                throw new InvalidPayloadMagicException($"Unrecognized payload type: {payloadType}");
+        }
+    }
+
+    /// <summary>
+    /// Builds an asynchronous extract plan (through <see cref="BuildExtractPlan"/>) and returns any
+    /// materialized temporary payload path alongside it. Reports ZIP materialization bytes through
+    /// <paramref name="byteProgress"/> when a container phase is used.
+    /// <para>异步构建提取计划（依赖 <see cref="BuildExtractPlan"/>），并同时返回物化产生的临时载荷
+    /// 路径。存在容器阶段时通过 <paramref name="byteProgress"/> 上报 ZIP 物化字节。</para>
+    /// </summary>
+    private static async Task<(ExtractPlan Plan, string? TempPath)> BuildExtractPlanAsync(string filepath, CancellationToken cancellationToken,
+        IProgress<(long Processed, long Total)>? byteProgress)
+    {
+        var payloadType = DetectPayloadType(filepath);
+        switch (payloadType)
+        {
+            case PayloadType.RawPayload:
+                {
+                    var outer = File.OpenRead(filepath);
+                    try
+                    {
+                        var (manifest, header) = await ReadManifestAsync(outer, cancellationToken).ConfigureAwait(false);
+                        var raw = filepath;
+                        return (new ExtractPlan(manifest, header, outer,
+                            () => new FileStream(raw, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.RandomAccess),
+                            0, ExtractTotalBytes(manifest)), null);
+                    }
+                    catch
+                    {
+                        outer.Dispose();
+                        throw;
+                    }
+                }
+
+            case PayloadType.ZipArchive:
+                {
+                    DeltaArchiveManifest manifest;
+                    PayloadHeader header;
+                    using (var zr = ZipFile.OpenRead(filepath))
+                    {
+                        var zf = FindPayloadEntry(zr)
+                            ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
+                        using var zfStream = zf.Open();
+                        (manifest, header) = await ReadManifestAsync(zfStream, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    var extractionTotal = ExtractTotalBytes(manifest);
+                    if (StoredZipEntryReader.TryResolve(filepath, PayloadConstants.PayloadFilename, out var dataOffset, out var length))
+                    {
+                        var zip = filepath;
+                        long offset = dataOffset;
+                        long entryLength = length;
+                        var outer = File.OpenRead(filepath);
+                        try
+                        {
+                            return (new ExtractPlan(manifest, header, outer,
+                                () => StoredZipEntryReader.OpenView(zip, offset, entryLength), 0, extractionTotal), null);
+                        }
+                        catch
+                        {
+                            outer.Dispose();
+                            throw;
+                        }
+                    }
+
+                    var containerTotal = PayloadEntryUncompressedLength(filepath);
+                    long totalBytes;
+                    try
+                    {
+                        totalBytes = checked(containerTotal + extractionTotal);
+                    }
+                    catch (OverflowException ex)
+                    {
+                        throw new InvalidManifestException("Payload and extraction sizes exceed the supported range.", ex);
+                    }
+
+                    var tempFile = await ExtractPayloadFromZipAsync(filepath, cancellationToken, byteProgress, totalBytes).ConfigureAwait(false);
+                    var containerOuter = File.OpenRead(tempFile);
+                    try
+                    {
+                        return (new ExtractPlan(manifest, header, containerOuter,
+                            () => new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 81920, FileOptions.RandomAccess),
+                            containerTotal, extractionTotal), tempFile);
+                    }
+                    catch
+                    {
+                        containerOuter.Dispose();
+                        throw;
+                    }
+                }
+
+            default:
+                throw new InvalidPayloadMagicException($"Unrecognized payload type: {payloadType}");
+        }
+    }
+
+    /// <summary>
+    /// Computes the total estimated output bytes of all manifest partitions.
+    /// <para>计算清单中所有分区的估计输出总字节数。</para>
+    /// </summary>
+    private static long ExtractTotalBytes(DeltaArchiveManifest manifest)
+    {
+        long total = 0;
+        foreach (var partition in manifest.Partitions)
+        {
+            if (string.IsNullOrEmpty(partition.PartitionName))
+            {
+                continue;
+            }
+
+            total = checked(total + PayloadExtractor.ProgressSize(partition, manifest.BlockSize));
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// Reads the uncompressed length of the payload entry within a ZIP archive.
+    /// <para>读取 ZIP 归档内 payload 条目的未压缩长度。</para>
+    /// </summary>
+    private static long PayloadEntryUncompressedLength(string filepath)
+    {
+        using var zr = ZipFile.OpenRead(filepath);
+        var zf = FindPayloadEntry(zr)
+            ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
+        return zf.Length;
+    }
+
+    /// <summary>
+    /// Offsets partition-extraction byte progress past a container (ZIP materialization) phase so a
+    /// single continuous job progress can be reported.
+    /// <para>把分区提取字节进度偏移到容器（ZIP 物化）阶段之后，从而上报单一连续的作业进度。</para>
+    /// </summary>
+    private sealed class OffsetByteProgress(IProgress<(long Processed, long Total)> sink, long offset, long total)
+        : IProgress<(long Processed, long Total)>
+    {
+        /// <inheritdoc />
+        public void Report((long Processed, long Total) sample)
+            => sink.Report((offset + sample.Processed, total));
+    }
+
+    /// <summary>
+    /// Holds the resolved payload source and cleaning contracts for an extract operation. The outer
+    /// stream is a placeholder when per-partition handles (<see cref="OpenPayloadStream"/>) are used.
+    /// <para>持有一次提取操作已解析的载荷来源与清理约定。当使用每分区句柄
+    /// （<see cref="OpenPayloadStream"/>）时，外层流仅为占位。</para>
+    /// </summary>
+    private sealed class ExtractPlan : IDisposable
+    {
+        /// <summary>Gets the extracted manifest. <para>获取已解析的清单。</para></summary>
+        public DeltaArchiveManifest Manifest { get; }
+
+        /// <summary>Gets the payload header. <para>获取载荷头。</para></summary>
+        public PayloadHeader Header { get; }
+
+        /// <summary>Gets the outer stream (used only as a fallback when no per-partition handle is present). <para>获取外层流（仅在无每分区句柄时作为回退使用）。</para></summary>
+        public Stream OuterStream { get; }
+
+        /// <summary>Gets the factory opening an exclusive read-only payload handle per partition. <para>获取每分区打开专属只读载荷句柄的工厂。</para></summary>
+        public Func<Stream> OpenPayloadStream { get; }
+
+        /// <summary>Gets the container (ZIP materialization) byte count; 0 when absent. <para>获取容器（ZIP 物化）阶段字节数；不存在时为 0。</para></summary>
+        public long ContainerOffset { get; }
+
+        /// <summary>Gets the sum of partition output bytes. <para>获取分区输出字节总和。</para></summary>
+        public long ExtractionTotal { get; }
+
+        /// <summary>Gets the combined job byte total (<see cref="ContainerOffset"/> + <see cref="ExtractionTotal"/>). <para>获取作业总字节数（<see cref="ContainerOffset"/> + <see cref="ExtractionTotal"/>）。</para></summary>
+        public long TotalBytes { get; }
+
+        /// <summary>
+        /// Initializes a new extract plan.
+        /// <para>初始化一个新的提取计划。</para>
+        /// </summary>
+        public ExtractPlan(DeltaArchiveManifest manifest, PayloadHeader header, Stream outerStream,
+            Func<Stream> openPayloadStream, long containerOffset, long extractionTotal)
+        {
+            Manifest = manifest;
+            Header = header;
+            OuterStream = outerStream;
+            OpenPayloadStream = openPayloadStream;
+            ContainerOffset = containerOffset;
+            ExtractionTotal = extractionTotal;
+            TotalBytes = checked(containerOffset + extractionTotal);
+        }
+
+        /// <inheritdoc />
+        public void Dispose() => OuterStream.Dispose();
     }
 
     #endregion
