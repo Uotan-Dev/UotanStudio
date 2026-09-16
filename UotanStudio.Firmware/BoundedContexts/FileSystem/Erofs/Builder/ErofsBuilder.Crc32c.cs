@@ -1,4 +1,4 @@
-﻿namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
+namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Erofs;
 
 public sealed partial class ErofsBuilder
 {
@@ -6,12 +6,18 @@ public sealed partial class ErofsBuilder
     private static readonly uint[] ErofsCrc32cTable = InitErofsCrc32cTable();
 
     /// <summary>
-    /// Computes the CRC32c checksum of the given data (crc32c_le convention: init ~0, no final XOR).
-    /// <para>计算数据的 CRC32c 校验值（crc32c_le 约定：初始 ~0，无最终异或）。</para>
+    /// Seed used by the Linux kernel's EROFS superblock checksum (fs/erofs/super.c erofs_superblock_csum_verify) and by erofs-utils.
+    /// <para>Linux 内核 EROFS 超级块校验和使用的种子（fs/erofs/super.c erofs_superblock_csum_verify），erofs-utils 亦同。</para>
     /// </summary>
-    private static uint ComputeCrc32C(ReadOnlySpan<byte> data)
+    private const uint ErofsSuperblockChecksumSeed = 0x5045B54Au;
+
+    /// <summary>
+    /// Computes the CRC32c checksum of the given data (crc32c_le convention: seed, no final XOR).
+    /// <para>计算数据的 CRC32c 校验值（crc32c_le 约定：以 seed 为初值，无最终异或）。</para>
+    /// </summary>
+    private static uint ComputeCrc32C(ReadOnlySpan<byte> data, uint seed = 0xFFFF_FFFF)
     {
-        uint crc = 0xFFFF_FFFF;
+        uint crc = seed;
         foreach (var b in data)
         {
             crc = ErofsCrc32cTable[(crc ^ b) & 0xFF] ^ (crc >> 8);

@@ -1026,11 +1026,9 @@ public sealed partial class ErofsBuilder
         if (options.SuperblockChecksum)
         {
             var crcRegion = output.CapturedWindow ?? throw new InvalidOperationException("Superblock checksum window was not captured.");
-            crcRegion[4] = 0;
-            crcRegion[5] = 0;
-            crcRegion[6] = 0;
-            crcRegion[7] = 0;
-            var finalCrc = ComputeCrc32C(crcRegion);
+            // Linux fs/erofs/super.c erofs_superblock_csum_verify: crc32c(0x5045B54A) over bytes
+            // [1024 + 8, blockSize), i.e. window[8..], skipping the magic and the checksum field.
+            var finalCrc = ComputeCrc32C(crcRegion.AsSpan(8), ErofsSuperblockChecksumSeed);
             Span<byte> crcLe = stackalloc byte[4];
             BinaryPrimitives.WriteUInt32LittleEndian(crcLe, finalCrc);
             output.Position = ErofsSuperblock.SuperblockOffset + 4;

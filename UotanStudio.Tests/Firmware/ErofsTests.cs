@@ -304,6 +304,68 @@ public class ErofsTests
         Assert.Equal(ErofsInode.DataLayoutFlat, (ushort)(iFormat & ErofsInode.DataLayoutMask));
     }
 
+    [Theory]
+    [InlineData(2048)]
+    [InlineData(4096)]
+    public void Builder_SuperblockChecksum_MatchesKernelCsumVerify(int blockSize)
+    {
+        // Linux fs/erofs/super.c erofs_superblock_csum_verify computes
+        // crc32c(0x5045B54A) over bytes [1024 + 8, blockSize) i.e. skipping the magic
+        // and the checksum field. Rebuild the image deterministically and verify the
+        // written checksum against that formula.
+        // 内核 erofs_superblock_csum_verify 用 crc32c(0x5045B54A) 覆盖 [1024 + 8, blockSize)（跳过
+        // 魔数和校验和字段）。此处按同一公式独立重算并断言与写盘值一致。
+        using var temp = new TempDirectory();
+        WriteText(temp, "a.txt", "hello");
+        var options = new ErofsOptions { Compress = false, BlockSize = blockSize, SuperblockChecksum = true };
+        var image = new ErofsBuilder().Build(temp.Path, options);
+        var superblock = ErofsSuperblock.FromImage(image);
+        Assert.True(superblock.HasCompatChecksum);
+
+        var expected = ErofsCrc32cLe(image.AsSpan(1024 + 8, blockSize - 1024 - 8), ErofsSuperblockChecksumSeed);
+        Assert.Equal(expected, superblock.Checksum);
+        Assert.Equal(expected, BinaryPrimitives.ReadUInt32LittleEndian(image.AsSpan(ErofsSuperblock.SuperblockOffset + 4, 4)));
+
+        // The checksum covers the hashed region: flipping a byte there changes the value.
+        // 校验和覆盖该区域：篡改其中任一字节会使重算值变化。
+        var tampered = (byte[])image.Clone();
+        tampered[1024 + 8] ^= 0x40;
+        var altered = ErofsCrc32cLe(tampered.AsSpan(1024 + 8, blockSize - 1024 - 8), ErofsSuperblockChecksumSeed);
+        Assert.NotEqual(expected, altered);
+    }
+
+    private const uint ErofsSuperblockChecksumSeed = 0x5045B54A;
+
+    private static uint ErofsCrc32cLe(ReadOnlySpan<byte> data, uint seed)
+    {
+        var crc = seed;
+        foreach (var b in data)
+        {
+            crc = ErofsCrc32cTable[(crc ^ b) & 0xFF] ^ (crc >> 8);
+        }
+
+        return crc;
+    }
+
+    private static readonly uint[] ErofsCrc32cTable = BuildErofsCrc32cTable();
+
+    private static uint[] BuildErofsCrc32cTable()
+    {
+        var table = new uint[256];
+        for (uint i = 0; i < 256; i++)
+        {
+            var crc = i;
+            for (var j = 0; j < 8; j++)
+            {
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0x82F63B78 : crc >> 1;
+            }
+
+            table[i] = crc;
+        }
+
+        return table;
+    }
+
     [Fact]
     public void Parser_UnsupportedDataLayout_ThrowsInvalidDataException()
     {
