@@ -79,11 +79,36 @@ public sealed class LpFormatHandler : IFormatHandler
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // 存储形态只看文件头 4 字节：稀疏 super 的文件布局与逻辑字节不同，标注为 sparse；否则为 raw。
+            // Storage layout reads only the first 4 header bytes: a sparse super's file layout differs
+            // from its logical bytes, so it is labeled sparse; everything else is raw.
+            var header = UotanStudio.Firmware.SharedKernel.FormatDetector.ReadHeader(filePath, sizeof(uint));
+            var isSparse = header.Length >= sizeof(uint)
+                && BinaryPrimitives.ReadUInt32LittleEndian(header) == SparseMagic;
             var metadata = MetadataReader.ReadFromImageFile(filePath);
             cancellationToken.ThrowIfCancellationRequested();
+            var result = new Dictionary<string, string>
+            {
+                // Super 布局：整体是 raw 还是 sparse 容器，以及几何/块设备关键参数。
+                // Super layout: whether the container is raw or sparse, plus key geometry/device parameters.
+                ["Storage"] = isSparse ? "sparse" : "raw",
+                ["Logical block size"] = $"{metadata.Geometry.LogicalBlockSize:N0} bytes",
+                ["Metadata max size"] = $"{metadata.Geometry.MetadataMaxSize:N0} bytes",
+                ["Metadata slots"] = metadata.Geometry.MetadataSlotCount.ToString(),
+                ["Super device size"] = $"{(long)metadata.BlockDevices[0].Size:N0} bytes",
+                ["Data start"] = $"sector {metadata.BlockDevices[0].FirstLogicalSector:N0}"
+            };
+            foreach (var partition in metadata.Partitions)
+            {
+                long partitionBytes = 0;
+                foreach (var extent in metadata.Extents.GetRange(checked((int)partition.FirstExtentIndex), checked((int)partition.NumExtents)))
+                    partitionBytes = checked(partitionBytes + (long)extent.NumSectors * MetadataFormat.LP_SECTOR_SIZE);
+                result[$"Partition {partition.NameString}"] =
+                    $"{partitionBytes:N0} bytes, {partition.NumExtents} extent(s), group {metadata.Groups[(int)partition.GroupIndex].NameString}";
+            }
             var summary = $"LP metadata: {metadata.Partitions.Count} partitions, {metadata.Extents.Count} extents, " +
                           $"{metadata.Groups.Count} groups, {metadata.BlockDevices.Count} block devices";
-            return Task.FromResult(FirmwareOpResult.Ok(summary, entries: [.. metadata.PartitionNames]));
+            return Task.FromResult(FirmwareOpResult.Ok(summary, entries: [.. metadata.PartitionNames], metadata: result));
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { return Task.FromResult(FirmwareOpResult.Fail(ex.Message)); }
