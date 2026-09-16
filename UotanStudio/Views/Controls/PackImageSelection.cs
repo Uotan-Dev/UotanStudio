@@ -13,10 +13,14 @@ public sealed record PackImageSelection(string GroupName, string FilePath)
     public IReadOnlySet<string>? DynamicPartitions { get; init; }
 }
 
-internal sealed partial class PackImageEntry(string filePath, bool isOriginal = false) : ObservableObject
+internal sealed partial class PackImageEntry(string filePath, bool isOriginal = false, string? sourceLabel = null) : ObservableObject
 {
     public string FilePath { get; } = filePath;
     public string Name { get; } = Path.GetFileName(filePath);
+    /// <summary><para>显示名；与其它来源重名时追加来源标注（如 “boot.img (delivery)”）。</para>
+    /// Display name; a source label is appended when the file name collides with another source.</summary>
+    public string DisplayName { get; } = sourceLabel is null ? Path.GetFileName(filePath)
+        : $"{Path.GetFileName(filePath)} ({sourceLabel})";
     public bool IsOriginal { get; } = isOriginal;
 
     [ObservableProperty] private bool _isSelected;
@@ -37,6 +41,8 @@ internal sealed partial class PackImageGroup : ObservableObject, IDisposable
 
     public string Name { get; }
     public bool IsExternal { get; }
+    /// <summary><para>是否为交付生成镜像分组。</para>Whether this group holds delivery-generated outputs.</summary>
+    public bool IsDeliveryOutputs { get; init; }
     internal IReadOnlySet<string>? DynamicPartitions { get; init; }
     public ObservableCollection<PackImageEntry> Images { get; } = [];
     public bool HasImages => Images.Count > 0;

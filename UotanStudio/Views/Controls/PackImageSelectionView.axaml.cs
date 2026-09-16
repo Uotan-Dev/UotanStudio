@@ -347,6 +347,34 @@ public partial class PackImageSelectionView : UserControl
         SetAssignedPaths(paths, readOnlyPaths);
     }
 
+    /// <summary><para>移除上一次交付生成镜像分组，随后把本次导出的镜像作为独立分组加入。</para>
+    /// Removes the previous delivery-outputs group, then adds this export's images as its own group.</summary>
+    internal void AddDeliveryOutputs(IEnumerable<string> filePaths)
+    {
+        var previous = _groups.FirstOrDefault(group => group.IsDeliveryOutputs);
+        if (previous is not null) { _groups.Remove(previous); ReleaseGroup(previous); }
+        // 路径去重并排除已存在的条目，避免与项目分组重复。
+        var paths = filePaths.Distinct(PathComparer).ToArray();
+        var existing = _groups.SelectMany(group => group.FilePaths).ToHashSet(PathComparer);
+        var added = paths.Where(path => !existing.Contains(path)).ToArray();
+        if (added.Length == 0) { ApplyGroupOptions(); return; }
+        // 与其它来源重名时在显示名中标注来源，纯路径比较不区分。
+        var takenNames = _groups.SelectMany(group => group.Entries).Select(entry => entry.Name).ToHashSet(PathComparer);
+        var label = LanguageService.Instance.GetString("PackDialog_DeliveryOutputsSource");
+        _groups.Add(ObserveGroup(new PackImageGroup(LanguageService.Instance.GetString("PackDialog_DeliveryOutputs"),
+            added.Select(path =>
+            {
+                var fileName = Path.GetFileName(path);
+                var entry = new PackImageEntry(path, sourceLabel: takenNames.Contains(fileName) ? label : null);
+                entry.UpdateFileInfo(PackImageFileInfo.Read(path));
+                return entry;
+            })) { IsDeliveryOutputs = true }));
+        ApplyGroupOptions();
+        UpdatePageSize();
+        _page = (_groups.Count - 1) / _pageSize;
+        RenderGroups();
+    }
+
     internal PackImageSelection[] GetSelectedImages() => _groups.SelectMany(group =>
         group.Entries.Where(image => image.IsSelected).Select(image => new PackImageSelection(group.Name, image.FilePath)
         { SizeBytes = image.SizeBytes, DynamicPartitions = group.DynamicPartitions })).ToArray();

@@ -451,6 +451,9 @@ public partial class DeliveryView
             Composition.SetRunning(true, 100);
             Composition.Model.Status = LanguageService.Instance.GetString("Delivery_OutputComplete", outputs.Length, plan.OutputDirectory);
             LogService.Instance.Write(LogLevel.Info, "Delivery", Composition.Model.Status);
+            // 生成的镜像同步映射到镜像文件管理面板，重名条目由面板标注来源。
+            // Map generated images into the image manager panel; the view annotates colliding file names with the source.
+            ImageSelection.AddDeliveryOutputs(outputs);
             if (showCompletion && _attached && root == ProjectContextService.Instance.RootDirectory)
                 await ShowDeliveryMessageAsync(Composition.Model.Status, false);
         }

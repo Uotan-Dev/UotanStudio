@@ -57,7 +57,7 @@
                                                           AutomationProperties.Name="{Binding Name}" />
                                                 <Grid Grid.Column="1" ColumnDefinitions="*,Auto" Margin="6,0" ColumnSpacing="4"
                                                       ToolTip.Tip="{Binding FilePath}">
-                                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding DisplayName}" VerticalAlignment="Center" />
                                                     <TextBlock Grid.Column="1" Text="{DynamicResource PackDialog_Original}"
                                                                IsVisible="{Binding IsOriginal}" VerticalAlignment="Center" FontSize="11"
                                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />

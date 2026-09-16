@@ -180,6 +180,8 @@
     <x:String x:Key="PackDialog_NoImages">暂无镜像</x:String>
     <x:String x:Key="PackDialog_AddImages">添加更多镜像</x:String>
     <x:String x:Key="PackDialog_ExtraImages">附加镜像 {0}</x:String>
+    <x:String x:Key="PackDialog_DeliveryOutputs">交付生成镜像</x:String>
+    <x:String x:Key="PackDialog_DeliveryOutputsSource">交付</x:String>
     <x:String x:Key="PackDialog_RemoveGroup">移除此镜像列表</x:String>
     <x:String x:Key="PackDialog_Previous">上一页子项目</x:String>
     <x:String x:Key="PackDialog_Next">下一页子项目</x:String>
