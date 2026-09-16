@@ -6,6 +6,7 @@
     <x:String x:Key="Tab_Workspace">Workspace</x:String>
     <x:String x:Key="Tab_Delivery">Delivery</x:String>
     <x:String x:Key="Delivery_DirectOutput">Pack as ZIP</x:String>
+    <x:String x:Key="Delivery_ZipArchiveName">Archive name</x:String>
     <x:String x:Key="Delivery_OutputDirectory">Output directory</x:String>
     <x:String x:Key="Delivery_LoadFailed">Unable to load image lists:</x:String>
     <x:String x:Key="Delivery_PackSettingsTitle">Packaging settings</x:String>

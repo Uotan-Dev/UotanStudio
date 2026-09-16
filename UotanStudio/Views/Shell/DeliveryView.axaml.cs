@@ -103,7 +103,9 @@ public partial class DeliveryView : UserControl
     {
         var packSuper = PackSuperBox.IsChecked == true;
         var packPayload = PackPayloadBox.IsChecked == true;
-        SettingsDivider.IsVisible = packSuper || packPayload;
+        // ZIP 打包同样是一组打包设置，保持与 Super/Payload 一致的分隔线语义。
+        // ZIP packing is a pack-settings group too, so it keeps the same divider semantics as Super/Payload.
+        SettingsDivider.IsVisible = packSuper || packPayload || DirectOutputBox.IsChecked == true;
         ProjectSettingsSelector.IsVisible = packSuper || packPayload;
         SuperSettings.IsVisible = packSuper || packPayload;
         SuperFormatOptions.IsVisible = packSuper;
@@ -231,6 +233,7 @@ public partial class DeliveryView : UserControl
         _solutionPath = context.CurrentSolutionPath;
         Composition.Reset();
         OutputDirectoryBox.Text = context.SubProjects.FirstOrDefault()?.OutputDir ?? string.Empty;
+        ZipArchiveNameBox.Text = context.SolutionName ?? string.Empty;
         DirectOutputBox.IsChecked = true;
         PackSuperBox.IsChecked = false;
         PackPayloadBox.IsChecked = false;

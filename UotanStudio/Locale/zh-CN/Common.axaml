@@ -5,7 +5,8 @@
     <!-- 选项卡 -->
     <x:String x:Key="Tab_Workspace">工作区</x:String>
     <x:String x:Key="Tab_Delivery">交付</x:String>
-    <x:String x:Key="Delivery_DirectOutput">打包成ZIP</x:String>
+    <x:String x:Key="Delivery_DirectOutput">打包为ZIP</x:String>
+    <x:String x:Key="Delivery_ZipArchiveName">压缩包名称</x:String>
     <x:String x:Key="Delivery_OutputDirectory">输出目录</x:String>
     <x:String x:Key="Delivery_LoadFailed">无法加载镜像列表：</x:String>
     <x:String x:Key="Delivery_PackSettingsTitle">打包设置</x:String>
