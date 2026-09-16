@@ -45,6 +45,47 @@ public class SparseRoundTripTests
     }
 
     [Fact]
+    public void ConvertRawToSparse_ZeroRunsBecomeDontCare_FileStaysSmall()
+    {
+        // 稀疏 super 依赖 DONT_CARE 跳过元数据区、分区间与尾部的大片全零区，因此文件很小。
+        // 重打包时若把整个设备当作单个 RAW chunk 写出（不做零折叠），文件将膨胀到约等于完整
+        // DeviceSize，超出原始稀疏 super，导致无法刷入。本用例固定这个不变量：
+        // 全零块必须编码为 DONT_CARE，输出体积与真实非零数据成正比。
+        // A sparse super stays small because DONT_CARE skips the metadata, inter-partition and
+        // trailing zero regions. Emitting the whole device as one RAW chunk (no zero folding) would
+        // bloat the file to ~the full DeviceSize and exceed the original sparse super, making it
+        // unflashable. This case pins that invariant: zero blocks become DONT_CARE so the output
+        // size scales with non-zero data, not with the device size.
+        const int rawLength = 8 * 1024 * 1024; // 8 MiB
+        var raw = new byte[rawLength];         // all zeros by default
+
+        // Plant a few non-zero regions akin to a super layout: leading metadata plus two sparse
+        // partition regions separated by zero padding.
+        // 模拟 super 布局：前部元数据 + 两段被零填充分隔的分区数据。
+        BuildBytes(BlockSize * 2, 5).CopyTo(raw, 0);
+        BuildBytes(BlockSize, 31).CopyTo(raw, 4 * 1024 * 1024);
+        BuildBytes(BlockSize * 2, 43).CopyTo(raw, 6 * 1024 * 1024);
+
+        using var input = new MemoryStream(raw);
+        using var output = new MemoryStream();
+        SparseImageConverter.ConvertRawToSparse(input, output, blockSize: BlockSize);
+
+        // Compact sparse output must scale with non-zero data, not the full raw size.
+        Assert.True(output.Length < rawLength / 2,
+            $"Sparse output {output.Length} bytes is not smaller than half the {rawLength}-byte raw.");
+
+        // Logical bytes survive the conversion exactly.
+        output.Position = 0;
+        using var loaded = SparseReader.FromStream(output);
+        using var expanded = new MemoryStream();
+        loaded.WriteRawToStream(expanded);
+        Assert.Equal(raw, expanded.ToArray());
+
+        // Zero regions are encoded as DONT_CARE rather than RAW data.
+        Assert.Contains(loaded.Chunks, c => (ChunkType)c.Header.ChunkType == ChunkType.DontCare);
+    }
+
+    [Fact]
     public void WriteThenRead_RoundTripsChunksAndLogicalData()
     {
         using var sparse = new SparseFile(BlockSize, BlockSize * 8);

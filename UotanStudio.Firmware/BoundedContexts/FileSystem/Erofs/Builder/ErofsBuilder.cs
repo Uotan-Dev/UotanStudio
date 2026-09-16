@@ -453,6 +453,7 @@ public sealed partial class ErofsBuilder
         public long MetaOffset;
         public byte[] InlineData = [];
         public long DirBlocks;
+        public long DirPayloadSize;
         public bool DirectoryInline;
         public long DirBlockAddr = -1;
         public long FlatBlockAddr = -1;
@@ -620,9 +621,18 @@ public sealed partial class ErofsBuilder
 
 
                 var payloadLength = EstimateDirPayloadLength(node);
-                node.DirBlocks = payloadLength <= blockSize
-                    ? 1
-                    : CountDirBlocks(BuildDirEntries(node), blockSize);
+                if (payloadLength <= blockSize)
+                {
+                    node.DirBlocks = 1;
+                    node.DirPayloadSize = payloadLength;
+                }
+                else
+                {
+                    var layout = MeasureDirLayout(BuildDirEntries(node), blockSize);
+                    node.DirBlocks = layout.Blocks;
+                    node.DirPayloadSize = layout.Size;
+                }
+
                 node.DirectoryInline = payloadLength + GetInodeHeaderSize(node) + node.XattrIbody.Length <= blockSize;
                 continue;
             }

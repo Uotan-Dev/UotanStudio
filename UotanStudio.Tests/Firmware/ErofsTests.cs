@@ -93,6 +93,72 @@ public class ErofsTests
     }
 
     [Fact]
+    public void BuildParse_MultiBlockDirectory_ReportsExactPayloadSize()
+    {
+        using var temp = new TempDirectory();
+        var names = Enumerable.Range(0, 400).Select(index => $"file_{index:D3}.txt").ToArray();
+        foreach (var name in names)
+        {
+            WriteText(temp, "dir/" + name, "x");
+        }
+
+        var image = new ErofsBuilder().Build(temp.Path, new ErofsOptions { Compress = false });
+        var parser = new ErofsParser(image);
+
+        var directory = parser.EnumerateEntries().Single(entry => entry.Path == "dir");
+        var parsed = parser.EnumerateFiles()
+            .Where(entry => entry.Path.StartsWith("dir/", StringComparison.Ordinal))
+            .Select(entry => entry.Path["dir/".Length..])
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(names.OrderBy(name => name, StringComparer.Ordinal).ToArray(), parsed);
+        // Linux fs/erofs/inode.c erofs_prepare_dir_file accumulates d_size with block-boundary gaps,
+        // so the final block is not padded: the directory size stays 9656 instead of 3 * 4096.
+        // Linux fs/erofs/inode.c erofs_prepare_dir_file 按块边界空余累加 d_size，末块不补齐：
+        // 目录大小应为 9656 而非 3 * 4096。
+        Assert.Equal(9656, directory.Size);
+        Assert.NotEqual(0, directory.Size % parser.BlockSize);
+    }
+
+    [Fact]
+    public void Compress_DefaultPclusterSmallerThanSingleBlockPcluster()
+    {
+        // A small MaxPclusterSize (one block) recompresses each 4 KiB independently, so LZ4 cannot
+        // use its 64 KiB history window across block boundaries and the image inflates. The default
+        // (a large pcluster) lets the planner merge many logical clusters and must be meaningfully
+        // smaller while still round-tripping exactly.
+        // 收缩的 MaxPclusterSize（单块）会独立重压每个 4 KiB，LZ4 无法跨块使用 64 KiB 历史窗口，
+        // 镜像因而膨胀；默认（加大的 pcluster）让规划器合并多个逻辑簇，应明显更小且仍可逐字节往返。
+        using var temp = new TempDirectory();
+        var text = string.Concat(Enumerable.Repeat("0123456789 abcdefghijklmnopqrstuvwxyz EROFS merge ratio\n", 6000));
+        WriteText(temp, "text", text);
+        var random = new byte[120_000];
+        new Random(913).NextBytes(random);
+        temp.WriteBytes("random", random);
+        temp.WriteBytes("moderate", Enumerable.Range(0, 40).SelectMany(_ => random.Take(8192)).ToArray());
+
+        byte[] Build(Action<ErofsOptions> configure)
+        {
+            using var output = new MemoryStream();
+            var options = new ErofsOptions { Compress = true, Algorithm = ErofsCompressionAlgorithm.Lz4, CompressionLevel = 9 };
+            configure(options);
+            new ErofsBuilder().Build(temp.Path, output, options);
+            return output.ToArray();
+        }
+
+        var singleBlock = Build(o => o.MaxPclusterSize = o.BlockSize);
+        var defaultPcluster = Build(o => { });
+
+        Assert.True(defaultPcluster.Length < singleBlock.Length / 2,
+            $"default {defaultPcluster.Length} should be well below single-block {singleBlock.Length}.");
+
+        // The larger-pcluster image still round-trips exactly.
+        var parser = new ErofsParser(defaultPcluster);
+        Assert.Equal(text, Encoding.UTF8.GetString(parser.ReadFileBytes("text")));
+        Assert.Equal(random, parser.ReadFileBytes("random"));
+    }
+
+    [Fact]
     public void BuildParse_EmptyDirectory_ReturnsNoFiles()
     {
         using var temp = new TempDirectory();

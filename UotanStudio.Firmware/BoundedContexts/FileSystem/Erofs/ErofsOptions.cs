@@ -10,7 +10,15 @@ public sealed class ErofsOptions
 
     public int CompressionLevel { get; set; } = 1;
 
-    /// <summary>Maximum physical compressed cluster size in bytes; zero uses one filesystem block.</summary>
+    /// <summary>The maximum physical compressed cluster (pcluster) size in bytes; zero selects the default.
+    /// <para>最大物理压缩簇（pcluster）字节数；0 表示使用默认值。</para>
+    /// A single pcluster may cover several logical clusters; a larger pcluster lets LZ4 use its full
+    /// 64 KiB history window across block boundaries, which is what keeps the output close to the
+    /// source image. Collapsing this to one filesystem block recompresses each 4 KiB independently and
+    /// noticeably inflates the image.
+    /// <para>一个 pcluster 可覆盖多个逻辑簇；加大的 pcluster 让 LZ4 能跨块使用完整 64 KiB 历史窗口，
+    /// 使输出接近源镜像。若把该值收缩为一个文件系统块，则会独立重压每个 4 KiB 而显著膨胀镜像。</para>
+    /// </summary>
     public int MaxPclusterSize { get; set; }
 
     /// <summary>MicroLZMA dictionary size in bytes, as declared in the compression configuration.</summary>
@@ -103,7 +111,7 @@ public sealed class ErofsOptions
                 "Unknown EROFS compression algorithm.");
         }
 
-        if (MaxPclusterSize == 0) MaxPclusterSize = BlockSize;
+        if (MaxPclusterSize == 0) MaxPclusterSize = ErofsCompression.MaxPclusterSize;
         if (MaxPclusterSize < BlockSize || MaxPclusterSize > ErofsCompression.MaxPclusterSize || MaxPclusterSize % BlockSize != 0)
             throw new ArgumentOutOfRangeException(nameof(MaxPclusterSize));
         if (DictionarySize is < 4096 or > 8 << 20)

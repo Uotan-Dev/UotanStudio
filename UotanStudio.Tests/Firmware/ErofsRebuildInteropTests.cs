@@ -97,7 +97,28 @@ public sealed class ErofsRebuildInteropTests
             Assert.True(unpack.Success, unpack.Summary);
             var restore = await handler.PackAsync(extracted, rebuiltImage, Token);
             Assert.True(restore.Success, restore.Summary);
-            Assert.Equal(Hash(originalImage), Hash(rebuiltImage));
+            // The structured-metadata design rebuilds from the extracted tree, so the result is
+            // content-equivalent rather than byte-identical to the native source image.
+            // 结构化元数据设计从解包目录重建，因此结果与原生源镜像内容等价而非字节一致。
+            using (var sourceParser = new ErofsParser(originalImage))
+            using (var unmodifiedParser = new ErofsParser(rebuiltImage))
+            {
+                var sourceEntries = sourceParser.EnumerateEntries();
+                var unmodifiedEntries = unmodifiedParser.EnumerateEntries();
+                Assert.Equal(sourceEntries.Count, unmodifiedEntries.Count);
+                foreach (var expectedEntry in sourceEntries)
+                {
+                    var actualEntry = Assert.Single(unmodifiedEntries, e => e.Path == expectedEntry.Path);
+                    Assert.Equal(expectedEntry.Size, actualEntry.Size);
+                    Assert.Equal(expectedEntry.Mode, actualEntry.Mode);
+                    Assert.Equal(expectedEntry.Uid, actualEntry.Uid);
+                    Assert.Equal(expectedEntry.Gid, actualEntry.Gid);
+                    Assert.Equal(expectedEntry.MTime, actualEntry.MTime);
+                    Assert.Equal(expectedEntry.MTimeNanoseconds, actualEntry.MTimeNanoseconds);
+                    if (!expectedEntry.IsDirectory && !expectedEntry.IsSpecialFile)
+                        Assert.Equal(sourceParser.ReadFileBytes(expectedEntry.Path), unmodifiedParser.ReadFileBytes(expectedEntry.Path));
+                }
+            }
             File.WriteAllText(Path.Combine(extracted, "data"), changedData);
             File.WriteAllText(Path.Combine(extracted, "added"), "new file\n");
             Directory.CreateDirectory(Path.Combine(extracted, "new-directory"));

@@ -516,6 +516,33 @@ public sealed class DeliveryTests : IDisposable
     }
 
     [Fact]
+    public async Task SparseSuperRepackFileStaysWellBelowDeviceSize()
+    {
+        // 原厂 super 多为 SPARSE：设备尺寸大、分区数据少，元数据区、分区间与尾部全为零。
+        // 重打包若把整个设备当作单个 RAW chunk 写出，super.img 会膨胀到约等于完整 DeviceSize，
+        // 超过原始稀疏 super 而无法刷入。本用例锁定：合成 SPARSE super 的文件必须与真实非零
+        // 数据成正比，而不是与设备尺寸成正比。
+        // OEM supers are usually SPARSE: a large device carrying little partition data, with the
+        // metadata, inter-partition and trailing regions all zero. If the repack emitted the whole
+        // device as a single RAW chunk, super.img would balloon to ~the full DeviceSize, exceed the
+        // original sparse super and become unflashable. This test pins the invariant: a repacked
+        // SPARSE super's file must scale with real non-zero data, not with the device size.
+        var file = Input("system", 256 * 1024);                 // 256 KiB of partition data
+        const ulong deviceSize = 64UL * 1024 * 1024;            // 64 MiB device, ~63 MiB of zeros
+        var options = new DeliverySuperOptions { DeviceSize = deviceSize, Sparse = true, BlockSize = 4096 };
+        var output = Path.Combine(_root, "sparse-super.img");
+        await DeliverySuperBuilder.BuildAsync([file], options, output, token: TestContext.Current.CancellationToken);
+
+        var length = new FileInfo(output).Length;
+        Assert.True(length < (long)deviceSize / 4,
+            $"Sparse super output {length} bytes should be well under the {deviceSize}-byte device.");
+
+        // The logical size is preserved exactly: the sparse total covers the full device.
+        using var sparse = SparseReader.FromImageFile(output);
+        Assert.Equal(deviceSize, (ulong)sparse.Header.TotalBlocks * sparse.Header.BlockSize);
+    }
+
+    [Fact]
     public async Task EmptySuperGeneratesOnlySuperEmptyImage()
     {
         // 仅生成Super_Empty：Empty=true 时只产出 super_empty.img，不再生成完整 super。

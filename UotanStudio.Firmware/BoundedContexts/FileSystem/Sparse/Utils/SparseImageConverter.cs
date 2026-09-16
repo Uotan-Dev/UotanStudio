@@ -1,3 +1,6 @@
+using System.Buffers;
+using System.Buffers.Binary;
+
 namespace UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 
 public static class SparseImageConverter
@@ -70,8 +73,133 @@ public static class SparseImageConverter
         var totalLength = length ?? input.Length;
         var totalBlocks = (uint)((totalLength + blockSize - 1) / blockSize);
         var sparseFile = new SparseFile(blockSize, totalLength);
-        sparseFile.AddRawChunk(new StreamDataProvider(input, input.Position, totalLength), totalBlocks);
-        sparseFile.WriteToStream(output, sparse: true);
+
+        // Non-seekable streams cannot back the absolute-offset providers the zero/fill run grouping
+        // needs, so fall back to a single RAW chunk spanning the whole image (byte-identical, not
+        // compact). Seekable callers — the super builder, image conversion and the flash service —
+        // take the compact encoding below.
+        // 不可寻址流无法为按绝对偏移读取的提供器做零/填充行程分组，回退为覆盖整张镜像的单个 RAW
+        // chunk（字节一致但不紧凑）。可寻址调用方——super 构建、镜像转换、刷机服务——走紧凑编码。
+        if (!input.CanSeek || totalBlocks == 0)
+        {
+            if (totalBlocks > 0)
+            {
+                sparseFile.AddRawChunk(new StreamDataProvider(input, input.Position, totalLength), totalBlocks);
+            }
+            sparseFile.WriteToStream(output, sparse: true);
+            return;
+        }
+
+        var buffer = ArrayPool<byte>.Shared.Rent((int)blockSize);
+        try
+        {
+            // Run-length classification folds all-zero blocks and uniform-fill spans into
+            // DONT_CARE / FILL chunks. Without it, a repacked SPARSE super would emit its entire
+            // device as one RAW chunk, so its file balloons to ~the full DeviceSize and exceeds the
+            // original sparse super, which then cannot be flashed.
+            // 行程分类把全零块与均匀填充区间折叠成 DONT_CARE / FILL。不这样做的话，重打包的
+            // SPARSE super 会把整个设备当作单个 RAW chunk 写出，文件膨胀到约等于完整 DeviceSize，
+            // 超过原始稀疏 super，导致无法刷入。
+            const byte KindZero = 1, KindFill = 2, KindRaw = 3;
+            byte kind = 0;
+            var fillValue = 0u;
+            var startBlock = 0u;
+            var startByte = 0L;
+            var blocks = 0u;
+
+            void Flush()
+            {
+                if (kind == 0 || blocks == 0)
+                {
+                    return;
+                }
+                switch (kind)
+                {
+                    case KindZero:
+                        sparseFile.AddDontCareChunk(checked(blocks * blockSize), startBlock);
+                        break;
+                    case KindFill:
+                        sparseFile.AddFillChunk(fillValue, checked(blocks * blockSize), startBlock);
+                        break;
+                    default:
+                        sparseFile.AddRawChunk(new StreamDataProvider(input, startByte, checked(blocks * blockSize)), blocks, startBlock);
+                        break;
+                }
+                kind = 0;
+                fillValue = 0;
+                blocks = 0;
+            }
+
+            for (var block = 0U; block < totalBlocks; block++)
+            {
+                var thisBlockBytes = (int)Math.Min(blockSize, totalLength - (long)block * blockSize);
+                input.ReadExactly(buffer, 0, thisBlockBytes);
+                if (thisBlockBytes < (int)blockSize)
+                {
+                    Array.Clear(buffer, thisBlockBytes, (int)blockSize - thisBlockBytes);
+                }
+
+                byte nextKind;
+                var nextFill = 0u;
+                if (IsZeroBlock(buffer, (int)blockSize))
+                {
+                    nextKind = KindZero;
+                }
+                else if (thisBlockBytes == (int)blockSize && IsUniformFill(buffer, out nextFill))
+                {
+                    nextKind = KindFill;
+                }
+                else
+                {
+                    nextKind = KindRaw;
+                }
+
+                if (kind != 0 && (nextKind != kind || (nextKind == KindFill && nextFill != fillValue)))
+                {
+                    Flush();
+                }
+                if (kind == 0)
+                {
+                    kind = nextKind;
+                    fillValue = nextFill;
+                    startBlock = block;
+                    startByte = (long)block * blockSize;
+                }
+                blocks++;
+            }
+            Flush();
+
+            sparseFile.WriteToStream(output, sparse: true);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static bool IsZeroBlock(byte[] buffer, int length)
+    {
+        for (var i = 0; i < length; i++)
+        {
+            if (buffer[i] != 0)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static bool IsUniformFill(byte[] buffer, out uint value)
+    {
+        value = BinaryPrimitives.ReadUInt32LittleEndian(buffer);
+        for (var i = 4; i < buffer.Length; i += 4)
+        {
+            if (BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(i, 4)) != value)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// <summary>

@@ -36,7 +36,12 @@ public sealed partial class ErofsBuilder
         switch (options.Algorithm)
         {
             case ErofsCompressionAlgorithm.Lz4:
-                BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(2), options.Lz4MaxDistance);
+                // erofs-utils compressor_lz4.c defaults the declared distance to LZ4_DISTANCE_MAX (65535);
+                // a zero ErofsOptions.Lz4MaxDistance denotes that same default, so the record carries 65535.
+                // erofs-utils compressor_lz4.c 将声明距离默认到 LZ4_DISTANCE_MAX（65535）；
+                // ErofsOptions.Lz4MaxDistance 为 0 即该默认值，记录应写入 65535。
+                BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(2),
+                    options.Lz4MaxDistance == 0 ? ErofsCompression.Lz4DistanceMax : options.Lz4MaxDistance);
                 BinaryPrimitives.WriteUInt16LittleEndian(configuration.AsSpan(4), checked((ushort)(options.MaxPclusterSize / options.BlockSize)));
                 break;
             case ErofsCompressionAlgorithm.Lzma:

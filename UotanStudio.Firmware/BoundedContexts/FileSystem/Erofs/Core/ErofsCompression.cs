@@ -29,6 +29,9 @@ internal static class ErofsCompression
 
     public const int MaxPclusterDecompressedSize = 12 << 20;
 
+    /// <summary>LZ4 history window size written into the compression configuration record (LZ4_DISTANCE_MAX).<para>写入压缩配置记录的最大 LZ4 匹配距离（LZ4_DISTANCE_MAX）。</para></summary>
+    public const ushort Lz4DistanceMax = 65535;
+
     public const int LzmaHeaderSize = 13;
 
     /// <summary>

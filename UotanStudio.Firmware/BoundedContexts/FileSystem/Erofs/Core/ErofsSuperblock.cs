@@ -257,7 +257,22 @@ internal sealed class ErofsSuperblock
             throw new FormatException($"Image too small to hold an EROFS superblock: {image.Length} bytes.");
         }
 
-        return FromBytes(image.Slice(SuperblockOffset, Math.Min(SuperblockSize, image.Length - SuperblockOffset)));
+        var core = image.Slice(SuperblockOffset, Math.Min(SuperblockSize, image.Length - SuperblockOffset));
+        var preliminary = FromBytes(core);
+        // The full struct is 128 bytes plus a 16-byte extension slot that carries s_metabox_nid
+        // (Linux fs/erofs/erofs_fs.h erofs_super_block, 144 bytes). Without the extension slot the
+        // metabox nid is unavailable, so a truncated parse would silently report nid 0.
+        // 完整结构为 128 字节加一个 16 字节扩展槽，扩展槽承载 s_metabox_nid
+        //（Linux fs/erofs/erofs_fs.h erofs_super_block，共 144 字节）。缺少扩展槽时 metabox nid
+        // 不可用，截断解析会把 nid 静默报为 0。
+        var slotSize = SuperblockSize + preliminary.SbExtSlots * ExtSlotSize;
+        if (slotSize <= SuperblockSize)
+        {
+            return preliminary;
+        }
+
+        var available = checked((int)Math.Min(slotSize, image.Length - SuperblockOffset));
+        return FromBytes(image.Slice(SuperblockOffset, available));
     }
 
     /// <summary>

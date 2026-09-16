@@ -99,12 +99,18 @@ public sealed partial class ErofsBuilder
     }
 
     /// <summary>
-    /// Computes the exact number of directory blocks using the same greedy bin-packing as WriteDirBlocks (each block = a dirent array followed by its name area; names never cross blocks and block-tail slack is not reused by later entries).
-    /// <para>按与 WriteDirBlocks 完全相同的贪心装箱计算多块目录所需块数 （每块 = dirent 数组 + 紧随的名字区；名字不跨块，块尾空余不参与后续打包）。</para>
+    /// Computes the exact directory payload length and block count with the same greedy bin-packing
+    /// as WriteDirBlocks: entries never cross a block, and a block-boundary gap is inserted before
+    /// the next block (matching upstream erofs_prepare_dir_file's d_size accumulation). The final
+    /// block is not padded, so the length is not necessarily a multiple of the block size.
+    /// <para>按与 WriteDirBlocks 完全相同的贪心装箱计算目录负载的精确长度与块数：条目不跨块，
+    /// 跨块前插入块边界空余（与上游 erofs_prepare_dir_file 的 d_size 累加一致）。末块不补齐，
+    /// 因此长度不一定是块大小的整数倍。</para>
     /// </summary>
-    private static long CountDirBlocks(List<DirEntry> sorted, int blockSize)
+    private static (long Blocks, long Size) MeasureDirLayout(List<DirEntry> sorted, int blockSize)
     {
         var blocks = 0L;
+        var size = 0L;
         var index = 0;
         while (index < sorted.Count)
         {
@@ -132,10 +138,15 @@ public sealed partial class ErofsBuilder
                 index++;
             }
 
+            size += direntCount * (long)ErofsDirectoryEntry.DirentSize + namesLength;
             blocks++;
+            if (index < sorted.Count)
+            {
+                size = AlignUp(size, blockSize);
+            }
         }
 
-        return blocks;
+        return (blocks, size);
     }
 
     /// <summary>
@@ -307,9 +318,7 @@ public sealed partial class ErofsBuilder
         {
             inode.Mode = (ushort)(ErofsInode.ModeDirectory | (node.HasModeOverride ? (node.ModeOverride & 0xFFF) : 0x1ED));
             inode.Nlink = (ulong)(2 + node.Children.Count(child => child.IsDirectory));
-            inode.Size = node.DirectoryInline
-                ? (ulong)EstimateDirPayloadLength(node)
-                : (ulong)(node.DirBlocks * blockSize);
+            inode.Size = (ulong)node.DirPayloadSize;
             if (node.DirectoryInline)
             {
 

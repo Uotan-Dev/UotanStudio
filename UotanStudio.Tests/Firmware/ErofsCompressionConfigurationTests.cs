@@ -63,4 +63,28 @@ public class ErofsCompressionConfigurationTests
         using var parser = new ErofsParser(image);
         Assert.Equal(payload, parser.ReadFileBytes("data.bin"));
     }
+
+    [Theory]
+    [InlineData(0, 65535)]
+    [InlineData(4096, 4096)]
+    [InlineData(16384, 16384)]
+    public void Build_Lz4Record_DeclaresUpstreamDistanceDefault(int lz4MaxDistance, ushort expected)
+    {
+        // erofs-utils writes sbi->lz4.max_distance (default LZ4_DISTANCE_MAX = 65535) into the
+        // z_erofs_lz4_cfgs record; a zero ErofsOptions distance denotes that same default.
+        // erofs-utils 将 sbi->lz4.max_distance（默认 LZ4_DISTANCE_MAX = 65535）写入 z_erofs_lz4_cfgs
+        // 记录；ErofsOptions 距离为 0 表示同一默认值。
+        using var source = new TempDirectory();
+        var payload = Enumerable.Repeat((byte)0x53, 8192).ToArray();
+        source.WriteBytes("data.bin", payload);
+        var image = new ErofsBuilder().Build(source.Path, new ErofsOptions
+        {
+            Algorithm = ErofsCompressionAlgorithm.Lz4,
+            Lz4MaxDistance = (ushort)lz4MaxDistance
+        });
+        var superblock = ErofsSuperblock.FromImage(image);
+        var configurationOffset = 1024 + 128 + superblock.SbExtSlots * 16;
+        Assert.Equal(14, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset)));
+        Assert.Equal(expected, BinaryPrimitives.ReadUInt16LittleEndian(image.AsSpan(configurationOffset + 2, 2)));
+    }
 }
