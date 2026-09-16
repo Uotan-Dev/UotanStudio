@@ -46,9 +46,23 @@ internal static class DeliverySuperBuilder
                 length = checked((long)source.Header.TotalBlocks * source.Header.BlockSize);
             }
             lengths.Add(length);
+        }
+        // Precheck capacity before allocating extents so the error reports actual numbers instead of a bare parameter name.
+        // 在分配 extent 前预检容量，使报错能给出具体数值而不是仅参数名。
+        var reservedBytes = checked(MetadataFormat.LP_PARTITION_RESERVED_BYTES + 2UL * MetadataFormat.LP_METADATA_GEOMETRY_SIZE
+            + (ulong)options.MetadataSize * options.Slots * 2);
+        var availableBytes = options.DeviceSize - AlignUp(reservedBytes, options.BlockSize);
+        var requiredBytes = lengths.Aggregate(0UL, (sum, length) => checked(sum + AlignUp((ulong)length, options.BlockSize)));
+        if (requiredBytes > availableBytes)
+            throw new InvalidDataException(
+                $"Super 空间不足 / Super space exceeded: partitions need {FormatSize((long)requiredBytes)}, "
+                + $"only {FormatSize((long)availableBytes)} available of {FormatSize((long)options.DeviceSize)} "
+                + $"(metadata reserves {FormatSize((long)reservedBytes)}). 请调大 Super 大小或减小分区镜像。");
+        foreach (var file in partitions)
+        {
             var group = groups.SingleOrDefault(g => g.Partitions.Contains(file.Partition))
                 ?? throw new InvalidDataException("请在分组配置中指定分区归属：" + file.Partition);
-            builder.AddPartition(file.Partition, group.Name, (ulong)length, 1);
+            builder.AddPartition(file.Partition, group.Name, (ulong)lengths[partitions.IndexOf(file)], 1);
         }
         var metadata = builder.Build();
         metadata.Header = metadata.Header with { Flags = options.VirtualAb ? 1u : 0u, MinorVersion = options.VirtualAb ? (ushort)2 : (ushort)0 };
@@ -123,6 +137,12 @@ internal static class DeliverySuperBuilder
         }
         finally { File.Delete(raw); File.Delete(temporary); }
     }, token);
+
+    private static ulong AlignUp(ulong size, uint alignment)
+    {
+        var remainder = size % alignment;
+        return remainder == 0 ? size : checked(size + alignment - remainder);
+    }
 
     private static string FormatSize(long bytes)
     {

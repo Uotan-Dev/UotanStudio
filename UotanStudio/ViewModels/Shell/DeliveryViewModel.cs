@@ -40,7 +40,7 @@ internal sealed partial class DeliveryImage : ObservableObject
     public string SourceFormat { get; }
     public bool IsReadOnly => !string.Equals(SourceFormat, "ext4", StringComparison.OrdinalIgnoreCase);
     public string SourceDisplay => string.IsNullOrEmpty(GroupName) ? SourceFormat.ToUpperInvariant() : $"{GroupName} · {SourceFormat.ToUpperInvariant()}";
-    public string DisplaySize => Generated ? LanguageService.Instance.GetString("Delivery_PendingImage") : SizeBytes is { } size ? $"{size:N0} B" : IsZeroSize ? "0 B" : "—";
+    public string DisplaySize => Generated ? LanguageService.Instance.GetString("Delivery_PendingImage") : SizeBytes is { } size ? ProgressMeter.FormatSize(size) : IsZeroSize ? "0 B" : "—";
     internal void RefreshLanguage()
     {
         OnPropertyChanged(nameof(Description));
