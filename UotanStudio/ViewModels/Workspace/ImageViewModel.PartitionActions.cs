@@ -242,16 +242,17 @@ internal partial class ImageViewModel
     }
 
     /// <summary>
-    /// <para>把右键条目或用户勾选的可刷写镜像（boot/raw/sparse/ext4/erofs/f2fs）刷入当前选中设备：分区名优先取
-    /// <see cref="ImageEntryViewModel"/> 已有分区字段，缺省用文件名去扩展名；经
-    /// <see cref="BatchFlashService.FlashSelectedAsync"/> 逐分区复用 <see cref="FlashService.FlashImageAsync"/>
-    /// 执行，单分区失败会继续，进度与结果回报到状态文本。</para>
-    /// Flashes the clicked or checked flashable images (boot/raw/sparse/ext4/erofs/f2fs) to the currently selected device
-    /// in order: the partition name prefers an existing partition field on
-    /// <see cref="ImageEntryViewModel"/>, falling back to the file name without its extension; each
-    /// partition is flashed sequentially via <see cref="BatchFlashService.FlashSelectedAsync"/> which reuses
-    /// <see cref="FlashService.FlashImageAsync"/>, a single-partition failure does not stop the rest,
-    /// and progress/results are reported to the status text.
+    /// <para>把右键条目或用户勾选的可刷写镜像（boot/raw/sparse/ext4/erofs/f2fs/super）刷入当前选中设备：分区名取镜像文件名去扩展名，
+    /// 多段分区名（如 <c>system_ext_a</c>）原样保留，不由本层拆分或追加槽位后缀；槽位解析交给
+    /// <c>FastbootSession.ResolvePartitionWithSlot</c> 处理（已带显式槽位后缀的名按原样刷写）。
+    /// 逐分区复用 <see cref="FlashService.FlashImageAsync"/> 执行，单分区失败会继续，进度与结果回报到状态文本。</para>
+    /// Flashes the clicked or checked flashable images (boot/raw/sparse/ext4/erofs/f2fs/super) to the currently selected device
+    /// in order: the partition name is the image file name without its extension, and compound names such as
+    /// <c>system_ext_a</c> are preserved verbatim (this layer never splits or slot-suffixes them); slot
+    /// resolution is delegated to <c>FastbootSession.ResolvePartitionWithSlot</c> which flashes an
+    /// explicit slot suffix unchanged. Each partition is flashed sequentially via
+    /// <see cref="BatchFlashService.FlashSelectedAsync"/> which reuses <see cref="FlashService.FlashImageAsync"/>,
+    /// a single-partition failure does not stop the rest, and progress/results are reported to the status text.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanFlashSelected))]
     private Task FlashSelectedAsync(ImageEntryViewModel? image = null) => RunExclusiveAsync(() => FlashSelectedCoreAsync(image));
@@ -283,7 +284,8 @@ internal partial class ImageViewModel
         var selected = clicked is null ? GetSelectedImages() : [clicked];
         foreach (var image in selected)
         {
-            if (image.IsDirectory || image.Format is not ("boot" or "raw" or "sparse" or "ext4" or "erofs" or "f2fs"))
+            // "super" 是 LP 容器（DetectFormat 按 LP 魔数判定），本质仍是可直接 fastboot flash 的整分区镜像。
+            if (image.IsDirectory || image.Format is not ("boot" or "raw" or "sparse" or "ext4" or "erofs" or "f2fs" or "super"))
             {
                 continue;
             }

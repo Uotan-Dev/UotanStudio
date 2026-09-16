@@ -126,7 +126,6 @@ public class FastbootBackupTests
         transport.Enqueue("OKAY");                       // getvar:max-download-size
         transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
         transport.Enqueue("OKAY");                       // payload accepted
-        transport.Enqueue("OKAYyes");                    // getvar:has-slot:boot_a -> yes
         transport.Enqueue("OKAY");                       // flash:boot_a (no re-suffix)
 
         using var session = new FastbootSession(transport);
@@ -134,9 +133,33 @@ public class FastbootBackupTests
         session.FlashPartition("boot_a", ms, imageBytes.Length);
 
         var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
-        Assert.Contains("getvar:has-slot:boot_a", commands);
         Assert.Contains("flash:boot_a", commands);
         Assert.DoesNotContain(commands, c => c == "flash:boot_a_a");
+        // An explicit slot is authoritative: upstream fastboot never queries has-slot for it.
+        Assert.DoesNotContain(commands, c => c.StartsWith("getvar:has-slot:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FlashPartition_PreservesCompoundPartitionNameWithSlot()
+    {
+        var imageBytes = new byte[4096];
+        Random.Shared.NextBytes(imageBytes);
+
+        var transport = new FakeCommTransport();
+        transport.Enqueue("OKAY");                       // getvar:max-download-size
+        transport.Enqueue($"DATA{imageBytes.Length:x8}"); // download:00001000
+        transport.Enqueue("OKAY");                       // payload accepted
+        transport.Enqueue("OKAY");                       // flash:system_ext_a
+
+        using var session = new FastbootSession(transport);
+        using var ms = new MemoryStream(imageBytes);
+        session.FlashPartition("system_ext_a", ms, imageBytes.Length);
+
+        var commands = transport.Writes.Select(w => Encoding.UTF8.GetString(w)).ToList();
+        Assert.Contains("flash:system_ext_a", commands);
+        Assert.DoesNotContain(commands, c => c == "flash:system_ext");
+        Assert.DoesNotContain(commands, c => c == "flash:system_a");
+        Assert.DoesNotContain(commands, c => c.StartsWith("getvar:has-slot:", StringComparison.Ordinal));
     }
 
     [Fact]

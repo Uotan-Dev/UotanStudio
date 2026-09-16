@@ -1022,15 +1022,22 @@ public sealed class FastbootSession : IProtocolSession
     }
 
     /// <summary>
-    /// Resolves the target partition name against A/B slots: slot-capable partitions that do
-    /// not already carry a slot suffix get the current active slot appended, matching upstream
-    /// fastboot. Non-slot partitions and already-slotted names are returned unchanged.
-    /// <para>按 A/B 槽位解析目标分区名：支持槽位且尚未携带槽位后缀的分区追加当前活跃槽位，
-    /// 与上游 fastboot 一致；非槽位分区与已带后缀的名称原样返回。</para>
+    /// Resolves the target partition name against A/B slots: a name that already carries an explicit
+    /// slot suffix (e.g. <c>system_ext_a</c>) is flashed verbatim, matching upstream fastboot, so the
+    /// compound base name is never re-split or re-suffixed; other slot-capable partitions get the
+    /// current active slot appended. Non-slot partitions are returned unchanged.
+    /// <para>按 A/B 槽位解析目标分区名：已带显式槽位后缀的名（如 <c>system_ext_a</c>）按原样刷写，
+    /// 与上游 fastboot 一致，绝不拆分或追加第二个后缀；其余支持槽位的分区追加当前活跃槽位；
+    /// 非槽位分区原样返回。</para>
     /// </summary>
     private string ResolvePartitionWithSlot(string partition)
     {
-        if (string.IsNullOrEmpty(partition) || !HasSlot(partition) || HasSlotSuffix(partition))
+        if (string.IsNullOrEmpty(partition) || HasSlotSuffix(partition))
+        {
+            return partition;
+        }
+
+        if (!HasSlot(partition))
         {
             return partition;
         }
@@ -1052,7 +1059,7 @@ public sealed class FastbootSession : IProtocolSession
         }
 
         var suffix = partition[(underscore + 1)..];
-        return suffix.Length == 1 && (suffix[0] == 'a' || suffix[0] == 'b');
+        return suffix.Length == 1 && (suffix[0] is 'a' or 'b' or 'A' or 'B');
     }
 
     /// <summary>
