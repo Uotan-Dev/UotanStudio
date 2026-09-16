@@ -343,6 +343,7 @@
     <x:String x:Key="Device_FlashConfirmMessage">刷写操作存在风险，可能导致设备变砖。是否继续？</x:String>
     <x:String x:Key="Device_ModeSystem">系统</x:String>
     <x:String x:Key="Device_ModeBootloader">Bootloader</x:String>
+    <x:String x:Key="Device_ModeFastbootd">Fastbootd</x:String>
     <x:String x:Key="Device_ModeRecovery">Recovery</x:String>
     <x:String x:Key="Device_ModeEdl">EDL 模式</x:String>
 

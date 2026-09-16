@@ -7,33 +7,79 @@
              mc:Ignorable="d" d:DesignWidth="960" d:DesignHeight="600"
              x:Class="UotanStudio.Views.Devices.DeviceView"
              x:DataType="vm:DeviceViewModel">
+    <UserControl.Resources>
+        <!-- 卡片圆角与描边沿用密钥管理器的 6px 口径，两处面板观感一致。 -->
+        <!-- Card radius/stroke follow the key manager's 6px value so both panels look alike. -->
+        <CornerRadius x:Key="DeviceCardCornerRadius">6</CornerRadius>
+        <SolidColorBrush x:Key="DeviceCardBackgroundBrush" Color="{DynamicResource CardBackground}" />
+        <SolidColorBrush x:Key="DeviceCardBorderBrush" Color="{DynamicResource BorderForegroundColor}" />
+    </UserControl.Resources>
     <UserControl.Styles>
+        <!-- 排版基线：密钥管理器同为 13px 正文 + 32px 控件高度。 -->
+        <!-- Typography baseline: 13px body text and 32px controls, matching the key manager. -->
+        <Style Selector="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="SelectableTextBlock">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <Style Selector="Button">
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+        <!-- 带文字的动作按钮 -->
+        <Style Selector="Button.DeviceActionButton">
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+        <!-- 纯图标按钮：与动作按钮同高，保证工具栏基线一致 -->
+        <Style Selector="Button.DeviceIconButton">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Border.ToolbarDivider">
+            <Setter Property="Width" Value="1" />
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Background" Value="{StaticResource DeviceCardBorderBrush}" />
+        </Style>
         <!-- 模式徽标通用样式 -->
         <Style Selector="Border.ModeChip">
             <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="Padding" Value="7,2" />
+            <Setter Property="Padding" Value="6,1" />
             <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <!-- 设备列表条目卡片（对应密钥列表的条目卡片） -->
+        <Style Selector="Border.DeviceEntryCard">
+            <Setter Property="CornerRadius" Value="{StaticResource DeviceCardCornerRadius}" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{StaticResource DeviceCardBorderBrush}" />
+        </Style>
+        <Style Selector="ListBox.DeviceList > ListBoxItem">
+            <Setter Property="CornerRadius" Value="{StaticResource DeviceCardCornerRadius}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         </Style>
         <!-- 详情区间行卡片样式 -->
         <Style Selector="Border.InfoCard">
-            <Setter Property="CornerRadius" Value="8" />
-            <Setter Property="Padding" Value="16,12" />
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="CornerRadius" Value="{StaticResource DeviceCardCornerRadius}" />
+            <Setter Property="Padding" Value="14,12" />
+            <Setter Property="Background" Value="{StaticResource DeviceCardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource DeviceCardBorderBrush}" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
         <Style Selector="TextBlock.CardCaption">
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="FontSize" Value="13" />
             <Setter Property="Margin" Value="0,0,0,8" />
         </Style>
         <Style Selector="TextBlock.CardLabel">
             <Setter Property="Opacity" Value="0.7" />
-            <Setter Property="FontSize" Value="13" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
         <Style Selector="TextBlock.CardValue">
-            <Setter Property="FontSize" Value="13" />
             <Setter Property="TextWrapping" Value="Wrap" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
@@ -45,150 +91,175 @@
     </UserControl.Styles>
 
     <DockPanel>
-        <!-- 顶部工具栏 -->
-        <Border DockPanel.Dock="Top" Height="40" Padding="8,4"
-                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding RefreshDevicesCommand}"
-                        IsEnabled="{Binding !IsRefreshing}"
-                        ToolTip.Tip="{DynamicResource Device_Refresh}">
-                    <avalonia:MaterialIcon Kind="Refresh" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding ConnectCommand}"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
-                        ToolTip.Tip="{DynamicResource Device_Connect}">
-                    <avalonia:MaterialIcon Kind="LinkVariant" Width="16" Height="16" Foreground="Green" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding DisconnectCommand}"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
-                        ToolTip.Tip="{DynamicResource Device_Disconnect}">
-                    <avalonia:MaterialIcon Kind="LinkOff" Width="16" Height="16" Foreground="Red" />
-                </Button>
-                <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
-                        Margin="4,0" />
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding RebootCommand}"
-                        CommandParameter="system"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
-                        ToolTip.Tip="{DynamicResource Device_Reboot}">
-                    <avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding RebootCommand}"
-                        CommandParameter="bootloader"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
-                        ToolTip.Tip="{DynamicResource Device_RebootBootloader}">
-                    <avalonia:MaterialIcon Kind="FastForward" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding RebootCommand}"
-                        CommandParameter="recovery"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
-                        ToolTip.Tip="{DynamicResource Device_RebootRecovery}">
-                    <avalonia:MaterialIcon Kind="HospitalBoxOutline" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding RebootCommand}"
-                        CommandParameter="edl"
-                        IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
-                        ToolTip.Tip="{DynamicResource Device_RebootEdl}">
-                    <avalonia:MaterialIcon Kind="DownloadOutline" Width="16" Height="16" />
-                </Button>
-                <Border Width="1" Height="20" Background="{DynamicResource BorderBrush}"
-                        Margin="4,0" />
-                <!-- 快速固件操作：命令按选中设备协议启用（CanExecute）。 -->
-                <!-- Quick firmware operations: enabled by the selected device protocol (CanExecute). -->
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding OpenAdbShellCommand}"
-                        ToolTip.Tip="{DynamicResource Device_OpenAdbShell}">
-                    <avalonia:MaterialIcon Kind="Terminal" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding ScreenMirrorCommand}"
-                        ToolTip.Tip="{DynamicResource Device_ScreenMirror}">
-                    <avalonia:MaterialIcon Kind="Cast" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding FastbootReadInfoCommand}"
-                        ToolTip.Tip="{DynamicResource Device_FastbootReadInfo}">
-                    <avalonia:MaterialIcon Kind="InformationOutline" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding QuickFlashCommand}"
-                        CommandParameter="boot"
-                        ToolTip.Tip="{DynamicResource Device_QuickFlash}">
-                    <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding BackupPartitionCommand}"
-                        CommandParameter="boot"
-                        ToolTip.Tip="{DynamicResource Device_BackupPartition}">
-                    <avalonia:MaterialIcon Kind="DatabaseArrowUp" Width="16" Height="16" />
-                </Button>
-                <Button Width="28" Height="28" Padding="0"
-                        Command="{Binding RestorePartitionCommand}"
-                        CommandParameter="boot"
-                        ToolTip.Tip="{DynamicResource Device_RestorePartition}">
-                    <avalonia:MaterialIcon Kind="DatabaseArrowDown" Width="16" Height="16" />
-                </Button>
-                <Button Content="HDC" IsVisible="{Binding SelectedDevice.IsHdc, FallbackValue=False}">
-                    <Button.Flyout>
-                        <MenuFlyout>
-                            <MenuItem Header="{DynamicResource Device_HdcSend}" Command="{Binding HdcOperationCommand}" CommandParameter="Send" />
-                            <MenuItem Header="{DynamicResource Device_HdcReceive}" Command="{Binding HdcOperationCommand}" CommandParameter="Receive" />
-                            <MenuItem Header="{DynamicResource Device_HdcInstall}" Command="{Binding HdcOperationCommand}" CommandParameter="Install" />
-                            <MenuItem Header="{DynamicResource Device_HdcUninstall}" Command="{Binding HdcOperationCommand}" CommandParameter="Uninstall" />
-                            <Separator />
-                            <MenuItem Header="{DynamicResource Device_HdcCancel}" Command="{Binding HdcOperationCancelCommand}" />
-                        </MenuFlyout>
-                    </Button.Flyout>
-                </Button>
-                <TextBlock Text="{Binding StatusText}" VerticalAlignment="Center"
-                           FontSize="12" Opacity="0.7" Margin="8,0" />
-            </StackPanel>
+        <!-- 顶部工具栏：设备会话操作按用途分组。 -->
+        <!-- Top toolbar: device session actions grouped by purpose. -->
+        <Border DockPanel.Dock="Top" Padding="20,6"
+                BorderBrush="{StaticResource DeviceCardBorderBrush}" BorderThickness="0,0,0,1">
+            <!-- 按钮固定宽度、状态文本吃剩余宽度：最小窗口宽度下状态文本截断而不是挤压按钮。 -->
+            <!-- Buttons keep their size and the status text takes the remainder: at the minimum
+                 window width the status trims instead of squeezing the buttons. -->
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding ConnectCommand}"
+                            IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            ToolTip.Tip="{DynamicResource Device_Connect}">
+                        <avalonia:MaterialIcon Kind="LinkVariant" Width="16" Height="16" Foreground="Green" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding DisconnectCommand}"
+                            IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            ToolTip.Tip="{DynamicResource Device_Disconnect}">
+                        <avalonia:MaterialIcon Kind="LinkOff" Width="16" Height="16" Foreground="Red" />
+                    </Button>
+                    <Border Classes="ToolbarDivider" />
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding RebootCommand}"
+                            CommandParameter="system"
+                            IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            ToolTip.Tip="{DynamicResource Device_Reboot}">
+                        <avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding RebootCommand}"
+                            CommandParameter="bootloader"
+                            IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            ToolTip.Tip="{DynamicResource Device_RebootBootloader}">
+                        <avalonia:MaterialIcon Kind="IntegratedCircuit" Width="16" Height="16" />
+                    </Button>
+                    <!-- Fastbootd 是用户空间 fastboot：ADB 走 reboot fastboot，Fastboot 走 reboot-fastboot。 -->
+                    <!-- Fastbootd is userspace fastboot: ADB uses reboot fastboot, Fastboot uses reboot-fastboot. -->
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding RebootCommand}"
+                            CommandParameter="fastbootd"
+                            IsEnabled="{Binding CanRebootToFastbootd}"
+                            ToolTip.Tip="{DynamicResource Device_RebootFastbootd}">
+                        <avalonia:MaterialIcon Kind="Android" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding RebootCommand}"
+                            CommandParameter="recovery"
+                            IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            ToolTip.Tip="{DynamicResource Device_RebootRecovery}">
+                        <avalonia:MaterialIcon Kind="DispensaryBoxOutline" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding RebootCommand}"
+                            CommandParameter="edl"
+                            IsEnabled="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            ToolTip.Tip="{DynamicResource Device_RebootEdl}">
+                        <avalonia:MaterialIcon Kind="DownloadOutline" Width="16" Height="16" />
+                    </Button>
+                    <Border Classes="ToolbarDivider" />
+                    <!-- 快速固件操作：命令按选中设备协议启用（CanExecute）。 -->
+                    <!-- Quick firmware operations: enabled by the selected device protocol (CanExecute). -->
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding OpenAdbShellCommand}"
+                            ToolTip.Tip="{DynamicResource Device_OpenAdbShell}">
+                        <avalonia:MaterialIcon Kind="Terminal" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding ScreenMirrorCommand}"
+                            ToolTip.Tip="{DynamicResource Device_ScreenMirror}">
+                        <avalonia:MaterialIcon Kind="Cast" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding FastbootReadInfoCommand}"
+                            ToolTip.Tip="{DynamicResource Device_FastbootReadInfo}">
+                        <avalonia:MaterialIcon Kind="InformationOutline" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding QuickFlashCommand}"
+                            CommandParameter="boot"
+                            ToolTip.Tip="{DynamicResource Device_QuickFlash}">
+                        <avalonia:MaterialIcon Kind="Flash" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding BackupPartitionCommand}"
+                            CommandParameter="boot"
+                            ToolTip.Tip="{DynamicResource Device_BackupPartition}">
+                        <avalonia:MaterialIcon Kind="DatabaseArrowUp" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceIconButton"
+                            Command="{Binding RestorePartitionCommand}"
+                            CommandParameter="boot"
+                            ToolTip.Tip="{DynamicResource Device_RestorePartition}">
+                        <avalonia:MaterialIcon Kind="DatabaseArrowDown" Width="16" Height="16" />
+                    </Button>
+                    <Button Classes="DeviceActionButton" Content="HDC"
+                            IsVisible="{Binding SelectedDevice.IsHdc, FallbackValue=False}">
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuItem Header="{DynamicResource Device_HdcSend}" Command="{Binding HdcOperationCommand}" CommandParameter="Send" />
+                                <MenuItem Header="{DynamicResource Device_HdcReceive}" Command="{Binding HdcOperationCommand}" CommandParameter="Receive" />
+                                <MenuItem Header="{DynamicResource Device_HdcInstall}" Command="{Binding HdcOperationCommand}" CommandParameter="Install" />
+                                <MenuItem Header="{DynamicResource Device_HdcUninstall}" Command="{Binding HdcOperationCommand}" CommandParameter="Uninstall" />
+                                <Separator />
+                                <MenuItem Header="{DynamicResource Device_HdcCancel}" Command="{Binding HdcOperationCancelCommand}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{Binding StatusText}"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Center" FontSize="12" Opacity="0.65"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding StatusText}" />
+            </Grid>
         </Border>
 
-        <!-- 左右两栏主区域 -->
-        <Grid Margin="0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="304" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
+        <!-- 底部进度条：刷新设备列表期间显示不确定进度（与密钥管理器一致）。 -->
+        <!-- Bottom progress bar: indeterminate while the device list refreshes, as in the key manager. -->
+        <ProgressBar DockPanel.Dock="Bottom" IsIndeterminate="True" IsVisible="{Binding IsRefreshing}" Height="3" />
 
+        <!-- 左右两栏主区域 -->
+        <Grid Margin="20,20,4,16" ColumnDefinitions="300,*" ColumnSpacing="20">
             <!-- ===== 左栏：设备列表 ===== -->
-            <Border Grid.Column="0"
-                    BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
-                <Grid>
+            <Grid Grid.Column="0" RowDefinitions="Auto,*" RowSpacing="10">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{DynamicResource Device_List}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Button Grid.Column="1" Classes="DeviceIconButton"
+                            Command="{Binding RefreshDevicesCommand}"
+                            IsEnabled="{Binding !IsRefreshing}"
+                            ToolTip.Tip="{DynamicResource Device_Refresh}">
+                        <avalonia:MaterialIcon Kind="Refresh" Width="16" Height="16" />
+                    </Button>
+                </Grid>
+
+                <Grid Grid.Row="1">
                     <!-- 空状态提示 -->
                     <StackPanel IsVisible="{Binding HasNoDevices}"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"
                                 Spacing="6">
+                        <avalonia:MaterialIcon Kind="Devices" Width="40" Height="40" Opacity="0.25"
+                                               HorizontalAlignment="Center" />
                         <TextBlock Text="{DynamicResource Device_NoDevices}"
-                                   FontSize="14" Opacity="0.7"
-                                   HorizontalAlignment="Center" />
+                                   Opacity="0.7" HorizontalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220" />
                         <TextBlock Text="{DynamicResource Device_EmptyHint}"
-                                   FontSize="12" Opacity="0.5"
-                                   HorizontalAlignment="Center" />
+                                   FontSize="12" Opacity="0.5" HorizontalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="220" />
                     </StackPanel>
 
                     <!-- 全部设备 -->
-                    <ListBox ItemsSource="{Binding Devices}"
+                    <ListBox Classes="DeviceList"
+                             ItemsSource="{Binding Devices}"
                              SelectedItem="{Binding SelectedDevice, Mode=TwoWay}"
                              IsVisible="{Binding HasNoDevices, Converter={x:Static BoolConverters.Not}}"
-                             Background="Transparent" BorderThickness="0">
+                             Background="Transparent" BorderThickness="0" Padding="0,0,12,0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
                         <ListBox.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:DeviceInfo}">
-                                <StackPanel Spacing="6" Margin="10,8">
-                                    <StackPanel.ContextMenu>
+                                <Border Classes="DeviceEntryCard">
+                                    <Border.ContextMenu>
                                         <ContextMenu>
                                             <MenuItem Header="{DynamicResource Device_Connect}" Click="OnConnectMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_Disconnect}" Click="OnDisconnectMenuClick" />
                                             <Separator />
                                             <MenuItem Header="{DynamicResource Device_Reboot}" Click="OnRebootMenuClick" CommandParameter="system" />
                                             <MenuItem Header="{DynamicResource Device_RebootBootloader}" Click="OnRebootMenuClick" CommandParameter="bootloader" />
+                                            <MenuItem Header="{DynamicResource Device_RebootFastbootd}" IsVisible="{Binding SupportsFastbootd}" Click="OnRebootMenuClick" CommandParameter="fastbootd" />
                                             <MenuItem Header="{DynamicResource Device_RebootRecovery}" Click="OnRebootMenuClick" CommandParameter="recovery" />
                                             <MenuItem Header="{DynamicResource Device_RebootEdl}" Click="OnRebootMenuClick" CommandParameter="edl" />
                                             <Separator />
@@ -197,65 +268,74 @@
                                             <MenuItem Header="{DynamicResource Device_HdcReceive}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Receive" />
                                             <MenuItem Header="{DynamicResource Device_HdcInstall}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Install" />
                                             <MenuItem Header="{DynamicResource Device_HdcUninstall}" IsVisible="{Binding IsHdc}" Click="OnHdcOperationMenuClick" CommandParameter="Uninstall" />
-
                                             <MenuItem Header="{DynamicResource Device_FastbootReadInfo}" Click="OnFastbootReadInfoMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_QuickFlash}" Click="OnQuickFlashMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_BackupPartition}" Click="OnBackupMenuClick" />
                                             <MenuItem Header="{DynamicResource Device_RestorePartition}" Click="OnRestoreMenuClick" />
                                         </ContextMenu>
-                                    </StackPanel.ContextMenu>
-                                    <!-- 序列号 -->
-                                    <TextBlock Text="{Binding Serial}" FontWeight="SemiBold" FontSize="13" />
-                                    <!-- 模式 + 类型徽标 -->
-                                    <StackPanel Orientation="Horizontal" Spacing="6">
-                                        <Border Classes="ModeChip" Background="#1B5E20"
-                                                IsVisible="{Binding HasSystemInfo}">
-                                            <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="White" />
-                                        </Border>
-                                        <Border Classes="ModeChip" Background="#0D47A1"
-                                                IsVisible="{Binding IsFastboot}">
-                                            <TextBlock Text="Fastboot" FontSize="10" Foreground="White" />
-                                        </Border>
-                                        <Border Classes="ModeChip" Background="#E65100"
-                                                IsVisible="{Binding IsEdl}">
-                                            <TextBlock Text="EDL" FontSize="10" Foreground="White" />
-                                        </Border>
-                                        <Border Classes="ModeChip" Background="#4A148C"
-                                                IsVisible="{Binding IsRkdl}">
-                                            <TextBlock Text="RKDL" FontSize="10" Foreground="White" />
-                                        </Border>
-                                        <!-- 链接端口/传输类型 -->
-                                        <Border Classes="ModeChip" Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
-                                                BorderThickness="1">
-                                            <TextBlock Text="{Binding Transport}" FontSize="10"
-                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                        </Border>
+                                    </Border.ContextMenu>
+                                    <StackPanel Spacing="4" VerticalAlignment="Center">
+                                        <!-- 标题：型号（未知时为序列号）+ 模式/传输徽标 -->
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                                            <TextBlock Grid.Column="0" Text="{Binding ListTitle}"
+                                                       FontWeight="Medium" TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center"
+                                                       ToolTip.Tip="{Binding ListTitle}" />
+                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                                <Border Classes="ModeChip" Background="#1B5E20"
+                                                        IsVisible="{Binding HasSystemInfo}">
+                                                    <TextBlock Text="{Binding Mode}" FontSize="10" Foreground="White" />
+                                                </Border>
+                                                <Border Classes="ModeChip" Background="#0D47A1"
+                                                        IsVisible="{Binding IsFastboot}">
+                                                    <TextBlock Text="Fastboot" FontSize="10" Foreground="White" />
+                                                </Border>
+                                                <Border Classes="ModeChip" Background="#E65100"
+                                                        IsVisible="{Binding IsEdl}">
+                                                    <TextBlock Text="EDL" FontSize="10" Foreground="White" />
+                                                </Border>
+                                                <Border Classes="ModeChip" Background="#4A148C"
+                                                        IsVisible="{Binding IsRkdl}">
+                                                    <TextBlock Text="RKDL" FontSize="10" Foreground="White" />
+                                                </Border>
+                                                <!-- 链接端口/传输类型 -->
+                                                <Border Classes="ModeChip"
+                                                        Background="{StaticResource DeviceCardBackgroundBrush}"
+                                                        BorderBrush="{StaticResource DeviceCardBorderBrush}"
+                                                        BorderThickness="1">
+                                                    <TextBlock Text="{Binding Transport}" FontSize="10" />
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+                                        <!-- 副标题：序列号 + 状态 -->
+                                        <TextBlock Text="{Binding ListSubtitle}" FontSize="12" Opacity="0.65"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding DisplayName}" />
                                     </StackPanel>
-                                    <!-- 名称/型号 -->
-                                    <TextBlock Text="{Binding DisplayName}" FontSize="11" Opacity="0.6"
-                                               TextTrimming="CharacterEllipsis" />
-                                </StackPanel>
+                                </Border>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
                 </Grid>
-            </Border>
+            </Grid>
 
             <!-- ===== 右栏：设备详情 ===== -->
             <Grid Grid.Column="1">
                 <!-- 占位提示 -->
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4"
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6"
                             IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNull}}">
-                    <avalonia:MaterialIcon Kind="Devices" Width="48" Height="48" Opacity="0.3"
+                    <avalonia:MaterialIcon Kind="Devices" Width="44" Height="44" Opacity="0.25"
                                            HorizontalAlignment="Center" />
                     <TextBlock Text="{DynamicResource Device_DetailPlaceholder}"
-                               FontSize="13" Opacity="0.5" HorizontalAlignment="Center" />
+                               Opacity="0.5" HorizontalAlignment="Center" />
                 </StackPanel>
 
                 <!-- 详情内容 -->
-                <ScrollViewer IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <StackPanel Margin="16" Spacing="12" MaxWidth="720" HorizontalAlignment="Stretch">
+                <ScrollViewer IsVisible="{Binding SelectedDevice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                              HorizontalScrollBarVisibility="Disabled"
+                              VerticalScrollBarVisibility="Auto" AllowAutoHide="True">
+                    <StackPanel Margin="0,0,16,0" Spacing="12" MaxWidth="720" HorizontalAlignment="Stretch">
+                        <TextBlock Text="{DynamicResource Device_Detail}" FontWeight="SemiBold" />
 
                         <!-- 设备详情（绑定 SelectedDevice） -->
                         <StackPanel Spacing="12" DataContext="{Binding SelectedDevice}">
@@ -263,31 +343,30 @@
                         <!-- 头部：名称 + 徽标 -->
                         <Border Classes="InfoCard">
                             <StackPanel Spacing="8">
-                                <TextBlock Text="{Binding DisplayName}" FontSize="17" FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" />
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Border Classes="ModeChip" CornerRadius="4" Background="#1B5E20"
+                                <TextBlock Text="{Binding DisplayName}" FontSize="15" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding DisplayName}" />
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <Border Classes="ModeChip" Background="#1B5E20"
                                             IsVisible="{Binding HasSystemInfo}">
                                         <TextBlock Text="{Binding Mode}" FontSize="11" Foreground="White" />
                                     </Border>
-                                    <Border Classes="ModeChip" CornerRadius="4" Background="#0D47A1"
+                                    <Border Classes="ModeChip" Background="#0D47A1"
                                             IsVisible="{Binding IsFastboot}">
                                         <TextBlock Text="Fastboot" FontSize="11" Foreground="White" />
                                     </Border>
-                                    <Border Classes="ModeChip" CornerRadius="4" Background="#E65100"
+                                    <Border Classes="ModeChip" Background="#E65100"
                                             IsVisible="{Binding IsEdl}">
                                         <TextBlock Text="EDL" FontSize="11" Foreground="White" />
                                     </Border>
-                                    <Border Classes="ModeChip" CornerRadius="4" Background="#4A148C"
+                                    <Border Classes="ModeChip" Background="#4A148C"
                                             IsVisible="{Binding IsRkdl}">
                                         <TextBlock Text="RKDL" FontSize="11" Foreground="White" />
                                     </Border>
-                                    <Border Classes="ModeChip" CornerRadius="4"
-                                            Background="{DynamicResource ControlFillColorDefaultBrush}"
-                                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    <Border Classes="ModeChip"
+                                            Background="{StaticResource DeviceCardBackgroundBrush}"
+                                            BorderBrush="{StaticResource DeviceCardBorderBrush}"
                                             BorderThickness="1">
-                                        <TextBlock Text="{Binding Transport}" FontSize="11"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                        <TextBlock Text="{Binding Transport}" FontSize="11" />
                                     </Border>
                                     <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.7"
                                                VerticalAlignment="Center" />
@@ -303,8 +382,8 @@
                                       RowSpacing="8">
                                     <TextBlock Grid.Row="0" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_Serial}" />
-                                    <TextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
-                                               Text="{Binding Serial}" />
+                                    <SelectableTextBlock Grid.Row="0" Grid.Column="1" Classes="CardValue"
+                                                         Text="{Binding Serial}" />
 
                                     <TextBlock Grid.Row="1" Grid.Column="0" Classes="CardLabel"
                                                Text="{DynamicResource Device_Brand}" />
@@ -546,7 +625,7 @@
                         </Border>
                         </StackPanel>
 
-                        </StackPanel>
+                    </StackPanel>
                 </ScrollViewer>
             </Grid>
         </Grid>

@@ -357,6 +357,7 @@
     <x:String x:Key="Device_FlashConfirmMessage">Flashing is a risky operation that may brick your device. Continue?</x:String>
     <x:String x:Key="Device_ModeSystem">system</x:String>
     <x:String x:Key="Device_ModeBootloader">bootloader</x:String>
+    <x:String x:Key="Device_ModeFastbootd">fastbootd</x:String>
     <x:String x:Key="Device_ModeRecovery">recovery</x:String>
     <x:String x:Key="Device_ModeEdl">EDL mode</x:String>
 

@@ -11,6 +11,7 @@
     <x:String x:Key="Device_Scanning">Scanning for devices...</x:String>
     <x:String x:Key="Device_Reboot">Reboot</x:String>
     <x:String x:Key="Device_RebootBootloader">Reboot to Bootloader</x:String>
+    <x:String x:Key="Device_RebootFastbootd">Reboot to Fastbootd</x:String>
     <x:String x:Key="Device_RebootRecovery">Reboot to Recovery</x:String>
     <x:String x:Key="Device_RebootEdl">Reboot to EDL</x:String>
     <x:String x:Key="Device_DeviceCount"> device(s) found.</x:String>
@@ -29,6 +30,7 @@
 
     <!-- Device detail two-column layout -->
     <x:String x:Key="Device_DetailPlaceholder">Select a device to view details</x:String>
+    <x:String x:Key="Device_List">Devices</x:String>
     <x:String x:Key="Device_DeviceInfo">Device Information</x:String>
     <x:String x:Key="Device_FastbootInfo">Fastboot Mode Information</x:String>
     <x:String x:Key="Device_EdlInfo">EDL Mode Information</x:String>

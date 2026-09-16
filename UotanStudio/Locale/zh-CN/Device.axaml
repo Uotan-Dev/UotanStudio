@@ -11,6 +11,7 @@
     <x:String x:Key="Device_Scanning">正在扫描设备...</x:String>
     <x:String x:Key="Device_Reboot">重启</x:String>
     <x:String x:Key="Device_RebootBootloader">重启到 Bootloader</x:String>
+    <x:String x:Key="Device_RebootFastbootd">重启到 Fastbootd</x:String>
     <x:String x:Key="Device_RebootRecovery">重启到 Recovery</x:String>
     <x:String x:Key="Device_RebootEdl">重启到 EDL</x:String>
     <x:String x:Key="Device_DeviceCount"> 个设备已发现。</x:String>
@@ -29,6 +30,7 @@
 
     <!-- 设备详情两栏布局 -->
     <x:String x:Key="Device_DetailPlaceholder">选择设备以查看详情</x:String>
+    <x:String x:Key="Device_List">设备列表</x:String>
     <x:String x:Key="Device_DeviceInfo">设备信息</x:String>
     <x:String x:Key="Device_FastbootInfo">Fastboot 模式信息</x:String>
     <x:String x:Key="Device_EdlInfo">EDL 模式信息</x:String>

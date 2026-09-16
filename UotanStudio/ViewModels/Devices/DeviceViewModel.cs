@@ -63,6 +63,7 @@ public partial class DeviceViewModel : ViewModelBase, IDisposable
                 OnPropertyChanged(nameof(DeviceDetail));
                 OnPropertyChanged(nameof(CanOpenAdbShell));
                 OnPropertyChanged(nameof(CanFastbootReadInfo));
+                OnPropertyChanged(nameof(CanRebootToFastbootd));
                 OnPropertyChanged(nameof(CanQuickFlash));
                 OnPropertyChanged(nameof(CanBackupRestore));
                 OnPropertyChanged(nameof(CanScreenMirror));

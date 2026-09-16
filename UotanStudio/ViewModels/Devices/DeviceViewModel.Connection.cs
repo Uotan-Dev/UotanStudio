@@ -144,11 +144,20 @@ public partial class DeviceViewModel
     }
 
     /// <summary>
-    /// <para>异步重启选中设备到指定模式（system/bootloader/recovery/edl）。</para>
-    /// Asynchronously reboots the selected device to the specified mode
-    /// (system/bootloader/recovery/edl).
+    /// <para>是否可重启选中设备到 fastbootd。ADB 走 <c>reboot fastboot</c>，Fastboot 走
+    /// <c>reboot-fastboot</c>；EDL/RKDL/HDC 没有该模式。</para>
+    /// Whether the selected device can reboot into fastbootd: ADB uses <c>reboot fastboot</c>,
+    /// Fastboot uses <c>reboot-fastboot</c>, while EDL/RKDL/HDC have no such mode.
     /// </summary>
-    /// <param name="mode">重启模式（system/bootloader/recovery/edl）。</param>
+    public bool CanRebootToFastbootd => SelectedDevice?.Protocol
+        is DeviceProtocolKind.Adb or DeviceProtocolKind.Fastboot;
+
+    /// <summary>
+    /// <para>异步重启选中设备到指定模式（system/bootloader/fastbootd/recovery/edl）。</para>
+    /// Asynchronously reboots the selected device to the specified mode
+    /// (system/bootloader/fastbootd/recovery/edl).
+    /// </summary>
+    /// <param name="mode">重启模式（system/bootloader/fastbootd/recovery/edl）。</param>
     [RelayCommand]
     private async Task RebootAsync(string? mode)
     {
@@ -163,6 +172,7 @@ public partial class DeviceViewModel
         {
             "system" => LanguageService.Instance.GetString("Device_ModeSystem"),
             "bootloader" => LanguageService.Instance.GetString("Device_ModeBootloader"),
+            "fastbootd" => LanguageService.Instance.GetString("Device_ModeFastbootd"),
             "recovery" => LanguageService.Instance.GetString("Device_ModeRecovery"),
             "edl" => LanguageService.Instance.GetString("Device_ModeEdl"),
             _ => mode

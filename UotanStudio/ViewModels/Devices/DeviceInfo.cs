@@ -67,6 +67,7 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
             {
                 Device.State = value;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(ListSubtitle));
             }
         }
     }
@@ -98,7 +99,13 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
     public string Model
     {
         get;
-        set => SetProperty(ref field, value);
+        set
+        {
+            if (SetProperty(ref field, value))
+            {
+                OnPropertyChanged(nameof(ListTitle));
+            }
+        }
     } = string.Empty;
 
     /// <summary>Android 版本（ro.build.version.release）。 Android version.</summary>
@@ -112,6 +119,18 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
     public string DisplayName => string.IsNullOrEmpty(Model)
         ? $"{Serial} ({State})"
         : $"{Serial} - {Model} ({State})";
+
+    /// <summary>
+    /// <para>设备列表条目标题：优先型号，型号未知时回退序列号。</para>
+    /// Device list entry title: the model when known, otherwise the serial.
+    /// </summary>
+    public string ListTitle => string.IsNullOrEmpty(Model) ? Serial : Model;
+
+    /// <summary>
+    /// <para>设备列表条目副标题：序列号与状态的组合，供条目第二行显示。</para>
+    /// Device list entry subtitle: serial plus state for the entry's second row.
+    /// </summary>
+    public string ListSubtitle => string.IsNullOrEmpty(State) ? Serial : $"{Serial} · {State}";
 
     /// <summary>链接端口/地址信息（USB 标识、TCP host:port、串口路径）。 Link/port info.</summary>
     public string LinkPort => Device.Transport switch
@@ -142,6 +161,12 @@ public partial class DeviceInfo(DetectedDevice device, DeviceViewModel? owner = 
 
     /// <summary>是否为 Fastboot 设备。 Whether the device is in Fastboot mode.</summary>
     public bool IsFastboot => Device.Protocol == DeviceProtocolKind.Fastboot;
+
+    /// <summary>
+    /// <para>是否支持重启到 fastbootd（ADB 或 Fastboot 协议）。</para>
+    /// Whether rebooting into fastbootd is supported (ADB or Fastboot protocol).
+    /// </summary>
+    public bool SupportsFastbootd => IsAdb || IsFastboot;
 
     /// <summary>是否为 EDL 设备。 Whether the device is in EDL mode.</summary>
     public bool IsEdl => Device.Protocol == DeviceProtocolKind.Edl;

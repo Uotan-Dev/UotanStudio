@@ -516,7 +516,10 @@ public sealed class DeviceMonitorService : IDisposable
             "recovery" => "recovery",
             "edl" => "edl",
             "sideload" => "sideload",
+            // fastboot 与 fastbootd 都表示用户空间 fastboot：adb reboot fastboot 进入 fastbootd。
+            // Both fastboot and fastbootd mean userspace fastboot: adb reboot fastboot enters fastbootd.
             "fastboot" => "fastboot",
+            "fastbootd" => "fastboot",
             _ => "now",
         };
         var fastbootTarget = mode switch
@@ -524,6 +527,10 @@ public sealed class DeviceMonitorService : IDisposable
             "bootloader" => "bootloader",
             "recovery" => "recovery",
             "edl" => "edl",
+            // fastboot 协议下 reboot-fastboot 即重启到 fastbootd（用户空间 fastboot）。
+            // Over the fastboot protocol, reboot-fastboot is the reboot into fastbootd (userspace fastboot).
+            "fastboot" => "fastboot",
+            "fastbootd" => "fastboot",
             _ => null,
         };
 
