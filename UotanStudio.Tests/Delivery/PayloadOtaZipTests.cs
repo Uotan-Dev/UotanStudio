@@ -54,7 +54,7 @@ public sealed class PayloadOtaZipTests : IDisposable
         Assert.DoesNotContain(paths, p => Path.GetFileName(p) is "payload.bin" or "payload_properties.txt" or "recovery.zip");
         var zipPath = Path.Combine(plan.OutputDirectory, "ota.zip");
         using var zip = ZipFile.OpenRead(zipPath);
-        Assert.Equal(new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata" }, zip.Entries.Select(e => e.FullName));
+        Assert.Equal(new[] { "payload.bin", "payload_properties.txt", "META-INF/com/android/metadata", "META-INF/com/google/android/update-binary" }, zip.Entries.Select(e => e.FullName));
         using var reader = new StreamReader(zip.GetEntry("META-INF/com/android/metadata")!.Open());
         var metadata = (await reader.ReadToEndAsync(TestContext.Current.CancellationToken))
             .Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split('=', 2)).ToDictionary(p => p[0], p => p[1]);

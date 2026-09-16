@@ -3,6 +3,7 @@ using System.IO.Hashing;
 using UotanStudio.Firmware.CrossCutting.Compress;
 using UotanStudio.Firmware.CrossCutting.Compress.Compressors;
 using UotanStudio.Firmware.SharedKernel.Streams;
+using UotanStudio.Tests.Comm.TestDoubles;
 using Xunit;
 
 namespace UotanStudio.Tests.Firmware;
@@ -45,6 +46,28 @@ public class CompressionRoundTripTests
     {
         var compressed = CompressionService.Compress("hello gzip"u8.ToArray(), CompressionFormat.Gzip);
         Assert.Equal(CompressionFormat.Gzip, CompressionFormats.Detect(compressed));
+    }
+
+    [Fact]
+    public void CompressFile_WithProgress_ReportsMonotonicBytesUpToSourceLength()
+    {
+        var payload = BuildPayload(256 * 1024);
+        using var temp = new TempDirectory();
+        var inputPath = temp.WriteBytes("input.bin", payload);
+        var outputPath = Path.Combine(temp.Path, "output.br");
+
+        var progress = new SyncProgress<(long Processed, long Total)>();
+        CompressionService.CompressFile(inputPath, outputPath, CompressionFormat.Brotli,
+            progress: progress,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.True(File.Exists(outputPath));
+        var reports = progress.Reports;
+        Assert.NotEmpty(reports);
+        Assert.Equal(payload.Length, reports[^1].Total);
+        Assert.Equal(payload.Length, reports[^1].Processed);
+        for (var i = 1; i < reports.Count; i++)
+            Assert.True(reports[i].Processed >= reports[i - 1].Processed, "Progress must not decrease.");
     }
 
     [Fact]

@@ -46,6 +46,25 @@ public class DatBrTests
     }
 
     [Fact]
+    public void Write_WithProgress_ReportsMonotonicBytesUpToSourceLength()
+    {
+        var image = BuildMixedImage(64, 7);
+        using var temp = new TempDirectory();
+        var imagePath = temp.WriteBytes("input.img", image);
+        var datPath = Path.Combine(temp.Path, "output.new.dat");
+        var listPath = Path.Combine(temp.Path, "output.transfer.list");
+
+        var progress = new SyncProgress<(long Processed, long Total)>();
+        DatWriter.Write(imagePath, datPath, listPath, new DatWriteOptions(), progress);
+
+        Assert.NotEmpty(progress.Reports);
+        Assert.Equal(image.Length, progress.Reports[^1].Total);
+        Assert.Equal(image.Length, progress.Reports[^1].Processed);
+        for (var i = 1; i < progress.Reports.Count; i++)
+            Assert.True(progress.Reports[i].Processed >= progress.Reports[i - 1].Processed, "Progress must not decrease.");
+    }
+
+    [Fact]
     public void RoundTrip_MaxCommandRangeBlocks_SplitsNewCommandsAndRoundTrips()
     {
         var image = BuildMixedImage(40, 5);
