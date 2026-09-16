@@ -65,6 +65,7 @@ public partial class CompareView : UserControl
 
     private readonly List<ColumnVisuals> _columnVisuals = [];
     private readonly List<GridSplitter> _columnDividers = [];
+    private readonly List<ColumnDefinition> _columnDefinitions = [];
     private CompareViewModel? _vm;
     private bool _syncing;
     private bool _syncingSelection;
@@ -233,6 +234,7 @@ public partial class CompareView : UserControl
         ColumnGrid.ColumnDefinitions.Clear();
         _columnVisuals.Clear();
         _columnDividers.Clear();
+        _columnDefinitions.Clear();
 
         var columnTemplate = (DataTemplate)Resources["CompareColumnTemplate"]!;
         var dividerTemplate = (ControlTemplate)Resources["CompareDividerTemplate"]!;
@@ -262,10 +264,14 @@ public partial class CompareView : UserControl
                 _columnDividers.Add(splitter);
             }
 
-            ColumnGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star)
+            var columnDefinition = new ColumnDefinition(1, GridUnitType.Star)
             {
                 MinWidth = MinColumnWidth
-            });
+            };
+            ColumnGrid.ColumnDefinitions.Add(columnDefinition);
+            // 只记录真正的列定义：列间隔（分割线与拖动条所在的格子）不能被当成列一起重置宽度。
+            // Only the real column definitions are recorded: the gap cells (divider plus splitter) must not be resized as columns.
+            _columnDefinitions.Add(columnDefinition);
 
             var container = new ContentControl
             {
@@ -298,6 +304,23 @@ public partial class CompareView : UserControl
             splitter.IsEnabled = draggable;
             splitter.IsHitTestVisible = draggable;
             splitter.Cursor = draggable ? new Cursor(StandardCursorType.SizeWestEast) : Cursor.Default;
+        }
+    }
+
+    /// <summary>
+    /// <para>把各列宽度恢复成等分：开始对比时两栏宽度被锁定，此时回到等分状态（用户此前手动拖动过的宽度不再保留）。</para>
+    /// Resets every column to an equal share: entering a comparison locks the pane widths, and this puts them back to an equal split (a
+    /// width the user dragged earlier is no longer kept).
+    /// </summary>
+    private void ResetColumnWidths()
+    {
+        // 只重置内容列：列间隔那几列是固定宽度（1px 分割线 + 可拖动条），把它们也设成星号会吃掉大块宽度，
+        // 看起来就是"两列没有填满"。
+        // Only the content columns are reset: the gap columns keep their fixed width (the divider line plus the draggable strip), otherwise
+        // they would swallow a large share of the width and the panes would look like they do not fill.
+        foreach (var definition in _columnDefinitions)
+        {
+            definition.Width = new GridLength(1, GridUnitType.Star);
         }
     }
 
@@ -734,6 +757,12 @@ public partial class CompareView : UserControl
         if (string.Equals(e.PropertyName, nameof(CompareViewModel.IsComparing), StringComparison.Ordinal))
         {
             UpdateDividerInteractivity();
+            // 进入对比时把两列恢复等分（对比中宽度被锁定，因此这一步就是"开始对比即等分"）。
+            // Entering a comparison restores an equal split (the widths are locked while comparing, so this is the "equal split on start" step).
+            if (DataContext is CompareViewModel comparing && comparing.IsComparing)
+            {
+                ResetColumnWidths();
+            }
         }
 
         // 数据加载/模式切换后重新挂接滚动容器：Rows/Mode/IsComparing 变化意味着列表已填充或

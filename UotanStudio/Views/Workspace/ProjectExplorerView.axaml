@@ -132,11 +132,6 @@
                                 <icons:MaterialIcon Kind="PackageDown" />
                             </MenuItem.Icon>
                         </MenuItem>
-                        <MenuItem Header="{DynamicResource Explorer_StartCompare}" Click="OnStartCompare">
-                            <MenuItem.Icon>
-                                <icons:MaterialIcon Kind="FileCompare" />
-                            </MenuItem.Icon>
-                        </MenuItem>
                         <Separator />
                         <MenuItem Header="{DynamicResource Menu_Cut}" Click="OnCut">
                             <MenuItem.Icon>
@@ -171,6 +166,11 @@
                         <MenuItem Header="{DynamicResource Explorer_OpenInFileExplorer}" Click="OnOpenInFileExplorer">
                             <MenuItem.Icon>
                                 <icons:MaterialIcon Kind="FolderOpenOutline" />
+                            </MenuItem.Icon>
+                        </MenuItem>
+                        <MenuItem Header="{DynamicResource Explorer_OpenInMultiColumnBrowser}" Click="OnOpenInCompareView">
+                            <MenuItem.Icon>
+                                <icons:MaterialIcon Kind="ViewColumnOutline" />
                             </MenuItem.Icon>
                         </MenuItem>
                         <MenuItem Header="{DynamicResource Explorer_OpenInTerminal}" IsVisible="{Binding IsDirectory}" Click="OnOpenInTerminal">

@@ -199,7 +199,7 @@
 							<avalonia:MaterialIcon Kind="CogOutline" Width="16" Height="16" />
 						</MenuItem.Icon>
 					</MenuItem>
-					<MenuItem Header="{DynamicResource Tab_Compare}" Command="{Binding MenuVM.GoToCompareCommand}">
+					<MenuItem Header="{DynamicResource Menu_MultiColumnFileBrowser}" Command="{Binding MenuVM.GoToCompareCommand}">
 						<MenuItem.Icon>
 							<avalonia:MaterialIcon Kind="FileCompare" Width="16" Height="16" />
 						</MenuItem.Icon>

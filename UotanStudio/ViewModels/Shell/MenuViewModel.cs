@@ -999,7 +999,9 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void GoToCompare()
     {
-        WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage());
+        // 「视图」菜单的多列文件浏览器入口：无论当前是否已有浏览器，都新开一个标签页。
+        // The View menu's multi-column file browser entry always opens a new tab, whether or not one already exists.
+        WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage { OpenInNewTab = true });
     }
 
     // ===== 窗口 / Window =====

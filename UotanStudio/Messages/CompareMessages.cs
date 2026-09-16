@@ -8,6 +8,13 @@ public sealed class OpenCompareRequestMessage
 {
     /// <summary><para>选中的路径；为空时仅打开或聚焦文档。</para>The selected path; null only opens or focuses the document.</summary>
     public string? Path { get; init; }
+
+    /// <summary>
+    /// <para>是否强制新开一个标签页（「视图」菜单的多列文件浏览器入口使用）：即使已经存在浏览器也再开一个。</para>
+    /// Whether a new tab must be created (used by the View menu's multi-column file browser entry): a browser tab is opened even when one
+    /// already exists.
+    /// </summary>
+    public bool OpenInNewTab { get; init; }
 }
 
 /// <summary>

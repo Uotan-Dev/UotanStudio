@@ -129,15 +129,6 @@ public partial class ProjectExplorerView : UserControl
         OpenWith(EditorOpenMode.Text);
     }
 
-    private void OnStartCompare(object? sender, RoutedEventArgs e)
-    {
-        if (sender is MenuItem { DataContext: ExplorerNode { IsPlaceholder: false } node })
-        {
-            ProjectTree.SelectedItem = node;
-            WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage { Path = node.Path });
-        }
-    }
-
     private void OnOpenAsLog(object? sender, RoutedEventArgs e) => OpenWith(EditorOpenMode.Log);
 
     private void OnOpenAsHex(object? sender, RoutedEventArgs e)
@@ -294,6 +285,17 @@ public partial class ProjectExplorerView : UserControl
             Process.Start(new ProcessStartInfo { FileName = target, UseShellExecute = true });
         }
         catch (Exception ex) { LogService.Instance.Write(LogLevel.Error, "Explorer", $"Open in explorer failed: {ex.Message}"); }
+    }
+
+    /// <summary>
+    /// <para>在多列文件浏览器（原对比文档）中打开选中的文件或目录：作为文件列载入，不自动开始对比。</para>
+    /// Opens the selected file or folder in the multi-column file browser (the former compare document): it loads as a file column
+    /// without starting a comparison.
+    /// </summary>
+    private void OnOpenInCompareView(object? sender, RoutedEventArgs e)
+    {
+        if (ProjectTree.SelectedItem is not ExplorerNode node || node.IsPlaceholder) return;
+        WeakReferenceMessenger.Default.Send(new OpenCompareRequestMessage { Path = node.Path });
     }
 
     private void OnOpenInTerminal(object? sender, RoutedEventArgs e)

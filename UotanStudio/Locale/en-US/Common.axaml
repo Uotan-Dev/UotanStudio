@@ -113,6 +113,7 @@
     <x:String x:Key="Tab_Log">Log</x:String>
     <x:String x:Key="Tab_Settings">Settings</x:String>
     <x:String x:Key="Tab_Compare">Compare</x:String>
+    <x:String x:Key="Menu_MultiColumnFileBrowser">Multi-Column File Browser</x:String>
     <x:String x:Key="Tab_ScreenMirror">Mirror</x:String>
     <x:String x:Key="ScreenMirror_Preparing">Preparing mirroring...</x:String>
     <x:String x:Key="ScreenMirror_Installing">Installing scrcpy server...</x:String>
@@ -248,10 +249,10 @@
     <x:String x:Key="Explorer_NewFile">New File</x:String>
     <x:String x:Key="Explorer_NewFolder">New Folder</x:String>
     <x:String x:Key="Explorer_Unpack">Unpack/Extract</x:String>
-    <x:String x:Key="Explorer_StartCompare">Start Comparison</x:String>
     <x:String x:Key="Explorer_Rename">Rename</x:String>
     <x:String x:Key="Explorer_CopyFullPath">Copy Full Path</x:String>
     <x:String x:Key="Explorer_OpenInFileExplorer">Open in File Explorer</x:String>
+    <x:String x:Key="Explorer_OpenInMultiColumnBrowser">Open in Multi-Column File Browser</x:String>
     <x:String x:Key="Explorer_OpenInTerminal">Open in Terminal</x:String>
     <x:String x:Key="Explorer_NodeProject">Node Project</x:String>
     <x:String x:Key="Explorer_ConfirmDeleteTitle">Confirm Delete</x:String>

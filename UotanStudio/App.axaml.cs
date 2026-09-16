@@ -246,8 +246,10 @@ public partial class App : Application
     /// Opens or focuses the workspace compare document and adds the explorer selection when provided.
     /// </summary>
     private async void OnOpenCompare(object recipient, OpenCompareRequestMessage message)
-        => await RunCompareRequestAsync("Open compare failed", compare => message.Path is { } path
-            ? compare.AddComparisonPathAsync(path) : Task.CompletedTask);
+        => await RunCompareRequestAsync(
+            "Open compare failed",
+            compare => message.Path is { } path ? compare.AddComparisonPathAsync(path) : Task.CompletedTask,
+            openInNewTab: message.OpenInNewTab);
 
     /// <summary>
     /// <para>响应投屏请求：打开投屏文档并对指定设备启动会话。</para>
@@ -335,8 +337,19 @@ public partial class App : Application
     }
 
     private Task RunCompareRequestAsync(string error, Func<UotanStudio.ViewModels.Compare.CompareViewModel, Task> operation)
-        => RunMainRequestAsync(error, main => main.WorkspaceVM.OpenCompareDocument() is { } compare
-            ? operation(compare) : Task.CompletedTask);
+        => RunCompareRequestAsync(error, operation, openInNewTab: false);
+
+    private Task RunCompareRequestAsync(
+        string error,
+        Func<UotanStudio.ViewModels.Compare.CompareViewModel, Task> operation,
+        bool openInNewTab)
+        => RunMainRequestAsync(error, main =>
+        {
+            var compare = openInNewTab
+                ? main.WorkspaceVM.OpenNewCompareDocument()
+                : main.WorkspaceVM.OpenCompareDocument();
+            return compare is { } document ? operation(document) : Task.CompletedTask;
+        });
 
     private void ApplyTheme(ThemeMode themeMode)
     {

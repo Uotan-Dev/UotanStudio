@@ -113,6 +113,7 @@
     <x:String x:Key="Tab_Log">日志</x:String>
     <x:String x:Key="Tab_Settings">设置</x:String>
     <x:String x:Key="Tab_Compare">对比</x:String>
+    <x:String x:Key="Menu_MultiColumnFileBrowser">多列文件浏览器</x:String>
     <x:String x:Key="Tab_ScreenMirror">投屏</x:String>
     <x:String x:Key="ScreenMirror_Preparing">正在准备投屏...</x:String>
     <x:String x:Key="ScreenMirror_Installing">正在安装 scrcpy 服务端...</x:String>
@@ -248,10 +249,10 @@
     <x:String x:Key="Explorer_NewFile">新建文件</x:String>
     <x:String x:Key="Explorer_NewFolder">新建文件夹</x:String>
     <x:String x:Key="Explorer_Unpack">解包/解压</x:String>
-    <x:String x:Key="Explorer_StartCompare">开始对比</x:String>
     <x:String x:Key="Explorer_Rename">重命名</x:String>
     <x:String x:Key="Explorer_CopyFullPath">复制完整路径</x:String>
     <x:String x:Key="Explorer_OpenInFileExplorer">在文件资源管理器中打开</x:String>
+    <x:String x:Key="Explorer_OpenInMultiColumnBrowser">在多列文件浏览器中打开</x:String>
     <x:String x:Key="Explorer_OpenInTerminal">在终端打开</x:String>
     <x:String x:Key="Explorer_NodeProject">节点项目</x:String>
     <x:String x:Key="Explorer_ConfirmDeleteTitle">确认删除</x:String>
