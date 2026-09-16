@@ -43,8 +43,13 @@ public sealed class ContainerProgressTests : IDisposable
             using (var output = File.Create(container)) builder.AddPartition("system", a).AddPartition("vendor", b).Build(output);
             if (kind == "zip-payload")
             {
+                // 真实全量 OTA 的 payload.bin 在 ZIP 内均为 STORED（未压缩），以 NoCompression 构造，
+                // 触发原址直读路径：进度 Total 即分区提取字节总量（系统 8192 + vendor 16384 = 24576）。
+                // Full-OTA payload.bin is stored uncompressed (STORED); build with NoCompression so the
+                // in-place read path applies, where the progress total equals the extraction byte count.
                 var zipPath = container + ".zip";
-                using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create)) zip.CreateEntryFromFile(container, "payload.bin");
+                using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+                    zip.CreateEntryFromFile(container, "payload.bin", CompressionLevel.NoCompression);
                 container = zipPath;
             }
         }

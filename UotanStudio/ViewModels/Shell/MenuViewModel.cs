@@ -393,14 +393,16 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
 
             if (form.SelectedPartitions.Length > 0)
             {
-                foreach (var partition in form.SelectedPartitions)
-                {
-                    var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
-                    var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
-                        containerPath, [partition],
-                        fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
-                    extractedPaths.AddRange(result.OutputPaths);
-                }
+                // 一次性批量提取全部勾选分区：单次打开容器并并行提取，进度条全程连续，
+                // 避免逐分区重复重开容器、重置进度条。
+                // Extract all selected partitions in one call: the container is opened once and the
+                // partitions extract in parallel under a single continuous progress bar, avoiding one
+                // container reopen and progress reset per partition.
+                var byteProgress = window.BeginByteProgress(LanguageService.Instance.GetString("NewProject_Extracting"));
+                var result = await Task.Run(() => ContainerEntryExtractor.ExtractAsync(
+                    containerPath, form.SelectedPartitions,
+                    fromPayloadOnly: form.ContainerKind == ContainerKind.Zip, outputDirectory: outputDirectory, byteProgress: byteProgress, cancellationToken: cancellationToken)).ConfigureAwait(true);
+                extractedPaths.AddRange(result.OutputPaths);
             }
 
             LogService.Instance.Write(LogLevel.Info, "Images",

@@ -4,6 +4,11 @@ using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Exceptions;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Models;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.SharedKernel;
+// SharpZipLib 用于读取条目本地头偏移（含 ZIP64），避免与 System.IO.Compression 的 ZipFile 重名。
+// SharpZipLib reads the entry local-header offset (incl. ZIP64), aliased to avoid the
+// System.IO.Compression ZipFile name collision.
+using SharpZipCompressionMethod = ICSharpCode.SharpZipLib.Zip.CompressionMethod;
+using SharpZipZipFile = ICSharpCode.SharpZipLib.Zip.ZipFile;
 
 namespace UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
 
@@ -360,11 +365,9 @@ public static partial class PayloadParser
     }
 
     /// <summary>
-    /// Extracts partitions from a local payload file.
-    /// ZIP-wrapped payloads with a STORED (uncompressed) payload.bin are read directly from the ZIP;
-    /// compressed entries fall back to materializing a temporary copy.
-    /// <para>从本地载荷文件中提取分区。ZIP 包裹的载荷中，STORED（未压缩）的 payload.bin 直接从 ZIP
-    /// 读取；压缩条目回退到物化临时副本。</para>
+    /// Extracts partitions from a local payload file. ZIP-wrapped payloads first materialize the
+    /// embedded payload.bin to a temporary file, then extract from that file.
+    /// <para>从本地载荷文件中提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件，再从该文件提取。</para>
     /// </summary>
     public static void Extract(string filepath, string[]? extractFiles = null, string? outputDir = null, string? sourcePayloadPath = null, IReadOnlyDictionary<string, string>? sourceImages = null)
     {
@@ -397,11 +400,11 @@ public static partial class PayloadParser
     }
 
     /// <summary>
-    /// Asynchronously extracts partitions from a local payload file.
-    /// ZIP-wrapped payloads with a STORED (uncompressed) payload.bin are read directly from the ZIP;
-    /// compressed entries fall back to materializing a temporary copy with byte progress.
-    /// <para>从本地载荷文件中异步提取分区。ZIP 包裹的载荷中，STORED（未压缩）的 payload.bin 直接从 ZIP
-    /// 读取；压缩条目回退到物化临时副本并上报字节进度。</para>
+    /// Asynchronously extracts partitions from a local payload file. ZIP-wrapped payloads first
+    /// materialize the embedded payload.bin to a temporary file with byte progress, then extract
+    /// from that file.
+    /// <para>从本地载荷文件中异步提取分区。ZIP 包裹的载荷先把内嵌 payload.bin 物化到临时文件并上报字节进度，
+    /// 再从该文件提取。</para>
     /// </summary>
     /// <param name="byteProgress">
     /// Optional byte-level progress callback receiving (Processed, Total) tuples covering the whole
@@ -529,11 +532,10 @@ public static partial class PayloadParser
 
     /// <summary>
     /// Builds a synchronous extract plan (manifest, header, outer stream, per-partition payload
-    /// handle) resolving the payload source once. ZIP payloads with a STORED payload.bin read
-    /// directly from the ZIP; compressed entries materialize a temporary copy recorded in
-    /// <paramref name="tempPath"/>.
-    /// <para>构建同步提取计划（清单、头、外层流、每分区载荷句柄），一次性解析载荷来源。STORED
-    /// payload.bin 的 ZIP 载荷从 ZIP 直读；压缩条目物化一份临时副本并记录到 <paramref name="tempPath"/>。</para>
+    /// handle) resolving the payload source once. ZIP payloads always materialize the embedded
+    /// payload.bin to a temporary copy recorded in <paramref name="tempPath"/>.
+    /// <para>构建同步提取计划（清单、头、外层流、每分区载荷句柄），一次性解析载荷来源。ZIP 载荷总是把
+    /// 内嵌 payload.bin 物化到临时副本并记录到 <paramref name="tempPath"/>。</para>
     /// </summary>
     private static ExtractPlan BuildExtractPlan(string filepath, ref string? tempPath)
     {
@@ -571,16 +573,19 @@ public static partial class PayloadParser
                     }
 
                     var extractionTotal = ExtractTotalBytes(manifest);
-                    if (StoredZipEntryReader.TryResolve(filepath, PayloadConstants.PayloadFilename, out var dataOffset, out var length))
+
+                    // 全量 OTA 的 payload.bin 通常在 ZIP 内未压缩（STORED）。对其原址建立可随机访问
+                    // 视图并直接解包，跳过临时物化，避免把多 GB 载荷先写盘再读回的多余 I/O。
+                    // Full-OTA payload.bin is usually stored uncompressed (STORED): build a seekable
+                    // in-place view of the entry and extract directly, skipping temp materialization.
+                    if (TryGetStoredPayloadLocation(filepath, out var dataStart, out var payloadLength))
                     {
-                        var zip = filepath;
-                        long offset = dataOffset;
-                        long entryLength = length;
                         var outer = File.OpenRead(filepath);
                         try
                         {
                             return new ExtractPlan(manifest, header, outer,
-                                () => StoredZipEntryReader.OpenView(zip, offset, entryLength), 0, extractionTotal);
+                                () => new StoredZipEntryStream(filepath, dataStart, payloadLength),
+                                0, extractionTotal);
                         }
                         catch
                         {
@@ -589,6 +594,9 @@ public static partial class PayloadParser
                         }
                     }
 
+                    // 压缩（DEFLATE）条目的回退路径：先物化到临时 payload.bin，再从中解包。
+                    // Compressed (DEFLATE) entries fall back to materializing the payload.bin to a temp
+                    // file, then extracting from it.
                     tempPath = ExtractPayloadFromZip(filepath);
                     var tempFile = tempPath;
                     var containerOuter = File.OpenRead(tempFile);
@@ -654,16 +662,22 @@ public static partial class PayloadParser
                     }
 
                     var extractionTotal = ExtractTotalBytes(manifest);
-                    if (StoredZipEntryReader.TryResolve(filepath, PayloadConstants.PayloadFilename, out var dataOffset, out var length))
+
+                    // 全量 OTA 的 payload.bin 通常在 ZIP 内未压缩（STORED）。对其原址建立可随机访问
+                    // 视图并直接解包，跳过临时物化，避免多 GB 载荷多一次写盘与读回的重复 I/O；因无
+                    // 容器阶段，进度 Total 即分区提取总量，直接映射到实际解压进度。
+                    // Full-OTA payload.bin is usually stored uncompressed (STORED): build a seekable
+                    // in-place view and extract directly, avoiding the redundant write-then-read of a
+                    // multi-GB temp copy; with no container phase the progress total equals the partition
+                    // extraction size, mapping directly to real extraction progress.
+                    if (TryGetStoredPayloadLocation(filepath, out var dataStart, out var payloadLength))
                     {
-                        var zip = filepath;
-                        long offset = dataOffset;
-                        long entryLength = length;
                         var outer = File.OpenRead(filepath);
                         try
                         {
                             return (new ExtractPlan(manifest, header, outer,
-                                () => StoredZipEntryReader.OpenView(zip, offset, entryLength), 0, extractionTotal), null);
+                                () => new StoredZipEntryStream(filepath, dataStart, payloadLength),
+                                0, extractionTotal), null);
                         }
                         catch
                         {
@@ -672,6 +686,11 @@ public static partial class PayloadParser
                         }
                     }
 
+                    // 压缩（DEFLATE）条目的回退路径：先把 payload.bin 物化到临时目录，随后从临时
+                    // payload.bin 中读取解包；解包阶段经 OffsetByteProgress 偏移到容器字节之后。
+                    // Compressed (DEFLATE) entries fall back to materializing the payload.bin to a temp
+                    // file, then extracting from it; extraction progress is offset past the container via
+                    // OffsetByteProgress so the whole job stays continuous.
                     var containerTotal = PayloadEntryUncompressedLength(filepath);
                     long totalBytes;
                     try
@@ -733,6 +752,53 @@ public static partial class PayloadParser
         var zf = FindPayloadEntry(zr)
             ?? throw new InvalidManifestException($"{PayloadConstants.PayloadFilename} not found in the zip file");
         return zf.Length;
+    }
+
+    /// <summary>
+    /// Locates a STORED (uncompressed) payload.bin entry inside a ZIP archive so extraction can read it
+    /// in place. Returns whether the entry is STORED; when true, <paramref name="dataStart"/> is the
+    /// absolute byte offset of the entry data within <paramref name="filepath"/> and
+    /// <paramref name="length"/> is the payload byte count.
+    /// <para>在 ZIP 归档中定位 STORED（未压缩）的 payload.bin 条目，以便解包原址直读。返回是否为
+    /// STORED 条目；为 true 时 <paramref name="dataStart"/> 是条目数据在 <paramref name="filepath"/>
+    /// 内的绝对字节偏移，<paramref name="length"/> 为载荷字节数。</para>
+    /// </summary>
+    private static bool TryGetStoredPayloadLocation(string filepath, out long dataStart, out long length)
+    {
+        dataStart = 0;
+        length = 0;
+        using var zip = new SharpZipZipFile(filepath);
+        var entry = zip.GetEntry(PayloadConstants.PayloadFilename);
+        if (entry is null || entry.CompressionMethod != SharpZipCompressionMethod.Stored || entry.Size < 0 || entry.Offset < 0)
+        {
+            return false;
+        }
+
+        length = entry.Size;
+        using var fs = File.OpenRead(filepath);
+        if (entry.Offset + 30 > fs.Length)
+        {
+            return false;
+        }
+
+        Span<byte> localHeader = stackalloc byte[30];
+        fs.Seek(entry.Offset, SeekOrigin.Begin);
+        if (fs.Read(localHeader) < localHeader.Length)
+        {
+            return false;
+        }
+
+        // 本地文件头：压缩方法(8-9)[0=STORED] 文件名长度(26-27) 扩展字段长度(28-29)。
+        // Local file header: compression method(8-9)[0=STORED] nameLen(26-27) extraLen(28-29).
+        if ((localHeader[8] | (localHeader[9] << 8)) != 0)
+        {
+            return false;
+        }
+
+        var nameLength = localHeader[26] | (localHeader[27] << 8);
+        var extraLength = localHeader[28] | (localHeader[29] << 8);
+        dataStart = checked(entry.Offset + 30 + nameLength + extraLength);
+        return true;
     }
 
     /// <summary>

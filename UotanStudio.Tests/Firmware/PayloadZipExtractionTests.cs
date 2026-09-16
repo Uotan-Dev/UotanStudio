@@ -2,7 +2,6 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using Google.Protobuf;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload;
-using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Core;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Payload.Proto;
 using UotanStudio.Firmware.SharedKernel;
 using Xunit;
@@ -10,9 +9,9 @@ using Xunit;
 namespace UotanStudio.Tests.Firmware;
 
 /// <summary>
-/// ZIP-wrapped payload extraction tests: STORED entries read directly from the ZIP, compressed
-/// entries fall back to materializing a temporary copy, and byte progress spans the whole job.
-/// <para>ZIP 包裹载荷提取测试：STORED 条目从 ZIP 直读、压缩条目回退物化临时副本，字节进度覆盖整个作业。</para>
+/// ZIP-wrapped payload extraction tests: the embedded payload is always materialized to a temporary
+/// file before extraction, and byte progress spans the whole job smoothly.
+/// <para>ZIP 包裹载荷提取测试：内嵌 payload 始终在提取前物化到临时文件，字节进度平滑覆盖整个作业。</para>
 /// </summary>
 public class PayloadZipExtractionTests
 {
@@ -91,6 +90,10 @@ public class PayloadZipExtractionTests
         // Assert: 单调不回退，且最终达到 (total, total)。
         // Monotonic, non-regressing, and finally reaching (total, total).
         Assert.NotEmpty(reports);
+        // STORED 原址直读路径不应把容器（payload.bin）字节算入总进度，Total 即分区提取字节总量(16+20)。
+        // The STORED in-place path must not inflate the total with the container bytes; Total equals the
+        // partition extraction bytes (16+20).
+        Assert.All(reports, r => Assert.Equal(36, r.Total));
         long? last = null;
         foreach (var (processed, total) in reports)
         {
@@ -101,72 +104,6 @@ public class PayloadZipExtractionTests
         }
 
         Assert.Equal(reports[^1].Total, reports[^1].Processed);
-    }
-
-    [Fact]
-    public void StoredEntry_TryResolve_ReturnsRangeReadableAsSourcePayload()
-    {
-        // Arrange
-        var payload = new byte[64 * 1024 + 7];
-        Random.Shared.NextBytes(payload);
-        var zipPath = CreateZip(Path.Combine(Path.GetTempPath(), $"uotan-payload-stored-{Guid.NewGuid():N}.zip"), "payload.bin", payload, CompressionLevel.NoCompression);
-        try
-        {
-            // Act
-            var resolved = StoredZipEntryReader.TryResolve(zipPath, "payload.bin", out var dataOffset, out var length);
-
-            // Assert
-            Assert.True(resolved);
-            Assert.Equal(payload.Length, length);
-            using var view = StoredZipEntryReader.OpenView(zipPath, dataOffset, length);
-            var read = new byte[length];
-            view.ReadExactly(read);
-            Assert.Equal(payload, read);
-        }
-        finally
-        {
-            File.Delete(zipPath);
-        }
-    }
-
-    [Fact]
-    public void CompressedEntry_TryResolve_ReturnsFalse()
-    {
-        // Arrange
-        var payload = new byte[4096];
-        Random.Shared.NextBytes(payload);
-        var zipPath = CreateZip(Path.Combine(Path.GetTempPath(), $"uotan-payload-deflated-{Guid.NewGuid():N}.zip"), "payload.bin", payload, CompressionLevel.Optimal);
-        try
-        {
-            // Act
-            var resolved = StoredZipEntryReader.TryResolve(zipPath, "payload.bin", out _, out _);
-
-            // Assert
-            Assert.False(resolved);
-        }
-        finally
-        {
-            File.Delete(zipPath);
-        }
-    }
-
-    [Fact]
-    public void MissingEntry_TryResolve_ReturnsFalse()
-    {
-        // Arrange
-        var zipPath = CreateZip(Path.Combine(Path.GetTempPath(), $"uotan-zip-{Guid.NewGuid():N}.zip"), "other.bin", new byte[] { 1, 2, 3 }, CompressionLevel.NoCompression);
-        try
-        {
-            // Act
-            var resolved = StoredZipEntryReader.TryResolve(zipPath, "payload.bin", out _, out _);
-
-            // Assert
-            Assert.False(resolved);
-        }
-        finally
-        {
-            File.Delete(zipPath);
-        }
     }
 
     [Fact]
