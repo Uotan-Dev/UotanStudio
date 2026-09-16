@@ -380,6 +380,9 @@
     <x:String x:Key="Image_FsVerifyingImage">Verifying original image</x:String>
     <x:String x:Key="Image_FsVerifyingFiles">Verifying extracted files</x:String>
     <x:String x:Key="Image_FsReadingMetadata">Reading file attributes</x:String>
+    <x:String x:Key="Image_FsBuildingImage">Building image</x:String>
+    <x:String x:Key="Image_FsWritingDat">Writing DAT</x:String>
+    <x:String x:Key="Image_FsCompressing">Compressing</x:String>
     <x:String x:Key="Progress_ProcessedStats">Processed {0} · Speed {2}</x:String>
     <x:String x:Key="Delivery_ProgressChecking">Checking inputs</x:String>
     <x:String x:Key="Delivery_ProgressSuper">Building Super</x:String>

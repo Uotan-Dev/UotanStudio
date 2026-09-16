@@ -11,7 +11,8 @@ internal static class RegisteredFirmwareFormats
 
     /// <summary>Packs a metadata-selected directory with the existing exact-name matching contract.</summary>
     internal static async Task<FirmwareOpResult> PackDirectoryAsync(
-        string format, string source, string output, CancellationToken cancellationToken = default, bool throwIfUnsupported = false)
+        string format, string source, string output, CancellationToken cancellationToken = default,
+        bool throwIfUnsupported = false, IProgress<FileSystemByteProgress>? progress = null)
     {
         FirmwareFormatRegistry.RegisterAll();
         if (FindByName(format) is not IWritableFormatHandler writer)
@@ -20,7 +21,7 @@ internal static class RegisteredFirmwareFormats
             if (throwIfUnsupported) throw new InvalidDataException(error);
             return FirmwareOpResult.Fail(error);
         }
-        var result = await writer.PackAsync(source, output, cancellationToken).ConfigureAwait(false);
+        var result = await writer.PackAsync(source, output, progress, cancellationToken).ConfigureAwait(false);
         return new FirmwareOpResult { Success = result.Success, Summary = result.Summary };
     }
 }

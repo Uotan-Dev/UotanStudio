@@ -26,7 +26,7 @@ internal sealed record ImageOperationPaths(string Source, bool IsDirectory, stri
             var path = Path.GetFullPath(IsDirectory ? Source : Path.Combine(parent, Name));
             if (!string.Equals(Path.GetDirectoryName(path), Path.TrimEndingDirectorySeparator(parent),
                     StringComparison.OrdinalIgnoreCase)
-                || new[] { "images", "output", ".uotan", ".deleted" }.Contains(Name, StringComparer.OrdinalIgnoreCase))
+                || new[] { "images", "output", "delivery", ".uotan", ".deleted" }.Contains(Name, StringComparer.OrdinalIgnoreCase))
                 throw new IOException("The unpacked directory must be a non-reserved child of the sub-project root.");
             return path;
         }

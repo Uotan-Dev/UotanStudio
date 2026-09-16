@@ -108,7 +108,8 @@ internal partial class ImageViewModel
                     else
                     {
                         Directory.CreateDirectory(paths.OutputRoot);
-                        var result = await Task.Run(() => ImageOutputService.Build(paths, operation, brotliLevel));
+                        var byteProgress = CreateFileSystemProgress(entry.DisplayName);
+                        var result = await Task.Run(() => ImageOutputService.Build(paths, operation, brotliLevel, byteProgress));
                         if (result.Success) succeeded++;
                         else failed++;
                         LogService.Instance.Write(result.Success ? LogLevel.Info : LogLevel.Error, "Images", result.Summary);

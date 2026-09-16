@@ -1,19 +1,20 @@
 using UotanStudio.Firmware.BoundedContexts.FileSystem.Sparse;
 using UotanStudio.Firmware.BoundedContexts.OtaDelta.Dat;
+using UotanStudio.Firmware.SharedKernel;
 
 namespace UotanStudio.Services.Firmware;
 
 /// <summary>Builds image and Android DAT outputs on disk. 在磁盘上构建镜像与 Android DAT 产物。</summary>
 internal static class ImageOutputService
 {
-    internal static FirmwareOpResult Build(ImageOperationPaths paths, string operation, int brotliLevel)
+    internal static FirmwareOpResult Build(ImageOperationPaths paths, string operation, int brotliLevel, IProgress<FileSystemByteProgress>? progress = null)
     {
         if (operation is not ("img" or "dat" or "br")) throw new ArgumentOutOfRangeException(nameof(operation));
         Directory.CreateDirectory(paths.OutputRoot);
         if (operation == "img")
         {
             if (!Directory.Exists(paths.UnpackedDirectory)) throw new DirectoryNotFoundException(paths.UnpackedDirectory);
-            var built = PackingService.BuildImage(paths.UnpackedDirectory, Path.Combine(paths.OutputRoot, paths.Name + ".img"));
+            var built = PackingService.BuildImage(paths.UnpackedDirectory, Path.Combine(paths.OutputRoot, paths.Name + ".img"), progress: progress);
             return new FirmwareOpResult { Success = built.Success, Summary = built.Summary };
         }
 
@@ -27,7 +28,7 @@ internal static class ImageOutputService
             if (paths.IsDirectory)
             {
                 input = Path.Combine(staging, "image.img");
-                var built = PackingService.BuildImage(paths.UnpackedDirectory, input);
+                var built = PackingService.BuildImage(paths.UnpackedDirectory, input, progress: progress);
                 if (!built.Success) return FirmwareOpResult.Fail(built.Summary);
             }
             if (new SparseFormatHandler().CanHandle(input))
@@ -41,13 +42,15 @@ internal static class ImageOutputService
             }
             var dat = Path.Combine(staging, paths.Name + ".new.dat");
             var transfer = Path.Combine(staging, paths.Name + ".transfer.list");
-            DatWriter.Write(input, dat, transfer);
+            var writing = FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.WritingDat);
+            DatWriter.Write(input, dat, transfer, new DatWriteOptions(), writing);
             if (operation == "br")
             {
                 var compressed = dat + ".br";
                 UotanStudio.Firmware.CrossCutting.Compress.CompressionService.CompressFile(dat, compressed,
                     UotanStudio.Firmware.CrossCutting.Compress.CompressionFormat.Brotli,
-                    new() { Level = brotliLevel });
+                    new() { Level = brotliLevel },
+                    FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.Compressing));
                 dat = compressed;
             }
             PublishOutputs(paths.OutputRoot, staging, dat, transfer);

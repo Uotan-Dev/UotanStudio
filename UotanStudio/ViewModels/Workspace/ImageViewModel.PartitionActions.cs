@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.Input;
 using UotanStudio.Services;
+using UotanStudio.Services.Devices;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Flash;
 using UotanStudio.Services.Projects;
@@ -251,7 +252,7 @@ internal partial class ImageViewModel
     /// <see cref="FlashService.FlashImageAsync"/>, a single-partition failure does not stop the rest,
     /// and progress/results are reported to the status text.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanFlashSelected))]
     private Task FlashSelectedAsync(ImageEntryViewModel? image = null) => RunExclusiveAsync(() => FlashSelectedCoreAsync(image));
 
     private async Task FlashSelectedCoreAsync(ImageEntryViewModel? clicked)
@@ -268,6 +269,12 @@ internal partial class ImageViewModel
         if (device is null)
         {
             LogService.Instance.Write(LogLevel.Warn, "Images", "Flash selected aborted: no device selected  选中文件刷入中止：未选中设备");
+            return;
+        }
+
+        if (device.Protocol != DeviceProtocolKind.Fastboot)
+        {
+            LogService.Instance.Write(LogLevel.Warn, "Images", "Flash selected aborted: selected device is not fastboot  选中文件刷入中止：当前选中设备非 fastboot");
             return;
         }
 
@@ -320,6 +327,16 @@ internal partial class ImageViewModel
             LogService.Instance.Write(LogLevel.Error, "Images", $"Flash selected failed: {ex.Message}  选中文件刷入失败：{ex.Message}");
         }
     }
+
+    /// <summary>
+    /// <para>「刷入选中文件」命令是否可用：仅当当前选中设备为 Fastboot 协议时才可执行，
+    /// 以此作为按钮禁用的判定条件。</para>
+    /// Whether the "flash selected" command is enabled: it can only run when the currently
+    /// selected device uses the Fastboot protocol, which drives the button's enabled state.
+    /// </summary>
+    private bool CanFlashSelected(ImageEntryViewModel? image)
+        => DeviceViewModel.Instance?.SelectedDevice is { } d
+           && d.Protocol == DeviceProtocolKind.Fastboot;
 
     /// <summary>Builds DAT output for the clicked or checked entries. 为右键或勾选条目构建 DAT。</summary>
     [RelayCommand]

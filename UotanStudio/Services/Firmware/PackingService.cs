@@ -20,7 +20,8 @@ internal static class PackingService
     public static (bool Success, string Summary) BuildImage(
         string sourceDirectory,
         string outputPath,
-        ProjectSettingViewModel? settings = null)
+        ProjectSettingViewModel? settings = null,
+        IProgress<FileSystemByteProgress>? progress = null)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -29,15 +30,38 @@ internal static class PackingService
             using var metadataScope = RepackMetadata.UseContext(
                 UotanStudio.Services.Projects.ProjectContextService.Instance.CaptureMetadataContext(sourceDirectory));
             var metadata = RepackMetadata.Read(sourceDirectory);
+            // 文件系统镜像重建上报真实字节进度；其他元数据分发分支按源目录估算做阶段式上报。
+            // Filesystem image rebuilds report real byte progress; other metadata-dispatch branches
+            // fall back to a stage-based estimate over the source directory size.
+            var imageProgress = FileSystemByteProgress.ForStage(progress, FileSystemWorkStage.BuildingImage);
+            settings ??= ProjectSettingViewModel.Instance;
             if (metadata is not null)
             {
                 if (!metadata.CanPackDirectory) return (false, metadata.PackingNotes);
-                var result = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath)
+                // 打包设置面板的稀疏/压缩等参数覆盖解包产出的元数据（仅文件系统镜像）。
+                // Let the packing-settings panel override the unpacked metadata for filesystem images.
+                var estimated = EstimateSourceBytes(sourceDirectory);
+                imageProgress.Report((0, estimated));
+                var focused = settings is not null && metadata.FormatName is "EXT4" or "EROFS";
+                if (focused)
+                {
+                    // 打包设置面板选择的目标格式覆盖原文件格式（如 EROFS → EXT4）。
+                    // The target format chosen in the packing-settings panel overrides the source
+                    // format (e.g. EROFS → EXT4), instead of always reusing the metadata format.
+                    var targetFormat = settings!.TypeEXT4 ? "EXT4" : "EROFS";
+                    using var overrides = RepackMetadata.UsePackingOverrides(BuildOverrideOptions(settings, targetFormat));
+                    var overridden = RegisteredFirmwareFormats.PackDirectoryAsync(targetFormat, sourceDirectory, outputPath, progress: progress)
+                        .GetAwaiter().GetResult();
+                    imageProgress.Report((estimated, estimated));
+                    return (overridden.Success, overridden.Summary);
+                }
+
+                var result = RegisteredFirmwareFormats.PackDirectoryAsync(metadata.FormatName, sourceDirectory, outputPath, progress: progress)
                     .GetAwaiter().GetResult();
+                imageProgress.Report((estimated, estimated));
                 return (result.Success, result.Summary);
             }
 
-            settings ??= ProjectSettingViewModel.Instance;
             if (settings is null)
             {
                 return (false, "Packing settings not available  打包设置不可用");
@@ -45,10 +69,10 @@ internal static class PackingService
 
             if (settings.TypeEXT4)
             {
-                return BuildExt4(sourceDirectory, outputPath, settings, sw);
+                return BuildExt4(sourceDirectory, outputPath, settings, sw, imageProgress);
             }
 
-            return BuildErofs(sourceDirectory, outputPath, settings, sw);
+            return BuildErofs(sourceDirectory, outputPath, settings, sw, imageProgress);
         }
         catch (Exception ex)
         {
@@ -56,11 +80,42 @@ internal static class PackingService
         }
     }
 
+    /// <summary>Estimates the source directory byte total as the progress denominator.</summary>
+    /// <summary>以源目录文件大小之和作为进度分母的估算值。</summary>
+    private static long EstimateSourceBytes(string sourceDirectory)
+    {
+        long total = 0;
+        foreach (var file in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+        {
+            try { total += new FileInfo(file).Length; }
+            catch (IOException) { }
+        }
+        return total == 0 ? 1 : total;
+    }
+
+    /// <summary>
+    /// Maps packing-settings panel values to option overrides for a filesystem image.
+    /// <para>将打包设置面板的值映射为文件系统镜像的选项覆盖。</para>
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> BuildOverrideOptions(ProjectSettingViewModel settings, string format)
+    {
+        return format == "EXT4" ? new Dictionary<string, string>
+        {
+            ["EnableSparse"] = settings.FormatSPARSE ? "1" : "0",
+            ["Ext4Compress"] = settings.EXT4Compress ? "1" : "0",
+        } : new Dictionary<string, string>
+        {
+            ["ErofsAlgorithm"] = settings.EROFSLZ4HC ? "lz4hc" : "lz4",
+            ["ErofsCompressionLevel"] = settings.EROFSComGrade.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+    }
+
     private static (bool Success, string Summary) BuildExt4(
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel settings,
-        System.Diagnostics.Stopwatch sw)
+        System.Diagnostics.Stopwatch sw,
+        IProgress<(long Processed, long Total)>? progress)
     {
         var options = new Ext4Options
         {
@@ -73,7 +128,7 @@ internal static class PackingService
             $"{(settings.FormatSPARSE ? "sparse" : "raw")})  " +
             $"正在构建 EXT4 镜像（{(settings.EXT4Compress ? "压缩" : "未压缩")}，{(settings.FormatSPARSE ? "稀疏" : "原始")}）");
 
-        Ext4Builder.Build(sourceDirectory, outputPath, options);
+        Ext4Builder.Build(sourceDirectory, outputPath, options, progress);
         sw.Stop();
 
         var size = new FileInfo(outputPath).Length;
@@ -87,7 +142,8 @@ internal static class PackingService
         string sourceDirectory,
         string outputPath,
         ProjectSettingViewModel settings,
-        System.Diagnostics.Stopwatch sw)
+        System.Diagnostics.Stopwatch sw,
+        IProgress<(long Processed, long Total)>? progress)
     {
         var options = new ErofsOptions
         {
@@ -102,7 +158,7 @@ internal static class PackingService
             $"正在构建 EROFS 镜像（算法={options.Algorithm}，级别={options.CompressionLevel}）");
 
         var builder = new ErofsBuilder();
-        builder.Build(sourceDirectory, outputPath, options);
+        builder.Build(sourceDirectory, outputPath, options, progress);
         sw.Stop();
 
         var size = new FileInfo(outputPath).Length;

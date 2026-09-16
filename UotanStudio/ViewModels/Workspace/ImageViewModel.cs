@@ -1,12 +1,16 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.Messaging;
 using Dock.Model.Mvvm.Controls;
 using UotanStudio.Messages;
 using UotanStudio.Services;
+using UotanStudio.Services.Devices;
 using UotanStudio.Services.Firmware;
 using UotanStudio.Services.Projects;
+using UotanStudio.ViewModels.Devices;
 
 namespace UotanStudio.ViewModels.Workspace;
 
@@ -200,7 +204,31 @@ internal partial class ImageViewModel : Tool
         // 注册跨会话操作历史重建工厂，使重启后可恢复撤销栈。
         // Register the cross-session history reconstructor so the undo stack can be restored after restart.
         OperationHistoryService.ReconstructOperation = ReconstructOperation;
+
+        // 「刷入选中文件」仅当选中 fastboot 设备时可用；设备接入/断开与选中变化时刷新命令可用性。
+        // "Flash selected" is enabled only for a selected fastboot device; refresh command availability
+        // when the device list or the current selection changes.
+        var deviceVm = DeviceViewModel.EnsureInstance();
+        ((INotifyPropertyChanged)deviceVm).PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DeviceViewModel.SelectedDevice))
+            {
+                RefreshFlashSelectedEnablement();
+            }
+        };
+        // DevicesChanged 在后台线程触发；命令的 CanExecuteChanged 会触达 UI 控件，必须回到 UI 线程再刷新。
+        // DevicesChanged fires on a background thread; the command's CanExecuteChanged reaches UI controls,
+        // so the refresh must be marshalled back to the UI thread.
+        DeviceMonitorService.Instance.DevicesChanged += (_, _) => RefreshFlashSelectedEnablement();
     }
+
+    /// <summary>
+    /// <para>在 UI 线程上刷新「刷入选中文件」命令的可用状态，避免后台线程直接修改控件状态触发异常。</para>
+    /// Refreshes the "flash selected" command's enabled state on the UI thread to avoid mutating
+    /// control state from a background thread.
+    /// </summary>
+    private void RefreshFlashSelectedEnablement()
+        => Dispatcher.UIThread.Post(() => FlashSelectedCommand.NotifyCanExecuteChanged());
 
     /// <summary>
     /// <para>响应工程上下文变更消息：打开工程时异步扫描 <c>images/</c> 目录并注册已知镜像格式，
