@@ -336,6 +336,33 @@
 					   VerticalAlignment="Center" Margin="16 0 12 0" TextTrimming="CharacterEllipsis"
 					   IsHitTestVisible="False" />
 			<Menu Grid.Column="3" x:Name="DeviceSelectorMenu" VerticalAlignment="Center" Margin="0,0,4,0">
+				<!-- 重启下拉框：与设备管理器同 5 个重启目标。菜单项是纯命令项（ToggleType 默认 None，
+				     不绑定 IsChecked/IsSelected），点击即执行，任何一项都不会保持选中或打勾外观。 -->
+				<!-- Reboot dropdown: the same five targets as the device manager. The items are plain
+				     command entries (ToggleType defaults to None, no IsChecked/IsSelected binding), so a
+				     click executes immediately and no item ever keeps a selected or checked look. -->
+				<MenuItem x:Name="RebootSelector" Height="28" Padding="8,2"
+						  IsEnabled="{Binding DeviceVM.HasSelectedDevice}"
+						  ToolTip.Tip="{DynamicResource Device_Reboot}"
+						  AutomationProperties.Name="{DynamicResource Device_Reboot}">
+					<MenuItem.Header>
+						<Grid ColumnDefinitions="16,12" ColumnSpacing="6">
+							<avalonia:MaterialIcon Kind="Restart" Width="16" Height="16" />
+							<avalonia:MaterialIcon Grid.Column="1" Kind="ChevronDown" Width="12" Height="12" />
+						</Grid>
+					</MenuItem.Header>
+					<MenuItem Header="{DynamicResource Device_Reboot}"
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="system" />
+					<MenuItem Header="{DynamicResource Device_RebootBootloader}"
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="bootloader" />
+					<MenuItem Header="{DynamicResource Device_RebootFastbootd}"
+							  IsEnabled="{Binding DeviceVM.CanRebootToFastbootd}"
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="fastbootd" />
+					<MenuItem Header="{DynamicResource Device_RebootRecovery}"
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="recovery" />
+					<MenuItem Header="{DynamicResource Device_RebootEdl}"
+							  Command="{Binding DeviceVM.RebootCommand}" CommandParameter="edl" />
+				</MenuItem>
 				<MenuItem x:Name="DeviceSelector" Height="28" Padding="8,2"
 						  ToolTip.Tip="{DynamicResource Device_Select}"
 						  AutomationProperties.Name="{DynamicResource Device_Select}">
