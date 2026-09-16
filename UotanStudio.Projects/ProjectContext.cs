@@ -19,6 +19,12 @@ public sealed record SubProjectContext(
     /// <summary>State owned by this sub-project, independent of the active selection.</summary>
     public string StateDirectory => Path.Combine(RootPath, ".uotan");
 
+    /// <summary>
+    /// Delivery output directory for this sub-project.
+    /// <para>该子项目用于存放交付输出的 <c>delivery/</c> 目录。</para>
+    /// </summary>
+    public string DeliveryDirectory => Path.Combine(RootPath, "delivery");
+
     /// <summary>Filesystem and firmware metadata owned by this sub-project.</summary>
     public string MetadataRoot => Path.Combine(StateDirectory, "metadata");
 }
@@ -68,8 +74,10 @@ public sealed class ProjectContext
 
 
     /// <summary>
-    /// Node project file path (<c>RootDirectory/&lt;SolutionName&gt;.uotannode</c>); <c>null</c> when no solution is open.
-    /// <para>节点项目文件路径（<c>RootDirectory/&lt;SolutionName&gt;.uotannode</c>）；未打开解决方案时为 <c>null</c>。</para>
+    /// Node project file path — lives inside the sub-project whose name equals the solution name,
+    /// falling back to the first sub-project; <c>null</c> when no sub-project exists.
+    /// <para>节点项目文件路径——位于「名为解决方案名的子项目，否则第一个子项目」文件夹内；
+    /// 无子项目时为 <c>null</c>。</para>
     /// </summary>
     public string? NodeProjectPath { get; private set; }
 
@@ -147,9 +155,8 @@ public sealed class ProjectContext
         }
 
         CurrentSolutionPath = Path.GetFullPath(solutionPath);
-        RootDirectory = Path.ChangeExtension(CurrentSolutionPath, null);
-        SolutionName = Path.GetFileName(RootDirectory);
-        NodeProjectPath = Path.Combine(RootDirectory, SolutionName + ".uotannode");
+        RootDirectory = Path.GetFullPath(Path.GetDirectoryName(CurrentSolutionPath)!);
+        SolutionName = Path.GetFileNameWithoutExtension(CurrentSolutionPath);
         Directory.CreateDirectory(RootDirectory);
 
         // Build sub-project list from snapshot or by scanning the root directory
@@ -163,7 +170,7 @@ public sealed class ProjectContext
                 var fwPath = Path.Combine(RootDirectory, dto.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                 if (!File.Exists(fwPath)) continue;
                 var subRoot = Path.GetDirectoryName(Path.GetFullPath(fwPath))!;
-                if (!ProjectValidation.IsSubProjectDirectory(RootDirectory, subRoot)) continue;
+                if (!ProjectValidation.IsDirectSubProjectDirectory(RootDirectory, subRoot)) continue;
                 subProjects.Add(new SubProjectContext(
                     dto.Name,
                     subRoot,
@@ -174,9 +181,16 @@ public sealed class ProjectContext
         }
         else if (snapshot is null)
         {
-            foreach (var directory in Directory.EnumerateDirectories(RootDirectory))
+            // Fallback scan: only a directory directly under the solution root that owns a *.uotanfw
+            // forms a sub-project. Directories nested inside another sub-project (or reserved folders)
+            // are skipped so a stray inner scaffold is never registered as an independent sub-project.
+            var candidates = Directory.EnumerateDirectories(RootDirectory)
+                .Where(directory => !IsReservedDirectory(directory)
+                    && (File.GetAttributes(directory) & FileAttributes.ReparsePoint) == 0)
+                .ToArray();
+            foreach (var directory in candidates)
             {
-                if (IsReservedDirectory(directory) || (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) continue;
+                if (candidates.Any(other => IsStrictlyWithinDirectory(directory, other))) continue;
                 foreach (var fwFile in Directory.EnumerateFiles(directory, "*.uotanfw"))
                     subProjects.Add(new(Path.GetFileNameWithoutExtension(fwFile), directory, fwFile,
                         Path.Combine(directory, "images"), Path.Combine(directory, "output")));
@@ -185,11 +199,25 @@ public sealed class ProjectContext
 
         SubProjects = subProjects;
         ActiveSubProject = subProjects.FirstOrDefault();
+        // The single node project is owned by the sub-project whose name equals the solution name,
+        // falling back to the first sub-project.
+        var nodeOwnerRoot = subProjects.FirstOrDefault(s => string.Equals(s.Name, SolutionName, StringComparison.OrdinalIgnoreCase))?.RootPath
+            ?? subProjects.FirstOrDefault()?.RootPath;
+        NodeProjectPath = nodeOwnerRoot is null ? null : Path.Combine(nodeOwnerRoot, SolutionName + ".uotannode");
         Changed?.Invoke();
     }
 
+    /// <summary>Whether <paramref name="candidate"/> is strictly inside <paramref name="parent"/>.</summary>
+    private static bool IsStrictlyWithinDirectory(string candidate, string parent)
+    {
+        if (string.Equals(Path.GetFullPath(candidate), Path.GetFullPath(parent), StringComparison.OrdinalIgnoreCase))
+            return false;
+        var parentRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(parent)) + Path.DirectorySeparatorChar;
+        return Path.GetFullPath(candidate).StartsWith(parentRoot, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsReservedDirectory(string path)
-        => new[] { "images", "output", ".uotan", ".deleted", ".git" }.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
+        => new[] { "images", "output", "delivery", ".uotan", ".deleted", ".git" }.Contains(Path.GetFileName(path), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Closes the current solution, clearing all state.

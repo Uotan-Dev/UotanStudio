@@ -4,9 +4,9 @@ using Xunit;
 namespace UotanStudio.Tests.Projects;
 
 /// <summary>
-/// Verifies the sub-project layout guard: a sub-project root may be the solution root itself (flat
-/// layout) or a nested directory below it; each sub-project owns its state directory.
-/// 验证子项目布局守卫：子项目根可以是解决方案根本身（扁平布局），也可以是其下的嵌套目录，
+/// Verifies the sub-project layout guard: a sub-project root must be a nested directory below the
+/// solution root, never the solution root itself; each sub-project owns its state directory.
+/// 验证子项目布局守卫：子项目根必须是解决方案根下的嵌套目录，不得为解决方案根本身，
 /// 每个子项目独立持有状态目录。
 /// </summary>
 public sealed class SubProjectLayoutGuardTests : IDisposable
@@ -16,12 +16,10 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
     public SubProjectLayoutGuardTests() => Directory.CreateDirectory(_root);
 
     [Fact]
-    public void SnapshotReference_RootLevelFirmware_IsKept()
+    public void SnapshotReference_RootLevelFirmware_IsSkipped()
     {
-        var solutionDir = Path.Combine(_root, "sol");
-        Directory.CreateDirectory(solutionDir);
         var solution = Path.Combine(_root, "sol.uotan");
-        File.WriteAllText(Path.Combine(solutionDir, "flat.uotanfw"), "{}");
+        File.WriteAllText(Path.Combine(_root, "flat.uotanfw"), "{}");
 
         var context = new ProjectContext();
         context.OpenSolution(solution, new SolutionSnapshot
@@ -31,20 +29,15 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
             SubProjects = [new() { Name = "flat", RelativePath = "flat.uotanfw" }]
         });
 
-        // 扁平布局：默认子项目与解决方案根共享目录，根级 .uotanfw 引用有效。
-        // Flat layout: the default sub-project shares the solution root, so a root-level
-        // .uotanfw reference is valid.
-        Assert.Equal("flat", Assert.Single(context.SubProjects).Name);
-        Assert.Equal(solutionDir, Assert.Single(context.SubProjects).RootPath);
+        Assert.Empty(context.SubProjects);
     }
 
     [Fact]
     public void SnapshotReference_NestedFirmware_IsKept()
     {
-        var solutionDir = Path.Combine(_root, "sol");
-        Directory.CreateDirectory(Path.Combine(solutionDir, "nested"));
+        Directory.CreateDirectory(Path.Combine(_root, "nested"));
         var solution = Path.Combine(_root, "sol.uotan");
-        File.WriteAllText(Path.Combine(solutionDir, "nested", "nested.uotanfw"), "{}");
+        File.WriteAllText(Path.Combine(_root, "nested", "nested.uotanfw"), "{}");
 
         var context = new ProjectContext();
         context.OpenSolution(solution, new SolutionSnapshot
@@ -60,10 +53,8 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
     [Fact]
     public void UnsupportedSolutionVersion_IsRejected()
     {
-        var solutionDir = Path.Combine(_root, "sol");
-        Directory.CreateDirectory(solutionDir);
         var solution = Path.Combine(_root, "sol.uotan");
-        File.WriteAllText(Path.Combine(solutionDir, "legacy.uotanfw"), "{}");
+        File.WriteAllText(Path.Combine(_root, "legacy.uotanfw"), "{}");
 
         var context = new ProjectContext();
         Assert.Throws<InvalidDataException>(() => context.OpenSolution(solution, new SolutionSnapshot
@@ -76,27 +67,25 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
     [Fact]
     public void FallbackScan_FindsNested_SkipsRootLevelAndReservedDirectories()
     {
-        var solutionDir = Path.Combine(_root, "sol");
-        Directory.CreateDirectory(Path.Combine(solutionDir, "device"));
-        Directory.CreateDirectory(Path.Combine(solutionDir, "device", "images"));
-        Directory.CreateDirectory(Path.Combine(solutionDir, ".uotan"));
+        Directory.CreateDirectory(Path.Combine(_root, "device", "images"));
+        Directory.CreateDirectory(Path.Combine(_root, ".uotan"));
         var solution = Path.Combine(_root, "sol.uotan");
-        File.WriteAllText(Path.Combine(solutionDir, "top.uotanfw"), "{}");
-        File.WriteAllText(Path.Combine(solutionDir, "device", "device.uotanfw"), "{}");
+        File.WriteAllText(Path.Combine(_root, "top.uotanfw"), "{}");
+        File.WriteAllText(Path.Combine(_root, "device", "device.uotanfw"), "{}");
         // 保留目录内的 fw 文件不构成子项目（如备份/镜像工作目录）。
         // A fw file inside a reserved directory does not form a sub-project.
-        File.WriteAllText(Path.Combine(solutionDir, ".uotan", "ghost.uotanfw"), "{}");
+        File.WriteAllText(Path.Combine(_root, ".uotan", "ghost.uotanfw"), "{}");
 
         var context = new ProjectContext();
         context.OpenSolution(solution);
 
         var sub = Assert.Single(context.SubProjects);
         Assert.Equal("device", sub.Name);
-        Assert.Equal(Path.Combine(solutionDir, "device"), sub.RootPath);
+        Assert.Equal(Path.Combine(_root, "device"), sub.RootPath);
     }
 
     [Fact]
-    public async Task AddSubProject_IntoSolutionRoot_SucceedsInFlatLayout()
+    public async Task AddSubProject_IntoSolutionRoot_IsAborted()
     {
         var session = CreateSession(out var workspace);
         var solution = Path.Combine(_root, "sol.uotan");
@@ -106,12 +95,9 @@ public sealed class SubProjectLayoutGuardTests : IDisposable
 
         await session.AddSubProjectAsync(fwPath, cancellationToken: TestContext.Current.CancellationToken);
 
-        // 扁平布局：根级子项目与默认子项目共享解决方案根目录，允许创建。
-        // Flat layout: a root-level sub-project shares the solution root with the default
-        // sub-project, so creating it is allowed.
-        Assert.Equal(2, session.Context.SubProjects.Count);
-        Assert.True(File.Exists(fwPath));
-        Assert.NotEmpty(workspace.Events);
+        Assert.Single(session.Context.SubProjects);
+        Assert.False(File.Exists(fwPath));
+        Assert.Empty(workspace.Events);
     }
 
     [Fact]

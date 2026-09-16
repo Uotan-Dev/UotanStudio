@@ -125,14 +125,15 @@ public sealed partial class ProjectSession
         var solutionName = target.SolutionName ?? Path.GetFileNameWithoutExtension(path);
         var rootDir = target.RootDirectory
             ?? Path.Combine(Path.GetDirectoryName(path) ?? ".", solutionName);
+        var subProjectDir = Path.Combine(rootDir, solutionName);
         var nodePath = target.NodeProjectPath
-            ?? Path.Combine(rootDir, solutionName + ".uotannode");
-        var subProjectDir = rootDir;
+            ?? Path.Combine(subProjectDir, solutionName + ".uotannode");
         var stateDir = Path.Combine(subProjectDir, ".uotan");
         var subImagesDir = Path.Combine(subProjectDir, "images");
         var subOutputDir = Path.Combine(subProjectDir, "output");
         Directory.CreateDirectory(subImagesDir);
         Directory.CreateDirectory(subOutputDir);
+        Directory.CreateDirectory(Path.Combine(subProjectDir, "delivery"));
 
         var firmwarePath = Path.Combine(subProjectDir, solutionName + ".uotanfw");
         var firmware = new FirmwareProjectSnapshot
@@ -156,7 +157,7 @@ public sealed partial class ProjectSession
             NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
             SubProjects =
             [
-                new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}.uotanfw" }
+                new SubProjectDto { Name = solutionName, RelativePath = $"{solutionName}/{solutionName}.uotanfw" }
             ]
         };
 
@@ -315,7 +316,7 @@ public sealed partial class ProjectSession
         fwPath = Path.GetFullPath(fwPath);
         if (File.Exists(fwPath)) throw new IOException("The sub-project file already exists; import its directory instead.");
         var subProjectDir = Path.GetDirectoryName(fwPath)!;
-        if (!ProjectValidation.IsSubProjectDirectory(context.RootDirectory!, subProjectDir)) return;
+        if (!ProjectValidation.IsDirectSubProjectDirectory(context.RootDirectory!, subProjectDir)) return;
         var subName = Path.GetFileNameWithoutExtension(fwPath);
 
         if (context.SubProjects.Any(sp => string.Equals(sp.Name, subName, StringComparison.OrdinalIgnoreCase)))
@@ -328,6 +329,7 @@ public sealed partial class ProjectSession
         var outputDir = Path.Combine(subProjectDir, "output");
         Directory.CreateDirectory(imagesDir);
         Directory.CreateDirectory(outputDir);
+        Directory.CreateDirectory(Path.Combine(subProjectDir, "delivery"));
 
         var firmware = new FirmwareProjectSnapshot
         {
@@ -359,7 +361,7 @@ public sealed partial class ProjectSession
     {
         using var transaction = new ProjectFileTransaction();
         var context = Context;
-        if (context.RootDirectory is { } solutionRoot && !ProjectValidation.IsSubProjectDirectory(solutionRoot, dirPath)) return;
+        if (context.RootDirectory is { } solutionRoot && !ProjectValidation.IsDirectSubProjectDirectory(solutionRoot, dirPath)) return;
         if (!context.IsProjectOpen || context.RootDirectory is null)
         {
             ProjectDiagnostics.Write(ProjectLogLevel.Warn, "Menu", "Import sub-project aborted: no solution is open  导入子项目中止：尚未打开解决方案");
@@ -385,10 +387,11 @@ public sealed partial class ProjectSession
             return;
         }
 
-        // 确保 images/ 和 output/ 子目录存在。
-        // Ensure images/ and output/ sub-directories exist.
+        // 确保 images/、output/ 与 delivery/ 子目录存在。
+        // Ensure images/, output/ and delivery/ sub-directories exist.
         Directory.CreateDirectory(Path.Combine(dirPath, "images"));
         Directory.CreateDirectory(Path.Combine(dirPath, "output"));
+        Directory.CreateDirectory(Path.Combine(dirPath, "delivery"));
 
         // 若目录下无 .uotanfw 文件则创建；已有时跳过以保留用户修改。
         // Create a .uotanfw file if missing; skip if it already exists to preserve user changes.
@@ -489,14 +492,17 @@ public sealed partial class ProjectSession
         }
 
         var nodePath = context.NodeProjectPath
-            ?? Path.Combine(rootDir, solutionName + ".uotannode");
+            ?? Path.Combine(rootDir, solutionName, solutionName + ".uotannode");
         var stateDir = context.StateDirectory;
 
         var solution = new SolutionSnapshot
         {
             FormatVersion = 2,
             SolutionName = solutionName,
-            NodeProjectPath = $"{solutionName}/{solutionName}.uotannode",
+            // The node project lives inside the node-owner sub-project; record its root-relative path so the
+            // recorded reference and the actually written file always agree, even when the owner is not the
+            // solution-named sub-project.
+            NodeProjectPath = Path.GetRelativePath(rootDir, nodePath).Replace(Path.DirectorySeparatorChar, '/'),
             SubProjects = subProjectDtos.Count > 0 ? subProjectDtos : null,
             State = CaptureState?.Invoke()
         };

@@ -147,7 +147,7 @@ public sealed class ProjectLifecycleTests : IDisposable
         var data = Assert.IsType<ProjectDataWorkspace>(session.Workspace);
         data.Workflow.Nodes.Add(new() { TypeKey = "keep" });
         var target = Path.Combine(_root, "blocked.uotan");
-        Directory.CreateDirectory(Path.Combine(_root, "blocked", "blocked.uotannode"));
+        Directory.CreateDirectory(Path.Combine(_root, "blocked", "blocked.uotanfw"));
         await Assert.ThrowsAsync<IOException>(() => session.CreateNewSolutionAsync(target, Token));
         Assert.Equal(source, session.CurrentProjectPath);
         Assert.Equal(source, session.Context.CurrentSolutionPath);

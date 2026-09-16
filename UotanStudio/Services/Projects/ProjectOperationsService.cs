@@ -112,7 +112,8 @@ public sealed class ProjectOperationsService
     internal Task WaitForIdleAsync() => _session.WaitForIdleAsync();
     internal Task AutoSaveAsync(bool persistProject = true, bool persistPageState = true)
         => _session.AutoSaveAsync(persistProject, persistPageState);
-    public Task CreateNewSolutionAsync(string path) => _session.CreateNewSolutionAsync(path);
+    public Task CreateNewSolutionAsync(string path, CancellationToken cancellationToken = default)
+        => _session.CreateNewSolutionAsync(path, cancellationToken);
     public Task<bool> OpenProjectFromPathAsync(string path) => _session.OpenProjectFromPathAsync(path);
     public Task<bool> SaveAsync(bool saveActiveDocument = true) => _session.SaveAsync(saveActiveDocument);
     public Task SaveAsAsync(string path) => _session.SaveAsAsync(path);

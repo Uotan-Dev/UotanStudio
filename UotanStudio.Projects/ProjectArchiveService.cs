@@ -10,7 +10,7 @@ public static class ProjectArchiveService
 
     /// <summary>Exports the solution file and data directory so the package can be reopened after import.</summary>
     public static Task ExportPackageAsync(string solutionPath, string outputPath, CancellationToken cancellationToken = default)
-        => ExportCoreAsync(Path.ChangeExtension(Path.GetFullPath(solutionPath), null), outputPath, Path.GetFullPath(solutionPath), cancellationToken);
+        => ExportCoreAsync(Path.GetDirectoryName(Path.GetFullPath(solutionPath))!, outputPath, Path.GetFullPath(solutionPath), cancellationToken);
 
     private static async Task ExportCoreAsync(string root, string outputPath, string? solutionPath, CancellationToken cancellationToken)
     {
@@ -18,18 +18,21 @@ public static class ProjectArchiveService
         outputPath = Path.GetFullPath(outputPath);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException(root);
         var excludedHistory = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        // Package mode archives only the solution file plus the referenced sub-project folders, so the
+        // result is self-contained. Plain archive mode (no solution) walks the whole root directory.
+        var includeRoots = new List<string>();
         if (solutionPath is not null)
         {
             var solution = await SolutionPersistenceService.LoadSolutionAsync(solutionPath, cancellationToken)
                 ?? throw new InvalidDataException("Cannot read the solution to package.");
-            var references = solution.SubProjects?.Select(p => p.RelativePath).ToList() ?? [];
-            foreach (var reference in references)
+            foreach (var reference in solution.SubProjects ?? [])
             {
-                var path = Path.GetFullPath(Path.Combine(root, reference));
+                var path = Path.GetFullPath(Path.Combine(root, reference.RelativePath));
                 if (!ProjectSaveAsTransaction.IsWithin(root, path) || !File.Exists(path))
                     throw new IOException("A package requires all sub-projects to exist inside its data directory.");
                 if (!ProjectValidation.IsSubProjectDirectory(root, Path.GetDirectoryName(path)!))
                     throw new IOException("A packaged sub-project requires its own directory.");
+                includeRoots.Add(Path.GetDirectoryName(path)!);
                 excludedHistory.Add(Path.Combine(Path.GetDirectoryName(path)!, ".uotan", "history.json"));
             }
         }
@@ -51,8 +54,15 @@ public static class ProjectArchiveService
                     await using var solutionOutput = archive.CreateEntry(Path.GetFileName(solutionPath)).Open();
                     await ProjectStreamCopy.CopyExactlyAsync(solutionSource, solutionOutput, solutionSource.Length, cancellationToken);
                 }
+                // Package mode archives only the solution file and the referenced sub-project folders so the
+                // result is self-contained: entry names are relative to the solution directory and match the
+                // snapshot's sub-project paths. Plain archive mode still walks the whole root directory.
                 var pending = new Stack<string>();
-                pending.Push(root);
+                if (solutionPath is not null)
+                {
+                    foreach (var includeRoot in includeRoots) pending.Push(includeRoot);
+                }
+                else pending.Push(root);
                 while (pending.TryPop(out var directory))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -66,7 +76,6 @@ public static class ProjectArchiveService
                         var name = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
                         // Executable history contains machine-local absolute paths and deleted files are excluded.
                         if (solutionPath is not null && excludedHistory.Contains(Path.GetFullPath(path))) continue;
-                        if (solutionPath is not null) name = Path.GetFileName(root) + "/" + name;
                         if ((attributes & FileAttributes.Directory) != 0)
                         {
                             if (Path.GetFileName(path) is ".git" or ".deleted") continue;

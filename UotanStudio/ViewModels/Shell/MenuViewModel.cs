@@ -207,8 +207,9 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             // 数据目录与 .uotan/ 状态目录随之嵌套在所选目录下，不污染上级。
             // Location is the chosen project directory (base/name); the solution file lives
             // inside it so the data and .uotan state directories nest under it.
+            GuardProjectLocationNotNested(form.Location, requireDirectChild: false);
             var solutionPath = Path.Combine(form.Location, form.ProjectName + ".uotan");
-            await _projectOps.CreateNewSolutionAsync(solutionPath);
+            await _projectOps.CreateNewSolutionAsync(solutionPath, cancellationToken);
             if (!string.Equals(_projectOps.CurrentProjectPath, solutionPath, StringComparison.OrdinalIgnoreCase))
                 throw new OperationCanceledException("Project creation was cancelled.");
             RecordRecentProject(solutionPath);
@@ -593,10 +594,11 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
             context.SubProjects.Select(sp => sp.Name));
         window.CreateWithCancellationAsync = async (form, cancellationToken) =>
         {
-            // 子项目与首个子项目布局一致：.uotanfw 直接位于解决方案根目录下，不再嵌套同名子目录。
-            // The sub-project follows the first sub-project's flat layout: the .uotanfw file lives
-            // directly in the solution root without a nested same-name directory.
-            var fwPath = Path.Combine(context.RootDirectory, form.ProjectName + ".uotanfw");
+            // 位置已是组合后的完整目录（解决方案根/子项目名），.uotanfw 与目录同名。
+            // The location is the combined directory (solution root/sub-project name); the .uotanfw
+            // file shares the directory name.
+            GuardProjectLocationNotNested(form.Location, requireDirectChild: true);
+            var fwPath = Path.Combine(form.Location, form.ProjectName + ".uotanfw");
             await _projectOps.AddSubProjectAsync(fwPath);
             // 重新加载解决方案后活动子项目回到第一项；切回刚创建的子项目再导入。
             // Reloading the solution resets the active sub-project to the first one; switch back to
@@ -622,6 +624,40 @@ public partial class MenuViewModel : ViewModelBase, IDisposable
                 throw new IOException("Could not save the imported project.");
         };
         await window.ShowDialog(owner);
+    }
+
+    /// <summary>
+    /// <para>拒绝把项目/子项目脚手架落到当前打开的解决方案树内部。新解决方案必须是外部独立目录；
+    /// 新增子项目必须是解决方案根的直接子级（独立平铺文件夹，禁止嵌套）。</para>
+    /// Rejects scaffolding a new project or sub-project inside the currently open solution tree: a new
+    /// solution must be an external, standalone directory; a new sub-project must be a direct child of
+    /// the solution root (an independent flat folder, never nested).
+    /// </summary>
+    /// <param name="location"><para>对话框选定的组合目录。</para>The combined directory chosen in the form.</param>
+    /// <param name="requireDirectChild">
+    /// <para><c>true</c> 表示新增子项目（要求是解决方案根的直接子级）；<c>false</c> 表示新建解决方案（要求不位于现有项目树内）。</para>
+    /// <c>true</c> for a new sub-project (must be a direct child of the solution root); <c>false</c> for a new
+    /// solution (must not sit inside an existing project tree).
+    /// </param>
+    /// <exception cref="IOException"><para>位置会形成嵌套布局时。</para>Thrown when the location would nest.</exception>
+    private static void GuardProjectLocationNotNested(string location, bool requireDirectChild)
+    {
+        var root = ProjectContextService.Instance.RootDirectory;
+        if (root is null) return;
+        var rootPath = Path.GetFullPath(root);
+        var loc = Path.GetFullPath(location);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (string.Equals(rootPath, loc, comparison))
+            throw new IOException("A project folder must be an independent directory.  项目必须位于独立目录中。");
+        if (requireDirectChild)
+        {
+            if (!ProjectValidation.IsDirectSubProjectDirectory(rootPath, loc))
+                throw new IOException("A sub-project must be an independent folder directly under the solution root.  子项目必须为解决方案根下的独立文件夹，禁止嵌套。");
+            return;
+        }
+        var prefix = Path.TrimEndingDirectorySeparator(rootPath) + Path.DirectorySeparatorChar;
+        if (loc.StartsWith(prefix, comparison))
+            throw new IOException("A project folder must not be nested inside an existing project.  项目文件夹禁止嵌套在现有项目中。");
     }
 
     /// <summary>

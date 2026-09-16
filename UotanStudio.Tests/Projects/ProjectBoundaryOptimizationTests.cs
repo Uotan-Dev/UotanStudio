@@ -42,7 +42,7 @@ public sealed class ProjectBoundaryOptimizationTests : IDisposable
         var imagePath = Path.Combine(session.Context.EnsureImagesDirectory(), "boot.img");
         await File.WriteAllBytesAsync(imagePath, [1, 2, 3, 4], Token);
         data.Images.Add(new() { RelativePath = session.Context.RelativePath(imagePath)! });
-        var archivePath = Path.Combine(_root, "project.zip");
+        var archivePath = Path.Combine(Path.GetTempPath(), Path.GetFileName(_root) + "-project.zip");
         await session.ExportPackageAsync(archivePath, Token);
         var imported = new ProjectSession();
         Assert.True(await imported.ImportPackageAsync(archivePath, Path.Combine(_root, "imported"), Token));
@@ -185,14 +185,20 @@ public sealed class ProjectBoundaryOptimizationTests : IDisposable
     }
 
     [Fact]
-    public void ContextDirectoryFailure_DoesNotPublishPartialState()
+    public void OpenSolution_RootIsTheSolutionsOwnDirectory_NotBlockedBySiblingFile()
     {
         var context = new ProjectContext();
         context.OpenSolution(Path.Combine(_root, "original.uotan"));
+        // Under the flat model the data root is the solution's own directory, so a stray file where the old
+        // ChangeExtension data directory used to live cannot block an open; it is simply not a sub-project.
         File.WriteAllText(Path.Combine(_root, "blocked"), "file instead of directory");
-        Assert.Throws<IOException>(() => context.OpenSolution(Path.Combine(_root, "blocked.uotan")));
-        Assert.Equal("original", context.SolutionName);
-        Assert.EndsWith("original.uotan", context.CurrentSolutionPath);
+
+        context.OpenSolution(Path.Combine(_root, "blocked.uotan"));
+
+        Assert.Equal("blocked", context.SolutionName);
+        Assert.Equal(_root, context.RootDirectory);
+        // The stray sibling file is never promoted to a sub-project; nothing wrote a *.uotanfw, so none are found.
+        Assert.Empty(context.SubProjects);
     }
 
     [Fact]

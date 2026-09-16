@@ -19,6 +19,9 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
 
     public SubProjectMetadataIsolationTests() => Directory.CreateDirectory(_root);
 
+    /// <summary>A package destination outside the project root (the flat root is the solution's directory).</summary>
+    private string OutsideRoot(string name) => Path.Combine(Path.GetTempPath(), Path.GetFileName(_root) + "-" + name);
+
     private async Task<ProjectSession> CreateAsync()
     {
         var session = new ProjectSession();
@@ -40,10 +43,7 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
         Assert.Equal(first.MetadataRoot, context.GetMetadataRoot(Path.Combine(first.ImagesDir, "system.img")));
         Assert.Null(context.GetMetadataRoot(first.RootPath + "-unrelated/system.img"));
         Assert.Equal(second.StateDirectory, context.StateDirectory);
-        // 扁平布局：默认子项目与解决方案根共享目录，其 .uotan 状态目录位于根下。
-        // Flat layout: the default sub-project shares the solution root, so its .uotan state
-        // directory lives at the root.
-        Assert.True(Directory.Exists(Path.Combine(context.RootDirectory!, ".uotan")));
+        Assert.False(Directory.Exists(Path.Combine(context.RootDirectory!, ".uotan")));
         context.CloseProject();
         Assert.Null(context.GetMetadataRoot());
         Assert.Null(context.StateDirectory);
@@ -66,14 +66,14 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
         Assert.True(await session.SwitchSubProjectAsync("other", cancellationToken: Token));
         Assert.Equal("second", Assert.Single(session.History.CaptureSnapshot()).Description);
         await session.SaveAsAsync(Path.Combine(_root, "copy.uotan"), Token);
-        Assert.True(Directory.Exists(Path.Combine(session.Context.RootDirectory!, ".uotan")));
+        Assert.False(Directory.Exists(Path.Combine(session.Context.RootDirectory!, ".uotan")));
         foreach (var child in session.Context.SubProjects)
         {
             Assert.True(File.Exists(Path.Combine(child.StateDirectory, "settings.json")));
             Assert.Equal(child.Name == "sample" ? "first" : "second",
                 RepackMetadata.ReadFromAbsolute(Path.Combine(child.MetadataRoot, "system", RepackMetadata.FileName))!.PackingNotes);
         }
-        var zip = Path.Combine(_root, "package.zip");
+        var zip = OutsideRoot("package.zip");
         await session.ExportPackageAsync(zip, Token);
         using (var archive = ZipFile.OpenRead(zip))
         {
@@ -83,7 +83,7 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
         var imported = await ProjectPackage.ImportAsync(zip, Path.Combine(_root, "imported"), Token);
         var reopened = new ProjectSession();
         Assert.True(await reopened.OpenProjectFromPathAsync(imported, Token));
-        Assert.True(Directory.Exists(Path.Combine(reopened.Context.RootDirectory!, ".uotan")));
+        Assert.False(Directory.Exists(Path.Combine(reopened.Context.RootDirectory!, ".uotan")));
         Assert.Empty(reopened.History.CaptureSnapshot());
         Assert.Equal(2, reopened.Context.SubProjects.Count);
     }
@@ -128,7 +128,7 @@ public sealed class SubProjectMetadataIsolationTests : IDisposable
             Assert.True(result.Success, result.Summary);
         }
         File.Delete(image);
-        var package = Path.Combine(_root, "preserved.zip");
+        var package = OutsideRoot("preserved.zip");
         await session.ExportPackageAsync(package, Token);
         var importedPath = await ProjectPackage.ImportAsync(package, Path.Combine(_root, "imported-preserved"), Token);
         var imported = new ProjectSession();

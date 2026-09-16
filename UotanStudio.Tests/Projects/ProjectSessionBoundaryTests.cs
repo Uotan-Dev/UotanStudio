@@ -61,6 +61,13 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         Assert.Empty(_workspace.Events);
     }
 
+    private string DestinationRoot(bool existing)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), Path.GetFileName(_root) + "-dest-" + Guid.NewGuid().ToString("N"));
+        if (existing) Directory.CreateDirectory(dir);
+        return dir;
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -73,22 +80,25 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         _workspace.Images.Add(new() { RelativePath = Path.GetRelativePath(context.RootDirectory!, originalImage), Format = "Boot", SizeBytes = 3 });
         var originalProjectPath = context.FirmwareProjectPath!;
         var originalProject = File.ReadAllBytes(originalProjectPath);
-        var target = Path.Combine(_root, "copy.uotan");
-        var unrelated = Path.Combine(_root, "copy", "keep.txt");
+        var destination = DestinationRoot(existingTarget);
+        var target = Path.Combine(destination, "copy.uotan");
+        var unrelated = Path.Combine(destination, "keep.txt");
         if (existingTarget)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(unrelated)!);
+            Directory.CreateDirectory(destination);
             File.WriteAllText(unrelated, "keep");
             File.WriteAllText(target, "old-destination-solution");
         }
 
         await _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken);
 
-        Assert.Equal(new byte[] { 4, 5, 6 }, await File.ReadAllBytesAsync(Path.Combine(context.EnsureImagesDirectory(), "boot.img"), TestContext.Current.CancellationToken));
-        Assert.True(File.Exists(originalImage));
+        // The source firmware stays byte-identical; the published copy carries the staged image.
         Assert.Equal(originalProject, File.ReadAllBytes(originalProjectPath));
+        Assert.True(File.Exists(originalImage));
+        Assert.Equal(new byte[] { 4, 5, 6 }, await File.ReadAllBytesAsync(Path.Combine(context.EnsureImagesDirectory(), "boot.img"), TestContext.Current.CancellationToken));
         if (existingTarget) Assert.Equal("keep", File.ReadAllText(unrelated));
         Assert.Equal(target, _projects.CurrentProjectPath);
+        Assert.Equal(destination, _projects.Context.RootDirectory);
         var saved = await SolutionPersistenceService.LoadFirmwareProjectAsync(context.FirmwareProjectPath!, TestContext.Current.CancellationToken);
         Assert.Equal("Boot", Assert.Single(saved!.Images).Format);
         Assert.True(await _projects.OpenProjectFromPathAsync(target, cancellationToken: TestContext.Current.CancellationToken));
@@ -110,22 +120,24 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         var metadata = Path.Combine(context.GetMetadataRoot()!, "system", ".uotanstudio-repack.json");
         Directory.CreateDirectory(Path.GetDirectoryName(metadata)!);
         File.WriteAllText(metadata, "metadata-marker");
-        var first = Path.Combine(oldRoot, "original.uotanfw");
+        var first = Path.Combine(oldRoot, "original", "original.uotanfw");
         var firstBytes = File.ReadAllBytes(first);
         _workspace.Images.Clear();
         _workspace.Images.Add(new() { RelativePath = Path.GetRelativePath(oldRoot, nested), Format = "EXT4", SizeBytes = 3 });
 
-        var target = Path.Combine(_root, "copy.uotan");
+        var destination = DestinationRoot(existing: false);
+        var target = Path.Combine(destination, "copy.uotan");
         await _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, context.SubProjects.Count);
         Assert.Equal("second", context.ActiveSubProject!.Name);
-        Assert.Equal(firstBytes, File.ReadAllBytes(Path.Combine(context.RootDirectory!, "original.uotanfw")));
-        Assert.Equal(new byte[] { 7, 8, 9 }, File.ReadAllBytes(Path.Combine(context.RootDirectory!, "second", "images", "nested", "system.img")));
-        Assert.Equal("metadata-marker", File.ReadAllText(Path.Combine(context.GetMetadataRoot()!, "system", ".uotanstudio-repack.json")));
+        Assert.Equal(destination, context.RootDirectory);
+        Assert.Equal(firstBytes, File.ReadAllBytes(first));
+        Assert.Equal(firstBytes, File.ReadAllBytes(Path.Combine(destination, "original", "original.uotanfw")));
+        Assert.Equal(new byte[] { 7, 8, 9 }, File.ReadAllBytes(Path.Combine(destination, "second", "images", "nested", "system.img")));
+        Assert.Equal("metadata-marker", File.ReadAllText(Path.Combine(destination, "second", ".uotan", "metadata", "system", ".uotanstudio-repack.json")));
         var snapshot = await SolutionPersistenceService.LoadSolutionAsync(target, TestContext.Current.CancellationToken);
         Assert.Equal(2, snapshot!.SubProjects!.Count);
-        Assert.Equal(firstBytes, File.ReadAllBytes(first));
     }
 
     [Theory]
@@ -138,16 +150,18 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         var context = _projects.Context;
         var oldRoot = context.RootDirectory;
         var oldActive = context.ActiveSubProject;
-        var oldMetadata = _projects.Context.GetMetadataRoot();
         var original = File.ReadAllBytes(source);
-        var target = Path.Combine(_root, "copy.uotan");
-        var destinationRoot = Path.ChangeExtension(target, null);
-        Directory.CreateDirectory(destinationRoot);
-        var marker = Path.Combine(destinationRoot, "keep.txt");
+        var firmwarePath = context.FirmwareProjectPath!;
+        var firmwareBytes = File.ReadAllBytes(firmwarePath);
+        var destination = DestinationRoot(existing: false);
+        var target = Path.Combine(destination, "copy.uotan");
+        Directory.CreateDirectory(destination);
+        var marker = Path.Combine(destination, "keep.txt");
         File.WriteAllText(marker, "untouched");
-        // A directory at the solution filename fails publication after the root swap.
-        // A directory at the node filename fails staging before the root swap.
-        Directory.CreateDirectory(commitFailure ? target : Path.Combine(destinationRoot, "copy.uotannode"));
+        // A directory at the solution filename fails the final publication step.
+        // A directory at the node filename fails node publication before the solution file is written.
+        if (commitFailure) Directory.CreateDirectory(target);
+        else Directory.CreateDirectory(Path.Combine(destination, "original", "copy.uotannode"));
 
         var error = await Record.ExceptionAsync(() => _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken));
         Assert.True(error is IOException or UnauthorizedAccessException, $"Unexpected error: {error}");
@@ -156,12 +170,9 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         Assert.Equal(source, context.CurrentSolutionPath);
         Assert.Equal(oldRoot, context.RootDirectory);
         Assert.Same(oldActive, context.ActiveSubProject);
-        Assert.Equal(oldMetadata, _projects.Context.GetMetadataRoot());
         Assert.Equal(original, File.ReadAllBytes(source));
+        Assert.Equal(firmwareBytes, File.ReadAllBytes(firmwarePath));
         Assert.Equal("untouched", File.ReadAllText(marker));
-        Assert.False(Directory.Exists(Path.Combine(destinationRoot, "original")));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(_root, "*.saveas-*"));
-        Assert.Empty(Directory.EnumerateFileSystemEntries(_root, "*.previous-*"));
         Assert.False(_projects.IsBusy);
     }
 
@@ -170,10 +181,14 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
     {
         var source = Path.Combine(_root, "original.uotan");
         await _projects.CreateNewSolutionAsync(source, cancellationToken: TestContext.Current.CancellationToken);
-        var target = Path.Combine(_projects.Context.RootDirectory!, "nested.uotan");
+        var context = _projects.Context;
+        // The destination directory sits inside a source sub-project folder.
+        var target = Path.Combine(context.RootDirectory!, "original", "nested.uotan");
         await Assert.ThrowsAsync<IOException>(() => _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(source, _projects.CurrentProjectPath);
-        Assert.False(Directory.Exists(Path.ChangeExtension(target, null)));
+        Assert.Equal(source, context.CurrentSolutionPath);
+        Assert.Single(context.SubProjects);
+        Assert.False(Directory.Exists(Path.Combine(_root, "original", "nested")));
     }
 
     [Fact]
@@ -215,7 +230,7 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         Assert.Same(active, _projects.Context.ActiveSubProject);
         var firmware = await SolutionPersistenceService.LoadFirmwareProjectAsync(active!.FwProjectPath, TestContext.Current.CancellationToken);
         Assert.Equal("EXT4", Assert.Single(firmware!.Images).Format);
-        Assert.Empty(Directory.EnumerateFileSystemEntries(_root, "*.saveas-*"));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_root, "*.tmp-*"));
     }
 
     [Fact]
@@ -230,50 +245,42 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveAs_ExternalSubproject_IsRejectedWithoutChangingSharedFiles()
+    public async Task SaveAs_EverySubProject_IsCopiedWithoutRewritingSourceFiles()
     {
         var source = Path.Combine(_root, "sample.uotan");
         await _projects.CreateNewSolutionAsync(source, cancellationToken: TestContext.Current.CancellationToken);
-        var external = Path.Combine(_root, "shared", "shared.uotanfw");
-        await _projects.AddSubProjectAsync(external, cancellationToken: TestContext.Current.CancellationToken);
-        var before = File.ReadAllBytes(external);
-        await Assert.ThrowsAsync<IOException>(() => _projects.SaveAsAsync(Path.Combine(_root, "copy.uotan"), cancellationToken: TestContext.Current.CancellationToken));
-        Assert.Equal(source, _projects.CurrentProjectPath);
-        Assert.Equal(before, File.ReadAllBytes(external));
-        Assert.False(Directory.Exists(Path.Combine(_root, "copy")));
+        var shared = Path.Combine(_root, "shared", "shared.uotanfw");
+        await _projects.AddSubProjectAsync(shared, cancellationToken: TestContext.Current.CancellationToken);
+        var before = File.ReadAllBytes(shared);
+        var destination = DestinationRoot(existing: false);
+        var target = Path.Combine(destination, "copy.uotan");
+
+        await _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(before, File.ReadAllBytes(shared));
+        Assert.Equal(2, _projects.Context.SubProjects.Count);
+        Assert.Equal(target, _projects.CurrentProjectPath);
+        Assert.True(File.Exists(Path.Combine(destination, "shared", "shared.uotanfw")));
     }
 
     [Fact]
-    public async Task SaveAs_AliasedInternalSubproject_WritesOnlyToPreparedCopy()
+    public async Task SaveAs_KeepsNestedOnlyAsSubProjectFolder_WithoutRegisteringInnerScaffold()
     {
         var source = Path.Combine(_root, "sample.uotan");
         await _projects.CreateNewSolutionAsync(source, cancellationToken: TestContext.Current.CancellationToken);
-        var context = _projects.Context;
-        var originalFirmware = context.FirmwareProjectPath!;
-        var originalBytes = File.ReadAllBytes(originalFirmware);
-        var alias = Path.Combine(_root, "alias");
-        try { Directory.CreateSymbolicLink(alias, context.RootDirectory!); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
-        {
-            Assert.Skip($"Directory symbolic links are unavailable: {ex.Message}");
-        }
-        try
-        {
-            context.OpenSolution(source, new SolutionSnapshot
-            {
-                SolutionName = "sample",
-                SubProjects = [new() { Name = "sample", RelativePath = "../alias/sample.uotanfw" }]
-            });
-            _workspace.Images.Add(new() { RelativePath = "images/boot.img", Format = "Boot" });
+        // A nested scaffold inside the sub-project folder is copied but never registered as its own sub-project.
+        var inner = Path.Combine(_root, "sample", "inner", "inner.uotanfw");
+        Directory.CreateDirectory(Path.GetDirectoryName(inner)!);
+        File.WriteAllBytes(inner, [9, 9, 9]);
+        var destination = DestinationRoot(existing: false);
+        var target = Path.Combine(destination, "copy.uotan");
 
-            await _projects.SaveAsAsync(Path.Combine(_root, "copy.uotan"), cancellationToken: TestContext.Current.CancellationToken);
+        await _projects.SaveAsAsync(target, cancellationToken: TestContext.Current.CancellationToken);
 
-            Assert.Equal(originalBytes, File.ReadAllBytes(originalFirmware));
-            Assert.Equal(Path.Combine(_root, "copy", "sample.uotanfw"), context.FirmwareProjectPath);
-            var saved = await SolutionPersistenceService.LoadFirmwareProjectAsync(context.FirmwareProjectPath!, TestContext.Current.CancellationToken);
-            Assert.Equal("Boot", Assert.Single(saved!.Images).Format);
-        }
-        finally { Directory.Delete(alias); }
+        Assert.Single(_projects.Context.SubProjects);
+        Assert.True(File.Exists(Path.Combine(destination, "sample", "inner", "inner.uotanfw")));
+        Assert.True(await _projects.OpenProjectFromPathAsync(target, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Single(_projects.Context.SubProjects);
     }
 
     [Fact]
@@ -347,6 +354,107 @@ public sealed class ProjectSessionBoundaryTests : IDisposable
         Assert.Contains(context.SubProjects, sp => sp.Name == "imported");
         Assert.True(await _projects.OpenProjectFromPathAsync(_projects.CurrentProjectPath!, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(3, context.SubProjects.Count);
+    }
+
+    [Fact]
+    public async Task CreateNewSolution_ProducesFlatIndependentSubProjectFolder()
+    {
+        var solution = Path.Combine(_root, "flat.uotan");
+        await _projects.CreateNewSolutionAsync(solution, cancellationToken: TestContext.Current.CancellationToken);
+        var context = _projects.Context;
+
+        // The root is the solution's own directory, the sub-project is an independent direct child.
+        Assert.Equal(_root, context.RootDirectory);
+        Assert.Equal("flat", context.SolutionName);
+        Assert.Single(context.SubProjects);
+        Assert.Equal(Path.Combine(_root, "flat"), context.SubProjects[0].RootPath);
+        Assert.True(File.Exists(Path.Combine(_root, "flat", "flat.uotanfw")));
+        Assert.True(File.Exists(Path.Combine(_root, "flat", "flat.uotannode")));
+        Assert.True(Directory.Exists(Path.Combine(_root, "flat", "images")));
+        Assert.True(Directory.Exists(Path.Combine(_root, "flat", "output")));
+        Assert.True(File.Exists(solution));
+        Assert.Equal(Path.Combine(_root, "flat"), Path.GetDirectoryName(context.NodeProjectPath));
+    }
+
+    [Fact]
+    public async Task SubProject_DeliveryDirectory_IsSiblingOfImagesAndOutput()
+    {
+        var solution = Path.Combine(_root, "flat.uotan");
+        await _projects.CreateNewSolutionAsync(solution, cancellationToken: TestContext.Current.CancellationToken);
+        var sub = Assert.Single(_projects.Context.SubProjects);
+
+        // 交付输出目录是子项目内的独立 delivery/ 同级文件夹，与源镜像 images/ 及通用工作区 output/ 平级。
+        // The delivery output directory is an independent sibling delivery/ folder beside the source images/ and
+        // the general workspace output/ folder, so packaging never targets the source image's own directory.
+        Assert.Equal(Path.Combine(sub.RootPath!, "delivery"), sub.DeliveryDirectory);
+        Assert.NotEqual(sub.OutputDir, sub.DeliveryDirectory);
+        Assert.Equal(sub.RootPath, Path.GetDirectoryName(sub.DeliveryDirectory));
+        Assert.Equal(sub.RootPath, Path.GetDirectoryName(sub.ImagesDir));
+        Assert.True(Directory.Exists(sub.DeliveryDirectory));
+    }
+
+    [Fact]
+    public async Task MultipleSubProjects_SiblingFlatFolders_EachOwnItsDirectory()
+    {
+        var solution = Path.Combine(_root, "sample.uotan");
+        await _projects.CreateNewSolutionAsync(solution, cancellationToken: TestContext.Current.CancellationToken);
+        var context = _projects.Context;
+        await _projects.AddSubProjectAsync(Path.Combine(context.RootDirectory!, "second", "second.uotanfw"), cancellationToken: TestContext.Current.CancellationToken);
+        await _projects.AddSubProjectAsync(Path.Combine(context.RootDirectory!, "third", "third.uotanfw"), cancellationToken: TestContext.Current.CancellationToken);
+
+        // The solution root is the solution's own directory; every sub-project is an independent direct child,
+        // laid out side by side like NewProject1/NewProject2/NewProject3 — never nested inside another one.
+        Assert.Equal(_root, context.RootDirectory);
+        Assert.Equal(3, context.SubProjects.Count);
+        foreach (var name in new[] { "sample", "second", "third" })
+        {
+            var sub = Assert.Single(context.SubProjects, s => s.Name == name);
+            Assert.Equal(Path.Combine(_root, name), sub.RootPath);
+            Assert.Equal(_root, Path.GetDirectoryName(sub.RootPath));
+            Assert.True(File.Exists(Path.Combine(sub.RootPath!, name + ".uotanfw")));
+            Assert.True(Directory.Exists(Path.Combine(sub.RootPath!, "images")));
+            Assert.True(Directory.Exists(Path.Combine(sub.RootPath!, "output")));
+        }
+
+        // The single node project is owned by the solution-named sub-project folder.
+        Assert.Equal(Path.Combine(_root, "sample"), Path.GetDirectoryName(context.NodeProjectPath));
+
+        // Reopen and confirm the flat sibling layout survives persistence.
+        context.CloseProject();
+        Assert.True(await _projects.OpenProjectFromPathAsync(solution, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(_root, _projects.Context.RootDirectory);
+        Assert.Equal(["sample", "second", "third"], _projects.Context.SubProjects.Select(s => s.Name).OrderBy(n => n).ToArray());
+    }
+
+    [Fact]
+    public async Task OpenSolution_RootDirectoryEqualsSolutionFolder()
+    {
+        var solution = Path.Combine(_root, "sample.uotan");
+        await _projects.CreateNewSolutionAsync(solution, cancellationToken: TestContext.Current.CancellationToken);
+        _projects.Context.CloseProject();
+
+        Assert.True(await _projects.OpenProjectFromPathAsync(solution, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Equal(_root, _projects.Context.RootDirectory);
+        Assert.Equal(_root, Path.GetDirectoryName(_projects.Context.CurrentSolutionPath));
+        Assert.Contains(_projects.Context.SubProjects, sp => sp.Name == "sample");
+    }
+
+    [Fact]
+    public async Task SubProject_InsideAnotherSubProject_IsNotRegistered()
+    {
+        var solution = Path.Combine(_root, "sample.uotan");
+        await _projects.CreateNewSolutionAsync(solution, cancellationToken: TestContext.Current.CancellationToken);
+        var context = _projects.Context;
+        var inner = Path.Combine(context.RootDirectory!, "sample", "deep", "deep.uotanfw");
+        Directory.CreateDirectory(Path.GetDirectoryName(inner)!);
+        File.WriteAllBytes(inner, [1, 2, 3]);
+
+        await _projects.AddSubProjectAsync(Path.Combine(context.RootDirectory!, "second", "second.uotanfw"), cancellationToken: TestContext.Current.CancellationToken);
+
+        // A scaffold nested under another sub-project must not register as an independent sub-project.
+        Assert.DoesNotContain(context.SubProjects, sp => sp.Name == "deep");
+        Assert.Contains(context.SubProjects, sp => sp.Name == "second");
     }
 
     public void Dispose()

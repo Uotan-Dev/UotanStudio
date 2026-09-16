@@ -53,19 +53,21 @@ public static class ProjectPackage
             var snapshot = await SolutionPersistenceService.LoadSolutionAsync(solutionPath, cancellationToken)
                 ?? throw new InvalidDataException("Invalid packaged solution.");
             ProjectValidation.ValidateSolution(snapshot);
-            var root = Path.ChangeExtension(solutionPath, null);
+            var root = Path.GetDirectoryName(solutionPath)!;
             foreach (var reference in snapshot.SubProjects ?? [])
             {
                 var path = Path.GetFullPath(Path.Combine(root, reference.RelativePath));
                 if (!ProjectSaveAsTransaction.IsWithin(root, path) || !File.Exists(path))
                     throw new InvalidDataException("Packaged sub-project is missing or outside the data root.");
-                if (!ProjectValidation.IsSubProjectDirectory(root, Path.GetDirectoryName(path)!))
+                if (!ProjectValidation.IsDirectSubProjectDirectory(root, Path.GetDirectoryName(path)!))
                     throw new InvalidDataException("A packaged sub-project requires its own directory.");
                 if (await SolutionPersistenceService.LoadFirmwareProjectAsync(path, cancellationToken) is null)
                     throw new InvalidDataException("Invalid packaged sub-project.");
             }
-            var nodePath = Path.Combine(root, Path.GetFileName(root) + ".uotannode");
-            if (await SolutionPersistenceService.LoadNodeProjectAsync(nodePath, cancellationToken) is null)
+            var nodeRelative = snapshot.NodeProjectPath ?? Path.GetFileName(root) + ".uotannode";
+            var nodePath = Path.GetFullPath(Path.Combine(root, nodeRelative.Replace('/', Path.DirectorySeparatorChar)));
+            if (!ProjectSaveAsTransaction.IsWithin(root, nodePath)
+                || await SolutionPersistenceService.LoadNodeProjectAsync(nodePath, cancellationToken) is null)
                 throw new InvalidDataException("Missing or invalid packaged workflow.");
             // Never reconstruct source-machine absolute undo paths in the imported workspace.
             foreach (var project in snapshot.SubProjects ?? [])

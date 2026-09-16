@@ -99,8 +99,16 @@ public partial class ProjectExplorerView : UserControl
             }
         }
 
-        // 顶层解决方案文件夹：在父目录中查找 .uotan 文件。
-        // Top-level solution folder: find the .uotan file in the parent directory.
+        // 顶层解决方案文件夹：当前根目录就是解决方案自身目录（.uotan 与子项目并列），
+        // 因此先在节点目录内查找 .uotan，再回退到父目录以兼容旧布局。
+        // Top-level solution folder: the root is the solution's own directory (the .uotan file sits
+        // alongside the sub-projects), so first search inside the node, then fall back to the parent.
+        foreach (var f in System.IO.Directory.EnumerateFiles(node.Path, "*.uotan"))
+        {
+            WeakReferenceMessenger.Default.Send(new OpenDocumentRequestMessage(f));
+            return;
+        }
+
         var parentDir = System.IO.Path.GetDirectoryName(node.Path);
         if (parentDir is not null)
         {
