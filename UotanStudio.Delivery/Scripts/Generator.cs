@@ -13,7 +13,7 @@ internal static partial class DeliveryScriptGenerator
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         // Invalidate saved generated scripts when the installer contract changes; edited drafts still use the host's conflict flow.
-        hash.AppendData("UotanStudio delivery scripts v2\n"u8);
+        hash.AppendData("UotanStudio delivery scripts v3\n"u8);
         hash.AppendData(JsonSerializer.SerializeToUtf8Bytes(plan with { Scripts = [], GeneratedScripts = [], OpenScripts = [], ScriptCarets = [], ScriptFingerprint = "", OutputDirectory = "" },
             DeliveryJsonContext.Default.DeliveryPlan));
         return Convert.ToHexString(hash.GetHashAndReset());
@@ -38,9 +38,17 @@ internal static partial class DeliveryScriptGenerator
             .ToList();
         if (plan.Recovery && !plan.PackPayload)
         {
-            result.Add("Recovery.sh", DeliveryPackageBuilder.RecoveryScript(plan, localize));
             if (DeliveryPackageBuilder.HasDat(plan))
+            {
+                // 旧式 DAT 卡刷包：update-binary 是原包/内嵌的原生 ELF 更新器，脚本只生成 Edify updater-script。
+                // Old-style DAT package: update-binary is the native ELF updater; only the Edify updater-script is generated.
                 result.Add("updater-script", DeliveryPackageBuilder.RecoveryUpdaterScript(plan, localize));
+            }
+            else
+            {
+                result.Add("update-binary", DeliveryPackageBuilder.RecoveryScript(plan, localize));
+                result.Add("updater-script", DeliveryPackageBuilder.RecoveryUpdaterScript(plan, localize));
+            }
         }
         if (flashFiles.Count == 0) return result;
         plan = plan with { Files = flashFiles };

@@ -172,7 +172,7 @@ public sealed partial class DeliveryCompletionTests
             Assert.Contains("boot.img", scripts[name]);
             Assert.DoesNotContain("system.new.dat", scripts[name]);
         }
-        Assert.Contains("package_extract_file(\"images/boot.img\", file_getprop(\"targets.prop\", \"target1\"))", scripts["updater-script"]);
+        Assert.Contains("package_extract_file(\"images/boot.img\", \"/dev/block/bootdevice/by-name/boot\" + getprop(\"ro.boot.slot_suffix\"))", scripts["updater-script"]);
     }
 
     [Fact]
@@ -197,14 +197,14 @@ public sealed partial class DeliveryCompletionTests
             "AuthorInformation" => "作者信息：",
             _ => key
         });
-        foreach (var name in new[] { "FlashWindows.bat", "FlashLinux.sh", "FlashMacOS.sh", "Recovery.sh", "updater-script" })
+        foreach (var name in new[] { "FlashWindows.bat", "FlashLinux.sh", "FlashMacOS.sh", "updater-script" })
         {
             Assert.Contains("机型代号：test_device", scripts[name]);
             Assert.Contains("作者信息：", scripts[name]);
             Assert.Contains("作者", scripts[name]);
         }
         Assert.Contains("100%% ^& ^\"quotes^\" ! ^^ ^| ^< ^> ^( ^)", scripts["FlashWindows.bat"]);
-        Assert.Contains("O'\"'\"'Brien", scripts["Recovery.sh"]);
+        Assert.Contains("O'Brien", scripts["updater-script"]);
         Assert.Contains("\\\"quotes\\\"", scripts["updater-script"]);
     }
 

@@ -46,13 +46,25 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         if (string.IsNullOrWhiteSpace(plan.OutputDirectory)) throw new InvalidDataException("Select an output directory.");
         var output = Path.GetFullPath(plan.OutputDirectory);
         CheckDirectory(output);
-        foreach (var file in plan.Files.Concat(plan.Container).Where(f => f.SourcePath.Length > 0))
-            if (IsUnder(file.SourcePath, output)) throw new InvalidDataException("输出目录不能包含源镜像 / Output must not contain source images.");
+        // 校验既要消除误报，也不能让输出覆盖已选源镜像：输出目录本身不得等于任一源镜像所在目录（避免 images/images 嵌套），
+        // 且按组织布局实际写出的目标路径不得与任一选择的源镜像路径重合（直接覆盖源镜像）。
+        var sources = plan.Files.Concat(plan.Container).Where(f => f.SourcePath.Length > 0).ToArray();
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var plannedOutputs = PlannedOutputPaths(plan).Select(path => Path.GetFullPath(path)).ToArray();
+        foreach (var source in sources)
+        {
+            if (string.Equals(Path.GetFullPath(output), GetDirectoryNameOrRoot(source.SourcePath), comparison))
+                throw new InvalidDataException("输出目录不能是源镜像所在目录 / Output must not target a source image's own directory.");
+            var sourcePath = Path.GetFullPath(source.SourcePath);
+            for (var i = 0; i < plannedOutputs.Length; i++)
+                if (string.Equals(sourcePath, plannedOutputs[i], comparison))
+                    throw new InvalidDataException("输出会覆盖源镜像 / Output would overwrite a source image: " + source.SourcePath);
+        }
         foreach (var source in new[] { plan.Payload.DynamicPartitionsFile, plan.Payload.SignatureFile, plan.Payload.SigningKeyPath, plan.Payload.PostinstallFile, plan.Package.SigningKeyPath, plan.Package.CertificatePath }.Where(p => p.Length > 0))
             if (IsUnder(source, output)) throw new InvalidDataException("Output must not contain Payload configuration inputs.");
         if (DeliveryPackageBuilder.HasDat(plan) && IsUnder(DeliveryRecoveryUpdater.Resolve(plan), output))
             throw new InvalidDataException("Output must not contain the source Recovery updater.");
-        if (plan.OrganizeDirectory && !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS || plan.Txt || plan.Recovery && plan.Scripts.ContainsKey("Recovery.sh"))
+        if (plan.OrganizeDirectory && !plan.PackPayload && (plan.Windows || plan.Linux || plan.MacOS || plan.Txt || plan.Recovery && plan.Scripts.ContainsKey("update-binary"))
             && plan.ScriptFingerprint != DeliveryScriptGenerator.Fingerprint(plan))
             throw new InvalidDataException("脚本已过期，请重新生成 / Scripts are stale; generate them again.");
         var parent = Path.GetDirectoryName(output) ?? throw new InvalidDataException("Invalid output directory.");
@@ -133,7 +145,7 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
                     if (!DeliveryValidation.IsScriptName(name))
                         throw new InvalidDataException("Invalid script filename: " + name);
                     if (Encoding.UTF8.GetByteCount(contents) > 1024 * 1024) throw new InvalidDataException("Script exceeds 1 MiB.");
-                    if (name == "updater-script") continue; // Published inside recovery.zip, with its native interpreter.
+                    if (name == "updater-script" || name == "update-binary") continue; // Published inside the Recovery ZIP, with its interpreter.
                     var path = Path.Combine(stage, name);
                     await File.WriteAllTextAsync(path, contents, new UTF8Encoding(false), token).ConfigureAwait(false);
                     if (!OperatingSystem.IsWindows() && name.EndsWith(".sh"))
@@ -207,10 +219,15 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     }
 
     internal static string ContainerFileName(DeliveryPlan plan) => plan.PackPayload
-        ? (plan.OrganizeDirectory ? "ota.zip" : "payload.bin")
+        ? (plan.OrganizeDirectory ? ZipFileName(plan, "ota.zip") : "payload.bin")
         : plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty
-            ? "super.zip"
+            ? ZipFileName(plan, "super.zip")
             : plan.Super.Empty ? "super_empty.img" : SuperFileName(plan.Super);
+
+    /// <summary><para>打包成 ZIP 时使用用户指定的压缩包名称（补 .zip），空则回退默认名。</para>
+    /// Uses the user-specified archive name (appending .zip) when packing into a ZIP; falls back to the default.</summary>
+    internal static string ZipFileName(DeliveryPlan plan, string fallback) =>
+        plan.OrganizeDirectory && plan.ArchiveName.Trim().Length > 0 ? plan.ArchiveName.Trim() + ".zip" : fallback;
 
     internal static string SuperFileName(DeliverySuperOptions options) => options.Zstd ? "super.zst" : "super.img";
 
@@ -265,14 +282,14 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
         plan = plan.ForOutput();
         var output = Path.GetFullPath(plan.OutputDirectory);
         if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
-            return [Path.Combine(output, "super.zip")];
+            return [Path.Combine(output, ZipFileName(plan, "super.zip"))];
         var plannedNames = plan.OrganizeDirectory
-            ? plan.Files.Select(f => f.Generated && plan.PackPayload ? "ota.zip" : plan.PackSuper ? OrganizedImageRelativePath(f) : Path.Combine("images", f.FileName)).Concat(plan.Scripts.Keys.Where(name => name != "updater-script")).Concat(["README.txt", "checksums.sha256"])
+            ? plan.Files.Select(f => f.Generated && plan.PackPayload ? ZipFileName(plan, "ota.zip") : plan.PackSuper ? OrganizedImageRelativePath(f) : Path.Combine("images", f.FileName)).Concat(plan.Scripts.Keys.Where(name => name is not ("updater-script" or "update-binary"))).Concat(["README.txt", "checksums.sha256"])
             : [ContainerFileName(plan)];
-        if (plan.PackPayload && plan.OrganizeDirectory) plannedNames = plannedNames.Append("ota.zip");
+        if (plan.PackPayload && plan.OrganizeDirectory) plannedNames = plannedNames.Append(ZipFileName(plan, "ota.zip"));
         if (plan.PackSuper && plan.OrganizeDirectory && !plan.Super.Empty)
             plannedNames = plannedNames.Concat(["META-INF/com/google/android/update-binary", "META-INF/com/google/android/updater-script"]);
-        if (plan.Recovery && !plan.PackPayload && !plan.PackSuper) plannedNames = plannedNames.Append("recovery.zip");
+        if (plan.Recovery && !plan.PackPayload && !plan.PackSuper) plannedNames = plannedNames.Append(ZipFileName(plan, "recovery.zip"));
         return plannedNames.Select(name => Path.Combine(output, name));
     }
 
@@ -343,6 +360,17 @@ internal sealed class DeliveryOutputService(IDeliveryTools tools, IDeliverySigni
     private static bool IsUnder(string path, string root) => Path.GetFullPath(path).StartsWith(
         Path.TrimEndingDirectorySeparator(root) + Path.DirectorySeparatorChar,
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    /// <summary><para>返回路径所在目录；已是目录则原样返回。空/根路径回退自身。</para>
+    /// Returns the containing directory of a path, or the path itself when it is already a directory.</summary>
+    private static string GetDirectoryNameOrRoot(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return path;
+        var full = Path.GetFullPath(path);
+        return Directory.Exists(full)
+            ? Path.TrimEndingDirectorySeparator(full)
+            : Path.GetDirectoryName(full) is { Length: > 0 } parent ? Path.TrimEndingDirectorySeparator(parent) : full;
+    }
 }
 
 internal sealed class InlineProgress<T>(Action<T> report) : IProgress<T>

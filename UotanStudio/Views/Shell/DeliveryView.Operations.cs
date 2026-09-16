@@ -185,6 +185,7 @@ public partial class DeliveryView
         Container = Composition.Model.Container.Select(i => i.Snapshot()).ToList()
     }) with
     {
+        ArchiveName = ZipArchiveNameBox.Text?.Trim() ?? "",
         Package = new()
         {
             Ota = PackPayloadBox.IsChecked == true,

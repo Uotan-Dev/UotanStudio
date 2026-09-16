@@ -6,7 +6,6 @@ namespace UotanStudio.Services.Delivery;
 /// <summary>Reuses the original ROM's native Edify interpreter instead of assuming a shell block_image_update command.</summary>
 internal static class DeliveryRecoveryUpdater
 {
-    internal const string ArchivePath = "META-INF/com/google/android/uotan-updater";
     internal const string ScriptPath = "META-INF/com/google/android/updater-script";
     /// <summary><para>A/B OTA 包内原生更新器的标准成员路径。</para>Standard member path of the native updater inside an A/B OTA package.</summary>
     internal const string EntryPath = "META-INF/com/google/android/update-binary";

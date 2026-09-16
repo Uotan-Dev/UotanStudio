@@ -51,7 +51,6 @@ internal static partial class DeliveryPackageBuilder
     internal static string RecoveryScript(DeliveryPlan plan, Func<string, string>? localize = null)
     {
         var images = RecoveryImages(plan);
-        var dat = HasDat(plan);
         var compressed = images.Any(i => i.Member.EndsWith(".zst", StringComparison.OrdinalIgnoreCase));
         var script = new StringBuilder("""
             #!/sbin/sh
@@ -100,11 +99,6 @@ internal static partial class DeliveryPackageBuilder
             script.AppendLine("verify_member \"$ZSTD_MEMBER\"");
             script.AppendLine("unzip -p \"$ZIPFILE\" \"$ZSTD_MEMBER\" >\"$WORK/zstd\" || fail 'Cannot extract zstd'\nchmod 755 \"$WORK/zstd\"\nZSTD=\"$WORK/zstd\"");
         }
-        if (dat)
-        {
-            script.AppendLine($"verify_member '{DeliveryRecoveryUpdater.ArchivePath}'\nverify_member '{DeliveryRecoveryUpdater.ScriptPath}'");
-            script.AppendLine($"unzip -p \"$ZIPFILE\" '{DeliveryRecoveryUpdater.ArchivePath}' >\"$WORK/updater\" || fail 'Cannot extract Edify updater'\nchmod 755 \"$WORK/updater\"");
-        }
         script.AppendLine("set_progress 0.2");
         for (var i = 0; i < images.Length; i++)
         {
@@ -124,19 +118,11 @@ internal static partial class DeliveryPackageBuilder
         for (var i = 0; i < images.Length; i++)
             script.AppendLine($"[ \"$resolved\" != \"$REAL{i}\" ] || fail 'Target partition is mounted'");
         script.AppendLine(";; esac; done < /proc/mounts\nset_progress 0.3");
-        if (dat)
+        for (var i = 0; i < images.Length; i++)
         {
-            // AOSP updater reads updater-script from ZIP and file_getprop resolves targets in this cwd.
-            script.AppendLine("cd \"$WORK\"\n\"$WORK/updater\" \"$1\" \"$2\" \"$ZIPFILE\" || fail 'Edify update failed'");
-        }
-        else
-        {
-            for (var i = 0; i < images.Length; i++)
-            {
-                var image = images[i];
-                script.AppendLine($"ui_print 'Writing {image.File.Partition}'\nstream_image '{image.Member}' dd of=\"$TARGET{i}\" bs=1048576 conv=fsync || fail 'Write failed: {image.File.Partition}'");
-                script.AppendLine("set_progress " + (0.3 + 0.7 * (i + 1) / images.Length).ToString("0.######", CultureInfo.InvariantCulture));
-            }
+            var image = images[i];
+            script.AppendLine($"ui_print 'Writing {image.File.Partition}'\nstream_image '{image.Member}' dd of=\"$TARGET{i}\" bs=1048576 conv=fsync || fail 'Write failed: {image.File.Partition}'");
+            script.AppendLine("set_progress " + (0.3 + 0.7 * (i + 1) / images.Length).ToString("0.######", CultureInfo.InvariantCulture));
         }
         script.AppendLine("sync || fail 'Sync failed'\nset_progress 1\nui_print 'Completed'");
         return script.ToString().ReplaceLineEndings("\n");
@@ -196,10 +182,20 @@ internal static partial class DeliveryPackageBuilder
     {
         if (!HasDat(plan)) return "# UotanStudio custom Recovery shell installer\n";
         var images = RecoveryImages(plan);
-        var script = new StringBuilder("# Executed by the original ROM updater from Recovery.sh; targets.prop is prepared by the wrapper.\n");
+        var script = new StringBuilder("# Executed by the native updater at META-INF/com/google/android/update-binary.\n");
         foreach (var line in DeliveryScriptGenerator.BannerLines(plan, localize))
             script.AppendLine("ui_print(" + DeliveryScriptGenerator.QuoteEdify(line) + ");");
-        string Target(int i) => $"file_getprop(\"targets.prop\", \"target{i}\")";
+        // AOSP 标准设备路径：A/B 设备用 getprop("ro.boot.slot_suffix") 拼接；显式 _a/_b 分区不加后缀。
+        // AOSP-standard device path: A/B slots append getprop("ro.boot.slot_suffix"); explicit _a/_b partitions take none.
+        string Target(int i)
+        {
+            var partition = images[i].File.Partition;
+            var explicitSlot = partition.EndsWith("_a", StringComparison.OrdinalIgnoreCase)
+                || partition.EndsWith("_b", StringComparison.OrdinalIgnoreCase);
+            return explicitSlot
+                ? $"\"/dev/block/bootdevice/by-name/{partition}\""
+                : $"\"/dev/block/bootdevice/by-name/{partition}\" + getprop(\"ro.boot.slot_suffix\")";
+        }
         string Args(int i, DatSet set) => $"{Target(i)}, package_extract_file(\"images/{set.Transfer.FileName}\"), \"images/{set.DataName}\", \"images/{set.PatchName}\"";
         for (var i = 0; i < images.Length; i++)
             if (images[i].Dat is { } set)

@@ -214,20 +214,21 @@ public sealed partial class DeliveryCompletionTests : IDisposable
         Assert.NotNull(zip.GetEntry("images/system.transfer.list"));
         Assert.NotNull(zip.GetEntry("images/system.new.dat.br"));
         Assert.NotNull(zip.GetEntry("images/system.patch.dat"));
-        using var script = new StreamReader(zip.GetEntry("META-INF/com/google/android/update-binary")!.Open());
-        var text = await script.ReadToEndAsync(Token);
-        Assert.Contains("\"$WORK/updater\" \"$1\" \"$2\" \"$ZIPFILE\"", text);
-        Assert.DoesNotContain("block_image_update", text);
-        Assert.Contains("system.transfer.list", text);
-        Assert.Contains("system.new.dat.br", text);
-        Assert.Contains("system.patch.dat", text);
-        Assert.DoesNotContain("dd if='images/system.new.dat.br'", text);
-        using var edify = new StreamReader(zip.GetEntry("META-INF/com/google/android/updater-script")!.Open());
+        // DAT 包把原包的原生 ELF 更新器原样放进标准 update-binary 位置，脚本只保留 Edify updater-script。
+        // The DAT package publishes the original ROM's native ELF updater verbatim at the standard
+        // update-binary path; the only generated script is the Edify updater-script.
+        var fixture = File.ReadAllBytes(plan.Package.RecoveryUpdaterPath);
+        using (var updater = zip.GetEntry(DeliveryRecoveryUpdater.EntryPath)!.Open())
+        using (var actual = new MemoryStream())
+        {
+            await updater.CopyToAsync(actual, Token);
+            Assert.Equal(fixture, actual.ToArray());
+        }
+        using var edify = new StreamReader(zip.GetEntry(DeliveryRecoveryUpdater.ScriptPath)!.Open());
         var edifyText = await edify.ReadToEndAsync(Token);
-        Assert.Contains("block_image_update(file_getprop(\"targets.prop\", \"target0\")", edifyText);
+        Assert.Contains("block_image_update(\"/dev/block/bootdevice/by-name/system\" + getprop(\"ro.boot.slot_suffix\")", edifyText);
         Assert.Contains("package_extract_file(\"images/system.transfer.list\")", edifyText);
         Assert.Contains("\"images/system.new.dat.br\", \"images/system.patch.dat\"", edifyText);
-        Assert.NotNull(zip.GetEntry(DeliveryRecoveryUpdater.ArchivePath));
     }
 
     [Fact]
@@ -252,12 +253,15 @@ public sealed partial class DeliveryCompletionTests : IDisposable
 
         var scripts = DeliveryScriptGenerator.Generate(plan);
 
-        Assert.Contains("Recovery.sh", scripts.Keys);
+        // DAT 卡刷只生成 Edify updater-script；update-binary 是原包的原生 ELF，不进入脚本生成器。
+        // DAT flashing only emits the Edify updater-script; update-binary is the original native ELF.
+        Assert.Contains("updater-script", scripts.Keys);
+        Assert.DoesNotContain("update-binary", scripts.Keys);
+        Assert.DoesNotContain("Recovery.sh", scripts.Keys);
         Assert.DoesNotContain("FlashLinux.sh", scripts.Keys);
         Assert.DoesNotContain("FlashWindows.bat", scripts.Keys);
         Assert.DoesNotContain("flash.txt", scripts.Keys);
         Assert.Contains("block_image_update", scripts["updater-script"]);
-        Assert.DoesNotContain("block_image_update", scripts["Recovery.sh"]);
     }
 
     [Fact]
@@ -404,5 +408,42 @@ public sealed partial class DeliveryCompletionTests : IDisposable
         Assert.Contains("sha256sum --strict -c", scripts["FlashLinux.sh"]);
         Assert.Contains("reboot fastboot", scripts["FlashLinux.sh"]); Assert.Contains("ensure_mode yes", scripts["FlashLinux.sh"]);
         Assert.Contains("Get-FileHash", scripts["FlashWindows.bat"]); Assert.Contains("call :ensure_mode yes", scripts["FlashWindows.bat"]);
+    }
+
+    [Fact]
+    public void ContainerFileNameUsesArchiveNameWhenOrganizingZip()
+    {
+        var plan = new DeliveryPlan { OrganizeDirectory = true, PackPayload = true, ArchiveName = "  my_custom  " };
+        Assert.Equal("my_custom.zip", DeliveryOutputService.ContainerFileName(plan));
+        Assert.Equal("my_custom.zip", DeliveryOutputService.ZipFileName(plan, "ota.zip"));
+        Assert.Equal("ota.zip", DeliveryOutputService.ContainerFileName(plan with { ArchiveName = "" }));
+    }
+
+    [Fact]
+    public async Task RecoveryExportPublishesUnderCustomArchiveName()
+    {
+        var plan = new DeliveryPlan
+        {
+            Recovery = true,
+            Txt = false,
+            ArchiveName = "custom_flash",
+            OutputDirectory = Path.Combine(_root, "archive-out"),
+            Files = [Image("boot")]
+        };
+        await new DeliveryOutputService(new NoTools()).ExportAsync(plan, token: Token);
+        Assert.True(File.Exists(Path.Combine(plan.OutputDirectory, "custom_flash.zip")));
+        Assert.False(File.Exists(Path.Combine(plan.OutputDirectory, "recovery.zip")));
+    }
+
+    [Fact]
+    public void InvalidArchiveNameRejected()
+    {
+        var plan = new DeliveryPlan
+        {
+            OrganizeDirectory = true,
+            ArchiveName = "bad/name",
+            Files = [new() { FileName = "boot.img", Partition = "boot" }]
+        };
+        Assert.Throws<InvalidDataException>(() => DeliveryValidation.Validate(plan));
     }
 }

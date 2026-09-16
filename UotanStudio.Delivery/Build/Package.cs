@@ -101,7 +101,8 @@ internal static partial class DeliveryPackageBuilder
         }
         if (plan.Recovery && !plan.PackPayload && !plan.PackSuper)
         {
-            var path = Path.Combine(stage, "recovery.zip");
+            var path = Path.Combine(stage, DeliveryOutputService.ZipFileName(plan, "recovery.zip"));
+            var dat = HasDat(plan);
             await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite))
             using (var zip = new ZipArchive(output, ZipArchiveMode.Create, true))
             {
@@ -122,15 +123,13 @@ internal static partial class DeliveryPackageBuilder
                     }
                     finally { if (temporary is not null) File.Delete(temporary); }
                 }
-                if (HasDat(plan))
+                if (dat)
                 {
                     foreach (var set in DatSets(plan).Where(s => s.Patch is null))
                     {
                         using var empty = new MemoryStream();
                         await AddHashedMemberAsync(zip, "images/" + set.PatchName, empty, hashes, token, progress);
                     }
-                    await using var engine = File.OpenRead(DeliveryRecoveryUpdater.Resolve(plan));
-                    await AddHashedMemberAsync(zip, DeliveryRecoveryUpdater.ArchivePath, engine, hashes, token, progress);
                 }
                 if (Selected(plan).Any(f => f.FileName.EndsWith(".zst", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -147,7 +146,18 @@ internal static partial class DeliveryPackageBuilder
                 await AddTextAsync(zip, "checksums.sha256", hashes.ToString(), token);
                 var updater = Entry(zip, "META-INF/com/google/android/update-binary");
                 updater.ExternalAttributes = 0x81ed << 16;
-                await using (var entry = updater.Open()) await entry.WriteAsync(Encoding.UTF8.GetBytes(plan.Scripts.GetValueOrDefault("Recovery.sh", RecoveryScript(plan))), token);
+                await using (var entry = updater.Open())
+                {
+                    if (dat)
+                    {
+                        // 旧式 DAT 卡刷包：update-binary 直接放原包/内嵌的原生 ELF 更新器，与 AOSP 标准布局一致。
+                        // Old-style DAT package: update-binary is the native ELF updater at the standard AOSP path.
+                        await using var engine = File.OpenRead(DeliveryRecoveryUpdater.Resolve(plan));
+                        await engine.CopyToAsync(entry, 65536, token);
+                    }
+                    else
+                        await entry.WriteAsync(Encoding.UTF8.GetBytes(plan.Scripts.GetValueOrDefault("update-binary", RecoveryScript(plan))), token);
+                }
             }
             if (plan.Package.SigningKeyPath.Length > 0) await SignAsync(path, plan.Package, token, signingKeys);
         }
@@ -158,7 +168,7 @@ internal static partial class DeliveryPackageBuilder
             // consumes META-INF/com/google/android/update-binary directly.
             var meta = Path.Combine(stage, "META-INF", "com", "google", "android");
             Directory.CreateDirectory(meta);
-            await File.WriteAllTextAsync(Path.Combine(meta, "update-binary"), plan.Scripts.GetValueOrDefault("Recovery.sh", RecoveryScript(plan)), new UTF8Encoding(false), token);
+            await File.WriteAllTextAsync(Path.Combine(meta, "update-binary"), plan.Scripts.GetValueOrDefault("update-binary", RecoveryScript(plan)), new UTF8Encoding(false), token);
             await File.WriteAllTextAsync(Path.Combine(meta, "updater-script"), "#Powered by UotanStudio\n", new UTF8Encoding(false), token);
             if (!OperatingSystem.IsWindows())
                 File.SetUnixFileMode(Path.Combine(meta, "update-binary"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute

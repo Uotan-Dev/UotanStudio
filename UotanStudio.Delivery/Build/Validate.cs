@@ -3,7 +3,7 @@ namespace UotanStudio.Services.Delivery;
 /// <summary>Validation shared by preview, script generation, and file publication.</summary>
 internal static class DeliveryValidation
 {
-    internal static bool IsScriptName(string name) => IsName(name) && (name == "updater-script"
+    internal static bool IsScriptName(string name) => IsName(name) && (name == "updater-script" || name == "update-binary"
         || name.EndsWith(".sh", StringComparison.Ordinal) || name.EndsWith(".bat", StringComparison.Ordinal)
         || name.EndsWith(".txt", StringComparison.Ordinal));
     internal static bool IsName(string value, int maximum = 100) => value is not null && value.Length is > 0 && value.Length <= maximum
@@ -31,6 +31,8 @@ internal static class DeliveryValidation
         if (plan.Slot is not ("" or "a" or "b" or "all")) throw new InvalidDataException("Invalid slot policy.");
         if (plan.Super.DeviceType is not ("" or "VAB" or "AB" or "AOnly")) throw new InvalidDataException("Invalid device type.");
         if (plan.DeviceCodename.Length > 0 && !IsName(plan.DeviceCodename, 64)) throw new InvalidDataException("机型代号无效 / Invalid device codename.");
+        if (plan.OrganizeDirectory && plan.ArchiveName.Length > 0 && !IsName(plan.ArchiveName, 200))
+            throw new InvalidDataException("压缩包名称无效 / Invalid archive name.");
         if (plan.Information.Length > 65536 || plan.Information.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))
             || plan.Information.ReplaceLineEndings("\n").Split('\n').Any(line => line.Length > 1024))
             throw new InvalidDataException("作者信息过长或含无效控制字符 / Author information is too long or contains control characters.");

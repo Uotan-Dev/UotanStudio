@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -232,7 +232,11 @@ public partial class DeliveryView : UserControl
         if (_solutionPath == context.CurrentSolutionPath) return;
         _solutionPath = context.CurrentSolutionPath;
         Composition.Reset();
-        OutputDirectoryBox.Text = context.SubProjects.FirstOrDefault()?.OutputDir ?? string.Empty;
+        // 交付输出默认落在子项目自己的 delivery/ 目录，与通用工作区 output/ 分离；该目录与源镜像 images/ 为同级，
+        // 打包时不会触发“输出目录是源镜像所在目录”的误报。
+        OutputDirectoryBox.Text = context.SubProjects.FirstOrDefault() is { } sp
+            ? sp.DeliveryDirectory
+            : string.Empty;
         ZipArchiveNameBox.Text = context.SolutionName ?? string.Empty;
         DirectOutputBox.IsChecked = true;
         PackSuperBox.IsChecked = false;

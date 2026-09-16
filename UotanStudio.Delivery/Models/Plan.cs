@@ -96,6 +96,9 @@ internal sealed record DeliveryPlan
     public bool MacOS { get; init; }
     public string DeviceCodename { get; init; } = "";
     public string Information { get; init; } = "";
+    /// <summary><para>打包成 ZIP 时的压缩包名称（不含扩展名），空则回退默认容器名。</para>
+    /// Archive name used when packing into a ZIP; empty falls back to the default container name.</summary>
+    public string ArchiveName { get; init; } = "";
     public bool AskWipe { get; init; }
     public bool Reboot { get; init; }
     public string Slot { get; init; } = "";
@@ -142,7 +145,7 @@ internal static class DeliveryPlanStore
             || plan.Payload is null || plan.Payload.DynamicPartitionsFile is null || plan.Payload.SignatureFile is null || plan.Payload.PostinstallFile is null
             || plan.Payload.SecurityPatchLevel is null || plan.Payload.Compression is null
             || plan.Payload.SigningKeyPath is null || plan.Payload.SigningKeyFingerprint is null
-            || plan.Scripts is null || plan.LocalZstd is null || plan.OutputDirectory is null || plan.DeviceCodename is null
+            || plan.Scripts is null || plan.LocalZstd is null || plan.OutputDirectory is null || plan.DeviceCodename is null || plan.ArchiveName is null
             || plan.GeneratedScripts is null || plan.OpenScripts is null || plan.ScriptCarets is null
             || plan.GeneratedScripts.Any(p => p.Value is null) || plan.OpenScripts.Any(p => p is null)
             || plan.Information is null || plan.Slot is null || plan.ScriptFingerprint is null
